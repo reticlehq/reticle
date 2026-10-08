@@ -36,6 +36,24 @@ reticle_run { tool: "reticle_lease", args: { action: "release", sessionId } }   
 
 `reticle_run { tool: "reticle_lease", args: { action: "acquire" } }` opens a fresh isolated headless context against your **already-running** app, stamps the lease identity into the URL so the app's own SDK registers under a sessionId you can target, and waits until that tab has connected (`ready: true`) before returning, so the sessionId is usable immediately. Release when the flow finishes.
 
+## Permissions
+
+A lease starts with every permission undecided. Pass `permissions` to grant some on the app's origin before the first navigation, so the first render already sees them:
+
+```text
+reticle_lease {action:"acquire"} { url: "http://localhost:3000/map", permissions: ["geolocation"] }
+```
+
+Acquiring again on an origin that already has a lease returns that lease, and its grants never change there, because it may be another agent's live tab. The same list is a plain reuse and a different one is refused. To change them, release the lease and acquire again. Names are Playwright's, such as `geolocation`, `clipboard-read`, `clipboard-write` and `notifications`; one the browser does not know is refused with its reason.
+
+| What the page reads | Without `permissions` | After a grant |
+| --- | --- | --- |
+| `navigator.permissions.query({ name })` | `prompt` | `granted` |
+| `Notification.permission`, in Playwright's headless shell (the default) | `denied` | still `denied` |
+| `Notification.permission`, in an installed Chrome the pool falls back to | `default` | `granted` |
+
+The headless shell has no notification support, so a notifications grant never reaches `Notification.permission` there. When you ask for `notifications`, the lease reads the value back from the page and says so in `hint` whenever the page cannot see the grant.
+
 ## 10 agents, 10 flows, one dashboard
 
 This is the design target, and it needs no special setup:

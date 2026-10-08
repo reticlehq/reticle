@@ -107,6 +107,14 @@ export interface PooledContext {
   newPage(): Promise<PooledPage>;
   close(): Promise<void>;
   addCookies?(cookies: PooledCookie[]): Promise<void>;
+  /**
+   * Grant browser permissions on this context. OPTIONAL, like `addCookies`: a context that cannot
+   * grant makes a lease that asked for permissions refuse, rather than open with none granted while
+   * the caller believes otherwise.
+   */
+  grantPermissions?(permissions: string[], opts?: { origin?: string }): Promise<void>;
+  /** Drop every permission granted on this context. OPTIONAL, for the same reason. */
+  clearPermissions?(): Promise<void>;
 }
 
 /** The launched browser. Real Playwright `Browser` satisfies this. */
