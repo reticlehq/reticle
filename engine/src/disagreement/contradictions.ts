@@ -859,6 +859,9 @@ function declareFailureHint(
   return `. If ${subject} the outcome you expect, declare it in the predicate: ${clauses.join(', ')}`;
 }
 
+/** Resolves a relative call url so its path can be read; the host is never shown or matched. */
+const RELATIVE_URL_BASE = 'http://reticle.invalid';
+
 /**
  * The display url's path, when it is both safe to show and narrow enough to declare one call.
  *
@@ -868,7 +871,7 @@ function declareFailureHint(
 function narrowPathOf(call: { url: string; matchUrl?: string }): string | undefined {
   let path: string;
   try {
-    path = new URL(call.url, 'http://reticle.invalid').pathname;
+    path = new URL(call.url, RELATIVE_URL_BASE).pathname;
   } catch {
     return undefined;
   }
