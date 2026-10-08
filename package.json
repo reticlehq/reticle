@@ -18,7 +18,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test:unit test:guards",
     "test:unit": "turbo run test:unit test:guards --concurrency=4 && pnpm test:bench",
-    "test:bench": "vitest run bench/harness bench/eval apps/e2e",
+    "test:bench": "vitest run bench/harness bench/eval apps/e2e action/ci-check.test.mjs",
     "bench:explore-cost": "node bench/harness/explore-cost.mjs",
     "bench:corpus-verify": "node bench/false-green-corpus/verify-rows.mjs",
     "bench:recoverability": "node bench/diagnosis/recoverability.mjs",
