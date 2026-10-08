@@ -390,6 +390,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .boolean()
       .optional()
       .describe('Open it in a browser window somebody can watch, instead of headless.'),
+    ignoreHTTPSErrors: z
+      .boolean()
+      .optional()
+      .describe(
+        'Accept a self-signed or mkcert certificate on an https dev server, for this lease only. Off by default.',
+      ),
     hud: z
       .enum([HudVisibility.SHOWN, HudVisibility.HIDDEN, HudVisibility.REMOVED])
       .optional()
@@ -569,6 +575,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           ...(deps.attachId === undefined ? {} : { owner: deps.attachId }),
           ...(validatedSeed !== undefined ? { seedStorage: validatedSeed } : {}),
           ...(permissions !== undefined ? { permissions } : {}),
+          ...(true === args['ignoreHTTPSErrors'] ? { ignoreHTTPSErrors: true } : {}),
         });
       } catch (err) {
         const refusal = permissionRefusal(err);

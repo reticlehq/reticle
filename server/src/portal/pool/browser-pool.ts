@@ -470,6 +470,8 @@ export class BrowserPool {
       headed?: boolean;
       /** Granted on the lease's origin before the first navigation, so the first render sees them. */
       permissions?: readonly string[];
+      /** Accept a self-signed or local-CA dev certificate for this lease's context only (#1255). */
+      ignoreHTTPSErrors?: boolean;
     } = {},
   ): Promise<Lease> {
     if (this.#closed) throw new Error('browser pool is shut down');
@@ -485,7 +487,9 @@ export class BrowserPool {
     let pendingDialogMessage: string | undefined;
     try {
       const browser = await this.#ensureBrowser(slot);
-      context = await browser.newContext();
+      context = await browser.newContext(
+        true === opts.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : undefined,
+      );
       if (opts.permissions !== undefined)
         await grantLeasePermissions(context, opts.permissions, url);
       const page = await context.newPage();

@@ -225,6 +225,19 @@ empty `stateDiffs`. Which reads as "nothing changed" and means "I was never watc
 
 React 19 dropped `_debugSource`. Wire up `@reticlehq/babel-plugin`. Or just use `@reticlehq/vite-plugin` or `@reticlehq/next`, which both include it. Without it you get component identity but no `file:line`.
 
+## A lease on an https dev server with a local certificate
+
+A dev server on `https://` with a self-signed or mkcert certificate makes `reticle_lease { "action": "acquire" }` fail with `net::ERR_CERT_AUTHORITY_INVALID`: the browser does not trust a certificate that no CA vouches for. The result says so and names the fix. If the server is yours, acquire again with `ignoreHTTPSErrors` set:
+
+```json
+{
+  "tool": "reticle_lease",
+  "args": { "action": "acquire", "url": "https://localhost:5173/", "ignoreHTTPSErrors": true }
+}
+```
+
+It applies to that lease's browser context only and is off by default, so a certificate problem on any other site is still reported.
+
 ## `ERESOLVE` installing next to a prerelease
 
 `@reticlehq/next` declares `peer next >=13` and `@reticlehq/react` declares `peer react >=18`. On a Next canary or React RC, npm refuses. See [the prerelease notes](/getting-started#installing-alongside-a-nextjs-or-react-prerelease).
