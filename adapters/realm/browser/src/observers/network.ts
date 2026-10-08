@@ -140,6 +140,41 @@ function jsonShape(text: string): string {
 }
 
 /**
+ * A byte body's text, when it is text: an `ArrayBuffer` or a view over one that decodes as strict
+ * UTF-8 with no control characters beyond whitespace. Anything else is undefined, so random binary
+ * (a protobuf, an image) keeps only its type marker and is never read as a string (#1347).
+ */
+function textOfBytes(body: unknown): string | undefined {
+  if (!(body instanceof ArrayBuffer || ArrayBuffer.isView(body))) return undefined;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(body);
+    // eslint-disable-next-line no-control-regex -- the point is to find control characters
+    return /[\0-\b\v\f\x0e-\x1f\x7f]/.test(text) ? undefined : text;
+  } catch {
+    // Not UTF-8, or no TextDecoder in this realm: either way, not text.
+    return undefined;
+  }
+}
+
+/**
+ * A FormData body's fingerprint: its field names, each field's kind (text, or a file's type and
+ * size), and the total length of its text values, hashed. Same rule as a JSON body: no character of
+ * any value reaches the hash, and a text value contributes only to a sum. Order-insensitive, like a
+ * JSON body's keys. Undefined for an empty form, which says nothing about what was sent.
+ */
+function formShape(form: FormData): string | undefined {
+  const fields: string[] = [];
+  let length = 0;
+  form.forEach((value, name) => {
+    if ('string' === typeof value) length += value.length;
+    fields.push(
+      `${name}=${'string' === typeof value ? '' : `${value.type}:${String(value.size)}`}`,
+    );
+  });
+  return 0 === fields.length ? undefined : fingerprintBody(fields.sort().join('&'), length);
+}
+
+/**
  * The request body for the transcript, and the SHAPE FINGERPRINT that stands in for it.
  *
  * The fingerprint is unconditional: `duplicate-request` needs to tell two writes to one endpoint
@@ -147,17 +182,30 @@ function jsonShape(text: string): string {
  * secrets. See `REQUEST_SHAPE_FIELD` for what the fingerprint is and why it carries nothing back.
  *
  * The body itself is captured (redacted, capped) only when asked for. Plain strings and
- * URLSearchParams are text; FormData/Blob/ArrayBuffer/stream are not, so they carry no fingerprint
- * and, under capture, a `requestBodyType` marker (the agent still learns a body existed) rather
- * than being silently dropped. Shared by the fetch and XHR paths.
+ * URLSearchParams are text, and so are bytes that decode as UTF-8 text: a client that encodes its
+ * JSON before sending it (Flutter web, gRPC-web) is still sending JSON (#1347). FormData is
+ * fingerprinted from its field names and kinds but never captured. A Blob, a stream or bytes that
+ * are not text carry no fingerprint and, under capture, a `requestBodyType` marker (the agent still
+ * learns a body existed) rather than being silently dropped. Shared by the fetch and XHR paths.
  */
 function projectRequestBody(body: unknown, captureBodies: boolean): Record<string, unknown> {
   let text: string | undefined;
   let contentType = 'application/json';
   let shape: string = REQUEST_SHAPE_NONE;
-  if ('string' === typeof body) {
-    text = body;
+  const bytesText = textOfBytes(body);
+  const typeOf = (): string =>
+    (body as { constructor?: { name?: string } }).constructor?.name ?? typeof body;
+  if ('string' === typeof body || bytesText !== undefined) {
+    text = bytesText ?? (body as string);
     if (text.length > 0) shape = fingerprintBody(jsonShape(text), text.length);
+  } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
+    // Read synchronously and never kept: names and kinds only, so it separates distinct uploads to
+    // one endpoint without carrying any value (#1347).
+    const form = formShape(body);
+    return {
+      ...(form === undefined ? {} : { [REQUEST_SHAPE_FIELD]: form }),
+      ...(captureBodies ? { requestBodyType: typeOf() } : {}),
+    };
   } else if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
     text = body.toString();
     contentType = 'application/x-www-form-urlencoded';
@@ -167,8 +215,7 @@ function projectRequestBody(body: unknown, captureBodies: boolean): Record<strin
     }
   } else if (body !== undefined && body !== null) {
     // No fingerprint at all: the field's absence is what says the identity is unknown.
-    const kind = (body as { constructor?: { name?: string } }).constructor?.name ?? typeof body;
-    return captureBodies ? { requestBodyType: kind } : {};
+    return captureBodies ? { requestBodyType: typeOf() } : {};
   }
   const fields: Record<string, unknown> = { [REQUEST_SHAPE_FIELD]: shape };
   if (!captureBodies || text === undefined || 0 === text.length) return fields;
