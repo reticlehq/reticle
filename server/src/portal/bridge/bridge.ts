@@ -28,6 +28,7 @@ import {
 import { Session } from '@/portal/session/session.js';
 import { SessionManager, type RefusedPage } from '@/portal/session/session-manager.js';
 import { tokensMatch } from './token-auth.js';
+import { noteWrongPathUpgrades, wrongPathReason } from './wrong-path.js';
 import { pairingTokenSource } from './pairing-token.js';
 import { log } from '@/log.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
@@ -467,6 +468,11 @@ export class Bridge {
     // with it. Logging one is all it takes; the transport itself needs no other reaction.
     this.#wss.on('error', (err: Error) => {
       log('bridge_ws_error', { error: err.message });
+    });
+    // A dial on any other path got a bare 400 from `ws` and left no trace for a diagnosis (#1242).
+    noteWrongPathUpgrades(this.#wss, (path, origin) => {
+      log('bridge_wrong_path', { path, origin: origin ?? 'missing' });
+      this.sessions.noteClosure(wrongPathReason(path, origin), this.#clock());
     });
 
     this.#wss.on('connection', (socket) => {
