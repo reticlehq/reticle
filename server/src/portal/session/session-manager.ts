@@ -317,6 +317,16 @@ export class SessionManager {
     return [...this.#sessions.values()];
   }
 
+  /**
+   * The connected sessions an id-less call may consider: the active project's, when one is set.
+   *
+   * The same set `resolve()` chooses from, so a caller that falls back from a refused resolution
+   * (an id-less yield) never reaches a tab the project scope would never have handed it.
+   */
+  inScope(): Session[] {
+    return scopeSessions(this.all(), this.#defaultScope);
+  }
+
   count(): number {
     return this.#sessions.size;
   }
