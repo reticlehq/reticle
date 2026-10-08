@@ -104,6 +104,8 @@ import {
   projectDirOf,
 } from './cli/ports/resolve/cli-port.js';
 import {
+  helpRunsAt,
+  helpVersionNote,
   nodeSpawner,
   readTextFile,
   reexecAtVersion,
@@ -691,6 +693,17 @@ export function main(): void {
       warn: (line) => process.stderr.write(`${line}\n`),
     });
     return;
+  }
+  // Help stays on this binary, so say which version the command it describes really runs at (#1378).
+  const helpVersion = helpRunsAt({
+    argv,
+    cliVersion: SERVER_VERSION,
+    env: process.env,
+    projectDir: projectDirOf(process.cwd()),
+    readFile: readTextFile,
+  });
+  if (helpVersion !== undefined) {
+    process.stdout.write(`${helpVersionNote(helpVersion, SERVER_VERSION)}\n\n`);
   }
   // Every invocation passes through here — the single chokepoint for the "how often is it used / how
   // many distinct machines + projects" metrics. Fire-and-forget: a metric must never delay or fail a run.

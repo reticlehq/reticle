@@ -170,7 +170,8 @@ A bare `reticle` with no arguments is not help. It is `reticle serve`.
   `npx @reticlehq/server` never pairs a daemon with an SDK it cannot talk to. `init`, `update`,
   `rollback`, `setup install`, `version` and `help` always run as typed, and so does a command whose
   version you pinned yourself (`npx @reticlehq/server@<version> …`). Set `RETICLE_NO_VERSION_MATCH=1` to
-  turn it off.
+  turn it off. Because `--help` runs as typed too, it describes the CLI you ran. When the command it
+  describes would run at the project's version instead, the help opens with a line naming that version.
 </Note>
 
 <Note>
