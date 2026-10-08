@@ -23,6 +23,7 @@
  * a human acts on.
  */
 
+import { RETIRED_WIRE_NAMES } from '@reticlehq/core';
 import { resolveSdkFix } from './sdk-fix.js';
 
 /** Which pair disagreed. Named so the nudge can report each independently. */
@@ -76,13 +77,15 @@ interface SelfIdentity {
  * is not a browser to do -- there is no touch equivalent of a console error. A peer speaking a name
  * we do not know was built against a contract this daemon does not have, and that is a genuine
  * mismatch: one of us is stale, and tools will behave in ways neither side reports.
+ *
+ * A name we RETIRED is not unknown: an older peer still lists it, and we never send it (#1343).
  */
 function namesWeDoNotKnow(peer: ContractParts, self: ContractParts): string[] {
   const unknown = [
     ...peer.commands.filter((name) => !self.commands.includes(name)),
     ...peer.events.filter((name) => !self.events.includes(name)),
     ...peer.actions.filter((name) => !self.actions.includes(name)),
-  ];
+  ].filter((name) => !RETIRED_WIRE_NAMES.includes(name));
   return [...new Set(unknown)].sort();
 }
 
@@ -116,9 +119,16 @@ export function describeSkew(peer: PeerIdentity, self: SelfIdentity): string | u
   if (peer.contractParts !== undefined && self.contractParts !== undefined) {
     const unknown = namesWeDoNotKnow(peer.contractParts, self.contractParts);
     if (0 === unknown.length) return undefined;
+    // Direction comes from the versions when both are known. An older peer naming something we do
+    // not know has a name we removed without retiring it, not a newer contract.
+    const order = compareVersions(peer.version, self.version);
+    const why =
+      order !== undefined && order < 0
+        ? 'though it is the older of the two — so this daemon dropped a name it still uses'
+        : 'so it was built against a newer contract than this one';
     return (
       `version skew: ${versionPhrase(peer, self)}, and ${peer.what} speaks names this daemon does ` +
-      `not know (${unknown.join(', ')}) — so it was built against a newer contract than this one. ` +
+      `not know (${unknown.join(', ')}) — ${why}. ` +
       `Tools will behave in ways neither side reports. ${peer.fix}`
     );
   }

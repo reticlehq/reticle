@@ -13,7 +13,7 @@
  * editor.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { runAdhocVerdict, type ToolCaller } from './adhoc-verdict.js';
+import { acquireLease, runAdhocVerdict, type ToolCaller } from './adhoc-verdict.js';
 import { ReticleTool } from '@reticlehq/core';
 
 /** A fake daemon: records what was asked, answers with the verdict it was given. */
@@ -253,6 +253,65 @@ describe('a url with no connected tab', () => {
     expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.ASSERT]);
   });
 
+  // `--session-id` skipped the same-document check entirely, so a pinned tab already on the url was
+  // reloaded: page 2 of a list went back to page 1 before the assert read it (#1409).
+  describe('with --session-id', () => {
+    const pinned = (sessions: { url: string; sessionId?: string }[]) => {
+      const c = leasing();
+      return {
+        c,
+        run: (url: string) =>
+          runAdhocVerdict({
+            port: 4400,
+            url,
+            sessionId: 'tab-2',
+            predicate: { kind: 'text', contains: 'page 2' },
+            connect: () => Promise.resolve(c.tool),
+            sessions: () => Promise.resolve(sessions),
+          }),
+      };
+    };
+
+    it('asserts a pinned tab already on the url without navigating it', async () => {
+      const { c, run } = pinned([
+        { sessionId: 'tab-1', url: 'http://localhost:5190/other' },
+        { sessionId: 'tab-2', url: 'http://localhost:5190/list?page=2#top' },
+      ]);
+      await run('http://localhost:5190/list/?page=2');
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.ASSERT]);
+      expect(c.calls[0]?.args['sessionId']).toBe('tab-2');
+    });
+
+    it('still navigates a pinned tab on a different url', async () => {
+      const { c, run } = pinned([{ sessionId: 'tab-2', url: 'http://localhost:5190/list?page=1' }]);
+      await run('http://localhost:5190/list?page=2');
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+      expect(c.calls[0]?.args['sessionId']).toBe('tab-2');
+    });
+
+    it('does not borrow another tab that is on the url', async () => {
+      const { c, run } = pinned([
+        { sessionId: 'tab-1', url: 'http://localhost:5190/list?page=2' },
+        { sessionId: 'tab-2', url: 'http://localhost:5190/' },
+      ]);
+      await run('http://localhost:5190/list?page=2');
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+    });
+
+    it('navigates, as before, when the status read fails', async () => {
+      const c = leasing();
+      await runAdhocVerdict({
+        port: 4400,
+        url: 'http://localhost:5190/list',
+        sessionId: 'tab-2',
+        predicate: { kind: 'text', contains: 'x' },
+        connect: () => Promise.resolve(c.tool),
+        sessions: () => Promise.reject(new Error('status unreachable')),
+      });
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+    });
+  });
+
   it('reports why the lease failed instead of asserting against nothing', async () => {
     const c = leasing({ acquire: { error: 'Chromium is not installed for Playwright — run: x' } });
     const result = await runAdhocVerdict({
@@ -265,5 +324,24 @@ describe('a url with no connected tab', () => {
     expect(result.code).toBe(1);
     expect(result.lines.join('\n')).toMatch(/Chromium is not installed/);
     expect(c.calls.map((x) => x.name)).not.toContain(ReticleTool.ASSERT);
+  });
+});
+
+// `init` must not count a lease that only connected through Reticle's injected reader as the
+// install connecting, and it can only tell from the flag carried here.
+describe('a lease that had to supply its own reader', () => {
+  const answering = (report: Record<string, unknown>): ToolCaller => ({
+    call: () => Promise.resolve({ structuredContent: report }),
+    close: () => Promise.resolve(),
+  });
+
+  it('says so', async () => {
+    const got = await acquireLease(answering({ sessionId: 's', zeroInstall: true }), 'http://x/');
+    expect(got).toEqual({ leased: 's', zeroInstall: true });
+  });
+
+  it('is not one when the app dialled in itself', async () => {
+    const got = await acquireLease(answering({ sessionId: 's' }), 'http://x/');
+    expect(got).toEqual({ leased: 's', zeroInstall: false });
   });
 });

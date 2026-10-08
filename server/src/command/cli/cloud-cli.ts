@@ -39,6 +39,7 @@ import {
   readSessionFor,
   RETICLE_DIR,
 } from './cloud-kit.js';
+import { syncRequest } from '@/memory/cloud/cloud-sync.js';
 import { describeSync, runSyncCycle } from '@/memory/cloud/sync-cycle.js';
 import { diskSink, diskSource, readCloudIssues, readCloudState } from '@/memory/cloud/sync-disk.js';
 
@@ -220,7 +221,13 @@ const cmdWhoami = async (): Promise<number> => {
       verify: cloud.verify,
     },
   });
-  if (null === cloud.config) hint('this repo is not attached — run `reticle link`');
+  // Signed out, `link` refuses with "run reticle login first"; `connect` does both in one go.
+  if (null === cloud.config)
+    hint(
+      null === session
+        ? 'this repo is not attached — run `reticle connect` (signs in and links in one step)'
+        : 'this repo is not attached — run `reticle link`',
+    );
   return 0;
 };
 
@@ -501,8 +508,9 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
    */
   if (!(await createNodeFileSystem().exists(join(process.cwd(), RETICLE_CONFIG_BASENAME)))) {
     hint(
-      `no ${RETICLE_CONFIG_BASENAME} here, so this app announces no project — its runs will not be ` +
-        'attributed to this binding. Run `reticle init` in the app, then restart the dev server.',
+      `no ${RETICLE_CONFIG_BASENAME} here: this app's runs reach this binding only while its dev ` +
+        'server runs with the Reticle build plugin, which announces it. Run `reticle init` in the app ' +
+        'to make the binding hold without it.',
     );
   }
   return 0;
@@ -637,10 +645,7 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
       sink: diskSink(reticleRoot),
       state: readCloudState(reticleRoot),
       now: () => Date.now(),
-      request: async (url, init) => {
-        const res = await fetch(url, init);
-        return { status: res.status, text: await res.text() };
-      },
+      request: (url, init) => syncRequest(url, init),
     });
     emit({
       ok: report.ok,

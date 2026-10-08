@@ -3,6 +3,7 @@ import { HudPanel, HudToggle, HudView, type HudUseData } from '@reticlehq/core';
 import { isReticleUi } from '@/dom/dom-ignore.js';
 import { nativeSetTimeout } from '@/timers/native/native-timers.js';
 import { CHAT_ATTR, MIN_ATTR, REPORT_ATTR, SETTINGS_ATTR } from './presenter-config.js';
+import { CAROUSEL_SLIDE_ATTR } from './carousel/carousel.js';
 
 /**
  * Report how a person uses the HUD, as control names only.
@@ -15,6 +16,8 @@ import { CHAT_ATTR, MIN_ATTR, REPORT_ATTR, SETTINGS_ATTR } from './presenter-con
  */
 
 const PREFIX = 'data-reticle-';
+/** Set on the root while the Flows or Notes page covers the Agent Log. */
+const PAGE_OPEN_ATTR = 'data-reticle-page-open';
 const TOGGLE_ROLES = new Set(['switch', 'checkbox']);
 
 /** The control id an element is named by, or undefined when it is not one of the HUD's controls. */
@@ -46,6 +49,10 @@ function viewOf(root: Element): { view: HudView; panel: HudPanel } {
   if ('1' === root.getAttribute(REPORT_ATTR)) {
     return { view: HudView.EXPANDED, panel: HudPanel.REPORT };
   }
+  // The Flows and Notes pages open over the Agent Log, with or without its own attribute set.
+  const page = root.getAttribute(PAGE_OPEN_ATTR);
+  if ('flows' === page) return { view: HudView.EXPANDED, panel: HudPanel.FLOWS };
+  if ('annotations' === page) return { view: HudView.EXPANDED, panel: HudPanel.NOTES };
   if ('1' === root.getAttribute(CHAT_ATTR)) return { view: HudView.EXPANDED, panel: HudPanel.CHAT };
   return { view: HudView.COLLAPSED, panel: HudPanel.NONE };
 }
@@ -86,15 +93,36 @@ export function installHudTelemetry(
     last = key;
     send(now);
   };
+  // A rail slide counts when it becomes the visible one while the Agent Log is open: an impression,
+  // named by the slide's id. The same slide shown again in a row is not a second impression.
+  let lastSlide = '';
+  const onSlide = (): void => {
+    if (HudPanel.CHAT !== viewOf(root).panel) return;
+    const shown = root.querySelector(`[${CAROUSEL_SLIDE_ATTR}]:not([hidden])`);
+    const slide = shown?.getAttribute(CAROUSEL_SLIDE_ATTR) ?? '';
+    if (0 === slide.length || slide === lastSlide) return;
+    lastSlide = slide;
+    send({ slide });
+  };
+  const slides = new MutationObserver(onSlide);
+  slides.observe(root, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['data-active', 'hidden'],
+  });
   doc.addEventListener('click', onPress, true);
-  const observer = new MutationObserver(onChange);
+  const observer = new MutationObserver((records) => {
+    onChange();
+    if (0 < records.length) onSlide();
+  });
   observer.observe(root, {
     attributes: true,
-    attributeFilter: [MIN_ATTR, CHAT_ATTR, SETTINGS_ATTR, REPORT_ATTR],
+    attributeFilter: [MIN_ATTR, CHAT_ATTR, SETTINGS_ATTR, REPORT_ATTR, PAGE_OPEN_ATTR],
   });
   onChange();
   return () => {
     doc.removeEventListener('click', onPress, true);
     observer.disconnect();
+    slides.disconnect();
   };
 }

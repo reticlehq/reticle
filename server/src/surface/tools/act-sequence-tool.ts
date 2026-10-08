@@ -339,8 +339,10 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
         );
         deps.recordings.capture(
           pageBefore === undefined ? recorded : { ...recorded, page: pageBefore },
+          undefined,
+          session.id,
         );
-        deps.recordings.markEnded(pathOf(session.url));
+        deps.recordings.markEnded(pathOf(session.url), session.id);
       }
       /*
        * The grade, and the coverage it is never allowed to hide.

@@ -264,6 +264,8 @@ export const RunFlowRecordingSchema = z.object({
 /** A flow that was replayed as part of the run. */
 export const RunFlowResultSchema = z.object({
   name: z.string(),
+  /** The saved flow this replayed copy was generated from — see the flow file's `template`. */
+  template: z.string().optional(),
   status: z.nativeEnum(RunFlowStatus),
   steps: z.number(),
   durationMs: z.number(),
@@ -500,6 +502,12 @@ export const ReticleVerificationRunSchema = z.object({
    */
   subject: SubjectRefSchema.optional(),
 
+  /**
+   * The prompt this verification answered, when the agent relayed one. Loose here because this
+   * schema loads with every page; its shape is `PromptContextSchema` in `@reticlehq/core/artifacts`,
+   * which the daemon writes and reads it with.
+   */
+  context: z.record(z.unknown()).optional(),
   changedFiles: z.array(RunChangedFileSchema).default([]),
   flows: z.array(RunFlowResultSchema).default([]),
   checks: z.array(RunCheckSchema).default([]),

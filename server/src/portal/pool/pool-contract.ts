@@ -19,12 +19,12 @@ export interface PooledPage {
    */
   onConsole?(handler: (text: string) => void): void;
   /**
-   * Capture the page as a PNG. OPTIONAL, like `onConsole`: a fake that does not implement it makes
+   * Capture the page as a PNG, or a JPEG at `jpegQuality` (a live picture, where size matters more). OPTIONAL, like `onConsole`: a fake that does not implement it makes
    * the pool report "no provider", which is the correct degradation — an absent screenshotter must
    * read as "this context cannot be captured", never as a blank image that a visual diff would then
    * compare against and pass.
    */
-  screenshot?(opts?: { fullPage?: boolean }): Promise<Uint8Array>;
+  screenshot?(opts?: ScreenshotOptions): Promise<Uint8Array>;
   /**
    * Move the real pointer to (x, y) so CSS `:hover` applies. OPTIONAL, like `screenshot`: a fake
    * that does not implement it makes hover refuse rather than dispatch a synthetic mouseover that
@@ -107,6 +107,14 @@ export interface PooledContext {
   newPage(): Promise<PooledPage>;
   close(): Promise<void>;
   addCookies?(cookies: PooledCookie[]): Promise<void>;
+  /**
+   * Grant browser permissions on this context. OPTIONAL, like `addCookies`: a context that cannot
+   * grant makes a lease that asked for permissions refuse, rather than open with none granted while
+   * the caller believes otherwise.
+   */
+  grantPermissions?(permissions: string[], opts?: { origin?: string }): Promise<void>;
+  /** Drop every permission granted on this context. OPTIONAL, for the same reason. */
+  clearPermissions?(): Promise<void>;
 }
 
 /** The launched browser. Real Playwright `Browser` satisfies this. */
@@ -120,3 +128,9 @@ export interface PooledBrowser {
 
 /** Produces a freshly launched browser. Injected so tests can supply a fake. */
 export type Launcher = () => Promise<PooledBrowser>;
+
+/** How a page is captured: the whole page or the viewport, and JPEG at a quality instead of PNG. */
+export interface ScreenshotOptions {
+  fullPage?: boolean;
+  jpegQuality?: number;
+}

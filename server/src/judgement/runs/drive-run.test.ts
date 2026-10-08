@@ -12,7 +12,13 @@ import {
   buildVerificationRun,
   type VerificationRunInput,
 } from './artifact/build-verification-run.js';
-import { driveRunFrom, driveRunId } from './drive-run.js';
+import {
+  driveRunFrom,
+  driveRunId,
+  driveRunsFrom,
+  harnessAgentId,
+  noteHarnessGoal,
+} from './drive-run.js';
 import { computeVerdict } from './artifact/build-verification-run.js';
 import { VerdictStatus } from '@reticlehq/core';
 
@@ -169,5 +175,48 @@ describe('the kind of evidence a check read', () => {
 
   it('leaves it absent when the journal never recorded one — a missing field, never a wrong one', () => {
     expect(driveRunFrom([action(Verified.YES)], DEPS)?.checks[0]?.kind).toBeUndefined();
+  });
+});
+
+describe('a Harness drive in the same tab', () => {
+  const by = { harness: 'h1', driver: 'server', persona: 'a merchant refunds a payment' };
+  const harness = (verified: Verified, at: number): JournalAction => ({
+    ...action(verified, 'a request POST matching refund', at),
+    drivenBy: by,
+  });
+
+  it('becomes its own run, named for its journey and credited to the Harness', () => {
+    const runs = driveRunsFrom(
+      [
+        action(Verified.YES, 'agent proved this', 10),
+        harness(Verified.YES, 40),
+        harness(Verified.NO, 70),
+      ],
+      DEPS,
+    );
+    expect(runs.map((run) => run.runId)).toEqual(['run_1', 'harness-h1']);
+    const [agent, drive] = runs;
+    expect(agent?.checks.map((check) => check.predicate)).toEqual(['agent proved this']);
+    expect(drive?.agent.id).toBe(harnessAgentId('server'));
+    expect(drive?.flows).toEqual([{ name: by.persona, status: 'fail', steps: 2, durationMs: 30 }]);
+    expect(drive?.checks).toHaveLength(2);
+  });
+
+  /** A drive that saw "Invalid email or password" and never reached its goal synced as "Proved". */
+  it('fails when the drive did not reach its goal, though every check held', () => {
+    const missed = { ...by, harness: 'h-goal' };
+    noteHarnessGoal('h-goal', false);
+    const runs = driveRunsFrom(
+      [
+        { ...harness(Verified.YES, 40), drivenBy: missed },
+        { ...harness(Verified.YES, 70), drivenBy: missed },
+      ],
+      DEPS,
+    );
+    expect(runs.find((run) => 'harness-h-goal' === run.runId)?.flows[0]?.status).toBe('fail');
+  });
+
+  it('leaves a session the Harness never touched exactly one run', () => {
+    expect(driveRunsFrom([action(Verified.YES)], DEPS).map((run) => run.runId)).toEqual(['run_1']);
   });
 });

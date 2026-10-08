@@ -7,6 +7,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { InitConfirmation, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import { FEEDBACK_HINT, Framework, InitFailure, type InitResult } from '@reticlehq/init';
 import { confirmInstall, nodeConfirmDeps } from '@/command/setup/terminal/confirm.js';
@@ -36,6 +37,25 @@ const POLL_MS = 250;
  * of the document can never see it. See `htmlCarriesSdk` in run-setup.ts.
  */
 const HTML_CARRIES_SDK: ReadonlySet<string> = new Set([Framework.VITE, Framework.HTML]);
+
+/** The connect component `init` writes for a Next App Router project. */
+const NEXT_APP_CONNECT = ['app', 'src/app'].flatMap((d) =>
+  ['tsx', 'jsx', 'js'].map((ext) => `${d}/reticle-dev.${ext}`),
+);
+
+/**
+ * Does the served document name the SDK, so its absence means a stale dev server?
+ *
+ * A Next App Router page names its client components in the flight data inlined into the HTML —
+ * `reticle-dev.tsx`, measured on Next 16 under Turbopack and webpack alike. Reported from a Next app
+ * whose dev server was already running before init: setup waited on a page that could never connect
+ * and said nothing, because Next was assumed to carry the SDK only in its bundle. The Pages Router
+ * names chunks, not modules, so it stays silent.
+ */
+export function htmlCarriesSdk(framework: string, exists: (path: string) => boolean): boolean {
+  if (HTML_CARRIES_SDK.has(framework)) return true;
+  return Framework.NEXT === framework && NEXT_APP_CONNECT.some(exists);
+}
 
 /** Just enough of the parsed command to decide and run. */
 interface InitRuntimeArgs {
@@ -218,7 +238,9 @@ export async function continueAfterInit(
             startupBudgetMs: parsed.timeoutSeconds * 1000,
           }),
       pollMs: POLL_MS,
-      htmlCarriesSdk: HTML_CARRIES_SDK.has(context.framework),
+      htmlCarriesSdk: htmlCarriesSdk(context.framework, (rel) =>
+        existsSync(join(context.appDir, rel)),
+      ),
       // A plain page with no dev script gets Reticle's own static server, so the page is actually
       // served and the connect can be proved, instead of stopping at "start the app yourself".
       ...((): { devCommand?: string } => {

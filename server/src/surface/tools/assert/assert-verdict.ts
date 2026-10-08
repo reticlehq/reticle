@@ -4,6 +4,7 @@ import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.j
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { declaresState } from '@reticlehq/engine/question/predicate/predicate-asks.js';
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
+import { hiddenMatchNote } from '@reticlehq/engine/evidence/already-true.js';
 import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core/artifacts';
 import {
   provenExpectedLinks,
@@ -41,7 +42,7 @@ import {
   repeatedRequestLabels,
 } from '@/surface/tools/act/settle-in-flight.js';
 import { gradeOfPredicate } from './assert-grade.js';
-import { assertSource } from './assert-source.js';
+import { assertSource, stampedSourceIn } from './assert-source.js';
 import { VerdictAttribution, verdictAttributionOf } from '@reticlehq/core';
 
 /**
@@ -101,6 +102,8 @@ export async function assertVerdict(
   const spots = blindSpotsFromState(session.blindSpots(), session.runtime);
   const statement = buildCoverageStatement(spots);
   const absenceBlindSpot = absenceBlindSpotNote(predicate, spots);
+  // A green resting on hidden matches says the node exists, not that it shows (#1408).
+  const hiddenMatch = hiddenMatchNote(predicate, evidence);
   // Omitted entirely when coverage is full, so an intact page pays nothing and the field's PRESENCE
   // is the warning.
   const coverage =
@@ -219,6 +222,7 @@ export async function assertVerdict(
     ...(effectiveInconclusive === undefined ? {} : { inconclusive: effectiveInconclusive }),
     ...(true === observationLost ? { observationLost: true, lastUrl: session.url } : {}),
     ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
+    ...(hiddenMatch === undefined ? {} : { hiddenMatch }),
     ...(namedNetIsInFlight(predicate, stillInFlight) ? { namedRequestInFlight: true } : {}),
     honesty: buildHonestyBlock({
       grade: gradeOfPredicate(predicate),
@@ -251,13 +255,25 @@ export async function assertVerdict(
       repeated: repeatedRequestLabels(windowEvents),
     },
   });
+  // The one file:line this verdict is entitled to: its own evidence, or — for a failure with no DOM
+  // clause to point at — the control last driven. Returned so the RESPONSE can echo the same value
+  // the journal keeps; one verdict must never carry two different pointers.
+  const source = assertSource({
+    predicate,
+    evidence,
+    pass,
+    lastActSource: session.lastAct.source(),
+  });
   // The same rule the act path uses, fed by what THIS path knows. An assertion drives nothing, so
-  // only two of the four gates can fire here: a red with no remembered source to point at, and a
-  // state assertion against an app that registers no store.
+  // only two of the four gates can fire here: a red with nothing located, and a state assertion
+  // against an app that registers no store. "Nothing located" reads the verdict's own source first,
+  // then any stamp in its evidence (a near miss carries one), and only then the last act: before,
+  // it read only the last act, so a red asked before any act reported `no-source-mapping` while its
+  // own near misses carried file:line (#1422).
   const gaps = gapsForAction({
     pass,
     ...(changeUndeclared === undefined ? {} : { changeUndeclared }),
-    source: session.lastAct.source(),
+    source: source ?? stampedSourceIn(evidence) ?? session.lastAct.source(),
     stateAsked: declaresState(predicate),
     stateUnwatched: isStateUnwatched(spots),
     // What the app DECLARED, so an under-instrumented one is told without having to be asked.
@@ -269,15 +285,6 @@ export async function assertVerdict(
     signalsFired: 0,
   });
   noteSessionGaps(session, gaps);
-  // The one file:line this verdict is entitled to: its own evidence, or — for a failure with no DOM
-  // clause to point at — the control last driven. Returned so the RESPONSE can echo the same value
-  // the journal keeps; one verdict must never carry two different pointers.
-  const source = assertSource({
-    predicate,
-    evidence,
-    pass,
-    lastActSource: session.lastAct.source(),
-  });
   // Who can act on this verdict, derived from the clause that decided it — see `attributedTo` below.
   const attributedTo = verdictAttributionOf(decision.verifiedReason);
   return {

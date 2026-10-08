@@ -5,7 +5,7 @@ description: Install Reticle, connect your coding agent, and get a real verdict 
 icon: rocket
 ---
 
-**Run the installer once, then run `reticle init` in your project.** Reticle embeds a dev-only SDK in your running app and proves a browser session connected. No account needed. Add `reticle connect` later if you want a cloud dashboard.
+**Run the installer once, then ask your agent to verify something in your app; its first Reticle call wires the app (the same thing `reticle init` does, which you can also run yourself).** Reticle embeds a dev-only SDK in your running app and proves a browser session connected. No account needed. Add `reticle connect` later if you want a cloud dashboard.
 
 By the end of this page your agent will click a button in your app and prove what happened: the request that fired, the state that changed, and the file to open if it didn't.
 
@@ -61,16 +61,17 @@ In your project directory, before opening your coding agent:
 RETICLE_INSTALL_SOURCE=docs_site npx @reticlehq/server init
 ```
 
-This installs the dev-only SDK, wires your build config, starts the dev server, and checks that a browser session connected. Nothing from your project leaves your machine. Open your coding agent once this command finishes; if it was already open during installation, restart it to load the new tools. The `RETICLE_INSTALL_SOURCE` prefix is optional and only tells us which page you installed from.
+This installs the dev-only SDK, wires your build config, starts the dev server, and checks that a browser session connected. Nothing from your project leaves your machine. Open your coding agent once this command finishes; if it was already open during installation, restart it to load the new tools. The `RETICLE_INSTALL_SOURCE` prefix is optional and only tells us which page you installed from. It is idempotent: run it twice and the second run reports what was already done rather than doing it again.
 
 Step 1 is once per machine. This step is once per project. **Skipping it is the most common reason Reticle "does nothing":** the agent has the tools, but there is no app on the other end for them to see.
 
 Want a cloud dashboard too? Run `npx @reticlehq/server connect --project "My App"` instead of, or after, `init`. It does everything `init` does, then opens browser sign-in approval, links this folder to the named cloud project, and sends existing local history. Approve the short code shown in the browser and terminal; the command resumes by itself.
 
 <Note>
-  **Skipped this step?** In a web app Reticle has never connected to, your agent's first reply
-  offers to run `init`, and runs it only if you say yes. This works in Claude Code, Codex, Cursor
-  and other agents that read MCP server instructions.
+  **Skipped this step?** Ask your agent to verify something in the app. Its first `reticle_session`
+  call finds a project that has never connected, runs `init` there itself, and lists every file it
+  changed under `wired`. Asked about something unrelated, it offers to wire the app instead of doing
+  it. This works in Claude Code, Codex, Cursor and other MCP agents.
 </Note>
 
 Prefer to install the skill and let the agent run setup itself? On Claude Code the plugin registers the MCP server and the skill in one step:
@@ -224,7 +225,7 @@ Read what that actually proves:
 
 ## What "verified" can say
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="yes" icon="circle-check">
     The consequence you named actually happened, and the evidence is attached.
   </Card>
@@ -233,6 +234,9 @@ Read what that actually proves:
   </Card>
   <Card title="unknown" icon="circle-question">
     Reticle drove the app and could not tell. **This is not a pass.** Report it as unknown.
+  </Card>
+  <Card title="no-fault" icon="circle-minus">
+    Nothing was declared to prove, so nothing was checked. **Not a pass either:** add an `until`.
   </Card>
 </CardGroup>
 

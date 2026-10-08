@@ -12,42 +12,38 @@
  */
 
 import { z } from 'zod';
+import { unprovedGoals } from '@/features/harness/goals.js';
 import { ReticleTool, asRecord } from '@reticlehq/core';
 import { stepCountSchema } from './args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
+import { runTool } from './invoke-tool.js';
+import { driveVerdict, type RemoteDriveOutcome } from '@/features/harness/platform/remote-drive.js';
 import {
   exploreApp,
   harnessAvailable,
   withLinkedCredential,
   MSG_NO_HARNESS_KEY,
 } from './harness-explore.js';
-import { DRIVER_NAMES } from '@/features/harness/drivers.js';
-import { describeDrive, replayedFlows } from '@/features/harness/drive-report.js';
+import { EXPLORE_NEEDS } from '@/features/harness/drivers.js';
+import { checkTally, describeDrive, replayedFlows } from '@/features/harness/drive-report.js';
 import { StopReason, type HarnessResult } from '@/features/harness/harness.js';
 
 export const EXPLORE_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.VERIFY_EXPLORE,
     description:
-      'Drive the app yourself? Do not — call this instead. A model inside the daemon drives it through this same tool surface, records what it drove as saved flows, and answers in a few lines, so the whole drive costs you one tool call instead of a context full of snapshots. Pass `persona` to say who to be or what to accomplish ("a returning customer checking out", "an admin revoking a seat") and it completes that whole journey rather than clicking at random. Returns { stopReason, steps, savedFlows, summary, usage }. The saved flows are the point: from the next run on, reticle_verify { action: "flows" } replays them deterministically with NO model in the loop. DESTRUCTIVE — it really drives the app, and it spends model budget. Needs ANTHROPIC_API_KEY in the daemon environment.',
+      'Drive the app yourself? Do not — call this instead. The Reticle Harness drives it through this same tool surface (it decides on the Reticle platform, this daemon executes each step), records what it drove as saved flows, and answers in a few lines, so the whole drive costs you one tool call instead of a context full of snapshots. Pass `persona` to say who to be or what to accomplish ("a returning customer checking out", "an admin revoking a seat") and it completes that whole journey rather than clicking at random. Returns { stopReason, steps, savedFlows, summary, usage }. The saved flows are the point: from the next run on, reticle_verify { action: "flows" } replays them deterministically with NO model in the loop. DESTRUCTIVE — it really drives the app, and it spends Harness credits. ' +
+      EXPLORE_NEEDS,
     inputSchema: {
       persona: z
         .string()
         .optional()
         .describe(
-          'Who to be, or what to accomplish. A journey ("sign up, then invite a teammate") drives far better than no focus at all.',
+          'The journey in plain words; any "quoted text" must be on the page when it ends (checked).',
         ),
       maxSteps: stepCountSchema
         .optional()
-        .describe(
-          'Ceiling on model turns. Bounds cost, not value — the drive is graded however it ends.',
-        ),
-      driver: z
-        .enum(DRIVER_NAMES)
-        .optional()
-        .describe(
-          'Which model drives. An unconfigured one is an error, never a substitution, so an A/B cannot measure the same driver twice. Omit for the default.',
-        ),
+        .describe('Ceiling on model turns; the drive is graded however it ends.'),
       sessionId: z
         .string()
         .optional()
@@ -64,6 +60,21 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       savedFlows: z.array(z.string()),
       /** Flows that already existed and were driven and written again. A second run's ordinary result. */
       rewroteFlows: z.array(z.string()),
+      /** Saved flows with no step that asserts anything: their replay verifies nothing. */
+      unverifiedFlows: z.array(z.string()),
+      /** Whether the drive ran at least one check. A drive that did not proved nothing. */
+      proved: z.boolean(),
+      /**
+       * Whether every journey reached its goal, as the platform judged when the drive finished.
+       * Absent when no journey's goal was judged. Checks that held are not the goal reached.
+       */
+      goalMet: z.boolean().optional(),
+      /** How the drive's checks came out, one per control and claim at its worst. */
+      checks: z.object({ held: z.number(), failed: z.number(), undecided: z.number() }),
+      /** The runs this drive syncs as (`harness-<uuid>`): what the platform links its check to. */
+      runIds: z.array(z.string()).optional(),
+      /** One verdict per requested goal, checked by the harness itself. Only `yes` is proved. */
+      goals: z.array(z.object({ text: z.string(), verified: z.string() })),
       /**
        * What the drive set out to do, read from `.reticle` BEFORE it started — every recorded
        * journey with the consequence that must still hold, and the declared intent nobody has
@@ -97,12 +108,20 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       const persona = args['persona'];
       const maxSteps = args['maxSteps'];
       const sessionId = args['sessionId'];
-      const driver = args['driver'];
-      const { drive, savedFlows, rewroteFlows, driverName, plan } = await exploreApp(deps, env, {
+      const {
+        drive,
+        savedFlows,
+        rewroteFlows,
+        unverifiedFlows,
+        driverName,
+        plan,
+        goals,
+        planLines,
+        runIds,
+      } = await exploreApp(deps, env, {
         ...('string' === typeof persona ? { focus: persona } : {}),
         ...('number' === typeof maxSteps ? { maxSteps } : {}),
         ...('string' === typeof sessionId ? { sessionId } : {}),
-        ...('string' === typeof driver ? { driverName: driver } : {}),
       });
       return {
         stopReason: drive.stopReason,
@@ -110,11 +129,19 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         steps: drive.steps,
         savedFlows: [...savedFlows],
         rewroteFlows: [...rewroteFlows],
+        unverifiedFlows: [...unverifiedFlows],
+        proved: drive.proved,
+        checks: checkTally(drive.toolCalls),
+        ...(drive.goalMet === undefined ? {} : { goalMet: drive.goalMet }),
+        ...(runIds === undefined ? {} : { runIds: [...runIds] }),
+        goals: [...goals],
         plan: { summary: plan.summary, steps: [...plan.steps] },
         // Derived, not narrated. The driver's own `summary` is appended only when it said
         // something — it is the one part of this a model authored, so it goes last and is labelled.
         summary: [
-          describeDrive(drive.toolCalls, [...savedFlows, ...rewroteFlows]),
+          ...(planLines ?? []),
+          describeDrive(drive.toolCalls, [...savedFlows, ...rewroteFlows], unverifiedFlows),
+          ...[unprovedGoals(goals)].filter((line): line is string => line !== undefined),
           ...(0 === drive.summary.length ? [] : [`The driver's own account: ${drive.summary}`]),
         ].join('\n'),
         ...(drive.error === undefined ? {} : { error: drive.error }),
@@ -180,4 +207,59 @@ const NOTHING_RECORDED: Record<StopReason, string> = {
   [StopReason.STALLED]:
     'The drive stopped asking for tools without finishing. Nothing was saved, and nothing is proved.',
   [StopReason.BROKEN]: 'The drive broke before saving anything — read `error`. Nothing is proved.',
+  [StopReason.STOPPED]:
+    'Autonomous driving was switched off before the drive saved anything. Nothing is proved; switch it back on to drive again.',
 };
+
+/**
+ * A drive the platform's chat asked for, run as the very tool an agent would call.
+ *
+ * Through `runTool`, not a second path to `exploreApp`: a dispatch that skips it is a drive nobody
+ * counted, and the chat's answer is then the same derived summary the agent would have read — never
+ * a model's account of its own drive.
+ */
+export async function driveForChat(
+  deps: ToolDeps,
+  goal: string,
+  sessionId?: string,
+): Promise<RemoteDriveOutcome> {
+  const explore = EXPLORE_TOOLS.find((tool) => ReticleTool.VERIFY_EXPLORE === tool.name);
+  if (explore === undefined) throw new Error('this build has no Harness drive');
+  const out = asRecord(
+    await runTool(explore, deps, {
+      persona: goal,
+      ...(sessionId === undefined ? {} : { sessionId }),
+    }),
+  );
+  const summary = 'string' === typeof out['summary'] ? out['summary'] : '';
+  const error = 'string' === typeof out['error'] ? out['error'] : undefined;
+  const note = 'string' === typeof out['note'] ? out['note'] : undefined;
+  const goals = Array.isArray(out['goals'])
+    ? out['goals'].flatMap((g) => {
+        const verified = asRecord(g)['verified'];
+        return 'string' === typeof verified ? [{ verified }] : [];
+      })
+    : [];
+  const goalMet = out['goalMet'];
+  const tally = asRecord(out['checks']);
+  const count = (key: string): number => ('number' === typeof tally[key] ? tally[key] : 0);
+  const checks = { held: count('held'), failed: count('failed'), undecided: count('undecided') };
+  const runIds = Array.isArray(out['runIds'])
+    ? out['runIds'].filter((id): id is string => 'string' === typeof id)
+    : [];
+  return {
+    // Only a drive that ran a check and did not break counts as one that proved anything.
+    ok: true === out['proved'] && error === undefined,
+    ...(0 === runIds.length ? {} : { runIds }),
+    verdict: driveVerdict({
+      proved: true === out['proved'],
+      checks,
+      goals,
+      ...(error === undefined ? {} : { error }),
+      ...('boolean' === typeof goalMet ? { goalMet } : {}),
+    }),
+    summary: [summary, note, error === undefined ? undefined : `Error: ${error}`]
+      .filter((line): line is string => line !== undefined && 0 < line.length)
+      .join('\n'),
+  };
+}

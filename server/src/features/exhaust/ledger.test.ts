@@ -6,6 +6,7 @@ import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
   LedgerStore,
   acceptCurrent,
+  coveragePercents,
   emptyLedger,
   levelsOf,
   mergeLedger,
@@ -182,5 +183,23 @@ describe('staleChanged — coverage taken before the file last changed', () => {
       code: { 'src/Cart.tsx': { 'pay@10': { name: 'pay', executed: true } } },
     });
     expect(staleChanged(old, ['src/Cart.tsx'], () => 1)).toEqual(['src/Cart.tsx']);
+  });
+});
+
+// The HUD's Reticle Coverage: each level as a percentage, from the ledger a drive already writes.
+describe('coveragePercents', () => {
+  it('reads each measured level of a project, and nothing before anything was measured', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ledger-pct-'));
+    try {
+      expect(coveragePercents(root)).toBeUndefined();
+      await new LedgerStore(createNodeFileSystem(), root).merge({
+        routes: { discovered: ['/', '/cart'], reached: ['/'] },
+        controls: { seen: ['a', 'b', 'c', 'd'], touched: ['a', 'b'], proved: ['a'] },
+      });
+      expect(coveragePercents(root)).toMatchObject({ reached: 50, touched: 50, proved: 25 });
+      expect(coveragePercents(root)).not.toHaveProperty('executed');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

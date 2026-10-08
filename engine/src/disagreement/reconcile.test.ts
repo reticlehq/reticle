@@ -67,10 +67,23 @@ describe('a state the page never shows', () => {
   };
 
   it('reports a record displayed as something it is not', () => {
-    const found = reconcile([settlements], 'badge "processed" badge "pending"');
+    const found = reconcile([settlements], 'row "s1" badge "processed" row "s2" badge "pending"');
     expect(found).toHaveLength(1);
     expect(found[0]?.entity).toBe('s2');
     expect(found[0]?.api).toBe('on_hold');
+  });
+
+  /** Live on a merchant dashboard: a filtered list and another page's data read as twenty defects. */
+  it('stays silent about a record the page does not show at all', () => {
+    expect(reconcile([settlements], 'row "s1" badge "processed" badge "pending"')).toEqual([]);
+  });
+
+  it('judges a record only against records the page shows', () => {
+    const payments = { items: [{ id: 'pay_1', status: 'captured' }] };
+    const disputes = { items: [{ id: 'disp_1', status: 'evidence_required' }] };
+    // A disputes page that names its dispute and renders "Needs response", while the payments the
+    // session loaded earlier are not on it: nothing here is shown wrongly.
+    expect(reconcile([payments, disputes], 'row "disp_1" badge "Needs response"')).toEqual([]);
   });
 
   it('accepts a humanised rendering of the same value', () => {

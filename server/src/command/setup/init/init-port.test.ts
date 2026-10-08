@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { portForInit, portFromEnv } from './init-port.js';
+import { isSameOrAbove, portForInit, portFromEnv } from './init-port.js';
 
 const OTHER_PROJECT = 'shop-1234abcd';
 const RELOCATED = 4401;
@@ -31,6 +31,20 @@ describe('portForInit', () => {
   // refused every connect from its app.
   it("moves a new project off the default when another project's daemon holds it", async () => {
     expect(await portForInit(undefined, undefined, undefined, deps(OTHER_PROJECT))).toBe(RELOCATED);
+  });
+
+  /**
+   * Reported from a Tauri + Next app: the editor's MCP had started a daemon on the default port from
+   * this very directory, before init wrote any project id. Init read that daemon as somebody else's,
+   * moved the project to 4401, and the agent — whose MCP resolves its port once — never saw the app.
+   */
+  it('keeps the default when the daemon there was started from this project, id or no id', async () => {
+    expect(
+      await portForInit(undefined, undefined, undefined, {
+        ...deps(OTHER_PROJECT),
+        daemonStartedHere: () => true,
+      }),
+    ).toBeUndefined();
   });
 
   it('keeps the default when the daemon there is this project’s own', async () => {
@@ -75,5 +89,14 @@ describe('portFromEnv', () => {
   it('is written into the project exactly as an explicit port is', async () => {
     const explicit = portFromEnv({ RETICLE_PORT: '4455' });
     expect(await portForInit(explicit, 4471, undefined, deps(OTHER_PROJECT))).toBe(4455);
+  });
+});
+
+describe('isSameOrAbove', () => {
+  it('is the directory itself, or one it sits inside', () => {
+    expect(isSameOrAbove('/work/app', '/work/app')).toBe(true);
+    expect(isSameOrAbove('/work', '/work/app')).toBe(true);
+    expect(isSameOrAbove('/work/app', '/work')).toBe(false);
+    expect(isSameOrAbove('/work/ap', '/work/app')).toBe(false); // a prefix is not a parent
   });
 });

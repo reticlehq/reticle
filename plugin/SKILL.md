@@ -3,7 +3,7 @@ name: reticle
 description: Install, instrument and verify this running web app from the inside (DOM, network, routing, console and framework state) instead of screenshots or guessing. Drives one real flow end to end and returns a verdict with the file:line to fix. Use when the user asks to set up or install Reticle, when a user-facing change needs proving before you call it done, when a test passes but the UI is broken, or when the user types /reticle.
 license: Apache-2.0
 metadata:
-  version: 3.5.0
+  version: 3.6.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -49,10 +49,10 @@ It detects the framework and package manager, wires the build config, installs t
 **Then prove a flow. That is the FIRST RUN, and it is a separate call:**
 
 ```
-reticle_verify { action: "explore", persona: "<who does what>" }
+reticle_act_and_wait { ref, action, until }
 ```
 
-It drives the app with a model inside the daemon and RECORDS what it drove, so every later check replays that flow with no model in the loop.
+Drive the journey that matters and put the verdict on its LAST step: `until` names the end state before the action fires. What you drive is saved as a flow, so later runs replay it with no model. On a linked project (`reticle connect`; every plan, Free included, has monthly Harness credits), `reticle_verify { action: "explore", persona: "<who does what>" }` has the Reticle Harness drive the whole journey for you instead. Before driving anything, replay what is already saved: `reticle_verify { action: "flows" }` costs no model at all.
 
 ## What YOU decide, and pass in
 
@@ -111,7 +111,7 @@ Four calls for a login, not fourteen. Every call is a full model turn, and in a 
 1. `reticle_look({ action: "page", mode: "interactive" })` **once**, for the whole flow. Elements are addressable by role and name, so you do not need to add `data-testid` anywhere.
 2. `reticle_act { steps: [...] }` for the setup: every fill and every intermediate click in ONE call.
 3. `reticle_act_and_wait({ ref, action, until })` for the step that ENDS the journey (the confirmation, the saved record, the last page), not the first click that looks like success. `until` names that end state **before** the action fires, which is the difference between a check and a rationalisation. Pass `durable: true` when the change should survive a reload. A step on the way with a consequence of its own (a save, a submit) gets its own `expect` in `steps`, so a journey that breaks at step three fails at step three.
-4. `reticle_look({ action: "state" })` once at the end. If it comes back empty or `hasCapabilities` is false, the capabilities file `init` generated registered nothing, which is what its `ℹ AGENT: finish the capabilities file` line was telling you. Finish it yourself before you drive: open `src/reticle-dev.*`, register the app's store if it has one, and list the `testids` the flow you picked actually touches. Do not offer, and do not ask; it is a few lines in a file `init` already wrote for you. Never report a clean install over an empty state read.
+4. `reticle_look({ action: "state" })` once at the end. If it comes back empty or `hasCapabilities` is false, the capabilities file `init` generated registered nothing, which is what its `ℹ AGENT: finish the capabilities file` line was telling you. Finish it yourself before you drive: open `src/reticle-dev.*`, register the app's store if it has one, and list the `testids` the flow you picked actually touches. That is a setup step rather than a decision: a few lines in a file `init` already wrote for you. Never report a clean install over an empty state read.
 
 Assert what the app _did_, not what it _shows_. A UI that renders the value it just sent, rather than the value the server returned, passes every DOM-level check ever written:
 

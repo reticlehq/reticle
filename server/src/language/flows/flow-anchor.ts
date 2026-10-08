@@ -244,7 +244,19 @@ function ambiguousAnchorDrift(anchor: FlowAnchor, matches: number): Drift {
  * changed by a click nobody can attribute, which is worse than the ambiguity it reports.
  */
 export function ambiguityDrift(anchor: FlowAnchor, refs: readonly string[]): Drift | null {
-  return refs.length > 1 ? ambiguousAnchorDrift(anchor, refs.length) : null;
+  return refs.length > 1 && refFor(anchor, refs) === undefined
+    ? ambiguousAnchorDrift(anchor, refs.length)
+    : null;
+}
+
+/**
+ * The one ref a step means: the only match, or the recorded position among same-named controls
+ * while the page still has exactly as many of them as when it was recorded. Otherwise undefined.
+ */
+export function refFor(anchor: object, refs: readonly string[]): string | undefined {
+  if (1 === refs.length) return refs[0];
+  const { nth, of }: Record<string, unknown> = { ...anchor };
+  return 'number' === typeof nth && of === refs.length ? refs[nth] : undefined;
 }
 
 /**
@@ -263,7 +275,7 @@ export function ambiguityDrift(anchor: FlowAnchor, refs: readonly string[]): Dri
 export function reresolved(anchor: FlowAnchor, refs: readonly string[]): Reresolved | undefined {
   const drift = ambiguityDrift(anchor, refs);
   if (drift !== null) return { drift };
-  const ref = refs[0];
+  const ref = refFor(anchor, refs);
   return ref === undefined ? undefined : { ref };
 }
 

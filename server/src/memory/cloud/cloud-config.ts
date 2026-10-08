@@ -250,6 +250,32 @@ export const linkedCloudPort =
     (await resolveProjectCloud(fs, reticleRoot, homeDir, env)).config;
 
 /**
+ * The API key a tab's own project resolves to, so a credential is only ever used for its own tabs.
+ * A tab whose project cannot be resolved has no key.
+ */
+export const sessionApiKeyPort =
+  (fs: FileSystemPort, homeDir: string, env: NodeJS.ProcessEnv, rootOf: (id: string) => string) =>
+  async (sessionId: string): Promise<string | undefined> =>
+    (await sessionCloudPort(fs, homeDir, env, rootOf)(sessionId))?.apiKey;
+
+/** The platform and key a tab's own project resolves to, or undefined when it is not linked. */
+export const sessionCloudPort =
+  (fs: FileSystemPort, homeDir: string, env: NodeJS.ProcessEnv, rootOf: (id: string) => string) =>
+  async (sessionId: string): Promise<CloudConfig | undefined> =>
+    (await resolveProjectCloud(fs, rootOf(sessionId), homeDir, env)).config ?? undefined;
+
+/**
+ * The credential for pushing RUNS, or null when this project opted out with `sync.runs: false`.
+ * `reticle verify` used the port above and pushed its run and progress regardless of the opt-out.
+ */
+export const linkedRunsCloudPort =
+  (fs: FileSystemPort, reticleRoot: string, homeDir: string, env: NodeJS.ProcessEnv) =>
+  async (): Promise<CloudConfig | null> => {
+    const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, env);
+    return cloud.policy.runs ? cloud.config : null;
+  };
+
+/**
  * The environment with this project's resolved credential written into it, for the readers that
  * take an env record (the panel's model config and harness switch). Handed `process.env` alone,
  * they never saw a key `reticle link` had stored. Resolved per call, so a link made mid-session

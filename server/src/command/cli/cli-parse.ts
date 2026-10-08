@@ -41,12 +41,14 @@ export {
  */
 export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticle <command>\` once the bin is on your PATH)
 
+  reticle tutorial [--run] [--headless] [--port N]   (watch Reticle verify a demo app, in seconds)
   reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
                 [--env KEY=VALUE]... [--files-only] [--hooks]  (wire Reticle into the project in this directory)
                 init is ONBOARDING: it wires the project, boots the app and proves a session
                 connected. It does not drive. The FIRST RUN is the stage that proves a flow:
-                reticle verify <url> --explore --persona "<who does what>", or the same thing
-                from an agent as reticle_verify { action: "explore", persona: "…" }
+                an agent drives one journey with reticle_act_and_wait and an \`until\` on its last
+                step; with a linked project, reticle_verify { action: "explore", persona: "…" }
+                (or reticle verify <url> --explore --persona "…") drives it instead
                 --app picks WHICH app in a monorepo, when several are found
                 --env is what the app needs to reach a usable state: the key from
                 .env.example, the mock backend, the variable that skips an auth wall.

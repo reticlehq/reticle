@@ -11,9 +11,35 @@ import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import { asString } from '@reticlehq/core';
 import type { ToolDef } from '@/surface/tools/tool-kit.js';
+import type { Session } from './session.js';
+import type { SessionManager } from './session-manager.js';
 import { gapReportLines } from '@/judgement/runs/artifact/gap-report.js';
 import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
 import { DiscoveryInvite } from '@reticlehq/core';
+
+/**
+ * The session an id-less yield hands back.
+ *
+ * Yield is non-destructive: it only gives the tab back to the human. With several projects connected,
+ * an id-less call hit the same "which session?" refusal a destructive action gets, so an agent that
+ * had just finished driving one tab had to look its id up in order to let go of it (#1258). When the
+ * ordinary resolution refuses, the one connected session this caller has DRIVEN (it holds a
+ * remembered act) is the clear candidate. None, or more than one, and the refusal stands: guessing
+ * which of two driven tabs to release is still a guess.
+ */
+function resolveYieldTarget(sessions: SessionManager, requested: string | undefined): Session {
+  if (requested !== undefined) return sessions.resolve(requested);
+  try {
+    return sessions.resolve();
+  } catch (refusal) {
+    // In scope only: a tab the project scope refuses to hand over is not this caller's to release.
+    const driven = sessions.inScope().filter((s) => s.lastAct.cursor() !== undefined);
+    const [only] = driven;
+    if (1 !== driven.length || only === undefined) throw refusal;
+    only.markAgentActivity();
+    return only;
+  }
+}
 
 /**
  * Is this a turn ending with nothing attached, rather than a call about a specific tab?
@@ -43,19 +69,34 @@ function endingTurnWithNothingAttached(deps: { sessions: { count(): number } }, 
  * PRESENTER commands. No clock is read here — inbox stamps were assigned by the session's injected
  * elapsed clock at enqueue time.
  */
+const DISCONNECT_NEEDS_SESSION_ID =
+  '`disconnect: true` needs the `sessionId` of the page to detach — list them with ' +
+  'reticle_session{action:"list"}; it is never picked for you, because detaching the wrong window ' +
+  'cuts you off from the app.';
+
 export const LIVE_CONTROL_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.END_SESSION,
     description:
       'End this session for good — use ONLY when the whole task is complete. Sets state "ended" ' +
       '(calm, terminal) and shows the optional `summary` on the panel. If you are just finishing a ' +
-      'turn or waiting on the human, call reticle_session{action:"yield"} instead (revivable). Idempotent.',
-    inputSchema: { summary: z.string().optional(), ...sessionIdShape },
+      'turn or waiting on the human, call reticle_session{action:"yield"} instead (revivable). Idempotent. ' +
+      "With `disconnect: true` and a `sessionId` it also closes that page's connection and refuses it " +
+      'until the daemon restarts — for a stray window (a hidden desktop webview, a 404 page) that keeps coming back.',
+    inputSchema: {
+      summary: z.string().optional(),
+      disconnect: z
+        .boolean()
+        .optional()
+        .describe('Also detach this page for good (needs sessionId). Reloads stay detached.'),
+      ...sessionIdShape,
+    },
     // `sessionId` is optional because there may genuinely not be one — see the no-op below. An
     // empty string would read as a real id in a log, which is worse than its absence.
     outputSchema: {
       ended: z.boolean(),
       sessionId: z.string().optional(),
+      disconnected: z.boolean().optional(),
       note: z.string().optional(),
       talk_to_us: z
         .string()
@@ -72,6 +113,9 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
     },
     handler: (deps, args) => {
       const requested = asString(args['sessionId']);
+      const detach = true === args['disconnect'];
+      // Named, never auto-picked: detaching the wrong window cuts the agent off from the app.
+      if (detach && requested === undefined) throw new Error(DISCONNECT_NEEDS_SESSION_ID);
       if (endingTurnWithNothingAttached(deps, requested)) {
         return Promise.resolve({ ended: true, note: YIELD_WITHOUT_SESSION_NOTE });
       }
@@ -114,7 +158,14 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
         const panel = [summary, gap[0]].filter((line): line is string => line !== undefined);
         // One PRESENTER push for the transition; the summary and the gap headline ride together.
         session.setState(SessionState.ENDED, 0 === panel.length ? undefined : panel.join('\n'));
-        return { ended: true, sessionId: session.id, gap, talk_to_us: DiscoveryInvite.AGENT };
+        if (detach) deps.sessions.park(session);
+        return {
+          ended: true,
+          sessionId: session.id,
+          ...(detach ? { disconnected: true } : {}),
+          gap,
+          talk_to_us: DiscoveryInvite.AGENT,
+        };
       });
     },
   },
@@ -153,7 +204,7 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
           note: YIELD_WITHOUT_SESSION_NOTE,
         });
       }
-      const session = deps.sessions.resolve(requested);
+      const session = resolveYieldTarget(deps.sessions, requested);
       const note = asString(args['note']);
       const tone = ask ? PresenterTone.ASK : PresenterTone.WAITING;
       const text =

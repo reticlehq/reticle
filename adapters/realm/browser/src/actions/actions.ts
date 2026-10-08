@@ -6,8 +6,10 @@ import {
   DANGEROUS_ACTION_CONFIRM_ARG,
   ElementState,
   NATIVE_INPUT_ARG,
+  QueryBy,
   SettleReason,
 } from '@reticlehq/core';
+import { elementsMatching } from '@/dom/query.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { echoRef, refs } from '@/dom/addressing/refs.js';
 import {
@@ -40,6 +42,7 @@ import {
   pressCombo,
   dispatchKeypress,
   closeModalOnEscape,
+  keyboardEvent,
 } from './actions-press.js';
 
 /**
@@ -134,6 +137,9 @@ interface ActionResult {
   /** Role + accessible name — the anchor that identifies an INSTANCE, not a JSX site. */
   role?: string;
   name?: string;
+  /** Which of several controls sharing that role and name this was, and how many there were. */
+  nth?: number;
+  of?: number;
   source?: { file: string; line: number; column?: number };
   /** Best-effort caveat the agent should heed (e.g. synthetic hover may not fire enter/leave). */
   warning?: string;
@@ -166,6 +172,8 @@ interface CapturedAnchor {
    */
   role?: string;
   name?: string;
+  nth?: number;
+  of?: number;
 }
 
 /**
@@ -199,6 +207,16 @@ function anchorOf(el: Element): CapturedAnchor {
   const name = getAccessibleName(el);
   if (role.length > 0) out.role = role;
   if (name.length > 0) out.name = name;
+  if (role.length > 0 && name.length > 0) {
+    // A sidebar link and a card link both named "Transactions": without the position, the recorded
+    // step was ambiguous on every replay.
+    const same = elementsMatching({ by: QueryBy.ROLE, value: role, name });
+    const at = same.indexOf(el as HTMLElement);
+    if (1 < same.length && 0 <= at) {
+      out.nth = at;
+      out.of = same.length;
+    }
+  }
   return out;
 }
 
@@ -229,6 +247,8 @@ const result = (
   if (anchor.source !== undefined) base.source = anchor.source;
   if (anchor.role !== undefined) base.role = anchor.role;
   if (anchor.name !== undefined) base.name = anchor.name;
+  if (anchor.nth !== undefined) base.nth = anchor.nth;
+  if (anchor.of !== undefined) base.of = anchor.of;
   if (warning !== undefined) base.warning = warning;
   return base;
 };
@@ -684,7 +704,7 @@ async function dispatchOther(
       // agent pressing Escape would otherwise switch off a mode the person turned on.
       const down = asSyntheticInput(() =>
         el.dispatchEvent(
-          new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ...mods }),
+          keyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ...mods }),
         ),
       );
       closeModalOnEscape(el, key, down); // on keydown, as a browser does, before any hold
@@ -697,7 +717,7 @@ async function dispatchOther(
       const hold = clampHoldMs(args['holdMs']);
       if (hold > 0) await holdKey(el, key, code, mods, hold);
       asSyntheticInput(() =>
-        el.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
+        el.dispatchEvent(keyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
       );
       return !down;
     }

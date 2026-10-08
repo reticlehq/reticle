@@ -450,12 +450,15 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'tape',
     'tools',
   ],
-  impact: ['cloud', 'session'],
+  // `project` for where this project's work stands with the platform, shown beside Sync now.
+  impact: ['cloud', 'project', 'session'],
   // `read` for `shapeQueryResult`: the scrolling find answers in the SAME shape as a plain find,
   // and sharing the shaper is what stops `scroll: true` being a different tool wearing one name.
   // One way only — `read` reaches nothing, which is the property that keeps it movable.
   input: ['args', 'pool', 'telemetry', 'tools'],
-  intent: ['dir', 'fs', 'machine', 'project', 'tools'],
+  // `telemetry` for the one free-text redactor (credentials and personal data out of what a person
+  // wrote), shared with feedback reports: a relayed user request is the same kind of text.
+  intent: ['dir', 'fs', 'machine', 'project', 'telemetry', 'tools'],
   // What a run artifact is FOR once it exists -- stored, compared, and read back as established
   // fact -- as against the rest of `runs`, which produces one. Named `artifact`, singular, and it
   // must stay singular: `core/src/artifacts` is a different package and a different node, and
@@ -501,6 +504,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   proxy: ['binding', 'daemon', 'identity', 'telemetry'],
   runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
+    // A command the Harness sends is marked as the Harness's, so the HUD can say who is driving;
+    // the async context that knows lives in `hooks`, beside the journal that reads it too.
+    'hooks',
     // Ending a session reports what it claimed and what held, folded from its own journal by the
     // one gap fold the context tool and `reticle report` also use.
     'artifact',
@@ -688,6 +694,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * guard is satisfied.
    */
   'page-commands': [],
+  // The platform's side of the Harness: a driver for the loop next door, and nothing else.
+  platform: ['harness'],
+  // The Harness's drive plan: planned from flows, run lane by lane through the loop next door.
+  // Handed its browser, model and tools as ports, so like `harness` it reaches nothing else.
+  script: ['harness'],
   tools: [
     // A lease that never dialled reads the served page's CSP, the same reader doctor uses.
     'dev-server',
@@ -722,6 +733,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'fs',
     'gaps',
     'harness',
+    // The platform's Harness driver, chosen with the local ones when a drive is built.
+    'platform',
+    // The drive plan, planned and run when no journey is named.
+    'script',
     'impact',
     'input',
     'intent',

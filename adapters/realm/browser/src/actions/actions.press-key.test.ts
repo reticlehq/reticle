@@ -147,3 +147,43 @@ describe('a document-key press needs no ref', () => {
     await expect(executeAction('', ActionType.PRESS, {})).rejects.toThrow(/no longer resolves/);
   });
 });
+
+/**
+ * A pressed key carries the legacy `keyCode`/`which` a real keyboard sets.
+ *
+ * Driven live on TodoMVC: its input adds a todo on `keyCode === 13`, and a synthetic Enter without
+ * a keyCode reads as 0, so `press Enter` did nothing while reporting success. Proved against the
+ * real page: the same synthetic event with keyCode 13 added the todo, without it nothing happened.
+ */
+describe('a pressed key carries the keyCode legacy handlers read', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  const codes = (el: HTMLElement): [string, number, number][] => {
+    const seen: [string, number, number][] = [];
+    el.addEventListener('keydown', (e) => seen.push([e.key, e.keyCode, e.which]));
+    return seen;
+  };
+
+  it('sends Enter as keyCode 13, the way a keyboard does', async () => {
+    const el = document.createElement('input');
+    document.body.appendChild(el);
+    const seen = codes(el);
+    await executeAction(refs.refFor(el), ActionType.PRESS, { text: 'Enter' });
+    expect(seen).toEqual([['Enter', 13, 13]]);
+  });
+
+  it('gives a letter its upper-case code and a named key its own', async () => {
+    const el = document.createElement('input');
+    document.body.appendChild(el);
+    const seen = codes(el);
+    await executeAction(refs.refFor(el), ActionType.PRESS, { text: 'Escape' });
+    await executeAction(refs.refFor(el), ActionType.PRESS, { keys: ['Control', 'k'] });
+    expect(seen).toEqual([
+      ['Escape', 27, 27],
+      ['Control', 17, 17],
+      ['k', 75, 75],
+    ]);
+  });
+});

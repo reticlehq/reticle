@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IMPACT_DEFECT_LIMIT, emptyImpactCounts } from '@reticlehq/core';
-import { ImpactStore, applyDelta, isoDay, readScope } from './impact-store.js';
+import { ImpactStore, applyDelta, atLeastProject, isoDay, readScope } from './impact-store.js';
 
 const DAY = 86_400_000;
 
@@ -51,10 +51,33 @@ describe('the impact record', () => {
     expect(scope.records.bestStreakDays, 'the best is remembered').toBe(2);
   });
 
+  /**
+   * The machine-wide record is shared by every daemon on the box and was also written by test runs
+   * with a frozen clock, so its days arrived out of order: `10-03, 1970-01-01, 10-03, …, 10-05`. The
+   * streak was a counter that only compared the newest bucket with the one before it, so any stray
+   * day in between reset it to 1 — the machine view read "1 day streak" no matter what.
+   */
+  it('keeps a streak across days that arrive out of order', () => {
+    const day1 = Date.parse('2026-10-03T10:00:00');
+    let scope = applyDelta(scopeAt(day1), { calls: 1 }, day1);
+    scope = applyDelta(scope, { calls: 1 }, 5_000); // a writer with a frozen clock
+    scope = applyDelta(scope, { calls: 1 }, day1 + DAY);
+    scope = applyDelta(scope, { calls: 1 }, day1); // an older delta flushed late by another daemon
+    scope = applyDelta(scope, { calls: 1 }, day1 + DAY * 2);
+    expect(scope.records.streakDays).toBe(3);
+    // One bucket per day, oldest first, so the next fold and the 30-day chart read the same thing.
+    const dates = scope.days.map((d) => d.date);
+    expect(dates).toEqual([...new Set(dates)].sort());
+    expect(scope.days.find((d) => d.date === isoDay(day1))?.counts.calls).toBe(2);
+  });
+
   it('writes both scopes atomically and reads them back', () => {
     const root = mkdtempSync(join(tmpdir(), 'impact-project-'));
+    // Its own home: without `globalRoot` this flush wrote a 1970 day into the developer's real
+    // ~/.reticle/impact.json on every test run, which is what kept the machine streak at 1.
     const store = new ImpactStore({
       reticleRoot: join(root, '.reticle'),
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-home-')),
       projectName: 'demo',
       now: () => 5_000,
     });
@@ -208,9 +231,119 @@ describe('the dashboard link', () => {
     );
   });
 
+  /*
+   * The daemon builds one store per project and keeps it for its whole life, while `reticle link`
+   * runs in another terminal. Read once at construction, a project linked after the daemon started
+   * said "Not linked" on every snapshot, reloads included, until the daemon was restarted.
+   */
+  it('is read per snapshot, so a link made while the daemon runs shows without a restart', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'impact-late-link-'));
+    const store = new ImpactStore({ reticleRoot: dir, notices: { read: () => [] } });
+    expect(store.snapshot().dashboardUrl).toBeUndefined();
+    writeFileSync(
+      join(dir, 'cloud.json'),
+      JSON.stringify({ dashboardUrl: 'https://c.test/p/web' }),
+    );
+    expect(store.snapshot().dashboardUrl).toBe('https://c.test/p/web');
+  });
+
   it('is absent — not crashed — when the link file is malformed', () => {
     const dir = mkdtempSync(join(tmpdir(), 'impact-bad-'));
     writeFileSync(join(dir, 'cloud.json'), '{not json', 'utf8');
     expect(new ImpactStore({ reticleRoot: dir }).snapshot().dashboardUrl).toBeUndefined();
+  });
+});
+
+describe('the sync status in the snapshot', () => {
+  it('is there for a linked project, and absent for one that is not', () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'impact-sync-'));
+    const reticleRoot = join(projectDir, '.reticle');
+    const base = {
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-sync-home-')),
+      notices: { read: () => [] },
+    };
+    expect(new ImpactStore({ ...base, reticleRoot }).snapshot()).not.toHaveProperty('sync');
+    mkdirSync(reticleRoot, { recursive: true });
+    writeFileSync(
+      join(reticleRoot, 'cloud.json'),
+      JSON.stringify({ dashboardUrl: 'https://app.reticle.sh/p/x' }),
+    );
+    const linked = new ImpactStore({ ...base, reticleRoot }).snapshot();
+    expect(linked.sync).toMatchObject({ status: 'on-platform', runs: 0, onPlatform: 0 });
+  });
+});
+
+describe('Reticle Coverage in the snapshot', () => {
+  it('carries the levels its source reports, and nothing when there is none', () => {
+    const base = {
+      reticleRoot: join(mkdtempSync(join(tmpdir(), 'impact-cov-')), '.reticle'),
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-cov-home-')),
+      notices: { read: () => [] },
+    };
+    expect(
+      new ImpactStore({ ...base, coverage: () => ({ proved: 40 }) }).snapshot().coverage,
+    ).toEqual({ proved: 40 });
+    expect(new ImpactStore({ ...base, coverage: () => undefined }).snapshot()).not.toHaveProperty(
+      'coverage',
+    );
+  });
+});
+
+/** The rail's notices: chosen by the daemon for THIS machine, never the whole file. */
+describe('the notices in the snapshot', () => {
+  const home = (): string => mkdtempSync(join(tmpdir(), 'impact-notices-home-'));
+  const entries = [
+    { id: 'for-everyone', title: 'Hello' },
+    { id: 'signed-out-only', title: 'Sign in', audience: { signedIn: false } },
+    { id: 'needs-newer', title: 'Later', minSdk: '9.0.0' },
+  ];
+
+  it('carries only the notices that apply to this machine', () => {
+    const store = new ImpactStore({
+      reticleRoot: join(mkdtempSync(join(tmpdir(), 'impact-notices-')), '.reticle'),
+      globalRoot: home(),
+      account: () => ({ signedIn: true }),
+      notices: { read: () => entries },
+      sdkVersion: '3.6.0',
+    });
+    expect(store.snapshot().notices).toEqual([{ id: 'for-everyone', title: 'Hello' }]);
+  });
+
+  it('leaves the field out when nothing applies, so the bundled slides show', () => {
+    const store = new ImpactStore({
+      reticleRoot: join(mkdtempSync(join(tmpdir(), 'impact-notices-')), '.reticle'),
+      globalRoot: home(),
+      notices: { read: () => [] },
+    });
+    expect(store.snapshot().notices).toBeUndefined();
+  });
+});
+
+describe('a streak longer than the daily window', () => {
+  it('keeps counting past the days the record keeps', () => {
+    let scope = scopeAt(Date.parse('2026-01-01T10:00:00'));
+    for (let day = 0; day < 60; day++) {
+      const now = Date.parse('2026-01-01T10:00:00') + day * DAY;
+      scope = applyDelta(scope, { verdicts: 1 }, now);
+    }
+    expect(scope.days.length).toBeLessThan(60);
+    expect(scope.records.streakDays).toBe(60);
+  });
+});
+
+describe('all time, beside one project', () => {
+  it('is never smaller than the project, even when the project kept history the machine did not', () => {
+    const now = Date.parse('2026-10-06T10:00:00');
+    const project = applyDelta(
+      scopeAt(now - 30 * DAY),
+      { calls: 40, verdicts: 12, failed: 3 },
+      now,
+    );
+    const global = applyDelta(scopeAt(now - DAY), { calls: 5, verdicts: 2 }, now);
+    const shown = atLeastProject(global, project);
+    expect(shown.counts.calls).toBe(40);
+    expect(shown.counts.verdicts).toBe(12);
+    expect(shown.counts.failed).toBe(3);
+    expect(shown.since).toBe(now - 30 * DAY);
   });
 });
