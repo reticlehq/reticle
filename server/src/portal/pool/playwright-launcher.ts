@@ -110,6 +110,8 @@ function wrapBrowser(browser: Browser): PooledBrowser {
           };
         },
         addCookies: (cookies) => context.addCookies(cookies),
+        grantPermissions: (permissions, opts) => context.grantPermissions(permissions, opts),
+        clearPermissions: () => context.clearPermissions(),
         close: () => context.close(),
       };
     },

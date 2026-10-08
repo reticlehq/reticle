@@ -219,7 +219,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // read where the envelope is assembled, in `invoke-tool.ts`, beside the other envelope sources.
   // 43 with `harness-script.ts`: the planned drive, split from `harness-explore.ts` at its line cap.
   // It binds the plan's ports to the tool surface, which is why it sits here and not in `script/`.
-  'server/src/surface/tools': 45,
+  // 46 with `lease-permissions.ts`: the `permissions` argument of `reticle_lease` acquire, its
+  // notification read-back and its hint. lease-tools.ts sits near the line cap, so the argument is
+  // declared beside it rather than inside it, as `query-hint-schema.ts` is beside tools.ts.
+  'server/src/surface/tools': 46,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

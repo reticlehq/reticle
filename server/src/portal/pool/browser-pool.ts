@@ -12,6 +12,11 @@
 
 import { unreachableUrlIn, type SeedStorage } from '@reticlehq/core';
 import { seedStorageInto } from './storage-seed.js';
+import {
+  grantLeasePermissions,
+  NOTIFICATION_PERMISSION_READ,
+  NOTIFICATION_READ_TIMEOUT_MS,
+} from './context-permissions.js';
 import type {
   InitScriptHandle,
   Launcher,
@@ -116,6 +121,8 @@ interface ActiveLease {
    * context for "why did the page look frozen for a moment", not a log an agent needs to replay.
    */
   lastDialogMessage?: string;
+  /** What this lease was granted when it opened. It never changes on an open lease. */
+  permissions: readonly string[];
 }
 
 /**
@@ -377,6 +384,35 @@ export class BrowserPool {
     }
   }
 
+  /** What a lease was granted when it opened, or undefined for a session that is not a lease. */
+  permissionsOf(sessionId: string): readonly string[] | undefined {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.permissions;
+  }
+
+  /**
+   * What the leased page's `Notification.permission` says, or undefined when it cannot be asked.
+   *
+   * Read back rather than inferred from the grant, because the headless shell answers `denied`
+   * after a notifications grant — see context-permissions.ts. Bounded, so a page that never answers
+   * reads as "could not ask" instead of holding the caller.
+   */
+  async notificationPermission(sessionId: string): Promise<string | undefined> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    if (lease === undefined || lease.page.evaluate === undefined) return undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const gaveUp = new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), NOTIFICATION_READ_TIMEOUT_MS);
+    });
+    try {
+      const value = await Promise.race([lease.page.evaluate(NOTIFICATION_PERMISSION_READ), gaveUp]);
+      return 'string' === typeof value ? value : undefined;
+    } catch {
+      return undefined;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async sweepExpired(): Promise<string[]> {
     const now = this.#now();
     const expired = [...this.#active.entries()]
@@ -432,6 +468,8 @@ export class BrowserPool {
       owner?: string;
       /** In a browser with a window the person can watch. */
       headed?: boolean;
+      /** Granted on the lease's origin before the first navigation, so the first render sees them. */
+      permissions?: readonly string[];
     } = {},
   ): Promise<Lease> {
     if (this.#closed) throw new Error('browser pool is shut down');
@@ -448,6 +486,8 @@ export class BrowserPool {
     try {
       const browser = await this.#ensureBrowser(slot);
       context = await browser.newContext();
+      if (opts.permissions !== undefined)
+        await grantLeasePermissions(context, opts.permissions, url);
       const page = await context.newPage();
       // Per-page crash isolation: if THIS renderer dies, reclaim only this lease — the shared browser
       // and every other agent's context keep running. (A full browser death is handled by #onCrash.)
@@ -515,6 +555,7 @@ export class BrowserPool {
         url,
         ...(opts.owner === undefined ? {} : { owner: opts.owner }),
         touchedAt: this.#now(),
+        permissions: opts.permissions ?? [],
         ...(pending === undefined ? {} : { dialFailureUrl: pending }),
         ...(pendingDialogMessage === undefined ? {} : { lastDialogMessage: pendingDialogMessage }),
       });

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine`: a `bodyMatches` clause on a truncated response names a remedy that can work.** When a response is longer than `networkBodyMaxChars`, every `bodyMatches` clause on it is inconclusive, which is honest, but the message said to assert on something inside the recorded prefix. A JSON prefix never parses, so doing that with `bodyMatches` gave the identical result. For `bodyMatches` the message now says to raise the cap past the response size, or to use `bodyContains` with a substring from the kept prefix, and the `assertion` field reads `net.bodyMatches` instead of `net.bodyContains`. The grade is still inconclusive. Closes [#1417](https://github.com/reticlehq/reticle/issues/1417).
