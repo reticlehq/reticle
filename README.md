@@ -117,7 +117,7 @@ You don't start Reticle yourself. Your agent starts it when it first calls a Ret
 
 **Any MCP client, by hand:** `{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/server", "mcp"] } } }`
 
-**CI:** set `RETICLE_API_KEY` and run `npx @reticlehq/server gate --since HEAD~1`.
+**CI:** run `npx @reticlehq/server verify <url>` then `npx @reticlehq/server gate --since HEAD~1`; set `RETICLE_API_KEY` only to sync runs to the dashboard.
 
 </details>
 
@@ -214,7 +214,7 @@ This isn't something your agent forgot. A coding agent is built to **produce a c
 
 > **You:** "Verify login works."
 >
-> **Agent, via Reticle:** clicks **Sign in** → `POST /api/login → 200 (14 ms)` → dashboard rendered → store holds `auth: { email: "admin@…" }` → **PASS**, evidence attached.
+> **Agent, via Reticle:** clicks **Sign in** → `POST /api/login → 200 (14 ms)` → dashboard rendered → store holds `auth: { email: "admin@…" }` → **`verified: "yes"`**, evidence attached.
 
 <p align="center">
   <img src="assets/readme/verdict-not-view.png" width="760"
@@ -259,9 +259,11 @@ reticle_assert({
     { kind: "console", level: "error", absent: true }  // …and nothing errored
   ]}
 })
-// → { pass: false,
+// → { verified: "no",
+//     because: "the declared consequence did not hold",
+//     pass: false,
 //     failureReason: "POST /api/order returned 500, expected 200",
-//     source: { file: "src/checkout/PayButton.tsx", line: 42 } }
+//     source: "src/checkout/PayButton.tsx:42" }
 ```
 
 </details>
@@ -270,7 +272,7 @@ reticle_assert({
 
 ## Benchmarks
 
-88 real regressions injected into a controlled app, Reticle against a Playwright script. Every number comes from a committed harness. Reproduce it with `pnpm bench`.
+An 88-bug registry injected into a controlled app (86 real regressions and 2 false-positive traps), Reticle against a Playwright script. Every number comes from a committed harness. Reproduce it with `node bench/pw-vs-reticle/run.mjs`.
 
 <p align="center">
   <img src="assets/readme/benchmark-chart.svg" width="880"
@@ -285,13 +287,8 @@ reticle_assert({
 Re-verification has no model in the loop, so a recorded suite is a fixed, tiny read. Reticle is ahead from the second run even when charged a full LLM drive to author the suite.
 
 <p align="center">
-  <img src="assets/readme/bench-rerun.png" width="840"
-       alt="Re-running a four-flow suite: Reticle replays it in 47 tokens with no model and no flake, against about 120,000 tokens to re-drive it with an LLM." />
-</p>
-
-<p align="center">
   <img src="assets/readme/chart-speed.svg" width="880"
-       alt="Wall-clock time to a verdict: a 2.6 second time-gated transition verified in 176 ms versus a 2,978 ms real wait, and a 16-flow batch in 5.2 seconds versus 31.7 seconds one at a time." />
+       alt="Wall-clock time to a verdict: a 2.6 second time-gated transition verified in 176 ms versus a 2,978 ms real wait, and a 16-flow batch in 5.2 seconds versus 35.4 seconds one at a time." />
 </p>
 
 Faster for a structural reason rather than a browser-speed one: a time-gated transition is verified from the event stream instead of waited out, and a batch of flows runs as a batch.
@@ -341,7 +338,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 
 **The open-source tool is the whole verify loop, on your machine.** The SDK in your app, the local daemon, the MCP tools your agent calls, and the HUD in the corner of your page where you watch it work: what the agent is doing, every verdict, the flows it saved, the notes you pin on the page. No account, and nothing from your app leaves your machine.
 
-**The Harness drives the app for you.** Describe a person and a journey (_"a returning customer reorders and pays"_) and the Harness drives it in your browser, proves each step, and saves what it drove as flows that replay with no model at all. Your agent spends one call instead of a context full of snapshots: on our explore benchmark the caller used 11.9× fewer tokens for the same verdict. It runs on the Reticle platform, on [TypeSafe AI](https://typesafe.ai)'s [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev), a System One model built for fast, typed choices, and every plan includes it: Free comes with Harness credits each month, Pro with more, Enterprise with what you agree. You watch it in the HUD as it happens ("Reticle Harness is driving"), and you can switch it off mid-run from the same panel. Call it with `reticle_verify { action: "explore", persona: "…" }`; see [docs/autodrive.md](docs/autodrive.md).
+**The Harness drives the app for you.** Describe a person and a journey (_"a returning customer reorders and pays"_) and the Harness drives it in your browser, proves each step, and saves what it drove as flows that replay with no model at all. Your agent spends one call instead of a context full of snapshots. It runs on the Reticle platform, on [TypeSafe AI](https://typesafe.ai)'s [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev), a System One model built for fast, typed choices, and every plan includes it: Free comes with Harness credits each month, Pro with more, Enterprise with what you agree. You watch it in the HUD as it happens ("Reticle Harness is driving"), and you can switch it off mid-run from the same panel. Call it with `reticle_verify { action: "explore", persona: "…" }`; see [docs/autodrive.md](docs/autodrive.md).
 
 **[app.reticle.sh](https://app.reticle.sh) is the dashboard.** Run `reticle connect` in your app, sign in, and everything your machine verified syncs on its own, whichever agent did the driving:
 

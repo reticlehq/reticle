@@ -201,7 +201,7 @@ Honesty is the point of this page, so here are the places Reticle does **not** w
 
 The numbers above are for **one** verification. But a test suite's real job is the **same** check, over and over, every commit, every CI run. Here the picture changes shape:
 
-- Reticle records a flow once, then **replays it with no AI model at all** (re-resolving each element and re-asserting the outcome) for **~239 tokens per run** (re-measured 2026-08-11; it was ~175 before each flow started carrying a success oracle).
+- Reticle records a flow once, then **replays it with no AI model at all** (re-resolving each element and re-asserting the outcome) for **~239 tokens per flow, per run** (re-measured 2026-08-11). Verifying a whole four-flow suite in one call reads **~480 tokens** for the suite (re-measured 2026-10-06; see `bench/SCORECARD.md`), about 60 tokens per added flow.
 - Playwright MCP and DevTools MCP have no replay: re-checking means an agent **re-drives the whole flow with the model every time**, costing tens of thousands of tokens per run.
 
 That's a **~127× cost difference per re-run**, and it grows with how often you run. This is where the "much cheaper than screenshots" claim becomes dramatic rather than incremental.
@@ -227,7 +227,7 @@ A fleet of agents (or a parallel suite) verifying the same app doesn't need a br
 
 - **Every number comes from a committed harness**, not a slide. Re-run it: `pnpm bench`.
 - **A no-bug control** runs in every pass, so a tool can't look good by flagging everything.
-- **Tool versions are pinned**; the raw payloads are saved to `bench/raw/` so anyone can audit them.
+- **Tool versions are recorded by hand in `bench/README.md`; re-derive before quoting.** The raw payloads are saved to `bench/raw/` so anyone can audit them.
 - **The token counter is a tokenizer**, not a guess. Where we use a proxy tokenizer instead of a specific model's, we say so and lean on _relative_ differences, which are robust to the choice.
 - **We publish where we lose** (above). A benchmark that only flatters its author isn't a benchmark.
 
