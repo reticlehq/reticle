@@ -57,10 +57,12 @@ export const CHAT_CAPABILITIES: readonly LinkCapability[] = [
 export interface ChatDriveSessions {
   list(): SessionInfo[];
   count(): number;
-  get(
-    id: string,
-  ):
-    | { autoEnd(text: string, tone: PresenterTone): void; pushNarration(text: string): void }
+  get(id: string):
+    | {
+        autoEnd(text: string, tone: PresenterTone): void;
+        pushNarration(text: string): void;
+        readonly sdkVersion?: string | undefined;
+      }
     | undefined;
 }
 
@@ -190,7 +192,10 @@ export function startChatDrives(
     capabilities: CHAT_CAPABILITIES,
     apps: async () =>
       appsByPlatform(
-        sessions.list(),
+        sessions.list().map((tab) => {
+          const sdkVersion = sessions.get(tab.sessionId)?.sdkVersion;
+          return sdkVersion === undefined ? tab : { ...tab, sdkVersion };
+        }),
         serverOptionsFromEnv(await withLinkedCredential(deps, env)),
         machine.id,
         async (tab) => {

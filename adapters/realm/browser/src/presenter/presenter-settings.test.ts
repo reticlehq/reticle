@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { Presenter } from './presenter.js';
 import { SETTINGS_ATTR, SETTINGS_STORAGE_KEY } from './presenter-config.js';
 import { Annotator } from '@/review/annotator.js';
-import { loadPresenterSettings } from './presenter-settings.js';
+import { loadPresenterSettings, settingsPanelHtml } from './presenter-settings.js';
+import { RETICLE_SDK_VERSION_GLOBAL } from '@reticlehq/core';
 
 afterEach(() => {
   document.querySelectorAll('[data-reticle-overlay]').forEach((e) => e.remove());
@@ -11,6 +12,19 @@ afterEach(() => {
 });
 
 describe('presenter settings', () => {
+  // Reported from the field: the CLI said one version while the page ran an older overlay, and
+  // nobody could tell which one the browser had actually loaded.
+  it('names the SDK version this page is running', () => {
+    const g = globalThis as Record<string, unknown>;
+    g[RETICLE_SDK_VERSION_GLOBAL] = '9.8.7';
+    try {
+      expect(settingsPanelHtml()).toContain('Reticle SDK 9.8.7');
+    } finally {
+      delete g[RETICLE_SDK_VERSION_GLOBAL];
+    }
+    expect(settingsPanelHtml()).toContain('Reticle SDK version unknown');
+  });
+
   it('anchors the settings card to the dock above the HUD', () => {
     const p = new Presenter({ border: 'session' });
     p.mount();

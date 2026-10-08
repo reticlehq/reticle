@@ -47,6 +47,8 @@ export interface AppTab extends DriveCandidate {
   projectId?: string;
   adapters: string[];
   runtime?: string;
+  /** The SDK the page announced. The dashboard compares it with `reticleVersion` per app. */
+  sdkVersion?: string;
 }
 
 export interface ReportedApp {
@@ -55,6 +57,7 @@ export interface ReportedApp {
   url: string;
   title?: string;
   stack: string[];
+  sdkVersion?: string;
 }
 
 const hash = (text: string): string =>
@@ -158,6 +161,7 @@ export async function appsByPlatform(
       url: withoutMarks(tab.url),
       ...(tab.title === undefined ? {} : { title: tab.title }),
       stack,
+      ...(tab.sdkVersion === undefined ? {} : { sdkVersion: tab.sdkVersion }),
     });
   }
   return [...groups.values()].map(({ platform, apps }) => ({ platform, apps: [...apps.values()] }));

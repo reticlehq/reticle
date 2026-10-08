@@ -35,7 +35,13 @@ import {
   SESSION_PARKED_REASON,
   sessionReplacedReason,
 } from '@/portal/session/facts/session-replaced.js';
-import { describeSkew, sdkFix, SkewPair } from '@/command/version/version-skew.js';
+import {
+  describeSdkBehind,
+  describeSkew,
+  sdkFix,
+  SDK_BEHIND_NARRATION,
+  SkewPair,
+} from '@/command/version/version-skew.js';
 import { noteVersionSkew } from '@/command/version/version-nudge.js';
 import { protocolSkewReason } from './protocol-skew.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
@@ -752,6 +758,15 @@ export class Bridge {
             });
             session.versionSkew = skew;
             noteVersionSkew(SkewPair.SDK, skew);
+          } else {
+            // Wire-compatible but a minor or more behind: the agent hears it on its next tool call
+            // and the person on the overlay. Not `versionSkew`, which marks the pair as broken.
+            const behind = describeSdkBehind(parsed.sdkVersion, SERVER_VERSION, fixForThisProject);
+            if (behind !== undefined && parsed.sdkVersion !== undefined) {
+              log('sdk_behind', { sessionId: session.id, sdk: parsed.sdkVersion });
+              noteVersionSkew(SkewPair.SDK, behind);
+              session.pushNarration(SDK_BEHIND_NARRATION(parsed.sdkVersion, SERVER_VERSION));
+            }
           }
           log('session_connected', { sessionId: session.id, url: session.url });
           // The one fact that separates a broken install from an unused one. Best-effort and wrapped:

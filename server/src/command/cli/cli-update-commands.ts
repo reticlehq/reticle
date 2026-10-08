@@ -14,9 +14,27 @@ import { log } from '@/log.js';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { reticleDepsOf, sdkSyncCommand } from '@/command/update/sdk-sync.js';
+import { installedSdkVersion, readTextFile } from '@/command/cli/launch/sdk-version-match.js';
 
 const WINDOWS_MANUAL_UPDATE =
   'irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex';
+
+/**
+ * What a person reads. `log` lines are JSON on stderr for the daemon's log, and a human running
+ * `reticle update` in a terminal used to see nothing else — not even that the restart was theirs.
+ */
+const MSG_SDK_SYNCED = (version: string): string =>
+  `Updated this app's Reticle SDK to ${version}. Now restart your dev server and reload the tab: ` +
+  'a running dev server keeps serving the old SDK, overlay included.';
+const MSG_SDK_SYNC_FAILED = (command: string): string =>
+  `Could not update this app's Reticle SDK. Run \`${command}\`, then restart your dev server.`;
+const MSG_NO_SDK_HERE =
+  "No Reticle SDK in this folder, so only the CLI was checked. Run `reticle update` in your app's " +
+  'folder to bring its SDK up too.';
+
+function say(line: string): void {
+  process.stdout.write(`${line}\n`);
+}
 
 /**
  * Bring the SDK in the CURRENT project to the version being installed.
@@ -26,12 +44,12 @@ const WINDOWS_MANUAL_UPDATE =
  * packages, simply has nothing to sync — that is a normal outcome, not a failure, and it must never
  * stop the CLI half from happening.
  */
-function syncProjectSdk(target: string): void {
-  const cwd = process.cwd();
+function syncProjectSdk(target: string, cwd: string): void {
   let manifest: unknown;
   try {
     manifest = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'));
   } catch {
+    say(MSG_NO_SDK_HERE);
     return; // not an app directory
   }
   const packages = reticleDepsOf(manifest);
@@ -42,25 +60,37 @@ function syncProjectSdk(target: string): void {
   const cmd = sdkSyncCommand(pm, packages, target);
   if (null === cmd) {
     log('reticle_update_sdk', { synced: false, reason: 'no @reticlehq packages in this project' });
+    say(MSG_NO_SDK_HERE);
     return;
   }
   const ok = io.exec(cmd.command, cmd.args);
   log('reticle_update_sdk', { synced: ok, packages, to: target, packageManager: pm });
   if (!ok) {
+    const line = `${cmd.command} ${cmd.args.join(' ')}`;
     log('reticle_update_sdk_failed', {
-      hint: `run \`${cmd.command} ${cmd.args.join(' ')}\` by hand, then restart the dev server`,
+      hint: `run \`${line}\` by hand, then restart the dev server`,
     });
+    say(MSG_SDK_SYNC_FAILED(line));
+    return;
   }
+  say(MSG_SDK_SYNCED(target));
 }
 
 /** `reticle update` — install the latest server version, sync the app's SDK, and restart. */
-export async function handleUpdate(): Promise<void> {
+export async function handleUpdate(cwd: string = process.cwd()): Promise<void> {
   try {
     const manifest = await checkForUpdate(SERVER_VERSION, () => Date.now());
     // Direction, not inequality: the registry being DIFFERENT is not the registry being newer, and
     // the old gate happily installed a downgrade — reported by a user. See updateTarget.
     const target = updateTarget(manifest);
     if (target === undefined) {
+      // The CLI being current says nothing about the app. A CLI from the installer or a fresh npx
+      // is on the latest release while the app keeps the SDK `init` pinned months ago, and this
+      // branch used to return before the sync — so the one command that should fix that pair
+      // answered "already on the latest version" and left the old overlay in the page.
+      const installed = installedSdkVersion(cwd, readTextFile);
+      if (installed === undefined) say(MSG_NO_SDK_HERE);
+      else if (installed !== SERVER_VERSION) syncProjectSdk(SERVER_VERSION, cwd);
       log('reticle_update', {
         ok: false,
         message: 'already on the latest version',
@@ -79,7 +109,7 @@ export async function handleUpdate(): Promise<void> {
     // That is backwards: the people who most need better instructions are the ones already
     // installed and not getting value, and this is the moment they are touching the install anyway.
     // Only files that ALREADY carry the block are touched, and only inside the markers.
-    const refreshed = refreshAgentRules(process.cwd(), {
+    const refreshed = refreshAgentRules(cwd, {
       read: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : null),
       write: (path, content) => {
         writeFileSync(path, content, 'utf8');
@@ -94,7 +124,7 @@ export async function handleUpdate(): Promise<void> {
     // Before the CLI swap because `applyUpdate` never returns (it execs and exits). If this half
     // fails the daemon is still the older one, which is the direction the HELLO check names clearly
     // and a re-run fixes; the reverse would leave a new daemon talking to an old page.
-    syncProjectSdk(target);
+    syncProjectSdk(target, cwd);
     await applyUpdate(target); // calls process.exit; Claude Code restarts
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

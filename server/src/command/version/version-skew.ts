@@ -197,6 +197,37 @@ function compareVersions(a: string | undefined, b: string): number | undefined {
 }
 
 /**
+ * A page whose SDK is a minor release or more behind this daemon.
+ *
+ * `describeSkew` is silent here on purpose: the contract matches, so the page connects and every
+ * verdict is sound. But whatever shipped since is not in the page, the overlay included, and from
+ * the field that looked exactly like a broken release: the CLI reported the new version while the
+ * page showed an overlay without the newer controls, and nothing anywhere said which SDK it was
+ * running. Patch releases stay silent for the cry-wolf reason in the header. `fix` is a thunk
+ * because reading the project's manifest is only worth it when the page IS behind.
+ */
+/** The same fact for the person looking at the page, on its overlay. */
+export const SDK_BEHIND_NARRATION = (sdk: string, daemon: string): string =>
+  `This app runs Reticle SDK ${sdk}, older than Reticle ${daemon}. Run \`reticle update\` in the ` +
+  "app's folder, then restart its dev server.";
+
+export function describeSdkBehind(
+  sdk: string | undefined,
+  daemon: string,
+  fix: () => string,
+): string | undefined {
+  const minorOf = (v: string): string => v.split('-')[0]?.split('.').slice(0, 2).join('.') ?? v;
+  if (sdk === undefined) return undefined;
+  const order = compareVersions(minorOf(sdk), minorOf(daemon));
+  if (order === undefined || order >= 0) return undefined;
+  return (
+    `This page runs Reticle SDK ${sdk}, older than Reticle ${daemon}. It connects and verifies, ` +
+    `but everything added since is missing from the page, the overlay's newer controls included. ` +
+    fix()
+  );
+}
+
+/**
  * The fix line for another Reticle process that disagrees with the daemon it attached to.
  *
  * Branches on DIRECTION, which the old unconditional `reticle stop` did not (#618). Restarting the

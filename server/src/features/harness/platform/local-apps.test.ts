@@ -59,7 +59,11 @@ describe('the apps reported to each platform', () => {
   it('reports each project once, to the platform its link names, with what it is built with', async () => {
     const groups = await appsByPlatform(
       [
-        tab('s1', 'http://localhost:3000/cart', { title: 'Shop', runtime: 'web' }),
+        tab('s1', 'http://localhost:3000/cart', {
+          title: 'Shop',
+          runtime: 'web',
+          sdkVersion: '9.1.0',
+        }),
         tab('s2', 'http://localhost:3000/', { adapters: ['vue'], runtime: 'electron' }),
         tab('s3', 'http://localhost:3000/other', { hidden: true }),
       ],
@@ -77,6 +81,7 @@ describe('the apps reported to each platform', () => {
             url: 'http://localhost:3000/cart',
             title: 'Shop',
             stack: ['react'],
+            sdkVersion: '9.1.0',
           },
         ],
       },
