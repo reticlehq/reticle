@@ -34,15 +34,74 @@ It drives your real running app, reads what actually happened, and hands back **
 
 ## Install
 
-One command. Needs Node 20.11+ (no Node? `brew install node` or [nodejs.org](https://nodejs.org)).
+Four commands. Each one says what it did and is safe to run twice. Needs Node 20.11+ (no Node? `brew install node` or [nodejs.org](https://nodejs.org)).
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh
-```
+| Step | Command | Once per | What it does | It worked when |
+| --- | --- | --- | --- | --- |
+| 1. Install | `curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh \| sh` | machine | Puts `reticle` on your PATH, registers it with every coding agent it finds, and verifies a demo app | it prints a verdict on the demo app |
+| 2. Wire your app | `reticle init` (in your app's folder) | project | Adds the dev-only SDK, boots your dev server, and checks that a browser session connects | it lists every file it changed and reports a connected browser session (check any time with `reticle status`) |
+| 3. Connect _(optional)_ | `reticle connect --project "My App"` | project | Does step 2 if needed, signs you in, links this folder to a project on [app.reticle.sh](https://app.reticle.sh), and sends your local history. It opens a browser to sign in, or to create a free account | `reticle whoami` shows this folder attached to the project |
+| 4. Push _(optional)_ | `reticle push` | whenever you like | Sends runs and flows that haven't synced yet. `reticle push --watch` keeps syncing | your runs show on the dashboard |
 
-Windows: `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`
+Windows step 1: `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`. If `reticle` isn't on your PATH yet, `npx @reticlehq/server <command>` runs the same thing.
 
-It registers Reticle with your coding agents and shows it verifying a demo app, in seconds. Then open your agent in your app's folder and ask: _"Verify one flow in my running app with Reticle."_ The first time it uses Reticle there, it wires the app itself (the same thing `reticle init` does) and tells you every file it changed. If Reticle is already running for another project, run `npx @reticlehq/server init` in this one first: the automatic wiring covers the project the daemon started in. No account needed, and nothing from your project leaves your machine.
+Steps 1 and 2 need no account, and nothing from your project leaves your machine. Step 3 is the free account that gives you the dashboard and monthly Harness credits.
+
+**Then restart your coding agent once** (it reads its tools at startup), open it in your app's folder, and ask: _"Verify the login flow in my running app with Reticle."_ Not working? Run `reticle doctor`.
+
+If Reticle is already running for another project, run `reticle init` in this one first: the automatic wiring covers only the project the daemon started in.
+
+<details>
+<summary><b>Installing with an AI agent? The rules it should follow</b></summary>
+
+<br/>
+
+The full agent guide is [SKILL.md](SKILL.md). These are the rules that matter most during install:
+
+- Run `init` in the app's folder before anything else, and use `reticle init --json` so you read one object instead of parsing text. Add `--app <dir>` in a monorepo and `--env KEY=VALUE` for anything the app needs to start.
+- If the dev server was already running when `init` ran, restart it and reload the tab. Until you do, the app is serving a bundle without the SDK.
+- Only run `reticle connect` if the user asked for the dashboard. It needs a person to approve the sign-in in a browser.
+- If the `reticle_*` tools aren't in your client, ask the user to run the installer and restart the client, then stop. If they were registered while you were running, `reticle init --relaunch` prints the command that resumes this conversation with them loaded.
+- Setup isn't done until the first run returns a verdict. A connected app only proves the SDK is on the page.
+- `unknown` is not a pass. Report it as "couldn't tell", with the reason Reticle gives.
+- Stuck? Run `reticle doctor` and report what it says. To report a problem with Reticle: `reticle feedback --agent --kind bug "…"`.
+
+</details>
+
+### Every day after that
+
+You don't start Reticle yourself. Your agent starts it when it first calls a Reticle tool, and it keeps running in the background.
+
+1. Start your dev server as usual (`npm run dev` or whatever your app uses).
+2. `reticle open` shows the app. It reuses a tab that's already connected, or opens one.
+3. Ask your agent to verify something. Saved flows re-check with no AI model: `reticle verify http://localhost:5173`.
+
+### All the commands
+
+`reticle <command>` once installed, or `npx @reticlehq/server <command>` anywhere. `reticle --help` lists every flag.
+
+| When | Command | What it does |
+| --- | --- | --- |
+| **Setting up** | `reticle setup mcp` | Registers Reticle with your coding agents. The installer already runs this; rerun it after you install a new agent |
+|  | `reticle init` | Wires the app in this folder. `--dry-run` shows the changes without writing them, `--app <dir>` picks one app in a monorepo, `--env KEY=VALUE` passes what the app needs to boot, `--json` prints one object for agents |
+|  | `reticle tutorial --run` | Watch Reticle verify a demo app. Touches nothing of yours |
+| **Running** | `reticle open [url]` | Shows your app in a browser connected to Reticle |
+|  | `reticle status` | Whether Reticle is running and which apps are connected |
+|  | `reticle doctor` | Diagnoses setup in one go: the browser, the background service, the port |
+|  | `reticle restart` / `reticle stop` | Restarts or stops Reticle's background service |
+| **Verifying** | `reticle verify <url>` | Re-checks your saved flows; exits 0 only when every one passes. `--explore --persona "a new user who signs up"` makes Reticle drive the app itself and save what it finds. `--expect '<check>'` gives one verdict |
+|  | `reticle gate --since HEAD~1` | For CI: fails unless every saved flow your changes touch has a passing run |
+|  | `reticle affected` | Lists which saved flows your changes touch |
+|  | `reticle report` | What the last session claimed, and what actually held |
+| **Dashboard** _(optional)_ | `reticle connect --project "My App"` | Signs in, links this folder to a project on app.reticle.sh and sends your local history. Wires the app first if needed |
+|  | `reticle push` | Syncs now. `--watch` keeps syncing |
+|  | `reticle whoami` | Who you're signed in as, and which project this folder is linked to |
+|  | `reticle config --runs off` | Chooses what syncs: `--runs`, `--memory` and `--flows`, each `on` or `off` |
+|  | `reticle runs` / `reticle regression` | Reads your runs back from the dashboard. `regression` exits 3 if any flow broke |
+|  | `reticle logout` | Signs out |
+| **Keeping it current** | `reticle update` / `reticle rollback` | Installs the latest version, or goes back to the previous one |
+|  | `reticle telemetry disable` | Turns off anonymous usage counts |
+|  | `reticle feedback "message"` | Tells us what worked and what didn't. It prints exactly what it sends |
 
 <a id="manual-install"></a>
 <details>
@@ -54,11 +113,11 @@ It registers Reticle with your coding agents and shows it verifying a demo app, 
 
 **Skills CLI** (Cursor, Codex, Copilot, Gemini and others): `npx skills add reticlehq/reticle`
 
-**No pipe to shell:** `npm install -g @reticlehq/server && reticle setup mcp`
+**Without piping to a shell:** `npm install -g @reticlehq/server && reticle setup mcp`
 
 **Any MCP client, by hand:** `{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/server", "mcp"] } } }`
 
-Wire your app yourself instead of letting your agent do it: `reticle init` in the app's folder. Want a cloud dashboard? `reticle connect --project "My App"`. Not sure it worked? `reticle doctor`.
+**CI:** set `RETICLE_API_KEY` and run `npx @reticlehq/server gate --since HEAD~1`.
 
 </details>
 

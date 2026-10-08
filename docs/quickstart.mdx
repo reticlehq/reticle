@@ -65,8 +65,6 @@ This installs the dev-only SDK, wires your build config, starts the dev server, 
 
 Step 1 is once per machine. This step is once per project. **Skipping it is the most common reason Reticle "does nothing":** the agent has the tools, but there is no app on the other end for them to see.
 
-Want a cloud dashboard too? Run `npx @reticlehq/server connect --project "My App"` instead of, or after, `init`. It does everything `init` does, then opens browser sign-in approval, links this folder to the named cloud project, and sends existing local history. Approve the short code shown in the browser and terminal; the command resumes by itself. The browser asks you to sign in, or to create a free account at app.reticle.sh. The Free plan includes monthly Harness credits. What syncs, and how to switch each part off, is in [What is recorded](/what-is-recorded).
-
 <Note>
   **Skipped this step?** Ask your agent to verify something in the app. Its first `reticle_session`
   call finds a project that has never connected, runs `init` there itself, and lists every file it
@@ -110,7 +108,30 @@ Start with `reticle init --dry-run` if you want to see the app changes before an
 
 Prefer to wire it yourself? See [Manual install](/install-manual). It is about ten lines, and worth reading once even if you let the agent do it, because it explains what the agent actually changed.
 
-## Step 3. Check the setup
+## Step 3. Connect the dashboard (optional)
+
+Skip this if you only want local verdicts. Everything above works without an account.
+
+```bash
+npx @reticlehq/server connect --project "My App"
+```
+
+`connect` runs Step 2 first if this project isn't wired yet, so you can use it in place of `init`. Then it:
+
+1. Opens a browser so you can sign in, or create a free account at app.reticle.sh. Approve the short code shown in the browser and in the terminal, and the command carries on by itself.
+2. Links this folder to the cloud project you named, creating it if it doesn't exist. `npx @reticlehq/server whoami` shows the link.
+3. Sends the runs and flows already on this machine.
+
+After that, every verified run syncs on its own. To sync right now, for example before showing a teammate:
+
+```bash
+npx @reticlehq/server push            # one sync
+npx @reticlehq/server push --watch    # keep syncing while you work
+```
+
+The Free plan includes monthly Harness credits. What syncs, and how to switch each part off (`reticle config --runs/--memory/--flows on|off`), is in [What is recorded](/what-is-recorded). In CI, set `RETICLE_API_KEY` instead of signing in.
+
+## Step 4. Check the setup
 
 ```bash
 npx @reticlehq/server doctor
@@ -118,7 +139,7 @@ npx @reticlehq/server doctor
 
 `doctor` diagnoses the whole setup in one command: Chromium, the daemon, the port. If something is wrong this is the page you want before you start debugging your app instead.
 
-## Step 4. Open your app again when you need it
+## Step 5. Open your app again when you need it
 
 `init` (or `connect`) already started the dev server and opened the app. On a later day, start your dev server as usual, then:
 
@@ -135,7 +156,7 @@ This reuses the tab you already have open, or opens one if you don't. The SDK co
   the single most common setup problem, and the console message names the exact address it tried.
 </Warning>
 
-## Step 5. Look at the page
+## Step 6. Look at the page
 
 Ask your agent to take a snapshot. This is what came back from a real app:
 
@@ -157,7 +178,7 @@ The whole snapshot cost **61 tokens**. This is `mode: "interactive"`, which retu
 
 Each control has a `ref` like `e5`. That's the handle for the next step, and it stays valid until the element leaves the DOM, so you don't re-snapshot between actions.
 
-## Step 6. Act, and prove it
+## Step 7. Act, and prove it
 
 Here is the whole idea of Reticle in one call. Your agent names the expected consequence **before** it acts:
 
