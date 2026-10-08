@@ -146,6 +146,21 @@ describe('a package.json with no UI library', () => {
     expect(io.lines.join('\n')).not.toContain('will NOT connect');
   });
 
+  it.each([STATIC_TOKEN_MODULE, '.gitignore'])(
+    'fails the run when the supporting %s write fails',
+    (failing) => {
+      const io = memoryIo(files);
+      const healthy = memoryIo(files);
+      io.writeFile = (path, content) => {
+        if (path === failing) throw new Error('EACCES');
+        io.written[path] = content;
+      };
+      expect(runInit(OPTS, healthy).ok).toBe(true);
+      expect(runInit(OPTS, io).ok).toBe(false);
+      expect(io.lines.join('\n')).toContain('will NOT connect');
+    },
+  );
+
   it('creates .gitignore and leaves all three static-page files unchanged on a second run', () => {
     const io = memoryIo(files);
     runInit(OPTS, io);
