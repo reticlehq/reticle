@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a lease that timed out on a slow first compile was reported as "is the app running there?".** On a cold Next.js (or similar) dev server, the first request to a route can take longer than the 30 s navigation budget, so `reticle_lease { action: "acquire" }` failed with a question that sent the agent looking for a missing dev server instead of retrying. A timeout now says the page did not finish loading within the budget and leads with the retry (and with starting the app if it is not running); a refused connection keeps "is the app running there?". Closes [#1460](https://github.com/reticlehq/reticle/issues/1460).

@@ -3,7 +3,7 @@ name: verify-pagination
 description: 'Prove the next page of a list, or the next batch of an infinite scroll, loads NEW rows from the server, repeats none, and that the end of the list is handled. Use when pagination or infinite scroll was added or changed, when a list shows the same rows twice or skips some, or when the last page still offers a next control.'
 license: Apache-2.0
 metadata:
-  version: 3.5.0
+  version: 3.6.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---

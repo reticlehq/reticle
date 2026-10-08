@@ -15,6 +15,7 @@ import {
   type ReticleVerificationRun,
   type RunId,
 } from '@reticlehq/core';
+import { PromptContextSchema, type PromptContext } from '@reticlehq/core/artifacts';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths, isValidRunId, runPath } from '@/memory/project/dir/reticle-dir.js';
 
@@ -42,6 +43,9 @@ interface RunStoreOptions {
   onWrote?: () => void;
 }
 
+/** A request older than this is about some other task, not the run being written now. */
+const REQUEST_RELEVANT_MS = 6 * 60 * 60 * 1000;
+
 export class RunStore {
   readonly #fs: FileSystemPort;
   readonly #root: string;
@@ -62,11 +66,14 @@ export class RunStore {
    * Guards runId as a safe path segment BEFORE building the path — a runId can originate from a caller
    * (an OEM may set it), so an unsafe value must never escape .reticle/runs/ (mirrors the read guard).
    */
-  async write(run: ReticleVerificationRun): Promise<void> {
+  async write(given: ReticleVerificationRun): Promise<void> {
+    let run = given;
     if (!isValidRunId(run.runId)) {
       throw new Error(`refusing to write run with unsafe runId: ${JSON.stringify(run.runId)}`);
     }
     await this.#fs.mkdir(reticleDirPaths(this.#root).runs);
+    const context = run.context ?? (await this.#recentRequest(run.createdAt));
+    if (context !== undefined) run = { ...run, context };
     // Atomic publish: write a temp file then rename, so a crash mid-write never leaves a half-written
     // artifact (a partial.json would otherwise read back as MALFORMED).
     const path = runPath(this.#root, run.runId);
@@ -81,6 +88,25 @@ export class RunStore {
       // Not this store's problem, and not worth failing a durable write over.
     }
     await this.#pruneOld();
+  }
+
+  /**
+   * The user's request this run answers, when the agent relayed one recently enough to be about it.
+   * Read from .reticle/intent/request.json (written by `reticle_intent { declare, request }`).
+   */
+  async #recentRequest(at: number): Promise<PromptContext | undefined> {
+    try {
+      const parsed = PromptContextSchema.safeParse(
+        JSON.parse(await this.#fs.readFile(reticleDirPaths(this.#root).request)),
+      );
+      if (!parsed.success) return undefined;
+      const given = parsed.data.at;
+      return given !== undefined && 0 <= at - given && at - given <= REQUEST_RELEVANT_MS
+        ? parsed.data
+        : undefined;
+    } catch {
+      return undefined; // no request recorded: the common case
+    }
   }
 
   /**

@@ -32,6 +32,9 @@ import {
   RunFramework,
   RunProfile,
   RunTrigger,
+  RunFlowStatus,
+  Verified,
+  type DrivenBy,
   type JournalAction,
   type RunCheck,
 } from '@reticlehq/core';
@@ -166,4 +169,113 @@ export function driveRunFrom(
     // failure this artifact is supposed to make impossible. Checks are the evidence here.
     evidence: { consoleErrors: [], networkAnomalies: [], stateAssertions: [], timeline: [] },
   };
+}
+
+/** Marks a run as one Harness drive, so it never collides with the session's own `drive-` run. */
+const HARNESS_RUN_PREFIX = 'harness-';
+
+/** What a Harness run says drove it, in the dashboard's "Driven by" line. */
+export function harnessAgentId(driver: string): string {
+  return 'server' === driver ? 'Reticle Harness (platform)' : `Reticle Harness (${driver})`;
+}
+
+/**
+ * The id of the run a Harness drive syncs as, so whoever started the drive can find it again (the
+ * platform's chat folds the run into the check it asked for). Undefined for an id no run can carry.
+ */
+export function harnessRunId(harness: string): string | undefined {
+  const candidate = `${HARNESS_RUN_PREFIX}${harness}`;
+  return isValidRunId(candidate) ? candidate : undefined;
+}
+
+/** The journey a Harness drive was named for, or what it did when nobody named one. */
+const UNNAMED_JOURNEY = 'Harness drive';
+
+/** Goal verdicts kept for the drives a session has not yet been graded on. */
+const MAX_GOALS_HELD = 200;
+const goalsMissed = new Map<string, boolean>();
+
+/**
+ * What the Harness judged of a drive's goal, noted the moment the drive finishes, before its
+ * session ends and is graded. A drive whose checks held but whose goal was not reached synced as
+ * "Proved" while the drive itself said it had failed. Unmet once is unmet: a later journey of the
+ * same drive reaching its goal does not undo it.
+ */
+export function noteHarnessGoal(harness: string, met: boolean | undefined): void {
+  if (met === undefined) return;
+  const before = goalsMissed.get(harness);
+  if (false === before) return;
+  if (MAX_GOALS_HELD <= goalsMissed.size && !goalsMissed.has(harness)) {
+    const oldest = goalsMissed.keys().next().value;
+    if (oldest !== undefined) goalsMissed.delete(oldest);
+  }
+  goalsMissed.set(harness, met);
+}
+
+/**
+ * One Harness drive, as its own run: named for the journey it was asked to complete, and credited to
+ * the Harness rather than to the agent whose tab it shared. The journey reads as one flow, failed
+ * when any check it declared came back no, passed when one came back yes and none failed.
+ */
+function harnessRunFrom(
+  by: DrivenBy,
+  actions: readonly JournalAction[],
+  deps: DriveRunDeps,
+): VerificationRunInput | undefined {
+  const input = driveRunFrom(actions, {
+    ...deps,
+    runId: harnessRunId(by.harness) ?? defaultRunId(),
+  });
+  if (input === undefined) return undefined;
+  const statuses = input.checks.map((check) => check.status);
+  const status =
+    statuses.includes(Verified.NO) || false === goalsMissed.get(by.harness)
+      ? RunFlowStatus.FAIL
+      : statuses.includes(Verified.YES)
+        ? RunFlowStatus.PASS
+        : RunFlowStatus.SKIPPED;
+  const first = actions.reduce((min, action) => Math.min(min, action.at), Number.MAX_SAFE_INTEGER);
+  return {
+    ...input,
+    durationMs: Math.max(0, input.durationMs - first),
+    agent: { id: harnessAgentId(by.driver), kind: RunAgentKind.CODING_AGENT },
+    trigger: {
+      kind: RunTrigger.EDIT,
+      note: `driven by the Harness${by.persona === undefined ? '' : `: ${by.persona}`}`,
+    },
+    flows: [
+      {
+        name: by.persona ?? UNNAMED_JOURNEY,
+        status,
+        steps: actions.length,
+        durationMs: Math.max(0, input.durationMs - first),
+      },
+    ],
+  };
+}
+
+/**
+ * Every run a session's journal holds: the connected agent's drive, and one per Harness drive.
+ *
+ * They used to be one. A Harness drive dispatches through the same tools in the same tab, so its
+ * verdicts folded into the agent's run, and the dashboard showed one blended row that credited the
+ * agent with what the Harness proved and named neither.
+ */
+export function driveRunsFrom(
+  actions: readonly JournalAction[],
+  deps: DriveRunDeps,
+): VerificationRunInput[] {
+  const own = actions.filter((action) => action.drivenBy === undefined);
+  const drives = new Map<string, { by: DrivenBy; actions: JournalAction[] }>();
+  for (const action of actions) {
+    const by = action.drivenBy;
+    if (by === undefined) continue;
+    const held = drives.get(by.harness) ?? { by, actions: [] };
+    held.actions.push(action);
+    drives.set(by.harness, held);
+  }
+  return [
+    driveRunFrom(own, deps),
+    ...[...drives.values()].map((drive) => harnessRunFrom(drive.by, drive.actions, deps)),
+  ].filter((run): run is VerificationRunInput => run !== undefined);
 }

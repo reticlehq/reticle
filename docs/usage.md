@@ -816,7 +816,7 @@ A session starts on the agent's first activity and must reliably end even when t
 - **Agent kills the Reticle server process** (so no push can arrive) → the SDK self-ends the session after it can't reach the bridge for `BRIDGE_LOST_MS` (~15s), showing "lost connection to Reticle."
 - **Slow-but-alive agent** → if it goes quiet long enough to auto-end and then acts again, the session **revives** automatically (an explicit `reticle_session {action:"end"}` stays terminal).
 
-Tune the idle window with `reticle_session({ action: "tune", idleEndMs })`; it updates both the browser timer and the server reaper. The human keeps the panel (with Copy/Export of the run) after any end.
+Tune the idle window with `reticle_session({ action: "tune", idleEndMs })`; it updates both the browser timer and the server reaper. When the HUD covers a control you have to test, `reticle_session({ action: "tune", hud: "top-left" })` moves it (any corner), and `hud: "hidden"`, `"shown"` or `"removed"` (until the page reloads) take it out of the way; the call fails rather than pretending if the page could not apply it. The human keeps the panel (with Copy/Export of the run) after any end.
 
 ### `reticle_session {action:"narrate"}`: show the agent's intent
 

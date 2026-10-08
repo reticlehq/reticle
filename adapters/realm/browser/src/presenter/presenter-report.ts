@@ -24,6 +24,7 @@ import {
   buildXShareUrl,
   compactDuration,
   compactNumber,
+  COVERAGE_LEVELS,
 } from './chrome/presenter-report-copy.js';
 
 /**
@@ -34,6 +35,7 @@ import {
  */
 
 const SCOPE_ATTR = 'data-reticle-report-scope';
+const SCOPE = { PROJECT: 'project', MACHINE: 'machine' } as const;
 const SHARE_X_ATTR = 'data-reticle-share-x';
 const SHARE_IN_ATTR = 'data-reticle-share-in';
 const SHARE_COPY_ATTR = 'data-reticle-share-copy';
@@ -46,7 +48,7 @@ export function reportPanelHtml(): string {
     <div class="reticle-report-inner">
       <div class="reticle-report-head">
         <span class="reticle-report-title">${REPORT_TEXT.TITLE}</span>
-        <button type="button" ${SCOPE_ATTR} class="reticle-report-scope" aria-pressed="false">${REPORT_TEXT.PROJECT}</button>
+        <span class="reticle-segmented reticle-report-scopes" role="group" aria-label="${REPORT_TEXT.SCOPE_LABEL}"><button type="button" ${SCOPE_ATTR}="${SCOPE.PROJECT}" aria-pressed="true">${REPORT_TEXT.PROJECT}</button><button type="button" ${SCOPE_ATTR}="${SCOPE.MACHINE}" aria-pressed="false" title="${REPORT_TEXT.GLOBAL_TITLE}">${REPORT_TEXT.GLOBAL}</button></span>
         <button type="button" ${REPORT_CLOSE_ATTR} class="reticle-report-close" title="Close" aria-label="Close impact">${close}</button>
       </div>
       <div class="reticle-report-body" data-reticle-report-body></div>
@@ -157,9 +159,15 @@ function defects(scope: ImpactScope, dashboardUrl: string | undefined): string {
     .join('');
   // Only claim there are more when there actually are — `counts.failed` is every defect ever, and
   // this list is the recent tail of it.
+  // Not linked, and more caught than shown: the same button as Sign in, so one press signs up, links
+  // this project and syncs its history, and the dashboard it opens on holds every one of them. With
+  // nothing more to show there is nothing to offer, and the list stays an answer, not an advert.
+  const hidden = scope.counts.failed > list.length;
   const more = !linked
-    ? ''
-    : `<a class="reticle-report-defects-more" data-reticle-link="dashboard" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.DEFECTS_MORE}${scope.counts.failed > list.length ? ` (${String(scope.counts.failed)})` : ''}</a>`;
+    ? !hidden
+      ? ''
+      : `<button type="button" data-reticle-defects-all ${ACCOUNT_SIGNIN_ATTR} class="reticle-report-defects-all" title="${REPORT_TEXT.DEFECTS_SEE_ALL_TITLE}">${REPORT_TEXT.DEFECTS_SEE_ALL} (${String(scope.counts.failed)}) →</button>`
+    : `<a class="reticle-report-defects-more" data-reticle-link="dashboard" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.DEFECTS_MORE}${hidden ? ` (${String(scope.counts.failed)})` : ''}</a>`;
   /*
    * The push control, beside the heading of the section it pushes.
    *
@@ -176,11 +184,54 @@ function defects(scope: ImpactScope, dashboardUrl: string | undefined): string {
   return `<div class="reticle-report-defects-wrap"><div class="reticle-report-defects-head"><span class="reticle-report-section">${REPORT_TEXT.DEFECTS}</span>${sync}</div><ul class="reticle-report-defects">${rows}</ul>${more}</div>`;
 }
 
+/**
+ * The sync status beside Sync now: synced, waiting, or refused, with the daemon's own sentence on
+ * hover. Every value is checked here: numbers are numbers, the status is one this HUD knows, and the
+ * sentence is escaped.
+ */
+function syncStatusHtml(sync: Readonly<Record<string, unknown>> | undefined): string {
+  if (sync === undefined) return '';
+  const num = (key: string): number => ('number' === typeof sync[key] ? sync[key] : 0);
+  const status = sync['status'];
+  const label =
+    'refused' === status
+      ? `${String(num('refused'))} refused`
+      : 'pending' === status
+        ? `${String(num('pending'))} waiting`
+        : 'on-platform' === status
+          ? `Synced · ${String(num('onPlatform'))}`
+          : undefined;
+  if (label === undefined) return '';
+  const said = 'string' === typeof sync['said'] ? sync['said'] : '';
+  return `<span class="reticle-sync-status" data-reticle-sync-status="${status as string}" title="${esc(said)}">${label}</span>`;
+}
+
+/**
+ * Reticle Coverage: the headline is controls PROVED, the level that is evidence rather than a visit;
+ * the rest show beside it. Only levels this HUD knows are rendered, so a key from the daemon is never
+ * printed as text, and numbers are rounded before they touch the markup.
+ */
+function coverageHtml(coverage: Readonly<Record<string, number>> | undefined): string {
+  if (coverage === undefined) return '';
+  const known = COVERAGE_LEVELS.filter((l) => 'number' === typeof coverage[l.key]);
+  if (0 === known.length) return '';
+  const pct = (key: string): string => `${String(Math.round(coverage[key] ?? 0))}%`;
+  const head = 'number' === typeof coverage['proved'] ? pct('proved') : pct(known[0]?.key ?? '');
+  const rows = known
+    .map((l) => `<span class="reticle-report-coverage-level">${pct(l.key)} ${l.label}</span>`)
+    .join('');
+  return `<div class="reticle-report-coverage" title="${REPORT_TEXT.COVERAGE_HELP}"><span class="reticle-report-section">${REPORT_TEXT.COVERAGE}</span><span class="reticle-report-coverage-value">${head}</span><div class="reticle-report-coverage-levels">${rows}</div></div>`;
+}
+
 export function reportBodyHtml(
   scope: ImpactScope,
   dashboardUrl?: string,
   account?: AccountState,
   projectName?: string,
+  /** This project's coverage. Passed only for the project scope: it is not a machine-wide number. */
+  coverage?: Readonly<Record<string, number>>,
+  /** Where this project's work stands with the platform. Project scope only, linked only. */
+  sync?: Readonly<Record<string, unknown>>,
 ): string {
   const c = scope.counts;
   if (0 === c.calls) return `<p class="reticle-report-empty">${REPORT_TEXT.EMPTY}</p>`;
@@ -220,8 +271,8 @@ export function reportBodyHtml(
    * it is about. This is a control, and a control somebody has to scroll a panel to find is one they
    * will not find. The two never both render — `localOnly` is gated on there being NO dashboard.
    */
-  const identity = `<div class="reticle-report-identity">${accountControlHtml(account, { dashboardUrl, projectName, verdicts: c.verdicts, defects: c.failed })}${syncButtonHtml(dashboardUrl)}</div>`;
-  return `${identity}${streak}${hero}${verdicts}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
+  const identity = `<div class="reticle-report-identity">${accountControlHtml(account, { dashboardUrl, projectName, verdicts: c.verdicts, defects: c.failed })}${syncButtonHtml(dashboardUrl)}${syncStatusHtml(sync)}</div>`;
+  return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}${coverageHtml(coverage)}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
 }
 
 /**
@@ -289,14 +340,19 @@ export class PresenterReport {
       e.stopPropagation();
       this.close();
     });
-    const scopeBtn = root.querySelector(`[${SCOPE_ATTR}]`);
-    scopeBtn?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.#global = !this.#global;
-      scopeBtn.setAttribute('aria-pressed', this.#global ? 'true' : 'false');
-      scopeBtn.textContent = this.#global ? REPORT_TEXT.GLOBAL : REPORT_TEXT.PROJECT;
-      this.#paint();
-    });
+    // Two choices, both always visible, the current one pressed. A single pill that rewrote its own
+    // label read as a tag rather than a switch, and never said what the other choice was.
+    const scopeBtns = root.querySelectorAll<HTMLElement>(`[${SCOPE_ATTR}]`);
+    for (const btn of scopeBtns) {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.#global = SCOPE.MACHINE === btn.getAttribute(SCOPE_ATTR);
+        for (const other of scopeBtns) {
+          other.setAttribute('aria-pressed', other === btn ? 'true' : 'false');
+        }
+        this.#paint();
+      });
+    }
     root.querySelector(`[${SHARE_X_ATTR}]`)?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.#openShare(buildXShareUrl(this.shareText()));
@@ -416,6 +472,8 @@ export class PresenterReport {
             this.#snapshot?.dashboardUrl,
             this.#snapshot?.account,
             this.#snapshot?.projectName,
+            this.#global ? undefined : this.#snapshot?.coverage,
+            this.#global ? undefined : this.#snapshot?.sync,
           );
   }
 

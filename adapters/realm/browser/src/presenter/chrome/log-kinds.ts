@@ -23,3 +23,7 @@ export type LogKind = (typeof LOG_KIND)[keyof typeof LOG_KIND];
 /** How an action row ended, which decides the glyph beside it. */
 export const LOG_RESULT = { PASS: 'pass', FAIL: 'fail' } as const;
 export type LogResult = (typeof LOG_RESULT)[keyof typeof LOG_RESULT];
+
+/** Who a row's action came from: the agent the person is working with, or the Reticle Harness. */
+export const LOG_ACTOR = { AGENT: 'agent', HARNESS: 'harness' } as const;
+export type LogActor = (typeof LOG_ACTOR)[keyof typeof LOG_ACTOR];

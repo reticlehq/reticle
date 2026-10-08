@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — `reticle drive` now says which app it attached to.** It attaches to whatever holds the port, and in a monorepo that is easily a different app from the one you meant, while the port, url and session id it printed looked the same either way. The attach line and the `reticle_drive_attached` JSON now carry the page's `projectId` and title, and warn when the current directory's `.reticle.json` names a different project. The not-ready hint also names the right SDK package, `@reticlehq/browser`, instead of `@reticlehq/core`. Closes [#1269](https://github.com/reticlehq/reticle/issues/1269).

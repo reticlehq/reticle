@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
 import { PresenterMode } from '@reticlehq/core';
 import { Presenter } from './presenter.js';
 import type { PresenterRunState } from './presenter-run-state.js';
@@ -7,6 +7,11 @@ import { buildSnapshot } from '@/dom/snapshot.js';
 import { isIgnored } from '@/dom/dom-ignore.js';
 import { until, wait } from './presenter.test-helpers.js';
 import { ACT_STRIP } from './presenter-config.js';
+
+// Each test is a fresh tab: the Agent Log keeps its rows in sessionStorage across a reload.
+beforeEach(() => {
+  sessionStorage.clear();
+});
 
 describe('presenter / transparency layer', () => {
   it('mounts an overlay that is excluded from snapshots, then narrates + destroys', () => {
@@ -131,8 +136,30 @@ describe('presenter v2 activity log', () => {
     handle?.result('pass');
     const rows = logRows();
     expect(rows.length).toBe(1);
-    expect(rows[0]?.textContent).not.toContain('✓');
+    // A step the person watched pulse while it ran says how it ended: a pass is seen, not implied.
+    expect(rows[0]?.textContent).toContain('✓');
+    expect(rows[0]?.getAttribute('data-state')).toBe('pass');
     expect(rows[0]?.querySelector('.reticle-res')?.className).toContain('reticle-pass');
+    p.destroy();
+  });
+
+  it('marks the moment the Harness takes over, and the moment the agent takes back', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    p.log('act', 'Clicking Save');
+    p.log('act', 'Clicking Refund', undefined, 'harness');
+    p.log('read', 'Looking at the page', undefined, 'harness');
+    p.log('act', 'Clicking Settings');
+    const rows = logRows().map((r) => [r.getAttribute('data-kind'), r.textContent?.trim()]);
+    expect(rows).toEqual([
+      ['act', expect.stringContaining('Clicking Save')],
+      ['handover', 'Reticle Harness is driving'],
+      ['act', expect.stringContaining('Clicking Refund')],
+      ['read', expect.stringContaining('Looking at the page')],
+      ['handover', 'Your agent is driving'],
+      ['act', expect.stringContaining('Clicking Settings')],
+    ]);
     p.destroy();
   });
 

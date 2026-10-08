@@ -102,6 +102,24 @@ describe('replay-from-panel wiring (bridge)', () => {
     expect(calls).toHaveLength(0);
   });
 
+  /**
+   * The panel's Sign in used to copy `reticle login` to the clipboard: a dead end for anybody who
+   * does not live in a terminal. It now asks the daemon, which owns the credential, to start the
+   * browser approval flow.
+   */
+  it('routes the panel sign-in to the daemon, and nowhere else', async () => {
+    const { bridge, client } = await connect('panel-s1');
+    let signins = 0;
+    const replays: string[] = [];
+    bridge.attachSigninRequest(() => {
+      signins += 1;
+    });
+    bridge.attachReplay((_s, flowName) => replays.push(flowName));
+    client.emitControl({ kind: HumanControlKind.SIGNIN });
+    await waitUntil(() => 1 === signins);
+    expect(replays).toHaveLength(0);
+  });
+
   it('routes the panel harness switch to the daemon, carrying the desired state', async () => {
     const { bridge, client } = await connect('panel-h1');
     const seen: boolean[] = [];

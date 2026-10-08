@@ -487,6 +487,12 @@ describe('every verdict names the clause that decided it', () => {
       settled: true,
       absenceBlindSpot: 'the absence target was in an unobserved region',
     },
+    [VerifiedReason.HIDDEN_MATCH]: {
+      pass: true,
+      honesty: clean(),
+      settled: true,
+      hiddenMatch: 'the declared consequence held only on a hidden element',
+    },
   };
 
   it.each(Object.entries(branches))('reports %s', (expected, inputs) => {

@@ -17,7 +17,11 @@ import {
 
 /** A lease this run opened, and the way to hand it back; or why it could not be opened. */
 type LeaseOutcome =
-  | { readonly sessionId: string; readonly release: () => Promise<void> }
+  | {
+      readonly sessionId: string;
+      readonly zeroInstall: boolean;
+      readonly release: () => Promise<void>;
+    }
   | { readonly failed: string };
 
 const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -42,6 +46,7 @@ export async function openLeaseFor(
     }
     return {
       sessionId: got.leased,
+      zeroInstall: got.zeroInstall,
       release: async () => {
         await releaseLease(caller, got.leased);
         await close();

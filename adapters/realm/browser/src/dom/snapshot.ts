@@ -9,6 +9,7 @@ const INTERACTIVE = new Set([
   'button',
   'link',
   'textbox',
+  'searchbox',
   'checkbox',
   'radio',
   'combobox',

@@ -83,4 +83,4 @@ ${sel('pop')} button[data-send]:disabled{opacity:.4;cursor:not-allowed;}
   80%{transform:translateX(calc(-50% + 2px))}}
 `;
 
-export const ANNOTATOR_ROOT_HTML = `<div ${MARK_ATTR}="hi"><span ${MARK_ATTR}="hilabel"></span></div><div ${MARK_ATTR}="sel" hidden></div>`;
+export const ANNOTATOR_ROOT_HTML: string = `<div ${MARK_ATTR}="hi"><span ${MARK_ATTR}="hilabel"></span></div><div ${MARK_ATTR}="sel" hidden></div>`;

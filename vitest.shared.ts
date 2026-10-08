@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 /**
  * Test timeouts, in one place, for every package in this repository.
  *
@@ -64,8 +65,12 @@ export const HOOK_TIMEOUT_MS = 60_000;
 export const MAX_WORKERS = 3;
 
 /** Spread into a package's `test` block so no package is left on the 5s default. */
+/** Every package's tests run with a temporary HOME: see vitest.temp-home.ts for the incident. */
+const TEMP_HOME_SETUP = fileURLToPath(new URL('./vitest.temp-home.ts', import.meta.url));
+
 export const sharedTestOptions = {
   testTimeout: TEST_TIMEOUT_MS,
   hookTimeout: HOOK_TIMEOUT_MS,
   maxWorkers: MAX_WORKERS,
+  setupFiles: [TEMP_HOME_SETUP],
 } as const;

@@ -15,7 +15,7 @@ interface ReactionReport {
   summary: ReactionSummary;
 }
 
-/** Turn a slice of the event buffer into the structured "what the app did" report (plan/05). */
+/** Turn a slice of the event buffer into the structured "what the app did" report. */
 export function buildReactionReport(events: ReticleEvent[], windowMs: number): ReactionReport {
   const summary: ReactionSummary = {
     total: events.length,

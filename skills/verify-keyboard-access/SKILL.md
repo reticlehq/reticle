@@ -3,7 +3,7 @@ name: verify-keyboard-access
 description: Verify that every interactive control on a page can take keyboard focus and that its primary action fires from the keyboard rather than only the mouse, and say plainly that Tab order cannot be verified today. Use when a component was hand-tested with a mouse, a custom dropdown/modal/combobox was added, or an accessibility report flags an unreachable control.
 license: Apache-2.0
 metadata:
-  version: 3.5.0
+  version: 3.6.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---

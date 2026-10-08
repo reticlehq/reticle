@@ -29,7 +29,11 @@ vi.mock('playwright', () => ({
   },
 }));
 
-import { playwrightLauncher } from './playwright-launcher.js';
+import {
+  HIDE_RETICLE_CHROME_CSS,
+  playwrightLauncher,
+  screenshotOptions,
+} from './playwright-launcher.js';
 
 describe('playwrightLauncher', () => {
   beforeEach(() => {
@@ -94,5 +98,20 @@ describe('playwrightLauncher', () => {
       const launch = playwrightLauncher({ headless: true });
       await expect(launch()).rejects.toThrow('spawn ENOENT');
     });
+  });
+});
+
+describe('a live picture of a leased tab', () => {
+  it("leaves Reticle's own panel out of the picture, as the visual captures do", () => {
+    expect(screenshotOptions({ jpegQuality: 50 })).toEqual({
+      fullPage: false,
+      type: 'jpeg',
+      quality: 50,
+      style: HIDE_RETICLE_CHROME_CSS,
+    });
+  });
+
+  it('keeps a plain capture exactly as it was', () => {
+    expect(screenshotOptions({ fullPage: true })).toEqual({ fullPage: true });
   });
 });

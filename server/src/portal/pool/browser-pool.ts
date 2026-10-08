@@ -12,6 +12,11 @@
 
 import { unreachableUrlIn, type SeedStorage } from '@reticlehq/core';
 import { seedStorageInto } from './storage-seed.js';
+import {
+  grantLeasePermissions,
+  NOTIFICATION_PERMISSION_READ,
+  NOTIFICATION_READ_TIMEOUT_MS,
+} from './context-permissions.js';
 import type {
   InitScriptHandle,
   Launcher,
@@ -19,6 +24,7 @@ import type {
   PooledContext,
   PooledMockRule,
   PooledPage,
+  ScreenshotOptions,
 } from './pool-contract.js';
 export type {
   InitScriptHandle,
@@ -72,12 +78,32 @@ interface BrowserPoolOptions {
    * the ~450KB build is only read if some page ever needs it; undefined when there is none to give.
    */
   zeroInstallScript?: () => string | undefined;
+  /**
+   * Launches a browser with a window, for a lease somebody wants to watch. Launched only when the
+   * first headed lease is asked for. Absent: a headed lease is refused.
+   */
+  launchHeaded?: Launcher;
 }
 
+/** One browser the pool may hold, and the launch in flight for it. */
+interface BrowserSlot {
+  readonly launch: Launcher | undefined;
+  readonly headed: boolean;
+  browser?: PooledBrowser | undefined;
+  launching?: Promise<PooledBrowser> | undefined;
+}
+
+/** What a headed lease is refused with where no window can be opened. */
+export const NO_HEADED_BROWSER = 'no headed browser can be opened here';
+
 interface ActiveLease {
+  /** Whether it lives in the headed browser: that browser's death is this lease's death. */
+  headed: boolean;
   context: PooledContext;
   page: PooledPage;
   url: string;
+  /** Who took it (one id per MCP attach). Only that caller is handed it again. */
+  owner?: string;
   /** Last time an agent touched this lease (acquire or any tool call); drives orphan reclaim. */
   touchedAt: number;
   /**
@@ -95,14 +121,16 @@ interface ActiveLease {
    * context for "why did the page look frozen for a moment", not a log an agent needs to replay.
    */
   lastDialogMessage?: string;
+  /** What this lease was granted when it opened. It never changes on an open lease. */
+  permissions: readonly string[];
 }
 
 /**
- * Owns a single browser and leases isolated contexts out of it, capped at `maxContexts`.
+ * Owns a headless browser (and, when asked, a headed one) and leases isolated contexts out of them,
+ * capped at `maxContexts` across both.
  * Not exported as a singleton — the daemon owns one instance.
  */
 export class BrowserPool {
-  readonly #launch: Launcher;
   readonly #max: number;
   readonly #genId: () => string;
   readonly #now: () => number;
@@ -110,8 +138,8 @@ export class BrowserPool {
   readonly #zeroInstall: (() => string | undefined) | undefined;
   readonly #navTimeout: number;
 
-  #browser: PooledBrowser | undefined;
-  #launching: Promise<PooledBrowser> | undefined;
+  readonly #headless: BrowserSlot;
+  readonly #headed: BrowserSlot;
   #closed = false;
   /** Leases reclaimed for going stale — see reapedLeaseCount(). */
   #reapedLeases = 0;
@@ -143,7 +171,8 @@ export class BrowserPool {
 
   constructor(launch: Launcher, opts: BrowserPoolOptions) {
     if (opts.maxContexts < 1) throw new Error('maxContexts must be >= 1');
-    this.#launch = launch;
+    this.#headless = { launch, headed: false };
+    this.#headed = { launch: opts.launchHeaded, headed: true };
     this.#max = opts.maxContexts;
     this.#genId = opts.genSessionId;
     this.#now = opts.now ?? ((): number => Date.now());
@@ -177,16 +206,20 @@ export class BrowserPool {
   }
 
   /**
-   * The public session id of an active lease on this origin, if we already hold one.
+   * The public session id of an active lease on this origin that `owner` took, if there is one.
    *
    * The lease TOOL reuses that id instead of minting a second context: a second acquire on the same
-   * origin used to leave both tabs connected and poison default session resolution (#600). The pool's
-   * own `acquire` still mints — the parallel suite needs isolation on purpose.
+   * origin used to leave both tabs connected and poison default session resolution (#600). Only the
+   * caller that took the lease gets it back: handing it to whoever asked put two agents in one tab,
+   * each one's verdicts resting on the other's actions (#1226). A caller with no owner cannot be told
+   * apart from another, so it always gets its own. The pool's own `acquire` still mints.
    *
    * Prefers the alias the agent was given, when the app registered under its own name.
    */
-  leaseIdOnOrigin(origin: string): string | undefined {
+  leaseIdOnOrigin(origin: string, owner: string | undefined): string | undefined {
+    if (owner === undefined) return undefined;
     for (const [leaseId, lease] of this.#active) {
+      if (lease.owner !== owner) continue;
       let leaseOrigin: string | undefined;
       try {
         leaseOrigin = new URL(lease.url).origin;
@@ -277,7 +310,7 @@ export class BrowserPool {
    */
   async screenshotLease(
     sessionId: string,
-    opts: { fullPage?: boolean } = {},
+    opts: ScreenshotOptions = {},
   ): Promise<Uint8Array | undefined> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease === undefined || lease.page.screenshot === undefined) return undefined;
@@ -351,6 +384,35 @@ export class BrowserPool {
     }
   }
 
+  /** What a lease was granted when it opened, or undefined for a session that is not a lease. */
+  permissionsOf(sessionId: string): readonly string[] | undefined {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.permissions;
+  }
+
+  /**
+   * What the leased page's `Notification.permission` says, or undefined when it cannot be asked.
+   *
+   * Read back rather than inferred from the grant, because the headless shell answers `denied`
+   * after a notifications grant — see context-permissions.ts. Bounded, so a page that never answers
+   * reads as "could not ask" instead of holding the caller.
+   */
+  async notificationPermission(sessionId: string): Promise<string | undefined> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    if (lease === undefined || lease.page.evaluate === undefined) return undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const gaveUp = new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), NOTIFICATION_READ_TIMEOUT_MS);
+    });
+    try {
+      const value = await Promise.race([lease.page.evaluate(NOTIFICATION_PERMISSION_READ), gaveUp]);
+      return 'string' === typeof value ? value : undefined;
+    } catch {
+      return undefined;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async sweepExpired(): Promise<string[]> {
     const now = this.#now();
     const expired = [...this.#active.entries()]
@@ -399,9 +461,21 @@ export class BrowserPool {
    */
   async acquire(
     url: string,
-    opts: { signal?: AbortSignal; sessionId?: string; seedStorage?: SeedStorage } = {},
+    opts: {
+      signal?: AbortSignal;
+      sessionId?: string;
+      seedStorage?: SeedStorage;
+      owner?: string;
+      /** In a browser with a window the person can watch. */
+      headed?: boolean;
+      /** Granted on the lease's origin before the first navigation, so the first render sees them. */
+      permissions?: readonly string[];
+    } = {},
   ): Promise<Lease> {
     if (this.#closed) throw new Error('browser pool is shut down');
+    const slot = true === opts.headed ? this.#headed : this.#headless;
+    // Refused before a slot is claimed, so a refusal never holds one.
+    if (slot.launch === undefined) throw new Error(NO_HEADED_BROWSER);
     // #waitForSlot claims the slot synchronously (bumps #occupied) before returning, so the cap holds
     // even when many acquires race through the gate in the same tick.
     await this.#waitForSlot(opts.signal);
@@ -410,8 +484,10 @@ export class BrowserPool {
     let pending: string | undefined;
     let pendingDialogMessage: string | undefined;
     try {
-      const browser = await this.#ensureBrowser();
+      const browser = await this.#ensureBrowser(slot);
       context = await browser.newContext();
+      if (opts.permissions !== undefined)
+        await grantLeasePermissions(context, opts.permissions, url);
       const page = await context.newPage();
       // Per-page crash isolation: if THIS renderer dies, reclaim only this lease — the shared browser
       // and every other agent's context keep running. (A full browser death is handled by #onCrash.)
@@ -457,7 +533,7 @@ export class BrowserPool {
       // #occupied. Registering the lease now would resurrect a dead entry against a crashed browser with
       // the slot count out of sync (drifting below #active.size, eventually exceeding the cap). If we're
       // no longer the live browser, bail — the catch below closes the context and returns the slot.
-      if (this.#browser !== browser) throw new Error('browser crashed during navigation');
+      if (slot.browser !== browser) throw new Error('browser crashed during navigation');
       let navStatus: number | undefined;
       if (null !== navRes && 'object' === typeof navRes && 'status' in navRes) {
         const s: unknown = (navRes as { status?: unknown }).status;
@@ -473,10 +549,13 @@ export class BrowserPool {
         }
       }
       this.#active.set(sessionId, {
+        headed: slot.headed,
         context,
         page,
         url,
+        ...(opts.owner === undefined ? {} : { owner: opts.owner }),
         touchedAt: this.#now(),
+        permissions: opts.permissions ?? [],
         ...(pending === undefined ? {} : { dialFailureUrl: pending }),
         ...(pendingDialogMessage === undefined ? {} : { lastDialogMessage: pendingDialogMessage }),
       });
@@ -528,16 +607,18 @@ export class BrowserPool {
     await Promise.all(contexts.map((c) => c.close().catch(() => undefined)));
     // If a launch is in flight, await it so we can close the resulting browser — otherwise it
     // resolves after shutdown returns and the Chromium process is orphaned (hundreds of MB leaked).
-    const inflight = this.#launching;
-    if (inflight !== undefined) {
-      const launched = await inflight.catch(() => undefined);
-      if (launched !== undefined && launched !== this.#browser) {
-        await launched.close().catch(() => undefined);
+    for (const slot of [this.#headless, this.#headed]) {
+      const inflight = slot.launching;
+      if (inflight !== undefined) {
+        const launched = await inflight.catch(() => undefined);
+        if (launched !== undefined && launched !== slot.browser) {
+          await launched.close().catch(() => undefined);
+        }
       }
+      const browser = slot.browser;
+      slot.browser = undefined;
+      if (browser !== undefined) await browser.close().catch(() => undefined);
     }
-    const browser = this.#browser;
-    this.#browser = undefined;
-    if (browser !== undefined) await browser.close().catch(() => undefined);
     for (const waiter of this.#waiters.splice(0)) waiter();
   }
 
@@ -604,35 +685,52 @@ export class BrowserPool {
     if (next !== undefined) next();
   }
 
-  async #ensureBrowser(): Promise<PooledBrowser> {
+  async #ensureBrowser(slot: BrowserSlot): Promise<PooledBrowser> {
     if (this.#closed) throw new Error('browser pool is shut down');
-    if (this.#browser !== undefined && this.#browser.isConnected()) return this.#browser;
+    if (slot.browser !== undefined && slot.browser.isConnected()) return slot.browser;
+    const launch = slot.launch;
+    if (launch === undefined) throw new Error(NO_HEADED_BROWSER);
     // De-dupe concurrent launches: the first acquire to find no browser starts one; the rest await it.
-    if (this.#launching === undefined) {
+    if (slot.launching === undefined) {
       // The in-flight promise MUST be cleared on failure as well as success. It used to be cleared only
       // in the success callback, so the first failed launch — Chromium not downloaded, a transient
       // EAGAIN — left a permanently rejected promise here, and every subsequent acquire for the daemon's
       // lifetime re-returned that same stale rejection. Running `npx playwright install` did not help;
       // only restarting the daemon did. A retry must be allowed to actually retry.
-      this.#launching = this.#launch()
+      slot.launching = launch()
         .then((b) => {
-          b.onDisconnected(() => this.#onCrash(b));
-          this.#browser = b;
+          b.onDisconnected(() => this.#onCrash(slot, b));
+          slot.browser = b;
           return b;
         })
         .finally(() => {
-          this.#launching = undefined;
+          slot.launching = undefined;
         });
     }
-    return this.#launching;
+    return slot.launching;
   }
 
-  /** The browser process died: drop every lease (they're invalid) and clear so the next acquire relaunches. */
-  #onCrash(crashed: PooledBrowser): void {
-    if (this.#browser !== crashed) return; // a stale handler from a prior browser
-    this.#browser = undefined;
-    this.#active.clear();
-    this.#occupied = 0; // every slot is gone with the browser
+  /**
+   * A browser process died: drop the leases it held (they're invalid) and clear its slot so the next
+   * acquire of that kind relaunches it. The other browser's leases live on.
+   */
+  #onCrash(slot: BrowserSlot, crashed: PooledBrowser): void {
+    if (slot.browser !== crashed) return; // a stale handler from a prior browser
+    slot.browser = undefined;
+    let freed = 0;
+    for (const [id, lease] of this.#active) {
+      if (lease.headed !== slot.headed) continue;
+      this.#active.delete(id);
+      freed += 1;
+    }
+    // A lease mid-acquire on the dead browser holds a slot too; it frees it in its own catch. When
+    // every lease belonged to this browser, nothing else can be holding one.
+    this.#occupied = 0 === this.#active.size ? 0 : Math.max(0, this.#occupied - freed);
     for (const waiter of this.#waiters.splice(0)) waiter(); // let them re-claim + relaunch
+  }
+
+  /** Whether this lease lives in the headed browser. */
+  isHeaded(sessionId: string): boolean {
+    return true === this.#active.get(this.#leaseIdOf(sessionId))?.headed;
   }
 }

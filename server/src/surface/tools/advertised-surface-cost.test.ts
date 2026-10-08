@@ -138,10 +138,15 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * With the coverage and crawl additions beside it (25_250 on their own), the two together measure
  * 25,451 to 25,459 B: 25_500.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 25_500;
+/*
+ * 25_650 for `hud` on reticle_session tune (25,612 B measured): seven enum words that let an agent
+ * hide or move a HUD sitting over the control it has to test, which was otherwise untestable. The
+ * two parameters it started as were merged into one, and its description dropped, to get here.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_650;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
-// LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
+// RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
 // parameter and a `rewroteFlows` output field: 86 B on the wire (24,600 -> 24,686, ~21
 // tokens/turn) against 0 B of headroom. The prose was cut first — the parameter description went
 // through three rewrites and lost half its length — and 86 B is what is left once the enum's two
@@ -281,7 +286,18 @@ describe('advertised surface cost', () => {
  */
 // With `durable`, `app` and `exhaustive` beside `compare`, the two together measure 145,676 to
 // 145,684 B, inside 146_000.
-const ALL_SURFACE_BYTE_BUDGET = 146_000;
+// 146_000 -> 146_400 for `push` on reticle_project and the query hint field (#1395): 146,174 B.
+// 146_400 -> 146_600 for `hud` on reticle_session tune and its `hud` result.
+// 146_600 -> 149_200: the result envelope is declared on EVERY tool with an output schema, not only
+// session-bound ones (149,138 B measured). runTool adds `next` and the one-shot keys to any result,
+// and a strict session-exempt schema rejected the call outright. The default surface sends no
+// output schemas, so this costs nothing there.
+// 149_200 -> 149_500 for `to` and `at` on reticle_flow_replay (149,437 B): replaying up to a point
+// and continuing from it is how a drive plan branches without re-driving the shared steps.
+// 149_500 -> 149_700 for `window` and `documentStatus` on reticle_sessions and `disconnected` on
+// session end (149,593 B): two windows of one desktop app share a url, and a validating client strips
+// an undeclared field, so the label that tells them apart has to be in the schema.
+const ALL_SURFACE_BYTE_BUDGET = 149_700;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

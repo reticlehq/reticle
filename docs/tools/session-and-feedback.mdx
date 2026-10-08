@@ -10,15 +10,15 @@ icon: comments
 
 The presenter panel in your app shows a live transcript of what the agent is doing. It reads "live" until the agent says otherwise. So an agent that wanders off without a word leaves a panel claiming work is in progress forever.
 
-| Action     | What it does                                                             |
-| ---------- | ------------------------------------------------------------------------ |
-| `yield`    | Hand control back between turns. `mode: "waiting"` or `"ask"`. Revivable |
-| `end`      | The task is done. Frees the session; revives on the next action          |
-| `tune`     | Adjust session behaviour, such as `idleEndMs`, the idle-end window       |
-| `resume`   | Clear a pause the human applied                                          |
-| `messages` | Drain the human-to-agent inbox                                           |
-| `review`   | List, and with `resolve`, retire the mistakes a human pinned to elements |
-| `narrate`  | State your intent on the presenter panel, with an optional `level`       |
+| Action | What it does |
+| --- | --- |
+| `yield` | Hand control back between turns. `mode: "waiting"` or `"ask"`. Revivable |
+| `end` | The task is done. Frees the session; revives on the next action |
+| `tune` | Adjust session behaviour: `idleEndMs`, the idle-end window, or `hud`: `hidden`, `shown`, `removed` (until reload), or a corner (`top-left`, `top-right`, `bottom-left`, `bottom-right`) when the HUD covers a control you must test |
+| `resume` | Clear a pause the human applied |
+| `messages` | Drain the human-to-agent inbox |
+| `review` | List, and with `resolve`, retire the mistakes a human pinned to elements |
+| `narrate` | State your intent on the presenter panel, with an optional `level` |
 
 ```json
 { "action": "yield", "mode": "waiting" }

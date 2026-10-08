@@ -19,6 +19,7 @@
  * the app grows something nobody has covered yet — which is precisely what the ratchet is for.
  */
 
+import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
@@ -75,6 +76,38 @@ export interface LevelReport {
   missing: string[];
   /** How many more are missing than `missing` names. */
   missingOverflow?: number;
+}
+
+/** A ledger file's text, or an empty ledger for anything unreadable: coverage never throws. */
+function parseLedger(text: string): AppLedger {
+  try {
+    const parsed = z
+      .object({ version: z.literal(LEDGER_VERSION), ledger: LedgerSchema })
+      .safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data.ledger : emptyLedger();
+  } catch {
+    return emptyLedger();
+  }
+}
+
+/**
+ * Each level's percentage for the project at `reticleRoot`, for the HUD: numbers only, and only the
+ * levels with an honest denominator. Undefined when nothing has been measured yet.
+ *
+ * Synchronous because the impact snapshot it feeds is: one small file read per snapshot.
+ */
+export function coveragePercents(reticleRoot: string): Record<string, number> | undefined {
+  let text: string;
+  try {
+    text = readFileSync(reticleDirPaths(reticleRoot).coverage, 'utf8');
+  } catch {
+    return undefined;
+  }
+  const out: Record<string, number> = {};
+  for (const report of levelsOf(parseLedger(text))) {
+    if (report.pct !== undefined) out[report.level] = report.pct;
+  }
+  return 0 < Object.keys(out).length ? out : undefined;
 }
 
 export function emptyLedger(): AppLedger {
@@ -266,14 +299,7 @@ export class LedgerStore {
       if (this.#fs.isNotFound(error)) return emptyLedger();
       throw error;
     }
-    try {
-      const parsed = z
-        .object({ version: z.literal(LEDGER_VERSION), ledger: LedgerSchema })
-        .safeParse(JSON.parse(text));
-      return parsed.success ? parsed.data.ledger : emptyLedger();
-    } catch {
-      return emptyLedger();
-    }
+    return parseLedger(text);
   }
 
   /**

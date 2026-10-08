@@ -197,6 +197,14 @@ function appSignal(dir: string, io: Pick<InitIo, 'exists' | 'readFile'>): AppSig
 }
 
 /**
+ * Whether `dir` is itself an app with a page: what the daemon asks before wiring a folder unasked,
+ * so a library or API package it happens to run in is left alone.
+ */
+export function isWebApp(dir: string, io: Pick<InitIo, 'exists' | 'readFile'>): boolean {
+  return AppSignal.UI === appSignal(dir, io);
+}
+
+/**
  * App directories under a workspace root.
  *
  * Running `reticle init` at the repo root is what people actually do, and in a monorepo the app is a

@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser`: `press Escape` inside a modal `<dialog>` closes it, as a keyboard does.** A dispatched key event is untrusted, so the browser never made the dialog's close request: no `cancel` and no `close`. An app that closes through `onCancel`, or relies on the default close, looked broken when it wasn't. Escape in a dialog opened with `showModal()` now makes the close request, through `requestClose()` where the browser has it, or otherwise a cancelable `cancel` followed by `close()`. It is skipped when the app prevented the keydown, and the dialog stays open when the app prevents `cancel`. Closes [#1123](https://github.com/reticlehq/reticle/issues/1123).

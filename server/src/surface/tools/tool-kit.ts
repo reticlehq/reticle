@@ -4,6 +4,7 @@
  * in its own leaf module (no dependency on any tool array) so the per-group tool files can import it
  * without a circular import — `tools.ts` assembles the groups and re-exports `ToolDef`/`ToolDeps`.
  */
+import type { FirstRunWiring } from '@/portal/session/first-run-wiring.js';
 import { z } from 'zod';
 import { type ProjectId, ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -66,6 +67,15 @@ export interface ToolDeps<Ext = unknown> {
    * whose server matched (#1136). Absent ⇒ this connection's server matched, or it did not announce.
    */
   peerSkew?: { take(): string | undefined };
+  /**
+   * Who is asking: one id per MCP attach. A browser lease is handed back only to the attach that took
+   * it, so two agents on one origin never share a tab (#1226). Absent ⇒ every acquire gets its own.
+   */
+  attachId?: string;
+  /** Run one sync cycle with the platform now, for `reticle_project { push }`. Absent: not linked here. */
+  syncNow?: () => Promise<unknown>;
+  /** Wires the app on the agent's first use, instead of at installation. Absent: tell, do not wire. */
+  firstRun?: FirstRunWiring;
   /** cross-run outcome memory (.reticle/project.json). */
   project: ProjectStore;
   /** optional native-input provider. undefined ⇒ everything stays synthetic. */
@@ -258,6 +268,10 @@ export const EnvelopeKey = {
   VERSION_SKEW: 'version_skew',
   /** A feedback report that was accepted and then failed to send. Only the reporter can act on it. */
   FEEDBACK_UNDELIVERED: 'feedback_undelivered',
+  /** Once per project: verified runs exist only on this machine. See platform-moment.ts. */
+  PLATFORM: 'platform',
+  /** The one thing to do next: declare the request, yield, fix sync, connect. See next-step.ts. */
+  NEXT: 'next',
 } as const;
 export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
 

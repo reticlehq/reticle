@@ -135,7 +135,7 @@ Not on this surface at all, but one hop away: `reticle_run { tool, args }` calls
 | --- | --- | --- |
 | **flows** | `reticle_flow_save*` / `reticle_flow_replay` / `reticle_verify { action: "heal" }` | Replayable **golden journeys**, anchored to testids/signals; drift is legible and self-heals. |
 | **baselines** | `reticle_baseline {action:"save"}` / `reticle_baseline {action:"diff"}` | Structural **"before" snapshots**; `reticle_baseline {action:"diff"}` flags regressions against them. |
-| **project.json** | `reticle_project` | Cross-run **run-history**: "did it behave like last run?" read via `reticle_project`. |
+| **project.json** | `reticle_project` | Cross-run **run-history**: "did it behave like last run?" read via `reticle_project`. Its `cloud.sync` says where this project's runs stand with the platform (on it, waiting, refused, last push); `push: true` syncs before answering. |
 
 > `reticle_project` / `project.json` are the **run-history layer**. flows answer "does the journey still work?"; baselines answer "did the structure change?"; project.json answers "is this run consistent with prior runs?".
 

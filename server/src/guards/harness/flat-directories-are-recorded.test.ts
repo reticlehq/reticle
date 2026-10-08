@@ -76,13 +76,17 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // and a `promo/` directory holding exactly one file would be a category invented for a single member.
   // 20 since `hud-telemetry.ts`: the one listener that names every HUD press. It reads the presenter's
   // own root attributes and every surface's controls, so it sits with the surfaces it watches.
-  'adapters/realm/browser/src/presenter': 20,
+  // 24 with `presenter-plan.ts`, the Harness plan board on the Agent Log: one surface, with its own
+  // stylesheet, beside the others.
+  'adapters/realm/browser/src/presenter': 24,
   // Newly over the line at 11, with `presenter-safe-html.ts`. It crossed because two SECURITY
   // helpers left `presenter-report.ts` when the account capsule became their second caller: HTML
   // escaping, and the dashboard-url scheme check that exists because `javascript:` once produced a
   // link running code inside the developer's own app. A security rule living in two files gets
   // fixed in one of them, so the duplicate was not an option.
-  'adapters/realm/browser/src/presenter/chrome': 11,
+  // 12 with `log-memory.ts`: the Agent Log's rows kept across the reloads a replay causes, beside
+  // the log they belong to.
+  'adapters/realm/browser/src/presenter/chrome': 12,
   /*
    * 12 because `verdict-attribution.ts` earns its own module, and the reason is measured rather than
    * tidy: folded into `verified-constants.ts` it added 687 B to what EVERY page downloads just for
@@ -105,7 +109,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
   // published API, and a page that only presses a key should not pull in the reader for a list of
   // them. Recorded rather than grouped, by the same rule as the note underneath.
-  'core/src/wire': 17,
+  'core/src/wire': 18,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not
@@ -128,8 +132,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * exactly one byte, which is how we learned the cost was the schema and not the constant -- but a
    * leaf the browser can import without the schemas is still the right shape, and the guard's
    * ceiling was raised with that reasoning written beside it.
+   *
+   * 17 with `drive-script.ts`, the Harness's plan language: an artifact the daemon and the platform
+   * both read, so it lives with the other formats, behind the artifacts subpath the SDK never loads.
    */
-  'core/src/artifacts': 14,
+  'core/src/artifacts': 17,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   'core/src': 11,
@@ -142,7 +149,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `predicate-eval.ts`: it is a pure rule with an incident behind it, and it is the kind of thing
   // that gets quietly re-broken when it lives inside the evaluator it constrains. This directory is
   // now the largest flat one in the package and is the next thing here worth grouping.
-  'engine/src/question/predicate': 21,
+  // 22 with `name-near-miss.ts`, the clause that names the labels a role really carries when an
+  // exact role+name predicate misses (#875). A sibling of `split-text-miss.ts` and
+  // `testid-near-miss.ts` rather than folded into either: each of those is named for the field it
+  // explains, and a filename here is published API (see public-subpaths-are-pinned.test.ts).
+  'engine/src/question/predicate': 22,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:
@@ -200,7 +211,14 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // call it rather than in a `text/` directory holding one file.
   // 39 with `query-hint-schema.ts`: tools.ts is at its line cap, and the one hint field that
   // overflowed it is declared beside it rather than squeezed out of its own description.
-  'server/src/surface/tools': 39,
+  // 42 with `next-step.ts`: the one line every tool result carries about what to do next. It is
+  // read where the envelope is assembled, in `invoke-tool.ts`, beside the other envelope sources.
+  // 43 with `harness-script.ts`: the planned drive, split from `harness-explore.ts` at its line cap.
+  // It binds the plan's ports to the tool surface, which is why it sits here and not in `script/`.
+  // 46 with `lease-permissions.ts`: the `permissions` argument of `reticle_lease` acquire, its
+  // notification read-back and its hint. lease-tools.ts sits near the line cap, so the argument is
+  // declared beside it rather than inside it, as `query-hint-schema.ts` is beside tools.ts.
+  'server/src/surface/tools': 46,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
@@ -240,7 +258,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // duplicated in two tool files. 23 for `serving-directory.ts`: which checkout's dev server served
   // a page is a fact about this machine's processes, and `session` is the directory already allowed
   // to read daemon state and port holders -- every other home needed two new reaches for it.
-  'server/src/portal/session': 23,
+  // 25 with `command-payload.ts`: the command's wire JSON, moved out of `session.ts` (at its cap)
+  // when it gained the mark that says the Harness sent it.
+  'server/src/portal/session': 25,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others
@@ -256,7 +276,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `flow-replay-run.ts` when the merged file crossed the 1000-line cap. It belongs in this
   // directory rather than a subdirectory because `flow-cross-step.test.ts` sits here too and the
   // pair is the whole rule.
-  'server/src/language/flows': 35,
+  // 36 with `replay-from-hud.ts`: the ▶ replay a person starts from the HUD, moved out of
+  // `server/src/index.ts` (at its cap) when it gained a progress push per step.
+  'server/src/language/flows': 36,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the
@@ -284,13 +306,13 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `dir -> resolve` and `dir -> project`, turning a leaf directory into one that reaches for four
   // others. A flat file is cheaper than a new mutual pair. Group them when the address question
   // stops needing the caller's dependencies to answer it.
-  'server/src/memory/project': 11,
+  'server/src/memory/project': 12,
   // 11 when `memory-scope.ts` landed: which project a shared-memory READ is about, on the wire and
   // in the response. Recorded rather than grouped, for the sibling reason above it. Its natural
   // group would be `cloud/memory/`, and a directory named `memory` beside `server/src/memory` is a
   // name collision the reach guard refuses outright; `cloud/scope/` would be a category invented
   // for one member. The file is the sibling of `cloud-sync.ts`'s path constants and belongs flat.
-  'server/src/memory/cloud': 11,
+  'server/src/memory/cloud': 12,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there

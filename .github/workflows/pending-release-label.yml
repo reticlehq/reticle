@@ -1,0 +1,31 @@
+name: Pending-release label
+
+# `fixed-pending-release` means the fix is on a release branch. It used to be applied when a pull
+# request opened, so contributors walked past work that was not done and others rewrote it (#980).
+# When the label is applied, this keeps it only if a commit citing the issue is on main or a v*
+# branch, and otherwise removes it with a comment saying why.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event.label.name == 'fixed-pending-release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Keep the label only when the fix is on a release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: node scripts/check-pending-release.mjs --label-earned "$ISSUE"

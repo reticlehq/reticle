@@ -125,10 +125,17 @@ jobs:
           # cannot move to the server, which sits 35KB under its own ceiling below. The follow-up
           # is a slimmer reader (no HUD), which would bring this back down; until then the margin
           # is ~40KB, on the same terms as above.
+          #
+          # 1,180,000 -> 1,380,000 in 3.6.0. MEASURED: 1,339,597 bytes, after the duplicate
+          # single-file build came out (1,897,301 before). reticle-inject.js is 564,690 (it was
+          # 472,597) and the rest is ~775KB (it was 663,995): the presenter grew across 3.4-3.6
+          # (chat views, settings, controls) and the reader carries it a second time, because it
+          # still bundles the HUD. The slimmer reader named above is still the follow-up, and it
+          # is what brings this back down. Margin ~40KB, on the same terms.
           bytes=$(cd adapters/realm/browser && npm pack --dry-run --json 2>/dev/null | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].unpackedSize))")
           echo "browser SDK unpacked: $bytes bytes"
-          if [ "$bytes" -gt 1180000 ]; then
-            echo "::error::@reticlehq/browser unpacked size $bytes exceeds the 1180KB budget"
+          if [ "$bytes" -gt 1380000 ]; then
+            echo "::error::@reticlehq/browser unpacked size $bytes exceeds the 1380KB budget"
             exit 1
           fi
 
@@ -174,6 +181,19 @@ jobs:
           # ~235KB of room over the measurement, matching the shape of the previous raise rather
           # than clearing today's number by a hair. The docs remain the first place to look.
           #
+          # RAISED to 6,600,000 on 2026-10-07, for v3.6.0: the release measured 6,413,252, 13KB
+          # over, packed and broken down against the raise below:
+          #
+          #     code  3,886K -> 3,953K   (+67K)
+          #     types 1,392K -> 1,410K   (+18K)
+          #     docs    907K ->   888K   (-19K)
+          #
+          # The code is the daemon's half of driving from the platform's chat: reporting the apps on
+          # this machine (local-apps), the chat wiring (chat-drives), a drive's target and HUD
+          # (drive-target), the tool session with its retries in remote-drive, headed leases in the
+          # pool, and reticle_lease's `headed` and `hud`. ~187KB of room, the same shape as the
+          # raises below; the docs remain the first place to look.
+          #
           # RAISED to 6,400,000 on 2026-10-05. main measured 6,197,543 -- 2.4KB under the old
           # ceiling -- against 6,017,969 at the previous raise (bfa6320ba), packed both ways:
           #
@@ -203,7 +223,7 @@ jobs:
           # replayable run fields. ~196KB of room, the same shape as the two raises above.
           server_bytes=$(cd server && npm pack --dry-run --json 2>/dev/null | sed -n '/^\[/,$p' | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].unpackedSize))")
           echo "server unpacked: $server_bytes bytes"
-          if [ "$server_bytes" -gt 6400000 ]; then
-            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 6400KB budget"
+          if [ "$server_bytes" -gt 6600000 ]; then
+            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 6600KB budget"
             exit 1
           fi

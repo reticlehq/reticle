@@ -1,3 +1,0 @@
-### Changed
-
-- **`reticle-tauri` now requires Tauri 2.12, and builds on Windows against it.** Tauri 2.12 moved to wry 0.57, which uses `webview2-com` 0.39 and `windows` 0.62. This crate pinned 0.38 and 0.61, so a Tauri 2.12 app ended up with two copies of each, and the webview handle `with_webview` returns no longer matched the types the Windows capture code calls (`CapturePreview` failed to compile). The pins now match Tauri's. Because the capture code has to use exactly the webview2 types Tauri hands back, the crate now declares `tauri = "2.12"`; an app on an older Tauri 2 should stay on the previous `reticle-tauri` until it upgrades. macOS and Linux are unchanged.
