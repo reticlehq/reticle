@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { CORE_TOOL_NAMES } from '@/surface/tools/tool-surface.js';
 import { buildServerInstructions, localizeInstructions } from './server-instructions.js';
+import { degradedInstructions } from './proxy/proxy-handshake.js';
 
 /**
  * The instructions string is the only channel that reaches an agent with no skill file, no restart
@@ -29,6 +30,29 @@ describe('buildServerInstructions', () => {
       // Resolved from the live surface, so this is `reticle_session` now that the nine is the
       // default. Asserting the literal `reticle_sessions` would pin a name the reader is not given.
       expect(text).toContain(ReticleTool.SESSION);
+    });
+
+    // Instructions are sent once, at the handshake, and the app can connect a minute later. Stated
+    // as a present fact, the lead kept agents running setup while the session list showed the app
+    // connected (#1362). The local proxy handshake builds from the same text with no live session
+    // list to consult, so the wording is the whole fix there.
+    it('opens with a snapshot, not a present fact', () => {
+      expect(text.slice(0, 200)).toMatch(/^FIRST: when this session started, no app had connected/);
+      expect(text).not.toMatch(/no app has ever connected/i);
+    });
+
+    // A session of some OTHER app on the same daemon is not proof for this one, and the unprompted
+    // first-reply nudge must not contradict a list that shows the app connected since the handshake.
+    it("counts only a session on this project's app, and makes the nudge conditional on it", () => {
+      const here = buildServerInstructions({ previouslyConnected: false, appHere: true });
+      expect(here).toMatch(/A session on this project's app listed there is the proof/);
+      expect(here).toMatch(/If none is listed, this directory holds a web app/);
+    });
+
+    it('reads the same on the local handshake, through the degraded wrapper', () => {
+      const degraded = degradedInstructions(text, 4400, 'the daemon did not answer in time');
+      expect(degraded).toMatch(/when this session started, no app had connected/);
+      expect(degraded).toMatch(/A session on this project's app listed there is the proof/);
     });
 
     // The first run wires the app, not the install: the agent's first session call does it and

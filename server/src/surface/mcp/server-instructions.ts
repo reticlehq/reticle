@@ -94,18 +94,21 @@ const replayFirst = (v: SurfaceVocabulary): string => {
  * common way this step half-succeeds. Telling every agent to restart sent them to kill the server
  * `init` had just started.
  */
+// The lead is a snapshot, not a present fact: these instructions are sent ONCE, at the handshake, and
+// the app can connect a minute later. Stated as fact, it kept agents running setup while the session
+// list showed the app connected (#1362).
 const firstMoveFor = (
   v: SurfaceVocabulary,
   appHere: boolean,
-): string => `FIRST: no app has ever connected to Reticle in this project, so nothing here can be verified yet. Having these tools is not the same as being set up — the tools reach a daemon, and the daemon has nothing to look at until the app itself is instrumented.
+): string => `FIRST: when this session started, no app had connected to Reticle in this project. Having these tools is not the same as being set up — the tools reach a daemon that has nothing to look at until the app is instrumented.
 
-Fix that first: call ${v.sessions}. Its first call wires the app (\`init\`, dev server, browser) and \`wired\` lists the files it changed; tell the user. If it answers \`run_init\`, run that command in the app's directory. A session listed there is the proof, and until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
+Fix that first: call ${v.sessions}. Its first call wires the app (\`init\`, dev server, browser) and \`wired\` lists the files it changed; tell the user. If it answers \`run_init\`, run that command in the app's directory. A session on this project's app listed there is the proof; until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
 
 const UNWIRED_LEAD_END = 'can tell you anything about this app.';
 
 // An agent never asked to verify anything never reads "fix that first"; this makes it raise wiring.
 const TELL_THE_USER =
-  ' This directory holds a web app that is not wired yet: in your first reply, even if their request is unrelated, tell the user in one line and offer to wire it (the first session call does it). Do it only if they agree; if they decline, do not raise it again.';
+  ' If none is listed, this directory holds a web app that is not wired: in your first reply, even if their request is unrelated, tell the user in one line and offer to wire it (the first session call does it). Do it only if they agree; if they decline, do not raise it again.';
 
 /** The nudge set for the AGENT's directory: a shared daemon briefs from where IT started. */
 export function localizeInstructions(instructions: string, appHere: boolean): string {
