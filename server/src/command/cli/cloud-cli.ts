@@ -868,8 +868,9 @@ export const runCloudCommand = async (argv: readonly string[]): Promise<number> 
         return await cmdLink(rest);
       case 'config':
         return await cmdConfig(rest);
+      // `push` is the name people type, so it takes `--watch` too: the help and the README say so.
       case 'push':
-        return await cmdPush();
+        return await cmdSync(rest);
       case 'sync':
         return await cmdSync(rest);
       case 'runs':
