@@ -5,14 +5,13 @@
  * because those answers are never actively wrong. When a project directory IS in hand, name the
  * packages actually in package.json and the manager the lockfile implies.
  *
- * Does not import `init/`. The library path must never reach the installer
- * (`library-path-boundary.test.ts`); `reticleDepsOf` lives in `update/` for that reason, and the
- * lockfile → manager map is the same evidence `detectPackageManager` reads, kept here so a HELLO
- * does not load the install plan.
+ * The manager is init's own rule, `detectPackageManager` over `resolveLockfiles`, read through a
+ * declared crossing (`library-path-boundary.test.ts`); a copy kept here had fallen behind it.
  */
 
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { detectPackageManager, PackageManager, resolveLockfiles } from '@reticlehq/init';
 import { reticleDepsOf } from '@/memory/project/reticle-deps.js';
 
 /** What a project contributes to the remedy, when we were able to read one. */
@@ -22,27 +21,23 @@ interface SdkFixContext {
   packageManager: PackageManagerName;
 }
 
-/** Lockfile / marker → manager, same evidence `init/detect.ts` uses. */
-export const PackageManagerName = {
-  PNPM: 'pnpm',
-  YARN: 'yarn',
-  BUN: 'bun',
-  NPM: 'npm',
-} as const;
-export type PackageManagerName = (typeof PackageManagerName)[keyof typeof PackageManagerName];
+/** init's manager names, under the name this module exports. */
+export const PackageManagerName = PackageManager;
+export type PackageManagerName = PackageManager;
 
 /** Same package a Vue/Nuxt install gets — never the React kit. */
 const FRAMEWORK_NEUTRAL_SDK = '@reticlehq/browser';
 const PACKAGE_JSON = 'package.json';
 const NODE_MODULES = 'node_modules';
-const LOCKFILE_NAMES = ['pnpm-lock.yaml', 'yarn.lock', 'bun.lockb', 'bun.lock'] as const;
-
-/** Markers each manager leaves inside `node_modules` — stronger than an uncommitted lockfile. */
-const NODE_MODULES_MARKERS: readonly (readonly [string, PackageManagerName])[] = [
-  ['.modules.yaml', PackageManagerName.PNPM],
-  ['.yarn-state.yml', PackageManagerName.YARN],
-  ['.package-lock.json', PackageManagerName.NPM],
-];
+/** The files init's rule reads, probed one by one because this module is handed a file reader. */
+const LOCKFILE_NAMES = [
+  'pnpm-lock.yaml',
+  'yarn.lock',
+  'bun.lockb',
+  'bun.lock',
+  'package-lock.json',
+] as const;
+const NODE_MODULES_MARKERS = ['.modules.yaml', '.yarn-state.yml', '.package-lock.json'] as const;
 
 const INSTALL_FLAGS: Record<PackageManagerName, readonly string[]> = {
   [PackageManagerName.PNPM]: ['add', '-D'],
@@ -54,19 +49,6 @@ const INSTALL_FLAGS: Record<PackageManagerName, readonly string[]> = {
 function packagesFor(ctx: Partial<SdkFixContext> | undefined): readonly string[] {
   if (ctx?.packages !== undefined && 0 !== ctx.packages.length) return ctx.packages;
   return [FRAMEWORK_NEUTRAL_SDK];
-}
-
-function managerOf(
-  lockfiles: ReadonlySet<string>,
-  nodeModulesMarkers: ReadonlySet<string>,
-): PackageManagerName {
-  if (lockfiles.has('pnpm-lock.yaml')) return PackageManagerName.PNPM;
-  if (lockfiles.has('yarn.lock')) return PackageManagerName.YARN;
-  if (lockfiles.has('bun.lockb') || lockfiles.has('bun.lock')) return PackageManagerName.BUN;
-  for (const [name, pm] of NODE_MODULES_MARKERS) {
-    if (nodeModulesMarkers.has(name)) return pm;
-  }
-  return PackageManagerName.NPM;
 }
 
 function installLine(pm: PackageManagerName, pkgs: readonly string[]): string {
@@ -108,7 +90,7 @@ export function sdkFixContextOf(
   if ('object' !== typeof pkgJson || null === pkgJson) return undefined;
   return {
     packages: reticleDepsOf(pkgJson),
-    packageManager: managerOf(lockfiles, nodeModulesMarkers),
+    packageManager: detectPackageManager(lockfiles, nodeModulesMarkers, pkgJson),
   };
 }
 
@@ -153,15 +135,12 @@ export function sdkFixForDirectory(
   directory: string,
   read: (path: string) => string | undefined = readTextFile,
 ): string {
+  const markers = present(directory, NODE_MODULES_MARKERS, read, NODE_MODULES);
+  const exists = (path: string): boolean => read(path) !== undefined;
   const ctx = sdkFixContextOf(
     parseJson(read(join(directory, PACKAGE_JSON))),
-    present(directory, LOCKFILE_NAMES, read),
-    present(
-      directory,
-      NODE_MODULES_MARKERS.map(([name]) => name),
-      read,
-      NODE_MODULES,
-    ),
+    resolveLockfiles(present(directory, LOCKFILE_NAMES, read), directory, { exists }, markers),
+    markers,
   );
   return resolveSdkFix(daemonVersion, ctx);
 }

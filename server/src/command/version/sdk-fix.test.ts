@@ -97,6 +97,45 @@ describe('sdkFixContextOf — lockfile + declared packages, not a third detector
     );
   });
 
+  it('names pnpm for a workspace package whose lockfile sits at the workspace root', () => {
+    // A pnpm workspace keeps its lockfile at the root, not in the package.
+    const files: Record<string, string> = {
+      [join('/repo', 'pnpm-lock.yaml')]: '',
+      [join('/repo', 'apps', 'web', 'package.json')]: JSON.stringify({
+        devDependencies: { '@reticlehq/browser': '2.2.1' },
+      }),
+    };
+    expect(sdkFixForDirectory(DAEMON, join('/repo', 'apps', 'web'), (p) => files[p])).toContain(
+      `pnpm add -D @reticlehq/browser@${DAEMON}`,
+    );
+
+    // The package's own lockfile or installed tree outranks the root's, as in init.
+    const ownLockfile = { ...files, [join('/repo', 'apps', 'web', 'package-lock.json')]: '' };
+    expect(
+      sdkFixForDirectory(DAEMON, join('/repo', 'apps', 'web'), (p) => ownLockfile[p]),
+    ).toContain(`npm i -D @reticlehq/browser@${DAEMON}`);
+    const ownTree = {
+      ...files,
+      [join('/repo', 'apps', 'web', 'node_modules', '.package-lock.json')]: '',
+    };
+    expect(sdkFixForDirectory(DAEMON, join('/repo', 'apps', 'web'), (p) => ownTree[p])).toContain(
+      `npm i -D @reticlehq/browser@${DAEMON}`,
+    );
+  });
+
+  it('names the manager the corepack packageManager field declares, over any lockfile', () => {
+    // Corepack refuses to run any other manager, so the field wins, as in init.
+    const declared = sdkFixContextOf(
+      { packageManager: 'yarn@4.1.0', devDependencies: { '@reticlehq/browser': '2.2.1' } },
+      new Set(['pnpm-lock.yaml']),
+    );
+    expect(declared?.packageManager).toBe(PackageManagerName.YARN);
+
+    // An unknown manager falls through to the lockfile, not to npm.
+    const unknown = sdkFixContextOf({ packageManager: 'deno@2.0.0' }, new Set(['yarn.lock']));
+    expect(unknown?.packageManager).toBe(PackageManagerName.YARN);
+  });
+
   it('uses the node_modules marker when there is no lockfile', () => {
     const ctx = sdkFixContextOf(
       { devDependencies: { '@reticlehq/browser': '2.2.1' } },
