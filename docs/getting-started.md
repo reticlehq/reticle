@@ -206,6 +206,7 @@ The daemon auto-generates a **pairing token** on first run and stores it at `~/.
 
 - **Vite plugin users:** nothing to do. The plugin reads the token server-side and injects it into `connect()` for you.
 - **Next.js / hand-wired `connect()`:** your `connect()` runs in the browser and can't read the file, so pass the token in yourself. The simplest path is a shared secret: set `RETICLE_TOKEN` for the daemon (it uses that instead of auto-generating) and expose the same value to the client as `NEXT_PUBLIC_RETICLE_TOKEN`, then pass it to `connect({ token })` (see below). On a single-user machine you can also just read `~/.reticle/pairing-token` in your dev tooling and forward it the same way.
+- **Keep the token out of `.env` files.** Pass it on the dev command (`VITE_RETICLE_TOKEN="$(cat ~/.reticle/pairing-token)" npm run dev`). A production build reads `.env` too, and would write the token into the JavaScript it ships.
 
 ### Next.js
 
@@ -259,10 +260,14 @@ Anywhere your app boots in dev:
 
 ```ts
 import { reticle, SESSION_AUTO } from '@reticlehq/react';
-// Pass the pairing token (see "The pairing token" above); on a hand-wired setup you supply it yourself.
-if (location.hostname === 'localhost')
+// A dev-only guard the bundler strips from production builds (Vite shown), and the pairing token
+// (see "The pairing token" above) passed in on the dev command line only.
+if (import.meta.env.DEV) {
   reticle.connect({ session: SESSION_AUTO, token: import.meta.env.VITE_RETICLE_TOKEN });
+}
 ```
+
+Not on Vite? Use your bundler's dev-only flag and its way of passing a value to the browser at dev time. Or run `npx @reticlehq/server init`, which wires the token for every supported stack.
 
 Plain HTML with no build step: run `npx @reticlehq/server init` in the folder that holds `index.html`. It adds a dev-only snippet that connects only on localhost, and puts this machine's pairing token in a gitignored `reticle.local.js` beside the page, so the token never lands in anything you publish. A hand-written script tag without that token is refused by the bridge.
 

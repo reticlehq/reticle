@@ -39,9 +39,11 @@ function Say([string]$Message) { [Console]::Error.WriteLine($Message) }
 # session: the error, or the success text and its next step, vanish with the window. Run as a file
 # (`powershell -File install.ps1`), `exit` is right, because the process exit code is the contract.
 # So: exit when this is a file, otherwise unwind to the bottom of the file with the code set.
+# Redirected output means nobody is reading a window: an agent ran `powershell -Command "irm | iex"`
+# and reads the process exit code, which a non-exiting unwind leaves at 0 even on failure.
 $script:ReticleExitCode = 0
 function Quit([int]$Code) {
-  if ($PSCommandPath) { exit $Code }
+  if ($PSCommandPath -or [Console]::IsOutputRedirected -or [Console]::IsErrorRedirected) { exit $Code }
   $script:ReticleExitCode = $Code
   throw 'reticle-exit'
 }

@@ -151,7 +151,7 @@ if (import.meta.env.DEV) {
 }
 ```
 
-Start the dev server with `VITE_RETICLE_TOKEN="$(cat ~/.reticle/pairing-token)"`, or pin your own secret with `RETICLE_TOKEN=<secret>` in the MCP server's environment and give the page the same value.
+Start the dev server with `VITE_RETICLE_TOKEN="$(cat ~/.reticle/pairing-token)"`, or pin your own secret with `RETICLE_TOKEN=<secret>` in the MCP server's environment and give the page the same value. Set it on the dev command only, never in a `.env` file: a production build reads `.env` and would embed the token in the JavaScript it ships. Not on Vite? Do the same with your bundler's dev-only flag and its way of passing a value to the browser.
 
 <Note>
   `connect()` is dev-only by design. Guard it with whatever your bundler gives you:

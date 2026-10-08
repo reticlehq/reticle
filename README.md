@@ -304,11 +304,13 @@ The agent finds your app with `reticle_session`, clicks and types with `reticle_
 }
 ```
 
-No agent handy? The same kind of proof from a terminal (exit code 0 only on `yes`):
+No agent handy? From a terminal you can check one fact about the page as it is right now. It doesn't click through a flow; that's the agent's job. It exits 0 only on `yes`:
 
 ```bash
 reticle verify http://localhost:5173 --expect '{"kind":"element","query":{"role":"heading","name":"Welcome"},"state":"visible"}'
 ```
+
+On Windows PowerShell, which mangles those quotes, put the JSON in a file and pass `--expect-file check.json` instead.
 
 **✅ It worked when** you get `verified: "yes"`, `"no"` or `"unknown"` with evidence. **That verdict is the install finishing**; a connected app only proves the SDK reached the page. `unknown` means **couldn't tell**, not pass. Anything you drive with a check in it is saved as a flow when the session ends, and re-checks later with no model.
 
@@ -450,19 +452,7 @@ import { ReticleDev } from './reticle-dev';
 }
 ```
 
-_Anything else:_ `reticle init` wires plain HTML, Angular, Remix, Astro, SvelteKit, Nuxt and more, and it's the safe way to get the **pairing token** to the page. If you do call `connect()` yourself, pass that token (it lives in `~/.reticle/pairing-token`); without it, the bridge refuses the page:
-
-```ts
-import { reticle, SESSION_AUTO } from '@reticlehq/browser';
-
-if (import.meta.env.DEV) {
-  reticle.connect({ session: SESSION_AUTO, token: import.meta.env.VITE_RETICLE_TOKEN });
-}
-```
-
-```bash
-VITE_RETICLE_TOKEN="$(cat ~/.reticle/pairing-token)" npm run dev
-```
+_Anything else:_ use `reticle init`. It wires plain HTML, Angular, Remix, Astro, SvelteKit, Nuxt and more, and gets the **pairing token** to the page without writing it into anything you ship. Without that token, the local bridge refuses the page. To call `connect()` yourself on another stack, follow [Manual install → Anything without the plugin](https://docs.reticle.sh/install-manual), which covers passing the token at dev time only.
 
 **4. Prove it.** Start your dev server, open the app, then:
 
