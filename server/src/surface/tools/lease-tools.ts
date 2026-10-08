@@ -514,8 +514,17 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       // A window asked for is never answered with the headless tab on that origin, nor the reverse.
       const held = origin === undefined ? undefined : pool.leaseIdOnOrigin(origin, deps.attachId);
       const existing = held !== undefined && pool.isHeaded(held) === headed ? held : undefined;
-      if (validatedSeed !== undefined && existing !== undefined) {
-        // Seeding asked for: release its own context so the new lease starts with the given state.
+      // A context's certificate setting is fixed when it is made, so an explicit request for the
+      // other one cannot be answered by the held lease: handing it back would keep checks off after
+      // `false`, or keep a local certificate refused after `true` (#1255). Omitted keeps the lease.
+      const certAsked = args['ignoreHTTPSErrors'];
+      const certMismatch =
+        existing !== undefined &&
+        'boolean' === typeof certAsked &&
+        pool.ignoresHTTPSErrors(existing) !== certAsked;
+      if ((validatedSeed !== undefined || certMismatch) && existing !== undefined) {
+        // Seeding or a different certificate setting asked for: release its own context so the new
+        // lease starts with what was asked.
         await pool.release(existing);
       } else if (existing !== undefined && origin !== undefined) {
         // Resolved, not looked up — the same resolver the mint path below uses, for the same reason

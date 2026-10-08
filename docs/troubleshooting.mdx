@@ -236,7 +236,7 @@ A dev server on `https://` with a self-signed or mkcert certificate makes `retic
 }
 ```
 
-It applies to that lease's browser context only and is off by default, so a certificate problem on any other site is still reported.
+It is off by default. When it is on, certificate checks are skipped for every site opened in that lease's browser context, including resources loaded from other sites. Other leases keep their checks. A context cannot change the setting once it is made, so acquiring again with the other value replaces the lease instead of reusing it.
 
 ## `ERESOLVE` installing next to a prerelease
 
