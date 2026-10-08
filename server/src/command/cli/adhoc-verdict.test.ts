@@ -253,6 +253,65 @@ describe('a url with no connected tab', () => {
     expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.ASSERT]);
   });
 
+  // `--session-id` skipped the same-document check entirely, so a pinned tab already on the url was
+  // reloaded: page 2 of a list went back to page 1 before the assert read it (#1409).
+  describe('with --session-id', () => {
+    const pinned = (sessions: { url: string; sessionId?: string }[]) => {
+      const c = leasing();
+      return {
+        c,
+        run: (url: string) =>
+          runAdhocVerdict({
+            port: 4400,
+            url,
+            sessionId: 'tab-2',
+            predicate: { kind: 'text', contains: 'page 2' },
+            connect: () => Promise.resolve(c.tool),
+            sessions: () => Promise.resolve(sessions),
+          }),
+      };
+    };
+
+    it('asserts a pinned tab already on the url without navigating it', async () => {
+      const { c, run } = pinned([
+        { sessionId: 'tab-1', url: 'http://localhost:5190/other' },
+        { sessionId: 'tab-2', url: 'http://localhost:5190/list?page=2#top' },
+      ]);
+      await run('http://localhost:5190/list/?page=2');
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.ASSERT]);
+      expect(c.calls[0]?.args['sessionId']).toBe('tab-2');
+    });
+
+    it('still navigates a pinned tab on a different url', async () => {
+      const { c, run } = pinned([{ sessionId: 'tab-2', url: 'http://localhost:5190/list?page=1' }]);
+      await run('http://localhost:5190/list?page=2');
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+      expect(c.calls[0]?.args['sessionId']).toBe('tab-2');
+    });
+
+    it('does not borrow another tab that is on the url', async () => {
+      const { c, run } = pinned([
+        { sessionId: 'tab-1', url: 'http://localhost:5190/list?page=2' },
+        { sessionId: 'tab-2', url: 'http://localhost:5190/' },
+      ]);
+      await run('http://localhost:5190/list?page=2');
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+    });
+
+    it('navigates, as before, when the status read fails', async () => {
+      const c = leasing();
+      await runAdhocVerdict({
+        port: 4400,
+        url: 'http://localhost:5190/list',
+        sessionId: 'tab-2',
+        predicate: { kind: 'text', contains: 'x' },
+        connect: () => Promise.resolve(c.tool),
+        sessions: () => Promise.reject(new Error('status unreachable')),
+      });
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+    });
+  });
+
   it('reports why the lease failed instead of asserting against nothing', async () => {
     const c = leasing({ acquire: { error: 'Chromium is not installed for Playwright — run: x' } });
     const result = await runAdhocVerdict({

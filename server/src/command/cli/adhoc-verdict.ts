@@ -62,7 +62,7 @@ interface AdhocVerdictOptions {
    * than refused. Absent = never lease, which is the old behaviour and what the unit tests that do
    * not care get.
    */
-  sessions?: () => Promise<readonly { url: string }[]>;
+  sessions?: () => Promise<readonly { url: string; sessionId?: string }[]>;
 }
 
 /** The lease tool is reached through `reticle_run`, the route that works on every tool profile. */
@@ -95,6 +95,26 @@ export async function leaseIfNoTab(
     return open.some((s) => sameDocument(s.url, url)) ? { alreadyAt: true } : {};
   }
   return acquireLease(caller, url);
+}
+
+/**
+ * Whether the tab named by `sessionId` already shows `url`'s document.
+ *
+ * Read from the same status the unpinned path reads. A status read that fails, or a session the
+ * daemon does not list, answers false: navigating is the old behaviour, so a doubt costs a reload
+ * rather than an assert against a page that is not there.
+ */
+async function pinnedTabIsAt(
+  sessions: () => Promise<readonly { url: string; sessionId?: string }[]>,
+  sessionId: string,
+  url: string,
+): Promise<boolean> {
+  try {
+    const pinned = (await sessions()).find((s) => s.sessionId === sessionId);
+    return pinned !== undefined && sameDocument(pinned.url, url);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -286,6 +306,12 @@ export async function runAdhocVerdict(options: AdhocVerdictOptions): Promise<Adh
     // OTHER listening port as the one to open. The caller already said which url; open it here, in
     // a Reticle browser, and hand the lease back when the verdict is in.
     let alreadyAt = false;
+    // A named tab gets the same same-document rule: navigating to the url it already shows is a
+    // reload, which throws away client-only state (page 2, a half-filled form) and in a desktop
+    // window disconnects the session the assert is about to read (#1409).
+    if (url !== undefined && options.sessionId !== undefined && options.sessions !== undefined) {
+      alreadyAt = await pinnedTabIsAt(options.sessions, options.sessionId, url);
+    }
     if (url !== undefined && options.sessionId === undefined && options.sessions !== undefined) {
       const opened = await leaseIfNoTab(caller, url, options.sessions);
       if ('failed' in opened) return { code: 1, lines: ['verified: unknown', ...opened.failed] };

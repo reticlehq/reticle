@@ -208,6 +208,31 @@ describe('reticle_lease_acquire failure surfaces a clean message', () => {
       /could not open http:\/\/localhost:3000\/ — is the app running there\? \(net::ERR_CONNECTION_REFUSED\)/,
     );
   });
+
+  // A cold dev server compiling a route for the first time can outlast the navigation budget. The
+  // app is running; "is the app running there?" sends the agent hunting for a missing server
+  // instead of retrying (#1460).
+  it('a navigation timeout says the page did not finish loading, and leads with the retry', async () => {
+    const pool = {
+      acquire: () =>
+        Promise.reject(
+          new Error(
+            'page.goto: Timeout 30000ms exceeded.\nCall log:\n  - navigating to "http://localhost:3000/", waiting until "load"',
+          ),
+        ),
+      leaseIdOnOrigin: () => undefined,
+      activeCount: () => 0,
+      queuedCount: () => 0,
+    } as unknown as BrowserPool;
+    const acquire = tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    );
+    await expect(acquire).rejects.toThrow(
+      /could not open http:\/\/localhost:3000\/ — the page did not finish loading within 30 s \(navigation timed out\)\. If the app is running, .*retry the acquire\. If it is not running, start it first\./,
+    );
+    await expect(acquire).rejects.not.toThrow(/is the app running there/);
+  });
 });
 
 describe('reticle_lease_acquire preflights the browser (#400)', () => {
