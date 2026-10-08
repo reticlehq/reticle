@@ -52,7 +52,7 @@ Nothing else changed in a way that can break you. Package names are unchanged, e
 
 ## 1. Most tool names changed. Old ones still work
 
-Reticle used to advertise seventeen tools. It now advertises **nine**, and ten of the old names live on as an `action` on one of the nine.
+Reticle used to advertise seventeen tools. It now advertises **ten**, and ten of the old names live on as an `action` on one of them.
 
 | You used to call       | Now call                                 |
 | ---------------------- | ---------------------------------------- |
@@ -71,7 +71,7 @@ Reticle used to advertise seventeen tools. It now advertises **nine**, and ten o
 
 **Why it is not entirely painless:** a redirect only helps once the call reaches Reticle. Anything that filters tool names _before_ the call — see the next section — refuses first, and Reticle never hears about it.
 
-`reticle_tools` prints the live list of nine plus every old name and where it went.
+`reticle_tools` prints the live list of ten plus every old name and where it went.
 
 ---
 

@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/inst
 
 Windows: `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`
 
-It registers Reticle with your coding agents and shows it verifying a demo app, in seconds. Then open your agent in your app's folder and ask: _"Verify one flow in my running app with Reticle."_ The first time it uses Reticle there, it wires the app itself (the same thing `reticle init` does) and tells you every file it changed. No account needed, and nothing from your project leaves your machine.
+It registers Reticle with your coding agents and shows it verifying a demo app, in seconds. Then open your agent in your app's folder and ask: _"Verify one flow in my running app with Reticle."_ The first time it uses Reticle there, it wires the app itself (the same thing `reticle init` does) and tells you every file it changed. If Reticle is already running for another project, run `npx @reticlehq/server init` in this one first: the automatic wiring covers the project the daemon started in. No account needed, and nothing from your project leaves your machine.
 
 <a id="manual-install"></a>
 <details>
@@ -193,7 +193,7 @@ One call checks many things at once. Say _"save that as a flow"_ and it replays 
 ```jsonc
 // The agent clicked "Pay". Did the right things actually happen?
 reticle_assert({
-  predicate: { allOf: [
+  predicate: { kind: "allOf", predicates: [
     { kind: "net",     method: "POST", urlContains: "/api/order", status: 200 },
     { kind: "element", query: { role: "dialog", name: "Order confirmed" }, state: "visible" },
     { kind: "signal",  name: "order:saved" },          // the charge actually committed
@@ -259,7 +259,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 - **Localhost-only bridge.** The daemon binds `127.0.0.1`, and an app pairs with it using a token stored owner-only at `~/.reticle/pairing-token`, so another page on your machine cannot drive your session.
 - **No arbitrary code.** The SDK runs a fixed set of commands (look, act, read state, navigate). There is no "evaluate this JavaScript" tool.
 - **Credentials redacted at the source.** Passwords, tokens, API keys and card numbers in captured request and response bodies, storage and state are replaced with `[REDACTED]` before they reach the agent.
-- **Your app's data stays on your machine.** DOM, network bodies, console output, state and source are never sent anywhere, with one exception you switch on yourself: when the Harness drives with a model (yours or the platform's), that model sees the steps it drives. You need no account, and a verdict is produced locally. If you choose to connect a project (`reticle connect`, or `RETICLE_API_KEY` in CI), what syncs is yours to set with `reticle config --runs/--memory/--flows on|off`, and [what each contains is written down](docs/what-is-recorded.md).
+- **Your app's data stays on your machine.** DOM, network bodies, console output, state and source are never sent anywhere, with one exception you switch on yourself: when the Reticle Harness drives (on the platform, after `reticle connect`), the platform's model sees the steps it drives. Secret fields stay on your machine as `RETICLE_SECRET_<FIELD>`. You need no account, and a verdict is produced locally. If you choose to connect a project (`reticle connect`, or `RETICLE_API_KEY` in CI), what syncs is yours to set with `reticle config --runs/--memory/--flows on|off`, and [what each contains is written down](docs/what-is-recorded.md).
 - **Anonymous usage counts are sent by default:** which commands ran, which tools an agent called, whether a verdict was produced, with a random id and nothing from your app. `reticle telemetry disable`, `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` turns them off. [The complete list](docs/telemetry.md).
 - **You see the plan first.** `init --dry-run` writes nothing; `--no-mcp` skips agent registration; `--files-only` writes the files and stops. Reporting a security issue: [SECURITY.md](SECURITY.md).
 

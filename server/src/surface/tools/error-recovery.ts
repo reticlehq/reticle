@@ -269,6 +269,16 @@ export const RECOVERY = {
     'months. This is a deliberate refusal and there is nothing to report: drive the app yourself ' +
     'through the MCP tools — reticle_navigate, then reticle_act_and_wait with an `until` — which is ' +
     'the same verification without a model driving it.',
+  /**
+   * The Harness asked for on a project that is not linked to the platform. The call was valid, and
+   * the refusal names reticle_act_and_wait as the alternative, which the catch-all below read as an
+   * agent's malformed call: it was then told to fix arguments that were never wrong.
+   */
+  HARNESS_NOT_LINKED:
+    'This project is not linked to the Reticle platform, where the Harness runs. The call itself was ' +
+    'valid. Either the human runs `npx @reticlehq/server connect` once in the app directory, or you ' +
+    'drive the journey yourself: reticle_navigate, then reticle_act_and_wait with an `until` on its ' +
+    'last step. There is nothing to report.',
 } as const;
 
 /**
@@ -310,6 +320,8 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   INVALID_NAME: RefusalReason.BAD_ARGS,
   // Nothing about the app or the call is wrong; the feature is switched off or unpaid for.
   HARNESS_OFF: RefusalReason.UNSUPPORTED,
+  // Nothing about the call is wrong either; the project is not linked yet.
+  HARNESS_NOT_LINKED: RefusalReason.UNSUPPORTED,
 };
 
 /** Hint text back to its reason. The hints are distinct strings, so this inverts cleanly. */
@@ -335,6 +347,7 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
     match: /Autonomous driving is turned OFF|no harness entitlement/i,
     hint: RECOVERY.HARNESS_OFF,
   },
+  { match: /The Reticle Harness runs on the Reticle platform/, hint: RECOVERY.HARNESS_NOT_LINKED },
   // Three conditions the daemon understands perfectly and still asked for a bug report about. Each
   // needs its own rule: none of them contains "no browser session connected" (the scope miss is
   // "no browser session FOR project 'x'", which is the opposite claim — sessions exist).

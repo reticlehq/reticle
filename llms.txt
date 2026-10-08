@@ -70,8 +70,8 @@ domain: https://docs.reticle.sh/use-cases
   name, every link with its `href` (`attrs: ["href"]`), redirects via the `route` predicate, and
   `reticle_verify { action: "crawl" }` for dead controls and failed requests. Head tags (favicon,
   canonical, meta description, Open Graph) via the `head` predicate.
-- **Personas and simulation.** `reticle_verify { action: "explore", persona: "<who does what>" }` drives
-  a journey described in plain words and saves it as a replayable flow; `reticle_lease` gives each role
+- **Personas and simulation.** `reticle_verify { action: "explore", persona: "<who does what>" }` (on a project
+  linked with `reticle connect`; Free includes Harness credits) drives a journey described in plain words and saves it as a replayable flow; `reticle_lease` gives each role
   an isolated context (seeded cookies/storage); several agents share one pooled Chromium.
 
 **Pairs well with:** a visual testing tool (pixel diffs), Playwright (sites you don't own, cross-browser

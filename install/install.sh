@@ -1,7 +1,7 @@
 #!/bin/sh
 # Reticle, in one line:
 #
-#   curl -fsSL https://reticle.sh/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh
 #
 # A LAUNCHER, not the implementation. Its twin is `install.ps1`, for the stock Windows box that has
 # no `sh` at all -- and the pair is safe for one reason only: there is almost nothing here to drift.
@@ -139,11 +139,16 @@ main() {
   # full text prints: noisy, never broken. Seconds, not milliseconds -- `date +%s%3N` is GNU-only.
   say "[3/4] Registering Reticle with the coding agents on this machine"
   out="$(mktemp)"
-  reticle setup install \
+  # Inside an `if`, so `set -e` cannot exit before the output below is printed: a failure has to
+  # show the reason it failed, not just the exit code.
+  if reticle setup install \
     --runtime-secs "$((runtime_done - started))" \
     --install-secs "$((installed - runtime_done))" \
-    "$@" >"$out" 2>&1
-  rc=$?
+    "$@" >"$out" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
   sed '/Reticle is installed\. How it works/,$d' "$out"
   rm -f "$out"
   [ "$rc" -eq 0 ] || exit "$rc"

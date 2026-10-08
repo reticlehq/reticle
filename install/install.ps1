@@ -1,22 +1,23 @@
 # Reticle, in one line, on a stock Windows box:
 #
-#   irm https://reticle.sh/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex
 #
 # The twin of install.sh, and it exists because `sh` is not on a stock Windows machine at all:
 # without this, the majority platform is told to install Git Bash or WSL before it can run the
 # command every doc shows. The prototype next door shipped both a .sh and a .cmd for the same
 # reason; this is that decision applied to the installer.
 #
-# The pair is safe because there is almost nothing to drift. Both launchers do the same three
-# things that CANNOT be Node, because Node may not exist yet:
+# The pair is safe because there is almost nothing to drift. Both launchers do the same four
+# things, the first two of which CANNOT be Node, because Node may not exist yet:
 #
 #   1. is there a usable `node`?
 #   2. npm install -g @reticlehq/server
 #   3. hand every other decision to `reticle setup install`
+#   4. show `reticle tutorial` verifying a demo app
 #
 # Everything else -- writing config, registering the MCP server with the agents on this machine,
 # saying what happened -- is `reticle setup install`, which is Node and exists once. If either
-# launcher ever needs a fourth step, it belongs in that command, not in here twice.
+# launcher ever needs a fifth step, it belongs in that command, not in here twice.
 #
 # ZERO HUMAN INPUT. Nothing is asked. The common case is an agent following a link somebody pasted,
 # and a prompt there is a hang nobody sees.
@@ -34,12 +35,31 @@ $StateDir = if ($env:RETICLE_STATE_DIR) { $env:RETICLE_STATE_DIR } else { Join-P
 
 function Say([string]$Message) { [Console]::Error.WriteLine($Message) }
 
+# `irm | iex` runs this file inside the user's own PowerShell session, where `exit` closes that
+# session: the error, or the success text and its next step, vanish with the window. Run as a file
+# (`powershell -File install.ps1`), `exit` is right, because the process exit code is the contract.
+# So: exit when this is a file, otherwise unwind to the bottom of the file with the code set.
+$script:ReticleExitCode = 0
+function Quit([int]$Code) {
+  if ($PSCommandPath) { exit $Code }
+  $script:ReticleExitCode = $Code
+  throw 'reticle-exit'
+}
+
+# `npm` and `reticle` resolve to their `.ps1` shims first, and the default Windows execution policy
+# refuses to run a .ps1 ("running scripts is disabled on this system"), so a stock machine failed
+# right after the Node check. The `.cmd` shims sit beside them and are not subject to the policy.
+function Native([string]$Name) {
+  if (Get-Command "$Name.cmd" -ErrorAction SilentlyContinue) { return "$Name.cmd" }
+  return $Name
+}
+
 # Takes the lines as an array rather than one here-string. Here-strings in this file broke on the
 # backticks in `node`/`reticle`, which PowerShell reads as escapes, and a launcher that does not
 # parse is worse than one that is plain.
 function Die([string[]]$Lines) {
   Say ("reticle: " + ($Lines -join [Environment]::NewLine))
-  exit 1
+  Quit 1
 }
 
 # The ONE thing this script reports on its own, and only on failure.
@@ -54,7 +74,9 @@ function Note-Failure([string]$Step, [string]$Reason) {
   try {
     if (-not (Test-Path $StateDir)) { New-Item -ItemType Directory -Force $StateDir | Out-Null }
     $line = '{{"phase":"install","step":"{0}","status":"failed","reason":"{1}"}}' -f $Step, $Reason
-    Add-Content -Path (Join-Path $StateDir 'install-trace.jsonl') -Value $line -Encoding utf8
+    # Not Add-Content -Encoding utf8: on Windows PowerShell 5.1 that writes a BOM, and a JSON-lines
+    # reader then rejects the first line.
+    [IO.File]::AppendAllText((Join-Path $StateDir 'install-trace.jsonl'), $line + "`n")
   } catch {
     # A machine that cannot take the note is not a reason to fail the install.
   }
@@ -101,9 +123,14 @@ function Install-Cli {
   Say "Installing $ReticlePkg..."
   Say '  npm prints nothing until it finishes. First run on a cold cache takes a minute.'
   # Native stderr is not a failure signal here; the exit code is. `npm install -g` writes progress
-  # to stderr on a perfectly good install, and treating that as an error fails every run.
-  & npm install -g $ReticlePkg 2>&1 | ForEach-Object { Say $_ }
-  if ($LASTEXITCODE -ne 0) {
+  # to stderr on a perfectly good install, and under $ErrorActionPreference = 'Stop' Windows
+  # PowerShell 5.1 turns the first stderr line into a terminating error (see Check-Node), so the
+  # preference is relaxed for this one native call.
+  $ErrorActionPreference = 'Continue'
+  & (Native 'npm') install -g $ReticlePkg 2>&1 | ForEach-Object { Say "$_" }
+  $npmRc = $LASTEXITCODE
+  $ErrorActionPreference = 'Stop'
+  if ($npmRc -ne 0) {
     Note-Failure 'cli_installed' 'npm_install'
     Die @("npm could not install $ReticlePkg. Its output above says why.")
   }
@@ -121,7 +148,7 @@ function Install-Cli {
 function Main {
   if ($args -contains '-h' -or $args -contains '--help') {
     Say 'usage: install.ps1 [--no-mcp]'
-    exit 0
+    Quit 0
   }
   $started = Get-Date
   Check-Node
@@ -139,13 +166,13 @@ function Main {
   # Native stderr under $ErrorActionPreference = 'Stop' becomes a throwing ErrorRecord (see Check-Node),
   # so it is relaxed for exactly the two native calls whose stderr is output, not failure.
   $ErrorActionPreference = 'Continue'
-  $out = & reticle setup install --runtime-secs $runtimeSecs --install-secs $installSecs @args 2>&1
+  $out = & (Native 'reticle') setup install --runtime-secs $runtimeSecs --install-secs $installSecs @args 2>&1
   $rc = $LASTEXITCODE
   foreach ($line in $out) {
     if ("$line" -match 'Reticle is installed\. How it works') { break }
     Write-Output "$line"
   }
-  if ($rc -ne 0) { exit $rc }
+  if ($rc -ne 0) { $ErrorActionPreference = 'Stop'; Quit $rc }
 
   # Step 4: a real verdict on Reticle's own demo app, before anything touches the user's project.
   # A port the OS says is free, run from the temp dir so a crash log never lands in the user's
@@ -157,7 +184,7 @@ function Main {
   $port = $listener.LocalEndpoint.Port
   $listener.Stop()
   Push-Location $env:TEMP
-  $demo = & reticle tutorial --run --headless --port $port 2>&1
+  $demo = & (Native 'reticle') tutorial --run --headless --port $port 2>&1
   $demoRc = $LASTEXITCODE
   Pop-Location
   $ErrorActionPreference = 'Stop'
@@ -179,9 +206,14 @@ function Main {
     Say "Done. Next, in the user's app folder: 'reticle init' wires the app and proves it connects."
     Say "The reticle_* tools load when this agent session restarts. Cannot restart yourself? 'reticle init --relaunch' prints the command that resumes this conversation with the tools loaded."
   }
-  exit 0
+  Quit 0
 }
 
 # LAST on purpose, exactly as in install.sh: an `irm | iex` cut off mid-download otherwise runs
 # whatever prefix arrived. This way a truncated file defines functions and runs none of them.
-Main @args
+try {
+  Main @args
+} catch {
+  if ("$_" -ne 'reticle-exit') { throw }
+  $global:LASTEXITCODE = $script:ReticleExitCode
+}

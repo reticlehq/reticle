@@ -14,7 +14,7 @@ Do not spend a turn working out which path you are on.
 reticle_session { action: "list" }
 ```
 
-On a never-connected project that call runs `init` itself and lists the files it changed under `wired`; tell the user. If it answers `run_init`, the daemon was started outside the project: run this in the app's directory:
+On a never-connected project that call runs `init` itself and lists the files it changed under `wired`; tell the user. If it answers `run_init`, or says to reopen another app's URL, run this in the app's directory:
 
 ```bash
 RETICLE_INSTALL_SOURCE=skill_file npx @reticlehq/server@latest init

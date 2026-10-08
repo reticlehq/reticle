@@ -88,12 +88,45 @@ interface NextActionFacts {
    * its one hit is as likely to be another repo's dev server as this one's.
    */
   lastKnownUrl?: string;
+  /** Ports that accepted a connection and answered nothing in time: up, not gone. */
+  slowListeners?: readonly number[];
   /**
    * Where the departed tab was seen heading, when the SDK reported it fresh (#1256). The
    * next-action reason must agree with the diagnosis: when this is present the tab was not
    * closed, it navigated away.
    */
   departedTo?: string;
+}
+
+/** The port a tombstone URL names, when it names one — anything unparseable names no port. */
+export function portOfUrl(url: string): number | undefined {
+  try {
+    const raw = new URL(url).port;
+    if ('' === raw) return undefined;
+    const port = Number(raw);
+    return Number.isSafeInteger(port) && port > 0 ? port : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The departed session's own port no longer answers. Direct evidence, because the scan always
+ * covers that port — unlike an empty scan, which proves nothing the moment another project
+ * happens to be listening (#1421). A slow listener is up, not gone, and a url with no explicit
+ * port was never scanned, so neither counts.
+ */
+export function departedPortGone(facts: {
+  lastKnownUrl?: string;
+  listening: readonly number[];
+  slowListeners?: readonly number[];
+}): boolean {
+  const port = facts.lastKnownUrl === undefined ? undefined : portOfUrl(facts.lastKnownUrl);
+  return (
+    port !== undefined &&
+    !facts.listening.includes(port) &&
+    !(facts.slowListeners ?? []).includes(port)
+  );
 }
 
 /**
@@ -154,7 +187,12 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   // (`connectedSinceLastClosure` in the manager). Read as the weaker "a refusal was recorded at
   // some point", the flip trades this bug for its mirror image and blames the token for a tab the
   // human closed. The ordering belongs to the fact; what this branch does with it is then obvious.
-  if (facts.everConnected && true !== facts.authRefused) {
+  // A departed session whose port is ALSO gone is the one shape where "reopen that" points at a
+  // dead socket and forbids the restart that fixes it (#1421). Keyed on that port itself, not on
+  // an empty scan: another project listening elsewhere says nothing about this one.
+  const departedPortIsGone =
+    facts.everConnected && true !== facts.authRefused && departedPortGone(facts);
+  if (facts.everConnected && true !== facts.authRefused && !departedPortIsGone) {
     const listening = facts.listening;
     const only = 1 === listening.length ? listening[0] : undefined;
     // The departed session's own url first: it is where this project's app demonstrably was, while
@@ -218,8 +256,18 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     };
   }
 
-  if (0 === facts.listening.length) {
+  if (0 === facts.listening.length || departedPortIsGone) {
     const dev = facts.dev;
+    // The start advice below follows a departed session whose port is gone. Name it, so the restart
+    // does not read as if nothing had ever run here (#1421).
+    const stopped = departedPortIsGone ? reopenableUrl(facts.lastKnownUrl) : undefined;
+    const stoppedNote =
+      stopped === undefined
+        ? ''
+        : ` The session that was on ${redactUrl(stopped.url)} is gone and nothing listens there now.`;
+    const notRunning = departedPortIsGone
+      ? "nothing answers on the port this project's app was last on, so the app is probably not running — "
+      : 'nothing is listening on the ports Reticle scans, so the app is probably not running — ';
     if (dev === undefined) {
       if (facts.exists !== undefined && !facts.exists('package.json')) {
         const ecosystem = detectNonJsEcosystem(facts.exists);
@@ -239,10 +287,11 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
       return {
         action: NoSessionAction.START_DEV_SERVER,
         reason:
-          'nothing is listening on the ports Reticle scans, so the app is probably not running — ' +
+          notRunning +
           'but this project declares no dev script (no `dev`, `develop` or `start` in its ' +
           'package.json), so there is no command to hand you. Ask the human how their app is ' +
-          'started, and for the URL it serves on.',
+          'started, and for the URL it serves on.' +
+          stoppedNote,
       };
     }
     // The app can live one directory down; the command has to be runnable from where the daemon
@@ -265,13 +314,14 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
       // rather than assumed away. Measured on a machine with three dev servers up on ports the scan
       // does not cover, it reported the app was not running.
       reason:
-        'nothing is listening on the ports Reticle scans, so the app is probably not running — ' +
+        notRunning +
         'though that scan is narrow, so if it IS up on another port, ask for its URL instead of ' +
         `starting a second one. This is the project's own ` +
         (undefined === dev.script ? 'launcher' : `\`${dev.script}\` script`) +
         (dev.directory === undefined ? '' : `, in \`${dev.directory}\``) +
         ` — run it in the ` +
-        'background, tell the human it is running, then call reticle_sessions again.',
+        'background, tell the human it is running, then call reticle_sessions again.' +
+        stoppedNote,
     };
   }
 

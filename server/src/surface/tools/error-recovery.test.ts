@@ -14,6 +14,7 @@ import {
 import { TOOLS } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { diagnoseNoSession } from '@/portal/session/no-session-diagnosis.js';
+import { MSG_NO_HARNESS_KEY } from './harness-explore.js';
 
 describe('recoveryFor — every known error carries an actionable next move', () => {
   it('maps the no-session footgun to a concrete recovery', () => {
@@ -89,6 +90,13 @@ describe('recoveryFor — every known error carries an actionable next move', ()
         'This workspace has no harness entitlement, so autonomous driving would run on Reticle\u2019s model budget.',
       ),
     ).toBe(RECOVERY.HARNESS_OFF);
+  });
+
+  it('answers an unlinked explore with "link it or drive it yourself", not "your call was invalid"', () => {
+    // The refusal names reticle_act_and_wait as the alternative, which the catch-all used to read as
+    // a malformed call, so the agent was told to fix arguments that were never wrong.
+    expect(recoveryFor(MSG_NO_HARNESS_KEY)).toBe(RECOVERY.HARNESS_NOT_LINKED);
+    expect(refusalReasonFor(MSG_NO_HARNESS_KEY)).not.toBe(RefusalReason.BAD_ARGS);
   });
 
   it('returns undefined for an unrecognized error (never invents a hint)', () => {

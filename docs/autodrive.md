@@ -1,6 +1,6 @@
 ---
 title: Let Reticle drive
-description: Hand the whole drive to a model inside the daemon, and get the flows it recorded back, so every run after the first one replays with no model in the loop.
+description: Hand the whole drive to the Reticle Harness on the platform, and get back the flows it recorded, so every run after the first one replays with no model in the loop.
 icon: steering-wheel
 ---
 
@@ -38,7 +38,7 @@ Every journey a drive walks is saved, whatever happens to the drive, including o
 
 ## The platform plans the drive
 
-With a platform credential (`reticle connect`, or `RETICLE_API_KEY`), the platform plans every drive. With a persona or without one, it proposes the people worth being, orders the saved flows, finds where they branch, and writes into each journey the product rules that apply to it, read from your project's own intents. The rules tell the Harness what the journey is for and where it ends (a journey that names Settings is not finished before Settings). They are not checked as assertions: a rule like "the row shows refunded" is guidance, and the checks are the consequences each step declares. Your machine sends what the project knows, with each saved step as a short hash and never the values it typed. It runs the plan it gets back and reports what happened. The plan is checked before it runs, and a plan that fails the checks is dropped. Every decision while it drives is the platform's too: your machine executes each step it is handed and reports what happened.
+The platform plans every drive (link the project once with `reticle connect`, or set `RETICLE_API_KEY` in CI). With a persona or without one, it proposes the people worth being, orders the saved flows, finds where they branch, and writes into each journey the product rules that apply to it, read from your project's own intents. The rules tell the Harness what the journey is for and where it ends (a journey that names Settings is not finished before Settings). They are not checked as assertions: a rule like "the row shows refunded" is guidance, and the checks are the consequences each step declares. Your machine sends what the project knows, with each saved step as a short hash and never the values it typed. It runs the plan it gets back and reports what happened. The plan is checked before it runs, and a plan that fails the checks is dropped. Every decision while it drives is the platform's too: your machine executes each step it is handed and reports what happened.
 
 ## With no persona, it writes a plan first
 
@@ -59,7 +59,7 @@ Two `reticle_flow_replay` arguments make the branches possible, and you can use 
 
 | Variable | What it does |
 | --- | --- |
-| `RETICLE_API_KEY` | The key `reticle connect` (or `reticle link`) wrote. The daemon uses it to ask the platform to drive. |
+| `RETICLE_API_KEY` | For CI, where nobody ran `reticle connect`. Locally the daemon uses the key `connect` stored in `~/.reticle/credentials.json`; either way it is what asks the platform to drive. |
 | `RETICLE_HARNESS_MAX_STEPS` | Ceiling on steps in one drive. Bounds cost, not value. |
 | `RETICLE_SECRET_<FIELD>` | The value for a secret field, such as `RETICLE_SECRET_AUTH_PASSWORD` for a field named `auth-password`. Only the field's NAME goes to the platform. The value is typed in on your machine and never sent. |
 
@@ -80,13 +80,13 @@ A project linked to a Reticle workspace reads two things from it before a drive 
 - **The switch.** Autonomous driving can be turned off per project, from the HUD's Reticle Harness switch or the dashboard (Settings → Verification model). A drive then refuses and says where to turn it back on. Switched off while a platform drive is running, the drive stops at its next turn with `stopReason: "stopped"`, keeps what it drove, and says so in the Agent Log. Everything else is unaffected, including the tools your own agent drives with.
 - **Credits.** Every workspace gets Harness credits each 30 days: Free 500, Pro 4,800 a seat, Enterprise as agreed. One credit is one decision the Harness makes. The HUD shows how many are left; once they are spent a drive is refused with that number and the way to get more.
 
-A daemon that cannot reach the platform at all drives normally: an unreachable settings endpoint is not a reason to lose a feature you were never told to stop using.
+If only the settings endpoint is unreachable, the on/off switch and the credit check do not block a drive: an unreachable settings endpoint is not a reason to lose a feature you were never told to stop using. The drive itself still needs the platform, so with no connection at all it is refused with the reason.
 
 ## What it will not do
 
 **It does not decide whether your app is correct.** The model chooses what to _try_; the engine decides what _happened_, from what it recorded. A model that graded its own driving would be scoring its own homework, and its verdict would be unfalsifiable. So the summary it writes is an account of what it drove, and nothing downstream grades from it.
 
-That split is also why the default model is not the largest one available. The harness is exploring an interface and stating expectations, not reasoning about your business logic. If finding defects needed a frontier model _there_, the engine would not be doing its job.
+That split is also why the platform's model is not the largest one available. The harness is exploring an interface and stating expectations, not reasoning about your business logic. If finding defects needed a frontier model _there_, the engine would not be doing its job.
 
 **It really clicks.** A drive navigates, submits forms and mutates state, exactly like the crawl does. Point it at a preview or a dev environment, not production.
 

@@ -16,7 +16,7 @@ By the end of this page your agent will click a button in your app and prove wha
 
 ## Prerequisites
 
-- Node 20 or newer
+- Node 20.11 or newer
 - A web app you can run locally, and its dev server
 - A coding agent that speaks MCP (Claude Code, Cursor, Codex, OpenCode, Windsurf, VS Code)
 
@@ -65,13 +65,15 @@ This installs the dev-only SDK, wires your build config, starts the dev server, 
 
 Step 1 is once per machine. This step is once per project. **Skipping it is the most common reason Reticle "does nothing":** the agent has the tools, but there is no app on the other end for them to see.
 
-Want a cloud dashboard too? Run `npx @reticlehq/server connect --project "My App"` instead of, or after, `init`. It does everything `init` does, then opens browser sign-in approval, links this folder to the named cloud project, and sends existing local history. Approve the short code shown in the browser and terminal; the command resumes by itself.
+Want a cloud dashboard too? Run `npx @reticlehq/server connect --project "My App"` instead of, or after, `init`. It does everything `init` does, then opens browser sign-in approval, links this folder to the named cloud project, and sends existing local history. Approve the short code shown in the browser and terminal; the command resumes by itself. The browser asks you to sign in, or to create a free account at app.reticle.sh. The Free plan includes monthly Harness credits. What syncs, and how to switch each part off, is in [What is recorded](/what-is-recorded).
 
 <Note>
   **Skipped this step?** Ask your agent to verify something in the app. Its first `reticle_session`
   call finds a project that has never connected, runs `init` there itself, and lists every file it
   changed under `wired`. Asked about something unrelated, it offers to wire the app instead of doing
-  it. This works in Claude Code, Codex, Cursor and other MCP agents.
+  it. This works in Claude Code, Codex, Cursor and other MCP agents. If Reticle is already running
+  for another project, run `npx @reticlehq/server init` in this one: the automatic wiring covers the
+  project the daemon started in.
 </Note>
 
 Prefer to install the skill and let the agent run setup itself? On Claude Code the plugin registers the MCP server and the skill in one step:
@@ -118,7 +120,7 @@ npx @reticlehq/server doctor
 
 ## Step 4. Open your app again when you need it
 
-`connect` already started the dev server and opened the app. On a later day, start your dev server as usual, then:
+`init` (or `connect`) already started the dev server and opened the app. On a later day, start your dev server as usual, then:
 
 ```bash
 npx @reticlehq/server open
@@ -293,7 +295,8 @@ That third state is the one that matters. Most tools have two outcomes and quiet
     Emit signals like `auth:granted` so your verdicts get stronger than "the DOM changed".
   </Card>
   <Card title="Every tool" icon="list" href="/tools/overview">
-    The 18 tools your agent sees by default, and the 30 more it can reach on demand.
+    The 10 tools your agent sees by default, and the rest it reaches through `reticle_tools` and
+    `reticle_run`.
   </Card>
   <Card title="Run it in CI" icon="circle-check" href="/testing">
     Turn this session into a suite that blocks a bad merge.

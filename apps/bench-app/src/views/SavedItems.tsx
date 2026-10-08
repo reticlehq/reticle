@@ -55,11 +55,10 @@ export function SavedItems(): React.ReactElement {
     const current = label.trim();
     // Do NOT clear the label before the response — that DOM change would make uiAdvanced()=true
     // before the POST settles, suppressing response-ignored in the broken variant.
-    // Clear only after saveItem resolves (which for renderDelay=0 is after the state update,
-    // and for renderDelay>0 is after the POST but before the delayed render).
+    // Clear only after saveItem resolves, which is after the state update — for renderDelay>0,
+    // after the DELAYED render. Clearing at response time would be the client visibly answering
+    // the write, and the broken variant would not be broken.
     await saveItem(current, renderDelay, serverDelay);
-    // For the broken variant the label clear still counts as a DOM change — but it happens
-    // AFTER act_and_wait has already closed its window (the net predicate resolved first).
     setLabel('');
   };
 

@@ -52,7 +52,12 @@ Install it now:
 Then follow https://docs.reticle.sh/install-agentic.md and, if anything needs a
 manual edit, https://docs.reticle.sh/install-manual.md. Do not stop until you have
 driven one real flow in my app and produced a verdict. That, not a config file, is
-what "installed" means.
+what "installed" means. If your reticle_* tools have not loaded yet (they load when
+I restart you), prove the flow from the shell instead:
+
+  npx @reticlehq/server verify <url> --expect '<predicate JSON>'
+
+which exits 0 only on verified: yes. Then tell me to restart you to get the tools.
 
 Afterwards, use it whenever you change any user-facing behaviour.
 ```
@@ -244,7 +249,7 @@ Three of these are answers only the caller has. `init` reads your repository; it
 
 | Flag | When you want it |
 | --- | --- |
-| `persona: "<what>"` | **Name the journey worth proving**, on the FIRST RUN (`reticle_verify { action: "explore", persona: "<the journey worth proving>" }`), not on `init`, which does not drive. Reticle can list the buttons on a page; it cannot know that checkout matters and the theme toggle does not. Naming it is the difference between a drive that finishes and one that spends its budget looking for something to do. |
+| `persona: "<what>"` | **Name the journey worth proving**, on the FIRST RUN (`reticle_verify { action: "explore", persona: "<the journey worth proving>" }`, on a project linked with `reticle connect`; otherwise drive it with `reticle_act_and_wait`), not on `init`, which does not drive. Reticle can list the buttons on a page; it cannot know that checkout matters and the theme toggle does not. Naming it is the difference between a drive that finishes and one that spends its budget looking for something to do. |
 | `--env KEY=VALUE` | What the app needs to reach a usable state: the key from `.env.example`, the mock backend, the variable that skips an auth wall. Repeatable, and a value may contain spaces and equals signs. Without it a real app sits on a login screen and there is no flow to drive. |
 | `--app <dir>` | Monorepos. `init` can find the apps that are servable; only your request says which one you are working in. |
 | `--license <key>` | Writes `RETICLE_LICENSE_KEY` to `.env` and keeps `.env` out of git. Do not do those two by hand. |

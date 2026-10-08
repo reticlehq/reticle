@@ -19,6 +19,7 @@ import { leaseCaveat, type LeaseBrowserState } from './presence/lease-availabili
 import { DEV_SERVER_PORTS } from '@/command/cli/ports/resolve/cli-port.js';
 import { siblingListenerNote } from '@/command/cli/ports/sibling-ports.js';
 import { STALL_AFTER_MS } from './stall-clock.js';
+import { departedPortGone } from './no-session-next-action.js';
 import { pageTornDownWhileOn } from '@reticlehq/engine/evidence/page-teardown.js';
 
 export interface NoSessionFacts {
@@ -198,7 +199,7 @@ const NUXT = 'nuxt';
  * generic one that contradicts it.
  */
 export const SELF_RECOVERING_MARKER =
-  'Then call reticle_sessions again — it will appear within a second of the page loading.';
+  'Then call reticle_session { action: "list" } again — it will appear within a second of the page loading.';
 const RETRY = SELF_RECOVERING_MARKER;
 
 /**
@@ -656,6 +657,19 @@ export function explainNoSession(facts: NoSessionFacts): {
           `problem. Ask the human to go back to the app${orOpenCommand(facts)}, or reload the tab. ` +
           `${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
         alreadyListeningClause(listening).trim(),
+      );
+    }
+    // The dev server that served this session has stopped: the departed session's own port no
+    // longer answers, so "ask the human to reopen the app" points at a dead socket. Keyed on that
+    // port, as the next action is (#1421) — the prose and the executable half agree on the story.
+    // No "already listening" clause: whatever else answers is not where this app was.
+    if (facts.lastKnownUrl !== undefined && departedPortGone(facts)) {
+      return reason(
+        NoSessionReason.TAB_GONE,
+        'no browser session connected, but one WAS connected to this daemon earlier, so the wiring ' +
+          `is correct. ${tabGoneWhat(facts.lastKnownUrl)} The dev server that served it has stopped ` +
+          '— nothing answers on that port any more — so start the app again (the command is in ' +
+          `\`next_action\`). ${RETRY}`,
       );
     }
     return reason(

@@ -2,6 +2,7 @@ import {
   ContradictionKind,
   EventType,
   NEXT_ACTION_FIELD,
+  PredicateKind,
   REQUEST_SHAPE_FIELD,
   isAbsenceDerived,
   isSameDocument,
@@ -552,7 +553,7 @@ function findWindowContradictions(
       kind: ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
       claim: 'the UI moved forward (DOM/store/route changed)',
       counter: `${String(unexpectedWrites.length)} request(s) in the same window failed`,
-      detail: unexpectedWrites.map(describe).join('; '),
+      detail: `${unexpectedWrites.map(describe).join('; ')}${declareFailureHint(unexpectedWrites)}`,
     });
   }
 
@@ -822,6 +823,61 @@ function findWindowContradictions(
   // Consumer rules run LAST and over the same app-only window, so a service embedding this engine
   // adds to the verdict rather than forking the file that produces it.
   return [...found, ...runRegisteredFolds(events, options)];
+}
+
+/**
+ * The `net` clause that declares each of these failures, worded as a condition.
+ *
+ * A designed error path (a 402 paywall, a 429, a 428 confirmation) asserted through the UI it renders
+ * gets `ui-advanced-request-failed`, and declaring the failing call in the oracle is what exempts it
+ * (`matchesDeclaredFailure`). Nothing in the finding said so, so agents dropped the check or
+ * weakened it until it proved nothing (#1418). The clause is built from the call itself, so it is
+ * exactly what would match, and it is conditional: the finding is still a finding, and a clause
+ * pasted to make a red go away would be the same false green with extra steps.
+ *
+ * Built from the DISPLAY url, which is redacted, never from `matchUrl`, which is not: the detail is
+ * copied into crawl anomalies, and a hint must not put back a token the description took out. A
+ * call whose path cannot be named exactly and narrowly gets no clause rather than a loose one: a
+ * bare `/` is a substring of every url and would exempt unrelated failures with the same method.
+ */
+function declareFailureHint(
+  calls: readonly { method: string; url: string; matchUrl?: string; status: number | undefined }[],
+): string {
+  const clauses = calls.flatMap((c) => {
+    const urlContains = narrowPathOf(c);
+    if (urlContains === undefined) return [];
+    const clause = {
+      kind: PredicateKind.NET,
+      method: c.method.toUpperCase(),
+      urlContains,
+      ...(c.status === undefined || 0 === c.status ? { ok: false } : { status: c.status }),
+    };
+    return [JSON.stringify(clause)];
+  });
+  if (0 === clauses.length) return '';
+  const subject = 1 === clauses.length ? 'this failure is' : 'these failures are';
+  return `. If ${subject} the outcome you expect, declare it in the predicate: ${clauses.join(', ')}`;
+}
+
+/** Resolves a relative call url so its path can be read; the host is never shown or matched. */
+const RELATIVE_URL_BASE = 'http://reticle.invalid';
+
+/**
+ * The display url's path, when it is both safe to show and narrow enough to declare one call.
+ *
+ * Only when it is literally in the url the declaration is matched against: `urlContains` is a
+ * substring test, so a path the parser re-encoded, or one the redaction changed, would never match.
+ */
+function narrowPathOf(call: { url: string; matchUrl?: string }): string | undefined {
+  let path: string;
+  try {
+    path = new URL(call.url, RELATIVE_URL_BASE).pathname;
+  } catch {
+    return undefined;
+  }
+  if (0 === path.replace(/\/+$/, '').length) return undefined;
+  if (!call.url.includes(path) || !(call.matchUrl ?? call.url).includes(path)) return undefined;
+  return path;
 }
 
 // ── Pagination ───────────────────────────────────────────────────────────────────────────────
