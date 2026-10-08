@@ -787,6 +787,21 @@ describe('installNetwork (XMLHttpRequest)', () => {
     expect(done.map((e) => e.data['url'])).toEqual(['/first', '/second']);
     expect(done.map((e) => e.data['status'])).toEqual([200, 201]);
   });
+
+  it('fingerprints the body as it was sent, not as the app left the buffer (#1347)', () => {
+    window.XMLHttpRequest = FakeXHR as unknown as typeof XMLHttpRequest;
+    const { emit, events } = collect();
+    const teardown = installNetwork(emit);
+    const xhr = new window.XMLHttpRequest() as unknown as FakeXHR;
+    const body = new TextEncoder().encode('{"q":1}');
+    xhr.open('POST', '/api/query');
+    xhr.send(body);
+    body.fill(0); // the app reuses its buffer while the request is pending
+    xhr.complete({ status: 200 });
+    teardown();
+
+    expect(eventOf(events, EventType.NET_REQUEST)[REQUEST_SHAPE_FIELD]).toMatch(/^[0-9a-f]{8}$/);
+  });
 });
 
 describe('document-initiated subresources (PerformanceObserver)', () => {
@@ -1003,6 +1018,28 @@ describe('installNetwork (request-body shape fingerprint)', () => {
       expect(request['requestBodyType']).toBeUndefined();
     });
 
+    it('rejects valid UTF-8 carrying control bytes, and keeps tab, newline and return', async () => {
+      const encode = (text: string): Uint8Array<ArrayBuffer> =>
+        new Uint8Array(new TextEncoder().encode(text));
+      expect(await shapeOfPost(encode('{"q":1}\u0000'))).toBeUndefined();
+      expect(await shapeOfPost(encode('{"q":1}\u007f'))).toBeUndefined();
+      expect(await shapeOfPost(encode('{\t"q":\r\n1}'))).toMatch(/^[0-9a-f]{8}$/);
+    });
+
+    it('does not decode an upload over the size bound', async () => {
+      const big = bytes({ blob: 'x'.repeat((1 << 20) + 1) });
+      expect(await shapeOfPost(big)).toBeUndefined();
+    });
+
+    it('fingerprints what fetch was given, before the app could change the buffer', async () => {
+      const body = bytes({ q: 1 });
+      window.fetch = vi.fn(() => {
+        body.fill(0);
+        return Promise.resolve(fakeResponse(200));
+      });
+      expect(await shapeOfPost(body)).toBe(await shapeOfPost(JSON.stringify({ q: 1 })));
+    });
+
     it('keeps only the type marker for bytes that are not text', async () => {
       const { emit, events } = collect();
       teardown = installNetwork(emit, { captureBodies: true });
@@ -1043,6 +1080,15 @@ describe('installNetwork (request-body shape fingerprint)', () => {
       const sameLength = new FormData();
       sameLength.append('password', 'abcdefg-zzzzzz');
       expect(await shapeOfPost(sameLength)).toBe(shape);
+    });
+
+    it('cannot be imitated by a field name that spells a separator', async () => {
+      const two = new FormData();
+      two.append('a', '');
+      two.append('b', '');
+      const one = new FormData();
+      one.append('a=&b', '');
+      expect(await shapeOfPost(two)).not.toBe(await shapeOfPost(one));
     });
 
     it('is still never captured, only marked', async () => {

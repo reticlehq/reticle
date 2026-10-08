@@ -330,14 +330,14 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * next hundred.
  */
 /*
- * Raised by 1,100 to 257,800 for request-body identity on bytes and forms (#1347). A JSON body a
- * client encoded to bytes (Flutter web, gRPC-web) and a FormData upload carried no fingerprint, so
- * every write to such an endpoint pooled into one unknown identity and a correct fan-out graded
+ * Raised to 257,300 for request-body identity on bytes and forms (#1347). A JSON body a client
+ * encoded to bytes (Flutter web, gRPC-web) and a FormData upload carried no fingerprint, so every
+ * write to such an endpoint pooled into one unknown identity and a correct fan-out graded
  * `unknown / duplicate-request`. The fingerprint has to run in the page at send time, so it cannot
- * be deferred. Measured +1,084 B against main in the same build (this machine's absolute differs
- * from CI's, the difference does not), after trimming the first revision from +1,372 B.
+ * be deferred. Measured 256,653 B on main and 257,254 B with this change (+601 B); the ceiling is
+ * that rounded up to the next hundred.
  */
-const MAX_FIRST_LOAD_BYTES = 257_800;
+const MAX_FIRST_LOAD_BYTES = 257_300;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

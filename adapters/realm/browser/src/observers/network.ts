@@ -139,13 +139,19 @@ function jsonShape(text: string): string {
   }
 }
 
+/** The largest byte body read as text for its fingerprint. */
+const MAX_DECODED_BODY_BYTES = 1 << 20;
+
 /**
  * A byte body's text, when it is text: an `ArrayBuffer` or a view over one that decodes as strict
  * UTF-8 with no control characters beyond whitespace. Anything else is undefined, so random binary
  * (a protobuf, an image) keeps only its type marker and is never read as a string (#1347).
  */
 function textOfBytes(body: unknown): string | undefined {
+  // Bounded before decoding: a large upload is not walked, scanned and parsed on the page's thread
+  // just to fingerprint it, and keeps the unknown-identity marker instead.
   if (!(body instanceof ArrayBuffer || ArrayBuffer.isView(body))) return undefined;
+  if (body.byteLength > MAX_DECODED_BODY_BYTES) return undefined;
   try {
     const text = new TextDecoder('utf-8', { fatal: true }).decode(body);
     // eslint-disable-next-line no-control-regex -- the point is to find control characters
@@ -167,11 +173,10 @@ function formShape(form: FormData): string | undefined {
   let length = 0;
   form.forEach((value, name) => {
     if ('string' === typeof value) length += value.length;
-    fields.push(
-      `${name}=${'string' === typeof value ? '' : `${value.type}:${String(value.size)}`}`,
-    );
+    // A JSON tuple per field, so no name can imitate a separator: `a=&b` is one field, not two.
+    fields.push(JSON.stringify([name, 'string' === typeof value ? 0 : [value.type, value.size]]));
   });
-  return 0 === fields.length ? undefined : fingerprintBody(fields.sort().join('&'), length);
+  return 0 === fields.length ? undefined : fingerprintBody(fields.sort().join(), length);
 }
 
 /**
@@ -232,7 +237,8 @@ interface XhrMeta {
   start: number;
   rawUrl: string;
   initiatorStack?: string | undefined;
-  reqBody?: Document | XMLHttpRequestBodyInit | null;
+  /** The request body's fields, projected at send: what was sent, not what the body became. */
+  reqFields?: Record<string, unknown>;
 }
 
 /**
@@ -481,6 +487,8 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     // sent, and a mutated `Headers` after this point is somebody else's observation.
     const nextAction = nextActionOf(input, init);
     const nextActionFields = nextAction === undefined ? {} : { [NEXT_ACTION_FIELD]: nextAction };
+    // The body too: a buffer or form the app edits while the request is pending is not what it sent.
+    const bodyFields = observeValue(() => projectRequestBody(init?.body, captureBodies)) ?? {};
     const urlFields = netUrlFields(rawUrl);
     const url = urlFields.url;
     const initiatorStack = observeValue(() => initiatorFrame());
@@ -525,7 +533,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
             ...initiatorFields,
             ...resourceTiming(rawUrl),
             ...netResponseMeta(res.statusText, contentType, res.headers.get('content-length')),
-            ...projectRequestBody(init?.body, captureBodies),
+            ...bodyFields,
             ...nextActionFields,
             ...responseBodyFields,
             // Applied LAST so a reinterpreted verdict wins over the transport's own fields — a Tauri
@@ -661,7 +669,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
       const m = meta.get(this);
       if (m !== undefined) {
         m.start = performance.now();
-        m.reqBody = body ?? null;
+        m.reqFields = observeValue(() => projectRequestBody(body ?? null, captureBodies)) ?? {};
         m.initiatorStack = initiatorFrame(); // the app's xhr.send call site
         const initiatorFields =
           m.initiatorStack === undefined ? {} : { initiatorStack: m.initiatorStack };
@@ -717,7 +725,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
                   xhrContentType,
                   this.getResponseHeader('content-length'),
                 ),
-                ...projectRequestBody(cur.reqBody, captureBodies),
+                ...cur.reqFields,
                 ...responseBodyFields,
               });
             });
