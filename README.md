@@ -287,6 +287,11 @@ An 88-bug registry injected into a controlled app (86 real regressions and 2 fal
 Re-verification has no model in the loop, so a recorded suite is a fixed, tiny read. Reticle is ahead from the second run even when charged a full LLM drive to author the suite.
 
 <p align="center">
+  <img src="assets/readme/bench-rerun.png" width="840"
+       alt="Re-running a four-flow suite: Reticle replays it in about 480 tokens with no model and no flake, against about 121,000 tokens to re-drive it with an LLM: 251 times cheaper." />
+</p>
+
+<p align="center">
   <img src="assets/readme/chart-speed.svg" width="880"
        alt="Wall-clock time to a verdict: a 2.6 second time-gated transition verified in 176 ms versus a 2,978 ms real wait, and a 16-flow batch in 5.2 seconds versus 35.4 seconds one at a time." />
 </p>
