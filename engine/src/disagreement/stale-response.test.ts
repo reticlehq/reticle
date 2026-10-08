@@ -207,4 +207,32 @@ describe('parallel fan-out is not a race', () => {
       ]),
     ).toEqual([]);
   });
+
+  // #1225: three shapes that are not a race were reported as one, so a working page got `no`.
+  describe('reads that never superseded each other', () => {
+    const race = (one: string, two: string, gapMs: number) =>
+      findStaleResponses([
+        pending(0, `/api/x?${one}`, 'a'),
+        pending(gapMs, `/api/x?${two}`, 'b'),
+        settled(100, 'b'),
+        settled(900, 'a'),
+        applied(900),
+      ]);
+
+    it('a fan-out over ids, each rendering its own tile', () => {
+      expect(race('id=1', 'id=2', 60)).toEqual([]);
+    });
+
+    it('two effects that fired in the same task with different filters', () => {
+      expect(race('type=a', 'type=b', 1)).toEqual([]);
+    });
+
+    it('two projections of one collection, whose key sets differ', () => {
+      expect(race('status=open&q=x&limit=50', 'status=open&count=1', 60)).toEqual([]);
+    });
+
+    it('while a filter changed by a later action is still a race', () => {
+      expect(race('type=a', 'type=b', 60)).toHaveLength(1);
+    });
+  });
 });

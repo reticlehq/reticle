@@ -236,6 +236,10 @@ export const EVENT_PAYLOAD_SCHEMAS = {
       runtime: z.string().optional(),
       /** The rendering engine, coarse on purpose (blink / gecko / webkit). Same reasoning as `runtime`. */
       engine: z.string().optional(),
+      /** The desktop shell's own name for this window (Tauri's label: `main`, `setup`). */
+      windowLabel: z.string().optional(),
+      /** The HTTP status the document was served with, when the page could read it. */
+      documentStatus: z.number().int().optional(),
     })
     .passthrough(),
   // The page called window.open — the clicked consequence may continue in a context the SDK cannot

@@ -216,6 +216,12 @@ export const HarnessConfigSchema = z.object({
   harnessEnabled: z.boolean(),
   /** Whether this workspace may drive on OUR model spend. Never folded into the switch. */
   harnessEntitled: z.boolean(),
+  /** Whether the selected provider has a usable platform key. Older daemons may omit it. */
+  providerReady: z.boolean().optional(),
+  /** Harness credits used and held this 30 days; one is one Harness decision. Absent: unbounded or unknown. */
+  credits: z.object({ used: z.number().int().min(0), limit: z.number().int().min(0) }).optional(),
+  /** The platform this answer came from, so the HUD's links go there and not to the hosted one. */
+  platformUrl: z.string().optional(),
 });
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 
@@ -255,6 +261,25 @@ export const ImpactSnapshotSchema = z.object({
    * cannot be honoured is worse than showing none.
    */
   harnessConfig: HarnessConfigSchema.optional(),
+  /**
+   * The rail's notices, already chosen for this machine by the daemon (see `hud-notices.ts`).
+   * Absent means the daemon has nothing newer than the SDK's bundled slides, which then show.
+   *
+   * Loose here on purpose: this schema is on every page's first load, and the full notice schema
+   * (link rules, id pattern) is not. The lazily loaded panel validates each notice with
+   * `HudNoticeSchema` from `@reticlehq/core/hud` before rendering it.
+   */
+  notices: z.array(z.unknown()).max(8).optional(),
+  /**
+   * Reticle Coverage: each level's percentage from the project's coverage ledger (`reached` routes,
+   * `proved` controls, `executed` code, ...). Numbers only. Absent until something was measured.
+   */
+  coverage: z.record(z.number()).optional(),
+  /**
+   * Where this project's work stands with the platform (status, runs on it, waiting, refused, last
+   * push, and the sentence describing it). Loose here, shaped by the daemon's sync-status.
+   */
+  sync: z.record(z.unknown()).optional(),
 });
 export type ImpactSnapshot = z.infer<typeof ImpactSnapshotSchema>;
 

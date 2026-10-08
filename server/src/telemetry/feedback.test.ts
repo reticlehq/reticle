@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { FEEDBACK_TEXT_MAX, StackUnknownReason } from '@reticlehq/core/telemetry';
 import {
   FEEDBACK_ENV,
@@ -67,6 +70,18 @@ describe('redactFeedbackText', () => {
     expect(out.text).toHaveLength(FEEDBACK_TEXT_MAX);
   });
 });
+
+// A report that cannot be sent is saved under the cwd. Left at the checkout, every run of this
+// suite wrote its reports into the repository's own `.reticle`, which the daemon then synced.
+beforeAll(() => {
+  vi.spyOn(process, 'cwd').mockReturnValue(mkdtempSync(join(tmpdir(), 'feedback-cwd-')));
+});
+afterAll(() => {
+  vi.restoreAllMocks();
+});
+
+/** Each report is written to a real temp directory: a bound for a slow disk, not a duration. */
+const FEEDBACK_WRITE_TIMEOUT_MS = 30_000;
 
 describe('feedbackDisabled', () => {
   it.each(['0', 'false', 'off', 'no'])('treats %s as off', (value) => {
@@ -186,12 +201,16 @@ describe('agents can ask for things, not only report failures', () => {
     expect(receipt.redacted).toEqual([]);
   });
 
-  it('separates a feature request from an improvement — the responses differ completely', async () => {
-    for (const kind of ['feature_request', 'improvement'] as const) {
-      const receipt = await submitFeedback({ source: 'agent', kind, text: 'x' });
-      expect(receipt.reason, `kind '${kind}' was rejected`).not.toMatch(/invalid/i);
-    }
-  });
+  it(
+    'separates a feature request from an improvement — the responses differ completely',
+    async () => {
+      for (const kind of ['feature_request', 'improvement'] as const) {
+        const receipt = await submitFeedback({ source: 'agent', kind, text: 'x' });
+        expect(receipt.reason, `kind '${kind}' was rejected`).not.toMatch(/invalid/i);
+      }
+    },
+    FEEDBACK_WRITE_TIMEOUT_MS,
+  );
 
   /**
    * The model cannot come from the transport: MCP's clientInfo carries a name and version and has no

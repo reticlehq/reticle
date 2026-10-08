@@ -167,13 +167,26 @@ function dedupeByDirectory(matches: readonly ProjectCandidate[]): ProjectCandida
 export function projectCandidatesFrom(
   discovery: ConfigDiscovery,
   registry: ProjectRegistry,
+  devServers: readonly { projectId?: string | undefined; root: string }[] = [],
 ): ProjectCandidate[] {
   const discovered: ProjectCandidate[] = discovery.found.flatMap((config) =>
     config.projectId === undefined || 0 === config.projectId.length
       ? []
       : [{ projectId: config.projectId, directory: config.directory }],
   );
-  return [...discovered, ...projectCandidates(registry)];
+  const known = [...discovered, ...projectCandidates(registry)];
+  // A dev server's own announcement of its project id and root, ONLY for an id nothing above names.
+  // It is the one source that knows an app wired by the build plugin alone (no `.reticle.json`, never
+  // `init`-ed), whose runs otherwise went to `unmatched/`, which nothing syncs. It fills gaps and never
+  // competes: `init` at a monorepo root names the root while the dev server names the app's subfolder,
+  // and counting both refused a project that resolved fine before.
+  const named = new Set(known.map((candidate) => candidate.projectId));
+  const announced: ProjectCandidate[] = devServers.flatMap((server) =>
+    server.projectId === undefined || 0 === server.projectId.length || named.has(server.projectId)
+      ? []
+      : [{ projectId: server.projectId, directory: server.root }],
+  );
+  return [...known, ...announced];
 }
 
 /** Where evidence goes when no project could be named and the daemon is a guest in this tree. */

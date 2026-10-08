@@ -5,8 +5,8 @@
 // is started here with every provider key deliberately BLANK, so a drive that works cannot be
 // working for some other reason.
 //
-// Prints one JSON object on the last line, which is what the caller reads. Driven by
-// reticle-cloud's scripts/harness-sync-check.mjs; runnable on its own for a quick manual check:
+// Prints one JSON object on the last line, which is what the caller reads. Driven by the hosted
+// platform's own sync check; runnable on its own for a quick manual check:
 //
 //   RETICLE_CLOUD_URL=... RETICLE_API_KEY=rk_live_... node bench/harness/platform-drive.mjs
 //
@@ -118,8 +118,8 @@ try {
    * The session is named EXPLICITLY, and that is not belt-and-braces.
    *
    * A daemon is scoped to the project of the directory it was started in, and this one is started
-   * by a check that lives in the platform's repository — so it scoped itself to `console-…` and
-   * refused to drive sessions belonging to `razorpay-merchant-dashboard-…`, which were right there
+   * by a check that lives in the platform's repository — so it scoped itself to that repository's
+   * project and refused to drive sessions belonging to the app under test, which were right there
    * and connected. Naming the session this check just watched arrive is the honest fix: it drives
    * the app it came to drive, rather than whichever project the caller happened to run from.
    */

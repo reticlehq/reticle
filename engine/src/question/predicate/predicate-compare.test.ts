@@ -165,6 +165,49 @@ describe('what `as` means', () => {
     expect(r.pass).toBe(false);
   });
 
+  it('preserves the negative sign on formatted currency in compare as number', async () => {
+    const session = new PageSession([refundCall('{"refunded":-11.87}')], {
+      '#refunded': 'Refunded -₹11.87',
+    });
+    const r = await evaluatePredicate(session, compare({ as: 'number' }));
+    expect(r.pass).toBe(true);
+  });
+
+  it('fails when negative currency on page disagrees in sign with server response', async () => {
+    const session = new PageSession([refundCall('{"refunded":11.87}')], {
+      '#refunded': 'Refunded -₹11.87',
+    });
+    const r = await evaluatePredicate(session, compare({ as: 'number' }));
+    expect(r.pass).toBe(false);
+    expect(r.failureReason).toContain('-11.87');
+    expect(r.failureReason).toContain('11.87');
+  });
+
+  it('handles negative currency with various symbol placements and spacing', async () => {
+    const sessionUSD = new PageSession([refundCall('{"refunded":-50}')], {
+      '#refunded': 'Total: -$50.00',
+    });
+    expect((await evaluatePredicate(sessionUSD, compare({ as: 'number' }))).pass).toBe(true);
+
+    const sessionEUR = new PageSession([refundCall('{"refunded":-123.45}')], {
+      '#refunded': 'Balance: -€123.45',
+    });
+    expect((await evaluatePredicate(sessionEUR, compare({ as: 'number' }))).pass).toBe(true);
+
+    const sessionSpace = new PageSession([refundCall('{"refunded":-1187.01}')], {
+      '#refunded': '-$ 1,187.01',
+    });
+    expect((await evaluatePredicate(sessionSpace, compare({ as: 'number' }))).pass).toBe(true);
+  });
+
+  it('does not mistake a hyphen separator in text for a negative sign', async () => {
+    const session = new PageSession([refundCall('{"refunded":50}')], {
+      '#refunded': 'Subtotal - $50.00',
+    });
+    const r = await evaluatePredicate(session, compare({ as: 'number' }));
+    expect(r.pass).toBe(true);
+  });
+
   it('applies a tolerance', async () => {
     const session = new PageSession([refundCall('{"refunded":11.874}')], { '#refunded': '11.87' });
     expect((await evaluatePredicate(session, compare({ as: 'number' }))).pass).toBe(false);

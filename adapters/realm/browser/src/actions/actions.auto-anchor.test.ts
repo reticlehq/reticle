@@ -127,3 +127,18 @@ describe('anchor identity when there is no accessible name', () => {
     expect(out.name).toBe('Details');
   });
 });
+
+/** From a recorded drive: a sidebar link and a card link both named "Transactions". */
+describe('act result — which of several same-named controls', () => {
+  it('reports the position among namesakes, and nothing when the name is unique', async () => {
+    document.body.innerHTML =
+      '<nav><a href="#/t">Transactions</a></nav><main><a href="#/t">Transactions</a><a href="#/s">Settings</a></main>';
+    const links = document.querySelectorAll('a');
+    const second = await executeAction(refs.refFor(links[1] as HTMLElement), 'click', {});
+    if (!second.ok) throw new Error('expected ok');
+    expect([second.nth, second.of]).toEqual([1, 2]);
+    const unique = await executeAction(refs.refFor(links[2] as HTMLElement), 'click', {});
+    if (!unique.ok) throw new Error('expected ok');
+    expect([unique.nth, unique.of]).toEqual([undefined, undefined]);
+  });
+});

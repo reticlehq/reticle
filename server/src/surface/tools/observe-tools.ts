@@ -363,7 +363,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const bodyRefusal = bodyClauseRefusal(predicate, session);
       if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
-      let since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
+      const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
       // See the note on the assert handler below: a wait cut off by a full-document navigation is
       // followed to the document that took over, rather than graded as a lost observation there.
       const predicateStarted = session.elapsed();
@@ -375,7 +375,6 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         predicateStarted,
         reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),
       });
-      if (followed.followed) since = 0;
       session = followed.session;
       const verdict = followed.verdict;
       // match reticle_assert — wrap with control + session health (throttle matters most while blocking)
@@ -607,7 +606,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // explicit `since` may reach back past the last step, where replay would not find it. The
       // store itself refuses when a navigation came after that step: see RecordingStore.markNavigated.
       if (Verified.YES === decision['verified'] && args['since'] === undefined) {
-        captureAssertion(deps.recordings, predicate);
+        captureAssertion(deps.recordings, predicate, session.id);
       }
       return withControl(session, {
         ...decision,

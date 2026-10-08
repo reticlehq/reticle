@@ -68,3 +68,20 @@ describe('the store is always recording', () => {
     expect(AMBIENT_RECORDING.startsWith('__')).toBe(true);
   });
 });
+
+/** From a recorded whole-app drive: every Harness journey was saved twice, once under a guessed name. */
+describe('a step the Harness drove', () => {
+  const step = (tool: string): Parameters<RecordingStore['capture']>[0] =>
+    ({ tool, args: {} }) as Parameters<RecordingStore['capture']>[0];
+
+  it('stays off the ambient tape, and still lands in the recording the Harness opened', () => {
+    let driving = false;
+    const store = new RecordingStore(() => driving);
+    store.start('harness-drive-refund', 0);
+    driving = true;
+    store.capture(step('reticle_act'));
+    driving = false;
+    expect(store.stepCount(AMBIENT_RECORDING) ?? 0).toBe(0);
+    expect(store.stepCount('harness-drive-refund')).toBe(1);
+  });
+});

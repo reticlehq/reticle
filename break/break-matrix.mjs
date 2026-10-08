@@ -678,7 +678,16 @@ for (const s of selected) {
   } finally {
     if (side !== undefined) side.kill();
     s.cleanup?.(dir);
-    if (!keep) rmSync(dir, { recursive: true, force: true });
+    // The project daemon `init` starts outlives the scenario and keeps writing `.reticle/` into
+    // this directory, so a single rmdir can race it: macOS CI died on ENOTEMPTY here and threw
+    // away every result. Retry, and a directory that still will not go is a leftover, not a crash.
+    if (!keep) {
+      try {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      } catch (err) {
+        process.stderr.write(`  (left ${dir} behind: ${err.code ?? err.message})\n`);
+      }
+    }
   }
 }
 

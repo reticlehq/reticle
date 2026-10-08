@@ -1,5 +1,22 @@
 # Upgrading to Reticle v3
 
+## From 3.5 to 3.6: the Harness drives only on the Reticle platform
+
+If you never used `reticle_verify { action: "explore" }` or `reticle verify --explore`, there is nothing to do.
+
+If you did, it used to drive on a model key of your own. In 3.6 the Harness decides on the Reticle platform and the daemon on your machine executes each step:
+
+| You had | Now |
+| --- | --- |
+| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `JEV_API_KEY` set for explore | Link the project instead: `npx @reticlehq/server connect`. Every plan includes Harness credits, Free too. The keys are no longer read for driving. |
+| `RETICLE_HARNESS_DRIVER` or `RETICLE_HARNESS_MODEL` | Remove them; nothing reads them. The platform picks the model. |
+| `driver: "…"` in an explore call | Remove the argument; it is no longer accepted. |
+| A secret field (a password) typed by the Harness | Keep it on your machine as `RETICLE_SECRET_<FIELD>`, for example `RETICLE_SECRET_PASSWORD`. Only the field's name reaches the platform. |
+
+Driving the app yourself through the MCP tools is unchanged and needs no account.
+
+---
+
 **From 2.x to 3.1.0.** This is the whole upgrade, in one place, in order.
 
 If you have never installed Reticle, you do not need this file. Read [Getting started](docs/getting-started.md) instead.

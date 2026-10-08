@@ -18,6 +18,8 @@
  *      reload. Somebody who said no has answered the question.
  */
 
+import { ReticleStorageKey } from '@/storage-keys.js';
+
 /** Root of the offer card, so the shell can find and replace it. */
 export const OFFER_ATTR = 'data-reticle-offer';
 /** The claim button — a link, because the answer lives on the platform. */
@@ -29,7 +31,7 @@ export const OFFER_CLAIM_ATTR = 'data-reticle-offer-claim';
  * Deliberately NOT session storage. "Not interested" asked again on every reload is the same as not
  * having a dismiss button, and the person is reloading constantly — that is what a dev server is.
  */
-export const OFFER_DISMISSED_KEY = 'reticle.harnessOffer.dismissed';
+export const OFFER_DISMISSED_KEY = ReticleStorageKey.HARNESS_OFFER_DISMISSED;
 
 /** What the card says. Named because a string a user reads is a decision, not an implementation detail. */
 export const OFFER_TEXT = {
@@ -129,7 +131,7 @@ export function offerHtml(offer: OfferState | undefined, dismissed: boolean): st
 }
 
 /** Styles, kept beside the markup they dress so a change to one is a change to both. */
-export const OFFER_CSS = `
+export const OFFER_CSS: string = `
 .reticle-offer{margin:8px 10px;padding:10px 12px;border:1px solid var(--reticle-line,#2a2f3a);border-radius:10px;background:var(--reticle-surface-inset,rgba(255,255,255,.03));}
 .reticle-offer-title{display:block;font-weight:600;font-size:12px;padding-right:18px;}
 .reticle-offer-body{margin:6px 0 8px;font-size:11px;line-height:1.45;opacity:.8;}

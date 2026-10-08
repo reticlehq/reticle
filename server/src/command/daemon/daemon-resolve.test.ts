@@ -6,6 +6,8 @@ import {
   resolveDaemonForProject,
   adoptable,
   resolveMcpPort,
+  projectlessNote,
+  projectDaemonsElsewhere,
   daemonsServingProjectElsewhere,
   splitBrainNote,
 } from './daemon-resolve.js';
@@ -182,6 +184,33 @@ describe('resolveMcpPort', () => {
         pickPort: assigned,
       }),
     ).resolves.toBe(4400);
+  });
+
+  // #1240: an editor's user-scope MCP starts in $HOME, with no project, and dialled 4400 forever.
+  it('takes the one live project daemon when a caller outside any project finds the default empty', async () => {
+    const dir = home([{ port: 47311, pid: 1, cwd: '/b', startedAt: 1, projectId: 'shop' }]);
+    await expect(
+      resolveMcpPort(4400, undefined, dir, {
+        alive: live,
+        daemonPresent: absent,
+        pickPort: assigned,
+      }),
+    ).resolves.toBe(47311);
+    const two = home([
+      { port: 47311, pid: 1, cwd: '/b', startedAt: 1, projectId: 'shop' },
+      { port: 47312, pid: 2, cwd: '/c', startedAt: 1, projectId: 'blog' },
+    ]);
+    await expect(
+      resolveMcpPort(4400, undefined, two, {
+        alive: live,
+        daemonPresent: absent,
+        pickPort: assigned,
+      }),
+    ).resolves.toBe(4400);
+    const note = projectlessNote(4400, projectDaemonsElsewhere(4400, two, live));
+    expect(note).toContain('shop on :47311');
+    expect(note).toContain('RETICLE_PORT=47311');
+    expect(projectlessNote(4400, [])).toBeUndefined();
   });
 
   it('does not reuse a daemon of ours whose process has died', async () => {

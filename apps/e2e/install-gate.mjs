@@ -1003,11 +1003,58 @@ function stepsOf(report) {
  */
 const fingerprint = (steps) => steps.map((s) => `${s.mark} ${s.title} → ${s.target}`);
 
-/** Refuse occupied fixture ports before init can accidentally adopt someone else's app. */
+/**
+ * Clear the fixture's dev ports before init can adopt whatever is listening there.
+ *
+ * A dev server THIS gate started (init records each one in the gate's state dir) is stopped, process
+ * tree and all; only a stranger is refused. Before, every listener counted as a stranger, so a
+ * previous scaffold's server that Windows had not finished releasing either failed the run as an
+ * occupied port or was left for the next init to find (#818).
+ */
 async function clearInitDevPorts(scaffold, note, exceptPort) {
   for (const port of scaffold.initDevPorts ?? []) {
-    if (port !== exceptPort) await freePortSafely(port, { onNote: note });
+    if (port === exceptPort) continue;
+    const stopped = stopGateDevServersOn(port);
+    // Windows kills a tree without naming its children, and releases the port a moment later: wait
+    // for that before calling whatever is still listening a stranger.
+    if (stopped.recorded) await portReleased(port);
+    await freePortSafely(port, { onNote: note, ownedPids: stopped.pids });
   }
+}
+
+/** How long a stopped dev server gets to let go of its port. */
+const PORT_RELEASE_WAIT_MS = 5_000;
+const PORT_RELEASE_POLL_MS = 200;
+
+async function portReleased(port) {
+  for (let waited = 0; waited < PORT_RELEASE_WAIT_MS; waited += PORT_RELEASE_POLL_MS) {
+    if (!portHolders(port).some((holder) => holder.listener)) return;
+    await sleep(PORT_RELEASE_POLL_MS);
+  }
+}
+
+/** Stop the dev servers this gate recorded on `port`: whether there were any, and their pids. */
+function stopGateDevServersOn(port) {
+  let files = [];
+  try {
+    files = readdirSync(GATE_STATE_DIR);
+  } catch {
+    return { recorded: false, pids: [] }; // nothing recorded yet
+  }
+  let recorded = false;
+  const owned = [];
+  for (const file of files) {
+    if (!/^dev-server-.*\.json$/.test(file)) continue;
+    try {
+      const record = JSON.parse(readFileSync(join(GATE_STATE_DIR, file), 'utf8'));
+      if (portOf(record.url) !== port) continue;
+      recorded = true;
+      owned.push(...(stopProcessTree(record.pid) ?? []));
+    } catch {
+      /* a half-written record names nothing we can prove is ours */
+    }
+  }
+  return { recorded, pids: owned };
 }
 
 async function stopGateDaemon(port) {

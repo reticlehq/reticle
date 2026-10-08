@@ -64,10 +64,11 @@ const NAME_FROM_CONTENT = new Set([
   'alert',
 ]);
 
-const INPUT_TEXT_TYPES = new Set(['text', 'email', 'tel', 'url', 'search', 'password', '']);
+const INPUT_TEXT_TYPES = new Set(['text', 'email', 'tel', 'url', 'password', '']);
 
 function inputRole(input: HTMLInputElement): string {
   const type = input.type.toLowerCase();
+  if ('search' === type) return 'searchbox';
   if (INPUT_TEXT_TYPES.has(type)) return 'textbox';
   if ('checkbox' === type) return 'checkbox';
   if ('radio' === type) return 'radio';
@@ -410,6 +411,17 @@ function hiddenInsideClosedDetails(el: Element): boolean {
 }
 
 /**
+ * Opacity 0 because a fade-in is stalled, not because the app hides it. A hidden tab's animations do
+ * not advance, so a fading element sits at its first frame and every "visible?" asked of it disagreed
+ * with the element being rendered (#793). Only on a hidden tab, and only with an animation still live
+ * on the element; at rest, opacity 0 is hidden.
+ */
+function stalledFade(el: Element): boolean {
+  if (!el.ownerDocument.hidden || !('getAnimations' in el)) return false;
+  return el.getAnimations().some((a) => 'running' === a.playState || a.pending);
+}
+
+/**
  * Whether the element's OWN box hides it — one forced-style resolution, no composed ancestor
  * walk. The one ancestor reading is `hiddenInsideClosedDetails`, which consults only the nearest
  * `<details>` boundary; composing the chain is still isVisible's job.
@@ -428,7 +440,7 @@ function selfHidden(el: Element): boolean {
     ) {
       return true;
     }
-    if (0 === Number.parseFloat(style.opacity || '1')) return true;
+    if (0 === Number.parseFloat(style.opacity || '1') && !stalledFade(el)) return true;
   }
   return false;
 }

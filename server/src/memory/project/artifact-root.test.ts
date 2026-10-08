@@ -242,6 +242,43 @@ describe('resolveArtifactRoot', () => {
  * the default arrangement when an editor starts a user-scoped MCP server.
  */
 describe('candidates from both sources', () => {
+  /**
+   * An app wired by the Vite plugin alone has no `.reticle.json` and was never `init`-ed, so neither
+   * source above knows its directory, and its runs went to ~/.reticle/unmatched, which nothing syncs.
+   * The plugin already announces every dev server with its project id and root, so the daemon reads
+   * those too.
+   */
+  /**
+   * Found on a real machine: `init` ran at a monorepo root and remembered the id there, while the
+   * dev server announced the app's own subdirectory. Counting both read as two competing checkouts
+   * and refused a project that resolved fine before announcements were read.
+   */
+  it('lets an announcement fill a gap, never contradict what init or discovery said', () => {
+    const registry = rememberProject(emptyProjectRegistry(), 'console-4734', '/repo', 1000);
+    const r = resolveArtifactRoot({
+      projectId: asProjectId('console-4734'),
+      candidates: projectCandidatesFrom(discovery([]), registry, [
+        { projectId: 'console-4734', root: '/repo/apps/console' },
+      ]),
+      daemonRoot: DAEMON_ROOT,
+    });
+    expect(r.root).toBe(join('/repo', ReticleDir.ROOT));
+    expect(r.reason).toBe(ArtifactRootReason.MATCHED_PROJECT);
+  });
+
+  it('resolves a plugin-only app from its dev-server announcement', () => {
+    const r = resolveArtifactRoot({
+      projectId: asProjectId('shop-1a2b'),
+      candidates: projectCandidatesFrom(discovery([]), emptyProjectRegistry(), [
+        { projectId: 'shop-1a2b', root: '/code/shop' },
+        { root: '/code/no-id' },
+      ]),
+      daemonRoot: DAEMON_ROOT,
+    });
+    expect(r.root).toBe(join('/code/shop', ReticleDir.ROOT));
+    expect(r.reason).toBe(ArtifactRootReason.MATCHED_PROJECT);
+  });
+
   it('resolves a project discovery cannot reach, because init remembered it', () => {
     const registry = rememberProject(
       emptyProjectRegistry(),

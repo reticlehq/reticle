@@ -128,6 +128,11 @@ export const ContradictionKind = {
    */
   UNIT_MISMATCH: 'unit-mismatch',
   /**
+   * The page label moved ("Page 2") while the app re-requested the page it already had (`page=1`):
+   * everything past the first page is unreachable, and every channel on its own looks healthy.
+   */
+  PAGINATION_NOT_FETCHED: 'pagination-not-fetched',
+  /**
    * A write returned success and its OWN echo shows a field it was asked to set was not applied.
    *
    * Ordinary in real backends: a column missing from the UPDATE, a schema stripping unknown keys, a
@@ -401,6 +406,8 @@ export const CONTRADICTION_CHANNELS: Record<ContradictionKind, readonly [Channel
   // Both sides are the server's own answer: the status line and the payload under it.
   [ContradictionKind.PARTIAL_FAILURE_IN_OK_RESPONSE]: [ChannelId.NET, ChannelId.NET],
   [ContradictionKind.UNIT_MISMATCH]: [ChannelId.UI, ChannelId.NET],
+  // The label the UI shows against the query string it sent.
+  [ContradictionKind.PAGINATION_NOT_FETCHED]: [ChannelId.UI, ChannelId.NET],
   // What was sent against what came back -- the request and its echo, neither derived from the click.
   [ContradictionKind.WRITE_FIELD_IGNORED]: [ChannelId.NET, ChannelId.NET],
   [ContradictionKind.REQUEST_NEVER_SETTLED]: [ChannelId.TIME, ChannelId.NET],

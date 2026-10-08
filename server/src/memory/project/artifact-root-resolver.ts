@@ -17,7 +17,7 @@
  * while the worktree bug reproduced unchanged. The defaults are the production answers; the seam is
  * what lets a test say "these are the projects on this machine" without one.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import {
@@ -26,7 +26,13 @@ import {
   parseProjectRegistry,
   type ProjectCandidate,
 } from '@reticlehq/core/artifacts';
-import { type ProjectId, ReticleDir } from '@reticlehq/core';
+import {
+  DevServerEntrySchema,
+  type ProjectId,
+  ReticleDir,
+  ReticleEnv,
+  devServerRegistryPort,
+} from '@reticlehq/core';
 import {
   discoverProjectConfigs,
   hasProjectConfig,
@@ -84,10 +90,14 @@ function daemonOwnProjectId(
 
 /**
  * Every project this machine knows the directory of: discovered `.reticle.json` files first, then
- * the user-level registry. Read on each call, since `init` can run in another terminal while the
- * daemon is up.
+ * the user-level registry, then the dev servers the build plugin announced. Read on each call, since
+ * `init` can run in another terminal while the daemon is up.
+ *
+ * Exported because sync must cover exactly the projects runs are written into. It kept its own list
+ * without the announced dev servers, so a project known only through its running dev server had its
+ * runs written to its `.reticle/runs/` and never sent, with nothing reporting a problem.
  */
-function knownProjectCandidates(): ProjectCandidate[] {
+export function knownProjectCandidates(): ProjectCandidate[] {
   let registry = emptyProjectRegistry();
   try {
     const path = join(homedir(), ReticleDir.ROOT, PROJECT_REGISTRY_FILE);
@@ -104,7 +114,36 @@ function knownProjectCandidates(): ProjectCandidate[] {
   } catch {
     // Same reasoning: a diagnostic search that throws must not take a tool call with it.
   }
-  return projectCandidatesFrom(discovery, registry);
+  return projectCandidatesFrom(discovery, registry, announcedDevServers());
+}
+
+/**
+ * The dev servers the build plugin announced, with the project id and root each serves. Read from
+ * the same state directory the plugin writes to. Unreadable or malformed entries are skipped: a stale
+ * announcement only ever names a directory that really was that project.
+ */
+function announcedDevServers(): { projectId?: string | undefined; root: string }[] {
+  const override = process.env[ReticleEnv.STATE_DIR];
+  const dir =
+    override !== undefined && 0 < override.length ? override : join(homedir(), ReticleDir.ROOT);
+  const servers: { projectId?: string | undefined; root: string }[] = [];
+  try {
+    for (const name of readdirSync(dir)) {
+      if (null === devServerRegistryPort(name)) continue;
+      try {
+        const parsed = DevServerEntrySchema.safeParse(
+          JSON.parse(readFileSync(join(dir, name), 'utf8')),
+        );
+        if (parsed.success)
+          servers.push({ projectId: parsed.data.projectId, root: parsed.data.root });
+      } catch {
+        /* one bad announcement does not hide the others */
+      }
+    }
+  } catch {
+    /* no state directory yet: nothing has been announced */
+  }
+  return servers;
 }
 
 /**

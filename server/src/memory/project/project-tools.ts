@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { describeSync, overallStatus, readSyncSummary } from '@/memory/project/sync-status.js';
 import { sessionRoot } from './session-root.js';
 import { projectForRoot } from './project-for-root.js';
 import { type ProjectId, ProjectReadError, RunStatus, type RunRecord } from '@reticlehq/core';
@@ -120,6 +121,7 @@ export const PROJECT_TOOLS: ToolDef[] = [
       'Read cross-run history from .reticle/project.json — the memory of how past runs behaved. With { name } it also returns the last run for that flow plus a diff-vs-last summary (status change, regressed flag, consoleErrors/driftSteps deltas) so you can answer "did it behave like last time?". `diff` is the lightweight status/console/drift delta vs the previous run of that NAME; `runDiff` is the per-flow duration/status delta between the two most-recent full verification artifacts ("step 3: 412ms -> 987ms (+140%), +2 requests"). When logged in to Reticle, also returns `cloud`: the team\'s server-side regression report (broken/changed flows vs before) — the durable memory a fresh or context-lost agent can rely on even when local history is empty. Returns { runs, learned?, lastRun?, diff?, runDiff?, cloud? } or { error, reason, cloud? }.',
     inputSchema: {
       name: z.string().optional().describe('Filter runs by this name. Omit to return all runs.'),
+      push: z.boolean().optional().describe('Sync with the platform now, before answering.'),
       limit: countSchema
         .optional()
         .describe(
@@ -140,16 +142,31 @@ export const PROJECT_TOOLS: ToolDef[] = [
       cloud: z.unknown().optional(),
     },
     handler: async (deps: ToolDeps, args) => {
-      const cloud = await cloudRegression(deps, asString(args['sessionId']));
-      const withCloud = <T extends object>(obj: T): T =>
-        cloud === undefined ? obj : { ...obj, cloud };
+      // A push asked for is done first, so the status below describes what it achieved.
+      if (true === args['push']) await deps.syncNow?.().catch(() => undefined);
+      const root = sessionRoot(deps, asString(args['sessionId']));
+      const linked = (await deps.linkedCloud?.().catch(() => null)) ?? null;
+      const summary = readSyncSummary(root, null !== linked);
+      const sync = {
+        ...summary,
+        status: overallStatus(summary),
+        said: describeSync(summary, deps.now()),
+      };
+      const regression = await cloudRegression(deps, asString(args['sessionId']));
+      // Where this project's work stands with the platform rides in `cloud` beside the team's
+      // regression report: the two answers to "what does the platform know about this project".
+      const cloud = {
+        ...('object' === typeof regression && null !== regression ? regression : {}),
+        sync,
+      };
+      const withCloud = <T extends object>(obj: T): T => ({ ...obj, cloud });
       const project = projectForRoot(deps, sessionRoot(deps, asString(args['sessionId'])));
       const read = await project.read();
       if (!read.ok) {
         return withCloud({
           error:
             read.reason === ProjectReadError.MISSING
-              ? 'no .reticle/project.json yet — run a flow (reticle_flow_replay) or reticle_run_record first'
+              ? 'no .reticle/project.json yet — the first verified run writes it: drive one step with reticle_act_and_wait and an `until`'
               : '.reticle/project.json is malformed — it will self-heal on the next recorded run',
           reason: read.reason,
         });

@@ -119,8 +119,8 @@ export function tutorialNextSteps(audience: TutorialAudience, restartAgent = fal
     TutorialAudience.AGENT === audience
       ? [
           'Next:',
-          '  reticle init            # instrument the project in this directory',
-          '  reticle status          # confirms the app connected, or says why it has not',
+          '  reticle_session list    # the first call wires this project: Reticle runs init itself',
+          '                          # and names every file it changed — tell the user which',
           '  then run the four steps above against it, and report the verdict',
         ]
       : [
@@ -128,12 +128,9 @@ export function tutorialNextSteps(audience: TutorialAudience, restartAgent = fal
           ...(restartAgent
             ? ['  restart your agent                 # it loads new tools only when it starts']
             : []),
-          '  cd <your project> && reticle init  # wire Reticle into the app',
-          '  npm run dev                        # then load it in a browser',
-          '  reticle status                     # confirms the app connected, or says why not',
           '',
           // One line: the terminal wraps it at the reader's width, not ours.
-          'Then ask your agent to drive one real flow and report the verdict. That is the install proving itself, and it is the agent’s job rather than a command you run.',
+          'Ask your agent to verify one real flow in your project. Nothing in your app changed at install: the first time the agent uses Reticle there, Reticle wires the app, starts it, and tells you which files it changed.',
         ];
   return lines.join('\n');
 }
@@ -145,8 +142,8 @@ export function tutorialNextSteps(audience: TutorialAudience, restartAgent = fal
  * on `process.stdout.isTTY` does not work: that is `undefined` through every pipe, so the tour never
  * prints. A heuristic that silently answers "nobody is watching" is worse than no heuristic.
  *
- * It ends with the tour's OWN closing, which already names `reticle init`. Adding a second "Next:"
- * under it would be the same instruction twice in ten lines.
+ * It ends with the tour's OWN closing. Installing changes no project: the app is wired the first time
+ * an agent uses Reticle in it (see first-run-wiring.ts).
  */
 export function installClosing(registered = true): string {
   // One line a step. The reasons are for `reticle tutorial`; right after an install they turned a
@@ -169,7 +166,7 @@ export function installClosing(registered = true): string {
  */
 const INSTALL_SAYS: Readonly<Record<string, string>> = {
   connect:
-    'Once `reticle init` wires your app, a Reticle panel appears in it: your proof the SDK is connected.',
+    'The first time your agent uses Reticle in a project, it wires the app and a Reticle panel appears in it: your proof the SDK is connected.',
 };
 
 export function renderTutorial(audience: TutorialAudience): string {

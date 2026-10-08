@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { zeroInstallScript } from './zero-install.js';
+import { readReaderBundle, zeroInstallScript } from './zero-install.js';
 
 /** A stand-in for the SDK bundle: evaluating it creates the singleton, exactly as the real one does. */
 const FAKE_BUNDLE =
@@ -39,5 +42,29 @@ describe('zeroInstallScript — the reader a page with no SDK is given', () => {
       token: 'tok',
       url: OPTS.url,
     });
+  });
+});
+
+/*
+ * The package ships ONE single-file build, and it has two readers: this daemon, which evaluates it
+ * as a script, and webpack 4 (#680), which reads the `module` field and parses it as CommonJS. Each
+ * reader used to get its own ~550KB copy, which is what took the SDK past its size budget.
+ */
+describe('the single-file build — one copy for the reader and for webpack 4', () => {
+  const require = createRequire(import.meta.url);
+  const pkgPath = require.resolve('@reticlehq/browser/package.json');
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { module?: string };
+
+  it('is the file the `module` field points at', () => {
+    expect(join(dirname(pkgPath), pkg.module ?? '')).toBe(
+      require.resolve('@reticlehq/browser/inject'),
+    );
+  });
+
+  it('loads as CommonJS and exports the SDK, so a webpack 4 import still resolves', () => {
+    const mod: { exports: Record<string, unknown> } = { exports: {} };
+    runInNewContext(readReaderBundle() ?? '', { module: mod });
+    expect(mod.exports['__esModule']).toBe(true);
+    expect(typeof mod.exports['reticle']).toBe('object');
   });
 });

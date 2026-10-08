@@ -14,7 +14,11 @@ import {
   REDUCE_MOTION_ATTR,
   LIVENESS_ATTR,
 } from './presenter-config.js';
-import { HUD_DROP_SHADOW, HUD_SURFACE_FILL } from './chrome/presenter-hud-chrome.js';
+import {
+  HUD_DROP_SHADOW,
+  HUD_GLASS_PAINT,
+  HUD_SURFACE_FILL,
+} from './chrome/presenter-hud-chrome.js';
 
 const OVERLAY = 'data-reticle-overlay';
 const HUD = 'data-reticle-hud';
@@ -38,57 +42,48 @@ export const SHELL_CSS = `
 [${OVERLAY}][${STATE}="paused"]{--reticle-state:var(--reticle-c-idle);}
 [${OVERLAY}][${STATE}="ended"]{--reticle-state:var(--reticle-c-ended);}
 [${DOCK_ATTR}]{
-  --reticle-surface:rgba(255,255,255,.06);
+  --reticle-surface:color-mix(in srgb,var(--reticle-hud-surface) 78%,transparent);
   /* No literal here: --reticle-accent is published on the overlay from the chosen status theme.
      Redefining it on the dock made every accented control - toolbar toggles, focus rings, the send
      button - stay blue no matter which theme was picked, because the dock's value won for its own
      subtree. The fallback only matters if the presenter is mounted without settings. */
   --reticle-accent:var(--reticle-c-active,#3b82f6);
   --reticle-accent-soft:color-mix(in srgb,var(--reticle-accent) 18%,transparent);
-  --reticle-bg:#050506;--reticle-bg2:#0c0c10;
-  --reticle-fg:#fff;--reticle-muted:rgba(255,255,255,.85);--reticle-faint:rgba(255,255,255,.5);
-  --reticle-line:rgba(255,255,255,.12);--reticle-line2:rgba(255,255,255,.08);
+  --reticle-bg:var(--reticle-hud-ground);--reticle-bg2:var(--reticle-hud-surface);
+  --reticle-fg:var(--reticle-hud-text);--reticle-muted:var(--reticle-hud-text-muted);--reticle-faint:var(--reticle-hud-text-faint);
+  --reticle-line:var(--reticle-hud-border-strong);--reticle-line2:color-mix(in srgb,var(--reticle-hud-border) 70%,transparent);
   --reticle-read:#d4d4d4;--reticle-ok:#fafafa;--reticle-bad:#f5f5f5;
-  --reticle-font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  --reticle-shell-ease:cubic-bezier(.22,1,.36,1);
+  --reticle-font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --reticle-shell-ease:var(--reticle-hud-ease);
   --reticle-shell-fast:.22s var(--reticle-shell-ease);
   --reticle-mark-accent:var(--reticle-accent);
   position:fixed;right:20px;bottom:20px;left:auto;
   z-index:2147483647;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:8px;
   overflow:visible;max-width:calc(100vw - 24px);font-family:var(--reticle-font);-webkit-font-smoothing:antialiased;
-  /**
-   * ONE width for the dock and the chat above it. They were 420px and 320px, so the toolbar
-   * overhung the panel it belongs to and the pair read as two unrelated widgets.
-   */
-  /* ONE width for the chat, the capsule and the toolbar. It used to be 440 with a "compact" 340
-     toggle; 340 is the size that actually reads well beside an app, so it is simply the size. */
-  --reticle-dock-w:340px;
+  /* ONE width for the chat, the capsule and the toolbar: the dock-width token. Two widths made the
+     toolbar overhang the panel it belongs to, and the pair read as two unrelated widgets. */
+  --reticle-dock-w:var(--reticle-hud-dock-width,320px);
   /* The log is the reason the panel exists, so it gets the height rather than the chrome. */
-  --reticle-chat-h:660px;
+  --reticle-chat-h:var(--reticle-hud-panel-height,440px);
   opacity:0;transform:translate3d(0,8px,0);transition:opacity var(--reticle-shell-fast),transform var(--reticle-shell-fast);}
 [${DOCK_ATTR}][data-dragged="1"]{left:var(--reticle-hud-x);top:var(--reticle-hud-y);bottom:auto;right:auto;transform:none;}
 [${DOCK_ATTR}][data-dragged="1"][data-on="1"]{transform:none;}
 [${DOCK_ATTR}][data-on="1"]{opacity:1;transform:translate3d(0,0,0);pointer-events:none;}
 [${DOCK_ATTR}][data-on="0"]{opacity:0;pointer-events:none;}
 /**
- * The panel is GLASS, tinted by the state colour, with the glow sitting behind it - restored from
- * the version before this one, where a flat near-black card had replaced it. Kept at ~92% opacity
- * rather than a real backdrop-filter: blur(24px) here was measured as the single most expensive
- * thing in the whole SDK (+4pp of main thread on the hostile fixture), and the tint buys the look
- * without the bill.
+ * The panel is painted by HUD_GLASS_PAINT: an opaque navy fill, lit by the state colour, with that
+ * colour glowing behind it. No backdrop-filter: blur(24px) here was measured as the single most
+ * expensive thing in the whole SDK.
  */
 [${CHAT_PANEL}]{
-  background:
-    radial-gradient(130% 90% at 50% 0%,color-mix(in srgb,var(--reticle-c-active) 18%,transparent),transparent 62%),
-    linear-gradient(180deg,rgba(13,15,22,.96),rgba(19,22,32,.94));
-  border:1px solid color-mix(in srgb,var(--reticle-c-active) 26%,rgba(255,255,255,.1));
+  ${HUD_GLASS_PAINT}
   display:none;position:absolute;right:0;left:auto;bottom:calc(100% + 8px);top:auto;z-index:5;
   box-sizing:border-box;width:var(--reticle-dock-w);max-width:min(var(--reticle-dock-w),calc(100vw - 16px));
+  height:min(var(--reticle-chat-max-h,var(--reticle-chat-h)),calc(100vh - 120px));
   max-height:min(var(--reticle-chat-max-h,var(--reticle-chat-h)),calc(100vh - 120px));
   flex-direction:column;overflow:hidden;text-align:left;
   color:var(--reticle-fg);font-size:13px;line-height:1.5;
-  border-radius:16px;
-  box-shadow:${HUD_DROP_SHADOW},0 0 54px -18px var(--reticle-c-active);
+  border-radius:var(--reticle-hud-radius-lg);
   contain:layout style paint;
   transform:translateZ(0);
   pointer-events:none;}
@@ -98,6 +93,9 @@ export const SHELL_CSS = `
   right:auto;left:0;}
 [${OVERLAY}][${CHAT_ATTR}="1"] [${CHAT_PANEL}]{
   display:flex;pointer-events:auto;}
+[${CHAT_PANEL}][hidden]{display:none!important;}
+[${DOCK_ATTR}][${CHAT_PLACEMENT_ATTR}="below"] [data-reticle-page-panel]{bottom:auto;top:calc(100% + 8px);}
+[${DOCK_ATTR}][${DOCK_ALIGN_ATTR}="start"] [data-reticle-page-panel]{right:auto;left:0;}
 /**
  * Idle, and not blocking the page: the card is not in use.
  *
@@ -108,6 +106,10 @@ export const SHELL_CSS = `
 [${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}],
 [${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}] [data-reticle-log]{
   pointer-events:none;}
+/* ...except a log with more than it shows: a feed nobody can scroll back through is not a log. */
+[${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}] [data-reticle-log][data-reticle-log-scrollable],
+[${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}] .reticle-flow-strip{
+  pointer-events:auto;}
 [${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}] :is(button,a,input,select,textarea){
   pointer-events:auto;}
 /**
@@ -151,6 +153,8 @@ export const SHELL_CSS = `
 [${CHAT_PANEL}] .reticle-head-account:empty{display:none;}
 [${CHAT_PANEL}] .reticle-chat-brand .reticle-mark{height:14px;width:auto;}
 [${CHAT_PANEL}] .reticle-chat-brandname{font-size:12.5px;font-weight:600;letter-spacing:.01em;}
+[${CHAT_PANEL}] .reticle-view-heading{display:flex;justify-content:space-between;align-items:baseline;gap:8px;min-height:28px;box-sizing:border-box;padding:6px 12px 4px;border-bottom:1px solid var(--reticle-hud-border);}
+[${CHAT_PANEL}] .reticle-view-heading strong{font-size:11px;font-weight:600;}
 /* No state word here: the activity strip immediately below already says "idle · 21s", and the
    dot in front of it carries the same colour. One fact, one place. */
 [${CHAT_PILL_ATTR}] .reticle-chat-pill-text{
@@ -270,13 +274,13 @@ export const SHELL_CSS = `
 [${HUD}] .reticle-toolbar-actions{
   display:inline-flex;align-items:center;gap:2px;flex:none;
   padding:2px;border-radius:999px;background:rgba(0,0,0,.2);}
-[${HUD}] .reticle-toolbar-chrome{display:inline-flex;align-items:center;gap:2px;flex:none;}
+[${HUD}] .reticle-toolbar-chrome{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));align-items:center;gap:var(--reticle-hud-space-1);flex:1;min-width:0;}
 [${HUD}] .reticle-tb-sep{width:1px;height:14px;background:rgba(255,255,255,.12);margin:0 4px;flex:none;align-self:center;}
 
 [${HUD}] .reticle-tb-wrap{position:relative;display:flex;align-items:center;justify-content:center;overflow:visible;}
 [${HUD}] .reticle-tb-btn{
   flex:none;display:inline-flex;align-items:center;justify-content:center;
-  width:32px;height:32px;padding:0;border:none;border-radius:50%;cursor:pointer;
+  width:var(--reticle-hud-control-size);height:var(--reticle-hud-control-size);padding:0;border:none;border-radius:var(--reticle-hud-radius-pill);cursor:pointer;
   background:transparent;color:rgba(255,255,255,.85);line-height:0;
   transition:background-color .15s ease,color .15s ease,transform .1s ease,opacity .2s ease;}
 [${HUD}] .reticle-tb-btn:hover{background:rgba(255,255,255,.12);color:#fff;}
@@ -309,18 +313,6 @@ export const SHELL_CSS = `
   color:#fff;background:rgba(255,255,255,.14);}
 [${HUD}] .reticle-tb-btn[data-danger]:hover:not(:disabled){color:#ff383c;
   background:color-mix(in srgb, #ff383c 25%, transparent);}
-/**
- * The toolbar is a FIXED number of slots.
- *
- * Copy and Export appear when a session ends, and the bar is already full - eleven icons in a pill
- * sized for nine renders the last one outside the rounded box. They take the two slots Pause and End
- * vacate: neither can do anything to an ended session, so the bar swaps two dead controls for two
- * live ones and never changes width.
- */
-[${HUD}] .reticle-tb-btn--export{display:none;}
-[${OVERLAY}][${STATE}="ended"] [${HUD}] .reticle-tb-btn--export{display:inline-flex;}
-[${OVERLAY}][${STATE}="ended"] [${HUD}] [data-reticle-pause],
-[${OVERLAY}][${STATE}="ended"] [${HUD}] [data-reticle-end]{display:none;}
 [${HUD}] .reticle-tb-tip{
   position:absolute;bottom:calc(100% + 14px);left:50%;transform:translateX(-50%) scale(.95);
   padding:6px 10px;background:#1a1a1a;color:rgba(255,255,255,.9);font-size:12px;font-weight:500;
@@ -374,7 +366,7 @@ export const SHELL_CSS = `
 [${HUD}] .reticle-hi-icon{display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0;color:inherit;}
 [${HUD}] .reticle-hi-icon svg{display:block;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
 [${HUD}] .reticle-live{display:none;}
-[${CHAT_PANEL}] .reticle-act-strip{flex:none;display:flex;align-items:center;gap:8px;padding:10px 14px;
+[${CHAT_PANEL}] .reticle-act-strip{flex:none;display:flex;align-items:center;gap:7px;min-height:36px;box-sizing:border-box;padding:4px 12px;
   border-bottom:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.22);}
 [${CHAT_PANEL}] .reticle-act-dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--reticle-faint);
   box-shadow:0 0 0 2px rgba(255,255,255,.04);transition:background .2s,box-shadow .2s;}
@@ -402,6 +394,15 @@ export const SHELL_CSS = `
 @keyframes reticle-idle-pulse{0%,100%{opacity:.45;transform:scale(.92)}50%{opacity:1;transform:scale(1)}}
 [${CHAT_PANEL}] .reticle-act{display:block;flex:1;min-width:0;color:var(--reticle-muted);font-size:11px;
   font-variant-numeric:tabular-nums;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+[${CHAT_PANEL}] .reticle-act-actions{display:flex;align-items:center;gap:4px;flex:none;margin-left:auto;}
+[${CHAT_PANEL}] .reticle-status-btn{position:relative;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--reticle-line);border-radius:var(--reticle-hud-radius-sm);background:transparent;color:var(--reticle-muted);cursor:pointer;}
+[${CHAT_PANEL}] .reticle-status-btn[hidden]{display:none;}
+[${CHAT_PANEL}] .reticle-status-btn:hover:not(:disabled){background:var(--reticle-hud-hover);color:var(--reticle-fg);}
+[${CHAT_PANEL}] .reticle-status-btn:focus-visible{outline:2px solid var(--reticle-accent);outline-offset:2px;}
+[${CHAT_PANEL}] .reticle-status-btn:disabled{opacity:.35;cursor:not-allowed;}
+[${CHAT_PANEL}] .reticle-status-stop:hover:not(:disabled){color:var(--reticle-state);border-color:var(--reticle-state);}
+[${CHAT_PANEL}] .reticle-act-actions .reticle-pause-badge{display:none;position:static;transform:none;padding:2px 5px;font-size:8px;}
 [${CHAT_PANEL}] .reticle-act-strip[data-liveness="active"] .reticle-act{color:var(--reticle-fg);}
 [${HUD}] .reticle-pass{color:var(--reticle-ok);}[${HUD}] .reticle-fail{color:var(--reticle-bad);}
 /**
@@ -423,6 +424,6 @@ export const SHELL_CSS = `
   --reticle-accent:var(--reticle-state);
   --reticle-accent-soft:color-mix(in srgb,var(--reticle-state) 18%,transparent);}
 @media (max-width:480px){
-  [${CHAT_PANEL}]{width:min(100vw - 24px,320px);max-height:min(360px,calc(100vh - 100px));}
+  [${CHAT_PANEL}]{width:min(100vw - 24px,320px);max-height:min(440px,calc(100vh - 100px));}
   [${OVERLAY}][${MIN_ATTR}="0"] [${HUD}]{max-width:calc(100vw - 24px);}
 }`;

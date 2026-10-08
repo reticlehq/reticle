@@ -121,6 +121,13 @@ done < <(ts_staged)
 # build -> format -> lint -> types -> tests -> audit. Keep this list in sync with ci.yml.
 
 # ----- 2. BUILD ------------------------------------------------------------
+# Everything below builds and tests the WORKING TREE, and some of those tests run git themselves.
+# Git exports GIT_INDEX_FILE (a temporary index for `git commit <paths>`) and GIT_DIR to this hook,
+# and a child git that inherits them reads THIS repository's index: "Error building trees" in a
+# scratch repo, "must be run in a work tree" from `rev-parse`. The staged list and the safety checks
+# above needed them; nothing below does.
+unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+
 step "Build (turbo)"
 if ! pnpm -s build; then note "${RED}✗ build${NC}"; fail=1; else note "${GREEN}✓ build${NC}"; fi
 

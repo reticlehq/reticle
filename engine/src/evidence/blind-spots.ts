@@ -188,7 +188,8 @@ export function blindSpotsFromState(
 }
 
 /**
- * Events the BROWSER's own transport queue threw away inside this window, or 0.
+ * Events lost in transport inside this window, or 0: the BROWSER's own transport queue threw them
+ * away, or the daemon dropped a frame from a live session that it could not read (#1413).
  *
  * `RATE_LIMITED` — the BRIDGE sampling because events arrived faster than its per-second cap — is
  * already the one blind spot that `impeachesCapture`, on the reasoning that a green over a window
@@ -272,7 +273,7 @@ export function transportGapNote(events: readonly ReticleEvent[]): string | unde
   const dropped = droppedByTransport(events);
   return 0 === dropped
     ? undefined
-    : `the browser dropped ${String(dropped)} event(s) in this window (transport queue overflow), so events that would have contradicted this may never have arrived`;
+    : `${String(dropped)} event(s) in this window were lost in transport (a browser queue overflow, or a frame the daemon could not read), so events that would have contradicted this may never have arrived`;
 }
 
 /**

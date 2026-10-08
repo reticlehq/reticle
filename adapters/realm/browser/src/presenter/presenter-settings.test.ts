@@ -257,3 +257,44 @@ describe('hide until restart', () => {
     localStorage.removeItem(SETTINGS_STORAGE_KEY);
   });
 });
+
+/**
+ * "Kill Reticle" ends Reticle for this page load: a developer who wants a clean run of their own app
+ * gets one without editing config. One click only arms it, because the way back is a restart.
+ */
+describe('kill Reticle', () => {
+  it('is the last thing in Settings, warns on the first click and kills on the second', () => {
+    let killed = 0;
+    const p = new Presenter({ border: 'session', onKill: () => (killed += 1) });
+    p.mount();
+    (document.querySelector('[data-reticle-settings-btn]') as HTMLElement).click();
+    const kill = document.querySelector('[data-reticle-settings-kill]') as HTMLElement;
+    const foot = document.querySelector('.reticle-settings-foot') as HTMLElement;
+    const row = foot.lastElementChild;
+    expect(row?.contains(kill), 'Kill Reticle is the last option').toBe(true);
+    expect(kill.textContent).toContain('Kill Reticle');
+    expect(row?.textContent, 'the warning sits under the button').toContain(
+      'restart your dev server',
+    );
+    kill.click();
+    expect(killed, 'one click only arms it').toBe(0);
+    expect(kill.getAttribute('data-armed')).toBe('1');
+    kill.click();
+    expect(killed).toBe(1);
+    p.destroy();
+  });
+
+  it('disarms when Settings closes', () => {
+    let killed = 0;
+    const p = new Presenter({ border: 'session', onKill: () => (killed += 1) });
+    p.mount();
+    (document.querySelector('[data-reticle-settings-btn]') as HTMLElement).click();
+    const kill = document.querySelector('[data-reticle-settings-kill]') as HTMLElement;
+    kill.click();
+    (document.querySelector('[data-reticle-settings-close]') as HTMLElement).click();
+    (document.querySelector('[data-reticle-settings-btn]') as HTMLElement).click();
+    kill.click();
+    expect(killed).toBe(0);
+    p.destroy();
+  });
+});

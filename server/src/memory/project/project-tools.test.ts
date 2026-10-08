@@ -213,7 +213,40 @@ describe('reticle_project reads the platform with the linked credential', () => 
     const res = (await tool(ReticleTool.PROJECT).handler(deps, {})) as { cloud?: unknown };
     expect(calls[0]?.url).toMatch(/^https:\/\/cloud\.test\/v1\/project\/regression/);
     expect(calls[0]?.auth).toBe('Bearer rk_live_stored');
-    expect(res.cloud).toEqual({ broken: [] });
+    expect(res.cloud).toMatchObject({ broken: [] });
     await removeTempDir(dir);
+  });
+});
+
+// Whether this project's work reached the platform, answerable from inside the agent.
+describe('reticle_project says where the work stands with the platform', () => {
+  it('pushes when asked, then reports the sync status', async () => {
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join: joinPath } = await import('node:path');
+    const root = joinPath(mkdtempSync(joinPath(tmpdir(), 'proj-sync-')), '.reticle');
+    let pushed = 0;
+    const tool = TOOLS.find((t) => ReticleTool.PROJECT === t.name);
+    const res = (await tool?.handler(
+      {
+        reticleRoot: root,
+        now: () => 0,
+        project: { read: () => Promise.resolve({ ok: false, reason: 'missing' }) },
+        sessions: {
+          resolve: () => {
+            throw new Error('none');
+          },
+        },
+        linkedCloud: () => Promise.resolve(null),
+        syncNow: () => {
+          pushed += 1;
+          return Promise.resolve(undefined);
+        },
+      } as unknown as ToolDeps,
+      { push: true },
+    )) as { cloud?: { sync?: { status: string; said: string } } };
+    expect(pushed).toBe(1);
+    expect(res.cloud?.sync?.status).toBe('local-only');
+    expect(res.cloud?.sync?.said).toContain('exist only on this machine');
   });
 });

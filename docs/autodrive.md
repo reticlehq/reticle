@@ -6,7 +6,7 @@ icon: steering-wheel
 
 Driving an app is the expensive part of verifying one. Every snapshot, every act result and every observation lands in your agent's context and is re-read on every turn after, and none of it is kept: the next run starts from nothing and pays again.
 
-`reticle_verify { action: "explore" }` moves the driving into the daemon. A model there drives your app through the same tool surface your agent uses, records what it drove as saved flows, and hands back a few lines.
+`reticle_verify { action: "explore" }` hands the driving to the Reticle Harness. It decides on the Reticle platform, and the daemon on your machine executes each step through the same tool surface your agent uses, records what it drove as saved flows, and hands back a few lines. It needs a linked project (`reticle connect`).
 
 ```jsonc
 reticle_verify {
@@ -32,51 +32,55 @@ So the drive is a one-off: pay for it once, and the journeys it recorded become 
 
 A drive reads `.reticle` first: every saved flow with the consequence that must still hold, and every signal and testid your app declares that no flow has ever asserted. It builds a plan from that before it opens its eyes on a page.
 
-Anything already recorded is **replayed**, deterministically, with no model call at all. Only the gaps are driven. So a second run over the same app is mostly free, and the model budget is spent on the part nobody has proved yet rather than on rediscovering what is already on disk. A replay that goes red is reported as a regression; one that DRIFTS is reported separately, because the app moved under the recording and that needs re-anchoring rather than a code change.
+With no persona, anything already recorded is **replayed**, deterministically, with no model call at all, and only the gaps are driven (see the plan below). With a persona, it drives that journey and replays nothing else: the saved flows have nothing to do with the journey you named. So a second run over the same app is mostly free, and the model budget is spent on the part nobody has proved yet rather than on rediscovering what is already on disk. A replay that goes red is reported as a regression; one that DRIFTS is reported separately, because the app moved under the recording and that needs re-anchoring rather than a code change.
 
 Every journey a drive walks is saved, whatever happens to the drive, including one that broke, ran out of budget, or whose model simply stopped asking for tools.
 
+## The platform plans the drive
+
+With a platform credential (`reticle connect`, or `RETICLE_API_KEY`), the platform plans every drive. With a persona or without one, it proposes the people worth being, orders the saved flows, finds where they branch, and writes into each journey the product rules that apply to it, read from your project's own intents. The rules tell the Harness what the journey is for and where it ends (a journey that names Settings is not finished before Settings). They are not checked as assertions: a rule like "the row shows refunded" is guidance, and the checks are the consequences each step declares. Your machine sends what the project knows, with each saved step as a short hash and never the values it typed. It runs the plan it gets back and reports what happened. The plan is checked before it runs, and a plan that fails the checks is dropped. Every decision while it drives is the platform's too: your machine executes each step it is handed and reports what happened.
+
+## With no persona, it writes a plan first
+
+Called with no `persona`, explore writes the whole drive down before it starts, as a drive plan:
+
+- **Journeys.** Each saved flow worth replaying, plus one open journey for each persona the platform proposes, for the request the user declared (`reticle_intent { action: "declare" }`), and for each intent nobody has proved. Replays need no model; only open journeys reach one.
+- **Order.** A flow that `needs` another runs after it. An open journey runs after the flow everything else needs, usually sign-in.
+- **Lanes.** Each journey nothing else needs gets a lane holding what it needs, in order. Lanes run side by side, each in its own leased browser context, four at a time. A journey that needs one from another lane waits for it, and is blocked if that journey failed. A prerequisite that commits something (a payment, an email) runs in one lane only, and the others wait on it rather than commit it twice.
+- **Branches.** Flows that start with the same steps become one journey. The shared steps are driven once and marked as a checkpoint, then each flow continues from that point. Every flow after the first replays back to the checkpoint first, so none of them starts from the page the previous one left.
+
+The plan appears at the top of the HUD's Agent Log: one row per lane, a card per journey, the running journey opened to its steps, and each card marked as it passes, fails or is blocked. The tool's answer carries one line per journey.
+
+Two `reticle_flow_replay` arguments make the branches possible, and you can use them directly. `to` stops before a step. `at` continues at a step on the page as it is, without driving the steps before it. A part-way replay checks the steps it drove and records nothing about the flow as a whole.
+
 ## What it needs
 
-**A model in the daemon's environment.** Any one of three, and the choice is reported back so a comparison can never mislabel its own arms:
-
-| Variable | Driver |
-| --- | --- |
-| `RETICLE_API_KEY` | `jev`, against the platform's own proxy, using the key `reticle link` already wrote. No model API key of your own, and the cheap path: it answers typed questions about the page rather than generating tool calls as text. |
-| `ANTHROPIC_API_KEY` | `anthropic`, which generates its calls as text. |
-| `OPENAI_API_KEY` | `openai`, the same, on OpenAI. |
-| `JEV_API_KEY` | `jev`, against TypeSafe directly, for anyone who holds their own key. |
-
-With several configured, `anthropic` is the default and `RETICLE_HARNESS_DRIVER` moves off it; with only a platform key, `jev` is not the cheaper option, it is the only one. Naming a driver that is not configured is an error, never a silent substitution.
-
-A driver can also be chosen per call, as `reticle_verify { action: "explore", driver: "jev" }`. The question people actually have is comparative, and answering it with an environment variable means restarting the daemon between arms.
-
-Three other dials, all optional:
+**A project on the Reticle platform.** Every plan includes the Harness: Free comes with monthly Harness credits, one per decision the Harness makes. Run `reticle connect` once in your app's folder. The Harness runs on the platform: planning, personas, and every choice of what to press next. A model key of your own does not drive it, and a machine with no platform link gets the refusal and the way to fix it.
 
 | Variable | What it does |
 | --- | --- |
-| `RETICLE_HARNESS_MODEL` | The Anthropic model that drives. Defaults to a mid-tier one on purpose, for the reason below. |
-| `RETICLE_HARNESS_MAX_STEPS` | Ceiling on model turns in one drive. Bounds cost, not value. |
-| `RETICLE_HARNESS_BASE_URL` | A proxy or gateway instead of the default API host. |
+| `RETICLE_API_KEY` | The key `reticle connect` (or `reticle link`) wrote. The daemon uses it to ask the platform to drive. |
+| `RETICLE_HARNESS_MAX_STEPS` | Ceiling on steps in one drive. Bounds cost, not value. |
+| `RETICLE_SECRET_<FIELD>` | The value for a secret field, such as `RETICLE_SECRET_AUTH_PASSWORD` for a field named `auth-password`. Only the field's NAME goes to the platform. The value is typed in on your machine and never sent. |
 
-## Two models, and what each one is for
+**What you see.** The HUD's Agent Log marks the moment the Harness takes over ("Reticle Harness is driving") and gives its steps their own colour, so you can tell its work from your agent's. Each Harness drive is recorded as its own run, named for its journey and credited to the Harness, beside your agent's run. Any "double-quoted text" in a persona must be on the page when the journey ends, and is checked.
 
-The `jev` driver decides; it cannot write. Every choice a drive makes is a selection from candidates Reticle enumerated off the page: which element, which tool, what consequence to claim. That is why it costs a fraction of a generating model and answers in a few hundred milliseconds.
+## How it decides
 
-One thing in a drive is not a selection. A text field is a composition: "a business name", "a statement descriptor", "a search term that returns results" cannot be enumerated from the page. Where the field's label is enough to guess, a small table answers it. Where it is not, and a generating model is configured, that model writes the value, and nothing else.
+The platform drives with Jev, a System One model that answers typed questions and cannot write. Every choice is a selection from candidates read off the page: which element, which tool, what consequence to claim. Three rules sit around those choices, because each one was a drive that stopped short or claimed nothing:
 
-Typing is a small minority of what a drive does: clicks and navigations are the overwhelming majority. So this is escalation rather than a second model in the loop, and a drive with no text fields never calls it at all.
-
-What it writes is a FIXTURE, not an opinion. Generated values are saved to `.reticle/fill-values.json` and reused forever: the second drive pays nothing, a replay sends exactly what the recording sent, and a value you dislike is a line in a git-checked file you can edit rather than an argument with a model.
+- A journey that names a page it has not reached ("then turn on automatic refunds in Settings") is not finished. The Harness goes there instead of stopping.
+- A dialog whose destructive action already ran is closed rather than treated as the end of the journey.
+- A control the destructive-action gate refused is a write, so the Harness always claims a request or a signal for it. A save the server rejects then fails visibly instead of passing as nothing to prove.
 
 ## Turning it off, and who pays for it
 
 A project linked to a Reticle workspace reads two things from it before a drive starts, and honours both:
 
-- **The switch.** Autonomous driving can be turned off per project in the dashboard, under Settings → Verification model. A drive then refuses and says where to turn it back on. Everything else is unaffected, including the tools your own agent drives with.
-- **Who is paying.** Driving through the platform spends Reticle's model budget, which is free for three months once claimed and included on a paid plan. Outside both, a drive is refused with the claim link rather than run on somebody else's money.
+- **The switch.** Autonomous driving can be turned off per project, from the HUD's Reticle Harness switch or the dashboard (Settings → Verification model). A drive then refuses and says where to turn it back on. Switched off while a platform drive is running, the drive stops at its next turn with `stopReason: "stopped"`, keeps what it drove, and says so in the Agent Log. Everything else is unaffected, including the tools your own agent drives with.
+- **Credits.** Every workspace gets Harness credits each 30 days: Free 500, Pro 4,800 a seat, Enterprise as agreed. One credit is one decision the Harness makes. The HUD shows how many are left; once they are spent a drive is refused with that number and the way to get more.
 
-Neither applies to a drive on a model key of your own: that costs us nothing, so it is not ours to gate. A daemon that cannot reach the platform at all drives normally: an unreachable settings endpoint is not a reason to lose a feature you were never told to stop using.
+A daemon that cannot reach the platform at all drives normally: an unreachable settings endpoint is not a reason to lose a feature you were never told to stop using.
 
 ## What it will not do
 

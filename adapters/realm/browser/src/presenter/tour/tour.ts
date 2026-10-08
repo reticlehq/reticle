@@ -35,9 +35,10 @@ import {
 import { TourAnchor } from '@reticlehq/core/tour';
 import { RETICLE_URL_PARAM } from '@reticlehq/core';
 import { appModalOpen } from '@/dom/dom-ignore.js';
+import { TOUR_SEEN_KEY_PREFIX } from '@/storage-keys.js';
 
 /** Where "they have seen it" is remembered. Per project, so a second app still gets its tour. */
-export const TOUR_SEEN_KEY_PREFIX = 'reticle.tour.seen.';
+export { TOUR_SEEN_KEY_PREFIX };
 
 /**
  * Where the app's own content lives, in preference order.
@@ -94,10 +95,12 @@ function unionOfVisible(doc: Document, selectors: readonly string[]): TourRect |
  * a switch so the set of pointable controls is one readable list; a slide naming an anchor that is
  * not here rings nothing, which is the same refusal as a HUD that is switched off.
  */
-const HUD_CONTROL_SELECTORS: Readonly<Partial<Record<TourAnchor, string>>> = {
+export const HUD_CONTROL_SELECTORS: Readonly<Partial<Record<TourAnchor, string>>> = {
   [TourAnchor.HUD_CHAT]: '[data-reticle-chat-toggle]',
-  [TourAnchor.HUD_ANNOTATE]: '[data-reticle-annotate-btn]',
-  [TourAnchor.HUD_IMPACT]: '[data-reticle-report-btn]',
+  [TourAnchor.HUD_FLOWS]: '[data-reticle-chat-view-btn="flows"]',
+  // The toolbar's Notes tab: the pin control lives inside that page, hidden until it opens.
+  [TourAnchor.HUD_ANNOTATE]: '[data-reticle-chat-view-btn="annotations"]',
+  [TourAnchor.HUD_IMPACT]: '[data-reticle-chat-impact]',
   [TourAnchor.HUD_SETTINGS]: '[data-reticle-settings-btn]',
 };
 

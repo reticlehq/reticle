@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { detectDevCommand } from './dev-command.js';
+import { detectDevCommand, detectDevCommandInProject } from './dev-command.js';
 
 /** A reader over an in-memory tree — the real one reads the disk. */
 function reader(files: Record<string, string>): (path: string) => string | undefined {
@@ -101,6 +101,16 @@ describe('detectDevCommand', () => {
     expect(detectDevCommand(DIR, reader(files))?.port).toBe(3001);
   });
 
+  it('reports the port when the script pins one with the short -p flag', () => {
+    const files = { [PKG]: JSON.stringify({ scripts: { dev: 'next dev -p 3005' } }) };
+    expect(detectDevCommand(DIR, reader(files))?.port).toBe(3005);
+  });
+
+  it('does not read a port out of the -p inside a longer flag', () => {
+    const files = { [PKG]: JSON.stringify({ scripts: { dev: 'vite --pretty 2' } }) };
+    expect(detectDevCommand(DIR, reader(files))?.port).toBeUndefined();
+  });
+
   it('reports the port from a PORT= env prefix', () => {
     const files = { [PKG]: JSON.stringify({ scripts: { dev: 'PORT=8080 remix dev' } }) };
     expect(detectDevCommand(DIR, reader(files))?.port).toBe(8080);
@@ -145,5 +155,66 @@ describe('detectDevCommand', () => {
       }),
     };
     expect(detectDevCommand(DIR, reader(files))).toEqual({ command: 'npx tauri dev' });
+  });
+});
+
+/**
+ * The app is one directory down, and the command has to say so.
+ *
+ * Reported from the field: a repo whose web app lives in `frontend/` was told "this project declares
+ * no dev script", and the agent asked a human for a command that was sitting in `frontend/package.json`
+ * the whole time (reticle#1368).
+ */
+describe('detectDevCommandInProject', () => {
+  const ROOT = join(DIR, '.');
+  const listing =
+    (entries: Record<string, string[]>): ((path: string) => readonly string[]) =>
+    (path) =>
+      entries[path] ?? [];
+
+  it('finds an app one directory down and names the directory', () => {
+    const files = {
+      [PKG]: JSON.stringify({ name: 'repo', private: true }),
+      [at('frontend/package.json')]: JSON.stringify({ scripts: { dev: 'vite' } }),
+    };
+    expect(
+      detectDevCommandInProject(DIR, reader(files), listing({ [ROOT]: ['frontend'] })),
+    ).toEqual({
+      command: 'npm run dev',
+      script: 'dev',
+      directory: 'frontend',
+    });
+  });
+
+  it('keeps the root command when the root has one', () => {
+    const files = { [PKG]: JSON.stringify({ scripts: { dev: 'vite' } }) };
+    expect(
+      detectDevCommandInProject(DIR, reader(files), listing({ [ROOT]: ['frontend'] })),
+    ).toEqual({ command: 'npm run dev', script: 'dev' });
+  });
+
+  it('uses the root lockfile for the app in a subdirectory', () => {
+    const files = {
+      [PKG]: JSON.stringify({}),
+      [at('pnpm-lock.yaml')]: '',
+      [at('frontend/package.json')]: JSON.stringify({ scripts: { dev: 'vite' } }),
+    };
+    expect(
+      detectDevCommandInProject(DIR, reader(files), listing({ [ROOT]: ['frontend'] })),
+    ).toEqual({
+      command: 'pnpm run dev',
+      script: 'dev',
+      directory: 'frontend',
+    });
+  });
+
+  it('stays undefined when no directory has a dev script', () => {
+    const files = {
+      [PKG]: JSON.stringify({ scripts: { build: 'tsc' } }),
+      [at('frontend/package.json')]: JSON.stringify({ scripts: { test: 'vitest' } }),
+    };
+    expect(
+      detectDevCommandInProject(DIR, reader(files), listing({ [ROOT]: ['frontend'] })),
+    ).toBeUndefined();
   });
 });
