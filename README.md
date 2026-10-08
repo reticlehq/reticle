@@ -177,7 +177,7 @@ It runs four things in order and asks you nothing:
    args = ["@reticlehq/server", "mcp"]
    ```
 
-4. `reticle tutorial --run`: Reticle drives its own demo app in a temporary folder and prints a real verdict.
+It ends by telling you Reticle is **not in your app yet**: run `reticle init` in your app's folder next. Want to see a verdict first? `reticle tutorial --run` drives Reticle's own demo app and touches nothing of yours.
 
 **Claude Code plugin:**
 
