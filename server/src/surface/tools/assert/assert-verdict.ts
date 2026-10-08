@@ -263,6 +263,9 @@ export async function assertVerdict(
     evidence,
     pass,
     lastActSource: session.lastAct.source(),
+    // Nothing was proven, so there is no code to send anyone to: `assertSource` withholds the
+    // borrowed pointer for an inconclusive verdict, and it can only do that if it is told.
+    ...(effectiveInconclusive === undefined ? {} : { inconclusive: effectiveInconclusive }),
   });
   // The same rule the act path uses, fed by what THIS path knows. An assertion drives nothing, so
   // only two of the four gates can fire here: a red with nothing located, and a state assertion

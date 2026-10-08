@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: `reticle_assert { action: "wait" }` returns a verdict, not just `pass`.** The same predicate answered `{ pass, evidence }` under `wait` and `{ verified, verifiedReason, … }` under `now`. An agent told that only `verified: "yes"` is a pass had to call `now` again after every `wait`. A `wait` pass over an evicted buffer or a contradicting request was also indistinguishable from a clean one, because it carried no grade, contradictions or instrumentation gaps. `wait` is now graded through the same path as `now`, keeps its `resume_ms`, and counts as a verification. Closes [#1119](https://github.com/reticlehq/reticle/issues/1119).

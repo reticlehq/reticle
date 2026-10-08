@@ -297,7 +297,10 @@ describe('advertised surface cost', () => {
 // 149_500 -> 149_700 for `window` and `documentStatus` on reticle_sessions and `disconnected` on
 // session end (149,593 B): two windows of one desktop app share a url, and a validating client strips
 // an undeclared field, so the label that tells them apart has to be in the schema.
-const ALL_SURFACE_BYTE_BUDGET = 149_700;
+// 149_700 -> 149_900 for `verified` and `verifiedReason` on the output schemas of both assert
+// budgets, `now` and `wait` (149,839 B measured): without them a schema-validating client strips the
+// one field the tool's description tells an agent to gate on (#1119).
+const ALL_SURFACE_BYTE_BUDGET = 149_900;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {
