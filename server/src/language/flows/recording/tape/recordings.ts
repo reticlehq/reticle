@@ -247,9 +247,13 @@ export class RecordingStore {
    */
   attachExpect(expect: Predicate, session?: string): void {
     if (this.#navigatedSinceStep) return;
-    for (const [, rec] of this.#targets(session)) {
+    const mocked = this.#mocked.has(session ?? '');
+    for (const [name, rec] of this.#targets(session)) {
       const last = rec.steps.at(-1);
       if (last === undefined) continue;
+      // A proof read while mocks are active rests on mocked responses even when the act before it
+      // ran unmocked, so the ambient step it joins is marked too (#1459).
+      if (mocked && AMBIENT_RECORDING === name) last.mocked = true;
       const held = last.expect;
       last.expect =
         held === undefined

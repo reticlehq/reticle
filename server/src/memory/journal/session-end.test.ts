@@ -16,6 +16,7 @@ import {
 } from '@reticlehq/core';
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';
+import { DriveFlowSkipReason } from './drive-flow.js';
 import { AMBIENT_RECORDING, RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { NETWORK_MOCK_TOOLS } from '@/portal/input/network-mock-tools.js';
 import type { ToolDeps } from '@/surface/tools/tools.js';
@@ -546,6 +547,35 @@ describe('teardown saves what a session drove as ONE flow per journey', () => {
     recordings.capture(proved('pay', '/checkout'), '/checkout', 'tab-1');
     await end(fakeSession('tab-1', {}));
     expect(await flows.list()).toHaveLength(1);
-    expect(reported.at(-1)?.reason).toBe('driven_under_network_mocks');
+    expect(reported.at(-1)?.reason).toBe(DriveFlowSkipReason.DRIVEN_UNDER_NETWORK_MOCKS);
+  });
+
+  it('does not save an unmocked act whose proof was read after mocks went on (#1459)', async () => {
+    // Act, then mock the request the app is still waiting on, then prove the result: the proof
+    // joins the earlier step, and it rests on the mocked response.
+    const recordings = new RecordingStore();
+    recordings.capture(
+      {
+        tool: ReticleTool.ACT,
+        args: { by: QueryBy.TESTID, value: 'pay', action: 'click', args: {} },
+        stable: true,
+        page: '/checkout',
+      },
+      '/checkout',
+      'tab-1',
+    );
+    recordings.markMocked('tab-1', true);
+    recordings.attachExpect({ kind: PredicateKind.SIGNAL, name: 'pay:done' }, 'tab-1');
+
+    const flows = new FlowStore(fs, root, { now: () => 1 });
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows,
+      takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+    });
+    await end(fakeSession('tab-1', {}));
+    expect(await flows.list()).toEqual([]);
   });
 });

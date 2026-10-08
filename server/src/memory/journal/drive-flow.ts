@@ -130,6 +130,14 @@ export function driveFlowName(route?: string, steps: readonly TapeStep[] = []): 
   return asFlowName(`${DRIVE_FLOW_PREFIX}${0 === parts.length ? 'journey' : parts.join('-')}`);
 }
 
+/** Why session end saved no flow, as reported on the `flow_recorded` step. */
+export const DriveFlowSkipReason = {
+  /** The drive declared no consequence, so a saved flow could never go red. */
+  NO_DECLARED_CONSEQUENCE: 'no_declared_consequence',
+  /** What it proved rested on network mocks the flow would not carry (#1459). */
+  DRIVEN_UNDER_NETWORK_MOCKS: 'driven_under_network_mocks',
+} as const;
+
 export interface DriveFlowOutcome {
   /** The flows that were written — one per journey the session contained. */
   readonly saved?: readonly string[];
