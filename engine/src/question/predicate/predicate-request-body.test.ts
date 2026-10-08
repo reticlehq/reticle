@@ -151,3 +151,89 @@ describe('three different unknowns, none of them "the app sent the wrong thing"'
     expect(r.pass, 'redaction elsewhere in the body is not this clause`s problem').toBe(true);
   });
 });
+
+describe('on a multiplexed endpoint, a miss is explained with the call the request clause selected (#1365)', () => {
+  const unrelatedRequest = JSON.stringify({ op: 'user.list' });
+  const unrelatedResponse = JSON.stringify({ users: [] });
+  const targetRequest = JSON.stringify({ op: 'thread.get', id: 7 });
+  const targetResponse = JSON.stringify({ thread: { id: 7, status: 'open' } });
+  const session = new WindowSession([
+    netEvent({ requestBody: unrelatedRequest, responseBody: unrelatedResponse }),
+    netEvent({ requestBody: targetRequest, responseBody: targetResponse }),
+  ]);
+
+  it('reports the target response in `observed`, and never the unrelated call', async () => {
+    const r = await evaluatePredicate(session, {
+      ...FILTER,
+      requestBodyMatches: { op: 'thread.get' },
+      bodyMatches: { 'thread.status': 'closed' },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.observed).toContain(String.raw`\"status\":\"open\"`);
+    expect(r.observed).not.toContain('user.list');
+    expect(r.observed).not.toContain('users');
+    expect(r.failureReason).toContain('the response value is what differed');
+  });
+
+  it('does not let the unrelated call supply a truncated-body verdict', async () => {
+    const r = await evaluatePredicate(
+      new WindowSession([
+        netEvent({
+          requestBody: unrelatedRequest,
+          responseBody: unrelatedResponse,
+          responseBodyTruncated: true,
+        }),
+        netEvent({ requestBody: targetRequest, responseBody: targetResponse }),
+      ]),
+      { ...FILTER, requestBodyMatches: { op: 'thread.get' }, bodyContains: 'closed' },
+    );
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive, 'the target body was complete, so this is decided').toBeUndefined();
+    expect(r.observed).toContain(String.raw`\"status\":\"open\"`);
+  });
+
+  it('a truncated request body on another call keeps the miss undecidable, not a response failure', async () => {
+    // Call 1 satisfied the request clause and answered "open"; call 2's request was cut off right
+    // where the needle would be, and it answered "closed". Call 2 may be the one that satisfies the
+    // whole predicate, so a definite verdict on call 1's response would be a guess.
+    const r = await evaluatePredicate(
+      new WindowSession([
+        netEvent({ requestBody: targetRequest, responseBody: targetResponse }),
+        netEvent({
+          requestBody: '{"op":"thread.',
+          requestBodyTruncated: true,
+          responseBody: JSON.stringify({ thread: { id: 8, status: 'closed' } }),
+        }),
+      ]),
+      { ...FILTER, requestBodyContains: 'thread.get', bodyContains: 'closed' },
+    );
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toContain('TRUNCATED');
+    expect(r.assertion).toBe('net.requestBody');
+  });
+
+  it('a request mismatch on another call does not outrank the selected call`s response miss', async () => {
+    const r = await evaluatePredicate(
+      new WindowSession([
+        netEvent({ requestBody: targetRequest, responseBody: targetResponse }),
+        netEvent({ requestBody: unrelatedRequest, responseBody: unrelatedResponse }),
+      ]),
+      { ...FILTER, requestBodyContains: 'thread.get', bodyContains: 'closed' },
+    );
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeUndefined();
+    expect(r.failureReason).toContain('the response value is what differed');
+    expect(r.observed).toContain(String.raw`\"status\":\"open\"`);
+  });
+
+  it('still reports the request side when NO call satisfied the request clause', async () => {
+    const r = await evaluatePredicate(session, {
+      ...FILTER,
+      requestBodyMatches: { op: 'thread.delete' },
+      bodyMatches: { 'thread.status': 'open' },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.assertion).toBe('net.requestBody');
+    expect(r.observed).toContain('request body');
+  });
+});
