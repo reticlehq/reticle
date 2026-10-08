@@ -8,6 +8,7 @@
 
 import type { Browser } from 'playwright';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
+import { HIDE_RETICLE_CHROME_CSS } from '@reticlehq/core';
 import { launchChromium } from '@/launch-chromium.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
@@ -20,27 +21,35 @@ import type { Launcher, PooledBrowser, PooledContext, PooledPage } from './brows
 import type { ScreenshotOptions } from './pool-contract.js';
 import { installNetworkMocks } from '@/portal/input/network-mock.js';
 
-/** Reticle's own panel, kept out of a picture of the app: it is ours, not what the app shows. */
-export const HIDE_RETICLE_CHROME_CSS = '[data-reticle-overlay]{display:none !important}';
+/**
+ * Reticle paints its own UI (presenter HUD, glow, annotator marks, tour) into the page. It is
+ * time-varying, since the activity log and border state change with every command, so capturing it
+ * makes a fresh screenshot of an unchanged page differ from its baseline. Playwright applies `style`
+ * for the shot only and then reverts it, so the page under test is never changed. Disabling animations
+ * settles any remaining transitions. Shared by every capture path, driven and leased, so both hide
+ * the same set: core's `RETICLE_OVERLAY_SELECTOR`.
+ */
+export const SCREENSHOT_DETERMINISM = {
+  style: HIDE_RETICLE_CHROME_CSS,
+  animations: 'disabled',
+} as const;
 
 /**
- * How Playwright captures a leased tab. A live picture (JPEG) leaves Reticle's panel out, as the
- * visual captures do; a plain PNG capture is unchanged, so no existing baseline moves.
+ * How Playwright captures a leased tab: a PNG by default, a JPEG for a live picture. Every capture
+ * hides Reticle's own UI with `SCREENSHOT_DETERMINISM`, the same as the driven path, so a lease
+ * baseline shows the app and not the HUD.
  */
 export function screenshotOptions(opts: ScreenshotOptions): {
   fullPage: boolean;
+  style: string;
+  animations: 'disabled';
   type?: 'jpeg';
   quality?: number;
-  style?: string;
 } {
+  const base = { ...SCREENSHOT_DETERMINISM, fullPage: true === opts.fullPage };
   return opts.jpegQuality === undefined
-    ? { fullPage: true === opts.fullPage }
-    : {
-        fullPage: true === opts.fullPage,
-        type: 'jpeg',
-        quality: opts.jpegQuality,
-        style: HIDE_RETICLE_CHROME_CSS,
-      };
+    ? base
+    : { ...base, type: 'jpeg', quality: opts.jpegQuality };
 }
 
 /**
@@ -79,6 +88,8 @@ function wrapBrowser(browser: Browser): PooledBrowser {
             close: () => page.close(),
             evaluate: (script) => page.evaluate(script),
             // Playwright returns a Buffer; Uint8Array is what the visual store and differ take.
+            // Same determinism as the driven path's capturePage: without it a lease baseline caught
+            // the HUD, its activity log and the toolbar, and a HUD change read as a regression (#1355).
             screenshot: async (opts) =>
               new Uint8Array(await page.screenshot(screenshotOptions(opts ?? {}))),
             // Three moves, same as performGesture: a single move to the center can be a no-op if
@@ -90,6 +101,7 @@ function wrapBrowser(browser: Browser): PooledBrowser {
             },
             installMocks: (rules) => installNetworkMocks(page, [...rules]),
             setViewport: (size) => page.setViewportSize(size),
+            bringToFront: () => page.bringToFront(),
             onCrash: (handler) => page.on('crash', handler),
             onConsole: (handler) => page.on('console', (msg) => handler(msg.text())),
             onDialog: (handler) =>

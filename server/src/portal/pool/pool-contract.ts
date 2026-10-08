@@ -63,6 +63,11 @@ export interface PooledPage {
    * existed short of restarting the daemon), because nothing in the stack ever answered it.
    */
   onDialog?(handler: (dialog: PooledDialog) => void): void;
+  /**
+   * Make this the visible tab. OPTIONAL, like `onDialog`: a page opened beside others can start
+   * hidden, and a hidden tab throttles timers and rAF so nothing on it verifies (#1351).
+   */
+  bringToFront?(): Promise<void>;
 }
 
 /** A native dialog the page opened, handed to the pool so it can be dismissed instead of left blocking. */

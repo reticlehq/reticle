@@ -7,7 +7,12 @@
  * dispatch out of the file that opens the window would have weakened a real invariant to satisfy a
  * line count. This resolves a TARGET and dispatches only QUERY, so that guard is untouched.
  */
-import { ReticleCommand, isGlobalPressCall } from '@reticlehq/core';
+import {
+  ReticleCommand,
+  SESSION_REF,
+  isGlobalPressCall,
+  unissuedRefRefusal,
+} from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import { normalizeQueryArgs } from '@/surface/tools/read/query-shape.js';
 import { resolveTargetRef, type TargetResolution } from './resolve-target.js';
@@ -57,7 +62,12 @@ export async function resolveActTarget(
   appearanceMs?: number,
 ): Promise<TargetResolution> {
   const ref = asString(args['ref']);
-  if (ref !== undefined && ref.length > 0) return { kind: 'ref', ref };
+  if (ref !== undefined && ref.length > 0) {
+    // Refused here, at the boundary, and never re-read as a `target`: guessing what an arbitrary
+    // string meant is the silent re-resolution the stale-ref refusal exists to prevent.
+    if (!SESSION_REF.test(ref)) return { kind: 'error', message: unissuedRefRefusal(ref) };
+    return { kind: 'ref', ref };
+  }
   const target = args['target'];
   if (target === undefined) {
     if (isGlobalPressCall(args)) return { kind: 'global', ref: '' };

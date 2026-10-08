@@ -73,3 +73,34 @@ describe('resolveActTarget — a document-key press needs no locator', () => {
     }
   });
 });
+
+/**
+ * `ref: "find:aria-label=Open menu"` was never a ref, and it was refused as STALE — "refs are
+ * invalidated whenever the DOM re-renders" — so the agent re-queried and retried the same mistake.
+ * A string without the minted shape is refused here, before the page is asked anything.
+ */
+describe('resolveActTarget — a ref Reticle never issued', () => {
+  it.each(['find:aria-label=Open menu', 'e', 'E12', 'e12x', '#submit', 'ref-3'])(
+    'refuses %j at the boundary, names target, and does not query',
+    async (ref) => {
+      const { session, command } = sessionThatMustNotBeQueried();
+      const r = await resolveActTarget(session, { ref, action: ActionType.CLICK });
+      expect(r.kind).toBe('error');
+      const message = 'error' === r.kind ? r.message : '';
+      expect(message).toBe(
+        `${JSON.stringify(ref)} is not a ref Reticle issued; refs look like e12. To address an ` +
+          'element by what it shows, pass target: { label }, { role, name }, { text } or { testid }.',
+      );
+      expect(command).not.toHaveBeenCalled();
+    },
+  );
+
+  it('passes a minted-shape ref through untouched — a genuinely stale one is the page’s to refuse', async () => {
+    const { session, command } = sessionThatMustNotBeQueried();
+    expect(await resolveActTarget(session, { ref: 'e12', action: ActionType.CLICK })).toEqual({
+      kind: 'ref',
+      ref: 'e12',
+    });
+    expect(command).not.toHaveBeenCalled();
+  });
+});

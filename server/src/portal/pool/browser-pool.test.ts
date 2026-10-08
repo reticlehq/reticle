@@ -39,6 +39,11 @@ class FakePage implements PooledPage {
   onDialog(handler: (dialog: PooledDialog) => void): void {
     this.#onDialog = handler;
   }
+  failFront = false;
+  bringToFront(): Promise<void> {
+    this.callOrder.push('bringToFront');
+    return this.failFront ? Promise.reject(new Error('target closed')) : Promise.resolve();
+  }
   disposedScripts = 0;
   evaluated: string[] = [];
   evaluate(script: string): Promise<unknown> {
@@ -682,6 +687,41 @@ describe('BrowserPool', () => {
     expect(pool.lastDialogMessage(lease.sessionId)).toBeUndefined();
   });
 
+  it('foregrounds the leased page after navigating, so its tab is not hidden behind another (#1351)', async () => {
+    // A pooled page opened beside other tabs can start hidden, and a hidden tab throttles timers and
+    // rAF — the lease then comes back ready and nothing on it can be verified.
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    await pool.acquire('http://localhost:3000/');
+
+    const page = browsers[0]?.contexts[0]?.pages[0];
+    expect(page?.callOrder).toEqual(['goto:http://localhost:3000/', 'bringToFront']);
+  });
+
+  it('a page that refuses to come to the front still yields its lease', async () => {
+    // Best-effort: the caller reports a tab that stayed hidden by name, so failing the lease here
+    // would turn a reportable condition into a lost one.
+    const page = new FakePage();
+    page.failFront = true;
+    const launch: Launcher = () => {
+      const b = new FakeBrowser();
+      const originalNewContext = b.newContext.bind(b);
+      b.newContext = async () => {
+        const ctx = await originalNewContext();
+        ctx.newPage = () => Promise.resolve(page);
+        return ctx;
+      };
+      return Promise.resolve(b);
+    };
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    const lease = await pool.acquire('http://localhost:3000/');
+
+    expect(lease.sessionId).toBe('s1');
+    expect(page.callOrder).toContain('bringToFront');
+  });
+
   it('seeds cookies, localStorage, and sessionStorage before page.goto and disposes init script immediately after', async () => {
     const { launch, browsers } = fakeLauncher();
     const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
@@ -715,6 +755,7 @@ describe('BrowserPool', () => {
       'addInitScript',
       'goto:http://localhost:3000/dashboard',
       'disposeInitScript',
+      'bringToFront',
     ]);
     expect(page?.disposedScripts).toBe(1);
   });
@@ -749,7 +790,7 @@ describe('BrowserPool', () => {
 
     expect(context?.cookies).toHaveLength(0);
     expect(page?.initScripts).toHaveLength(0);
-    expect(page?.callOrder).toEqual(['goto:http://localhost:3000/dashboard']);
+    expect(page?.callOrder).toEqual(['goto:http://localhost:3000/dashboard', 'bringToFront']);
   });
 
   it('preserves isolation between multiple leases with different seedStorage', async () => {

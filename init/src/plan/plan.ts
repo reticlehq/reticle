@@ -36,6 +36,7 @@ import {
   CURSOR_RULE_PATH,
 } from '@/project/agent-rules.js';
 import { cspStep } from '@/diagnose/csp-step.js';
+import { HTML_INDEX_PATH } from '@/patch/static-page.js';
 import { frameworkSteps } from './framework-adapter.js';
 import { FRAMEWORK_ADAPTERS, RETICLE_BROWSER_SDK, RETICLE_REACT_KIT } from './framework-adapter.js';
 import { MCP_TARGET, StepStatus, type Step, type Plan, type PlanInput } from './plan-types.js';
@@ -775,8 +776,9 @@ function reticleConfigSteps(input: PlanInput): Step[] {
 }
 
 export function buildPlan(input: PlanInput): Plan {
+  const cspSteps = cspStep(input);
   const steps: Step[] = [
-    ...cspStep(input),
+    ...cspSteps,
     ...mcpSteps(input),
     ...agentRuleSteps(input),
     ...slashCommandSteps(input),
@@ -788,7 +790,13 @@ export function buildPlan(input: PlanInput): Plan {
     installStep(input),
     ...reticleConfigSteps(input),
   ];
-  steps.push(...frameworkSteps(input));
+  // Both steps can patch index.html: the connect write must keep the CSP edit that runs first.
+  const patchedIndex = cspSteps.find((step) => step.write?.path === HTML_INDEX_PATH)?.write?.content;
+  steps.push(
+    ...frameworkSteps(
+      patchedIndex === undefined ? input : { ...input, htmlIndexSource: patchedIndex },
+    ),
+  );
   // LAST, and a notice rather than an action: it is a statement about this machine's shape, and it
   // only matters once every file above has been written. See containerised-dev-server.ts.
   const container = containerisedStep(input);

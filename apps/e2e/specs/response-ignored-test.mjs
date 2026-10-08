@@ -163,7 +163,9 @@ async function runPolarity(label, url, sessionId) {
 
   const observed = await T(sessionId, 'reticle_observe', {
     since: postSince,
-    filters: ['net', 'state', 'signal', 'route'],  // exclude DOM_ATTR — focus noise is not app logic
+    // Shapes the returned timeline only: contradictions are judged over the whole window, DOM
+    // included, so the broken fixture must keep the client still until its delayed render.
+    filters: ['net', 'state', 'signal', 'route'],
   });
 
   // Keep page alive briefly for polarity A confirmation.

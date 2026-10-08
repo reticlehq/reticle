@@ -13,6 +13,9 @@ on:
   # last merge of a release and none of the ones that built it. The push trigger above did eventually
   # scan the code, after it was already in.
   pull_request:
+  # The merge queue builds a fresh commit for each queued pull request, and that commit is what lands
+  # on main. Scanning only the pull request's head left the landed commit unscanned.
+  merge_group:
   schedule:
     - cron: '27 4 * * 1' # Mondays, off the hour to avoid the load spike
 

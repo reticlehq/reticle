@@ -25,7 +25,11 @@ import {
   type PackageManager,
 } from './detect/detect.js';
 import { ANGULAR_PROXY_PATH, angularEntry } from './patch/angular.js';
-import { HTML_INDEX_PATH } from './patch/static-page.js';
+import {
+  HTML_INDEX_PATH,
+  STATIC_GITIGNORE_PATH,
+  STATIC_TOKEN_MODULE,
+} from './patch/static-page.js';
 import { initWithoutPackageJson } from './no-package-json.js';
 import { sdkPackagesDeclared, sdkPackagesPresent } from './sdk-packages.js';
 import { wasMcpRegistered } from './register/mcp-registered.js';
@@ -458,7 +462,13 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     })(),
     ...(Framework.ANGULAR === detection.framework ? angularInputs(io) : {}),
     ...(Framework.HTML === detection.framework
-      ? { htmlIndexSource: io.readFile(HTML_INDEX_PATH) }
+      ? {
+          htmlIndexSource: io.readFile(HTML_INDEX_PATH),
+          htmlLocalSources: {
+            [STATIC_TOKEN_MODULE]: io.readFile(STATIC_TOKEN_MODULE),
+            [STATIC_GITIGNORE_PATH]: io.readFile(STATIC_GITIGNORE_PATH),
+          },
+        }
       : {}),
     craEntry: craEntryOf(io),
     craEnv: io.readFile(CRA_ENV_PATH),

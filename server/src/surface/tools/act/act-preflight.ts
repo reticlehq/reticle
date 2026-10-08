@@ -11,7 +11,7 @@
  * outcome than "unknown".
  */
 import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate-schema.js';
-import { isGlobalPressCall } from '@reticlehq/core';
+import { SESSION_REF, isGlobalPressCall, unissuedRefRefusal } from '@reticlehq/core';
 import { SessionReplacedError } from '@/portal/session/page-commands/pending-commands.js';
 import { assertNativeInputSupported } from './act-danger.js';
 import {
@@ -125,7 +125,17 @@ export function assertSequenceSteps(steps: readonly unknown[]): void {
           'as a step that declared nothing. Nothing was acted on.',
       );
     }
-    if ('string' === typeof step['ref'] && step['ref'].length > 0) return;
+    if ('string' === typeof step['ref'] && step['ref'].length > 0) {
+      // The same shape check `resolveActTarget` makes, moved ahead of the first step: left there, a
+      // malformed ref in step three is only found after steps one and two have already acted.
+      if (!SESSION_REF.test(step['ref'])) {
+        throw new Error(
+          `step ${String(i)}: ${unissuedRefRefusal(step['ref'])} ` +
+            'Nothing was acted on — the whole sequence is refused so a bad step cannot leave the earlier ones half-applied.',
+        );
+      }
+      return;
+    }
     if (step['target'] !== undefined) return;
     if (isGlobalPressCall(step)) return;
     throw new Error(

@@ -20,7 +20,7 @@ import { registeredElsewhere } from '@/memory/recall/registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
 import { detectDevCommandInProject } from './dev-server/dev-command.js';
-import { nextActionFor, renderNextAction } from './no-session-next-action.js';
+import { nextActionFor, portOfUrl, renderNextAction } from './no-session-next-action.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import {
   DEV_SERVER_PORTS,
@@ -72,18 +72,6 @@ function attachFailureClause(port: number, reason: string): string {
         'rather than treating this as a problem with the app.'
       : '')
   );
-}
-
-/** The port a tombstone URL names, when it names one — anything unparseable names no port. */
-function portOfUrl(url: string): number | undefined {
-  try {
-    const raw = new URL(url).port;
-    if ('' === raw) return undefined;
-    const port = Number(raw);
-    return Number.isSafeInteger(port) && port > 0 ? port : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 interface NoSessionWatchOptions {
@@ -463,6 +451,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       })(),
       ...(split === undefined ? {} : { splitBrain: split }),
       listening,
+      slowListeners,
       // The url the departed tab was on — the same tombstone the prose diagnosis quotes, so the
       // command and the sentence beside it name the same page.
       ...(() => {

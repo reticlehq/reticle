@@ -14,14 +14,14 @@ gh api repos/reticlehq/reticle/commits/main/check-runs --jq '.check_runs[].name'
 
 Settings → Rules → Rulesets, or Settings → Branches:
 
-- [ ] Require a pull request before merging.
+- [x] Require a pull request before merging. (The `main` ruleset carries a `pull_request` rule with zero required approvals, until an independent reviewer exists.)
 - [ ] Require at least one approving review from another maintainer once an independent reviewer is available.
 - [ ] Dismiss stale approvals when new commits are pushed; require code-owner review.
 - [ ] Require status checks and up-to-date branches. Include `gate` (the CI aggregate), `package-quality`, and the exact CodeQL matrix check name reported by GitHub, currently expected to be `analyze (javascript-typescript)`. Preserve other required checks.
 - [ ] Require conversation resolution.
-- [ ] Block force pushes and branch deletion.
-- [ ] Enforce protection for administrators and remove routine bypasses.
-- [ ] If a merge queue is enabled, ensure every required workflow runs on `merge_group` before requiring it in the queue.
+- [x] Block force pushes and branch deletion.
+- [x] Enforce protection for administrators and remove routine bypasses. (The `main` ruleset has no bypass actors.)
+- [x] If a merge queue is enabled, ensure every required workflow runs on `merge_group` before requiring it in the queue. (CodeQL now runs on `merge_group`; require its check only after that has landed.)
 
 `verify` alone does not enforce unit tests, e2e, Rust, desktop, and the other jobs included in `gate`. Package quality and CodeQL run in separate workflows and must be required separately.
 

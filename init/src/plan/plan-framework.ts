@@ -47,6 +47,7 @@ import {
   REACT_ROUTER_ENTRY_PATH,
   UNVERIFIED_TANSTACK_START_NOTE,
   htmlManual,
+  connectArg,
 } from '@/patch/snippets.js';
 import { StepStatus, type PlanInput, type Step } from './plan-types.js';
 import { StepTitle } from './connect-steps.js';
@@ -60,7 +61,26 @@ import {
 import { patchNuxtConfig } from '@/patch/nuxt-patch.js';
 import { alreadyOrMovedPort } from './port-steps.js';
 import { capabilitiesTodo, needsManualStore } from './plan-vite.js';
-import { HTML_INDEX_PATH, hasStaticSnippet } from '@/patch/static-page.js';
+import {
+  HTML_INDEX_PATH,
+  STATIC_GITIGNORE_PATH,
+  STATIC_SNIPPET_MARKER,
+  STATIC_TOKEN_MODULE,
+  staticTokenFiles,
+  withStaticSnippet,
+} from '@/patch/static-page.js';
+
+/*
+ * Threat model for the static page's token module. `reticle.local.js` sits beside `index.html`, so
+ * whatever serves the page serves it too, to any client that can reach that server. That is the same
+ * exposure every other dev path already has: the Vite plugin bakes the token into the connect module
+ * it serves, and the no-package.json path writes this very file. The dev server's bind address is
+ * the boundary; the module is gitignored so it never reaches a commit or a published build.
+ */
+const STATIC_TOKEN_DETAIL = `write this machine’s pairing token to ${STATIC_TOKEN_MODULE} beside the page`;
+const STATIC_IGNORE_DETAIL = `add ${STATIC_TOKEN_MODULE} to ${STATIC_GITIGNORE_PATH} — it holds this machine’s pairing token`;
+const STATIC_CONNECT_DETAIL = 'write the dev-only connect snippet (loopback hosts only)';
+const STATIC_CONNECT_ALREADY_DETAIL = `${HTML_INDEX_PATH} already loads the Reticle SDK`;
 
 /**
  * Turn a conservative source patch into a step: applied when it patched, already when the wiring is
@@ -669,28 +689,50 @@ export function astroSteps(input: PlanInput): Step[] {
 }
 
 /**
- * The plain-HTML path: no bundler to hook, so the connect snippet is printed for a hand edit.
+ * The plain-HTML path: write the static connect when the page exists, otherwise print the recipe.
  *
  * A function of its own, and NOT a fallthrough. Every framework is sent here on purpose or not at
  * all — a member of `Framework` with no adapter entry is a compile error in `FRAMEWORK_ADAPTERS`,
  * where the if/else chain this replaced used to hand it these instructions silently.
  */
 export function htmlSteps(input: PlanInput): Step[] {
-  // Read the page before calling the step undone. It used to be MANUAL unconditionally, so a re-run
-  // over a page that already connects said "This app will NOT connect until the ⚠ step".
   const index = input.htmlIndexSource ?? null;
-  if (null !== index && hasStaticSnippet(index)) {
+  if (null !== index) {
+    // The page is publishable; the pairing token belongs in its gitignored sibling module instead.
+    // Refresh that module even when the connect block itself is already in place.
+    const steps: Step[] = Object.entries(
+      staticTokenFiles(input.pairingToken, (path) => input.htmlLocalSources?.[path] ?? null),
+    ).map(([path, content]) => ({
+      title: StepTitle.STATIC_PAIRING_TOKEN,
+      target: path,
+      status: StepStatus.APPLY,
+      detail: STATIC_GITIGNORE_PATH === path ? STATIC_IGNORE_DETAIL : STATIC_TOKEN_DETAIL,
+      write: { path, content },
+    }));
+    const written = withStaticSnippet(
+      index,
+      connectArg(input.options.port, input.options.projectId),
+    );
     return [
-      alreadyOrMovedPort(
-        {
-          title: StepTitle.CONNECT_SNIPPET,
-          target: HTML_INDEX_PATH,
-          status: StepStatus.ALREADY,
-          detail: 'index.html already loads the Reticle SDK',
-        },
-        index,
-        input.options.port,
-      ),
+      ...steps,
+      null !== written
+        ? {
+            title: StepTitle.CONNECT_SNIPPET,
+            target: HTML_INDEX_PATH,
+            status: StepStatus.APPLY,
+            detail: STATIC_CONNECT_DETAIL,
+            write: { path: HTML_INDEX_PATH, content: written, expect: [STATIC_SNIPPET_MARKER] },
+          }
+        : alreadyOrMovedPort(
+            {
+              title: StepTitle.CONNECT_SNIPPET,
+              target: HTML_INDEX_PATH,
+              status: StepStatus.ALREADY,
+              detail: STATIC_CONNECT_ALREADY_DETAIL,
+            },
+            index,
+            input.options.port,
+          ),
     ];
   }
   return [

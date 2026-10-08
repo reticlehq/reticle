@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/core` + `@reticlehq/server` — a lease no longer reports `ready: true` while its tab is hidden.** A pooled page opened beside other tabs could start hidden, and a hidden tab throttles timers and animations: the SDK dialled in and answered, so the lease came back ready, and then nothing on it could be verified. The pool now brings the leased page to the front after navigating (best-effort), and if the SDK still reports the tab hidden, `reticle_lease` returns `ready: false` with a third `LeaseNotReadyReason`, `tab_hidden`, on both a fresh and a reused lease. Closes [#1351](https://github.com/reticlehq/reticle/issues/1351).

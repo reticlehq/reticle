@@ -14,9 +14,9 @@ import type { Browser, Page } from 'playwright';
 import { stampedDriveUrl } from './drive-url-stamp.js';
 import { launchChromium } from '@/launch-chromium.js';
 import {
-  HIDE_RETICLE_CHROME_CSS,
   chromiumLaunchHint,
   gotoOptions,
+  SCREENSHOT_DETERMINISM,
 } from '@/portal/pool/playwright-launcher.js';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
@@ -460,15 +460,6 @@ export async function performGesture(
   }
   return real(false);
 }
-
-/**
- * Reticle paints its own dev overlay (presenter HUD + border glow) into the page. That chrome is
- * time-varying — the activity log and border state change with every command — so capturing it
- * makes a fresh screenshot of an unchanged page differ from its baseline. Hide it during capture
- * (Playwright applies this stylesheet only for the shot, then reverts) so visual baselines reflect
- * the app, not Reticle. Disabling animations settles any remaining transitions for determinism.
- */
-const SCREENSHOT_DETERMINISM = { style: HIDE_RETICLE_CHROME_CSS, animations: 'disabled' } as const;
 
 /**
  * Capture a PNG from a Playwright page. Shared by the CDP + launched providers so the

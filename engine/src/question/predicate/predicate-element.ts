@@ -16,8 +16,10 @@ import {
   type MatchResult,
 } from '@reticlehq/core';
 import {
+  describeAltOnNonImage,
   describeUnusableElementQuery,
   residualQueryChecks,
+  withAltProjected,
   satisfiesResiduals,
   describeResidual,
   type EvalResult,
@@ -181,13 +183,20 @@ export async function evalElement(
     const reason = describeUnusableElementQuery(query, residual.unusable);
     return { pass: false, failureReason: reason, inconclusive: reason };
   }
-  let match = await matchOnce(session, query, state);
+  let match = await matchOnce(session, withAltProjected(query, residual.checks), state);
   const subject = JSON.stringify(query);
   // A residual narrows the SET; `count` is every match while `elements` is only the described prefix,
   // so a locator broad enough to be truncated cannot be narrowed honestly. Say so instead of guessing.
   if (residual.checks.length > 0 && match.count > match.elements.length) {
     const reason = `${String(match.count)} elements matched ${subject} and only ${String(match.elements.length)} were described, so ${residual.checks.map(([f]) => `\`${f}\``).join(', ')} could not be checked against all of them — narrow the locator`;
     return { pass: false, failureReason: reason, inconclusive: reason };
+  }
+  // `alt` is only meaningful on an image, and the role that says so is on the matched descriptor, so
+  // this cannot be refused before the round-trip the way an uncheckable field is. It runs AFTER the
+  // truncation check: judged on a cut-off prefix, "none of these is an image" would be a guess.
+  const altRefusal = describeAltOnNonImage(residual.checks, match.elements);
+  if (altRefusal !== undefined) {
+    return { pass: false, failureReason: altRefusal, inconclusive: altRefusal };
   }
   const kept = match.elements.filter((element) => satisfiesResiduals(element, residual.checks));
   // The locator found something and the dropped fields disagree with it. Reported separately from a

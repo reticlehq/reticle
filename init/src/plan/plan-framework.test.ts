@@ -15,6 +15,8 @@ import { detect, Framework, type DetectInput } from '@/detect/detect.js';
 import { frameworkSteps } from './framework-adapter.js';
 import { STEP_TITLES, StepTitle } from './connect-steps.js';
 import { type PlanInput, type Step } from './plan.js';
+import { StepStatus } from './plan-types.js';
+import { STATIC_SNIPPET_MARKER } from '@/patch/static-page.js';
 
 /** The target the plain-HTML fallback names, and the tell that a framework fell through to it. */
 const HTML_INDEX = 'index.html';
@@ -51,9 +53,36 @@ describe('every framework the detector can return', () => {
     }
   });
 
-  it('still gives plain HTML the manual snippet, which is correct for it', () => {
+  it('keeps plain HTML manual when there is no index.html to write', () => {
     const steps = frameworkSteps(planFor(Framework.HTML));
-    expect(steps.some(isHtmlFallback)).toBe(true);
+    expect(steps.find(isHtmlFallback)?.status).toBe(StepStatus.MANUAL);
+  });
+});
+
+describe('plain HTML with an index.html', () => {
+  it('plans a write that preserves the page and inserts the dev-only snippet before </body>', () => {
+    const source = '<html><body><h1>Hello</h1></body></html>';
+    const steps = frameworkSteps({ ...planFor(Framework.HTML), htmlIndexSource: source });
+    const connect = steps.find(isHtmlFallback);
+    expect(connect?.status).toBe(StepStatus.APPLY);
+    expect(connect?.write?.path).toBe(HTML_INDEX);
+    const written = connect?.write?.content ?? '';
+    expect(written).toContain('<h1>Hello</h1>');
+    expect(written).toContain(STATIC_SNIPPET_MARKER);
+    expect(written.indexOf(STATIC_SNIPPET_MARKER)).toBeLessThan(written.indexOf('</body>'));
+    expect(written).toContain('location.hostname');
+    expect(written).toContain("projectId: 'demo'");
+    expect(steps.some((step) => step.status === StepStatus.MANUAL)).toBe(false);
+  });
+
+  it('reports already on a second plan without writing a duplicate snippet', () => {
+    const input = { ...planFor(Framework.HTML), htmlIndexSource: '<html><body></body></html>' };
+    const first = frameworkSteps(input).find(isHtmlFallback);
+    const second = frameworkSteps({ ...input, htmlIndexSource: first?.write?.content }).find(
+      isHtmlFallback,
+    );
+    expect(second?.status).toBe(StepStatus.ALREADY);
+    expect(second?.write).toBeUndefined();
   });
 });
 

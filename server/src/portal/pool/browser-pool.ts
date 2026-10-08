@@ -534,6 +534,9 @@ export class BrowserPool {
       // the slot count out of sync (drifting below #active.size, eventually exceeding the cap). If we're
       // no longer the live browser, bail — the catch below closes the context and returns the slot.
       if (slot.browser !== browser) throw new Error('browser crashed during navigation');
+      // Foreground it: a page opened beside other tabs can start hidden (#1351). Best-effort — a tab
+      // that stays hidden is reported by name at the lease, which failing here would lose.
+      await page.bringToFront?.().catch(() => undefined);
       let navStatus: number | undefined;
       if (null !== navRes && 'object' === typeof navRes && 'status' in navRes) {
         const s: unknown = (navRes as { status?: unknown }).status;

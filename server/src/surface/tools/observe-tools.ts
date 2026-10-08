@@ -236,8 +236,11 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         asNumber(args['max_events']) ?? DEFAULT_OBSERVE_EVENT_LIMIT,
       );
       const report = buildReactionReport(budgeted, windowMs);
-      // Run over the FILTERED-but-unbudgeted window: a contradiction must not vanish because the
-      // timeline was capped for tokens. Detection is cheap; the events are already in hand.
+      // Run over the WHOLE window: neither unfiltered nor unbudgeted is a display choice. A contradiction
+      // must not vanish because the timeline was capped for tokens, and it must not APPEAR because a
+      // filter removed its counter-evidence: `filters: ["route"]` dropped the DOM events proving a
+      // destination rendered, and the call reported `route-rendered-nothing` the unfiltered call did
+      // not (#1359). Detection is cheap; the events are already in hand.
       // The act that opened this window is not in `args` — observe is a separate call — so its action
       // and in-target mutation count are read back off the session. Without them the "this click did
       // nothing" check is unreachable on the ordinary act-then-observe flow, which is most of them.
@@ -246,7 +249,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // never asked about.
       const actCursor = session.lastAct.cursor();
       const judgingTheAct = actCursor !== undefined && actCursor >= since;
-      const contradictions = findContradictions(filtered, {
+      const contradictions = findContradictions(events, {
         currentDocumentId: session.currentDocumentId,
         currentEditEpoch: session.currentEditEpoch,
         appOrigin: session.url,

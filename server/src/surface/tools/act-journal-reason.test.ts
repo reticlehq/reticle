@@ -103,7 +103,7 @@ describe('act_and_wait records WHY the verdict came out that way', () => {
   it('writes the deciding clause into the journal, not just the verdict', async () => {
     const { deps, recorded } = sessionRecordingItsJournal();
     await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
-      ref: 'btn',
+      ref: 'e4',
       action: 'click',
       timeout_ms: 0,
       until: { kind: 'element', query: { testid: 'never-appears' } },
@@ -118,7 +118,7 @@ describe('act_and_wait records WHY the verdict came out that way', () => {
   it('still carries the claim, the kind and the pre-registration flag', async () => {
     const { deps, recorded } = sessionRecordingItsJournal();
     await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
-      ref: 'btn',
+      ref: 'e4',
       action: 'click',
       timeout_ms: 0,
       until: { kind: 'element', query: { testid: 'never-appears' } },

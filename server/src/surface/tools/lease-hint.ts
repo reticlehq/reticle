@@ -18,6 +18,8 @@
  * nothing. A cause we hold positive evidence against is not printed at all.
  */
 
+import { isLoopbackHostname } from '@reticlehq/core';
+
 /** What the daemon can say for certain at the moment a lease comes back unconnected. */
 export interface LeaseEvidence {
   /** A dial WAS made and turned away, with the reason. The only certain cause there is. */
@@ -81,6 +83,19 @@ const NUXT_FIRST =
 
 const RELEASE =
   'The tab stays leased either way — release it with reticle_lease{action:"release"}.';
+
+const PRODUCTION_STUB =
+  ' If this is a production build (`vite build`, `next build`, `next start`, or a deployed site), it strips ' +
+  'Reticle or replaces it with an inert stub by design; point the lease at the dev server instead.';
+
+function isRemoteUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return !isLoopbackHostname(hostname);
+  } catch {
+    return false;
+  }
+}
 
 function markerClause(sdkMarker: boolean | undefined): string {
   if (sdkMarker === undefined) return '';
@@ -177,23 +192,33 @@ export function leaseNotConnectedHint(
         : ' That may have been a DIFFERENT app, though: this one may carry no Reticle SDK at all, ' +
           'in which case run `reticle init` in ITS directory first — every cause below assumes the ' +
           'SDK is already installed.';
+    // Never beside a marker that WAS found: "it ships the SDK" and "the build stripped it" cannot
+    // both be the story.
+    const production =
+      true !== evidence.sdkMarker && (false === evidence.sdkMarker || isRemoteUrl(url))
+        ? PRODUCTION_STUB
+        : '';
     return (
       `${opening} An app for this project HAS connected on this port before, so the port is ` +
-      `proven.${notThisApp}${nuxt}${marker} ${REAL_CAUSES} ${RELEASE}`
+      `proven.${notThisApp}${nuxt}${marker}${production} ${REAL_CAUSES} ${RELEASE}`
     );
   }
 
   // 4. Wired, but never seen connect. Rank the real causes; keep the port differential last, where
   //    the evidence for it actually sits.
   if (true === evidence.initialized) {
-    return `${opening}${nuxt}${marker} ${REAL_CAUSES} If none of those, it may be dialling a different daemon than this one: check the app's reticle port matches ${String(port)}. ${RELEASE}`;
+    const production = false === evidence.sdkMarker ? PRODUCTION_STUB : '';
+    return `${opening}${nuxt}${marker}${production} ${REAL_CAUSES} If none of those, it may be dialling a different daemon than this one: check the app's reticle port matches ${String(port)}. ${RELEASE}`;
   }
 
   // 5. Nothing known. The differential, plus the possibility this app carries no SDK at all —
   //    except when the marker check already ruled that out, which is the whole reason for the bit.
+  // Nothing says the project was ever wired, so `reticle init` stays the advice whenever the SDK
+  // was not seen; a production build is the other way to serve a page without it.
   const noSdk =
     true === evidence.sdkMarker
       ? ''
-      : ' If the app carries no Reticle SDK at all, run `reticle init` in it first.';
+      : ' If the app carries no Reticle SDK at all, run `reticle init` in it first.' +
+        (false === evidence.sdkMarker || isRemoteUrl(url) ? PRODUCTION_STUB : '');
   return `${opening}${nuxt}${marker} ${PORT_DIFFERENTIAL}${noSdk} ${REAL_CAUSES} ${RELEASE}`;
 }

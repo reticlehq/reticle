@@ -90,6 +90,24 @@ function usedQueryFields(query: ElementQuery): ReadonlySet<string> {
 }
 
 /**
+ * The role the browser reports for an `<img>`. It stands in for "an image" because the descriptor
+ * carries no tag name, so anything else with this role — an `<svg role="img">` — counts as one too.
+ */
+const IMAGE_ROLE = 'img';
+const ALT_FIELD = 'alt';
+/** How a failure reports an image that carries no `alt` attribute at all. */
+const NO_ALT_ATTRIBUTE = '(no alt attribute)';
+
+/** What the refusal says about `alt` on something that is not an image, and what to assert instead. */
+const ALT_IMAGE_ONLY = '`alt` can only be checked on an image';
+const ALT_USE_NAME =
+  'For an element that is not an image, assert its accessible name with `name` instead.';
+
+function isImage(element: ElementDescriptor): boolean {
+  return IMAGE_ROLE === element.role;
+}
+
+/**
  * How a dropped field is checked back on the server, against the descriptor the match returned.
  *
  * `value` is the field this exists for: `{ role: "textbox", name: "GST amount", value: "274.58" }`
@@ -103,6 +121,11 @@ function usedQueryFields(query: ElementQuery): ReadonlySet<string> {
  * copies out of a query result are the words that match here. `text` is a substring match, matching
  * Testing Library's `exact: false`, and falls back to the name because describe() omits `text` when it
  * equals the accessible name.
+ *
+ * `alt` is read from the image's `alt` ATTRIBUTE, projected onto the match by `withAltProjected` —
+ * not from its accessible name. Both a decorative `alt=""` and a missing alt give an empty name, and
+ * only the attribute tells them apart: a missing alt is the defect `alt: ""` exists to rule out. On
+ * anything but an image it is false, and `describeAltOnNonImage` turns that into a refusal.
  */
 /**
  * Does an element whose computed role is `actual` satisfy a query for `queried`?
@@ -124,7 +147,39 @@ const RESIDUAL_CHECKS: Readonly<
   role: (element, want) => matchesRole(element.role, want),
   name: (element, want) => element.name.trim() === want.trim(),
   text: (element, want) => (element.text ?? element.name).includes(want),
+  [ALT_FIELD]: (element, want) => {
+    const alt = element.attrs?.[ALT_FIELD];
+    return isImage(element) && alt !== undefined && alt.trim() === want.trim();
+  },
 };
+
+/** The query to send, asking the browser to project `alt` when this side has to check it. */
+export function withAltProjected(
+  query: ElementQuery,
+  checks: readonly [string, string][],
+): ElementQuery {
+  const attrs = query.attrs ?? [];
+  if (!checks.some(([field]) => ALT_FIELD === field) || attrs.includes(ALT_FIELD)) return query;
+  return { ...query, attrs: [...attrs, ALT_FIELD] };
+}
+
+/**
+ * Why `alt` cannot be checked, when none of the matched elements is an image — or `undefined` when
+ * it can. A button has no alt, so grading it "no" would read as "the alt is wrong" when the truth is
+ * "this is not an image": a refusal that says what to use instead costs one turn.
+ *
+ * Only the case where NO match is an image is refused. With an image among them, the others simply do
+ * not satisfy `alt`, and the verdict is about the images.
+ */
+export function describeAltOnNonImage(
+  checks: readonly [string, string][],
+  elements: readonly ElementDescriptor[],
+): string | undefined {
+  const wantsAlt = checks.some(([field]) => ALT_FIELD === field);
+  if (!wantsAlt || 0 === elements.length || elements.some(isImage)) return undefined;
+  const roles = [...new Set(elements.map((element) => element.role))].join(', ');
+  return `${ALT_IMAGE_ONLY}, and the element matched is ${roles}, not ${IMAGE_ROLE}. ${ALT_USE_NAME}`;
+}
 
 interface ResidualQueryChecks {
   /** Dropped fields this side CAN check, as [field, wanted value] pairs. */
@@ -194,7 +249,9 @@ export function describeResidual(element: ElementDescriptor, field: string): str
         ? (element.text ?? element.name)
         : 'role' === field
           ? element.role
-          : element.name;
+          : ALT_FIELD === field
+            ? (element.attrs?.[ALT_FIELD] ?? NO_ALT_ATTRIBUTE)
+            : element.name;
   return `${element.role} "${element.name}" ${field}=${JSON.stringify(reading)}`;
 }
 

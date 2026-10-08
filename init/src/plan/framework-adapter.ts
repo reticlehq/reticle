@@ -270,10 +270,10 @@ export const FRAMEWORK_ADAPTERS: Record<Framework, FrameworkAdapter> = {
     carriesOwnUnverifiedNote: false,
   },
   [Framework.HTML]: {
-    // No bundler plugin to install — just the kit; connect is wired by hand (see htmlManual).
+    // No bundler plugin to install — write the static connect into index.html when it is present.
     packages: (kit) => [kit],
     steps: htmlSteps,
-    connectStepTitles: [StepTitle.CONNECT_SNIPPET],
+    connectStepTitles: [StepTitle.CONNECT_SNIPPET, StepTitle.STATIC_PAIRING_TOKEN],
     carriesOwnUnverifiedNote: false,
   },
 };

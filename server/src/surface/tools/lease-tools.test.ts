@@ -583,6 +583,50 @@ describe('reticle_lease_acquire', () => {
     // real readiness wait, because proving "no SDK ever dialled in" means letting it run out.
   }, 20_000);
 
+  it('does not report a freshly minted lease ready while its tab is hidden (#1351)', async () => {
+    // A hidden tab throttles timers and rAF: the SDK dialled in, yet nothing on the page can be
+    // verified. Neither existing reason fits — the install is fine and the tab is answering.
+    const { pool } = fakePool();
+    const hiddenTab = {
+      info: () => ({ hidden: true }),
+      command: () => Promise.resolve({ ok: true }),
+    };
+    const sessions = { get: () => hiddenTab, all: () => [] };
+
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { ready: boolean; notReadyReason?: string };
+
+    expect(result.ready).toBe(false);
+    expect(result.notReadyReason).toBe(LeaseNotReadyReason.TAB_HIDDEN);
+  });
+
+  it('does not report a reused lease ready while its tab is hidden', async () => {
+    const { pool } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const hiddenTab = {
+      info: () => ({ hidden: true }),
+      command: () => Promise.resolve({ ok: true }),
+    };
+    const sessions = {
+      get: (i: string) => (i === first.sessionId ? hiddenTab : undefined),
+      all: () => [],
+    };
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { ready: boolean; reused?: boolean; notReadyReason?: string };
+
+    expect(second.reused).toBe(true);
+    expect(second.ready).toBe(false);
+    expect(second.notReadyReason).toBe(LeaseNotReadyReason.TAB_HIDDEN);
+  });
+
   it('treats a session it cannot probe as alive, rather than failing a working lease', async () => {
     // Fail OPEN. A registry entry with no `command` is a shape this code did not put there, and
     // turning a lease that works into a refusal over a probe that could not run would be a worse

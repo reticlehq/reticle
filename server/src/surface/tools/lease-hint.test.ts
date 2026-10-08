@@ -126,3 +126,76 @@ describe('a page whose CSP blocks the bridge', () => {
     expect(wrongPort).toContain('4999');
   });
 });
+
+describe('a production build whose SDK was stubbed', () => {
+  it('points an initialized project at the dev server, not back at init', () => {
+    const hint = leaseNotConnectedHint('http://localhost:4173/', 4400, {
+      initialized: true,
+      sdkMarker: false,
+    });
+    expect(hint).toMatch(/production build/i);
+    expect(hint).toMatch(/stub|strip/i);
+    expect(hint).toMatch(/dev server/i);
+    expect(hint).not.toContain('reticle init');
+  });
+
+  it('treats a non-localhost URL as likely production even without a marker check', () => {
+    const hint = leaseNotConnectedHint('https://app.example.com/', 4400);
+    expect(hint).toMatch(/production build/i);
+    expect(hint).toMatch(/dev server/i);
+  });
+
+  // Nothing says this project was ever wired, so a missing marker is first of all a missing
+  // install: the production note may join the init advice, never replace it.
+  it('keeps the init advice for an unwired project whose page carried no marker', () => {
+    const hint = leaseNotConnectedHint('http://localhost:4173/', 4400, { sdkMarker: false });
+    expect(hint).toContain('reticle init');
+    expect(hint).toMatch(/production build/i);
+  });
+
+  it('never names a production stub beside an SDK marker that WAS found', () => {
+    for (const evidence of [
+      { previouslyConnected: true, sdkMarker: true },
+      { initialized: true, sdkMarker: true },
+      { sdkMarker: true },
+    ]) {
+      const hint = leaseNotConnectedHint('https://app.example.com/', 4400, evidence);
+      expect(hint).toMatch(/marker WAS found/);
+      expect(hint).not.toMatch(/production build/i);
+    }
+  });
+
+  it('does not treat every loopback address as production', () => {
+    const hint = leaseNotConnectedHint('http://127.0.0.2:5173/', 4400);
+    expect(hint).not.toMatch(/production build/i);
+  });
+
+  it('keeps production as an extra possibility when another app may have connected before', () => {
+    const hint = leaseNotConnectedHint('http://localhost:4173/', 4400, {
+      initialized: true,
+      previouslyConnected: true,
+      sdkMarker: false,
+    });
+    expect(hint).toMatch(/DIFFERENT app/i);
+    expect(hint).toMatch(/reticle init/i);
+    expect(hint).toMatch(/production build/i);
+  });
+
+  it('does not attach the production explanation to a refused dial', () => {
+    const hint = leaseNotConnectedHint('http://localhost:4173/', 4400, {
+      refusal: 'wrong pairing token',
+      sdkMarker: false,
+    });
+    expect(hint).toContain('wrong pairing token');
+    expect(hint).not.toMatch(/production build/i);
+  });
+
+  it('does not attach the production explanation to a proven port mismatch', () => {
+    const hint = leaseNotConnectedHint('http://localhost:4173/', 4400, {
+      dialledUrl: 'ws://localhost:4444/reticle',
+      sdkMarker: false,
+    });
+    expect(hint).toContain('4444');
+    expect(hint).not.toMatch(/production build/i);
+  });
+});

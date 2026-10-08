@@ -29,11 +29,8 @@ vi.mock('playwright', () => ({
   },
 }));
 
-import {
-  HIDE_RETICLE_CHROME_CSS,
-  playwrightLauncher,
-  screenshotOptions,
-} from './playwright-launcher.js';
+import { HIDE_RETICLE_CHROME_CSS } from '@reticlehq/core';
+import { playwrightLauncher, screenshotOptions } from './playwright-launcher.js';
 
 describe('playwrightLauncher', () => {
   beforeEach(() => {
@@ -108,10 +105,15 @@ describe('a live picture of a leased tab', () => {
       type: 'jpeg',
       quality: 50,
       style: HIDE_RETICLE_CHROME_CSS,
+      animations: 'disabled',
     });
   });
 
-  it('keeps a plain capture exactly as it was', () => {
-    expect(screenshotOptions({ fullPage: true })).toEqual({ fullPage: true });
+  it('leaves it out of a plain PNG capture too, so a lease baseline shows only the app', () => {
+    expect(screenshotOptions({ fullPage: true })).toEqual({
+      fullPage: true,
+      style: HIDE_RETICLE_CHROME_CSS,
+      animations: 'disabled',
+    });
   });
 });

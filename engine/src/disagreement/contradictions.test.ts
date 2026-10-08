@@ -125,6 +125,18 @@ describe('findContradictions — cross-channel disagreement', () => {
     expect(found[0]?.claim).toContain('todo:archived');
   });
 
+  // The click itself moves focus to the button, and over an unfiltered window that event is in
+  // hand. It is the browser's, not the app answering the write, so the write is still ignored.
+  it('does not read the click moving focus as the UI advancing', () => {
+    expect(
+      causedKinds([
+        ev(EventType.FOCUS_CHANGE, { to: 'button "Save"', from: 'textbox "Item"', toBody: false }),
+        okCall('POST', '/api/save'),
+        ev(EventType.FOCUS_CHANGE, { from: 'button "Save"', toBody: true }),
+      ]),
+    ).toEqual([ContradictionKind.RESPONSE_IGNORED]);
+  });
+
   it('catches a successful write that changed nothing on the client', () => {
     expect(causedKinds([okCall('POST', '/api/save')])).toEqual([
       ContradictionKind.RESPONSE_IGNORED,

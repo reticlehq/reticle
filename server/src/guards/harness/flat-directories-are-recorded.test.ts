@@ -218,7 +218,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 46 with `lease-permissions.ts`: the `permissions` argument of `reticle_lease` acquire, its
   // notification read-back and its hint. lease-tools.ts sits near the line cap, so the argument is
   // declared beside it rather than inside it, as `query-hint-schema.ts` is beside tools.ts.
-  'server/src/surface/tools': 46,
+  // 47 with `lease-readiness.ts`: the checks a lease runs before it may say `ready: true` (does
+  // the tab answer, is it visible), moved out of lease-tools.ts for the same line-cap reason.
+  'server/src/surface/tools': 47,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
