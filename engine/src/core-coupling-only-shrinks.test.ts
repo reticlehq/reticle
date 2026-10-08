@@ -76,7 +76,13 @@ import { fileURLToPath } from 'node:url';
  * constants below, and it reads events the way `evalNet` and `evalSignal` do, so it goes with the
  * rest when `Realm` arrives.
  */
-const MAX_FILES_IMPORTING_CORE = 45;
+/*
+ * 45 -> 46 for the `head` predicate's evaluator, `predicate-head.ts`, the same case as
+ * `predicate-compare.ts` above it: a new kind of claim gets its own evaluator file, and that file
+ * sends a wire command and reads its answer, both of which live in core by rule 3. It reads no event
+ * and no `ReticleEvent`, so it is not the debt `Realm` exists to fix.
+ */
+const MAX_FILES_IMPORTING_CORE = 46;
 /**
  * Raised by one, deliberately, and this is the argument for it.
  *
@@ -122,7 +128,12 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * comparison with. The source TYPE is derived from `Predicate` rather than imported, because that one
  * could be. Like the predicate contract above, these are the claim language, not Reticle's event nouns.
  */
-const MAX_DISTINCT_SYMBOLS = 62;
+/*
+ * 62 -> 63 for the `head` predicate: `HeadSnapshotSchema`, the shape of the HEAD_READ answer the
+ * evaluator parses before trusting it. It crosses the wire, so it lives in core. Its type and the
+ * predicate's value type are derived locally rather than borrowed, which is why this is +1, not +3.
+ */
+const MAX_DISTINCT_SYMBOLS = 63;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

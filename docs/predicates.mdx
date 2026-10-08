@@ -148,6 +148,20 @@ A passing route verdict quotes the transition itself:
   the response says so: `expected: "a route change to /"`, `assertion: "route.changed"`.
 </Warning>
 
+### head
+
+```json
+{ "kind": "head", "link": { "rel": "icon" }, "href": { "contains": "icon.svg" } }
+```
+
+```json
+{ "kind": "head", "meta": { "name": "description" }, "content": { "contains": "Plan your week" } }
+```
+
+A `<link>` or `<meta>` in the live `<head>`, which no element locator can reach. Name exactly one tag: a `link` by `rel` (a token, so `icon` matches `rel="shortcut icon"`), or a `meta` by `name` or Open Graph `property`. `href` and `content` take `contains` or `equals`, and `absent: true` asserts the tag is not there.
+
+The head is read when the check runs, so a tag a framework's head manager sets after load is seen. A value redacted or shortened before it leaves the page (a `csrf-token` meta, a token in a URL, anything over 2,048 characters) still proves a `contains` its visible part holds; anything it cannot settle comes back `unknown` rather than failing.
+
 ### console
 
 ```json

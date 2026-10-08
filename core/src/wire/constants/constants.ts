@@ -905,6 +905,9 @@ export const QueryBy = {
 } as const;
 export type QueryBy = (typeof QueryBy)[keyof typeof QueryBy];
 
+/** At most this many `<head>` tags cross the bridge per HEAD_READ; past it the answer says `truncated`. */
+export const HEAD_READ_MAX_TAGS = 200;
+
 /** Commands the bridge sends to the browser SDK (the `name` field of a CommandMessage). */
 export const ReticleCommand = {
   SNAPSHOT: 'snapshot',
@@ -920,6 +923,8 @@ export const ReticleCommand = {
   STATE_READ: 'state_read',
   /** Read localStorage / sessionStorage / readable cookies (sensitive keys redacted). */
   STORAGE_READ: 'storage_read',
+  /** Read the live `<head>`: its `<link rel>` and `<meta>` tags (sensitive values redacted). */
+  HEAD_READ: 'head_read',
   /** scroll a ref's nearest scrollable container by ~a viewport (virtualized lists). */
   SCROLL: 'scroll',
   /** Session lifecycle: agent tunes the presenter session (e.g. idle-end timeout) for the app's needs. */
@@ -981,20 +986,3 @@ export const MessageKind = {
   EVENT: 'event',
 } as const;
 export type MessageKind = (typeof MessageKind)[keyof typeof MessageKind];
-
-/**
- * WHY a lease came back `ready: false` — the two situations that were one word.
- *
- * `ready: false` meant exactly one thing on the mint path: the SDK never dialled in, so the app
- * probably does not embed `@reticlehq/core`. A REUSED lease can fail readiness a second way, and it
- * is the opposite problem: an SDK did dial in, and has since stopped answering. The next action
- * differs — check the install versus recover the tab — so the two get names rather than sharing a
- * bare `false`.
- */
-export const LeaseNotReadyReason = {
-  /** No SDK dialled in within the wait. The install is the thing to look at. */
-  SDK_NEVER_DIALLED: 'sdk_never_dialled',
-  /** One dialled in and stopped answering: the tab is attached but wedged. */
-  SDK_STOPPED_ANSWERING: 'sdk_stopped_answering',
-} as const;
-export type LeaseNotReadyReason = (typeof LeaseNotReadyReason)[keyof typeof LeaseNotReadyReason];

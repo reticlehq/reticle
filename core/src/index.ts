@@ -26,6 +26,7 @@ export * from './artifacts/flow-select.js'; // selectFlows — which flows a run
 export * from './artifacts/flow-unreached.js'; // unreachedRoutes — known routes this run never visited
 export * from './artifacts/flow-mutation-target.js'; // what a flow says it depends on: mutationTargetsFor + perturbationFor
 export * from './wire/constants/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
+export * from './wire/constants/lease.js'; // LeaseNotReadyReason — why a lease came back not ready
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
 export * from './identity/testid-attribute.js'; // DEFAULT_TESTID_ATTR, ALTERNATIVE_TESTID_ATTRS
 export * from './wire/event-classification.js'; // CHURN_TYPES — shared eviction priority for buffer/queue
@@ -98,6 +99,7 @@ export * from './telemetry.js';
 export * from './words/no-session-reason.js';
 export * from './telemetry-refusal.js';
 export * from './wire/narrow.js';
+export * from './wire/head.js'; // HeadSnapshot — what HEAD_READ answers, for the head predicate
 export * from './wire/tool-names.js';
 export * from './wire/snapshot-tree.js'; // parseInteractive — the browser writes this format, Node reads it
 export * from './wire/platform.js';

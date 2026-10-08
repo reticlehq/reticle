@@ -109,7 +109,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
   // published API, and a page that only presses a key should not pull in the reader for a list of
   // them. Recorded rather than grouped, by the same rule as the note underneath.
-  'core/src/wire': 18,
+  // 19 with `head.ts`, the shape of the HEAD_READ answer. Its own file because it is a zod schema
+  // built at module scope: beside the other payloads it would ride every page's first load, and the
+  // browser needs only the cap, which lives in constants.ts.
+  'core/src/wire': 19,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not
@@ -153,7 +156,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // exact role+name predicate misses (#875). A sibling of `split-text-miss.ts` and
   // `testid-near-miss.ts` rather than folded into either: each of those is named for the field it
   // explains, and a filename here is published API (see public-subpaths-are-pinned.test.ts).
-  'engine/src/question/predicate': 22,
+  // 23 with `predicate-head.ts`, the `head` predicate's evaluator, beside the other kinds' evaluators.
+  'engine/src/question/predicate': 23,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:

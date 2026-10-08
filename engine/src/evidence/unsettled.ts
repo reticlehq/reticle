@@ -70,6 +70,10 @@ export function describeWaitTarget(predicate: Predicate): string {
       return predicate.name === undefined ? 'an animation' : `animation '${predicate.name}'`;
     case PredicateKind.COMPARE:
       return `${predicate.left.from} and ${predicate.right.from} readings to agree`;
+    case PredicateKind.HEAD:
+      return predicate.link !== undefined
+        ? `<link rel="${predicate.link.rel}"> in the head`
+        : `<meta ${predicate.meta?.name !== undefined ? 'name' : 'property'}="${predicate.meta?.name ?? predicate.meta?.property ?? ''}"> in the head`;
     case PredicateKind.ALL_OF:
       return `all of (${predicate.predicates.map(describeWaitTarget).join('; ')})`;
     case PredicateKind.ANY_OF:

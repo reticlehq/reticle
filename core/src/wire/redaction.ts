@@ -21,6 +21,9 @@ import { URL_RAW } from './net.js';
 // `code` on its own is deliberately NOT here — `statusCode`, `postcode`, `couponCode` and
 // `countryCode` are ordinary app data an agent needs in order to reach a verdict.
 //
+// A bare `csrf`/`xsrf` is the token itself: Spring Security's `<meta name="_csrf">` and csurf's
+// `_csrf` cookie. Boundary-anchored like `card`, so `csrfless` stays visible.
+//
 // `token` must match auth CREDENTIALS, not compound design fields. Bare/separated `token(s)` and
 // auth-prefixed tokens (accessToken, auth_token, sessionToken, …) are redacted; `colorToken`,
 // `backgroundToken`, `tokenCount`, `designToken` are NOT — redacting those blinds
@@ -33,7 +36,7 @@ import { URL_RAW } from './net.js';
 // `card_number` are not the only spellings, and `card` is what Stripe's own object calls it. The
 // anchors keep `discard`, `cardinality` and `panel` visible.
 const SENSITIVE_KEY =
-  /password|passwd|passcode|pass[-_]?phrase|(?:otp|totp|mfa|recovery|backup)[-_]?codes?|(?:^|[-_])(?:otp|totp)(?=$|[-_])|secret|(?:(?:access|refresh|auth|bearer|api|id|session|csrf|client)[-_]?tokens?|(?:^|[-_])tokens?(?=$|[-_]))|session[-_]?id|(?:^|[-_])(?:sid|pwd|jwt)(?=$|[-_])|authorization|(?:^|[-_])(?:set[-_])?cookie(?=$|[-_])|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?(?:number|num|no|pan)(?=$|[-_])|(?:^|[-_])(?:card|pan)(?=$|[-_])|cvv|cvc|ssn|(?:^|[-_])(?:signature|sig)$|(?:^|[-_])credential$|x-(?:amz|goog)-(?:signature|credential|security-token)$/i;
+  /password|passwd|passcode|pass[-_]?phrase|(?:otp|totp|mfa|recovery|backup)[-_]?codes?|(?:^|[-_])(?:otp|totp)(?=$|[-_])|secret|(?:(?:access|refresh|auth|bearer|api|id|session|csrf|client)[-_]?tokens?|(?:^|[-_])tokens?(?=$|[-_]))|(?:^|[-_])[cx]srf(?=$|[-_])|session[-_]?id|(?:^|[-_])(?:sid|pwd|jwt)(?=$|[-_])|authorization|(?:^|[-_])(?:set[-_])?cookie(?=$|[-_])|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?(?:number|num|no|pan)(?=$|[-_])|(?:^|[-_])(?:card|pan)(?=$|[-_])|cvv|cvc|ssn|(?:^|[-_])(?:signature|sig)$|(?:^|[-_])credential$|x-(?:amz|goog)-(?:signature|credential|security-token)$/i;
 
 /**
  * The built-in rule, always available and never configurable.

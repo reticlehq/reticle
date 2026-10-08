@@ -18,6 +18,7 @@ import { describeSuperseded } from './observed-in-window.js';
 import { evalElement, withTextProperty } from './predicate-element.js';
 import { evalState } from './predicate-state.js';
 import { evalCompare } from './predicate-compare.js';
+import { evalHead } from './predicate-head.js';
 import {
   PredicateSchema,
   evalNet,
@@ -354,6 +355,8 @@ async function evaluatePredicateRaw(
     }
     case PredicateKind.COMPARE:
       return evalCompare(session, events, predicate, diagnose);
+    case PredicateKind.HEAD:
+      return evalHead(session, predicate);
     case PredicateKind.ALL_OF: {
       const results = clearStarvedWhenSiblingsSaw(
         predicate.predicates,

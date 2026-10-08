@@ -36,6 +36,7 @@ const EXAMPLES: Readonly<Partial<Record<string, string>>> = {
   [PredicateKind.SIGNAL]: '{ kind: "signal", name: "todos:loaded" }',
   [PredicateKind.STATE]: '{ kind: "state", path: "cart.total", equals: 0 }',
   [PredicateKind.SETTLED]: '{ kind: "settled" }',
+  [PredicateKind.HEAD]: '{ kind: "head", link: { rel: "icon" }, href: { contains: "icon.svg" } }',
   [PredicateKind.COMPARE]:
     '{ kind: "compare", left: { from: "text", scope: "#total" }, right: { from: "net", urlContains: "/api/cart", path: "total" }, as: "number" }',
   [PredicateKind.ALL_OF]:

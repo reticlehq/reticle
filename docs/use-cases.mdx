@@ -101,9 +101,10 @@ Type "shoes" into a debounced search box and require exactly one request:
 
 ## SEO checks
 
-Reticle sees the rendered page and the routes, so it covers the behavioural half of SEO. It does not read `<head>` meta tags or score a page, so pair it with an SEO crawler for those.
+Reticle sees the rendered page, the routes and the `<head>`, so it covers the behavioural half of SEO. It does not score a page, so pair it with an SEO crawler for that.
 
 - `reticle_look { action: "page" }` reports the document `title` and the current route.
+- **Head tags.** The favicon, canonical link, meta description and Open Graph image: `{ "kind": "head", "meta": { "name": "description" }, "content": { "contains": "Plan" } }`.
 - **Headings and links.** The page's heading exists under its accessible name, and `reticle_look { action: "find", by: "role", value: "link", attrs: ["href"] }` lists every link with its `href`.
 - **Redirects and routing.** A legacy URL lands on the right path: `{ "kind": "route", "pathname": "/pricing" }`.
 - **Broken links and dead controls.** `reticle_verify { action: "crawl" }` drives every reachable control and reports failed requests, console errors and controls that do nothing.

@@ -47,6 +47,7 @@ const RE_READABLE: ReadonlySet<string> = new Set([
   PredicateKind.ELEMENT,
   PredicateKind.TEXT,
   PredicateKind.STATE,
+  PredicateKind.HEAD,
 ]);
 
 /** The part of a predicate a fresh document can answer, or undefined when there is none. */

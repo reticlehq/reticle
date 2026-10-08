@@ -46,6 +46,8 @@ export const PredicateKind = {
   CONSOLE: 'console',
   ANIMATION: 'animation',
   SETTLED: 'settled',
+  /** A `<link>` or `<meta>` in the live `<head>` — the elements no locator can reach. */
+  HEAD: 'head',
   /** Two observed values, related to each other — see compare-source.ts. */
   COMPARE: 'compare',
   ALL_OF: 'allOf',
@@ -69,6 +71,8 @@ const PRESENCE_KINDS: ReadonlySet<string> = new Set(Object.values(PresenceKind))
 export const PRESENCE_GRADED: ReadonlySet<string> = new Set([
   ...PRESENCE_KINDS,
   PredicateKind.ROUTE,
+  // A head tag is read off the page like an element, so it proves exactly as much as one does.
+  PredicateKind.HEAD,
 ]);
 
 /** True when `kind` (a predicate/expect kind) asserts a consequence (signal/net/state). */
