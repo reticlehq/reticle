@@ -657,7 +657,9 @@ export const ACT_TOOLS: ToolDef[] = [
         // Coverage: cross-origin frames / other blind spots the SDK reported during this window mean the
         // verdict didn't see everything — say so, never imply full coverage.
         const spots = blindSpotsFromState(session.blindSpots(), session.runtime);
-        const coverage = buildCoverageStatement(spots);
+        // The window's own counts, so sampling before it is not described as this window's (#1414).
+        const windowSpots = blindSpotsFromState(session.blindSpots(since), session.runtime);
+        const coverage = buildCoverageStatement(spots, windowSpots);
         const absenceBlindSpot = absenceBlindSpotNote(until, spots);
         // A green resting on hidden matches says the node exists, not that it shows (#1408).
         const hiddenMatch = hiddenMatchNote(until, verdict.evidence);
@@ -669,9 +671,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // must not downgrade a verdict about what WAS observed.
         const impeaching = buildCoverageStatement(
           // The WINDOW's blind spots: sampling before it is a coverage fact, not this verdict's gap (#1414).
-          blindSpotsFromState(session.blindSpots(since), session.runtime).filter((s) =>
-            impeachesCapture(s.kind),
-          ),
+          windowSpots.filter((s) => impeachesCapture(s.kind)),
         );
         // Same rule as reticle_assert: a browser-side transport gap means part of this window was
         // never seen, which is what `blindSpots` exists to say. `truncated` above covers the SERVER

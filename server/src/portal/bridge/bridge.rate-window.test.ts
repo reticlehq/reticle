@@ -97,7 +97,11 @@ describe('bridge sampling impeaches only the window it happened in', () => {
 
     expect(out['verifiedReason']).not.toBe(VerifiedReason.UNCLEAN_CAPTURE);
     // The session still says sampling happened: a coverage fact, not this verdict's gap.
-    expect(JSON.stringify(out['coverage'])).toContain('rate cap');
+    const note = JSON.stringify(out['coverage']);
+    expect(note).toContain('rate cap');
+    // ...without telling the reader to repeat a check whose own capture was whole.
+    expect(note).toContain('none in this window');
+    expect(note).not.toContain('SAMPLED');
   });
 
   it('still impeaches a window that contains the drops', async () => {
@@ -106,5 +110,6 @@ describe('bridge sampling impeaches only the window it happened in', () => {
     const out = await assertQuiet(bridge, 0);
 
     expect(out['verifiedReason']).toBe(VerifiedReason.UNCLEAN_CAPTURE);
+    expect(JSON.stringify(out['coverage'])).toContain('this window is SAMPLED');
   });
 });
