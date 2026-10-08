@@ -52,8 +52,17 @@ const FREE_DRIVE_PATH = '/v1/harness/free-drive';
 const FREE_DRIVE_KIND = 'try';
 const NEEDS_CARD = 'needs_card';
 const HTTP_PAYMENT_REQUIRED = 402;
-/** Where a workspace picks a plan, under the dashboard's origin. */
-const PLAN_PATH = '/settings/plan';
+/** Where a workspace starts its trial: the dashboard's billing settings, at its origin. */
+const PLAN_PATH = '/settings?group=billing';
+
+/** The dashboard's origin, whatever path the link it gave us carried. */
+function originOf(base: string): string {
+  try {
+    return new URL(base).origin;
+  } catch {
+    return base.replace(/\/+$/, '');
+  }
+}
 const PERSONA_FLAG = '--persona';
 const EXPLORE_ACTION = 'explore';
 
@@ -162,7 +171,7 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
     if (grant.hint !== undefined) ports.fail(grant.hint);
     if (grant.needsCard) {
       const base = (await ports.dashboardUrl(cloud).catch(() => undefined)) ?? cloud.url;
-      ports.fail(`Plans: ${base.replace(/\/+$/, '')}${PLAN_PATH}`);
+      ports.fail(`Plans: ${originOf(base)}${PLAN_PATH}`);
     }
     return EXIT_FAIL;
   }

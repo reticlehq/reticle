@@ -69,7 +69,7 @@ describe('reticle try', () => {
     expect(seen.fail).toEqual([
       'Your free drives are used up.',
       'Add a card to keep driving.',
-      'Plans: https://app.reticle.test/p/shop/settings/plan',
+      'Plans: https://app.reticle.test/settings?group=billing',
     ]);
     expect(seen.drives).toEqual([]);
   });
