@@ -667,7 +667,12 @@ export const ACT_TOOLS: ToolDef[] = [
         // Only a spot that IMPEACHES the capture belongs in integrity — see impeachesCapture. A
         // structural boundary (virtualized rows, a cross-origin frame) is reported as coverage and
         // must not downgrade a verdict about what WAS observed.
-        const impeaching = buildCoverageStatement(spots.filter((s) => impeachesCapture(s.kind)));
+        const impeaching = buildCoverageStatement(
+          // The WINDOW's blind spots: sampling before it is a coverage fact, not this verdict's gap (#1414).
+          blindSpotsFromState(session.blindSpots(since), session.runtime).filter((s) =>
+            impeachesCapture(s.kind),
+          ),
+        );
         // Same rule as reticle_assert: a browser-side transport gap means part of this window was
         // never seen, which is what `blindSpots` exists to say. `truncated` above covers the SERVER
         // ring buffer evicting; this covers the BROWSER queue overflowing, and they are not the same

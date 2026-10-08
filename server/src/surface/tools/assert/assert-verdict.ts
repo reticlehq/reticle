@@ -143,7 +143,12 @@ export async function assertVerdict(
   });
   // Only a spot that IMPEACHES the capture downgrades a general verdict. Structural boundaries are
   // reported as coverage; the narrower absence exception is computed separately above.
-  const impeaching = buildCoverageStatement(spots.filter((sp) => impeachesCapture(sp.kind)));
+  const impeaching = buildCoverageStatement(
+    // The WINDOW's blind spots: sampling before it is a coverage fact, not this verdict's gap (#1414).
+    blindSpotsFromState(session.blindSpots(since), session.runtime).filter((sp) =>
+      impeachesCapture(sp.kind),
+    ),
+  );
   // A gap in the WINDOW, as opposed to a standing limit of the page. Both mean the same thing to the
   // rule — part of what happened was not seen — so both belong in `blindSpots`, which is the only
   // input `decideVerified` reads for that.
