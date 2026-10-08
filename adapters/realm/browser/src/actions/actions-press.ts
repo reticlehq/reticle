@@ -128,20 +128,28 @@ export function dispatchKeypress(
   mods: ModifierFlags,
   repeat = false,
 ): void {
-  if ('Enter' !== key && 1 !== key.length) return;
-  asSyntheticInput(() =>
-    el.dispatchEvent(
-      new KeyboardEvent('keypress', {
-        key,
-        code,
-        bubbles: true,
-        cancelable: true,
-        repeat,
-        ...mods,
-      }),
-    ),
-  );
+  if (ENTER_KEY !== key && 1 !== key.length) return;
+  const event = new KeyboardEvent('keypress', {
+    key,
+    code,
+    bubbles: true,
+    cancelable: true,
+    repeat,
+    ...mods,
+  });
+  // A real keypress carries the character code in all three legacy fields, and scanner handlers read
+  // them. The constructor leaves them at 0 in every engine, so they are set on the instance.
+  const legacy = ENTER_KEY === key ? ENTER_CHAR_CODE : key.charCodeAt(0);
+  for (const field of LEGACY_KEY_CODE_FIELDS) {
+    Object.defineProperty(event, field, { value: legacy });
+  }
+  asSyntheticInput(() => el.dispatchEvent(event));
 }
+
+const ENTER_KEY = 'Enter';
+/** The carriage return a browser reports as Enter's keypress code. */
+const ENTER_CHAR_CODE = 13;
+const LEGACY_KEY_CODE_FIELDS = ['keyCode', 'charCode', 'which'] as const;
 
 /**
  * Named keys whose `code` equals their `key`. An allow-list rather than a shape test: `Zzz` looks

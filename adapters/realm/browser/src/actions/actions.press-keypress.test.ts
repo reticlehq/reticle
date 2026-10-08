@@ -80,6 +80,21 @@ describe('press dispatches browser-like keypress events', () => {
     expect(seen).toEqual(['keydown:a', 'keypress:a', 'keydown:b', 'keyup:b', 'keyup:a']);
   });
 
+  it.each([
+    ['9', 57],
+    ['a', 97],
+    ['A', 65],
+    ['Enter', 13],
+  ])('gives keypress for %s the legacy codes a scanner listener reads', async (key, code) => {
+    // Barcode-scanner and POS handlers still read `which` / `keyCode` / `charCode` on keypress. A
+    // synthetic event leaves all three at 0, so the scan arrives as a run of NULs.
+    const seen: KeyboardEvent[] = [];
+    el.addEventListener('keypress', (event) => seen.push(event));
+    await press({ key });
+    expect(seen).toHaveLength(1);
+    expect([seen[0]?.keyCode, seen[0]?.charCode, seen[0]?.which]).toEqual([code, code, code]);
+  });
+
   it('marks held-key keypress repeats as repeat events', async () => {
     const repeats: KeyboardEvent[] = [];
     el.addEventListener('keypress', (event) => {
