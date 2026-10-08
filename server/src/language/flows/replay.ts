@@ -1,5 +1,5 @@
 import { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
-import { FlowPredicateSchema, Verified, type Predicate } from '@reticlehq/core';
+import { FlowPredicateSchema, Verified, pathOf, type Predicate } from '@reticlehq/core';
 import {
   DANGEROUS_ACTION_CONFIRM_ARG,
   ReticleCommand,
@@ -92,14 +92,7 @@ function sourceFromResult(res: Record<string, unknown>): Record<string, unknown>
  * Pathname rather than the whole url, because that is what `startPath` is compared against and what
  * a hash-routed app makes meaningless in the document location — see routeOfEvent.
  */
-export function pathOf(url: string | undefined): string | undefined {
-  if (url === undefined) return undefined;
-  try {
-    return new URL(url).pathname;
-  } catch {
-    return undefined;
-  }
-}
+export { pathOf };
 
 /** What a saved flow could not keep, and the fix. See RecordedStep.unkeptExpect. */
 export const UNKEPT_EXPECT =

@@ -38,6 +38,7 @@ import {
   RETICLE_URL_PARAM,
   RETICLE_DEFAULT_PORT,
   SeedStorageSchema,
+  originOf,
   type SeedStorage,
 } from '@reticlehq/core';
 import { HudVisibility, ReticleTool, SESSION_HEALTH } from '@reticlehq/core';
@@ -113,15 +114,6 @@ async function leaseEvidence(deps: ToolDeps, port: number, url: string): Promise
 
 const POOL_UNAVAILABLE =
   'browser pool unavailable — the lease tools need the daemon-managed pool (start Reticle via `reticle mcp`).';
-
-/** The origin of a URL, or undefined when it does not parse. */
-function originOf(url: string): string | undefined {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return undefined;
-  }
-}
 
 const ALREADY_HELD_LEASE = 'you already hold a lease on this origin';
 

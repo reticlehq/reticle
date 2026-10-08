@@ -1,4 +1,4 @@
-import { NO_SESSION_CONNECTED_ERROR } from '@reticlehq/core';
+import { NO_SESSION_CONNECTED_ERROR, originOf } from '@reticlehq/core';
 import { notePendingNoSessionReason } from '@/telemetry/tool-refused.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import {
@@ -26,15 +26,8 @@ interface ResolveScope {
   url?: string;
 }
 
-/** The scheme://host:port of a URL, or undefined if it can't be parsed. Used to compare origins. */
-export function originOf(url: string | undefined): string | undefined {
-  if (url === undefined) return undefined;
-  try {
-    return new URL(url).origin;
-  } catch {
-    return undefined;
-  }
-}
+/** Core's `originOf`, re-exported for this module's existing importers. */
+export { originOf };
 
 /**
  * Narrow a session list to those belonging to the scoped project. With a `projectId` the match is by

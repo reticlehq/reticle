@@ -3,6 +3,8 @@
  * soft. Shared by `doctor` (is a policy blocking the bridge?) and a lease that never dialled (was
  * it the page's own policy?), which is why it lives beside the dev-server probe and not in either.
  */
+import { originOf } from '@reticlehq/core';
+
 /** What a served page said about its policy. The same shape `diagnoseObservedWebCsp` reads. */
 export interface ObservedWebDocument {
   url: string;
@@ -28,14 +30,6 @@ function loopbackDocumentUrl(raw: string): URL | undefined {
     const url = new URL(raw);
     if (!['http:', 'https:'].includes(url.protocol)) return undefined;
     return LOOPBACK_HOSTS.includes(url.hostname) ? url : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function originOf(raw: string): string | undefined {
-  try {
-    return new URL(raw).origin;
   } catch {
     return undefined;
   }

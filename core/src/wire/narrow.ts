@@ -51,3 +51,23 @@ export function asRecord(value: unknown): Record<string, unknown> {
 export function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return 'object' === typeof value && value !== null && !Array.isArray(value);
 }
+
+/** The URL's origin, or nothing when it is absent or does not parse. */
+export function originOf(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The URL's pathname, or nothing when it is absent or does not parse. */
+export function pathOf(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined;
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return undefined;
+  }
+}

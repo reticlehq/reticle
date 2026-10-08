@@ -1,4 +1,4 @@
-import { EventType, type ReticleEvent } from '@reticlehq/core';
+import { EventType, pathOf as routeFromUrl, type ReticleEvent } from '@reticlehq/core';
 
 interface RouteLearningSession {
   url: string;
@@ -30,15 +30,8 @@ export function routeFromEvent(event: ReticleEvent): string | undefined {
   return pathname;
 }
 
-/** Read the same route shape from a session's absolute URL. */
-export function routeFromUrl(value: string): string | undefined {
-  try {
-    const url = new URL(value);
-    return url.pathname;
-  } catch {
-    return undefined;
-  }
-}
+/** Read the same route shape from a session's absolute URL: core's `pathOf`, re-exported. */
+export { routeFromUrl };
 
 export function routesFromEvents(events: readonly ReticleEvent[]): string[] {
   return events.flatMap((event) => {
