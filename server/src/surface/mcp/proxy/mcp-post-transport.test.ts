@@ -12,7 +12,9 @@ import { getSessionMetrics, resetSessionMetrics } from '@/telemetry/session-metr
 
 const noBuffers = Object.assign(new Error('no buffer space'), { code: 'ENOBUFS' });
 
-function isHeaderRecord(headers: http.RequestOptions['headers']): headers is http.OutgoingHttpHeaders {
+function isHeaderRecord(
+  headers: http.RequestOptions['headers'],
+): headers is http.OutgoingHttpHeaders {
   return headers !== undefined && !Array.isArray(headers);
 }
 
