@@ -69,9 +69,8 @@ Step 1 is once per machine. This step is once per project. **Skipping it is the 
   **Skipped this step?** Ask your agent to verify something in the app. Its first `reticle_session`
   call finds a project that has never connected, runs `init` there itself, and lists every file it
   changed under `wired`. Asked about something unrelated, it offers to wire the app instead of doing
-  it. This works in Claude Code, Codex, Cursor and other MCP agents. If Reticle is already running
-  for another project, run `npx @reticlehq/server init` in this one: the automatic wiring covers the
-  project the daemon started in.
+  it. This works in Claude Code, Codex, Cursor and other MCP agents, including a second project
+  while Reticle is already running for another one.
 </Note>
 
 Prefer to install the skill and let the agent run setup itself? On Claude Code the plugin registers the MCP server and the skill in one step:

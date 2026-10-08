@@ -194,7 +194,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // nothing else here. `binding` replaces it, because the skew warning still asks for the status.
   launch: ['machine', 'identity', 'version', 'binding'],
   /** The mouth and ears: the tool surface and the MCP server, plus the HTTP door they answer on. */
-  surface: ['bridge', 'telemetry', 'version'],
+  surface: [
+    'bridge',
+    // The POST that carries a tool call names the proxy's project, and the diagnosis reads that
+    // directory from the same async context the Harness uses for who is driving.
+    'hooks',
+    'telemetry',
+    'version',
+  ],
   /**
    * Where `.reticle/` is for a given project, and the id derived from it.
    *

@@ -478,7 +478,6 @@ A session listed means the SDK reached the page. Then run your first check (Opti
 | "no browser session connected" | The dev server was already running when `init` edited the build config, so it's serving a bundle without the SDK | Restart the dev server and hard-reload the tab |
 | Browser console: `[Reticle] this page could not open a websocket to …` | The app and Reticle disagree on the port | `RETICLE_PORT=4400 npm run dev` (Vite plugin), `reticle({ port: 4400 })` in `vite.config`, or `reticle.connect({ url: 'ws://localhost:4400/reticle' })` by hand |
 | `init` stops with "Several apps found" | A monorepo | Rerun with the `reticle init --app <dir>` line it printed |
-| Nothing connects in a second project | Automatic wiring covers the project Reticle first started in | Run `reticle init` in this project too |
 | Codex doesn't see the tools | Reticle never rewrites a TOML file | Paste the block `init` printed under its `⚠` into `~/.codex/config.toml` |
 | `reticle: command not found` | npm's global bin isn't on your PATH | `export PATH="$(npm prefix -g)/bin:$PATH"`, or use `npx @reticlehq/server …` |
 | Anything else |  | `reticle doctor` checks the browser, the background service and the port in one go, and names the fix |

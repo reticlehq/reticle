@@ -8,6 +8,8 @@ export const RETICLE_WS_PATH = '/reticle';
 /** Agent↔server MCP wire paths — served by the daemon HTTP plane, forwarded by the stdio proxy. */
 export const MCP_SSE_PATH = '/mcp/sse';
 export const MCP_MESSAGE_PATH = '/mcp/message';
+/** Directory the MCP proxy was started in. One daemon serves every project, and this says which. */
+export const MCP_CLIENT_DIRECTORY_HEADER = 'x-reticle-client-directory';
 /**
  * The name this MCP server answers to — in its own `serverInfo` handshake, and in the registration
  * an installer writes into an agent's config. Those must be the same string or the agent registers

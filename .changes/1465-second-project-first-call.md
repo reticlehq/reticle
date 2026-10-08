@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a second project's first session call wired nothing and was told to reopen the first project's app.** One daemon serves every project. After any session had connected, `reticle_session { action: "list" }` from a project that had never connected answered `reopen_app` with the other project's URL and left the new project untouched. The call now runs `init` in the project the agent is in, and a reopen suggestion names a URL from that project only. Closes [#1465](https://github.com/reticlehq/reticle/issues/1465).
