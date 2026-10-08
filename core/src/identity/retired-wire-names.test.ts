@@ -37,6 +37,7 @@ const SHIPPED: readonly string[] = [
   'flows',
   'flow.progress',
   'plan',
+  'head_read',
   // events
   'dom.added',
   'dom.removed',
