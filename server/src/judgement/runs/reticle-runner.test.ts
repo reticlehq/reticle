@@ -229,3 +229,19 @@ describe('ReticleRunner.verify progress', () => {
     expect(seen[0]?.total).toBe(0);
   });
 });
+
+describe('ReticleRunner evidence', () => {
+  it('reports the console errors the replay windows saw, not an empty claim (#1344)', async () => {
+    const boom = { level: 'console.error', message: 'boom', at: 812 };
+    const port = fakePort(
+      {
+        save: replay('save', ReplayStatus.OK, {
+          steps: [{ step: 0, anchor: 'save', ok: true, consoleErrors: [boom] }],
+        }),
+      },
+      [],
+    );
+    const run = await new ReticleRunner(port).verify({ ...opts, names: ['save'] });
+    expect(run.evidence?.consoleErrors).toEqual([boom]);
+  });
+});

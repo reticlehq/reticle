@@ -103,7 +103,7 @@ registered tool by name. Verdicts come from `reticle_act_and_wait`, `reticle_ass
 `reticle_act` performs an action and reports no verdict; an agent that only calls it has verified
 nothing, which was the single largest cause of un-verified sessions. `reticle_act { steps }` collapses
 a multi-step flow (a login form, a checkout) into one call. A returned `verified: "unknown"` is **not**
-a pass — it means Reticle could not tell.
+a pass — it means Reticle could not tell — and neither is `"no-fault"`, which means nothing was declared to prove.
 
 The **verdict artifact** (`ReticleVerificationRun`, defined in `@reticlehq/core`) is stable and
 versioned: `verdict` (pass/fail/partial, confidence, blocking risks, reasons), `flows[]`, `checks[]`,

@@ -1046,3 +1046,42 @@ describe('a caller can state that the page was hidden', () => {
     expect(found.length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * #984: a verdict that asserted a REJECTED write — a 409 on a duplicate email, a validation error —
+ * was contradicted by the very failure under test, because the app's acknowledgement was on screen
+ * (an alert, an invalid field, the server's own message) rather than in a store or signal.
+ */
+describe('a failure the user is shown is acknowledged', () => {
+  const conflict = (): ReticleEvent =>
+    ev(EventType.NET_REQUEST, {
+      id: 'n1',
+      method: 'POST',
+      url: '/api/invites',
+      status: 409,
+      ok: false,
+      error: 'Another account already uses this email.',
+    });
+  const found = (...shown: ReticleEvent[]): string[] =>
+    findContradictions([conflict(), ...shown, domChanged()], { actionSince: 0 }).map((c) => c.kind);
+
+  it('by an alert', () => {
+    expect(found(ev(EventType.DOM_ADDED, { role: 'alert', name: 'Email taken' }))).toEqual([]);
+  });
+
+  it('by a field marked invalid', () => {
+    expect(found(ev(EventType.DOM_ATTR, { attr: 'aria-invalid', value: 'true' }))).toEqual([]);
+  });
+
+  it('by the server’s own error text on screen, in any wording', () => {
+    expect(
+      found(ev(EventType.DOM_TEXT, { text: 'Another account already uses this email.' })),
+    ).toEqual([]);
+  });
+
+  it('but not by a success toast', () => {
+    expect(found(ev(EventType.DOM_ADDED, { role: 'status', name: 'Invitation sent' }))).toEqual([
+      ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
+    ]);
+  });
+});

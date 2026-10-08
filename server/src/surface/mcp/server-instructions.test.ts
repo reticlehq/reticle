@@ -31,15 +31,11 @@ describe('buildServerInstructions', () => {
       expect(text).toContain(ReticleTool.SESSION);
     });
 
-    /*
-     * `init` starts the dev server and opens the app itself. This line used to say "run init, then
-     * RESTART the dev server, then load the app in a browser" to every agent, which contradicted
-     * skills/install-and-verify and sent agents to kill the server init had just started. The
-     * restart only applies to a dev server that was already running before init edited its config.
-     */
-    it('does not tell every agent to restart the dev server init just started', () => {
-      expect(text).toContain('starts the dev server and opens the app itself');
-      expect(text).toMatch(/only if a dev server was ALREADY running/);
+    // The first run wires the app, not the install: the agent's first session call does it and
+    // says which files changed. Restarting a dev server is no longer the agent's move at all.
+    it('has the first session call wire the app and name what changed', () => {
+      expect(text).toContain('Its first call wires the app');
+      expect(text).toContain('`wired` lists the files it changed');
       expect(text).not.toMatch(/then RESTART the dev server/);
     });
 

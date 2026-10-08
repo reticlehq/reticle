@@ -79,3 +79,29 @@ export function verifyEndpointMismatch(status: unknown, wantedPort: number): str
     ? `the daemon already running serves the verify HTTP endpoint on :${String(served)}, not :${String(wantedPort)} — ${fix}`
     : `a daemon is already running without the verify HTTP endpoint — \`--http\` cannot be applied to it; ${fix}`;
 }
+
+/**
+ * What a restart is about to do to the agents attached to the daemon whose `/status` this is, or
+ * undefined when nothing.
+ *
+ * A restart puts this CLI's version on the daemon. An agent whose own MCP server is older stays
+ * attached to a daemon it no longer matches, and a running agent cannot restart its own MCP server,
+ * so the restart that was meant to converge the versions strands it instead (#812). Said before the
+ * kill, with the way to restart at the version the attached agents run.
+ */
+export function strandedClientsNote(status: unknown, next = SERVER_VERSION): string | undefined {
+  const raw =
+    'object' === typeof status && null !== status
+      ? (status as { mcpPeers?: unknown }).mcpPeers
+      : undefined;
+  const peers = Array.isArray(raw) ? raw.filter((v): v is string => 'string' === typeof v) : [];
+  const behind = [...new Set(peers.filter((v) => v !== next))];
+  const pin = behind[0];
+  if (pin === undefined) return undefined;
+  return (
+    `warning: ${String(peers.length)} agent MCP server(s) are attached at ${behind.join(', ')}, ` +
+    `and this restart runs the daemon at ${next}. They stay attached to a daemon they no longer ` +
+    'match until their editor restarts its MCP server. To keep them working, restart at their ' +
+    `version instead: npx @reticlehq/server@${pin} restart`
+  );
+}

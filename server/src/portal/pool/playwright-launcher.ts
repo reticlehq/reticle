@@ -18,7 +18,39 @@ import {
   bundledPlaywrightVersion,
 } from '@/command/cli/doctor/browser/chromium-hint.js';
 import type { Launcher, PooledBrowser, PooledContext, PooledPage } from './browser-pool.js';
+import type { ScreenshotOptions } from './pool-contract.js';
 import { installNetworkMocks } from '@/portal/input/network-mock.js';
+
+/**
+ * Reticle paints its own UI (presenter HUD, glow, annotator marks, tour) into the page. It is
+ * time-varying, since the activity log and border state change with every command, so capturing it
+ * makes a fresh screenshot of an unchanged page differ from its baseline. Playwright applies `style`
+ * for the shot only and then reverts it, so the page under test is never changed. Disabling animations
+ * settles any remaining transitions. Shared by every capture path, driven and leased, so both hide
+ * the same set: core's `RETICLE_OVERLAY_SELECTOR`.
+ */
+export const SCREENSHOT_DETERMINISM = {
+  style: HIDE_RETICLE_CHROME_CSS,
+  animations: 'disabled',
+} as const;
+
+/**
+ * How Playwright captures a leased tab: a PNG by default, a JPEG for a live picture. Every capture
+ * hides Reticle's own UI with `SCREENSHOT_DETERMINISM`, the same as the driven path, so a lease
+ * baseline shows the app and not the HUD.
+ */
+export function screenshotOptions(opts: ScreenshotOptions): {
+  fullPage: boolean;
+  style: string;
+  animations: 'disabled';
+  type?: 'jpeg';
+  quality?: number;
+} {
+  const base = { ...SCREENSHOT_DETERMINISM, fullPage: true === opts.fullPage };
+  return opts.jpegQuality === undefined
+    ? base
+    : { ...base, type: 'jpeg', quality: opts.jpegQuality };
+}
 
 /**
  * How a leased tab navigates. Pure, and exported, because the decision in it is worth a test while
@@ -43,28 +75,6 @@ export function gotoOptions(timeoutMs: number | undefined): {
   };
 }
 
-/**
- * Reticle paints its own UI (presenter HUD, glow, annotator marks, tour) into the page. It is
- * time-varying, since the activity log and border state change with every command, so capturing it
- * makes a fresh screenshot of an unchanged page differ from its baseline. Playwright applies `style`
- * for the shot only and then reverts it, so the page under test is never changed. Disabling animations
- * settles any remaining transitions. Shared by every capture path, driven and leased, so both hide
- * the same set: core's `RETICLE_OVERLAY_SELECTOR`.
- */
-export const SCREENSHOT_DETERMINISM = {
-  style: HIDE_RETICLE_CHROME_CSS,
-  animations: 'disabled',
-} as const;
-
-/** The options a lease screenshot is taken with. */
-export function leaseScreenshotOptions(opts?: { fullPage?: boolean }): {
-  fullPage: boolean;
-  style: string;
-  animations: 'disabled';
-} {
-  return { ...SCREENSHOT_DETERMINISM, fullPage: true === opts?.fullPage };
-}
-
 function wrapBrowser(browser: Browser): PooledBrowser {
   return {
     isConnected: () => browser.isConnected(),
@@ -81,7 +91,7 @@ function wrapBrowser(browser: Browser): PooledBrowser {
             // Same determinism as the driven path's capturePage: without it a lease baseline caught
             // the HUD, its activity log and the toolbar, and a HUD change read as a regression (#1355).
             screenshot: async (opts) =>
-              new Uint8Array(await page.screenshot(leaseScreenshotOptions(opts))),
+              new Uint8Array(await page.screenshot(screenshotOptions(opts ?? {}))),
             // Three moves, same as performGesture: a single move to the center can be a no-op if
             // the pointer was already there, and CSS :hover needs a native hit-test to apply.
             hover: async (x, y) => {
@@ -111,6 +121,8 @@ function wrapBrowser(browser: Browser): PooledBrowser {
           };
         },
         addCookies: (cookies) => context.addCookies(cookies),
+        grantPermissions: (permissions, opts) => context.grantPermissions(permissions, opts),
+        clearPermissions: () => context.clearPermissions(),
         close: () => context.close(),
       };
     },

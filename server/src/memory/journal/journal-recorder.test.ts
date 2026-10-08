@@ -5,6 +5,7 @@ import {
   type JournalAction,
   type ReticleEvent,
 } from '@reticlehq/core';
+import { runDrivenBy } from '@/hooks/driven-by.js';
 import { JournalRecorder, type JournalSink } from './journal-recorder.js';
 
 function evt(seq: number): ReticleEvent {
@@ -44,6 +45,21 @@ function stepClock(values: number[]): () => number {
 }
 
 describe('JournalRecorder', () => {
+  it("stamps an action the Harness drove, and leaves the agent's own actions unstamped", async () => {
+    const sink = fakeSink();
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const by = { harness: 'h1', driver: 'server' };
+    await runDrivenBy(by, () => {
+      rec.beginAction('c1', 'reticle_act_and_wait', {});
+      rec.finishAction();
+      rec.recordAction('c2', 'reticle_assert', {});
+      return Promise.resolve();
+    });
+    rec.recordAction('c3', 'reticle_assert', {});
+    await rec.flush();
+    expect(sink.actions.map((a) => a.drivenBy)).toEqual([by, by, undefined]);
+  });
+
   it('journals ambient events with no attribution when no action is active', async () => {
     const sink = fakeSink();
     const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });

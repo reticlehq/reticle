@@ -146,7 +146,14 @@ export class ReticleRunner {
       flows,
       checks: [],
       risks,
-      evidence: { consoleErrors: [], networkAnomalies: [], stateAssertions: [], timeline: [] },
+      // What the replay windows saw. An empty list written here regardless read as a clean
+      // console on a run whose steps had counted errors (#1344).
+      evidence: {
+        consoleErrors: replays.flatMap((r) => r.steps.flatMap((step) => step.consoleErrors ?? [])),
+        networkAnomalies: [],
+        stateAssertions: [],
+        timeline: [],
+      },
       ...(failurePackets.length > 0 ? { repair: { failurePackets } } : {}),
     };
     const run = buildVerificationRun(input, () => this.#port.now());

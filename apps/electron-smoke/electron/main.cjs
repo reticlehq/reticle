@@ -109,7 +109,8 @@ function createWindow() {
       backgroundThrottling: false,
     },
   });
-  installReticleCapture(win);
+  // The label names this window in Reticle's session list, as a Tauri window label does.
+  installReticleCapture(win, { label: 'main' });
 
   // Forward renderer console to the terminal — a desktop renderer has no visible console unless you
   // open devtools, so a Reticle connect failure would otherwise be completely silent.

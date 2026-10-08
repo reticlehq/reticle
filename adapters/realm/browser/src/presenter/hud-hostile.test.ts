@@ -211,7 +211,7 @@ describe('shapes the panel must survive', () => {
     const { root, report } = mount();
     report.setSnapshot(snapshot([defect({ title: 'Sign In' })]));
     report.open();
-    root.querySelector<HTMLButtonElement>('[data-reticle-report-scope]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-reticle-report-scope="machine"]')?.click();
     expect(root.querySelector('[data-reticle-report-body]')?.textContent).toContain('Sign In');
   });
 });

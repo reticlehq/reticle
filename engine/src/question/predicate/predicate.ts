@@ -467,6 +467,25 @@ const MIN_RECHECK_GAP_MS = 25;
 const COUNT_CONFIRM_MS = 300;
 
 /**
+ * The least time an absence claim keeps watching after it first reads true, before the page's
+ * settle is consulted.
+ *
+ * An absence is not a count: the thing it rules out is usually a reaction the action scheduled, such
+ * as a `setTimeout(() => console.error(...), 800)` in a click handler. Held for COUNT_CONFIRM_MS, that
+ * step passed and the error landed in nobody's window (#1344). So an absence holds for this floor
+ * AND until the page has gone quiet by the `settled` oracle's own rule, whichever ends later, and the
+ * caller's budget still ends both.
+ *
+ * It is a ceiling, not a proof: an error scheduled more than a second after an otherwise silent
+ * action still passes. Nothing on the page says a timer is pending, so a longer floor is the only
+ * way to see further, and every live absence check would pay it.
+ */
+const ABSENCE_HOLD_MS = 1_000;
+
+/** "Has the page gone quiet", asked of the same window the absence is about. */
+const SETTLED_PROBE: Predicate = { kind: PredicateKind.SETTLED };
+
+/**
  * Does this predicate assert an exact cardinality anywhere inside it?
  *
  * Only these hold after passing. A presence-only predicate ("at least one") IS satisfiable early and
@@ -494,7 +513,7 @@ function assertsExactCount(predicate: Predicate): boolean {
  * Such a claim is about the END of a window for the same reason an exact count is, and reads true
  * at the start of every window by construction. Settled on its first reading, a clean-console check
  * passed on a page whose `console.error` landed a few milliseconds later, which the bench measured
- * once the page ran slower. It holds for the same bounded window as a count; see COUNT_CONFIRM_MS.
+ * once the page ran slower. It holds until the page goes quiet; see ABSENCE_HOLD_MS.
  */
 function claimsAbsence(predicate: Predicate): boolean {
   if (PredicateKind.NOT === predicate.kind) return true;
@@ -540,8 +559,9 @@ export function waitForPredicate(
     /** One-shot re-check timed to when a time-based predicate could first pass. See retryAfterMs. */
     let hintTimer: ReturnType<typeof setTimeout> | undefined;
     // An exact count or an absence keeps watching after it first reads true — see COUNT_CONFIRM_MS
-    // and claimsAbsence.
-    const holdsForCount = assertsExactCount(predicate) || claimsAbsence(predicate);
+    // and ABSENCE_HOLD_MS.
+    const holdsForAbsence = claimsAbsence(predicate);
+    const holdsForCount = assertsExactCount(predicate) || holdsForAbsence;
     let confirming = false;
     let confirmTimer: ReturnType<typeof setTimeout> | undefined;
     /** Report a wait that could not run, and END it — see guardedCheck. */
@@ -624,13 +644,32 @@ export function waitForPredicate(
           }
           if (confirming) return;
           confirming = true;
-          confirmTimer = setTimeout(() => {
+          const confirm = (): void => {
             void evaluatePredicate(reader, predicate, since, true, baselines)
               .then(finish)
               .catch((error: unknown) => {
                 finish(failed(error));
               });
-          }, COUNT_CONFIRM_MS);
+          };
+          if (!holdsForAbsence) {
+            confirmTimer = setTimeout(confirm, COUNT_CONFIRM_MS);
+            return;
+          }
+          // An absence waits out ABSENCE_HOLD_MS, then for the page to go quiet. A settle read that
+          // could not answer is not a reason to hold on: the confirming read still decides.
+          const holdUntilQuiet = (): void => {
+            void evaluatePredicate(reader, SETTLED_PROBE, since, false)
+              .then((settled) => {
+                if (done) return;
+                if (settled.pass) {
+                  confirm();
+                  return;
+                }
+                confirmTimer = setTimeout(holdUntilQuiet, settled.retryAfterMs ?? POLL_INTERVAL_MS);
+              })
+              .catch(confirm);
+          };
+          confirmTimer = setTimeout(holdUntilQuiet, ABSENCE_HOLD_MS);
         })
         .catch((error: unknown) => {
           finish(failed(error));

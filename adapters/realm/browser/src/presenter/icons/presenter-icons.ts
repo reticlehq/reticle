@@ -20,6 +20,7 @@ export const PresenterIcon = {
   COPY: 'copy',
   DOWNLOAD: 'download',
   MESSAGE: 'message',
+  NOTES: 'notes',
   GEAR: 'gear',
   LAYOUT: 'layout',
   TRASH: 'trash',
@@ -41,6 +42,7 @@ export const PRESENTER_ICON_SIZE = {
   SEND: 14,
   MIN: 12,
   HELP: 12,
+  NAV: 18,
   TOOLBAR: 18,
   FAB: 22,
 } as const;

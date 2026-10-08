@@ -104,11 +104,24 @@ function usedQueryFields(query: ElementQuery): ReadonlySet<string> {
  * Testing Library's `exact: false`, and falls back to the name because describe() omits `text` when it
  * equals the accessible name.
  */
+/**
+ * Does an element whose computed role is `actual` satisfy a query for `queried`?
+ *
+ * `searchbox` is an ARIA sub-role of `textbox`. A standard search input computes as `searchbox`
+ * (per HTML-AAM), which matches `{ role: "searchbox" }`. A `{ role: "textbox" }` query must
+ * keep matching it as well, so existing flows and recorded steps using `textbox` continue to match.
+ */
+function matchesRole(actual: string, queried: string): boolean {
+  if (actual === queried) return true;
+  if ('textbox' === queried && 'searchbox' === actual) return true;
+  return false;
+}
+
 const RESIDUAL_CHECKS: Readonly<
   Record<string, (element: ElementDescriptor, want: string) => boolean>
 > = {
   value: (element, want) => (element.value ?? '').trim() === want.trim(),
-  role: (element, want) => element.role === want,
+  role: (element, want) => matchesRole(element.role, want),
   name: (element, want) => element.name.trim() === want.trim(),
   text: (element, want) => (element.text ?? element.name).includes(want),
 };

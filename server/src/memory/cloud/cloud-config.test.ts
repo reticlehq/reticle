@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import {
   resolveProjectCloud,
   platformEnvPort,
+  linkedCloudPort,
+  linkedRunsCloudPort,
   CLOUD_LINK_FILE,
   CREDENTIALS_FILE,
 } from './cloud-config.js';
@@ -44,6 +46,27 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
    * key belonging to a different organisation — valid, so every check passed, and its runs would
    * have been pushed into a stranger's dashboard.
    */
+  /**
+   * `reticle verify` pushed its run and its progress to the cloud even with `sync.runs: false`: it
+   * read the credentials through a port that dropped the policy. Opting out has to mean out.
+   */
+  describe('a project that opted out of run sync', () => {
+    it('gives verify no cloud to push runs to, while the credential itself still resolves', async () => {
+      await writeLink({ projectId: 'web', url: 'https://cloud.test', sync: { runs: false } });
+      await writeCreds({ 'https://cloud.test::web': 'rk_live_web' });
+      expect(await linkedRunsCloudPort(fs, reticleRoot, homeDir, env)()).toBeNull();
+      expect((await linkedCloudPort(fs, reticleRoot, homeDir, env)())?.apiKey).toBe('rk_live_web');
+    });
+
+    it('keeps pushing runs for a project that did not opt out', async () => {
+      await writeLink({ projectId: 'web', url: 'https://cloud.test' });
+      await writeCreds({ 'https://cloud.test::web': 'rk_live_web' });
+      expect((await linkedRunsCloudPort(fs, reticleRoot, homeDir, env)())?.apiKey).toBe(
+        'rk_live_web',
+      );
+    });
+  });
+
   describe('two tenants on one cloud', () => {
     const URL = 'https://cloud.test';
     const bothTenants = {

@@ -1,14 +1,7 @@
 import { TESTID_FOUND_UNDER_SCHEMA } from './query-hint-schema.js';
 import { z } from 'zod';
-import {
-  DiscoveryInvite,
-  AttrNamesSchema,
-  EventType,
-  NoSessionAction,
-  QueryBy,
-  ReticleCommand,
-  SnapshotMode,
-} from '@reticlehq/core';
+import { EMPTY_SESSION_LIST_OUTPUT, emptySessionList } from './empty-session-list.js';
+import { AttrNamesSchema, EventType, QueryBy, ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { withSizeCost } from '@/portal/session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './read/snapshot-delta.js';
@@ -103,6 +96,13 @@ export const RAW_TOOLS: ToolDef[] = [
               .describe(
                 "Present only when this page's SDK version differs from the daemon's. A skewed pair connects and then disagrees about tool behaviour — usually surfacing as a bare -32000. Fix it before trusting any verdict from this session.",
               ),
+            window: z.string().optional().describe('Desktop window label (Tauri: main, setup…).'),
+            documentStatus: z
+              .number()
+              .optional()
+              .describe(
+                'Set only for an error page (4xx/5xx): not the app, never auto-selected first.',
+              ),
             lastSeenMs: z.number(),
             throttled: z.boolean(),
             focused: z.boolean(),
@@ -140,38 +140,7 @@ export const RAW_TOOLS: ToolDef[] = [
         .describe(
           'Connected browser sessions with health state. `projectId` groups sessions by app (stable across port changes); `leased` marks a pool-managed headless context vs a human tab.',
         ),
-      why: z
-        .string()
-        .optional()
-        .describe(
-          'Present ONLY when `sessions` is empty: why nothing is connected, and the next action that fixes it. An empty list is never the end of the road — read this before concluding the app cannot be driven.',
-        ),
-      next_action: z
-        .object({
-          action: z.nativeEnum(NoSessionAction),
-          command: z.string().optional(),
-          port: z.number().optional(),
-          reason: z.string(),
-        })
-        .optional()
-        .describe(
-          "Present ONLY when `sessions` is empty: the same answer as `why`, executable. `command` is the LITERAL command to run, sourced from this project's own package.json scripts and lockfile — it is absent, never guessed, when the project declares no dev script. `action` is one of daemon_split | start_dev_server | run_init | open_app | reopen_app. `daemon_split` outranks the rest and means the app IS running and instrumented, on a DIFFERENT daemon than the one you are attached to — do not start or re-init anything, read `reason`.",
-        ),
-      talk_to_us: z
-        .string()
-        .optional()
-        .describe(
-          'Present ONLY when `sessions` is empty: a call with the founder for the person you are working with. Offer it; never act on it.',
-        ),
-      lastKnown: z
-        .object({
-          sessionId: z.string(),
-          url: z.string(),
-        })
-        .optional()
-        .describe(
-          'Present ONLY when `sessions` is empty AND a tab was connected to this daemon earlier: the last sessionId and URL that tab was on when it disappeared. A route that 500s tears the page down and the SDK never reconnects — this is the last thing we knew, not a route-500 verdict. An empty list with no lastKnown is a tab that never arrived.',
-        ),
+      ...EMPTY_SESSION_LIST_OUTPUT,
     },
     handler: async (deps) => {
       const provider = deps.realInput;
@@ -183,27 +152,8 @@ export const RAW_TOOLS: ToolDef[] = [
           leased: leasedIds.has(s.sessionId),
         })),
       );
-      // An empty list is the most common thing this tool ever returns, and on its own it is a dead
-      // end: the agent asked the one question it knows to ask, got a confident-looking answer with
-      // no next step, and stopped. The daemon already knows WHY nothing is connected — say it here
-      // rather than only when a later tool fails for want of a session.
-      if (0 === sessions.length) {
-        const why = deps.sessions.noSessionHint();
-        // The executable half. `why` is for the human reading the transcript; this is the one the
-        // agent acts on, so it never has to parse a paragraph to find a command inside it.
-        const next = deps.sessions.noSessionNextAction();
-        // The last tab, when one was here. Optional-call: test stubs of SessionManager predate it.
-        const known = deps.sessions.lastKnown?.();
-        const lastKnown = undefined === known ? undefined : { sessionId: known.id, url: known.url };
-        return {
-          sessions,
-          ...(why === undefined ? {} : { why }),
-          ...(next === undefined ? {} : { next_action: next }),
-          ...(undefined === lastKnown ? {} : { lastKnown }),
-          // Setup that never connects is where most people give up; it is the talk worth having.
-          talk_to_us: DiscoveryInvite.AGENT,
-        };
-      }
+      // An empty list is a dead end on its own; see empty-session-list.ts for what it carries.
+      if (0 === sessions.length) return emptySessionList(deps, sessions);
       return { sessions };
     },
   },
@@ -636,7 +586,10 @@ export const MERGE_PLANS: MergePlan[] = [
       // whatever comes first is what an agent discovers; when this sentence opened with `tune` the
       // MANDATORY handback sat past the cut and no agent reading the catalogue ever learned it
       // existed. The rule is: if a tool has an obligation, the obligation goes first.
-      'Session lifecycle and the human channel, by action: "yield" hands control back to the human and is MANDATORY before you stop driving (mode: waiting|ask, between turns); "tune" adjusts the presenter session (e.g. idle-end window); "end" terminates the session for good; "resume" clears a human pause; "messages" drains the human→agent inbox; "review" lists/resolves the mistakes a human pinned to elements; "narrate" states your intent on the presenter HUD.',
+      // The first sentence is all a lean surface shows (160 characters), so it carries the
+      // obligation and the HUD control; the rest is the detail for a full one.
+      'By action: "yield" is MANDATORY before you stop driving; "tune" hides or moves the HUD, or sets the idle window. ' +
+      'In full: "yield" hands control back to the human (mode: waiting|ask, between turns); "tune" takes `hud` (hidden, shown, removed until reload, or a corner) for when the HUD covers a control you must test, and `idleEndMs`; "end" terminates the session for good; "resume" clears a human pause; "messages" drains the human→agent inbox; "review" lists/resolves the mistakes a human pinned to elements; "narrate" states your intent on the presenter HUD.',
     members: {
       tune: ReticleTool.SESSION_TUNE,
       yield: ReticleTool.YIELD,
@@ -653,7 +606,7 @@ export const MERGE_PLANS: MergePlan[] = [
   {
     name: ReticleTool.VERIFY,
     description:
-      'What is proved, and what is not — by action. Start from a change: { action: "affected" } names which saved flows must re-verify for the files you edited (pass `files`, and/or `since` for a git ref), and "change" goes further and actually replays them, answering with one `verified` plus `because`. `unknown` there is the honest answer when NO saved flow covers the change: nothing ran, so nothing was proved, and it is never reported as green. Without a change to start from: "flows" replays every saved flow for one consolidated suite verdict (deterministic, no LLM per flow), and "coverage" lists the interactive controls you have and have NOT driven this session — an untouched list still holding the controls your change affects means you are not done. "crawl" is the no-script option: it drives every reachable control itself and reports single-channel faults (console errors, failed requests, dead controls) and CONTRADICTIONS, two channels disagreeing about the same click — the false greens a human cannot see, because a human watches the screen and the screen looks correct. "explore" is the one to reach for on a project with NO saved flows: a model inside the daemon drives the app for you — pass a `persona` and it completes that whole journey — and RECORDS what it drove, so the next run replays it with no model in the loop and none of the driving costs your context. "mutate" grades the FLOW rather than the app: it breaks the endpoint a saved flow declared it depends on and replays it, and a flow that stays GREEN through a broken subject is a click sequence, not a test. "heal" repairs a flow whose LOCATOR drifted (a renamed testid), re-asserting the saved consequence before it writes and refusing when that stops firing — it heals a locator, never an intent. DESTRUCTIVE: crawl and explore really click, and may navigate or mutate state; "mutate" really fails a request on a driven page, and always puts it back.',
+      'What is proved, and what is not — by action. Start from a change: { action: "affected" } names which saved flows must re-verify for the files you edited (pass `files`, and/or `since` for a git ref), and "change" goes further and actually replays them, answering with one `verified` plus `because`. `unknown` there is the honest answer when NO saved flow covers the change: nothing ran, so nothing was proved, and it is never reported as green. Without a change to start from: "flows" replays every saved flow for one consolidated suite verdict (deterministic, no LLM per flow), and "coverage" lists the interactive controls you have and have NOT driven this session — an untouched list still holding the controls your change affects means you are not done. "crawl" is the no-script option: it drives every reachable control itself and reports single-channel faults (console errors, failed requests, dead controls) and CONTRADICTIONS, two channels disagreeing about the same click — the false greens a human cannot see, because a human watches the screen and the screen looks correct. "explore" is the one to reach for on a project with NO saved flows: the Reticle Harness drives the app for you on the platform — pass a `persona` and it completes that whole journey — and RECORDS what it drove, so the next run replays it with no model in the loop and none of the driving costs your context. "mutate" grades the FLOW rather than the app: it breaks the endpoint a saved flow declared it depends on and replays it, and a flow that stays GREEN through a broken subject is a click sequence, not a test. "heal" repairs a flow whose LOCATOR drifted (a renamed testid), re-asserting the saved consequence before it writes and refusing when that stops firing — it heals a locator, never an intent. DESTRUCTIVE: crawl and explore really click, and may navigate or mutate state; "mutate" really fails a request on a driven page, and always puts it back.',
     members: {
       change: ReticleTool.VERIFY_CHANGE,
       flows: ReticleTool.FLOW_VERIFY,
@@ -959,6 +912,9 @@ export const MERGED_SURFACE_PLANS: MergePlan[] = [
           // surface: on the default one `reticle_sessions` still exists and this tool is purely
           // lifecycle, where no member is the obvious bare meaning.
           defaultAction: 'list',
+          description:
+            'By action: "list" (the default) shows connected tabs; "yield" is MANDATORY before you stop; "tune" hides or moves the HUD; "feedback" reports a problem. ' +
+            'In full: "list" is the first call to make, and on a project that has never connected it wires the app and names the files it changed under `wired`; "yield" hands control back to the human (mode: waiting|ask); "tune" takes `hud` (hidden, shown, removed until reload, or a corner) for when the HUD covers a control you must test, and `idleEndMs`; "feedback" files a report; "end", "resume", "messages", "review" and "narrate" manage the session and the human channel.',
         }
       : plan,
   ),

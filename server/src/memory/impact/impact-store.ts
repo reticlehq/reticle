@@ -1,9 +1,12 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { describeSync, overallStatus, readSyncSummary } from '@/memory/project/sync-status.js';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { readAccountState } from '@/memory/cloud/account-state.js';
 import { harnessOfferSource, type OfferSource } from '@/memory/cloud/harness-offer.js';
 import type { ConfigSource } from '@/memory/cloud/harness-config.js';
+import { hudNoticesSource, type NoticesSource } from '@/memory/cloud/hud-notices-source.js';
+import { selectNotices } from '@reticlehq/core/hud';
 import {
   ReticleDir,
   IMPACT_DAILY_BUCKETS,
@@ -24,19 +27,17 @@ import {
 /**
  * Where Reticle keeps the record of what it has done for you.
  *
- * Two scopes, two files, both local and never uploaded: the project's own `.reticle/impact.json`,
- * and a machine-wide `~/.reticle/impact.json` that answers "what has Reticle done for me overall"
- * across every app you have instrumented.
+ * Two scopes, two files: the project's own `.reticle/impact.json`, and a machine-wide
+ * `~/.reticle/impact.json` that answers "what has Reticle done for me overall" across every app you
+ * have instrumented.
  *
- * This is NOT telemetry. Telemetry answers our questions about the product and leaves the machine;
- * this answers the user's question about their own work and never does.
+ * This is NOT telemetry. Telemetry answers our questions about the product; this answers the user's
+ * question about their own work. A linked project's record syncs to that user's own dashboard (the
+ * sync cycle's `impact` kind); the machine-wide record never leaves the machine.
  */
 
 /** Writes are debounced: a verification loop is 50-200 calls, and each one is a counter bump. */
 const WRITE_DEBOUNCE_MS = 800;
-
-/** The project's cloud binding, written by `reticle link`. Absent for an unlinked project. */
-const CLOUD_LINK_FILE = 'cloud.json';
 
 interface ImpactPaths {
   project: string;
@@ -68,7 +69,9 @@ function impactPaths(reticleRoot: string, globalRoot: string): ImpactPaths {
  */
 function readDashboardUrl(reticleRoot: string): string | undefined {
   try {
-    const raw: unknown = JSON.parse(readFileSync(join(reticleRoot, CLOUD_LINK_FILE), 'utf8'));
+    const raw: unknown = JSON.parse(
+      readFileSync(join(reticleRoot, ReticleDir.CLOUD_LINK_FILE), 'utf8'),
+    );
     if ('object' !== typeof raw || null === raw) return undefined;
     const value = (raw as Record<string, unknown>)['dashboardUrl'];
     return 'string' === typeof value && value.length > 0 ? value : undefined;
@@ -118,6 +121,13 @@ function writeScope(path: string, scope: ImpactScope): void {
   }
 }
 
+/** The daemon's cached copy of the HUD notices file, beside the machine-wide impact record. */
+const HUD_NOTICES_CACHE_FILE = 'hud-notices.json';
+/** How long a sync status is reused before it is read again. */
+const SYNC_STATUS_EVERY_MS = 10_000;
+/** When the caller did not say which build this is: matches only notices with no `minSdk`. */
+const UNKNOWN_SDK_VERSION = '0.0.0';
+
 /** YYYY-MM-DD in local time - the day boundary a person recognises, not UTC's. */
 export function isoDay(now: number): string {
   const d = new Date(now);
@@ -131,6 +141,26 @@ function isNextDay(a: string, b: string): boolean {
   const prev = new Date(`${a}T00:00:00`);
   const next = new Date(`${b}T00:00:00`);
   return 1 === Math.round((next.getTime() - prev.getTime()) / 86_400_000);
+}
+
+/**
+ * Consecutive days ending at the newest recorded day, read from the days themselves.
+ *
+ * It was a counter bumped when a fold opened a new day and compared only with the bucket before it,
+ * so one stray day in between (a late flush from another daemon, a writer with a frozen clock) reset
+ * it to 1. Counting back from the newest date means no out-of-order write can shorten it.
+ */
+function streakEndingAtLatest(sortedDates: readonly string[]): number {
+  let streak = 0;
+  let later: string | undefined;
+  for (let i = sortedDates.length - 1; i >= 0; i -= 1) {
+    const date = sortedDates[i];
+    if (date === undefined) break;
+    if (later !== undefined && !isNextDay(date, later)) break;
+    streak += 1;
+    later = date;
+  }
+  return streak;
 }
 
 /**
@@ -159,27 +189,30 @@ export function applyDelta(
 ): ImpactScope {
   const today = isoDay(now);
   const counts = addImpactCounts(scope.counts, delta);
-  const days = scope.days.slice();
-  const last = days[days.length - 1];
-  if (last !== undefined && last.date === today) {
-    days[days.length - 1] = { date: today, counts: addImpactCounts(last.counts, delta) };
-  } else {
-    days.push({ date: today, counts: addImpactCounts(emptyImpactCounts(), delta) });
+  // One bucket per date, wherever the delta's date falls. The machine-wide record has many writers
+  // and a late flush carries an older date, so "the last bucket is today" is not something a fold
+  // may assume — appending on that assumption duplicated dates and put them out of order.
+  const byDate = new Map<string, ImpactCounts>();
+  for (const day of scope.days) {
+    byDate.set(day.date, addImpactCounts(byDate.get(day.date) ?? emptyImpactCounts(), day.counts));
   }
+  const todayCounts = addImpactCounts(byDate.get(today) ?? emptyImpactCounts(), delta);
+  byDate.set(today, todayCounts);
+  const dates = [...byDate.keys()].sort();
+  const days = dates.map((date) => ({ date, counts: byDate.get(date) ?? emptyImpactCounts() }));
   while (days.length > IMPACT_DAILY_BUCKETS) days.shift();
 
-  const todayCounts = days[days.length - 1]?.counts ?? emptyImpactCounts();
-  const previousDay = days[days.length - 2];
   const records = { ...scope.records };
   records.bestVerdictDay = Math.max(records.bestVerdictDay, todayCounts.verdicts);
   records.bestDefectDay = Math.max(records.bestDefectDay, todayCounts.failed);
-  if (last === undefined || last.date !== today) {
-    // A new day joins the streak only if it follows yesterday; otherwise it starts a new one.
-    records.streakDays =
-      previousDay !== undefined && isNextDay(previousDay.date, today) ? records.streakDays + 1 : 1;
-  } else if (0 === records.streakDays) {
-    records.streakDays = 1;
-  }
+  // The window keeps IMPACT_DAILY_BUCKETS days, so a streak longer than it cannot be read off the
+  // dates alone: when the whole window is one unbroken run, it continues the streak already held.
+  const inWindow = streakEndingAtLatest(dates);
+  const unbroken = inWindow === dates.length && scope.days.length >= IMPACT_DAILY_BUCKETS;
+  const newDay = !scope.days.some((day) => day.date === today);
+  records.streakDays = unbroken
+    ? Math.max(inWindow, scope.records.streakDays + (newDay ? 1 : 0))
+    : inWindow;
   records.bestStreakDays = Math.max(records.bestStreakDays, records.streakDays);
   records.longestRunMs = Math.max(records.longestRunMs, meta.runMs ?? 0);
 
@@ -202,6 +235,43 @@ export function applyDelta(
   };
 }
 
+/** The larger of two counters, key by key. */
+function maxEach<T extends Record<string, number>>(a: T, b: T): T {
+  const out = { ...a };
+  for (const key of Object.keys(b) as (keyof T)[])
+    out[key] = Math.max(a[key] ?? 0, b[key] ?? 0) as T[keyof T];
+  return out;
+}
+
+/**
+ * All time, never smaller than the project being looked at.
+ *
+ * The two scopes live in different files: the project's in its `.reticle`, the machine's in the
+ * home directory. A project whose history began before this machine's ledger (an upgrade, a new
+ * laptop, a moved checkout) showed more under "This project" than under "All time", which no reader
+ * can believe. The machine has done at least what any one of its projects has.
+ */
+export function atLeastProject(global: ImpactScope, project: ImpactScope): ImpactScope {
+  // The earlier of the two starts; zero is "never recorded", not the epoch.
+  const starts = [global.since, project.since].filter((t) => 0 < t);
+  return {
+    ...global,
+    counts: maxEach(global.counts, project.counts),
+    records: maxEach(global.records, project.records),
+    savings: {
+      tokens: {
+        ...global.savings.tokens,
+        value: Math.max(global.savings.tokens.value, project.savings.tokens.value),
+      },
+      minutes: {
+        ...global.savings.minutes,
+        value: Math.max(global.savings.minutes.value, project.savings.minutes.value),
+      },
+    },
+    since: 0 === starts.length ? 0 : Math.min(...starts),
+  };
+}
+
 /**
  * The live impact record for one project.
  *
@@ -210,9 +280,12 @@ export function applyDelta(
  */
 export class ImpactStore {
   readonly #paths: ImpactPaths;
+  readonly #root: string;
+  /** The sync status, re-read at most every SYNC_STATUS_EVERY_MS: it reads every run file. */
+  #sync: { at: number; value: Record<string, unknown> } | undefined;
   readonly #now: () => number;
   readonly #projectName: string | undefined;
-  readonly #dashboardUrl: string | undefined;
+  #dashboardUrl: string | undefined;
   #project: ImpactScope;
   #global: ImpactScope;
   /**
@@ -230,6 +303,9 @@ export class ImpactStore {
   /** Where this workspace stands with the free harness offer. Cached; see harness-offer.ts. */
   readonly #offer: OfferSource;
   readonly #config: ConfigSource;
+  readonly #notices: NoticesSource;
+  readonly #sdkVersion: string;
+  readonly #coverage: (() => Record<string, number> | undefined) | undefined;
 
   constructor(opts: {
     reticleRoot: string;
@@ -242,7 +318,14 @@ export class ImpactStore {
     /** Where the workspace stands with the free harness offer. Injected so no test touches a network. */
     offer?: OfferSource;
     config?: ConfigSource;
+    /** The HUD rail's notices. Defaults to the daemon's cached copy of the published file. */
+    notices?: NoticesSource;
+    /** This build's version, for notices that need a newer SDK. Passed in: the store reads no package. */
+    sdkVersion?: string;
+    /** Reticle Coverage per level, as percentages. Injected: the ledger lives in `features/exhaust`. */
+    coverage?: () => Record<string, number> | undefined;
   }) {
+    this.#coverage = opts.coverage;
     this.#paths = impactPaths(opts.reticleRoot, opts.globalRoot ?? homedir());
     // Resolved per snapshot, not cached: a user who runs `reticle login` in another terminal must
     // see the HUD change without restarting the daemon that is watching their app.
@@ -250,15 +333,40 @@ export class ImpactStore {
     this.#now = opts.now ?? ((): number => Date.now());
     this.#projectName = opts.projectName;
     this.#dashboardUrl = readDashboardUrl(opts.reticleRoot);
+    this.#root = opts.reticleRoot;
     // The claim happens in the console, so the link this project was linked to IS the claim link —
     // built here rather than in the HUD, which has no way to know where this project points.
     this.#offer = opts.offer ?? harnessOfferSource(process.env, () => this.#dashboardUrl);
+    this.#notices =
+      opts.notices ??
+      hudNoticesSource({
+        cacheFile: join(opts.globalRoot ?? homedir(), ReticleDir.ROOT, HUD_NOTICES_CACHE_FILE),
+      });
+    this.#sdkVersion = opts.sdkVersion ?? UNKNOWN_SDK_VERSION;
     // No default: the loader lives in `features/harness` and this file may not reach for it.
     // A store built without one simply reports no harness config, which the HUD renders as no row.
     this.#config = opts.config ?? { read: () => undefined };
     const now = this.#now();
     this.#project = readScope(this.#paths.project, now);
     this.#global = readScope(this.#paths.global, now);
+  }
+
+  #syncStatus(): Record<string, unknown> {
+    const now = this.#now();
+    if (this.#sync !== undefined && now - this.#sync.at < SYNC_STATUS_EVERY_MS)
+      return this.#sync.value;
+    const summary = readSyncSummary(this.#root, true);
+    const value = {
+      status: overallStatus(summary),
+      runs: summary.runs,
+      onPlatform: summary.onPlatform,
+      pending: summary.pending,
+      refused: summary.refused.length + summary.refusedMore,
+      ...(summary.lastPushAt === undefined ? {} : { lastPushAt: summary.lastPushAt }),
+      said: describeSync(summary, now),
+    };
+    this.#sync = { at: now, value };
+    return value;
   }
 
   /** Notified after every fold, so the HUD can be pushed a fresh snapshot. */
@@ -281,9 +389,12 @@ export class ImpactStore {
     const snap: ImpactSnapshot = {
       schemaVersion: IMPACT_SCHEMA_VERSION,
       project: this.#project,
-      global: this.#global,
+      global: atLeastProject(this.#global, this.#project),
     };
     if (this.#projectName !== undefined) snap.projectName = this.#projectName;
+    // Re-read, like the account: `reticle link` runs in another terminal while this store lives as
+    // long as the daemon, so a construction-time read said "Not linked" until a restart.
+    this.#dashboardUrl = readDashboardUrl(this.#root);
     if (this.#dashboardUrl !== undefined) snap.dashboardUrl = this.#dashboardUrl;
     snap.account = this.#account();
     const cfgForOffer = this.#config.read();
@@ -299,6 +410,20 @@ export class ImpactStore {
     // Absent stays absent: the HUD reads that as "we have not heard" and renders no control.
     const cfg = this.#config.read();
     if (cfg !== undefined) snap.harnessConfig = cfg;
+    // Chosen here, where the account and the entitlement are both known. Absent when nothing applies,
+    // so the HUD falls back to the slides bundled with the SDK.
+    const notices = selectNotices(this.#notices.read(), {
+      signedIn: snap.account?.signedIn,
+      entitled: cfg?.harnessEntitled,
+      sdkVersion: this.#sdkVersion,
+      now: this.#now(),
+    });
+    if (0 < notices.length) snap.notices = notices;
+    const coverage = this.#coverage?.();
+    if (coverage !== undefined) snap.coverage = coverage;
+    // Only for a linked project: an unlinked one has nothing on the platform, and the HUD already
+    // offers the way to link it.
+    if (this.#dashboardUrl !== undefined) snap.sync = this.#syncStatus();
     return snap;
   }
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InitResult } from '@reticlehq/init';
-import { continueAfterInit } from './init-runtime.js';
+import { continueAfterInit, htmlCarriesSdk } from './init-runtime.js';
 import { registerOtherAgents, runSetupCommand } from '../setup-command.js';
 import { LicenseWrite, writeLicenseKey } from '../license-key.js';
 import { SetupPhase } from '../run-setup.js';
@@ -219,5 +219,21 @@ describe('init reports its deferred outcome once, after runtime setup', () => {
       }),
       expect.any(Function),
     );
+  });
+});
+
+describe('htmlCarriesSdk — when a page without the SDK means a stale dev server', () => {
+  it('is true for a Next App Router project: its flight data names reticle-dev', () => {
+    expect(htmlCarriesSdk('next', (p) => 'app/reticle-dev.tsx' === p)).toBe(true);
+    expect(htmlCarriesSdk('next', (p) => 'src/app/reticle-dev.jsx' === p)).toBe(true);
+  });
+
+  it('stays false for the Pages Router, whose HTML names chunks rather than modules', () => {
+    expect(htmlCarriesSdk('next', () => false)).toBe(false);
+  });
+
+  it('keeps Vite and plain HTML as they were', () => {
+    expect(htmlCarriesSdk('vite', () => false)).toBe(true);
+    expect(htmlCarriesSdk('html', () => false)).toBe(true);
   });
 });

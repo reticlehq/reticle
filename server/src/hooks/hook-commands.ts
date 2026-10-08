@@ -22,7 +22,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
+import { closeSync, fstatSync, openSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { HOOK_EVENT_NAMES, HookConfigSchema, type HookPayload } from '@reticlehq/core/hooks';
 import { ReticleDir } from '@reticlehq/core';
@@ -71,16 +71,27 @@ let cached: { at: number; config: Record<string, string> } | undefined;
  */
 export function readHookConfig(reticleRoot: string): Record<string, string> {
   const path = join(reticleRoot, ReticleDir.HOOKS_FILE);
-  let mtime: number;
+  // Open once, then stat and read the SAME descriptor: the mtime the cache keys on is the mtime of
+  // the bytes read, not of whatever the path pointed at a moment earlier.
+  let fd: number;
   try {
-    mtime = statSync(path).mtimeMs;
+    fd = openSync(path, 'r');
   } catch {
     cached = undefined;
     return {};
   }
+  try {
+    return readOpenHookConfig(fd);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function readOpenHookConfig(fd: number): Record<string, string> {
+  const mtime = fstatSync(fd).mtimeMs;
   if (cached !== undefined && cached.at === mtime) return cached.config;
   try {
-    const parsed = HookConfigSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')));
+    const parsed = HookConfigSchema.safeParse(JSON.parse(readFileSync(fd, 'utf8')));
     if (!parsed.success) {
       reportOnce(
         `config:${String(mtime)}`,

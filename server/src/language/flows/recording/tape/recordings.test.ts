@@ -29,6 +29,35 @@ describe('RecordingStore', () => {
     expect(store.stop('flow')).toBeUndefined();
   });
 
+  // #988: one daemon serves every app on the machine, and a click in an unrelated app landed in
+  // somebody else's saved flow, with its assertion attached to that flow's last step.
+  it('takes only the steps and assertions of the session that started it', () => {
+    const store = new RecordingStore();
+    store.start('mine', 0, '/', 'tab-a');
+    store.capture(step('reticle_act'), undefined, 'tab-a');
+    store.capture(step('reticle_act_sequence'), undefined, 'tab-b');
+    store.attachExpect({ kind: 'signal', name: 'other:app' }, 'tab-b');
+    const rec = store.stop('mine');
+    expect(rec?.steps.map((s) => s.tool)).toEqual(['reticle_act']);
+    expect(rec?.steps[0]?.expect).toBeUndefined();
+  });
+
+  it('takes a refuted expectation off the ambient tape, and leaves a deliberate recording alone', () => {
+    const store = new RecordingStore();
+    store.start('mine', 0);
+    const refuted = {
+      ...step('reticle_act'),
+      expect: { kind: 'route', pathname: '/nowhere' },
+    } as RecordedStep;
+    store.capture(refuted);
+    store.unassertLast();
+    expect(store.stop(AMBIENT_RECORDING)?.steps.at(-1)?.expect).toBeUndefined();
+    expect(store.stop('mine')?.steps.at(-1)?.expect).toEqual({
+      kind: 'route',
+      pathname: '/nowhere',
+    });
+  });
+
   it('capture with no NAMED recording still records — the ambient tape opens itself', () => {
     /*
      * Inverted deliberately. This used to assert that a step driven with no recording open was a
@@ -267,5 +296,23 @@ describe('captureAssertion', () => {
     const store = new RecordingStore();
     captureAssertion(store, sig('a'));
     expect(store.active()).toEqual([]);
+  });
+});
+
+// #988: a proved `until` the flow file cannot express was dropped and the flow saved weaker, silently.
+describe('a proved check the flow cannot keep', () => {
+  it('is marked on the step, so stop can say so', () => {
+    const store = new RecordingStore();
+    store.start('f', 0, '/', 's1');
+    captureAct(
+      store,
+      { ref: 'e3', action: 'click', until: { kind: 'element', query: { ref: 'e12' } } },
+      { target: { testid: 'save' } },
+      '/',
+      's1',
+    );
+    const rec = store.stop('f');
+    expect(rec?.steps[0]?.expect).toBeUndefined();
+    expect(rec?.steps[0]?.unkeptExpect).toContain('session ref');
   });
 });

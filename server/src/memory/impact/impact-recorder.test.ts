@@ -23,6 +23,8 @@ import {
 } from './impact-recorder.js';
 
 const root = (): string => mkdtempSync(join(tmpdir(), 'impact-root-'));
+/** The machine-wide record goes to a temp home, never the developer's real ~/.reticle. */
+const home = (): string => mkdtempSync(join(tmpdir(), 'impact-home-'));
 
 /**
  * Verdicts recorded against one root, read from the in-memory scope.
@@ -42,7 +44,7 @@ describe('impact is recorded per project root', () => {
   it("keeps two projects' ledgers apart when one daemon serves both", () => {
     const daemonRoot = root();
     const otherApp = root();
-    initImpact({ reticleRoot: daemonRoot });
+    initImpact({ reticleRoot: daemonRoot, globalRoot: home() });
 
     recordImpact({ calls: 1, verdicts: 1, passed: 1 }, {}, daemonRoot);
     recordImpact({ calls: 1, verdicts: 1, failed: 1 }, {}, otherApp);
@@ -56,7 +58,7 @@ describe('impact is recorded per project root', () => {
     // took both and the other app's ledger stayed at zero.
     const daemonRoot = root();
     const otherApp = root();
-    initImpact({ reticleRoot: daemonRoot });
+    initImpact({ reticleRoot: daemonRoot, globalRoot: home() });
 
     recordImpact({ calls: 1, verdicts: 1, passed: 1 }, {}, otherApp);
 
@@ -68,7 +70,7 @@ describe('impact is recorded per project root', () => {
     // Not every counter has a session to ask. Those keep the old behaviour rather than being
     // dropped: an unattributed count is worth less than an attributed one and more than none.
     const daemonRoot = root();
-    initImpact({ reticleRoot: daemonRoot });
+    initImpact({ reticleRoot: daemonRoot, globalRoot: home() });
 
     recordImpact({ calls: 1, verdicts: 1, passed: 1 });
 
@@ -78,7 +80,7 @@ describe('impact is recorded per project root', () => {
   it('reads back the snapshot for the root asked for, not whichever was first', () => {
     const daemonRoot = root();
     const otherApp = root();
-    initImpact({ reticleRoot: daemonRoot });
+    initImpact({ reticleRoot: daemonRoot, globalRoot: home() });
     recordImpact({ calls: 1, verdicts: 1, passed: 1 }, {}, daemonRoot);
     recordImpact({ calls: 2, verdicts: 2, failed: 2 }, {}, otherApp);
 
@@ -98,8 +100,8 @@ describe('impact is recorded per project root', () => {
   it('keeps the daemon root stable once set, so a later init cannot move the fallback', () => {
     const first = root();
     const second = root();
-    initImpact({ reticleRoot: first });
-    initImpact({ reticleRoot: second });
+    initImpact({ reticleRoot: first, globalRoot: home() });
+    initImpact({ reticleRoot: second, globalRoot: home() });
 
     recordImpact({ calls: 1, verdicts: 1, passed: 1 });
 

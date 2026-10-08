@@ -31,7 +31,10 @@ import { tokensMatch } from './token-auth.js';
 import { pairingTokenSource } from './pairing-token.js';
 import { log } from '@/log.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
-import { sessionReplacedReason } from '@/portal/session/facts/session-replaced.js';
+import {
+  SESSION_PARKED_REASON,
+  sessionReplacedReason,
+} from '@/portal/session/facts/session-replaced.js';
 import { describeSkew, sdkFix, SkewPair } from '@/command/version/version-skew.js';
 import { noteVersionSkew } from '@/command/version/version-nudge.js';
 import { protocolSkewReason } from './protocol-skew.js';
@@ -179,6 +182,11 @@ function harnessRequest(event: {
   if ('on' === want) return true;
   if ('off' === want) return false;
   return undefined;
+}
+
+/** True when this event is the panel's Sign in. Pure boundary narrowing, like the above. */
+function isSigninRequest(event: { type: string; data: Record<string, unknown> }): boolean {
+  return event.type === EventType.HUMAN_CONTROL && event.data['kind'] === HumanControlKind.SIGNIN;
 }
 
 /** True when this event is the panel's "sync now" button. Pure boundary narrowing, like the above. */
@@ -331,7 +339,8 @@ export class Bridge {
   #onSessionEnd: ((session: Session) => Promise<void>) | undefined;
   /** Wired by the daemon: push to the dashboard now, because somebody asked in the panel. */
   #onSyncRequest: (() => void) | undefined;
-  #onHarnessRequest: ((enabled: boolean) => void) | undefined;
+  #onHarnessRequest: ((enabled: boolean, session: Session) => void) | undefined;
+  #onSigninRequest: (() => void) | undefined;
 
   constructor(options: BridgeOptions) {
     const host = options.host ?? LOOPBACK_HOST;
@@ -545,6 +554,22 @@ export class Bridge {
             log('hello_invalid', { ...refused });
             this.sessions.noteClosure(WS_CLOSE_REASON.INVALID_HELLO, this.#clock(), refused);
           }
+          // On a LIVE session a frame that fails the schema is dropped, not answered with a close.
+          // The SDK reads every 1008 as permanent and stops reconnecting, so one event kind from a
+          // newer SDK ended the session for good, mid-drive, until a manual reload (#1413). What was
+          // thrown away is evidence, so it is recorded as a transport gap in this window: a verdict
+          // over it is downgraded rather than graded over an event nobody read. Only before hello is
+          // a bad frame still a terminal refusal.
+          if (undefined !== session) {
+            log('invalid_frame_dropped', { sessionId: session.id, ...peekFrameKind(text) });
+            session.pushEvent({
+              t: session.elapsed(),
+              type: EventType.TRANSPORT_OVERFLOW,
+              sessionId: session.id,
+              data: { dropped: 1 },
+            });
+            return;
+          }
           socket.close(...WS_CLOSE.INVALID_MESSAGE);
           return;
         }
@@ -609,6 +634,11 @@ export class Bridge {
               ...(parsed.projectId === undefined ? {} : { projectId: parsed.projectId }),
             });
             socket.close(WS_CLOSE.AUTH_FAILED[0], reason);
+            return;
+          }
+          // A window the agent detached stays detached across its own reloads. See SessionManager.park.
+          if (this.sessions.isParked(parsed.sessionId)) {
+            socket.close(1008, SESSION_PARKED_REASON);
             return;
           }
           const existing = this.sessions.get(parsed.sessionId);
@@ -759,7 +789,9 @@ export class Bridge {
           else if (isSyncRequest(parsed.event)) this.#onSyncRequest?.();
           // The switch is written through to the platform by the daemon, for the same reason: the
           // Session has no cloud credential and should not grow one.
-          else if (harness !== undefined) this.#onHarnessRequest?.(harness);
+          else if (harness !== undefined) this.#onHarnessRequest?.(harness, session);
+          // Signing in writes `~/.reticle`, which only the daemon may do; the panel only asks.
+          else if (isSigninRequest(parsed.event)) this.#onSigninRequest?.();
           // Pass the raw frame's byte length so the buffer doesn't re-serialize every event for accounting.
           else session.pushEvent(parsed.event, Buffer.byteLength(text, 'utf8'));
         } else if (parsed.kind === MessageKind.COMMAND_RESULT) {
@@ -900,8 +932,13 @@ export class Bridge {
    * Register a handler for the panel's harness switch. Optional for the same reason as the above: a
    * bridge built without one ignores the request rather than refusing it.
    */
-  attachHarnessRequest(handler: (enabled: boolean) => void): void {
+  attachHarnessRequest(handler: (enabled: boolean, session: Session) => void): void {
     this.#onHarnessRequest = handler;
+  }
+
+  /** Register a handler for the panel's Sign in. Optional, like the above: without one it is ignored. */
+  attachSigninRequest(handler: () => void): void {
+    this.#onSigninRequest = handler;
   }
 
   /** Register a handler to run when a session connects. Additive — every handler runs. */
@@ -918,3 +955,26 @@ export class Bridge {
     });
   }
 }
+
+/**
+ * The `kind` and event `type` of a frame that failed the schema, for the log: never its payload,
+ * which can carry anything the page sent. Each is a bounded string or absent.
+ */
+function peekFrameKind(text: string): { kind?: string; eventType?: string } {
+  const short = (v: unknown): string | undefined =>
+    'string' === typeof v ? v.slice(0, MAX_LOGGED_FRAME_FIELD) : undefined;
+  try {
+    const json = JSON.parse(text) as { kind?: unknown; event?: { type?: unknown } } | null;
+    const kind = short(json?.kind);
+    const eventType = short(json?.event?.type);
+    return {
+      ...(kind === undefined ? {} : { kind }),
+      ...(eventType === undefined ? {} : { eventType }),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** How much of a frame's `kind` or event `type` the drop log keeps. */
+const MAX_LOGGED_FRAME_FIELD = 64;

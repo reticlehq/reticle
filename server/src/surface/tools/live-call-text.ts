@@ -89,8 +89,8 @@ const NO_TOOL_EQUIVALENT: readonly {
    * every session, and the longer two-route version cost 67 bytes there against a budget measured
    * in whole-session terms — for advice that is read once, on a first run.
    *
-   * `explore` needs ANTHROPIC_API_KEY and says so itself when it is missing, naming the fallback in
-   * the same breath ("flows are recorded by your own coding agent through the MCP tools"). That
+   * `explore` runs on the platform and says so itself when it is not linked, naming the fallback in
+   * the same breath (drive the journey yourself with the MCP tools). That
    * error is now recognised as ours, so the reader who hits it gets the next step instead of an
    * invitation to file a defect report. One hop, and every hop is honest.
    */

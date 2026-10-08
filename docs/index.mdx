@@ -28,7 +28,7 @@ irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1
 
 </CodeGroup>
 
-That registers the MCP server with every coding agent it can reach, so the `reticle_*` tools are there the next time you open one. Then, in your project, `npx @reticlehq/server init` wires the app. The [quickstart](/quickstart) walks both.
+That registers the MCP server with every coding agent it can reach, so the `reticle_*` tools are there the next time you open one. Then ask your agent to verify something in your app: its first Reticle call wires the app and lists the files it changed (`npx @reticlehq/server init` does the same by hand). The [quickstart](/quickstart) walks both.
 
 ### Or hand the whole thing to your agent
 
@@ -54,8 +54,9 @@ That one command wires the project, starts the dev server, opens the app and
 waits for it to connect. Do not walk it by hand: read what it prints, do anything
 it says is outstanding, and re-run it, which is safe. It exits non-zero until the
 app connects, and that connection, not a config file, is what "installed" means.
-Then prove a flow, which is a separate call:
-reticle_verify { action: "explore", persona: "<who does what>" }. Only if it could not run at all, follow
+Then prove a flow, which is a separate call: drive the journey with
+reticle_act_and_wait and an `until` on its last step (or, with a linked project,
+reticle_verify { action: "explore", persona: "<who does what>" }). Only if it could not run at all, follow
 https://docs.reticle.sh/install-manual.md.
 
 Afterwards, use it whenever you change any user-facing behaviour.

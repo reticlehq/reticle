@@ -31,7 +31,7 @@
 import { fileURLToPath } from 'node:url';
 import { createServer, type Server } from 'node:http';
 import { dirname, join, relative, extname, sep } from 'node:path';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 /** Where the tour starts. Everything else on the page is reached from here. */
 const SDK_ENTRY = '@reticlehq/browser';
@@ -235,13 +235,19 @@ export function serveDemoPage(
       if (!path.startsWith(mount.prefix)) continue;
       const file = join(mount.dir, path.slice(mount.prefix.length));
       // A request that climbed out of the mount is not served, whatever it points at.
-      if (!file.startsWith(mount.dir + sep) || !existsSync(file) || statSync(file).isDirectory()) {
+      if (!file.startsWith(mount.dir + sep)) break;
+      // One read, no prior exists/stat check: a missing file or a directory throws here, and there
+      // is no window between a check and the read for the path to change under it.
+      let body: Buffer;
+      try {
+        body = readFileSync(file);
+      } catch {
         break;
       }
       res.writeHead(200, {
         'content-type': '.js' === extname(file) ? JS_CONTENT_TYPE : 'application/octet-stream',
       });
-      res.end(readFileSync(file));
+      res.end(body);
       return;
     }
     res.writeHead(404);

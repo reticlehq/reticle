@@ -23,7 +23,6 @@ export default defineConfig({
         url: 'http://localhost/',
       },
     },
-    setupFiles: ['./vitest.setup.ts'],
     /**
      * The jsdom window has to be the REAL one, because this package now constructs events with it.
      *
@@ -65,5 +64,8 @@ export default defineConfig({
      * a shared file nobody reads on the way past.
      */
     ...sharedTestOptions,
+    // After the spread, and BOTH files: the shared options also set `setupFiles`, and spread last
+    // they replaced this package's own, so the MockStorage install silently stopped running.
+    setupFiles: [...sharedTestOptions.setupFiles, './vitest.setup.ts'],
   },
 });

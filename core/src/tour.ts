@@ -40,6 +40,7 @@ export const TourAnchor = {
   APP: 'app',
   /** One control in the HUD's toolbar. Ours, so naming it is not a guess. */
   HUD_CHAT: 'hud-chat',
+  HUD_FLOWS: 'hud-flows',
   HUD_ANNOTATE: 'hud-annotate',
   HUD_IMPACT: 'hud-impact',
   HUD_SETTINGS: 'hud-settings',
@@ -190,17 +191,24 @@ export const TOUR_STEPS: readonly TourStep[] = [
 export const TOUR_HUD_STEPS: readonly TourCard[] = [
   {
     id: 'hud-chat',
-    title: 'Activity Panel',
-    say: 'Watch what your agent is doing in your app, as it happens.',
+    title: 'Agent Log',
+    say: 'Watch what your agent is doing in your app, as it happens, and which steps it proved.',
     anchor: TourAnchor.HUD_CHAT,
     tryIt: 'Open it.',
   },
   {
+    id: 'hud-flows',
+    title: 'Saved flows',
+    say: 'Every journey your agent verifies is saved here. Replay one with a click, with no agent in the loop.',
+    anchor: TourAnchor.HUD_FLOWS,
+    tryIt: 'Open them.',
+  },
+  {
     id: 'hud-annotate',
-    title: 'Annotate',
-    say: 'Click anywhere in your app to drop a numbered pin with a note. Hand the pins to your agent and it fixes them.',
+    title: 'Notes',
+    say: 'Open Notes, then click anywhere in your app to drop a numbered pin with a note. Hand the pins to your agent and it fixes them.',
     anchor: TourAnchor.HUD_ANNOTATE,
-    tryIt: 'Turn it on, then click something in your app.',
+    tryIt: 'Open Notes, then pin something in your app.',
   },
   {
     id: 'hud-impact',

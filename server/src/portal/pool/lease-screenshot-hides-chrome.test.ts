@@ -9,11 +9,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { HIDE_RETICLE_CHROME_CSS, RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
-import { leaseScreenshotOptions, SCREENSHOT_DETERMINISM } from './playwright-launcher.js';
+import { screenshotOptions, SCREENSHOT_DETERMINISM } from './playwright-launcher.js';
 
 describe('the options a lease screenshot is taken with', () => {
   it('hide every piece of Reticle chrome, not only the overlay root', () => {
-    const { style } = leaseScreenshotOptions();
+    const { style } = screenshotOptions({});
     for (const selector of RETICLE_OVERLAY_SELECTOR.split(',')) {
       expect(style, selector).toContain(selector);
     }
@@ -21,15 +21,15 @@ describe('the options a lease screenshot is taken with', () => {
   });
 
   it('settle animations, as the driven path does', () => {
-    expect(leaseScreenshotOptions().animations).toBe('disabled');
+    expect(screenshotOptions({}).animations).toBe('disabled');
   });
 
   it('are the driven path options plus fullPage, so the two paths cannot drift', () => {
-    expect(leaseScreenshotOptions({ fullPage: true })).toEqual({
+    expect(screenshotOptions({ fullPage: true })).toEqual({
       ...SCREENSHOT_DETERMINISM,
       fullPage: true,
     });
-    expect(leaseScreenshotOptions().fullPage).toBe(false);
+    expect(screenshotOptions({}).fullPage).toBe(false);
     expect(SCREENSHOT_DETERMINISM.style).toBe(HIDE_RETICLE_CHROME_CSS);
   });
 });

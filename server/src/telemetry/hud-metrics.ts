@@ -23,7 +23,13 @@ export interface HudSummary {
   hudJourney?: string[];
   /** Present, and true, only when the journey was cut. */
   hudJourneyCut?: true;
+  /** Times each rail slide became the visible one. Slide ids are Reticle's own, never page text. */
+  hudSlides?: Record<string, number>;
 }
+
+/** Distinct slide ids counted per window; past this a broken notices file is not a dashboard. */
+const MAX_SLIDE_IDS = 20;
+const SLIDE_ID = /^[a-z0-9-]{1,56}$/;
 
 export class HudMetrics {
   readonly #now: () => number;
@@ -31,6 +37,7 @@ export class HudMetrics {
   readonly #viewMs = new Map<HudView, number>();
   readonly #panelMs = new Map<HudPanel, number>();
   readonly #journey: string[] = [];
+  readonly #slides = new Map<string, number>();
   #cut = false;
   /** Did anything happen this window. A HUD merely sitting open is not worth a flush of its own. */
   #changed = false;
@@ -46,6 +53,7 @@ export class HudMetrics {
     // text cannot ride in on the id.
     const control =
       use.control !== undefined && isHudControl(use.control) ? use.control : undefined;
+    if (use.slide !== undefined) this.#countSlide(use.slide);
     if (control === undefined && use.view === undefined && use.panel === undefined) return;
     this.#changed = true;
     if (control !== undefined) {
@@ -65,6 +73,14 @@ export class HudMetrics {
     }
   }
 
+  #countSlide(slide: string): void {
+    // A slide id is Reticle's own (`notice-<id>` for the remote ones): lowercase words and dashes.
+    if (!SLIDE_ID.test(slide)) return;
+    if (!this.#slides.has(slide) && this.#slides.size >= MAX_SLIDE_IDS) return;
+    this.#slides.set(slide, (this.#slides.get(slide) ?? 0) + 1);
+    this.#changed = true;
+  }
+
   get empty(): boolean {
     return !this.#changed;
   }
@@ -79,6 +95,7 @@ export class HudMetrics {
       ...(panelMs.size > 0 ? { hudPanelMs: Object.fromEntries(panelMs) } : {}),
       ...(this.#journey.length > 0 ? { hudJourney: [...this.#journey] } : {}),
       ...(this.#cut ? { hudJourneyCut: true as const } : {}),
+      ...(this.#slides.size > 0 ? { hudSlides: Object.fromEntries(this.#slides) } : {}),
     };
   }
 
@@ -86,6 +103,7 @@ export class HudMetrics {
   reset(): void {
     const at = this.#now();
     this.#controls.clear();
+    this.#slides.clear();
     this.#viewMs.clear();
     this.#panelMs.clear();
     this.#journey.length = 0;

@@ -105,6 +105,11 @@ export interface ScreenshotOpts {
   fullPage?: boolean;
   /** Restrict the capture to one element/region (viewport CSS px). */
   clip?: ElementBox;
+  /**
+   * A live picture, as a JPEG at this quality: what a person is watching, taken as it is. The
+   * baseline tweaks (hiding the HUD, stopping animations) would make their window flicker each second.
+   */
+  jpegQuality?: number;
 }
 
 /** The capability surface reticle_act depends on. A FAKE implementing this is injected in tests. */
@@ -462,11 +467,13 @@ export async function performGesture(
  */
 export async function capturePage(page: Page, opts: ScreenshotOpts): Promise<Uint8Array> {
   const buf = await page.screenshot(
-    opts.clip !== undefined
-      ? { ...SCREENSHOT_DETERMINISM, clip: opts.clip }
-      : true === opts.fullPage
-        ? { ...SCREENSHOT_DETERMINISM, fullPage: true }
-        : { ...SCREENSHOT_DETERMINISM },
+    opts.jpegQuality !== undefined
+      ? { type: 'jpeg', quality: opts.jpegQuality }
+      : opts.clip !== undefined
+        ? { ...SCREENSHOT_DETERMINISM, clip: opts.clip }
+        : true === opts.fullPage
+          ? { ...SCREENSHOT_DETERMINISM, fullPage: true }
+          : { ...SCREENSHOT_DETERMINISM },
   );
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }

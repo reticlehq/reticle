@@ -39,7 +39,7 @@ installReticleCapture(win);
 
 `reticle_screenshot` and `reticle_visual_diff` now work. It uses `webContents.capturePage()`, which reads the window's own backing store — correct while the window is behind your editor, correct while backgrounded, and needing no screen-recording permission. Capturing a screen region was deliberately not used: it photographs whatever is on top, which would bank a picture of your editor as a visual baseline.
 
-Safe to call for several windows; the handler registers once and answers for whichever window asked.
+Safe to call for several windows; the handler registers once and answers for whichever window asked. Give each a name with `installReticleCapture(win, { label: 'settings' })` and the session list shows `window: "settings"`, the way a Tauri window's label appears. Without one, windows are told apart by url and title.
 
 `{ fullPage: true }` is **refused**, not silently downgraded — `capturePage()` composites the viewport, and handing back a viewport image for a full-page request would bank a baseline that says nothing about the content below the fold.
 

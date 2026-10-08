@@ -31,6 +31,7 @@ import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import {
   pruneEvidenceBudget,
   pruneFeedback,
+  prunePlans,
   pruneSessions,
   pruneVisualDiffs,
 } from './retention.js';
@@ -61,6 +62,8 @@ export async function pruneWorkspace(
   await pruneVisualDiffs(fs, root, retain.visual);
   // Write-only local copies of reports the outbox already carries.
   await pruneFeedback(fs, root, retain.feedback);
+  // The recent plans are what somebody reads back; the platform holds every one.
+  await prunePlans(fs, root);
   // LAST, and the one that was missing: the only bound that limits SIZE rather than count.
   await pruneEvidenceBudget(fs, root, retain.budgetBytes, live);
 }

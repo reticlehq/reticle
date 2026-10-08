@@ -48,6 +48,46 @@ function pointerEventFor(el: Element, type: string, init: PointerEventInit): Mou
     : new MouseEvent(type, full);
 }
 
+/** `buttons` bitmask for the primary button: 1 while held, 0 once released. */
+const BUTTON_HELD = 1;
+const BUTTON_RELEASED = 0;
+
+/**
+ * One pointer or mouse event at a point, with the button state a real pointer would report.
+ *
+ * Each field breaks a standard library pattern when missing: without coordinates a geometry-based
+ * collision resolver sees a zero delta (and a canvas hit-tests nothing); without `buttons: 1` the
+ * usual "was the mouse released?" guard bails out mid-drag. A `mouse*` type stays a MouseEvent even
+ * where PointerEvent exists: the pair is the point. `enter`/`leave` do not bubble, as a real
+ * pointer's would not.
+ */
+function fireAt(
+  el: Element,
+  type: string,
+  at: Point,
+  buttons: number,
+  related?: EventTarget | null,
+  detail = 0,
+): boolean {
+  const init = {
+    bubbles: !(type.endsWith('enter') || type.endsWith('leave')),
+    cancelable: true,
+    detail,
+    clientX: at.x,
+    clientY: at.y,
+    screenX: at.x,
+    screenY: at.y,
+    buttons,
+    button: 0,
+    ...(related !== undefined ? { relatedTarget: related } : {}),
+  };
+  return el.dispatchEvent(
+    type.startsWith('pointer')
+      ? pointerEventFor(el, type, { ...init, pointerId: 1, isPrimary: true })
+      : mouseEventFor(el, type, init),
+  );
+}
+
 /**
  * Full click as a real user produces it: pointerdown -> mousedown -> focus -> pointerup -> mouseup
  * -> click. A bare `click` event skips pointer- and focus-gated handlers. Returns the click event's
@@ -61,9 +101,13 @@ export async function fireClickSequence(
 ): Promise<{ prevented: boolean; heldMs: number }> {
   const doc = el.ownerDocument;
   const from: EventTarget = doc.activeElement ?? doc.body;
-  const init: MouseEventInit = { bubbles: true, cancelable: true, detail: detail ?? 0 };
-  firePointer(el, 'pointerdown', from);
-  asSyntheticInput(() => el.dispatchEvent(mouseEventFor(el, 'mousedown', init)));
+  // Where a real mouse would be, and which button is down. A canvas or SVG app hit-tests its own
+  // shapes from clientX/Y and ignores a pointer with no id; a click at (0,0) with no pointerId landed
+  // on nothing, and one path passed anyway (#1003). Drag already sent all of this.
+  const at = centreOf(el);
+  const d = detail ?? 0;
+  asSyntheticInput(() => fireAt(el, 'pointerdown', at, BUTTON_HELD, from, d));
+  asSyntheticInput(() => fireAt(el, 'mousedown', at, BUTTON_HELD, undefined, d));
   if (el.tabIndex >= 0 && 'function' === typeof el.focus) el.focus();
   // The gap that makes hold-to-confirm driveable. With down and up synchronous, a control whose
   // contract is "the button is down for N ms" cannot be expressed at all — it cancels its own
@@ -78,11 +122,13 @@ export async function fireClickSequence(
     await hold.sleep(hold.ms);
     heldMs = hold.now() - startedAt;
   }
-  firePointer(el, 'pointerup', from);
-  asSyntheticInput(() => el.dispatchEvent(mouseEventFor(el, 'mouseup', init)));
+  asSyntheticInput(() => fireAt(el, 'pointerup', at, BUTTON_RELEASED, from, d));
+  asSyntheticInput(() => fireAt(el, 'mouseup', at, BUTTON_RELEASED, undefined, d));
   // Marked as Reticle's own so the annotator's capture-phase listener lets it through. Without it,
   // the click is swallowed whole in annotate mode while still reporting `dispatched: true`.
-  const notPrevented = asSyntheticInput(() => el.dispatchEvent(mouseEventFor(el, 'click', init)));
+  const notPrevented = asSyntheticInput(() =>
+    fireAt(el, 'click', at, BUTTON_RELEASED, undefined, d),
+  );
   return { prevented: !notPrevented, heldMs };
 }
 
@@ -171,10 +217,6 @@ interface Point {
   y: number;
 }
 
-/** `buttons` bitmask for the primary button: 1 while held, 0 once released. */
-const BUTTON_HELD = 1;
-const BUTTON_RELEASED = 0;
-
 /**
  * How many intermediate moves a drag emits.
  *
@@ -210,49 +252,14 @@ export async function dragElement(
   const dest = target ?? source;
   const from = centreOf(source);
   const to = centreOf(dest);
-  /**
-   * Dispatch ONE pointer/mouse pair with real coordinates and button state.
-   *
-   * Everything here was missing before, and each omission breaks a different, standard library
-   * pattern: without coordinates a geometry-based collision resolver sees a zero delta and reports
-   * the source as its own drop target; without `buttons: 1` the usual "was the mouse released?"
-   * guard (`event.buttons === 0`) bails out mid-drag. Boundary events (`over`/`out` bubbling,
-   * `enter`/`leave` not) do not bubble exactly when a real pointer's would not.
-   */
-  const fire = (
-    el: Element,
-    type: string,
-    at: Point,
-    buttons: number,
-    related?: Element | null,
-  ): void => {
-    const bubbles = !(type.endsWith('enter') || type.endsWith('leave'));
-    const init = {
-      bubbles,
-      cancelable: true,
-      clientX: at.x,
-      clientY: at.y,
-      screenX: at.x,
-      screenY: at.y,
-      buttons,
-      button: 0,
-      ...(related !== undefined ? { relatedTarget: related } : {}),
-    };
-    // A `mouse*` type stays a MouseEvent even where PointerEvent exists — the pair is the point.
-    el.dispatchEvent(
-      type.startsWith('pointer')
-        ? pointerEventFor(el, type, { ...init, pointerId: 1, isPrimary: true })
-        : mouseEventFor(el, type, init),
-    );
-  };
   /** Is this path point inside an element's box? Rects are cached; jsdom reports zeros otherwise. */
   const sourceRect = source.getBoundingClientRect();
   const destRect = target !== null ? dest.getBoundingClientRect() : null;
   const crosses = (rect: DOMRect, p: Point): boolean =>
     p.x >= rect.left && p.x <= rect.right && p.y >= rect.top && p.y <= rect.bottom;
 
-  fire(source, 'pointerdown', from, BUTTON_HELD);
-  fire(source, 'mousedown', from, BUTTON_HELD);
+  fireAt(source, 'pointerdown', from, BUTTON_HELD);
+  fireAt(source, 'mousedown', from, BUTTON_HELD);
   await nativeFrame();
   // A path, not a jump. `activationConstraint: { distance: N }` is the standard way to keep a
   // draggable card clickable, and a sensor only starts a drag once it has SEEN the pointer travel
@@ -270,32 +277,32 @@ export async function dragElement(
       leftSource = true;
       // relatedTarget is the element the pointer crossed TO/FROM; React's enter/leave synthesis
       // reads it off the delegated over/out pair to know which boundary was crossed.
-      fire(source, 'pointerout', at, BUTTON_HELD, dest);
-      fire(source, 'mouseout', at, BUTTON_HELD, dest);
-      fire(source, 'pointerleave', at, BUTTON_HELD, dest);
-      fire(source, 'mouseleave', at, BUTTON_HELD, dest);
+      fireAt(source, 'pointerout', at, BUTTON_HELD, dest);
+      fireAt(source, 'mouseout', at, BUTTON_HELD, dest);
+      fireAt(source, 'pointerleave', at, BUTTON_HELD, dest);
+      fireAt(source, 'mouseleave', at, BUTTON_HELD, dest);
     }
     if (leftSource && !enteredDest && destRect !== null && crosses(destRect, at)) {
       enteredDest = true;
-      fire(dest, 'pointerover', at, BUTTON_HELD, source);
-      fire(dest, 'mouseover', at, BUTTON_HELD, source);
-      fire(dest, 'pointerenter', at, BUTTON_HELD, source);
-      fire(dest, 'mouseenter', at, BUTTON_HELD, source);
+      fireAt(dest, 'pointerover', at, BUTTON_HELD, source);
+      fireAt(dest, 'mouseover', at, BUTTON_HELD, source);
+      fireAt(dest, 'pointerenter', at, BUTTON_HELD, source);
+      fireAt(dest, 'mouseenter', at, BUTTON_HELD, source);
     }
-    fire(dest, 'pointermove', at, BUTTON_HELD);
-    fire(dest, 'mousemove', at, BUTTON_HELD);
+    fireAt(dest, 'pointermove', at, BUTTON_HELD);
+    fireAt(dest, 'mousemove', at, BUTTON_HELD);
     await nativeFrame();
   }
   // A short hop whose sampled steps never land inside the destination box still crossed into it;
   // announce the arrival rather than silently skipping the pair.
   if (!enteredDest && destRect !== null) {
-    fire(dest, 'pointerover', to, BUTTON_HELD, source);
-    fire(dest, 'mouseover', to, BUTTON_HELD, source);
-    fire(dest, 'pointerenter', to, BUTTON_HELD, source);
-    fire(dest, 'mouseenter', to, BUTTON_HELD, source);
+    fireAt(dest, 'pointerover', to, BUTTON_HELD, source);
+    fireAt(dest, 'mouseover', to, BUTTON_HELD, source);
+    fireAt(dest, 'pointerenter', to, BUTTON_HELD, source);
+    fireAt(dest, 'mouseenter', to, BUTTON_HELD, source);
   }
-  fire(dest, 'pointerup', to, BUTTON_RELEASED);
-  fire(dest, 'mouseup', to, BUTTON_RELEASED);
+  fireAt(dest, 'pointerup', to, BUTTON_RELEASED);
+  fireAt(dest, 'mouseup', to, BUTTON_RELEASED);
 
   let dropPrevented = false;
   if ('function' === typeof DragEvent) {

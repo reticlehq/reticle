@@ -1,6 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Presenter } from './presenter.js';
-import { DISCOVERY_CALL_URL } from '@reticlehq/core';
 import { HudShell } from './presenter-shell.js';
 import { asSyntheticInput } from '@/actions/synthetic/synthetic-input.js';
 import { Annotator } from '@/review/annotator.js';
@@ -26,6 +25,83 @@ afterEach(() => {
 const HUD_MOUNT_TIMEOUT_MS = 30_000;
 
 describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
+  // #992: the HUD sat outside every landmark, so an instrumented page could never be axe-clean.
+  it('is one labelled landmark, so the page it sits on stays axe-clean', () => {
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    const dock = document.querySelector('[data-reticle-dock]');
+    expect(dock?.getAttribute('role')).toBe('complementary');
+    expect(dock?.getAttribute('aria-label')).toBe('Reticle');
+  });
+
+  it('renders six top-level destinations/actions once with one aligned toolbar', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    click(document.querySelector('[data-reticle-fab]'));
+    const toolbar = document.querySelector<HTMLElement>('[role="toolbar"]');
+    if (null === toolbar) throw new Error('HUD toolbar failed to mount');
+    const chrome = toolbar.querySelector('.reticle-toolbar-chrome');
+    if (null === chrome) throw new Error('HUD toolbar destinations are missing');
+    expect(chrome.querySelectorAll('[data-reticle-chat-view-btn="activity"]')).toHaveLength(1);
+    expect(chrome.querySelectorAll('[data-reticle-chat-view-btn="flows"]')).toHaveLength(1);
+    expect(chrome.querySelectorAll('[data-reticle-chat-view-btn="annotations"]')).toHaveLength(1);
+    expect(chrome.querySelectorAll('[data-reticle-chat-impact]')).toHaveLength(1);
+    expect(chrome.querySelectorAll('[data-reticle-annotate-btn]')).toHaveLength(0);
+    expect(chrome.querySelectorAll('[data-reticle-settings-btn]')).toHaveLength(1);
+    expect(chrome.querySelectorAll('[data-reticle-min-btn]')).toHaveLength(1);
+    expect(toolbar.querySelectorAll('[data-reticle-chat-view-btn="annotations"]')).toHaveLength(1);
+    expect(toolbar.querySelectorAll('[data-reticle-chat-view="annotations"]')).toHaveLength(0);
+    expect(chrome.querySelectorAll('button')).toHaveLength(6);
+    expect(chrome.querySelectorAll('svg:not([width="18"][height="18"])')).toHaveLength(0);
+    const toolbarGlyphs = Array.from(
+      chrome.querySelectorAll('button'),
+      (button) => button.querySelector('svg')?.innerHTML,
+    );
+    expect(new Set(toolbarGlyphs).size).toBe(6);
+    const agentPage = document.querySelector('[data-reticle-chat-panel]');
+    const flowsPage = document.querySelector('[data-reticle-page-panel="flows"]');
+    const notesPage = document.querySelector('[data-reticle-page-panel="annotations"]');
+    expect(agentPage?.parentElement).toBe(flowsPage?.parentElement);
+    expect(agentPage?.parentElement).toBe(notesPage?.parentElement);
+    expect(agentPage?.contains(document.querySelector('[data-reticle-harness-spot]'))).toBe(true);
+    expect(flowsPage?.querySelector('[data-reticle-harness-spot]')).toBeNull();
+    expect(notesPage?.querySelector('[data-reticle-harness-spot]')).toBeNull();
+    expect(agentPage?.querySelector('.reticle-hud-log-well')).not.toBeNull();
+    expect(flowsPage?.querySelector('.reticle-hud-log-well')).toBeNull();
+    expect(notesPage?.querySelector('.reticle-hud-log-well')).toBeNull();
+    p.destroy();
+  });
+
+  it('lets Flows, Notes, and Impact receive pointer clicks instead of starting a toolbar drag', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    click(document.querySelector('[data-reticle-fab]'));
+    for (const selector of [
+      '[data-reticle-chat-view-btn="flows"]',
+      '[data-reticle-chat-view-btn="annotations"]',
+      '[data-reticle-chat-impact]',
+    ]) {
+      const button = document.querySelector(selector);
+      if (null === button) throw new Error(`Missing toolbar button: ${selector}`);
+      const pointerDown = new MouseEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+      });
+      button.dispatchEvent(pointerDown);
+      expect(pointerDown.defaultPrevented, `${selector} must not be captured as a drag`).toBe(
+        false,
+      );
+      document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, button: 0 }));
+    }
+    p.destroy();
+  });
+
   // Expanding now OPENS the chat rather than revealing a bare toolbar: the chat is the HUD's
   // content, and a toolbar with nothing above it made the agent's log something you had to know to
   // go looking for. The toggle still closes it, which the next assertion covers.
@@ -41,20 +117,15 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     expect(overlay?.getAttribute('data-reticle-chat')).toBeNull();
     p.destroy();
   });
-  // The top carousel lives INSIDE the log's scroll container, first, so it takes no height from the
-  // panel and rows push it up. The log trims by row, so a full log must not delete it.
-  it('mounts the carousel first in the log, and keeps it there as rows arrive and are trimmed', () => {
+  it('keeps the agent log dedicated to real activity as rows arrive and are trimmed', () => {
     document.body.innerHTML = '';
     globalThis.sessionStorage.clear();
     const p = new Presenter({ logMax: 3 });
     p.mount();
     const log = document.querySelector('[data-reticle-log]');
-    expect(log?.firstElementChild?.hasAttribute('data-reticle-carousel')).toBe(true);
-    expect(log?.querySelector('[data-reticle-talk-book]')?.getAttribute('href')).toBe(
-      DISCOVERY_CALL_URL,
-    );
+    expect(log?.querySelectorAll('[data-reticle-log-row]')).toHaveLength(0);
+    expect(log?.querySelector('[data-reticle-carousel]')).toBeNull();
     for (let i = 0; i < 6; i += 1) p.log(LOG_KIND.ACT, `row ${String(i)}`);
-    expect(log?.firstElementChild?.hasAttribute('data-reticle-carousel')).toBe(true);
     expect(log?.querySelectorAll('[data-reticle-log-row]')).toHaveLength(3);
     p.destroy();
   });
@@ -107,31 +178,285 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     expect(getComputedStyle(deco as Element).visibility).toBe('visible');
     p.destroy();
   });
-  it('ships a workspace chip in the panel footer', () => {
-    // Was "in the chat composer". The composer is gone; the workspace chip shared its stack and is
-    // the reason that footer still exists.
+  it('keeps the project capsule alone and puts the promo in the rail every page shares', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     p.mount();
-    expect(document.querySelector('[data-reticle-workspace-btn]')).not.toBeNull();
-    expect(document.querySelector('.reticle-foot-stack')).not.toBeNull();
+    expect(
+      document.querySelector('.reticle-foot-workspace-row [data-reticle-workspace-btn]'),
+    ).not.toBeNull();
+    const carousel = document.querySelector('[data-reticle-carousel]');
+    expect(carousel?.closest('[data-reticle-rail]')).not.toBeNull();
+    expect(carousel?.closest('[data-reticle-log]')).toBeNull();
+    // One rail, outside every panel, so no page can lose it.
+    const rail = document.querySelector('[data-reticle-rail]');
+    expect(document.querySelectorAll('[data-reticle-rail]')).toHaveLength(1);
+    expect(rail?.closest('[data-reticle-chat-panel],[data-reticle-page-panel]')).toBeNull();
     p.destroy();
+  });
+  it('keeps the Agent Log to two rows above the log, ended or not', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    const panel = document.querySelector('[data-reticle-chat-panel]');
+    // The title is in the header, not a row of its own.
+    expect(panel?.querySelector('.reticle-chat-head')?.textContent).toContain('Reticle');
+    expect(panel?.querySelector('.reticle-view-heading')).toBeNull();
+    // "Session ended" replaces the status text inside the status row rather than adding a row.
+    expect(panel?.querySelector('.reticle-act-strip [data-reticle-banner]')).not.toBeNull();
+    // The Harness control sits in the footer beside the project capsule.
+    expect(panel?.querySelector('[data-reticle-foot] [data-reticle-harness-spot]')).not.toBeNull();
+    p.destroy();
+  });
+  it('gives every page one header row: title, one-line subtitle, actions, close', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    for (const page of ['flows', 'annotations']) {
+      const panel = document.querySelector(`[data-reticle-page-panel="${page}"]`);
+      // The subtitle lives inside the header rather than as a second bordered row.
+      expect(panel?.querySelector('.reticle-page-heading .reticle-page-subtitle')).not.toBeNull();
+      expect(panel?.querySelector(':scope > .reticle-page-subtitle')).toBeNull();
+    }
+    // Settings keeps its links, but in the scrolling body rather than a fixed footer.
+    expect(
+      document.querySelector('.reticle-settings-body [data-reticle-feedback-call]'),
+    ).not.toBeNull();
+    p.destroy();
+  });
+  it("shows a setting's help under its row when the (?) is clicked, and hides it again", () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    click(document.querySelector('[data-reticle-fab]'));
+    click(document.querySelector('[data-reticle-settings-btn]'));
+    const help = document.querySelector<HTMLElement>('[data-reticle-settings-help]');
+    const row = help?.closest('.reticle-settings-row');
+    click(help);
+    expect(row?.querySelector('[data-reticle-settings-helptext]')?.textContent).toBe(
+      help?.getAttribute('title'),
+    );
+    expect(help?.getAttribute('aria-expanded')).toBe('true');
+    click(help);
+    expect(row?.querySelector('[data-reticle-settings-helptext]')).toBeNull();
+    p.destroy();
+  });
+  it('never blocks the page because a setting changed while nobody is adding notes', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    click(document.querySelector('[data-reticle-fab]'));
+    const overlay = document.querySelector('div[data-reticle-overlay]');
+    click(document.querySelector('[data-reticle-settings-btn]'));
+    click(document.querySelector('[data-reticle-settings-cycle="outputDetail"]'));
+    expect(overlay?.getAttribute('data-reticle-block'), 'the app stays clickable').toBe('0');
+    // ...and it still blocks while notes ARE being added, which is what the setting is for.
+    click(document.querySelector('[data-reticle-chat-view-btn="annotations"]'));
+    click(document.querySelector('[data-reticle-annotate-btn]'));
+    click(document.querySelector('[data-reticle-settings-btn]'));
+    click(document.querySelector('[data-reticle-settings-cycle="outputDetail"]'));
+    expect(overlay?.getAttribute('data-reticle-block')).toBe('1');
+    p.destroy();
+  });
+  it('opens from the bubble on the first click after the toolbar was dragged', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    click(document.querySelector('[data-reticle-fab]'));
+    const toolbar = document.querySelector('.reticle-toolbar-drag');
+    const pointer = (type: string, x: number): void => {
+      toolbar?.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          clientX: x,
+          clientY: 300,
+          pointerId: 7,
+          button: 0,
+        }),
+      );
+    };
+    pointer('pointerdown', 400);
+    pointer('pointermove', 200);
+    pointer('pointerup', 200);
+    click(document.querySelector('[data-reticle-min-btn]'));
+    const overlay = document.querySelector('div[data-reticle-overlay]');
+    expect(overlay?.getAttribute('data-reticle-min')).toBe('1');
+    click(document.querySelector('[data-reticle-fab]'));
+    expect(overlay?.getAttribute('data-reticle-min'), 'one click opens it').toBe('0');
+    p.destroy();
+  });
+  it('keeps the Notes page open when the first note is added', () => {
+    document.body.innerHTML = '<h2 id="target">Pricing</h2>';
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    const annotator = new Annotator({ emit: () => {}, now: () => 0 });
+    annotator.mount();
+    p.bindAnnotator(annotator);
+    click(document.querySelector('[data-reticle-fab]'));
+    click(document.querySelector('[data-reticle-chat-view-btn="annotations"]'));
+    click(document.querySelector('[data-reticle-annotate-btn]'));
+    const overlay = document.querySelector('div[data-reticle-overlay]');
+    document
+      .getElementById('target')
+      ?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 100, clientY: 120 }),
+      );
+    const textarea = document.querySelector<HTMLTextAreaElement>(
+      '[data-reticle-mark="pop"] textarea',
+    );
+    if (null === textarea) throw new Error('note composer did not open');
+    textarea.value = 'Price is wrong';
+    textarea.dispatchEvent(new Event('input'));
+    click(document.querySelector('[data-reticle-mark="pop"] button[data-send]'));
+    expect(overlay?.getAttribute('data-reticle-page-open'), 'still on Notes').toBe('annotations');
+    expect(document.querySelectorAll('.reticle-annotation-item')).toHaveLength(1);
+    p.destroy();
+    annotator.destroy();
+  });
+  it('treats every toolbar tab as a tab: clicking the open one keeps it open', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    click(document.querySelector('[data-reticle-fab]'));
+    const overlay = document.querySelector('div[data-reticle-overlay]');
+    const open = (): string => {
+      if ('1' === overlay?.getAttribute('data-reticle-chat')) return 'log';
+      if ('1' === overlay?.getAttribute('data-reticle-settings')) return 'settings';
+      if ('1' === overlay?.getAttribute('data-reticle-report')) return 'impact';
+      return overlay?.getAttribute('data-reticle-page-open') ?? 'none';
+    };
+    for (const [sel, name] of [
+      ['[data-reticle-chat-view-btn="activity"]', 'log'],
+      ['[data-reticle-chat-view-btn="flows"]', 'flows'],
+      ['[data-reticle-chat-view-btn="annotations"]', 'annotations'],
+      ['[data-reticle-chat-impact]', 'impact'],
+      ['[data-reticle-settings-btn]', 'settings'],
+    ] as const) {
+      click(document.querySelector(sel));
+      expect(open(), `${name} opens`).toBe(name);
+      click(document.querySelector(sel));
+      expect(open(), `${name} stays open when clicked again`).toBe(name);
+    }
+    p.destroy();
+  });
+  it('lights the Settings tab exactly like every other active tab', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    click(document.querySelector('[data-reticle-fab]'));
+    /*
+     * The DECLARED value each property ends up with, read from every stylesheet rule that matches the
+     * element, in order. jsdom does not resolve var(), so computed styles compared two unresolved
+     * strings and nearly always agreed; the declarations themselves differ when the styling does.
+     */
+    const look = (el: Element | null): string[] => {
+      if (null === el) throw new Error('toolbar button missing');
+      const props = ['background', 'background-color', 'color', 'border-radius', 'width', 'height'];
+      const won: Record<string, string> = {};
+      for (const sheet of Array.from(document.styleSheets)) {
+        for (const rule of Array.from(sheet.cssRules)) {
+          if (!(rule instanceof CSSStyleRule)) continue;
+          let matches = false;
+          try {
+            matches = el.matches(rule.selectorText);
+          } catch {
+            /* a selector jsdom cannot parse matches nothing here */
+          }
+          if (!matches) continue;
+          for (const prop of props) {
+            const value = rule.style.getPropertyValue(prop);
+            if ('' !== value) won[prop] = value;
+          }
+        }
+      }
+      return props.map((prop) => `${prop}=${won[prop] ?? ''}`);
+    };
+    click(document.querySelector('[data-reticle-chat-view-btn="flows"]'));
+    const flows = look(document.querySelector('[data-reticle-chat-view-btn="flows"]'));
+    click(document.querySelector('[data-reticle-settings-btn]'));
+    expect(document.querySelector('[data-reticle-settings-btn]')?.getAttribute('data-active')).toBe(
+      '1',
+    );
+    expect(look(document.querySelector('[data-reticle-settings-btn]'))).toEqual(flows);
+    p.destroy();
+  });
+  it('makes Add note the primary action and explains an empty page', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    const notes = document.querySelector('[data-reticle-page-panel="annotations"]');
+    expect(notes?.querySelector('[data-reticle-annotate-btn]')?.classList).toContain(
+      'reticle-primary-btn',
+    );
+    expect(notes?.querySelector('[data-reticle-copy-all-notes]')?.getAttribute('aria-label')).toBe(
+      'Copy all notes',
+    );
+    expect(notes?.querySelector('.reticle-annotation-empty strong')?.textContent).toBe(
+      'No notes on this page',
+    );
+    p.destroy();
+  });
+  it('hands the rail Sign in to whoever can start the browser sign-in', () => {
+    document.body.innerHTML = '';
+    let asked = 0;
+    const shell = new HudShell({ onSignIn: () => (asked += 1) });
+    document.body.innerHTML = `<div data-reticle-overlay>${HudShell.dockHtml('', '', 'data-reticle-log', '', '')}</div>`;
+    const root = document.querySelector<HTMLElement>('[data-reticle-overlay]');
+    if (null === root) throw new Error('overlay missing');
+    shell.mount(root);
+    shell.paintAccount({ signedIn: false }, undefined);
+    click(document.querySelector('[data-reticle-rail-signin] [data-reticle-account-signin]'));
+    expect(asked).toBe(1);
+    shell.teardown();
+  });
+  it('asks a signed-out user to sign in on every page, and shows the promo once signed in', () => {
+    document.body.innerHTML = '';
+    const shell = new HudShell();
+    document.body.innerHTML = `<div data-reticle-overlay>${HudShell.dockHtml('', '', 'data-reticle-log', '', '')}</div>`;
+    const root = document.querySelector<HTMLElement>('[data-reticle-overlay]');
+    if (null === root) throw new Error('overlay missing');
+    shell.mount(root);
+    const signin = (): HTMLElement | null =>
+      document.querySelector<HTMLElement>('[data-reticle-rail-signin]');
+    const promo = (): HTMLElement | null =>
+      document.querySelector<HTMLElement>('[data-reticle-rail-promo]');
+    shell.paintAccount({ signedIn: false }, undefined);
+    expect(signin()?.hidden).toBe(false);
+    expect(signin()?.querySelector('[data-reticle-account-signin]')).not.toBeNull();
+    expect(signin()?.textContent).toContain('Harness');
+    // Signing in is the step: every workspace gets Harness credits. The rail says "try".
+    expect(signin()?.textContent).toContain('Sign in to try Reticle Harness');
+    expect(promo()?.hidden).toBe(true);
+    shell.paintAccount({ signedIn: true, org: 'Acme' }, undefined);
+    expect(signin()?.hidden).toBe(true);
+    expect(promo()?.hidden).toBe(false);
+    shell.teardown();
   });
   it('does not ship a separate flag-a-bug control', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     p.mount();
     expect(document.querySelector('[data-reticle-flag-btn]')).toBeNull();
-    expect(document.querySelector('[data-reticle-chat-toggle]')).not.toBeNull();
+    expect(
+      document.querySelector('.reticle-chat-nav [data-reticle-chat-view-btn="activity"]'),
+    ).not.toBeNull();
     p.destroy();
   });
-  it('ships inline icons on chat and settings toolbar buttons', () => {
+  it('ships inline icons on the Agent log and settings controls', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     p.mount();
     p.sessionStart();
     click(document.querySelector('[data-reticle-fab]'));
-    const chat = document.querySelector('[data-reticle-chat-toggle]');
+    const chat = document.querySelector(
+      '.reticle-chat-nav [data-reticle-chat-view-btn="activity"]',
+    );
     const settings = document.querySelector('[data-reticle-settings-btn]');
     expect(chat?.querySelector('svg')).not.toBeNull();
     expect(settings?.querySelector('svg')).not.toBeNull();
@@ -182,15 +507,16 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
  * The toggle is the user's half only. Annotation still also needs a live session and an open HUD;
  * this asserts the half that was missing without asserting away the other two.
  */
-describe('the annotate toggle', () => {
-  it('is in the toolbar and OFF until asked for', () => {
+describe('the Notes capture toggle', () => {
+  it('is in the Notes page and OFF until asked for', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     p.mount();
     p.sessionStart();
     click(document.querySelector('[data-reticle-fab]'));
+    click(document.querySelector('[data-reticle-chat-view-btn="annotations"]'));
     const btn = document.querySelector('[data-reticle-annotate-btn]');
-    expect(btn, 'the control must exist in the toolbar').not.toBeNull();
+    expect(btn, 'the control must exist on the Notes page').not.toBeNull();
     expect(
       btn?.getAttribute('aria-pressed'),
       'annotate captures clicks, so it is entered deliberately rather than defaulted on',
@@ -204,13 +530,35 @@ describe('the annotate toggle', () => {
     p.mount();
     p.sessionStart();
     click(document.querySelector('[data-reticle-fab]'));
+    click(document.querySelector('[data-reticle-chat-view-btn="annotations"]'));
     const btn = document.querySelector('[data-reticle-annotate-btn]');
     click(btn);
     expect(btn?.getAttribute('aria-pressed')).toBe('true');
     expect(btn?.getAttribute('data-active')).toBe('1');
+    expect(btn?.getAttribute('aria-label')).toBe('Stop adding notes');
+    expect(btn?.textContent).toContain('Stop adding notes');
+    expect(
+      document
+        .querySelector('[data-reticle-chat-view-btn="annotations"]')
+        ?.getAttribute('data-capture'),
+    ).toBe('1');
+    click(document.querySelector('[data-reticle-chat-view-btn="flows"]'));
+    expect(btn?.getAttribute('aria-pressed')).toBe('true');
+    expect(
+      document
+        .querySelector('[data-reticle-chat-view-btn="annotations"]')
+        ?.getAttribute('data-capture'),
+    ).toBe('1');
+    click(document.querySelector('[data-reticle-chat-view-btn="annotations"]'));
     click(btn);
     expect(btn?.getAttribute('aria-pressed')).toBe('false');
     expect(btn?.getAttribute('data-active')).toBe('0');
+    expect(btn?.getAttribute('aria-label')).toBe('Add notes');
+    expect(
+      document
+        .querySelector('[data-reticle-chat-view-btn="annotations"]')
+        ?.getAttribute('data-capture'),
+    ).toBe('0');
     p.destroy();
   });
 
@@ -221,6 +569,7 @@ describe('the annotate toggle', () => {
     p.mount();
     p.sessionStart();
     click(document.querySelector('[data-reticle-fab]'));
+    click(document.querySelector('[data-reticle-chat-view-btn="annotations"]'));
     const overlay = document.querySelector('div[data-reticle-overlay]');
     const before = overlay?.getAttribute('data-reticle-min');
     const chatBefore = overlay?.getAttribute('data-reticle-chat');
@@ -290,16 +639,21 @@ describe('the chat panel survives clicks on the page', () => {
     p.destroy();
   });
 
-  it('still closes on its own toggle and on Escape', () => {
+  it('opens the Agent log from the bottom bar and closes from the panel or Escape', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     p.mount();
     p.sessionStart();
     click(document.querySelector('[data-reticle-fab]'));
     const overlay = document.querySelector('div[data-reticle-overlay]');
-    click(document.querySelector('[data-reticle-chat-toggle]'));
-    expect(overlay?.getAttribute('data-reticle-chat'), 'the toggle is a way out').toBeNull();
-    click(document.querySelector('[data-reticle-chat-toggle]'));
+    click(document.querySelector('[data-reticle-chat-min]'));
+    click(document.querySelector('.reticle-chat-nav [data-reticle-chat-view-btn="activity"]'));
+    expect(overlay?.getAttribute('data-reticle-chat'), 'the Agent log opens the panel').toBe('1');
+    click(document.querySelector('[data-reticle-chat-min]'));
+    expect(
+      overlay?.getAttribute('data-reticle-chat'),
+      'the panel has its own minimise control',
+    ).toBeNull();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(overlay?.getAttribute('data-reticle-chat'), 'Escape is a way out').toBeNull();
     p.destroy();

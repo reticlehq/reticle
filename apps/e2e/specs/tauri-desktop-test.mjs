@@ -87,6 +87,8 @@ try {
       ? `no packaged-origin session among ${JSON.stringify(sessions.map((s) => String(s?.url)))}`
       : String(tauriSession.url),
   );
+  // Several windows of one Tauri app share an origin; the label is how the listing tells them apart.
+  chk('the session names its Tauri window', tauriSession?.window === 'main', String(tauriSession?.window));
 
   for (let i = 0; i < 40; i++) {
     if (JSON.stringify(await tool('reticle_network', {})).includes('ipc://load_todos')) break;
