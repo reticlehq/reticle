@@ -1,0 +1,3 @@
+### Fixed
+
+- **Refusal signals no longer contradict an expected failed request.** A flow asserting a POST returning 403 and an "Order refused" message could fail because signals such as `order:refused`, `order:forbidden`, or `order:blocked` were read as success claims. These signals now acknowledge the refusal, while a success signal such as `order:placed` over the same failed write still contradicts the verdict. Closes [#1233](https://github.com/reticlehq/reticle/issues/1233).

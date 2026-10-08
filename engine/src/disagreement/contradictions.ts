@@ -122,7 +122,9 @@ function uiAdvanced(events: readonly ReticleEvent[]): boolean {
  * English-only, and knowingly so — this is the softest edge in the file. It is a fallback for when
  * the structural check below cannot decide, not the primary signal.
  */
-const ACKNOWLEDGED = /error|fail|invalid|reject|denied|unable|could not|couldn't/i;
+// Refusal words need token boundaries: "unblocked" and "blockchain" are not failure acknowledgements.
+const ACKNOWLEDGED =
+  /error|fail|invalid|reject|denied|unable|could not|couldn't|(?:^|[^a-z])(?:refus(?:e[ds]?|al|ing)|forbid(?:den|ding|s)?|block(?:ed|ing)|not[ _-]+allowed)(?:$|[^a-z])/i;
 
 /**
  * Below this length an error string is too generic to be evidence — "no", "err", a bare code — and

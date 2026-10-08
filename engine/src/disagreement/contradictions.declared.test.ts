@@ -15,9 +15,18 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ContradictionKind, EventType, PredicateKind, type ReticleEvent } from '@reticlehq/core';
+import {
+  ContradictionKind,
+  EventType,
+  PredicateKind,
+  Verified,
+  VerifiedReason,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import { findContradictions } from './contradictions.js';
 import { declaredExpectations } from '@/question/declared.js';
+import { decideVerified } from '@/evidence/verified.js';
+import { HonestyGrade } from '@/evidence/honesty.js';
 
 let seq = 0;
 function ev(type: EventType, data: Record<string, unknown> = {}): ReticleEvent {
@@ -109,6 +118,73 @@ describe('a declared expected failure is not a contradiction', () => {
     );
     expect(kindsOf(found)).toContain(ContradictionKind.FAILURE_MISATTRIBUTED);
   });
+});
+
+describe('a signal acknowledging a declared refusal', () => {
+  const orderVerdict = (signal: string) => {
+    const declared = declaredExpectations({
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.NET, method: 'POST', urlContains: '/orders', status: 403 },
+        { kind: PredicateKind.TEXT, contains: 'Order refused' },
+      ],
+    });
+    const contradictions = findContradictions(
+      [
+        ev(EventType.DOM_ADDED, { name: 'Order refused' }),
+        failedCall('POST', '/orders', 403),
+        ev(EventType.SIGNAL, { name: signal }),
+      ],
+      { expectedFailures: declared.netFailures, actionSince: 0 },
+    );
+    return {
+      ...decideVerified({
+        pass: true,
+        declaredConsequence: true,
+        settled: true,
+        contradictions,
+        honesty: {
+          grade: HonestyGrade.SIGNAL,
+          attribution: 'window',
+          coverage: { partial: false },
+          integrity: { clean: true, issues: [] },
+        },
+      }),
+      contradictions,
+    };
+  };
+
+  it.each([
+    'order:refused',
+    'order:refusal',
+    'order:refusing',
+    'ORDER_REFUSED',
+    'order:forbidden',
+    'order:forbids',
+    'order:blocked',
+    'order:blocking',
+    'order:not allowed',
+    'order:not_allowed',
+    'order:not-allowed',
+  ])('verifies the expected 403 when the app signals %s', (signal) => {
+    expect(orderVerdict(signal)).toMatchObject({
+      verified: Verified.YES,
+      verifiedReason: VerifiedReason.PROVED,
+      contradictions: [],
+    });
+  });
+
+  it.each(['order:placed', 'order:unblocked', 'blockchain:saved'])(
+    'still contradicts a success signal %s over the expected 403',
+    (signal) => {
+      const verdict = orderVerdict(signal);
+      expect(verdict).toMatchObject({
+        verified: Verified.NO,
+        verifiedReason: VerifiedReason.CONTRADICTED,
+      });
+      expect(kindsOf(verdict.contradictions)).toContain(ContradictionKind.SIGNAL_CONTRADICTED);
+    },
+  );
 });
 
 describe('a declared denial on screen is proof of the 401, not a contradiction', () => {
