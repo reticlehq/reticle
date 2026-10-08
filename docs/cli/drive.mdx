@@ -12,11 +12,11 @@ npx @reticlehq/server drive <url> [--headless] [--headed]
 
 ## Arguments and flags
 
-| Argument     | Type                             | Default                  | What it does      |
-| ------------ | -------------------------------- | ------------------------ | ----------------- |
-| `url`        | string, positional, **required** | none                     | The page to drive |
-| `--headed`   | boolean                          | on by default outside CI | Show the browser  |
-| `--headless` | boolean                          | on when `CI` is set      | Hide it           |
+| Argument | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `url` | string, positional, **required** | none | The page to drive |
+| `--headed` | boolean | on by default outside CI | Show the browser |
+| `--headless` | boolean | on when `CI` or `RETICLE_HEADLESS` is set, or on Linux with no display | Hide it |
 
 `drive` is the one interactive command in the family, so it is the one that shows the browser by default. `serve`, `mcp` and the internal daemon own the pooled browser behind leases, which is batch work, and hide theirs.
 
@@ -66,7 +66,7 @@ attached to the Reticle daemon on :4497 ... it is driving http://localhost:5177/
 
 That session lives in the daemon, so the tools your agent already has open can address it by id. You do **not** need `reticle stop` first, and should not use it: the MCP proxy respawns a daemon as soon as the next tool call arrives, which is a race a manual `stop` loses.
 
-Attaching means the browser is the daemon's pooled, headless one, so `--headed` cannot apply. To watch a browser instead, drive on a port no daemon owns (`RETICLE_PORT=4460`).
+Attaching means the browser is the daemon's pooled one, shown or hidden as that daemon was started, so `--headed` cannot apply. To watch a browser instead, drive on a port no daemon owns (`RETICLE_PORT=4460`).
 
 <Note>
   If the port is held by something that is **not** a Reticle daemon, `drive` refuses and names the

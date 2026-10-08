@@ -116,8 +116,8 @@ Cloud (link this project to Reticle; runs/flows recorded on the dashboard):
   reticle push | sync [--watch]                        (one sync cycle: send the difference, collect decisions)
   reticle runs | regression | share <runId>            (read cloud state; regression exits 3 if any flow broke)
 
-'drive' shows the browser; everything else is hidden (serve/mcp own the pool behind leases, replay
-and the spec runner: batch work). --headed opts any of them in, --headless hides drive, CI hides it.`;
+A browser Reticle opens is shown by default, so you can watch the run. --headless hides it; CI,
+RETICLE_HEADLESS=1, or a Linux machine with no display hides it too.`;
 
 const INIT_COMMAND = 'init';
 const SERVE_COMMAND = 'serve';
@@ -238,7 +238,7 @@ export function knownCommand(arg: string | undefined): string {
  * and every "did it actually do anything?" question cost a round-trip. CI passes this (or just sets
  * CI, which flips the default) because there is no display there to be headed on.
  */
-const HEADLESS_FLAG = '--headless';
+export const HEADLESS_FLAG = '--headless';
 export const DRIVE_FLAG = '--drive';
 const QUIET_FLAG = '--quiet';
 const DRY_RUN_FLAG = '--dry-run';
@@ -414,12 +414,6 @@ type ServeFlags =
   | { kind: 'error'; message: string };
 
 /**
- * `serve` / `mcp` / `_daemon` own the browser POOL, which backs automated work — leased contexts for
- * parallel agents, flow replay, the spec runner. Those are batch: nobody is watching, and launching
- * them headed changed timing enough to break four e2e specs. The headed default belongs to the
- * INTERACTIVE command (`drive`), where a human asked to see the run. `--headed` still opts in here.
- */
-/**
  * A usage error names the thing that was wrong.
  *
  * These used to return CLI_USAGE as the MESSAGE, so every mistake — a typo'd flag, a flag missing
@@ -443,11 +437,11 @@ const unknownCommand = (command: string): ParseError => ({
 function parseServeFlags(
   args: string[],
   defaultPort: number,
-  _defaultHeadless: boolean,
+  defaultHeadless: boolean,
 ): ServeFlags {
   let port = defaultPort;
   let driveUrl: string | undefined;
-  let headless = true;
+  let headless = defaultHeadless;
   let http = false;
   let httpPort: number | undefined;
   let httpToken: string | undefined;
@@ -726,8 +720,9 @@ export function parseCliArgs(
   defaultPort: number,
   defaultHeadless = false,
 ): CliResult {
-  // Bare `reticle` is `serve` — a pool-owning command, so headless like the rest of that family.
-  if (0 === argv.length) return { kind: 'serve', port: defaultPort, headless: true, http: false };
+  // Bare `reticle` is `serve`.
+  if (0 === argv.length)
+    return { kind: 'serve', port: defaultPort, headless: defaultHeadless, http: false };
 
   const [cmd, ...rest] = argv;
   // Guaranteed by the bare-argv check above; restated so the unknown-command error can name it.

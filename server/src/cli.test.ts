@@ -90,7 +90,7 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs([], PORT)).toEqual({
       kind: 'serve',
       port: PORT,
-      headless: true,
+      headless: false,
       http: false,
     });
   });
@@ -182,7 +182,7 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['serve'], PORT)).toEqual({
       kind: 'serve',
       port: PORT,
-      headless: true,
+      headless: false,
       http: false,
     });
   });
@@ -191,7 +191,7 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['serve', '--port', '5000'], PORT)).toEqual({
       kind: 'serve',
       port: 5000,
-      headless: true,
+      headless: false,
       http: false,
     });
   });
@@ -201,7 +201,7 @@ describe('parseCliArgs', () => {
       kind: 'serve',
       port: PORT,
       driveUrl: URL,
-      headless: true,
+      headless: false,
       http: false,
     });
   });
@@ -581,7 +581,7 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['_daemon', '--port', '5000'], PORT)).toEqual({
       kind: '_daemon',
       port: 5000,
-      headless: true,
+      headless: false,
       http: false,
     });
   });
@@ -591,7 +591,7 @@ describe('parseCliArgs', () => {
       kind: '_daemon',
       port: PORT,
       driveUrl: URL,
-      headless: true,
+      headless: false,
       http: false,
     });
   });
@@ -602,7 +602,7 @@ describe('parseCliArgs', () => {
     ).toEqual({
       kind: 'serve',
       port: PORT,
-      headless: true,
+      headless: false,
       http: true,
       httpPort: 7331,
       httpToken: 'sek',
@@ -613,7 +613,7 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['mcp'], PORT)).toEqual({
       kind: 'mcp',
       port: PORT,
-      headless: true,
+      headless: false,
       http: false,
     });
   });
@@ -622,7 +622,7 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['mcp', '--port', '5000'], PORT)).toEqual({
       kind: 'mcp',
       port: 5000,
-      headless: true,
+      headless: false,
       http: false,
     });
   });
@@ -632,7 +632,7 @@ describe('parseCliArgs', () => {
       kind: 'mcp',
       port: PORT,
       driveUrl: 'http://localhost:3000',
-      headless: true,
+      headless: false,
       http: false,
     });
   });
@@ -671,7 +671,7 @@ describe('parseCliArgs', () => {
     ).toEqual({
       kind: 'mcp',
       port: PORT,
-      headless: true,
+      headless: false,
       http: true,
       httpPort: 9100,
       httpToken: 't',
@@ -699,11 +699,12 @@ describe('parseCliArgs — the browser is visible unless something says otherwis
     expect(headlessOf(parseCliArgs(['drive', URL], PORT))).toBe(false);
   });
 
-  it('leaves the pool-owning commands headless — they back batch work nobody watches', () => {
-    // serve/mcp/_daemon own the browser pool: leased contexts for parallel agents, flow replay, the
-    // spec runner. Launching those headed broke four e2e specs and helps no one.
+  it('shows the pool-owning commands too, so a person can watch the agent drive', () => {
+    // From the field: someone watched an agent drive their app through `mcp` and saw nothing. The
+    // batteries that need hidden set RETICLE_HEADLESS, which arrives here as the injected default.
     for (const argv of [[], ['serve'], ['mcp'], ['_daemon']]) {
-      expect(headlessOf(parseCliArgs(argv, PORT)), argv.join(' ')).toBe(true);
+      expect(headlessOf(parseCliArgs(argv, PORT)), argv.join(' ')).toBe(false);
+      expect(headlessOf(parseCliArgs(argv, PORT, true)), argv.join(' ')).toBe(true);
     }
   });
 

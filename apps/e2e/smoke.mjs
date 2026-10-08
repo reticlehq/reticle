@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { McpStdioClient, RETICLE_CLI } from '../../bench/harness/mcp-client.mjs';
 import { checkSmoke } from './smoke-checks.mjs';
+// Batteries are not watched, and a shown browser changes their timing: hide every browser Reticle opens.
+process.env.RETICLE_HEADLESS ??= '1';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const artifactDir = resolve(process.env.RETICLE_SMOKE_ARTIFACTS ?? join(root, 'artifacts/smoke'));

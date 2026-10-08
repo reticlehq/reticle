@@ -21,6 +21,8 @@ import { basename, join } from 'node:path';
 import * as PORTS from './ports.mjs';
 import { verifyAnchors } from './inject.mjs';
 import { measurementVerdict } from './pass-artifact.mjs';
+// Batteries are not watched, and a shown browser changes their timing: hide every browser Reticle opens.
+process.env.RETICLE_HEADLESS ??= '1';
 const FULL = process.argv.includes('--full');
 const NO_BOOT = process.argv.includes('--no-boot');
 

@@ -16,6 +16,7 @@ import {
   DAEMON_INNER_COMMAND,
   DRIVE_FLAG,
   HEADED_FLAG,
+  HEADLESS_FLAG,
   HTTP_FLAG,
   HTTP_PORT_FLAG,
   HTTP_TOKEN_FLAG,
@@ -57,7 +58,9 @@ export function daemonStartOptions(parsed: DaemonFlags): StartOptions {
 export function daemonSpawnArgs(parsed: DaemonFlags): string[] {
   const args = [DAEMON_INNER_COMMAND, PORT_FLAG, String(parsed.port)];
   if (parsed.driveUrl !== undefined) args.push(DRIVE_FLAG, parsed.driveUrl);
-  if (!parsed.headless) args.push(HEADED_FLAG);
+  // Said either way: the child decides its own default from its environment, so a parent that
+  // resolved hidden must say so rather than leave it to a default that may differ.
+  args.push(parsed.headless ? HEADLESS_FLAG : HEADED_FLAG);
   if (parsed.http) {
     args.push(HTTP_FLAG);
     if (parsed.httpPort !== undefined) args.push(HTTP_PORT_FLAG, String(parsed.httpPort));

@@ -97,6 +97,8 @@ import {
   Attribution,
   sweepBatteryOrphans,
 } from './gate-harness.mjs';
+// Batteries are not watched, and a shown browser changes their timing: hide every browser Reticle opens.
+process.env.RETICLE_HEADLESS ??= '1';
 
 const WIN = 'win32' === process.platform;
 
