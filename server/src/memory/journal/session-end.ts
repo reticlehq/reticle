@@ -368,6 +368,10 @@ async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): 
     step: 'flow_recorded',
     status: 0 === programs.length ? OnboardingStepStatus.SKIPPED : OnboardingStepStatus.COMPLETED,
     ...(outcome.unprovenSteps === undefined ? {} : { reason: 'no_declared_consequence' }),
+    // Not saved, with the reason: proved against mocked responses, which replay cannot see (#1459).
+    ...(0 < programs.length || outcome.mockedSteps === undefined
+      ? {}
+      : { reason: 'driven_under_network_mocks' }),
   });
 }
 

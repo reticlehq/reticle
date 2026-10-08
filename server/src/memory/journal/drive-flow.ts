@@ -29,6 +29,8 @@ export interface TapeStep {
   endPage?: string;
   /** The intent the agent declared on this action. The first one names the journey. */
   intent?: string;
+  /** Recorder-internal: network mocks were active when it ran (#1459). Never written to disk. */
+  mocked?: true;
 }
 
 /** The compiled shape a flow store accepts. Structural, for the same reason as `TapeStep`. */
@@ -140,6 +142,13 @@ export interface DriveFlowOutcome {
    * "the agent drove and proved nothing" stays visible instead of looking like nothing happened.
    */
   readonly unprovenSteps?: number;
+  /**
+   * Steps of journeys that proved something and were NOT saved because they ran while network
+   * mocks were active (#1459). Such a journey replays against the real backend, so it either fails
+   * for a reason unrelated to the change or passes on data the original check never saw, and the
+   * flow file holds no trace of the precondition. Counted, so "not saved" has a reason.
+   */
+  readonly mockedSteps?: number;
 }
 
 /**
@@ -207,9 +216,14 @@ export function driveFlowsFrom(
   if (tape === undefined || 0 === tape.steps.length) return { programs: [], outcome: {} };
   const programs: DriveProgram[] = [];
   let unproven = 0;
+  let mocked = 0;
   for (const segment of segmentsByRoute(tape.steps)) {
     if (!carriesAnAssertion(segment.steps)) {
       unproven += segment.steps.length;
+      continue;
+    }
+    if (segment.steps.some((step) => true === step.mocked)) {
+      mocked += segment.steps.length;
       continue;
     }
     const startPath = segment.route ?? tape.startPath;
@@ -218,7 +232,7 @@ export function driveFlowsFrom(
       version: REPLAY_PROGRAM_VERSION,
       // The route is recorder-internal and has no business on disk — `startPath` is where the
       // on-disk flow says the same thing, in the field replay actually reads.
-      steps: segment.steps.map(({ route: _route, ...step }) => step),
+      steps: segment.steps.map(({ route: _route, mocked: _mocked, ...step }) => step),
       ...(startPath === undefined ? {} : { startPath }),
     });
   }
@@ -227,6 +241,7 @@ export function driveFlowsFrom(
     outcome: {
       ...(0 === programs.length ? {} : { saved: programs.map((p) => p.name) }),
       ...(0 === unproven ? {} : { unprovenSteps: unproven }),
+      ...(0 === mocked ? {} : { mockedSteps: mocked }),
     },
   };
 }
