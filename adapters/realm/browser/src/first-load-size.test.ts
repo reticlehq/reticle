@@ -329,7 +329,12 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * unreachable-warning text, and the merge measured 256,653 B; the ceiling is that rounded up to the
  * next hundred.
  */
-const MAX_FIRST_LOAD_BYTES = 256_700;
+/*
+ * Raised to 257,700 so a layout-shift event can name the element that moved most (#1266): the PERF
+ * observer runs at load, so the attribution cannot be lazy. Measured at 257,602 B after merging main,
+ * rounded up to the next hundred.
+ */
+const MAX_FIRST_LOAD_BYTES = 257_700;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The
