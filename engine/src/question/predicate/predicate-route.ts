@@ -129,15 +129,29 @@ function withoutIdentityParams(value: unknown): unknown {
 }
 
 /**
- * A `?query` with Reticle's own params removed, in the one encoding both sides of a start-path
- * comparison use. A recording keeps the app's query in `startPath` and replay compares against it,
+ * A `?query` with Reticle's own params removed and the app's pairs left exactly as written. A recording keeps the app's query in `startPath` and replay compares against it,
  * so a leased tab's `__reticle_*` params must be dropped on both sides or a tab already on the page
  * reads as somewhere else (#1411).
  */
 function searchWithoutIdentityParams(search: string): string {
-  if ('' === search) return '';
-  const cleaned = withoutIdentityParams(search.startsWith('?') ? search : `?${search}`);
-  return 'string' === typeof cleaned ? cleaned : '';
+  const query = search.startsWith('?') ? search.slice(1) : search;
+  if ('' === query) return '';
+  // Pair by pair, not through URLSearchParams: its round trip re-encodes what it keeps (`%20` comes
+  // back as `+`), so a hand-written startPath `/search?q=red%20shirt` would stop matching a tab on
+  // exactly that URL. Only Reticle's own pairs are removed; the rest keep their spelling.
+  const ours = new Set<string>(Object.values(RETICLE_URL_PARAM));
+  const kept = query.split('&').filter((pair) => !ours.has(paramNameOf(pair)));
+  return 0 === kept.length ? '' : `?${kept.join('&')}`;
+}
+
+/** The decoded name of one `name=value` query pair, or the raw text when it does not decode. */
+function paramNameOf(pair: string): string {
+  const raw = pair.split('=', 1)[0] ?? '';
+  try {
+    return decodeURIComponent(raw.replaceAll('+', ' '));
+  } catch {
+    return raw;
+  }
 }
 
 /** A route as a navigable path, pathname + app query + hash, with Reticle's own params dropped. */

@@ -195,7 +195,13 @@ export const READ_TOOLS: ToolDef[] = [
       // Where the journey begins, so a saved flow can navigate here before step 1 instead of
       // replaying from wherever the page happens to be. Pathname only: a host or port belongs to
       // the machine that recorded it, not to the journey.
-      deps.recordings.start(name, cursor, pathnameOf(session.url), session.id);
+      deps.recordings.start(
+        name,
+        cursor,
+        pathnameOf(session.url),
+        session.id,
+        session.currentDocumentId,
+      );
       return Promise.resolve({ recordingName: name, since: cursor });
     },
   },
@@ -237,11 +243,15 @@ export const READ_TOOLS: ToolDef[] = [
       }
       // A full-page load mid-recording reconnects the page as a NEW Session, whose clock restarts
       // below the cursor stored at start: the window came out negative and the span empty (#1411).
-      // Detected by the session that answers now not being the one that started it, or by its clock
-      // being behind the cursor (a reconnect can keep the id). The new page is then read from its
-      // start, and the warning says the report covers only it.
+      // Detected by the session that answers now not being the one that started it, or by the tab
+      // being on another document. A reconnect can keep the id, and its clock comes from another
+      // connection, so comparing clocks alone misses a reload once the new page has run past the
+      // cursor. The clock check stays for an SDK that stamps no document. The new page is then read
+      // from its start, and the warning says the report covers only it.
       const crossedReload =
-        (rec.session !== undefined && rec.session !== session.id) || session.elapsed() < rec.cursor;
+        (rec.session !== undefined && rec.session !== session.id) ||
+        (rec.document !== undefined && rec.document !== session.currentDocumentId) ||
+        session.elapsed() < rec.cursor;
       const from = crossedReload ? 0 : rec.cursor;
       const events = session.eventsSince(from);
       const routes = routesFromRecording(rec.startPath, events);

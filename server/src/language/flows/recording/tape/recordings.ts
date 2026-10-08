@@ -54,6 +54,11 @@ interface ActiveRecording {
   /** The route the journey began on. See CompiledProgram.startPath. */
   startPath?: string;
   /**
+   * The document the tab was on at start. A full-page load makes a new one even when the SDK keeps
+   * its session id, and its clock is from a different connection, so this is how stop tells (#1411).
+   */
+  document?: string;
+  /**
    * For each recording that was ALREADY in flight when this one started, how many steps it had.
    *
    * That mark is what makes a sub-flow boundary knowable. `capture` appends to every active
@@ -135,7 +140,13 @@ export class RecordingStore {
   /** `byHarness`: whether the step being captured was driven by the Harness, which tapes its own. */
   constructor(private readonly byHarness: () => boolean = () => false) {}
 
-  start(name: string, cursor: number, startPath?: string, session?: string): void {
+  start(
+    name: string,
+    cursor: number,
+    startPath?: string,
+    session?: string,
+    document?: string,
+  ): void {
     const openedOver = new Map<string, number>();
     for (const [outer, rec] of this.#targets(session)) openedOver.set(outer, rec.steps.length);
     this.#active.set(name, {
@@ -144,6 +155,7 @@ export class RecordingStore {
       openedOver,
       ...(startPath === undefined ? {} : { startPath }),
       ...(session === undefined ? {} : { session }),
+      ...(document === undefined ? {} : { document }),
     });
   }
 
