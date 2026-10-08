@@ -311,6 +311,7 @@ export async function exploreScript(
       options.expect,
     ),
     ...(0 === runIds.length ? {} : { runIds }),
+    journeys: results,
     planLines: [
       `Plan · ${String(script.journeys.length)} journeys in ${String(script.lanes.length)} lane(s)`,
       ...run.lines,

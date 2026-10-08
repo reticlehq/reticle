@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { DriveStoppedError, runHarness, type HarnessToolset } from '../harness.js';
-import { serverDriver } from './server-driver.js';
+import {
+  DRIVE_HEADER,
+  platformHeaders,
+  serverDriver,
+  serverOptionsFromEnv,
+} from './server-driver.js';
 
 const toolset = (seen: string[]): HarnessToolset => ({
   tools: [{ name: 'reticle_act_and_wait', description: 'act', inputSchema: { type: 'object' } }],
@@ -142,5 +147,39 @@ describe('autonomous driving switched off mid-run', () => {
     await expect(driver.turn({ system: '', tools: [], history: [] })).rejects.toBeInstanceOf(
       DriveStoppedError,
     );
+  });
+});
+
+describe('a free drive names itself on every call', () => {
+  it('reads the drive id from the environment and sends it as a header on each turn', async () => {
+    const headers: string[] = [];
+    const fetch = (url: string, init: RequestInit): Promise<Response> => {
+      headers.push(String(new Headers(init.headers).get(DRIVE_HEADER)));
+      const done = new URL(url).pathname.endsWith('/turn');
+      return Promise.resolve(
+        new Response(
+          JSON.stringify(
+            done
+              ? { turn: 0, calls: [], text: '', done: true, status: 'finished' }
+              : { runId: 'hr_free' },
+          ),
+          { status: 200 },
+        ),
+      );
+    };
+    const platform = serverOptionsFromEnv({
+      RETICLE_API_KEY: 'rk_live_x',
+      RETICLE_CLOUD_URL: 'https://p.test',
+      RETICLE_DRIVE_ID: 'drv_1',
+    });
+    expect(platform?.driveId).toBe('drv_1');
+    if (platform === undefined) return;
+    await runHarness(serverDriver({ ...platform, fetch }), toolset([]));
+    expect(headers.length).toBeGreaterThan(1);
+    expect(new Set(headers)).toEqual(new Set(['drv_1']));
+  });
+
+  it('sends no drive header when no free drive was granted', () => {
+    expect(platformHeaders({ apiKey: 'k' })[DRIVE_HEADER]).toBeUndefined();
   });
 });

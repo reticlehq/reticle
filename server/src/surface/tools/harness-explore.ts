@@ -31,6 +31,7 @@ import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { buildHarnessPlan, planAsText, withoutReplays, type HarnessPlan } from './harness-plan.js';
 import { allSessionIntents } from '@/memory/intent/open-intents.js';
 import { fetchPlatformConfig, type ConfigFetch } from '@/features/harness/platform-config.js';
+import type { JourneyResult } from '@/features/harness/platform/script.js';
 import {
   DEFAULT_MAX_STEPS,
   runHarness,
@@ -118,6 +119,8 @@ export interface ExploreResult {
   driverName: string;
   /** The run this drive syncs as (`harness-<id>`), so a caller can find it on the platform. */
   runIds?: readonly string[];
+  /** How each journey of a platform plan ended, worst lane first. Absent for an unplanned drive. */
+  journeys?: readonly JourneyResult[];
 }
 
 /**

@@ -143,7 +143,12 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * hide or move a HUD sitting over the control it has to test, which was otherwise untestable. The
  * two parameters it started as were merged into one, and its description dropped, to get here.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 25_650;
+/*
+ * 25_700 for `driveId` on reticle_verify explore (25,676 B measured), with no description: the one
+ * free drive `reticle try` was granted has to reach the daemon that drives, and an argument on that
+ * call is the only channel to it.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_700;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`

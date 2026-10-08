@@ -13,7 +13,7 @@
 
 import { z } from 'zod';
 import { unprovedGoals } from '@/features/harness/goals.js';
-import { ReticleTool, asRecord } from '@reticlehq/core';
+import { ReticleEnv, ReticleTool, asRecord } from '@reticlehq/core';
 import { stepCountSchema } from './args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { runTool } from './invoke-tool.js';
@@ -57,6 +57,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         .describe(
           'Active session ID from reticle_sessions. Omit when only one browser session is open.',
         ),
+      driveId: z.string().optional(),
     },
     // Everything the handler returns has to be declared, or a schema-aware client never sees it.
     outputSchema: {
@@ -106,11 +107,18 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       }),
       /** Said out loud when a drive recorded nothing, because that is not a verified app. */
       note: z.string().optional(),
+      /** Each journey of a platform plan and how it ended. Only `passed` is proved. */
+      journeys: z.array(z.object({ title: z.string(), status: z.string() })).optional(),
     },
     handler: async (deps: ToolDeps, args: Record<string, unknown>) => {
       // The credential `reticle link` already filed counts as configured, so somebody who has
       // signed in and linked does not also have to export a key by hand.
-      const env = await withLinkedCredential(deps, process.env);
+      const driveId = args['driveId'];
+      const env = {
+        ...(await withLinkedCredential(deps, process.env)),
+        // Billed to the one free drive the platform granted `reticle try`, never to another.
+        ...('string' === typeof driveId ? { [ReticleEnv.DRIVE_ID]: driveId } : {}),
+      };
       if (!harnessAvailable(env)) throw new Error(MSG_NO_HARNESS_KEY);
       const persona = args['persona'];
       const maxSteps = args['maxSteps'];
@@ -126,6 +134,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         goals,
         planLines,
         runIds,
+        journeys,
       } = await exploreApp(deps, env, {
         ...('string' === typeof persona ? { focus: persona } : {}),
         ...('number' === typeof maxSteps ? { maxSteps } : {}),
@@ -143,6 +152,9 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         checks: checkTally(drive.toolCalls),
         ...(drive.goalMet === undefined ? {} : { goalMet: drive.goalMet }),
         ...(runIds === undefined ? {} : { runIds: [...runIds] }),
+        ...(journeys === undefined
+          ? {}
+          : { journeys: journeys.map((j) => ({ title: j.title, status: j.status })) }),
         goals: [...goals],
         plan: { summary: plan.summary, steps: [...plan.steps] },
         // Derived, not narrated. The driver's own `summary` is appended only when it said
