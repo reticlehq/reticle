@@ -297,7 +297,9 @@ describe('advertised surface cost', () => {
 // 149_500 -> 149_700 for `window` and `documentStatus` on reticle_sessions and `disconnected` on
 // session end (149,593 B): two windows of one desktop app share a url, and a validating client strips
 // an undeclared field, so the label that tells them apart has to be in the schema.
-const ALL_SURFACE_BYTE_BUDGET = 149_700;
+// 149_700 -> 149_800 for `repeatable` on a net clause (#1353), 149,731 B: a read over POST declared
+// as one is kept out of duplicate-request, and the field rides every schema that carries a predicate.
+const ALL_SURFACE_BYTE_BUDGET = 149_800;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

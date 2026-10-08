@@ -44,6 +44,8 @@ interface DeclaredExpectations {
    * is why an empty-string entry is meaningful and is preserved rather than skipped.
    */
   netUrls: readonly string[];
+  /** The subset of `netUrls` whose clause said `repeatable: true`: reads, not writes (#1353). */
+  repeatableNetUrls: readonly string[];
 }
 
 /** Below this, a status is a success or a redirect: not a declared failure. */
@@ -102,6 +104,7 @@ function pushAuthDenialStatuses(into: DeclaredNetFailure[]): void {
 export function declaredExpectations(predicate: Predicate | undefined): DeclaredExpectations {
   const netFailures: DeclaredNetFailure[] = [];
   const netUrls: string[] = [];
+  const repeatableNetUrls: string[] = [];
   let rendersContent = false;
 
   const walk = (p: Predicate): void => {
@@ -114,6 +117,7 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
         return;
       case PredicateKind.NET: {
         netUrls.push(p.urlContains ?? '');
+        if (true === p.repeatable) repeatableNetUrls.push(p.urlContains ?? '');
         const declaredFailure =
           false === p.ok || (p.status !== undefined && p.status >= FAILURE_STATUS_MIN);
         if (!declaredFailure) return;
@@ -144,7 +148,7 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
   };
 
   if (predicate !== undefined) walk(predicate);
-  return { netFailures, rendersContent, netUrls };
+  return { netFailures, rendersContent, netUrls, repeatableNetUrls };
 }
 
 /**

@@ -170,4 +170,10 @@ export interface ContradictionOptions {
    * declared, nothing is unrelated.
    */
   namedNetUrls?: readonly string[] | undefined;
+  /**
+   * Endpoints the assertion declared as reads (`net { repeatable: true }`), matched the way
+   * `namedNetUrls` is. Repeats on them are not a double submit, so `duplicate-request` skips them
+   * (#1353). Nothing else reads it: they are still waited for and still counted.
+   */
+  repeatableNetUrls?: readonly string[] | undefined;
 }

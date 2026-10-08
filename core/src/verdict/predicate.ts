@@ -77,6 +77,8 @@ export type Predicate =
       requestBodyContains?: string;
       /** JSON field match over the REQUEST body, in the style of `signal.dataMatches`. */
       requestBodyMatches?: Record<string, unknown>;
+      /** Repeats of this call are expected (a read over POST), so they are not a double submit. */
+      repeatable?: boolean;
     }
   | { kind: typeof PredicateKind.ROUTE; pathname?: string; contains?: string; since?: number }
   | {
@@ -353,6 +355,13 @@ function predicateUnion() {
          * instead of reporting a mismatch: a redacted field is unknown, not different.
          */
         requestBodyMatches: z.record(z.string(), z.unknown()).optional(),
+        /**
+         * The endpoint READS, so running twice in one window is not a double submit (#1353). GraphQL
+         * queries, tRPC batches, query buses and read Server Actions all read over POST, and React
+         * StrictMode runs the effect behind them twice in development. Scoped to this verdict and to
+         * the duplicate rule only: the request is still waited for and still counted.
+         */
+        repeatable: z.boolean().optional(),
       })
       .strict(),
     z
