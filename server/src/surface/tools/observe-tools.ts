@@ -81,7 +81,7 @@ import { bodyIsEvidence, type BodyMode } from '@reticlehq/engine/window/body-rel
 import { foldAssetNoise } from '@reticlehq/engine/window/asset-noise.js';
 import { bodyClauseRefusal } from '@reticlehq/engine/evidence/body-capture-remedy.js';
 import { withControl } from '@/portal/session/control-envelope.js';
-import { asNumber, asRecord, asString } from '@reticlehq/core';
+import { asNumber, asRecord, asString, isPlainRecord } from '@reticlehq/core';
 import { type ToolDef, intentArg, sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { captureAssertion } from '@/language/flows/replay.js';
@@ -917,8 +917,3 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     },
   },
 ];
-
-/** Narrow a command result to something noteEmptyRead can annotate. */
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return 'object' === typeof value && value !== null && !Array.isArray(value);
-}
