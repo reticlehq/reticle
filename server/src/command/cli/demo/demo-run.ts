@@ -17,7 +17,7 @@
  * routes pass through it.
  */
 
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, asString as asText } from '@reticlehq/core';
 // TOOLS comes through the package barrel rather than from `surface/tools/tools.js` directly. That
 // aggregator composes the tool arrays out of five directories, and anything importing it back is how
 // this package accumulated cycles; the barrel sits above both it and this file, which is the
@@ -64,10 +64,6 @@ function toolNamed(name: string): ToolDef {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return 'object' === typeof value && null !== value ? (value as Record<string, unknown>) : {};
-}
-
-function asText(value: unknown): string | undefined {
-  return 'string' === typeof value ? value : undefined;
 }
 
 /** The controls `reticle_query` found, in the shape the safety rule reads them. */

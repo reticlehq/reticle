@@ -6,12 +6,8 @@
  * exists on search. That shape is visible from the route list with no change to the flow file, so
  * stop/save can warn instead of writing a flow that fails on the next click.
  */
-import { EventType, type ReticleEvent } from '@reticlehq/core';
+import { EventType, asString, type ReticleEvent } from '@reticlehq/core';
 import { routePathOf } from '@reticlehq/engine/question/predicate/predicate-route.js';
-
-function asString(value: unknown): string | undefined {
-  return 'string' === typeof value ? value : undefined;
-}
 
 /**
  * The page a recording step sat on, comparable across path routers and hash routers.
