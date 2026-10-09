@@ -36,6 +36,20 @@ describe('a drive becomes a flow without anybody asking', () => {
     expect(outcome.unprovenSteps, 'drove and proved nothing must stay visible').toBe(2);
   });
 
+  it('does not save a journey that ran under network mocks, and counts it (#1459)', () => {
+    const mocked: TapeStep = { ...step(true, '/checkout'), mocked: true };
+    const { programs, outcome } = driveFlowsFrom({
+      steps: [step(false, '/checkout'), mocked, step(true, '/issues')],
+    });
+    expect(programs.map((p) => p.startPath)).toEqual(['/issues']);
+    expect(outcome.mockedSteps).toBe(2);
+    expect(outcome.unprovenSteps).toBeUndefined();
+    // A mocked journey that proved nothing is unproven first: the mocks are not why it was dropped.
+    expect(driveFlowsFrom({ steps: [{ ...step(false), mocked: true }] }).outcome).toEqual({
+      unprovenSteps: 1,
+    });
+  });
+
   it('writes nothing for a session that drove nothing', () => {
     expect(driveFlowsFrom({ steps: [] })).toEqual({ programs: [], outcome: {} });
     expect(driveFlowsFrom(undefined)).toEqual({ programs: [], outcome: {} });

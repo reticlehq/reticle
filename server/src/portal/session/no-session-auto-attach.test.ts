@@ -371,7 +371,7 @@ describe('the structured next action the watch publishes', () => {
   );
 
   it(
-    'asks for `reticle init` — never a dev command — when a server is up and nothing is wired',
+    'asks for `npx @reticlehq/server init` — never a dev command — when a server is up and nothing is wired',
     async () => {
       const { manager, next } = stubSessions();
       const stop = startNoSessionWatch({
@@ -385,7 +385,7 @@ describe('the structured next action the watch publishes', () => {
       const action = next();
       stop();
       expect(action?.action).toBe(NoSessionAction.RUN_INIT);
-      expect(action?.command).toBe('reticle init');
+      expect(action?.command).toBe('npx @reticlehq/server init');
     },
     TEMP_PROJECT_TIMEOUT_MS,
   );

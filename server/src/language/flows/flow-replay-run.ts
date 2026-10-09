@@ -20,7 +20,11 @@ import {
 import { haltedFrom } from './recording/replay-halt.js';
 import { establishedState, samePath } from './flow-journey.js';
 import { asRecord, asString } from '@reticlehq/core';
-import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
+import {
+  navigablePath,
+  routeOfEvent,
+  routeOfUrl,
+} from '@reticlehq/engine/question/predicate/predicate-route.js';
 import type { ArrivalClock } from '@/surface/tools/act/navigation/navigate-arrival.js';
 import { carryReticleIdentity } from '@/surface/tools/lease-tools.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -163,11 +167,12 @@ function currentPathOf(session: StartPathSession): string | undefined {
   // query usually decides what the page renders, so a tab on `?tab=summary` would read as "already
   // at `?tab=wrap`" and the replay would start on the wrong page with nothing saying so. Both sides
   // carry it, which keeps a real difference visible and stops the false one.
+  // Reticle's own params dropped, as the recording drops them from `startPath` (#1411).
   const observed = last === undefined ? undefined : routeOfEvent(last);
-  if (observed !== undefined) return `${observed.docPath}${observed.search}${observed.hash}`;
+  if (observed !== undefined) return navigablePath(observed);
   if (session.url === undefined) return undefined;
   const fromUrl = routeOfUrl(session.url);
-  return fromUrl === undefined ? undefined : `${fromUrl.docPath}${fromUrl.search}${fromUrl.hash}`;
+  return fromUrl === undefined ? undefined : navigablePath(fromUrl);
 }
 
 /**

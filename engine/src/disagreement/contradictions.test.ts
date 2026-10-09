@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { ContradictionKind, EventType, isAbsenceDerived, type ReticleEvent } from '@reticlehq/core';
+import {
+  ContradictionKind,
+  EventType,
+  ROUTE_CHANGE_HOW_FIELD,
+  RouteChangeHow,
+  Verified,
+  isAbsenceDerived,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import { findContradictions } from './contradictions.js';
+import { decideVerified } from '../evidence/verified.js';
+import { HonestyGrade } from '../evidence/honesty.js';
 
 let seq = 0;
 function ev(type: EventType, data: Record<string, unknown> = {}): ReticleEvent {
@@ -434,6 +444,98 @@ describe('the route moved and nothing was rendered for it', () => {
       pathname: '/',
       search: '',
       hash: '#/invoices',
+    });
+    expect(kinds([hashRoute])).toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+  });
+
+  /**
+   * An input that sets an SVG group's transform and calls `history.replaceState(null, "", "?zoom=125")`
+   * is recording UI state, not navigating. The route wait holds (`until: { kind: "route", contains:
+   * "zoom=125" }`) and the only visible effect is an attribute. Grading that `route-rendered-nothing`
+   * made the verdict `unknown`.
+   */
+  it('returns yes for a same-pathname replaceState whose only effect is an attribute', () => {
+    const zoom = ev(EventType.ROUTE_CHANGE, {
+      from: 'http://localhost:5173/editor',
+      to: 'http://localhost:5173/editor?zoom=125',
+      pathname: '/editor',
+      search: '?zoom=125',
+      hash: '',
+      [ROUTE_CHANGE_HOW_FIELD]: RouteChangeHow.REPLACE,
+    });
+    const transform = ev(EventType.DOM_ATTR, { attr: 'transform', value: 'scale(1.25)' });
+    const found = findContradictions([zoom, transform], { action: 'fill', actionSince: 0 });
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+    const decision = decideVerified({
+      pass: true,
+      declaredConsequence: true,
+      settled: true,
+      contradictions: found,
+      honesty: {
+        grade: HonestyGrade.PRESENCE,
+        coverage: { partial: false },
+        integrity: { clean: true, issues: [] },
+      },
+    });
+    expect(decision.verified).toBe(Verified.YES);
+  });
+
+  it('still flags a pushState onto a new pathname that renders nothing', () => {
+    const pushed = ev(EventType.ROUTE_CHANGE, {
+      from: 'http://localhost:5173/editor',
+      to: 'http://localhost:5173/invoices',
+      pathname: '/invoices',
+      search: '',
+      hash: '',
+      [ROUTE_CHANGE_HOW_FIELD]: RouteChangeHow.PUSH,
+    });
+    expect(kinds([pushed, attrOnly()])).toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+  });
+
+  it('still flags a replaceState onto a new pathname that renders nothing', () => {
+    const replaced = ev(EventType.ROUTE_CHANGE, {
+      from: 'http://localhost:5173/editor',
+      to: 'http://localhost:5173/invoices',
+      pathname: '/invoices',
+      search: '',
+      hash: '',
+      [ROUTE_CHANGE_HOW_FIELD]: RouteChangeHow.REPLACE,
+    });
+    expect(kinds([replaced])).toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+  });
+
+  it('still flags a same-pathname pushState that renders nothing', () => {
+    const pushed = ev(EventType.ROUTE_CHANGE, {
+      from: 'http://localhost:5173/editor',
+      to: 'http://localhost:5173/editor?zoom=125',
+      pathname: '/editor',
+      search: '?zoom=125',
+      hash: '',
+      [ROUTE_CHANGE_HOW_FIELD]: RouteChangeHow.PUSH,
+    });
+    expect(kinds([pushed, attrOnly()])).toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+  });
+
+  it('still flags a same-pathname pop that renders nothing', () => {
+    const popped = ev(EventType.ROUTE_CHANGE, {
+      from: 'http://localhost:5173/editor?zoom=125',
+      to: 'http://localhost:5173/editor',
+      pathname: '/editor',
+      search: '',
+      hash: '',
+      [ROUTE_CHANGE_HOW_FIELD]: RouteChangeHow.POP,
+    });
+    expect(kinds([popped, attrOnly()])).toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+  });
+
+  it('still flags a replaceState into a hash-router path (`#/invoices`)', () => {
+    const hashRoute = ev(EventType.ROUTE_CHANGE, {
+      from: 'http://localhost:5173/#/home',
+      to: 'http://localhost:5173/#/invoices',
+      pathname: '/',
+      search: '',
+      hash: '#/invoices',
+      [ROUTE_CHANGE_HOW_FIELD]: RouteChangeHow.REPLACE,
     });
     expect(kinds([hashRoute])).toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
   });

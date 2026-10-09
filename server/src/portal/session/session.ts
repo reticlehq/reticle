@@ -455,10 +455,10 @@ export class Session implements HandshakeFacts {
     return this.#observed.actedRefs();
   }
   noteRateLimited(dropped: number): void {
-    this.#observed.noteRateLimited(dropped);
+    this.#observed.noteRateLimited(dropped, this.elapsed());
   }
-  blindSpots(): Readonly<Record<string, number>> {
-    return this.#observed.blindSpots();
+  blindSpots(since?: number): Readonly<Record<string, number>> {
+    return this.#observed.blindSpots(since);
   }
 
   /** Learned ambient-churn counts (PredicateSession hook the settle oracle reads). */

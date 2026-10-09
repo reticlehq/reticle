@@ -333,8 +333,24 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * Then the panel's Run Harness and Stop: two control kinds and the running drive on the impact
  * snapshot, whose schema loads with every page; without the drive on the snapshot the panel cannot
  * know when to show Stop. Both together measured at 256,871 B; rounded up to the next hundred.
+ *
+ * Then `route.change` started carrying how the URL moved. The page is the only place that knows
+ * whether it was `pushState`, `replaceState`, or the session history moving, so that vocabulary has
+ * to be in the first load. Measured with everything above at 257,020 B; the ceiling is that
+ * rounded up to the next hundred.
  */
-const MAX_FIRST_LOAD_BYTES = 256_900;
+/*
+ * Raised for request-body identity on bytes and forms (#1347). A JSON body a client encoded to
+ * bytes (Flutter web, gRPC-web) and a FormData upload carried no fingerprint, so every write to such
+ * an endpoint pooled into one unknown identity and a correct fan-out graded
+ * `unknown / duplicate-request`. The fingerprint has to run in the page at send time, so it cannot
+ * be deferred. Measured 257,598 B merged with main at 256,871 B (+727 B); the ceiling is that
+ * rounded up to the next hundred.
+ *
+ * Merged with main after #1479's route.change vocabulary landed: 257,747 B. The ceiling now carries
+ * ~1KB of headroom above the measurement, so the next small PR does not have to move it.
+ */
+const MAX_FIRST_LOAD_BYTES = 258_800;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

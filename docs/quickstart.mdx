@@ -38,7 +38,7 @@ irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1
 
 This puts `reticle` on your PATH and registers the MCP server with every coding agent it can reach: Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue and Factory Droid. Nothing is asked. It does not wire your app, and says so: that is step 2. Want a verdict first? `reticle tutorial --run` drives Reticle's own demo app.
 
-Codex CLI keeps a TOML config that Reticle will not rewrite, so the installer prints the lines to paste and the file to paste them into.
+Codex CLI keeps a TOML config that Reticle will not rewrite itself, so with the `codex` command installed the installer registers Reticle through `codex mcp add`. Without it, the installer prints the lines to paste and the file to paste them into.
 
 <Note>
   **Run this before opening your agent, and there is nothing to restart.** A coding agent reads its
@@ -69,9 +69,8 @@ Step 1 is once per machine. This step is once per project. **Skipping it is the 
   **Skipped this step?** Ask your agent to verify something in the app. Its first `reticle_session`
   call finds a project that has never connected, runs `init` there itself, and lists every file it
   changed under `wired`. Asked about something unrelated, it offers to wire the app instead of doing
-  it. This works in Claude Code, Codex, Cursor and other MCP agents. If Reticle is already running
-  for another project, run `npx @reticlehq/server init` in this one: the automatic wiring covers the
-  project the daemon started in.
+  it. This works in Claude Code, Codex, Cursor and other MCP agents, including a second project
+  while Reticle is already running for another one.
 </Note>
 
 Prefer to install the skill and let the agent run setup itself? On Claude Code the plugin registers the MCP server and the skill in one step:

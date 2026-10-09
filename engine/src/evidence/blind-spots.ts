@@ -108,8 +108,26 @@ export function impeachesCapture(kind: BlindSpotKind): boolean {
   return kind === BlindSpotKind.RATE_LIMITED;
 }
 
-/** Compose the coverage statement. `full` (no note) when nothing was unobserved. */
-export function buildCoverageStatement(spots: readonly BlindSpot[]): CoverageStatement {
+/**
+ * Bridge sampling that happened in the session but not in the window being judged (#1414). The
+ * window's own label says "this window is SAMPLED" and asks for a re-run, which is false here: the
+ * verdict's capture is whole, and repeating the drive would only repeat a clean check.
+ */
+const RATE_LIMITED_ELSEWHERE = (n: number): string =>
+  `${String(n)} event${1 === n ? '' : 's'} dropped by the bridge rate cap earlier in this session, none in this window, so this result's capture is complete`;
+
+/**
+ * Compose the coverage statement. `full` (no note) when nothing was unobserved.
+ *
+ * `windowSpots`, when given, are the same spots counted over the judged window only. An impeaching
+ * kind is then labelled by what the WINDOW saw: its window count when it dropped events there, and
+ * as an earlier-in-the-session fact when it did not. Bounding kinds are standing facts of the page
+ * and keep their session-wide label.
+ */
+export function buildCoverageStatement(
+  spots: readonly BlindSpot[],
+  windowSpots?: readonly BlindSpot[],
+): CoverageStatement {
   const present = spots.filter((s) => s.count > 0);
   if (0 === present.length) return { coverage: Coverage.FULL, spots: [] };
   // Each label carries its own ending. Appending a blanket " unobserved" here produced
@@ -120,8 +138,15 @@ export function buildCoverageStatement(spots: readonly BlindSpot[]): CoverageSta
   // daemon can report one, and `LABEL[kind](count)` threw a TypeError on the verdict path when it
   // did — turning "there is something I could not see" into a crashed assert, which is worse than
   // either the caveat or the silence. Unknown kinds degrade to their own name.
-  const label = (s: BlindSpot): string =>
+  const known = (s: BlindSpot): string =>
     'function' === typeof LABEL[s.kind] ? LABEL[s.kind](s.count) : `${s.kind} (${String(s.count)})`;
+  const label = (s: BlindSpot): string => {
+    if (windowSpots === undefined || !impeachesCapture(s.kind)) return known(s);
+    const inWindow = windowSpots.find((w) => w.kind === s.kind)?.count ?? 0;
+    return 0 < inWindow
+      ? known({ kind: s.kind, count: inWindow })
+      : RATE_LIMITED_ELSEWHERE(s.count);
+  };
   const note = `${Coverage.PARTIAL} — ${present.map(label).join(', ')}`;
   return { coverage: Coverage.PARTIAL, note, spots: present };
 }

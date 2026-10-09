@@ -37,7 +37,7 @@ function shellSafe(args: readonly string[]): string[] {
 /**
  * Every program `init` is ever allowed to run.
  *
- * The set is closed and tiny — the four package managers, `npx`, `corepack`, and the Claude CLI —
+ * The set is closed and tiny — the four package managers, `npx`, `corepack`, and the Claude and Codex CLIs —
  * because those are the only things the plan can ask for. It is a named constant for the same reason
  * every other wire string here is one, and it is CHECKED because of the shell: on Windows these spawn
  * through a shell, and a shell turns the command name into something the shell parses rather than a
@@ -59,6 +59,7 @@ export const RUNNABLE_COMMANDS: readonly string[] = [
   'npx',
   'corepack',
   'claude',
+  'codex',
 ];
 
 /** The command, proven to be one of `RUNNABLE_COMMANDS` — never the caller's string. */

@@ -8,6 +8,7 @@
  */
 
 import * as http from 'node:http';
+import { MCP_CLIENT_DIRECTORY_HEADER } from '@reticlehq/core';
 import { log } from '@/log.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { reconnectDelayMs } from '@/surface/mcp/proxy/proxy-backoff.js';
@@ -72,6 +73,10 @@ export function postToSession(
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': bodyBuf.byteLength,
+          // The project this proxy was started in. The daemon serves every project; without this
+          // it can only see the directory it itself started in. Percent-encoded: a cwd such as
+          // `/work/项目` is not a legal header value, and Node throws before the request is sent.
+          [MCP_CLIENT_DIRECTORY_HEADER]: encodeURIComponent(process.cwd()),
         },
       };
       // A keep-alive socket carries historical bytes; retry safety depends on this request's delta.

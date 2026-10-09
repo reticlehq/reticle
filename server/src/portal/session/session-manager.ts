@@ -170,6 +170,7 @@ export class SessionManager {
 
   add(session: Session): Session | undefined {
     this.#everConnected = true;
+    if (session.projectId !== undefined) this.#connectedProjects.add(session.projectId);
     // Ordering, not lifetime: this is what makes a remembered refusal distinguishable from a live
     // one. Here for the same reason `#everConnected` is — `add` is the one method every path that
     // registers a session goes through.
@@ -439,9 +440,21 @@ export class SessionManager {
 
   /** Whether any session has connected since this daemon booted — half the diagnosis. */
   #everConnected = false;
+  /**
+   * Which projects have registered a session in this process.
+   *
+   * `#everConnected` is one bit for the whole daemon. A second project asking "has anything
+   * connected" was answered about the first. The set is the same fact, per project.
+   */
+  readonly #connectedProjects = new Set<string>();
 
   everConnected(): boolean {
     return this.#everConnected;
+  }
+
+  /** Whether a session for this project has registered since boot. An unknown id has not. */
+  everConnectedTo(projectId: string): boolean {
+    return this.#connectedProjects.has(projectId);
   }
 
   /**
@@ -506,6 +519,25 @@ export class SessionManager {
     let last: SessionIdentity | undefined;
     for (const record of this.#tombstones.values()) last = record;
     return last;
+  }
+
+  /**
+   * The most recent departed session for one project.
+   *
+   * `lastKnown` is the newest tombstone of any project. A shared daemon that quoted it to every
+   * caller told the second project to reopen the first project's tab.
+   */
+  lastKnownFor(projectId: string): SessionIdentity | undefined {
+    let last: SessionIdentity | undefined;
+    for (const record of this.#tombstones.values()) {
+      if (record.projectId === projectId) last = record;
+    }
+    return last;
+  }
+
+  /** Every departed session's URL, oldest first. The port scan has to see all of them, not only the newest. */
+  tombstoneUrls(): readonly string[] {
+    return [...this.#tombstones.values()].map((record) => record.url);
   }
 
   /**

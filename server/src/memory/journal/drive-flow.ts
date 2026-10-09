@@ -29,6 +29,8 @@ export interface TapeStep {
   endPage?: string;
   /** The intent the agent declared on this action. The first one names the journey. */
   intent?: string;
+  /** Recorder-internal: network mocks were active when it ran (#1459). Never written to disk. */
+  mocked?: true;
 }
 
 /** The compiled shape a flow store accepts. Structural, for the same reason as `TapeStep`. */
@@ -128,6 +130,14 @@ export function driveFlowName(route?: string, steps: readonly TapeStep[] = []): 
   return asFlowName(`${DRIVE_FLOW_PREFIX}${0 === parts.length ? 'journey' : parts.join('-')}`);
 }
 
+/** Why session end saved no flow, as reported on the `flow_recorded` step. */
+export const DriveFlowSkipReason = {
+  /** The drive declared no consequence, so a saved flow could never go red. */
+  NO_DECLARED_CONSEQUENCE: 'no_declared_consequence',
+  /** What it proved rested on network mocks the flow would not carry (#1459). */
+  DRIVEN_UNDER_NETWORK_MOCKS: 'driven_under_network_mocks',
+} as const;
+
 export interface DriveFlowOutcome {
   /** The flows that were written — one per journey the session contained. */
   readonly saved?: readonly string[];
@@ -140,6 +150,13 @@ export interface DriveFlowOutcome {
    * "the agent drove and proved nothing" stays visible instead of looking like nothing happened.
    */
   readonly unprovenSteps?: number;
+  /**
+   * Steps of journeys that proved something and were NOT saved because they ran while network
+   * mocks were active (#1459). Such a journey replays against the real backend, so it either fails
+   * for a reason unrelated to the change or passes on data the original check never saw, and the
+   * flow file holds no trace of the precondition. Counted, so "not saved" has a reason.
+   */
+  readonly mockedSteps?: number;
 }
 
 /**
@@ -207,9 +224,14 @@ export function driveFlowsFrom(
   if (tape === undefined || 0 === tape.steps.length) return { programs: [], outcome: {} };
   const programs: DriveProgram[] = [];
   let unproven = 0;
+  let mocked = 0;
   for (const segment of segmentsByRoute(tape.steps)) {
     if (!carriesAnAssertion(segment.steps)) {
       unproven += segment.steps.length;
+      continue;
+    }
+    if (segment.steps.some((step) => true === step.mocked)) {
+      mocked += segment.steps.length;
       continue;
     }
     const startPath = segment.route ?? tape.startPath;
@@ -218,7 +240,7 @@ export function driveFlowsFrom(
       version: REPLAY_PROGRAM_VERSION,
       // The route is recorder-internal and has no business on disk — `startPath` is where the
       // on-disk flow says the same thing, in the field replay actually reads.
-      steps: segment.steps.map(({ route: _route, ...step }) => step),
+      steps: segment.steps.map(({ route: _route, mocked: _mocked, ...step }) => step),
       ...(startPath === undefined ? {} : { startPath }),
     });
   }
@@ -227,6 +249,7 @@ export function driveFlowsFrom(
     outcome: {
       ...(0 === programs.length ? {} : { saved: programs.map((p) => p.name) }),
       ...(0 === unproven ? {} : { unprovenSteps: unproven }),
+      ...(0 === mocked ? {} : { mockedSteps: mocked }),
     },
   };
 }

@@ -9,6 +9,8 @@
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import { DiscoveryInvite, NoSessionAction } from '@reticlehq/core';
+import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
+import { callingClientDirectory } from '@/hooks/client-directory.js';
 import type { ToolDeps } from './tool-kit.js';
 
 /** The answers that mean "this app is not set up yet", which a first run can settle by wiring it. */
@@ -58,6 +60,41 @@ export const EMPTY_SESSION_LIST_OUTPUT = {
     ),
 };
 
+/**
+ * Wire the calling project when another project's tab is the one currently connected.
+ *
+ * The list handler only used to reach {@link emptySessionList} when the daemon's whole list was
+ * empty. A live tab in project A then answered project B's first call with A's sessions, and B
+ * was never wired.
+ */
+export async function wireCallerBesideLiveSessions(
+  deps: ToolDeps,
+  sessions: readonly { projectId?: string }[],
+): Promise<unknown> {
+  const dir = callingClientDirectory();
+  if (dir === undefined) return undefined;
+  const projectId = readProjectId(dir);
+  if (projectId !== undefined && sessions.some((session) => session.projectId === projectId)) {
+    return undefined;
+  }
+  const next = deps.sessions.noSessionNextAction();
+  const target =
+    next !== undefined && FIRST_RUN_ACTIONS.has(next.action)
+      ? deps.firstRun?.projectDirectory(dir)
+      : undefined;
+  if (target === undefined || deps.firstRun === undefined) return undefined;
+  return deps.firstRun.wire(target);
+}
+
+/** The departed tab for this call: the caller's own project when it named one, else the daemon's newest. */
+function departedForCaller(deps: ToolDeps): { id: string; url: string } | undefined {
+  const dir = callingClientDirectory();
+  if (dir === undefined) return deps.sessions.lastKnown?.();
+  const projectId = readProjectId(dir);
+  if (projectId === undefined) return undefined;
+  return deps.sessions.lastKnownFor?.(projectId);
+}
+
 export async function emptySessionList(
   deps: ToolDeps,
   sessions: unknown[],
@@ -66,14 +103,17 @@ export async function emptySessionList(
   // The executable half. `why` is for the human reading the transcript; this is the one the
   // agent acts on, so it never has to parse a paragraph to find a command inside it.
   const next = deps.sessions.noSessionNextAction();
-  // The first run wires the app, not the installation: the daemon runs init itself, once,
-  // in its own project, and says what it changed. A daemon outside any project asks instead.
+  // The first run wires the app the client is in, not the directory the daemon was started in.
+  // One daemon serves every project; the proxy names its cwd on the call. With no caller (an
+  // embed, a test) it is still the daemon's own project. A daemon outside any project asks instead.
+  // ponytail: cwd, not an MCP roots/list round trip. A proxy started outside the project still
+  // answers run_init; roots are the upgrade when a client launches there but names the project.
   // Not only on `run_init`: an unwired app whose dev server is not running yet answers
   // `start_dev_server`, which is the commonest first run of all, and init starts that server itself.
   // `projectDirectory` refuses a project that is already wired, so a wired app is never re-run.
   const dir =
     next !== undefined && FIRST_RUN_ACTIONS.has(next.action)
-      ? deps.firstRun?.projectDirectory(dirname(deps.reticleRoot))
+      ? deps.firstRun?.projectDirectory(callingClientDirectory() ?? dirname(deps.reticleRoot))
       : undefined;
   if (dir !== undefined && deps.firstRun !== undefined) {
     const wired = await deps.firstRun.wire(dir);
@@ -82,7 +122,7 @@ export async function emptySessionList(
     return { sessions, wired, ...(why === undefined ? {} : { why }) };
   }
   // The last tab, when one was here. Optional-call: test stubs of SessionManager predate it.
-  const known = deps.sessions.lastKnown?.();
+  const known = departedForCaller(deps);
   const lastKnown = undefined === known ? undefined : { sessionId: known.id, url: known.url };
   return {
     sessions,

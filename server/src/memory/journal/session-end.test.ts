@@ -16,6 +16,10 @@ import {
 } from '@reticlehq/core';
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';
+import { DriveFlowSkipReason } from './drive-flow.js';
+import { AMBIENT_RECORDING, RecordingStore } from '@/language/flows/recording/tape/recordings.js';
+import { NETWORK_MOCK_TOOLS } from '@/portal/input/network-mock-tools.js';
+import type { ToolDeps } from '@/surface/tools/tools.js';
 import { DEFAULT_DIFF_RETENTION, DEFAULT_SESSION_RETENTION } from './on-disk/retention.js';
 import { reticleDirPaths, sessionDirPath } from '@/memory/project/dir/reticle-dir.js';
 
@@ -491,5 +495,87 @@ describe('teardown saves what a session drove as ONE flow per journey', () => {
     await end(fakeSession('tab-1', {}, undefined, projectRoot));
     expect(await new FlowStore(fs, projectRoot, { now: () => 1 }).list()).toHaveLength(1);
     expect(await new FlowStore(fs, root, { now: () => 1 }).list()).toEqual([]);
+  });
+  it('does not auto-save a journey proved under network mocks, and says why (#1459)', async () => {
+    const recordings = new RecordingStore();
+    const mock = NETWORK_MOCK_TOOLS.find((t) => t.name === ReticleTool.NETWORK_MOCK);
+    const deps = {
+      sessions: { resolve: () => ({ id: 'tab-1', url: 'http://localhost:5173/checkout' }) },
+      pool: { setMocksLease: () => Promise.resolve(true) },
+      recordings,
+    } as unknown as ToolDeps;
+    const proved = (value: string, page: string) => ({
+      tool: ReticleTool.ACT,
+      args: { by: QueryBy.TESTID, value, action: 'click', args: {} },
+      stable: true,
+      page,
+      expect: { kind: PredicateKind.SIGNAL, name: `${value}:done` },
+    });
+    await mock?.handler(deps, { mocks: [{ urlContains: '/api/pay', status: 500 }] });
+    recordings.capture(proved('pay', '/checkout'), '/checkout', 'tab-1');
+    // Settled where it ran, so the next page starts a journey of its own.
+    recordings.markEnded('/checkout', 'tab-1');
+    await mock?.handler(deps, { clear: true });
+    recordings.capture(proved('close', '/issues'), '/issues', 'tab-1');
+
+    const flows = new FlowStore(fs, root, { now: () => 1 });
+    const reported: { reason?: string | undefined }[] = [];
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows,
+      takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+      reportStep: (step) => {
+        reported.push(step);
+        return Promise.resolve(true);
+      },
+    });
+    await end(fakeSession('tab-1', {}));
+
+    // The journey after the mocks were cleared is saved, and carries no recorder-internal mark.
+    const saved = await flows.list();
+    expect(saved).toHaveLength(1);
+    const flow = await flows.load(saved[0] ?? '');
+    const onDisk = JSON.stringify(flow.ok && flow.value);
+    expect(onDisk).toContain('close:done');
+    expect(onDisk).not.toContain('pay:done');
+    expect(onDisk).not.toContain('mocked');
+
+    // Mocked only: nothing saved, and the reason says so.
+    recordings.markMocked('tab-1', true);
+    recordings.capture(proved('pay', '/checkout'), '/checkout', 'tab-1');
+    await end(fakeSession('tab-1', {}));
+    expect(await flows.list()).toHaveLength(1);
+    expect(reported.at(-1)?.reason).toBe(DriveFlowSkipReason.DRIVEN_UNDER_NETWORK_MOCKS);
+  });
+
+  it('does not save an unmocked act whose proof was read after mocks went on (#1459)', async () => {
+    // Act, then mock the request the app is still waiting on, then prove the result: the proof
+    // joins the earlier step, and it rests on the mocked response.
+    const recordings = new RecordingStore();
+    recordings.capture(
+      {
+        tool: ReticleTool.ACT,
+        args: { by: QueryBy.TESTID, value: 'pay', action: 'click', args: {} },
+        stable: true,
+        page: '/checkout',
+      },
+      '/checkout',
+      'tab-1',
+    );
+    recordings.markMocked('tab-1', true);
+    recordings.attachExpect({ kind: PredicateKind.SIGNAL, name: 'pay:done' }, 'tab-1');
+
+    const flows = new FlowStore(fs, root, { now: () => 1 });
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows,
+      takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+    });
+    await end(fakeSession('tab-1', {}));
+    expect(await flows.list()).toEqual([]);
   });
 });

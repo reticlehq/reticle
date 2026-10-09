@@ -99,7 +99,7 @@ Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` 
 
 ## Wire your app: on the first run, or `reticle init`
 
-Installing Reticle changes nothing in your project. The first time your agent uses Reticle in a project that has never connected (its first `reticle_session { action: "list" }`), Reticle runs `init` there itself and returns the files it changed under `wired`, so you can skip straight to asking your agent to verify a flow. Run `init` yourself to wire a project ahead of time, to preview the changes, or when the agent's MCP server was started outside the project (the call then answers `run_init` with this same command), or when Reticle is already running for another project: the automatic wiring covers the project the daemon started in.
+Installing Reticle changes nothing in your project. The first time your agent uses Reticle in a project that has never connected (its first `reticle_session { action: "list" }`), Reticle runs `init` there itself and returns the files it changed under `wired`, so you can skip straight to asking your agent to verify a flow. That call wires the project the agent is in, including a second project on a machine where Reticle is already running for another one. Run `init` yourself to wire a project ahead of time, to preview the changes, or when the agent's MCP server was started outside the project (the call then answers `run_init` with this same command).
 
 From your project root:
 

@@ -1,5 +1,6 @@
 import {
   DRIVE_FLOW_PREFIX,
+  DriveFlowSkipReason,
   driveFlowsFrom,
   type DriveProgram,
   type TapeStep,
@@ -367,7 +368,13 @@ async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): 
     phase: OnboardingPhase.FIRST_RUN,
     step: 'flow_recorded',
     status: 0 === programs.length ? OnboardingStepStatus.SKIPPED : OnboardingStepStatus.COMPLETED,
-    ...(outcome.unprovenSteps === undefined ? {} : { reason: 'no_declared_consequence' }),
+    ...(outcome.unprovenSteps === undefined
+      ? {}
+      : { reason: DriveFlowSkipReason.NO_DECLARED_CONSEQUENCE }),
+    // Not saved, with the reason: proved against mocked responses, which replay cannot see (#1459).
+    ...(0 < programs.length || outcome.mockedSteps === undefined
+      ? {}
+      : { reason: DriveFlowSkipReason.DRIVEN_UNDER_NETWORK_MOCKS }),
   });
 }
 

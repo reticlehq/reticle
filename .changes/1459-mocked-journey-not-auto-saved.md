@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: a journey proved while `reticle_network_mock` rules were active is no longer auto-saved as a `drive-*` flow.** Such a flow kept no trace of the mocks, so a replay ran against the real backend and either failed for a reason unrelated to the change or passed on data the original check never saw. The recorder marks each ambient step that ran while its tab had mocks, and session end skips the journeys that contain one. It counts their steps as `mockedSteps` and reports the step as `driven_under_network_mocks` when nothing else was saved. Journeys driven before the mocks were installed or after they were cleared are saved as before. Closes [#1459](https://github.com/reticlehq/reticle/issues/1459).

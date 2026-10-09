@@ -332,14 +332,16 @@ describe('handing the dev server over', () => {
   // The server used to write into pipes this process owned. Once init exited nobody held the read
   // end, so the dev server's NEXT line — a compile error, an HMR update, SvelteKit's first warning —
   // was an EPIPE and it died: "it connected, then the app went away". Its output goes to a file.
-  it.skipIf(isWindows)(
-    'keeps the handed-over server alive and logging after init has exited',
-    async () => {
-      const dir = mkdtempSync(join(tmpdir(), 'handover-'));
-      const beat = join(dir, 'beat');
-      writeFileSync(
-        join(dir, 'chatty.cjs'),
-        `const fs = require('fs');
+  //
+  // Run on Windows too. It was skipped there, and Windows is where it failed: libuv kills every
+  // non-detached child when its parent exits, so the supervisor died with init and the server's next
+  // line was the same EPIPE. Seven Windows install cells were red on every main run because of it.
+  it('keeps the handed-over server alive and logging after init has exited', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'handover-'));
+    const beat = join(dir, 'beat');
+    writeFileSync(
+      join(dir, 'chatty.cjs'),
+      `const fs = require('fs');
          const beat = ${JSON.stringify(beat)};
          let i = 0;
          setInterval(() => {
@@ -349,8 +351,8 @@ describe('handing the dev server over', () => {
            fs.writeFileSync(beat + '.next', String(i));
            fs.renameSync(beat + '.next', beat);
          }, 20);`,
-      );
-      const script = `
+    );
+    const script = `
         import { OwnedDevServer } from '${pathToFileURL(join(process.cwd(), 'dist/command/setup/node-effects.js')).href}';
         const server = new OwnedDevServer(${JSON.stringify(dir)});
         server.start('node chatty.cjs', ${JSON.stringify(dir)}, {});
@@ -361,59 +363,59 @@ describe('handing the dev server over', () => {
           server.handOver();
         }, 20);
       `;
-      const parent = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-        encoding: 'utf8',
-        timeout: 10_000,
-      });
-      const reported: unknown = JSON.parse(parent.stdout.trim().split('\n')[0] ?? '{}');
-      const pid =
-        'object' === typeof reported && null !== reported && 'pid' in reported
-          ? Number((reported as { pid?: unknown }).pid ?? 0)
-          : 0;
-      const beatNow = (): number => {
-        try {
-          return Number(readFileSync(beat, 'utf8'));
-        } catch {
-          return 0;
-        }
-      };
-      const alive = (): boolean => {
-        try {
-          process.kill(pid, 0);
-          return true;
-        } catch {
-          return false;
-        }
-      };
+    const parent = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    const reported: unknown = JSON.parse(parent.stdout.trim().split('\n')[0] ?? '{}');
+    const pid =
+      'object' === typeof reported && null !== reported && 'pid' in reported
+        ? Number((reported as { pid?: unknown }).pid ?? 0)
+        : 0;
+    const beatNow = (): number => {
       try {
-        expect(pid, 'the parent never reported the server it handed over').toBeGreaterThan(0);
-        // Bounded poll for PROGRESS, not a duration: the server must write well past the moment
-        // init let go of it. A dead one stops beating and the deadline decides.
-        const afterExit = beatNow();
-        const deadline = Date.now() + 10_000;
-        while (beatNow() < afterExit + 10 && Date.now() < deadline) await sleep(20);
-        expect(beatNow(), 'the server stopped writing once init exited').toBeGreaterThanOrEqual(
-          afterExit + 10,
-        );
-        expect(alive(), 'the handed-over server died').toBe(true);
-        const logged = readdirSync(dir)
-          .filter((f) => f.endsWith('.log'))
-          .map((f) => readFileSync(join(dir, f), 'utf8'))
-          .join('');
-        expect(logged, 'its output after the handover went nowhere').toContain(
-          `line ${String(afterExit + 5)}`,
-        );
-      } finally {
-        if (0 < pid) {
-          try {
-            process.kill(-pid, 'SIGKILL');
-          } catch {
-            /* already gone, which is the failure this test reports */
-          }
-        }
-        rmSync(dir, { recursive: true, force: true });
+        return Number(readFileSync(beat, 'utf8'));
+      } catch {
+        return 0;
       }
-    },
-    20_000,
-  );
+    };
+    const alive = (): boolean => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    try {
+      expect(pid, 'the parent never reported the server it handed over').toBeGreaterThan(0);
+      // Bounded poll for PROGRESS, not a duration: the server must write well past the moment
+      // init let go of it. A dead one stops beating and the deadline decides.
+      const afterExit = beatNow();
+      const deadline = Date.now() + 10_000;
+      while (beatNow() < afterExit + 10 && Date.now() < deadline) await sleep(20);
+      expect(beatNow(), 'the server stopped writing once init exited').toBeGreaterThanOrEqual(
+        afterExit + 10,
+      );
+      expect(alive(), 'the handed-over server died').toBe(true);
+      const logged = readdirSync(dir)
+        .filter((f) => f.endsWith('.log'))
+        .map((f) => readFileSync(join(dir, f), 'utf8'))
+        .join('');
+      expect(logged, 'its output after the handover went nowhere').toContain(
+        `line ${String(afterExit + 5)}`,
+      );
+    } finally {
+      if (0 < pid) {
+        try {
+          if (isWindows) spawnSync('taskkill', ['/PID', String(pid), '/T', '/F']);
+          else process.kill(-pid, 'SIGKILL');
+        } catch {
+          /* already gone, which is the failure this test reports */
+        }
+      }
+      // Windows holds the log open for a moment after the kill: EBUSY, retried rather than thrown.
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10 });
+    }
+  }, 20_000);
 });

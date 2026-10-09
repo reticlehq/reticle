@@ -1,6 +1,10 @@
 import { TESTID_FOUND_UNDER_SCHEMA } from './query-hint-schema.js';
 import { z } from 'zod';
-import { EMPTY_SESSION_LIST_OUTPUT, emptySessionList } from './empty-session-list.js';
+import {
+  EMPTY_SESSION_LIST_OUTPUT,
+  emptySessionList,
+  wireCallerBesideLiveSessions,
+} from './empty-session-list.js';
 import { AttrNamesSchema, EventType, QueryBy, ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { withSizeCost } from '@/portal/session/output-budget.js';
@@ -145,16 +149,22 @@ export const RAW_TOOLS: ToolDef[] = [
     handler: async (deps) => {
       const provider = deps.realInput;
       const leasedIds = new Set(deps.pool?.leasedSessionIds() ?? []);
-      const sessions = await Promise.all(
-        deps.sessions.list().map(async (s) => ({
-          ...s,
-          realInputAvailable: provider !== undefined ? await provider.isAvailableFor(s.url) : false,
-          leased: leasedIds.has(s.sessionId),
-        })),
-      );
+      const list = () =>
+        Promise.all(
+          deps.sessions.list().map(async (s) => ({
+            ...s,
+            realInputAvailable:
+              provider !== undefined ? await provider.isAvailableFor(s.url) : false,
+            leased: leasedIds.has(s.sessionId),
+          })),
+        );
+      const sessions = await list();
       // An empty list is a dead end on its own; see empty-session-list.ts for what it carries.
       if (0 === sessions.length) return emptySessionList(deps, sessions);
-      return { sessions };
+      // Another project's tab is up. This caller's project may still never have been wired.
+      const wired = await wireCallerBesideLiveSessions(deps, sessions);
+      if (wired === undefined) return { sessions };
+      return { sessions: await list(), wired };
     },
   },
   {

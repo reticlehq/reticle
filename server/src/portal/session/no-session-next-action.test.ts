@@ -109,7 +109,7 @@ describe('nextActionFor', () => {
       dev: DEV,
     });
     expect(next.action).toBe(NoSessionAction.RUN_INIT);
-    expect(next.command).toBe('reticle init');
+    expect(next.command).toBe('npx @reticlehq/server init');
     expect(next.command).not.toContain('run dev');
   });
 
@@ -122,7 +122,7 @@ describe('nextActionFor', () => {
       configsElsewhere: [{ directory: '/repo/apps/client', projectId: 'client-1' }],
     });
     expect(next.action).toBe(NoSessionAction.OPEN_APP);
-    expect(next.command).not.toBe('reticle init');
+    expect(next.command).not.toBe('npx @reticlehq/server init');
     expect(next.reason).toContain('/repo/apps/client');
     expect(next.reason).toContain('client-1');
     expect(next.reason).toMatch(/scope|directory/i);
@@ -137,8 +137,38 @@ describe('nextActionFor', () => {
       dev: DEV,
     });
     expect(next.action).toBe(NoSessionAction.OPEN_APP);
-    expect(next.command).toBe('reticle open http://localhost:5173');
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:5173');
     expect(next.port).toBe(5173);
+  });
+
+  // The default MCP registration runs Reticle through `npx`, with no `reticle` bin on PATH: a bare
+  // `reticle open` / `reticle init` is "command not found" exactly where it is handed out (#1456).
+  it('every Reticle command it hands back runs without a global install', () => {
+    const reopen = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [5173],
+      dev: DEV,
+    });
+    const open = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [5173],
+      dev: DEV,
+    });
+    const init = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [5173],
+      dev: DEV,
+    });
+
+    expect(reopen.action).toBe(NoSessionAction.REOPEN_APP);
+    expect(open.action).toBe(NoSessionAction.OPEN_APP);
+    expect(init.action).toBe(NoSessionAction.RUN_INIT);
+    for (const next of [reopen, open, init]) {
+      expect(next.command).toMatch(/^npx @reticlehq\/server (open|init)\b/);
+    }
   });
 
   // The prose half of this same payload says, for this exact branch, that the most likely cause is
@@ -217,7 +247,7 @@ describe('nextActionFor', () => {
     expect(next.reason).toContain('5173');
     expect(next.reason).toMatch(/already listening/i);
     expect(next.reason).toMatch(/do not start a second/i);
-    expect(next.command).toBe('reticle open http://localhost:5173');
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:5173');
     expect(next.port).toBe(5173);
   });
 
@@ -234,7 +264,7 @@ describe('nextActionFor', () => {
       lastKnownUrl: 'http://localhost:5190/counter?__reticle_session=lease-1&tab=2',
     });
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
-    expect(next.command).toBe('reticle open http://localhost:5190/counter?tab=2');
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:5190/counter?tab=2');
     expect(next.port).toBe(5190);
   });
 
@@ -281,7 +311,7 @@ describe('nextActionFor', () => {
       lastKnownUrl: 'http://127.0.0.1:44549/orders',
     });
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
-    expect(next.command).toBe('reticle open http://127.0.0.1:44549/orders');
+    expect(next.command).toBe('npx @reticlehq/server open http://127.0.0.1:44549/orders');
   });
 
   it('the departed port still answers: reopen it, as before', () => {
@@ -293,7 +323,7 @@ describe('nextActionFor', () => {
       lastKnownUrl: 'http://127.0.0.1:44549/orders',
     });
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
-    expect(next.command).toBe('reticle open http://127.0.0.1:44549/orders');
+    expect(next.command).toBe('npx @reticlehq/server open http://127.0.0.1:44549/orders');
   });
 });
 

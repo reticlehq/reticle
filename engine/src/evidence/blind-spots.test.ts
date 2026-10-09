@@ -97,6 +97,31 @@ describe('buildCoverageStatement', () => {
   });
 });
 
+describe('buildCoverageStatement over a window (#1414)', () => {
+  const sampled = { kind: BlindSpotKind.RATE_LIMITED, count: 40 };
+  const frames = { kind: BlindSpotKind.CROSS_ORIGIN_IFRAME, count: 2 };
+
+  it('says sampling was earlier in the session when the window dropped nothing', () => {
+    const s = buildCoverageStatement([sampled, frames], [frames]);
+    expect(s.note).toContain('40 events dropped by the bridge rate cap earlier in this session');
+    expect(s.note).toContain('none in this window');
+    expect(s.note).not.toContain('SAMPLED');
+    // A bounding spot is a standing fact of the page and keeps its label.
+    expect(s.note).toContain('2 cross-origin frames unobserved');
+    // The structured spots still carry the session count.
+    expect(s.spots).toEqual([sampled, frames]);
+  });
+
+  it("names the window's own count when the window dropped events", () => {
+    const s = buildCoverageStatement([sampled], [{ kind: BlindSpotKind.RATE_LIMITED, count: 3 }]);
+    expect(s.note).toContain('3 events dropped by the bridge rate cap, so this window is SAMPLED');
+  });
+
+  it('keeps the session-wide label when no window is given', () => {
+    expect(buildCoverageStatement([sampled]).note).toContain('this window is SAMPLED');
+  });
+});
+
 describe('blindSpotsFromEvents', () => {
   it('reduces BLIND_SPOT events to one spot per kind, latest count winning', () => {
     const spots = blindSpotsFromEvents([

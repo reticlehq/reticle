@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — mirroring UI state into the URL with `history.replaceState` was graded `route-rendered-nothing`.** An app that records a zoom, a filter, or a selected tab as `?zoom=125` on the same pathname got `unknown`, even when the route wait had held and the only visible effect was an attribute change. `route.change` now says whether the URL moved by `push`, `replace`, or `pop`, and a same-pathname replace is not treated as a navigation to a blank view. A `pushState` onto a new pathname that renders nothing is still flagged. Closes [#1457](https://github.com/reticlehq/reticle/issues/1457).

@@ -23,6 +23,7 @@ import {
   requestToken,
   tokensMatch,
 } from '@/portal/bridge/token-auth.js';
+import { clientDirectoryFromPeer, runWithClientDirectory } from '@/hooks/client-directory.js';
 import { LOOPBACK_IDLE_MS } from './loopback-agent.js';
 
 export interface SharedServer {
@@ -281,7 +282,16 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
         res.end('session not found');
         return;
       }
-      transport.handlePostMessage(req, res).catch((err: unknown) => {
+      const clientDirectory = clientDirectoryFromPeer(
+        isLoopbackPeer(req.socket.remoteAddress),
+        req.headers,
+      );
+      const deliver = (): Promise<void> => transport.handlePostMessage(req, res);
+      const posted =
+        clientDirectory === undefined
+          ? deliver()
+          : runWithClientDirectory(clientDirectory, deliver);
+      posted.catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
         log('mcp_message_error', { error: message });
       });

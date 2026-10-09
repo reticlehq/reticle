@@ -100,7 +100,9 @@ export async function assertVerdict(
   // over-warning, which is the correct direction here: the failure this guards against is a green
   // that implies coverage it never had, and a needless caveat costs the agent a sentence.
   const spots = blindSpotsFromState(session.blindSpots(), session.runtime);
-  const statement = buildCoverageStatement(spots);
+  // The window's own counts, so sampling before it is not described as this window's (#1414).
+  const windowSpots = blindSpotsFromState(session.blindSpots(since), session.runtime);
+  const statement = buildCoverageStatement(spots, windowSpots);
   const absenceBlindSpot = absenceBlindSpotNote(predicate, spots);
   // A green resting on hidden matches says the node exists, not that it shows (#1408).
   const hiddenMatch = hiddenMatchNote(predicate, evidence);
@@ -138,12 +140,16 @@ export async function assertVerdict(
     background: session.background,
     expectedFailures: declared.netFailures,
     namedNetUrls: declared.netUrls,
+    repeatableNetUrls: declared.repeatableNetUrls,
     renderProved: pass && declared.rendersContent,
     ...(actCursor !== undefined && actCursor >= since ? { actionSince: actCursor } : {}),
   });
   // Only a spot that IMPEACHES the capture downgrades a general verdict. Structural boundaries are
   // reported as coverage; the narrower absence exception is computed separately above.
-  const impeaching = buildCoverageStatement(spots.filter((sp) => impeachesCapture(sp.kind)));
+  const impeaching = buildCoverageStatement(
+    // The WINDOW's blind spots: sampling before it is a coverage fact, not this verdict's gap (#1414).
+    windowSpots.filter((sp) => impeachesCapture(sp.kind)),
+  );
   // A gap in the WINDOW, as opposed to a standing limit of the page. Both mean the same thing to the
   // rule — part of what happened was not seen — so both belong in `blindSpots`, which is the only
   // input `decideVerified` reads for that.
