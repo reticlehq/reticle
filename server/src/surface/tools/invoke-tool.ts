@@ -49,7 +49,7 @@ import {
   recordImpact,
 } from '@/memory/impact/impact-recorder.js';
 import { type FrictionKind, frictionOf, inviteFor } from './feedback-invite.js';
-import type { ToolDef, ToolDeps } from './tool-kit.js';
+import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
 
 /**
  * The live-session tools whose result MUST carry the
@@ -381,12 +381,13 @@ export async function runTool<Ext>(
   tool: ToolDef<Ext>,
   deps: ToolDeps<Ext>,
   args: Record<string, unknown>,
+  call?: ToolCall,
 ): Promise<unknown> {
   const logPath = toolLogPath();
-  if (logPath === undefined) return dispatchTool(tool, deps, args);
+  if (logPath === undefined) return dispatchTool(tool, deps, args, call);
   const at = deps.now();
   try {
-    const result = await dispatchTool(tool, deps, args);
+    const result = await dispatchTool(tool, deps, args, call);
     logToolCall(logPath, { tool: tool.name, args, at, ms: deps.now() - at, result });
     return result;
   } catch (error) {
@@ -400,6 +401,7 @@ async function dispatchTool<Ext>(
   tool: ToolDef<Ext>,
   deps: ToolDeps<Ext>,
   args: Record<string, unknown>,
+  call?: ToolCall,
 ): Promise<unknown> {
   // Both dispatch paths (MCP + programmatic) pass through here — the one place "which tool is mostly
   // used" can be counted. This used to EMIT an event per call; it now increments an in-process counter
@@ -540,13 +542,13 @@ async function dispatchTool<Ext>(
     // `dispatchArgs`, not `args`: an inferred session is pinned into the arguments before the
     // handler sees them, so a tool that resolves the session a second time cannot land on a
     // different one than the dispatcher chose.
-    const call = (): Promise<unknown> =>
+    const invokeHandler = (): Promise<unknown> =>
       span('tool.handler', { tool: tool.name, session: session?.id }, () =>
-        tool.handler(deps, dispatchArgs),
+        tool.handler(deps, dispatchArgs, call),
       );
     // The Harness's own inner calls carry their drive in an async context (`runDrivenBy`), which is
     // what attributes their verdicts; the outer explore call adjudicates nothing of its own.
-    raw = await call();
+    raw = await invokeHandler();
   } catch (error) {
     // The commonest refusal shape by far, and the one nothing could see: the message is built, handed
     // to the agent by the MCP boundary, and discarded. Reported here rather than at that boundary

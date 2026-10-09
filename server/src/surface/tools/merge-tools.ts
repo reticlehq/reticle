@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolDef, ToolDeps } from './tool-kit.js';
+import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
 
 /**
  * Surface consolidation. Tool definitions are re-sent to the model EVERY turn, so the named-def
@@ -169,7 +169,7 @@ export function mergeTools(spec: MergeSpec): ToolDef {
       [DISCRIMINATOR]: discriminatorSchema(actionNames, spec.defaultAction),
       ...unionShape(spec.actions),
     },
-    handler: (deps: ToolDeps, args: Record<string, unknown>) => {
+    handler: (deps: ToolDeps, args: Record<string, unknown>, call?: ToolCall) => {
       const named = args[DISCRIMINATOR];
       const action = 'string' === typeof named ? named : spec.defaultAction;
       const chosen = action === undefined ? undefined : spec.actions[action];
@@ -179,7 +179,7 @@ export function mergeTools(spec: MergeSpec): ToolDef {
           expected: actionNames,
         });
       }
-      return chosen.handler(deps, args);
+      return chosen.handler(deps, args, call);
     },
   };
 }
