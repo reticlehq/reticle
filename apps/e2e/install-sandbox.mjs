@@ -3,6 +3,9 @@
 //
 //   node apps/e2e/install-sandbox.mjs [--only <name>] [--no-publish]
 //
+// --no-publish installs Reticle's released packages from npm instead of this checkout: quick, and
+// enough when only the launcher changed.
+//
 // Every other install check runs on this machine, which already has Node, a warm npm cache, a
 // Chromium, and Reticle's own state in ~/.reticle. A user has none of that. Each sandbox here is a
 // fresh container: this checkout is published to a throwaway registry, install.sh is served to the
@@ -11,7 +14,8 @@
 //
 // Needs Docker. Each image is a kind of machine users install on: a full Node, a slim one, Alpine's
 // busybox sh, a Node too old to run Reticle, a machine with no Node at all, and one that ships a
-// browser.
+// browser. Three more hold the agent prompt the installer fetches to its rules: a served prompt is
+// printed, an unreachable one falls back to the bundled copy, and a hostile one prints inert.
 
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -40,7 +44,28 @@ const SANDBOXES = [
   { name: 'node18-too-old', image: 'node:18-bookworm-slim', prep: 'apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null', expect: 'refuses', mustSay: /node/i },
   { name: 'no-node', image: 'ubuntu:24.04', prep: 'apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null', expect: 'refuses', mustSay: /node/i },
   { name: 'with-browser', image: 'mcr.microsoft.com/playwright:v1.63.0-noble', expect: 'installs' },
+  { name: 'prompt-served', image: 'node:22-bookworm', expect: 'installs', prompt: 'served' },
+  { name: 'prompt-unreachable', image: 'node:22-bookworm', expect: 'installs', prompt: 'unreachable' },
+  { name: 'prompt-hostile', image: 'node:22-bookworm', expect: 'installs', prompt: 'hostile' },
 ];
+
+/**
+ * The agent-prompt files the script server answers with. The hostile one is what a compromised or
+ * mistyped file could carry: a command substitution, backticks, a terminal title escape, a screen
+ * clear and a bidirectional override. All of it must reach the terminal as inert text.
+ */
+const PROMPT_MARK = 'SANDBOX-SERVED-PROMPT';
+const HOSTILE_MARK = 'SANDBOX-HOSTILE-PROMPT';
+const PROMPT_FILES = {
+  '/prompt/served.json': { version: 1, title: 'Served title', prompt: `${PROMPT_MARK}: run reticle init in the app folder.` },
+  '/prompt/hostile.json': {
+    version: 1,
+    title: '\u001b[31mred title\u001b[0m',
+    prompt: `${HOSTILE_MARK} $(touch /tmp/pwned-subst) \`touch /tmp/pwned-tick\` \u001b]0;hijacked\u0007 \u001b[2J \u202e reversed`,
+  },
+};
+/** A line only the bundled fallback prompt prints. */
+const FALLBACK_MARK = 'Instrument this app with Reticle';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -62,10 +87,12 @@ async function startRegistry() {
   const config = join(dir, 'verdaccio.yaml');
   writeFileSync(
     config,
-    readFileSync(join(ROOT, 'scripts/verdaccio.yaml'), 'utf8').replace(
-      'listen: 127.0.0.1:4873',
-      `listen: 127.0.0.1:${String(REGISTRY_PORT)}`,
-    ),
+    readFileSync(join(ROOT, 'scripts/verdaccio.yaml'), 'utf8')
+      .replace('listen: 127.0.0.1:4873', `listen: 127.0.0.1:${String(REGISTRY_PORT)}`)
+      // Nothing is published from this checkout, so Reticle's packages come from npm: the
+      // installer under test runs against the released CLI. Each run's storage is fresh, so
+      // without this an unpublished run had nothing to install.
+      .replace(/^( {2}'(?:@reticlehq\/\*|open-verification)':\n)/gm, NO_PUBLISH ? '$1    proxy: npmjs\n' : '$1'),
   );
   const bin = join(ROOT, 'apps/e2e/node_modules/verdaccio/bin/verdaccio');
   const proc = spawn(process.execPath, [bin, '--config', config], { cwd: ROOT, detached: true, stdio: 'ignore' });
@@ -102,6 +129,11 @@ async function startRegistry() {
 function serveInstaller() {
   const script = readFileSync(join(ROOT, 'install', 'install.sh'));
   const server = createServer((req, res) => {
+    const prompt = PROMPT_FILES[req.url ?? ''];
+    if (prompt !== undefined) {
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(prompt));
+      return;
+    }
     if (req.url !== '/install.sh') {
       res.writeHead(404).end();
       return;
@@ -140,13 +172,24 @@ async function runSandbox(box) {
     `${userCommand}; rc=$?`,
     'echo "--- installer exit: $rc"',
     'if command -v reticle >/dev/null 2>&1; then echo "--- reticle --version: $(reticle --version 2>&1)"; fi',
+    // Proof the hostile prompt ran nothing: either file existing means fetched text was executed.
+    'if [ -e /tmp/pwned-subst ] || [ -e /tmp/pwned-tick ]; then echo "--- EXECUTED FETCHED TEXT"; fi',
     'exit $rc',
   ].join('\n');
+  // The prompt boxes need the fetch on, and the fetch honours the telemetry opt-out, so telemetry
+  // stays on there and is pointed at a port nothing listens on: nothing leaves the machine.
+  const promptEnv =
+    box.prompt === undefined
+      ? ['-e', 'RETICLE_TELEMETRY=0']
+      : [
+          '-e', 'RETICLE_TELEMETRY_URL=http://127.0.0.1:9',
+          '-e', `RETICLE_AGENT_PROMPT_URL=${'unreachable' === box.prompt ? 'http://127.0.0.1:9/prompt.json' : `http://${HOST}:${String(SCRIPT_PORT)}/prompt/${box.prompt}.json`}`,
+        ];
   const started = Date.now();
   const { code, output } = await dockerRun([
     'run', '--rm',
     '-e', `npm_config_registry=http://${HOST}:${String(REGISTRY_PORT)}`,
-    '-e', 'RETICLE_TELEMETRY=0',
+    ...promptEnv,
     '-e', 'CI=',
     box.image, 'sh', '-c', script,
   ]);
@@ -155,13 +198,21 @@ async function runSandbox(box) {
   const problems = [];
   // `curl | sh` exits 0 when curl fails, because sh ran an empty script. The banner is the proof
   // the installer itself ran at all.
-  if (!/\[1\/3\]/.test(output.split('--- installer exit')[0] ?? '')) problems.push('the installer never ran');
+  if (!/Installing Reticle/.test(output.split('--- installer exit')[0] ?? '')) problems.push('the installer never ran');
   if ('installs' === box.expect && !installed) problems.push('did not install');
   if ('refuses' === box.expect && 0 === code) problems.push('installed where it must refuse');
   if (box.mustSay !== undefined && !box.mustSay.test(output)) problems.push(`never said ${String(box.mustSay)}`);
   // Every box that installs must close by saying the app is not wired yet: a closing demo verdict
   // read as "Reticle is in my app" to a real user, which is why the installer no longer runs one.
   if ('installs' === box.expect && !/not in (your|the user's) app yet/.test(output)) problems.push('never said the app is not wired yet');
+  // Every install closes with a prompt to paste; the opted-out matrix boxes get the bundled one.
+  const wantPrompt = 'served' === box.prompt ? PROMPT_MARK : 'hostile' === box.prompt ? HOSTILE_MARK : FALLBACK_MARK;
+  if ('installs' === box.expect && !output.includes(wantPrompt)) problems.push(`never printed the ${box.prompt ?? 'bundled'} prompt`);
+  if ('hostile' === box.prompt) {
+    if (output.includes('--- EXECUTED FETCHED TEXT')) problems.push('executed fetched text');
+    if (/[\u001b\u0007\u202e]/.test(output)) problems.push('printed a control character from the fetched prompt');
+    if (!output.includes('$(touch /tmp/pwned-subst)')) problems.push('did not print the substitution as text');
+  }
   return { box, code, seconds, output, problems };
 }
 

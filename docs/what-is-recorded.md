@@ -61,6 +61,8 @@ Telemetry carries no free text. Free text leaves in three ways, each one somethi
 
 The daemon also fetches a small public file, `https://reticle.sh/hud/notices.v1.json`, for the notices in the HUD's rail. The request carries nothing about you or your project. `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` stops it, and `RETICLE_HUD_NOTICES_URL` points it elsewhere.
 
+The one-line installer fetches one public file too, `https://reticle.sh/install/agent-prompt.v1.json`: the prompt it prints for you to paste into your coding agent. It is a plain GET with a three-second timeout that sends nothing about you, your machine or your project. The installer checks the file (a JSON object whose `prompt` is text of at most 4000 characters), removes every control character but the newline, and only prints it; nothing in it is ever run. If the fetch is off, fails or the file does not pass, it prints the copy it carries instead. The same `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` stops the fetch, and `RETICLE_AGENT_PROMPT_URL` points it elsewhere.
+
 ## What `init` writes to your project
 
 Run it with `--dry-run` and it prints the whole plan without writing anything:
