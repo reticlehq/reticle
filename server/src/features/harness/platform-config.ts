@@ -17,9 +17,12 @@
  *     environment, wins over the stored preference. Precedence lives in the caller.
  */
 
-import { platformCredentialFrom } from '@reticlehq/core';
+import { ReticleEnv, platformCredentialFrom } from '@reticlehq/core';
 
 const CONFIG_PATH = '/v1/model/config';
+
+/** The header naming the free drive a call belongs to. See `ReticleEnv.DRIVE_ID`. */
+export const DRIVE_HEADER = 'x-reticle-drive';
 
 /**
  * How long the daemon will wait for a preference before driving without it.
@@ -127,6 +130,7 @@ export async function fetchPlatformConfig(
   if (cloud === undefined) return undefined;
   const key = cloud.apiKey;
   const host = cloud.url;
+  const drive = env[ReticleEnv.DRIVE_ID];
 
   const controller = new AbortController();
   const timer = setTimeout(() => {
@@ -136,7 +140,11 @@ export async function fetchPlatformConfig(
     const base = host.replace(/\/+$/, '');
     const res = await doFetch(`${base}${CONFIG_PATH}`, {
       method: 'GET',
-      headers: { authorization: `Bearer ${key}` },
+      // The free drive too: a workspace with no card is entitled for that drive and no other.
+      headers: {
+        authorization: `Bearer ${key}`,
+        ...(drive === undefined || 0 === drive.length ? {} : { [DRIVE_HEADER]: drive }),
+      },
       signal: controller.signal,
     });
     if (!res.ok) return undefined;

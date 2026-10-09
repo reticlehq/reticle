@@ -21,6 +21,7 @@ import {
 } from './cli-verify.js';
 import { PortPresence } from '../daemon/binding/port-presence.js';
 import { CLI_USAGE } from './cli-parse.js';
+import { verifyResults } from './verify-results.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -371,5 +372,32 @@ describe('the HTTP transport is named wherever --expect refuses', () => {
   it('CLI_USAGE and the daemon-needed refusal both point at http-transport', () => {
     expect(CLI_USAGE).toContain('http-transport');
     expect(expectNeedsDaemonMessage(4400, PortPresence.FOREIGN)).toContain('http-transport');
+  });
+});
+
+describe('runVerify --results-json', () => {
+  it('writes one verdict per journey, the engine words unchanged, beside the report', async () => {
+    const { ports, rec } = harness({ verify: () => Promise.resolve(makeRun(RunFlowStatus.FAIL)) });
+    const written: { path: string; text: string }[] = [];
+    ports.writeResults = (path, text) => {
+      written.push({ path, text });
+      return Promise.resolve();
+    };
+    await runVerify({ ...ARGS, resultsJson: 'out.json' }, ports);
+    expect(rec.exit).toEqual([1]);
+    expect(written.map((w) => w.path)).toEqual(['out.json']);
+    expect(JSON.parse(written[0]?.text ?? '{}')).toEqual({
+      verdict: 'no',
+      results: [{ journey: 'checkout', verdict: 'no', reason: 'order never saved' }],
+    });
+  });
+
+  it('reads a skipped journey as unknown, and the run as unknown rather than yes', () => {
+    const run = makeRun(RunFlowStatus.SKIPPED);
+    expect(verifyResults(run)).toEqual({
+      verdict: 'unknown',
+      results: [{ journey: 'checkout', verdict: 'unknown' }],
+    });
+    expect(verifyResults(makeRun(RunFlowStatus.PASS)).verdict).toBe('yes');
   });
 });

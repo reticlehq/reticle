@@ -18,8 +18,8 @@ This is what `reticle init` registers, so you rarely type it yourself.
 | --- | --- | --- | --- |
 | `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Bridge port |
 | `--drive <url>` | string | unset | Have the daemon launch its own browser at this URL, so the agent has autonomous control without relying on your tab |
-| `--headless` | boolean | `true` for `mcp` | Hide that browser |
-| `--headed` | boolean | `false` | Show it |
+| `--headless` | boolean | on when `CI` or `RETICLE_HEADLESS` is set, or on Linux with no display | Hide that browser |
+| `--headed` | boolean | on otherwise | Show it |
 | `--http` | boolean | `false` | Forward the HTTP verify endpoint flags to the daemon it spawns |
 | `--http-port N` | number | unset | Port for that endpoint |
 | `--http-token T` | string | unset | Bearer token for it |

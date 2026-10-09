@@ -751,6 +751,29 @@ describe('it sends only the difference', () => {
     const post = calls.find((c) => 'POST' === c.method);
     expect((post?.body as { flows: unknown[] }).flows).toEqual([{ name: 'sign-in' }]);
   });
+
+  /*
+   * Every run push re-sent the whole flow and capsule set, measured at ~1.3 MB a push on a real
+   * repo: one POST hit the 30s timeout and took the run down with the flows. A set the platform
+   * already answered for has nothing to add to a run push.
+   */
+  it('does not drag an unchanged flow or capsule set along with a new run', async () => {
+    const flows = [{ name: 'sign-in' }];
+    const capsules = [{ id: 'c1' }];
+    const { calls } = await cycle(
+      { status: {}, sync: { runs: { accepted: 1 } } },
+      source({
+        runs: () => [{ runId: 'r', payload: { runId: 'r' } }],
+        flows: () => flows,
+        capsules: () => capsules,
+      }),
+      { sentFlowsHash: hashPayload(flows), sentCapsulesHash: hashPayload(capsules) },
+    );
+    const post = calls.find((c) => 'POST' === c.method)?.body as Record<string, unknown>;
+    expect(post['runs']).toEqual([{ runId: 'r' }]);
+    expect(post['flows']).toBeUndefined();
+    expect(post['capsules']).toBeUndefined();
+  });
 });
 
 describe('decisions come back and are applied', () => {

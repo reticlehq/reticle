@@ -232,3 +232,49 @@ describe('the standing instruction', () => {
     expect(systemPrompt()).not.toContain('Focus for this run');
   });
 });
+
+/*
+ * A drive is started and polled now, so the person who started it can stop it or tell it something
+ * between turns, not only flip the project-wide switch.
+ */
+describe('a running drive, steered between turns', () => {
+  it('stops before its next turn when asked, and says it was stopped', async () => {
+    let asked = false;
+    const result = await runHarness(
+      scripted([
+        { text: '', calls: [call('reticle_snapshot')] },
+        { text: '', calls: [call('reticle_snapshot')] },
+      ]),
+      toolset(() => {
+        asked = true;
+        return OK();
+      }),
+      { stopped: () => asked },
+    );
+    expect(result.stopReason).toBe(StopReason.STOPPED);
+    expect(result.steps).toBe(1);
+  });
+
+  it('hands what somebody said to the model as a user turn before its next turn', async () => {
+    const heard: string[] = [];
+    let said = ['check the refund page too'];
+    const driver: ModelDriver = {
+      turn: ({ history }) => {
+        for (const entry of history) if ('user' === entry.role) heard.push(entry.text);
+        return Promise.resolve(
+          2 > heard.length
+            ? { text: '', calls: [call('reticle_snapshot')] }
+            : { text: '', calls: [] },
+        );
+      },
+    };
+    await runHarness(driver, toolset(OK), {
+      inbox: () => {
+        const taken = said;
+        said = [];
+        return taken;
+      },
+    });
+    expect(heard).toContain('check the refund page too');
+  });
+});

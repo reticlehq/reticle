@@ -90,6 +90,7 @@ import {
   OutputDetail,
   syncPageBlocker,
   type PresenterSettings,
+  paintSdkVersion,
 } from './presenter-settings.js';
 import { Annotator, type AnnotatorChrome } from '@/review/annotator.js';
 import { shouldAutoOpenChat } from './presenter-shell.js';
@@ -205,6 +206,12 @@ export class Presenter {
       onSignIn: () => this.#onControl?.({ kind: HumanControlKind.SIGNIN }),
       onHarness: (enabled) =>
         this.#onControl?.({ kind: HumanControlKind.HARNESS, text: enabled ? 'on' : 'off' }),
+      onHarnessRun: (persona) =>
+        this.#onControl?.({
+          kind: HumanControlKind.HARNESS_RUN,
+          ...(persona === undefined ? {} : { text: persona }),
+        }),
+      onHarnessStop: () => this.#onControl?.({ kind: HumanControlKind.HARNESS_STOP }),
       settings: {
         onBeforeOpen: () => {
           if (this.#shell.isCollapsed()) this.#shell.expand();
@@ -242,6 +249,10 @@ export class Presenter {
   refilterFlows() {
     this.#panel.refilterFlows();
   }
+  /** Name the SDK version this page runs, in settings. Called by the SDK, which holds it. */
+  showSdkVersion(version: string | undefined): void {
+    if (this.#root !== undefined) paintSdkVersion(this.#root, version);
+  }
   handlePush(command: { name: string; args: Record<string, unknown> }): void {
     const a = command.args;
     if (command.name === ReticleCommand.FLOWS) return void this.#panel.setFlows(a['flows']);
@@ -265,6 +276,7 @@ export class Presenter {
         this.#shell.paintOffer(snapshot.harnessOffer, snapshot.notices);
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
         this.#shell.paintHarness(snapshot.harnessConfig);
+        this.#shell.paintHarnessDrive(snapshot.harnessDrive);
         this.#shell.paintImpact(snapshot.project.counts.verdicts);
         const owner = true === snapshot.account?.signedIn ? snapshot.account.email : undefined;
         if (claimLog(owner)) this.#clearRunLog();

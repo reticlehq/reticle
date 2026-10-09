@@ -55,6 +55,8 @@ interface AdhocVerdictOptions {
    */
   sessionId?: string;
   token?: string;
+  /** The caller's project `.reticle`: a lease opened here writes its runs there. */
+  root?: string;
   /** Injected so a test does not need a live daemon. */
   connect?: (endpoint: URL) => Promise<ToolCaller>;
   /**
@@ -89,12 +91,14 @@ export async function leaseIfNoTab(
   caller: ToolCaller,
   url: string,
   sessions: () => Promise<readonly { url: string }[]>,
+  /** The caller's project `.reticle`, so the lease's runs land where this command looks. */
+  root?: string,
 ): Promise<{ leased?: string; alreadyAt?: boolean } | { failed: string[] }> {
   const open = [...(await sessions())];
   if ('open' !== decideOpen(open, url).action) {
     return open.some((s) => sameDocument(s.url, url)) ? { alreadyAt: true } : {};
   }
-  return acquireLease(caller, url);
+  return acquireLease(caller, url, false, root);
 }
 
 /**
@@ -143,10 +147,22 @@ function sameDocument(a: string, b: string): boolean {
 export async function acquireLease(
   caller: ToolCaller,
   url: string,
+  /** Open it in a window somebody can watch, whatever the daemon was started as. */
+  headed?: boolean,
+  /** The `.reticle` the lease's runs belong in: the caller's project, not wherever the page resolves. */
+  root?: string,
 ): Promise<{ leased: string; zeroInstall: boolean } | { failed: string[] }> {
   const acquired = await caller.call(
     ReticleTool.RUN,
-    { tool: ReticleTool.LEASE, args: { action: LeaseAction.ACQUIRE, url } },
+    {
+      tool: ReticleTool.LEASE,
+      args: {
+        action: LeaseAction.ACQUIRE,
+        url,
+        ...(true === headed ? { headed } : {}),
+        ...(root === undefined ? {} : { root }),
+      },
+    },
     LEASE_TIMEOUT_MS,
   );
   const report = verdictOf(acquired, 'sessionId');
@@ -313,7 +329,7 @@ export async function runAdhocVerdict(options: AdhocVerdictOptions): Promise<Adh
       alreadyAt = await pinnedTabIsAt(options.sessions, options.sessionId, url);
     }
     if (url !== undefined && options.sessionId === undefined && options.sessions !== undefined) {
-      const opened = await leaseIfNoTab(caller, url, options.sessions);
+      const opened = await leaseIfNoTab(caller, url, options.sessions, options.root);
       if ('failed' in opened) return { code: 1, lines: ['verified: unknown', ...opened.failed] };
       leased = opened.leased;
       alreadyAt = true === opened.alreadyAt;
@@ -354,5 +370,46 @@ export async function runAdhocVerdict(options: AdhocVerdictOptions): Promise<Adh
   } finally {
     if (leased !== undefined) await releaseLease(caller, leased);
     await caller.close().catch(() => undefined);
+  }
+}
+
+const EXPLORE_ACTION = 'explore';
+const DRIVE_RUNNING = 'running';
+/** The most one explore call waits on its drive (the tool's own ceiling), and the call's slack. */
+const EXPLORE_WAIT_MAX_S = 240;
+const CALL_SLACK_MS = 15_000;
+const MS_PER_S = 1000;
+
+/**
+ * One Harness drive through the daemon, polled to its end or until `budgetMs` runs out.
+ *
+ * An explore answers `{ status: "running", runId }` when its drive outlasts the call's wait, so a
+ * caller that wants the finished report asks again by `runId` rather than starting a second drive.
+ */
+export async function exploreToEnd(
+  caller: ToolCaller,
+  args: Record<string, unknown>,
+  budgetMs: number,
+  now: () => number = Date.now,
+): Promise<unknown> {
+  const deadline = now() + budgetMs;
+  const ask = (more: Record<string, unknown>): Promise<unknown> => {
+    const wait = Math.max(
+      0,
+      Math.min(EXPLORE_WAIT_MAX_S, Math.floor((deadline - now() - CALL_SLACK_MS) / MS_PER_S)),
+    );
+    return caller.call(
+      ReticleTool.VERIFY,
+      { ...more, action: EXPLORE_ACTION, wait },
+      wait * MS_PER_S + CALL_SLACK_MS,
+    );
+  };
+  let result = await ask(args);
+  for (;;) {
+    const report = verdictOf(result, 'status');
+    const runId = report?.['runId'];
+    if (DRIVE_RUNNING !== report?.['status'] || 'string' !== typeof runId || now() >= deadline)
+      return result;
+    result = await ask({ runId });
   }
 }

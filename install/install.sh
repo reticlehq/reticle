@@ -5,7 +5,7 @@
 #
 # A LAUNCHER, not the implementation. Its twin is `install.ps1`, for the stock Windows box that has
 # no `sh` at all -- and the pair is safe for one reason only: there is almost nothing here to drift.
-# Both do the same four things. Every real decision stays in Node (`reticle setup install`, which
+# Both do the same three things. Every real decision stays in Node (`reticle setup install`, which
 # exists once); the launchers only ORDER the steps and choose what a new user reads. That last part
 # lives here on purpose: this file is served from main, so first-run wording changes on merge,
 # without an npm release. Logic still belongs in Node -- only sequencing and words belong here.
@@ -13,7 +13,11 @@
 #   1. is there a usable `node`?
 #   2. npm install -g @reticlehq/server
 #   3. `reticle setup install`: register with the agents here (its closing tour is trimmed)
-#   4. `reticle tutorial --run`: a real verdict on a demo app, then ONE next step
+#
+# Then ONE next step, and it is `reticle init`: nothing above touched the user's app. A demo verdict
+# used to close this script, and from the field it read as "Reticle is in my app" -- a person saw a
+# session connect and a `verified: yes`, went to the dashboard, and found nothing wired. The first
+# verdict a person sees is now one on their own app. `reticle tutorial --run` still shows the demo.
 #
 # ZERO HUMAN INPUT. Nothing is asked. The common case is an agent following a link somebody pasted,
 # and a prompt there is a hang nobody sees. What gets written is announced by the command in step 3,
@@ -90,7 +94,7 @@ install_cli() {
   # prints nothing at all between here and its final summary. A cold cache makes that a silent
   # minute on the first thing anybody runs, reported from a real install as "sticks for a while",
   # and reported again after a note saying so was added: a note is not progress.
-  say "[2/4] Installing ${RETICLE_PKG} (a cold npm cache takes about a minute)"
+  say "[2/3] Installing ${RETICLE_PKG} (a cold npm cache takes about a minute)"
   log="$(mktemp)"
   npm install -g "$RETICLE_PKG" >"$log" 2>&1 &
   pid=$!
@@ -126,7 +130,7 @@ main() {
       ;;
   esac
   started="$(date +%s)"
-  say "[1/4] Checking for Node $NODE_MIN_MAJOR.$NODE_MIN_MINOR+"
+  say "[1/3] Checking for Node $NODE_MIN_MAJOR.$NODE_MIN_MINOR+"
   check_node
   say "  found Node $(node -p 'process.versions.node')"
   runtime_done="$(date +%s)"
@@ -134,10 +138,10 @@ main() {
   installed="$(date +%s)"
   # Registration and its telemetry stay Node's. The WORDING after it is ours: this file is served
   # from main, so what a new user reads changes on merge instead of waiting for an npm release.
-  # The tour and "Next" list `setup install` closes with are cut at their first line -- the demo
-  # below shows those steps happening. If that line is ever reworded, the cut finds nothing and the
+  # The tour and "Next" list `setup install` closes with are cut at their first line -- the one next
+  # step below replaces them. If that line is ever reworded, the cut finds nothing and the
   # full text prints: noisy, never broken. Seconds, not milliseconds -- `date +%s%3N` is GNU-only.
-  say "[3/4] Registering Reticle with the coding agents on this machine"
+  say "[3/3] Registering Reticle with the coding agents on this machine"
   out="$(mktemp)"
   # Inside an `if`, so `set -e` cannot exit before the output below is printed: a failure has to
   # show the reason it failed, not just the exit code.
@@ -153,30 +157,17 @@ main() {
   rm -f "$out"
   [ "$rc" -eq 0 ] || exit "$rc"
 
-  # The aha, before anything touches the user's project: Reticle drives its own demo app to a real
-  # verdict in seconds. No MCP reload and no instrumentation, so it works the same whether a person
-  # or an agent ran this. A port the OS says is free, because any fixed one is somebody's (a test
-  # install met an unrelated server on the first one picked). Run from a temp dir, so a crash log
-  # never lands in whatever folder the user piped this from. Never fatal: Reticle is installed.
-  say "[4/4] Watching Reticle verify a demo app"
-  demo="$(mktemp)"
-  port="$(node -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')"
-  if (cd "${TMPDIR:-/tmp}" && reticle tutorial --run --headless --port "$port") >"$demo" 2>&1; then
-    grep -v -e '^{"t"' -e '^  why:' "$demo"
-  else
-    say "  skipped: no browser could start here. Reticle is installed; 'reticle doctor' says why."
-  fi
-  rm -f "$demo"
-
   # One next step. A terminal means a person. No terminal means an agent ran this, and an agent
   # cannot restart itself, so it gets the step that works in the session it is already in.
   say ""
   if [ -t 1 ]; then
-    say "Done. Open your coding agent in your app's folder and ask:"
-    say "  \"Verify one flow in my running app with Reticle.\""
+    say "Reticle is installed on this machine. It is not in your app yet."
+    say "Next, in your app's folder:"
+    say "  reticle init        (adds Reticle to the app and proves it connects)"
+    say "Then ask your coding agent there: \"Verify one flow in my running app with Reticle.\""
     say "Agent already open? Restart it once so it loads Reticle's tools."
   else
-    say "Done. Next, in the user's app folder: 'reticle init' wires the app and proves it connects."
+    say "Reticle is installed, but not in the user's app yet. Next, in the user's app folder: 'reticle init' wires the app and proves it connects."
     say "The reticle_* tools load when this agent session restarts. Cannot restart yourself? 'reticle init --relaunch' prints the command that resumes this conversation with the tools loaded."
   fi
 }

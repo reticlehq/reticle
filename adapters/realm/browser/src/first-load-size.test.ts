@@ -327,17 +327,22 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * keep their previous semantics. No dependency or protocol schema was added. Re-measured at
  * 256,176 B after merging main. Main then gained the keypress key codes, the image-alt check and the
  * unreachable-warning text, and the merge measured 256,653 B; the ceiling is that rounded up to the
- * next hundred.
+ * next hundred. The impact snapshot schema then gained `instrumentation` (the tab's coverage and
+ * the coding-agent prompt the HUD copies), measured at 256,728 B on its own.
+ *
+ * Then the panel's Run Harness and Stop: two control kinds and the running drive on the impact
+ * snapshot, whose schema loads with every page; without the drive on the snapshot the panel cannot
+ * know when to show Stop. Both together measured at 256,871 B; rounded up to the next hundred.
  */
 /*
- * Raised to 257,300 for request-body identity on bytes and forms (#1347). A JSON body a client
- * encoded to bytes (Flutter web, gRPC-web) and a FormData upload carried no fingerprint, so every
- * write to such an endpoint pooled into one unknown identity and a correct fan-out graded
+ * Raised for request-body identity on bytes and forms (#1347). A JSON body a client encoded to
+ * bytes (Flutter web, gRPC-web) and a FormData upload carried no fingerprint, so every write to such
+ * an endpoint pooled into one unknown identity and a correct fan-out graded
  * `unknown / duplicate-request`. The fingerprint has to run in the page at send time, so it cannot
- * be deferred. Measured 256,653 B on main and 257,254 B with this change (+601 B); the ceiling is
- * that rounded up to the next hundred.
+ * be deferred. Measured 257,598 B merged with main at 256,871 B (+727 B); the ceiling is that
+ * rounded up to the next hundred.
  */
-const MAX_FIRST_LOAD_BYTES = 257_300;
+const MAX_FIRST_LOAD_BYTES = 257_600;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

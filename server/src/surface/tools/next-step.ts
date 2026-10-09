@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { ReticleDir, ReticleEnv } from '@reticlehq/core';
+import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
 
 /**
  * The one thing the agent should do next, on the result of the call it just made.
@@ -85,6 +86,8 @@ function unsentRuns(root: string, lastPushAt: number, now: number): number {
   try {
     const dir = join(root, ReticleDir.RUNS_SUBDIR);
     return readdirSync(dir).filter((name) => {
+      // A drive's own record is not a run and never syncs.
+      if (name.endsWith(DRIVE_RECORD_SUFFIX)) return false;
       const at = statSync(join(dir, name)).mtimeMs;
       return at > lastPushAt + UNSENT_AFTER_MS && now - at > UNSENT_AFTER_MS;
     }).length;

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { hashPayload } from '@/memory/cloud/sync-hash.js';
-import { SyncStatus, describeSync, overallStatus, summarizeSync } from './sync-status.js';
+import {
+  SyncStatus,
+  dashboardRunUrl,
+  describeSync,
+  overallStatus,
+  seeRunLine,
+  summarizeSync,
+} from './sync-status.js';
 
 const run = (runId: string, n = 1) => ({ runId, payload: { runId, n } });
 
@@ -47,5 +54,28 @@ describe('where this project stands with the platform', () => {
     });
     expect(overallStatus(summary)).toBe(SyncStatus.PENDING);
     expect(describeSync(summary, 0)).toContain('the last push failed: platform answered 503');
+  });
+});
+
+describe('the run a person is sent to', () => {
+  it('names the newest run the platform holds in its current form', () => {
+    const older = { runId: 'old', payload: { runId: 'old', createdAt: 1 } };
+    const newer = { runId: 'new', payload: { runId: 'new', createdAt: 5 } };
+    const unsent = { runId: 'unsent', payload: { runId: 'unsent', createdAt: 9 } };
+    const summary = summarizeSync({
+      linked: true,
+      runs: [older, newer, unsent],
+      state: {
+        sentRunHashes: { old: hashPayload(older.payload), new: hashPayload(newer.payload) },
+      },
+    });
+    expect(summary.latestOnPlatform).toBe('new');
+  });
+
+  it('links the console’s run page at the dashboard’s origin', () => {
+    expect(seeRunLine('https://app.reticle.sh/projects/shop', 'run 1')).toBe(
+      'See it in your dashboard: https://app.reticle.sh/runs/run%201',
+    );
+    expect(dashboardRunUrl('https://app.reticle.sh/', 'r2')).toBe('https://app.reticle.sh/runs/r2');
   });
 });

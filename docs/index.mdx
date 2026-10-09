@@ -18,12 +18,12 @@ Four steps. Each command says what it did and is safe to run twice. Needs Node 2
 
 | Step | Command | Once per | It worked when |
 | --- | --- | --- | --- |
-| 1. Install | `curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh \| sh` | machine | it prints a verdict on the demo app |
+| 1. Install | `curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh \| sh` | machine | it says Reticle is installed but not in your app yet |
 | 2. Wire your app | `reticle init` (in your app's folder) | project | it lists the files it changed and reports a connected session |
 | 3. Connect _(optional)_ | `reticle connect --project "My App"` | project | `reticle whoami` shows this folder attached |
 | 4. Push _(optional)_ | `reticle push` | whenever you like | your runs show on the dashboard |
 
-On Windows, step 1 is `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`. The installer puts `reticle` on your PATH, registers it with every coding agent it finds and verifies a demo app. It does not wire your app: that is step 2. Skip step 2 and your agent's first `reticle_session` call wires the app instead. The [quickstart](/quickstart) walks every step.
+On Windows, step 1 is `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`. The installer puts `reticle` on your PATH, registers it with every coding agent it finds. It does not wire your app: that is step 2. Skip step 2 and your agent's first `reticle_session` call wires the app instead. The [quickstart](/quickstart) walks every step.
 
 A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict.
 

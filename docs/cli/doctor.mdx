@@ -59,6 +59,8 @@ When nothing has connected, the `sessions` line fails and the daemon's own diagn
 | `daemon log` | Where the structured daemon log lives |
 | `tracing` | How to turn that log into a per-stage trace |
 | `desktop` | Only on a desktop project. Every Electron and Tauri misconfiguration here fails silently, so it is diagnosed explicitly |
+| `coverage` | Only with a connected app. What Reticle sees in it, out of eight capabilities: what is missing, what is not seen yet, and, once a verdict recorded a gap, a prompt to paste into your coding agent |
+| `unsynced` | Only when a project folder holds runs the platform never got. Names the folder and the command that sends them, usually `reticle link` run there |
 
 ## The chromium line
 

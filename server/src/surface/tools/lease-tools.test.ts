@@ -31,6 +31,7 @@ import {
 import type { Session } from '@/portal/session/session.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
+import { claimedArtifactRoot } from '@/memory/project/root-claims.js';
 import type { BrowserPool, Lease } from '@/portal/pool/browser-pool.js';
 
 function tool(name: string): (deps: ToolDeps, args: Record<string, unknown>) => Promise<unknown> {
@@ -171,6 +172,24 @@ describe('a lease the platform opens for a drive', () => {
     expect(headed.reused).toBeUndefined();
     expect(acquired.map((a) => a.headed)).toEqual([undefined, true]);
     expect(new URL(acquired[1]?.url ?? '').searchParams.get(RETICLE_URL_PARAM.HUD)).toBe('removed');
+  });
+});
+
+/*
+ * A lease opened by `reticle try` or a chat drive wrote wherever the page's project id resolved —
+ * `~/.reticle/unmatched/` for an app with none — so the run never synced and try's wait timed out.
+ */
+describe('a lease opened for a caller’s project', () => {
+  it('writes into the root the caller named, from the moment its page registers', async () => {
+    const { pool, acquired } = fakePool();
+    await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3100/', root: '/work/shop/.reticle' },
+    );
+    const leaseId = acquired[0]?.sessionId ?? '';
+    expect(claimedArtifactRoot(leaseId, acquired[0]?.url)).toBe('/work/shop/.reticle');
+    await tool(ReticleTool.LEASE_RELEASE)({ ...baseDeps, pool }, { sessionId: leaseId });
+    expect(claimedArtifactRoot(leaseId, undefined)).toBeUndefined();
   });
 });
 

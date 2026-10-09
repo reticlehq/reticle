@@ -31,7 +31,7 @@ It registers the MCP server with the coding agents it finds and, where an agent 
 
 `init`, whether the first session call runs it or you do, is ONBOARDING, and where it stops: wire, boot, wait for a session. Idempotent, reporting `·` for what is already there. Two things it cannot do for you, in this order:
 
-1. **Restart the dev server if one was already running when `init` ran.** It read the build config at boot; `init` edited that file afterwards, so the process keeps serving a bundle with no SDK in it. Restart, then hard-reload the tab. A 100% failure, not an intermittent one, and a common cause of a correct install that finds nothing connected.
+1. **Restart the dev server if one was already running when `init` ran.** It read the build config at boot; `init` edited that file afterwards, so the process keeps serving a bundle with no SDK in it. Restart, then hard-reload the tab. A 100% failure, and a common cause of a correct install finding nothing connected.
 2. **Confirm rather than assume:** `reticle_session { action: "list" }`. One session listed is the proof the SDK reached the page. An empty list carries a `why` that names which cause this is; read it before changing anything.
 
 Then the FIRST RUN, which proves anything at all:
@@ -40,7 +40,7 @@ Then the FIRST RUN, which proves anything at all:
 reticle_act_and_wait { ref, action, until }
 ```
 
-Drive the journey that matters; `until` on its LAST step names the end state. It is saved as a flow that replays with no model. On a linked project (Free includes monthly Harness credits), `reticle_verify { action: "explore", persona }` drives it for you on the Reticle platform. Either way, name the journey: Reticle lists buttons, not which one matters.
+Drive the journey that matters; `until` on its LAST step names the end state. It is saved as a flow that replays with no model. On a linked project (Free includes monthly Harness credits), `reticle_verify { action: "explore", persona }` drives it for you on the Reticle platform; it answers a runId in ~45s: poll by runId until done, never start a second. Either way, name the journey: Reticle lists buttons, not which one matters.
 
 Everything between here and there is a rule the steps assume. Read it as you go, not before you act.
 
@@ -77,7 +77,7 @@ The moment Reticle breaks, lies, cannot see something you needed, costs too many
 reticle_session { action: "feedback", kind, text }
 ```
 
-`kind` is one of `bug`, `gap`, `ambiguity`, `feature_request`, `improvement`, `experience`. One call, then carry on with the task. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell:
+`kind` is one of `bug`, `gap`, `ambiguity`, `feature_request`, `improvement`, `experience`. One call, then carry on with the task. If the tools are unreachable, file it from the shell:
 
 ```bash
 npx @reticlehq/server feedback --agent --kind <kind> "what happened"
@@ -102,7 +102,7 @@ Every page arrives with the rules that matter prepended, so one fetch orients yo
 
 `init` is idempotent: running it is the cheapest way to find out what is wired. It never drives.
 
-Read **VERIFY** below when the question is "does this still work?" rather than "is this set up?". If `reticle_session` returns an empty list on a project that is already wired, read `docs/troubleshooting.mdx` beside this file (no network call), or fetch `https://docs.reticle.sh/troubleshooting.md`; do not restart setup.
+Read **VERIFY** below when the question is "does this still work?" rather than "is this set up?". If `reticle_session` returns an empty list on a project that is already wired, read `docs/troubleshooting.mdx` beside this file, or fetch `https://docs.reticle.sh/troubleshooting.md`; do not restart setup.
 
 ---
 
@@ -118,7 +118,7 @@ You need it once, while setting a project up. If `reticle_session` already lists
 
 **Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`).** Everything else (a bare `act`, `look`, `navigate`, `observe`) moves or reads the app and proves nothing. A drive that ends without a verdict has no result, however many tools it used.
 
-`verified: "unknown"` is not a pass: Reticle drove the app and could not tell what happened; report it as unknown. Nor is `"no-fault"`: the page settled with nothing wrong, but nothing was declared to prove, so assert a consequence the action CHANGES. **Never weaken a check to make it pass.**
+`verified: "unknown"` is not a pass: Reticle drove the app and could not tell what happened; report it as "not proved", not "failed". Nor is `"no-fault"`: the page settled with nothing wrong, but nothing was declared to prove, so assert a consequence the action CHANGES. **Never weaken a check to make it pass.**
 
 ## Take the cheapest path that answers the question
 

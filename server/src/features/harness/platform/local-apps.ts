@@ -11,8 +11,14 @@
  * waiting, which is how a daemon with nothing open hears about one without polling every few seconds.
  */
 import { createHash } from 'node:crypto';
+import { relative, sep } from 'node:path';
 import {
+  LinkReportKey,
   LinkPath,
+  type LinkAppGap,
+  type LinkDevServer,
+  type LinkHelloFailure,
+  type LinkUnsyncedRoot,
   PLATFORM_LINK_VERSION,
   RETICLE_URL_PARAM,
   parseLinkNotices,
@@ -47,6 +53,12 @@ export interface AppTab extends DriveCandidate {
   projectId?: string;
   adapters: string[];
   runtime?: string;
+  /** The SDK the page announced. The dashboard compares it with `reticleVersion` per app. */
+  sdkVersion?: string;
+  /** The page's HELLO channels, plus the coverage markers (`source`, `testid`) it earned. */
+  channels?: string[];
+  /** Instrumentation gaps this tab's verdicts recorded, newest first. */
+  gaps?: LinkAppGap[];
 }
 
 export interface ReportedApp {
@@ -55,6 +67,25 @@ export interface ReportedApp {
   url: string;
   title?: string;
   stack: string[];
+  sdkVersion?: string;
+  channels?: string[];
+  gaps?: LinkAppGap[];
+  adapters?: string[];
+}
+
+/** What a report carries beside its apps. Every field additive; see `LinkReportKey`. */
+export interface ReportExtras {
+  devServers?: LinkDevServer[];
+  helloFailure?: LinkHelloFailure;
+  unsynced?: LinkUnsyncedRoot[];
+}
+
+/** `path` under `home` as `~/...`, so no home directory leaves the machine in a report. */
+export function homeRelative(path: string, home: string): string {
+  const inside = relative(home, path);
+  if (0 === inside.length) return '~';
+  if (inside.startsWith('..') || inside.startsWith(sep) || /^[a-zA-Z]:/.test(inside)) return path;
+  return `~/${inside.split(sep).join('/')}`;
 }
 
 const hash = (text: string): string =>
@@ -158,6 +189,12 @@ export async function appsByPlatform(
       url: withoutMarks(tab.url),
       ...(tab.title === undefined ? {} : { title: tab.title }),
       stack,
+      ...(tab.sdkVersion === undefined ? {} : { sdkVersion: tab.sdkVersion }),
+      ...(tab.channels === undefined ? {} : { [LinkReportKey.CHANNELS]: tab.channels }),
+      ...(tab.gaps === undefined || 0 === tab.gaps.length
+        ? {}
+        : { [LinkReportKey.GAPS]: tab.gaps }),
+      ...(0 === tab.adapters.length ? {} : { [LinkReportKey.ADAPTERS]: tab.adapters }),
     });
   }
   return [...groups.values()].map(({ platform, apps }) => ({ platform, apps: [...apps.values()] }));
@@ -171,10 +208,15 @@ export interface AppReportDeps {
   /** What this daemon can do for the platform: it offers a person only what is here. */
   capabilities: readonly LinkCapability[];
   apps: () => Promise<{ platform: Platform; apps: ReportedApp[] }[]>;
-  /** Open an app so it connects: one somebody asked to bring back. A throw is logged, never fatal. */
-  open: (url: string) => Promise<void>;
+  /**
+   * Open an app so it connects: one somebody asked to bring back, named by its app key so the tab
+   * writes into that app's own `.reticle`. A throw is logged, never fatal.
+   */
+  open: (url: string, appKey?: string) => Promise<void>;
   /** A drive is waiting for the project this credential is for. */
   drivePending: (platform: Platform) => void;
+  /** Dev servers, the last refused hello and unsent runs: read once per report. */
+  extras?: () => Promise<ReportExtras>;
   /**
    * Something the platform wants the person told ("update Reticle"), for the project this credential
    * is for. Called once per notice for the daemon's life, however often the platform repeats it.
@@ -199,6 +241,7 @@ export function startAppReports(deps: AppReportDeps): AppReports {
     if (busy) return;
     busy = true;
     try {
+      const extras = (await deps.extras?.().catch(() => undefined)) ?? {};
       for (const { platform, apps } of await deps.apps()) {
         try {
           const res = await doFetch(`${platform.url}${LinkPath.APPS}`, {
@@ -213,6 +256,15 @@ export function startAppReports(deps: AppReportDeps): AppReports {
               protocol: PLATFORM_LINK_VERSION,
               capabilities: deps.capabilities,
               apps,
+              ...(extras.devServers === undefined
+                ? {}
+                : { [LinkReportKey.DEV_SERVERS]: extras.devServers }),
+              ...(extras.helloFailure === undefined
+                ? {}
+                : { [LinkReportKey.HELLO_FAILURE]: extras.helloFailure }),
+              ...(extras.unsynced === undefined
+                ? {}
+                : { [LinkReportKey.UNSYNCED]: extras.unsynced }),
             }),
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           });
@@ -234,7 +286,7 @@ export function startAppReports(deps: AppReportDeps): AppReports {
             if ('string' !== typeof key || 'string' !== typeof url || open.has(key)) continue;
             open.add(key);
             deps.log?.(`reticle: opening ${url}, asked for from the platform chat`);
-            await deps.open(url).catch((error: unknown) => {
+            await deps.open(url, key).catch((error: unknown) => {
               deps.log?.(`reticle: could not open ${url}: ${String(error)}`);
             });
           }

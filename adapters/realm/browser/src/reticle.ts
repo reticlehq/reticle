@@ -571,6 +571,7 @@ export class Reticle {
         const panel = new Presenter(panelOptions);
         this.#presenter = panel;
         panel.mount();
+        panel.showSdkVersion(this.#sdkVersion);
         // Drain pushes that arrived before this existed. After mount(), so the DOM they paint into is
         // there; the presenter's own painters no-op on a missing element rather than throwing.
         for (const buffered of this.#pendingPushes.values()) panel.handlePush(buffered);

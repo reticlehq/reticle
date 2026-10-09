@@ -11,7 +11,7 @@
 //
 // Needs Docker. Each image is a kind of machine users install on: a full Node, a slim one, Alpine's
 // busybox sh, a Node too old to run Reticle, a machine with no Node at all, and one that ships a
-// browser so the installer's demo can reach a verdict.
+// browser.
 
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -19,6 +19,8 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// Batteries are not watched, and a shown browser changes their timing: hide every browser Reticle opens.
+process.env.RETICLE_HEADLESS ??= '1';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const OUT = join(ROOT, 'artifacts', 'install-sandbox');
@@ -37,7 +39,7 @@ const SANDBOXES = [
   { name: 'node24-alpine', image: 'node:24-alpine', prep: 'apk add --no-cache curl >/dev/null', expect: 'installs' },
   { name: 'node18-too-old', image: 'node:18-bookworm-slim', prep: 'apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null', expect: 'refuses', mustSay: /node/i },
   { name: 'no-node', image: 'ubuntu:24.04', prep: 'apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null', expect: 'refuses', mustSay: /node/i },
-  { name: 'with-browser', image: 'mcr.microsoft.com/playwright:v1.63.0-noble', expect: 'installs', demo: /verified: yes/ },
+  { name: 'with-browser', image: 'mcr.microsoft.com/playwright:v1.63.0-noble', expect: 'installs' },
 ];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -153,11 +155,13 @@ async function runSandbox(box) {
   const problems = [];
   // `curl | sh` exits 0 when curl fails, because sh ran an empty script. The banner is the proof
   // the installer itself ran at all.
-  if (!/\[1\/4\]/.test(output.split('--- installer exit')[0] ?? '')) problems.push('the installer never ran');
+  if (!/\[1\/3\]/.test(output.split('--- installer exit')[0] ?? '')) problems.push('the installer never ran');
   if ('installs' === box.expect && !installed) problems.push('did not install');
   if ('refuses' === box.expect && 0 === code) problems.push('installed where it must refuse');
   if (box.mustSay !== undefined && !box.mustSay.test(output)) problems.push(`never said ${String(box.mustSay)}`);
-  if (box.demo !== undefined && !box.demo.test(output)) problems.push('the demo did not reach a verdict');
+  // Every box that installs must close by saying the app is not wired yet: a closing demo verdict
+  // read as "Reticle is in my app" to a real user, which is why the installer no longer runs one.
+  if ('installs' === box.expect && !/not in (your|the user's) app yet/.test(output)) problems.push('never said the app is not wired yet');
   return { box, code, seconds, output, problems };
 }
 

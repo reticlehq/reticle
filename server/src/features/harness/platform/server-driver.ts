@@ -19,6 +19,9 @@ import {
   type ToolOutcome,
   type ToolRequest,
 } from '../harness.js';
+import { DRIVE_HEADER } from '../platform-config.js';
+
+export { DRIVE_HEADER };
 
 export const SERVER_DRIVER_NAME = 'server';
 const RUNS_PATH = '/v1/harness/runs';
@@ -47,6 +50,8 @@ export interface ServerDriverOptions {
   /** Where secret field values live. Only their NAMES go to the platform. Defaults to `process.env`. */
   env?: Record<string, string | undefined>;
   maxSteps?: number;
+  /** The free drive this run is billed to, sent as `DRIVE_HEADER` on every turn. */
+  driveId?: string;
   fetch?: FetchLike;
 }
 
@@ -61,15 +66,39 @@ interface TurnReply {
   usage?: { input: number; output: number; cacheRead: number; cacheWrite: number };
 }
 
+/** Where to reach the platform, as which key, and for which free drive when there is one. */
+export interface PlatformCredential {
+  url: string;
+  apiKey: string;
+  driveId?: string;
+}
+
 /** The platform's url and this project's key, when the machine is linked. */
 export function serverOptionsFromEnv(
   env: Record<string, string | undefined>,
-): { url: string; apiKey: string } | undefined {
+): PlatformCredential | undefined {
   const url = cloudUrlFrom(env);
   const apiKey = env[ReticleEnv.API_KEY];
+  const driveId = env[ReticleEnv.DRIVE_ID];
   return url === undefined || apiKey === undefined || 0 === apiKey.length
     ? undefined
-    : { url: url.replace(/\/+$/, ''), apiKey };
+    : {
+        url: url.replace(/\/+$/, ''),
+        apiKey,
+        ...(driveId === undefined || 0 === driveId.length ? {} : { driveId }),
+      };
+}
+
+/** The headers every Harness call carries: JSON, the key, and the free drive it is billed to. */
+export function platformHeaders(platform: {
+  apiKey: string;
+  driveId?: string | undefined;
+}): Record<string, string> {
+  return {
+    'content-type': 'application/json',
+    authorization: `Bearer ${platform.apiKey}`,
+    ...(platform.driveId === undefined ? {} : { [DRIVE_HEADER]: platform.driveId }),
+  };
 }
 
 export class ServerHarnessError extends Error {
@@ -93,10 +122,7 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
       try {
         const res = await doFetch(`${options.url}${path}`, {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            authorization: `Bearer ${options.apiKey}`,
-          },
+          headers: platformHeaders(options),
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(TURN_TIMEOUT_MS),
         });
@@ -141,9 +167,15 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
       const outcomes = fresh.flatMap((entry) =>
         'tool' === entry.role ? entry.outcomes.map(outcomeOf) : [],
       );
+      // What somebody said to the drive since the last turn. The opening line is the loop's own and
+      // the platform writes its own, so only words that arrived after it travel.
+      const say = fresh.flatMap((entry, i) =>
+        'user' === entry.role && (0 < turn || 0 < i) ? [entry.text] : [],
+      );
       const reply = (await call(`${RUNS_PATH}/${encodeURIComponent(runId)}/turn`, {
         turn,
         outcomes,
+        ...(0 === say.length ? {} : { say }),
       })) as TurnReply;
       turn = reply.turn + 1;
       // The platform's spend, reported so the drive's cost is visible here as it is for a local one.

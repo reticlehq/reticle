@@ -106,6 +106,15 @@ export const REPORT_TEXT = {
   SHARE: 'Share',
   COPY: 'Copy',
   COPIED: 'Copied',
+  /** The run that just synced, on its own dashboard page. */
+  SEE_RUN: 'See it in your dashboard',
+  /** Runs in an unlinked project: on this machine only. */
+  NOT_SENT: 'not sent',
+  /** How much of this app Reticle sees: capabilities covered out of the eight. */
+  INSTRUMENTATION: 'Coverage',
+  INSTRUMENTATION_HELP:
+    'What Reticle can see in this app, from its handshake and the gaps its verdicts recorded',
+  COPY_PROMPT: 'Copy prompt for your coding agent',
   REFER: 'Send to a friend',
 } as const;
 

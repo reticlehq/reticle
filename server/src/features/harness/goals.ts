@@ -78,6 +78,28 @@ function allOf(texts: readonly string[]): Record<string, unknown> {
   return 1 === each.length ? (each[0] ?? {}) : { kind: PredicateKind.ALL_OF, predicates: each };
 }
 
+/**
+ * The end state the caller declared, checked like any assert.
+ *
+ * Quoted text only proves some words are on the last page, which is how a drive that never used the
+ * app could pass: from the field, "it only checks that I have certain titles on my page". An `expect`
+ * names an OUTCOME — a route reached, a request made, state changed — in the same predicate grammar
+ * as reticle_assert, and is graded the same way. A check that cannot run is `unknown`.
+ */
+export async function checkExpect(
+  invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+  predicate: Record<string, unknown>,
+): Promise<GoalCheck> {
+  let verified: string = Verified.UNKNOWN;
+  try {
+    const result = asRecord(await invoke(ReticleTool.ASSERT, { predicate }));
+    if ('string' === typeof result['verified']) verified = result['verified'];
+  } catch {
+    /* stays unknown: the outcome was not proved */
+  }
+  return { text: `expect ${JSON.stringify(predicate).slice(0, MAX_GOAL_LENGTH)}`, verified };
+}
+
 /** One line naming the goals the drive did not prove, or undefined when it proved them all. */
 export function unprovedGoals(checks: readonly GoalCheck[]): string | undefined {
   const missed = checks.filter((c) => Verified.YES !== c.verified);

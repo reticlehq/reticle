@@ -32,92 +32,9 @@ export {
   RATING_FLAG,
 } from './cli-parse-feedback.js';
 
-/**
- * The lines below say `reticle <command>`, which is the bin this package installs and is correct
- * once it is on PATH. Copied into `npx`, it is not: `npx reticle` resolves the PACKAGE named
- * `reticle`, which belongs to somebody else, and npx will happily fetch and run it. The docs were
- * telling readers to do exactly that on 110 lines before it was caught, so the invocation now leads
- * the usage block rather than being a footnote somewhere else.
- */
-export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticle <command>\` once the bin is on your PATH)
-
-  reticle tutorial [--run] [--headless] [--port N]   (watch Reticle verify a demo app, in seconds)
-  reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
-                [--env KEY=VALUE]... [--files-only] [--hooks]  (wire Reticle into the project in this directory)
-                init is ONBOARDING: it wires the project, boots the app and proves a session
-                connected. It does not drive. The FIRST RUN is the stage that proves a flow:
-                an agent drives one journey with reticle_act_and_wait and an \`until\` on its last
-                step; with a linked project, reticle_verify { action: "explore", persona: "…" }
-                (or reticle verify <url> --explore --persona "…") drives it instead
-                --app picks WHICH app in a monorepo, when several are found
-                --env is what the app needs to reach a usable state: the key from
-                .env.example, the mock backend, the variable that skips an auth wall.
-                Repeatable, and a value may contain spaces and equals signs
-                --files-only writes the files and stops, which is what init did before it
-                learned to boot the app and prove the install works
-                --relaunch prints the exact command that restarts THIS conversation with
-                the tools loaded, so the restart is not a chore handed to a human. It
-                refuses when the session id has no transcript behind it, because
-                --resume on an empty id opens a blank conversation that looks like
-                success. Works with --files-only
-                --license writes the key to .env and keeps .env out of git
-                --json puts the result on stdout, so an agent reads one object
-                --no-open / --no-agents / --url / --timeout are the runtime dials: CI, a
-                headless box, or an app you already run
-                --no-mcp skips MORE than the server registration: also the agent rule files
-                (CLAUDE.md / AGENTS.md / .cursor) and the /reticle command, because all three
-                only make sense once the tools are reachable.
-  reticle serve [--port N] [--drive <url>] [--headless] [--http] [--http-port N] [--http-token T]
-  reticle stop  [--port N] [--quiet]                    (stop the daemon we started, by its recorded pid)
-  reticle kill  [--port N] [--force]                   (free the port by its LISTENER, never the agent's mcp proxy)
-  reticle restart [--port N] [--force]                 (kill, then start a daemon and wait for a real bind)
-  reticle status [--port N] [--json]                   (a readable block; --json for the event)
-  reticle doctor [--port N]                            (one command to diagnose setup: Chromium, daemon, port)
-  reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
-  reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
-                       [--explore] [--persona <who>]   (no saved flows? let Reticle drive the app itself and record them)
-                       [--select <label>]              (repeatable: verify only flows carrying these labels — no model, exit 0=pass)
-                [--expect '<json predicate>' | --expect-file <path>]   (one verdict, no saved
-                flows needed. --expect-file avoids cmd.exe and PowerShell quote mangling. It
-                asks an existing daemon, never binds or stops one; with none, it refuses.
-                Cannot combine with --storage-state. Use when the client lacks reticle_*
-                tools. exit 0 ONLY on verified:"yes" — "unknown" is not a pass. For an
-                action --expect cannot do, drive the daemon's HTTP MCP transport instead — see
-                https://docs.reticle.sh/http-transport.md)
-  reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
-  reticle gate [--since <ref>] [--accept-coverage] [file...]  (exit non-zero unless passing artifacts cover the affected flows)
-  reticle report [--session <id>] [--hook]             (what the latest session claimed, and what held)
-  reticle setup mcp                                    (register the MCP server with your agents; the installer's registration half)
-  reticle capsules                                     (list the saved fail-to-pass bug capsules in .reticle/capsules)
-  reticle hunt <dir>                                   (aggregate a directory of crawl reports into one false-green rate)
-  reticle watch [url]                                  (on save, report which saved flows must re-verify)
-  reticle drive <url> [--headless]                     (foreground mode, for debugging)
-  reticle mcp   [--port N] [--drive <url>] [--headless] (MCP stdio proxy; auto-starts daemon if needed)
-  reticle update                                       (install the latest server version and restart)
-  reticle rollback                                     (restore the previous server version and restart)
-  reticle license                                      (show enterprise license status: active | eval | missing)
-  reticle telemetry [status|enable|disable]            (anonymous usage metrics; status shows what's sent + the policy)
-  reticle feedback [--rating 1-5] [--bug] "message"    (tell us what worked and what didn't; prints exactly what it sends)
-  reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "message"
-                                                       (agents: file from anywhere, including a setup that never finished)
-  reticle identify --context company|side_project|open_source|learning [--company N] [--email E] [--forget]
-                                                       (OPT-IN: tell us who you are, e.g. for support or an enterprise trial)
-
-Cloud (link this project to Reticle; runs/flows recorded on the dashboard):
-  reticle connect [--project <name|id>] [--url <cloud origin>]
-                                                       (wire this app if needed, sign in, link, send local history)
-  reticle login [--url <u>] [--email <e>] [--code <c>] [--org <n>]
-                                                       (browser device flow by default; --email mails a code)
-  reticle logout [--url <u>]                           (sign out of ONE host; others stay signed in)
-  reticle link  [--project <name|id>]                  (bind this repo: mints a scoped key, writes .reticle/cloud.json)
-  reticle whoami                                        (who am I signed in as, and is this repo attached?)
-  reticle project <ls|create <name>>                   (list or create cloud projects)
-  reticle config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]
-  reticle push | sync [--watch]                        (one sync cycle: send the difference, collect decisions)
-  reticle runs | regression | share <runId>            (read cloud state; regression exits 3 if any flow broke)
-
-'drive' shows the browser; everything else is hidden (serve/mcp own the pool behind leases, replay
-and the spec runner: batch work). --headed opts any of them in, --headless hides drive, CI hides it.`;
+// The help text lives on its own page; re-exported so every importer of it is unaffected.
+import { CLI_USAGE } from './cli-usage.js';
+export { CLI_USAGE };
 
 const INIT_COMMAND = 'init';
 const SERVE_COMMAND = 'serve';
@@ -195,6 +112,7 @@ const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
   IDENTIFY_COMMAND,
   DAEMON_INNER_COMMAND,
   'connect',
+  'try',
   'login',
   'logout',
   'whoami',
@@ -238,7 +156,7 @@ export function knownCommand(arg: string | undefined): string {
  * and every "did it actually do anything?" question cost a round-trip. CI passes this (or just sets
  * CI, which flips the default) because there is no display there to be headed on.
  */
-const HEADLESS_FLAG = '--headless';
+export const HEADLESS_FLAG = '--headless';
 export const DRIVE_FLAG = '--drive';
 const QUIET_FLAG = '--quiet';
 const DRY_RUN_FLAG = '--dry-run';
@@ -381,6 +299,7 @@ export type CliResult =
       explore?: boolean;
       persona?: string;
       select?: string[];
+      resultsJson?: string;
     }
   | { kind: 'affected'; files: string[]; since?: string }
   | { kind: 'hunt'; dir: string }
@@ -414,12 +333,6 @@ type ServeFlags =
   | { kind: 'error'; message: string };
 
 /**
- * `serve` / `mcp` / `_daemon` own the browser POOL, which backs automated work — leased contexts for
- * parallel agents, flow replay, the spec runner. Those are batch: nobody is watching, and launching
- * them headed changed timing enough to break four e2e specs. The headed default belongs to the
- * INTERACTIVE command (`drive`), where a human asked to see the run. `--headed` still opts in here.
- */
-/**
  * A usage error names the thing that was wrong.
  *
  * These used to return CLI_USAGE as the MESSAGE, so every mistake — a typo'd flag, a flag missing
@@ -443,11 +356,11 @@ const unknownCommand = (command: string): ParseError => ({
 function parseServeFlags(
   args: string[],
   defaultPort: number,
-  _defaultHeadless: boolean,
+  defaultHeadless: boolean,
 ): ServeFlags {
   let port = defaultPort;
   let driveUrl: string | undefined;
-  let headless = true;
+  let headless = defaultHeadless;
   let http = false;
   let httpPort: number | undefined;
   let httpToken: string | undefined;
@@ -726,8 +639,9 @@ export function parseCliArgs(
   defaultPort: number,
   defaultHeadless = false,
 ): CliResult {
-  // Bare `reticle` is `serve` — a pool-owning command, so headless like the rest of that family.
-  if (0 === argv.length) return { kind: 'serve', port: defaultPort, headless: true, http: false };
+  // Bare `reticle` is `serve`.
+  if (0 === argv.length)
+    return { kind: 'serve', port: defaultPort, headless: defaultHeadless, http: false };
 
   const [cmd, ...rest] = argv;
   // Guaranteed by the bare-argv check above; restated so the unknown-command error can name it.
@@ -932,6 +846,7 @@ export function parseCliArgs(
         ...(true === r.explore ? { explore: true } : {}),
         ...(r.persona !== undefined ? { persona: r.persona } : {}),
         ...(r.select !== undefined ? { select: r.select } : {}),
+        ...(r.resultsJson !== undefined ? { resultsJson: r.resultsJson } : {}),
       };
     }
     case CAPSULES_COMMAND:
