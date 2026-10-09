@@ -27,11 +27,10 @@ describe('the directory a calling client names', () => {
   });
 
   it('decodes a percent-encoded path, which is how a non-ASCII directory fits in a header', () => {
-    const encoded = encodeURIComponent('/work/项目');
+    const project = resolve('/work/项目');
+    const encoded = encodeURIComponent(project);
     expect([...encoded].every((char) => char.charCodeAt(0) < 128)).toBe(true);
-    expect(clientDirectoryFromHeader({ [MCP_CLIENT_DIRECTORY_HEADER]: encoded })).toBe(
-      '/work/项目',
-    );
+    expect(clientDirectoryFromHeader({ [MCP_CLIENT_DIRECTORY_HEADER]: encoded })).toBe(project);
   });
 
   it('ignores a directory named by a peer that is not on this machine', () => {
