@@ -29,11 +29,11 @@ import { asNumber, asString, parseInteractive } from '@reticlehq/core';
 
 import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './tool-kit.js';
 import { bufferEnvelope } from '@/portal/session/session-health.js';
-import { routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
+import { navigablePath, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 
 /** The route part of a session URL. A host belongs to the machine, not to the journey. */
 /**
- * The page a recording started on, as a NAVIGABLE path: pathname + hash.
+ * The page a recording started on, as a NAVIGABLE path: pathname + query + hash.
  *
  * The hash matters and the pathname alone is not enough. Under a hash router every page has the
  * document pathname `/`, so a recording made on `#/posts/12` stored `/`, the replay's start-path
@@ -43,8 +43,15 @@ import { routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route
 function pathnameOf(url: string | undefined): string | undefined {
   if (url === undefined) return undefined;
   const parts = routeOfUrl(url);
-  return parts === undefined ? undefined : `${parts.docPath}${parts.hash}`;
+  // The query too, minus Reticle's own params: `/products?scope=TOPWEAR` and `/products` are different
+  // pages, and replay compares the query when the flow recorded one (#1059), so dropping it here
+  // started the replay on the unfiltered page (#1411).
+  return parts === undefined ? undefined : navigablePath(parts);
 }
+
+/** What record-stop says when the span crossed a full-page load (#1411). */
+const RECORDING_CROSSED_RELOAD =
+  'The recording crossed a full-page load: the page it started on unloaded, so the reaction report and the proposed consequences cover only the page that loaded after it.';
 
 /**
  * What record-stop says about a step that compiled to no anchor at all.
@@ -188,7 +195,13 @@ export const READ_TOOLS: ToolDef[] = [
       // Where the journey begins, so a saved flow can navigate here before step 1 instead of
       // replaying from wherever the page happens to be. Pathname only: a host or port belongs to
       // the machine that recorded it, not to the journey.
-      deps.recordings.start(name, cursor, pathnameOf(session.url), session.id);
+      deps.recordings.start(
+        name,
+        cursor,
+        pathnameOf(session.url),
+        session.id,
+        session.currentDocumentId,
+      );
       return Promise.resolve({ recordingName: name, since: cursor });
     },
   },
@@ -228,7 +241,19 @@ export const READ_TOOLS: ToolDef[] = [
             : `no active recording named '${name}'; in progress: ${active.map((r) => `'${r}'`).join(', ')}`,
         );
       }
-      const events = session.eventsSince(rec.cursor);
+      // A full-page load mid-recording reconnects the page as a NEW Session, whose clock restarts
+      // below the cursor stored at start: the window came out negative and the span empty (#1411).
+      // Detected by the session that answers now not being the one that started it, or by the tab
+      // being on another document. A reconnect can keep the id, and its clock comes from another
+      // connection, so comparing clocks alone misses a reload once the new page has run past the
+      // cursor. The clock check stays for an SDK that stamps no document. The new page is then read
+      // from its start, and the warning says the report covers only it.
+      const crossedReload =
+        (rec.session !== undefined && rec.session !== session.id) ||
+        (rec.document !== undefined && rec.document !== session.currentDocumentId) ||
+        session.elapsed() < rec.cursor;
+      const from = crossedReload ? 0 : rec.cursor;
+      const events = session.eventsSince(from);
       const routes = routesFromRecording(rec.startPath, events);
       const program: CompiledProgram = {
         name,
@@ -239,7 +264,7 @@ export const READ_TOOLS: ToolDef[] = [
       };
       deps.recordings.saveCompiled(program);
       const unstable = rec.steps.filter((s) => !s.stable).length;
-      const report = buildReactionReport(events, session.elapsed() - rec.cursor);
+      const report = buildReactionReport(events, session.elapsed() - from);
       // Self-generating oracles: propose ranked mustHold from what the recorded window actually did.
       const proposedConsequences = proposeConsequences(events);
       const digest = summarizeReaction(report);
@@ -252,7 +277,7 @@ export const READ_TOOLS: ToolDef[] = [
       const timeline =
         events.length > 0
           ? {
-              timeline_omitted: `${String(events.length)} event(s) were recorded and are not included here. Call reticle_observe { since: ${String(rec.cursor)} } for the raw timeline.`,
+              timeline_omitted: `${String(events.length)} event(s) were recorded and are not included here. Call reticle_observe { since: ${String(from)} } for the raw timeline.`,
             }
           : {};
       const unanchored = 0 < unstable ? unanchoredWarning(unstable) : undefined;
@@ -263,7 +288,8 @@ export const READ_TOOLS: ToolDef[] = [
           ? `${String(unkept)} step(s) proved a consequence this flow does not keep: ${UNKEPT_EXPECT}.`
           : undefined;
       const backtrack = recordingBacktrackWarning(routes);
-      const warning = [unanchored, backtrack, lostChecks].filter(
+      const reloaded = crossedReload ? RECORDING_CROSSED_RELOAD : undefined;
+      const warning = [reloaded, unanchored, backtrack, lostChecks].filter(
         (part): part is string => part !== undefined,
       );
       const body = {

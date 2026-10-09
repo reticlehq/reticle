@@ -148,9 +148,14 @@ function reopenableUrl(raw: string | undefined): { url: string; port: number } |
   return { url: url.toString(), port };
 }
 
-/** `reticle init`, the only command here that is Reticle's own and so cannot be wrong. */
-const INIT_COMMAND = 'reticle init';
-const OPEN_COMMAND = 'reticle open';
+/**
+ * Reticle's own commands, the only ones here that cannot be wrong. Spelled through `npx`, like the
+ * CLI's own messages: the default MCP registration runs Reticle through `npx` and puts no `reticle`
+ * bin on PATH, so a bare `reticle init` fails with "command not found" exactly where it is handed out.
+ */
+const CLI = 'npx @reticlehq/server';
+const INIT_COMMAND = `${CLI} init`;
+const OPEN_COMMAND = `${CLI} open`;
 const LOCALHOST = 'http://localhost';
 
 export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {

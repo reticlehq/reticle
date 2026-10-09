@@ -11,6 +11,8 @@ import { NodePlatform } from '@reticlehq/init';
 import {
   SDK_PACKAGES,
   VersionMatchEnv,
+  helpRunsAt,
+  helpVersionNote,
   installedSdkVersion,
   npxInvocation,
   reexecAtVersion,
@@ -122,6 +124,38 @@ describe('versionToMatch', () => {
 
   it('ignores an SDK version that is not a published release', () => {
     expect(decide({ files: sdkAt(PROJECT, '@reticlehq/react', 'workspace:*') })).toBeUndefined();
+  });
+});
+
+describe('--help under a project that re-runs the command (#1378)', () => {
+  const helpFor = (argv: string[], env: Record<string, string> = {}): string | undefined =>
+    helpRunsAt({
+      argv,
+      cliVersion: '3.3.0',
+      env,
+      projectDir: PROJECT,
+      readFile: fsWith(sdkAt(PROJECT, '@reticlehq/react', '2.14.0')),
+    });
+
+  it('names the version the command it describes would actually run at', () => {
+    for (const argv of [['verify', '--help'], ['verify', '-h'], ['help', 'verify'], ['--help']]) {
+      expect(helpFor(argv), argv.join(' ')).toBe('2.14.0');
+    }
+    const note = helpVersionNote('2.14.0', '3.3.0');
+    expect(note).toContain('@reticlehq/server 3.3.0');
+    expect(note).toContain('runs at @reticlehq/server@2.14.0');
+    expect(note).toContain('npx @reticlehq/server@2.14.0 <command> --help');
+    expect(note).toContain(`${VersionMatchEnv.OPT_OUT}=1`);
+  });
+
+  it('says nothing when the command runs on this binary anyway', () => {
+    expect(helpFor(['init', '--help'])).toBeUndefined();
+    expect(helpFor(['help', 'update'])).toBeUndefined();
+    expect(helpFor(['verify', '--help'], { [VersionMatchEnv.OPT_OUT]: '1' })).toBeUndefined();
+  });
+
+  it('says nothing when help was not asked for', () => {
+    expect(helpFor(['verify'])).toBeUndefined();
   });
 });
 

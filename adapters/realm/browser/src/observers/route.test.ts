@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { EventType } from '@reticlehq/core';
+import { EventType, ROUTE_CHANGE_HOW_FIELD, RouteChangeHow } from '@reticlehq/core';
 import { installRoute } from './route.js';
 import { captureMethod } from '@/patching/capture-method.js';
 import type { Emit, Teardown } from './types.js';
@@ -34,6 +34,54 @@ describe('installRoute', () => {
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe(EventType.ROUTE_CHANGE);
     expect(String(events[0]?.data['pathname'])).toBe('/next');
+    expect(events[0]?.data[ROUTE_CHANGE_HOW_FIELD]).toBe(RouteChangeHow.PUSH);
+  });
+
+  it('records replaceState as replace', () => {
+    history.replaceState({}, '', '/editor');
+    const { emit, events } = collect();
+    teardown = installRoute(emit);
+
+    history.replaceState({}, '', '/editor?zoom=125');
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.data[ROUTE_CHANGE_HOW_FIELD]).toBe(RouteChangeHow.REPLACE);
+    expect(String(events[0]?.data['search'])).toBe('?zoom=125');
+    expect(String(events[0]?.data['pathname'])).toBe('/editor');
+  });
+
+  it('records popstate as pop', async () => {
+    history.replaceState({}, '', '/a');
+    const { emit, events } = collect();
+    teardown = installRoute(emit);
+
+    history.pushState({}, '', '/b');
+    await new Promise<void>((resolve) => {
+      window.addEventListener('popstate', () => resolve(), { once: true });
+      history.back();
+    });
+
+    const backNav = events.find(
+      (e) => String(e.data['from']).endsWith('/b') && String(e.data['to']).endsWith('/a'),
+    );
+    expect(backNav?.data[ROUTE_CHANGE_HOW_FIELD]).toBe(RouteChangeHow.POP);
+  });
+
+  it('records hashchange as pop', async () => {
+    history.replaceState({}, '', '/editor');
+    const { emit, events } = collect();
+    teardown = installRoute(emit);
+
+    // jsdom delivers hashchange on a later turn, and it also fires popstate for the same move.
+    // The first of those is the change; the second sees an href that already matches and drops.
+    await new Promise<void>((resolve) => {
+      window.addEventListener('hashchange', () => resolve(), { once: true });
+      location.hash = 'section';
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.data[ROUTE_CHANGE_HOW_FIELD]).toBe(RouteChangeHow.POP);
+    expect(String(events[0]?.data['hash'])).toBe('#section');
   });
 
   it('emits ROUTE_CHANGE on a Back navigation after a pushState (stale-lastHref regression)', async () => {

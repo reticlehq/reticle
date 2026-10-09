@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: `--help` says which version the command will actually run at.** In a project whose SDK is a different major from the CLI, every command is re-run at the project's version, but `--help` stays on the CLI you ran. It therefore advertised flags such as `verify --select` that the re-run older release rejected as unknown parameters. `--help` and `help <command>` now open with one line on stdout in that case. It names the version the command runs at and how to get that version's own help, and says that `RETICLE_NO_VERSION_MATCH=1` keeps the current CLI. Closes [#1378](https://github.com/reticlehq/reticle/issues/1378).

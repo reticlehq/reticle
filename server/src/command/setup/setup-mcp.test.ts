@@ -17,6 +17,7 @@ import { setupMcp, type SetupMcpIo } from './setup-mcp.js';
 import type { OnboardingStep } from '@reticlehq/core/telemetry';
 
 const CLAUDE = 'claude';
+const CODEX = 'codex';
 
 interface Machine {
   /** Is the `claude` CLI installed here? */
@@ -25,6 +26,10 @@ interface Machine {
   claudeAlreadyRegistered?: boolean;
   /** Config files this machine keeps, by path suffix. */
   files?: Record<string, string>;
+  /** Is the `codex` CLI installed here? */
+  codexInstalled?: boolean;
+  /** Does `codex mcp add` fail when it runs? */
+  codexAddFails?: boolean;
 }
 
 interface Recorded {
@@ -59,6 +64,10 @@ function machine(m: Machine = {}): Recorded {
     print: (l) => void lines.push(l),
     runCli: (command, args) => {
       ran.push(`${command} ${args.join(' ')}`);
+      if (CODEX === command) {
+        if (true !== m.codexInstalled) return false;
+        return !(true === m.codexAddFails && 'add' === args[1]);
+      }
       if (CLAUDE !== command) return false;
       if (true !== m.claudeInstalled) return false;
       return true;
@@ -246,6 +255,90 @@ describe('a config format we will not rewrite', () => {
     expect(result.registered).toContain('claude-code');
     expect(result.registered).toContain('cursor');
     expect(result.manual.map((c) => c.id)).toContain('codex');
+  });
+});
+
+/**
+ * Codex is registered through its own CLI when there is one (#1238).
+ *
+ * The block above says what happens when we cannot write a client's config. Codex has
+ * `codex mcp add`, so with the binary on PATH nothing is left for a human, and no TOML is edited by
+ * us. `codex mcp add` REPLACES an entry of the same name and still exits 0, so it runs only when the
+ * config names no `reticle` server at all.
+ */
+describe('Codex with its CLI on PATH', () => {
+  const CODEX_CONFIG = '.codex/config.toml';
+  const ADD = 'codex mcp add reticle -- npx @reticlehq/server mcp';
+  const WIRED = '[mcp_servers.reticle]\ncommand = "npx"\nargs = ["@reticlehq/server", "mcp"]\n';
+  const OWN_BUILD = '[mcp_servers.reticle]\ncommand = "node"\nargs = ["/opt/local/reticle.js"]\n';
+  const URL_SHAPED = '[mcp_servers.reticle]\nurl = "https://example.test/mcp"\n';
+  const OTHER = '[mcp_servers.other]\ncommand = "foo"\n';
+
+  it('registers it with `codex mcp add`, and leaves nothing for a human', () => {
+    const { io, ran, writes } = machine({ codexInstalled: true, files: { [CODEX_CONFIG]: OTHER } });
+    const result = setupMcp(io);
+
+    expect(ran).toContain(ADD);
+    expect(result.registered).toContain('codex');
+    expect(result.manual.map((c) => c.id)).not.toContain('codex');
+    expect(
+      writes.filter((w) => w.path.includes('.codex')),
+      'the TOML is never written by us',
+    ).toEqual([]);
+  });
+
+  it('registers it when the config file does not exist yet, since the directory is the marker', () => {
+    const { io, ran } = machine({ codexInstalled: true, files: { '.codex/other.toml': 'x' } });
+
+    expect(setupMcp(io).registered).toContain('codex');
+    expect(ran).toContain(ADD);
+  });
+
+  it('reports it as already there on the second run, and does not run the command again', () => {
+    const { io, ran } = machine({ codexInstalled: true, files: { [CODEX_CONFIG]: WIRED } });
+    const result = setupMcp(io);
+
+    expect(result.alreadyThere).toContain('codex');
+    expect(ran.filter((c) => c.startsWith('codex mcp add'))).toEqual([]);
+  });
+
+  it('never overwrites an entry somebody else wrote', () => {
+    for (const config of [OWN_BUILD, URL_SHAPED]) {
+      const { io, ran } = machine({ codexInstalled: true, files: { [CODEX_CONFIG]: config } });
+      setupMcp(io);
+
+      expect(
+        ran.filter((c) => c.startsWith('codex mcp add')),
+        `would replace: ${config}`,
+      ).toEqual([]);
+    }
+  });
+
+  it('keeps an unreadable entry as a hand edit instead of replacing it', () => {
+    const { io } = machine({ codexInstalled: true, files: { [CODEX_CONFIG]: URL_SHAPED } });
+    const result = setupMcp(io);
+
+    expect(result.manual.map((c) => c.id)).toContain('codex');
+    expect(result.registered).not.toContain('codex');
+  });
+
+  it('says it failed, rather than registered, when `codex mcp add` fails', () => {
+    const { io } = machine({
+      codexInstalled: true,
+      codexAddFails: true,
+      files: { [CODEX_CONFIG]: OTHER },
+    });
+    const result = setupMcp(io);
+
+    expect(result.failed).toContain('codex');
+    expect(result.registered).not.toContain('codex');
+  });
+
+  it('does not look for the CLI on a machine with no Codex config directory', () => {
+    const { io, ran } = machine({ codexInstalled: true });
+    setupMcp(io);
+
+    expect(ran.filter((c) => c.startsWith('codex'))).toEqual([]);
   });
 });
 

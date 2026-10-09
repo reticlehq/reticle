@@ -6,16 +6,20 @@ const { checkForUpdate, exec } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/command/update/update-checker.js', () => ({ checkForUpdate }));
-vi.mock('@reticlehq/init', () => ({
-  refreshAgentRules: vi.fn(() => ({ updated: [] })),
-  detectPackageManager: vi.fn(() => 'npm'),
-  buildNodeIo: vi.fn(() => ({ rootFiles: () => [], listDirs: () => [], exec })),
-  installCommandParts: (_pm: string, specs: string[]) => ({
-    command: 'npm',
-    args: ['i', ...specs],
-  }),
-  SILENT_HOST: {},
-}));
+vi.mock('@reticlehq/init', async (importOriginal) => {
+  // The real detection and file access, so a workspace's lockfile is read as it is on disk; only the
+  // install itself is faked, and it is told which manager was chosen.
+  const actual = await importOriginal<typeof import('@reticlehq/init')>();
+  return {
+    ...actual,
+    refreshAgentRules: vi.fn(() => ({ updated: [] })),
+    buildNodeIo: (cwd: string, host: Parameters<typeof actual.buildNodeIo>[1]) => ({
+      ...actual.buildNodeIo(cwd, host),
+      exec,
+    }),
+    installCommandParts: (pm: string, specs: string[]) => ({ command: pm, args: ['i', ...specs] }),
+  };
+});
 
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -96,6 +100,32 @@ describe('handleUpdate', () => {
     await handleUpdate(dir);
 
     expect(exec).not.toHaveBeenCalled();
+  });
+
+  // From review: an app inside a pnpm workspace keeps its lockfile at the workspace root, so reading
+  // only the app's own folder chose npm and ran `npm i` inside a pnpm workspace.
+  it('installs with the package manager of the workspace when its lockfile is at the root', async () => {
+    checkForUpdate.mockResolvedValueOnce({ latestVersion: SERVER_VERSION });
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const root = mkdtempSync(join(tmpdir(), 'reticle-update-ws-'));
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'ws', private: true }));
+    writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - apps/*\n');
+    writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
+    const app = join(root, 'apps', 'web');
+    mkdirSync(join(app, 'node_modules', '@reticlehq', 'react'), { recursive: true });
+    writeFileSync(
+      join(app, 'package.json'),
+      JSON.stringify({ name: 'web', devDependencies: { '@reticlehq/react': '0.0.1' } }),
+    );
+    writeFileSync(
+      join(app, 'node_modules', '@reticlehq', 'react', 'package.json'),
+      JSON.stringify({ version: '0.0.1' }),
+    );
+
+    await handleUpdate(app);
+
+    expect(exec).toHaveBeenCalledWith('pnpm', ['i', `@reticlehq/react@${SERVER_VERSION}`]);
   });
 
   it('says where to run it when this folder has no Reticle SDK', async () => {
