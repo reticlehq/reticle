@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ReticleDir } from '@reticlehq/core';
+import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
 import { describeUnsynced, unsentRunCount, unsyncedRoots } from './unsynced-roots.js';
 
 function rootWith(runIds: readonly string[], sent: readonly string[] = []): string {
@@ -24,6 +25,14 @@ function rootWith(runIds: readonly string[], sent: readonly string[] = []): stri
 describe('unsynced roots', () => {
   it('counts the runs the platform never accepted, by id', () => {
     expect(unsentRunCount(rootWith(['a', 'b', 'c'], ['a']))).toBe(2);
+  });
+
+  // A refused Harness drive left only its `.drive.json` record; the dashboard and `reticle sync` then
+  // both said "1 run waiting to be sent: run reticle sync", and sync answered "nothing to send".
+  it('does not count a Harness drive record as a run', () => {
+    const root = rootWith(['a'], ['a']);
+    writeFileSync(join(root, ReticleDir.RUNS_SUBDIR, `harness-x${DRIVE_RECORD_SUFFIX}`), '{}');
+    expect(unsentRunCount(root)).toBe(0);
   });
 
   it('counts nothing in a folder with no runs', () => {

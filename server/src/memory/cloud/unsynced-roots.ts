@@ -9,6 +9,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
+import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
 import { readCloudState } from './sync-disk.js';
 
 export interface UnsyncedRoot {
@@ -32,7 +33,7 @@ export function unsentRunCount(root: string): number {
     const state = readCloudState(root);
     const sent = new Set([...Object.keys(state.sentRunHashes ?? {}), ...(state.sentRunIds ?? [])]);
     return readdirSync(dir)
-      .filter((file) => file.endsWith(RUN_SUFFIX))
+      .filter((file) => file.endsWith(RUN_SUFFIX) && !file.endsWith(DRIVE_RECORD_SUFFIX))
       .filter((file) => !sent.has(file.slice(0, -RUN_SUFFIX.length))).length;
   } catch {
     return 0;

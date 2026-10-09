@@ -358,7 +358,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * If a FOURTH kind of caller appears, the question is whether the new event is a moment something
    * became true or an internal step wearing an event's clothes — the bar stated in `hook-events.ts`.
    */
-  cloud: ['cli', 'fs', 'hooks', 'intent'],
+  // `dir` for DRIVE_RECORD_SUFFIX, as `telemetry` below: the unsent-run count read a refused
+  // drive's `.drive.json` as a run, so `reticle sync` and the dashboard asked for a sync that had
+  // nothing to send, forever.
+  cloud: ['cli', 'dir', 'fs', 'hooks', 'intent'],
   command: [
     'answers',
     'demo',
