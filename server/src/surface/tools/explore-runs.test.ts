@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ToolDeps } from './tool-kit.js';
 // The tool table first, as the daemon loads it: the explore module sits on an import cycle with it.
@@ -135,7 +136,7 @@ describe('a Harness drive, started then polled', () => {
     forgetDrives();
     const out = record(await answerExplore(deps(files), { runId, wait: 0 }, undefined, d.drive));
     expect(out).toMatchObject({ status: DriveStatus.DONE, summary: 'kept' });
-    expect([...files.keys()]).toEqual([`${ROOT}/runs/${String(runId)}.drive.json`]);
+    expect([...files.keys()]).toEqual([join(ROOT, 'runs', `${String(runId)}.drive.json`)]);
   });
 
   it('reads a drive a dead daemon left running as broken, not as running forever', async () => {

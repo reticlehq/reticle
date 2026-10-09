@@ -7,7 +7,7 @@
  * platform report can each name the folder and the one command that fixes it.
  */
 import { existsSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import { readCloudState } from './sync-disk.js';
 
@@ -55,7 +55,9 @@ export async function unsyncedRoots(
 
 /** One line a person can act on: where the runs are, and the command that sends them. */
 export function describeUnsynced(entry: UnsyncedRoot, from: string): string {
-  const where = relative(from, entry.root) || entry.root;
+  // Forward slashes on every platform, as the platform report writes `~/...`: one spelling of a
+  // folder whether it is read in a Windows terminal, the HUD or the dashboard.
+  const where = (relative(from, entry.root) || entry.root).split(sep).join('/');
   return entry.linked
     ? `${String(entry.runs)} run(s) in ${where} are waiting to be sent: run \`reticle sync\` there`
     : `${String(entry.runs)} run(s) in ${where} were never sent: run \`reticle link\` there`;
