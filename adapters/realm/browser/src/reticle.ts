@@ -550,6 +550,7 @@ export class Reticle {
         if (options.endedFadeMs !== undefined) panelOptions.endedFadeMs = options.endedFadeMs;
         if (options.idleEndMs !== undefined) panelOptions.idleEndMs = options.idleEndMs;
         panelOptions.sessionId = this.#session;
+        if (this.#projectId !== undefined) panelOptions.projectId = this.#projectId;
         // The panel calls this when the human pauses, resumes, ends, or sends a message. We emit a
         // HUMAN_CONTROL event over the existing transport; #emit stamps `t` from the elapsed clock.
         panelOptions.onControl = (intent: ControlIntent) =>

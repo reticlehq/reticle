@@ -18,6 +18,14 @@ describe('presenter workspace selector', () => {
     expect(workspaceRowHtml()).toContain('reticle-workspace-name');
   });
 
+  it('says what the chip is: the project folder this page is served from', () => {
+    document.body.innerHTML = workspaceRowHtml();
+    const btn = document.querySelector('[data-reticle-workspace-btn]');
+    // A bare folder name in a pill read as a tag nobody could place.
+    expect(btn?.querySelector('.reticle-workspace-k')?.textContent).toBe('Project');
+    expect(btn?.getAttribute('title')).toContain('project folder this page is served from');
+  });
+
   it('labels the folder from the injected repo root', () => {
     (globalThis as Record<string, unknown>)[RETICLE_ROOT_GLOBAL] = 'C:/apps/linkit_v5';
     expect(workspaceFolderLabel('C:/apps/linkit_v5')).toBe('linkit_v5');

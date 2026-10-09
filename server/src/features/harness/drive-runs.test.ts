@@ -7,6 +7,7 @@ import {
   forgetDrives,
   noteDriveLine,
   noteDriveStep,
+  onDriveStep,
   runningDrive,
   sayToDrive,
   startDrive,
@@ -93,6 +94,19 @@ describe('a Harness drive the agent can poll', () => {
     finish({});
     await waited;
     expect(seen.slice(0, 2)).toEqual([1, 2]);
+  });
+
+  // Driven before release: the HUD row read "0 steps" for a whole drive, because only a drive's
+  // start and end repainted the panel and a step changed nothing anybody listened to.
+  it('tells step listeners on each step, so the panel can repaint its count', () => {
+    heldDrive('h9');
+    const seen: number[] = [];
+    const off = onDriveStep((r) => seen.push(r.steps));
+    noteDriveStep('h9', 'reticle_act');
+    noteDriveStep('h9-L2', 'reticle_act');
+    off();
+    noteDriveStep('h9', 'reticle_act');
+    expect(seen).toEqual([1, 2]);
   });
 
   it('finds the drive running on a session, so a second start returns it instead', () => {

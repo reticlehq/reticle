@@ -6,7 +6,7 @@
  * filled, and clearing with `replaceChildren` would wipe it on every new run.
  */
 import { describe, expect, it } from 'vitest';
-import { LOG_KIND } from './presenter-log.js';
+import { LOG_CSS, LOG_EMPTY_TEXT, LOG_KIND } from './presenter-log.js';
 import { appendLogRow, clearLogRows, trimLogRows } from './presenter-log.js';
 
 function logWithPinned(): { log: HTMLElement; pinned: HTMLElement } {
@@ -43,5 +43,18 @@ describe('log rows', () => {
     appendLogRow(log, LOG_KIND.NARRATION, 'a', '+0s', 10);
     clearLogRows(log);
     expect([...log.children]).toEqual([pinned]);
+  });
+});
+
+/*
+ * The empty log was a box saying only "Agent activity will appear here": nothing about what the HUD
+ * is or how to make anything happen, which is all a first-time user needs from it.
+ */
+describe('the empty log', () => {
+  it('says what Reticle is and both ways to start, in the stylesheet that paints it', () => {
+    expect(LOG_CSS).toContain(LOG_EMPTY_TEXT.TITLE);
+    expect(LOG_EMPTY_TEXT.BODY).toContain('Ask your coding agent');
+    expect(LOG_EMPTY_TEXT.BODY).toContain('Harness');
+    expect(LOG_CSS).not.toContain('Agent activity will appear here');
   });
 });

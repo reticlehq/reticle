@@ -9,21 +9,43 @@ const CLAIM_URL = 'https://app.reticle.sh/harness';
 describe('panelSlides', () => {
   it('leads with the offer when it applies, followed by product value cards', () => {
     const ids = panelSlides({ claimed: false, claimUrl: CLAIM_URL }, false).map((s) => s.id);
-    expect(ids).toEqual(['harness-offer', 'harness-journeys', 'replay-confidence']);
+    expect(ids).toEqual(['harness-offer', 'replay-confidence', 'notes-for-agent']);
   });
 
   it('shows the value cards when no offer is known', () => {
     expect(panelSlides(undefined, false).map((s) => s.id)).toEqual([
-      'harness-journeys',
       'replay-confidence',
+      'notes-for-agent',
     ]);
   });
 
   it('keeps the product value cards when somebody already declined the offer', () => {
     expect(panelSlides({ claimed: false, claimUrl: CLAIM_URL }, true).map((s) => s.id)).toEqual([
-      'harness-journeys',
       'replay-confidence',
+      'notes-for-agent',
     ]);
+  });
+
+  /*
+   * The rail sits right under the Agent Log's Harness block, so a Harness card there said the same
+   * thing twice, and its detail was cut off mid-word at the HUD's width.
+   */
+  it('does not advertise Harness under the panel that already offers it', () => {
+    const text = panelSlides(undefined, false)
+      .map((s) => s.html)
+      .join('');
+    expect(text).not.toContain('Harness');
+  });
+
+  it('keeps every value card short enough to fit one line of the rail', () => {
+    for (const slide of panelSlides(undefined, false)) {
+      const host = document.createElement('div');
+      host.innerHTML = slide.html;
+      const title = host.querySelector('.reticle-promo-title')?.textContent ?? '';
+      const detail = host.querySelector('.reticle-promo-detail')?.textContent ?? '';
+      expect(title.length, title).toBeLessThanOrEqual(32);
+      expect(detail.length, detail).toBeLessThanOrEqual(36);
+    }
   });
 });
 
@@ -56,6 +78,38 @@ describe('remote notices', () => {
       'not a notice',
     ]);
     expect(slides.map((s) => s.id)).toEqual(['notice-ok']);
+  });
+
+  /*
+   * The hosted notices file carried a Harness card, and the rail showed it right under the Agent
+   * Log's own Harness block, cut off mid-sentence. The panel already offers Harness; the rail does not.
+   */
+  it('drops a Harness notice, since the panel above already offers Harness', () => {
+    const slides = panelSlides(undefined, false, [
+      { id: 'harness-drive', title: 'Let Reticle drive your app for you' },
+      { id: 'replayable-journeys', title: 'Keep every journey replayable' },
+    ]);
+    expect(slides.map((s) => s.id)).toEqual(['notice-replayable-journeys']);
+  });
+
+  it('falls back to the bundled cards when every notice was a Harness one', () => {
+    const slides = panelSlides(undefined, false, [{ id: 'harness-drive', title: 'Drive' }]);
+    expect(slides.map((s) => s.id)).toEqual(panelSlides(undefined, false).map((s) => s.id));
+  });
+
+  it('keeps the whole sentence one hover away when a notice is too long for the rail', () => {
+    const [slide] = panelSlides(undefined, false, [
+      {
+        id: 'long',
+        title: 'A title',
+        detail: 'A detail far too long to fit on one line of the rail',
+      },
+    ]);
+    const host = document.createElement('div');
+    host.innerHTML = slide?.html ?? '';
+    expect(host.querySelector('.reticle-promo-detail')?.getAttribute('title')).toBe(
+      'A detail far too long to fit on one line of the rail',
+    );
   });
 
   it('keeps the bundled slides when the daemon sent none', () => {

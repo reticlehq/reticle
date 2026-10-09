@@ -70,6 +70,7 @@ const byHarness = new Map<string, Entry>();
 /** One pending note per drive, latest state wins: what the agent has not heard yet. */
 const notes = new Map<string, string>();
 const changeListeners = new Set<(record: DriveRecord) => void>();
+const stepListeners = new Set<(record: DriveRecord) => void>();
 
 export interface StartDrive {
   harness: string;
@@ -213,6 +214,14 @@ export function noteDriveStep(harness: string, tool: string): void {
   entry.record.steps += 1;
   entry.record.lastLine = `step ${String(entry.record.steps)} · ${tool}`;
   changed(entry, false);
+  const record = { ...entry.record };
+  for (const listener of stepListeners) {
+    try {
+      listener(record);
+    } catch {
+      /* a listener never breaks the drive it listens to */
+    }
+  }
 }
 
 /** A line the drive narrated to the HUD. */
@@ -221,6 +230,12 @@ export function noteDriveLine(harness: string, line: string): void {
   if (entry === undefined) return;
   entry.record.lastLine = line;
   changed(entry, false);
+}
+
+/** Hear every step a drive takes, so a panel showing its count can repaint. Returns the unsubscribe. */
+export function onDriveStep(listener: (record: DriveRecord) => void): () => void {
+  stepListeners.add(listener);
+  return () => stepListeners.delete(listener);
 }
 
 /** Hear every drive start and end, from any origin. Returns the unsubscribe. */

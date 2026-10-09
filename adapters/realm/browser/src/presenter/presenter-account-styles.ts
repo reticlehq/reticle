@@ -53,7 +53,7 @@ export const ACCOUNT_CSS = `
 .reticle-account-trigger[aria-expanded="true"]{box-shadow:0 0 0 2px rgba(255,255,255,.28);}
 
 .reticle-account-signin{
-  border:none;border-radius:6px;padding:2px 9px;cursor:pointer;font:inherit;font-size:10.5px;
+  border:none;border-radius:6px;padding:2px 9px;cursor:pointer;font:inherit;font-size:11px;
   background:rgba(255,255,255,.06);color:rgba(255,255,255,.75);transition:background .12s,color .12s;}
 .reticle-account-signin:hover{background:rgba(255,255,255,.12);color:#fff;}
 
@@ -81,7 +81,7 @@ export const ACCOUNT_CSS = `
   font-size:11.5px;font-weight:600;color:rgba(255,255,255,.95);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .reticle-account-email{
-  font-size:10.5px;color:rgba(255,255,255,.55);
+  font-size:11px;color:rgba(255,255,255,.55);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 .reticle-account-rows{
@@ -107,7 +107,7 @@ export const ACCOUNT_CSS = `
 /* The unlinked hint is a sentence, not a verb: it wraps rather than truncating, because a clipped
    instruction is worse than a tall menu. */
 .reticle-account-action--hint{
-  color:rgba(255,255,255,.5);font-size:10.5px;line-height:1.35;white-space:normal;cursor:pointer;}
+  color:rgba(255,255,255,.5);font-size:11px;line-height:1.35;white-space:normal;cursor:pointer;}
 
 .reticle-account-dashboard{
   display:inline-flex;align-items:center;justify-content:center;

@@ -39,7 +39,7 @@ const OVERLAY = 'data-reticle-overlay';
 export const RAIL_TEXT = {
   // Signing in is the whole step: every workspace, Free included, gets Harness credits each month.
   TITLE: 'Sign in to try Reticle Harness',
-  DETAIL: 'Free credits every month for autonomous end-to-end checks',
+  DETAIL: 'Free Harness runs every month.',
   CTA: 'Sign in',
 } as const;
 
@@ -89,7 +89,7 @@ export const FRAME_CSS = `
 /*
  * Two rows above the log in every state: the header and the status row. "Session ended" (or the
  * handoff notice) takes the status text's place instead of arriving as a row of its own, and the
- * Harness control sits in the footer beside the project capsule.
+ * Harness block sits in the footer above the project capsule.
  */
 [${OVERLAY}] [${CHAT_PANEL_ATTR}] .reticle-act-strip .reticle-banner{display:none;flex:1;min-width:0;min-height:0;padding:0;border:0;background:none;
   font-size:11px;font-weight:600;line-height:1.3;color:var(--reticle-hud-text);
@@ -97,11 +97,9 @@ export const FRAME_CSS = `
 [${OVERLAY}][data-reticle-state="ended"] [${CHAT_PANEL_ATTR}] .reticle-act-strip .reticle-banner{display:-webkit-box;}
 [${OVERLAY}][data-reticle-state="ended"] [${CHAT_PANEL_ATTR}] .reticle-act-strip .reticle-act{display:none;}
 [${CHAT_PANEL_ATTR}] .reticle-foot-workspace-row{gap:var(--reticle-hud-space-2);}
-[${CHAT_PANEL_ATTR}] [data-reticle-foot] .reticle-harness-spot{flex:none;margin-left:auto;padding:0;border:0;}
-[${CHAT_PANEL_ATTR}] [data-reticle-foot] .reticle-harness-row{min-height:0;gap:var(--reticle-hud-space-2);}
-[${CHAT_PANEL_ATTR}] [data-reticle-foot] .reticle-harness-copy strong{font-size:var(--reticle-hud-size-xs);color:var(--reticle-hud-text-muted);white-space:nowrap;}
-/* The explanation stays for screen readers; sighted users get it from the link it sits beside. */
-[${CHAT_PANEL_ATTR}] [data-reticle-foot] .reticle-harness-copy span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+/* The Harness block sits above the project capsule, full width: one clear thing to press. */
+[${CHAT_PANEL_ATTR}] [data-reticle-foot] .reticle-foot-stack{display:flex;flex-direction:column;gap:var(--reticle-hud-space-2);}
+[${CHAT_PANEL_ATTR}] [data-reticle-foot] .reticle-foot-workspace-row:has(> .reticle-workspace-wrap[hidden]){display:none;}
 ${BELOW} ${PAGES}{bottom:auto;top:calc(100% + 8px + var(--reticle-rail-h) + var(--reticle-frame-gap));}
 [${DOCK_ATTR}][${DOCK_ALIGN_ATTR}="start"] :is(${PAGES},[${RAIL_ATTR}]){right:auto;left:0;}
 
@@ -143,7 +141,7 @@ ${BELOW} ${PAGES}{bottom:auto;top:calc(100% + 8px + var(--reticle-rail-h) + var(
 [${PAGE_PANEL_ATTR}="flows"] .reticle-flow-row:focus-visible{outline:2px solid var(--reticle-hud-brand);outline-offset:1px;}
 [${PAGE_PANEL_ATTR}="flows"] .reticle-flow-row:disabled{cursor:not-allowed;opacity:.5;}
 [${PAGE_PANEL_ATTR}="flows"] .reticle-flow-play{flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;
-  border-radius:50%;background:var(--reticle-hud-brand-soft);color:var(--reticle-hud-brand);font-size:10px;}
+  border-radius:50%;background:var(--reticle-hud-brand-soft);color:var(--reticle-hud-brand);font-size:11px;}
 [${PAGE_PANEL_ATTR}="flows"] .reticle-flow-row:disabled .reticle-flow-play{background:var(--reticle-hud-inset);color:var(--reticle-hud-text-faint);}
 [${PAGE_PANEL_ATTR}="flows"] .reticle-flow-text{display:flex;flex:1;min-width:0;flex-direction:column;gap:1px;}
 [${PAGE_PANEL_ATTR}="flows"] .reticle-flow-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--reticle-hud-size-sm);font-weight:600;}

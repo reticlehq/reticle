@@ -224,23 +224,45 @@ function settingsHelpIcon(): string {
   return hiIconHtml(PresenterIcon.HELP, PRESENTER_ICON_SIZE.HELP);
 }
 
-function settingsLabel(text: string, helpTitle: string): string {
+/** Each option's name and the one line under it that says what it does. */
+const SETTING_TEXT = {
+  outputDetail: ['Output detail', 'How much a copied run includes.'],
+  autoOpenChat: ['Open the log automatically', 'Opens this panel when a session starts.'],
+  showTimestamps: ['Show timestamps', 'Shows how long ago each log row happened.'],
+  showTally: ['Show pass/fail count', 'A score pill for this session in the toolbar.'],
+  reactComponents: ['React component names', 'Adds component names to copied runs.'],
+  blockPageInteractions: [
+    'Block page while adding notes',
+    'Clicks pin a note instead of using the app.',
+  ],
+  clearOnCopy: ['Clear notes after copying', 'Starts fresh once your notes are copied.'],
+  hideUntilRestart: ['Hide until reload', 'Hides the HUD until this page reloads.'],
+  harnessEnabled: ['Allow Reticle to drive', 'On by default. Lets Run Harness test this project.'],
+  reduceMotion: ['Reduce motion', 'Fewer HUD animations.'],
+  ambientGlow: ['Page glow', 'Tints the page edges while a session runs.'],
+  workspace: ['Workspace', 'The Reticle account this machine is signed in to.'],
+} as const;
+
+function settingsLabel(text: string, helpTitle: string, desc = ''): string {
   const help = settingsHelpIcon();
-  return `<span class="reticle-settings-label">${text}<button type="button" class="reticle-settings-help" data-reticle-settings-help title="${helpTitle}" aria-label="${helpTitle}">${help}</button></span>`;
+  const line = '' === desc ? '' : `<span class="reticle-settings-desc">${desc}</span>`;
+  return `<span class="reticle-settings-labelcol"><span class="reticle-settings-label">${text}<button type="button" class="reticle-settings-help" data-reticle-settings-help title="${helpTitle}" aria-label="${helpTitle}">${help}</button></span>${line}</span>`;
 }
 
-function settingsToggleRow(key: string, label: string, helpTitle: string, extra = ''): string {
+function settingsToggleRow(key: keyof typeof SETTING_TEXT, helpTitle: string, extra = ''): string {
+  const [label, desc] = SETTING_TEXT[key];
   return `<div class="reticle-settings-row" ${extra}>
-    ${settingsLabel(label, helpTitle)}
+    ${settingsLabel(label, helpTitle, desc)}
     <button type="button" class="reticle-settings-toggle" ${SETTING_KEY_ATTR}="${key}" role="switch" aria-checked="false"></button>
   </div>`;
 }
 
-function settingsCheckRow(key: string, label: string, checked: boolean): string {
+function settingsCheckRow(key: keyof typeof SETTING_TEXT, checked: boolean): string {
+  const [label, desc] = SETTING_TEXT[key];
   const on = checked ? 'true' : 'false';
   return `<label class="reticle-settings-checkrow" data-reticle-check-row="${key}">
     <span class="reticle-settings-check" data-reticle-check="${key}" role="checkbox" aria-checked="${on}" tabindex="0"></span>
-    <span class="reticle-settings-check-label">${label}</span>
+    <span class="reticle-settings-labelcol"><span class="reticle-settings-check-label">${label}</span><span class="reticle-settings-desc">${desc}</span></span>
   </label>`;
 }
 
@@ -253,7 +275,7 @@ const HELP_TEXT_ATTR = 'data-reticle-settings-helptext';
 /** The harness row, hidden until the platform has actually said something about it. */
 const SETTINGS_HARNESS_ROW_ATTR = 'data-reticle-settings-harness-row';
 const HARNESS_HELP =
-  'Let Reticle drive this app by itself to find defects. Set here or in your dashboard — both write to the same place.';
+  'Let Reticle test this app by itself to find defects, from Run Harness or from your coding agent. Off blocks every run. Set here or in your dashboard — both write to the same place.';
 /** Shown instead of the switch when the platform says this workspace cannot drive right now. */
 const HARNESS_LOCKED_HELP =
   'The Harness is not available to this workspace right now. Every workspace gets free Harness credits each month: see Plan in your Reticle dashboard.';
@@ -388,27 +410,27 @@ export function settingsPanelHtml(): string {
       <div class="reticle-settings-body">
         <div class="reticle-settings-section">Session</div>
         <div class="reticle-settings-row">
-          ${settingsLabel('Output Detail', outputHelp)}
+          ${settingsLabel(SETTING_TEXT.outputDetail[0], outputHelp, SETTING_TEXT.outputDetail[1])}
           <button type="button" class="reticle-settings-cycle" data-reticle-settings-cycle="outputDetail"><span data-reticle-cycle-label></span><span class="reticle-settings-dots" data-reticle-cycle-dots></span></button>
         </div>
-        ${settingsToggleRow('autoOpenChat', 'Auto-open chat', autoChatHelp)}
-        ${settingsToggleRow('showTimestamps', 'Show timestamps', timestampsHelp)}
-        ${settingsToggleRow('showTally', 'Show verdict tally', tallyHelp)}
+        ${settingsToggleRow('autoOpenChat', autoChatHelp)}
+        ${settingsToggleRow('showTimestamps', timestampsHelp)}
+        ${settingsToggleRow('showTally', tallyHelp)}
         <div class="reticle-settings-section">Inspector</div>
-        ${settingsToggleRow('reactComponents', 'React Components', reactHelp, 'data-reticle-settings-react-row')}
+        ${settingsToggleRow('reactComponents', reactHelp, 'data-reticle-settings-react-row')}
         <div class="reticle-settings-section">Interaction</div>
-        ${settingsCheckRow('blockPageInteractions', 'Block page while adding notes', true)}
-        ${settingsCheckRow('clearOnCopy', 'Clear notes after copying', false)}
-        ${settingsToggleRow('hideUntilRestart', 'Hide until reload', hideHelp)}
-        ${settingsToggleRow('harnessEnabled', 'Autonomous driving', harnessHelp, `${SETTINGS_HARNESS_ROW_ATTR} hidden`)}
-        ${settingsToggleRow('reduceMotion', 'Reduce motion', motionHelp)}
+        ${settingsCheckRow('blockPageInteractions', true)}
+        ${settingsCheckRow('clearOnCopy', false)}
+        ${settingsToggleRow('hideUntilRestart', hideHelp)}
+        ${settingsToggleRow('harnessEnabled', harnessHelp, `${SETTINGS_HARNESS_ROW_ATTR} hidden`)}
+        ${settingsToggleRow('reduceMotion', motionHelp)}
         <div class="reticle-settings-section">Account</div>
         <div class="reticle-settings-row" ${SETTINGS_ACCOUNT_ROW_ATTR} hidden>
-          ${settingsLabel('Workspace', ACCOUNT_HELP)}
+          ${settingsLabel(SETTING_TEXT.workspace[0], ACCOUNT_HELP, SETTING_TEXT.workspace[1])}
           <span ${SETTINGS_ACCOUNT_ATTR}></span>
         </div>
         <div class="reticle-settings-section">Status theme</div>
-        ${settingsToggleRow('ambientGlow', 'Page glow', glowHelp)}
+        ${settingsToggleRow('ambientGlow', glowHelp)}
         <div class="reticle-settings-themes" data-reticle-settings-themes></div>
         <div class="reticle-settings-section">Help</div>
         <div class="reticle-settings-foot">

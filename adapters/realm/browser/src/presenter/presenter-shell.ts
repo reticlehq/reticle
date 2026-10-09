@@ -180,6 +180,10 @@ export class HudShell {
    * Routed through the shell like every other painter rather than reaching into the panel: the
    * panel may not be mounted yet, and the shell is the layer that knows.
    */
+  /** The project this page reports to, for the Harness block's dashboard links. */
+  setProjectId(projectId: string | undefined): void {
+    this.#chatViews.setProjectId(projectId);
+  }
   /** The drive running in this tab's project, so the Agent Log shows its steps and Stop. */
   paintHarnessDrive(drive: HarnessDrive | undefined): void {
     this.#chatViews.paintDrive(drive);

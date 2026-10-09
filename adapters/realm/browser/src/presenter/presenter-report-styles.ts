@@ -34,17 +34,17 @@ export const REPORT_CSS = `
 [${REPORT_PANEL_ATTR}] .reticle-report-scope{
   margin-left:auto;padding:3px 9px;border-radius:999px;cursor:pointer;
   border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);
-  color:var(--reticle-muted);font:inherit;font-size:10.5px;}
+  color:var(--reticle-muted);font:inherit;font-size:11px;}
 [${REPORT_PANEL_ATTR}] .reticle-report-scope:hover{background:rgba(255,255,255,.08);color:var(--reticle-fg);}
 [${REPORT_PANEL_ATTR}] .reticle-report-close{
   flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
   border:none;background:transparent;color:var(--reticle-faint);cursor:pointer;line-height:0;}
 [${REPORT_PANEL_ATTR}] .reticle-report-close svg{display:block;fill:none;stroke:currentColor;stroke-width:1.6;}
 [${REPORT_PANEL_ATTR}] .reticle-report-body{
-  min-height:0;overflow-y:auto;padding:12px 14px 6px;
+  flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:12px 14px 6px;
   scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;}
 [${REPORT_PANEL_ATTR}] .reticle-report-empty{
-  margin:0;padding:22px 6px;text-align:center;color:var(--reticle-faint);font-size:11.5px;}
+  margin:0;padding:22px 6px;text-align:center;color:var(--reticle-faint);font-size:12px;}
 /* The streak sits above the hero, as a flame and a number: it is the one stat that is about
    TODAY, so it reads first and never competes with the count it sits over. */
 [${REPORT_PANEL_ATTR}] .reticle-report-streak{
@@ -53,19 +53,36 @@ export const REPORT_CSS = `
   border:1px solid color-mix(in srgb,var(--reticle-c-active) 22%,transparent);
   font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;}
 [${REPORT_PANEL_ATTR}] .reticle-report-streak-label{
-  color:var(--reticle-faint);font-size:9.5px;font-weight:400;letter-spacing:.04em;text-transform:uppercase;}
+  color:var(--reticle-faint);font-size:11px;font-weight:400;}
 [${REPORT_PANEL_ATTR}] .reticle-report-hero{display:flex;flex-direction:column;gap:2px;margin-bottom:10px;}
 [${REPORT_PANEL_ATTR}] .reticle-report-hero-value{
   font-size:34px;font-weight:700;line-height:1;letter-spacing:-.02em;color:var(--reticle-c-active);}
-[${REPORT_PANEL_ATTR}] .reticle-report-hero-label{color:var(--reticle-muted);font-size:11.5px;}
+[${REPORT_PANEL_ATTR}] .reticle-report-hero-label{color:var(--reticle-muted);font-size:12px;}
 [${REPORT_PANEL_ATTR}] .reticle-report-verdicts{display:flex;gap:6px;margin-bottom:12px;}
 [${REPORT_PANEL_ATTR}] .reticle-sync-status{font-size:11px;color:var(--reticle-faint);font-variant-numeric:tabular-nums;white-space:nowrap;}
 [${REPORT_PANEL_ATTR}] .reticle-sync-status[data-reticle-sync-status="refused"]{color:var(--reticle-c-error,#f87171);}
 [${REPORT_PANEL_ATTR}] .reticle-report-coverage{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:12px;padding:8px 10px;border:1px solid var(--reticle-hud-border);border-radius:var(--reticle-hud-radius-sm,8px);}
 [${REPORT_PANEL_ATTR}] .reticle-report-coverage-value{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--reticle-hud-text);}
 [${REPORT_PANEL_ATTR}] .reticle-report-coverage-levels{display:flex;flex-wrap:wrap;gap:4px 10px;width:100%;font-size:11px;color:var(--reticle-faint);font-variant-numeric:tabular-nums;}
+[${REPORT_PANEL_ATTR}] .reticle-report-instrumentation{margin-bottom:12px;padding:10px;border:1px solid var(--reticle-hud-border);border-radius:var(--reticle-hud-radius-md);}
+[${REPORT_PANEL_ATTR}] .reticle-report-instrumentation-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+[${REPORT_PANEL_ATTR}] .reticle-report-instrumentation-head .reticle-report-section{margin-bottom:0;}
+[${REPORT_PANEL_ATTR}] .reticle-report-instrumentation-value{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--reticle-hud-text);}
+[${REPORT_PANEL_ATTR}] .reticle-report-caps{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin:8px 0 0;padding:0;list-style:none;}
+[${REPORT_PANEL_ATTR}] .reticle-report-cap{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 6px;min-width:0;font-size:11px;line-height:1.4;color:var(--reticle-muted);}
+[${REPORT_PANEL_ATTR}] .reticle-report-cap-mark{flex:none;width:10px;text-align:center;}
+[${REPORT_PANEL_ATTR}] .reticle-report-cap-name{flex:1;min-width:0;}
+[${REPORT_PANEL_ATTR}] .reticle-report-cap[data-state="seen"] .reticle-report-cap-mark{color:#86efac;}
+[${REPORT_PANEL_ATTR}] .reticle-report-cap[data-state="missing"]{grid-column:1/-1;color:var(--reticle-hud-text);}
+[${REPORT_PANEL_ATTR}] .reticle-report-cap[data-state="missing"] .reticle-report-cap-mark{color:#fca5a5;}
+[${REPORT_PANEL_ATTR}] .reticle-report-cap[data-state="unseen"]{color:var(--reticle-faint);}
+[${REPORT_PANEL_ATTR}] .reticle-report-cap-cost{flex-basis:100%;padding-left:16px;color:var(--reticle-faint);}
+[${REPORT_PANEL_ATTR}] .reticle-report-caps-note{display:block;margin-top:6px;color:var(--reticle-faint);font-size:11px;}
+[${REPORT_PANEL_ATTR}] .reticle-report-copy-prompt{display:block;width:100%;margin-top:10px;padding:6px 10px;border:1px solid color-mix(in srgb,var(--reticle-hud-brand) 50%,transparent);
+  border-radius:var(--reticle-hud-radius-sm);background:var(--reticle-hud-brand-soft);color:var(--reticle-hud-brand);font:inherit;font-size:12px;font-weight:600;cursor:pointer;}
+[${REPORT_PANEL_ATTR}] .reticle-report-copy-prompt:hover{filter:brightness(1.15);}
 [${REPORT_PANEL_ATTR}] .reticle-report-verdict{
-  flex:1;padding:5px 8px;border-radius:8px;font-size:10.5px;text-align:center;
+  flex:1;padding:5px 8px;border-radius:8px;font-size:11px;text-align:center;
   background:rgba(255,255,255,.05);color:var(--reticle-muted);}
 [${REPORT_PANEL_ATTR}] .reticle-report-verdict[data-kind="fail"]{color:#fca5a5;}
 [${REPORT_PANEL_ATTR}] .reticle-report-verdict[data-kind="unknown"]{color:#fcd34d;}
@@ -75,11 +92,11 @@ export const REPORT_CSS = `
   display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:10px;
   background:rgba(255,255,255,.04);}
 [${REPORT_PANEL_ATTR}] .reticle-report-value{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;}
-[${REPORT_PANEL_ATTR}] .reticle-report-label{color:var(--reticle-faint);font-size:9.5px;line-height:1.3;}
+[${REPORT_PANEL_ATTR}] .reticle-report-label{color:var(--reticle-faint);font-size:11px;line-height:1.3;}
 /* An estimate is labelled as one, and its label carries what it is measured against. */
 [${REPORT_PANEL_ATTR}] .reticle-report-basis{
   display:block;margin-top:2px;color:var(--reticle-c-active);opacity:.8;
-  font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;cursor:help;}
+  font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:help;}
 [${REPORT_PANEL_ATTR}] .reticle-report-defects-wrap{margin-top:14px;}
 /* The heading and its push control on one line, so the button reads as belonging to this section
    rather than floating above the list. */
@@ -95,9 +112,9 @@ export const REPORT_CSS = `
 [${REPORT_PANEL_ATTR}] .reticle-report-defect-title{
   font-size:11px;line-height:1.35;overflow-wrap:anywhere;}
 [${REPORT_PANEL_ATTR}] .reticle-report-defect-detail{
-  color:var(--reticle-faint);font-size:10px;line-height:1.35;overflow-wrap:anywhere;}
+  color:var(--reticle-faint);font-size:11px;line-height:1.35;overflow-wrap:anywhere;}
 [${REPORT_PANEL_ATTR}] .reticle-report-defect-source{
-  color:var(--reticle-faint);font-size:9.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:var(--reticle-faint);font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   overflow-wrap:anywhere;}
 .reticle-report-defect-link{flex:none;display:inline-flex;align-items:center;justify-content:center;
   width:20px;height:20px;border-radius:6px;color:var(--reticle-faint);pointer-events:auto;
@@ -106,30 +123,20 @@ export const REPORT_CSS = `
 .reticle-report-defect-link:focus-visible{opacity:1;}
 .reticle-report-defect-link:hover{color:var(--reticle-fg);background:rgba(255,255,255,.07);}
 [${REPORT_PANEL_ATTR}] .reticle-report-defects-more{
-  display:inline-block;margin-top:8px;font-size:10px;color:var(--reticle-c-active);
+  display:inline-block;margin-top:8px;font-size:11px;color:var(--reticle-c-active);
   text-decoration:none;}
 [${REPORT_PANEL_ATTR}] .reticle-report-defects-more:hover{text-decoration:underline;}
-[${REPORT_PANEL_ATTR}] .reticle-report-defects-all{display:inline-block;margin-top:8px;border:0;padding:0;background:none;cursor:pointer;font:inherit;font-size:10.5px;font-weight:500;color:var(--reticle-c-active);}
+[${REPORT_PANEL_ATTR}] .reticle-report-defects-all{display:inline-block;margin-top:8px;border:0;padding:0;background:none;cursor:pointer;font:inherit;font-size:11px;font-weight:500;color:var(--reticle-c-active);}
 [${REPORT_PANEL_ATTR}] .reticle-report-defects-all:hover{text-decoration:underline;}
 [${REPORT_PANEL_ATTR}] .reticle-report-local-only{
   margin:14px 0 0;padding-top:10px;border-top:1px solid var(--reticle-line);
-  color:var(--reticle-faint);font-size:10px;line-height:1.45;}
+  color:var(--reticle-faint);font-size:11px;line-height:1.45;}
 [${REPORT_PANEL_ATTR}] .reticle-report-local-only code{
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--reticle-c-active);}
 [${REPORT_PANEL_ATTR}] .reticle-report-chart-wrap{margin-top:12px;}
 [${REPORT_PANEL_ATTR}] .reticle-report-section{
-  display:block;margin-bottom:6px;color:var(--reticle-faint);font-size:9.5px;
+  display:block;margin-bottom:6px;color:var(--reticle-faint);font-size:11px;
   letter-spacing:.06em;text-transform:uppercase;}
-[${REPORT_PANEL_ATTR}] .reticle-report-instrumentation{
-  display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin-top:12px;}
-[${REPORT_PANEL_ATTR}] .reticle-report-instrumentation .reticle-report-section{
-  flex-basis:100%;margin-bottom:0;}
-[${REPORT_PANEL_ATTR}] .reticle-report-instrumentation-value{
-  color:var(--reticle-fg);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;}
-[${REPORT_PANEL_ATTR}] .reticle-report-copy-prompt{
-  border:0;padding:0;background:none;cursor:pointer;font:inherit;font-size:10.5px;font-weight:500;
-  color:var(--reticle-c-active);}
-[${REPORT_PANEL_ATTR}] .reticle-report-copy-prompt:hover{text-decoration:underline;}
 /* Thirty fixed slots, not a flex row: one recorded day is one thin bar on a month's axis, and a
    single stretched block would read as "a month of solid work" on the day you install it. */
 [${REPORT_PANEL_ATTR}] .reticle-report-chart{
@@ -138,19 +145,20 @@ export const REPORT_CSS = `
   min-width:2px;border-radius:2px 2px 0 0;
   background:color-mix(in srgb,var(--reticle-c-active) 55%,transparent);}
 [${REPORT_PANEL_ATTR}] .reticle-report-bar[data-hot="1"]{background:#f87171;}
+/* Sharing is a quiet row under the record, never the loudest thing on the panel. */
 [${REPORT_PANEL_ATTR}] .reticle-report-foot{
-  flex:none;display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 8px;
+  flex:none;display:flex;flex-wrap:nowrap;align-items:center;gap:2px;padding:6px 10px 2px 14px;
   border-top:1px solid rgba(255,255,255,.06);}
+[${REPORT_PANEL_ATTR}] .reticle-report-share-label{margin-right:4px;color:var(--reticle-faint);font-size:11px;}
 [${REPORT_PANEL_ATTR}] .reticle-report-share{
-  padding:5px 10px;border-radius:8px;cursor:pointer;font:inherit;font-size:11px;
-  border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--reticle-muted);}
-[${REPORT_PANEL_ATTR}] .reticle-report-share:hover{background:rgba(255,255,255,.09);color:var(--reticle-fg);}
-[${REPORT_PANEL_ATTR}] .reticle-report-refer{
-  border-color:color-mix(in srgb,var(--reticle-c-active) 45%,transparent);color:var(--reticle-fg);}
+  flex:none;padding:3px 6px;border:0;border-radius:6px;cursor:pointer;font:inherit;font-size:11px;
+  background:transparent;color:var(--reticle-muted);white-space:nowrap;}
+[${REPORT_PANEL_ATTR}] .reticle-report-share:hover{background:rgba(255,255,255,.08);color:var(--reticle-fg);}
+[${REPORT_PANEL_ATTR}] .reticle-report-refer{margin-left:auto;color:var(--reticle-hud-brand);}
 [${REPORT_PANEL_ATTR}] .reticle-report-links{
-  flex:none;display:flex;gap:12px;padding:0 14px 12px;}
+  flex:none;display:flex;gap:12px;padding:2px 14px 10px;}
 [${REPORT_PANEL_ATTR}] .reticle-report-links a{
-  color:var(--reticle-faint);font-size:10.5px;text-decoration:none;}
+  color:var(--reticle-faint);font-size:11px;text-decoration:none;}
 [${REPORT_PANEL_ATTR}] .reticle-report-links a:hover{color:var(--reticle-fg);text-decoration:underline;}
 
 /* Who this record belongs to, and the push-now control. Tokens only — no literal colours. */

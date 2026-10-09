@@ -27,7 +27,9 @@ export type ChatView = 'activity' | 'flows' | 'annotations';
 const HISTORY_KEY = ReticleStorageKey.ANNOTATION_HISTORY;
 const HISTORY_LIMIT = 200;
 /** Settings → Projects → Verification: the console's Harness switch. There is no /harness page. */
-const HARNESS_SETUP_PATH = '/settings?group=project#model';
+const HARNESS_SETUP_PATH = '/settings?group=project';
+/** The section of that page the switch and provider live in. After the query, so it stays a hash. */
+const HARNESS_SETUP_HASH = '#model';
 /** Credits and plans live on the Plan screen, the way in for a workspace that cannot drive. */
 const HARNESS_PLAN_PATH = '/settings?group=billing';
 
@@ -84,18 +86,50 @@ export interface HudDriveHost {
   stop(): void;
 }
 
-const DRIVE_TEXT = {
+/** Every word the Harness block says. A first-time reader should need nothing else. */
+const HARNESS_TEXT = {
+  TITLE: 'Let Reticle test this page',
+  READY: 'Press Run Harness: it clicks through like a real user and reports what breaks.',
+  UNLINKED:
+    'This project is not linked yet. Run <code>reticle connect</code> in the app folder, then reload.',
+  NOT_ENTITLED: 'Harness is not on your plan yet. Every plan has a free monthly allowance.',
+  NO_PROVIDER: 'Choose a model provider for this project first.',
+  SWITCHED_OFF: 'Driving is turned off for this project. Allow it to use Run Harness.',
+  RENEW: 'They renew over 30 days.',
+  SET_UP: 'Set up ↗',
+  PLANS: 'See plans ↗',
+  PRO: 'Get more with Pro ↗',
+  SWITCH: 'Allow Reticle to drive this project',
+  SWITCH_TITLE:
+    'Allowed by default. Turning it off blocks every Harness run on this project, from here and from your coding agent.',
+  ON: 'Allowed',
+  OFF: 'Not allowed',
+  PERSONA: 'Act as… (optional)',
+  PERSONA_HINT: 'e.g. a first-time shopper',
   RUN: 'Run Harness',
   STOP: 'Stop',
-  PERSONA: 'Who to be (optional)',
-  driving: (steps: number): string => `Driving · ${String(steps)} steps`,
+  DRIVING: 'Reticle is testing this page',
+  steps: (steps: number): string =>
+    `${String(steps)} step${1 === steps ? '' : 's'} so far. Each one shows in the log above.`,
 } as const;
+const PERSONA_ID = 'reticle-harness-persona';
+
+/** The block's heading and one-line explanation: the shape every Harness state shares. */
+function harnessHead(line: string, side = ''): string {
+  return `<div class="reticle-harness-head"><strong class="reticle-harness-title">${HARNESS_TEXT.TITLE}</strong>${side}</div><p class="reticle-harness-line">${line}</p>`;
+}
+
+/** A state that cannot run yet: what is missing, and the one link that fixes it. */
+function harnessBlocked(line: string, href: string, label: string): string {
+  return `${harnessHead(line)}<a class="reticle-harness-link" href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+}
 
 /** Run Harness with an optional persona, or the running drive's progress and Stop. */
-function driveRowHtml(drive: HarnessDrive | undefined): string {
+function driveRowHtml(drive: HarnessDrive | undefined, enabled: boolean): string {
   if (drive !== undefined)
-    return `<div class="reticle-harness-row"><div class="reticle-harness-copy"><span>${DRIVE_TEXT.driving(drive.steps)}</span></div><button type="button" data-reticle-harness-stop class="reticle-harness-link">${DRIVE_TEXT.STOP}</button></div>`;
-  return `<div class="reticle-harness-row"><input type="text" data-reticle-harness-persona class="reticle-harness-persona" placeholder="${DRIVE_TEXT.PERSONA}" aria-label="${DRIVE_TEXT.PERSONA}"><button type="button" data-reticle-harness-run class="reticle-harness-link">${DRIVE_TEXT.RUN}</button></div>`;
+    return `<button type="button" data-reticle-harness-stop class="reticle-harness-run reticle-harness-stop">${HARNESS_TEXT.STOP}</button>`;
+  const off = enabled ? '' : ' disabled';
+  return `<label class="reticle-harness-label" for="${PERSONA_ID}">${HARNESS_TEXT.PERSONA}</label><input type="text" id="${PERSONA_ID}" data-reticle-harness-persona class="reticle-harness-persona" placeholder="${HARNESS_TEXT.PERSONA_HINT}"${off}><button type="button" data-reticle-harness-run class="reticle-harness-run"${off}>${HARNESS_TEXT.RUN}</button>`;
 }
 
 export const CHAT_VIEWS_HTML = `
@@ -139,19 +173,32 @@ export const ANNOTATIONS_HTML = `<section data-reticle-page-panel="annotations" 
 </section>`;
 
 export const CHAT_VIEWS_CSS = `
-[data-reticle-chat-panel] .reticle-harness-spot{flex:1 1 100%;min-width:0;border-bottom:1px solid var(--reticle-hud-border);padding:0 var(--reticle-hud-space-3);}
+[data-reticle-chat-panel] .reticle-harness-spot{flex:none;display:flex;flex-direction:column;gap:6px;padding:10px 12px;
+  border:1px solid var(--reticle-hud-border);border-radius:var(--reticle-hud-radius-md);background:var(--reticle-hud-inset);}
 [data-reticle-chat-panel] .reticle-harness-spot[hidden]{display:none;}
-[data-reticle-chat-panel] .reticle-harness-row{display:flex;align-items:center;gap:var(--reticle-hud-space-2);min-height:40px;}
-[data-reticle-chat-panel] .reticle-harness-persona{flex:1;min-width:0;font:inherit;color:inherit;background:transparent;border:1px solid var(--reticle-hud-border);border-radius:var(--reticle-hud-radius-sm);padding:var(--reticle-hud-space-1) var(--reticle-hud-space-2);}
-[data-reticle-chat-panel] .reticle-harness-copy{display:flex;flex:1;min-width:0;flex-direction:column;line-height:1.3;}
-[data-reticle-chat-panel] .reticle-harness-copy strong{font-size:var(--reticle-hud-size-sm);font-weight:600;color:var(--reticle-hud-text);}
-[data-reticle-chat-panel] .reticle-harness-copy span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--reticle-hud-size-xs);color:var(--reticle-hud-text-muted);}
+[data-reticle-chat-panel] .reticle-harness-head{display:flex;align-items:center;gap:var(--reticle-hud-space-2);}
+[data-reticle-chat-panel] .reticle-harness-title{flex:1;min-width:0;font-size:var(--reticle-hud-size-base);font-weight:600;color:var(--reticle-hud-text);}
+[data-reticle-chat-panel] .reticle-harness-line{margin:0;font-size:var(--reticle-hud-size-xs);line-height:1.45;color:var(--reticle-hud-text-muted);}
+[data-reticle-chat-panel] .reticle-harness-line code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--reticle-hud-text);}
+[data-reticle-chat-panel] .reticle-harness-label{margin-top:2px;font-size:var(--reticle-hud-size-xs);font-weight:500;color:var(--reticle-hud-text);}
+[data-reticle-chat-panel] .reticle-harness-persona{box-sizing:border-box;width:100%;height:30px;font:inherit;font-size:var(--reticle-hud-size-sm);color:var(--reticle-hud-text);
+  background:var(--reticle-hud-ground);border:1px solid var(--reticle-hud-border-strong);border-radius:var(--reticle-hud-radius-sm);padding:0 var(--reticle-hud-space-2);}
+[data-reticle-chat-panel] .reticle-harness-persona::placeholder{color:var(--reticle-hud-text-faint);}
+[data-reticle-chat-panel] .reticle-harness-persona:focus-visible{outline:2px solid var(--reticle-hud-brand);outline-offset:0;}
+[data-reticle-chat-panel] .reticle-harness-run{box-sizing:border-box;width:100%;height:32px;border:0;border-radius:var(--reticle-hud-radius-sm);cursor:pointer;
+  background:var(--reticle-hud-brand);color:#160b02;font:inherit;font-size:var(--reticle-hud-size-sm);font-weight:700;}
+[data-reticle-chat-panel] .reticle-harness-run:hover:not(:disabled){filter:brightness(1.08);}
+[data-reticle-chat-panel] .reticle-harness-run:focus-visible{outline:2px solid var(--reticle-hud-text);outline-offset:2px;}
+[data-reticle-chat-panel] :is(.reticle-harness-run,.reticle-harness-persona):disabled{opacity:.45;cursor:not-allowed;}
+[data-reticle-chat-panel] .reticle-harness-stop{background:transparent;color:var(--reticle-hud-text);border:1px solid var(--reticle-hud-border-strong);}
+[data-reticle-chat-panel] .reticle-harness-toggle{flex:none;display:inline-flex;align-items:center;gap:6px;cursor:help;}
+[data-reticle-chat-panel] .reticle-harness-switch-label{font-size:var(--reticle-hud-size-xs);color:var(--reticle-hud-text-muted);}
 [data-reticle-chat-panel] .reticle-harness-switch{flex:none;width:32px;height:20px;border:0;border-radius:20px;padding:2px;cursor:pointer;background:rgba(255,255,255,.2);}
 [data-reticle-chat-panel] .reticle-harness-switch::after{content:"";display:block;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s;}
-[data-reticle-chat-panel] .reticle-harness-switch[aria-checked="true"]{background:var(--reticle-accent);}
+[data-reticle-chat-panel] .reticle-harness-switch[aria-checked="true"]{background:var(--reticle-hud-brand);}
 [data-reticle-chat-panel] .reticle-harness-switch[aria-checked="true"]::after{transform:translateX(12px);}
 [data-reticle-chat-panel] .reticle-harness-switch:disabled{opacity:.45;cursor:not-allowed;}
-[data-reticle-chat-panel] .reticle-harness-link{flex:none;color:var(--reticle-hud-brand);font-size:var(--reticle-hud-size-xs);font-weight:600;text-decoration:none;white-space:nowrap;}
+[data-reticle-chat-panel] .reticle-harness-link{align-self:flex-start;color:var(--reticle-hud-brand);font-size:var(--reticle-hud-size-sm);font-weight:600;text-decoration:none;white-space:nowrap;}
 [data-reticle-chat-panel] button.reticle-harness-link{border:0;padding:0;background:none;cursor:pointer;font-family:inherit;}
 [data-reticle-chat-panel] .reticle-harness-link:hover{text-decoration:underline;}
 [data-reticle-hud] .reticle-chat-nav{display:contents;}
@@ -171,7 +218,7 @@ export const CHAT_VIEWS_CSS = `
 .reticle-page-heading strong{font-size:12px;font-weight:600;}
 .reticle-page-heading button{width:26px;height:26px;border:0;border-radius:6px;background:transparent;color:var(--reticle-hud-text-muted);font:inherit;font-size:19px;line-height:1;cursor:pointer;}
 .reticle-page-heading button:hover{background:var(--reticle-hud-hover);color:var(--reticle-hud-text);}
-.reticle-page-subtitle{flex:none;padding:5px 12px;border-bottom:1px solid var(--reticle-hud-border);color:var(--reticle-hud-text-muted);font-size:10px;}
+.reticle-page-subtitle{flex:none;padding:5px 12px;border-bottom:1px solid var(--reticle-hud-border);color:var(--reticle-hud-text-muted);font-size:11px;}
 .reticle-page-panel .reticle-all-flows,.reticle-page-panel .reticle-annotation-list{flex:1;min-height:0;overflow-y:auto;}
 [data-reticle-page-panel="annotations"] .reticle-annotations-tabs{flex:none;}
 [data-reticle-page-panel="annotations"] .reticle-annotation-list{flex:1;}
@@ -196,7 +243,7 @@ export const CHAT_VIEWS_CSS = `
 [data-reticle-page-panel="annotations"] .reticle-annotation-content{flex:1;min-width:0;}
 [data-reticle-page-panel="annotations"] .reticle-annotation-content strong{display:block;font-size:11px;font-weight:600;overflow-wrap:anywhere;}
 [data-reticle-page-panel="annotations"] .reticle-annotation-content span{display:block;margin-top:3px;font-size:var(--reticle-hud-size-xs);color:var(--reticle-hud-text-muted);overflow-wrap:anywhere;}
-[data-reticle-page-panel="annotations"] .reticle-annotation-item button{flex:none;border:1px solid var(--reticle-line);border-radius:6px;background:rgba(255,255,255,.04);color:var(--reticle-muted);font:inherit;font-size:10px;padding:4px 6px;cursor:pointer;}
+[data-reticle-page-panel="annotations"] .reticle-annotation-item button{flex:none;border:1px solid var(--reticle-line);border-radius:6px;background:rgba(255,255,255,.04);color:var(--reticle-muted);font:inherit;font-size:11px;padding:4px 6px;cursor:pointer;}
 [data-reticle-page-panel="annotations"] .reticle-annotation-item button:hover{color:#fff;background:rgba(255,255,255,.1);}
 `;
 
@@ -217,6 +264,7 @@ export class ChatViews {
   #listeners: AbortController | undefined;
   #drive: HudDriveHost | undefined;
   #driving: HarnessDrive | undefined;
+  #projectId: string | undefined;
 
   constructor(
     onHarness: (enabled: boolean) => void,
@@ -253,7 +301,9 @@ export class ChatViews {
       (event) => {
         const target = event.target;
         if (!(target instanceof Element)) return;
-        if (null !== target.closest('[data-reticle-harness-run]')) {
+        const run = target.closest<HTMLButtonElement>('[data-reticle-harness-run]');
+        if (null !== run) {
+          if (run.disabled) return;
           const persona = this.#root
             ?.querySelector<HTMLInputElement>('[data-reticle-harness-persona]')
             ?.value.trim();
@@ -271,6 +321,8 @@ export class ChatViews {
         this.#pendingHarness = enabled;
         toggle.setAttribute('aria-checked', String(enabled));
         toggle.disabled = true;
+        // Repaint so the On/Off words and Run follow the switch at once, not on the platform's echo.
+        this.#paintHarness();
         this.#onHarness(enabled);
       },
       { signal },
@@ -361,6 +413,11 @@ export class ChatViews {
     });
   }
 
+  /** The project this page reports to, so the dashboard links open on it. */
+  setProjectId(projectId: string | undefined): void {
+    this.#projectId = projectId;
+    this.#paintHarness();
+  }
   paintAccount(account: AccountState | undefined): void {
     this.#account = account;
     this.#paintHarness();
@@ -411,18 +468,35 @@ export class ChatViews {
     }
     spot.hidden = false;
     const base = platformBase(config, account);
-    const setupUrl = `${base}${HARNESS_SETUP_PATH}`;
+    // Named, so the dashboard opens on THIS project's switch rather than on "All projects".
+    const project =
+      this.#projectId === undefined ? '' : `&project=${encodeURIComponent(this.#projectId)}`;
+    const setupUrl = `${base}${HARNESS_SETUP_PATH}${project}${HARNESS_SETUP_HASH}`;
     const planUrl = `${base}${HARNESS_PLAN_PATH}`;
     if (config === undefined) {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Link project to enable driving</span></div><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="Reticle Harness autonomous driving" aria-checked="false" aria-disabled="true" disabled></button><a class="reticle-harness-link" href="${setupUrl}" target="_blank" rel="noopener noreferrer">Set up ↗</a></div>`;
+      spot.innerHTML = harnessBlocked(HARNESS_TEXT.UNLINKED, setupUrl, HARNESS_TEXT.SET_UP);
     } else if (!config.harnessEntitled) {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Describe a user and Reticle drives the whole journey for you</span></div><a class="reticle-harness-link" href="${planUrl}" target="_blank" rel="noopener noreferrer">See plans ↗</a></div>`;
+      spot.innerHTML = harnessBlocked(HARNESS_TEXT.NOT_ENTITLED, planUrl, HARNESS_TEXT.PLANS);
     } else if (config.credits !== undefined && config.credits.used >= config.credits.limit) {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>${creditsLeft(config.credits)}. They renew over 30 days.</span></div><a class="reticle-harness-link" href="${planUrl}" target="_blank" rel="noopener noreferrer">Get more with Pro ↗</a></div>`;
+      spot.innerHTML = harnessBlocked(
+        `${creditsLeft(config.credits)}. ${HARNESS_TEXT.RENEW}`,
+        planUrl,
+        HARNESS_TEXT.PRO,
+      );
     } else if (false === config.providerReady) {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Choose a model provider to start driving</span></div><a class="reticle-harness-link" href="${setupUrl}" target="_blank" rel="noopener noreferrer">Set up ↗</a></div>`;
+      spot.innerHTML = harnessBlocked(HARNESS_TEXT.NO_PROVIDER, setupUrl, HARNESS_TEXT.SET_UP);
+    } else if (this.#driving !== undefined && this.#drive !== undefined) {
+      spot.innerHTML = `<div class="reticle-harness-head"><strong class="reticle-harness-title">${HARNESS_TEXT.DRIVING}</strong></div><p class="reticle-harness-line">${HARNESS_TEXT.steps(this.#driving.steps)}</p>${driveRowHtml(this.#driving, true)}`;
     } else {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>${config.credits === undefined ? 'Autonomous checks' : creditsLeft(config.credits)}</span></div><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="Reticle Harness autonomous driving" aria-checked="${String(this.#pendingHarness ?? config.harnessEnabled)}" ${this.#pendingHarness === undefined ? '' : 'disabled'}></button></div>${this.#drive === undefined ? '' : driveRowHtml(this.#driving)}`;
+      const enabled = this.#pendingHarness ?? config.harnessEnabled;
+      const credits = creditsLeft(config.credits);
+      const line = enabled
+        ? `${HARNESS_TEXT.READY}${'' === credits ? '' : ` ${credits}.`}`
+        : HARNESS_TEXT.SWITCHED_OFF;
+      // The switch is the project's permission, shared with the agent's runs and with Settings. It
+      // says so in words beside it, and Run follows it, so the two can never disagree.
+      const toggle = `<span class="reticle-harness-toggle" title="${HARNESS_TEXT.SWITCH_TITLE}"><span class="reticle-harness-switch-label">${enabled ? HARNESS_TEXT.ON : HARNESS_TEXT.OFF}</span><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="${HARNESS_TEXT.SWITCH}" aria-checked="${String(enabled)}" ${this.#pendingHarness === undefined ? '' : 'disabled'}></button></span>`;
+      spot.innerHTML = `${harnessHead(line, toggle)}${this.#drive === undefined ? '' : driveRowHtml(undefined, enabled)}`;
     }
   }
 

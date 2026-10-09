@@ -39,7 +39,7 @@ export const PLAN_CSS: string = `
 [data-reticle-chat-panel] .reticle-plan-lanes{display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto;scrollbar-width:none;}
 [data-reticle-chat-panel] .reticle-plan-lanes::-webkit-scrollbar{display:none;}
 [data-reticle-chat-panel] .reticle-plan-lane{display:flex;gap:6px;align-items:flex-start;min-width:0;}
-[data-reticle-chat-panel] .reticle-plan-lane-name{flex:none;width:16px;padding-top:6px;font-size:10px;font-weight:600;text-align:center;color:var(--reticle-hud-text-muted);}
+[data-reticle-chat-panel] .reticle-plan-lane-name{flex:none;width:16px;padding-top:6px;font-size:11px;font-weight:600;text-align:center;color:var(--reticle-hud-text-muted);}
 [data-reticle-chat-panel] .reticle-plan-lane-journeys{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px;}
 [data-reticle-chat-panel] .reticle-plan-journey{display:block;width:100%;text-align:left;border:1px solid transparent;border-radius:8px;padding:5px 7px;background:rgba(255,255,255,.04);color:var(--reticle-hud-text);font:inherit;font-size:var(--reticle-hud-size-xs);cursor:pointer;}
 [data-reticle-chat-panel] .reticle-plan-journey[data-status="running"]{border-color:var(--reticle-c-active);box-shadow:0 0 12px -4px var(--reticle-c-active);}
@@ -50,9 +50,9 @@ export const PLAN_CSS: string = `
 [data-reticle-chat-panel] [data-status="running"]>.reticle-plan-row>.reticle-plan-glyph,[data-reticle-chat-panel] .reticle-plan-step[data-status="running"]>.reticle-plan-glyph{color:var(--reticle-c-active);animation:reticle-flow-pulse 1.2s ease-in-out infinite;}
 [data-reticle-chat-panel] [data-status="passed"]>.reticle-plan-row>.reticle-plan-glyph,[data-reticle-chat-panel] .reticle-plan-step[data-status="passed"]>.reticle-plan-glyph{color:#4ade80;}
 [data-reticle-chat-panel] [data-status="failed"]>.reticle-plan-row>.reticle-plan-glyph,[data-reticle-chat-panel] .reticle-plan-step[data-status="failed"]>.reticle-plan-glyph{color:#f87171;}
-[data-reticle-chat-panel] .reticle-plan-meta{display:block;margin:2px 0 0 18px;color:var(--reticle-hud-text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+[data-reticle-chat-panel] .reticle-plan-meta{display:block;margin:2px 0 0 18px;color:var(--reticle-hud-text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 [data-reticle-chat-panel] .reticle-plan-steps{margin:4px 0 0 18px;display:flex;flex-direction:column;gap:2px;}
-[data-reticle-chat-panel] .reticle-plan-step{display:flex;gap:6px;color:var(--reticle-hud-text-muted);font-size:10px;min-width:0;}
+[data-reticle-chat-panel] .reticle-plan-step{display:flex;gap:6px;color:var(--reticle-hud-text-muted);font-size:11px;min-width:0;}
 [data-reticle-chat-panel] .reticle-plan-step span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 `;
 

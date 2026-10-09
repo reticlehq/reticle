@@ -389,6 +389,8 @@ export const SHELL_CSS = `
  */
 [${OVERLAY}][${STATE}="unreachable"]{--reticle-state:var(--reticle-faint);}
 [${OVERLAY}][${STATE}="unreachable"] [${CHAT_PANEL}] .reticle-act-dot{animation:none;}
+/* The one status that is a sentence to act on: two lines, full contrast, the detail on hover. */
+[${OVERLAY}][${STATE}="unreachable"] [${CHAT_PANEL}] .reticle-act{white-space:normal;line-height:1.35;color:var(--reticle-fg);cursor:help;}
 [${OVERLAY}][${STATE}="paused"] [${CHAT_PANEL}] .reticle-act-dot,
 [${OVERLAY}][${STATE}="ended"] [${CHAT_PANEL}] .reticle-act-dot{animation:none;}
 @keyframes reticle-idle-pulse{0%,100%{opacity:.45;transform:scale(.92)}50%{opacity:1;transform:scale(1)}}

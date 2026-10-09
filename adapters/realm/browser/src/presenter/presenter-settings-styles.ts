@@ -68,8 +68,10 @@ export const SETTINGS_CSS = `
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-row{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:8px 14px;min-height:30px;}
+[${SETTINGS_PANEL_ATTR}] .reticle-settings-labelcol{display:flex;flex:1;min-width:0;flex-direction:column;gap:2px;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-label{
-  display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.62);font-size:13px;font-weight:500;}
+  display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.86);font-size:13px;font-weight:500;}
+[${SETTINGS_PANEL_ATTR}] .reticle-settings-desc{color:rgba(255,255,255,.5);font-size:11px;line-height:1.35;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-help{
   display:inline-flex;align-items:center;justify-content:center;
   width:14px;height:14px;border:none;border-radius:999px;padding:0;cursor:help;
@@ -98,7 +100,7 @@ export const SETTINGS_CSS = `
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-toggle:focus-visible{outline:2px solid rgba(59,130,246,.55);outline-offset:2px;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-row[data-disabled="1"]{opacity:.45;pointer-events:none;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-section{
-  padding:10px 14px 6px;color:rgba(255,255,255,.38);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;}
+  padding:10px 14px 6px;color:rgba(255,255,255,.38);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-swatches{
   display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 10px;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-swatch{
@@ -110,13 +112,13 @@ export const SETTINGS_CSS = `
   border-color:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-swatch:focus-visible{outline:2px solid rgba(59,130,246,.65);outline-offset:2px;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-checkrow{
-  display:flex;align-items:center;gap:10px;padding:7px 14px;color:rgba(255,255,255,.8);font-size:13px;
+  display:flex;align-items:center;gap:10px;padding:7px 14px;color:rgba(255,255,255,.86);font-size:13px;
   cursor:pointer;user-select:none;margin:0;transition:background .12s;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-checkrow:hover{background:rgba(255,255,255,.03);}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-check{
   width:16px;height:16px;border-radius:5px;border:1px solid rgba(255,255,255,.22);
   background:rgba(255,255,255,.04);display:inline-flex;align-items:center;justify-content:center;
-  color:transparent;font-size:10px;line-height:1;flex:none;transition:background .12s,border-color .12s,color .12s;}
+  color:transparent;font-size:11px;line-height:1;flex:none;transition:background .12s,border-color .12s,color .12s;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-check[data-on="1"]{
   background:#fafafa;border-color:#fafafa;color:#111;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-check:focus-visible{outline:2px solid rgba(59,130,246,.55);outline-offset:2px;}
@@ -147,6 +149,8 @@ export const SETTINGS_CSS = `
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-kill[data-armed="1"]{background:#ef4444;border-color:#ef4444;color:#fff;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-kill:focus-visible{outline:2px solid rgba(239,68,68,.6);outline-offset:2px;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-kill-sub{margin:8px 0 0;font-size:11px;line-height:1.45;color:rgba(255,255,255,.55);}
+/* The SDK version line sits straight in the foot, so it takes the rows' inset rather than none. */
+[${SETTINGS_PANEL_ATTR}] .reticle-settings-foot > .reticle-settings-kill-sub{padding:0 14px;}
 [${'data-reticle-overlay'}][${SETTINGS_ATTR}="1"] [${'data-reticle-hud'}] .reticle-tb-tip{
   opacity:0;visibility:hidden;transition-delay:0s;}
 /* The dock's accent IS the theme's active colour, published as --reticle-accent on the overlay by

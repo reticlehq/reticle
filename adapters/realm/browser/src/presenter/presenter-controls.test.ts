@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { HumanControlKind, PresenterTone, SessionState } from '@reticlehq/core';
 import { Presenter, type ControlIntent } from './presenter.js';
-import { CONTROLS_CSS } from './presenter-controls.js';
+import { CONTROLS_CSS, CONTROLS_FOOT_HTML } from './presenter-controls.js';
 import { CHAT_VIEWS_CSS } from './presenter-chat-views.js';
+import { FRAME_CSS } from './presenter-frame.js';
 import { buildSnapshot } from '@/dom/snapshot.js';
 import { LOG_KIND } from './chrome/presenter-log.js';
 import { isIgnored } from '@/dom/dom-ignore.js';
@@ -451,7 +452,14 @@ describe('a replay started from a chip', () => {
 describe('the Harness spot in the footer', () => {
   it('takes its own line instead of overflowing beside the workspace chip', () => {
     expect(CONTROLS_CSS).toMatch(/\.reticle-foot-workspace-row\{[^}]*flex-wrap:wrap/);
-    expect(CHAT_VIEWS_CSS).toMatch(/\.reticle-harness-spot\{[^}]*flex:1 1 100%/);
+    // Its own block above the chip's row, never inside it: the stack is a column of full-width rows.
+    const foot = CONTROLS_FOOT_HTML;
+    expect(foot.indexOf('data-reticle-harness-spot')).toBeLessThan(
+      foot.indexOf('reticle-foot-workspace-row'),
+    );
+    expect(foot).not.toMatch(/reticle-foot-workspace-row">[^]*data-reticle-harness-spot/);
+    expect(FRAME_CSS).toMatch(/\.reticle-foot-stack\{[^}]*flex-direction:column/);
+    expect(CHAT_VIEWS_CSS).toMatch(/\.reticle-harness-spot\{[^}]*flex-direction:column/);
     // Run Harness and Stop are buttons wearing a link's class: without a reset they draw as the
     // browser's default white button.
     expect(CHAT_VIEWS_CSS).toMatch(/button\.reticle-harness-link\{[^}]*background:none/);

@@ -38,14 +38,32 @@ describe('chat views and harness access states', () => {
     expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
   });
 
-  it('explains missing project access and keeps the switch visibly disabled', () => {
+  it('heads every state with what Harness does, in plain words', () => {
+    const { root, views } = mountViews();
+    views.paintAccount({ signedIn: true });
+    for (const config of [
+      undefined,
+      { ...entitled, harnessEntitled: false },
+      { ...entitled, providerReady: false },
+      entitled,
+    ]) {
+      views.paintHarness(config);
+      expect(root.querySelector('.reticle-harness-title')?.textContent).toBe(
+        'Let Reticle test this page',
+      );
+    }
+  });
+
+  it('explains missing project access with one link and no dead switch', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
     views.paintHarness(undefined);
-    expect(root.textContent).toContain('Link project to enable driving');
-    expect(root.querySelector('[data-reticle-harness-switch]')?.hasAttribute('disabled')).toBe(
-      true,
-    );
+    // Says exactly what to run, and where.
+    expect(root.textContent).toContain('reticle connect');
+    expect(root.textContent).toContain('app folder');
+    // A disabled switch with nothing behind it was one more control to puzzle over.
+    expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
+    expect(root.querySelectorAll('.reticle-harness-link')).toHaveLength(1);
     expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Set up');
   });
 
@@ -53,9 +71,7 @@ describe('chat views and harness access states', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
     views.paintHarness({ ...entitled, harnessEntitled: false });
-    expect(root.textContent).toContain(
-      'Describe a user and Reticle drives the whole journey for you',
-    );
+    expect(root.textContent).toContain('Harness is not on your plan');
     expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('See plans');
     // The console has no /harness page; it redirected to the home page. Credits live on Plan.
     expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
@@ -64,7 +80,7 @@ describe('chat views and harness access states', () => {
     expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
   });
 
-  it('says how many Harness credits are left beside the switch', () => {
+  it('says how many Harness credits are left above Run Harness', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
     views.paintHarness({ ...entitled, credits: { used: 188, limit: 500 } });
@@ -85,7 +101,7 @@ describe('chat views and harness access states', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
     views.paintHarness({ ...entitled, providerReady: false });
-    expect(root.textContent).toContain('Choose a model provider to start driving');
+    expect(root.textContent).toContain('Choose a model provider');
     expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Set up');
     // The switch and provider live in Settings → Projects → Verification.
     expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
@@ -115,6 +131,20 @@ describe('chat views and harness access states', () => {
     );
   });
 
+  /*
+   * A paid user pressed Set up and landed on dashboard Settings showing "All projects" and no switch:
+   * the link named no project. The console reads `?project=`, before the hash.
+   */
+  it('opens Set up on THIS project when the HUD knows its project id', () => {
+    const { root, views } = mountViews();
+    views.setProjectId('acme web/9f3c');
+    views.paintAccount({ signedIn: true });
+    views.paintHarness({ ...entitled, providerReady: false });
+    expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
+      'https://app.reticle.sh/settings?group=project&project=acme%20web%2F9f3c#model',
+    );
+  });
+
   it('never links to a base that is not http(s)', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true, host: 'javascript:alert(1)' });
@@ -122,6 +152,20 @@ describe('chat views and harness access states', () => {
     expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
       'https://app.reticle.sh/settings?group=project#model',
     );
+  });
+
+  it('says in words what the switch allows, and that off blocks every run', () => {
+    const { root, views } = mountViews();
+    views.paintAccount({ signedIn: true });
+    views.paintHarness(entitled);
+    const toggle = root.querySelector('[data-reticle-harness-switch]');
+    expect(toggle?.getAttribute('aria-label')).toBe('Allow Reticle to drive this project');
+    expect(root.querySelector('.reticle-harness-switch-label')?.textContent).toBe('Allowed');
+    // On by default: the copy says Run Harness starts a drive, not that the switch does.
+    expect(root.textContent).toContain('Run Harness');
+    views.paintHarness({ ...entitled, harnessEnabled: false });
+    expect(root.querySelector('.reticle-harness-switch-label')?.textContent).toBe('Not allowed');
+    expect(root.textContent).toContain('Driving is turned off for this project');
   });
 
   it('toggles only when the server reports an entitled, ready workspace', () => {
@@ -236,6 +280,26 @@ describe('running the Harness from the panel', () => {
     views.paintHarness(entitled);
     return { root, views, drive };
   };
+
+  it('labels the persona field and gives Run Harness the full width', () => {
+    const { root } = mountWithDrive();
+    const input = root.querySelector<HTMLInputElement>('[data-reticle-harness-persona]');
+    const label = root.querySelector(`label[for="${input?.id ?? ''}"]`);
+    expect(label?.textContent).toBe('Act as… (optional)');
+    expect(input?.placeholder).toBe('e.g. a first-time shopper');
+    expect(root.querySelector('[data-reticle-harness-run]')?.classList).toContain(
+      'reticle-harness-run',
+    );
+  });
+
+  it('cannot start a run while the switch is off', () => {
+    const { root, views, drive } = mountWithDrive();
+    views.paintHarness({ ...entitled, harnessEnabled: false });
+    const run = root.querySelector<HTMLButtonElement>('[data-reticle-harness-run]');
+    expect(run?.disabled).toBe(true);
+    run?.click();
+    expect(drive.run).not.toHaveBeenCalled();
+  });
 
   it('starts a drive with the persona typed beside Run Harness', () => {
     const { root, drive } = mountWithDrive();

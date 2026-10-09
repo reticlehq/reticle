@@ -50,6 +50,7 @@ import { probeDevServers } from '../../portal/session/dev-server/dev-server-prob
 import {
   DriveOrigin,
   onDriveChange,
+  onDriveStep,
   runningDrive,
   stopDrive,
 } from '../../features/harness/drive-runs.js';
@@ -436,4 +437,6 @@ export function attachHudHarness(
     void hudDrive(daemon.deps(), s.id, request, (on) => applySwitch(root, on));
   });
   onDriveChange(daemon.repaint);
+  // Each step too, so the panel's "N steps so far" counts up instead of sitting at zero.
+  onDriveStep(daemon.repaint);
 }
