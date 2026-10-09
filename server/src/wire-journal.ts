@@ -16,7 +16,7 @@ import { FlowStore } from './language/flows/flows.js';
 import type { FlowFile } from '@reticlehq/core';
 import type { FileSystemPort } from './memory/project/fs/fs-port.js';
 import { makeJournalAttach } from './memory/journal/attach-journal.js';
-import { makeSessionEnd, recordDriveRun } from './memory/journal/session-end.js';
+import { endLiveSessions, makeSessionEnd, recordDriveRun } from './memory/journal/session-end.js';
 import { attachDriveRunFlush } from './memory/journal/drive-run-flush.js';
 import type { TapeStep } from './memory/journal/drive-flow.js';
 import type { OnboardingStep } from '@reticlehq/core/telemetry';
@@ -56,7 +56,7 @@ export function attachJournal(
     /** What this project is willing to keep — the `retain` block of its `.reticle.json`. */
     retain?: PruneWorkspaceOptions;
   },
-): void {
+): () => Promise<void> {
   const journalAttach = makeJournalAttach(deps);
   const ambientStore = new AmbientStore(deps.fs, deps.reticleRoot);
   // Built once, not per session: the resolver walks config discovery and the user-level registry,
@@ -94,19 +94,26 @@ export function attachJournal(
     }
   });
   // Teardown: flush the journal tail to disk + persist what this session learned.
-  bridge.attachSessionEnd(
-    makeSessionEnd({
-      ...deps,
-      // A drive is saved in the session's own project, where replay will look for it.
-      ...(deps.flows === undefined
-        ? {}
-        : { flowsAt: (root: string) => new FlowStore(deps.fs, root, { now: Date.now }) }),
-      ...(deps.retain === undefined ? {} : { retain: deps.retain }),
-      // Retention runs from teardown, and it must not delete the journal of a session that is still
-      // being written. The registry is the only thing that knows which those are.
-      liveSessionIds: () => new Set(bridge.sessions.all().map((s) => s.id)),
-    }),
-  );
+  const teardown = makeSessionEnd({
+    ...deps,
+    // A drive is saved in the session's own project, where replay will look for it.
+    ...(deps.flows === undefined
+      ? {}
+      : {
+          flowsAt: (root: string) =>
+            new FlowStore(
+              deps.fs,
+              root,
+              { now: Date.now },
+              deps.onRunPersisted === undefined ? {} : { onWrote: deps.onRunPersisted },
+            ),
+        }),
+    ...(deps.retain === undefined ? {} : { retain: deps.retain }),
+    // Retention runs from teardown, and it must not delete the journal of a session that is still
+    // being written. The registry is the only thing that knows which those are.
+    liveSessionIds: () => new Set(bridge.sessions.all().map((s) => s.id)),
+  });
+  bridge.attachSessionEnd(teardown);
   /*
    * And the same write, DURING the session rather than only at the end of it.
    *
@@ -139,4 +146,6 @@ export function attachJournal(
     new Set(bridge.sessions.all().map((s) => s.id)),
     deps.retain ?? {},
   );
+  // For a closing daemon: tear down the tabs still open, awaited, before its last sync.
+  return () => endLiveSessions(bridge.sessions, teardown);
 }

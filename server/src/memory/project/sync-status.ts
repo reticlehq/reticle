@@ -152,7 +152,7 @@ export function describeSync(summary: SyncSummary, now: number): string {
 }
 
 /**
- * Every project folder this machine knows with runs the platform never got, linked by its OWN link
+ * Every project folder this machine knows with runs or flows the platform never got, linked by its OWN link
  * file or not. `reticle sync` and `doctor` print these; a daemon tracks the same through its cycle.
  */
 export async function machineUnsyncedRoots(
@@ -161,8 +161,13 @@ export async function machineUnsyncedRoots(
   env: NodeJS.ProcessEnv,
 ): Promise<UnsyncedRoot[]> {
   const roots = knownProjectCandidates().map((c) => join(c.directory, ReticleDir.ROOT));
-  return unsyncedRoots(roots, async (root) => {
-    const cloud = await resolveProjectCloud(fs, root, home, env);
-    return null !== cloud.config && null !== cloud.projectId;
-  });
+  const cloudOf = (root: string) => resolveProjectCloud(fs, root, home, env);
+  return unsyncedRoots(
+    roots,
+    async (root) => {
+      const cloud = await cloudOf(root);
+      return null !== cloud.config && null !== cloud.projectId;
+    },
+    async (root) => (await cloudOf(root)).policy.flows,
+  );
 }

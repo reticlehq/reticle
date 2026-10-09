@@ -614,7 +614,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // See the sibling path: `retain.sessions: 0` stops the capture too, not only the sweep.
   const journalEnabled =
     readJournalEnabled(process.cwd(), process.env[ReticleEnv.JOURNAL]) && 0 < retain.sessions;
-  const flows = new FlowStore(fs, reticleRoot, { now });
+  // A saved flow wakes sync like a landed run: see FlowStore's `onWrote`.
+  const flows = new FlowStore(fs, reticleRoot, { now }, { onWrote: () => syncNudge.run?.() });
   // Built here rather than inside `deps` below, so teardown can save what a drive recorded. Both
   // paths pass the same pair — `daemon-parity.test.ts` is what keeps them from drifting apart.
   const recordings = new RecordingStore(() => currentDrivenBy() !== undefined);
@@ -626,7 +627,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
    * setup ahead of session capture for the sake of one callback.
    */
   const syncNudge: { run?: () => void } = {};
-  attachJournal(bridge, {
+  const endLiveSessions = attachJournal(bridge, {
     fs,
     reticleRoot,
     enabled: journalEnabled,
@@ -854,6 +855,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       leaseReaper.stop();
       chatDrives.stop();
       accountFiles.close();
+      await endLiveSessions(); // first: an open tab's teardown writes the flow this flush sends
       await cloudSync.flush(); // not stop(): the last run written is the one nobody has yet
       await loopbackAlias.close?.();
       await pool.shutdown();

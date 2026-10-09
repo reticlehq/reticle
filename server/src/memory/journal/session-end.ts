@@ -398,3 +398,21 @@ async function dropUndrivenJournal(
     // tidying is never the reason a teardown fails
   }
 }
+
+/**
+ * Tear down every session still open, and wait for it.
+ *
+ * Teardown is what saves a tab's driven flow and its last run, and it normally fires from the
+ * socket's close handler, unawaited. A daemon closing with tabs open terminated those sockets after
+ * its final sync, so the flow was written too late to be sent, or not at all once the process
+ * exited. Called before that final sync instead: each session leaves the registry first, so the
+ * socket closing later finds nothing to tear down a second time.
+ */
+export async function endLiveSessions<S>(
+  sessions: { all: () => S[]; remove: (session: S) => boolean },
+  teardown: (session: S) => Promise<void>,
+): Promise<void> {
+  const ending = sessions.all().filter((session) => sessions.remove(session));
+  // Teardown is best-effort everywhere it runs: one that fails must not stop the others.
+  await Promise.all(ending.map((session) => teardown(session).catch(() => undefined)));
+}

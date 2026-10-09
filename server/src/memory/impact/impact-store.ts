@@ -6,7 +6,11 @@ import {
   overallStatus,
   readSyncSummary,
 } from '@/memory/project/sync-status.js';
-import { describeUnsynced, unsentRunCount } from '@/memory/cloud/unsynced-roots.js';
+import {
+  describeUnsynced,
+  unsentFlowCount,
+  unsentRunCount,
+} from '@/memory/cloud/unsynced-roots.js';
 import { readDashboardUrl } from '@/memory/cloud/cloud-config.js';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
@@ -342,17 +346,21 @@ export class ImpactStore {
     const now = this.#now();
     if (this.#sync !== undefined && now - this.#sync.at < SYNC_STATUS_EVERY_MS)
       return this.#sync.value;
-    // Not linked: one line when runs sit here that nothing will send, and nothing otherwise.
+    // Not linked: one line when runs or flows sit here that nothing will send, and nothing otherwise.
+    // `pending` counts both, so the HUD's existing "N not sent" includes a flow saved with no run.
     if (dashboardUrl === undefined) {
-      const unsent = unsentRunCount(this.#root);
+      const runs = unsentRunCount(this.#root);
+      const flows = unsentFlowCount(this.#root, false);
       const value =
-        0 === unsent
+        0 === runs + flows
           ? undefined
           : {
               status: SyncStatus.LOCAL_ONLY,
-              pending: unsent,
+              pending: runs + flows,
+              runs,
+              flows,
               said: describeUnsynced(
-                { root: this.#root, runs: unsent, linked: false },
+                { root: this.#root, runs, flows, linked: false },
                 dirname(this.#root),
               ),
             };
