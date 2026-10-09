@@ -5,7 +5,7 @@ import { getAccessibleName, getRole, getStates, getValue, isVisible } from './a1
 import { refs } from './addressing/refs.js';
 import { isIgnored, isReticleOverlay } from './dom-ignore.js';
 
-const INTERACTIVE = new Set([
+export const INTERACTIVE = new Set([
   'button',
   'link',
   'textbox',

@@ -752,6 +752,8 @@ export const ActionWarning = {
    */
   GLOBAL_PRESS:
     'press landed on the focused element or document — no named target was given, so this effect does not claim one',
+  CLICK_NOT_A_CONTROL:
+    'target is not a control and sits inside none (no button/link/input role, onclick, tabindex or pointer cursor), so a click on it may do nothing — if nothing happened, target the control inside it by role',
 } as const;
 export type ActionWarning = (typeof ActionWarning)[keyof typeof ActionWarning];
 

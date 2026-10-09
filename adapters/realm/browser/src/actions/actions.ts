@@ -413,6 +413,7 @@ import {
   mouseEventFor,
 } from './actions-dom.js';
 import { scrollFrom } from './scroll.js';
+import { clickHitsNoControl } from './click-target.js';
 
 /** Derive `enabled` from the shared a11y state logic (disabled prop + aria-disabled). */
 function enabledOf(el: Element): boolean {
@@ -923,7 +924,9 @@ export async function executeAction(
       ? ActionWarning.CLICK_OCCLUDED
       : action === ActionType.HOVER && elementHasHoverHandlers(el)
         ? ActionWarning.HOVER_NATIVE_ENTER_LEAVE
-        : undefined;
+        : clickHitsNoControl(el, action)
+          ? ActionWarning.CLICK_NOT_A_CONTROL
+          : undefined;
   return result(ref, action, effect, settled, settleReason, anchor, warning);
 }
 
