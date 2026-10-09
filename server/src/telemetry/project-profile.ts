@@ -16,6 +16,7 @@ import { ProjectSize, ReticleDir, type ProjectProfile } from '@reticlehq/core';
 import { gitFacts } from './git-facts.js';
 import { detectStack } from './feedback-context.js';
 import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
+import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
 
 /**
  * The feature FAMILIES, and the on-disk evidence that a project has adopted each. Named rather than
@@ -146,9 +147,11 @@ const defaultReadDir: DirReader = (dir) => {
 const defaultRead: FileReader = (path) => readFileSync(path, 'utf8');
 
 /** How many entries a `.reticle` subdirectory holds, matching an optional extension. 0 when absent. */
-function countIn(reticleRoot: string, subdir: string, extension?: RegExp): number {
+function countIn(reticleRoot: string, subdir: string, extension?: RegExp, except?: string): number {
   try {
-    const names = readdirSync(join(reticleRoot, subdir));
+    const names = readdirSync(join(reticleRoot, subdir)).filter(
+      (n) => except === undefined || !n.endsWith(except),
+    );
     return extension === undefined ? names.length : names.filter((n) => extension.test(n)).length;
   } catch {
     return 0;
@@ -186,7 +189,8 @@ export function profileProject(cwd: string, now: number, install?: InstallFacts)
   const baselineCount = countIn(reticleRoot, ReticleDir.BASELINES_SUBDIR);
   // `.diff.png` files are diff OUTPUT, not baselines — counting them would double every visual user.
   const visualBaselineCount = countIn(reticleRoot, ReticleDir.VISUAL_SUBDIR, /(?<!\.diff)\.png$/);
-  const runCount = countIn(reticleRoot, ReticleDir.RUNS_SUBDIR, /\.json$/);
+  // A drive's own record sits beside its run and is not one.
+  const runCount = countIn(reticleRoot, ReticleDir.RUNS_SUBDIR, /\.json$/, DRIVE_RECORD_SUFFIX);
   const capsuleCount = countIn(reticleRoot, ReticleDir.CAPSULES_SUBDIR, /\.json$/);
   const hasContract = exists(join(reticleRoot, ReticleDir.CONTRACT_FILE));
   const hasHistory = exists(join(reticleRoot, ReticleDir.PROJECT_FILE));

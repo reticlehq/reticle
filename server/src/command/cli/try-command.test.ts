@@ -3,14 +3,12 @@ import {
   MSG_SIGN_IN_FIRST,
   journeysOf,
   parseTryArgs,
-  requestFreeDrive,
   runTry,
   summarizeTry,
-  type FreeDrive,
   type TryDrive,
-  type TryFetch,
   type TryPorts,
 } from './try-command.js';
+import type { FreeDrive } from '@/features/harness/platform/platform-drives.js';
 
 const CLOUD = { url: 'https://app.reticle.test', apiKey: 'rk_live_x' };
 const URL_UNDER_TEST = 'https://shop.example';
@@ -147,49 +145,5 @@ describe('parseTryArgs', () => {
     expect(parseTryArgs([])).toHaveProperty('error');
     expect(parseTryArgs(['https://a', '--persona'])).toHaveProperty('error');
     expect(parseTryArgs(['https://a', '--port', '1'])).toHaveProperty('error');
-  });
-});
-
-describe('requestFreeDrive', () => {
-  const answering =
-    (status: number, body: unknown, seen: { url?: string; init?: unknown } = {}): TryFetch =>
-    (url, init) => {
-      seen.url = url;
-      seen.init = init;
-      return Promise.resolve({ status, text: () => Promise.resolve(JSON.stringify(body)) });
-    };
-
-  it('posts kind "try" with the key and returns the granted drive', async () => {
-    const seen: { url?: string; init?: unknown } = {};
-    const grant = await requestFreeDrive(
-      CLOUD,
-      answering(200, { granted: true, driveId: 'drv_9' }, seen),
-    );
-    expect(grant).toEqual({ granted: true, driveId: 'drv_9' });
-    expect(seen.url).toBe('https://app.reticle.test/v1/harness/free-drive');
-    expect(seen.init).toMatchObject({
-      method: 'POST',
-      body: JSON.stringify({ kind: 'try' }),
-      headers: { authorization: 'Bearer rk_live_x' },
-    });
-  });
-
-  it('reads a 402 as needing a card, with the platform message', async () => {
-    expect(
-      await requestFreeDrive(
-        CLOUD,
-        answering(402, {
-          error: 'needs_card',
-          capability: 'harness',
-          message: 'Add a card.',
-          hint: 'h',
-        }),
-      ),
-    ).toEqual({ granted: false, needsCard: true, message: 'Add a card.', hint: 'h' });
-  });
-
-  it('turns an unreachable platform into an answer rather than a throw', async () => {
-    const grant = await requestFreeDrive(CLOUD, () => Promise.reject(new Error('offline')));
-    expect(grant).toMatchObject({ granted: false, needsCard: false });
   });
 });

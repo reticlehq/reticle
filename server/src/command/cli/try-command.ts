@@ -12,14 +12,14 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import {
-  RETICLE_DEFAULT_PORT,
-  ReticleDir,
-  ReticleEnv,
-  ReticleTool,
-  ScriptStatus,
-} from '@reticlehq/core';
+import { RETICLE_DEFAULT_PORT, ReticleDir, ReticleEnv, ScriptStatus } from '@reticlehq/core';
 import type { CloudConfig } from '@/memory/cloud/cloud-sync.js';
+import {
+  FreeDriveKind,
+  planUrl,
+  requestFreeDrive,
+  type FreeDrive,
+} from '@/features/harness/platform/platform-drives.js';
 import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
@@ -43,6 +43,7 @@ import {
   acquireLease,
   connectOverSse,
   endpointFor,
+  exploreToEnd,
   refusalText,
   releaseLease,
   verdictOf,
@@ -50,23 +51,7 @@ import {
 
 export const MSG_SIGN_IN_FIRST = 'Sign in first: reticle connect (it is free, no card)';
 
-const FREE_DRIVE_PATH = '/v1/harness/free-drive';
-const FREE_DRIVE_KIND = 'try';
-const NEEDS_CARD = 'needs_card';
-const HTTP_PAYMENT_REQUIRED = 402;
-/** Where a workspace starts its trial: the dashboard's billing settings, at its origin. */
-const PLAN_PATH = '/settings?group=billing';
-
-/** The dashboard's origin, whatever path the link it gave us carried. */
-function originOf(base: string): string {
-  try {
-    return new URL(base).origin;
-  } catch {
-    return base.replace(/\/+$/, '');
-  }
-}
 const PERSONA_FLAG = '--persona';
-const EXPLORE_ACTION = 'explore';
 
 /** The whole drive, model turns and browser included, before the CLI stops waiting for it. */
 export const TRY_BUDGET_MS = 120_000;
@@ -78,11 +63,6 @@ const RUN_WRITE_POLL_MS = 250;
 
 const EXIT_OK = 0;
 const EXIT_FAIL = 1;
-
-/** The drive the platform granted, or why it would not. */
-export type FreeDrive =
-  | { granted: true; driveId: string }
-  | { granted: false; needsCard: boolean; message: string; hint?: string };
 
 export interface TryJourney {
   title: string;
@@ -173,7 +153,7 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
     if (grant.hint !== undefined) ports.fail(grant.hint);
     if (grant.needsCard) {
       const base = (await ports.dashboardUrl(cloud).catch(() => undefined)) ?? cloud.url;
-      ports.fail(`Plans: ${originOf(base)}${PLAN_PATH}`);
+      ports.fail(`Plans: ${planUrl(base)}`);
     }
     return EXIT_FAIL;
   }
@@ -205,55 +185,7 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
   return EXIT_OK;
 }
 
-/** One HTTP request, narrowed so a test answers it without a network. */
-export type TryFetch = (
-  url: string,
-  init: { method: string; headers: Record<string, string>; body: string },
-) => Promise<{ status: number; text(): Promise<string> }>;
-
-function record(text: string): Record<string, unknown> {
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return 'object' === typeof parsed && null !== parsed ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
 const str = (value: unknown): string | undefined => ('string' === typeof value ? value : undefined);
-
-/** Ask the platform for the one free drive. Every failure is an answer, never a throw. */
-export async function requestFreeDrive(
-  cloud: CloudConfig,
-  doFetch: TryFetch = (url, init) => fetch(url, init),
-): Promise<FreeDrive> {
-  try {
-    const res = await doFetch(`${cloud.url.replace(/\/+$/, '')}${FREE_DRIVE_PATH}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${cloud.apiKey}` },
-      body: JSON.stringify({ kind: FREE_DRIVE_KIND }),
-    });
-    const body = record(await res.text());
-    const driveId = str(body['driveId']);
-    if (true === body['granted'] && driveId !== undefined) return { granted: true, driveId };
-    const message =
-      str(body['message']) ??
-      `The Reticle platform did not grant a drive (it answered ${String(res.status)}).`;
-    const hint = str(body['hint']);
-    return {
-      granted: false,
-      needsCard: HTTP_PAYMENT_REQUIRED === res.status || NEEDS_CARD === body['error'],
-      message,
-      ...(hint === undefined ? {} : { hint }),
-    };
-  } catch (error) {
-    return {
-      granted: false,
-      needsCard: false,
-      message: `Could not reach the Reticle platform: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
-}
 
 /** The journeys out of an explore report, or one journey graded from the drive when unplanned. */
 export function journeysOf(report: Record<string, unknown>, persona?: string): TryJourney[] {
@@ -314,10 +246,9 @@ async function driveThroughDaemon(
     const opened = await acquireLease(caller, request.url, true, reticleRoot);
     if ('failed' in opened) return { journeys: [], runIds: [], error: opened.failed.join('\n') };
     try {
-      const drove = await caller.call(
-        ReticleTool.VERIFY,
+      const drove = await exploreToEnd(
+        caller,
         {
-          action: EXPLORE_ACTION,
           sessionId: opened.leased,
           driveId: request.driveId,
           maxSteps: TRY_MAX_STEPS,
@@ -375,7 +306,7 @@ export async function cmdTry(argv: readonly string[], cloudCommands: TryCloud): 
   const port = tryPort(cwd);
   return runTry(parsed, {
     linked: linkedCloudPort(createNodeFileSystem(), reticleRoot, homedir(), process.env),
-    requestDrive: (cloud) => requestFreeDrive(cloud),
+    requestDrive: (cloud) => requestFreeDrive(cloud, FreeDriveKind.TRY),
     drive: (request) => driveThroughDaemon(port, request, reticleRoot),
     sync: async (runIds) => {
       await waitForRuns(reticleRoot, runIds);

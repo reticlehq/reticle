@@ -148,7 +148,13 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * free drive `reticle try` was granted has to reach the daemon that drives, and an argument on that
  * call is the only channel to it.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 25_700;
+/*
+ * 25_850 for `wait`, `runId`, `stop` and `say` on reticle_verify explore (25,840 B measured), only
+ * `wait` described: a drive awaited inside one call outlived a 60s client timeout, so the agent got
+ * no run id and a retry paid for a second drive. Starting it and polling by id needs the id passed
+ * back, and stop/say are the only way to steer a drive short of the project-wide switch.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_850;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -305,7 +311,10 @@ describe('advertised surface cost', () => {
 // 149_700 -> 149_800 for `expect` on reticle_verify explore (149,734 B): a drive graded only on
 // quoted text passed without using the app, so the outcome it must end in has to be declarable.
 // Typed as a plain record, not the predicate schema, which would have cost ~700 tokens.
-const ALL_SURFACE_BYTE_BUDGET = 149_800;
+// 149_800 -> 149_950 for the start-then-poll explore (149,926 B): `wait`/`runId`/`stop`/`say` in,
+// and `status`/`runId`/`lastLine`/`next` out, because a running drive answers only those and a
+// validating client strips an undeclared field.
+const ALL_SURFACE_BYTE_BUDGET = 149_950;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

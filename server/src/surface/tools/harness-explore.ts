@@ -36,12 +36,14 @@ import {
   DEFAULT_MAX_STEPS,
   runHarness,
   StopReason,
+  type HarnessOptions,
   type HarnessResult,
   type HarnessToolset,
   type ModelDriver,
   type ToolOutcome,
 } from '@/features/harness/harness.js';
 import { reticleToolset } from './harness-toolset.js';
+import { noteDriveLine } from '@/features/harness/drive-runs.js';
 import { checkExpect, checkGoals, goalsIn, type GoalCheck } from '@/features/harness/goals.js';
 
 export interface ExploreOptions {
@@ -81,6 +83,12 @@ export interface ExploreOptions {
    * supposed to cover the OFF switch was asserting on a path where the platform is never asked.
    */
   configFetch?: ConfigFetch;
+  /** The drive's harness id, minted by the caller so its run id is known before the drive starts. */
+  harnessId?: string;
+  /** Asked between turns: whoever started the drive asked it to stop. */
+  stopped?: () => boolean;
+  /** Asked between turns: what whoever started the drive said to it since. */
+  inbox?: () => readonly string[];
 }
 
 export interface ExploreResult {
@@ -243,7 +251,7 @@ export async function exploreApp(
 
   // Every action this drive takes carries who took it, so the run it folds into is the Harness's own
   // and not mixed into the run of whichever agent shares the tab.
-  const harnessId = randomUUID();
+  const harnessId = options.harnessId ?? randomUUID();
   const toolset = reticleToolset(deps, {
     ...pinned(options),
     drivenBy: {
@@ -255,6 +263,7 @@ export async function exploreApp(
   const narrate = narrator(deps, options);
   narrate(`Harness is driving${options.focus === undefined ? '' : `: ${options.focus}`}`);
   const drive = await runHarness(driver, toolset, {
+    ...steering(options),
     maxSteps,
     // The plan rides in as standing instruction, so it is in front of the model on every turn
     // rather than remembered from a first one. `focus` is the caller's own words and goes last:
@@ -307,9 +316,19 @@ export async function exploreApp(
   };
 }
 
+/** The stop and the words of whoever started the drive, for `runHarness`. */
+export function steering(options: ExploreOptions): Pick<HarnessOptions, 'stopped' | 'inbox'> {
+  return {
+    ...(options.stopped === undefined ? {} : { stopped: options.stopped }),
+    ...(options.inbox === undefined ? {} : { inbox: options.inbox }),
+  };
+}
+
 /** A line in the HUD's Agent Log for the person watching; nobody watching is not an error. */
 export function narrator(deps: ToolDeps, options: ExploreOptions): (text: string) => void {
   return (text) => {
+    // The drive's poll answers with its latest line, whether or not a tab is watching.
+    if (options.harnessId !== undefined) noteDriveLine(options.harnessId, text);
     try {
       deps.sessions.resolve(options.sessionId).pushNarration(text);
     } catch {

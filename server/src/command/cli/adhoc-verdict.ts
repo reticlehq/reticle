@@ -372,3 +372,44 @@ export async function runAdhocVerdict(options: AdhocVerdictOptions): Promise<Adh
     await caller.close().catch(() => undefined);
   }
 }
+
+const EXPLORE_ACTION = 'explore';
+const DRIVE_RUNNING = 'running';
+/** The most one explore call waits on its drive (the tool's own ceiling), and the call's slack. */
+const EXPLORE_WAIT_MAX_S = 240;
+const CALL_SLACK_MS = 15_000;
+const MS_PER_S = 1000;
+
+/**
+ * One Harness drive through the daemon, polled to its end or until `budgetMs` runs out.
+ *
+ * An explore answers `{ status: "running", runId }` when its drive outlasts the call's wait, so a
+ * caller that wants the finished report asks again by `runId` rather than starting a second drive.
+ */
+export async function exploreToEnd(
+  caller: ToolCaller,
+  args: Record<string, unknown>,
+  budgetMs: number,
+  now: () => number = Date.now,
+): Promise<unknown> {
+  const deadline = now() + budgetMs;
+  const ask = (more: Record<string, unknown>): Promise<unknown> => {
+    const wait = Math.max(
+      0,
+      Math.min(EXPLORE_WAIT_MAX_S, Math.floor((deadline - now() - CALL_SLACK_MS) / MS_PER_S)),
+    );
+    return caller.call(
+      ReticleTool.VERIFY,
+      { ...more, action: EXPLORE_ACTION, wait },
+      wait * MS_PER_S + CALL_SLACK_MS,
+    );
+  };
+  let result = await ask(args);
+  for (;;) {
+    const report = verdictOf(result, 'status');
+    const runId = report?.['runId'];
+    if (DRIVE_RUNNING !== report?.['status'] || 'string' !== typeof runId || now() >= deadline)
+      return result;
+    result = await ask({ runId });
+  }
+}
