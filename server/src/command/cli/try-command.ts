@@ -351,7 +351,8 @@ export async function cmdTry(argv: readonly string[], cloudCommands: TryCloud): 
  * Every effect is a port, so each branch is tested without a daemon, a platform or a browser.
  */
 /** Who the first drive is. The one journey every app has, whatever it is for. */
-export const FIRST_FLOW_PERSONA = 'a first-time visitor';
+export const FIRST_FLOW_PERSONA =
+  'a first-time visitor: do the main thing this page offers, and check that it worked';
 /** Model turns in the first drive: enough for one journey, and a bound on what it costs. */
 export const FIRST_FLOW_MAX_STEPS = 20;
 /** The whole drive before `init` stops waiting for it. The drive itself keeps its own ceiling. */
@@ -426,6 +427,27 @@ export function proveOneFlowLines(url: string): string[] {
 
 const NOT_SAVED: FirstFlowOutcome = { flowSaved: false };
 
+/**
+ * The drive's verdict in one line, graded by the rule every drive is: failed only when a check came
+ * back no, proved only when one held and none failed. A goal the model did not reach proves nothing
+ * either way, so it is "not proved", never "broken".
+ */
+function firstFlowVerdict(report: Record<string, unknown>): string {
+  const checks = asRecord(report['checks']);
+  const count = (key: string): number => ('number' === typeof checks[key] ? checks[key] : 0);
+  const goalMet = report['goalMet'];
+  const status = driveFlowStatus({
+    held: count('held'),
+    failed: count('failed'),
+    ...('boolean' === typeof goalMet ? { goalMet } : {}),
+  });
+  if (RunFlowStatus.PASS === status)
+    return `✓ verified: yes — ${String(count('held'))} check(s) held.`;
+  if (RunFlowStatus.FAIL === status)
+    return `✗ verified: no — ${String(count('failed'))} check(s) failed. That is the app, not the check.`;
+  return '? not proved — the drive decided no check, so it says nothing either way about the app.';
+}
+
 const names = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => 'string' === typeof v) : [];
 
@@ -435,6 +457,7 @@ export async function runFirstFlow(
   ports: FirstFlowPorts,
 ): Promise<FirstFlowOutcome> {
   const say = ports.note;
+  say('');
   const cloud = await ports.linked().catch(() => null);
   if (null === cloud) {
     say('No first flow yet: this project is not linked, so there is no model to drive it with.');
@@ -449,7 +472,6 @@ export async function runFirstFlow(
     for (const line of proveOneFlowLines(url).slice(0, 2)) say(line);
     return NOT_SAVED;
   }
-  say('');
   say(`Driving the first flow in your open tab, as ${FIRST_FLOW_PERSONA}. Watch it.`);
   let result: unknown;
   try {
@@ -469,7 +491,7 @@ export async function runFirstFlow(
     return NOT_SAVED;
   }
   const report = verdictOf(result, 'savedFlows') ?? {};
-  for (const line of summarizeTry(journeysOf(report, FIRST_FLOW_PERSONA))) say(line);
+  say(firstFlowVerdict(report));
   const saved = [...names(report['savedFlows']), ...names(report['rewroteFlows'])];
   if (0 === saved.length) {
     const why = report['note'] ?? report['error'];
@@ -485,6 +507,14 @@ export async function runFirstFlow(
       1 === saved.length ? 'it' : 'them'
     } with no model in the loop; your tab stays open.`,
   );
+  const empty = names(report['unverifiedFlows']).filter((name) => saved.includes(name));
+  if (0 < empty.length) {
+    say(
+      `  ${empty.join(', ')} checks nothing yet: no step asserts a consequence, so a replay ` +
+        'verifies nothing until one does. Ask your coding agent to prove the journey with ' +
+        'reticle_act_and_wait and an until on its last step.',
+    );
+  }
   return { flowSaved: true };
 }
 

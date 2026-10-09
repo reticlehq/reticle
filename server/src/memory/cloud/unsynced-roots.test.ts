@@ -101,6 +101,15 @@ describe('unsynced roots', () => {
     ).toContain('`reticle sync`');
   });
 
+  // A linked root holds flows here only when flow sync is off or the platform refused them, and
+  // `reticle sync` alone sends neither, so it is not told to wait for one.
+  it('tells a linked folder holding flows which two things keep them off the dashboard', () => {
+    const said = describeUnsynced({ root: '/w/.reticle', runs: 0, flows: 2, linked: true }, '/w');
+    expect(said).toContain('2 flow(s)');
+    expect(said).toContain('`reticle config --flows on`');
+    expect(said).toContain('`reticle sync`');
+  });
+
   it('names the flows too, and leaves out a count of zero', () => {
     expect(describeUnsynced({ root: '/w/.reticle', runs: 1, flows: 2, linked: false }, '/w')).toBe(
       '1 run(s) and 2 flow(s) in .reticle are not on your dashboard: run `reticle connect` there',

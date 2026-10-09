@@ -87,7 +87,11 @@ export function describeUnsynced(entry: UnsyncedRoot, from: string): string {
     ...(0 < entry.flows ? [`${String(entry.flows)} flow(s)`] : []),
   ].join(' and ');
   // `connect`, not `link`: it signs in first when it has to, so it is the one command that works.
-  return entry.linked
-    ? `${what} in ${where} are waiting to be sent: run \`reticle sync\` there`
-    : `${what} in ${where} are not on your dashboard: run \`reticle connect\` there`;
+  if (!entry.linked)
+    return `${what} in ${where} are not on your dashboard: run \`reticle connect\` there`;
+  // A linked root counts flows only when flow sync is off or the platform refused them.
+  return 0 < entry.flows
+    ? `${what} in ${where} are not on your dashboard: \`reticle config --flows on\` there if flow ` +
+        'sync is off; `reticle sync` names any the platform refused'
+    : `${what} in ${where} are waiting to be sent: run \`reticle sync\` there`;
 }

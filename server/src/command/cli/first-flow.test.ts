@@ -79,9 +79,39 @@ describe('the first flow', () => {
     const out = await runFirstFlow(SESSION, URL, p);
     expect(out.flowSaved).toBe(true);
     const said = p.lines.join('\n');
-    expect(said).toContain('1 work');
+    expect(said).toContain('verified: yes');
     expect(said).toContain('first-visit');
     expect(said).toMatch(/saved/i);
+  });
+
+  // The drive's own verdict, not the plan's goal: a goal the model missed is not a broken app.
+  it('says not proved when the drive decided no check, and never calls it broken', async () => {
+    const p = ports({
+      drive: () =>
+        Promise.resolve(
+          answer({
+            savedFlows: ['visit'],
+            unverifiedFlows: ['visit'],
+            checks: { held: 0, failed: 0 },
+            goalMet: false,
+            journeys: [{ title: FIRST_FLOW_PERSONA, status: 'failed' }],
+          }),
+        ),
+    });
+    expect((await runFirstFlow(SESSION, URL, p)).flowSaved).toBe(true);
+    const said = p.lines.join('\n');
+    expect(said).toContain('not proved');
+    expect(said).not.toContain('broken');
+    expect(said).toContain('checks nothing yet');
+  });
+
+  it('says verified: no when a check failed', async () => {
+    const p = ports({
+      drive: () =>
+        Promise.resolve(answer({ savedFlows: ['visit'], checks: { held: 1, failed: 1 } })),
+    });
+    await runFirstFlow(SESSION, URL, p);
+    expect(p.lines.join('\n')).toContain('verified: no');
   });
 
   it('a drive that saved nothing is not a saved flow', async () => {
