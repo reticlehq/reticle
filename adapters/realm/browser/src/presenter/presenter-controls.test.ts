@@ -462,6 +462,6 @@ describe('the Harness spot in the footer', () => {
     expect(CHAT_VIEWS_CSS).toMatch(/\.reticle-harness-spot\{[^}]*flex-direction:column/);
     // Run Harness and Stop are buttons wearing a link's class: without a reset they draw as the
     // browser's default white button.
-    expect(CHAT_VIEWS_CSS).toMatch(/button\.reticle-harness-link\{[^}]*background:none/);
+    expect(CHAT_VIEWS_CSS).toMatch(/\.reticle-harness-link\{[^}]*background:none/);
   });
 });

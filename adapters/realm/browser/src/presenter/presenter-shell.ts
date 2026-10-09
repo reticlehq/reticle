@@ -260,7 +260,8 @@ export class HudShell {
   constructor(callbacks: HudShellCallbacks = {}) {
     this.#callbacks = callbacks;
     this.#chatViews = new ChatViews(
-      (enabled) => callbacks.onHarness?.(enabled),
+      // "Turn on" opens Settings, where the Harness switch lives.
+      () => this.#settings.open(),
       () => {
         this.#chatViews.closePage();
         this.closeChat();

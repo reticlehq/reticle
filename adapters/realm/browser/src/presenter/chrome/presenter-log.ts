@@ -80,7 +80,7 @@ export const LOG_EMPTY_TEXT = {
   /** Before the page has ever reached Reticle: no agent and no Harness can reach it either. */
   OFFLINE_TITLE: 'Not connected yet.',
   OFFLINE_BODY: 'Once Reticle is running, this page connects by itself and the steps show here.',
-  BODY: 'Ask your coding agent to verify a change with Reticle: each step shows here, live.\\AOr let Reticle test this page itself with Harness, below.',
+  BODY: 'Ask your coding agent to verify a change with Reticle: each step shows here, live.\\AOr press Run Harness below: Reticle clicks through as the person you pick and reports what breaks.',
 } as const;
 
 /** How long to keep re-pinning the feed after the panel opens, while rows render their real size. */

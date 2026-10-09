@@ -64,6 +64,8 @@ const PLAIN_CONTROLS = [
   // Run Harness beside it, and Stop while the drive it started runs.
   'harness-run',
   'harness-stop',
+  // "Turn on" in the Agent Log's Harness row when it is off: opens Settings, where the switch lives.
+  'harness-settings',
   // The coding-agent block on the Agent Log: send a note, or copy a prompt when none is connected.
   'agent-send',
   'agent-copy',

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AGENT_LINK_HTML, AgentLinkView } from './presenter-agent-link.js';
+import { AGENT_LINK_HTML, AgentLinkView, agentsLine } from './presenter-agent-link.js';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -25,22 +25,25 @@ describe('the coding agent, from the HUD', () => {
     expect(root.querySelector<HTMLElement>('[data-reticle-agent-spot]')?.hidden).toBe(true);
   });
 
-  it('names the connected agent and labels the note box with it', () => {
+  it('labels the note box with the connected agent, by name', () => {
     const { root, view } = mount();
     view.paint({ agents: ['Claude Code'], notes: [] });
-    expect(text(root, '[data-reticle-agent-line]')).toBe('Connected: Claude Code');
     const input = root.querySelector<HTMLInputElement>('[data-reticle-agent-note]');
+    expect(input?.placeholder).toBe('Note to Claude Code…');
     expect(root.querySelector(`label[for="${input?.id ?? ''}"]`)?.textContent).toBe(
       'Note to Claude Code',
     );
-    expect(root.querySelector<HTMLElement>('[data-reticle-agent-copy]')?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('[data-reticle-agent-none]')?.hidden).toBe(true);
+    expect(agentsLine(['Claude Code'])).toBe('Connected: Claude Code');
   });
 
   it('with no agent, says so and offers the prompt instead of a box nobody reads', () => {
     const { root, view } = mount();
     view.paint({ agents: [], notes: [] });
-    expect(text(root, '[data-reticle-agent-line]')).toBe('No coding agent connected');
-    expect(root.querySelector<HTMLElement>('[data-reticle-agent-copy]')?.hidden).toBe(false);
+    expect(text(root, '[data-reticle-agent-none]')).toContain('No coding agent connected');
+    expect(root.querySelector('[data-reticle-agent-copy]')?.getAttribute('aria-label')).toBe(
+      'Copy prompt for your coding agent',
+    );
     expect(root.querySelector<HTMLElement>('[data-reticle-agent-form]')?.hidden).toBe(true);
   });
 
@@ -63,20 +66,20 @@ describe('the coding agent, from the HUD', () => {
   it('says "Sent" until the daemon reports an agent took the note, then "Seen by" that agent', () => {
     const { root, view } = mount();
     view.paint({ agents: ['Claude Code'], notes: [{ text: 'check the coupon', seen: false }] });
-    expect(text(root, '[data-reticle-agent-notes] li span')).toBe(
+    expect(text(root, '[data-reticle-agent-status]')).toBe(
       'Sent. Claude Code sees this the next time it calls Reticle.',
     );
     view.paint({
       agents: ['Claude Code'],
       notes: [{ text: 'check the coupon', seen: true, by: 'Claude Code' }],
     });
-    expect(text(root, '[data-reticle-agent-notes] li span')).toBe('Seen by Claude Code');
+    expect(text(root, '[data-reticle-agent-status]')).toBe('Seen by Claude Code');
   });
 
   it('never names one agent for a note when several are connected and none took it yet', () => {
     const { root, view } = mount();
     view.paint({ agents: ['Claude Code', 'Cursor'], notes: [{ text: 'x', seen: false }] });
-    expect(text(root, '[data-reticle-agent-notes] li span')).toBe(
+    expect(text(root, '[data-reticle-agent-status]')).toBe(
       'Sent. Your coding agent sees this the next time it calls Reticle.',
     );
   });

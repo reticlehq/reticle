@@ -32,38 +32,45 @@ afterEach(() => {
 });
 
 describe('chat views and harness access states', () => {
-  it('leaves the signed-out ask to the shared rail rather than asking twice', () => {
+  const rows = (root: HTMLElement): number =>
+    root.querySelectorAll('[data-reticle-harness-spot] .reticle-harness-row').length;
+
+  it('signed out, is one row: a sentence and Sign in', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: false });
-    expect(root.querySelector<HTMLElement>('[data-reticle-harness-spot]')?.hidden).toBe(true);
-    expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
+    expect(rows(root)).toBe(1);
+    expect(root.textContent).toContain('Sign in to use Harness');
+    expect(root.querySelector('[data-reticle-account-signin]')).not.toBeNull();
   });
 
-  it('heads every state with what Harness does, in plain words', () => {
+  it('shows nothing while the account is unknown, never a sign-in nag', () => {
+    const { root, views } = mountViews();
+    views.paintAccount(undefined);
+    expect(rows(root)).toBe(0);
+  });
+
+  it('has no heading, no paragraph and no switch in any state: the log gets the room', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
     for (const config of [
       undefined,
       { ...entitled, harnessEntitled: false },
       { ...entitled, providerReady: false },
-      entitled,
+      { ...entitled, harnessEnabled: false },
+      { ...entitled, credits: { used: 5, limit: 5 } },
     ]) {
       views.paintHarness(config);
-      expect(root.querySelector('.reticle-harness-title')?.textContent).toBe(
-        'Let Reticle test this page',
-      );
+      expect(rows(root)).toBe(1);
+      expect(root.querySelector('.reticle-harness-title')).toBeNull();
+      expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
     }
   });
 
-  it('explains missing project access with one link and no dead switch', () => {
+  it('explains missing project access in one row with one link', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
     views.paintHarness(undefined);
-    // Says exactly what to run, and where.
     expect(root.textContent).toContain('reticle connect');
-    expect(root.textContent).toContain('app folder');
-    // A disabled switch with nothing behind it was one more control to puzzle over.
-    expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
     expect(root.querySelectorAll('.reticle-harness-link')).toHaveLength(1);
     expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Set up');
   });
@@ -81,28 +88,27 @@ describe('chat views and harness access states', () => {
     expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
   });
 
-  it('says how many Harness credits are left above Run Harness', () => {
+  it("says how many credits are left in one small line, the platform's numbers", () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
-    views.paintHarness({ ...entitled, credits: { used: 188, limit: 500 } });
-    expect(root.textContent).toContain('312 of 500 Harness credits left');
-    expect(root.querySelector('[data-reticle-harness-switch]')).not.toBeNull();
+    views.paintHarness({ ...entitled, credits: { used: 294, limit: 5000 } });
+    expect(root.querySelector('[data-reticle-foot-meta]')?.textContent).toBe('4,706 credits left');
   });
 
-  it('points at Pro, not at a dead switch, once the credits are spent', () => {
+  it('once the credits are spent, says so in its row with the way to get more', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
     views.paintHarness({ ...entitled, credits: { used: 500, limit: 500 } });
-    expect(root.textContent).toContain('All 500 Harness credits used');
-    expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Pro');
-    expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
+    expect(root.textContent).toContain('No Harness credits left');
+    expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Get more');
+    expect(root.querySelector('[data-reticle-foot-meta]')?.textContent).toBe('');
   });
 
   it('shows setup instead of an active switch until the model provider is ready', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
     views.paintHarness({ ...entitled, providerReady: false });
-    expect(root.textContent).toContain('Choose a model provider');
+    expect(root.textContent).toContain('No model provider set');
     expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Set up');
     // The switch and provider live in Settings → Projects → Verification.
     expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
@@ -155,43 +161,13 @@ describe('chat views and harness access states', () => {
     );
   });
 
-  it('says in words what the switch allows, and that off blocks every run', () => {
-    const { root, views } = mountViews();
-    views.paintAccount({ signedIn: true });
-    views.paintHarness(entitled);
-    const toggle = root.querySelector('[data-reticle-harness-switch]');
-    expect(toggle?.getAttribute('aria-label')).toBe('Allow Reticle to drive this project');
-    expect(root.querySelector('.reticle-harness-switch-label')?.textContent).toBe('Allowed');
-    // On by default: the copy says Run Harness starts a drive, not that the switch does.
-    expect(root.textContent).toContain('Run Harness');
-    views.paintHarness({ ...entitled, harnessEnabled: false });
-    expect(root.querySelector('.reticle-harness-switch-label')?.textContent).toBe('Not allowed');
-    expect(root.textContent).toContain('Driving is turned off for this project');
-  });
-
-  it('toggles only when the server reports an entitled, ready workspace', () => {
+  it('when Harness is off, says so and opens Settings, where the switch lives', () => {
     const { root, views, onHarness } = mountViews();
     views.paintAccount({ signedIn: true });
     views.paintHarness({ ...entitled, harnessEnabled: false });
-    const toggle = root.querySelector<HTMLButtonElement>('[data-reticle-harness-switch]');
-    if (null === toggle) throw new Error('eligible Harness toggle is missing');
-    expect(toggle.getAttribute('aria-checked')).toBe('false');
-    toggle.click();
-    expect(onHarness).toHaveBeenCalledWith(true);
-    expect(toggle.getAttribute('aria-checked')).toBe('true');
-    views.paintHarness({ ...entitled, harnessEnabled: true });
-    expect(root.querySelector('[data-reticle-harness-switch]')?.getAttribute('aria-checked')).toBe(
-      'true',
-    );
-    const enabledToggle = root.querySelector<HTMLButtonElement>('[data-reticle-harness-switch]');
-    if (null === enabledToggle) throw new Error('enabled Harness toggle is missing');
-    enabledToggle.click();
-    expect(onHarness).toHaveBeenLastCalledWith(false);
-    expect(enabledToggle.getAttribute('aria-checked')).toBe('false');
-    views.paintHarness({ ...entitled, harnessEnabled: false });
-    expect(root.querySelector('[data-reticle-harness-switch]')?.getAttribute('aria-checked')).toBe(
-      'false',
-    );
+    expect(root.textContent).toContain('Harness is off');
+    root.querySelector<HTMLElement>('[data-reticle-harness-settings]')?.click();
+    expect(onHarness).toHaveBeenCalledTimes(1);
   });
 
   it('keeps Notes controls in one compact row', () => {
@@ -289,26 +265,40 @@ describe('running the Harness from the panel', () => {
     select.dispatchEvent(new Event('change', { bubbles: true }));
   };
 
-  it('offers labelled presets with a one-line hint, First-time visitor by default', () => {
+  it('is one row, "As [preset] Run Harness", First-time visitor by default, each with its hint', () => {
     const { root } = mountWithDrive();
     const select = root.querySelector<HTMLSelectElement>('[data-reticle-harness-persona-pick]');
-    expect(root.querySelector(`label[for="${select?.id ?? ''}"]`)?.textContent).toBe('Act as');
+    expect(root.querySelectorAll('.reticle-harness-row')).toHaveLength(1);
+    expect(root.querySelector(`label[for="${select?.id ?? ''}"]`)?.textContent).toBe('As');
     expect([...(select?.options ?? [])].map((o) => o.textContent)).toEqual([
       ...PERSONAS.map((p) => p.label),
       'Custom…',
     ]);
     expect(select?.value).toBe('first-time');
-    expect(root.querySelector('.reticle-harness-hint')?.textContent).toBe(PERSONAS[0].hint);
-    // No free-text box until Custom is chosen.
+    // The hint is the select's description and tooltip, not a line that takes log space.
+    expect(select?.title).toBe(PERSONAS[0].hint);
+    const described = select?.getAttribute('aria-describedby') ?? '';
+    expect(root.querySelector(`#${described}`)?.textContent).toBe(PERSONAS[0].hint);
     expect(root.querySelector('[data-reticle-harness-persona]')).toBeNull();
   });
 
   it('runs as the picked preset, sending its sentence as the persona', () => {
     const { root, drive } = mountWithDrive();
     pick(root, 'keyboard');
-    expect(root.querySelector('.reticle-harness-hint')?.textContent).toBe(PERSONAS[3].hint);
+    expect(root.querySelector<HTMLSelectElement>('select')?.title).toBe(PERSONAS[3].hint);
     root.querySelector<HTMLElement>('[data-reticle-harness-run]')?.click();
     expect(drive.run).toHaveBeenCalledWith(`Keyboard only: ${PERSONAS[3].hint}`);
+  });
+
+  it('while its drive runs, the same row says who it is driving as, the steps, and Stop', () => {
+    const { root, views } = mountWithDrive();
+    pick(root, 'keyboard');
+    root.querySelector<HTMLElement>('[data-reticle-harness-run]')?.click();
+    views.paintDrive({ runId: 'harness-1', steps: 7 });
+    expect(root.querySelectorAll('.reticle-harness-row')).toHaveLength(1);
+    expect(root.querySelector('.reticle-harness-said')?.textContent).toBe(
+      'Driving as Keyboard only · 7 steps',
+    );
   });
 
   it('reveals the text box for Custom and runs with the words typed there', () => {
@@ -363,9 +353,9 @@ describe('running the Harness from the panel', () => {
   it('cannot start a run while the switch is off', () => {
     const { root, views, drive } = mountWithDrive();
     views.paintHarness({ ...entitled, harnessEnabled: false });
-    const run = root.querySelector<HTMLButtonElement>('[data-reticle-harness-run]');
-    expect(run?.disabled).toBe(true);
-    run?.click();
+    // No Run button to press at all: the row says Harness is off and offers to turn it on.
+    expect(root.querySelector('[data-reticle-harness-run]')).toBeNull();
+    expect(root.querySelector('[data-reticle-harness-settings]')).not.toBeNull();
     expect(drive.run).not.toHaveBeenCalled();
   });
 

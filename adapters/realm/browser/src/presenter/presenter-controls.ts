@@ -86,7 +86,7 @@ export function flowTitle(name: string): string {
 
 /** CSS for the control surface (injected with the rest of the presenter stylesheet). */
 export const CONTROLS_CSS = `
-[data-reticle-chat-panel] [data-reticle-foot]{flex:none;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.07);
+[data-reticle-chat-panel] [data-reticle-foot]{flex:none;padding:6px 10px 8px;border-top:1px solid rgba(255,255,255,.07);
   background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,.55) 100%);pointer-events:auto;}
 [data-reticle-chat-panel] .reticle-foot-workspace-row{display:flex;flex-wrap:wrap;align-items:center;min-width:0;}
 [data-reticle-chat-panel] .reticle-hud-log-well{margin:0 0 4px;}
@@ -158,8 +158,12 @@ export const CONTROLS_CSS = `
 [data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-glow][data-on="1"]{
   box-shadow:inset 0 0 0 2px rgba(255,255,255,.22);}
 [data-reticle-chat-panel] .reticle-flows{display:none;flex:none;min-width:0;padding:8px 12px;border-top:1px solid var(--reticle-line2);pointer-events:auto;}
-[data-reticle-chat-panel] .reticle-flows[data-has="1"]{display:block;}
-[data-reticle-chat-panel] .reticle-flows-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px;}
+[data-reticle-chat-panel] .reticle-flows[data-has="1"]{display:flex;align-items:center;gap:8px;padding:5px 12px;}
+/* One line: the caption, the chips scrolling between, and See all. It never takes the log's rows. */
+[data-reticle-chat-panel] .reticle-flows-head{display:contents;}
+[data-reticle-chat-panel] .reticle-flows[data-has="1"] .reticle-flows-cap{order:0;flex:none;}
+[data-reticle-chat-panel] .reticle-flows[data-has="1"] .reticle-flow-strip{order:1;flex:1;}
+[data-reticle-chat-panel] .reticle-flows[data-has="1"] .reticle-flows-links{order:2;flex:none;}
 [data-reticle-chat-panel] .reticle-flows-all{border:0;padding:0;background:none;cursor:pointer;color:var(--reticle-c-active);font:inherit;font-size:11px;font-weight:500;}
 [data-reticle-chat-panel] .reticle-flows-all:hover{text-decoration:underline;}
 [data-reticle-chat-panel] .reticle-flows-links{display:inline-flex;gap:10px;}

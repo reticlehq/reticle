@@ -78,7 +78,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // own root attributes and every surface's controls, so it sits with the surfaces it watches.
   // 24 with `presenter-plan.ts`, the Harness plan board on the Agent Log: one surface, with its own
   // stylesheet, beside the others.
-  'adapters/realm/browser/src/presenter': 26,
+  'adapters/realm/browser/src/presenter': 27,
   // Newly over the line at 11, with `presenter-safe-html.ts`. It crossed because two SECURITY
   // helpers left `presenter-report.ts` when the account capsule became their second caller: HTML
   // escaping, and the dashboard-url scheme check that exists because `javascript:` once produced a
