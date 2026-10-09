@@ -136,7 +136,15 @@ export async function runScript(
         const ok = await runJourney(journey, card.steps, tools, ports, own, tell, () => {
           stopped = true;
         });
-        card.status = ok ? ScriptStatus.PASSED : ScriptStatus.FAILED;
+        // A drive the platform cut off (credits gone, a refusal, a 5xx) judged nothing: blocked, and
+        // its reason said, never "failed" over an app nobody finished driving.
+        const cut = own.find((d) => StopReason.BROKEN === d.stopReason);
+        if (cut !== undefined) broken.set(lane.id, cut.error ?? StopReason.BROKEN);
+        card.status = ok
+          ? ScriptStatus.PASSED
+          : cut === undefined
+            ? ScriptStatus.FAILED
+            : ScriptStatus.BLOCKED;
         drives.push(...own);
         if (!ok && own.some((d) => false === d.goalMet)) goalMissed.add(card);
         blocked = !ok;

@@ -11,7 +11,7 @@
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { exploreScript } from './harness-script.js';
 import { randomUUID } from 'node:crypto';
-import { harnessRunId } from '@/judgement/runs/drive-run.js';
+import { harnessRunId, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
 import {
   ReticleEnv,
   ReticleTool,
@@ -20,6 +20,8 @@ import {
   asRecord,
   type FlowFile,
 } from '@reticlehq/core';
+import { creditsSpent, creditsUsedLine } from '@reticlehq/core/hud';
+import { planUrl } from '@/features/harness/platform/platform-drives.js';
 import { flowsForSession } from '@/language/flows/flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
@@ -45,6 +47,8 @@ import {
 import { reticleToolset } from './harness-toolset.js';
 import { noteDriveLine } from '@/features/harness/drive-runs.js';
 import { checkExpect, checkGoals, goalsIn, type GoalCheck } from '@/features/harness/goals.js';
+import { instrumentationOf } from '@/portal/session/recorded-gaps.js';
+import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 
 export interface ExploreOptions {
   /** Who to be, or what to accomplish. Appended to the standing instruction. */
@@ -139,8 +143,8 @@ export interface ExploreResult {
  * print it, and two copies of this sentence would drift.
  */
 export const MSG_NO_HARNESS_KEY =
-  `The Reticle Harness runs on the Reticle platform, and every plan includes it (Free comes with ` +
-  `monthly Harness credits): run \`reticle connect\` to link this project and sign in. ` +
+  `The Reticle Harness runs on the Reticle platform, and a new account gets 10 free credits ` +
+  `to try it: run \`reticle connect\` to link this project and sign in. ` +
   `Without it, drive the journey yourself with reticle_act_and_wait and an \`until\` on its last step: ` +
   `what you drive is saved as a flow just the same.`;
 
@@ -185,6 +189,32 @@ export async function withLinkedCredential(
     // and its absence is a routine answer; a drive must never fail because a JSON file was odd.
     return env;
   }
+}
+
+/** Introduces the prompt under a coverage refusal, so the agent knows it is for itself. */
+export const MSG_GATE_PROMPT_LEAD = 'To unlock it, do this (or hand it to your coding agent):';
+
+/**
+ * Why the Harness must not drive this tab's app yet, or undefined when it may: below the coverage
+ * gate (core's `instrumentation-coverage.ts`), one reason sentence and the prompt that closes it. Every Harness
+ * start passes here (an agent's explore, Run Harness, `reticle try`, the platform's chat), so the
+ * gate holds wherever a drive starts; every other tool works at any coverage. A tab that cannot be
+ * resolved is not refused here: the drive itself answers for a missing tab. Counted once per refusal.
+ */
+export function coverageRefusal(deps: ToolDeps, sessionId: string | undefined): string | undefined {
+  let tab: ReturnType<ToolDeps['sessions']['resolve']>;
+  try {
+    tab = deps.sessions.resolve(sessionId);
+  } catch {
+    return undefined;
+  }
+  const coverage = instrumentationOf(tab);
+  const gate = coverage.harnessGate;
+  if (gate.unlocked || gate.reason === undefined) return undefined;
+  getSessionMetrics().recordHarnessRefused(gate.percent);
+  return coverage.prompt === undefined
+    ? gate.reason
+    : `${gate.reason}\n\n${MSG_GATE_PROMPT_LEAD}\n${coverage.prompt}`;
 }
 
 /**
@@ -274,10 +304,15 @@ export async function exploreApp(
     ].join('\n\n'),
   });
 
+  // Before the session ends and is graded: a drive whose goal was missed, or that was cut off part-way,
+  // must not sync as "Proved" on the checks that held before it stopped.
+  noteHarnessGoal(harnessId, drive.goalMet);
   narrate(
     StopReason.STOPPED === drive.stopReason
       ? `Autonomous driving switched off — the Harness stopped after ${String(drive.steps)} steps. What it drove is kept.`
-      : `Harness finished — ${verdictLine(checkTally(drive.toolCalls))}`,
+      : StopReason.BROKEN === drive.stopReason
+        ? msgDriveCutOff(drive.error)
+        : `Harness finished — ${verdictLine(checkTally(drive.toolCalls))}`,
   );
   // MANDATORY, and deliberately outside the loop. A drive that runs out of budget mid-journey, or
   // breaks, or whose model simply stops asking for tools, leaves a recording open and everything it
@@ -464,22 +499,44 @@ export function reconcileFlows(
  * control anything is worse than no control: somebody turns it off, watches Reticle drive their app
  * anyway, and now correctly distrusts every other switch in the product.
  *
- * Absent means ON. The platform's own default is on, and a machine that cannot reach the platform —
- * offline, CI, no link — must not silently lose a feature it was never told to stop using.
+ * Absent means OFF. The Harness is opt-in: a new project starts with it off, and an answer that does
+ * not say it is on is not a yes to spend credits on.
  */
 export const MSG_HARNESS_DISABLED =
-  'Autonomous driving is turned OFF for this project. Turn it back on in the Reticle dashboard ' +
-  '(Settings → Verification model), or drive the app yourself through the MCP tools.';
+  "The Reticle Harness is off for this project. The user can switch it on in the HUD's Settings " +
+  'or the Reticle dashboard (Settings → Verification model); until then, drive the app yourself ' +
+  'through the MCP tools.';
 
 /**
  * The other reason a drive can be refused, and it is NOT the same reason.
  *
- * A drive through the platform spends Reticle's model budget, bounded by the workspace's monthly
- * Harness credits. The platform answers this only when something other than the switch stops it.
+ * A drive through the platform spends Reticle's model budget, bounded by the workspace's Harness
+ * credits. The platform answers this only when something other than the switch stops it.
  */
 export const MSG_HARNESS_UNCLAIMED =
-  'The Reticle platform says this workspace cannot drive the Harness right now. Every workspace, ' +
-  'Free included, gets Harness credits each month: see Settings → Plan in the Reticle dashboard.';
+  'The Reticle platform says this workspace cannot drive the Harness right now, usually because its ' +
+  'credits are spent: see Settings → Plan in the Reticle dashboard.';
+
+/**
+ * Why a drive must not be replayed into a verdict, or undefined when it may. A drive the platform
+ * cut off (credits gone: 402 needs_card) had saved one partial flow, and replaying it printed PASS
+ * with no word about the credits. The one test both CLI explore paths answer through.
+ */
+export function cutOffReason(drive: { stopReason?: unknown; error?: unknown }): string | undefined {
+  if (StopReason.BROKEN !== drive.stopReason && StopReason.STOPPED !== drive.stopReason)
+    return undefined;
+  const why =
+    'string' === typeof drive.error && 0 < drive.error.length
+      ? drive.error
+      : StopReason.STOPPED === drive.stopReason
+        ? 'autonomous driving was switched off.'
+        : 'the drive broke.';
+  return `The drive stopped before it finished: ${why} Nothing was proved; what it saved stays, and the next run replays it.`;
+}
+
+/** The Agent Log's last line for a drive the platform cut off: its reason, and that it proved nothing. */
+export const msgDriveCutOff = (error: string | undefined): string =>
+  `Harness stopped before it finished, so nothing is proved: ${error ?? 'the drive broke.'}`;
 
 /** The platform could not be asked, and the drive would spend Reticle's budget without its yes. */
 export const MSG_HARNESS_UNCONFIRMED =
@@ -516,6 +573,9 @@ export async function refusedByPlatform(
   // It needs a confirmed yes, not the absence of a no. The platform also checks on every turn.
   if (config === undefined) return MSG_HARNESS_UNCONFIRMED;
   if (!config.harnessEnabled) return MSG_HARNESS_DISABLED;
+  // Before entitlement: no credits left is why most workspaces are not entitled, said as the HUD says it.
+  if (config.credits !== undefined && creditsSpent(config.credits))
+    return creditsUsedLine(config.credits, planUrl(config.platformUrl ?? cloudUrlFrom(env) ?? ''));
   if (!config.harnessEntitled) return MSG_HARNESS_UNCLAIMED;
   return undefined;
 }

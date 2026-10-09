@@ -39,17 +39,10 @@ describe('what the agent is told to do next', () => {
     expect(verdict(r)).toBe(NextText.FINISH_LINKED);
   });
 
-  it('tells an unlinked project how to connect on the first verdict and every fifth after', () => {
+  /** The connect advice is the agent nudge's, said once per session: never repeated here. */
+  it('on an unlinked project, says only how to hand the tab back', () => {
     const r = root({ 'request.json': { at: NOW } });
-    const said = Array.from({ length: 6 }, () => verdict(r));
-    expect(said.map((s) => s === NextText.CONNECT)).toEqual([
-      true,
-      false,
-      false,
-      false,
-      false,
-      true,
-    ]);
+    expect(Array.from({ length: 6 }, () => verdict(r))).toEqual(Array(6).fill(NextText.FINISH));
   });
 
   it('stays quiet on a read with nothing pending, and never asks the intent tool to declare', () => {

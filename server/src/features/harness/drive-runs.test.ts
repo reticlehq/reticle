@@ -7,6 +7,7 @@ import {
   forgetDrives,
   noteDriveLine,
   noteDriveStep,
+  onDriveStep,
   runningDrive,
   sayToDrive,
   startDrive,
@@ -95,6 +96,19 @@ describe('a Harness drive the agent can poll', () => {
     expect(seen.slice(0, 2)).toEqual([1, 2]);
   });
 
+  // Driven before release: the HUD row read "0 steps" for a whole drive, because only a drive's
+  // start and end repainted the panel and a step changed nothing anybody listened to.
+  it('tells step listeners on each step, so the panel can repaint its count', () => {
+    heldDrive('h9');
+    const seen: number[] = [];
+    const off = onDriveStep((r) => seen.push(r.steps));
+    noteDriveStep('h9', 'reticle_act');
+    noteDriveStep('h9-L2', 'reticle_act');
+    off();
+    noteDriveStep('h9', 'reticle_act');
+    expect(seen).toEqual([1, 2]);
+  });
+
   it('finds the drive running on a session, so a second start returns it instead', () => {
     heldDrive('h6', 's1');
     expect(runningDrive('s1')?.harnessRun).toBe('harness-h6');
@@ -131,13 +145,42 @@ describe('a Harness drive the agent can poll', () => {
 
   it('tells the agent once when a drive starts and when it ends, never twice', async () => {
     const { finish } = heldDrive('h9');
-    expect(takeDriveNotes()).toEqual([expect.stringContaining('harness-h9 running')]);
+    expect(takeDriveNotes()).toEqual([expect.stringContaining('harness-h9 is running')]);
     expect(takeDriveNotes()).toEqual([]);
     finish({ checks: { held: 2, failed: 1, undecided: 0 } });
     await awaitDrive('harness-h9', 60_000);
     expect(takeDriveNotes()).toEqual([
       expect.stringMatching(/harness-h9 finished \(done: 2 held, 1 failed, 0 undecided\)/),
     ]);
+  });
+
+  it('tells the agent a drive started from the HUD runs on its tab, with the exact poll call', () => {
+    startDrive({
+      harness: 'h11',
+      runId: 'harness-h11',
+      origin: DriveOrigin.HUD,
+      sessionId: 'tab-1',
+      now: () => 1,
+      persist: () => Promise.resolve(),
+      run: () => new Promise(() => undefined),
+    });
+    const [note] = takeDriveNotes();
+    expect(note).toContain('started from the HUD');
+    expect(note).toContain('tab-1');
+    expect(note).toContain('reticle_verify {action:"explore", runId:"harness-h11"}');
+    expect(note).toContain('keeps running');
+    stopDrive('harness-h11');
+  });
+
+  it('delivers the finished drive with its own summary', async () => {
+    const { finish } = heldDrive('h12');
+    takeDriveNotes();
+    finish({ checks: { held: 1, failed: 0, undecided: 0 }, summary: 'Drove checkout.\nmore' });
+    await awaitDrive('harness-h12', 60_000);
+    const [note] = takeDriveNotes();
+    expect(note).toContain('1 held, 0 failed, 0 undecided');
+    expect(note).toContain('Drove checkout.');
+    expect(note).not.toContain('more');
   });
 
   it('does not tell the agent about the drive it is already reading', () => {

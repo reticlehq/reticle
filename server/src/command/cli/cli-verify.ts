@@ -18,6 +18,7 @@ import { verifyResults } from './verify-results.js';
 import { writeFile } from 'node:fs/promises';
 import { runAdhocExplore, runAdhocSuite } from './adhoc-suite.js';
 import {
+  cutOffReason,
   exploreApp,
   harnessAvailable,
   MSG_NO_HARNESS_KEY,
@@ -105,6 +106,14 @@ const MSG_EXPLORED_NOTHING =
   'The drive saved no flows, so there is still nothing to verify. Nothing was proved.';
 const MSG_VERIFY_PREFIX = 'verify failed: ';
 
+/** What a drive left, and how it ended: `broken` and `stopped` are drives cut off part-way. */
+export interface ExploreOutcome {
+  savedFlows: readonly string[];
+  steps: number;
+  stopReason?: string;
+  error?: string;
+}
+
 /** The live capabilities runVerify needs — faked in tests so the logic runs without a browser. */
 export interface VerifyConnection {
   /** Resolve true once a browser session has connected, or false at timeout. */
@@ -122,7 +131,7 @@ export interface VerifyConnection {
    * Optional on the interface on purpose: the harness is unavailable on a machine with no key, and
    * every other path through this command has to keep working exactly as it did.
    */
-  explore?: (focus?: string) => Promise<{ savedFlows: readonly string[]; steps: number }>;
+  explore?: (focus?: string) => Promise<ExploreOutcome>;
   /**
    * `onProgress` is narration for a run in flight — see `verify-progress.ts` in core. Optional at
    * every layer: a connection that ignores it behaves exactly as it did before.
@@ -296,6 +305,12 @@ async function explore(
   }
   ports.out('No saved flows yet — driving the app to record some.');
   const drive = await conn.explore(args.persona);
+  const cut = cutOffReason(drive);
+  if (cut !== undefined) {
+    ports.fail(cut);
+    ports.exit(EXIT_FAIL);
+    return false;
+  }
   if (0 === drive.savedFlows.length) {
     ports.fail(MSG_EXPLORED_NOTHING);
     ports.exit(EXIT_FAIL);
@@ -459,7 +474,12 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
               ...(focus === undefined ? {} : { focus }),
               ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
             });
-            return { savedFlows: result.savedFlows, steps: result.drive.steps };
+            return {
+              savedFlows: result.savedFlows,
+              steps: result.drive.steps,
+              stopReason: result.drive.stopReason,
+              ...(result.drive.error === undefined ? {} : { error: result.drive.error }),
+            };
           },
         }
       : {}),

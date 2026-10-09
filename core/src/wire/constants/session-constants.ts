@@ -46,9 +46,9 @@ export const HumanControlKind = {
   /**
    * Human pressed Sign in in the panel. Carries nothing.
    *
-   * A page cannot write `~/.reticle`, so the panel used to copy `reticle login` and stop there: a
+   * A page cannot write `~/.reticle`, so the panel used to copy `reticle connect` and stop there: a
    * dead end for anybody who does not live in a terminal. The daemon owns the credential, so it
-   * starts the same browser approval flow `reticle login` does and the panel repaints when it lands.
+   * starts the same browser approval flow `reticle connect` does and the panel repaints when it lands.
    */
   SIGNIN: 'signin',
   /**

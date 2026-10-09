@@ -15,6 +15,7 @@
  * is stopped, the agent keeps its link.
  */
 import { ReticleTool } from '@reticlehq/core';
+import { cutOffReason } from '@/surface/tools/harness-explore.js';
 import {
   connectOverSse,
   endpointFor,
@@ -186,6 +187,8 @@ export async function runAdhocExplore(options: AdhocExploreOptions): Promise<Adh
       ...(summary === undefined ? [] : [summary]),
       ...(note === undefined ? [] : [note]),
     ];
+    const cut = cutOffReason(report ?? {});
+    if (cut !== undefined) return { code: 1, lines: ['status: unverifiable', ...drive, cut] };
     // A drive that left nothing to replay proved nothing, however long it ran.
     if (0 === recorded.length) return { code: 1, lines: ['status: unverifiable', ...drive] };
     const suite = await replaySuite(caller, pin);

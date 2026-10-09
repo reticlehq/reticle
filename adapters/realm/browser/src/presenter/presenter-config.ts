@@ -36,6 +36,8 @@ export interface PresenterOptions {
   idleEndMs?: number;
   /** Session id, surfaced in the exported run state. */
   sessionId?: string;
+  /** The project this page reports to, so the HUD's dashboard links open on it. */
+  projectId?: string;
   /** Deprecated: accepted for source compat; the live log no longer auto-expires. */
   narrationDwellMs?: number;
   /**

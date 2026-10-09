@@ -4,7 +4,7 @@ description: List which saved flows must re-verify for a set of changed files.
 icon: code-branch
 ---
 
-`reticle affected` answers one question: given these changed files, which saved flows cover them? It is the foundation the [gate](/cli/gate) and [watch](/cli/watch) are built on, and it costs your agent nothing per turn because it runs in the environment.
+`reticle affected` answers one question: given these changed files, which saved flows cover them? It is the foundation the [gate](/cli/gate) is built on, and it costs your agent nothing per turn because it runs in the environment.
 
 ```bash
 npx @reticlehq/server affected [--since <ref>] [file...]

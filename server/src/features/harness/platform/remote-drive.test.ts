@@ -354,10 +354,14 @@ describe('which tab a chat-requested drive uses', () => {
 });
 
 describe('the verdict a chat-requested drive reports', () => {
-  it('is the goal judgement when the drive carries one', () => {
-    expect(driveVerdict({ goalMet: false, proved: true })).toBe('no');
-    // A journey whose goal was not reached is not "passed", so nothing reads proved: still a no.
-    expect(driveVerdict({ goalMet: false, proved: false })).toBe('no');
+  it('reads a goal judged missed, with no check against it, as not proved rather than failed', () => {
+    expect(driveVerdict({ goalMet: false, proved: true })).toBe('unknown');
+    expect(driveVerdict({ goalMet: false, proved: false })).toBe('unknown');
+    const undecided = { held: 0, failed: 0, undecided: 2 };
+    expect(driveVerdict({ goalMet: false, proved: true, checks: undecided })).toBe('unknown');
+    expect(
+      driveVerdict({ goalMet: false, proved: true, checks: { held: 2, failed: 0, undecided: 0 } }),
+    ).toBe('unknown');
     expect(
       driveVerdict({ goalMet: true, proved: true, checks: { held: 1, failed: 0, undecided: 0 } }),
     ).toBe('yes');

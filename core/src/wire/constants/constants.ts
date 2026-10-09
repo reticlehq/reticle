@@ -467,7 +467,7 @@ export const ReticleDir = {
   REQUEST_FILE: 'request.json',
   PLATFORM_MOMENTS_FILE: 'platform-moments.json', // moments already said, so each is said once
   /**
-   * the project's cloud binding — .reticle/cloud.json, written by `reticle link`. Git-checked and
+   * the project's cloud binding — .reticle/cloud.json, written by `reticle connect`. Git-checked and
    * non-secret: the project id, the API origin, and where its dashboard lives. The KEY lives in
    * ~/.reticle/credentials.json instead, because that one must never reach a repository.
    */

@@ -1,5 +1,6 @@
 import { appModalOpen } from '@/dom/dom-ignore.js';
-import type { HarnessConfig, HarnessDrive } from '@reticlehq/core';
+import type { AgentLink, HarnessConfig, HarnessDrive } from '@reticlehq/core';
+import type { HarnessGateView } from './presenter-harness-row.js';
 import { PresenterReport, reportPanelHtml } from './presenter-report.js';
 import type { AccountState } from '@reticlehq/core';
 import { paintToolbarAccount, TOOLBAR_ACCOUNT_ATTR } from './presenter-workspace.js';
@@ -94,6 +95,8 @@ interface HudShellCallbacks {
   onHarnessRun?: (persona?: string) => void;
   /** Stop on the drive running in this tab. */
   onHarnessStop?: () => void;
+  /** Send a note to the coding agent, read on its next Reticle call. */
+  onAgentNote?: (text: string) => void;
   /** Any Sign in button. The daemon owns the credential, so it starts the browser sign-in. */
   onSignIn?: () => void;
   settings?: SettingsHost;
@@ -180,14 +183,22 @@ export class HudShell {
    * Routed through the shell like every other painter rather than reaching into the panel: the
    * panel may not be mounted yet, and the shell is the layer that knows.
    */
+  /** The project this page reports to, for the Harness block's dashboard links. */
+  setProjectId(projectId: string | undefined): void {
+    this.#chatViews.setProjectId(projectId);
+  }
   /** The drive running in this tab's project, so the Agent Log shows its steps and Stop. */
   paintHarnessDrive(drive: HarnessDrive | undefined): void {
     this.#chatViews.paintDrive(drive);
   }
-  paintHarness(config: HarnessConfig | undefined): void {
+  /** Which coding agent is connected, and this tab's notes to it. */
+  paintAgent(link: AgentLink | undefined): void {
+    this.#chatViews.paintAgent(link);
+  }
+  paintHarness(config: HarnessConfig | undefined, gate?: HarnessGateView): void {
     this.#pushedHarness = config;
-    this.#settings.paintHarness(config);
-    this.#chatViews.paintHarness(config);
+    this.#settings.paintHarness(config, gate);
+    this.#chatViews.paintHarness(config, gate);
     this.#repaintPromoIfMoved();
   }
 
@@ -250,7 +261,8 @@ export class HudShell {
   constructor(callbacks: HudShellCallbacks = {}) {
     this.#callbacks = callbacks;
     this.#chatViews = new ChatViews(
-      (enabled) => callbacks.onHarness?.(enabled),
+      // "Turn on" opens Settings, where the Harness switch lives.
+      () => this.#settings.open(),
       () => {
         this.#chatViews.closePage();
         this.closeChat();
@@ -272,6 +284,7 @@ export class HudShell {
         run: (persona) => callbacks.onHarnessRun?.(persona),
         stop: () => callbacks.onHarnessStop?.(),
       },
+      (text) => callbacks.onAgentNote?.(text),
     );
     this.#settings = new PresenterSettingsPanel({
       ...callbacks.settings,

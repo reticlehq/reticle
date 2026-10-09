@@ -143,7 +143,7 @@ Optional. Instead of, or after, `init`, run this in your app directory:
 npx @reticlehq/server connect --project "My App"
 ```
 
-Approve the short browser code if Reticle asks you to sign in. The browser asks you to sign in, or to create a free account at app.reticle.sh. The Free plan includes monthly Harness credits. What syncs, and how to switch each part off, is in [What is recorded](what-is-recorded.md). The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
+Approve the short browser code if Reticle asks you to sign in. The browser asks you to sign in, or to create a free account at app.reticle.sh. A new account gets 10 free credits to try the Harness. What syncs, and how to switch each part off, is in [What is recorded](what-is-recorded.md). The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
 
 ## Step 2: Embed the SDK in your app
 

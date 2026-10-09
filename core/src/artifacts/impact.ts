@@ -204,6 +204,10 @@ export const HarnessOfferSchema = z.object({
 });
 export type HarnessOffer = z.infer<typeof HarnessOfferSchema>;
 
+/** The grant Harness credits came from: sign-up, the card-started trial, or a paid plan. */
+export const CreditKind = { FREE: 'free', TRIAL: 'trial', PAID: 'paid' } as const;
+export type CreditKind = (typeof CreditKind)[keyof typeof CreditKind];
+
 /**
  * What the platform says about autonomous driving for this project.
  *
@@ -212,22 +216,66 @@ export type HarnessOffer = z.infer<typeof HarnessOfferSchema>;
  */
 export const HarnessConfigSchema = z.object({
   provider: z.string(),
-  /** The switch somebody set. The platform's default is on. */
+  /** The switch somebody set. Off for a new project: the Harness is opt-in. */
   harnessEnabled: z.boolean(),
   /** Whether this workspace may drive on OUR model spend. Never folded into the switch. */
   harnessEntitled: z.boolean(),
   /** Whether the selected provider has a usable platform key. Older daemons may omit it. */
   providerReady: z.boolean().optional(),
   /** Harness credits used and held this 30 days; one is one Harness decision. Absent: unbounded or unknown. */
-  credits: z.object({ used: z.number().int().min(0), limit: z.number().int().min(0) }).optional(),
+  credits: z
+    .object({
+      used: z.number().int().min(0),
+      limit: z.number().int().min(0),
+      /** The grant they came from. Optional on the wire: an older platform omits it. */
+      kind: z.enum([CreditKind.FREE, CreditKind.TRIAL, CreditKind.PAID]).optional(),
+      /** Whole days the grant has left, counted by the daemon from the platform's end date. */
+      daysLeft: z.number().int().min(0).optional(),
+    })
+    .optional(),
   /** The platform this answer came from, so the HUD's links go there and not to the hosted one. */
   platformUrl: z.string().optional(),
+  /**
+   * The platform's own Harness coverage gate, which it enforces. The HUD prefers it to the daemon's
+   * local score; absent from an older platform, which leaves the local score to decide.
+   */
+  gate: z
+    .object({
+      unlocked: z.boolean(),
+      /** floor(score × 100); absent before any app reported. */
+      percent: z.number().int().min(0).max(100).optional(),
+      reason: z.string().max(400).optional(),
+      prompt: z.string().max(4000).optional(),
+    })
+    .optional(),
 });
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 
 /** The Harness drive running in this tab's project, so the panel can show progress and Stop. */
 export const HarnessDriveSchema = z.object({ runId: z.string(), steps: z.number().int().min(0) });
 export type HarnessDrive = z.infer<typeof HarnessDriveSchema>;
+
+/** The longest note a person can send their coding agent from the HUD. */
+export const AGENT_NOTE_MAX = 500;
+/** How many of a tab's latest notes the HUD shows. */
+export const AGENT_NOTES_SHOWN = 5;
+const AGENT_LABEL_MAX = 64;
+
+/** A note sent to the coding agent from this tab. `seen` only once an agent's tool call took it. */
+export const AgentNoteSchema = z.object({
+  text: z.string().max(AGENT_NOTE_MAX),
+  seen: z.boolean(),
+  /** Which agent took it, when the daemon knows. */
+  by: z.string().max(AGENT_LABEL_MAX).optional(),
+});
+export type AgentNote = z.infer<typeof AgentNoteSchema>;
+
+/** The coding agents attached to the daemon now (friendly names), and this tab's latest notes. */
+export const AgentLinkSchema = z.object({
+  agents: z.array(z.string().max(AGENT_LABEL_MAX)).max(8),
+  notes: z.array(AgentNoteSchema).max(AGENT_NOTES_SHOWN),
+});
+export type AgentLink = z.infer<typeof AgentLinkSchema>;
 
 export const ImpactSnapshotSchema = z.object({
   schemaVersion: z.number().int().positive(),
@@ -267,6 +315,8 @@ export const ImpactSnapshotSchema = z.object({
   harnessConfig: HarnessConfigSchema.optional(),
   /** The drive running now, when there is one. Absent: nothing is driving. */
   harnessDrive: HarnessDriveSchema.optional(),
+  /** Who is coding against this daemon, and what this tab said to them. Absent: an older daemon. */
+  agent: AgentLinkSchema.optional(),
   /**
    * The rail's notices, already chosen for this machine by the daemon (see `hud-notices.ts`).
    * Absent means the daemon has nothing newer than the SDK's bundled slides, which then show.

@@ -177,7 +177,7 @@ It runs four things in order and asks you nothing:
    args = ["@reticlehq/server", "mcp"]
    ```
 
-It ends by telling you Reticle is **not in your app yet**: run `reticle init` in your app's folder next. Want to see a verdict first? `reticle tutorial --run` drives Reticle's own demo app and touches nothing of yours.
+It ends by telling you Reticle is **not in your app yet**: run `reticle init` in your app's folder next. Want to see a verdict first? Signed in, `reticle try <url>` drives a URL once in a window you watch.
 
 **Claude Code plugin:**
 
@@ -328,11 +328,11 @@ It opens your browser so you can sign in, or create a free account, then links t
 After that, runs sync on their own. To sync right now:
 
 ```bash
-reticle push            # sync once
-reticle push --watch    # keep syncing while you work
+reticle sync            # sync once
+reticle sync --watch    # keep syncing while you work
 ```
 
-**✅ It worked when** `reticle whoami` shows this folder linked to your project.
+**✅ It worked when** `reticle status` shows this folder linked to your project.
 
 > `reticle: command not found`? Every command works as `npx @reticlehq/server <command>`, e.g. `npx @reticlehq/server init`.
 
@@ -527,7 +527,7 @@ You don't start Reticle yourself. Your agent starts it when it first calls a Ret
 | --- | --- | --- |
 | **Setting up** | `reticle setup mcp` | Registers Reticle with your coding agents. The installer already runs this; rerun it after you install a new agent |
 |  | `reticle init` | Wires the app in this folder. `--dry-run` shows the changes without writing them, `--app <dir>` picks one app in a monorepo, `--env KEY=VALUE` passes what the app needs to boot, `--json` prints one object for agents |
-|  | `reticle tutorial --run` | Watch Reticle verify a demo app. Touches nothing of yours |
+|  | `reticle try <url>` | Signed in: Reticle drives a URL once, in a window you watch, and says which journeys work |
 | **Running** | `reticle open [url]` | Shows your app in a browser connected to Reticle |
 |  | `reticle status` | Whether Reticle is running and which apps are connected |
 |  | `reticle doctor` | Diagnoses setup in one go: the browser, the background service, the port |
@@ -537,10 +537,10 @@ You don't start Reticle yourself. Your agent starts it when it first calls a Ret
 |  | `reticle affected` | Lists which saved flows your changes touch |
 |  | `reticle report` | What the last session claimed, and what actually held |
 | **Dashboard** _(optional)_ | `reticle connect --project "My App"` | Signs in, links this folder to a project on app.reticle.sh and sends your local history. Wires the app first if needed |
-|  | `reticle push` | Syncs now. `--watch` keeps syncing |
-|  | `reticle whoami` | Who you're signed in as, and which project this folder is linked to |
+|  | `reticle sync` | Syncs now. `--watch` keeps syncing |
+|  | `reticle status` | Whether Reticle is running, who you're signed in as, and which project this folder is linked to |
 |  | `reticle config --runs off` | Chooses what syncs: `--runs`, `--memory` and `--flows`, each `on` or `off` |
-|  | `reticle runs` / `reticle regression` | Reads your runs back from the dashboard. `regression` exits 3 if any flow broke |
+|  | `reticle runs` / `reticle runs regression` | Reads your runs back from the dashboard. `runs regression` exits 3 if any flow broke |
 |  | `reticle logout` | Signs out |
 | **Keeping it current** | `reticle update` / `reticle rollback` | Installs the latest version, or goes back to the previous one |
 |  | `reticle telemetry disable` | Turns off anonymous usage counts |
@@ -773,7 +773,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 
 **The open-source tool is the whole verify loop, on your machine.** The SDK in your app, the local daemon, the MCP tools your agent calls, and the HUD in the corner of your page where you watch it work: what the agent is doing, every verdict, the flows it saved, the notes you pin on the page. No account, and nothing from your app leaves your machine.
 
-**The Harness drives the app for you.** Describe a person and a journey (_"a returning customer reorders and pays"_) and the Harness drives it in your browser, proves each step, and saves what it drove as flows that replay with no model at all. Your agent spends one call instead of a context full of snapshots. It runs on the Reticle platform, and a free account includes monthly Harness credits. You watch it in the HUD as it happens ("Reticle Harness is driving"), and you can switch it off mid-run from the same panel. Call it with `reticle_verify { action: "explore", persona: "…" }`; see [docs/autodrive.md](docs/autodrive.md).
+**The Harness drives the app for you.** Describe a person and a journey (_"a returning customer reorders and pays"_) and the Harness drives it in your browser, proves each step, and saves what it drove as flows that replay with no model at all. Your agent spends one call instead of a context full of snapshots. It decides on the Reticle platform, and a new account gets 10 free credits to try it (a card starts a 14-day trial with 500). Start it from **Run Harness** in the HUD on your running app, or have your coding agent call `reticle_verify { action: "explore", persona: "…" }`. You watch it in the HUD as it happens ("Reticle Harness is driving"), and you can switch it off mid-run from the same panel; see [docs/autodrive.md](docs/autodrive.md).
 
 **[app.reticle.sh](https://app.reticle.sh) is the dashboard.** Run `reticle connect` in your app, sign in, and everything your machine verified syncs on its own, whichever agent did the driving:
 
@@ -782,7 +782,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 - saved flows, Reticle Coverage (routes reached, controls proved), and the notes people pinned in the HUD
 - a team view of all of it, and a shareable proof link for any run
 
-The open-source tool never needs the dashboard. The dashboard is where a team sees what its agents proved, and where the Harness runs.
+The open-source tool never needs the dashboard. The dashboard is where a team sees what its agents and the Harness proved; testing an app on your machine starts from Run Harness in the HUD or from your coding agent.
 
 ## Docs
 

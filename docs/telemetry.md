@@ -42,7 +42,7 @@ Eighteen kinds of events, each a single small JSON object. This is the whole lis
 | `bug_found` | Reticle finds a defect in the app under test | The **kind** of defect (`signal-contradicted`, `console-error`, …) and how it was found, never what it was found in |
 | `tool_refused` | A tool cannot do what an agent asked | Which tool, why (one of six buckets: no session, no match, unsupported, bad arguments, not ready, other), and whether the same call was retried. **Never the message**, because a refusal interpolates whatever you asked for, so only the tool name and the bucket are sent. Capped at 50 per daemon run |
 | `feedback_submitted` | **Only** when you or your agent explicitly send feedback | The report; see [Feedback](#feedback). The AGENT's call does not wait for the network: the receipt says `accepted` (validated, redacted, queued), never `sent`, and a delivery that then fails is reported back on the agent's next tool result. `reticle feedback` typed by a human still waits, because a person at a terminal is owed the real answer |
-| `identified` | **Only** when you run `reticle identify` | What you chose to tell us; see [Telling us who you are](#telling-us-who-you-are) |
+| `identified` | **Never** from this version. Only an earlier version's `reticle identify`, which has been removed | What you chose to tell us then; see [Telling us who you are](#telling-us-who-you-are) |
 
 **There is no per-tool-call event.** Tool usage is counted in memory and leaves once, inside `daemon_stopped`, as a histogram like `{"reticle_act": 40, "reticle_assert": 12}`. That is counts of tool NAMES from a fixed list we define, never arguments, results, selectors, or URLs.
 
@@ -111,7 +111,7 @@ Your code. Your app's DOM, network requests or responses, console logs, applicat
 A few of these are worth being explicit about, because they are the ones a product team is most tempted by:
 
 - **We do not send your project's name or its GitHub URL.** `projectId` is a one-way hash. It lets us count distinct projects and see that a project came back next week; it cannot be turned back into a repository, and we cannot look you up from it.
-- **We do not try to work out who you work for.** No domain sniffing, no email inference, no matching a repo against a company. If you _want_ us to know, [`reticle identify`](#telling-us-who-you-are) exists and you decide what it says.
+- **We do not try to work out who you work for.** No domain sniffing, no email inference, no matching a repo against a company. If you _want_ us to know, [email us](#telling-us-who-you-are).
 - **We do not record what you asked your agent to verify.** The `verification_completed` event knows that a verification happened and how it turned out. The prompt behind it is not something Reticle can see, and we do not reconstruct it.
 
 ## Feedback
@@ -156,25 +156,9 @@ Every switch in [Your choices](#your-choices) disables feedback too. If telemetr
 
 ## Telling us who you are
 
-Everything above is anonymous, and stays that way unless you decide otherwise. If you want us to know who you are (to get support, to ask about an enterprise licence, or to be a design partner), there is one command, and running it is the only way it ever happens:
+Everything above is anonymous, and stays that way. There is no command that sends who you are: `reticle identify`, which used to, has been removed, and this version never sends an `identified` event. If you want support, an enterprise licence, or to be a design partner, email support@reticlehq.com.
 
-```bash
-npx @reticlehq/server identify --context company --company "Acme" --email you@acme.com
-```
-
-`--context` is the only required part, and `company | side_project | open_source | learning` is the whole vocabulary. You can say "this is a company" without naming it, or name it without leaving an email.
-
-Before it sends anything, it prints what it will send and one thing worth reading carefully: **the identity is linked to this machine's anonymous id, so identifying yourself also connects the anonymous usage already recorded from this machine to what you enter.** That is what makes it useful to us, and it is why you are told before choosing rather than after.
-
-**One place mentions it to you.** After you send feedback as a human (never as an agent, and never if you have already identified or already declined), the receipt prints one line offering this command, because a bug report we cannot reply to is a conversation that ends after one sentence. Your feedback has already been sent by then: the line is an offer, not a question, and nothing is gated on it. **No address is ever attached to the feedback itself**: it would put personal data on the anonymous stream, which is exactly what the rest of this page promises not to do.
-
-To undo it:
-
-```bash
-npx @reticlehq/server identify --forget
-```
-
-That deletes the local file and stops any further sends. To have what was already sent removed, email support@reticlehq.com.
+An identity sent by an earlier version with `reticle identify` stays linked to that machine's anonymous id until you ask for it to be removed: email support@reticlehq.com.
 
 ## Where it goes
 

@@ -20,6 +20,7 @@ export const StatusLabel = {
   DAEMON: 'daemon',
   SESSIONS: 'sessions',
   AGENT_LINK: 'agent link',
+  ACCOUNT: 'account',
   NEXT: 'next',
   SPLIT_BRAIN: 'split brain',
   UPDATE: 'update',
@@ -127,6 +128,26 @@ export function statusLines(fields: Record<string, unknown>): string[] {
     // could infer — it is the one holding the connection.
     const why = str(fields, 'why');
     if (why !== undefined) lines.push(continuation(why));
+  }
+
+  // Who is signed in, and whether this repo is linked: what `whoami` used to answer. Only when the
+  // caller looked, which is what the key being present means.
+  if ('signedInAs' in fields) {
+    const who = str(fields, 'signedInAs');
+    const project = str(fields, 'linkedProject');
+    lines.push(
+      row(
+        StatusLabel.ACCOUNT,
+        who === undefined ? `${NOT_OK} not signed in` : `${OK} signed in as ${who}`,
+      ),
+    );
+    lines.push(
+      continuation(
+        project === undefined
+          ? 'this repo is not linked: run `reticle connect`'
+          : `this repo is linked to ${project}`,
+      ),
+    );
   }
 
   const client = str(fields, 'mcpClient');

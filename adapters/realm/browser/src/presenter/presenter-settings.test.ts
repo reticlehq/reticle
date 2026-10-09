@@ -2,7 +2,13 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { Presenter } from './presenter.js';
 import { SETTINGS_ATTR, SETTINGS_STORAGE_KEY } from './presenter-config.js';
 import { Annotator } from '@/review/annotator.js';
-import { loadPresenterSettings } from './presenter-settings.js';
+import {
+  HARNESS_LOCKED_HELP,
+  creditsLeft,
+  loadPresenterSettings,
+  paintHarnessRow,
+  settingsPanelHtml,
+} from './presenter-settings.js';
 
 afterEach(() => {
   document.querySelectorAll('[data-reticle-overlay]').forEach((e) => e.remove());
@@ -296,5 +302,68 @@ describe('kill Reticle', () => {
     kill.click();
     expect(killed).toBe(0);
     p.destroy();
+  });
+});
+
+/*
+ * Every option said only its name, with the explanation behind a (?) nobody clicks: "Output Detail",
+ * "React Components" and "Autonomous driving" meant nothing to a first-time user.
+ */
+describe('every setting explains itself in one line', () => {
+  it('gives each switch and checkbox a visible description', () => {
+    document.body.innerHTML = settingsPanelHtml();
+    const rows = [
+      ...document.querySelectorAll('.reticle-settings-row, .reticle-settings-checkrow'),
+    ].filter((row) => null !== row.querySelector('[role="switch"],[role="checkbox"]'));
+    expect(rows.length).toBeGreaterThan(8);
+    for (const row of rows) {
+      const desc = row.querySelector('.reticle-settings-desc')?.textContent ?? '';
+      expect(desc.length, row.textContent ?? '').toBeGreaterThan(10);
+    }
+  });
+
+  it('names the options in plain words', () => {
+    document.body.innerHTML = settingsPanelHtml();
+    const text = document.body.textContent ?? '';
+    for (const jargon of ['Output Detail', 'React Components', 'Autonomous driving'])
+      expect(text).not.toContain(jargon);
+    expect(text).toContain('Allow Reticle to drive');
+  });
+});
+
+describe('the Harness switch help, in credits', () => {
+  it('says the credits left by their grant, and never a free monthly allowance', () => {
+    expect(creditsLeft({ used: 2, limit: 10, kind: 'free' })).toBe('8 of 10 free credits');
+    expect(creditsLeft({ used: 80, limit: 500, kind: 'trial' })).toBe('420 of 500 trial credits');
+    expect(creditsLeft({ used: 3, limit: 50 })).toBe('47 of 50 credits left');
+    expect(creditsLeft({ used: 10, limit: 10, kind: 'free' })).toBe(
+      'Your 10 free credits are used.',
+    );
+    expect(HARNESS_LOCKED_HELP).not.toMatch(/each month|monthly/);
+  });
+});
+
+describe('the Harness switch and the coverage gate', () => {
+  const config = { provider: 'jev', harnessEnabled: false, harnessEntitled: true };
+  const toggle = (): Element | null =>
+    document.querySelector('[data-reticle-setting="harnessEnabled"]');
+
+  it('is locked below 80%, and its help says why', () => {
+    document.body.innerHTML = settingsPanelHtml();
+    const reason = 'Harness unlocks at 80% instrumentation. This app is at 62%: missing x.';
+    paintHarnessRow(document.body, config, { percent: 62, unlocked: false, reason });
+    expect(toggle()?.getAttribute('aria-disabled')).toBe('true');
+    expect(
+      document
+        .querySelector('[data-reticle-settings-harness-row] [data-reticle-settings-help]')
+        ?.getAttribute('title'),
+    ).toBe(reason);
+  });
+
+  it('can be switched on at 80% or more', () => {
+    document.body.innerHTML = settingsPanelHtml();
+    paintHarnessRow(document.body, config, { percent: 87, unlocked: true });
+    expect(toggle()?.getAttribute('aria-disabled')).toBe('false');
+    expect(toggle()?.getAttribute('aria-checked')).toBe('false');
   });
 });

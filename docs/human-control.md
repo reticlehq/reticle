@@ -26,6 +26,8 @@ The floating panel (bottom-center, `present: true`) gives you:
 
 - **Pause / Resume**: one toggle. Paused turns the panel + page border **amber** with a `PAUSED` badge.
 - **End** ends the session: panel turns **emerald**, shows `Session ended · <summary>`, then fades away.
+- **Note to your agent.** The Agent Log names the coding agent attached to Reticle (`Connected: Claude Code`, read from the MCP handshake) and has one box: a note to that agent. It says `Sent. Claude Code sees this the next time it calls Reticle.` and turns into `Seen by Claude Code` only once one of the agent's tool calls has actually taken it. With no agent attached it says so and offers a prompt to copy into one.
+- **Run Harness** drives the page as a person you pick: First-time visitor (the default), Returning power user, On a phone with a slow connection, Keyboard only, Careless user, Admin / settings, or Custom… in your own words. The pick is remembered per project. The agent hears about the drive on its next tool call (`harness`), with the `runId` to follow it.
 - **Minimise (▾)** collapses the panel to a bar that streams only the live line; click the bar to restore.
 - **Flag a bug**, the button in the corner. Toggle it on, click the element that looks wrong, type what's wrong (⌘/Ctrl+Enter to send, Esc to back out). Reticle pins a numbered marker, logs your flag in the panel, and hands the agent a structured mark. Notes are kept in `.reticle/notes.json` (pending and resolved), so a reload or a daemon restart does not lose them, and a linked project syncs them to the dashboard.
 
@@ -53,7 +55,7 @@ When paused, every action tool short-circuits with the human's guidance, so the 
 
 ## Piggybacked guidance
 
-Even without a pause, action/observe/assert results carry a `control` block when there's something to tell the agent:
+Even without a pause, any Reticle tool result carries a `control` block when there's something to tell the agent:
 
 ```jsonc
 { since, dispatched, settled, result, control: { state: "active", guidance: ["looks good, keep going"] } }

@@ -12,20 +12,13 @@ describe('dialsTheDaemon — which commands the ambiguous-port refusal stops', (
     parseCliArgs(argv, RETICLE_DEFAULT_PORT);
 
   it('stops every command that talks to the daemon on the resolved port', () => {
-    for (const argv of [
-      ['status'],
-      ['mcp'],
-      ['stop'],
-      ['doctor'],
-      ['open'],
-      ['tutorial', '--run'],
-    ]) {
+    for (const argv of [['status'], ['mcp'], ['stop'], ['doctor'], ['open']]) {
       expect(dialsTheDaemon(parse(argv))).toBe(true);
     }
   });
 
   it('lets through what never dials: init resolves the workspace itself, the rest need no port', () => {
-    for (const argv of [['init'], ['version'], ['help'], ['tutorial'], ['license']]) {
+    for (const argv of [['init'], ['version'], ['help'], ['license']]) {
       expect(dialsTheDaemon(parse(argv))).toBe(false);
     }
   });

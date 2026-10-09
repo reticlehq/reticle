@@ -303,11 +303,18 @@ export class FlowStore {
   readonly #fs: FileSystemPort;
   readonly #root: string;
   readonly #clock: Clock;
+  readonly #onWrote: (() => void) | undefined;
 
-  constructor(fs: FileSystemPort, root: string, clock: Clock) {
+  /**
+   * `onWrote` is told after a save lands, so cloud sync cycles on a new flow the way it does on a
+   * new run (`RunStore` takes the same callback). Without it a flow saved with no run behind it
+   * waited for the timer, and a daemon that exited first never sent it.
+   */
+  constructor(fs: FileSystemPort, root: string, clock: Clock, opts: { onWrote?: () => void } = {}) {
     this.#fs = fs;
     this.#root = root;
     this.#clock = clock;
+    this.#onWrote = opts.onWrote;
   }
 
   /**
@@ -403,6 +410,7 @@ export class FlowStore {
     const flow = await this.#linkIntent(base);
     await this.#fs.mkdir(flowParentDir(this.#root, program.name, pid));
     await this.#fs.writeFile(flowPath(this.#root, program.name, pid), this.#serialize(flow));
+    this.#onWrote?.();
     return { ok: true, value: this.#summary(flow) };
   }
 
@@ -448,6 +456,7 @@ export class FlowStore {
       }
       if (groupPrint === print) result = merged;
     }
+    this.#onWrote?.();
     return { ok: true, value: this.#summary(result) };
   }
 
@@ -486,6 +495,7 @@ export class FlowStore {
       flowPath(this.#root, asFlowName(valid.name), pid),
       this.#serialize(valid),
     );
+    this.#onWrote?.();
     return { ok: true, value: this.#summary(valid) };
   }
 

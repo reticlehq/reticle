@@ -203,7 +203,7 @@ describe('a Harness drive in the same tab', () => {
   });
 
   /** A drive that saw "Invalid email or password" and never reached its goal synced as "Proved". */
-  it('fails when the drive did not reach its goal, though every check held', () => {
+  it('is not proved when the drive did not reach its goal, though every check held', () => {
     const missed = { ...by, harness: 'h-goal' };
     noteHarnessGoal('h-goal', false);
     const runs = driveRunsFrom(
@@ -213,7 +213,21 @@ describe('a Harness drive in the same tab', () => {
       ],
       DEPS,
     );
-    expect(runs.find((run) => 'harness-h-goal' === run.runId)?.flows[0]?.status).toBe('fail');
+    expect(runs.find((run) => 'harness-h-goal' === run.runId)?.flows[0]?.status).toBe('skipped');
+  });
+
+  /** A user drive with 0 failed and 2 undecided, its goal judged missed, synced as a failure. */
+  it('never syncs undecided checks as a failure, goal missed or not', () => {
+    const open = { ...by, harness: 'h-open' };
+    noteHarnessGoal('h-open', false);
+    const runs = driveRunsFrom(
+      [
+        { ...harness(Verified.UNKNOWN, 40), drivenBy: open },
+        { ...harness(Verified.UNKNOWN, 70), drivenBy: open },
+      ],
+      DEPS,
+    );
+    expect(runs.find((run) => 'harness-h-open' === run.runId)?.flows[0]?.status).toBe('skipped');
   });
 
   it('leaves a session the Harness never touched exactly one run', () => {

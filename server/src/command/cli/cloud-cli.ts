@@ -27,6 +27,7 @@ import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
 import { normalizeUrl } from './auth/cloud-session.js';
 import { cmdLogin, cmdLogout } from './cloud-login.js';
 import { cmdTry } from './try-command.js';
+import { CLOUD_COMMANDS } from './cli-parse-grammar.js';
 import {
   api,
   baseUrl,
@@ -68,25 +69,9 @@ import { fetchPlatformRun } from '@/features/harness/platform/platform-drives.js
  * override resolves through. This directory is what makes staging and production hold at the same
  * time instead of clobbering each other, which is the whole reason a single file was not enough.
  */
-const CLOUD_COMMANDS: ReadonlySet<string> = new Set([
-  'login',
-  'connect',
-  'try',
-  'logout',
-  'whoami',
-  'link',
-  'project',
-  'config',
-  'issues',
-  'memory',
-  'push',
-  'sync',
-  'runs',
-  'regression',
-  'share',
-]);
+const CLOUD_COMMAND_SET: ReadonlySet<string> = new Set(CLOUD_COMMANDS);
 export const isCloudCommand = (cmd: string | undefined): boolean =>
-  cmd !== undefined && CLOUD_COMMANDS.has(cmd);
+  cmd !== undefined && CLOUD_COMMAND_SET.has(cmd);
 
 /** `reticle sync --watch` — keep cycling instead of exiting. */
 const WATCH_FLAG = '--watch';
@@ -241,9 +226,30 @@ const cmdWhoami = async (): Promise<number> => {
     hint(
       null === session
         ? 'this repo is not attached — run `reticle connect` (signs in and links in one step)'
-        : 'this repo is not attached — run `reticle link`',
+        : 'this repo is not attached — run `reticle connect`',
     );
   return 0;
+};
+
+/**
+ * Who is signed in and which project this repo is linked to, for `reticle status`. Local files
+ * only: status must answer with no network.
+ */
+export const accountStatusFields = async (): Promise<{
+  signedInAs: string | null;
+  linkedProject: string | null;
+}> => {
+  const session = await readSession();
+  const cloud = await resolveProjectCloud(
+    createNodeFileSystem(),
+    linkedRoot(),
+    homedir(),
+    process.env,
+  );
+  return {
+    signedInAs: session?.orgName ?? null,
+    linkedProject: null === cloud.config ? null : cloud.projectId,
+  };
 };
 
 /** `reticle project ls` / `reticle project create <name>` — key- or session-authed. */
@@ -257,8 +263,8 @@ const cmdProject = async (argv: readonly string[]): Promise<number> => {
     // baffling to somebody who just did — the useful fact is that they logged in somewhere else.
     err(
       null !== active && normalizeUrl(active.url) !== url
-        ? `signed in to ${normalizeUrl(active.url)}, but this command targets ${url} — run \`reticle login --url ${url}\`, or set RETICLE_API_KEY`
-        : `not signed in to ${url} — run \`reticle login --url ${url}\`, or set RETICLE_API_KEY`,
+        ? `signed in to ${normalizeUrl(active.url)}, but this command targets ${url} — run \`reticle connect --url ${url}\`, or set RETICLE_API_KEY`
+        : `not signed in to ${url} — run \`reticle connect --url ${url}\`, or set RETICLE_API_KEY`,
     );
     return 2;
   }
@@ -277,7 +283,7 @@ const cmdProject = async (argv: readonly string[]): Promise<number> => {
       await api('POST', `${url}/v1/projects`, token, { name }),
     );
     emit(created);
-    hint(`next: \`reticle link --project ${created.projectId}\` to bind this repo`);
+    hint(`next: \`reticle connect --project ${created.projectId}\` to bind this repo`);
     return 0;
   }
   if ('rename' === sub) {
@@ -445,7 +451,7 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
       orgId = session.orgId;
     }
   } else {
-    err('run `reticle login` first, or set RETICLE_API_KEY to link with an existing key');
+    err('run `reticle connect` first, or set RETICLE_API_KEY to link with an existing key');
     return 2;
   }
 
@@ -514,9 +520,9 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
       ? `reusing key ${keyHint(key)} — already stored in ${credPath}, not in your repo`
       : `minted key ${keyHint(key)} — stored in ${credPath}, not in your repo`,
   );
-  hint('to change it: `reticle link --project <other>`; to inspect: `reticle whoami`');
+  hint('to change it: `reticle connect --project <other>`; to inspect: `reticle status`');
   hint(
-    'linked ✓ runs auto-push on `reticle verify`; `reticle push` sends existing local runs; `reticle whoami` shows state',
+    'linked ✓ runs auto-push on `reticle verify`; `reticle sync` sends existing local runs; `reticle status` shows state',
   );
   /*
    * A binding is not a connection.
@@ -601,7 +607,7 @@ const cmdConfig = async (argv: readonly string[]): Promise<number> => {
   const linkPath = join(linkedRoot(), CLOUD_LINK_FILE);
   const raw = await readJson(linkPath);
   if (null === raw || typeof raw !== 'object') {
-    err('no .reticle/cloud.json here — run `reticle link` first');
+    err('no .reticle/cloud.json here — run `reticle connect` first');
     return 2;
   }
   const cfg = raw as Record<string, unknown>;
@@ -648,7 +654,7 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
   const reticleRoot = linkedRoot();
   const cloud = await resolveProjectCloud(fs, reticleRoot, homedir(), process.env);
   if (null === cloud.config) {
-    err(cloud.reason ?? 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY');
+    err(cloud.reason ?? 'cloud not attached here: run `reticle connect`, or set RETICLE_API_KEY');
     await reportUnsynced(fs);
     return 1;
   }
@@ -739,7 +745,7 @@ const repoCloud = async (): Promise<{
   const cloud = await resolveProjectCloud(fs, linkedRoot(), homedir(), process.env);
   if (null === cloud.config)
     throw new Error(
-      cloud.reason ?? 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY',
+      cloud.reason ?? 'cloud not attached here: run `reticle connect`, or set RETICLE_API_KEY',
     );
   return { ...cloud.config, projectId: cloud.projectId };
 };
@@ -786,7 +792,7 @@ const cmdIssues = async (argv: readonly string[]): Promise<number> => {
   const fixAt = argv.indexOf('--fix');
   const wanted = -1 === fixAt ? undefined : argv[fixAt + 1];
   if (fixAt !== -1 && wanted === undefined) {
-    err('usage: reticle issues --fix <fingerprint>');
+    err('usage: reticle runs issues --fix <fingerprint>');
     return 2;
   }
   const body = await api('GET', `${url}/v1/issues`, apiKey);
@@ -807,7 +813,7 @@ const cmdIssues = async (argv: readonly string[]): Promise<number> => {
   }
   const found = parsed.data.issues.find((i) => i.fingerprint === wanted);
   if (found === undefined) {
-    err(`no issue with fingerprint '${wanted}' — run \`reticle issues\` to list them`);
+    err(`no issue with fingerprint '${wanted}' — run \`reticle runs issues\` to list them`);
     return 2;
   }
   const prompt = found.fixPrompt;
@@ -839,7 +845,7 @@ const cmdMemory = async (argv: readonly string[]): Promise<number> => {
   const at = argv.indexOf('--subject');
   const subject = -1 === at ? undefined : argv[at + 1];
   if (-1 !== at && subject === undefined) {
-    err('usage: reticle memory [--subject <name>]');
+    err('usage: reticle runs memory [--subject <name>]');
     return 2;
   }
   // Scoped to the LINKED project, on the way out AND on the way back. Without the parameter
@@ -886,12 +892,29 @@ const cmdRegression = async (): Promise<number> => {
 const cmdShare = async (argv: readonly string[]): Promise<number> => {
   const runId = argv[0];
   if (runId === undefined) {
-    err('usage: reticle share <runId>');
+    err('usage: reticle runs share <runId>');
     return 2;
   }
   const { url, apiKey } = await repoCloud();
   emit(await api('POST', `${url}/v1/runs/${encodeURIComponent(runId)}/share`, apiKey));
   return 0;
+};
+
+/** `reticle runs <regression|share|issues|memory>`, and `reticle runs [<runId>]` otherwise. */
+const cmdRunsFamily = async (argv: readonly string[]): Promise<number> => {
+  const [sub, ...rest] = argv;
+  switch (sub) {
+    case 'regression':
+      return cmdRegression();
+    case 'share':
+      return cmdShare(rest);
+    case 'issues':
+      return cmdIssues(rest);
+    case 'memory':
+      return cmdMemory(rest);
+    default:
+      return cmdRuns(argv);
+  }
 };
 
 /** Dispatch a cloud subcommand. Returns the process exit code. */
@@ -926,7 +949,7 @@ export const runCloudCommand = async (argv: readonly string[]): Promise<number> 
       case 'sync':
         return await cmdSync(rest);
       case 'runs':
-        return await cmdRuns(rest);
+        return await cmdRunsFamily(rest);
       case 'issues':
         return await cmdIssues(rest);
       case 'memory':

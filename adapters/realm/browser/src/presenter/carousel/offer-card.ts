@@ -136,5 +136,5 @@ export const OFFER_CSS: string = `
 .reticle-offer-title{display:block;font-weight:600;font-size:12px;padding-right:18px;}
 .reticle-offer-body{margin:6px 0 8px;font-size:11px;line-height:1.45;opacity:.8;}
 .reticle-offer-claim{display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;background:var(--reticle-accent,#4f7cff);color:#fff;text-decoration:none;}
-.reticle-offer-claimed{margin:6px 10px;font-size:10px;opacity:.6;}
+.reticle-offer-claimed{margin:6px 10px;font-size:11px;opacity:.6;}
 `;

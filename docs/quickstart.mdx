@@ -5,7 +5,7 @@ description: Install Reticle, connect your coding agent, and get a real verdict 
 icon: rocket
 ---
 
-**Four steps: run the installer once per machine, run `reticle init` once per project, then optionally `reticle connect` for the dashboard and `reticle push` to sync.** Skip `init` and your agent's first `reticle_session` call wires the app instead. Reticle embeds a dev-only SDK in your running app and proves a browser session connected. No account needed for steps 1 and 2.
+**Four steps: run the installer once per machine, run `reticle init` once per project, then optionally `reticle connect` for the dashboard and `reticle sync` to send runs.** Skip `init` and your agent's first `reticle_session` call wires the app instead. Reticle embeds a dev-only SDK in your running app and proves a browser session connected. No account needed for steps 1 and 2.
 
 By the end of this page your agent will click a button in your app and prove what happened: the request that fired, the state that changed, and the file to open if it didn't.
 
@@ -36,7 +36,7 @@ irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1
 
 </CodeGroup>
 
-This puts `reticle` on your PATH and registers the MCP server with every coding agent it can reach: Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue and Factory Droid. Nothing is asked. It does not wire your app, and says so: that is step 2. Want a verdict first? `reticle tutorial --run` drives Reticle's own demo app.
+This puts `reticle` on your PATH and registers the MCP server with every coding agent it can reach: Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue and Factory Droid. Nothing is asked. It does not wire your app, and says so: that is step 2. Want a verdict first? Signed in, `reticle try <url>` drives a URL once in a window you watch.
 
 Codex CLI keeps a TOML config that Reticle will not rewrite itself, so with the `codex` command installed the installer registers Reticle through `codex mcp add`. Without it, the installer prints the lines to paste and the file to paste them into.
 
@@ -120,17 +120,17 @@ npx @reticlehq/server connect --project "My App"
 `connect` runs Step 2 first if this project isn't wired yet, so you can use it in place of `init`. Then it:
 
 1. Opens a browser so you can sign in, or create a free account at app.reticle.sh. Approve the short code shown in the browser and in the terminal, and the command carries on by itself.
-2. Links this folder to the cloud project you named, creating it if it doesn't exist. `npx @reticlehq/server whoami` shows the link.
+2. Links this folder to the cloud project you named, creating it if it doesn't exist. `npx @reticlehq/server status` shows the link.
 3. Sends the runs and flows already on this machine.
 
 After that, every verified run syncs on its own. To sync right now, for example before showing a teammate:
 
 ```bash
-npx @reticlehq/server push            # one sync
-npx @reticlehq/server push --watch    # keep syncing while you work
+npx @reticlehq/server sync            # one sync
+npx @reticlehq/server sync --watch    # keep syncing while you work
 ```
 
-The Free plan includes monthly Harness credits. What syncs, and how to switch each part off (`reticle config --runs/--memory/--flows on|off`), is in [What is recorded](/what-is-recorded). In CI, set `RETICLE_API_KEY` instead of signing in.
+A new account gets 10 free credits to try the Harness. What syncs, and how to switch each part off (`reticle config --runs/--memory/--flows on|off`), is in [What is recorded](/what-is-recorded). In CI, set `RETICLE_API_KEY` instead of signing in.
 
 ## Step 4. Check the setup
 

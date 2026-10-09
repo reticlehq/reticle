@@ -234,6 +234,19 @@ describe('reticle.ts -> presenter log wiring', () => {
     reticle.disconnect();
   });
 
+  /** The SDK-behind notice is sent the instant a page connects, before its panel has loaded. */
+  it('shows narration that arrived before the panel did, once it arrives', async () => {
+    const reticle = new Reticle();
+    reticle.connect({ present: true, pace: 0 });
+    await dispatch(ReticleCommand.NARRATE, { text: 'This app runs an older SDK' });
+    await connectAndWaitForPanel(reticle, { present: true, pace: 0 });
+    await vi.waitFor(() => {
+      const texts = logRows().map((r) => r.querySelector('.reticle-log-text')?.textContent);
+      expect(texts).toEqual(['This app runs an older SDK']);
+    });
+    reticle.disconnect();
+  });
+
   it('present:false → narrate/act commands are no-ops', async () => {
     const reticle = new Reticle();
     await connectAndWaitForPanel(reticle, { present: false });

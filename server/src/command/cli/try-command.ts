@@ -12,7 +12,15 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { RETICLE_DEFAULT_PORT, ReticleDir, ReticleEnv, ScriptStatus } from '@reticlehq/core';
+import {
+  RETICLE_DEFAULT_PORT,
+  ReticleDir,
+  ReticleEnv,
+  RunFlowStatus,
+  ScriptStatus,
+  asRecord,
+  driveFlowStatus,
+} from '@reticlehq/core';
 import type { CloudConfig } from '@/memory/cloud/cloud-sync.js';
 import {
   FreeDriveKind,
@@ -20,7 +28,8 @@ import {
   requestFreeDrive,
   type FreeDrive,
 } from '@/features/harness/platform/platform-drives.js';
-import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
+import { linkedCloudPort, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import { describeUnsynced, unsyncedRoots } from '@/memory/cloud/unsynced-roots.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
   defaultPairingTokenDir,
@@ -179,7 +188,7 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
     for (const line of lines) ports.out(line);
   } else {
     ports.fail(
-      'The run is kept on this machine; it could not be sent. Run `reticle push` to retry.',
+      'The run is kept on this machine; it could not be sent. Run `reticle sync` to retry.',
     );
   }
   return EXIT_OK;
@@ -198,12 +207,20 @@ export function journeysOf(report: Record<string, unknown>, persona?: string): T
       return title === undefined || status === undefined ? [] : [{ title, status }];
     });
   }
-  // An unplanned drive is one journey. It failed when its goal was judged missed, worked when a
-  // check proved something and no goal was missed, and otherwise proved nothing either way.
+  // An unplanned drive is one journey, graded by the one rule every drive is: failed only when a
+  // check came back no. A missed goal or undecided checks prove nothing either way.
+  const checks = asRecord(report['checks']);
+  const count = (key: string): number => ('number' === typeof checks[key] ? checks[key] : 0);
+  const goalMet = report['goalMet'];
+  const flow = driveFlowStatus({
+    held: count('held'),
+    failed: count('failed'),
+    ...('boolean' === typeof goalMet ? { goalMet } : {}),
+  });
   const status =
-    false === report['goalMet']
+    RunFlowStatus.FAIL === flow
       ? ScriptStatus.FAILED
-      : true === report['proved']
+      : RunFlowStatus.PASS === flow
         ? ScriptStatus.PASSED
         : ScriptStatus.BLOCKED;
   return [{ title: persona ?? 'Autonomous drive', status }];
@@ -316,4 +333,146 @@ export async function cmdTry(argv: readonly string[], cloudCommands: TryCloud): 
     out: (line) => process.stdout.write(`${line}\n`),
     fail: (line) => process.stderr.write(`${line}\n`),
   });
+}
+
+// ── how `init` ends ───────────────────────────────────────────────────────────────────────
+/**
+ * How `init` ends once the connection is proved: what Reticle sees of the app, what it is missing,
+ * and the prompt that hands the rest to the coding agent, which proves the first flow. `init` never
+ * drives: the Harness is opt-in and unlocks at a coverage score (core's `instrumentation-coverage.ts`), and a
+ * freshly wired app is rarely there yet.
+ *
+ * Read from the daemon's `/status`, the same coverage `doctor` prints, so the two never disagree.
+ */
+
+/** What a project that is not linked is told, once, at the end. */
+export const UNLINKED_PITCH = [
+  'Results stay on this machine. `reticle connect` saves them to your dashboard and lets Reticle',
+  'Harness test the whole app: a new account gets 10 free credits.',
+];
+
+/** Prove one flow with the coding agent: the line every ending names. */
+export const msgProveOneFlow = (url: string): string =>
+  `Then ask your coding agent: "Use Reticle to prove one flow in ${url}: drive it, and end with ` +
+  'reticle_act_and_wait and an until on the last step."';
+
+const names = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.flatMap((item: unknown) => {
+        const name: unknown =
+          'object' === typeof item && null !== item
+            ? (item as Record<string, unknown>)['capability']
+            : item;
+        return 'string' === typeof name ? [name] : [];
+      })
+    : [];
+
+/**
+ * The closing lines for one tab's coverage, as `/status` reports it: the score, what is missing, the
+ * Harness gate in its own sentence, and the prompt for the coding agent. Pure.
+ */
+export function initCoverageLines(tab: Record<string, unknown> | undefined, url: string): string[] {
+  const gate = asRecord(tab?.['harnessGate']);
+  const percent = gate['percent'];
+  if (tab === undefined || 'number' !== typeof percent)
+    return [
+      'Instrumentation is measured on an open tab of the app: run `reticle doctor` with it open.',
+      msgProveOneFlow(url),
+    ];
+  const unseen = [...names(tab['missing']), ...names(tab['notSeenYet'])];
+  const reason = gate['reason'];
+  const prompt = tab['prompt'];
+  return [
+    `Instrumentation: ${String(percent)}%` +
+      (0 === unseen.length ? '' : ` — missing: ${unseen.join(', ')}`),
+    'string' === typeof reason
+      ? reason
+      : `Harness can be switched on: it is off until you switch it on in the HUD's Settings.`,
+    ...('string' === typeof prompt
+      ? [
+          'Paste this into your coding agent; it closes the gaps and proves the first flow:',
+          ...prompt.split('\n').map((line) => `  ${line}`),
+        ]
+      : [msgProveOneFlow(url)]),
+  ];
+}
+
+/** The project's own `.reticle`, where the drive's flow and run land and where its link lives. */
+const projectRoot = (appDir: string): string =>
+  callerArtifactRoot(appDir) ?? join(appDir, ReticleDir.ROOT);
+
+/**
+ * This project's runs and flows that will never reach the dashboard as things stand, one line each:
+ * not linked, no key for its host, flow sync off, or refused. A linked root's pending runs are left
+ * out, because the daemon sends them within seconds and saying so would be noise.
+ */
+export async function strandedWorkLines(appDir: string): Promise<string[]> {
+  const fs = createNodeFileSystem();
+  const cloud = () => resolveProjectCloud(fs, projectRoot(appDir), homedir(), process.env);
+  const roots = await unsyncedRoots(
+    [projectRoot(appDir)],
+    async () => {
+      const c = await cloud();
+      return null !== c.config && null !== c.projectId;
+    },
+    async () => (await cloud()).policy.flows,
+  );
+  return roots
+    .filter((entry) => !entry.linked || 0 < entry.flows)
+    .map((entry) => `⚠ ${describeUnsynced(entry, appDir)}`);
+}
+
+/** What `init` hands its ending, once the connection is proved. */
+export interface FirstFlowContext {
+  appDir: string;
+  bridgePort: number;
+  pairingToken?: string | undefined;
+  url: string;
+  sessionId: string;
+  /** The proof came from a Reticle-owned browser, now closed: its own tab cannot be measured. */
+  leased: boolean;
+  openBrowser: boolean;
+  /** False for `--no-first-run`: connect, and say nothing more. */
+  firstRun: boolean;
+  json: boolean;
+}
+
+/** The tab `init` proved, out of `/status`: by session, else the only one on the same url. */
+function tabIn(
+  status: unknown,
+  sessionId: string,
+  url: string,
+): Record<string, unknown> | undefined {
+  const list = asRecord(status)['coverage'];
+  if (!Array.isArray(list)) return undefined;
+  const tabs = list.map((entry: unknown) => asRecord(entry));
+  return (
+    tabs.find((tab) => sessionId === tab['sessionId']) ??
+    tabs.find((tab) => 'string' === typeof tab['url'] && tab['url'].startsWith(url))
+  );
+}
+
+/**
+ * How `init` ends: the coverage score, the gaps and the agent prompt, the pitch when the project is
+ * not linked, then what will never reach the dashboard. Nothing is driven. Never throws.
+ */
+export async function initFirstFlow(
+  ctx: FirstFlowContext,
+  say: (line: string) => void,
+): Promise<{ flowSaved: boolean }> {
+  if (ctx.firstRun) {
+    // A leased proof's tab has closed; another open tab of the same app still answers for it.
+    const status = await fetchStatus(ctx.bridgePort).catch(() => undefined);
+    say('');
+    for (const line of initCoverageLines(tabIn(status, ctx.sessionId, ctx.url), ctx.url)) say(line);
+    const linked = linkedCloudPort(
+      createNodeFileSystem(),
+      projectRoot(ctx.appDir),
+      homedir(),
+      process.env,
+    );
+    if (null === (await linked().catch(() => null))) for (const line of UNLINKED_PITCH) say(line);
+  }
+  for (const line of await strandedWorkLines(ctx.appDir).catch(() => [])) say(line);
+  return { flowSaved: false };
 }

@@ -98,6 +98,7 @@ import { resolveActTarget } from './act/act-target.js';
 import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrue } from './act/already-true.js';
+import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
 
 /**
  * Narrow the wire's `action` to a real ActionType, or undefined.
@@ -610,14 +611,14 @@ export const ACT_TOOLS: ToolDef[] = [
 
         const r = asRecord(actResult?.result);
         if ('boolean' === typeof r['settled']) settledOutcome = r['settled'];
-        // Where the acted element is written. Captured at act time alongside the anchor, so it is
-        // available even when the action unmounted its own target.
+        // Where the acted element is written, captured at act time even if the action unmounted it.
         const actedSource = sourceOf(r['source']);
-        // Remembered on the session so a LATER assertion can name a file even when its failure has no
-        // element to point at — a signal that never fired, a request that was never made.
+        // Remembered so a LATER assertion can name a file with no element to point at, and so the
+        // app's coverage counts source mapping as seen.
         const actedSourceLabel =
           actedSource === undefined ? undefined : `${actedSource.file}:${String(actedSource.line)}`;
         session.lastAct.markSource(actedSourceLabel);
+        noteSourceSeen(session.id, actedSourceLabel);
         const windowEvents = session.eventsSince(since);
         const trace = summarizeReaction(
           buildReactionReport(windowEvents, session.elapsed() - since),

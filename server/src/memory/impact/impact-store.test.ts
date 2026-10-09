@@ -284,7 +284,21 @@ describe('the sync status in the snapshot', () => {
       notices: { read: () => [] },
     }).snapshot();
     expect(snap.sync).toMatchObject({ status: 'local-only', pending: 1 });
-    expect(String(snap.sync?.['said'])).toContain('reticle link');
+    expect(String(snap.sync?.['said'])).toContain('reticle connect');
+  });
+
+  // A flow saved in an unlinked folder with no run beside it was only a daemon log line.
+  it('counts the flows an unlinked project holds in the same not-sent number', () => {
+    const reticleRoot = join(mkdtempSync(join(tmpdir(), 'impact-unsent-flows-')), '.reticle');
+    mkdirSync(join(reticleRoot, 'flows'), { recursive: true });
+    writeFileSync(join(reticleRoot, 'flows', 'checkout.json'), JSON.stringify({ name: 'c' }));
+    const snap = new ImpactStore({
+      reticleRoot,
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-unsent-flows-home-')),
+      notices: { read: () => [] },
+    }).snapshot();
+    expect(snap.sync).toMatchObject({ status: 'local-only', pending: 1, runs: 0, flows: 1 });
+    expect(String(snap.sync?.['said'])).toContain('1 flow(s)');
   });
 
   it('links the newest run the platform holds, on its own dashboard page', () => {

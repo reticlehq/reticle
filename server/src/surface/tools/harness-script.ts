@@ -56,6 +56,7 @@ import {
   buildDriver,
   flowsThatCheckNothing,
   maxStepsFromEnv,
+  msgDriveCutOff,
   narrator,
   pinned,
   productRules,
@@ -255,16 +256,19 @@ export async function exploreScript(
   );
   if (planId !== undefined) await reportPlanResults(platform, planId, results);
   for (const line of run.lines) narrate(line);
+  const cutOff = run.drives.find((d) => StopReason.BROKEN === d.stopReason);
   narrate(
     run.stopped
       ? 'Autonomous driving switched off — the Harness stopped. What it drove is kept.'
-      : `Harness finished the plan — ${String(run.lines.filter((l) => l.startsWith('✓')).length)} of ${String(run.lines.length)} journeys passed. ${verdictLine(checkTally(run.toolCalls))}`,
+      : cutOff !== undefined
+        ? msgDriveCutOff(cutOff.error)
+        : `Harness finished the plan — ${String(run.lines.filter((l) => l.startsWith('✓')).length)} of ${String(run.lines.length)} journeys passed. ${verdictLine(checkTally(run.toolCalls))}`,
   );
 
   const sum = (pick: (r: HarnessResult) => number): number =>
     run.drives.reduce((n, r) => n + pick(r), 0);
   // A model drive that broke breaks the run: "finished" over a platform that answered 500 hid it.
-  const broke = run.drives.find((d) => StopReason.BROKEN === d.stopReason);
+  const broke = cutOff;
   const drive: HarnessResult = {
     stopReason: run.stopped
       ? StopReason.STOPPED

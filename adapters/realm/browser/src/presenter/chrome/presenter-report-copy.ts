@@ -49,10 +49,11 @@ export const REPORT_TEXT = {
    * the shape of an assertion that was wrong — a clean-console assertion against ordinary dev-mode
    * logging goes red and reports a defect nobody found.
    *
-   * The honest word is what Reticle DID: it refused to pass them. That is true of the assertion
-   * error and the real bug alike.
+   * "Failed checks" is true of the assertion error and the real bug alike, and "caught before you
+   * shipped" says why the number is good news. The old "checks Reticle refused to pass" was honest
+   * too, but read to a new user as Reticle itself being broken.
    */
-  HERO_DEFECTS: 'checks Reticle refused to pass',
+  heroDefects: (n: number): string => `failed check${1 === n ? '' : 's'} caught before you shipped`,
   VERDICTS: 'Verdicts',
   PASSED: 'passed',
   FAILED: 'failed',
@@ -95,11 +96,11 @@ export const REPORT_TEXT = {
    * there is a verdict worth keeping — an offer to preserve nothing is just an advert.
    */
   LOCAL_ONLY: 'This record stops at this machine.',
-  LOCAL_ONLY_ACTION: 'reticle login',
+  LOCAL_ONLY_ACTION: 'reticle connect',
   LOCAL_ONLY_TAIL: 'keeps it, and lets a team see it.',
   /** Signed in, repo not linked — a different state with a different next step. */
   UNLINKED: 'Signed in, but this repo is not linked.',
-  UNLINKED_ACTION: 'reticle link',
+  UNLINKED_ACTION: 'reticle connect',
   UNLINKED_TAIL: 'sends this record to your workspace.',
   DEFECTS_NONE: 'Nothing has failed a declared consequence yet.',
   EMPTY: 'Nothing recorded yet. Drive the app once and this fills in.',
@@ -109,14 +110,38 @@ export const REPORT_TEXT = {
   /** The run that just synced, on its own dashboard page. */
   SEE_RUN: 'See it in your dashboard',
   /** Runs in an unlinked project: on this machine only. */
-  NOT_SENT: 'not sent',
+  NOT_SENT: 'not synced',
+  /** What the chip means and what to do about it, on hover. */
+  NOT_SENT_HELP:
+    'Runs saved on this machine but not on your dashboard yet. Run reticle connect in this project to send them.',
   /** How much of this app Reticle sees: capabilities covered out of the eight. */
-  INSTRUMENTATION: 'Coverage',
+  INSTRUMENTATION: 'What Reticle can see',
   INSTRUMENTATION_HELP:
     'What Reticle can see in this app, from its handshake and the gaps its verdicts recorded',
+  covered: (covered: number, total: number): string => `${String(covered)} of ${String(total)}`,
+  /** Shown after the names nothing has confirmed either way yet. */
+  NOT_SEEN_YET: 'not checked yet',
   COPY_PROMPT: 'Copy prompt for your coding agent',
-  REFER: 'Send to a friend',
+  SHARE_LABEL: 'Share',
+  POST_X: 'X',
+  POST_IN: 'LinkedIn',
+  REFER: 'Invite a friend',
 } as const;
+
+/**
+ * The eight capabilities in words a first-time user reads without a glossary. Keyed by the names
+ * core's coverage model reports; a name this HUD does not know is shown as sent, escaped.
+ */
+export const CAPABILITY_WORDS: Readonly<Record<string, string>> = {
+  'page connected': 'Page connected',
+  'DOM actions': 'Clicks and typing',
+  network: 'Network requests',
+  console: 'Console errors',
+  'app state (store registered)': 'App state',
+  'signals on mutation': 'Success signals from your code',
+  'file:line source mapping': 'Source file and line',
+  'stable test ids': 'Stable test ids',
+};
 
 /** "4.2k", "1.3M" - a number a person reads at a glance rather than counts digits in. */
 export function compactNumber(n: number): string {

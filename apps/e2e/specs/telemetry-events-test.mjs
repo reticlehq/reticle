@@ -70,7 +70,6 @@ const { getSessionMetrics, resetSessionMetrics } = await import(`${DIST}/telemet
 const { installDaemonTelemetry } = await import(`${DIST}/telemetry/daemon-telemetry.js`);
 const { installDaemonResilience } = await import(`${DIST}/command/daemon/daemon-resilience.js`);
 const { submitFeedback } = await import(`${DIST}/telemetry/feedback.js`);
-const { submitIdentity } = await import(`${DIST}/telemetry/identify.js`);
 const { reportCliRun } = await import(`${DIST}/telemetry/cli-telemetry.js`);
 const { runTool } = await import(`${DIST}/surface/tools/invoke-tool.js`);
 const { TOOLS } = await import(`${DIST}/surface/tools/tools.js`);
@@ -542,15 +541,6 @@ await settle();
   // vendor-key rule sees it. Either is a correct redaction — assert that SOMETHING fired rather than
   // pinning which rule won, or this becomes a brittle test of rule ordering.
   check('  redaction is reported back for the structured field', (featureReceipt?.redacted ?? []).length > 0, JSON.stringify(featureReceipt?.redacted));
-}
-
-// ── 7. Identify (opt-in) ──────────────────────────────────────────────────────
-await submitIdentity({ context: 'company', company: 'Acme Corp', email: 'dev@acme.com' });
-await settle();
-{
-  const i = find('identified')[0];
-  check('identified fires only from an explicit call', i !== undefined);
-  check('  carries the self-declared context', i?.properties.identity_context === 'company');
 }
 
 // ── 8. Human feedback path ────────────────────────────────────────────────────

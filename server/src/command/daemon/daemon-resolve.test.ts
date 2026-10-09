@@ -207,6 +207,16 @@ describe('resolveMcpPort', () => {
         pickPort: assigned,
       }),
     ).resolves.toBe(4400);
+    // A port somebody ASKED for is not a guess. Driven before release: `reticle mcp --port
+    // 15520` in an unwired app attached to the one other project's daemon on 15500, and wiring then
+    // wrote 15500 into that app's .reticle.json.
+    await expect(
+      resolveMcpPort(15520, undefined, dir, {
+        alive: live,
+        daemonPresent: absent,
+        pickPort: assigned,
+      }),
+    ).resolves.toBe(15520);
     const note = projectlessNote(4400, projectDaemonsElsewhere(4400, two, live));
     expect(note).toContain('shop on :47311');
     expect(note).toContain('RETICLE_PORT=47311');

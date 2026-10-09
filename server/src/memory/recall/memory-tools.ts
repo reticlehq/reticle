@@ -39,7 +39,7 @@ const ADVICE: Record<MemoryUnavailable, string> = {
   [MemoryUnavailable.UNVERIFIED]:
     'the server answered, but the answer could not be shown to be about THIS project, so none of it is being reported. This is not an empty corpus: do NOT conclude this project knows nothing. Check the link with `reticle status`, and retry once the workspace is reachable.',
   [MemoryUnavailable.UNREADABLE]:
-    'the workspace answered about THIS project, but the body was a shape this build cannot read entries out of. Retrying will not change it — this is not an empty corpus and not a link problem. Check the workspace version, and that `reticle memory` from the same terminal returns a `{ projectId, entries }` body.',
+    'the workspace answered about THIS project, but the body was a shape this build cannot read entries out of. Retrying will not change it — this is not an empty corpus and not a link problem. Check the workspace version, and that `reticle runs memory` from the same terminal returns a `{ projectId, entries }` body.',
 };
 
 export const MEMORY_TOOLS: ToolDef[] = [

@@ -1,14 +1,16 @@
 ---
 title: reticle stop
-description: Stop the Reticle daemon on a port, escalating from SIGTERM to SIGKILL if it will not go.
+description: Stop the Reticle daemon on a port, or free the port by its listener with --force, never touching the agent's MCP proxy.
 icon: circle-stop
 ---
 
-`reticle stop` reads the pid recorded for the port and stops that process.
+`reticle stop` reads the pid recorded for the port and stops that process. `reticle stop --force` asks **who is listening** on the port instead, and frees it.
 
 ```bash
-npx @reticlehq/server stop [--port N] [--quiet]
+npx @reticlehq/server stop [--port N] [--quiet] [--force]
 ```
+
+`reticle kill` is the old name for `stop --force`. It still works for one release and prints one line naming the new spelling.
 
 ## Flags
 
@@ -16,6 +18,7 @@ npx @reticlehq/server stop [--port N] [--quiet]
 | --- | --- | --- | --- |
 | `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Which daemon to stop |
 | `--quiet` | boolean | `false` | Print nothing. For scripts that stop a daemon that may not be running |
+| `--force` | boolean | `false` | Find the process by the **listener** on the port, not by the recorded pid. See [Freeing the port](#freeing-the-port-force) |
 
 ## How it stops
 
@@ -48,17 +51,73 @@ With `--quiet` that same run prints nothing at all and still exits `0`.
 
 <Warning>
   Do not stop a daemon with `lsof -ti tcp:4400 | xargs kill -9`. That pattern matches the agent's
-  own `reticle mcp` proxy as well as the daemon and takes both down. Use this command, or [`reticle
-  kill`](/cli/kill).
+  own `reticle mcp` proxy as well as the daemon and takes both down. Use this command, or `reticle
+  stop --force`.
 </Warning>
 
-## When this is not enough
+## Freeing the port: `--force`
 
-`stop` needs the pid Reticle recorded. If the pid file is stale, was never written, or the port is held by a daemon from another checkout, `stop` reports `reticle_daemon_not_running` about a port that is demonstrably occupied. [`reticle kill`](/cli/kill) asks the **port** instead and is the command for that case.
+`stop` needs the pid Reticle recorded. If the pid file is stale, was never written, or the port is held by a daemon from another checkout, plain `stop` reports `reticle_daemon_not_running` about a port that is demonstrably occupied. `stop --force` asks the **port** instead and is the command for that case.
+
+<Warning>
+  Never free the port with `lsof -ti tcp:4400 | xargs kill -9`. `reticle mcp` holds a **client**
+  socket on that port, so `-ti` lists the proxy right beside the daemon and the pipeline kills both.
+  When the proxy dies, the agent's next tool calls get no reply at all: not an error, not a timeout.
+  Nothing is written to the proxy log either, because the process that writes it is the one that
+  died. That is the mechanism behind most "my MCP disconnected" reports.
+</Warning>
+
+|  | `reticle stop` | `reticle stop --force` |
+| --- | --- | --- |
+| Finds the process by | the pid recorded in Reticle's own state | the **listener** on the port |
+| Works when the pid file is stale or was never written | no | yes |
+| Works on a daemon from another checkout | no | yes |
+| Works without `lsof` (Windows, slim containers) | yes | yes, falling back to the recorded pid and saying so |
+
+### How `--force` decides
+
+1. Look up the listener with `lsof -nP -iTCP:<port> -sTCP:LISTEN`. Client sockets are excluded by construction, so the proxy is never a candidate.
+2. It is Reticle's if it answers `/status`, **or** if it is the pid Reticle recorded for the port. `/status` outranks the pid file, so a daemon started from another checkout is still recognised as ours.
+3. Anything else is refused, by name: it is someone else's process.
+4. `SIGTERM`, then `SIGKILL` after 5 seconds, then report that it survived and exit `1`.
+
+### What `--force` prints
+
+Real captures, taken against a daemon started on a scratch port. The long `note` and `reason` strings are trimmed at the ellipsis. Measured exit codes: `0` for killed and nothing-to-do, `1` for refused.
+
+Killed:
+
+```
+{"t":"2026-08-15T18:43:43.590Z","event":"reticle_killed","port":4499,"pid":78621,"escalated":false,"listenerIdentified":true,"note":"only the listener was signalled. Any `reticle mcp` proxy on this port holds a client connection, not the port, and was left alone ..."}
+```
+
+Refused, because the listener is not ours. This one was captured with `python3 -m http.server 4498` holding the port:
+
+```
+{"t":"2026-08-15T18:43:57.128Z","event":"reticle_kill_refused","port":4498,"reason":"pid 78795 (\"Python\") is listening, and it is not a Reticle daemon ... it never answered /status and it is not the pid Reticle recorded. Killing it would be killing someone else's process. Run it again with --force if that is what you meant, or start Reticle on another port.","holder":"Python"}
+```
+
+Nothing to free:
+
+```
+{"t":"2026-08-15T18:43:43.784Z","event":"reticle_kill_nothing_to_do","port":4499,"presence":"free"}
+```
+
+| Event                        | When                                                              |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `reticle_killed`             | The listener is gone. `escalated: true` means it took a `SIGKILL` |
+| `reticle_kill_refused`       | The listener is not a Reticle daemon. Exits `1`                   |
+| `reticle_kill_survived`      | It survived `SIGKILL`. The port is still held. Exits `1`          |
+| `reticle_kill_nothing_to_do` | No listener, and no live recorded pid                             |
+
+`listenerIdentified: false` means `lsof` could not run and the pid came from Reticle's records rather than from an observed listener. Those are different claims, so the field says which one you got.
+
+With `--force`, exit `0` means the port is free and `1` means it is still held: refused, or the process survived `SIGKILL`.
 
 ## Worked example
 
 ```bash
 npx @reticlehq/server stop --port 4400 --quiet && npx @reticlehq/server serve --port 4400
 npx @reticlehq/server restart --port 4400   # the same thing, honest about each half
+npx @reticlehq/server stop --force          # the port is held and the pid file says nothing
 ```

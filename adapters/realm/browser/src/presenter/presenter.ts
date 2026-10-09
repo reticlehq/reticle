@@ -11,7 +11,7 @@ import {
   type PresenterTone,
 } from '@reticlehq/core';
 import { refs } from '@/dom/addressing/refs.js';
-import { unreachableStripText } from '@/transport/unreachable-message.js';
+import { UNREACHABLE_HEADLINE, unreachableMessage } from '@/transport/unreachable-message.js';
 import { actionVerb } from './chrome/presenter-verbs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from '@/timers/native/native-timers.js';
 import {
@@ -31,6 +31,7 @@ import {
 } from './chrome/presenter-log.js';
 import { PRESENTER_CSS } from './presenter-styles.js';
 import { HudShell } from './presenter-shell.js';
+import { harnessGateIn } from './presenter-harness-row.js';
 import { parseImpactSnapshot } from './chrome/presenter-report-copy.js';
 import { scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import {
@@ -212,6 +213,7 @@ export class Presenter {
           ...(persona === undefined ? {} : { text: persona }),
         }),
       onHarnessStop: () => this.#onControl?.({ kind: HumanControlKind.HARNESS_STOP }),
+      onAgentNote: (text) => this.#onControl?.({ kind: HumanControlKind.MESSAGE, text }),
       settings: {
         onBeforeOpen: () => {
           if (this.#shell.isCollapsed()) this.#shell.expand();
@@ -225,6 +227,7 @@ export class Presenter {
           this.#onControl?.({ kind: HumanControlKind.HARNESS, text: enabled ? 'on' : 'off' }),
       },
     });
+    this.#shell.setProjectId(options.projectId);
   }
   /** Setter so reticle.ts can wire the control callback after construction. */
   setControlHandler(handler: ControlHandler): void {
@@ -275,8 +278,12 @@ export class Presenter {
         // The one thing this HUD advertises, from the same snapshot as everything else it shows.
         this.#shell.paintOffer(snapshot.harnessOffer, snapshot.notices);
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
-        this.#shell.paintHarness(snapshot.harnessConfig);
+        this.#shell.paintHarness(
+          snapshot.harnessConfig,
+          harnessGateIn(snapshot.instrumentation, snapshot.harnessConfig),
+        );
         this.#shell.paintHarnessDrive(snapshot.harnessDrive);
+        this.#shell.paintAgent(snapshot.agent);
         this.#shell.paintImpact(snapshot.project.counts.verdicts);
         const owner = true === snapshot.account?.signedIn ? snapshot.account.email : undefined;
         if (claimLog(owner)) this.#clearRunLog();
@@ -483,8 +490,10 @@ export class Presenter {
     const dock = this.#root?.querySelector('[data-reticle-dock]');
     dock?.setAttribute(DATA_ON, GLOW_ON);
     this.#hud?.setAttribute(DATA_ON, GLOW_ON);
-    this.#lastActionText = unreachableStripText(url, attempts);
+    this.#lastActionText = UNREACHABLE_HEADLINE;
     this.#paintActStrip(this.#lastActionText, true);
+    // The plain sentence on the row, the address and the checks one hover away for debugging.
+    this.#actLine?.setAttribute('title', unreachableMessage(url, attempts));
     // The message IS the reason this state exists, and a collapsed capsule hides it. Same setting
     // a live session honours, so a user who wants the bare toolbar still gets one.
     if (shouldAutoOpenChat(getPresenterSettings().autoOpenChat)) this.#shell.openChat();
@@ -588,7 +597,10 @@ export class Presenter {
    * capsule all live outside the strip and still have to say whether the agent is working.
    */
   #paintActStrip(text: string, idle: boolean): void {
-    if (this.#actLine !== undefined) this.#actLine.textContent = text;
+    if (this.#actLine !== undefined) {
+      this.#actLine.textContent = text;
+      this.#actLine.removeAttribute('title');
+    }
     const liveness = idle ? 'idle' : 'active';
     if (this.#actStrip !== undefined) this.#actStrip.setAttribute('data-liveness', liveness);
     this.#root?.setAttribute(LIVENESS_ATTR, liveness);

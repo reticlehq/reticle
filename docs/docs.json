@@ -117,14 +117,12 @@
                 "group": "CLI commands",
                 "pages": [
                   "cli",
-                  "cli/tutorial",
                   "cli/init",
                   "cli/setup",
                   "cli/doctor",
                   "cli/status",
                   "cli/serve",
                   "cli/stop",
-                  "cli/kill",
                   "cli/restart",
                   "cli/mcp",
                   "cli/open",
@@ -134,16 +132,12 @@
                   "cli/affected",
                   "cli/gate",
                   "cli/report",
-                  "cli/watch",
-                  "cli/capsules",
-                  "cli/hunt",
                   "cli/update",
                   "cli/rollback",
                   "cli/license",
                   "cli/version",
                   "cli/telemetry",
                   "cli/feedback",
-                  "cli/identify",
                   "cli/help",
                   "cli/cloud",
                   "environment"
@@ -341,6 +335,36 @@
     ]
   },
   "redirects": [
+    {
+      "source": "/cli/kill",
+      "destination": "/cli/stop",
+      "permanent": true
+    },
+    {
+      "source": "/cli/tutorial",
+      "destination": "/cli/init",
+      "permanent": true
+    },
+    {
+      "source": "/cli/watch",
+      "destination": "/cli/affected",
+      "permanent": true
+    },
+    {
+      "source": "/cli/capsules",
+      "destination": "/cli",
+      "permanent": true
+    },
+    {
+      "source": "/cli/hunt",
+      "destination": "/cli",
+      "permanent": true
+    },
+    {
+      "source": "/cli/identify",
+      "destination": "/cli/feedback",
+      "permanent": true
+    },
     {
       "source": "/README",
       "destination": "/getting-started",

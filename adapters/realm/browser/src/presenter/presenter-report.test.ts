@@ -13,6 +13,7 @@ import {
   reportPanelHtml,
 } from './presenter-report.js';
 import { Presenter } from './presenter.js';
+import { REPORT_CSS } from './presenter-report-styles.js';
 import {
   buildLinkedInShareUrl,
   buildShareText,
@@ -44,15 +45,23 @@ const defect = (over: Partial<ImpactDefect> = {}): ImpactDefect => ({
 });
 
 describe('the impact report', () => {
-  it('leads with what it refused to pass, and shows unknowns rather than hiding them', () => {
+  it('leads with the failed checks it caught, and shows unknowns rather than hiding them', () => {
     const html = reportBodyHtml(
       scope({ calls: 40, verdicts: 12, passed: 9, failed: 2, unknown: 1 }),
     );
     // Not "defects caught": a failed verdict is equally the shape of a wrong assertion, and a
-    // verification tool must not overclaim in that direction. What is true of both is that Reticle
-    // refused to pass them.
-    expect(html).toContain('refused to pass');
+    // verification tool must not overclaim in that direction. "Failed checks" is true of both, and
+    // "caught before you shipped" says why the number is good news, where "refused to pass" read as
+    // Reticle being broken.
+    expect(html).toContain('failed checks caught before you shipped');
+    expect(html).not.toContain('refused to pass');
     expect(html).toContain('unknown');
+  });
+
+  it('says one failed check in the singular', () => {
+    expect(reportBodyHtml(scope({ calls: 2, verdicts: 1, failed: 1 }))).toContain(
+      'failed check caught before you shipped',
+    );
   });
 
   /**
@@ -91,9 +100,9 @@ describe('what an UNLINKED user is told about the dashboard', () => {
     // and an unknown must not be read as signed-out — see the account-state tests beside this file.
     const html = reportBodyHtml(withVerdicts, undefined, { signedIn: false });
     expect(html).toContain('This record stops at this machine.');
-    expect(html).toContain('reticle login');
+    expect(html).toContain('reticle connect');
     // Once. A second mention in the same panel is where a line becomes a nag.
-    expect(html.split('reticle login').length - 1).toBe(1);
+    expect(html.split('reticle connect').length - 1).toBe(1);
   });
 
   it('goes silent the moment the repo is linked', () => {
@@ -188,7 +197,7 @@ describe('the pushed impact record reaches the panel', () => {
     (btn as HTMLElement | null)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     const body = document.querySelector('[data-reticle-report-body]');
     expect(body?.textContent, 'the pushed record is what the panel shows').toContain(
-      'refused to pass',
+      'caught before you shipped',
     );
     expect(body?.textContent).toContain('1');
     p.destroy();
@@ -622,16 +631,52 @@ describe('what the HUD says once a run syncs, or never will', () => {
     );
   });
 
-  it('counts runs an unlinked project will never send', () => {
-    expect(at({ status: 'local-only', pending: 31 })).toContain('31 not sent');
+  it('counts runs an unlinked project will never send, and says what that means', () => {
+    const html = at({ status: 'local-only', pending: 31 });
+    expect(html).toContain('31 not synced');
+    // "2 not sent" alone said nothing about what was not sent where, or what to do.
+    expect(html).toContain('not on your dashboard yet');
+    expect(html).toContain('reticle connect');
   });
 
   it('shows the coverage line, and the copy button only once a prompt exists', () => {
-    expect(instrumentationHtml({ covered: 5, total: 8 })).toContain('5/8');
+    expect(instrumentationHtml({ covered: 5, total: 8 })).toContain('5 of 8');
     expect(instrumentationHtml({ covered: 5, total: 8 })).not.toContain('Copy prompt');
     expect(instrumentationHtml({ covered: 5, total: 8, prompt: 'Read …' })).toContain(
       'Copy prompt for your coding agent',
     );
     expect(instrumentationHtml({ covered: '<b>', total: 8 })).toBe('');
+  });
+
+  // Driven before release: the coverage line shipped with no rules at all, so the copy button drew as
+  // the browser's default white button over the cards below it.
+  it('styles every class the coverage line renders', () => {
+    const html = instrumentationHtml({ covered: 5, total: 8, prompt: 'Read …' });
+    const classes = [...html.matchAll(/class="([^"]+)"/g)].flatMap((m) => (m[1] ?? '').split(' '));
+    for (const name of classes) expect(REPORT_CSS).toContain(`.${name}{`);
+  });
+
+  it('names what Reticle can and cannot see yet, in plain words', () => {
+    const host = document.createElement('div');
+    host.innerHTML = instrumentationHtml({
+      covered: 2,
+      total: 8,
+      seen: ['page connected', 'network'],
+      missing: [
+        { capability: 'signals on mutation', cost: 'the app never says <b>it</b> succeeded' },
+      ],
+      notSeenYet: ['stable test ids', '<img src=x>'],
+    });
+    const items = [...host.querySelectorAll('[data-state]')].map(
+      (el) =>
+        `${el.getAttribute('data-state') ?? ''}:${el.querySelector('.reticle-report-cap-name')?.textContent ?? ''}`,
+    );
+    expect(items).toContain('seen:Page connected');
+    expect(items).toContain('seen:Network requests');
+    expect(items).toContain('missing:Success signals from your code');
+    expect(items).toContain('unseen:Stable test ids');
+    // Daemon text is escaped, never markup.
+    expect(host.querySelector('b,img')).toBeNull();
+    expect(host.textContent).toContain('the app never says <b>it</b> succeeded');
   });
 });

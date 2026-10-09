@@ -1,0 +1,4 @@
+### Fixed
+
+- **`@reticlehq/server` — a saved flow waited for the sync timer, and a tab's driven flow could miss the dashboard altogether.** Only a run woke cloud sync, so a flow saved with no run behind it sat on disk for up to a minute. And a daemon stopped while a tab was still open sent its last sync before that tab's teardown saved the flow the tab drove, so the flow never left the machine. A flow save now wakes sync, and a closing daemon tears down its open tabs before its final sync.
+- **`@reticlehq/server` — flows that will never reach the dashboard were only a log line.** Flows in a folder that is not linked, has no key for its host, has flow sync off, or whose flows the platform refused are now counted beside unsent runs in `reticle doctor`, in the HUD's not-sent count, and in `reticle init`'s closing output. An unlinked folder is told to run `reticle connect`.

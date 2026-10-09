@@ -4,7 +4,7 @@ description: Every reticle command. What it does, what it prints, and what it ex
 icon: terminal
 ---
 
-The `reticle` CLI installs Reticle into a project and proves the install works (`init`), runs and diagnoses the daemon your app connects to (`serve`, `status`, `doctor`, `kill`, `restart`), and gates a build on verification in CI (`verify`, `affected`, `gate`). This page is the index; each command has its own page with real captured output and measured exit codes.
+The `reticle` CLI installs Reticle into a project and proves the install works (`init`), runs and diagnoses the daemon your app connects to (`status`, `doctor`, `stop`, `restart`), and gates a build on verification in CI (`verify`, `affected`, `gate`). This page is the index; each command has its own page with real captured output and measured exit codes.
 
 The CLI is mostly for you, not your agent. Your agent talks MCP; you use these to set things up, work out why nothing connected, and wire verification into CI.
 
@@ -26,49 +26,78 @@ npx @reticlehq/server <command>
 
 ## Every command
 
-One row per line of `reticle --help`. The order is the install order first, then everything else.
+`reticle --help` prints the short list, grouped the way you meet the commands. `reticle help all` prints every command, and `reticle <command> --help` prints one command's detail.
+
+### Get started
 
 | Command | What it does | Page |
 | --- | --- | --- |
-| `reticle tutorial [--run] [--headless] [--port N]` | Watch Reticle verify a demo app | [tutorial](/cli/tutorial) |
 | `reticle init` | Wire Reticle into this project, boot the app, prove a session connected | [init](/cli/init) |
-| `reticle connect [--project <name\|id>] [--url <origin>]` | Wire if needed, sign in, link this folder to a cloud project, send local history | [cloud](/cli/cloud) |
+| `reticle connect [--project <name\|id>] [--url <origin>]` | Wire if needed, sign in, link this folder to a cloud project (created if it does not exist), send local history | [cloud](/cli/cloud) |
 | `reticle try <url> [--persona <who>]` | Signed in: one free Harness drive of a URL, in a window you watch, then which journeys work | [try](/cli/try) |
-| `reticle push \| sync [--watch]` | Send what has not synced yet; `--watch` keeps going | [cloud](/cli/cloud#reticle-push) |
-| `reticle setup mcp` | Register the MCP server with your coding agents (the installer's registration half) | [setup](/cli/setup) |
-| `reticle serve` | Start the daemon and wait for it to bind | [serve](/cli/serve) |
-| `reticle stop` | Stop the daemon we started, by its recorded pid | [stop](/cli/stop) |
-| `reticle kill` | Free the port by its listener, never the agent's MCP proxy | [kill](/cli/kill) |
-| `reticle restart` | Kill, then start a daemon and wait for a real bind | [restart](/cli/restart) |
-| `reticle status [--json]` | Is the daemon up, and which pages connected | [status](/cli/status) |
+
+### Check your app
+
+| Command | What it does | Page |
+| --- | --- | --- |
+| `reticle verify <url>` | One-shot: drive the URL, verify saved flows or one predicate, exit 0 on pass | [verify](/cli/verify) |
+| `reticle gate [--since <ref>]` | Exit non-zero unless passing artifacts cover the affected flows | [gate](/cli/gate) |
+
+### Reticle on this machine
+
+| Command | What it does | Page |
+| --- | --- | --- |
+| `reticle status [--json]` | Is the daemon up, which pages connected, who is signed in, is this repo linked | [status](/cli/status) |
 | `reticle doctor` | Diagnose setup: Chromium, daemon, port | [doctor](/cli/doctor) |
 | `reticle open [url]` | Show the app: reuse the connected tab, else open one | [open](/cli/open) |
-| `reticle verify <url>` | One-shot: drive the URL, verify saved flows or one predicate, exit 0 on pass | [verify](/cli/verify) |
-| `reticle affected [--since <ref>]` | Which saved flows must re-verify for the changed files | [affected](/cli/affected) |
-| `reticle gate [--since <ref>]` | Exit non-zero unless passing artifacts cover the affected flows | [gate](/cli/gate) |
-| `reticle report [--session <id>] [--hook]` | What the latest session claimed, and what held | [report](/cli/report) |
-| `reticle capsules` | List the saved fail-to-pass bug capsules | [capsules](/cli/capsules) |
-| `reticle hunt <dir>` | Aggregate crawl reports into one false-green rate | [hunt](/cli/hunt) |
-| `reticle watch [url]` | On save, report which saved flows must re-verify | [watch](/cli/watch) |
-| `reticle drive <url>` | Foreground mode, for debugging | [drive](/cli/drive) |
-| `reticle mcp` | The MCP stdio proxy your agent runs; starts the daemon if needed | [mcp](/cli/mcp) |
+| `reticle stop [--force]` | Stop the daemon we started; `--force` frees the port by its listener, never the agent's MCP proxy | [stop](/cli/stop) |
+| `reticle restart` | Free the port, then start a daemon and wait for a real bind | [restart](/cli/restart) |
 | `reticle update` | Install the latest server version and restart | [update](/cli/update) |
+
+### Account
+
+| Command | What it does | Page |
+| --- | --- | --- |
+| `reticle logout [--url <u>]` | Sign out of one host; others stay signed in | [cloud](/cli/cloud#reticle-logout) |
+| `reticle feedback` | Tell us what worked and what did not | [feedback](/cli/feedback) |
+| `reticle telemetry [status\|enable\|disable]` | Anonymous usage metrics: what is sent, and the switch | [telemetry](/cli/telemetry) |
+
+### Everything else (`reticle help all`)
+
+| Command | What it does | Page |
+| --- | --- | --- |
+| `reticle sync [--watch]` | Send what has not synced yet; `--watch` keeps going | [cloud](/cli/cloud#reticle-sync) |
+| `reticle runs [<runId>]` | The linked project's recent runs, or one of them | [cloud](/cli/cloud#reticle-runs) |
+| `reticle runs regression` | Which flows broke; exits `3` if any did | [cloud](/cli/cloud#reticle-runs-regression) |
+| `reticle runs share <runId>` | Mint a public proof link for one run | [cloud](/cli/cloud#reticle-runs-share) |
+| `reticle runs issues [--fix <fp>]` | The triage queue; `--fix` prints one issue's fix prompt | [cloud](/cli/cloud#reticle-runs-issues) |
+| `reticle runs memory` | What the linked project has learned | [cloud](/cli/cloud#reticle-runs-memory) |
+| `reticle config` | Choose what syncs: runs, memory, flows; where verification runs | [cloud](/cli/cloud#reticle-config) |
+| `reticle setup mcp` | Register the MCP server with your coding agents (the installer's registration half) | [setup](/cli/setup) |
+| `reticle serve` | Start the daemon and wait for it to bind | [serve](/cli/serve) |
+| `reticle mcp` | The MCP stdio proxy your agent runs; starts the daemon if needed | [mcp](/cli/mcp) |
+| `reticle drive <url>` | Foreground mode, for debugging | [drive](/cli/drive) |
+| `reticle affected [--since <ref>]` | Which saved flows must re-verify for the changed files | [affected](/cli/affected) |
+| `reticle report [--session <id>] [--hook]` | What the latest session claimed, and what held | [report](/cli/report) |
 | `reticle rollback` | Restore the previous server version and restart | [rollback](/cli/rollback) |
 | `reticle license` | Enterprise license status: active, eval or missing | [license](/cli/license) |
-| `reticle telemetry [status\|enable\|disable]` | Anonymous usage metrics: what is sent, and the switch | [telemetry](/cli/telemetry) |
-| `reticle feedback` | Tell us what worked and what did not | [feedback](/cli/feedback) |
-| `reticle identify` | Opt in: say who you are, for support or a trial | [identify](/cli/identify) |
-| `reticle login` | Sign in: browser device flow, or `--email` for a code | [cloud](/cli/cloud#reticle-login) |
-| `reticle logout [--url <u>]` | Sign out of one host; others stay signed in | [cloud](/cli/cloud#reticle-logout) |
-| `reticle link [--project <name\|id>]` | Bind this repo to a project; writes `.reticle/cloud.json` | [cloud](/cli/cloud#reticle-link) |
-| `reticle whoami` | Who you are signed in as, and whether this repo is attached | [cloud](/cli/cloud#reticle-whoami) |
-| `reticle project <ls\|create <name>>` | List or create cloud projects | [cloud](/cli/cloud#reticle-project) |
-| `reticle config` | Choose what syncs: runs, memory, flows; where verification runs | [cloud](/cli/cloud#reticle-config) |
-| `reticle runs` | The linked project's recent runs | [cloud](/cli/cloud#reticle-runs) |
-| `reticle regression` | Which flows broke; exits `3` if any did | [cloud](/cli/cloud#reticle-regression) |
-| `reticle share <runId>` | Mint a public proof link for one run | [cloud](/cli/cloud#reticle-share) |
 | `reticle version` | Print the version | [version](/cli/version) |
-| `reticle help` | Usage for everything | [help](/cli/help) |
+| `reticle help [all\|<command>]` | Usage: the short list, every command, or one command | [help](/cli/help) |
+
+### Renamed and removed
+
+The old names below still work for one release and print one line naming the new one.
+
+| Old | Now |
+| --- | --- |
+| `reticle kill` | `reticle stop --force` |
+| `reticle login`, `reticle link` | `reticle connect` |
+| `reticle project` | `reticle connect --project <name\|id>` |
+| `reticle whoami` | `reticle status` |
+| `reticle push` | `reticle sync` |
+| `reticle regression`, `share`, `issues`, `memory` | `reticle runs regression`, `runs share`, `runs issues`, `runs memory` |
+
+`hunt`, `watch`, `capsules`, `tutorial` and `identify` were removed. Each prints what to use instead and exits `1`: `reticle affected` or `reticle gate` for `watch`, `reticle init` or `reticle try <url>` for `tutorial`, `reticle feedback` for `identify`. Saved capsules stay in `.reticle/capsules`.
 
 ## Setup and diagnosis
 
@@ -122,7 +151,7 @@ Exits `0`. That parenthetical about the bridge port is doing a lot of work. Mixi
 
 ### `reticle status`
 
-Whether the daemon is up and which apps have connected.
+Whether the daemon is up, which apps have connected, who is signed in, and whether this repo is linked to a cloud project.
 
 ```text
 reticle status
@@ -157,8 +186,8 @@ policy       https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md
 | --- | --- |
 | `reticle serve` | Start the daemon and wait for it to bind. `--drive <url>`, `--headless`, `--headed`, `--http`, `--http-port N`, `--http-token T` |
 | `reticle stop` | Stop the daemon we started, by its recorded pid. `--quiet` |
-| `reticle kill` | Free the port by asking who is **listening** on it. `--force` |
-| `reticle restart` | Kill, then start a daemon and wait for a real bind. `--force` |
+| `reticle stop --force` | Free the port by asking who is **listening** on it |
+| `reticle restart` | Free the port, then start a daemon and wait for a real bind. `--force` |
 | `reticle open [url]` | Show the app. Reuse the connected tab, or open one |
 | `reticle drive <url>` | Foreground mode, for debugging |
 | `reticle mcp` | The MCP stdio proxy. Auto-starts the daemon if needed. This is what your agent runs |
@@ -252,18 +281,6 @@ Measured exit code: **`1`**, with the flow lists trimmed above. That run genuine
 
 `quarantined` flows are excluded from the pass/fail decision. Quarantine is for a flow that is known flaky and being fixed; it is not a place to hide failures, because the list is printed on every run.
 
-### `reticle watch [url]`
-
-On save, report which saved flows must re-verify. The interactive companion to `affected`. Long-running; stop it with `Ctrl+C`.
-
-### `reticle capsules`
-
-List the saved fail-to-pass bug capsules in `.reticle/capsules`. No flags. See [capsules](/cli/capsules).
-
-### `reticle hunt <dir>`
-
-Aggregate a directory of crawl reports into one false-green rate. See [hunt](/cli/hunt).
-
 ## Maintenance
 
 | Command            | What it does                                        |
@@ -272,7 +289,7 @@ Aggregate a directory of crawl reports into one false-green rate. See [hunt](/cl
 | `reticle rollback` | Restore the previous version and restart            |
 | `reticle license`  | Enterprise license status: active, eval, or missing |
 | `reticle version`  | Print the version                                   |
-| `reticle help`     | Usage for everything                                |
+| `reticle help`     | The short list; `help all` for every command        |
 
 <Tip>
   `rollback` exists because an auto-updating dev tool that cannot go back is a dev tool that can
@@ -294,13 +311,3 @@ The `--agent` form matters more than it looks: the setup that failed halfway is 
 <Card title="How feedback is handled" icon="comments" href="/tools/session-and-feedback">
   What each kind means, and what happens when a report cannot be delivered.
 </Card>
-
-## `reticle identify`
-
-Opt-in, and off by default:
-
-```bash
-npx @reticlehq/server identify --context company|side_project|open_source|learning [--company N] [--email E] [--forget]
-```
-
-Only useful if you want support or an enterprise trial. `--forget` removes it.

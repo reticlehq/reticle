@@ -55,7 +55,7 @@ Two `reticle_flow_replay` arguments make the branches possible, and you can use 
 
 ## What it needs
 
-**A project on the Reticle platform.** Every plan includes the Harness: Free comes with monthly Harness credits, one per decision the Harness makes. Run `reticle connect` once in your app's folder. The Harness runs on the platform: planning, personas, and every choice of what to press next. A model key of your own does not drive it, and a machine with no platform link gets the refusal and the way to fix it.
+**A project on the Reticle platform.** Every plan includes the Harness. A new account gets 10 free credits (about two full drives of a small app), a card starts a 14-day trial with 500, and the paid plan includes 1,000 credits per seat each month. Run `reticle connect` once in your app's folder. The Harness runs on the platform: planning, personas, and every choice of what to press next. A model key of your own does not drive it, and a machine with no platform link gets the refusal and the way to fix it.
 
 | Variable | What it does |
 | --- | --- |
@@ -78,7 +78,7 @@ The platform drives with Jev, a System One model that answers typed questions an
 A project linked to a Reticle workspace reads two things from it before a drive starts, and honours both:
 
 - **The switch.** Autonomous driving can be turned off per project, from the HUD's Reticle Harness switch or the dashboard (Settings → Verification model). A drive then refuses and says where to turn it back on. Switched off while a platform drive is running, the drive stops at its next turn with `stopReason: "stopped"`, keeps what it drove, and says so in the Agent Log. Everything else is unaffected, including the tools your own agent drives with.
-- **Credits.** Every workspace gets Harness credits each 30 days: Free 500, Pro 4,800 a seat, Enterprise as agreed. One credit is one decision the Harness makes. The HUD shows how many are left; once they are spent a drive is refused with that number and the way to get more.
+- **Credits.** Harness drives and dashboard chat checks spend Harness credits. A new workspace's trial starts with 500 credits for 14 days, and the platform sets the amount for your plan. The HUD shows how many are left; once they are spent a drive is refused with that number and the way to get more.
 
 If only the settings endpoint is unreachable, the on/off switch and the credit check do not block a drive: an unreachable settings endpoint is not a reason to lose a feature you were never told to stop using. The drive itself still needs the platform, so with no connection at all it is refused with the reason.
 

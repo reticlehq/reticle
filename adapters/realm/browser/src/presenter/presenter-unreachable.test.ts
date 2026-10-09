@@ -33,10 +33,25 @@ describe('a bridge that never answered', () => {
     expect(dockOn()).toBe('1');
   });
 
-  it('says WHICH url it tried, because the port is the usual answer', () => {
+  it('says in plain words what is wrong and what to do, with the url kept on hover', () => {
     const p = mount();
     p.showUnreachable('ws://localhost:4460/reticle', 3);
-    expect(document.querySelector('.reticle-act')?.textContent ?? '').toContain('4460');
+    const act = document.querySelector('.reticle-act');
+    const text = act?.textContent ?? '';
+    // A raw "no bridge at ws://…" told a first-time user nothing they could act on.
+    expect(text).not.toContain('ws://');
+    expect(text).toContain("Can't reach Reticle");
+    expect(text).toContain('reticle serve');
+    // The technical detail stays one hover away: the port is still the usual answer.
+    expect(act?.getAttribute('title') ?? '').toContain('ws://localhost:4460/reticle');
+  });
+
+  it('drops the hover detail once a live action replaces the message', () => {
+    const p = mount();
+    p.showUnreachable('ws://localhost:4460/reticle', 3);
+    p.sessionStart();
+    p.status('clicked Save');
+    expect(document.querySelector('.reticle-act')?.hasAttribute('title')).toBe(false);
   });
 
   it('marks itself unreachable rather than posing as a live session', () => {

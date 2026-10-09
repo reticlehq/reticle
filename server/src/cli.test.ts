@@ -78,6 +78,7 @@ const INIT_DEFAULTS = {
   hooks: false,
   json: false,
   open: true,
+  firstRun: true,
   relaunch: false,
   agents: true,
   url: undefined,
@@ -168,14 +169,6 @@ describe('parseCliArgs', () => {
   it('parses the lifecycle commands moved to the CLI', () => {
     expect(parseCliArgs(['update'], PORT)).toEqual({ kind: 'update' });
     expect(parseCliArgs(['rollback'], PORT)).toEqual({ kind: 'rollback' });
-  });
-
-  it('parses `watch [url]` with and without a url', () => {
-    expect(parseCliArgs(['watch', 'http://localhost:3000'], PORT)).toEqual({
-      kind: 'watch',
-      url: 'http://localhost:3000',
-    });
-    expect(parseCliArgs(['watch'], PORT)).toEqual({ kind: 'watch' });
   });
 
   it('serve with no flags uses the default port', () => {
@@ -400,6 +393,14 @@ describe('parseCliArgs', () => {
 
   it('init --yes is accepted', () => {
     expect(parseCliArgs(['init', '--yes'], PORT)).toEqual(INIT_DEFAULTS);
+  });
+
+  // init drives the first flow in the open tab of a linked project; this is how to say no.
+  it('parses `init --no-first-run` as connect-and-stop', () => {
+    expect(parseCliArgs(['init', '--no-first-run'], PORT)).toEqual({
+      ...INIT_DEFAULTS,
+      firstRun: false,
+    });
   });
 
   /**

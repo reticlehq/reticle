@@ -12,6 +12,7 @@ interface TabCoverage {
   missing?: unknown;
   notSeenYet?: unknown;
   prompt?: unknown;
+  harnessGate?: unknown;
 }
 
 const capabilitiesIn = (value: unknown): string[] =>
@@ -49,6 +50,13 @@ export function coverageLines(status: unknown): string[] {
             ...tab.prompt.split('\n').map((line) => `      ${line}`),
           ]
         : [];
-    return [doctorRow(DoctorRow.COVERAGE, parts.join(' — ')), ...prompt];
+    const gate = tab.harnessGate;
+    const reason =
+      'object' === typeof gate && null !== gate
+        ? (gate as Record<string, unknown>)['reason']
+        : undefined;
+    // The Harness gate, in the sentence a refused drive says.
+    const locked = 'string' === typeof reason ? [`    ${reason}`] : [];
+    return [doctorRow(DoctorRow.COVERAGE, parts.join(' — ')), ...locked, ...prompt];
   });
 }

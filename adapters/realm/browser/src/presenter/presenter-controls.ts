@@ -86,9 +86,9 @@ export function flowTitle(name: string): string {
 
 /** CSS for the control surface (injected with the rest of the presenter stylesheet). */
 export const CONTROLS_CSS = `
-[data-reticle-chat-panel] [data-reticle-foot]{flex:none;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.07);
+[data-reticle-chat-panel] [data-reticle-foot]{flex:none;padding:6px 10px 8px;border-top:1px solid rgba(255,255,255,.07);
   background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,.55) 100%);pointer-events:auto;}
-[data-reticle-chat-panel] .reticle-foot-workspace-row{display:flex;align-items:center;min-width:0;}
+[data-reticle-chat-panel] .reticle-foot-workspace-row{display:flex;flex-wrap:wrap;align-items:center;min-width:0;}
 [data-reticle-chat-panel] .reticle-hud-log-well{margin:0 0 4px;}
 [data-reticle-chat-panel] .reticle-workspace-wrap{position:relative;align-self:flex-start;max-width:100%;}
 [data-reticle-chat-panel] .reticle-workspace-wrap[hidden]{display:none;}
@@ -97,6 +97,7 @@ export const CONTROLS_CSS = `
   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.78);
   font:inherit;font-size:11px;font-weight:500;line-height:1.2;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:background .15s,border-color .15s,color .15s;}
+[data-reticle-chat-panel] .reticle-workspace-k{color:var(--reticle-hud-text-faint);font-weight:400;}
 [data-reticle-chat-panel] .reticle-workspace:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:#fff;}
 [data-reticle-chat-panel] .reticle-workspace[aria-expanded="true"]{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:#fff;}
 [data-reticle-chat-panel] .reticle-workspace-icon,
@@ -120,7 +121,7 @@ export const CONTROLS_CSS = `
 [data-reticle-chat-panel] .reticle-workspace-menu-head{
   display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
 [data-reticle-chat-panel] .reticle-workspace-menu-title{
-  color:rgba(255,255,255,.42);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;}
+  color:rgba(255,255,255,.42);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;}
 [data-reticle-chat-panel] .reticle-workspace-copy{
   display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:none;border-radius:6px;
   background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);cursor:pointer;line-height:0;transition:background .12s,color .12s;}
@@ -157,9 +158,13 @@ export const CONTROLS_CSS = `
 [data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-glow][data-on="1"]{
   box-shadow:inset 0 0 0 2px rgba(255,255,255,.22);}
 [data-reticle-chat-panel] .reticle-flows{display:none;flex:none;min-width:0;padding:8px 12px;border-top:1px solid var(--reticle-line2);pointer-events:auto;}
-[data-reticle-chat-panel] .reticle-flows[data-has="1"]{display:block;}
-[data-reticle-chat-panel] .reticle-flows-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px;}
-[data-reticle-chat-panel] .reticle-flows-all{border:0;padding:0;background:none;cursor:pointer;color:var(--reticle-c-active);font:inherit;font-size:10.5px;font-weight:500;}
+[data-reticle-chat-panel] .reticle-flows[data-has="1"]{display:flex;align-items:center;gap:8px;padding:5px 12px;}
+/* One line: the caption, the chips scrolling between, and See all. It never takes the log's rows. */
+[data-reticle-chat-panel] .reticle-flows-head{display:contents;}
+[data-reticle-chat-panel] .reticle-flows[data-has="1"] .reticle-flows-cap{order:0;flex:none;}
+[data-reticle-chat-panel] .reticle-flows[data-has="1"] .reticle-flow-strip{order:1;flex:1;}
+[data-reticle-chat-panel] .reticle-flows[data-has="1"] .reticle-flows-links{order:2;flex:none;}
+[data-reticle-chat-panel] .reticle-flows-all{border:0;padding:0;background:none;cursor:pointer;color:var(--reticle-c-active);font:inherit;font-size:11px;font-weight:500;}
 [data-reticle-chat-panel] .reticle-flows-all:hover{text-decoration:underline;}
 [data-reticle-chat-panel] .reticle-flows-links{display:inline-flex;gap:10px;}
 [data-reticle-chat-panel] .reticle-flows-all[hidden]{display:none;}
@@ -172,7 +177,7 @@ export const CONTROLS_CSS = `
 @keyframes reticle-flow-pulse{50%{opacity:.55}}
 [data-reticle-chat-panel] :is(.reticle-flow,.reticle-flow-row)[data-state="passed"]::after{background:#4ade80;}
 [data-reticle-chat-panel] :is(.reticle-flow,.reticle-flow-row)[data-state="failed"]::after{background:#f87171;}
-[data-reticle-chat-panel] .reticle-flows-cap{display:block;color:var(--reticle-faint);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;}
+[data-reticle-chat-panel] .reticle-flows-cap{display:block;color:var(--reticle-faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase;}
 [data-reticle-chat-panel] .reticle-flow-strip{display:flex;gap:6px;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-inline:contain;pointer-events:auto;}
 [data-reticle-chat-panel] .reticle-flow-strip::-webkit-scrollbar{display:none;}
 [data-reticle-chat-panel] .reticle-flow-strip .reticle-flow{flex:none;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -235,7 +240,7 @@ export const CONTROLS_FLOWS_HTML: string = `<div data-reticle-flows class="retic
  *
  * The row it shared a stack with stays: it is read and clicked, not typed into.
  */
-export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-foot-stack"><div class="reticle-foot-workspace-row">${workspaceRowHtml()}${CHAT_VIEWS_HTML}</div></div></div>`;
+export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-foot-stack">${CHAT_VIEWS_HTML}<div class="reticle-foot-workspace-row">${workspaceRowHtml()}</div></div></div>`;
 
 interface ControlRefs {
   pauseBtn: HTMLButtonElement | undefined;

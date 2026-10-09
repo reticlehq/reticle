@@ -116,10 +116,10 @@ describe('reading the driver preference from the platform', () => {
     expect(got?.harnessEntitled).toBe(true);
   });
 
-  /** The platform's own default is on; a daemon reading absence as "off" would disable the feature. */
-  it('treats a missing harnessEnabled as enabled', async () => {
+  /** The Harness is opt-in: only the platform saying it is on lets a drive spend credits. */
+  it('treats a missing harnessEnabled as off', async () => {
     const got = await fetchPlatformConfig(LINKED, answering({ provider: 'jev' }));
-    expect(got?.harnessEnabled).toBe(true);
+    expect(got?.harnessEnabled).toBe(false);
   });
 
   it('answers nothing on a non-2xx', async () => {
@@ -156,5 +156,49 @@ describe('reading the driver preference from the platform', () => {
       'https://app.reticle.sh/v1/model/config',
       expect.anything(),
     );
+  });
+});
+
+describe('the grant end date', () => {
+  it('reads an ISO date or a number, and drops anything else', async () => {
+    const iso = await fetchPlatformConfig(
+      LINKED,
+      answering({
+        provider: 'jev',
+        credits: { used: 1, limit: 500, kind: 'trial', endsAt: '1970-01-02T00:00:00Z' },
+      }),
+    );
+    expect(iso?.credits?.endsAt).toBe(86_400_000);
+    const junk = await fetchPlatformConfig(
+      LINKED,
+      answering({ provider: 'jev', credits: { used: 1, limit: 500, endsAt: 'soon' } }),
+    );
+    expect(junk?.credits).toEqual({ used: 1, limit: 500 });
+  });
+});
+
+describe("the platform's coverage gate", () => {
+  it('reads harnessUnlocked, coverageScore and harnessLock, rounding the percent down', async () => {
+    const got = await fetchPlatformConfig(
+      LINKED,
+      answering({
+        provider: 'jev',
+        harnessUnlocked: false,
+        coverageScore: 0.799,
+        harnessLock: { reason: 'Harness unlocks at 80%…', prompt: 'p', command: null },
+      }),
+    );
+    expect(got?.gate).toEqual({
+      unlocked: false,
+      percent: 79,
+      reason: 'Harness unlocks at 80%…',
+      prompt: 'p',
+    });
+  });
+
+  it('carries no gate from a platform that sends none', async () => {
+    expect(
+      (await fetchPlatformConfig(LINKED, answering({ provider: 'jev' })))?.gate,
+    ).toBeUndefined();
   });
 });

@@ -6,13 +6,19 @@
  *
  * Deduped by kind + missing, newest first, bounded per session.
  */
+import { withRunningDrive } from '@/features/harness/drive-runs.js';
+import { agentLinkOf } from './agent-link.js';
+import type { InboxMessage } from './human/live-control.js';
 import {
   CoverageMarker,
   InstrumentationGapKind,
   LINK_APP_GAPS_MAX,
   agentPromptFor,
   coverageOf,
+  harnessGateOf,
+  harnessUnlockPrompt,
   type Coverage,
+  type CoverageCapability,
   type ImpactSnapshot,
 } from '@reticlehq/core';
 
@@ -59,6 +65,14 @@ export function recordGaps(sessionId: string, gaps: readonly object[], now: numb
   if (0 < list.length) bySession.set(sessionId, list);
 }
 
+/** Sessions where at least one verdict mapped a control to its file:line. */
+const sourceSeen = new Set<string>();
+
+/** A verdict on this session named a file:line: source mapping is seen, whatever else lacks one. */
+export function noteSourceSeen(sessionId: string, source: string | undefined): void {
+  if (source !== undefined) sourceSeen.add(sessionId);
+}
+
 /** What this session's verdicts recorded, newest first. */
 export function recordedGaps(sessionId: string): readonly RecordedGap[] {
   return bySession.get(sessionId) ?? [];
@@ -67,6 +81,7 @@ export function recordedGaps(sessionId: string): readonly RecordedGap[] {
 /** Forget a session that ended. */
 export function forgetRecordedGaps(sessionId: string): void {
   bySession.delete(sessionId);
+  sourceSeen.delete(sessionId);
 }
 
 /** What instrumentation coverage reads off a connected tab. */
@@ -75,6 +90,8 @@ export interface InstrumentedTab {
   readonly url?: string | undefined;
   readonly channels?: readonly string[] | undefined;
   readonly sourceMapping?: boolean | undefined;
+  /** What the person said to the agent from this tab. Absent on a test double. */
+  inboxHistory?(): readonly InboxMessage[];
 }
 
 const SOURCE_GAPS: ReadonlySet<string> = new Set([
@@ -83,13 +100,18 @@ const SOURCE_GAPS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The tab's HELLO channels, plus the `source` marker when its page said it carries source mapping
- * and no verdict recorded otherwise — the list the platform report sends and coverage reads.
+ * The tab's HELLO channels, plus the `source` marker when a verdict mapped a control to its
+ * file:line (seen anywhere is seen), or when its page said it carries source mapping and no verdict
+ * recorded otherwise — the list the platform report sends and coverage reads. A build that turned
+ * the stamp off has none, whatever was seen before it.
  */
 export function announcedChannels(tab: InstrumentedTab): string[] {
   const channels = [...(tab.channels ?? [])];
-  const contradicted = recordedGaps(tab.id).some((gap) => SOURCE_GAPS.has(gap.kind));
-  if (true === tab.sourceMapping && !contradicted) channels.push(CoverageMarker.SOURCE);
+  const gaps = recordedGaps(tab.id);
+  const off = gaps.some((gap) => InstrumentationGapKind.SOURCE_MAPPING_OFF === gap.kind);
+  const contradicted = gaps.some((gap) => SOURCE_GAPS.has(gap.kind));
+  const claimed = true === tab.sourceMapping && !contradicted;
+  if (!off && (sourceSeen.has(tab.id) || claimed)) channels.push(CoverageMarker.SOURCE);
   return channels;
 }
 
@@ -102,20 +124,65 @@ const appNameOf = (url: string): string => {
   }
 };
 
-/** This tab's coverage, with the coding-agent prompt when its verdicts recorded any gap. */
-export function instrumentationOf(tab: InstrumentedTab): Coverage & { prompt?: string } {
+/**
+ * The coverage capabilities that do not apply to this tab's app, excluded from both sides of the
+ * score. ponytail: nothing declares one yet, so every capability applies; the platform reads the
+ * same list from the local-apps report, so the day something declares one both sides move together.
+ */
+export function notApplicableOf(_tab: InstrumentedTab): CoverageCapability[] {
+  return [];
+}
+
+/** Whether the Harness may drive this tab's app (see core's `instrumentation-coverage.ts`), as pushed. */
+export interface TabHarnessGate {
+  percent: number;
+  unlocked: boolean;
+  reason?: string;
+}
+
+/**
+ * This tab's coverage and its Harness gate, with the coding-agent prompt when its verdicts recorded
+ * any gap or the gate is shut: below the gate the prompt names every unseen capability, so there is
+ * always something to hand the agent.
+ */
+export function instrumentationOf(
+  tab: InstrumentedTab,
+): Coverage & { prompt?: string; harnessGate: TabHarnessGate } {
   const gaps = recordedGaps(tab.id);
   const coverage = coverageOf({ channels: announcedChannels(tab), gaps });
   const url = tab.url ?? '';
+  const appName = appNameOf(url);
+  const notApplicable = notApplicableOf(tab);
+  const gate = harnessGateOf(coverage, notApplicable);
+  const harnessGate = {
+    percent: gate.percent,
+    unlocked: gate.unlocked,
+    ...(gate.reason === undefined ? {} : { reason: gate.reason }),
+  };
+  if (!gate.unlocked)
+    return {
+      ...coverage,
+      harnessGate,
+      prompt: harnessUnlockPrompt({ coverage, gaps, appName, url, notApplicable }),
+    };
   return 0 === gaps.length
-    ? coverage
-    : { ...coverage, prompt: agentPromptFor({ gaps, appName: appNameOf(url), url }) };
+    ? { ...coverage, harnessGate }
+    : { ...coverage, harnessGate, prompt: agentPromptFor({ gaps, appName, url }) };
 }
 
-/** The impact snapshot a tab is pushed, carrying that tab's own coverage for the HUD. */
+/**
+ * The impact snapshot a tab is pushed, carrying that tab's own coverage, running drive and agent
+ * link (who is attached, and this tab's notes to them). Every
+ * push needs the drive: one without it reads as "no drive", and the drive's own tool calls push.
+ */
 export function withInstrumentation(
   tab: InstrumentedTab,
   snapshot: ImpactSnapshot,
 ): ImpactSnapshot {
-  return { ...snapshot, instrumentation: { ...instrumentationOf(tab) } };
+  const pushed = {
+    ...snapshot,
+    instrumentation: { ...instrumentationOf(tab) },
+    agent: agentLinkOf(tab.inboxHistory?.() ?? []),
+  };
+  return withRunningDrive(pushed, tab.id) ?? pushed;
 }

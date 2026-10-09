@@ -216,6 +216,41 @@ describe('a lane that breaks', () => {
   });
 });
 
+/** A drive the platform cut off (credits gone, 402) read as a journey that ran and was judged. */
+describe('a journey whose drive the platform cut off', () => {
+  it('is blocked, not passed or failed, and says the platform’s reason', async () => {
+    const fake = fakePorts();
+    const credits = 'Your 10 free credits are used.';
+    const ports: ScriptPorts = {
+      ...fake.ports,
+      drive: async (...args) => ({
+        ...(await fake.ports.drive(...args)),
+        stopReason: StopReason.BROKEN,
+        goalMet: false,
+        error: credits,
+      }),
+    };
+    const run = await runScript(
+      script({
+        version: 1,
+        source: 'platform',
+        journeys: [
+          { id: 'compose', title: 'Compose', steps: [{ kind: 'act', goal: 'compose one' }] },
+          { id: 'save', title: 'Save', steps: [{ kind: 'act', goal: 'save it' }] },
+        ],
+        lanes: [{ id: 'A', journeys: ['compose', 'save'] }],
+      }),
+      ports,
+    );
+    expect(run.view.lanes[0]?.journeys.map((j) => j.status)).toEqual([
+      ScriptStatus.BLOCKED,
+      ScriptStatus.BLOCKED,
+    ]);
+    expect(run.lines[0]).toContain(`blocked (${credits})`);
+    expect(run.drives.some((d) => StopReason.BROKEN === d.stopReason)).toBe(true);
+  });
+});
+
 /** From the recorded runs: a persona journey whose two checks both failed was marked passed. */
 describe('an open journey', () => {
   it('fails when its checks failed, though a check ran', async () => {

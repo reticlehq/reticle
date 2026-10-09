@@ -43,13 +43,18 @@ import {
 } from '../../features/harness/platform/local-apps.js';
 import { serverOptionsFromEnv } from '../../features/harness/platform/server-driver.js';
 import { EXPLORE_TOOLS, driveForChat } from './explore-tools.js';
-import { MSG_NO_HARNESS_KEY, withLinkedCredential } from './harness-explore.js';
+import { MSG_NO_HARNESS_KEY, coverageRefusal, withLinkedCredential } from './harness-explore.js';
 import { runTool } from './invoke-tool.js';
-import { announcedChannels, recordedGaps } from '../../portal/session/recorded-gaps.js';
+import {
+  announcedChannels,
+  notApplicableOf,
+  recordedGaps,
+} from '../../portal/session/recorded-gaps.js';
 import { probeDevServers } from '../../portal/session/dev-server/dev-server-probe.js';
 import {
   DriveOrigin,
   onDriveChange,
+  onDriveStep,
   runningDrive,
   stopDrive,
 } from '../../features/harness/drive-runs.js';
@@ -60,6 +65,7 @@ import {
   type FreeDrive,
 } from '../../features/harness/platform/platform-drives.js';
 import { HumanControlKind } from '@reticlehq/core';
+import { onAgentsChange } from '../../hooks/coding-agents.js';
 
 /** Why a platform drive with no tab of its own runs no tool. */
 const NO_DRIVEN_TAB = 'No tab was picked for this drive, so no tool runs.';
@@ -294,6 +300,7 @@ export function startChatDrives(
             ...(sdkVersion === undefined ? {} : { sdkVersion }),
             ...(0 === channels.length ? {} : { channels }),
             gaps,
+            notApplicable: notApplicableOf({ id: tab.sessionId }),
           };
         }),
         serverOptionsFromEnv(await withLinkedCredential(deps, env)),
@@ -385,6 +392,9 @@ export async function hudDrive(
     if (running === undefined || !stopDrive(running.harnessRun)) say(MSG_NOTHING_DRIVING);
     return;
   }
+  // Before the grant: a drive the gate refuses must not take one. The panel shows the prompt.
+  const locked = coverageRefusal(deps, sessionId);
+  if (locked !== undefined) return say(locked.split('\n')[0] ?? locked);
   const platform = serverOptionsFromEnv(await withLinkedCredential(deps, process.env));
   if (platform === undefined) return say(MSG_NO_HARNESS_KEY);
   const granted = await grant(platform);
@@ -436,4 +446,8 @@ export function attachHudHarness(
     void hudDrive(daemon.deps(), s.id, request, (on) => applySwitch(root, on));
   });
   onDriveChange(daemon.repaint);
+  // Each step too, so the panel's "N steps so far" counts up instead of sitting at zero.
+  onDriveStep(daemon.repaint);
+  // And "Connected: Claude Code" follows an agent attaching or leaving.
+  onAgentsChange(daemon.repaint);
 }

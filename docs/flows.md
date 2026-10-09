@@ -104,7 +104,7 @@ Every session's driving is saved as a flow at teardown when it declared a conseq
 - merge: another drive that starts on the same page and takes the same steps updates the existing file instead of adding a copy. The existing flow keeps its name and everything it already says; the new drive only fills gaps. Flows you named yourself are never merged;
 - record, on every step, the `page` it ran on and the `endPage` it led to;
 - declare `requires` (the start page) and `ensures` (the end page) as route claims, so `canFollow` can tell which flows chain. Replay treats a required start page as met by navigating there;
-- carry `author: { agent, person }`: the MCP client that drove it and the email of whoever ran `reticle login` on that machine. Either is left out when it is not known.
+- carry `author: { agent, person }`: the MCP client that drove it and the email of whoever signed in with `reticle connect` on that machine. Either is left out when it is not known.
 
 ## Delete a flow
 

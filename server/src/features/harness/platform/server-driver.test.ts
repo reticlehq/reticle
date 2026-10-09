@@ -130,6 +130,61 @@ describe('the platform drives, this machine executes', () => {
   });
 });
 
+describe('a platform refusal part-way through a drive', () => {
+  const FREE_USED =
+    'Your 10 free credits are used. Add a card to start your 14-day trial with 500 credits, in Settings → Plan.';
+  /** One proving turn, then the refusal on the next. */
+  const cutOff = (status: number, body: unknown) => {
+    const answers = [
+      { status: 201, body: { runId: 'hr_1' } },
+      {
+        status: 200,
+        body: {
+          turn: 0,
+          calls: [{ id: 't1', name: 'reticle_act_and_wait', args: { ref: 'e1', until: {} } }],
+          text: '',
+          done: false,
+          status: 'running',
+        },
+      },
+      { status, body },
+    ];
+    return serverDriver({
+      url: 'https://p.test',
+      apiKey: 'k',
+      fetch: () => {
+        const next = answers.shift() ?? { status: 500, body: {} };
+        return Promise.resolve(new Response(JSON.stringify(next.body), { status: next.status }));
+      },
+    });
+  };
+
+  it("carries the card wall's own message (402 needs_card, a flat body), and never reaches its goal", async () => {
+    const result = await runHarness(
+      cutOff(402, { error: 'needs_card', capability: 'hosted-runner', message: FREE_USED }),
+      toolset([]),
+    );
+    expect(result.stopReason).toBe('broken');
+    expect(result.error).toBe(FREE_USED);
+    expect(result.proved, 'a check held before the cut-off').toBe(true);
+    expect(result.goalMet).toBe(false);
+  });
+
+  it.each([
+    [402, 'upgrade_required', "This month's credits are used."],
+    [401, 'unauthorized', 'bad key'],
+    [403, 'forbidden', 'not your project'],
+    [429, 'rate_limited', 'slow down'],
+    [500, 'internal', 'boom'],
+    [502, 'provider_failed', 'the provider answered 503'],
+  ])('a %i ends the drive broken, unmet, with the message', async (status, code, message) => {
+    const result = await runHarness(cutOff(status, { error: { code, message } }), toolset([]));
+    expect(result.stopReason).toBe('broken');
+    expect(result.error).toBe(message);
+    expect(result.goalMet).toBe(false);
+  });
+});
+
 describe('autonomous driving switched off mid-run', () => {
   it('ends the drive as stopped, not broken', async () => {
     const answers = [

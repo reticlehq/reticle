@@ -9,3 +9,5 @@
 export * from './wire/constants/hud-controls.js';
 // The rail's notices: read by the daemon that chooses them and the lazy panel that renders them.
 export * from './artifacts/hud-notices.js';
+// Harness credits: the HUD's row says what the daemon's refusal says.
+export * from './artifacts/harness-credits.js';

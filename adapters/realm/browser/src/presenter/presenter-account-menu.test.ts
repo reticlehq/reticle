@@ -196,7 +196,7 @@ describe('opening and closing the menu', () => {
 });
 
 /**
- * Sign in used to copy `reticle login` and stop: a dead end for anybody who does not live in a
+ * Sign in used to copy `reticle connect` and stop: a dead end for anybody who does not live in a
  * terminal. It now asks the daemon to open the browser approval, and still copies the command as
  * the fallback for an older daemon that does not answer.
  */
@@ -218,7 +218,7 @@ describe('signing in from the HUD', () => {
   it('does not treat the copy-a-command hints as a sign-in', () => {
     const root = document.createElement('div');
     root.innerHTML =
-      '<button data-reticle-account-signin data-reticle-copy="reticle link">link</button>';
+      '<button data-reticle-account-signin data-reticle-copy="reticle connect">link</button>';
     document.body.appendChild(root);
     let asked = 0;
     const teardown = mountAccountControl(root, () => {

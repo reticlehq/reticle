@@ -154,7 +154,7 @@ Recent additions, each of which answers a question agents were previously asking
 
 **When a verdict comes back `unsettled`,** it now names what it was waiting for and what the window actually held. Read those before retrying: an `unknown` that explains itself is a retry with a better `until`, and one that does not is a dead end.
 
-**If the port is taken,** `reticle kill` frees it and leaves your own MCP proxy alone. Do not reach for `lsof -i :4400` and kill what it lists; that matches every process on the port, including the proxy you are talking through.
+**If the port is taken,** `reticle stop --force` frees it and leaves your own MCP proxy alone. Do not reach for `lsof -i :4400` and kill what it lists; that matches every process on the port, including the proxy you are talking through.
 
 ## Start here
 

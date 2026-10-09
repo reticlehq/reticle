@@ -44,6 +44,7 @@ import {
 import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource, stampedSourceIn } from './assert-source.js';
 import { VerdictAttribution, verdictAttributionOf } from '@reticlehq/core';
+import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
 
 /**
  * The honesty verdict for a plain `reticle_assert`.
@@ -290,6 +291,7 @@ export async function assertVerdict(
     domMutated: false,
     signalsFired: 0,
   });
+  noteSourceSeen(session.id, source ?? stampedSourceIn(evidence));
   noteSessionGaps(session, gaps);
   // Who can act on this verdict, derived from the clause that decided it — see `attributedTo` below.
   const attributedTo = verdictAttributionOf(decision.verifiedReason);

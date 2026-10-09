@@ -1,17 +1,11 @@
 /**
- * The HUD offers no text input.
+ * The HUD's one text box says who it talks to.
  *
- * Users could not tell when to type into the HUD and when to type at their agent, because both were
- * a box on the same screen and nothing said which was which. There is no wording that fixes two
- * inputs that look alike and do different things; the answer is to have one.
- *
- * Scoped to the COMPOSER, not the panel. The chat panel also carries the banner, the replayable-flow
- * chips, the pause badge and the export/copy controls — all of which are read, not typed into, and
- * all of which stay.
- *
- * Removing it also takes hit-test surface out of the page. `.reticle-msg` and `.reticle-send` both
- * carried `pointer-events:auto`, and Reticle's overlay sitting in an app's hit-test path is a
- * reported defect in its own right.
+ * The old composer went because users could not tell when to type into the HUD and when to type at
+ * their agent: two boxes that looked alike and did different things, and nothing said which was
+ * which. The note box that replaced it is labelled with the agent's own name and sits beside
+ * "Connected: <agent>", so the question cannot arise. These pin the parts of the old removal that
+ * still matter: no textarea, none of the composer's markup or styles left in the hit-test path.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -35,24 +29,24 @@ const PRESENTER_SHELL_SRC = readFileSync(
   'utf8',
 );
 
-describe('the HUD has no text input', () => {
-  it('renders no textarea', () => {
+describe('the HUD has one text box, and it names the agent it talks to', () => {
+  it('renders no textarea and none of the old composer', () => {
     expect(CONTROLS_FOOT_HTML).not.toContain('<textarea');
-  });
-
-  it('renders no send button', () => {
     expect(CONTROLS_FOOT_HTML).not.toContain('data-reticle-send');
-  });
-
-  it('carries no composer styles, so nothing is merely hidden', () => {
-    // Hiding it would leave the element in the hit-test path, which is half the reason it is going.
     expect(CONTROLS_CSS).not.toContain('.reticle-msg');
-    expect(CONTROLS_CSS).not.toContain('.reticle-send');
     expect(CONTROLS_CSS).not.toContain('.reticle-composer');
   });
 
+  it('labels its only text box as a note to the coding agent', () => {
+    document.body.innerHTML = CONTROLS_FOOT_HTML;
+    const inputs = [...document.querySelectorAll<HTMLInputElement>('input[type="text"]')];
+    expect(inputs.map((input) => input.getAttribute('data-reticle-agent-note'))).toEqual(['']);
+    const label = document.querySelector(`label[for="${inputs[0]?.id ?? ''}"]`);
+    expect(label?.hasAttribute('data-reticle-agent-label')).toBe(true);
+    document.body.innerHTML = '';
+  });
+
   it('keeps the workspace row, which shared the composer’s stack', () => {
-    // The one thing that lived beside the input and is not an input.
     expect(CONTROLS_FOOT_HTML).toContain('data-reticle-foot');
     expect(CONTROLS_FOOT_HTML.length, 'the footer still renders something').toBeGreaterThan(30);
   });

@@ -78,7 +78,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // own root attributes and every surface's controls, so it sits with the surfaces it watches.
   // 24 with `presenter-plan.ts`, the Harness plan board on the Agent Log: one surface, with its own
   // stylesheet, beside the others.
-  'adapters/realm/browser/src/presenter': 24,
+  'adapters/realm/browser/src/presenter': 27,
   // Newly over the line at 11, with `presenter-safe-html.ts`. It crossed because two SECURITY
   // helpers left `presenter-report.ts` when the account capsule became their second caller: HTML
   // escaping, and the dashboard-url scheme check that exists because `javascript:` once produced a
@@ -136,7 +136,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * 17 with `drive-script.ts`, the Harness's plan language: an artifact the daemon and the platform
    * both read, so it lives with the other formats, behind the artifacts subpath the SDK never loads.
    */
-  'core/src/artifacts': 17,
+  'core/src/artifacts': 18,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   'core/src': 11,
@@ -220,7 +220,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // declared beside it rather than inside it, as `query-hint-schema.ts` is beside tools.ts.
   // 47 with `lease-readiness.ts`: the checks a lease runs before it may say `ready: true` (does
   // the tab answer, is it visible), moved out of lease-tools.ts for the same line-cap reason.
-  'server/src/surface/tools': 47,
+  'server/src/surface/tools': 48,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
@@ -262,7 +262,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // to read daemon state and port holders -- every other home needed two new reaches for it.
   // 25 with `command-payload.ts`: the command's wire JSON, moved out of `session.ts` (at its cap)
   // when it gained the mark that says the Harness sent it.
-  'server/src/portal/session': 26,
+  'server/src/portal/session': 27,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others
@@ -280,7 +280,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // pair is the whole rule.
   // 36 with `replay-from-hud.ts`: the ▶ replay a person starts from the HUD, moved out of
   // `server/src/index.ts` (at its cap) when it gained a progress push per step.
-  'server/src/language/flows': 36,
+  'server/src/language/flows': 35,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the
@@ -323,7 +323,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // Its own file so the 700-line session aggregator did not grow a second concern.
   // 36 again when the drive-attribution counter went: the async context in `hooks/driven-by.ts`
   // already says which drive a call belongs to, per call, so a second module-wide copy was removed.
-  'server/src/telemetry': 36,
+  'server/src/telemetry': 35,
   'spec-runner/src': 11,
 };
 

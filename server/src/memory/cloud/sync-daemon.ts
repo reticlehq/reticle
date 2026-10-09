@@ -180,6 +180,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   let unsynced: readonly UnsyncedRoot[] = [];
   /** Which roots pushed this cycle, and whether each is linked by its own link file. */
   let rootsLinked = new Map<string, boolean>();
+  /** The linked roots that send flows: a link with `sync.flows` off keeps every flow local. */
+  let rootsSendFlows = new Set<string>();
 
   /**
    * Count what every root still owes, and say once per change where runs sit that nothing sends.
@@ -188,17 +190,22 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
    */
   const refreshUnsynced = async (): Promise<void> => {
     const linked = rootsLinked;
-    unsynced = await unsyncedRoots([...linked.keys()], (r) =>
-      Promise.resolve(true === linked.get(r)),
+    const sendsFlows = rootsSendFlows;
+    unsynced = await unsyncedRoots(
+      [...linked.keys()],
+      (r) => Promise.resolve(true === linked.get(r)),
+      (r) => Promise.resolve(sendsFlows.has(r)),
     );
     for (const entry of unsynced) {
-      if (entry.linked || announced.get(entry.root) === entry.runs) continue;
-      announced.set(entry.root, entry.runs);
+      const held = entry.runs + entry.flows;
+      if (entry.linked || announced.get(entry.root) === held) continue;
+      announced.set(entry.root, held);
       log('reticle_cloud_unsynced_root', {
         root: entry.root,
         runs: entry.runs,
+        flows: entry.flows,
         linked: entry.linked,
-        fix: "run `reticle link` in that folder's project: these runs are on this machine only",
+        fix: "run `reticle connect` in that folder's project: this work is on this machine only",
       });
     }
   };
@@ -253,6 +260,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
         // Never silently: `refreshUnsynced` names this root if it holds runs.
         if (null === cloud.config || null === cloud.projectId) continue;
         rootsLinked.set(root, true);
+        if (cloud.policy.flows) rootsSendFlows.add(root);
         const report = await pushRoot(root, cloud);
         if (report === undefined) continue;
         if (report.error !== undefined) {
@@ -279,10 +287,13 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     if (running) return undefined;
     running = true;
     rootsLinked = new Map();
+    rootsSendFlows = new Set();
     try {
       const cloud = await deps.cloud();
       const linked = null !== cloud.config;
-      rootsLinked.set(deps.reticleRoot, linked);
+      const own = deps.reticleRoot;
+      rootsLinked.set(own, linked);
+      if (linked && cloud.policy.flows) rootsSendFlows.add(own);
       if (linked !== wasLinked) {
         wasLinked = linked;
         if (linked)

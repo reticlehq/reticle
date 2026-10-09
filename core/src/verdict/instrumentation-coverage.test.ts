@@ -47,15 +47,38 @@ describe('coverageOf', () => {
   it('marks a capability missing when a verdict recorded its gap, with that gap’s fix', () => {
     const coverage = coverageOf({
       channels: ALL_CHANNELS,
-      gaps: [{ kind: InstrumentationGapKind.NO_SOURCE_MAPPING, missing: 'e3 has no source' }],
+      gaps: [{ kind: InstrumentationGapKind.NO_STORE_REGISTERED, missing: 'no store' }],
     });
     expect(coverage.covered).toBe(7);
     expect(coverage.missing).toEqual([
       expect.objectContaining({
-        capability: CoverageCapability.SOURCE_MAPPING,
-        fix: fixForGap(InstrumentationGapKind.NO_SOURCE_MAPPING),
+        capability: CoverageCapability.APP_STATE,
+        fix: fixForGap(InstrumentationGapKind.NO_STORE_REGISTERED),
       }),
     ]);
+  });
+
+  /** A verdict mapped to src/App.jsx:24, one other control did not, and the HUD said "not seen". */
+  it('counts source mapping seen anywhere, whatever one unmapped control recorded', () => {
+    const coverage = coverageOf({
+      channels: ALL_CHANNELS,
+      gaps: [{ kind: InstrumentationGapKind.NO_SOURCE_MAPPING, missing: 'e3 has no source' }],
+    });
+    expect(coverage.seen).toContain(CoverageCapability.SOURCE_MAPPING);
+    expect(coverage.missing).toEqual([]);
+  });
+
+  it('marks source mapping missing when the build turned it off, or none was ever seen', () => {
+    const off = coverageOf({
+      channels: ALL_CHANNELS,
+      gaps: [{ kind: InstrumentationGapKind.SOURCE_MAPPING_OFF, missing: 'stamp off' }],
+    });
+    expect(off.missing.map((m) => m.capability)).toEqual([CoverageCapability.SOURCE_MAPPING]);
+    const never = coverageOf({
+      channels: ALL_CHANNELS.filter((c) => CoverageMarker.SOURCE !== c),
+      gaps: [{ kind: InstrumentationGapKind.NO_SOURCE_MAPPING, missing: 'e3 has no source' }],
+    });
+    expect(never.missing.map((m) => m.capability)).toEqual([CoverageCapability.SOURCE_MAPPING]);
   });
 
   it('sees nothing for a page that never connected', () => {

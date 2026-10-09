@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { LinkCapability, LinkReportKey, PLATFORM_LINK_VERSION } from '@reticlehq/core';
+import {
+  CoverageCapability,
+  LinkCapability,
+  LinkReportKey,
+  NotApplicableSchema,
+  PLATFORM_LINK_VERSION,
+} from '@reticlehq/core';
 import {
   appKeyOf,
   appsByPlatform,
@@ -334,7 +340,13 @@ describe('what a report says about coverage and connection', () => {
   it('carries each app’s channels, recorded gaps and adapters', async () => {
     const gap = { kind: 'no-source-mapping', missing: 'e1', fix: 'add the plugin', seenAt: 7 };
     const [group] = await appsByPlatform(
-      [tab('s1', 'http://localhost:3000/', { channels: ['ui', 'net'], gaps: [gap] })],
+      [
+        tab('s1', 'http://localhost:3000/', {
+          channels: ['ui', 'net'],
+          gaps: [gap],
+          notApplicable: [CoverageCapability.APP_STATE],
+        }),
+      ],
       undefined,
       MACHINE.id,
       () => Promise.resolve({ platform: A, dir: '/code/shop', name: 'shop' }),
@@ -343,7 +355,11 @@ describe('what a report says about coverage and connection', () => {
       [LinkReportKey.CHANNELS]: ['ui', 'net'],
       [LinkReportKey.GAPS]: [gap],
       [LinkReportKey.ADAPTERS]: ['react'],
+      [LinkReportKey.NOT_APPLICABLE]: [CoverageCapability.APP_STATE],
     });
+    expect(
+      NotApplicableSchema.safeParse(group?.apps[0]?.[LinkReportKey.NOT_APPLICABLE]).success,
+    ).toBe(true);
   });
 
   it('sends dev servers, the last refused hello and unsent runs at the top level', async () => {

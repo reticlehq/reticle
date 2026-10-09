@@ -25,11 +25,11 @@ export function unreachableMessage(url: string, attempts: number): string {
 }
 
 /**
- * The same fact, sized for the HUD's one-line status row.
+ * What the HUD's status row says, in words a first-time user can act on.
  *
- * The console warning explains; this one only has room to name the URL, which is the answer in
- * most cases anyway — a bridge on a port the page is not dialling.
+ * Still no diagnosis: the page cannot tell a stopped daemon from an unreachable one, so it says it
+ * cannot reach Reticle and names the two commands that settle it. The url and attempt count stay on
+ * hover, from `unreachableMessage`.
  */
-export function unreachableStripText(url: string, attempts: number): string {
-  return `no bridge at ${url} — ${String(attempts)} attempt${1 === attempts ? '' : 's'}`;
-}
+export const UNREACHABLE_HEADLINE =
+  "Can't reach Reticle from this page. Run reticle status to check, or reticle serve to start it.";

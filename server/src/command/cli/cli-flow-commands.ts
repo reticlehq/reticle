@@ -29,13 +29,10 @@ import {
 } from '@/features/exhaust/ledger.js';
 import { gateDecision, passingFlowNames } from '@/language/flows/change/gate.js';
 import { FlakeStore } from '@/language/flows/stores/flake-store.js';
-import { formatBuddyStatus } from '@/language/flows/buddy-status.js';
-import { CapsuleStore } from '@/judgement/capsule/capsule-store.js';
 import { AssertionTiersStore } from '@/language/flows/stores/assertion-tiers-store.js';
 import { detectDowngrades } from '@/judgement/outcome/assertion-integrity.js';
 import { computeCoverage, flowCoverageReport } from '@/language/flows/suite/coverage.js';
-import { createWatchBatcher } from '@/language/flows/change/watch-batcher.js';
-import { readFileSync, statSync, watch } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { log } from '@/log.js';
 /** Load the {name, steps} of every saved flow for the active project. */
 /** Explicit files plus, when --since is given, the git-changed files since that ref. */
@@ -79,109 +76,6 @@ export async function loadNamedFlows(
     if (loaded.ok) flows.push({ name: loaded.value.name, steps: loaded.value.steps });
   }
   return flows;
-}
-
-/** File-change extensions worth reacting to (skip node_modules churn, dotfiles, build output). */
-
-/**
- * The buddy channel: one ambient line a human can park in a statusline. Deliberately best-effort
- * and silent on failure — a status line that throws is worse than no status line, and it must never
- * interfere with the watch loop it rides on.
- */
-async function emitBuddyStatus(
-  fs: ReturnType<typeof createNodeFileSystem>,
-  reticleRoot: string,
-  flows: readonly NamedFlow[],
-  affected: readonly string[],
-): Promise<void> {
-  try {
-    const latest = await new RunStore(fs, reticleRoot).latest();
-    const passingNames = new Set(passingFlowNames(latest?.flows ?? []));
-    const quarantined = await new FlakeStore(fs, reticleRoot).flakyFlows();
-    const flaky = new Set(quarantined);
-    // A deviation is an at-risk flow with no passing artifact — and a quarantined flake is not a deviation.
-    const deviations = affected.filter((n) => !passingNames.has(n) && !flaky.has(n));
-    log('reticle_buddy', {
-      status: formatBuddyStatus({
-        total: flows.length,
-        passing: passingNames.size,
-        deviations,
-        quarantined,
-      }),
-    });
-  } catch {
-    // never let the ambient line break the watcher
-  }
-}
-
-const WATCHED_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|vue|svelte)$/;
-const WATCH_DEBOUNCE_MS = 200;
-
-/**
- * `reticle watch [url]` — on every save, report which saved flows must re-verify (the affected set).
- * Environment-side (costs the agent nothing per turn); the buddy loop. This v1 detects + reports on
- * change; auto-replaying the affected flows against the app is the next increment. Long-running.
- */
-export function handleWatch(): void {
-  const fs = createNodeFileSystem();
-  const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
-  const batcher = createWatchBatcher({
-    debounceMs: WATCH_DEBOUNCE_MS,
-    schedule: (fn, ms) => {
-      setTimeout(fn, ms).unref();
-    },
-    onFlush: (files) => {
-      void loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()))
-        .then(async (flows) => {
-          const result = affectedSavedFlows(flows, files);
-          if (result.affected.length > 0) {
-            log('reticle_watch_affected', { changed: files, affected: result.affected });
-          }
-          await emitBuddyStatus(fs, reticleRoot, flows, result.affected);
-        })
-        .catch((error) => {
-          log('reticle_watch_failed', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
-    },
-  });
-  log('reticle_watch_started', { cwd: process.cwd() });
-  // Print the ambient line once at startup so the human sees where they stand before touching anything.
-  void loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()))
-    .then((flows) => emitBuddyStatus(fs, reticleRoot, flows, []))
-    .catch(() => undefined);
-  watch(process.cwd(), { recursive: true }, (_event, filename) => {
-    if ('string' === typeof filename && WATCHED_EXTENSIONS.test(filename))
-      batcher.onChange(filename);
-  });
-}
-
-/**
- * `reticle capsules` — list saved fail-to-pass bug capsules (.reticle/capsules). Each is a minimal
- * failing reproduction plus the consequence that should have held; replay one with reticle_flow_replay.
- */
-export async function handleCapsules(): Promise<void> {
-  try {
-    const fs = createNodeFileSystem();
-    const capsules = await new CapsuleStore(fs, join(process.cwd(), ReticleDir.ROOT)).all();
-    log('reticle_capsules', {
-      count: capsules.length,
-      capsules: capsules.map((c) => ({
-        id: c.id,
-        ...(c.flow === undefined ? {} : { flow: c.flow }),
-        origin: c.origin,
-        expected: c.expected,
-        observed: c.observed,
-        steps: c.steps.length,
-      })),
-    });
-  } catch (error) {
-    log('reticle_capsules_failed', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    process.exitCode = 1;
-  }
 }
 
 /**

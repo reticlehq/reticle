@@ -89,7 +89,7 @@ Two structural facts:
 
 | Failure | Silent | Guarded by |
 | --- | --- | --- |
-| proxy killed externally (the `lsof -ti` recipe) | **yes, total** | `reticle kill` frees the port and leaves the agent's own proxy alone. See [harness rule 1](https://github.com/reticlehq/reticle/blob/main/apps/e2e/harness-rules.md) |
+| proxy killed externally (the `lsof -ti` recipe) | **yes, total** | `reticle stop --force` frees the port and leaves the agent's own proxy alone. See [harness rule 1](https://github.com/reticlehq/reticle/blob/main/apps/e2e/harness-rules.md) |
 | proxy uncaught exception | no | `installProxyResilience` + `proxyLog` |
 | proxy exits when the reconnect budget is spent | _was the worst bug in the product_ | `onReconnectBudgetSpent` → DORMANT, never exit |
 | client closes stdin with calls in flight | no | `SHUTDOWN_DRAIN_MS` (5s) |

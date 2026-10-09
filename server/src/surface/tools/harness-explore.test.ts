@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ReticleEnv } from '@reticlehq/core';
+import { ReticleEnv, Verified } from '@reticlehq/core';
+import { driveRunsFrom } from '@/judgement/runs/drive-run.js';
 import type { ToolDeps } from './tools.js';
 import {
   DEFAULT_MAX_STEPS,
@@ -132,6 +133,36 @@ describe('exploring an app', () => {
 
     expect(result.savedFlows).toEqual(['checkout']);
     expect(result.drive.summary).toBe('drove checkout');
+  });
+
+  it('a drive cut off part-way never syncs as proved, though a check held before it', async () => {
+    const refused: ModelDriver = {
+      turn: () => Promise.reject(new Error('Your 10 free credits are used.')),
+    };
+    const result = await exploreApp(
+      depsWithFlows([]),
+      {},
+      {
+        driver: refused,
+        skipPlatformConfig: true,
+        harnessId: 'h-cut',
+      },
+    );
+    expect(result.drive.error).toBe('Your 10 free credits are used.');
+    const held = {
+      v: 1 as const,
+      actionId: 'c1',
+      tool: 'reticle_act_and_wait',
+      args: {},
+      effect: { claim: 'saved', verified: Verified.YES },
+      tRange: { from: 0, to: 1 },
+      at: 1,
+      drivenBy: { harness: 'h-cut', driver: 'custom' },
+    };
+    const run = driveRunsFrom([held], { runId: 'run_1', projectId: 'p-1' }).find(
+      (r) => 'harness-h-cut' === r.runId,
+    );
+    expect(run?.flows[0]?.status).toBe('skipped');
   });
 
   it('believes the disk and not the model about what was saved', async () => {
@@ -438,6 +469,27 @@ describe('a workspace with no entitlement', () => {
     expect(MSG_HARNESS_UNCLAIMED).toContain('Settings → Plan');
   });
 
+  it('with its credits used up, says what the HUD says, with the platform’s numbers', async () => {
+    const spent = (kind: string, limit: number) =>
+      exploreApp(depsWithFlows([]), linked, {
+        maxSteps: 1,
+        driver: finishing(''),
+        configFetch: platformSays({
+          provider: 'jev',
+          harnessEnabled: true,
+          harnessEntitled: false,
+          credits: { used: limit, limit, kind },
+        }),
+      });
+    await expect(spent('free', 25)).rejects.toThrow(
+      'Your 25 free credits are used. Add a card to start your 14-day trial: https://api.test/settings?group=billing',
+    );
+    await expect(spent('trial', 500)).rejects.toThrow(
+      'Your 500 trial credits are used. Pro starts when your trial ends.',
+    );
+    await expect(spent('paid', 4000)).rejects.toThrow("This month's credits are used.");
+  });
+
   /**
    * The gate used to FAIL OPEN: a platform that was slow for two seconds, or down, let the drive
    * run on Reticle's model budget with nobody's entitlement checked. A drive that would bill us
@@ -459,9 +511,20 @@ describe('a workspace with no entitlement', () => {
     const result = await exploreApp(depsWithFlows([]), linked, {
       maxSteps: 1,
       driver: finishing(''),
-      configFetch: platformSays({ provider: 'jev' }),
+      configFetch: platformSays({ provider: 'jev', harnessEnabled: true }),
     });
     expect(result.drive).toBeDefined();
+  });
+
+  /** The Harness is opt-in: a platform that does not say it is on has not switched it on. */
+  it('refuses when the platform says nothing about the switch', async () => {
+    await expect(
+      exploreApp(depsWithFlows([]), linked, {
+        maxSteps: 1,
+        driver: finishing(''),
+        configFetch: platformSays({ provider: 'jev' }),
+      }),
+    ).rejects.toThrow(MSG_HARNESS_DISABLED);
   });
 });
 

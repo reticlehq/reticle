@@ -5,7 +5,7 @@
  * a module that imports nothing cannot be read half-initialised.
  *
  * There is one driver. Every Harness decision, its models and its planning run on the Reticle
- * platform, on the workspace's monthly Harness credits; this machine executes what it is told.
+ * platform, on the workspace's Harness credits; this machine executes what it is told.
  */
 
 /** The platform's Harness: it decides on its side, this machine executes. See server-driver.ts. */

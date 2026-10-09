@@ -32,8 +32,8 @@ import {
   RunFramework,
   RunProfile,
   RunTrigger,
-  RunFlowStatus,
   Verified,
+  driveFlowStatus,
   type DrivenBy,
   type JournalAction,
   type RunCheck,
@@ -198,8 +198,8 @@ const goalsMissed = new Map<string, boolean>();
 /**
  * What the Harness judged of a drive's goal, noted the moment the drive finishes, before its
  * session ends and is graded. A drive whose checks held but whose goal was not reached synced as
- * "Proved" while the drive itself said it had failed. Unmet once is unmet: a later journey of the
- * same drive reaching its goal does not undo it.
+ * "Proved"; it is not proved. Unmet once is unmet: a later journey of the same drive reaching its
+ * goal does not undo it.
  */
 export function noteHarnessGoal(harness: string, met: boolean | undefined): void {
   if (met === undefined) return;
@@ -214,8 +214,8 @@ export function noteHarnessGoal(harness: string, met: boolean | undefined): void
 
 /**
  * One Harness drive, as its own run: named for the journey it was asked to complete, and credited to
- * the Harness rather than to the agent whose tab it shared. The journey reads as one flow, failed
- * when any check it declared came back no, passed when one came back yes and none failed.
+ * the Harness rather than to the agent whose tab it shared. The journey reads as one flow, graded by
+ * `driveFlowStatus`: failed only on a check that came back no.
  */
 function harnessRunFrom(
   by: DrivenBy,
@@ -227,13 +227,13 @@ function harnessRunFrom(
     runId: harnessRunId(by.harness) ?? defaultRunId(),
   });
   if (input === undefined) return undefined;
-  const statuses = input.checks.map((check) => check.status);
-  const status =
-    statuses.includes(Verified.NO) || false === goalsMissed.get(by.harness)
-      ? RunFlowStatus.FAIL
-      : statuses.includes(Verified.YES)
-        ? RunFlowStatus.PASS
-        : RunFlowStatus.SKIPPED;
+  const count = (verified: string): number =>
+    input.checks.filter((check) => verified === check.status).length;
+  const status = driveFlowStatus({
+    held: count(Verified.YES),
+    failed: count(Verified.NO),
+    goalMet: goalsMissed.get(by.harness),
+  });
   const first = actions.reduce((min, action) => Math.min(min, action.at), Number.MAX_SAFE_INTEGER);
   return {
     ...input,

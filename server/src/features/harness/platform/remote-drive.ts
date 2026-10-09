@@ -16,7 +16,9 @@ import {
   LinkPath,
   PLATFORM_LINK_VERSION,
   PresenterTone,
+  RunFlowStatus,
   TOOL_SESSION_LIMITS,
+  driveFlowStatus,
   parseDriveSpec,
   parseToolSessionReply,
   sessionAskRetryable,
@@ -512,9 +514,14 @@ export function driveVerdict(out: {
   checks?: { held: number; failed: number; undecided: number };
 }): DriveVerdict {
   if (out.error !== undefined) return 'unknown';
-  // A goal judged unmet, or a check that came back "no", is a failed drive whatever else held.
-  if (false === out.goalMet) return 'no';
-  if (0 < (out.checks?.failed ?? 0)) return 'no';
+  // A check that came back "no" is a failed drive whatever else held. A goal the model judged unmet
+  // is its opinion, not evidence: with no check against it the drive is not proved, never failed.
+  const graded = driveFlowStatus({
+    held: out.checks?.held ?? 0,
+    failed: out.checks?.failed ?? 0,
+    goalMet: out.goalMet,
+  });
+  if (RunFlowStatus.FAIL === graded) return 'no';
   // The quoted texts are looked for on the page the drive ENDED on. None there refutes the goal;
   // some missing does not, because a goal that quotes where it starts ("from "Count is 0" to
   // "Count is 1"") loses that text by working. Then the goal's own judgement decides, as below.
@@ -522,7 +529,7 @@ export function driveVerdict(out: {
   if (0 < goals.length && goals.every((g) => 'no' === g.verified)) return 'no';
   if (0 < goals.length && !goals.some((g) => 'yes' === g.verified)) return 'unknown';
   // A yes needs a check that held behind it: the model saying the goal was met is not evidence.
-  if (!out.proved || 0 === (out.checks?.held ?? 0)) return 'unknown';
+  if (!out.proved || RunFlowStatus.PASS !== graded) return 'unknown';
   if (true === out.goalMet) return 'yes';
   if (0 < goals.length && goals.every((g) => 'yes' === g.verified)) return 'yes';
   return 'unknown';

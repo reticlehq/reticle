@@ -93,7 +93,7 @@ export function describeForeignHolder(
   // outcome and leaves the reader to invent a route to it, and the route they invent is the `-ti`
   // pipeline that takes their agent's proxy down with the holder.
   const tail =
-    'a daemon cannot bind it. Free it with `reticle kill --force` (it signals the listener only, ' +
+    'a daemon cannot bind it. Free it with `reticle restart --force` (it signals the listener only, ' +
     "never the agent's mcp proxy), or run Reticle on a different port (`--port`), then retry.";
   if (null === holder) {
     /**

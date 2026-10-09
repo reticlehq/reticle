@@ -49,3 +49,68 @@ export const VERIFY_COMMAND = 'verify';
  * missed for a release.
  */
 export const EXPECT_FLAG = '--expect';
+
+/**
+ * The account and cloud commands. They are dispatched before the typed parser, and listed here so
+ * that the dispatcher and the telemetry vocabulary read one list instead of two.
+ */
+export const CLOUD_COMMANDS: readonly string[] = [
+  'login',
+  'connect',
+  'try',
+  'logout',
+  'whoami',
+  'link',
+  'project',
+  'config',
+  'issues',
+  'memory',
+  'push',
+  'sync',
+  'runs',
+  'regression',
+  'share',
+];
+
+/**
+ * Old command names that still run, for one release, under the name that replaced them. Each one
+ * prints a single line saying so, then does what it always did.
+ */
+export const RENAMED_COMMANDS: ReadonlyMap<string, string> = new Map([
+  ['kill', 'stop --force'],
+  ['login', 'connect'],
+  ['link', 'connect'],
+  ['project', 'connect --project <name|id>'],
+  ['whoami', 'status'],
+  ['push', 'sync'],
+  ['regression', 'runs regression'],
+  ['share', 'runs share <runId>'],
+  ['issues', 'runs issues'],
+  ['memory', 'runs memory'],
+]);
+
+/**
+ * Commands that were removed, and what to use instead. They stay in the telemetry vocabulary, so
+ * the people still typing one show up as that name rather than as `unknown`.
+ */
+export const REMOVED_COMMANDS: ReadonlyMap<string, string> = new Map([
+  ['hunt', 'it has no replacement'],
+  ['watch', 'use `reticle affected` after you save, or `reticle gate` before you commit'],
+  ['capsules', 'it has no replacement; saved capsules stay in .reticle/capsules'],
+  ['tutorial', "use `reticle init` in your app's folder, or `reticle try <url>`"],
+  [
+    'identify',
+    'it has no replacement; delete ~/.reticle/identity.json to forget a saved identity, and use `reticle feedback` to reach us',
+  ],
+]);
+
+export const removedNote = (command: string, instead: string): string =>
+  `\`reticle ${command}\` was removed in this version; ${instead}`;
+
+const DIM = '\u001b[2m';
+const RESET = '\u001b[0m';
+/** One line on stderr when an old name ran: dim on a terminal, plain anywhere else. */
+export const renamedNote = (command: string, now: string, colour: boolean): string => {
+  const line = `\`reticle ${command}\` is now \`reticle ${now}\``;
+  return colour ? `${DIM}${line}${RESET}` : line;
+};

@@ -635,6 +635,6 @@ describe('a root nothing will send is said out loud', () => {
     const said = lines.filter((l) => l.includes('reticle_cloud_unsynced_root'));
     expect(said).toHaveLength(1);
     expect(JSON.parse(String(said[0]))).toMatchObject({ root: sibling, runs: 3, linked: false });
-    expect(d.unsyncedRoots()).toEqual([{ root: sibling, runs: 3, linked: false }]);
+    expect(d.unsyncedRoots()).toEqual([{ root: sibling, runs: 3, flows: 0, linked: false }]);
   });
 });

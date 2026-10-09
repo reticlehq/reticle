@@ -107,6 +107,21 @@ export const RunFlowStatus = {
 export type RunFlowStatus = (typeof RunFlowStatus)[keyof typeof RunFlowStatus];
 
 /**
+ * What one drive came to, and the only place that is decided. A check that came back no is the only
+ * failure. Checks nobody could decide, or a goal the model judged missed with no check against it,
+ * are NOT PROVED (`skipped`): undecided evidence calls for a better check, never a code change, and
+ * a drive with nothing failed was reported "1 broken" before this rule was one rule.
+ */
+export function driveFlowStatus(checks: {
+  held: number;
+  failed: number;
+  goalMet?: boolean | undefined;
+}): RunFlowStatus {
+  if (0 < checks.failed) return RunFlowStatus.FAIL;
+  return 0 < checks.held && false !== checks.goalMet ? RunFlowStatus.PASS : RunFlowStatus.SKIPPED;
+}
+
+/**
  * The kind of standalone assertion captured outside a flow.
  *
  * This is `PredicateKind` -- the vocabulary assertions are written in -- and not a second list: two

@@ -76,6 +76,39 @@ describe('a Harness drive, started then polled', () => {
     expect(out['next']).toEqual({ action: 'explore', runId: out['runId'] });
   });
 
+  it('while running, says how far it got and tells the agent to poll again rather than leave', async () => {
+    const d = held();
+    let now = 1000;
+    const clocked = { ...deps(), now: () => now } as ToolDeps;
+    const { runId } = record(await answerExplore(clocked, { wait: 0 }, undefined, d.drive));
+    noteDriveStep(String(d.harnesses[0]), 'reticle_act');
+    now = 13_400;
+    const out = record(await answerExplore(clocked, { runId, wait: 0 }, undefined, d.drive));
+    expect(out).toMatchObject({ status: DriveStatus.RUNNING, steps: 1, elapsedS: 12 });
+    expect(out['lastLine']).toContain('reticle_act');
+    expect(out['instruction']).toContain(
+      `reticle_verify {action:"explore", runId:"${String(runId)}"}`,
+    );
+    expect(out['instruction']).toContain('keeps running');
+  });
+
+  it('waits the default bound when no wait is given, below a 60s client timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const d = held();
+      const pending = answerExplore(deps(), {}, undefined, d.drive);
+      await vi.advanceTimersByTimeAsync(49_000);
+      let settled = false;
+      void pending.then(() => (settled = true));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(record(await pending)['status']).toBe(DriveStatus.RUNNING);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('answers the full result when the drive ends inside the wait', async () => {
     const d = held();
     const pending = answerExplore(deps(), { wait: 30 }, undefined, d.drive);
@@ -153,7 +186,7 @@ describe('a Harness drive, started then polled', () => {
     const d = held();
     const pending = answerExplore(deps(), { wait: 30 }, undefined, d.drive);
     await d.started();
-    d.fail(new Error('Autonomous driving is turned OFF'));
-    await expect(pending).rejects.toThrow('turned OFF');
+    d.fail(new Error('The Reticle Harness is off for this project'));
+    await expect(pending).rejects.toThrow('is off for this project');
   });
 });

@@ -8,7 +8,7 @@ import {
   terminalWidth,
   wrapForTerminal,
 } from '@reticlehq/init';
-import { installClosing, tutorialShownSteps } from './tutorial.js';
+import { tutorialShownSteps } from './tutorial.js';
 import { setupMcp, knownClientLabels, type SetupMcpIo } from '@/command/setup/setup-mcp.js';
 import { reportInstallSteps } from '@/command/setup/setup-install.js';
 import { registerOtherAgents } from '@/command/setup/setup-command.js';
@@ -136,9 +136,8 @@ export function handleSetupInstall(
   } else {
     process.stdout.write('Skipping MCP registration (--no-mcp).\n');
   }
-  // Installation and onboarding are one script, so the tour prints here and is not gated on
-  // anything — see installClosing for the heuristic this replaced and why it reached nobody.
-  process.stdout.write(`${wrapForTerminal(installClosing(opts.mcp), terminalWidth())}\n`);
-  // Shown, so the ONBOARD steps are a fact rather than a guess.
+  // No closing here: the installer prints the next step and the agent prompt itself, right after
+  // this returns, so what this prints is progress and nothing else. Those two blocks are what the
+  // ONBOARD steps below now stand for: what Reticle is for, shown before anything is asked of anyone.
   for (const step of tutorialShownSteps()) reportStep(step);
 }

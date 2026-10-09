@@ -8,7 +8,7 @@ import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
  *
  * Every client reads tool results; few read a briefing twice, and none keep a skill in mind across a
  * long session. So what an agent must not forget (record what the user asked, hand the tab back,
- * notice when its runs are not reaching the platform, tell the user how to connect) is said where
+ * notice when its runs are not reaching the platform) is said where
  * the agent is already looking, one short line, on the moment it applies. It is placed first in the
  * result, because a model that truncates a long result keeps its beginning.
  *
@@ -20,8 +20,6 @@ import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
 const REQUEST_FRESH_MS = 6 * 60 * 60 * 1000;
 /** A reminder that is not about a verdict is repeated at most this often, per project. */
 const QUIET_CALLS = 10;
-/** An unlinked project hears how to connect on every Nth verdict, the first included. */
-const CONNECT_EVERY = 5;
 /**
  * How often the agent is asked to record the request before the other lines get their turn. In
  * every recorded run the agent ignored it, and because it always won, no agent was ever told its
@@ -36,8 +34,6 @@ export const NextText = {
     'Record what the user asked, once per task, verbatim: reticle_run { tool: "reticle_intent", args: { action: "declare", request: "<their words>" } }. It travels with every run.',
   SYNC_PROBLEM: (why: string): string =>
     `Runs are not reaching the platform (${why}). reticle_run { tool: "reticle_project", args: { push: true } } retries and reports why.`,
-  CONNECT:
-    'These runs stay on this machine. To share them on the team dashboard, the user runs once: npx @reticlehq/server connect',
   FINISH_LINKED:
     'Done driving? reticle_session { action: "yield" } hands the tab back; this run syncs to the platform on its own.',
   FINISH: 'Done driving? reticle_session { action: "yield" } hands the tab back.',
@@ -47,7 +43,6 @@ export const NextText = {
 
 interface RootState {
   calls: number;
-  verdicts: number;
   lastQuietAt: number;
   declareAsks: number;
   /** Told about the saved flows already, which is said once per project. */
@@ -148,14 +143,12 @@ export function nextStep(input: NextStepInput): string | undefined {
   if (root === undefined) return undefined;
   const state = roots.get(root) ?? {
     calls: 0,
-    verdicts: 0,
     lastQuietAt: Number.NEGATIVE_INFINITY,
     declareAsks: 0,
     replayTold: false,
   };
   roots.set(root, state);
   state.calls += 1;
-  if (input.verdict) state.verdicts += 1;
   const linked = existsSync(join(root, ReticleDir.CLOUD_LINK_FILE));
   // A key in the environment syncs too, so its runs not arriving is just as much a problem.
   const sends = linked || 0 < (process.env[ReticleEnv.API_KEY] ?? '').length;
@@ -185,6 +178,6 @@ export function nextStep(input: NextStepInput): string | undefined {
     return NextText.DECLARE;
   }
   if (!input.verdict) return undefined;
-  if (!sends && 1 === state.verdicts % CONNECT_EVERY) return NextText.CONNECT;
+  // How to connect is the agent nudge's to say, once per session (`platform-moment.ts`).
   return sends ? NextText.FINISH_LINKED : NextText.FINISH;
 }

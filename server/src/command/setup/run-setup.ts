@@ -2,12 +2,8 @@
  * The half of setup that happens after the files are written.
  *
  * `init` wires a project; this gets the app running with the SDK inside it and proves a session
- * connected. That is where ONBOARDING ends — the first run, which proves a flow, is a separate
- * stage and a separate command.
- *
- * It does NOT drive a flow. `reticle_verify { action: "explore" }` does that, with a model inside
- * the daemon that already holds the tools — so no client restart is needed and no second CLI has to
- * exist on the machine.
+ * connected. That is where ONBOARDING ends. Then init says what Reticle sees and hands the first
+ * flow to the coding agent (`try-command.ts`'s `initFirstFlow`); nothing in init drives.
  *
  * Every effect is injected. That is not ceremony: the sequence has five phases, each with its own
  * way of going wrong, and the alternative to injecting them is a test that boots a real dev server
@@ -79,11 +75,14 @@ export interface SetupOutcome {
   readonly url?: string | undefined;
   readonly sessionId?: string | undefined;
   /**
-   * Always false here now, and kept because the callers that report progress still read it.
-   *
-   * Onboarding does not drive, so it cannot save a flow. The first run is what saves one.
+   * Always false: init never drives, and the coding agent proves the first flow after it.
    */
   readonly flowSaved: boolean;
+  /**
+   * The session was a Reticle-owned headless browser, now closed: there is no tab of the person's
+   * own to drive a first flow in.
+   */
+  readonly leased?: boolean;
   /** What the caller should do next, when this did not finish. */
   readonly fallback: string[];
   readonly notes: string[];
@@ -551,46 +550,25 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   // Getting started is three stages — installation puts the CLI on the machine, onboarding wires
   // the project, the first run proves a flow — and this command owns the middle one. A connected
   // session is the whole proof that onboarding worked: the SDK is in the page, the bridge paired,
-  // and the tools now have something to talk to.
-  //
-  // `<url>` stays a placeholder in this string on purpose: `guidance-commands-run` feeds every
-  // command we print to the real parser, and an interpolated value reads there as a missing operand.
-  // The live url is named in the sentence instead, where a reader needs it anyway.
-  // Both routes, because `explore` runs on the platform: without a linked project it refuses.
-  // Naming only that one hands the reader a dead end on any machine without one.
-  // A heading and a numbered list rather than one paragraph: a reader scans for what to do next.
-  //
-  // This was a single 524-character note, measured on a real first run: eighty-three words, no
-  // break, naming `reticle_*` tools at a reader who had just typed `reticle init` in a terminal and
-  // has no such tools to call. The facts were right and the shape made them unreadable, which on
-  // the last line of onboarding is the same as not saying them.
+  // and the tools now have something to talk to. What to do next is the first flow's to say.
   note(`✓ Connected. ${url} is instrumented. Onboarding is done; nothing is verified yet.`);
   // Said, because "connected" otherwise reads as "your browser connected": the page that dialled
   // was a headless one Reticle launched and has now closed, and nothing is open on this screen.
-  if (undefined !== lease && session.sessionId === lease.sessionId) {
+  const leased = undefined !== lease && session.sessionId === lease.sessionId;
+  if (leased) {
     note(
       'The proof came from a Reticle-owned headless browser (now closed), not a window of yours — ' +
         `open ${url} in your own browser to use the app.`,
     );
   }
   await releaseLease(lease);
-  note('');
-  note('Next, prove one flow. Your agent does this:');
-  note(
-    '  1. Drive one flow and end it with `reticle_act_and_wait` or `reticle_assert`. Those two ' +
-      'produce a verdict; nothing else does.',
-  );
-  note(
-    '  2. Or hand over the whole drive: `reticle_verify { action: "explore", persona: "<who does ' +
-      'what>" }` records what it drove, so later runs replay with no model in the loop. Runs on ' +
-      'the Reticle platform: needs a linked project (`reticle connect`); Free includes monthly Harness credits.',
-  );
   return {
     ok: true,
     reachedPhase: SetupPhase.CONNECT,
     url,
     sessionId: session.sessionId,
     flowSaved: false,
+    leased,
     notes,
     fallback: [],
   };

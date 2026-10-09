@@ -269,14 +269,14 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
       await writeLink({ projectId: 'shop', url: HOSTED });
       const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {});
       expect(cloud.config).toBeNull();
-      expect(cloud.reason).toContain('reticle login');
+      expect(cloud.reason).toContain('reticle connect');
       expect(cloud.reason).toContain('RETICLE_API_KEY');
     });
 
     it('says to link or set a key when there is neither', async () => {
       const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {});
       expect(cloud.config).toBeNull();
-      expect(cloud.reason).toContain('reticle link');
+      expect(cloud.reason).toContain('reticle connect');
       expect(cloud.reason).toContain('RETICLE_API_KEY');
     });
 

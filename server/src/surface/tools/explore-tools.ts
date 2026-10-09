@@ -21,11 +21,13 @@ import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
 import {
   DriveOrigin,
   DriveStatus,
+  POLL_WAIT_DEFAULT_S,
   awaitDrive,
   driveRecord,
   runningDrive,
   sayToDrive,
   startDrive,
+  stillRunning,
   stopDrive,
   type DriveControl,
   type DriveRecord,
@@ -41,6 +43,7 @@ import { sessionRoot } from '@/memory/project/session-root.js';
 import { runTool } from './invoke-tool.js';
 import { driveVerdict, type RemoteDriveOutcome } from '@/features/harness/platform/remote-drive.js';
 import {
+  coverageRefusal,
   exploreApp,
   harnessAvailable,
   withLinkedCredential,
@@ -54,8 +57,6 @@ import type { ExploreResult } from './harness-explore.js';
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   'object' === typeof v && null !== v && !Array.isArray(v);
 
-/** How long a call waits on a drive before answering `running`: inside a 60s client timeout. */
-const WAIT_DEFAULT_S = 45;
 export const WAIT_MAX_S = 240;
 
 export const EXPLORE_TOOLS: ToolDef[] = [
@@ -87,7 +88,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       driveId: z.string().optional(),
       // Bare on purpose: the description and every `running` answer say how to poll, and this
       // schema is re-sent on every turn of every session.
-      wait: z.number().min(0).max(WAIT_MAX_S).optional().describe('Seconds; default 45.'),
+      wait: z.number().min(0).max(WAIT_MAX_S).optional().describe('Seconds; default 50.'),
       runId: z.string().optional(),
       stop: z.boolean().optional(),
       say: z.string().optional(),
@@ -103,6 +104,10 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       lastLine: z.string().optional(),
       /** The call that reads this drive again. */
       next: z.object({ action: z.string(), runId: z.string() }).optional(),
+      /** Seconds since the drive started, while it runs. */
+      elapsedS: z.number().optional(),
+      /** While it runs: poll again with the same call; stopping never stops the drive. */
+      instruction: z.string().optional(),
       stopReason: z.string().optional(),
       /** Which driver actually drove, so a comparison can never misattribute its own result. */
       driver: z.string().optional(),
@@ -138,6 +143,11 @@ export const EXPLORE_TOOLS: ToolDef[] = [
        * and a driver that can is the one witness with a reason to round "unknown" up to "worked".
        */
       summary: z.string().optional(),
+      /**
+       * The driver's own account, alone. The platform's driver says here why a drive checked nothing
+       * at its end, which a caller that only shows the verdict otherwise cannot tell anybody.
+       */
+      driverAccount: z.string().optional(),
       /** Present when the drive broke: a model that would not answer, a wedged browser. */
       error: z.string().optional(),
       /** What the drive cost, cache hits included, so an expensive run is visible rather than felt. */
@@ -192,7 +202,8 @@ export async function answerExplore(
 ): Promise<unknown> {
   const wait = args['wait'];
   const waitMs =
-    MS_PER_S * Math.min(WAIT_MAX_S, Math.max(0, 'number' === typeof wait ? wait : WAIT_DEFAULT_S));
+    MS_PER_S *
+    Math.min(WAIT_MAX_S, Math.max(0, 'number' === typeof wait ? wait : POLL_WAIT_DEFAULT_S));
   const sessionId = str(args['sessionId']);
   const asked = str(args['runId']);
   if (asked !== undefined) {
@@ -214,6 +225,9 @@ export async function answerExplore(
     // Billed to the one free drive the platform granted, never to another.
     ...('string' === typeof driveId ? { [ReticleEnv.DRIVE_ID]: driveId } : {}),
   };
+  // The coverage gate first: it is local, and the one thing to fix before anything else matters.
+  const locked = coverageRefusal(deps, sessionId);
+  if (locked !== undefined) throw new Error(locked);
   if (!harnessAvailable(env)) throw new Error(MSG_NO_HARNESS_KEY);
   const harness = randomUUID();
   const runId = harnessRunId(harness);
@@ -250,14 +264,18 @@ async function answerDrive(
   );
   const record = driveRecord(runId) ?? (await readDriveFile(deps, sessionId, runId));
   if (record === undefined) return fromPlatform(deps, runId);
-  if (DriveStatus.RUNNING === record.status)
+  if (DriveStatus.RUNNING === record.status) {
+    const elapsedS = Math.max(0, Math.round((deps.now() - record.startedAt) / MS_PER_S));
     return {
       status: record.status,
       runId,
       steps: record.steps,
       lastLine: record.lastLine,
+      elapsedS,
       next: { action: 'explore', runId },
+      instruction: stillRunning(runId, record.steps, elapsedS),
     };
+  }
   if (record.result !== undefined) return { status: record.status, runId, ...record.result };
   if (refuseBroken && record.error !== undefined) throw new Error(record.error);
   return { status: record.status, runId, steps: record.steps, error: record.error ?? 'no result' };
@@ -375,6 +393,7 @@ function exploreReport(explored: ExploreResult): Record<string, unknown> {
       ...[unprovedGoals(goals)].filter((line): line is string => line !== undefined),
       ...(0 === drive.summary.length ? [] : [`The driver's own account: ${drive.summary}`]),
     ].join('\n'),
+    ...(0 === drive.summary.length ? {} : { driverAccount: drive.summary }),
     ...(drive.error === undefined ? {} : { error: drive.error }),
     usage: drive.usage,
     // The note only fires when the drive left NOTHING behind. A rewritten flow is a flow: it

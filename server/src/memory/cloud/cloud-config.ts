@@ -191,7 +191,7 @@ export async function resolveProjectCloud(
       verify: VerifyMode.LOCAL,
       projectId: null,
       ...(null === config
-        ? { reason: 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY' }
+        ? { reason: 'cloud not attached here: run `reticle connect`, or set RETICLE_API_KEY' }
         : {}),
     };
   }
@@ -224,9 +224,9 @@ export async function resolveProjectCloud(
       ? undefined
       : fromEnv !== null
         ? `this repo is linked to ${linkedUrl}, and RETICLE_API_KEY is set for ${fromEnv.url}: ` +
-          `set RETICLE_CLOUD_URL=${linkedUrl} to use that key here, or run \`reticle login\` for it`
+          `set RETICLE_CLOUD_URL=${linkedUrl} to use that key here, or run \`reticle connect\` for it`
         : `this repo is linked to ${linkedUrl}, and this machine has no key for it: run ` +
-          '`reticle login`, or set RETICLE_API_KEY' +
+          '`reticle connect`, or set RETICLE_API_KEY' +
           (DEFAULT_PLATFORM_URL === linkedUrl ? '' : ` with RETICLE_CLOUD_URL=${linkedUrl}`);
   return {
     config,

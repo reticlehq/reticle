@@ -2,9 +2,11 @@ import { healthEnvelope } from '@/portal/session/session-health.js';
 import { logToolCall, toolLogPath } from '@/hooks/tool-log.js';
 import { nextStep } from './next-step.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
+import { runAsAgent } from '@/hooks/coding-agents.js';
+import { takeHumanNotes } from './human-notes.js';
 import { takeDriveNotes } from '@/features/harness/drive-runs.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
-import { takePlatformMoment } from './platform-moment.js';
+import { agentNudge, takePlatformMoment } from './platform-moment.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
   type BrowserBrand,
@@ -549,7 +551,8 @@ async function dispatchTool<Ext>(
       );
     // The Harness's own inner calls carry their drive in an async context (`runDrivenBy`), which is
     // what attributes their verdicts; the outer explore call adjudicates nothing of its own.
-    raw = await invokeHandler();
+    // As the agent on this connection, so a note it reads is marked seen by that agent.
+    raw = await runAsAgent(deps.attachId, invokeHandler);
   } catch (error) {
     // The commonest refusal shape by far, and the one nothing could see: the message is built, handed
     // to the agent by the MCP boundary, and discarded. Reported here rather than at that boundary
@@ -682,20 +685,48 @@ async function dispatchTool<Ext>(
           now: 'function' === typeof deps.now ? deps.now() : Date.now(),
         })
       : undefined;
+  // Only an agent's own call (an MCP connection, not the Harness, not the HUD's or the chat's calls
+  // into the same tools) takes what is waiting for the agent: those calls answer nobody who reads.
+  const answer = isPlainObject(raw) ? raw : undefined;
+  const agentCall =
+    answer !== undefined && deps.attachId !== undefined && currentDrivenBy() === undefined;
   // A Harness drive started or finished, from the HUD, the platform's chat or this agent: one line,
-  // once. Not for the Harness's own calls, and not about the run this very result already reports.
-  const drives =
-    isPlainObject(raw) && currentDrivenBy() === undefined
-      ? takeDriveNotes('string' === typeof raw['runId'] ? raw['runId'] : undefined)
-      : [];
+  // once. Not about the run this very result already reports.
+  // One-time advisories toward the platform and the Harness (`platform-moment.ts`), only on the agent's
+  // own calls, riding the same platform line as the moments above.
+  const nudge =
+    agentCall && answer !== undefined
+      ? await agentNudge({
+          deps,
+          tool: tool.name,
+          raw: answer,
+          isError: resultIsError(answer),
+          tab: session,
+          root: safeRoot(() => sessionRoot(deps, rawSessionId)),
+          harnessOn: () => impactSnapshot(artifactRoot)?.harnessConfig?.harnessEnabled,
+        })
+      : undefined;
+  const platformLine =
+    platform === undefined ? nudge : nudge === undefined ? platform : `${platform}\n${nudge}`;
+  const drives = agentCall
+    ? takeDriveNotes('string' === typeof answer?.['runId'] ? answer['runId'] : undefined)
+    : [];
+  // The person's notes from the HUD, on ANY tool. Act tools splice their own `control` first.
+  const notes =
+    agentCall && answer !== undefined && !(EnvelopeKey.CONTROL in answer)
+      ? await runAsAgent(deps.attachId, () =>
+          Promise.resolve(takeHumanNotes(deps.sessions, rawSessionId, session)),
+        )
+      : undefined;
   const result =
     0 === drives.length &&
+    notes === undefined &&
     prompt === undefined &&
     update === undefined &&
     skew === undefined &&
     undelivered === undefined &&
     friction === undefined &&
-    platform === undefined &&
+    platformLine === undefined &&
     next === undefined
       ? raw
       : {
@@ -712,8 +743,9 @@ async function dispatchTool<Ext>(
           ...(prompt !== undefined ? { [EnvelopeKey.FEEDBACK_PROMPT]: prompt } : {}),
           ...(update !== undefined ? { [EnvelopeKey.UPDATE_AVAILABLE]: update } : {}),
           ...(skew !== undefined ? { [EnvelopeKey.VERSION_SKEW]: skew } : {}),
-          ...(platform !== undefined ? { [EnvelopeKey.PLATFORM]: platform } : {}),
+          ...(platformLine !== undefined ? { [EnvelopeKey.PLATFORM]: platformLine } : {}),
           ...(0 === drives.length ? {} : { [EnvelopeKey.HARNESS]: drives.join('\n') }),
+          ...(notes === undefined ? {} : { [EnvelopeKey.CONTROL]: notes }),
           ...(undelivered !== undefined
             ? {
                 [EnvelopeKey.FEEDBACK_UNDELIVERED]: `your earlier report did NOT send: ${undelivered}. Tell the human what you found so it is not lost.`,
@@ -723,7 +755,14 @@ async function dispatchTool<Ext>(
   if (!bound || !isPlainObject(result)) return result;
   // Reuse the session resolved above so the health envelope describes the SAME session the handler
   // drove; only re-resolve if the up-front attempt failed but the handler somehow succeeded.
-  const driven = session ?? deps.sessions.resolve(rawSessionId);
+  // A handler that answered with no tab to resolve (a Harness drive polled by runId after a daemon
+  // restart reads its record from disk) keeps its answer: there is no session health to describe.
+  let driven = session;
+  try {
+    driven ??= deps.sessions.resolve(rawSessionId);
+  } catch {
+    return result;
+  }
   // ...unless the call replaced that document. A full navigation or reload registers a NEW Session
   // under the same id (or under the id the result reports it arrived at), and the object resolved
   // before the call is the page that unloaded: it reported itself hidden on the way out, so every

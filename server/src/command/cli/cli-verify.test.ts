@@ -20,7 +20,7 @@ import {
   type VerifyPorts,
 } from './cli-verify.js';
 import { PortPresence } from '../daemon/binding/port-presence.js';
-import { CLI_USAGE } from './cli-parse.js';
+import { renderHelp } from './cli-usage.js';
 import { verifyResults } from './verify-results.js';
 
 const NOW = 1_700_000_000_000;
@@ -286,6 +286,49 @@ describe('exploring an app that has no saved flows', () => {
     expect(rec.fail.join('\n')).toContain('Nothing was proved');
   });
 
+  it('never passes a drive the platform cut off, and says why', async () => {
+    // A drive refused mid-way (credits gone: 402 needs_card) had saved one partial flow; replaying
+    // that flow printed PASS with no word about the credits.
+    const credits = 'Your 10 free credits are used. Add a card to start your 14-day trial.';
+    let flows: readonly string[] = [];
+    const { ports, rec } = harness({
+      listFlows: () => Promise.resolve([...flows]),
+      explore: () => {
+        flows = ['half-a-journey'];
+        return Promise.resolve({
+          savedFlows: ['half-a-journey'],
+          steps: 7,
+          stopReason: 'broken',
+          error: credits,
+        });
+      },
+    });
+
+    await runVerify(EXPLORING, ports);
+
+    expect(rec.verifyCalls).toBe(0);
+    expect(rec.exit).toEqual([1]);
+    expect(rec.out.join('\n')).not.toContain('PASS');
+    expect(rec.fail.join('\n')).toContain(credits);
+    expect(rec.fail.join('\n')).toContain('Nothing was proved');
+  });
+
+  it('never passes a drive somebody switched off part-way', async () => {
+    let flows: readonly string[] = [];
+    const { ports, rec } = harness({
+      listFlows: () => Promise.resolve([...flows]),
+      explore: () => {
+        flows = ['half'];
+        return Promise.resolve({ savedFlows: ['half'], steps: 3, stopReason: 'stopped' });
+      },
+    });
+
+    await runVerify(EXPLORING, ports);
+
+    expect(rec.verifyCalls).toBe(0);
+    expect(rec.exit).toEqual([1]);
+  });
+
   it('says how to make exploring available when the project is not on the platform', async () => {
     const { ports, rec } = harness({ listFlows: () => Promise.resolve([]) });
 
@@ -369,8 +412,8 @@ describe('the run is pushed with the linked credential', () => {
 });
 
 describe('the HTTP transport is named wherever --expect refuses', () => {
-  it('CLI_USAGE and the daemon-needed refusal both point at http-transport', () => {
-    expect(CLI_USAGE).toContain('http-transport');
+  it('verify --help and the daemon-needed refusal both point at http-transport', () => {
+    expect(renderHelp('verify')).toContain('http-transport');
     expect(expectNeedsDaemonMessage(4400, PortPresence.FOREIGN)).toContain('http-transport');
   });
 });
