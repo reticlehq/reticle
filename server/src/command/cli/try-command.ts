@@ -12,7 +12,15 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { RETICLE_DEFAULT_PORT, ReticleDir, ReticleEnv, ScriptStatus } from '@reticlehq/core';
+import {
+  RETICLE_DEFAULT_PORT,
+  ReticleDir,
+  ReticleEnv,
+  RunFlowStatus,
+  ScriptStatus,
+  asRecord,
+  driveFlowStatus,
+} from '@reticlehq/core';
 import type { CloudConfig } from '@/memory/cloud/cloud-sync.js';
 import {
   FreeDriveKind,
@@ -198,12 +206,20 @@ export function journeysOf(report: Record<string, unknown>, persona?: string): T
       return title === undefined || status === undefined ? [] : [{ title, status }];
     });
   }
-  // An unplanned drive is one journey. It failed when its goal was judged missed, worked when a
-  // check proved something and no goal was missed, and otherwise proved nothing either way.
+  // An unplanned drive is one journey, graded by the one rule every drive is: failed only when a
+  // check came back no. A missed goal or undecided checks prove nothing either way.
+  const checks = asRecord(report['checks']);
+  const count = (key: string): number => ('number' === typeof checks[key] ? checks[key] : 0);
+  const goalMet = report['goalMet'];
+  const flow = driveFlowStatus({
+    held: count('held'),
+    failed: count('failed'),
+    ...('boolean' === typeof goalMet ? { goalMet } : {}),
+  });
   const status =
-    false === report['goalMet']
+    RunFlowStatus.FAIL === flow
       ? ScriptStatus.FAILED
-      : true === report['proved']
+      : RunFlowStatus.PASS === flow
         ? ScriptStatus.PASSED
         : ScriptStatus.BLOCKED;
   return [{ title: persona ?? 'Autonomous drive', status }];

@@ -127,12 +127,23 @@ describe('journeysOf', () => {
     ]);
   });
 
-  it('grades an unplanned drive from its goal, and never rounds an unproved one up', () => {
-    expect(journeysOf({ proved: true, goalMet: false }, 'p')).toEqual([
+  it('grades an unplanned drive from its checks, and never rounds an unproved one up', () => {
+    const held = { held: 1, failed: 0, undecided: 0 };
+    expect(journeysOf({ checks: { held: 1, failed: 1, undecided: 0 } }, 'p')).toEqual([
       { title: 'p', status: 'failed' },
     ]);
-    expect(journeysOf({ proved: true })[0]?.status).toBe('passed');
+    expect(journeysOf({ proved: true, checks: held })[0]?.status).toBe('passed');
     expect(journeysOf({ proved: false })[0]?.status).toBe('blocked');
+  });
+
+  /** 0 failed, 2 undecided and a goal judged missed printed "0 work, 1 broken". */
+  it('never calls a drive with nothing failed broken', () => {
+    const undecided = { held: 0, failed: 0, undecided: 2 };
+    const [journey] = journeysOf({ proved: true, goalMet: false, checks: undecided });
+    expect(journey?.status).toBe('blocked');
+    expect(summarizeTry(journey === undefined ? [] : [journey])[0]).toBe(
+      'Tried 1 journey: 0 work, 0 broken, 1 not proved',
+    );
   });
 });
 
