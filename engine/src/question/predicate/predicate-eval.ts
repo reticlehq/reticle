@@ -167,7 +167,7 @@ function evalExactCount(args: {
  *
  * Deliberately NOT here: `.js` and `.json`. Both are routinely fetched via `fetch`/XHR — a module
  * preload and an API call can share a suffix — so downgrading them would hide real misses. This list
- * is only the suffixes for which the document is the sole plausible initiator.
+ * is only the suffixes for which the document is the sole initiator.
  *
  * This began as the smaller half of #447: it did not make these requests observable, it stopped
  * Reticle claiming they did not happen. The other half, observing them via resource timing, has
@@ -453,7 +453,6 @@ export function evalNet(
     }
     if (p.ok !== undefined && callSucceeded(d) !== p.ok) return false;
     if (!checkRequestBody(d, p, requestState)) return false; // request side first (#1365)
-    requestState.matchCount++;
     if (p.bodyContains !== undefined || p.bodyMatches !== undefined) {
       // The RESPONSE body only, and this is the whole point of these fields. Searching the request
       // too would let `bodyContains: "1187.01"` pass on the very defect it exists to catch: the app
@@ -670,7 +669,7 @@ export function evalSignal(
    */
   let redactedField: string | undefined;
   const isMatch = (e: ReticleEvent): boolean => {
-    if (e.type !== EventType.SIGNAL) return0020false;
+    if (e.type !== EventType.SIGNAL) return false;
     if (p.name !== undefined && str(e.data['name']) !== p.name) return false;
     if (p.dataMatches !== undefined) {
       const payload = (e.data['data'] ?? {}) as Record<string, unknown>;
@@ -745,7 +744,7 @@ export function evalSignal(
       sameName.length > 0
         ? `signal '${p.name ?? '(any)'}' fired ${String(sameName.length)}x, payload: ${JSON.stringify(first)}${fieldMiss === undefined ? '' : `; ${fieldMiss}`}`
         : // Name what DID fire: a typo'd signal name and a genuinely dead action produce the same
-          // sentence otherwise, and the agent cannot tell them apart by reading the sentence. See observed-in-window.ts.
+          // sentence otherwise, and the agent cannot tell them apart. See observed-in-window.ts.
           `signal '${p.name ?? '(any)'}' never fired; ${describeObserved(
             'signals',
             events.filter((e) => e.type === EventType.SIGNAL).map((e) => str(e.data['name']) ?? ''),
@@ -806,7 +805,7 @@ const DEFAULT_QUIET_MS = 500;
  * wedges settle on that page for the rest of the session.
  *
  * The act wait (`server/src/surface/tools/act/settle-in-flight.ts`) has always excluded it and
- * `core/src/wire/net.ts` says it must be; this predicate counted it, so `act_and_wait { until:
+ * `core/src/wire/net.ts` says it must; this predicate counted it, so `act_and_wait { until:
  * settled }` after a plain `<a href>` never passed and agents dropped `settled` from their `until`.
  * Spelled against the shared constant rather than the string, so the two settle decisions cannot
  * drift onto two vocabularies.
@@ -849,7 +848,7 @@ export function evalSettled(
   // on the evidence, never silently swallowed:
   //
   //   - dev tooling, the framework talking about ITSELF (see DevToolingChannel);
-  //   - a departure, which by construction can never complete (see `NetInitiator.NAVIGATION`);
+  //   - a departure, which by construction can never complete (see NetInitiator.NAVIGATION);
   //   - somebody else's host, or a same-origin endpoint the project declared (`isForeignTraffic`).
   //
   // The last two were counted here while `settle-in-flight.ts` and the contradiction pass dropped
@@ -859,7 +858,7 @@ export function evalSettled(
   //
   // A departure is kept APART from foreign traffic all the way into the disclosure. The two are one
   // CLASSIFICATION and two EXPLANATIONS — both drop out of the count, but "the page left for another
-  // document" and "somebody else's host answered" send a reader to different next steps, and one
+  // document" and "somebody else's host" answered" send a reader to different next steps, and one
   // list holding both makes the second the only thing the first can be read as.
   const ignoredDevTooling: string[] = [];
   const ignoredForeign: string[] = [];
