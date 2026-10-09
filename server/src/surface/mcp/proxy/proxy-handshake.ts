@@ -37,7 +37,8 @@ interface JsonRpcLike {
   params?: { protocolVersion?: unknown };
 }
 
-function parseLine(line: string): JsonRpcLike | null {
+/** A line as a JSON-RPC object, or null when it is not JSON or not an object. */
+export function parseLine(line: string): JsonRpcLike | null {
   try {
     const parsed: unknown = JSON.parse(line);
     return 'object' === typeof parsed && parsed !== null ? parsed : null;

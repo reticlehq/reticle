@@ -10,7 +10,7 @@
  * guess, and a guess here would drive the wrong app.
  */
 
-import { RETICLE_URL_PARAM } from '@reticlehq/core';
+import { RETICLE_URL_PARAM, originOf } from '@reticlehq/core';
 import type { Session } from './session.js';
 
 export interface SessionIdentity {
@@ -35,14 +35,6 @@ const REAL_CLOCK: SuccessorClock = {
   now: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 };
-
-function originOf(url: string): string | undefined {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return undefined;
-  }
-}
 
 /**
  * The session a URL explicitly CLAIMS to be, via `__reticle_session`.

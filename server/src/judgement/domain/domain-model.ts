@@ -20,10 +20,13 @@ import {
   type Predicate,
   type CapabilitiesContract,
   type FlowFile,
-  type FlowStep,
   type RunRecord,
 } from '@reticlehq/core';
-import { classifyFlowAssertions, FlowAssertionGrade } from '@/language/flows/flow-classify.js';
+import {
+  classifyFlowAssertions,
+  FlowAssertionGrade,
+  flattenSteps as flatten,
+} from '@/language/flows/flow-classify.js';
 import { successLabel } from '@/language/flows/flow-success.js';
 import { flowRisk, latestRun, rankByRisk, RiskLevel, type FlowRisk } from './flow-risk.js';
 
@@ -66,15 +69,6 @@ export interface DomainModel {
   riskRanked: string[];
   /** One-line headline an agent (or human) can read at a glance. */
   summary: string;
-}
-
-function flatten(steps: readonly FlowStep[]): FlowStep[] {
-  const out: FlowStep[] = [];
-  for (const s of steps) {
-    out.push(s);
-    if (s.steps !== undefined) out.push(...flatten(s.steps));
-  }
-  return out;
 }
 
 /*

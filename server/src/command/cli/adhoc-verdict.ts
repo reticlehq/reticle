@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
 import { TOKEN_QUERY_PARAM } from '@/portal/bridge/token-auth.js';
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, asString as asText } from '@reticlehq/core';
 import { decideOpen } from '@/command/cli/launch/cli-launch.js';
 
 /**
@@ -350,8 +350,6 @@ export async function runAdhocVerdict(options: AdhocVerdictOptions): Promise<Adh
     // Narrowed rather than stringified: these arrive as `unknown` off a record, and a verdict field
     // that is accidentally an object must not print as `[object Object]` in the one line a reader
     // acts on.
-    const asText = (value: unknown): string | undefined =>
-      'string' === typeof value ? value : undefined;
     const verified = asText(verdict?.['verified']);
     const reason = asText(verdict?.['verifiedReason']) ?? asText(verdict?.['failureReason']);
     const lines = [

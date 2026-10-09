@@ -1,4 +1,4 @@
-import { PredicateKind, REDACTED_VALUE, selectPath } from '@reticlehq/core';
+import { PredicateKind, REDACTED_VALUE, asNumber, asString, selectPath } from '@reticlehq/core';
 import type { Predicate } from './predicate-schema.js';
 
 /**
@@ -70,13 +70,8 @@ export interface EvalResult {
   assertion?: string;
 }
 
-export function str(value: unknown): string | undefined {
-  return 'string' === typeof value ? value : undefined;
-}
-
-export function num(value: unknown): number | undefined {
-  return 'number' === typeof value ? value : undefined;
-}
+/** Core's `asString` and `asNumber`, under the names the oracles here read them by. */
+export { asString as str, asNumber as num };
 
 /**
  * Match one value against a pattern. Supports `*` (present), strict equality, and operators:

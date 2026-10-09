@@ -80,6 +80,10 @@ const DECLARED_CROSSINGS: Record<string, string> = {
     'Reads the pure non-JS ecosystem marker detector when there is no package.json and no ' +
     'session is running, so Flutter gets an accurate diagnosis. The rest of the initializer ' +
     'is never invoked on this path.',
+  'command/version/sdk-fix.ts':
+    'Reads `detectPackageManager` and `resolveLockfiles`, the pure rule init picks a package ' +
+    'manager with, because the copy kept here fell behind it and told a pnpm workspace app to ' +
+    'run `npm i -D`.',
 };
 
 /** Every module in `reached` that imports the scaffolder package directly. */

@@ -1,5 +1,5 @@
 import { dirname } from 'node:path';
-import type { ProjectId } from '@reticlehq/core';
+import { originOf, type ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { claimedArtifactRoot } from './root-claims.js';
 
@@ -18,20 +18,6 @@ export interface ProjectTarget {
   origin?: string | undefined;
   /** The root whoever leased this session claimed for it (see `root-claims.ts`), which wins. */
   claimedRoot?: string | undefined;
-}
-
-/**
- * The scheme://host:port a session's page was served from. Local rather than the session manager's
- * copy because `memory/project` does not reach `portal/session`, and five lines are cheaper than a
- * new dependency between the two.
- */
-function originOf(url: string | undefined): string | undefined {
-  if (url === undefined) return undefined;
-  try {
-    return new URL(url).origin;
-  } catch {
-    return undefined;
-  }
 }
 
 /** The target for a caller that genuinely holds no session -- the id is all there is. */

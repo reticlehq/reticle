@@ -18,6 +18,7 @@ import {
   FlowErrorCode,
   FlowFileSchema,
   type FlowFile,
+  isPlainRecord as isRecord,
 } from '@reticlehq/core';
 import type { ZodError, ZodIssue } from 'zod';
 import type { FlowResult } from './flow-result.js';
@@ -27,10 +28,6 @@ export const FlowParseNote = {
   MALFORMED: 'flow file is malformed — fix or regenerate it with reticle_flow_save',
   UNSUPPORTED_SHAPE: 'valid JSON, unsupported expect shape',
 } as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return 'object' === typeof value && null !== value && !Array.isArray(value);
-}
 
 type CoerceExpectResult = { ok: true; value: unknown } | { ok: false; detail: string };
 
