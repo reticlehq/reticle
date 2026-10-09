@@ -10,7 +10,7 @@ import { GateExit } from './answers/gate-exit.js';
 import { gateHookMessage, GATE_SKIP_ENV } from './answers/gate-hook-message.js';
 import { readProjectId } from './ports/resolve/cli-port.js';
 import { changedFilesSince, type ChangedFiles } from '@/language/flows/change/git-changed.js';
-import { join } from 'node:path';
+import { isAbsolute, join, sep } from 'node:path';
 import { type ProjectId, ReticleDir } from '@reticlehq/core';
 import { FlowStore } from '@/language/flows/flows.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
@@ -20,7 +20,11 @@ import {
   toFlowSources,
   type NamedFlow,
 } from '@/language/flows/change/flow-sources.js';
-import { isInteractiveSource, unflowedFiles } from '@/language/flows/change/affected.js';
+import {
+  isInteractiveSource,
+  sourceMatchesChange,
+  unflowedFiles,
+} from '@/language/flows/change/affected.js';
 import {
   LedgerStore,
   regressions,
@@ -88,23 +92,26 @@ export async function loadNamedFlows(
  * and silent on failure — a status line that throws is worse than no status line, and it must never
  * interfere with the watch loop it rides on.
  */
-async function emitBuddyStatus(
+export async function emitBuddyStatus(
   fs: ReturnType<typeof createNodeFileSystem>,
   reticleRoot: string,
   flows: readonly NamedFlow[],
   affected: readonly string[],
+  changed: readonly string[],
 ): Promise<void> {
   try {
-    const latest = await new RunStore(fs, reticleRoot).latest();
-    const passingNames = new Set(passingFlowNames(latest?.flows ?? []));
+    const current = await currentPassing(fs, reticleRoot, flows, affected, changed, true);
+    const passingNames = current.passing;
     const quarantined = await new FlakeStore(fs, reticleRoot).flakyFlows();
     const flaky = new Set(quarantined);
     // A deviation is an at-risk flow with no passing artifact — and a quarantined flake is not a deviation.
-    const deviations = affected.filter((n) => !passingNames.has(n) && !flaky.has(n));
+    const deviations = [...new Set([...affected, ...current.stale])].filter(
+      (n) => !passingNames.has(n) && !flaky.has(n),
+    );
     log('reticle_buddy', {
       status: formatBuddyStatus({
         total: flows.length,
-        passing: passingNames.size,
+        passing: flows.filter((f) => passingNames.has(f.name)).length,
         deviations,
         quarantined,
       }),
@@ -137,7 +144,7 @@ export function handleWatch(): void {
           if (result.affected.length > 0) {
             log('reticle_watch_affected', { changed: files, affected: result.affected });
           }
-          await emitBuddyStatus(fs, reticleRoot, flows, result.affected);
+          await emitBuddyStatus(fs, reticleRoot, flows, result.affected, files);
         })
         .catch((error) => {
           log('reticle_watch_failed', {
@@ -149,7 +156,7 @@ export function handleWatch(): void {
   log('reticle_watch_started', { cwd: process.cwd() });
   // Print the ambient line once at startup so the human sees where they stand before touching anything.
   void loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()))
-    .then((flows) => emitBuddyStatus(fs, reticleRoot, flows, []))
+    .then((flows) => emitBuddyStatus(fs, reticleRoot, flows, [], []))
     .catch(() => undefined);
   watch(process.cwd(), { recursive: true }, (_event, filename) => {
     if ('string' === typeof filename && WATCHED_EXTENSIONS.test(filename))
@@ -191,17 +198,30 @@ export async function handleCapsules(): Promise<void> {
  */
 /**
  * A changed file's text, or '' when it is gone. `git diff --name-only` answers from the repository
- * root while the gate may run in a package below it, so leading segments are dropped until the path
- * resolves from `cwd`.
+ * root while the gate may run in a package below it, so a leading segment is dropped only when it is
+ * the directory the gate runs in (or a chain of them ending at `cwd`). An absolute path is read as is.
+ * Never fall through to a shorter suffix that merely happens to exist: that is another file.
  */
 function atChangedPath<T>(cwd: string, file: string, read: (path: string) => T): T | undefined {
-  const parts = file.split('/');
-  for (let i = 0; i < parts.length; i += 1) {
+  const attempt = (path: string): T | undefined => {
     try {
-      return read(join(cwd, ...parts.slice(i)));
+      return read(path);
     } catch {
-      // not at this depth; try the path one segment shorter
+      return undefined;
     }
+  };
+  if (isAbsolute(file)) return attempt(file);
+  const parts = file.split('/');
+  const cwdParts = cwd.split(sep);
+  for (let i = 0; i < parts.length; i += 1) {
+    if (
+      i > 0 &&
+      (i > cwdParts.length || cwdParts.slice(-i).join('/') !== parts.slice(0, i).join('/'))
+    ) {
+      continue;
+    }
+    const found = attempt(join(cwd, ...parts.slice(i)));
+    if (found !== undefined) return found;
   }
   return undefined;
 }
@@ -213,6 +233,50 @@ function readChangedFile(cwd: string, file: string): string {
 /** When a changed file was last modified, or undefined when it is gone. Same lookup as its text. */
 function changedFileModifiedAt(cwd: string, file: string): number | undefined {
   return atChangedPath(cwd, file, (path) => statSync(path).mtimeMs);
+}
+
+/**
+ * Which flows still count as passing, and which have a recorded pass that an edit has made stale.
+ *
+ * A flow's newest pass counts only if its run is later than the newest mtime of the files that
+ * belong to THAT flow: the changed files that match its sources (the same suffix rule as
+ * `affectedFlows`, so a repo-root path, a package-relative stamp and an absolute stamp all agree).
+ * Edits outside its sources never invalidate it. A flow with no recorded sources cannot be
+ * attributed, so every changed file counts for it. A changed file that is gone fails closed.
+ *
+ * `onDisk` is for the long-running watcher, which sees only one debounce batch at a time: it also
+ * reads the newest mtime of the flow's own sources on disk, so an earlier edit keeps the flow stale
+ * after an unrelated save or a restart. A source that is missing counts as stale there, as it does
+ * for the gate. A flow with no stamped sources shows nominal at startup, since an edit cannot be
+ * attributed to it without a batch of changed files. Without `onDisk` only `affected` flows are judged (the gate's contract).
+ */
+async function currentPassing(
+  fs: FileSystemPort,
+  root: string,
+  flows: readonly NamedFlow[],
+  affected: readonly string[],
+  changed: readonly string[],
+  onDisk = false,
+): Promise<{ passing: Set<string>; stale: Set<string> }> {
+  const sourcesOf = new Map(toFlowSources(flows).map((f) => [f.name, f.sources ?? []]));
+  const passing = new Set<string>();
+  const stale = new Set<string>();
+  const cwd = process.cwd();
+  for (const [name, at] of await new RunStore(fs, root).passingFlowTimes(passingFlowNames)) {
+    const sources = sourcesOf.get(name) ?? [];
+    const reported =
+      0 === sources.length ? changed : changed.filter((f) => sourceMatchesChange(f, sources));
+    const diskTimes = onDisk ? sources.map((f) => changedFileModifiedAt(cwd, f)) : [];
+    const judged = affected.includes(name) || (onDisk && sources.length > 0);
+    const newerThanPass = (t: number | undefined): boolean => !((t ?? Infinity) < at);
+    const isStale =
+      judged &&
+      (reported.some((f) => newerThanPass(changedFileModifiedAt(cwd, f))) ||
+        diskTimes.some(newerThanPass));
+    if (isStale) stale.add(name);
+    else passing.add(name);
+  }
+  return { passing, stale };
 }
 
 export async function handleGate(
@@ -230,8 +294,9 @@ export async function handleGate(
     const changed = (await resolveChangedFiles(files, since, process.cwd())).files;
     const allFlows = await loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()));
     const affected = affectedSavedFlows(allFlows, changed).affected;
-    const latest = await new RunStore(fs, reticleRoot).latest();
-    const passing = passingFlowNames(latest?.flows ?? []);
+    const passing = [
+      ...(await currentPassing(fs, reticleRoot, allFlows, affected, changed)).passing,
+    ];
     const flaky = await new FlakeStore(fs, reticleRoot).flakyFlows();
     // Anti-reward-hacking: diff each flow's CURRENT assertions against what it asserted the last
     // time it passed. A mustHold that dropped from a real consequence to a fakeable presence check is a

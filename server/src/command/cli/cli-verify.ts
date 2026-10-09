@@ -462,7 +462,7 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
         profile: RunProfile.PROD_PREVIEW,
         ...(onProgress === undefined ? {} : { onProgress }),
       });
-      // Persist the artifact. `reticle gate` decides from RunStore.latest, so without this the
+      // Persist the artifact. `reticle gate` decides from the runs in the store, so without this the
       // documented CI loop is broken end to end: `reticle verify` could pass and the gate would still
       // block, because it never sees a passing run. (Only the optional `serve --http` endpoint used to
       // persist.) Best-effort — a disk failure must not turn a passing verification into a failure.

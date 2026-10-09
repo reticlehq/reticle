@@ -4,9 +4,16 @@ import { mkdtemp, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asRunId, RunReadError, type ReticleVerificationRun } from '@reticlehq/core';
+import {
+  asRunId,
+  RunFlowStatus,
+  RunReadError,
+  type ReticleVerificationRun,
+  type RunFlowResult,
+} from '@reticlehq/core';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { RunStore } from './run-store.js';
+import { passingFlowNames } from '@/language/flows/change/gate.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { RunAgentKind, RunFramework, RunProfile, RunTrigger } from '@reticlehq/core';
 
@@ -26,6 +33,16 @@ const baseInput = (runId: string): VerificationRunInput => ({
 
 const make = (runId: string, at: number): ReticleVerificationRun =>
   buildVerificationRun(baseInput(runId), () => at);
+
+const withFlows = (runId: string, at: number, flows: RunFlowResult[]): ReticleVerificationRun =>
+  buildVerificationRun({ ...baseInput(runId), flows }, () => at);
+
+const flowResult = (name: string, status: RunFlowStatus): RunFlowResult => ({
+  name,
+  status,
+  steps: 1,
+  durationMs: 1,
+});
 
 /**
  * A BOUND, not a measurement. The retention test writes five runs sequentially through the real
@@ -119,6 +136,65 @@ describe('RunStore — temp-dir filesystem, never touches the repo', () => {
     await store.write(make('run-c', 2000));
     const pair = await store.latestTwo();
     expect(pair?.map((r) => r.runId)).toEqual(['run-c', 'run-b']); // 2000 then 3000
+  });
+
+  it('latestPerFlow keeps the newest result per flow and skips runs that carry no flows', async () => {
+    await store.write(
+      withFlows('old', 1000, [
+        flowResult('a', RunFlowStatus.PASS),
+        flowResult('b', RunFlowStatus.PASS),
+      ]),
+    );
+    await store.write(withFlows('new', 2000, [flowResult('a', RunFlowStatus.FAIL)]));
+    await store.write(withFlows('drive', 3000, []));
+    const latest = await store.latestPerFlow();
+    expect(latest.get('a')?.result.status).toBe(RunFlowStatus.FAIL);
+    expect(latest.get('b')?.result.status).toBe(RunFlowStatus.PASS);
+    expect(latest.get('b')?.createdAt).toBe(1000);
+  });
+
+  it('latestPerFlow breaks a tie between runs of equal time on the run id, whatever the write order', async () => {
+    await store.write(withFlows('run-b', 2000, [flowResult('a', RunFlowStatus.PASS)]));
+    await store.write(withFlows('run-a', 2000, [flowResult('a', RunFlowStatus.FAIL)]));
+    expect((await store.latestPerFlow()).get('a')?.result.status).toBe(RunFlowStatus.PASS);
+  });
+
+  it('passingFlowTimes counts pass and heal from each flow newest result, with its time', async () => {
+    await store.write(
+      withFlows('old', 1000, [
+        flowResult('a', RunFlowStatus.PASS),
+        flowResult('b', RunFlowStatus.FAIL),
+        flowResult('c', RunFlowStatus.PASS),
+      ]),
+    );
+    await store.write(
+      withFlows('new', 2000, [
+        flowResult('b', RunFlowStatus.HEALED),
+        flowResult('c', RunFlowStatus.FAIL),
+      ]),
+    );
+    await store.write(withFlows('drive', 3000, []));
+    expect([...(await store.passingFlowTimes(passingFlowNames))].sort()).toEqual([
+      ['a', 1000],
+      ['b', 2000],
+    ]);
+  });
+
+  it('passingFlowTimes credits a template from a copy that proved a consequence (#1321)', async () => {
+    const copy = (name: string, consequence?: string): RunFlowResult => ({
+      ...flowResult(name, RunFlowStatus.PASS),
+      template: 'checkout',
+      stepResults: [
+        { step: 0, anchor: 'Pay', ok: true, ...(consequence === undefined ? {} : { consequence }) },
+      ],
+    });
+    await store.write(withFlows('old', 1000, [copy('checkout--fixture-1', 'net POST')]));
+    await store.write(withFlows('new', 2000, [copy('checkout--fixture-2')]));
+    expect([...(await store.passingFlowTimes(passingFlowNames))].sort()).toEqual([
+      ['checkout', 1000],
+      ['checkout--fixture-1', 1000],
+      ['checkout--fixture-2', 2000],
+    ]);
   });
 
   it('refuses to write a run whose runId is a path-traversal value', async () => {
