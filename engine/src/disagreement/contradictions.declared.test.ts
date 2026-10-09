@@ -166,7 +166,6 @@ describe('a signal acknowledging a declared refusal', () => {
     'order:forbidden',
     'order:forbids',
     'order:blocked',
-    'order:blocking',
     'order:not allowed',
     'order:not_allowed',
     'order:not-allowed',
@@ -178,7 +177,7 @@ describe('a signal acknowledging a declared refusal', () => {
     });
   });
 
-  it.each(['order:placed', 'order:unblocked', 'blockchain:saved'])(
+  it.each(['order:placed', 'order:unblocked', 'blockchain:saved', 'order:blocking'])(
     'still contradicts a success signal %s over the expected 403',
     (signal) => {
       const verdict = orderVerdict(signal);

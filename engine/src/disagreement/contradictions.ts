@@ -127,7 +127,7 @@ const ACKNOWLEDGED = /error|fail|invalid|reject|denied|unable|could not|couldn't
 // Refusal wording belongs to explicit signals; "checkout.blocking" can be an ordinary loading flag.
 // Token boundaries keep "unblocked" and "blockchain" as success claims.
 const REFUSAL_SIGNAL =
-  /(?:^|[^a-z])(?:refus(?:e[ds]?|al|ing)|forbid(?:den|ding|s)?|block(?:ed|ing)|not[ _-]+allowed)(?:$|[^a-z])/i;
+  /(?:^|[^a-z])(?:refus(?:e[ds]?|al|ing)|forbid(?:den|ding|s)?|blocked|not[ _-]+allowed)(?:$|[^a-z])/i;
 
 const signalAcknowledgesFailure = (name: string): boolean =>
   ACKNOWLEDGED.test(name) || REFUSAL_SIGNAL.test(name);
