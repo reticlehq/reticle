@@ -429,7 +429,7 @@ export interface FirstFlowContext {
   pairingToken?: string | undefined;
   url: string;
   sessionId: string;
-  /** The proof came from a Reticle-owned browser, now closed: no tab to measure. */
+  /** The proof came from a Reticle-owned browser, now closed: its own tab cannot be measured. */
   leased: boolean;
   openBrowser: boolean;
   /** False for `--no-first-run`: connect, and say nothing more. */
@@ -461,9 +461,8 @@ export async function initFirstFlow(
   say: (line: string) => void,
 ): Promise<{ flowSaved: boolean }> {
   if (ctx.firstRun) {
-    const status = ctx.leased
-      ? undefined
-      : await fetchStatus(ctx.bridgePort).catch(() => undefined);
+    // A leased proof's tab has closed; another open tab of the same app still answers for it.
+    const status = await fetchStatus(ctx.bridgePort).catch(() => undefined);
     say('');
     for (const line of initCoverageLines(tabIn(status, ctx.sessionId, ctx.url), ctx.url)) say(line);
     const linked = linkedCloudPort(

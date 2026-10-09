@@ -212,6 +212,6 @@ export const HARNESS_ROW_CSS = `
 [data-reticle-chat-panel] .reticle-harness-link{flex:none;border:0;padding:0;background:none;cursor:pointer;font:inherit;color:var(--reticle-hud-brand);font-size:var(--reticle-hud-size-sm);font-weight:600;text-decoration:none;white-space:nowrap;}
 [data-reticle-chat-panel] .reticle-harness-link:hover{text-decoration:underline;}
 [data-reticle-chat-panel] .reticle-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
-[data-reticle-chat-panel] .reticle-foot-meta{margin:0;font-size:11px;line-height:1.3;color:var(--reticle-hud-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+[data-reticle-chat-panel] .reticle-foot-meta{margin:0;font-size:11px;line-height:1.3;color:var(--reticle-hud-text-muted);overflow-wrap:anywhere;}
 [data-reticle-chat-panel] .reticle-foot-meta:empty{display:none;}
 `;
