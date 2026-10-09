@@ -81,7 +81,13 @@ export class OwnedDevServer {
       {
         cwd,
         // Its own process group, so stopping it stops what it started rather than only the wrapper.
-        detached: !WINDOWS,
+        // Detached on Windows too: there libuv puts every non-detached child in a job object that
+        // kills it when this process exits. The supervisor died with `init`, the server it fed lost
+        // its pipe reader, and its next log line was an EPIPE: every Windows install cell whose
+        // server logs per request (Next, Astro) or on an edit (CRA, Angular) failed that way.
+        detached: true,
+        // Detached on Windows means no console; this keeps one from opening as a visible window.
+        windowsHide: true,
         // Nothing of ours: the supervisor holds the server's pipes, and init holds none of its.
         stdio: 'ignore',
         // Reticle already provides the detached supervisor. Astro's agent auto-backgrounding

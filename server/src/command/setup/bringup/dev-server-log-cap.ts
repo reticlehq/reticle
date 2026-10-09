@@ -102,6 +102,8 @@ function main(argv: readonly string[]): void {
   const child = spawn(command, {
     shell: true,
     stdio: ['ignore', 'pipe', 'pipe'],
+    // This supervisor runs detached with no console on Windows, so the shell would open a window.
+    windowsHide: true,
     env: process.env,
   });
   child.stdout.on('data', (chunk: Buffer) => log.write(chunk));
