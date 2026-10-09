@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { HumanControlKind, PresenterTone, SessionState } from '@reticlehq/core';
 import { Presenter, type ControlIntent } from './presenter.js';
 import { CONTROLS_CSS } from './presenter-controls.js';
+import { CHAT_VIEWS_CSS } from './presenter-chat-views.js';
 import { buildSnapshot } from '@/dom/snapshot.js';
 import { LOG_KIND } from './chrome/presenter-log.js';
 import { isIgnored } from '@/dom/dom-ignore.js';
@@ -442,5 +443,17 @@ describe('a replay started from a chip', () => {
     expect(chip()?.getAttribute('data-state')).toBe('passed');
     expect(chip()?.textContent).toBe('✓ refund');
     presenter.destroy();
+  });
+});
+
+// Driven before release: the Harness spot sat beside the workspace chip with flex:none, ran 50px
+// past the 320px panel, and the Run Harness button and the on/off switch were clipped off it.
+describe('the Harness spot in the footer', () => {
+  it('takes its own line instead of overflowing beside the workspace chip', () => {
+    expect(CONTROLS_CSS).toMatch(/\.reticle-foot-workspace-row\{[^}]*flex-wrap:wrap/);
+    expect(CHAT_VIEWS_CSS).toMatch(/\.reticle-harness-spot\{[^}]*flex:1 1 100%/);
+    // Run Harness and Stop are buttons wearing a link's class: without a reset they draw as the
+    // browser's default white button.
+    expect(CHAT_VIEWS_CSS).toMatch(/button\.reticle-harness-link\{[^}]*background:none/);
   });
 });

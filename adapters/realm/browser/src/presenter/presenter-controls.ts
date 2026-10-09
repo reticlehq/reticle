@@ -88,7 +88,7 @@ export function flowTitle(name: string): string {
 export const CONTROLS_CSS = `
 [data-reticle-chat-panel] [data-reticle-foot]{flex:none;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.07);
   background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,.55) 100%);pointer-events:auto;}
-[data-reticle-chat-panel] .reticle-foot-workspace-row{display:flex;align-items:center;min-width:0;}
+[data-reticle-chat-panel] .reticle-foot-workspace-row{display:flex;flex-wrap:wrap;align-items:center;min-width:0;}
 [data-reticle-chat-panel] .reticle-hud-log-well{margin:0 0 4px;}
 [data-reticle-chat-panel] .reticle-workspace-wrap{position:relative;align-self:flex-start;max-width:100%;}
 [data-reticle-chat-panel] .reticle-workspace-wrap[hidden]{display:none;}
