@@ -30,7 +30,10 @@ import {
   type DriveControl,
   type DriveRecord,
 } from '@/features/harness/drive-runs.js';
-import { fetchPlatformRun } from '@/features/harness/platform/platform-drives.js';
+import {
+  fetchPlatformRun,
+  platformRunAnswer,
+} from '@/features/harness/platform/platform-drives.js';
 import { serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { harnessRunId } from '@/judgement/runs/drive-run.js';
 import { DRIVE_RECORD_SUFFIX, reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
@@ -266,7 +269,7 @@ async function fromPlatform(deps: ToolDeps, runId: string): Promise<unknown> {
   if (platform === undefined) throw new Error(msgNoDrive(runId));
   const got = await fetchPlatformRun(platform, runId);
   if ('error' in got) throw new Error(got.error);
-  return { ...got.run, runId };
+  return platformRunAnswer(runId, got.run);
 }
 
 /** Where the drive's record lives: its session's own project, never wherever the daemon started. */

@@ -95,11 +95,38 @@ export async function requestFreeDrive(
   }
 }
 
+const DRIVE_DONE = 'done';
+const msgFromDashboard = (verdict: string | undefined, checks: number): string =>
+  `From the dashboard (the drive itself is no longer on this machine): ${
+    verdict === undefined ? 'no verdict recorded' : `verdict ${verdict}`
+  }, ${String(checks)} check${1 === checks ? '' : 's'}.`;
+
+/**
+ * A synced run as the explore poll answers it, in the poll's own fields.
+ *
+ * The platform serves the run file under `run` with the authoritative verdict (a review overturn
+ * wins) beside it — the dashboard's shape. The poll's agent needs the outcome and where it came from,
+ * not the whole file; `reticle runs <id>` prints the full answer for anyone who wants it.
+ */
+export function platformRunAnswer(
+  runId: string,
+  body: Record<string, unknown>,
+): { status: string; runId: string; summary: string } {
+  const run = body['run'];
+  const checks =
+    'object' === typeof run &&
+    null !== run &&
+    Array.isArray((run as Record<string, unknown>)['checks'])
+      ? ((run as Record<string, unknown>)['checks'] as unknown[]).length
+      : 0;
+  return { status: DRIVE_DONE, runId, summary: msgFromDashboard(str(body['verdict']), checks) };
+}
+
 /** Said when the platform has no such run: it may simply not have synced yet. */
 export const msgRunNotOnPlatform = (runId: string): string =>
   `Run ${runId} is not on the Reticle platform: not synced yet, or not found.`;
 
-/** The run as the platform kept it (`{ runId, status, verdict, steps, summary, result }`), or why not. */
+/** The platform's answer for one run (`{ run, verdict, grade, projectName, … }`), or why not. */
 export async function fetchPlatformRun(
   platform: Platform,
   runId: string,

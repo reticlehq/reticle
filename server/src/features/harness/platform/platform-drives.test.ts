@@ -3,6 +3,7 @@ import {
   FreeDriveKind,
   fetchPlatformRun,
   planUrl,
+  platformRunAnswer,
   requestFreeDrive,
   type PlatformFetch,
 } from './platform-drives.js';
@@ -87,6 +88,30 @@ describe('the run the platform kept', () => {
       Promise.reject(new Error('offline')),
     );
     expect('error' in answer).toBe(true);
+  });
+});
+
+describe('a drive read back from the dashboard', () => {
+  // The platform answers GET /v1/runs/:id with the run file under `run` and the authoritative
+  // verdict beside it, the shape the dashboard's run page reads.
+  const body = {
+    run: { runId: 'harness-1', checks: [{ verdict: 'yes' }, { verdict: 'no' }] },
+    projectName: 'shop',
+    grade: { effectiveStatus: 'fail' },
+    verdict: 'fail',
+  };
+
+  it("answers in the explore poll's own fields, naming where it came from", () => {
+    expect(platformRunAnswer('harness-1', body)).toEqual({
+      status: 'done',
+      runId: 'harness-1',
+      summary:
+        'From the dashboard (the drive itself is no longer on this machine): verdict fail, 2 checks.',
+    });
+  });
+
+  it('says so plainly when the platform sent no verdict', () => {
+    expect(platformRunAnswer('harness-2', {}).summary).toContain('no verdict');
   });
 });
 
