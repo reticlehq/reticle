@@ -167,7 +167,7 @@ function evalExactCount(args: {
  *
  * Deliberately NOT here: `.js` and `.json`. Both are routinely fetched via `fetch`/XHR — a module
  * preload and an API call can share a suffix — so downgrading them would hide real misses. This list
- * is only the suffixes for which the document is the sole initiator.
+ * is only the suffixes for which the document is the sole plausible initiator.
  *
  * This began as the smaller half of #447: it did not make these requests observable, it stopped
  * Reticle claiming they did not happen. The other half, observing them via resource timing, has
@@ -848,17 +848,17 @@ export function evalSettled(
   // on the evidence, never silently swallowed:
   //
   //   - dev tooling, the framework talking about ITSELF (see DevToolingChannel);
-  //   - a departure, which by construction can never complete (see NetInitiator.NAVIGATION);
+  //   - a departure, which by construction can never complete (see `NetInitiator.NAVIGATION`);
   //   - somebody else's host, or a same-origin endpoint the project declared (`isForeignTraffic`).
   //
   // The last two were counted here while `settle-in-flight.ts` and the contradiction pass dropped
   // them, so the product held two answers to one question. The predicate's answer was the wrong one:
   // after a plain `<a href>` click it reported "1 request(s) still in flight" forever, and a vendor
-  // beacon made every assertion on an app return `unknown / outcome_pending`.
+  // beacon made every assertion on such an app return `unknown / outcome_pending`.
   //
   // A departure is kept APART from foreign traffic all the way into the disclosure. The two are one
   // CLASSIFICATION and two EXPLANATIONS — both drop out of the count, but "the page left for another
-  // document" and "somebody else's host" answered" send a reader to different next steps, and one
+  // document" and "somebody else's host answered" send a reader to different next steps, and one
   // list holding both makes the second the only thing the first can be read as.
   const ignoredDevTooling: string[] = [];
   const ignoredForeign: string[] = [];
