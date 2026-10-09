@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: `reticle update` left the app on its old SDK.** When the CLI was already current (installed by the one-line installer or a fresh `npx`), `reticle update` answered "already on the latest version" before it ever looked at the app, so the page kept running the previous SDK and its overlay while the CLI reported the new release. It now brings an app's `@reticlehq/*` packages up to the CLI's version whenever they are behind, never downgrades a newer app, never rewrites `workspace:`/`link:`/`file:` dependencies, and says in plain words to restart the dev server (or to run it in the app's folder when there is no SDK where it was run).
