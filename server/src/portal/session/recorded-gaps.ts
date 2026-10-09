@@ -6,6 +6,7 @@
  *
  * Deduped by kind + missing, newest first, bounded per session.
  */
+import { withRunningDrive } from '@/features/harness/drive-runs.js';
 import {
   CoverageMarker,
   InstrumentationGapKind,
@@ -112,10 +113,14 @@ export function instrumentationOf(tab: InstrumentedTab): Coverage & { prompt?: s
     : { ...coverage, prompt: agentPromptFor({ gaps, appName: appNameOf(url), url }) };
 }
 
-/** The impact snapshot a tab is pushed, carrying that tab's own coverage for the HUD. */
+/**
+ * The impact snapshot a tab is pushed, carrying that tab's own coverage and running drive. Every
+ * push needs the drive: one without it reads as "no drive", and the drive's own tool calls push.
+ */
 export function withInstrumentation(
   tab: InstrumentedTab,
   snapshot: ImpactSnapshot,
 ): ImpactSnapshot {
-  return { ...snapshot, instrumentation: { ...instrumentationOf(tab) } };
+  const pushed = { ...snapshot, instrumentation: { ...instrumentationOf(tab) } };
+  return withRunningDrive(pushed, tab.id) ?? pushed;
 }

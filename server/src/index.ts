@@ -63,7 +63,6 @@ import { createMcpServer } from './surface/mcp/mcp.js';
 import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
 import { attachHudHarness, startChatDrives } from './surface/tools/chat-drives.js';
-import { withRunningDrive } from './features/harness/drive-runs.js';
 import { runTool } from './surface/tools/invoke-tool.js';
 import {
   SessionReaper,
@@ -561,8 +560,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     for (const session of bridge.sessions.all()) {
       const root =
         session.artifactRoot ?? options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT);
-      if (only === undefined || only === root)
-        session.pushImpact(() => withRunningDrive(impactSnapshot(root), session.id), true);
+      if (only === undefined || only === root) session.pushImpact(() => impactSnapshot(root), true);
     }
   };
   pushHarnessConfig = repaint;

@@ -529,6 +529,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'config',
     'daemon',
     'gaps',
+    // Every impact push carries the drive running on its tab, or the HUD's Stop button is cleared
+    // by the next push the drive's own tool calls make.
+    'harness',
     'human',
     'impact',
     'input',

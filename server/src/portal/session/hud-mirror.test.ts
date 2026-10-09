@@ -18,6 +18,7 @@ import {
 } from '@reticlehq/core';
 import { Session } from './session.js';
 import { SessionManager } from './session-manager.js';
+import { DriveOrigin, forgetDrives, startDrive } from '@/features/harness/drive-runs.js';
 
 interface Captured {
   name?: string;
@@ -143,5 +144,27 @@ describe('a headless driven session mirrors its HUD feed to the tabs a human can
     driven.pushNarration('clicked Submit');
 
     expect(named(watched, ReticleCommand.NARRATE)[0]?.sessionId).toBe('tab-1');
+  });
+});
+
+// Driven before release: Run Harness started a drive, the HUD showed Stop for one frame, and the
+// next push (every tool call the drive made sends one) carried no drive, so Stop never stayed up.
+describe('every impact push carries the drive running on its tab', () => {
+  it('a push from any caller keeps the running drive', () => {
+    const [tab, sent] = open('tab-drive', 'http://localhost:3000/', 'app');
+    startDrive({
+      harness: 'hud-push',
+      runId: 'harness-hud-push',
+      origin: DriveOrigin.HUD,
+      sessionId: 'tab-drive',
+      now: () => 1,
+      persist: () => Promise.resolve(),
+      run: () => new Promise(() => undefined),
+    });
+    tab.pushImpact(() => ({ calls: 1 }) as never, true);
+    forgetDrives();
+    const pushed = named(sent, ReticleCommand.IMPACT)[0]?.args?.['snapshot'] as
+      Record<string, unknown> | undefined;
+    expect(pushed?.['harnessDrive']).toEqual({ runId: 'harness-hud-push', steps: 0 });
   });
 });
