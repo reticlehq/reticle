@@ -75,7 +75,7 @@ interface CapabilityCopy {
 const COPY_BY_CAPABILITY: Record<CloudCapability, CapabilityCopy> = {
   [CloudCapability.SHARE_PROOF]: {
     reason: 'Sharing a verification result with a teammate needs a hosted, linkable proof page.',
-    unlockedBy: 'Link a free Reticle Cloud account (reticle login), then share the run.',
+    unlockedBy: 'Link a free Reticle Cloud account (reticle connect), then share the run.',
   },
   [CloudCapability.RUN_HISTORY]: {
     reason:

@@ -21,7 +21,7 @@
  *
  * ── WHY SIGN IN IS NOT A BUTTON THAT SIGNS YOU IN ───────────────────────────────────────────────
  * A page cannot run a CLI, and signing in is a device flow in a terminal. So the control copies
- * `reticle login` rather than pretending to start something. A button that quietly does nothing is
+ * `reticle connect` rather than pretending to start something. A button that quietly does nothing is
  * worse than a line of text, because the person waits for it.
  */
 
@@ -40,8 +40,8 @@ export const ACCOUNT_SIGNOUT_ATTR = 'data-reticle-account-signout';
 
 export const ACCOUNT_TEXT = {
   SIGNED_OUT: 'Sign in',
-  SIGNIN_TITLE: 'Sign in through your browser. Also copies `reticle login`, for a terminal',
-  SIGNIN_COMMAND: 'reticle login',
+  SIGNIN_TITLE: 'Sign in through your browser. Also copies `reticle connect`, for a terminal',
+  SIGNIN_COMMAND: 'reticle connect',
   DASHBOARD_TITLE: 'Open this project on the dashboard',
   /** "Now", not "sync" — the timer already syncs, this only stops somebody wondering when. */
   SYNC_TITLE: 'Push to the dashboard now, instead of waiting for the next sync',
@@ -53,8 +53,8 @@ export const ACCOUNT_TEXT = {
   SIGNED_IN_AS: 'Signed in',
   DASHBOARD_ACTION: 'Open dashboard',
   /** Linking is a terminal step for the same reason signing in is: only the CLI can write the file. */
-  LINK_HINT: 'Not linked — run `reticle link` to keep a record on the dashboard',
-  LINK_COMMAND: 'reticle link',
+  LINK_HINT: 'Not linked — run `reticle connect` to keep a record on the dashboard',
+  LINK_COMMAND: 'reticle connect',
   SIGNOUT_ACTION: 'Copy sign-out command',
   SIGNOUT_TITLE: 'Copy `reticle logout` to run in your terminal',
   SIGNOUT_COMMAND: 'reticle logout',
@@ -109,7 +109,7 @@ export function accountInitials(org: string | undefined): string {
  * now live once, unscoped, in `presenter-account-styles.ts`.
  *
  * WHAT THE MENU IS FOR. An avatar alone answers "am I signed in" and nothing else. Somebody who has
- * just run `reticle login` wants to know WHICH account, on WHICH host, against WHICH project, and
+ * just run `reticle connect` wants to know WHICH account, on WHICH host, against WHICH project, and
  * where the record went -- so the menu carries the identity, the project, the counts already on the
  * wire, and the way through to the dashboard. Everything in it comes from the impact snapshot; none
  * of it is fetched, because the HUD has no credential and must never acquire one.
@@ -185,7 +185,7 @@ function accountMenuHtml(account: AccountState, details: AccountDetails): string
   const linked = details.dashboardUrl !== undefined && isSafeDashboardUrl(details.dashboardUrl);
   const dashboard = linked
     ? `<a class="reticle-account-action" data-reticle-account-dashboard href="${esc(details.dashboardUrl ?? '')}" target="_blank" rel="noreferrer noopener" title="${ACCOUNT_TEXT.DASHBOARD_TITLE}">${hiIconHtml(PresenterIcon.VIEW, PRESENTER_ICON_SIZE.HELP)}<span>${ACCOUNT_TEXT.DASHBOARD_ACTION}</span></a>`
-    : // Unlinked is a real and common state -- an account with a repo nobody has run `reticle link`
+    : // Unlinked is a real and common state -- an account with a repo nobody has run `reticle connect`
       // in -- and it gets the way forward rather than a link that 404s.
       `<button type="button" class="reticle-account-action reticle-account-action--hint" ${ACCOUNT_SIGNIN_ATTR} data-reticle-copy="${ACCOUNT_TEXT.LINK_COMMAND}" title="${ACCOUNT_TEXT.LINK_HINT}"><span>${ACCOUNT_TEXT.LINK_HINT}</span></button>`;
   const signOut = `<button type="button" class="reticle-account-action" ${ACCOUNT_SIGNOUT_ATTR} data-reticle-copy="${ACCOUNT_TEXT.SIGNOUT_COMMAND}" title="${ACCOUNT_TEXT.SIGNOUT_TITLE}"><span>${ACCOUNT_TEXT.SIGNOUT_ACTION}</span></button>`;
@@ -311,7 +311,7 @@ export function mountAccountControl(root: HTMLElement, onSignIn?: () => void): (
 
       // The bare Sign in control carries no `data-reticle-copy`, because it predates the menu and
       // three surfaces plus their tests assert on its attribute.
-      // It asks the daemon to open the browser sign-in, and still copies `reticle login`: the copy is
+      // It asks the daemon to open the browser sign-in, and still copies `reticle connect`: the copy is
       // the fallback for an older daemon that ignores the request, and costs nobody anything.
       const signin = target.closest(`[${ACCOUNT_SIGNIN_ATTR}]`);
       if (signin instanceof HTMLElement) {

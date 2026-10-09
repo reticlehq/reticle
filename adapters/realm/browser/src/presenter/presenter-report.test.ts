@@ -100,9 +100,9 @@ describe('what an UNLINKED user is told about the dashboard', () => {
     // and an unknown must not be read as signed-out — see the account-state tests beside this file.
     const html = reportBodyHtml(withVerdicts, undefined, { signedIn: false });
     expect(html).toContain('This record stops at this machine.');
-    expect(html).toContain('reticle login');
+    expect(html).toContain('reticle connect');
     // Once. A second mention in the same panel is where a line becomes a nag.
-    expect(html.split('reticle login').length - 1).toBe(1);
+    expect(html.split('reticle connect').length - 1).toBe(1);
   });
 
   it('goes silent the moment the repo is linked', () => {
@@ -636,7 +636,7 @@ describe('what the HUD says once a run syncs, or never will', () => {
     expect(html).toContain('31 not synced');
     // "2 not sent" alone said nothing about what was not sent where, or what to do.
     expect(html).toContain('not on your dashboard yet');
-    expect(html).toContain('reticle link');
+    expect(html).toContain('reticle connect');
   });
 
   it('shows the coverage line, and the copy button only once a prompt exists', () => {

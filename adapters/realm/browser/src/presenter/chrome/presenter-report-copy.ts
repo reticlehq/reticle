@@ -96,11 +96,11 @@ export const REPORT_TEXT = {
    * there is a verdict worth keeping — an offer to preserve nothing is just an advert.
    */
   LOCAL_ONLY: 'This record stops at this machine.',
-  LOCAL_ONLY_ACTION: 'reticle login',
+  LOCAL_ONLY_ACTION: 'reticle connect',
   LOCAL_ONLY_TAIL: 'keeps it, and lets a team see it.',
   /** Signed in, repo not linked — a different state with a different next step. */
   UNLINKED: 'Signed in, but this repo is not linked.',
-  UNLINKED_ACTION: 'reticle link',
+  UNLINKED_ACTION: 'reticle connect',
   UNLINKED_TAIL: 'sends this record to your workspace.',
   DEFECTS_NONE: 'Nothing has failed a declared consequence yet.',
   EMPTY: 'Nothing recorded yet. Drive the app once and this fills in.',
@@ -113,7 +113,7 @@ export const REPORT_TEXT = {
   NOT_SENT: 'not synced',
   /** What the chip means and what to do about it, on hover. */
   NOT_SENT_HELP:
-    'Runs saved on this machine but not on your dashboard yet. Run reticle link in this project to send them.',
+    'Runs saved on this machine but not on your dashboard yet. Run reticle connect in this project to send them.',
   /** How much of this app Reticle sees: capabilities covered out of the eight. */
   INSTRUMENTATION: 'What Reticle can see',
   INSTRUMENTATION_HELP:

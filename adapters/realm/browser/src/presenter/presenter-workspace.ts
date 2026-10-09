@@ -18,7 +18,7 @@ const WORKSPACE_COPY_ATTR = 'data-reticle-workspace-copy';
  * Where the account capsule lands: a slot, filled later, rather than markup built here.
  *
  * This row is built ONCE at mount, and whether the machine is signed in arrives later and can change
- * — a `reticle login` in another terminal while the page is open is an ordinary thing to do. So the
+ * — a `reticle connect` in another terminal while the page is open is an ordinary thing to do. So the
  * row reserves the space and `paintWorkspaceAccount` fills it whenever a snapshot lands, the same
  * way the folder and project rows are painted rather than interpolated.
  */

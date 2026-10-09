@@ -354,8 +354,8 @@ export function reportBodyHtml(
  * The one line about where this record lives, and what the next step is — if there is one.
  *
  * NOT gated on `dashboardUrl` alone, which conflates two states with opposite remedies: "nobody on
- * this machine has signed in" (`reticle login`) and "signed in, but this repo is not linked"
- * (`reticle link`). Telling a signed-in user to sign in is the kind of nag that gets a dev-only HUD
+ * this machine has signed in" (`reticle connect`) and "signed in, but this repo is not linked"
+ * (`reticle connect`). Telling a signed-in user to sign in is the kind of nag that gets a dev-only HUD
  * switched off for good.
  *
  * An ABSENT `account` is unknown, never signed-out. An older daemon sends none, and guessing there
