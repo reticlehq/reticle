@@ -1026,6 +1026,17 @@ describe('installNetwork (request-body shape fingerprint)', () => {
       expect(await shapeOfPost(encode('{\t"q":\r\n1}'))).toMatch(/^[0-9a-f]{8}$/);
     });
 
+    it('treats exactly the controls below space except tab, newline and return, and DEL, as not text', async () => {
+      const encode = (text: string): Uint8Array<ArrayBuffer> =>
+        new Uint8Array(new TextEncoder().encode(text));
+      const allowed = new Set([0x09, 0x0a, 0x0d]);
+      for (let code = 0; code <= 0xa0; code += 1) {
+        const control = (code < 0x20 && !allowed.has(code)) || 0x7f === code;
+        const shape = await shapeOfPost(encode(`{"q":"${String.fromCharCode(code)}"}`));
+        expect({ code, text: shape !== undefined }).toEqual({ code, text: !control });
+      }
+    });
+
     it('does not decode an upload over the size bound', async () => {
       const big = bytes({ blob: 'x'.repeat((1 << 20) + 1) });
       expect(await shapeOfPost(big)).toBeUndefined();

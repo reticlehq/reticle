@@ -142,6 +142,25 @@ function jsonShape(text: string): string {
 /** The largest byte body read as text for its fingerprint. */
 const MAX_DECODED_BODY_BYTES = 1 << 20;
 
+/** Tab, newline and carriage return: the only control characters below space a text body may carry. */
+const TAB = 0x09;
+const LINE_FEED = 0x0a;
+const CARRIAGE_RETURN = 0x0d;
+const FIRST_PRINTABLE = 0x20;
+const DELETE = 0x7f;
+
+/** Whether `text` holds a control character below space other than tab, newline or return, or DEL. */
+function hasControlCharacter(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code === DELETE) return true;
+    if (code < FIRST_PRINTABLE && code !== TAB && code !== LINE_FEED && code !== CARRIAGE_RETURN) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * A byte body's text, when it is text: an `ArrayBuffer` or a view over one that decodes as strict
  * UTF-8 with no control characters beyond whitespace. Anything else is undefined, so random binary
@@ -154,8 +173,7 @@ function textOfBytes(body: unknown): string | undefined {
   if (body.byteLength > MAX_DECODED_BODY_BYTES) return undefined;
   try {
     const text = new TextDecoder('utf-8', { fatal: true }).decode(body);
-    // eslint-disable-next-line no-control-regex -- the point is to find control characters
-    return /[\0-\b\v\f\x0e-\x1f\x7f]/.test(text) ? undefined : text;
+    return hasControlCharacter(text) ? undefined : text;
   } catch {
     // Not UTF-8, or no TextDecoder in this realm: either way, not text.
     return undefined;
