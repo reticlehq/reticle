@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { FEEDBACK_HINT } from './diagnose/closing-hint.js';
 import { SILENT_HOST } from './host.js';
 import { runInit, resolveLockfiles, type InitIo, type InitOptions } from './run.js';
+import { codexAvailableProbe } from './register/mcp.js';
 
 /**
  * The token the host hands over. Minting belongs to the bridge, which owns the file — this package
@@ -434,6 +435,73 @@ describe('runInit', () => {
     expect(io.written['.mcp.json']).toBeUndefined();
     expect(io.execCalls.some((c) => 'claude' === c.command && c.args.includes('add'))).toBe(true);
     expect(io.written['vite.config.ts']).toContain('@reticlehq/vite-plugin');
+  });
+
+  it.each([
+    'vite --config "build/vite.config.mjs"',
+    'vite -c build/vite.config.mjs',
+    'vite --config=build/vite.config.mjs',
+    'vite --config="build/vite.config.mjs"',
+  ])('patches the nested config selected by `%s` without creating an unused root config', (dev) => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { vite: '^5' },
+        scripts: { dev },
+      }),
+      'build/vite.config.mjs': `export default { plugins: [] };\n`,
+    });
+
+    runInit(OPTS, io);
+
+    expect(io.written['build/vite.config.mjs']).toContain('reticle(');
+    expect(io.written['vite.config.mjs']).toBeUndefined();
+    expect(io.written['vite.config.ts']).toBeUndefined();
+  });
+
+  it('names a nested config for a custom dev server instead of creating an unused root config', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { vite: '^5' },
+        scripts: { dev: 'node server.mjs' },
+      }),
+      'build/vite.config.mjs': `export default { plugins: [] };\n`,
+    });
+
+    runInit(OPTS, io);
+
+    expect(io.lines.join('\n')).toContain('build/vite.config.mjs');
+    expect(io.written['build/vite.config.mjs']).toBeUndefined();
+    expect(io.written['vite.config.mjs']).toBeUndefined();
+    expect(io.written['vite.config.ts']).toBeUndefined();
+  });
+
+  it('patches the root config when a wrapper dev script sits beside an unrelated nested config', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { vite: '^5' },
+        scripts: { dev: 'concurrently "vite" "node server.mjs"' },
+      }),
+      'vite.config.ts': `export default { plugins: [] };\n`,
+      'docs/vite.config.ts': `export default { plugins: [] };\n`,
+    });
+
+    runInit(OPTS, io);
+
+    expect(io.written['vite.config.ts']).toContain('reticle(');
+    expect(io.written['docs/vite.config.ts']).toBeUndefined();
+  });
+
+  it('still creates a root config when plain vite uses its default config lookup', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { vite: '^5' },
+        scripts: { dev: 'vite' },
+      }),
+    });
+
+    runInit(OPTS, io);
+
+    expect(io.written['vite.config.mjs']).toContain('reticle(');
   });
 
   it('does not re-register when an reticle server already exists (idempotent, install-once)', () => {
@@ -1506,7 +1574,9 @@ describe('the closing hint agrees with the registration rows above it', () => {
       { ...VITE_FILES, [`${HOME}/.codex`]: '', [CODEX_CONFIG]: 'model = "gpt-5"\n' },
       { mcpExists: true },
     );
-    runInit(OPTS, io);
+    // Codex is left to a hand edit only without its CLI: with `codex` on PATH it registers through
+    // `codex mcp add` instead (#1238). This fake's probe answers the same for every binary.
+    runInit(OPTS, { ...io, probe: (command) => codexAvailableProbe().command !== command });
     const printed = io.lines.join('\n');
     expect(printed).toContain('[⚠] MCP server (Codex CLI)');
     expect(printed).toContain('(MCP server (Codex CLI))');

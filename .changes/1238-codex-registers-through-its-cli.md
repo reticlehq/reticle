@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/init` — `reticle init` and `reticle setup mcp` left Codex for you to wire by hand.** Every other agent got Reticle registered, but Codex (desktop and CLI) printed "add this by hand" because its config is TOML that Reticle will not edit, so a Codex session started with no `reticle_*` tools. With the `codex` command installed, both now run `codex mcp add reticle -- npx @reticlehq/server mcp`, and a second run reports Reticle already registered. They never run it when `~/.codex/config.toml` already has a `reticle` server in any shape, because that command replaces an existing entry without a word. Closes [#1238](https://github.com/reticlehq/reticle/issues/1238).

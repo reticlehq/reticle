@@ -14,6 +14,7 @@ import {
   describe,
   isMutating,
   isSameDocumentHashAnchor,
+  isSamePathnameReplace,
   isSteadyCadence,
   netCall,
   recoveredByRetry,
@@ -124,6 +125,14 @@ function uiAdvanced(events: readonly ReticleEvent[]): boolean {
  */
 const ACKNOWLEDGED = /error|fail|invalid|reject|denied|unable|could not|couldn't/i;
 
+// Refusal wording belongs to explicit signals; "checkout.blocking" can be an ordinary loading flag.
+// Token boundaries keep "unblocked" and "blockchain" as success claims.
+const REFUSAL_SIGNAL =
+  /(?:^|[^a-z])(?:refus(?:e[ds]?|al|ing)|forbid(?:den|ding|s)?|blocked|not[ _-]+allowed)(?:$|[^a-z])/i;
+
+const signalAcknowledgesFailure = (name: string): boolean =>
+  ACKNOWLEDGED.test(name) || REFUSAL_SIGNAL.test(name);
+
 /**
  * Below this length an error string is too generic to be evidence — "no", "err", a bare code — and
  * could coincide with unrelated state text.
@@ -194,7 +203,8 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
   return events.some((e) => {
     // A failure-shaped SIGNAL is an acknowledgement too. An app that fires `auth:denied` has plainly
     // not proceeded as if it succeeded, whatever its state paths happen to be named.
-    if (e.type === EventType.SIGNAL) return ACKNOWLEDGED.test(asString(e.data['name']) ?? '');
+    if (e.type === EventType.SIGNAL)
+      return signalAcknowledgesFailure(asString(e.data['name']) ?? '');
     if (e.type !== EventType.STATE_CHANGE) return false;
     const path = asString(e.data['path']) ?? '';
     const value = e.data['value'];
@@ -422,7 +432,13 @@ function findWindowContradictions(
   // consequences are location.hash, focus, and scroll — not a DOM mutation. Treating it as a
   // blank destination made "did my skip link work" unanswerable. Hash-router paths (`#/invoices`)
   // still go through the rule: those ARE a new view.
-  const hashAnchorOnly = routed && routeEvents.every(isSameDocumentHashAnchor);
+  //
+  // A `replaceState` that keeps the pathname is the same kind of non-navigation: the URL recorded
+  // state (a zoom, a filter, a selected tab) and the view did not change. A replace onto a new
+  // pathname, or a push onto one, is still a navigation.
+  const notANavigation =
+    routed &&
+    routeEvents.every((event) => isSameDocumentHashAnchor(event) || isSamePathnameReplace(event));
   // `dom.text` counts as rendered, and it has to: React reconciles a destination IN PLACE far more
   // often than it adds nodes. Measured on three ordinary sidebar navigations of the bench app — every
   // one emitted { dom.attr:2, dom.text:2, render.commit, state.change } and ZERO dom.added/removed,
@@ -442,7 +458,7 @@ function findWindowContradictions(
   const fetched = events.some(
     (e) => e.type === EventType.NET_REQUEST || e.type === EventType.NET_PENDING,
   );
-  if (routed && !hashAnchorOnly && !rendered && !fetched && true !== options.renderProved) {
+  if (routed && !notANavigation && !rendered && !fetched && true !== options.renderProved) {
     // A console error in the SAME window turns "nothing rendered" from an absence into a positive
     // claim: the destination did not merely fail to produce content, it crashed while trying to.
     // Reported once as `unknown` when this held — a React hooks error and an empty destination were
@@ -504,7 +520,7 @@ function findWindowContradictions(
   // A failure-shaped signal is not a success claim, so it must not be read as one: saying "the app
   // claimed success" about an app that plainly reported a failure is true in outline and wrong in
   // its reasoning, which is how a checker stops being believed.
-  const successSignals = signals.filter((name) => !ACKNOWLEDGED.test(name));
+  const successSignals = signals.filter((name) => !signalAcknowledgesFailure(name));
   // An app that RETRACTED has not claimed success, whenever it fired the optimistic signal.
   //
   // The weaker UI rule below already consulted this and the sharper signal rule did not, so an app

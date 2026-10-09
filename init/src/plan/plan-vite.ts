@@ -219,6 +219,22 @@ function viteConfigSteps(input: PlanInput, detail: string, inject = true): Step[
   // plugin, and a file carrying ours alone would not boot the app.
   const plainVite = Framework.VITE === input.detection.framework;
   if (null === cfg) {
+    const candidates = input.viteConfigCandidates ?? [];
+    if (candidates.length > 0) {
+      const named = candidates.map((path) => `\`${path}\``).join(', ');
+      return [
+        {
+          title: StepTitle.VITE_PLUGIN,
+          target: candidates[0] ?? 'vite.config',
+          status: StepStatus.MANUAL,
+          detail:
+            `Reticle could not safely patch the Vite config used by the dev server. ` +
+            `Candidate config(s): ${named}. ` +
+            `Add the Reticle plugin to the config passed to createServer().\n\n` +
+            viteManual(port, input.detection.uiLibrary, inject, stampSource),
+        },
+      ];
+    }
     if (!plainVite) {
       return [
         {

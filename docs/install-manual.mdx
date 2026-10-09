@@ -19,7 +19,7 @@ npx @reticlehq/server init                      # in your project
 
 The first registers the MCP server with every agent it can reach. The second wires the app. See the [quickstart](/quickstart).
 
-This page is for the cases those cannot cover: a machine where piping a script is not allowed, an agent Reticle does not know, or a step the installer reported as needing a hand (Codex CLI is the usual one, because its config is TOML that Reticle will not rewrite).
+This page is for the cases those cannot cover: a machine where piping a script is not allowed, an agent Reticle does not know, or a step the installer reported as needing a hand (Codex CLI is the usual one when the `codex` command is not installed, because its config is TOML that Reticle will not rewrite itself).
 
 </Warning>
 
@@ -86,7 +86,7 @@ Same shape, different file and root key. Cursor and Windsurf use `mcpServers`; V
 
 ### Codex CLI
 
-TOML, in `~/.codex/config.toml`. Reticle does not rewrite this file: `init` and the installer print these lines for you to paste.
+TOML, in `~/.codex/config.toml`. With the `codex` command installed, `init` runs `codex mcp add reticle -- npx @reticlehq/server mcp` for you, and only when the file has no `reticle` entry yet, because that command replaces one without asking. Without the command, `init` cannot write it for you:
 
 ```toml
 [mcp_servers.reticle]

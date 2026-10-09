@@ -8,7 +8,13 @@
 import { checkForUpdate } from '@/command/update/update-checker.js';
 import { isNewerVersion, updateTarget } from '@/command/update/update-nudge.js';
 import { applyUpdate, rollback } from '@/command/update/updater.js';
-import { refreshAgentRules, detectPackageManager, buildNodeIo, SILENT_HOST } from '@reticlehq/init';
+import {
+  refreshAgentRules,
+  detectPackageManager,
+  buildNodeIo,
+  enclosingWorkspaceRoot,
+  SILENT_HOST,
+} from '@reticlehq/init';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { log } from '@/log.js';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -77,7 +83,14 @@ function syncProjectSdk(target: string, cwd: string): void {
   // Nothing to trace and nothing to report: this reads the manifest and runs one package-manager
   // command. It never enters `runInit`, so there is no init outcome for a host to carry.
   const io = buildNodeIo(cwd, SILENT_HOST);
-  const pm = detectPackageManager(new Set(io.rootFiles()), new Set(io.listDirs('node_modules')));
+  // A workspace member keeps its lockfile at the workspace root: read both, or an app in a pnpm
+  // workspace looks lockfile-less and is installed with npm.
+  const workspace = enclosingWorkspaceRoot(cwd, io);
+  const rootIo = workspace === undefined ? io : buildNodeIo(workspace, SILENT_HOST);
+  const pm = detectPackageManager(
+    new Set([...io.rootFiles(), ...rootIo.rootFiles()]),
+    new Set([...io.listDirs('node_modules'), ...rootIo.listDirs('node_modules')]),
+  );
   const cmd = sdkSyncCommand(pm, packages, target);
   if (null === cmd) {
     log('reticle_update_sdk', { synced: false, reason: 'no @reticlehq packages in this project' });

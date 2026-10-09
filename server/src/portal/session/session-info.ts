@@ -134,7 +134,8 @@ export function buildSessionInfo(session: SessionView): SessionInfo {
     base.unresponsive = true;
     base.unresponsive_suggestion =
       'This tab is connected but has stopped answering commands, so every call against it will time ' +
-      'out. Ending the session does not revive the page. Reload the tab, or run `reticle open <url>` ' +
+      'out. Ending the session does not revive the page. Reload the tab, or run ' +
+      '`npx @reticlehq/server open <url>` ' +
       'to get a fresh one — it will no longer hand this tab back.';
   }
   // Surface human bug reports in reticle_sessions (only when > 0, so a clean session adds nothing).
