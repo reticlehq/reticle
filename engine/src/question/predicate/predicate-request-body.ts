@@ -37,7 +37,7 @@ interface RequestBodyPredicate {
 /**
  * What the filtering pass learned about calls that matched everything else.
  *
- * Accumulated during the single pass over events rather than recomputed after it, the way the
+ * Accumulated during the single pass over events rather than recomputed after, the way the
  * response-side trackers already are.
  */
 interface RequestBodyState {
@@ -56,10 +56,16 @@ interface RequestBodyState {
    * payload.
    */
   redactedField?: string;
+  /**
+   * Calls that passed the request-side filter (#1365). Distinct from the caller's `matches.length`,
+   * which also requires the RESPONSE to match: a response mismatch must outrank a request verdict
+   * whenever at least one call matched the request side.
+   */
+  matchCount: number;
 }
 
 export function newRequestBodyState(): RequestBodyState {
-  return { unrecorded: false };
+  return { unrecorded: false, matchCount: 0 };
 }
 
 /**
@@ -82,7 +88,7 @@ export function checkRequestBody(
   }
   const wasTruncated = true === data['requestBodyTruncated'];
   const note = (): false => {
-    // The same rule the response side keeps: a needle missing from a body we hold only the first N
+    // The same rule the response side keeps: a needle missing from a body we hold the first N
     // bytes of is undecidable, not absent.
     if (wasTruncated) state.truncated ??= sent;
     else state.mismatch ??= sent;

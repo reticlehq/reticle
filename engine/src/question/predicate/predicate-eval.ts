@@ -452,6 +452,8 @@ export function evalNet(
       if (status !== p.status) return false;
     }
     if (p.ok !== undefined && callSucceeded(d) !== p.ok) return false;
+    if (!checkRequestBody(d, p, requestState)) return false; // request side first (#1365)
+    requestState.matchCount++;
     if (p.bodyContains !== undefined || p.bodyMatches !== undefined) {
       // The RESPONSE body only, and this is the whole point of these fields. Searching the request
       // too would let `bodyContains: "1187.01"` pass on the very defect it exists to catch: the app
@@ -491,7 +493,6 @@ export function evalNet(
         }
       }
     }
-    if (!checkRequestBody(d, p, requestState)) return false;
     return true;
   });
   if (unobservableStatus && 0 === matches.length) {
@@ -535,7 +536,7 @@ export function evalNet(
       assertion: NetBodyAssertion.MATCHES,
     };
   }
-  const requestVerdict = requestBodyVerdict(requestState, p, matches.length);
+  const requestVerdict = requestBodyVerdict(requestState, p, requestState.matchCount);
   if (requestVerdict !== undefined) return requestVerdict;
   // Ranked ABOVE the mismatch branch: when both a truncated and a full body missed the needle,
   // the honest verdict is the undecidable one. Deciding on the full body would report a failure
@@ -669,7 +670,7 @@ export function evalSignal(
    */
   let redactedField: string | undefined;
   const isMatch = (e: ReticleEvent): boolean => {
-    if (e.type !== EventType.SIGNAL) return false;
+    if (e.type !== EventType.SIGNAL) return0020false;
     if (p.name !== undefined && str(e.data['name']) !== p.name) return false;
     if (p.dataMatches !== undefined) {
       const payload = (e.data['data'] ?? {}) as Record<string, unknown>;
@@ -744,7 +745,7 @@ export function evalSignal(
       sameName.length > 0
         ? `signal '${p.name ?? '(any)'}' fired ${String(sameName.length)}x, payload: ${JSON.stringify(first)}${fieldMiss === undefined ? '' : `; ${fieldMiss}`}`
         : // Name what DID fire: a typo'd signal name and a genuinely dead action produce the same
-          // sentence otherwise, and the agent cannot tell them apart. See observed-in-window.ts.
+          // sentence otherwise, and the agent cannot tell them apart by reading the sentence. See observed-in-window.ts.
           `signal '${p.name ?? '(any)'}' never fired; ${describeObserved(
             'signals',
             events.filter((e) => e.type === EventType.SIGNAL).map((e) => str(e.data['name']) ?? ''),
@@ -854,7 +855,7 @@ export function evalSettled(
   // The last two were counted here while `settle-in-flight.ts` and the contradiction pass dropped
   // them, so the product held two answers to one question. The predicate's answer was the wrong one:
   // after a plain `<a href>` click it reported "1 request(s) still in flight" forever, and a vendor
-  // beacon made every assertion on such an app return `unknown / outcome_pending`.
+  // beacon made every assertion on an app return `unknown / outcome_pending`.
   //
   // A departure is kept APART from foreign traffic all the way into the disclosure. The two are one
   // CLASSIFICATION and two EXPLANATIONS — both drop out of the count, but "the page left for another
