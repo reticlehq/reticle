@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle_lease acquire` on a URL the server redirects (an auth gate, a locale redirect) returned `ready: false` and a `lease-…` id that named no session.** The redirect dropped the `__reticle_session` marker before the SDK loaded, so the tab registered under its own id. The pool now stamps the lease's marker back onto the leased page's URL, before any app script runs (top frame, lease's own origin only), so the SDK registers under the lease id and the acquire returns it with `ready: true`. A person's tab at the same URL is in another browser and never carries the marker, so it is never adopted. Closes [#1352](https://github.com/reticlehq/reticle/issues/1352).

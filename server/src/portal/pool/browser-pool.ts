@@ -11,7 +11,8 @@
  */
 
 import { unreachableUrlIn, type SeedStorage } from '@reticlehq/core';
-import { seedStorageInto } from './storage-seed.js';
+import { seedStorageInto, targetOriginOf } from './storage-seed.js';
+import { installLeaseMarker, leaseMarkerOf } from './lease-marker-stamp.js';
 import {
   grantLeasePermissions,
   NOTIFICATION_PERMISSION_READ,
@@ -513,6 +514,10 @@ export class BrowserPool {
         else pendingDialogMessage = dialog.message;
         void dialog.dismiss();
       });
+      const marker = leaseMarkerOf(url);
+      if (marker?.session === sessionId) {
+        await installLeaseMarker(page, sessionId, targetOriginOf(url), marker.project);
+      }
       let seedHandle: InitScriptHandle | undefined;
       let checkSeedError: (() => void) | undefined;
       if (opts.seedStorage !== undefined) {

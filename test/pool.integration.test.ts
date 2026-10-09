@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { chromium, type Page as PlaywrightPage } from 'playwright';
+import { RETICLE_URL_PARAM } from '@reticlehq/core';
 import { BrowserPool, playwrightLauncher, type Launcher } from '@reticlehq/server';
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -31,6 +32,39 @@ function countingLauncher(): { launch: Launcher; count: () => number } {
     count: () => launches,
   };
 }
+
+type PooledPage = Awaited<
+  ReturnType<Awaited<ReturnType<Awaited<ReturnType<Launcher>>['newContext']>>['newPage']>
+>;
+
+/** The real launcher, remembering every page it opens so a test can ask the page where it is. */
+function recordingLauncher(pages: PooledPage[]): Launcher {
+  const real = playwrightLauncher({ headless: true });
+  return async () => {
+    const browser = await real();
+    return {
+      ...browser,
+      isConnected: () => browser.isConnected(),
+      close: () => browser.close(),
+      onDisconnected: (handler) => browser.onDisconnected(handler),
+      newContext: async () => {
+        const context = await browser.newContext();
+        return {
+          ...context,
+          close: () => context.close(),
+          newPage: async () => {
+            const page = await context.newPage();
+            pages.push(page);
+            return page;
+          },
+        };
+      },
+    };
+  };
+}
+
+const hrefOf = async (page: PooledPage | undefined): Promise<URL> =>
+  new URL(String(await page?.evaluate?.('location.href')));
 
 let server: http.Server;
 let url: string;
@@ -257,5 +291,73 @@ describe('BrowserPool — real Chromium', () => {
     expect(pool.queuedCount()).toBe(0);
 
     await pool.shutdown();
+  });
+});
+
+describe('BrowserPool — lease marker survives a real server redirect (#1352)', () => {
+  const SESSION = RETICLE_URL_PARAM.SESSION;
+  let redirectServer: http.Server;
+  let origin: string;
+  let pool: BrowserPool;
+  let n = 0;
+  const pages: PooledPage[] = [];
+
+  beforeAll(async () => {
+    redirectServer = http.createServer((req, res) => {
+      const path = (req.url ?? '').split('?')[0] ?? '';
+      if ('/private' === path) {
+        res.writeHead(302, { Location: '/login' }).end();
+      } else if ('/a/b/deep' === path) {
+        res.writeHead(302, { Location: '/a/login' }).end();
+      } else {
+        res.setHeader('content-type', 'text/html');
+        res.end('<title>ok</title>');
+      }
+    });
+    await new Promise<void>((ok) => redirectServer.listen(0, '127.0.0.1', ok));
+    origin = `http://127.0.0.1:${String((redirectServer.address() as AddressInfo).port)}`;
+    pool = new BrowserPool(recordingLauncher(pages), {
+      maxContexts: 3,
+      genSessionId: () => `lease-gen-${String(n++)}`,
+    });
+  });
+
+  afterAll(async () => {
+    await pool?.shutdown();
+    await new Promise<void>((ok) => redirectServer?.close(() => ok()));
+  });
+
+  const leaseUrl = (path: string, id: string): string => `${origin}${path}?${SESSION}=${id}`;
+
+  it.each([
+    ['/private', '/login'],
+    ['/a/b/deep', '/a/login'],
+  ])('%s redirects to %s and keeps the lease marker', async (from, to) => {
+    const id = `lease-real-${String(from.length)}`;
+    pages.length = 0;
+    const lease = await pool.acquire(leaseUrl(from, id), { sessionId: id });
+    try {
+      const landed = await hrefOf(pages[0]);
+      expect(landed.pathname).toBe(to);
+      expect(landed.searchParams.get(SESSION)).toBe(id);
+    } finally {
+      await lease.release();
+    }
+  });
+
+  it('concurrent leases each keep their own marker', async () => {
+    pages.length = 0;
+    const [a, b] = await Promise.all([
+      pool.acquire(leaseUrl('/private', 'lease-a'), { sessionId: 'lease-a' }),
+      pool.acquire(leaseUrl('/private', 'lease-b'), { sessionId: 'lease-b' }),
+    ]);
+    try {
+      const markers = await Promise.all(
+        pages.map(async (p) => (await hrefOf(p)).searchParams.get(SESSION)),
+      );
+      expect(markers.sort()).toEqual(['lease-a', 'lease-b']);
+    } finally {
+      await Promise.all([a.release(), b.release()]);
+    }
   });
 });
