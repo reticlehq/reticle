@@ -154,6 +154,9 @@ export function connectionPolicy(
 }
 
 /** Console line after the HUD's Kill Reticle, so the way back is written down somewhere. */
+/** Narration rows held for a panel that has not arrived yet. */
+const MAX_PENDING_NARRATIONS = 20;
+
 const KILLED_MESSAGE =
   '[Reticle] killed for this page. Restart your dev server or reload the page to bring it back.';
 
@@ -294,6 +297,12 @@ export class Reticle {
   #presenter: Presenter | undefined;
   /** Presenter pushes that arrived before the presenter existed, replayed on construction. */
   readonly #pendingPushes = new Map<string, { name: string; args: Record<string, unknown> }>();
+  /**
+   * Narration that arrived before the panel did. The daemon tells a page about ITSELF (its SDK is
+   * behind) the instant it connects, while the panel is still being fetched; dropped, that notice
+   * only ever appeared mirrored from another tab, under a raw session id.
+   */
+  readonly #pendingNarrations: { text: string; level: string }[] = [];
   /** The HUD asked for (by the page's address, or a command) before the panel mounted. */
   #pendingHud: HudVisibility | undefined;
   /**
@@ -577,6 +586,9 @@ export class Reticle {
         // there; the presenter's own painters no-op on a missing element rather than throwing.
         for (const buffered of this.#pendingPushes.values()) panel.handlePush(buffered);
         this.#pendingPushes.clear();
+        if (0 < this.#pendingNarrations.length) panel.sessionStart();
+        for (const early of this.#pendingNarrations.splice(0))
+          panel.narrate(early.text, early.level);
         if (this.#pendingHud !== undefined) panel.placeHud(this.#pendingHud, undefined);
         this.#pendingHud = undefined;
         /*
@@ -792,6 +804,15 @@ export class Reticle {
   async #handleCommand(command: CommandMessage): Promise<CommandOutcome> {
     // NARRATE: the agent tells the human what it's about to do / decide (presenter HUD).
     if (command.name === ReticleCommand.NARRATE) {
+      if (this.#presenter === undefined && this.#panelRequested) {
+        // ponytail: bounded, the oldest kept; a page that never gets its panel drops the rest.
+        if (this.#pendingNarrations.length < MAX_PENDING_NARRATIONS)
+          this.#pendingNarrations.push({
+            text: str(command.args['text']),
+            level: str(command.args['level'], 'info'),
+          });
+        return { ok: true, result: { shown: false, buffered: true } };
+      }
       this.#presenter?.sessionStart(); // first agent activity → reveal the glow + panel
       this.#presenter?.narrate(str(command.args['text']), str(command.args['level'], 'info'));
       return { ok: true, result: { shown: this.#presenter !== undefined } };
