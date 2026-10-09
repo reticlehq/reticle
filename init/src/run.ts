@@ -13,7 +13,7 @@ import { CONTAINER_MARKERS, runsDevServer } from './diagnose/containerised-dev-s
 import { explainInstallFailure } from './diagnose/install-retries.js';
 import { CSP_FILES } from './diagnose/csp-doctor.js';
 import { preflight } from './plan/preflight.js';
-import { devCommandFrom, devScriptBody } from './detect/dev-script.js';
+import { devCommandFrom, devScriptBody, discoverPlainViteConfig } from './detect/dev-script.js';
 import { restartHint, FEEDBACK_HINT } from './diagnose/closing-hint.js';
 import { projectIdOf, rememberProjectOnDisk } from './project/remember-project.js';
 import {
@@ -300,6 +300,10 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
   const detection = detect(detectInput);
   // Forge has no `vite.config.*`; its renderer config IS the Vite config the plugin belongs in, and
   // handing it over under that name is what lets the ordinary Vite patcher do the work.
+  const plainViteConfig =
+    Framework.VITE === detection.framework
+      ? discoverPlainViteConfig(io, pkg, rootFiles, VITE_CONFIG_CANDIDATES)
+      : undefined;
   const vitePath = firstPresent(
     rootFiles,
     Framework.ELECTRON_FORGE === detection.framework
@@ -308,7 +312,11 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
   );
   const viteSource = null === vitePath ? null : io.readFile(vitePath);
   const viteConfig =
-    vitePath !== null && viteSource !== null ? { path: vitePath, source: viteSource } : null;
+    plainViteConfig === undefined
+      ? vitePath !== null && viteSource !== null
+        ? { path: vitePath, source: viteSource }
+        : null
+      : plainViteConfig.config;
 
   const electronVitePath = firstPresent(rootFiles, ELECTRON_VITE_CONFIG_CANDIDATES);
   const electronViteSource = null === electronVitePath ? null : io.readFile(electronVitePath);
@@ -404,6 +412,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
       return marker === undefined ? {} : { containerMarker: marker };
     })(),
     viteConfig,
+    viteConfigCandidates: plainViteConfig?.candidates,
     electronViteConfig,
     electronPreload,
     electronMain,

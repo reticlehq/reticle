@@ -436,6 +436,74 @@ describe('runInit', () => {
     expect(io.written['vite.config.ts']).toContain('@reticlehq/vite-plugin');
   });
 
+  it.each([
+    'vite --config "build/vite.config.mjs"',
+    'vite -c build/vite.config.mjs',
+    'vite --config=build/vite.config.mjs',
+    'vite --config="build/vite.config.mjs"',
+  ])('patches the nested config selected by `%s` without creating an unused root config', (dev) => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { vite: '^5' },
+        scripts: { dev },
+      }),
+      'build/vite.config.mjs': `export default { plugins: [] };\n`,
+    });
+
+    runInit(OPTS, io);
+
+    expect(io.written['build/vite.config.mjs']).toContain('reticle(');
+    expect(io.written['vite.config.mjs']).toBeUndefined();
+    expect(io.written['vite.config.ts']).toBeUndefined();
+  });
+
+  it('names a nested config for a custom dev server instead of creating an unused root config', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { vite: '^5' },
+        scripts: { dev: 'node server.mjs' },
+      }),
+      'build/vite.config.mjs': `export default { plugins: [] };\n`,
+    });
+
+    runInit(OPTS, io);
+
+    expect(io.lines.join('\n')).toContain('build/vite.config.mjs');
+    expect(io.written['build/vite.config.mjs']).toBeUndefined();
+    expect(io.written['vite.config.mjs']).toBeUndefined();
+    expect(io.written['vite.config.ts']).toBeUndefined();
+  });
+
+  it('does not guess the root config when a custom dev server also has a nested config', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { vite: '^5' },
+        scripts: { dev: 'node server.mjs' },
+      }),
+      'vite.config.mjs': `export default { plugins: [] };\n`,
+      'build/vite.config.mjs': `export default { plugins: [] };\n`,
+    });
+
+    runInit(OPTS, io);
+
+    expect(io.lines.join('\n')).toContain('build/vite.config.mjs');
+    expect(io.written['vite.config.mjs']).toBeUndefined();
+    expect(io.written['build/vite.config.mjs']).toBeUndefined();
+  });
+
+  it('still creates a root config when plain vite uses its default config lookup', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { vite: '^5' },
+        scripts: { dev: 'vite' },
+      }),
+    });
+
+    runInit(OPTS, io);
+
+    expect(io.written['vite.config.mjs']).toContain('reticle(');
+  });
+
   it('does not re-register when an reticle server already exists (idempotent, install-once)', () => {
     const io = memoryIo(VITE_FILES, { mcpExists: true });
     runInit(OPTS, io);

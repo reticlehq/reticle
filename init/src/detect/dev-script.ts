@@ -1,3 +1,5 @@
+import type { InitIo } from '@/run-types.js';
+
 /**
  * Which command starts this project, and should we start it ourselves?
  *
@@ -158,4 +160,153 @@ export function devScriptBody(pkg: unknown): string | undefined {
   const name = CANDIDATES.find((c) => 'string' === typeof table[c] && table[c] !== '');
   const body = name === undefined ? undefined : table[name];
   return 'string' === typeof body ? body : undefined;
+}
+
+interface ViteConfigDiscovery {
+  config: { path: string; source: string } | null;
+  /** Paths that may own Vite but cannot safely be selected automatically. */
+  candidates: readonly string[];
+}
+
+interface ViteInvocation {
+  /** The raw --config argument, retained so an unsafe or missing file can be named in MANUAL. */
+  configArgument: string | null;
+  /** A safe project-relative form of configArgument, or null when it must not be read. */
+  configPath: string | null;
+}
+
+const SHELL_TOKEN = /"(?:\\.|[^"\\])*"|'[^']*'|&&|\|\||[;|]|[^\s;&|]+/g;
+const SHELL_SEPARATORS = new Set(['&&', '||', ';', '|']);
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const MAX_CONFIG_DEPTH = 4;
+const MAX_CONFIG_CANDIDATES = 20;
+const SKIP_CONFIG_DIRS = new Set([
+  'node_modules',
+  'dist',
+  'out',
+  'coverage',
+  'target',
+  '.git',
+  '.next',
+  '.nuxt',
+  '.svelte-kit',
+]);
+
+function unquote(token: string): string {
+  if (token.startsWith("'") && token.endsWith("'")) return token.slice(1, -1);
+  if (token.startsWith('"') && token.endsWith('"')) {
+    return token.slice(1, -1).replace(/\\(["\\])/g, '$1');
+  }
+  return token;
+}
+
+function safeRelativePath(value: string): string | null {
+  const normal = unquote(value).replace(/\\/g, '/').replace(/^\.\//, '');
+  if (
+    '' === normal ||
+    normal.startsWith('/') ||
+    normal.startsWith('~') ||
+    /^[A-Za-z]:\//.test(normal) ||
+    normal.split('/').includes('..') ||
+    /[\0$`]/.test(normal)
+  ) {
+    return null;
+  }
+  return normal;
+}
+
+function isViteCommand(token: string): boolean {
+  const normal = token.replace(/\\/g, '/');
+  return 'vite' === normal || 'vite.cmd' === normal || normal.endsWith('/node_modules/.bin/vite');
+}
+
+/** The direct Vite invocation in the selected dev script, if that script has one. */
+function viteInvocation(script: string): ViteInvocation | undefined {
+  const tokens = script.match(SHELL_TOKEN) ?? [];
+  let start = 0;
+  while (start < tokens.length) {
+    let end = start;
+    while (end < tokens.length && !SHELL_SEPARATORS.has(tokens[end] ?? '')) end += 1;
+    const segment = tokens.slice(start, end).map(unquote);
+    let command = 0;
+    while (command < segment.length && ENV_ASSIGNMENT.test(segment[command] ?? '')) command += 1;
+    if (isViteCommand(segment[command] ?? '')) {
+      const args = segment.slice(command + 1);
+      for (let i = 0; i < args.length; i += 1) {
+        const arg = args[i] ?? '';
+        const inline = /^(?:--config|-c)=(.*)$/.exec(arg);
+        const raw = inline?.[1] ?? ('--config' === arg || '-c' === arg ? args[i + 1] : undefined);
+        if (raw !== undefined) {
+          return { configArgument: raw, configPath: safeRelativePath(raw) };
+        }
+      }
+      return { configArgument: null, configPath: null };
+    }
+    start = end + 1;
+  }
+  return undefined;
+}
+
+function nestedViteConfigs(io: InitIo, configNames: readonly string[]): string[] {
+  const found: string[] = [];
+  const walk = (dir: string, depth: number): void => {
+    if (found.length >= MAX_CONFIG_CANDIDATES || depth > MAX_CONFIG_DEPTH) return;
+    for (const file of io.listFiles(dir)) {
+      if (configNames.includes(file)) found.push(`${dir}/${file}`);
+      if (found.length >= MAX_CONFIG_CANDIDATES) return;
+    }
+    for (const child of io.listDirs(dir)) {
+      if (found.length >= MAX_CONFIG_CANDIDATES) return;
+      if (child.startsWith('.') || SKIP_CONFIG_DIRS.has(child)) continue;
+      walk(`${dir}/${child}`, depth + 1);
+    }
+  };
+  for (const dir of io.listDirs('.')) {
+    if (found.length >= MAX_CONFIG_CANDIDATES) break;
+    if (dir.startsWith('.') || SKIP_CONFIG_DIRS.has(dir)) continue;
+    walk(dir, 1);
+  }
+  return [...new Set(found)];
+}
+
+function readable(io: InitIo, path: string | null): ViteConfigDiscovery['config'] {
+  if (null === path) return null;
+  const source = io.readFile(path);
+  return null === source ? null : { path, source };
+}
+
+/**
+ * Find the config that a plain-Vite dev script actually loads.
+ *
+ * An explicit `--config` is authoritative. A direct `vite` command without one keeps Vite's own
+ * root lookup. A custom server plus nested configs is ambiguous, so it returns evidence for a
+ * precise MANUAL step instead of creating a root config that the server may never read.
+ */
+export function discoverPlainViteConfig(
+  io: InitIo,
+  pkg: unknown,
+  rootFiles: ReadonlySet<string>,
+  configNames: readonly string[],
+): ViteConfigDiscovery {
+  const rootPath = configNames.find((path) => rootFiles.has(path)) ?? null;
+  const script = devScriptBody(pkg);
+  const invocation = script === undefined ? undefined : viteInvocation(script);
+
+  if (invocation !== undefined && invocation.configArgument !== null) {
+    const config = readable(io, invocation.configPath);
+    return {
+      config,
+      candidates: null === config ? [invocation.configArgument] : [],
+    };
+  }
+  if (invocation !== undefined) return { config: readable(io, rootPath), candidates: [] };
+
+  const nested = script === undefined ? [] : nestedViteConfigs(io, configNames);
+  if (nested.length > 0) {
+    return {
+      config: null,
+      candidates: null === rootPath ? nested : [rootPath, ...nested],
+    };
+  }
+  return { config: readable(io, rootPath), candidates: [] };
 }

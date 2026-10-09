@@ -140,6 +140,8 @@ export interface PlanInput {
     readonly { id: McpClient; configPath: string; existing: string | null }[] | undefined;
   /** Discovered Vite config: its path + source, or null if none found. */
   viteConfig: { path: string; source: string } | null;
+  /** Config paths found but not safely attributable to the selected dev command. */
+  viteConfigCandidates?: readonly string[] | undefined;
   /** Discovered electron-vite config: its path + source, or null if none found. */
   electronViteConfig?: { path: string; source: string } | null | undefined;
   /** Electron preload source we can patch, or null when none was found. */
