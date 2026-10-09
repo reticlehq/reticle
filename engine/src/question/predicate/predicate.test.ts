@@ -1451,6 +1451,96 @@ describe('state predicate — assert store truth', () => {
   });
 });
 
+/**
+ * MCP clients may stringify untyped arguments (#1117), turning `false` into `"false"`. The engine
+ * must not grade that as a confident `no` — the app is correct, the wire mangled the expected value.
+ */
+describe('state predicate — stringified primitive equals is inconclusive, not no (#1229)', () => {
+  it('equals: "false" against boolean false is inconclusive, not no', async () => {
+    const r = await evaluatePredicate(new StateSession({ flags: { enabled: false } }), {
+      kind: 'state',
+      store: 'flags',
+      path: 'enabled',
+      equals: 'false',
+    });
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeDefined();
+  });
+
+  it('equals: "true" against boolean true is inconclusive', async () => {
+    const r = await evaluatePredicate(new StateSession({ flags: { enabled: true } }), {
+      kind: 'state',
+      store: 'flags',
+      path: 'enabled',
+      equals: 'true',
+    });
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeDefined();
+  });
+
+  it('equals: "42" against number 42 is inconclusive', async () => {
+    const r = await evaluatePredicate(new StateSession({ config: { retries: 42 } }), {
+      kind: 'state',
+      store: 'config',
+      path: 'retries',
+      equals: '42',
+    });
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeDefined();
+  });
+
+  it('equals: "null" against null is inconclusive', async () => {
+    const r = await evaluatePredicate(new StateSession({ app: { selected: null } }), {
+      kind: 'state',
+      store: 'app',
+      path: 'selected',
+      equals: 'null',
+    });
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeDefined();
+  });
+
+  it('a real mismatch ("false" against boolean true) stays no', async () => {
+    const r = await evaluatePredicate(new StateSession({ flags: { enabled: true } }), {
+      kind: 'state',
+      store: 'flags',
+      path: 'enabled',
+      equals: 'false',
+    });
+    // String(true) !== "false", so this is a genuine mismatch
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeUndefined();
+  });
+
+  it('exact type match (boolean false vs false) stays yes', async () => {
+    const r = await evaluatePredicate(new StateSession({ flags: { enabled: false } }), {
+      kind: 'state',
+      store: 'flags',
+      path: 'enabled',
+      equals: false,
+    });
+    expect(r.pass).toBe(true);
+  });
+
+  it('string-vs-string match ("queued" vs "queued") stays yes', async () => {
+    const r = await evaluatePredicate(
+      new StateSession({ app: { deployments: [{ status: 'queued' }] } }),
+      { kind: 'state', store: 'app', path: 'deployments.0.status', equals: 'queued' },
+    );
+    expect(r.pass).toBe(true);
+  });
+
+  it('store-less path: equals "false" against boolean false is inconclusive', async () => {
+    const r = await evaluatePredicate(new StateSession({ flags: { enabled: false } }), {
+      kind: 'state',
+      path: 'enabled',
+      equals: 'false',
+    });
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeDefined();
+  });
+});
+
 /** Session that lets the test drive events and control when each command resolves, to prove the
  * waiter never fans out one round-trip per event. `command` counts calls (one STATE_READ per eval). */
 class CoalesceSession implements PredicateSession {

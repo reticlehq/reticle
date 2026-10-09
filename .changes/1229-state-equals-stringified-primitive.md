@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — `state.equals: "false"` against a boolean no longer returns a confident `no`.** Some MCP clients stringify untyped arguments, so `false` arrives as `"false"`. The engine compared `false === "false"`, failed, and graded the app as broken when it was correct. When the only difference is `String(observed) === expected` across a type boundary (boolean, number, or null vs their string form), the result is now `inconclusive` with a reason naming the type mismatch and suggesting the correct literal. A real value mismatch (`true` vs `"false"`) still returns `no`. Closes [#1229](https://github.com/reticlehq/reticle/issues/1229).
