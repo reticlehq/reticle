@@ -2,6 +2,7 @@ import { healthEnvelope } from '@/portal/session/session-health.js';
 import { logToolCall, toolLogPath } from '@/hooks/tool-log.js';
 import { nextStep } from './next-step.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
+import { takeDriveNotes } from '@/features/harness/drive-runs.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { takePlatformMoment } from './platform-moment.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
@@ -681,7 +682,14 @@ async function dispatchTool<Ext>(
           now: 'function' === typeof deps.now ? deps.now() : Date.now(),
         })
       : undefined;
+  // A Harness drive started or finished, from the HUD, the platform's chat or this agent: one line,
+  // once. Not for the Harness's own calls, and not about the run this very result already reports.
+  const drives =
+    isPlainObject(raw) && currentDrivenBy() === undefined
+      ? takeDriveNotes('string' === typeof raw['runId'] ? raw['runId'] : undefined)
+      : [];
   const result =
+    0 === drives.length &&
     prompt === undefined &&
     update === undefined &&
     skew === undefined &&
@@ -705,6 +713,7 @@ async function dispatchTool<Ext>(
           ...(update !== undefined ? { [EnvelopeKey.UPDATE_AVAILABLE]: update } : {}),
           ...(skew !== undefined ? { [EnvelopeKey.VERSION_SKEW]: skew } : {}),
           ...(platform !== undefined ? { [EnvelopeKey.PLATFORM]: platform } : {}),
+          ...(0 === drives.length ? {} : { [EnvelopeKey.HARNESS]: drives.join('\n') }),
           ...(undelivered !== undefined
             ? {
                 [EnvelopeKey.FEEDBACK_UNDELIVERED]: `your earlier report did NOT send: ${undelivered}. Tell the human what you found so it is not lost.`,

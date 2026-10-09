@@ -283,6 +283,8 @@ export const EnvelopeKey = {
   PLATFORM: 'platform',
   /** The one thing to do next: declare the request, yield, fix sync, connect. See next-step.ts. */
   NEXT: 'next',
+  /** One-shot: a Harness drive started or finished, from any origin, and how to read it. */
+  HARNESS: 'harness',
 } as const;
 export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
 

@@ -314,7 +314,10 @@ describe('advertised surface cost', () => {
 // 149_800 -> 149_950 for the start-then-poll explore (149,926 B): `wait`/`runId`/`stop`/`say` in,
 // and `status`/`runId`/`lastLine`/`next` out, because a running drive answers only those and a
 // validating client strips an undeclared field.
-const ALL_SURFACE_BYTE_BUDGET = 149_950;
+// 149_950 -> 150_300 for the `harness` envelope key on every output schema (150,251 B): a drive the
+// HUD or the platform's chat started reaches the agent only on its next tool result, and a
+// validating client strips an undeclared key. The default surface sends no output schemas.
+const ALL_SURFACE_BYTE_BUDGET = 150_300;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {
