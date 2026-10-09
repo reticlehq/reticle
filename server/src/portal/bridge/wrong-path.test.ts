@@ -22,11 +22,15 @@ afterEach(async () => {
   );
 });
 
-function dial(port: number, path: string): Promise<void> {
+const APP_ORIGIN = 'http://localhost:5173';
+
+/** `null` dials with no Origin header at all, as a non-browser process does. */
+function dial(port: number, path: string, origin: string | null = APP_ORIGIN): Promise<void> {
   return new Promise((resolve) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${String(port)}${path}`, {
-      origin: 'http://localhost:5173',
-    });
+    const socket = new WebSocket(
+      `ws://127.0.0.1:${String(port)}${path}`,
+      null === origin ? {} : { origin },
+    );
     socket.once('error', () => resolve());
     socket.once('open', () => {
       socket.terminate();
@@ -74,6 +78,28 @@ describe('a dial on the wrong bridge path', () => {
     await dial((srv.address() as AddressInfo).port, '/ws');
 
     expect(bridge.sessions.lastClosure()?.reason ?? '').toContain('asked for /ws ');
+  });
+
+  it('records nothing for a dial with no Origin, so no diagnosis says the app is running', async () => {
+    const bridge = new Bridge({ port: 0 });
+    bridges.push(bridge);
+    const port = await bridge.ready;
+
+    await dial(port, '/ws', null);
+
+    expect(bridge.sessions.lastClosure()).toBeUndefined();
+    expect(() => bridge.sessions.resolve()).toThrow();
+    expect(() => bridge.sessions.resolve()).not.toThrow(/probably still running|asked for \/ws/);
+  });
+
+  it('records nothing for a dial from an origin the handshake would refuse', async () => {
+    const bridge = new Bridge({ port: 0 });
+    bridges.push(bridge);
+    const port = await bridge.ready;
+
+    await dial(port, '/ws', 'https://evil.example');
+
+    expect(bridge.sessions.lastClosure()).toBeUndefined();
   });
 
   it('records nothing for a dial on the bridge path', async () => {

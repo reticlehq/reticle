@@ -459,9 +459,13 @@ export class Bridge {
       log('bridge_ws_error', { error: err.message });
     });
     // A dial on any other path got a bare 400 from `ws` and left no trace for a diagnosis (#1242).
+    // Only a dial the origin check would have let in is the app's: a socket with no Origin is any
+    // local process, and recording it would tell the agent the app is running when it may not be.
     noteWrongPathUpgrades(this.#wss, (path, origin) => {
       log('bridge_wrong_path', { path, origin: origin ?? 'missing' });
-      this.sessions.noteClosure(wrongPathReason(path, origin), this.#clock());
+      if (origin !== undefined && this.#originAllowed(origin)) {
+        this.sessions.noteClosure(wrongPathReason(path, origin), this.#clock());
+      }
     });
 
     this.#wss.on('connection', (socket) => {
