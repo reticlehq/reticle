@@ -142,6 +142,11 @@ export const EXPLORE_TOOLS: ToolDef[] = [
        * and a driver that can is the one witness with a reason to round "unknown" up to "worked".
        */
       summary: z.string().optional(),
+      /**
+       * The driver's own account, alone. The platform's driver says here why a drive checked nothing
+       * at its end, which a caller that only shows the verdict otherwise cannot tell anybody.
+       */
+      driverAccount: z.string().optional(),
       /** Present when the drive broke: a model that would not answer, a wedged browser. */
       error: z.string().optional(),
       /** What the drive cost, cache hits included, so an expensive run is visible rather than felt. */
@@ -384,6 +389,7 @@ function exploreReport(explored: ExploreResult): Record<string, unknown> {
       ...[unprovedGoals(goals)].filter((line): line is string => line !== undefined),
       ...(0 === drive.summary.length ? [] : [`The driver's own account: ${drive.summary}`]),
     ].join('\n'),
+    ...(0 === drive.summary.length ? {} : { driverAccount: drive.summary }),
     ...(drive.error === undefined ? {} : { error: drive.error }),
     usage: drive.usage,
     // The note only fires when the drive left NOTHING behind. A rewritten flow is a flow: it

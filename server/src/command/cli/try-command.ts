@@ -446,7 +446,11 @@ function firstFlowVerdict(report: Record<string, unknown>): string {
     return `✓ verified: yes — ${String(count('held'))} check(s) held.`;
   if (RunFlowStatus.FAIL === status)
     return `✗ verified: no — ${String(count('failed'))} check(s) failed. That is the app, not the check.`;
-  return '? not proved — the drive decided no check, so it says nothing either way about the app.';
+  const account = report['driverAccount'];
+  return (
+    '? not proved — the drive decided no check, so it says nothing either way about the app.' +
+    ('string' === typeof account && 0 < account.length ? `\n  ${account}` : '')
+  );
 }
 
 const names = (value: unknown): string[] =>

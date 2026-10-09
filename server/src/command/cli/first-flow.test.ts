@@ -105,6 +105,20 @@ describe('the first flow', () => {
     expect(said).toContain('checks nothing yet');
   });
 
+  // The platform says why nothing was checked at the end; "decided no check" alone hid it.
+  it("says why the drive proved nothing, in the drive's own words", async () => {
+    const why =
+      'No end-state check: "dispatched" was already on the page before the journey started.';
+    const p = ports({
+      drive: () =>
+        Promise.resolve(
+          answer({ savedFlows: ['visit'], checks: { held: 0, failed: 0 }, driverAccount: why }),
+        ),
+    });
+    await runFirstFlow(SESSION, URL, p);
+    expect(p.lines.join('\n')).toContain(why);
+  });
+
   it('says verified: no when a check failed', async () => {
     const p = ports({
       drive: () =>
