@@ -452,6 +452,7 @@ export function evalNet(
       if (status !== p.status) return false;
     }
     if (p.ok !== undefined && callSucceeded(d) !== p.ok) return false;
+    if (!checkRequestBody(d, p, requestState)) return false;
     if (p.bodyContains !== undefined || p.bodyMatches !== undefined) {
       // The RESPONSE body only, and this is the whole point of these fields. Searching the request
       // too would let `bodyContains: "1187.01"` pass on the very defect it exists to catch: the app
@@ -491,7 +492,6 @@ export function evalNet(
         }
       }
     }
-    if (!checkRequestBody(d, p, requestState)) return false;
     return true;
   });
   if (unobservableStatus && 0 === matches.length) {
@@ -535,8 +535,6 @@ export function evalNet(
       assertion: NetBodyAssertion.MATCHES,
     };
   }
-  const requestVerdict = requestBodyVerdict(requestState, p, matches.length);
-  if (requestVerdict !== undefined) return requestVerdict;
   // Ranked ABOVE the mismatch branch: when both a truncated and a full body missed the needle,
   // the honest verdict is the undecidable one. Deciding on the full body would report a failure
   // the truncated call may well contradict.
@@ -556,6 +554,8 @@ export function evalNet(
       assertion: truncatedClause ?? NetBodyAssertion.CONTAINS,
     };
   }
+  const requestVerdict = requestBodyVerdict(requestState, p, matches.length, bodyMismatch);
+  if (requestVerdict !== undefined) return requestVerdict;
   if (bodyMismatch !== undefined && 0 === matches.length) {
     // The call is there and its body is there; only the VALUE differs. Counting it as zero matches
     // points at the wiring, which is the one place the defect is not. A field clause also names the

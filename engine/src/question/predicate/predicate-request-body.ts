@@ -107,11 +107,17 @@ export function checkRequestBody(
  *
  * Ranked the way the response side ranks its own: the two nobody could have answered (redacted,
  * unrecorded, truncated) come before the one that WAS answered and came out false.
+ *
+ * `responseMismatch` is the response body of a call whose request DID satisfy the clause and whose
+ * response did not. When it is set, a definite request mismatch on some OTHER call is not the
+ * explanation and yields to it; the unknowns above still win, because the call they describe may
+ * be the one that would have satisfied the whole predicate.
  */
 export function requestBodyVerdict(
   state: RequestBodyState,
   predicate: NetPredicate,
   matchCount: number,
+  responseMismatch?: string,
 ): EvalResult | undefined {
   if (matchCount > 0) return undefined;
   const wanted = JSON.stringify(predicate.requestBodyContains ?? predicate.requestBodyMatches);
@@ -144,7 +150,7 @@ export function requestBodyVerdict(
       assertion: 'net.requestBody',
     };
   }
-  if (state.mismatch !== undefined) {
+  if (state.mismatch !== undefined && responseMismatch === undefined) {
     // Named separately from "no call matched", for the reason the response side already learned: the
     // request DID fire, and reporting zero matches sends the caller to check the url and the method,
     // which are both fine, instead of to the value the UI actually sent.
