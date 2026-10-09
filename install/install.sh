@@ -159,16 +159,27 @@ main() {
 
   # One next step. A terminal means a person. No terminal means an agent ran this, and an agent
   # cannot restart itself, so it gets the step that works in the session it is already in.
+  # --no-mcp registered nothing, so no restart loads any tools: say how to register instead.
+  mcp=1
+  case " $* " in *" --no-mcp "*) mcp=0 ;; esac
   say ""
   if [ -t 1 ]; then
     say "Reticle is installed on this machine. It is not in your app yet."
     say "Next, in your app's folder:"
     say "  reticle init        (adds Reticle to the app and proves it connects)"
     say "Then ask your coding agent there: \"Verify one flow in my running app with Reticle.\""
-    say "Agent already open? Restart it once so it loads Reticle's tools."
+    if [ "$mcp" -eq 1 ]; then
+      say "Agent already open? Restart it once so it loads Reticle's tools."
+    else
+      say "No coding agent was registered (--no-mcp). To give one the reticle_* tools later: reticle setup mcp"
+    fi
   else
     say "Reticle is installed, but not in the user's app yet. Next, in the user's app folder: 'reticle init' wires the app and proves it connects."
-    say "The reticle_* tools load when this agent session restarts. Cannot restart yourself? 'reticle init --relaunch' prints the command that resumes this conversation with the tools loaded."
+    if [ "$mcp" -eq 1 ]; then
+      say "The reticle_* tools load when this agent session restarts. Cannot restart yourself? 'reticle init --relaunch' prints the command that resumes this conversation with the tools loaded."
+    else
+      say "No coding agent was registered (--no-mcp), so no reticle_* tools will load. To register later: 'reticle setup mcp', then restart the agent."
+    fi
   fi
 }
 

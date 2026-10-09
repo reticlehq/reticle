@@ -180,16 +180,26 @@ function Main {
   # No demo here, for the reason install.sh gives: a demo verdict read as "Reticle is in my app".
 
   # One next step. Redirected output means an agent ran this, and an agent cannot restart itself.
+  # --no-mcp registered nothing, so no restart loads any tools: say how to register instead.
+  $mcp = -not ($args -contains '--no-mcp')
   Say ''
   if (-not [Console]::IsOutputRedirected) {
     Say "Reticle is installed on this machine. It is not in your app yet."
     Say "Next, in your app's folder:"
     Say '  reticle init        (adds Reticle to the app and proves it connects)'
     Say 'Then ask your coding agent there: "Verify one flow in my running app with Reticle."'
-    Say "Agent already open? Restart it once so it loads Reticle's tools."
+    if ($mcp) {
+      Say "Agent already open? Restart it once so it loads Reticle's tools."
+    } else {
+      Say 'No coding agent was registered (--no-mcp). To give one the reticle_* tools later: reticle setup mcp'
+    }
   } else {
     Say "Reticle is installed, but not in the user's app yet. Next, in the user's app folder: 'reticle init' wires the app and proves it connects."
-    Say "The reticle_* tools load when this agent session restarts. Cannot restart yourself? 'reticle init --relaunch' prints the command that resumes this conversation with the tools loaded."
+    if ($mcp) {
+      Say "The reticle_* tools load when this agent session restarts. Cannot restart yourself? 'reticle init --relaunch' prints the command that resumes this conversation with the tools loaded."
+    } else {
+      Say "No coding agent was registered (--no-mcp), so no reticle_* tools will load. To register later: 'reticle setup mcp', then restart the agent."
+    }
   }
   Quit 0
 }
