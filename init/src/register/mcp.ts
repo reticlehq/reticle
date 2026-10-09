@@ -39,6 +39,7 @@ export const NPX = 'npx';
 const RETICLE_PACKAGE = RETICLE_NPM_PACKAGE;
 const MCP_SUBCOMMAND = 'mcp';
 const CLAUDE_CLI = 'claude';
+const CODEX_CLI = 'codex';
 /** Windows `cmd /c` — the spawn that PowerShell's execution policy does not gate. */
 const WINDOWS_SHELL = 'cmd';
 const WINDOWS_SHELL_C = '/c';
@@ -90,7 +91,7 @@ function serverInvocation(): string[] {
   return [NPX, ...npxServerArgs()];
 }
 
-interface ClaudeAddCommand {
+interface CliAddCommand {
   command: string;
   args: string[];
   /** Human-readable form of the same command, for reports and manual fallback. */
@@ -98,7 +99,7 @@ interface ClaudeAddCommand {
 }
 
 /** `claude mcp add reticle -s user -- npx @reticlehq/server mcp` — registers globally for all projects (portless). */
-export function claudeAddCommand(): ClaudeAddCommand {
+export function claudeAddCommand(): CliAddCommand {
   const tail = serverInvocation();
   const args = [MCP_SUBCOMMAND, 'add', MCP_SERVER_NAME, '-s', 'user', '--', ...tail];
   return { command: CLAUDE_CLI, args, display: `${CLAUDE_CLI} ${args.join(' ')}` };
@@ -158,6 +159,23 @@ export function claudeHasReticle(
 /** Probe args for whether the `claude` CLI is installed at all. */
 export function claudeAvailableProbe(): { command: string; args: string[] } {
   return { command: CLAUDE_CLI, args: ['--version'] };
+}
+
+/**
+ * `codex mcp add reticle -- npx @reticlehq/server mcp` — Codex keeps the entry in its own
+ * `~/.codex/config.toml`, shared by the desktop app and the CLI, so one registration covers both.
+ *
+ * It REPLACES an existing entry of the same name and still exits 0, so callers run it only when the
+ * config names no `reticle` server at all (see `codexNamesOurServer`).
+ */
+export function codexAddCommand(): CliAddCommand {
+  const args = [MCP_SUBCOMMAND, 'add', MCP_SERVER_NAME, '--', ...serverInvocation()];
+  return { command: CODEX_CLI, args, display: `${CODEX_CLI} ${args.join(' ')}` };
+}
+
+/** Probe args for whether the `codex` CLI is installed at all. */
+export function codexAvailableProbe(): { command: string; args: string[] } {
+  return { command: CODEX_CLI, args: ['--version'] };
 }
 
 /**

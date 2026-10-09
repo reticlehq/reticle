@@ -63,6 +63,7 @@ function fakePool(): {
     headed?: boolean;
   }[] = [];
   const headedIds = new Set<string>();
+  const certSkipIds = new Set<string>();
   let active = 0;
   const released: string[] = [];
   const aliased: [string, string][] = [];
@@ -78,7 +79,13 @@ function fakePool(): {
   const pool = {
     acquire(
       url: string,
-      opts: { sessionId?: string; seedStorage?: unknown; owner?: string; headed?: boolean } = {},
+      opts: {
+        sessionId?: string;
+        seedStorage?: unknown;
+        owner?: string;
+        headed?: boolean;
+        ignoreHTTPSErrors?: boolean;
+      } = {},
     ): Promise<Lease> {
       acquired.push({
         url,
@@ -87,6 +94,8 @@ function fakePool(): {
         ...(opts.headed === undefined ? {} : { headed: opts.headed }),
       });
       if (true === opts.headed && opts.sessionId !== undefined) headedIds.add(opts.sessionId);
+      if (true === opts.ignoreHTTPSErrors && opts.sessionId !== undefined)
+        certSkipIds.add(opts.sessionId);
       active += 1;
       const sessionId = opts.sessionId ?? 'gen';
       owners.set(sessionId, opts.owner);
@@ -113,6 +122,7 @@ function fakePool(): {
     },
     touch: () => undefined,
     isHeaded: (id: string) => headedIds.has(id),
+    ignoresHTTPSErrors: (id: string) => certSkipIds.has(id),
     alias: (registeredId: string, leaseId: string) => {
       aliased.push([registeredId, leaseId]);
     },
@@ -386,6 +396,31 @@ describe('reticle_lease_acquire', () => {
     expect(second.hint).toMatch(/already hold a lease on this origin/);
     expect(second.hint).toContain(first.sessionId);
     expect(acquired).toHaveLength(1);
+  });
+
+  it('replaces a held lease asked for with the other certificate setting, and reuses it otherwise', async () => {
+    // A context's ignoreHTTPSErrors is fixed when it is made, so `false` after `true` must not get
+    // the same context back with certificate checks still off (#1255).
+    const { pool, acquired, released } = fakePool();
+    const acquire = (
+      args: Record<string, unknown>,
+    ): Promise<{ sessionId: string; reused?: boolean }> =>
+      tool(ReticleTool.LEASE_ACQUIRE)(
+        { ...baseDeps, pool },
+        { url: 'https://localhost:5173/', ...args },
+      ) as Promise<{ sessionId: string; reused?: boolean }>;
+
+    const opted = await acquire({ ignoreHTTPSErrors: true });
+    const same = await acquire({});
+    const sameExplicit = await acquire({ ignoreHTTPSErrors: true });
+    const checked = await acquire({ ignoreHTTPSErrors: false });
+
+    expect(same.reused).toBe(true);
+    expect(sameExplicit.reused).toBe(true);
+    expect(checked.reused).toBeUndefined();
+    expect(checked.sessionId).not.toBe(opted.sessionId);
+    expect(released).toEqual([opted.sessionId]);
+    expect(acquired).toHaveLength(2);
   });
 
   it('mints a second lease when the first is on a different origin', async () => {

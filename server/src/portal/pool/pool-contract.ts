@@ -125,7 +125,8 @@ export interface PooledContext {
 /** The launched browser. Real Playwright `Browser` satisfies this. */
 export interface PooledBrowser {
   isConnected(): boolean;
-  newContext(): Promise<PooledContext>;
+  /** `ignoreHTTPSErrors` accepts a self-signed or local-CA certificate for this context only. */
+  newContext(opts?: { ignoreHTTPSErrors?: boolean }): Promise<PooledContext>;
   close(): Promise<void>;
   /** Fires when the browser process dies/crashes so the pool can relaunch on the next acquire. */
   onDisconnected(handler: () => void): void;

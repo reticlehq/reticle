@@ -50,13 +50,14 @@ const NO_TOOL_EQUIVALENT: readonly {
     // body stopped at the inner brace and left ` }` behind once the hint was corrected.
     pattern:
       /`?reticle_run\s*\{\s*tool:\s*\\?"reticle_lease\\?"(?:[^{}]|\{[^{}]*\})*\}`?(\s*\([^)]*\))?(\s*[-\u2014]+\s*reticle_lease is[^.]*\.)?/g,
-    instead: 'the CLI: `reticle open <url>` (a human can equivalently run `reticle drive <url>`)',
+    instead:
+      'the CLI: `npx @reticlehq/server open <url>` (a human can equivalently run `npx @reticlehq/server drive <url>`)',
   },
   {
     needs: [ReticleTool.LEASE],
     // The bare cross-reference, left behind once the call above is gone.
     pattern: /\breticle_lease\s*\{[^}]*\}/g,
-    instead: '`reticle open <url>`',
+    instead: '`npx @reticlehq/server open <url>`',
   },
   {
     needs: [ReticleTool.FLOW],

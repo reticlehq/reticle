@@ -105,6 +105,8 @@ import {
   projectDirOf,
 } from './cli/ports/resolve/cli-port.js';
 import {
+  helpRunsAt,
+  helpVersionNote,
   nodeSpawner,
   readTextFile,
   reexecAtVersion,
@@ -677,13 +679,15 @@ export function main(): void {
   // `version_skew`, and the unpinned `npx @reticlehq/server` every agent entry uses resolves the
   // LATEST major whatever the project installed. Hand the same arguments to the matching release and
   // step aside — it reports its own run. See cli/launch/sdk-version-match.ts.
-  const matchVersion = versionToMatch({
+  // One project lookup for both questions below: it reads config and walks the workspace.
+  const versionInput = {
     argv,
     cliVersion: SERVER_VERSION,
     env: process.env,
     projectDir: projectDirOf(process.cwd()),
     readFile: readTextFile,
-  });
+  };
+  const matchVersion = versionToMatch(versionInput);
   if (matchVersion !== undefined) {
     process.stderr.write(`${versionMatchNote(matchVersion, SERVER_VERSION)}\n`);
     reexecAtVersion(matchVersion, argv, process.env, {
@@ -692,6 +696,11 @@ export function main(): void {
       warn: (line) => process.stderr.write(`${line}\n`),
     });
     return;
+  }
+  // Help stays on this binary, so say which version the command it describes really runs at (#1378).
+  const helpVersion = helpRunsAt(versionInput);
+  if (helpVersion !== undefined) {
+    process.stdout.write(`${helpVersionNote(helpVersion, SERVER_VERSION)}\n\n`);
   }
   // Every invocation passes through here — the single chokepoint for the "how often is it used / how
   // many distinct machines + projects" metrics. Fire-and-forget: a metric must never delay or fail a run.
