@@ -20,6 +20,8 @@ import {
   asRecord,
   type FlowFile,
 } from '@reticlehq/core';
+import { creditsSpent, creditsUsedLine } from '@reticlehq/core/hud';
+import { planUrl } from '@/features/harness/platform/platform-drives.js';
 import { flowsForSession } from '@/language/flows/flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
@@ -542,6 +544,9 @@ export async function refusedByPlatform(
   // It needs a confirmed yes, not the absence of a no. The platform also checks on every turn.
   if (config === undefined) return MSG_HARNESS_UNCONFIRMED;
   if (!config.harnessEnabled) return MSG_HARNESS_DISABLED;
+  // Before entitlement: no credits left is why most workspaces are not entitled, said as the HUD says it.
+  if (config.credits !== undefined && creditsSpent(config.credits))
+    return creditsUsedLine(config.credits, planUrl(config.platformUrl ?? cloudUrlFrom(env) ?? ''));
   if (!config.harnessEntitled) return MSG_HARNESS_UNCLAIMED;
   return undefined;
 }

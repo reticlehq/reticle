@@ -7,7 +7,13 @@
  * cannot run is one short sentence and the one thing that fixes it. The on/off switch lives in
  * Settings only; what Harness does is said once, in the empty log.
  */
-import type { AccountState, HarnessConfig, HarnessDrive } from '@reticlehq/core';
+import {
+  CreditKind,
+  type AccountState,
+  type HarnessConfig,
+  type HarnessDrive,
+} from '@reticlehq/core';
+import { creditsLeftText, creditsSpent, creditsUsedText, type Credits } from '@reticlehq/core/hud';
 import { ACCOUNT_SIGNIN_ATTR } from './presenter-account.js';
 import { personaPickHtml, personaCustomHtml, personaLabel } from './presenter-personas.js';
 
@@ -24,6 +30,7 @@ export const HARNESS_ROW_TEXT = {
   TURN_ON: 'Turn on',
   SET_UP: 'Set up ↗',
   PLANS: 'See plans ↗',
+  PLAN: 'Plan ↗',
   MORE: 'Get more ↗',
   driving: (as: string | undefined, steps: number): string =>
     `Driving${as === undefined ? '' : ` as ${as}`} · ${String(steps)} step${1 === steps ? '' : 's'}`,
@@ -50,11 +57,23 @@ const said = (text: string): string => `<span class="reticle-harness-said">${tex
 const link = (href: string, label: string): string =>
   `<a class="reticle-harness-link" href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 
-/** "4,706 credits left", or nothing for an unbounded plan: the platform's numbers, in credits. */
-export function creditsShort(credits: { used: number; limit: number } | undefined): string {
-  const left = credits === undefined ? 0 : Math.max(0, credits.limit - credits.used);
-  // None left is said by the row itself ("No Harness credits left"), not twice.
-  return 0 === left ? '' : `${left.toLocaleString('en-US')} credits left`;
+/** "8 of 10 free credits", or nothing for an unbounded plan or none left (the row says that). */
+export function creditsShort(credits: Credits | undefined): string {
+  return credits === undefined || creditsSpent(credits) ? '' : creditsLeftText(credits);
+}
+
+/** No credits left: the platform's sentence for the grant, and the one link that gets more. */
+function creditsUsedRow(credits: Credits, planUrl: string): string {
+  if (credits.kind === undefined)
+    return row(`${said(HARNESS_ROW_TEXT.NO_CREDITS)}${link(planUrl, HARNESS_ROW_TEXT.MORE)}`);
+  const text = creditsUsedText(credits);
+  const action =
+    text.action !== undefined
+      ? link(planUrl, `${text.action} ↗`)
+      : CreditKind.TRIAL === credits.kind
+        ? link(planUrl, HARNESS_ROW_TEXT.PLAN)
+        : '';
+  return `<div class="reticle-harness-row reticle-harness-row-wrap">${said(text.said)}${action}</div>`;
 }
 
 /** The row for this state. Never more than one row, plus the custom box when Custom is picked. */
@@ -68,10 +87,11 @@ export function harnessRowHtml(s: HarnessRowState): string {
   const config = s.config;
   if (config === undefined)
     return row(`${said(HARNESS_ROW_TEXT.UNLINKED)}${link(s.setupUrl, HARNESS_ROW_TEXT.SET_UP)}`);
+  // Credits first: the platform says none left as not entitled, and "not on your plan" was wrong.
+  if (config.credits !== undefined && creditsSpent(config.credits))
+    return creditsUsedRow(config.credits, s.planUrl);
   if (!config.harnessEntitled)
     return row(`${said(HARNESS_ROW_TEXT.NOT_ENTITLED)}${link(s.planUrl, HARNESS_ROW_TEXT.PLANS)}`);
-  if (config.credits !== undefined && config.credits.used >= config.credits.limit)
-    return row(`${said(HARNESS_ROW_TEXT.NO_CREDITS)}${link(s.planUrl, HARNESS_ROW_TEXT.MORE)}`);
   if (false === config.providerReady)
     return row(`${said(HARNESS_ROW_TEXT.NO_PROVIDER)}${link(s.setupUrl, HARNESS_ROW_TEXT.SET_UP)}`);
   if (s.drive !== undefined && s.canDrive)
@@ -95,6 +115,8 @@ export const HARNESS_ROW_CSS = `
 [data-reticle-chat-panel] .reticle-harness-spot[hidden],[data-reticle-chat-panel] .reticle-harness-spot:empty{display:none;}
 [data-reticle-chat-panel] .reticle-harness-row{display:flex;align-items:center;gap:6px;min-height:30px;min-width:0;}
 [data-reticle-chat-panel] .reticle-harness-said{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--reticle-hud-size-sm);color:var(--reticle-hud-text);}
+[data-reticle-chat-panel] .reticle-harness-row-wrap{flex-wrap:wrap;row-gap:2px;padding:4px 0;}
+[data-reticle-chat-panel] .reticle-harness-row-wrap .reticle-harness-said{flex:1 1 100%;white-space:normal;}
 [data-reticle-chat-panel] .reticle-harness-said code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;}
 [data-reticle-chat-panel] .reticle-harness-as{flex:none;font-size:var(--reticle-hud-size-xs);color:var(--reticle-hud-text-muted);}
 [data-reticle-chat-panel] .reticle-harness-persona{box-sizing:border-box;flex:1;min-width:0;width:100%;height:30px;font:inherit;font-size:var(--reticle-hud-size-sm);color:var(--reticle-hud-text);

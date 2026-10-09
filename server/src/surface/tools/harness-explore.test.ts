@@ -469,6 +469,27 @@ describe('a workspace with no entitlement', () => {
     expect(MSG_HARNESS_UNCLAIMED).toContain('Settings → Plan');
   });
 
+  it('with its credits used up, says what the HUD says, with the platform’s numbers', async () => {
+    const spent = (kind: string, limit: number) =>
+      exploreApp(depsWithFlows([]), linked, {
+        maxSteps: 1,
+        driver: finishing(''),
+        configFetch: platformSays({
+          provider: 'jev',
+          harnessEnabled: true,
+          harnessEntitled: false,
+          credits: { used: limit, limit, kind },
+        }),
+      });
+    await expect(spent('free', 25)).rejects.toThrow(
+      'Your 25 free credits are used. Add a card to start your 14-day trial: https://api.test/settings?group=billing',
+    );
+    await expect(spent('trial', 500)).rejects.toThrow(
+      'Your 500 trial credits are used. Pro starts when your trial ends.',
+    );
+    await expect(spent('paid', 4000)).rejects.toThrow("This month's credits are used.");
+  });
+
   /**
    * The gate used to FAIL OPEN: a platform that was slow for two seconds, or down, let the drive
    * run on Reticle's model budget with nobody's entitlement checked. A drive that would bill us

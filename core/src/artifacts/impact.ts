@@ -204,6 +204,10 @@ export const HarnessOfferSchema = z.object({
 });
 export type HarnessOffer = z.infer<typeof HarnessOfferSchema>;
 
+/** The grant Harness credits came from: sign-up, the card-started trial, or a paid plan. */
+export const CreditKind = { FREE: 'free', TRIAL: 'trial', PAID: 'paid' } as const;
+export type CreditKind = (typeof CreditKind)[keyof typeof CreditKind];
+
 /**
  * What the platform says about autonomous driving for this project.
  *
@@ -219,7 +223,14 @@ export const HarnessConfigSchema = z.object({
   /** Whether the selected provider has a usable platform key. Older daemons may omit it. */
   providerReady: z.boolean().optional(),
   /** Harness credits used and held this 30 days; one is one Harness decision. Absent: unbounded or unknown. */
-  credits: z.object({ used: z.number().int().min(0), limit: z.number().int().min(0) }).optional(),
+  credits: z
+    .object({
+      used: z.number().int().min(0),
+      limit: z.number().int().min(0),
+      /** The grant they came from. Optional on the wire: an older platform omits it. */
+      kind: z.enum([CreditKind.FREE, CreditKind.TRIAL, CreditKind.PAID]).optional(),
+    })
+    .optional(),
   /** The platform this answer came from, so the HUD's links go there and not to the hosted one. */
   platformUrl: z.string().optional(),
 });

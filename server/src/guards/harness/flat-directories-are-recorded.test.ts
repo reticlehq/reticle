@@ -136,7 +136,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * 17 with `drive-script.ts`, the Harness's plan language: an artifact the daemon and the platform
    * both read, so it lives with the other formats, behind the artifacts subpath the SDK never loads.
    */
-  'core/src/artifacts': 17,
+  'core/src/artifacts': 18,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   'core/src': 11,

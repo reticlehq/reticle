@@ -2,7 +2,12 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { Presenter } from './presenter.js';
 import { SETTINGS_ATTR, SETTINGS_STORAGE_KEY } from './presenter-config.js';
 import { Annotator } from '@/review/annotator.js';
-import { loadPresenterSettings, settingsPanelHtml } from './presenter-settings.js';
+import {
+  HARNESS_LOCKED_HELP,
+  creditsLeft,
+  loadPresenterSettings,
+  settingsPanelHtml,
+} from './presenter-settings.js';
 
 afterEach(() => {
   document.querySelectorAll('[data-reticle-overlay]').forEach((e) => e.remove());
@@ -322,5 +327,17 @@ describe('every setting explains itself in one line', () => {
     for (const jargon of ['Output Detail', 'React Components', 'Autonomous driving'])
       expect(text).not.toContain(jargon);
     expect(text).toContain('Allow Reticle to drive');
+  });
+});
+
+describe('the Harness switch help, in credits', () => {
+  it('says the credits left by their grant, and never a free monthly allowance', () => {
+    expect(creditsLeft({ used: 2, limit: 10, kind: 'free' })).toBe('8 of 10 free credits');
+    expect(creditsLeft({ used: 80, limit: 500, kind: 'trial' })).toBe('420 of 500 trial credits');
+    expect(creditsLeft({ used: 3, limit: 50 })).toBe('47 of 50 credits left');
+    expect(creditsLeft({ used: 10, limit: 10, kind: 'free' })).toBe(
+      'Your 10 free credits are used.',
+    );
+    expect(HARNESS_LOCKED_HELP).not.toMatch(/each month|monthly/);
   });
 });

@@ -24,6 +24,7 @@ import { HUD_SURFACE_CLASS } from './chrome/presenter-hud-chrome.js';
 import { resetHudDockPosition } from './presenter-drag.js';
 import { findDock, scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import { SETTINGS_CSS } from './presenter-settings-styles.js';
+import { creditsLeftText, creditsSpent, creditsUsedText, type Credits } from '@reticlehq/core/hud';
 import type { AccountState } from '@reticlehq/core';
 import { DISCOVERY_CALL_URL, FOUNDER_EMAIL, FOUNDER_MAILTO } from '@reticlehq/core';
 import {
@@ -277,16 +278,13 @@ const SETTINGS_HARNESS_ROW_ATTR = 'data-reticle-settings-harness-row';
 const HARNESS_HELP =
   'Let Reticle test this app by itself to find defects, from Run Harness or from your coding agent. Off blocks every run. Set here or in your dashboard — both write to the same place.';
 /** Shown instead of the switch when the platform says this workspace cannot drive right now. */
-const HARNESS_LOCKED_HELP =
-  'The Harness is not available to this workspace right now. Every workspace gets free Harness credits each month: see Plan in your Reticle dashboard.';
+export const HARNESS_LOCKED_HELP =
+  'The Harness is not available to this workspace right now: see Plan in your Reticle dashboard.';
 
-/** "47 of 50 Harness credits left", from the platform's numbers, or nothing for an unbounded plan. */
-export function creditsLeft(credits: { used: number; limit: number } | undefined): string {
+/** "8 of 10 free credits", from the platform's numbers by grant, or nothing for an unbounded plan. */
+export function creditsLeft(credits: Credits | undefined): string {
   if (credits === undefined) return '';
-  const left = Math.max(0, credits.limit - credits.used);
-  return 0 === left
-    ? `All ${String(credits.limit)} Harness credits used`
-    : `${String(left)} of ${String(credits.limit)} Harness credits left`;
+  return creditsSpent(credits) ? creditsUsedText(credits).said : creditsLeftText(credits);
 }
 /** Sign-in is a device flow the HUD opens in the browser; the terminal is only the fallback. */
 const ACCOUNT_HELP = `Whether this machine is signed in to a Reticle workspace. Press ${ACCOUNT_TEXT.SIGNED_OUT} to sign in through your browser.`;
@@ -323,7 +321,9 @@ export function paintHarnessRow(root: ParentNode, config: HarnessConfig | undefi
   if (help instanceof HTMLElement)
     help.title = usable
       ? [HARNESS_HELP, credits].filter((t) => 0 < t.length).join(' ')
-      : HARNESS_LOCKED_HELP;
+      : creditsSpent(config.credits)
+        ? credits
+        : HARNESS_LOCKED_HELP;
 }
 
 /**

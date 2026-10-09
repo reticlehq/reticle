@@ -17,7 +17,8 @@
  *     environment, wins over the stored preference. Precedence lives in the caller.
  */
 
-import { ReticleEnv, platformCredentialFrom } from '@reticlehq/core';
+import { CreditKind, ReticleEnv, platformCredentialFrom } from '@reticlehq/core';
+import type { Credits } from '@reticlehq/core/hud';
 
 const CONFIG_PATH = '/v1/model/config';
 
@@ -58,7 +59,7 @@ export interface PlatformModelConfig {
    */
   providerReady: boolean;
   /** Harness credits used and held this 30 days. Absent when the plan is unbounded or the API is older. */
-  credits?: { used: number; limit: number };
+  credits?: Credits;
   /** The platform that answered, no trailing slash: where the HUD's settings and plan links go. */
   platformUrl?: string;
 }
@@ -99,13 +100,17 @@ function parse(body: string): PlatformModelConfig | undefined {
       'object' === typeof credits && null !== credits
         ? (credits as Record<string, unknown>)['limit']
         : undefined;
+    const kind =
+      'object' === typeof credits && null !== credits
+        ? Object.values(CreditKind).find((k) => k === (credits as Record<string, unknown>)['kind'])
+        : undefined;
     return {
       provider,
       harnessEnabled: 'boolean' === typeof enabled ? enabled : true,
       harnessEntitled: 'boolean' === typeof entitled ? entitled : true,
       providerReady: 'boolean' === typeof ready ? ready : true,
       ...('number' === typeof used && 'number' === typeof limit
-        ? { credits: { used, limit } }
+        ? { credits: { used, limit, ...(kind === undefined ? {} : { kind }) } }
         : {}),
     };
   } catch {

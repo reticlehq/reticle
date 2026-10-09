@@ -92,7 +92,17 @@ describe('chat views and harness access states', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
     views.paintHarness({ ...entitled, credits: { used: 294, limit: 5000 } });
-    expect(root.querySelector('[data-reticle-foot-meta]')?.textContent).toBe('4,706 credits left');
+    expect(root.querySelector('[data-reticle-foot-meta]')?.textContent).toBe(
+      '4,706 of 5,000 credits left',
+    );
+    views.paintHarness({ ...entitled, credits: { used: 2, limit: 10, kind: 'free' } });
+    expect(root.querySelector('[data-reticle-foot-meta]')?.textContent).toBe(
+      '8 of 10 free credits',
+    );
+    views.paintHarness({ ...entitled, credits: { used: 80, limit: 500, kind: 'trial' } });
+    expect(root.querySelector('[data-reticle-foot-meta]')?.textContent).toBe(
+      '420 of 500 trial credits',
+    );
   });
 
   it('once the credits are spent, says so in its row with the way to get more', () => {
@@ -102,6 +112,67 @@ describe('chat views and harness access states', () => {
     expect(root.textContent).toContain('No Harness credits left');
     expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Get more');
     expect(root.querySelector('[data-reticle-foot-meta]')?.textContent).toBe('');
+  });
+
+  /*
+   * The platform reports no credits left as `harnessEntitled: false`, so the row checked entitlement
+   * first and told a workspace whose free credits ran out that Harness was "not on your plan".
+   */
+  describe('with no credits left, by the grant they came from', () => {
+    const spent = (kind: 'free' | 'trial' | 'paid', limit: number): HarnessConfig => ({
+      ...entitled,
+      harnessEntitled: false,
+      credits: { used: limit, limit, kind },
+    });
+    const links = (root: HTMLElement): (string | null)[] =>
+      [...root.querySelectorAll('[data-reticle-harness-spot] .reticle-harness-link')].map(
+        (a) => a.textContent,
+      );
+
+    it('free: the platform’s number, and one link that starts the trial', () => {
+      const { root, views } = mountViews();
+      views.paintAccount({ signedIn: true });
+      views.paintHarness(spent('free', 25));
+      expect(root.textContent).toContain('Your 25 free credits are used.');
+      expect(root.textContent).not.toContain('not on your plan');
+      expect(links(root)).toEqual(['Add a card to start your 14-day trial ↗']);
+      expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
+        'https://app.reticle.sh/settings?group=billing',
+      );
+      expect(root.textContent).not.toMatch(/Get more|Pro/);
+    });
+
+    it('trial: when Pro starts, and no offer to buy more', () => {
+      const { root, views } = mountViews();
+      views.paintAccount({ signedIn: true });
+      views.paintHarness(spent('trial', 500));
+      expect(root.textContent).toContain(
+        'Your 500 trial credits are used. Pro starts when your trial ends.',
+      );
+      expect(root.textContent).not.toContain('Get more');
+      expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
+        'https://app.reticle.sh/settings?group=billing',
+      );
+    });
+
+    it('paid: when they renew', () => {
+      const { root, views } = mountViews();
+      views.paintAccount({ signedIn: true });
+      views.paintHarness(spent('paid', 4000));
+      expect(root.textContent).toContain(
+        "This month's credits are used. They renew over the next 30 days.",
+      );
+      expect(root.textContent).not.toContain('not on your plan');
+    });
+
+    it('stays one row', () => {
+      const { root, views } = mountViews();
+      views.paintAccount({ signedIn: true });
+      for (const kind of ['free', 'trial', 'paid'] as const) {
+        views.paintHarness(spent(kind, 10));
+        expect(rows(root)).toBe(1);
+      }
+    });
   });
 
   it('shows setup instead of an active switch until the model provider is ready', () => {
