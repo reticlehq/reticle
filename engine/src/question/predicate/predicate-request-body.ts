@@ -37,7 +37,7 @@ interface RequestBodyPredicate {
 /**
  * What the filtering pass learned about calls that matched everything else.
  *
- * Accumulated during the single pass over events rather than recomputed after, the way the
+ * Accumulated during the single pass over events rather than recomputed after it, the way the
  * response-side trackers already are.
  */
 interface RequestBodyState {
@@ -79,7 +79,10 @@ export function checkRequestBody(
   state: RequestBodyState,
 ): boolean {
   const { requestBodyContains, requestBodyMatches } = predicate;
-  if (undefined === requestBodyContains && undefined === requestBodyMatches) return true;
+  if (undefined === requestBodyContains && undefined === requestBodyMatches) {
+    state.matchCount++;
+    return true;
+  }
 
   const sent = str(data['requestBody']);
   if (sent === undefined) {
@@ -88,7 +91,7 @@ export function checkRequestBody(
   }
   const wasTruncated = true === data['requestBodyTruncated'];
   const note = (): false => {
-    // The same rule the response side keeps: a needle missing from a body we hold the first N
+    // The same rule the response side keeps: a needle missing from a body we hold only the first N
     // bytes of is undecidable, not absent.
     if (wasTruncated) state.truncated ??= sent;
     else state.mismatch ??= sent;
@@ -96,13 +99,19 @@ export function checkRequestBody(
   };
 
   if (requestBodyContains !== undefined && !sent.includes(requestBodyContains)) return note();
-  if (requestBodyMatches === undefined) return true;
+  if (requestBodyMatches === undefined) {
+    state.matchCount++;
+    return true;
+  }
 
   // `matchJsonBody` is the shared one, and a body that is not a JSON object counts as a mismatch
   // there for the reason this side already had written down: guessing at form encoding would answer
   // a different question than the one asked, and `requestBodyContains` exists for those bodies.
   const verdict = matchJsonBody(sent, requestBodyMatches);
-  if ('match' === verdict) return true;
+  if ('match' === verdict) {
+    state.matchCount++;
+    return true;
+  }
   if ('mismatch' === verdict) return note();
   state.redactedField ??= verdict.redacted;
   return false;
