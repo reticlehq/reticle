@@ -1,6 +1,6 @@
 import type { Contradiction, ContradictionKind, ReticleEvent } from '@reticlehq/core';
 import type { NoteFn } from '@/window/engine-host.js';
-import type { DeclaredNetFailure } from '@/question/declared.js';
+import type { DeclaredNetFailure, DeclaredRead } from '@/question/declared.js';
 
 /**
  * What a contradiction IS, separated from the rules that find one.
@@ -171,9 +171,10 @@ export interface ContradictionOptions {
    */
   namedNetUrls?: readonly string[] | undefined;
   /**
-   * Endpoints the assertion declared as reads (`net { repeatable: true }`), matched the way
-   * `namedNetUrls` is. Repeats on them are not a double submit, so `duplicate-request` skips them
-   * (#1353). Nothing else reads it: they are still waited for and still counted.
+   * Endpoints the assertion declared as reads (`net { repeatable: true }`). Repeats on them are not
+   * a double submit, so `duplicate-request` skips them (#1353). A call matches when its URL contains
+   * `urlContains` and, if the clause named a method, its method is that one: a repeatable GET never
+   * excuses a POST. Nothing else reads it: they are still waited for and still counted.
    */
-  repeatableNetUrls?: readonly string[] | undefined;
+  repeatableNetUrls?: readonly DeclaredRead[] | undefined;
 }

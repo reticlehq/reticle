@@ -87,7 +87,11 @@ async function readTwice(): Promise<Bridge> {
   return bridge;
 }
 
-async function assertNet(bridge: Bridge, net: Record<string, unknown>) {
+async function assertNet(
+  bridge: Bridge,
+  net: Record<string, unknown>,
+  predicate: Record<string, unknown> = { kind: 'net', urlContains: '/graphql', ...net },
+) {
   const deps = {
     sessions: bridge.sessions,
     recordings: new RecordingStore(),
@@ -96,7 +100,7 @@ async function assertNet(bridge: Bridge, net: Record<string, unknown>) {
   const tool = TOOLS.find((t) => t.name === ReticleTool.ASSERT);
   if (tool === undefined) throw new Error('no assert tool');
   return (await tool.handler(deps, {
-    predicate: { kind: 'net', urlContains: '/graphql', ...net },
+    predicate,
     since: 0,
     sessionId: 'reads',
   })) as { verified?: string; contradictions?: { kind: string }[] };
@@ -113,6 +117,35 @@ describe('a read over POST declared as one', () => {
 
   it('is still a duplicate-request without the declaration', async () => {
     const out = await assertNet(await readTwice(), {});
+    expect(out.contradictions?.map((c) => c.kind) ?? []).toContain(
+      ContradictionKind.DUPLICATE_REQUEST,
+    );
+    expect(out.verified).not.toBe('yes');
+  });
+});
+
+describe('a repeatable clause that names no endpoint, or another method', () => {
+  it('is refused when it has no urlContains, rather than excusing every request', async () => {
+    const outcome = await assertNet(await readTwice(), {}, { kind: 'net', repeatable: true }).then(
+      (out) => JSON.stringify(out),
+      (err: unknown) => String(err),
+    );
+    expect(outcome).toContain('needs a non-empty `urlContains`');
+    expect(outcome).not.toContain('"verified":"yes"');
+  });
+
+  it('does not excuse POSTs when the repeatable clause said GET', async () => {
+    const out = await assertNet(
+      await readTwice(),
+      {},
+      {
+        kind: 'allOf',
+        predicates: [
+          { kind: 'net', method: 'POST', urlContains: '/graphql' },
+          { kind: 'net', method: 'GET', urlContains: '/graphql', repeatable: true },
+        ],
+      },
+    );
     expect(out.contradictions?.map((c) => c.kind) ?? []).toContain(
       ContradictionKind.DUPLICATE_REQUEST,
     );

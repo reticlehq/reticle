@@ -129,7 +129,7 @@ Some endpoints read over POST: a GraphQL query, a tRPC batch, a query bus, a Ser
 { "kind": "net", "method": "POST", "urlContains": "/graphql", "repeatable": true }
 ```
 
-`repeatable: true` keeps that endpoint out of `duplicate-request` for this verdict only. The request is still waited for and still counted, so `count` keeps its meaning. Leave it off for an endpoint that writes: there, the second call is the bug.
+`repeatable: true` keeps that endpoint out of `duplicate-request` for this verdict only. The request is still waited for and still counted, so `count` keeps its meaning. It needs a non-empty `urlContains`, and a clause without one is refused, because it would excuse every request in the window. When the clause names a `method`, only calls with that method are excused: a repeatable `GET` never excuses a `POST` to the same URL. Leave it off for an endpoint that writes: there, the second call is the bug.
 
 ### route
 
