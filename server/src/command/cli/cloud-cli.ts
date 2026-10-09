@@ -27,6 +27,7 @@ import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
 import { normalizeUrl } from './auth/cloud-session.js';
 import { cmdLogin, cmdLogout } from './cloud-login.js';
 import { cmdTry } from './try-command.js';
+import { CLOUD_COMMANDS } from './cli-parse-grammar.js';
 import {
   api,
   baseUrl,
@@ -68,25 +69,9 @@ import { fetchPlatformRun } from '@/features/harness/platform/platform-drives.js
  * override resolves through. This directory is what makes staging and production hold at the same
  * time instead of clobbering each other, which is the whole reason a single file was not enough.
  */
-const CLOUD_COMMANDS: ReadonlySet<string> = new Set([
-  'login',
-  'connect',
-  'try',
-  'logout',
-  'whoami',
-  'link',
-  'project',
-  'config',
-  'issues',
-  'memory',
-  'push',
-  'sync',
-  'runs',
-  'regression',
-  'share',
-]);
+const CLOUD_COMMAND_SET: ReadonlySet<string> = new Set(CLOUD_COMMANDS);
 export const isCloudCommand = (cmd: string | undefined): boolean =>
-  cmd !== undefined && CLOUD_COMMANDS.has(cmd);
+  cmd !== undefined && CLOUD_COMMAND_SET.has(cmd);
 
 /** `reticle sync --watch` — keep cycling instead of exiting. */
 const WATCH_FLAG = '--watch';

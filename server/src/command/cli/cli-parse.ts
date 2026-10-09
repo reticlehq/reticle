@@ -16,6 +16,7 @@ import {
   retiredFlag,
   unknownArgument,
   type ParseError,
+  CLOUD_COMMANDS,
 } from './cli-parse-grammar.js';
 
 // Re-exported because the daemon's own argv builder reaches for these through this module, which is
@@ -63,6 +64,9 @@ const VERSION_COMMAND = 'version';
 const TELEMETRY_COMMAND = 'telemetry';
 const FEEDBACK_COMMAND = 'feedback';
 const IDENTIFY_COMMAND = 'identify';
+const DOCTOR_COMMAND = 'doctor';
+const SETUP_COMMAND = 'setup';
+const TUTORIAL_COMMAND = 'tutorial';
 const COMPANY_FLAG = '--company';
 const EMAIL_FLAG = '--email';
 const CONTEXT_FLAG = '--context';
@@ -86,7 +90,9 @@ export const DAEMON_INNER_COMMAND = '_daemon';
  * defined; a second list somewhere else would drift the first time a command is added.
  */
 export const UNKNOWN_COMMAND = 'unknown';
-const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
+const HELP_COMMAND = 'help';
+/** Every command the typed parser below routes. The parser refuses any word not in this list. */
+export const LOCAL_COMMANDS: readonly string[] = [
   INIT_COMMAND,
   SERVE_COMMAND,
   STOP_COMMAND,
@@ -111,24 +117,22 @@ const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
   FEEDBACK_COMMAND,
   IDENTIFY_COMMAND,
   DAEMON_INNER_COMMAND,
-  'connect',
-  'try',
-  'login',
-  'logout',
-  'whoami',
-  'link',
-  'project',
-  'config',
-  'push',
-  'runs',
-  'issues',
-  'memory',
-  'regression',
-  'share',
-  'doctor',
-  'setup',
-  'tutorial',
-  'help',
+  DOCTOR_COMMAND,
+  SETUP_COMMAND,
+  TUTORIAL_COMMAND,
+];
+const LOCAL_COMMAND_SET: ReadonlySet<string> = new Set(LOCAL_COMMANDS);
+const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
+  ...LOCAL_COMMANDS,
+  ...CLOUD_COMMANDS,
+  HELP_COMMAND,
+]);
+/** The conventional flag spellings of two commands, reported as the command they ask for. */
+const COMMAND_FLAG_ALIASES: ReadonlyMap<string, string> = new Map([
+  ['--version', VERSION_COMMAND],
+  ['-v', VERSION_COMMAND],
+  ['--help', HELP_COMMAND],
+  ['-h', HELP_COMMAND],
 ]);
 
 /**
@@ -147,8 +151,8 @@ function numberFlag(args: readonly string[], name: string): number {
 
 /** The subcommand name if we recognize it, else `unknown`. Bare `reticle` reports `help`. */
 export function knownCommand(arg: string | undefined): string {
-  if (arg === undefined || '' === arg) return 'help';
-  return KNOWN_COMMANDS.has(arg) ? arg : UNKNOWN_COMMAND;
+  if (arg === undefined || '' === arg) return HELP_COMMAND;
+  return KNOWN_COMMANDS.has(arg) ? arg : (COMMAND_FLAG_ALIASES.get(arg) ?? UNKNOWN_COMMAND);
 }
 
 /**
@@ -664,6 +668,8 @@ export function parseCliArgs(
     return { kind: 'help' };
   }
 
+  // The list is the gate, so a command cannot be routed without also being named in telemetry.
+  if (!LOCAL_COMMAND_SET.has(cmd)) return unknownCommand(cmd);
   switch (cmd) {
     case INIT_COMMAND: {
       const r = parseInitFlags(rest);
@@ -721,7 +727,7 @@ export function parseCliArgs(
       // parsing it knows to ask for the object.
       return { kind: 'status', port, json: rest.includes(JSON_FLAG) };
     }
-    case 'tutorial': {
+    case TUTORIAL_COMMAND: {
       // `--agent` is the opt-in, because a person typing this is the common case and should not have
       // to ask for prose. An agent knows to pass the flag; a human would not know to avoid it.
       const audience = argv.includes('--agent') ? TutorialAudience.AGENT : TutorialAudience.HUMAN;
@@ -736,7 +742,7 @@ export function parseCliArgs(
         headless: !argv.includes('--headed'),
       };
     }
-    case 'doctor': {
+    case DOCTOR_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
       return { kind: 'doctor', port };
     }
@@ -752,7 +758,7 @@ export function parseCliArgs(
      * no flag: it tells a reader a confirmation exists. What this writes is stated before it runs
      * and printed after, which is the honest version of the same reassurance.
      */
-    case 'setup': {
+    case SETUP_COMMAND: {
       const what = rest[0];
       /*
        * `setup install` — the Node half of the one-line installer.

@@ -49,3 +49,25 @@ export const VERIFY_COMMAND = 'verify';
  * missed for a release.
  */
 export const EXPECT_FLAG = '--expect';
+
+/**
+ * The account and cloud commands. They are dispatched before the typed parser, and listed here so
+ * that the dispatcher and the telemetry vocabulary read one list instead of two.
+ */
+export const CLOUD_COMMANDS: readonly string[] = [
+  'login',
+  'connect',
+  'try',
+  'logout',
+  'whoami',
+  'link',
+  'project',
+  'config',
+  'issues',
+  'memory',
+  'push',
+  'sync',
+  'runs',
+  'regression',
+  'share',
+];
