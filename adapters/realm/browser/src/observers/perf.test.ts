@@ -85,6 +85,98 @@ describe('installPerf', () => {
     expect(cls.map((d) => d['value'])).toEqual([0.1, expect.closeTo(0.15, 5)]); // running total
   });
 
+  // The running value says THAT the page shifted; without `sources` an agent had nowhere to look
+  // (#1266). Only the largest source is named, so the event stays small.
+  describe('a CLS event names the element that moved most', () => {
+    const rect = (width: number, height: number) => ({ width, height }) as DOMRectReadOnly;
+    const shift = (sources: unknown[]) =>
+      ({
+        value: 0.2,
+        startTime: 300,
+        hadRecentInput: false,
+        sources,
+      }) as unknown as PerformanceEntry;
+    const clsEvents = (t: ReturnType<typeof install>) =>
+      t.events.map((e) => e.data).filter((d) => d['metric'] === PerfMetric.CLS);
+
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    it('names the largest source by ref and a short selector', () => {
+      document.body.innerHTML =
+        '<div id="banner" class="promo"></div><p class="note small"></p><span data-testid="price"></span>';
+      const banner = document.getElementById('banner');
+      const note = document.querySelector('p');
+      const price = document.querySelector('span');
+      const t = install();
+      byType('layout-shift')?.fire([
+        shift([
+          { node: note, previousRect: rect(100, 20), currentRect: rect(100, 20) },
+          { node: banner, previousRect: rect(0, 0), currentRect: rect(800, 120) },
+          { node: price, previousRect: rect(40, 20), currentRect: rect(40, 20) },
+        ]),
+      ]);
+      t();
+
+      const [cls] = clsEvents(t);
+      const shifted = cls?.['shifted'] as { ref: string; selector: string } | undefined;
+      expect(shifted?.selector).toBe('div#banner');
+      expect(shifted?.ref).toMatch(/\S/);
+    });
+
+    it('uses the testid, else the first class, and names a text node by its parent', () => {
+      document.body.innerHTML = '<span data-testid="price">9.99</span><p class="note small">x</p>';
+      const t = install();
+      const text = document.querySelector('p')?.firstChild;
+      byType('layout-shift')?.fire([
+        shift([{ node: document.querySelector('span'), currentRect: rect(10, 10) }]),
+      ]);
+      byType('layout-shift')?.fire([shift([{ node: text, currentRect: rect(10, 10) }])]);
+      t();
+
+      const selectors = clsEvents(t).map(
+        (d) => (d['shifted'] as { selector: string } | undefined)?.selector,
+      );
+      expect(selectors).toEqual(['[data-testid="price"]', 'p.note']);
+    });
+
+    it('escapes values, so the selector matches the element it names', () => {
+      document.body.innerHTML =
+        '<span data-testid=\'a"b\'></span><div id="1:main"></div><p class="w-1/2"></p>';
+      const t = install();
+      for (const el of [...document.body.children]) {
+        byType('layout-shift')?.fire([shift([{ node: el, currentRect: rect(10, 10) }])]);
+      }
+      t();
+
+      const selectors = clsEvents(t).map(
+        (d) => (d['shifted'] as { selector: string } | undefined)?.selector ?? '',
+      );
+      expect(selectors).toHaveLength(3);
+      [...document.body.children].forEach((el, i) => {
+        expect(document.querySelector(selectors[i] ?? ''), selectors[i]).toBe(el);
+      });
+    });
+
+    it("never names Reticle's own overlay, and omits the field when nothing can be named", () => {
+      document.body.innerHTML = '<div data-reticle-hud></div>';
+      const t = install();
+      byType('layout-shift')?.fire([
+        shift([
+          { node: document.querySelector('[data-reticle-hud]'), currentRect: rect(300, 300) },
+        ]),
+      ]);
+      byType('layout-shift')?.fire([shift([{ node: null, currentRect: rect(10, 10) }])]);
+      byType('layout-shift')?.fire([
+        { value: 0.1, startTime: 400, hadRecentInput: false } as unknown as PerformanceEntry,
+      ]);
+      t();
+
+      expect(clsEvents(t).every((d) => !('shifted' in d))).toBe(true);
+    });
+  });
+
   it('emits LCP only when a candidate exceeds the previous (no duplicate smaller candidates)', () => {
     const t = install();
     const lcp = byType('largest-contentful-paint');

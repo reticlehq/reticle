@@ -168,6 +168,8 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     metric: z.nativeEnum(PerfMetric),
     value: z.number(),
     at: z.number(),
+    // CLS only: the element the shift moved most, so the value has somewhere to point (#1266).
+    shifted: z.object({ ref: z.string(), selector: z.string() }).optional(),
   }),
   [EventType.ROUTE_CHANGE]: z.object({
     from: z.string(),
