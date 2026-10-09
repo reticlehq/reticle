@@ -452,6 +452,7 @@ export function evalNet(
       if (status !== p.status) return false;
     }
     if (p.ok !== undefined && callSucceeded(d) !== p.ok) return false;
+    if (!checkRequestBody(d, p, requestState)) return false; // request side first (#1365)
     if (p.bodyContains !== undefined || p.bodyMatches !== undefined) {
       // The RESPONSE body only, and this is the whole point of these fields. Searching the request
       // too would let `bodyContains: "1187.01"` pass on the very defect it exists to catch: the app
@@ -491,7 +492,6 @@ export function evalNet(
         }
       }
     }
-    if (!checkRequestBody(d, p, requestState)) return false;
     return true;
   });
   if (unobservableStatus && 0 === matches.length) {
@@ -535,7 +535,7 @@ export function evalNet(
       assertion: NetBodyAssertion.MATCHES,
     };
   }
-  const requestVerdict = requestBodyVerdict(requestState, p, matches.length);
+  const requestVerdict = requestBodyVerdict(requestState, p, requestState.matchCount);
   if (requestVerdict !== undefined) return requestVerdict;
   // Ranked ABOVE the mismatch branch: when both a truncated and a full body missed the needle,
   // the honest verdict is the undecidable one. Deciding on the full body would report a failure
@@ -805,7 +805,7 @@ const DEFAULT_QUIET_MS = 500;
  * wedges settle on that page for the rest of the session.
  *
  * The act wait (`server/src/surface/tools/act/settle-in-flight.ts`) has always excluded it and
- * `core/src/wire/net.ts` says it must be; this predicate counted it, so `act_and_wait { until:
+ * `core/src/wire/net.ts` says it must; this predicate counted it, so `act_and_wait { until:
  * settled }` after a plain `<a href>` never passed and agents dropped `settled` from their `until`.
  * Spelled against the shared constant rather than the string, so the two settle decisions cannot
  * drift onto two vocabularies.

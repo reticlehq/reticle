@@ -56,10 +56,16 @@ interface RequestBodyState {
    * payload.
    */
   redactedField?: string;
+  /**
+   * Calls that passed the request-side filter (#1365). Distinct from the caller's `matches.length`,
+   * which also requires the RESPONSE to match: a response mismatch must outrank a request verdict
+   * whenever at least one call matched the request side.
+   */
+  matchCount: number;
 }
 
 export function newRequestBodyState(): RequestBodyState {
-  return { unrecorded: false };
+  return { unrecorded: false, matchCount: 0 };
 }
 
 /**
@@ -73,7 +79,10 @@ export function checkRequestBody(
   state: RequestBodyState,
 ): boolean {
   const { requestBodyContains, requestBodyMatches } = predicate;
-  if (undefined === requestBodyContains && undefined === requestBodyMatches) return true;
+  if (undefined === requestBodyContains && undefined === requestBodyMatches) {
+    state.matchCount++;
+    return true;
+  }
 
   const sent = str(data['requestBody']);
   if (sent === undefined) {
@@ -90,13 +99,19 @@ export function checkRequestBody(
   };
 
   if (requestBodyContains !== undefined && !sent.includes(requestBodyContains)) return note();
-  if (requestBodyMatches === undefined) return true;
+  if (requestBodyMatches === undefined) {
+    state.matchCount++;
+    return true;
+  }
 
   // `matchJsonBody` is the shared one, and a body that is not a JSON object counts as a mismatch
   // there for the reason this side already had written down: guessing at form encoding would answer
   // a different question than the one asked, and `requestBodyContains` exists for those bodies.
   const verdict = matchJsonBody(sent, requestBodyMatches);
-  if ('match' === verdict) return true;
+  if ('match' === verdict) {
+    state.matchCount++;
+    return true;
+  }
   if ('mismatch' === verdict) return note();
   state.redactedField ??= verdict.redacted;
   return false;
