@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { CoverageMarker, LINK_APP_GAPS_MAX } from '@reticlehq/core';
+import { CoverageCapability, CoverageMarker, LINK_APP_GAPS_MAX } from '@reticlehq/core';
 import {
   announcedChannels,
   forgetRecordedGaps,
   instrumentationOf,
+  noteSourceSeen,
   recordGaps,
   recordedGaps,
 } from './recorded-gaps.js';
@@ -49,6 +50,18 @@ describe('a tab’s coverage', () => {
     expect(announcedChannels(tab)).toContain(CoverageMarker.SOURCE);
     recordGaps('s1', [gap('e1')], 1);
     expect(announcedChannels(tab)).not.toContain(CoverageMarker.SOURCE);
+  });
+
+  /** A verdict mapped to src/App.jsx:24 and coverage still listed "File and line" as not seen. */
+  it('adds the source marker once any verdict mapped to a file:line, whatever else was recorded', () => {
+    const plain = { id: 's1', channels: ['ui', 'net', 'log'] };
+    expect(announcedChannels(plain)).not.toContain(CoverageMarker.SOURCE);
+    noteSourceSeen('s1', 'src/App.jsx:24');
+    recordGaps('s1', [gap('e1')], 1);
+    expect(announcedChannels(plain)).toContain(CoverageMarker.SOURCE);
+    expect(instrumentationOf(plain).seen).toContain(CoverageCapability.SOURCE_MAPPING);
+    recordGaps('s1', [{ kind: 'source-mapping-off', missing: 'off', fix: 'turn it on' }], 2);
+    expect(announcedChannels(plain)).not.toContain(CoverageMarker.SOURCE);
   });
 
   it('carries a prompt only once a verdict recorded a gap, naming only that gap', () => {

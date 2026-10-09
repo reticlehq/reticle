@@ -60,6 +60,14 @@ export function recordGaps(sessionId: string, gaps: readonly object[], now: numb
   if (0 < list.length) bySession.set(sessionId, list);
 }
 
+/** Sessions where at least one verdict mapped a control to its file:line. */
+const sourceSeen = new Set<string>();
+
+/** A verdict on this session named a file:line: source mapping is seen, whatever else lacks one. */
+export function noteSourceSeen(sessionId: string, source: string | undefined): void {
+  if (source !== undefined) sourceSeen.add(sessionId);
+}
+
 /** What this session's verdicts recorded, newest first. */
 export function recordedGaps(sessionId: string): readonly RecordedGap[] {
   return bySession.get(sessionId) ?? [];
@@ -68,6 +76,7 @@ export function recordedGaps(sessionId: string): readonly RecordedGap[] {
 /** Forget a session that ended. */
 export function forgetRecordedGaps(sessionId: string): void {
   bySession.delete(sessionId);
+  sourceSeen.delete(sessionId);
 }
 
 /** What instrumentation coverage reads off a connected tab. */
@@ -84,13 +93,18 @@ const SOURCE_GAPS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The tab's HELLO channels, plus the `source` marker when its page said it carries source mapping
- * and no verdict recorded otherwise — the list the platform report sends and coverage reads.
+ * The tab's HELLO channels, plus the `source` marker when a verdict mapped a control to its
+ * file:line (seen anywhere is seen), or when its page said it carries source mapping and no verdict
+ * recorded otherwise — the list the platform report sends and coverage reads. A build that turned
+ * the stamp off has none, whatever was seen before it.
  */
 export function announcedChannels(tab: InstrumentedTab): string[] {
   const channels = [...(tab.channels ?? [])];
-  const contradicted = recordedGaps(tab.id).some((gap) => SOURCE_GAPS.has(gap.kind));
-  if (true === tab.sourceMapping && !contradicted) channels.push(CoverageMarker.SOURCE);
+  const gaps = recordedGaps(tab.id);
+  const off = gaps.some((gap) => InstrumentationGapKind.SOURCE_MAPPING_OFF === gap.kind);
+  const contradicted = gaps.some((gap) => SOURCE_GAPS.has(gap.kind));
+  const claimed = true === tab.sourceMapping && !contradicted;
+  if (!off && (sourceSeen.has(tab.id) || claimed)) channels.push(CoverageMarker.SOURCE);
   return channels;
 }
 

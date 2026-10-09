@@ -6,7 +6,8 @@
  * rule `instrumentation-gap.ts` keeps. The platform derives the same three states from the same
  * report, so the HUD, `doctor` and the dashboard agree:
  *
- *   missing       a verdict recorded the gap that names it (or a channel every SDK has is absent)
+ *   missing       a verdict recorded the gap that names it (or a channel every SDK has is absent);
+ *                 a gap about one control does not outrank its channel seen elsewhere
  *   seen          its channel or marker was announced
  *   not seen yet  neither — never counted as covered
  */
@@ -62,6 +63,11 @@ interface CapabilityRule {
   always?: true;
   /** Gap kinds that, once recorded, mean this capability is missing. */
   gaps: readonly InstrumentationGapKind[];
+  /**
+   * Gap kinds about ONE control. Its channel seen anywhere outranks them: one unmapped button is not
+   * an app with no source mapping, and reporting it as one hid every file:line a verdict did give.
+   */
+  perControl?: readonly InstrumentationGapKind[];
   cost: string;
   fix: string;
 }
@@ -119,6 +125,7 @@ const RULES: readonly CapabilityRule[] = [
     capability: CoverageCapability.SOURCE_MAPPING,
     channel: CoverageMarker.SOURCE,
     gaps: [InstrumentationGapKind.NO_SOURCE_MAPPING, InstrumentationGapKind.SOURCE_MAPPING_OFF],
+    perControl: [InstrumentationGapKind.NO_SOURCE_MAPPING],
     cost: 'a broken control is named, never the line that renders it',
     fix: fixForGap(InstrumentationGapKind.NO_SOURCE_MAPPING),
   },
@@ -142,7 +149,12 @@ export function coverageOf(input: {
   const missing: MissingCapability[] = [];
   const notSeenYet: CoverageCapability[] = [];
   for (const rule of RULES) {
-    const recorded = input.gaps.find((gap) => rule.gaps.some((kind) => kind === gap.kind));
+    const announced = rule.channel === undefined ? connected : channels.has(rule.channel);
+    const recorded = input.gaps.find(
+      (gap) =>
+        rule.gaps.some((kind) => kind === gap.kind) &&
+        !(announced && true === rule.perControl?.some((kind) => kind === gap.kind)),
+    );
     if (recorded !== undefined) {
       missing.push({
         capability: rule.capability,
@@ -151,7 +163,6 @@ export function coverageOf(input: {
       });
       continue;
     }
-    const announced = rule.channel === undefined ? connected : channels.has(rule.channel);
     if (announced) seen.push(rule.capability);
     else if (!connected || true === rule.always)
       missing.push({ capability: rule.capability, cost: rule.cost, fix: rule.fix });
