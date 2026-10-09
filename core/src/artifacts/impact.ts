@@ -225,6 +225,10 @@ export const HarnessConfigSchema = z.object({
 });
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 
+/** The Harness drive running in this tab's project, so the panel can show progress and Stop. */
+export const HarnessDriveSchema = z.object({ runId: z.string(), steps: z.number().int().min(0) });
+export type HarnessDrive = z.infer<typeof HarnessDriveSchema>;
+
 export const ImpactSnapshotSchema = z.object({
   schemaVersion: z.number().int().positive(),
   project: ImpactScopeSchema,
@@ -261,6 +265,8 @@ export const ImpactSnapshotSchema = z.object({
    * cannot be honoured is worse than showing none.
    */
   harnessConfig: HarnessConfigSchema.optional(),
+  /** The drive running now, when there is one. Absent: nothing is driving. */
+  harnessDrive: HarnessDriveSchema.optional(),
   /**
    * The rail's notices, already chosen for this machine by the daemon (see `hud-notices.ts`).
    * Absent means the daemon has nothing newer than the SDK's bundled slides, which then show.

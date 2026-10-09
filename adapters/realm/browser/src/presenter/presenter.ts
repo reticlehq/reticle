@@ -206,6 +206,12 @@ export class Presenter {
       onSignIn: () => this.#onControl?.({ kind: HumanControlKind.SIGNIN }),
       onHarness: (enabled) =>
         this.#onControl?.({ kind: HumanControlKind.HARNESS, text: enabled ? 'on' : 'off' }),
+      onHarnessRun: (persona) =>
+        this.#onControl?.({
+          kind: HumanControlKind.HARNESS_RUN,
+          ...(persona === undefined ? {} : { text: persona }),
+        }),
+      onHarnessStop: () => this.#onControl?.({ kind: HumanControlKind.HARNESS_STOP }),
       settings: {
         onBeforeOpen: () => {
           if (this.#shell.isCollapsed()) this.#shell.expand();
@@ -270,6 +276,7 @@ export class Presenter {
         this.#shell.paintOffer(snapshot.harnessOffer, snapshot.notices);
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
         this.#shell.paintHarness(snapshot.harnessConfig);
+        this.#shell.paintHarnessDrive(snapshot.harnessDrive);
         this.#shell.paintImpact(snapshot.project.counts.verdicts);
         const owner = true === snapshot.account?.signedIn ? snapshot.account.email : undefined;
         if (claimLog(owner)) this.#clearRunLog();

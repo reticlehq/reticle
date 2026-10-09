@@ -62,7 +62,8 @@ import { startVerifyServer } from './judgement/runs/verify-server.js';
 import { createMcpServer } from './surface/mcp/mcp.js';
 import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
-import { startChatDrives } from './surface/tools/chat-drives.js';
+import { hudDrive, startChatDrives, withRunningDrive } from './surface/tools/chat-drives.js';
+import { onDriveChange } from './features/harness/drive-runs.js';
 import { runTool } from './surface/tools/invoke-tool.js';
 import {
   SessionReaper,
@@ -560,7 +561,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     for (const session of bridge.sessions.all()) {
       const root =
         session.artifactRoot ?? options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT);
-      if (only === undefined || only === root) session.pushImpact(() => impactSnapshot(root), true);
+      if (only === undefined || only === root)
+        session.pushImpact(() => withRunningDrive(impactSnapshot(root), session.id), true);
     }
   };
   pushHarnessConfig = repaint;
@@ -667,10 +669,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     otherRoots: knownProjectRoots,
   });
   syncNudge.run = (): void => cloudSync.nudge();
-  // `syncNow`, not `nudge`: a nudge schedules a cycle soon, which is right for "a run landed" and
-  // wrong for a button somebody is watching. Never awaited.
+  // `syncNow`, not `nudge` (a cycle soon): somebody is watching the button. Never awaited.
   bridge.attachSyncRequest(() => void cloudSync.syncNow());
-  // The panel's harness switch, written through to the platform so console and panel cannot disagree.
   if (options.hudSignIn !== undefined)
     bridge.attachSigninRequest(options.hudSignIn(() => repaint()));
   // logout and link run in another process: repaint when their files change. See account-watch.ts.
@@ -679,10 +679,14 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   bridge.attachSessionReady((s) =>
     accountFiles.watch(join(s.artifactRoot ?? reticleRoot, ReticleDir.CLOUD_LINK_FILE)),
   );
-  bridge.attachHarnessRequest((on, s) => {
+  // The panel's Harness controls: the switch writes through to the platform; Run and Stop drive.
+  bridge.attachHarnessRequest((request, s) => {
     const root = s.artifactRoot ?? reticleRoot;
-    applyHarnessSwitch(configForRoot, root, on, platformEnvFor(root));
+    void hudDrive(deps, s.id, request, (on) =>
+      applyHarnessSwitch(configForRoot, root, on, platformEnvFor(root)),
+    );
   });
+  onDriveChange(() => repaint());
   // Scope auto-selection to the active project (from .reticle.json) so a stray tab from another app is
   // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
   // Scope + the no-session diagnosis: "no browser session connected" is the error that ends most

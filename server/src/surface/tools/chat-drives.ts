@@ -42,11 +42,24 @@ import {
   startAppReports,
 } from '../../features/harness/platform/local-apps.js';
 import { serverOptionsFromEnv } from '../../features/harness/platform/server-driver.js';
-import { driveForChat } from './explore-tools.js';
-import { withLinkedCredential } from './harness-explore.js';
+import { EXPLORE_TOOLS, driveForChat } from './explore-tools.js';
+import { MSG_NO_HARNESS_KEY, withLinkedCredential } from './harness-explore.js';
 import { runTool } from './invoke-tool.js';
 import { announcedChannels, recordedGaps } from '../../portal/session/recorded-gaps.js';
 import { probeDevServers } from '../../portal/session/dev-server/dev-server-probe.js';
+import {
+  DriveOrigin,
+  runningDrive,
+  stopDrive,
+  type DriveRecord,
+} from '../../features/harness/drive-runs.js';
+import {
+  FreeDriveKind,
+  planUrl,
+  requestFreeDrive,
+  type FreeDrive,
+} from '../../features/harness/platform/platform-drives.js';
+import { HumanControlKind, type HarnessDrive, type ImpactSnapshot } from '@reticlehq/core';
 
 /** Why a platform drive with no tab of its own runs no tool. */
 const NO_DRIVEN_TAB = 'No tab was picked for this drive, so no tool runs.';
@@ -339,4 +352,69 @@ export function startChatDrives(
       reports.stop();
     },
   };
+}
+
+/** Said on the HUD when Stop finds nothing to stop. */
+const MSG_NOTHING_DRIVING = 'No Harness drive is running in this tab.';
+const msgStartTrial = (url: string): string => `Start your trial: ${url}`;
+
+/**
+ * The panel's Harness controls. The switch is the platform's autonomous mode, unchanged. Run Harness
+ * and Stop drive. A run asks the platform for the drive's grant, then starts it
+ * through the same explore an agent calls (counted, recorded, polled the same way); its lines and
+ * steps reach the HUD log as the drive narrates them. A refused grant says why, and where to start
+ * a trial when it wants a card.
+ */
+export async function hudDrive(
+  deps: ToolDeps,
+  sessionId: string,
+  /** The panel's control, as the bridge narrowed it (`harness-request.ts`). */
+  request:
+    | { kind: typeof HumanControlKind.HARNESS; enabled: boolean }
+    | { kind: typeof HumanControlKind.HARNESS_RUN; persona?: string }
+    | { kind: typeof HumanControlKind.HARNESS_STOP },
+  /** The autonomous switch: written through to the platform, which the daemon owns. */
+  applySwitch: (enabled: boolean) => void,
+  grant: (platform: { url: string; apiKey: string }) => Promise<FreeDrive> = (platform) =>
+    requestFreeDrive(platform, FreeDriveKind.EXPLORE),
+): Promise<void> {
+  if (HumanControlKind.HARNESS === request.kind) return applySwitch(request.enabled);
+  const say = (text: string): void => deps.sessions.get?.(sessionId)?.pushNarration(text);
+  if (HumanControlKind.HARNESS_STOP === request.kind) {
+    const running = runningDrive(sessionId);
+    if (running === undefined || !stopDrive(running.harnessRun)) say(MSG_NOTHING_DRIVING);
+    return;
+  }
+  const platform = serverOptionsFromEnv(await withLinkedCredential(deps, process.env));
+  if (platform === undefined) return say(MSG_NO_HARNESS_KEY);
+  const granted = await grant(platform);
+  if (!granted.granted) {
+    say(granted.message);
+    if (granted.needsCard) say(msgStartTrial(planUrl(platform.url)));
+    return;
+  }
+  const explore = EXPLORE_TOOLS.find((tool) => ReticleTool.VERIFY_EXPLORE === tool.name);
+  if (explore === undefined) return;
+  try {
+    await runTool(explore, deps, {
+      sessionId,
+      driveId: granted.driveId,
+      origin: DriveOrigin.HUD,
+      wait: 0,
+      ...(request.persona === undefined ? {} : { persona: request.persona }),
+    });
+  } catch (error) {
+    say(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** The impact snapshot, with the drive running on this tab when there is one. */
+export function withRunningDrive(
+  snapshot: ImpactSnapshot | undefined,
+  sessionId: string,
+): ImpactSnapshot | undefined {
+  const running: DriveRecord | undefined = runningDrive(sessionId);
+  if (running === undefined || snapshot === undefined) return snapshot;
+  const drive: HarnessDrive = { runId: running.harnessRun, steps: running.steps };
+  return { ...snapshot, harnessDrive: drive };
 }
