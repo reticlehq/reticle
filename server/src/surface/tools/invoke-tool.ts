@@ -723,7 +723,14 @@ async function dispatchTool<Ext>(
   if (!bound || !isPlainObject(result)) return result;
   // Reuse the session resolved above so the health envelope describes the SAME session the handler
   // drove; only re-resolve if the up-front attempt failed but the handler somehow succeeded.
-  const driven = session ?? deps.sessions.resolve(rawSessionId);
+  // A handler that answered with no tab to resolve (a Harness drive polled by runId after a daemon
+  // restart reads its record from disk) keeps its answer: there is no session health to describe.
+  let driven = session;
+  try {
+    driven ??= deps.sessions.resolve(rawSessionId);
+  } catch {
+    return result;
+  }
   // ...unless the call replaced that document. A full navigation or reload registers a NEW Session
   // under the same id (or under the id the result reports it arrived at), and the object resolved
   // before the call is the page that unloaded: it reported itself hidden on the way out, so every

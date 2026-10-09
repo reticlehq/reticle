@@ -110,6 +110,16 @@ describe('runTool — universal session-health invariant', () => {
     expect('session' in r).toBe(false);
   });
 
+  /** A Harness runId polled after a daemon restart answered "no browser session connected". */
+  it('keeps a bound tool answer that needed no tab, when no tab can be resolved', async () => {
+    const deps = fakeDeps();
+    (deps.sessions as Partial<SessionManager>).resolve = () => {
+      throw new Error('no browser session connected');
+    };
+    const record = { status: 'done', runId: 'harness-1' };
+    expect(await runTool(stubTool(ReticleTool.VERIFY, record), deps, {})).toEqual(record);
+  });
+
   it('4: never corrupts a non-object result (array / primitive pass through)', async () => {
     const name = ReticleTool.ACT;
     expect(await runTool(stubTool(name, [1, 2, 3]), fakeDeps(), {})).toEqual([1, 2, 3]);
