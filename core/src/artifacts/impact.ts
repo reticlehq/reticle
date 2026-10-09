@@ -280,6 +280,11 @@ export const ImpactSnapshotSchema = z.object({
    * push, and the sentence describing it). Loose here, shaped by the daemon's sync-status.
    */
   sync: z.record(z.unknown()).optional(),
+  /**
+   * How much of THIS tab's app Reticle sees, and the prompt that asks a coding agent to close the
+   * rest (`covered`, `total`, `missing`, `prompt`). Loose here, shaped by the daemon's coverageOf.
+   */
+  instrumentation: z.record(z.unknown()).optional(),
 });
 export type ImpactSnapshot = z.infer<typeof ImpactSnapshotSchema>;
 

@@ -327,9 +327,10 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * keep their previous semantics. No dependency or protocol schema was added. Re-measured at
  * 256,176 B after merging main. Main then gained the keypress key codes, the image-alt check and the
  * unreachable-warning text, and the merge measured 256,653 B; the ceiling is that rounded up to the
- * next hundred.
+ * next hundred. The impact snapshot schema then gained `instrumentation` (the tab's coverage and
+ * the coding-agent prompt the HUD copies), measured at 256,728 B; rounded up to the next hundred.
  */
-const MAX_FIRST_LOAD_BYTES = 256_700;
+const MAX_FIRST_LOAD_BYTES = 256_800;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The
