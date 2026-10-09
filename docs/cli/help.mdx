@@ -24,6 +24,34 @@ All three are the same command.
 
 ## The short list
 
+```text
+usage:  reticle <command>   (or npx @reticlehq/server <command>)
+
+Get started
+  init        Wire Reticle into the app in this folder
+  connect     Sign in and link this project to the dashboard
+  try         Watch Reticle drive a URL once and say which journeys work
+
+Check your app
+  verify      Check the saved flows against the running app; exit 0 means pass
+  gate        Fail unless passing checks cover the flows your changes touch
+
+Reticle on this machine
+  status      Is Reticle running, is your app connected, are you signed in
+  doctor      Find what is wrong with the setup, and what is missing from coverage
+  open        Show the app in the browser Reticle drives
+  stop        Stop Reticle; --force frees its port even without a recorded pid
+  restart     Stop Reticle, then start it and wait until it is listening
+  update      Install the latest version and restart
+
+Account
+  logout      Sign out (of one host; others stay signed in)
+  feedback    Tell us what worked and what didn't; prints exactly what it sends
+  telemetry   Show or change anonymous usage metrics
+
+All commands: reticle help all     One command: reticle <command> --help
+```
+
 | Group                   | Commands                                                |
 | ----------------------- | ------------------------------------------------------- |
 | Get started             | `init`, `connect`, `try`                                |

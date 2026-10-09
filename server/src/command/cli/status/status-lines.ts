@@ -144,7 +144,7 @@ export function statusLines(fields: Record<string, unknown>): string[] {
     lines.push(
       continuation(
         project === undefined
-          ? 'this repo is not linked — run `reticle connect`'
+          ? 'this repo is not linked: run `reticle connect`'
           : `this repo is linked to ${project}`,
       ),
     );
