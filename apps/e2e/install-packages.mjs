@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
   readFileSync,
   readdirSync,
@@ -67,6 +67,20 @@ export function validatePackageManifest(manifest, expected, sha, readTarball) {
   }
 }
 
+/**
+ * Run tar with the archive on stdin. tar may stop reading once it has what it needs (the
+ * end-of-archive blocks, or every member named by -T), leaving gzip padding unread; if it exits
+ * before node finishes writing, the write fails with EPIPE although tar succeeded. Under load that
+ * failed the battery with `spawnSync tar EPIPE` on 2026-10-09. So EPIPE with exit 0 is success, and
+ * every other failure, including a non-zero tar exit, still throws.
+ */
+function tarStdin(args, archive, options = {}) {
+  const res = spawnSync('tar', args, { ...options, input: archive });
+  if (res.error !== undefined && !(res.error.code === 'EPIPE' && res.status === 0)) throw res.error;
+  if (res.status !== 0) throw new Error(`tar ${args.join(' ')} exited ${res.status}: ${res.stderr}`);
+  return res.stdout;
+}
+
 export function restoreInstallPackages(directory, root) {
   const expected = publishablePackages(root);
   const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
@@ -78,8 +92,7 @@ export function restoreInstallPackages(directory, root) {
     // GNU tar treats the colon in a Windows drive path as a remote archive. Stdin keeps the
     // verified bytes local regardless of which tar the runner puts on PATH.
     const archive = readFileSync(tarball);
-    const listing = execFileSync('tar', ['-tzf', '-'], {
-      input: archive,
+    const listing = tarStdin(['-tzf', '-'], archive, {
       encoding: 'utf8',
       maxBuffer: 16 * 1024 * 1024,
     });
@@ -102,10 +115,7 @@ export function restoreInstallPackages(directory, root) {
           // makes GNU tar seek backwards in the stdin archive and report them as missing.
           members.filter((member) => member.startsWith('package/dist/') && !member.endsWith('/')).join('\n') + '\n',
         );
-        execFileSync('tar', ['-xzf', '-', '--strip-components=1', '-T', list], {
-          cwd: target,
-          input: archive,
-        });
+        tarStdin(['-xzf', '-', '--strip-components=1', '-T', list], archive, { cwd: target });
       } finally {
         rmSync(selection, { recursive: true, force: true });
       }

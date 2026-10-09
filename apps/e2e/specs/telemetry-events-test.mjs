@@ -105,9 +105,16 @@ const check = (name, ok, detail = '') => results.push({ name, ok, detail });
  * spec settles fifteen times, so that is most of a second back); under load it keeps waiting up to
  * the cap. Nothing about the assertions changes — they still require the events to actually arrive.
  */
+/*
+ * Quiet alone is still a duration: an event whose emitter does real work first (the crash report
+ * snapshots the machine) can arrive after 120ms of silence. Under battery load on 2026-10-09 that
+ * failed all twelve `runtime_crashed` checks with "got 0" while the spec passed alone. So a site
+ * that knows what it is waiting FOR passes `arrived`, and settle keeps waiting until that holds
+ * (or the cap, where the assertion reports what is missing) before it starts timing the quiet.
+ */
 const SETTLE_QUIET_MS = 120;
 const SETTLE_CAP_MS = 10_000;
-const settle = async () => {
+const settle = async (arrived = () => true) => {
   const deadline = Date.now() + SETTLE_CAP_MS;
   let seen = captured.length;
   let quietSince = Date.now();
@@ -118,7 +125,7 @@ const settle = async () => {
       quietSince = Date.now();
       continue;
     }
-    if (Date.now() - quietSince >= SETTLE_QUIET_MS) return;
+    if (arrived() && Date.now() - quietSince >= SETTLE_QUIET_MS) return;
     if (Date.now() >= deadline) return; // cap: let the assertion below report what is missing
   }
 };
@@ -455,7 +462,7 @@ installDaemonResilience({ on: (ev, fn) => (handlers[ev] = fn) }, () => {}, () =>
   handlers['unhandledRejection']?.(err);
 }
 handlers['uncaughtException']?.(new RangeError('index out of range'));
-await settle();
+await settle(() => find('runtime_crashed').length >= 2);
 {
   const cs = find('runtime_crashed');
   check('runtime_crashed fires for both crash kinds', cs.length === 2, `got ${cs.length}`);

@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from 'vitest';
+import { describe, expect, it, afterEach, vi } from 'vitest';
 import { request } from 'node:http';
 import { startConnectProxy, type ConnectProxy } from './proxy.js';
 
@@ -8,17 +8,30 @@ afterEach(async () => {
   running = undefined;
 });
 
-/** A CONNECT, the way every HTTPS client opens a tunnel through a proxy. */
-function connect(port: number, target: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const req = request({ port, method: 'CONNECT', path: target });
-    req.on('connect', (_res, socket) => {
-      socket.destroy();
-      resolve();
-    });
-    req.on('error', reject);
-    req.end();
-  });
+/**
+ * A CONNECT, the way every HTTPS client opens a tunnel through a proxy, held until the proxy has
+ * RECORDED it.
+ *
+ * This used to wait for the tunnel to open, which means the proxy dialling the real host over the
+ * internet: DNS plus a TCP handshake to api.github.com or example.com, inside vitest's 5s default.
+ * Under load on 2026-10-09 three of these failed. The recording is the property under test and it
+ * happens when the CONNECT line arrives, so wait for that (bounded), not for the far side.
+ */
+async function connect(proxy: ConnectProxy, target: string): Promise<void> {
+  const before = proxy.connectsSince(Number.NEGATIVE_INFINITY).length;
+  const req = request({ port: proxy.port, method: 'CONNECT', path: target });
+  req.on('error', () => undefined);
+  req.end();
+  try {
+    await vi.waitFor(
+      () => {
+        expect(proxy.connectsSince(Number.NEGATIVE_INFINITY).length).toBeGreaterThan(before);
+      },
+      { timeout: 4_000, interval: 10 },
+    );
+  } finally {
+    req.destroy();
+  }
 }
 
 describe('watching which hosts a tool dials', () => {
@@ -33,13 +46,13 @@ describe('watching which hosts a tool dials', () => {
    */
   it('records the host and port a client asked to reach', async () => {
     running = await startConnectProxy({ now: () => 1_000 });
-    await connect(running.port, 'api.github.com:443');
+    await connect(running, 'api.github.com:443');
     expect(running.connectsSince(0)).toEqual([{ host: 'api.github.com', port: 443, at: 1_000 }]);
   });
 
   it('reports only what happened after the moment asked about', async () => {
     running = await startConnectProxy({ now: () => 5_000 });
-    await connect(running.port, 'example.com:443');
+    await connect(running, 'example.com:443');
     expect(running.connectsSince(9_000)).toEqual([]);
   });
 
@@ -52,7 +65,7 @@ describe('watching which hosts a tool dials', () => {
    */
   it('reads a target with no port as the one an HTTPS client means', async () => {
     running = await startConnectProxy({ now: () => 0 });
-    await connect(running.port, 'example.com');
+    await connect(running, 'example.com');
     expect(running.connectsSince(0)[0]?.port).toBe(443);
   });
 

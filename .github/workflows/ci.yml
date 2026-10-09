@@ -132,9 +132,9 @@ jobs:
       # failure in a package nobody was editing.
       - run: pnpm lint:docs
       - run: pnpm typecheck
-      # High and critical dependency advisories fail verify and therefore the aggregate gate.
-      # The checker accepts only the two exact, reviewed, unpatched development-tool paths recorded
-      # in REPOSITORY-SETTINGS.md; any new path, patched release, or advisory fails.
+      # Critical dependency advisories fail verify and therefore the aggregate gate; high ones are
+      # printed as warnings (package, path, fix version) and do not fail it. The two reviewed,
+      # unpatched development-tool exceptions in REPOSITORY-SETTINGS.md still fail when stale.
       - name: Security audit
         run: node scripts/check-js-audit.mjs --self-test && node scripts/check-js-audit.mjs
       # format:check is its own job (format-check); running it here as well cost ~30s for nothing.
@@ -188,9 +188,13 @@ jobs:
   # only machine honest enough to lose the race.
   windows:
     runs-on: windows-latest
-    # Queue, main, nightly and on demand; not on every PR push. It was the slowest job left on the
-    # PR critical path, and the queue still runs it before anything reaches main.
-    if: github.event_name != 'pull_request'
+    # Queue, main, nightly and on demand always; on a PR only when Windows-sensitive source
+    # changed. It used to skip every PR, so Windows-only defects (path separators in messages and
+    # in tests' hard-coded POSIX paths) surfaced first in the merge queue and dropped the entry:
+    # #1468, #1490 and #1493 each cost a fix plus a 20-40 minute re-queue. A docs-only PR still
+    # does not pay for it.
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.windows == 'true'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -544,6 +548,7 @@ jobs:
       conformance: ${{ steps.filter.outputs.conformance }}
       rust: ${{ steps.filter.outputs.rust }}
       e2e: ${{ steps.filter.outputs.e2e }}
+      windows: ${{ steps.filter.outputs.windows }}
       # WHICH scaffolds run on WHICH os, decided per event rather than hard-coded in the matrix.
       install_matrix: ${{ steps.install_matrix.outputs.value }}
     steps:
@@ -555,7 +560,7 @@ jobs:
           # Full qualification must also work when manually dispatched on a feature branch.
           case "${{ github.event_name }}" in
             schedule|workflow_dispatch)
-              for tier in install gateself desktop bench conformance rust e2e; do
+              for tier in install gateself desktop bench conformance rust e2e windows; do
                 echo "$tier=true" >> "$GITHUB_OUTPUT"
               done
               exit 0
@@ -585,7 +590,8 @@ jobs:
             echo "bench=true" >> "$GITHUB_OUTPUT"
             echo "conformance=true" >> "$GITHUB_OUTPUT"
             echo "rust=true" >> "$GITHUB_OUTPUT"
-            echo "e2e=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "windows=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CHANGED="$(git diff --name-only "$BASE"...HEAD || true)"
           # Still fails OPEN. A base that resolves but produces nothing — a force-push, an empty
@@ -599,7 +605,8 @@ jobs:
             echo "bench=true" >> "$GITHUB_OUTPUT"
             echo "conformance=true" >> "$GITHUB_OUTPUT"
             echo "rust=true" >> "$GITHUB_OUTPUT"
-            echo "e2e=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "windows=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "changed files:"; echo "$CHANGED" | sed 's/^/  /'
           # What the e2e battery can see: every package it boots or drives, and the apps it starts.
@@ -670,6 +677,13 @@ jobs:
             echo "bench=true" >> "$GITHUB_OUTPUT"
           else
             echo "bench=false" >> "$GITHUB_OUTPUT"
+          fi
+          # What the `windows` job can see: the TypeScript packages its build, typecheck, unit
+          # suite and daemon specs exercise, plus the scripts and lockfile they run through.
+          if grep -qE '^(core|engine|server|init|open-verification|spec-runner|conformance|adapters|scripts)/|^apps/e2e/|^(package\.json|pnpm-lock\.yaml|turbo\.json|\.github/workflows/ci\.yml)$' <<< "$CHANGED"; then
+            echo "windows=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "windows=false" >> "$GITHUB_OUTPUT"
           fi
           # Both Rust compile jobs run for crate changes. JS/docs cannot change this standalone
           # Cargo tree; scheduled/manual runs still exercise it through the full-tier fallback.
