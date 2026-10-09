@@ -13,6 +13,7 @@ import {
   reportPanelHtml,
 } from './presenter-report.js';
 import { Presenter } from './presenter.js';
+import { REPORT_CSS } from './presenter-report-styles.js';
 import {
   buildLinkedInShareUrl,
   buildShareText,
@@ -633,5 +634,13 @@ describe('what the HUD says once a run syncs, or never will', () => {
       'Copy prompt for your coding agent',
     );
     expect(instrumentationHtml({ covered: '<b>', total: 8 })).toBe('');
+  });
+
+  // Driven before release: the coverage line shipped with no rules at all, so the copy button drew as
+  // the browser's default white button over the cards below it.
+  it('styles every class the coverage line renders', () => {
+    const html = instrumentationHtml({ covered: 5, total: 8, prompt: 'Read …' });
+    const classes = [...html.matchAll(/class="([^"]+)"/g)].flatMap((m) => (m[1] ?? '').split(' '));
+    for (const name of classes) expect(REPORT_CSS).toContain(`.${name}{`);
   });
 });

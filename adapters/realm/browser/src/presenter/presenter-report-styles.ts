@@ -120,6 +120,16 @@ export const REPORT_CSS = `
 [${REPORT_PANEL_ATTR}] .reticle-report-section{
   display:block;margin-bottom:6px;color:var(--reticle-faint);font-size:9.5px;
   letter-spacing:.06em;text-transform:uppercase;}
+[${REPORT_PANEL_ATTR}] .reticle-report-instrumentation{
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin-top:12px;}
+[${REPORT_PANEL_ATTR}] .reticle-report-instrumentation .reticle-report-section{
+  flex-basis:100%;margin-bottom:0;}
+[${REPORT_PANEL_ATTR}] .reticle-report-instrumentation-value{
+  color:var(--reticle-fg);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;}
+[${REPORT_PANEL_ATTR}] .reticle-report-copy-prompt{
+  border:0;padding:0;background:none;cursor:pointer;font:inherit;font-size:10.5px;font-weight:500;
+  color:var(--reticle-c-active);}
+[${REPORT_PANEL_ATTR}] .reticle-report-copy-prompt:hover{text-decoration:underline;}
 /* Thirty fixed slots, not a flex row: one recorded day is one thin bar on a month's axis, and a
    single stretched block would read as "a month of solid work" on the day you install it. */
 [${REPORT_PANEL_ATTR}] .reticle-report-chart{
