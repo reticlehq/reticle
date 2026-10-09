@@ -279,8 +279,8 @@ function readable(io: InitIo, path: string | null): ViteConfigDiscovery['config'
  * Find the config that a plain-Vite dev script actually loads.
  *
  * An explicit `--config` is authoritative. A direct `vite` command without one keeps Vite's own
- * root lookup. A custom server plus nested configs is ambiguous, so it returns evidence for a
- * precise MANUAL step instead of creating a root config that the server may never read.
+ * root lookup. A custom server with no root config but nested ones is ambiguous, so it returns
+ * evidence for a precise MANUAL step instead of creating a root config the server may never read.
  */
 export function discoverPlainViteConfig(
   io: InitIo,
@@ -302,11 +302,8 @@ export function discoverPlainViteConfig(
   if (invocation !== undefined) return { config: readable(io, rootPath), candidates: [] };
 
   const nested = script === undefined ? [] : nestedViteConfigs(io, configNames);
-  if (nested.length > 0) {
-    return {
-      config: null,
-      candidates: null === rootPath ? nested : [rootPath, ...nested],
-    };
+  if (null === rootPath && nested.length > 0) {
+    return { config: null, candidates: nested };
   }
   return { config: readable(io, rootPath), candidates: [] };
 }

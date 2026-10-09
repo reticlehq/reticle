@@ -474,21 +474,20 @@ describe('runInit', () => {
     expect(io.written['vite.config.ts']).toBeUndefined();
   });
 
-  it('does not guess the root config when a custom dev server also has a nested config', () => {
+  it('patches the root config when a wrapper dev script sits beside an unrelated nested config', () => {
     const io = memoryIo({
       'package.json': JSON.stringify({
         devDependencies: { vite: '^5' },
-        scripts: { dev: 'node server.mjs' },
+        scripts: { dev: 'concurrently "vite" "node server.mjs"' },
       }),
-      'vite.config.mjs': `export default { plugins: [] };\n`,
-      'build/vite.config.mjs': `export default { plugins: [] };\n`,
+      'vite.config.ts': `export default { plugins: [] };\n`,
+      'docs/vite.config.ts': `export default { plugins: [] };\n`,
     });
 
     runInit(OPTS, io);
 
-    expect(io.lines.join('\n')).toContain('build/vite.config.mjs');
-    expect(io.written['vite.config.mjs']).toBeUndefined();
-    expect(io.written['build/vite.config.mjs']).toBeUndefined();
+    expect(io.written['vite.config.ts']).toContain('reticle(');
+    expect(io.written['docs/vite.config.ts']).toBeUndefined();
   });
 
   it('still creates a root config when plain vite uses its default config lookup', () => {
