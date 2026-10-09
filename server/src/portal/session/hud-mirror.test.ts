@@ -65,6 +65,23 @@ describe('a headless driven session mirrors its HUD feed to the tabs a human can
     expect(named(watched, ReticleCommand.IMPACT)).toHaveLength(1);
   });
 
+  /** Two tabs of one app each showed the SDK-behind notice twice, the copy prefixed with an id. */
+  it('keeps a notice about this page on this page, once', () => {
+    const manager = new SessionManager();
+    const [first, firstSent] = open('tab-1', 'http://localhost:3000/', 'app');
+    const [second, secondSent] = open('tab-2', 'http://localhost:3000/', 'app');
+    manager.add(first);
+    manager.add(second);
+
+    first.pushNarration('This app runs an older SDK', false);
+    second.pushNarration('This app runs an older SDK', false);
+
+    for (const sent of [firstSent, secondSent]) {
+      const rows = named(sent, ReticleCommand.NARRATE).map((m) => m.args?.['text']);
+      expect(rows).toEqual(['This app runs an older SDK']);
+    }
+  });
+
   it('names the session the mirrored row came from, so the watcher is not lied to', () => {
     const manager = new SessionManager();
     const [driven] = open('lease-1', 'http://localhost:3000/', 'app');

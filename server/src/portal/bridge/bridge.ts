@@ -758,7 +758,7 @@ export class Bridge {
             if (behind !== undefined && parsed.sdkVersion !== undefined) {
               log('sdk_behind', { sessionId: session.id, sdk: parsed.sdkVersion });
               noteVersionSkew(SkewPair.SDK_BEHIND, behind);
-              session.pushNarration(SDK_BEHIND_NARRATION(parsed.sdkVersion, SERVER_VERSION));
+              session.pushNarration(SDK_BEHIND_NARRATION(parsed.sdkVersion, SERVER_VERSION), false);
             }
           }
           log('session_connected', { sessionId: session.id, url: session.url });

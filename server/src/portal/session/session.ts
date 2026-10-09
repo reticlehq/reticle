@@ -905,8 +905,10 @@ export class Session implements HandshakeFacts {
   /** Fire-and-forget a narration row to the live panel (so a resolved mark shows "✓ fixed"). */
   #impactTimer: ReturnType<typeof setTimeout> | undefined;
 
-  pushNarration(text: string): void {
-    this.#post(ReticleCommand.NARRATE, { text, level: 'info' });
+  /** `mirror: false` for a notice about THIS page (its SDK is behind), which every tab says itself. */
+  pushNarration(text: string, mirror = true): void {
+    if (mirror) this.#post(ReticleCommand.NARRATE, { text, level: 'info' });
+    else this.#send(ReticleCommand.NARRATE, { text, level: 'info' });
   }
 
   /** A HUD replay's progress, or the Harness's drive plan: pictures the HUD redraws as they change. */
@@ -953,12 +955,9 @@ export class Session implements HandshakeFacts {
   }
 
   /**
-   * Fire-and-forget command send — NOT registered in #pending (no correlated result expected).
-   *
-   * Mirrored to this project's other tabs, for the two commands that are a REPORT of what happened
-   * (narration, impact). PRESENTER is deliberately not among them: it is the glow and the lifecycle
-   * that say "the agent is driving THIS tab", and a viewer that showed it would be claiming
-   * something untrue about itself.
+   * Fire-and-forget command send, NOT registered in #pending. Mirrored to this project's other tabs
+   * for the commands that REPORT what happened. PRESENTER is not among them: it says "the agent is
+   * driving THIS tab", and a viewer that showed it would be claiming something untrue about itself.
    */
   #post(name: string, args: Record<string, unknown>): void {
     this.#send(name, args);
