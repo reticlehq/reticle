@@ -1,3 +1,0 @@
-### Changed
-
-- **`@reticlehq/engine`: `ui-advanced-request-failed` says how to declare a failure you expect.** Testing a designed error path (a 402 paywall, a 429 rate limit) through the UI it renders gets this finding, and declaring the failing call in the predicate is what exempts it, but nothing in the finding said so. Its `detail` now ends with the exact `net` clause built from each failed write (method, path, and status, or `ok: false` when there was no status), worded as a condition: if this failure is the outcome you expect, declare it. The finding and the verdict are unchanged, and no other finding carries the hint. Closes [#1418](https://github.com/reticlehq/reticle/issues/1418).

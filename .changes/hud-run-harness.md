@@ -1,3 +1,0 @@
-### Added
-
-- **`@reticlehq/browser` + `@reticlehq/server`: Run Harness from the HUD.** The Agent Log's Harness switch only turned the platform's autonomous mode on or off; nothing on the panel could start a drive. Beside it there is now a Run Harness button with an optional persona field. It asks the platform for the drive's grant and starts it exactly as an agent's `reticle_verify { action: "explore" }` would, the drive's steps show in the Agent Log, and Stop ends it. When the workspace needs a card, the log says so with a link to the dashboard's billing settings. The switch itself behaves as before.

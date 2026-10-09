@@ -1,3 +1,0 @@
-### Added
-
-- **A `net` clause can declare its endpoint a read with `repeatable: true`.** GraphQL queries, tRPC batches, query buses and read Server Actions all read over POST. When React StrictMode ran one twice in an action window, a `net` clause naming it got `unknown` with `duplicate-request` although nothing was written. The only workarounds were dropping the clause or listing the endpoint as `background`, which also hid it from the settle wait. `repeatable: true` keeps that endpoint out of the duplicate rule for this verdict only: the request is still waited for and counted. Without it the rule is unchanged. Closes [#1353](https://github.com/reticlehq/reticle/issues/1353).

@@ -1,3 +1,0 @@
-### Added
-
-- **`@reticlehq/server` + `@reticlehq/core`: coverage, and a prompt for your coding agent.** `reticle doctor` and the HUD say how much of your app Reticle can see — page, actions, network, console, app state, signals, file:line, stable test ids — and what each missing piece costs you, with a copy-paste prompt for your coding agent that lists only the gaps Reticle actually recorded and ends with the verify command that proves the change. The daemon also reports dev servers it finds running without the SDK and the last refused page handshake, so the dashboard can tell "not installed", "not running" and "not instrumented" apart.

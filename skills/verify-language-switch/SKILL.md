@@ -3,7 +3,7 @@ name: verify-language-switch
 description: 'Prove a language switch translates what the user sees, keeps what they had already typed, and is still in force after a reload. Use when i18n, a locale picker, a language menu or translation files were added or changed, when a string is suspected of staying in the old language or showing a raw translation key, or when a user reports losing their form or their language choice after switching or refreshing.'
 license: Apache-2.0
 metadata:
-  version: 3.6.0
+  version: 3.7.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
