@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -5,6 +6,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { MCP_CLIENT_DIRECTORY_HEADER, MCP_MESSAGE_PATH, MCP_SSE_PATH } from '@reticlehq/core';
 import { callingClientDirectory } from '@/hooks/client-directory.js';
 import { createSharedServer, type SharedServer } from './surface/http-server.js';
+
+/** A project directory, absolute on whichever platform runs the test (drive-rooted on Windows). */
+const SHOP = resolve('/work/shop');
 
 /**
  * The daemon's HTTP/SSE MCP transport, pinned as public surface (#690).
@@ -255,12 +259,12 @@ describe('the SSE handshake', () => {
     const { sse, endpoint } = await handshake(port);
 
     await post(port, endpoint, rpc(4, 'tools/call', { name: 'where', arguments: {} }), {
-      [MCP_CLIENT_DIRECTORY_HEADER]: '/work/shop',
+      [MCP_CLIENT_DIRECTORY_HEADER]: SHOP,
     });
     const named = await sse.waitFor((f) => 4 === idOf(f));
     const namedText = (JSON.parse(named.data) as { result: { content: { text?: string }[] } })
       .result.content[0]?.text;
-    expect(namedText).toBe('/work/shop');
+    expect(namedText).toBe(SHOP);
 
     await post(port, endpoint, rpc(5, 'tools/call', { name: 'where', arguments: {} }));
     const unnamed = await sse.waitFor((f) => 5 === idOf(f));
