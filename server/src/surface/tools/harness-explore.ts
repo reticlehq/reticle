@@ -139,8 +139,8 @@ export interface ExploreResult {
  * print it, and two copies of this sentence would drift.
  */
 export const MSG_NO_HARNESS_KEY =
-  `The Reticle Harness runs on the Reticle platform, and every plan includes it (Free comes with ` +
-  `monthly Harness credits): run \`reticle connect\` to link this project and sign in. ` +
+  `The Reticle Harness runs on the Reticle platform, and a new account gets 10 free credits ` +
+  `to try it: run \`reticle connect\` to link this project and sign in. ` +
   `Without it, drive the journey yourself with reticle_act_and_wait and an \`until\` on its last step: ` +
   `what you drive is saved as a flow just the same.`;
 
@@ -474,12 +474,12 @@ export const MSG_HARNESS_DISABLED =
 /**
  * The other reason a drive can be refused, and it is NOT the same reason.
  *
- * A drive through the platform spends Reticle's model budget, bounded by the workspace's monthly
- * Harness credits. The platform answers this only when something other than the switch stops it.
+ * A drive through the platform spends Reticle's model budget, bounded by the workspace's Harness
+ * credits. The platform answers this only when something other than the switch stops it.
  */
 export const MSG_HARNESS_UNCLAIMED =
-  'The Reticle platform says this workspace cannot drive the Harness right now. Every workspace, ' +
-  'Free included, gets Harness credits each month: see Settings → Plan in the Reticle dashboard.';
+  'The Reticle platform says this workspace cannot drive the Harness right now, usually because its ' +
+  'credits are spent: see Settings → Plan in the Reticle dashboard.';
 
 /** The platform could not be asked, and the drive would spend Reticle's budget without its yes. */
 export const MSG_HARNESS_UNCONFIRMED =

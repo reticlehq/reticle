@@ -55,7 +55,7 @@ Two `reticle_flow_replay` arguments make the branches possible, and you can use 
 
 ## What it needs
 
-**A project on the Reticle platform.** Every plan includes the Harness: Free comes with monthly Harness credits, one per decision the Harness makes. Run `reticle connect` once in your app's folder. The Harness runs on the platform: planning, personas, and every choice of what to press next. A model key of your own does not drive it, and a machine with no platform link gets the refusal and the way to fix it.
+**A project on the Reticle platform.** Every plan includes the Harness. A new account gets 10 free credits (about two full drives of a small app), a card starts a 14-day trial with 500, and the paid plan includes 1,000 credits per seat each month. Run `reticle connect` once in your app's folder. The Harness runs on the platform: planning, personas, and every choice of what to press next. A model key of your own does not drive it, and a machine with no platform link gets the refusal and the way to fix it.
 
 | Variable | What it does |
 | --- | --- |
