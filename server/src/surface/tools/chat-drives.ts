@@ -9,7 +9,13 @@
 import { basename, dirname, join } from 'node:path';
 import { homedir, hostname } from 'node:os';
 import type { SessionInfo } from '../../portal/session/session-info.js';
-import { LinkCapability, ReticleTool, asRecord, type PresenterTone } from '@reticlehq/core';
+import {
+  LinkCapability,
+  ReticleTool,
+  asRecord,
+  type LinkDevServer,
+  type PresenterTone,
+} from '@reticlehq/core';
 import { prepareDrive } from '../../features/harness/platform/drive-target.js';
 import { reticleToolset } from './harness-toolset.js';
 import type { AttachedApp } from '../../features/harness/platform/remote-drive.js';
@@ -27,6 +33,7 @@ import {
 import {
   appKeyOf,
   appsByPlatform,
+  homeRelative,
   machineOf,
   mayOpen,
   NOT_AN_APP_ADDRESS,
@@ -38,6 +45,8 @@ import { serverOptionsFromEnv } from '../../features/harness/platform/server-dri
 import { driveForChat } from './explore-tools.js';
 import { withLinkedCredential } from './harness-explore.js';
 import { runTool } from './invoke-tool.js';
+import { announcedChannels, recordedGaps } from '../../portal/session/recorded-gaps.js';
+import { probeDevServers } from '../../portal/session/dev-server/dev-server-probe.js';
 
 /** Why a platform drive with no tab of its own runs no tool. */
 const NO_DRIVEN_TAB = 'No tab was picked for this drive, so no tool runs.';
@@ -62,8 +71,12 @@ export interface ChatDriveSessions {
         autoEnd(text: string, tone: PresenterTone): void;
         pushNarration(text: string): void;
         readonly sdkVersion?: string | undefined;
+        readonly channels?: readonly string[] | undefined;
+        readonly sourceMapping?: boolean | undefined;
       }
     | undefined;
+  /** The last page handshake the bridge refused, when there was one. */
+  lastClosure?(): { at: number; reason: string } | undefined;
 }
 
 /** A project's own name: its package's, else its id's, else its folder's. */
@@ -88,7 +101,41 @@ export interface ChatDriveCloud {
   /** The platform and key a tab's own project is linked with, or undefined when it is not. */
   sessionCloud: (sessionId: string) => Promise<{ url: string; apiKey: string } | undefined>;
   version: string;
+  /** Folders holding runs the platform never got (the sync daemon's last count). Absolute roots. */
+  unsynced?: () => readonly { root: string; runs: number; linked: boolean }[];
 }
+
+/** How often the localhost dev-server scan may run: never more than this, however often we report. */
+const DEV_SERVER_SCAN_EVERY_MS = 30_000;
+
+/**
+ * Dev servers listening on localhost with no connected Reticle page — an app that is up and not
+ * instrumented, or not dialling. The same probe `doctor` and the no-session diagnosis use, cached.
+ */
+function devServerScan(
+  connectedUrls: () => readonly string[],
+  now: () => number,
+): () => Promise<LinkDevServer[]> {
+  let last: { at: number; ports: number[] } | undefined;
+  return async () => {
+    if (last === undefined || now() - last.at >= DEV_SERVER_SCAN_EVERY_MS)
+      last = { at: now(), ports: await probeDevServers() };
+    const connected = new Set(
+      connectedUrls().map((url) => {
+        try {
+          return Number(new URL(url).port);
+        } catch {
+          return 0;
+        }
+      }),
+    );
+    return last.ports
+      .filter((port) => !connected.has(port))
+      .map((port) => ({ url: `http://${LOCALHOST_HOST}:${String(port)}`, port }));
+  };
+}
+
+const LOCALHOST_HOST = 'localhost';
 
 export function startChatDrives(
   deps: ToolDeps,
@@ -203,6 +250,10 @@ export function startChatDrives(
     log,
   });
 
+  const scanDevServers = devServerScan(
+    () => sessions.list().map((tab) => tab.url),
+    () => Date.now(),
+  );
   const reports = startAppReports({
     machine,
     version: cloud.version,
@@ -210,8 +261,27 @@ export function startChatDrives(
     apps: async () =>
       appsByPlatform(
         sessions.list().map((tab) => {
-          const sdkVersion = sessions.get(tab.sessionId)?.sdkVersion;
-          return sdkVersion === undefined ? tab : { ...tab, sdkVersion };
+          const live = sessions.get(tab.sessionId);
+          const sdkVersion = live?.sdkVersion;
+          // What the page announced plus the gaps its verdicts paid for: what the dashboard's
+          // coverage line and coding-agent prompt are built from.
+          const channels = announcedChannels({
+            id: tab.sessionId,
+            channels: live?.channels,
+            sourceMapping: live?.sourceMapping,
+          });
+          const gaps = recordedGaps(tab.sessionId).map(({ kind, missing, fix, seenAt }) => ({
+            kind,
+            missing,
+            fix,
+            seenAt,
+          }));
+          return {
+            ...tab,
+            ...(sdkVersion === undefined ? {} : { sdkVersion }),
+            ...(0 === channels.length ? {} : { channels }),
+            gaps,
+          };
         }),
         serverOptionsFromEnv(await withLinkedCredential(deps, env)),
         machine.id,
@@ -230,6 +300,21 @@ export function startChatDrives(
         },
       ),
     open,
+    extras: async () => {
+      const closure = sessions.lastClosure?.();
+      const unsynced = cloud.unsynced?.() ?? [];
+      return {
+        devServers: await scanDevServers(),
+        ...(closure === undefined
+          ? {}
+          : { helloFailure: { reason: closure.reason, at: closure.at } }),
+        ...(0 === unsynced.length
+          ? {}
+          : {
+              unsynced: unsynced.map((u) => ({ ...u, root: homeRelative(u.root, homedir()) })),
+            }),
+      };
+    },
     drivePending: (platform) => void drives.tick(platform),
     // What the platform wants the person told: in the daemon's log, and on the HUD of each open tab
     // of that project, so somebody who never reads the log still sees "update Reticle".

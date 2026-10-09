@@ -37,6 +37,7 @@ import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { probeDaemon, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
 import { readProjectPort } from '@/command/cli/ports/resolve/cli-port.js';
 import { callerArtifactRoot } from '@/memory/project/link-directory.js';
+import { seeRunLine } from '@/memory/project/sync-status.js';
 import { DAEMON_INNER_COMMAND, PORT_FLAG } from '@/command/cli/cli-parse.js';
 import {
   acquireLease,
@@ -189,8 +190,13 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
   for (const line of summarizeTry(drive.journeys)) ports.out(line);
   // Saying "saved" over a sync that failed would be this command lying about its own work.
   if (await ports.sync(drive.runIds).catch(() => false)) {
-    const where = (await ports.dashboardUrl(cloud).catch(() => undefined)) ?? cloud.url;
-    ports.out(`Saved to your dashboard: ${where}`);
+    const dashboard = await ports.dashboardUrl(cloud).catch(() => undefined);
+    // Each run on its own page when the dashboard is known; the dashboard itself otherwise.
+    const lines =
+      dashboard === undefined || 0 === drive.runIds.length
+        ? [`Saved to your dashboard: ${dashboard ?? cloud.url}`]
+        : drive.runIds.map((runId) => seeRunLine(dashboard, runId));
+    for (const line of lines) ports.out(line);
   } else {
     ports.fail(
       'The run is kept on this machine; it could not be sent. Run `reticle push` to retry.',

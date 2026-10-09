@@ -93,7 +93,7 @@ describe('reticle try', () => {
       '  ✓ works: Shopper: checks out',
       '  ✗ broken: Shopper: applies a coupon',
       '  ? not proved (blocked): Admin: refunds',
-      'Saved to your dashboard: https://app.reticle.test/p/shop',
+      'See it in your dashboard: https://app.reticle.test/runs/harness-1',
     ]);
   });
 

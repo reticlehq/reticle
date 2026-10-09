@@ -262,7 +262,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // to read daemon state and port holders -- every other home needed two new reaches for it.
   // 25 with `command-payload.ts`: the command's wire JSON, moved out of `session.ts` (at its cap)
   // when it gained the mark that says the Harness sent it.
-  'server/src/portal/session': 25,
+  'server/src/portal/session': 26,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others
@@ -314,7 +314,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // group would be `cloud/memory/`, and a directory named `memory` beside `server/src/memory` is a
   // name collision the reach guard refuses outright; `cloud/scope/` would be a category invented
   // for one member. The file is the sibling of `cloud-sync.ts`'s path constants and belongs flat.
-  'server/src/memory/cloud': 12,
+  'server/src/memory/cloud': 13,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there

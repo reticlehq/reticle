@@ -1,5 +1,13 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { describeSync, overallStatus, readSyncSummary } from '@/memory/project/sync-status.js';
+import {
+  SyncStatus,
+  dashboardRunUrl,
+  describeSync,
+  overallStatus,
+  readSyncSummary,
+} from '@/memory/project/sync-status.js';
+import { describeUnsynced, unsentRunCount } from '@/memory/cloud/unsynced-roots.js';
+import { readDashboardUrl } from '@/memory/cloud/cloud-config.js';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { readAccountState } from '@/memory/cloud/account-state.js';
@@ -57,27 +65,6 @@ function impactPaths(reticleRoot: string, globalRoot: string): ImpactPaths {
     project: join(reticleRoot, ReticleDir.IMPACT_FILE),
     global: join(globalRoot, ReticleDir.ROOT, ReticleDir.IMPACT_FILE),
   };
-}
-
-/**
- * Where this project's dashboard lives, if `reticle link` recorded one.
- *
- * Read from the link file rather than derived from the API url, because the API origin and the
- * console origin are different hosts in every deployment that is not a laptop. Synchronous and
- * best-effort, like every other read in this file: a missing or malformed link file means no link
- * in the HUD, never a failed tool call.
- */
-function readDashboardUrl(reticleRoot: string): string | undefined {
-  try {
-    const raw: unknown = JSON.parse(
-      readFileSync(join(reticleRoot, ReticleDir.CLOUD_LINK_FILE), 'utf8'),
-    );
-    if ('object' !== typeof raw || null === raw) return undefined;
-    const value = (raw as Record<string, unknown>)['dashboardUrl'];
-    return 'string' === typeof value && value.length > 0 ? value : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function emptyScope(now: number): ImpactScope {
@@ -282,7 +269,7 @@ export class ImpactStore {
   readonly #paths: ImpactPaths;
   readonly #root: string;
   /** The sync status, re-read at most every SYNC_STATUS_EVERY_MS: it reads every run file. */
-  #sync: { at: number; value: Record<string, unknown> } | undefined;
+  #sync: { at: number; value: Record<string, unknown> | undefined } | undefined;
   readonly #now: () => number;
   readonly #projectName: string | undefined;
   #dashboardUrl: string | undefined;
@@ -351,11 +338,29 @@ export class ImpactStore {
     this.#global = readScope(this.#paths.global, now);
   }
 
-  #syncStatus(): Record<string, unknown> {
+  #syncStatus(dashboardUrl: string | undefined): Record<string, unknown> | undefined {
     const now = this.#now();
     if (this.#sync !== undefined && now - this.#sync.at < SYNC_STATUS_EVERY_MS)
       return this.#sync.value;
+    // Not linked: one line when runs sit here that nothing will send, and nothing otherwise.
+    if (dashboardUrl === undefined) {
+      const unsent = unsentRunCount(this.#root);
+      const value =
+        0 === unsent
+          ? undefined
+          : {
+              status: SyncStatus.LOCAL_ONLY,
+              pending: unsent,
+              said: describeUnsynced(
+                { root: this.#root, runs: unsent, linked: false },
+                dirname(this.#root),
+              ),
+            };
+      this.#sync = { at: now, value };
+      return value;
+    }
     const summary = readSyncSummary(this.#root, true);
+    const latest = summary.latestOnPlatform;
     const value = {
       status: overallStatus(summary),
       runs: summary.runs,
@@ -363,6 +368,8 @@ export class ImpactStore {
       pending: summary.pending,
       refused: summary.refused.length + summary.refusedMore,
       ...(summary.lastPushAt === undefined ? {} : { lastPushAt: summary.lastPushAt }),
+      // The run that just synced, on its own page — the HUD's "see it in your dashboard".
+      ...(latest === undefined ? {} : { runUrl: dashboardRunUrl(dashboardUrl, latest) }),
       said: describeSync(summary, now),
     };
     this.#sync = { at: now, value };
@@ -423,7 +430,8 @@ export class ImpactStore {
     if (coverage !== undefined) snap.coverage = coverage;
     // Only for a linked project: an unlinked one has nothing on the platform, and the HUD already
     // offers the way to link it.
-    if (this.#dashboardUrl !== undefined) snap.sync = this.#syncStatus();
+    const sync = this.#syncStatus(this.#dashboardUrl);
+    if (sync !== undefined) snap.sync = sync;
     return snap;
   }
 

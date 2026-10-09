@@ -43,6 +43,8 @@ import {
   RETICLE_DIR,
 } from './cloud-kit.js';
 import { syncRequest } from '@/memory/cloud/cloud-sync.js';
+import { describeUnsynced } from '@/memory/cloud/unsynced-roots.js';
+import { machineUnsyncedRoots } from '@/memory/project/sync-status.js';
 import { describeSync, runSyncCycle } from '@/memory/cloud/sync-cycle.js';
 import { diskSink, diskSource, readCloudIssues, readCloudState } from '@/memory/cloud/sync-disk.js';
 
@@ -646,6 +648,7 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
   const cloud = await resolveProjectCloud(fs, reticleRoot, homedir(), process.env);
   if (null === cloud.config) {
     err(cloud.reason ?? 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY');
+    await reportUnsynced(fs);
     return 1;
   }
   const config = cloud.config;
@@ -685,6 +688,7 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
       ...(report.error === undefined ? {} : { error: report.error }),
     });
     hint(describeSync(report));
+    await reportUnsynced(fs);
     return report.ok ? 0 : 1;
   };
 
@@ -697,6 +701,15 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
     await once();
     await sleep(everyMs);
   }
+};
+
+/**
+ * Every other folder on this machine holding runs the platform never got, one line each. `sync` only
+ * ever sends the folder it runs in, so a monorepo app's unlinked `.reticle` was invisible from here.
+ */
+const reportUnsynced = async (fs: ReturnType<typeof createNodeFileSystem>): Promise<void> => {
+  for (const entry of await machineUnsyncedRoots(fs, homedir(), process.env))
+    hint(describeUnsynced(entry, process.cwd()));
 };
 
 /** `reticle push` — the name people already type. One cycle, same as `reticle sync`. */

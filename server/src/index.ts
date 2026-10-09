@@ -584,6 +584,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       bridge.sessions.noSessionHint(),
       verifyHttp?.port,
       bridge.sessions.noSessionLead(),
+      bridge.sessions.all(),
     );
   });
   // Agent-independent presence: the daemon outlives any single agent, so when the LAST agent's MCP
@@ -750,6 +751,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
         sessionRoot(effectiveDeps, id),
       ),
       version: SERVER_VERSION,
+      unsynced: () => cloudSync.unsyncedRoots(),
     },
     log,
   );
