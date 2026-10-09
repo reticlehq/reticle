@@ -319,14 +319,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there
   // was a CLI). Three files rather than one: they answer at three different moments.
-  // 36 with `harness-drive.ts`: the span that says a verdict came from Reticle driving the app
-  // rather than from the user's own agent. It is a module and not a flag on a call because the two
-  // are indistinguishable at the emit site otherwise, and every activation number built on verdicts
-  // reads a drive we performed as adoption we did not earn. Raised rather than grouped: this
-  // directory is already the largest flat one here and grouping it is its own piece of work.
   // 37 since `hud-metrics.ts`, which rolls HUD use into the session summary beside the tool counts.
   // Its own file so the 700-line session aggregator did not grow a second concern.
-  'server/src/telemetry': 37,
+  // 36 again when the drive-attribution counter went: the async context in `hooks/driven-by.ts`
+  // already says which drive a call belongs to, per call, so a second module-wide copy was removed.
+  'server/src/telemetry': 36,
   'spec-runner/src': 11,
 };
 

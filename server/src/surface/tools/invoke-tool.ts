@@ -26,7 +26,6 @@ import { verificationOf } from '@/telemetry/verification-of.js';
 import { emitBugFoundHook, emitVerdictHook } from '@/hooks/hook-emit.js';
 import { reportOnboardingStep } from '@/telemetry/onboarding-funnel.js';
 import { noteActed, noteFirstVerdict, noteOnboardingFirst } from '@/telemetry/onboarding-firsts.js';
-import { withHarnessDrive } from '@/telemetry/harness-drive.js';
 import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
 import { DiscoveryInvite, asString } from '@reticlehq/core';
 import { SESSION_ID_ARG, sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
@@ -182,18 +181,6 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.FEEDBACK,
 ]);
 
-/**
- * The merged action that hands the drive to a model inside the daemon.
- *
- * Derived from the member tool's own name rather than spelled again: the merge dispatches on
- * `action`, and `reticle_verify` plus `explore` IS `reticle_verify_explore`. A literal here would be
- * a third spelling of one name, and the one that silently stops matching when the action is renamed.
- */
-const HARNESS_DRIVE_ACTION = ReticleTool.VERIFY_EXPLORE.slice(`${ReticleTool.VERIFY}_`.length);
-function isHarnessDrive(toolName: string, args: Record<string, unknown>): boolean {
-  return ReticleTool.VERIFY === toolName && HARNESS_DRIVE_ACTION === args['action'];
-}
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return 'object' === typeof value && value !== null && !Array.isArray(value);
 }
@@ -215,7 +202,13 @@ function recordVerification(
   brand: BrowserBrand | undefined,
   sessionId: string | undefined,
 ): void {
-  const verification = verificationOf(toolName, result, durationMs, brand);
+  const verification = verificationOf(
+    toolName,
+    result,
+    durationMs,
+    brand,
+    currentDrivenBy() !== undefined,
+  );
   if (verification === undefined) return;
   getSessionMetrics().recordVerification();
   void getTelemetry().emit(TelemetryEventKind.VERIFICATION_COMPLETED, {
@@ -551,15 +544,9 @@ async function dispatchTool<Ext>(
       span('tool.handler', { tool: tool.name, session: session?.id }, () =>
         tool.handler(deps, dispatchArgs),
       );
-    // A drive we run on the user's behalf, marked for its whole span so the verdicts it produces
-    // underneath are distinguishable from the ones the user's own agent earned.
-    //
-    // The outer call emits no verdict of its own, and that is the honest answer rather than a gap:
-    // it drives and records, it adjudicates nothing, and its result carries no verified/pass field
-    // to read. Deriving one from how far the drive got would be inventing a verdict nobody reached.
-    // What was missing was never an event here — it was that a session driven BY US read exactly
-    // like one the agent earned, which is what the span fixes.
-    raw = await (isHarnessDrive(tool.name, args) ? withHarnessDrive(call) : call());
+    // The Harness's own inner calls carry their drive in an async context (`runDrivenBy`), which is
+    // what attributes their verdicts; the outer explore call adjudicates nothing of its own.
+    raw = await call();
   } catch (error) {
     // The commonest refusal shape by far, and the one nothing could see: the message is built, handed
     // to the agent by the MCP boundary, and discarded. Reported here rather than at that boundary
