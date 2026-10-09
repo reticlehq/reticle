@@ -236,3 +236,108 @@ describe('parallel fan-out is not a race', () => {
     });
   });
 });
+
+describe('projection-aware stale response detection', () => {
+  const race = (one: string, two: string) =>
+    findStaleResponses([
+      pending(0, `/rest/v1/items?${one}`, 'a'),
+      pending(10, `/rest/v1/items?${two}`, 'b'),
+      settled(100, 'b'),
+      applied(100),
+      settled(900, 'a'),
+      applied(900),
+    ]);
+
+  describe.each(['select', 'fields', 'columns', 'include', 'expand'])('%s', (projection) => {
+    it('stays silent for different projections of the same collection', () => {
+      expect(race(`${projection}=a&parent=eq.1`, `${projection}=b&parent=eq.1`)).toEqual([]);
+    });
+
+    it('still reports a filter race with the same projection', () => {
+      const found = race(`${projection}=a&status=eq.open`, `${projection}=a&status=eq.held`);
+      expect(found).toHaveLength(1);
+      expect(found[0]?.kind).toBe(ContradictionKind.STALE_RESPONSE_APPLIED);
+    });
+
+    it('stays silent when the projection and filter both change', () => {
+      expect(race(`${projection}=a&status=eq.open`, `${projection}=b&status=eq.held`)).toEqual([]);
+    });
+  });
+
+  it.each([
+    ['a missing projection', 'select=id&status=open', 'status=held'],
+    ['an added empty projection', 'status=open', 'select=&status=held'],
+    ['different empty and nonempty projections', 'select=&status=open', 'select=id&status=held'],
+    [
+      'different first repeated values',
+      'select=id&select=notes&status=open',
+      'select=notes&select=id&status=held',
+    ],
+    ['different field-list order', 'select=id,status&status=open', 'select=status,id&status=held'],
+  ])('stays silent for %s', (_name, one, two) => {
+    expect(race(one, two)).toEqual([]);
+  });
+
+  // Match the existing URLSearchParams.get comparisons: decoded first values, with no field-list
+  // normalization. Every positive changes a filter so it cannot depend on raw-query retry handling.
+  it.each([
+    ['no projection on either request', 'status=open', 'status=held'],
+    ['bare and empty projection values', 'select&status=open', 'select=&status=held'],
+    [
+      'percent-encoded projection values',
+      'select=id,status&status=open',
+      'select=id%2Cstatus&status=held',
+    ],
+    ['percent-encoded projection keys', 'select=id&status=open', '%73elect=id&status=held'],
+    [
+      'equivalent space encodings',
+      'select=display+name&status=open',
+      'select=display%20name&status=held',
+    ],
+    ['reordered query keys', 'select=id&status=open', 'status=held&select=id'],
+    [
+      'different later repeated values',
+      'select=id&select=notes&status=open',
+      'select=id&select=status&status=held',
+    ],
+  ])('still reports a filter race with %s', (_name, one, two) => {
+    const found = race(one, two);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.kind).toBe(ContradictionKind.STALE_RESPONSE_APPLIED);
+  });
+
+  it.each([
+    ['identity', 'select=id&id=1&status=open', 'select=id&id=2&status=held'],
+    ['enumeration only', 'select=id&status=open&page=1', 'select=id&status=open&page=2'],
+  ])('preserves the %s exclusion with matching projections', (_name, one, two) => {
+    expect(race(one, two)).toEqual([]);
+  });
+
+  it('still reports a filter race when pagination also changes', () => {
+    expect(race('select=id&status=open&page=1', 'select=id&status=held&page=2')).toHaveLength(1);
+  });
+
+  it.each([
+    ['same-task fan-out', 1, 900, 100, 900, 0],
+    ['the fan-out threshold', 2, 900, 100, 900, 1],
+    ['no overlap', 900, 900, 1000, 900, 0],
+    ['responses settling in order', 10, 100, 900, 100, 0],
+    ['no application of the old response', 10, 900, 100, undefined, 0],
+    ['a reaction before the apply slack', 10, 900, 100, 799, 0],
+    ['a reaction at the apply slack', 10, 900, 100, 800, 1],
+    ['a reaction at the apply window', 10, 900, 100, 1400, 1],
+    ['a reaction after the apply window', 10, 900, 100, 1401, 0],
+  ])(
+    'preserves %s with matching projections',
+    (_name, gap, firstEnd, secondEnd, reaction, count) => {
+      const events = [
+        pending(0, '/rest/v1/items?select=id&status=open', 'a'),
+        pending(gap, '/rest/v1/items?select=id&status=held', 'b'),
+        settled(secondEnd, 'b'),
+        settled(firstEnd, 'a'),
+      ];
+      if (reaction !== undefined) events.push(applied(reaction));
+      expect(findStaleResponses(events)).toHaveLength(count);
+    },
+  );
+});

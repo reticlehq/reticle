@@ -267,3 +267,66 @@ export const LinkPath = {
   driveSession: (id: string): string =>
     `/v1/harness/local-drives/${encodeURIComponent(id)}/session`,
 } as const;
+
+/**
+ * What a daemon adds to each local-apps report so the platform can say what an app is missing and
+ * why a page never connected. Every key is additive: a platform that predates one ignores it.
+ */
+export const LinkReportKey = {
+  /** Per app: the channels its page announced in its HELLO. */
+  CHANNELS: 'channels',
+  /** Per app: instrumentation gaps its verdicts recorded, deduped by kind + missing, newest first. */
+  GAPS: 'gaps',
+  /** Per app: the framework adapters its page announced. */
+  ADAPTERS: 'adapters',
+  /** Top level: dev servers listening on this machine that no Reticle page has connected from. */
+  DEV_SERVERS: 'devServers',
+  /** Top level: the last page handshake this daemon refused, and why. */
+  HELLO_FAILURE: 'helloFailure',
+  /** Top level: `.reticle` folders holding runs that never reached the platform. */
+  UNSYNCED: 'unsynced',
+} as const;
+
+/** How many recorded gaps one app reports. */
+export const LINK_APP_GAPS_MAX = 20;
+
+/** One recorded instrumentation gap, as an app report carries it. */
+export interface LinkAppGap {
+  kind: string;
+  missing: string;
+  fix: string;
+  seenAt: number;
+}
+
+/** A dev server listening on localhost with no connected Reticle page. */
+export interface LinkDevServer {
+  url: string;
+  port: number;
+}
+
+/** The last refused page handshake: version skew, token, port or protocol, in `reason`. */
+export interface LinkHelloFailure {
+  reason: string;
+  at: number;
+  sdkVersion?: string;
+}
+
+/** A `.reticle` folder with runs that never reached the platform. `root` is `~`-relative. */
+export interface LinkUnsyncedRoot {
+  root: string;
+  runs: number;
+  linked: boolean;
+}
+
+/**
+ * Markers a daemon adds to an app's `channels` beside the protocol channel ids, for the two
+ * capabilities no channel names. Sent only on evidence, never while the gap that names the same
+ * capability is recorded: absence of both reads as "not seen yet", never as covered.
+ */
+export const CoverageMarker = {
+  /** The page carries `data-reticle-source` (the build plugin is active). */
+  SOURCE: 'source',
+  /** The app's snapshots show `data-testid` on its controls. */
+  TESTID: 'testid',
+} as const;
+export type CoverageMarker = (typeof CoverageMarker)[keyof typeof CoverageMarker];

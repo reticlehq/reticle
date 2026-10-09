@@ -63,6 +63,8 @@ const KEEP_COMMANDS: ReadonlySet<string> = new Set([
   '_daemon',
 ]);
 const KEEP_FLAGS: ReadonlySet<string> = new Set(['--version', '-v', '--help', '-h']);
+const HELP_COMMAND = 'help';
+const HELP_FLAGS: ReadonlySet<string> = new Set(['--help', '-h']);
 const SETUP_COMMAND = 'setup';
 const SETUP_INSTALL = 'install';
 
@@ -116,6 +118,20 @@ export function versionMatchNote(sdkVersion: string, cliVersion: string): string
   );
 }
 
+/**
+ * The line `--help` opens with when the command it describes would run at another version (#1378).
+ * Help stays on this binary, so without it the flags listed are this release's, and the re-run
+ * rejected the ones its older release never had, as an unknown parameter.
+ */
+export function helpVersionNote(sdkVersion: string, cliVersion: string): string {
+  return (
+    `This help describes ${SERVER_PACKAGE} ${cliVersion}, but in this project the command runs at ` +
+    `${SERVER_PACKAGE}@${sdkVersion} to match its SDK, which may not take every flag listed here. ` +
+    `Run npx ${SERVER_PACKAGE}@${sdkVersion} <command> --help for that version's help, or set ` +
+    `${VersionMatchEnv.OPT_OUT}=1 to run this one.`
+  );
+}
+
 /** Did the person name a version on the npx line (`npx @reticlehq/server@<version> …`)? */
 function pinnedOnNpxLine(spec: string | undefined): boolean {
   if (spec === undefined || !spec.startsWith(`${SERVER_PACKAGE}@`)) return false;
@@ -152,6 +168,20 @@ export function versionToMatch(input: VersionMatchInput): string | undefined {
   const sdkMajor = majorOf(sdk);
   if (sdkMajor === undefined) return undefined;
   return sdkMajor === majorOf(input.cliVersion) ? undefined : sdk;
+}
+
+/**
+ * The version the command asked about with `--help`, or `help <command>`, would actually run at.
+ * Undefined when help was not asked for, or when that command runs on this binary. Pure, like
+ * `versionToMatch`: it asks that same question about the command with the help request removed.
+ */
+export function helpRunsAt(input: VersionMatchInput): string | undefined {
+  const viaCommand = HELP_COMMAND === input.argv[0];
+  if (!viaCommand && !input.argv.some((arg) => HELP_FLAGS.has(arg))) return undefined;
+  const asked = (viaCommand ? input.argv.slice(1) : input.argv).filter(
+    (arg) => !HELP_FLAGS.has(arg),
+  );
+  return versionToMatch({ ...input, argv: asked });
 }
 
 /** How to launch `npx --yes @reticlehq/server@<version> <args>` on this platform. */

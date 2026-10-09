@@ -32,6 +32,7 @@ import {
   watchersToNotify,
 } from '@/portal/session/lease-visibility.js';
 import { reticleStateHome } from '@/command/daemon/daemon.js';
+import { claimArtifactRoot, dropArtifactRootClaim } from '@/memory/project/root-claims.js';
 import {
   LeaseNotReadyReason,
   RETICLE_URL_PARAM,
@@ -374,7 +375,7 @@ export function hasOriginLock(origin: string): boolean {
 export const LEASE_ACQUIRE_TOOL: ToolDef = {
   name: ReticleTool.LEASE_ACQUIRE,
   description:
-    'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running; one with no Reticle SDK gets one supplied, reported as zeroInstall). If this origin is already leased and still connected, this returns THAT session rather than minting a second tab — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done. PREFER AN ALREADY-OPEN TAB: if reticle_sessions lists a non-leased session for this app, drive THAT instead — a lease is invisible to the person watching the app, whose HUD lives in their own tab, and a tab flagged hidden/throttled is often still driveable. Lease for isolation you actually need (a second identity, a clean context, parallel flows) or when driving the open tab has failed — this call answers with `preferExisting` when a live tab was available.',
+    'Lease a fresh isolated browser context from the shared pool (shown or hidden as the daemon was started; `headed: true` forces a window) and navigate it to the app URL (the app must already be running; one with no Reticle SDK gets one supplied, reported as zeroInstall). If this origin is already leased and still connected, this returns THAT session rather than minting a second tab — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done. PREFER AN ALREADY-OPEN TAB: if reticle_sessions lists a non-leased session for this app, drive THAT instead — a lease is invisible to the person watching the app, whose HUD lives in their own tab, and a tab flagged hidden/throttled is often still driveable. Lease for isolation you actually need (a second identity, a clean context, parallel flows) or when driving the open tab has failed — this call answers with `preferExisting` when a live tab was available.',
   inputSchema: {
     url: z
       .string()
@@ -390,11 +391,23 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .boolean()
       .optional()
       .describe('Open it in a browser window somebody can watch, instead of headless.'),
+    ignoreHTTPSErrors: z
+      .boolean()
+      .optional()
+      .describe(
+        'Accept a self-signed or mkcert certificate on an https dev server, for this lease only. Off by default.',
+      ),
     hud: z
       .enum([HudVisibility.SHOWN, HudVisibility.HIDDEN, HudVisibility.REMOVED])
       .optional()
       .describe('How the HUD starts on the page: shown (default), hidden, or removed.'),
     permissions: LEASE_PERMISSIONS_ARG,
+    root: z
+      .string()
+      .optional()
+      .describe(
+        "Absolute path of the .reticle folder this lease's runs belong in — the caller's project. Without it, the page's project id decides, and a page with none lands in ~/.reticle/unmatched, which nothing syncs.",
+      ),
   },
   outputSchema: {
     sessionId: z.string(),
@@ -465,6 +478,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       if (refusal !== undefined) throw new Error(refusal);
     }
     const projectId = asString(args['projectId']);
+    const root = asString(args['root']);
     const headed = true === args['headed'];
     const hud = Object.values(HudVisibility).find((v) => v === args['hud']);
     const permissions = parseLeasePermissions(args['permissions']);
@@ -508,8 +522,17 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       // A window asked for is never answered with the headless tab on that origin, nor the reverse.
       const held = origin === undefined ? undefined : pool.leaseIdOnOrigin(origin, deps.attachId);
       const existing = held !== undefined && pool.isHeaded(held) === headed ? held : undefined;
-      if (validatedSeed !== undefined && existing !== undefined) {
-        // Seeding asked for: release its own context so the new lease starts with the given state.
+      // A context's certificate setting is fixed when it is made, so an explicit request for the
+      // other one cannot be answered by the held lease: handing it back would keep checks off after
+      // `false`, or keep a local certificate refused after `true` (#1255). Omitted keeps the lease.
+      const certAsked = args['ignoreHTTPSErrors'];
+      const certMismatch =
+        existing !== undefined &&
+        'boolean' === typeof certAsked &&
+        pool.ignoresHTTPSErrors(existing) !== certAsked;
+      if ((validatedSeed !== undefined || certMismatch) && existing !== undefined) {
+        // Seeding or a different certificate setting asked for: release its own context so the new
+        // lease starts with what was asked.
         await pool.release(existing);
       } else if (existing !== undefined && origin !== undefined) {
         // Resolved, not looked up — the same resolver the mint path below uses, for the same reason
@@ -560,6 +583,8 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         await pool.release(existing);
       }
       const sessionId = newLeaseId();
+      // Before the page can dial in: the session is stamped with its root the moment it registers.
+      if (root !== undefined) claimArtifactRoot(sessionId, root);
       const navUrl = appendReticleParams(url, sessionId, projectId, hud);
       let lease;
       try {
@@ -569,6 +594,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           ...(deps.attachId === undefined ? {} : { owner: deps.attachId }),
           ...(validatedSeed !== undefined ? { seedStorage: validatedSeed } : {}),
           ...(permissions !== undefined ? { permissions } : {}),
+          ...(true === args['ignoreHTTPSErrors'] ? { ignoreHTTPSErrors: true } : {}),
         });
       } catch (err) {
         const refusal = permissionRefusal(err);
@@ -693,6 +719,7 @@ const LEASE_RELEASE_TOOL: ToolDef = {
     // ask which project it belonged to.
     const projectId = deps.sessions.get(sessionId)?.projectId;
     await pool.release(sessionId);
+    dropArtifactRootClaim(sessionId);
     // Only once the LAST lease is gone. Announcing "live again" while another lease still drives
     // would be a lie, and a HUD that says the wrong thing is worse than one that says nothing.
     if (0 === pool.activeCount()) tellWatchers(deps, projectId, AGENT_DRIVING_HERE_AGAIN);

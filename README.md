@@ -158,7 +158,7 @@ npm install -g @reticlehq/server
 reticle setup mcp
 ```
 
-**✅ It worked when** it finishes with a verdict on Reticle's own demo app. It doesn't touch your project. **Run it before you open your coding agent**; an agent that's already open needs one restart to see the new tools.
+**✅ It worked when** it finishes with "Reticle is installed on this machine. It is not in your app yet." It doesn't touch your project. **Run it before you open your coding agent**; an agent that's already open needs one restart to see the new tools.
 
 <details>
 <summary>What the installer does, and other ways to install</summary>
@@ -177,7 +177,7 @@ It runs four things in order and asks you nothing:
    args = ["@reticlehq/server", "mcp"]
    ```
 
-4. `reticle tutorial --run`: Reticle drives its own demo app in a temporary folder and prints a real verdict.
+It ends by telling you Reticle is **not in your app yet**: run `reticle init` in your app's folder next. Want to see a verdict first? `reticle tutorial --run` drives Reticle's own demo app and touches nothing of yours.
 
 **Claude Code plugin:**
 

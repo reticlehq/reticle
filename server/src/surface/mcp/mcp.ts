@@ -16,7 +16,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { SHARED_PARAM_SHORT } from './shared-params.js';
 import { buildDynamicTools } from '@/surface/tools/dynamic-tools.js';
 import { runTool } from '@/surface/tools/invoke-tool.js';
-import { sessionEnvelopeShape, newSnapshotCache } from '@/surface/tools/tool-kit.js';
+import { sessionEnvelopeShape, newSnapshotCache, type ToolCall } from '@/surface/tools/tool-kit.js';
 import { buildErrorPayload } from '@/surface/tools/error-recovery.js';
 import { takeVersionSkewOnto } from '@/command/version/version-nudge.js';
 import { resultIsError } from './faults/mcp-is-error.js';
@@ -233,12 +233,49 @@ type ReticleRegisterTool = (
     inputSchema: z.ZodRawShape;
     outputSchema?: z.ZodRawShape;
   },
-  handler: (args: Record<string, unknown>) => Promise<{
+  handler: (
+    args: Record<string, unknown>,
+    extra: McpRequestExtra,
+  ) => Promise<{
     content: Array<{ type: 'text'; text: string }>;
     isError?: boolean;
     structuredContent?: Record<string, unknown>;
   }>,
 ) => void;
+
+/** The slice of the SDK's per-request `extra` a tool call reads: cancellation and progress. */
+interface McpRequestExtra {
+  signal?: AbortSignal;
+  _meta?: { progressToken?: string | number };
+  sendNotification?: (notification: {
+    method: typeof PROGRESS_NOTIFICATION;
+    params: { progressToken: string | number; progress: number; message: string };
+  }) => Promise<void>;
+}
+
+const PROGRESS_NOTIFICATION = 'notifications/progress';
+
+/**
+ * The request's cancellation and, when the client sent a progress token, a progress reporter. A
+ * long call (a Harness drive's wait) reports each step, so a client that resets its timeout on
+ * progress keeps waiting instead of abandoning a call that is working.
+ */
+export function toolCallOf(extra: McpRequestExtra | undefined): ToolCall {
+  const token = extra?._meta?.progressToken;
+  const send = extra?.sendNotification;
+  return {
+    ...(extra?.signal === undefined ? {} : { signal: extra.signal }),
+    ...(token === undefined || send === undefined
+      ? {}
+      : {
+          progress: (progress: number, message: string) =>
+            void send({
+              method: PROGRESS_NOTIFICATION,
+              params: { progressToken: token, progress, message },
+            }).catch(() => undefined),
+        }),
+  };
+}
 
 /**
  * The tools a profile advertises directly.
@@ -734,9 +771,9 @@ export function createMcpServer(
     // clients. This removes the single largest remaining slice of the per-request tax (~36% of the
     // hybrid payload) with no loss the agent can observe.
     const config = advertisedConfig(tool, advertised, profile);
-    registerTool(tool.name, config, async (args: Record<string, unknown>) => {
+    registerTool(tool.name, config, async (args: Record<string, unknown>, extra) => {
       try {
-        const result = await runTool(tool, deps, args);
+        const result = await runTool(tool, deps, args, toolCallOf(extra));
         // A tool this codebase did not write may not hand the agent a verdict.
         //
         // Only reached for a tool absent from the first-party table, so the shipped surface pays a

@@ -78,8 +78,10 @@ export function gotoOptions(timeoutMs: number | undefined): {
 function wrapBrowser(browser: Browser): PooledBrowser {
   return {
     isConnected: () => browser.isConnected(),
-    newContext: async (): Promise<PooledContext> => {
-      const context = await browser.newContext();
+    newContext: async (opts): Promise<PooledContext> => {
+      const context = await browser.newContext(
+        true === opts?.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : undefined,
+      );
       return {
         newPage: async (): Promise<PooledPage> => {
           const page = await context.newPage();

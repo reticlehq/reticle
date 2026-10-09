@@ -1,0 +1,54 @@
+name: Reticle verify
+description: Replay your saved Reticle journeys against a URL and report one check per pull request.
+author: Reticle
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  url:
+    description: The running app to verify, such as your preview deployment.
+    required: true
+  api-key:
+    description: A Reticle workspace API key. Store it as a secret.
+    required: true
+  project:
+    description: The Reticle project id. Used to pull the suite when the repository has no .reticle/flows.
+    required: false
+    default: ''
+  node-version:
+    description: The Node.js version to run Reticle on.
+    required: false
+    default: '20'
+  cloud-url:
+    description: The Reticle platform. Change it only for a self-hosted platform.
+    required: false
+    default: 'https://app.reticle.sh'
+
+outputs:
+  details-url:
+    description: Where the check's details live on the Reticle dashboard.
+    value: ${{ steps.check.outputs.details-url }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+    # Installed once, so the Chromium below is the revision this exact server build drives.
+    - name: Install Reticle
+      shell: bash
+      run: |
+        npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/reticle" @reticlehq/server@latest
+        "$RUNNER_TEMP/reticle/node_modules/.bin/playwright" install --with-deps chromium
+    - name: Verify and report
+      id: check
+      shell: bash
+      env:
+        RETICLE_ACTION_URL: ${{ inputs.url }}
+        RETICLE_API_KEY: ${{ inputs.api-key }}
+        RETICLE_PROJECT: ${{ inputs.project }}
+        RETICLE_CLOUD_URL: ${{ inputs.cloud-url }}
+        RETICLE_BIN: ${{ runner.temp }}/reticle/node_modules/.bin/reticle
+      run: node "$GITHUB_ACTION_PATH/ci-check.mjs"

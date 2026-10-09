@@ -64,9 +64,9 @@ import { ReviewStore, type ReviewMark } from './human/review-store.js';
 import { buildSessionRecommendation } from './presence/session-recommendation.js';
 import { buildPresenterArgs } from './human/presenter-args.js';
 import { buildSessionLease, type SessionLease } from './presence/session-lease.js';
-import type { SessionInfo } from './session-info.js';
 export type { SessionInfo } from './session-info.js';
-import { buildSessionInfo } from './session-info.js';
+import { buildSessionInfo, type SessionInfo } from './session-info.js';
+import { withInstrumentation } from './recorded-gaps.js';
 import { MAX_SUCCESSOR_HOPS, REBINDABLE_COMMANDS } from './rebind.js';
 
 type Clock = () => number;
@@ -883,18 +883,18 @@ export class Session implements HandshakeFacts {
    * when it fires rather than capturing a snapshot when it was scheduled.
    */
   pushImpact(read: () => ImpactSnapshot | undefined, immediate = false): void {
-    if (immediate) {
-      // A tab that just connected has nothing to show yet, so its first record goes out at once -
-      // waiting a debounce here is a report that reads "nothing recorded" over a month of history.
-      const first = read();
-      if (first !== undefined) this.#post(ReticleCommand.IMPACT, { snapshot: first });
-      return;
-    }
+    const send = (): void => {
+      const snapshot = read();
+      // Every push carries this tab's own coverage, so the HUD's line is about the app on screen.
+      if (snapshot !== undefined)
+        this.#post(ReticleCommand.IMPACT, { snapshot: withInstrumentation(this, snapshot) });
+    };
+    // A new tab's first record goes out at once: debounced, it reads "nothing recorded" over history.
+    if (immediate) return send();
     if (this.#impactTimer !== undefined) return;
     this.#impactTimer = setTimeout(() => {
       this.#impactTimer = undefined;
-      const snapshot = read();
-      if (snapshot !== undefined) this.#post(ReticleCommand.IMPACT, { snapshot });
+      send();
     }, IMPACT_PUSH_DEBOUNCE_MS);
     this.#impactTimer.unref?.();
   }

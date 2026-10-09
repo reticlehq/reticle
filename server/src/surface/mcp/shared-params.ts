@@ -32,7 +32,7 @@ export const SHARED_PARAM_GUIDANCE =
   'Arguments that mean the same thing on every tool: `sessionId` — omit unless you mean a specific ' +
   'tab; Reticle scopes to your project, prefers the active one, and refuses rather than guesses when ' +
   'ambiguous. `since` — a cursor from a prior act/observe, bounding an observation to what came ' +
-  'after it, or a git ref when verifying a change. `limit` — caps returned descriptors, cutting tokens on broad queries.';
+  'after it, or a git ref when verifying a change. `limit` — caps returned descriptors.';
 
 /** Is this a parameter whose guidance now lives in the instructions block? */
 export function isSharedParam(name: string): boolean {

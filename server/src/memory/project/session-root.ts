@@ -1,6 +1,7 @@
 import { dirname } from 'node:path';
 import type { ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
+import { claimedArtifactRoot } from './root-claims.js';
 
 /**
  * Which project a call is about, and the page origin it came through.
@@ -15,6 +16,8 @@ import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 export interface ProjectTarget {
   projectId: ProjectId | undefined;
   origin?: string | undefined;
+  /** The root whoever leased this session claimed for it (see `root-claims.ts`), which wins. */
+  claimedRoot?: string | undefined;
 }
 
 /**
@@ -79,6 +82,7 @@ export function sessionRoot(deps: ToolDeps, sessionId: string | undefined): stri
  * cannot disagree about what a resolved root is.
  */
 export function rootForTarget(deps: ToolDeps, target: ProjectTarget): string {
+  if (target.claimedRoot !== undefined) return target.claimedRoot;
   return deps.artifactRootFor?.(target.projectId, target.origin).root ?? deps.reticleRoot;
 }
 
@@ -139,7 +143,12 @@ export function safeSessionTarget(deps: ToolDeps, sessionId: string | undefined)
 export function sessionTarget(deps: ToolDeps, sessionId: string | undefined): ProjectTarget {
   try {
     const session = deps.sessions.resolve(sessionId);
-    return { projectId: session.projectId, origin: originOf(session.url) };
+    const claimedRoot = claimedArtifactRoot(session.id, session.url);
+    return {
+      projectId: session.projectId,
+      origin: originOf(session.url),
+      ...(claimedRoot === undefined ? {} : { claimedRoot }),
+    };
   } catch (cause) {
     if (sessionId === undefined) return projectOnly(undefined);
     throw unresolvedTargetRefusal(sessionId, cause);

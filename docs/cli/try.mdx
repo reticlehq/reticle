@@ -1,0 +1,58 @@
+---
+title: reticle try
+description: Sign in, then watch Reticle drive any URL once and say which journeys work.
+icon: play
+---
+
+`reticle try` is the fastest way to see Reticle on your own app. It drives a URL once with the Reticle Harness, in a browser window you can watch, and ends with a list of the journeys it tried and how each one ended.
+
+```bash
+npx @reticlehq/server try <url> [--persona <who>]
+```
+
+The app needs nothing installed. A page with no Reticle SDK gets one supplied for the drive, so verdicts cover the DOM, network, console and routes. There is no component state and no source `file:line` until you run [`reticle init`](/cli/init).
+
+## Sign in first
+
+The drive runs on the Reticle platform, so `try` needs a linked folder. On a machine that is not linked it drives nothing and says:
+
+```
+Sign in first: reticle connect (it is free, no card)
+```
+
+Run [`reticle connect`](/cli/cloud) in the folder, then run `try` again. It exits `1` in this case.
+
+## Arguments and flags
+
+| Argument | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `url` | string, positional, **required** | none | The page to drive. It must already be running |
+| `--persona <who>` | string | unset | Who to be, or what to get done ("a returning customer checking out"). Without it, the platform plans the journeys from what the page offers |
+
+## What happens
+
+1. `try` asks the platform for one free drive. If the workspace needs a card first, it prints the platform's message and the plan page, then exits `1` without opening anything.
+2. It opens the URL in a window you can watch, through the Reticle daemon, and starting one if none is running.
+3. The Harness drives for up to two minutes and 40 steps, and records what it drove as saved flows.
+4. It prints the result and sends the run to your dashboard, the same way [`reticle push`](/cli/cloud#reticle-push) does.
+
+## What it prints
+
+```
+Tried 3 journeys: 1 work, 1 broken, 1 not proved
+  ✓ works: Shopper: checks out
+  ✗ broken: Shopper: applies a coupon
+  ? not proved (blocked): Admin: refunds
+Saved to your dashboard: <your dashboard url>
+```
+
+Each verdict comes from the engine. A journey that neither passed nor failed is reported as **not proved**. It is never counted as working.
+
+If the run could not be sent, `try` says so, keeps the run on this machine and tells you to run `reticle push`. It never prints "Saved" in that case.
+
+## Exit codes
+
+| Code | When                                                                       |
+| ---- | -------------------------------------------------------------------------- |
+| `0`  | The drive ran. Broken journeys are a finding, not a failure of the command |
+| `1`  | Not signed in, no free drive granted, or the drive could not run           |

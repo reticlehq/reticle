@@ -113,6 +113,18 @@ afterEach(() => {
 });
 
 describe('reticle.ts session wiring (border)', () => {
+  // From the field: the CLI and the page disagreed about the SDK version and nothing said which one
+  // the page had. The version reaches the SDK as a connect option (the build plugin passes it), never
+  // as a global, so the overlay has to be told by the instance that holds it.
+  it('shows the SDK version the page was connected with in the overlay settings', async () => {
+    const reticle = new Reticle();
+    await connectAndWaitForPanel(reticle, { present: true, pace: 0, sdkVersion: '9.8.7' });
+    expect(document.querySelector('[data-reticle-sdk-version]')?.textContent).toBe(
+      'Reticle SDK 9.8.7',
+    );
+    reticle.disconnect();
+  });
+
   it('17 connect({present:true}) mounts the overlay but stays dormant until the first command', async () => {
     const reticle = new Reticle();
     await connectAndWaitForPanel(reticle, { present: true, pace: 0 });

@@ -90,6 +90,7 @@ export * from './registry/project-registry.js'; // projectId -> directory, so a 
 export * from './verdict/intent.js'; // what a change was supposed to make true, captured while somebody knows
 export * from './verdict/run-context.js'; // what a run established, folded and capped, for the agent to pull back
 export * from './verdict/instrumentation-gap.js'; // what Reticle could not see, and the change that would let it
+export * from './verdict/instrumentation-coverage.js'; // how much of an app Reticle sees, and the prompt that closes the rest
 export * from './verdict/security.js'; // sanitize/serialize helpers shared by browser + server
 export * from './wire/redaction.js'; // isSensitiveKey / scrubKnownSecrets — the shared redaction rules
 export * from './wire/state-select.js'; // selectPath / capDepth — shared by browser SDK + server fallback

@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server`: `reticle_lease { action: "acquire" }` can open an https dev server with a self-signed or mkcert certificate.** Lease contexts were created with no options, so a dev server with a local CA failed with `net::ERR_CERT_AUTHORITY_INVALID`, and the acquire reported it as "is the app running there?". Pass `ignoreHTTPSErrors: true` to accept the certificate for that lease's context only. It is off by default, and without it a certificate failure is now reported as a certificate error that names the option. Closes [#1255](https://github.com/reticlehq/reticle/issues/1255).

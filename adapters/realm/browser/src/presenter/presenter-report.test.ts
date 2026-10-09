@@ -6,7 +6,12 @@ import {
   IMPACT_BASIS,
 } from '@reticlehq/core';
 import type { ImpactDefect, ImpactScope, ImpactSnapshot } from '@reticlehq/core';
-import { PresenterReport, reportBodyHtml, reportPanelHtml } from './presenter-report.js';
+import {
+  PresenterReport,
+  instrumentationHtml,
+  reportBodyHtml,
+  reportPanelHtml,
+} from './presenter-report.js';
 import { Presenter } from './presenter.js';
 import {
   buildLinkedInShareUrl,
@@ -588,5 +593,45 @@ describe('the sync status beside Sync now', () => {
 
   it('shows nothing for a status it does not know', () => {
     expect(at({ status: '<script>' })).not.toContain('reticle-sync-status');
+  });
+});
+
+describe('what the HUD says once a run syncs, or never will', () => {
+  const SCOPE = scope({ calls: 3, verdicts: 2, passed: 2 });
+  const at = (sync: Record<string, unknown>, instrumentation?: Record<string, unknown>) =>
+    reportBodyHtml(
+      SCOPE,
+      'https://app.reticle.sh/p',
+      { signedIn: true },
+      'x',
+      undefined,
+      sync,
+      instrumentation,
+    );
+
+  it('links the run that synced on its own dashboard page', () => {
+    const html = at({
+      status: 'on-platform',
+      onPlatform: 1,
+      runUrl: 'https://app.reticle.sh/runs/r1',
+    });
+    expect(html).toContain('href="https://app.reticle.sh/runs/r1"');
+    expect(html).toContain('See it in your dashboard');
+    expect(at({ status: 'on-platform', runUrl: 'javascript:alert(1)' })).not.toContain(
+      'javascript:',
+    );
+  });
+
+  it('counts runs an unlinked project will never send', () => {
+    expect(at({ status: 'local-only', pending: 31 })).toContain('31 not sent');
+  });
+
+  it('shows the coverage line, and the copy button only once a prompt exists', () => {
+    expect(instrumentationHtml({ covered: 5, total: 8 })).toContain('5/8');
+    expect(instrumentationHtml({ covered: 5, total: 8 })).not.toContain('Copy prompt');
+    expect(instrumentationHtml({ covered: 5, total: 8, prompt: 'Read …' })).toContain(
+      'Copy prompt for your coding agent',
+    );
+    expect(instrumentationHtml({ covered: '<b>', total: 8 })).toBe('');
   });
 });

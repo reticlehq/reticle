@@ -1,0 +1,19 @@
+# Allowlist: the workspace manifests + only the sources the atlas build needs.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig.base.json
+!scripts
+!**/package.json
+!open-verification
+!core
+!adapters/realm/browser
+!adapters/framework/react
+!adapters/build/vite
+!adapters/build/babel-plugin
+!apps/atlas
+**/node_modules
+**/dist
+**/.turbo
+**/*.tsbuildinfo

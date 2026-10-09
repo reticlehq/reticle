@@ -1,4 +1,9 @@
-import { DEFAULT_PLATFORM_URL, type AccountState, type HarnessConfig } from '@reticlehq/core';
+import {
+  DEFAULT_PLATFORM_URL,
+  type AccountState,
+  type HarnessConfig,
+  type HarnessDrive,
+} from '@reticlehq/core';
 import type { AnnotationItem } from '@/review/annotator.js';
 import { marksForAgent } from '@/review/marks-for-agent.js';
 import {
@@ -73,6 +78,26 @@ function saveHistory(items: HistoricalAnnotation[]): void {
   }
 }
 
+/** What the panel's Run Harness and Stop do: the presenter sends them to the daemon. */
+export interface HudDriveHost {
+  run(persona?: string): void;
+  stop(): void;
+}
+
+const DRIVE_TEXT = {
+  RUN: 'Run Harness',
+  STOP: 'Stop',
+  PERSONA: 'Who to be (optional)',
+  driving: (steps: number): string => `Driving · ${String(steps)} steps`,
+} as const;
+
+/** Run Harness with an optional persona, or the running drive's progress and Stop. */
+function driveRowHtml(drive: HarnessDrive | undefined): string {
+  if (drive !== undefined)
+    return `<div class="reticle-harness-row"><div class="reticle-harness-copy"><span>${DRIVE_TEXT.driving(drive.steps)}</span></div><button type="button" data-reticle-harness-stop class="reticle-harness-link">${DRIVE_TEXT.STOP}</button></div>`;
+  return `<div class="reticle-harness-row"><input type="text" data-reticle-harness-persona class="reticle-harness-persona" placeholder="${DRIVE_TEXT.PERSONA}" aria-label="${DRIVE_TEXT.PERSONA}"><button type="button" data-reticle-harness-run class="reticle-harness-link">${DRIVE_TEXT.RUN}</button></div>`;
+}
+
 export const CHAT_VIEWS_HTML = `
   <div data-reticle-harness-spot class="reticle-harness-spot" hidden></div>`;
 
@@ -117,6 +142,7 @@ export const CHAT_VIEWS_CSS = `
 [data-reticle-chat-panel] .reticle-harness-spot{flex:none;border-bottom:1px solid var(--reticle-hud-border);padding:0 var(--reticle-hud-space-3);}
 [data-reticle-chat-panel] .reticle-harness-spot[hidden]{display:none;}
 [data-reticle-chat-panel] .reticle-harness-row{display:flex;align-items:center;gap:var(--reticle-hud-space-2);min-height:40px;}
+[data-reticle-chat-panel] .reticle-harness-persona{flex:1;min-width:0;font:inherit;color:inherit;background:transparent;border:1px solid var(--reticle-hud-border);border-radius:var(--reticle-hud-radius-sm);padding:var(--reticle-hud-space-1) var(--reticle-hud-space-2);}
 [data-reticle-chat-panel] .reticle-harness-copy{display:flex;flex:1;min-width:0;flex-direction:column;line-height:1.3;}
 [data-reticle-chat-panel] .reticle-harness-copy strong{font-size:var(--reticle-hud-size-sm);font-weight:600;color:var(--reticle-hud-text);}
 [data-reticle-chat-panel] .reticle-harness-copy span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--reticle-hud-size-xs);color:var(--reticle-hud-text-muted);}
@@ -188,15 +214,19 @@ export class ChatViews {
   #onImpact: () => void;
   #onOpenChat: (view: ChatView) => void;
   #listeners: AbortController | undefined;
+  #drive: HudDriveHost | undefined;
+  #driving: HarnessDrive | undefined;
 
   constructor(
     onHarness: (enabled: boolean) => void,
     onImpact: () => void,
     onOpenChat: (view: ChatView) => void,
+    drive?: HudDriveHost,
   ) {
     this.#onHarness = onHarness;
     this.#onImpact = onImpact;
     this.#onOpenChat = onOpenChat;
+    this.#drive = drive;
   }
 
   mount(root: HTMLElement): void {
@@ -221,11 +251,19 @@ export class ChatViews {
       'click',
       (event) => {
         const target = event.target;
-        if (
-          !(target instanceof Element) ||
-          null === target.closest('[data-reticle-harness-switch]')
-        )
+        if (!(target instanceof Element)) return;
+        if (null !== target.closest('[data-reticle-harness-run]')) {
+          const persona = this.#root
+            ?.querySelector<HTMLInputElement>('[data-reticle-harness-persona]')
+            ?.value.trim();
+          this.#drive?.run(persona === undefined || 0 === persona.length ? undefined : persona);
           return;
+        }
+        if (null !== target.closest('[data-reticle-harness-stop]')) {
+          this.#drive?.stop();
+          return;
+        }
+        if (null === target.closest('[data-reticle-harness-switch]')) return;
         const toggle = target.closest<HTMLButtonElement>('[data-reticle-harness-switch]');
         if (null === toggle || toggle.disabled) return;
         const enabled = toggle.getAttribute('aria-checked') !== 'true';
@@ -326,6 +364,11 @@ export class ChatViews {
     this.#account = account;
     this.#paintHarness();
   }
+  /** The drive running in this tab's project, from the daemon's snapshot: Stop while one runs. */
+  paintDrive(drive: HarnessDrive | undefined): void {
+    this.#driving = drive;
+    this.#paintHarness();
+  }
   paintHarness(config: HarnessConfig | undefined): void {
     this.#harness = config;
     // A platform echo, including one that refused the write, ends the pending state.
@@ -378,7 +421,7 @@ export class ChatViews {
     } else if (false === config.providerReady) {
       spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Choose a model provider to start driving</span></div><a class="reticle-harness-link" href="${setupUrl}" target="_blank" rel="noopener noreferrer">Set up ↗</a></div>`;
     } else {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>${config.credits === undefined ? 'Autonomous checks' : creditsLeft(config.credits)}</span></div><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="Reticle Harness autonomous driving" aria-checked="${String(this.#pendingHarness ?? config.harnessEnabled)}" ${this.#pendingHarness === undefined ? '' : 'disabled'}></button></div>`;
+      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>${config.credits === undefined ? 'Autonomous checks' : creditsLeft(config.credits)}</span></div><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="Reticle Harness autonomous driving" aria-checked="${String(this.#pendingHarness ?? config.harnessEnabled)}" ${this.#pendingHarness === undefined ? '' : 'disabled'}></button></div>${this.#drive === undefined ? '' : driveRowHtml(this.#driving)}`;
     }
   }
 

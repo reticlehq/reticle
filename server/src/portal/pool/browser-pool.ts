@@ -123,6 +123,8 @@ interface ActiveLease {
   lastDialogMessage?: string;
   /** What this lease was granted when it opened. It never changes on an open lease. */
   permissions: readonly string[];
+  /** Whether its context accepts any TLS certificate (#1255). Fixed when the context is made. */
+  ignoresHTTPSErrors: boolean;
 }
 
 /**
@@ -470,6 +472,8 @@ export class BrowserPool {
       headed?: boolean;
       /** Granted on the lease's origin before the first navigation, so the first render sees them. */
       permissions?: readonly string[];
+      /** Accept a self-signed or local-CA dev certificate for this lease's context only (#1255). */
+      ignoreHTTPSErrors?: boolean;
     } = {},
   ): Promise<Lease> {
     if (this.#closed) throw new Error('browser pool is shut down');
@@ -485,7 +489,9 @@ export class BrowserPool {
     let pendingDialogMessage: string | undefined;
     try {
       const browser = await this.#ensureBrowser(slot);
-      context = await browser.newContext();
+      context = await browser.newContext(
+        true === opts.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : undefined,
+      );
       if (opts.permissions !== undefined)
         await grantLeasePermissions(context, opts.permissions, url);
       const page = await context.newPage();
@@ -559,6 +565,7 @@ export class BrowserPool {
         ...(opts.owner === undefined ? {} : { owner: opts.owner }),
         touchedAt: this.#now(),
         permissions: opts.permissions ?? [],
+        ignoresHTTPSErrors: true === opts.ignoreHTTPSErrors,
         ...(pending === undefined ? {} : { dialFailureUrl: pending }),
         ...(pendingDialogMessage === undefined ? {} : { lastDialogMessage: pendingDialogMessage }),
       });
@@ -730,6 +737,11 @@ export class BrowserPool {
     // every lease belonged to this browser, nothing else can be holding one.
     this.#occupied = 0 === this.#active.size ? 0 : Math.max(0, this.#occupied - freed);
     for (const waiter of this.#waiters.splice(0)) waiter(); // let them re-claim + relaunch
+  }
+
+  /** Whether this lease's context skips certificate checks. A context cannot change it later. */
+  ignoresHTTPSErrors(sessionId: string): boolean {
+    return true === this.#active.get(this.#leaseIdOf(sessionId))?.ignoresHTTPSErrors;
   }
 
   /** Whether this lease lives in the headed browser. */

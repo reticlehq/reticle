@@ -13,6 +13,9 @@
 import { join, basename } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { runAdhocVerdict } from './adhoc-verdict.js';
+import { callerArtifactRoot } from '@/memory/project/link-directory.js';
+import { verifyResults } from './verify-results.js';
+import { writeFile } from 'node:fs/promises';
 import { runAdhocExplore, runAdhocSuite } from './adhoc-suite.js';
 import {
   exploreApp,
@@ -63,7 +66,8 @@ import {
   SyncOutcome,
   type CloudConfig,
 } from '@/memory/cloud/cloud-sync.js';
-import { linkedRunsCloudPort } from '@/memory/cloud/cloud-config.js';
+import { linkedRunsCloudPort, readDashboardUrl } from '@/memory/cloud/cloud-config.js';
+import { seeRunLine } from '@/memory/project/sync-status.js';
 import { homedir } from 'node:os';
 import { ReticleRunner, type VerifyProgressListener } from '@/judgement/runs/reticle-runner.js';
 import { createRunnerPort } from '@/judgement/runs/runner-port.js';
@@ -137,6 +141,10 @@ export interface VerifyPorts {
    * one. A port so the push is testable, and so this reads what every other caller reads.
    */
   cloud: () => Promise<CloudConfig | null>;
+  /** Write `--results-json`. A port so the test reads what would have been written. */
+  writeResults?: (path: string, text: string) => Promise<void>;
+  /** The dashboard `reticle link` recorded, so a synced run is printed as a link to its page. */
+  dashboardUrl?: () => string | undefined;
 }
 
 interface VerifyArgs {
@@ -148,6 +156,8 @@ interface VerifyArgs {
   persona?: string;
   /** Verify only flows carrying ANY of these labels. */
   select?: string[];
+  /** Also write the per-journey verdicts here, as JSON. See verify-results.ts. */
+  resultsJson?: string;
 }
 
 function errMessage(error: unknown): string {
@@ -251,6 +261,12 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
       cloud,
       cloudFetch,
     ).catch(() => undefined);
+    if (args.resultsJson !== undefined && ports.writeResults !== undefined) {
+      await ports.writeResults(
+        args.resultsJson,
+        `${JSON.stringify(verifyResults(run), null, 2)}\n`,
+      );
+    }
     ports.out(renderRunReport(run));
     ports.exit(run.verdict.status === VerdictStatus.PASS ? EXIT_PASS : EXIT_FAIL);
   } catch (error) {
@@ -306,7 +322,12 @@ async function pushRunToCloud(
   if (null === config) return;
   const result = await syncRunToCloud(run, config, cloudFetch);
   if (result.outcome === SyncOutcome.SYNCED) {
-    ports.out(`↑ run ${run.runId} recorded on the Reticle dashboard`);
+    const dashboard = ports.dashboardUrl?.();
+    ports.out(
+      dashboard === undefined
+        ? `↑ run ${run.runId} recorded on the Reticle dashboard`
+        : seeRunLine(dashboard, run.runId),
+    );
   } else {
     ports.fail(
       `cloud run sync failed (${result.status ?? result.error ?? 'error'}); run kept locally`,
@@ -637,6 +658,8 @@ export function handleVerify(parsed: {
   persona?: string;
   /** Bridge port — parseCliArgs already resolves --port / RETICLE_PORT / .reticle.json into this. */
   port: number;
+  /** Write the per-journey verdicts here as JSON, for a CI step to post. */
+  resultsJson?: string;
 }): void {
   const now = (): number => Date.now();
   /*
@@ -685,12 +708,17 @@ export function handleVerify(parsed: {
     fail: (line) => process.stderr.write(`${line}\n`),
     exit: (code) => process.exit(code),
     cloud: linkedRunsCloudPort(createNodeFileSystem(), reticleRoot, homedir(), process.env),
+    dashboardUrl: () => readDashboardUrl(reticleRoot),
+    writeResults: (path, text) => writeFile(path, text, 'utf8'),
   };
   // Asked BEFORE anything binds. The listen failure arrives asynchronously on the server object,
   // long after `start` has resolved, so no `.catch` on that promise can ever see it — which is why
   // this used to reach the user as a raw node stack rather than as an answer.
   void (async () => {
     const port = parsed.port ?? RETICLE_DEFAULT_PORT;
+    // A lease opened for this verdict writes its runs into this folder's project, not `unmatched/`.
+    const root = callerArtifactRoot(process.cwd());
+    const callerRoot = root === undefined ? {} : { root };
     const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
     const plan = routeVerify({
       hasPredicate: expectation !== undefined,
@@ -721,6 +749,7 @@ export function handleVerify(parsed: {
           // Read fresh, not from `presence`: that probe asks whether a daemon is on the port, and
           // this asks whether a TAB is — the difference between asserting and opening the url first.
           sessions: async () => summarizeStatus(await fetchStatus(port)).sessions,
+          ...callerRoot,
           ...(parsed.sessionId === undefined ? {} : { sessionId: parsed.sessionId }),
           ...((t: string | undefined) => (t === undefined || 0 === t.length ? {} : { token: t }))(
             readOrCreatePairingTokenSync(defaultPairingTokenDir()),
@@ -753,6 +782,7 @@ export function handleVerify(parsed: {
           url: parsed.url,
           ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
           sessions: async () => summarizeStatus(await fetchStatus(port)).sessions,
+          ...callerRoot,
           ...((t: string | undefined) => (t === undefined || 0 === t.length ? {} : { token: t }))(
             readOrCreatePairingTokenSync(defaultPairingTokenDir()),
           ),
@@ -776,6 +806,7 @@ export function handleVerify(parsed: {
             ...(true === parsed.explore ? { explore: true } : {}),
             ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
             ...(parsed.select === undefined ? {} : { select: parsed.select }),
+            ...(parsed.resultsJson === undefined ? {} : { resultsJson: parsed.resultsJson }),
           },
           ports,
         );

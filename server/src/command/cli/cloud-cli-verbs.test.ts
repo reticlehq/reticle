@@ -873,6 +873,19 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(lastJsonOutput()).toEqual({ runs: [{ runId: 'run_1' }] });
   });
 
+  // A drive's local record can be gone (another machine, a cleaned checkout); the platform kept it.
+  it('runs <id> reads one run from the platform, and says when it is not there yet', async () => {
+    process.env['RETICLE_CLOUD_URL'] = TEST_URL;
+    process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
+    responder = () => ({ body: { runId: 'harness-1', status: 'done' } });
+    expect(await runCloudCommand(['runs', 'harness-1'])).toBe(0);
+    expect(requests[0]?.url).toBe(`${TEST_URL}/v1/runs/harness-1`);
+    expect(lastJsonOutput()).toEqual({ runId: 'harness-1', status: 'done' });
+
+    responder = () => ({ status: 404, body: {} });
+    expect(await runCloudCommand(['runs', 'harness-2'])).toBe(1);
+  });
+
   it('regression fetches the CI report and exits clean on zero broken flows', async () => {
     process.env['RETICLE_CLOUD_URL'] = TEST_URL;
     process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;

@@ -210,6 +210,8 @@ export const ReticleEnv = {
   HARNESS_BASE_URL: 'RETICLE_HARNESS_BASE_URL',
   /** Hard ceiling on harness model turns in one drive. Bounds cost, not value. */
   HARNESS_MAX_STEPS: 'RETICLE_HARNESS_MAX_STEPS',
+  /** The free drive `reticle try` was granted, sent on every Harness call it bills. */
+  DRIVE_ID: 'RETICLE_DRIVE_ID',
   /**
    * Which model backs the harness driver: `anthropic` (the default) or `jev`.
    *

@@ -200,11 +200,40 @@ function syncStatusHtml(sync: Readonly<Record<string, unknown>> | undefined): st
         ? `${String(num('pending'))} waiting`
         : 'on-platform' === status
           ? `Synced · ${String(num('onPlatform'))}`
-          : undefined;
+          : 'local-only' === status
+            ? `${String(num('pending'))} ${REPORT_TEXT.NOT_SENT}`
+            : undefined;
   if (label === undefined) return '';
   const said = 'string' === typeof sync['said'] ? sync['said'] : '';
-  return `<span class="reticle-sync-status" data-reticle-sync-status="${status as string}" title="${esc(said)}">${label}</span>`;
+  const runUrl = sync['runUrl'];
+  const seeRun =
+    'string' === typeof runUrl && isSafeDashboardUrl(runUrl)
+      ? ` <a class="reticle-sync-run" data-reticle-link="run" href="${esc(runUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.SEE_RUN}</a>`
+      : '';
+  return `<span class="reticle-sync-status" data-reticle-sync-status="${esc(String(status))}" title="${esc(said)}">${label}</span>${seeRun}`;
 }
+
+/**
+ * This tab's instrumentation, one line: capabilities covered out of the total, and — once a verdict
+ * recorded a gap — the button that copies the prompt for a coding agent. Numbers are checked as
+ * numbers; the prompt is never rendered, only copied.
+ */
+export function instrumentationHtml(
+  instrumentation: Readonly<Record<string, unknown>> | undefined,
+): string {
+  if (instrumentation === undefined) return '';
+  const covered = instrumentation['covered'];
+  const total = instrumentation['total'];
+  if ('number' !== typeof covered || 'number' !== typeof total) return '';
+  const copy =
+    'string' === typeof instrumentation['prompt']
+      ? `<button type="button" class="reticle-report-copy-prompt" ${COPY_PROMPT_ATTR}>${REPORT_TEXT.COPY_PROMPT}</button>`
+      : '';
+  return `<div class="reticle-report-instrumentation" title="${REPORT_TEXT.INSTRUMENTATION_HELP}"><span class="reticle-report-section">${REPORT_TEXT.INSTRUMENTATION}</span> <span class="reticle-report-instrumentation-value">${String(Math.round(covered))}/${String(Math.round(total))}</span>${copy}</div>`;
+}
+
+/** Marks the copy-prompt button; the click is delegated, since the body repaints. */
+const COPY_PROMPT_ATTR = 'data-reticle-copy-prompt';
 
 /**
  * Reticle Coverage: the headline is controls PROVED, the level that is evidence rather than a visit;
@@ -230,8 +259,10 @@ export function reportBodyHtml(
   projectName?: string,
   /** This project's coverage. Passed only for the project scope: it is not a machine-wide number. */
   coverage?: Readonly<Record<string, number>>,
-  /** Where this project's work stands with the platform. Project scope only, linked only. */
+  /** Where this project's work stands with the platform. Project scope only. */
   sync?: Readonly<Record<string, unknown>>,
+  /** This tab's instrumentation coverage and agent prompt. Project scope only. */
+  instrumentation?: Readonly<Record<string, unknown>>,
 ): string {
   const c = scope.counts;
   if (0 === c.calls) return `<p class="reticle-report-empty">${REPORT_TEXT.EMPTY}</p>`;
@@ -272,7 +303,7 @@ export function reportBodyHtml(
    * will not find. The two never both render — `localOnly` is gated on there being NO dashboard.
    */
   const identity = `<div class="reticle-report-identity">${accountControlHtml(account, { dashboardUrl, projectName, verdicts: c.verdicts, defects: c.failed })}${syncButtonHtml(dashboardUrl)}${syncStatusHtml(sync)}</div>`;
-  return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}${coverageHtml(coverage)}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
+  return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}${instrumentationHtml(instrumentation)}${coverageHtml(coverage)}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
 }
 
 /**
@@ -391,6 +422,13 @@ export class PresenterReport {
         void this.#copy(ACCOUNT_TEXT.SIGNIN_COMMAND, signin);
         return;
       }
+      const copyPrompt = target.closest(`[${COPY_PROMPT_ATTR}]`);
+      const prompt = this.#snapshot?.instrumentation?.['prompt'];
+      if (copyPrompt !== null && 'string' === typeof prompt) {
+        e.stopPropagation();
+        void this.#copy(prompt, copyPrompt);
+        return;
+      }
       const sync = target.closest(`[${SYNC_BTN_ATTR}]`);
       if (sync !== null) {
         e.stopPropagation();
@@ -474,6 +512,7 @@ export class PresenterReport {
             this.#snapshot?.projectName,
             this.#global ? undefined : this.#snapshot?.coverage,
             this.#global ? undefined : this.#snapshot?.sync,
+            this.#global ? undefined : this.#snapshot?.instrumentation,
           );
   }
 

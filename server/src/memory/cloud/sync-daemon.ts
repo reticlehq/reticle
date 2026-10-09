@@ -27,6 +27,7 @@ import { emitSyncHook } from '@/hooks/hook-emit.js';
 import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
 import { diskSink, diskSource, readCloudState } from './sync-disk.js';
 import { resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
+import { unsyncedRoots, type UnsyncedRoot } from './unsynced-roots.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 
 /** How often the daemon cycles. See the note above on why this is a constant and not a curve. */
@@ -125,6 +126,11 @@ export interface SyncDaemon {
    * time — the artifact is still on disk and the next daemon for this project sends it.
    */
   flush: () => Promise<void>;
+  /**
+   * Every root this daemon knows with runs the platform does not have, as of the last cycle — linked
+   * or not. An unlinked one is the case nothing will ever send, and it used to be skipped silently.
+   */
+  unsyncedRoots: () => readonly UnsyncedRoot[];
 }
 
 /** Whether a cycle landed or collected anything — what earns the fast interval and a log line. */
@@ -169,6 +175,33 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
    * so too. Once per transition, never per tick — a line every minute is a line people stop reading.
    */
   let wasLinked: boolean | undefined;
+  /** The last count logged per root: a root is announced when its count changes, never per tick. */
+  const announced = new Map<string, number>();
+  let unsynced: readonly UnsyncedRoot[] = [];
+  /** Which roots pushed this cycle, and whether each is linked by its own link file. */
+  let rootsLinked = new Map<string, boolean>();
+
+  /**
+   * Count what every root still owes, and say once per change where runs sit that nothing sends.
+   * Linked roots are listed too (the platform report and `doctor` read them), but only an unlinked
+   * one earns a log line: a linked root's pending runs are the next cycle's job.
+   */
+  const refreshUnsynced = async (): Promise<void> => {
+    const linked = rootsLinked;
+    unsynced = await unsyncedRoots([...linked.keys()], (r) =>
+      Promise.resolve(true === linked.get(r)),
+    );
+    for (const entry of unsynced) {
+      if (entry.linked || announced.get(entry.root) === entry.runs) continue;
+      announced.set(entry.root, entry.runs);
+      log('reticle_cloud_unsynced_root', {
+        root: entry.root,
+        runs: entry.runs,
+        linked: entry.linked,
+        fix: "run `reticle link` in that folder's project: these runs are on this machine only",
+      });
+    }
+  };
 
   /** One root's bundle. The state, source and sink are already per-root; only the caller was not. */
   const pushRoot = async (root: string, cloud: ProjectCloud): Promise<SyncReport | undefined> => {
@@ -210,13 +243,16 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     }
     for (const root of list) {
       if (root === deps.reticleRoot) continue;
+      rootsLinked.set(root, false);
       try {
         const cloud = await cloudFor(root);
         // Linked HERE, by its own link file. An unlinked root resolves to the environment's key,
         // which is the right answer for the root this daemon stands in and somebody else's project
         // for every other one: a daemon started with RETICLE_API_KEY pushed every project this
         // machine had seen into that one, a status and a pull per root on every cycle.
+        // Never silently: `refreshUnsynced` names this root if it holds runs.
         if (null === cloud.config || null === cloud.projectId) continue;
+        rootsLinked.set(root, true);
         const report = await pushRoot(root, cloud);
         if (report === undefined) continue;
         if (report.error !== undefined) {
@@ -242,9 +278,11 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     // race and the cursor written by the loser silently rewinds the winner's progress.
     if (running) return undefined;
     running = true;
+    rootsLinked = new Map();
     try {
       const cloud = await deps.cloud();
       const linked = null !== cloud.config;
+      rootsLinked.set(deps.reticleRoot, linked);
       if (linked !== wasLinked) {
         wasLinked = linked;
         if (linked)
@@ -311,6 +349,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       }
       return undefined;
     } finally {
+      await refreshUnsynced().catch(() => undefined);
       running = false;
     }
   };
@@ -334,6 +373,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
 
   return {
     syncNow: cycle,
+    unsyncedRoots: () => unsynced,
     nudge: (): void => {
       // A cycle already in flight will not pick this up, so the nudge is still scheduled behind it
       // rather than dropped — otherwise the run that arrived during a slow cycle waits a full tick.

@@ -33,6 +33,7 @@ One row per line of `reticle --help`. The order is the install order first, then
 | `reticle tutorial [--run] [--headless] [--port N]` | Watch Reticle verify a demo app | [tutorial](/cli/tutorial) |
 | `reticle init` | Wire Reticle into this project, boot the app, prove a session connected | [init](/cli/init) |
 | `reticle connect [--project <name\|id>] [--url <origin>]` | Wire if needed, sign in, link this folder to a cloud project, send local history | [cloud](/cli/cloud) |
+| `reticle try <url> [--persona <who>]` | Signed in: one free Harness drive of a URL, in a window you watch, then which journeys work | [try](/cli/try) |
 | `reticle push \| sync [--watch]` | Send what has not synced yet; `--watch` keeps going | [cloud](/cli/cloud#reticle-push) |
 | `reticle setup mcp` | Register the MCP server with your coding agents (the installer's registration half) | [setup](/cli/setup) |
 | `reticle serve` | Start the daemon and wait for it to bind | [serve](/cli/serve) |
@@ -170,7 +171,8 @@ A bare `reticle` with no arguments is not help. It is `reticle serve`.
   `npx @reticlehq/server` never pairs a daemon with an SDK it cannot talk to. `init`, `update`,
   `rollback`, `setup install`, `version` and `help` always run as typed, and so does a command whose
   version you pinned yourself (`npx @reticlehq/server@<version> …`). Set `RETICLE_NO_VERSION_MATCH=1` to
-  turn it off.
+  turn it off. Because `--help` runs as typed too, it describes the CLI you ran. When the command it
+  describes would run at the project's version instead, the help opens with a line naming that version.
 </Note>
 
 <Note>

@@ -130,6 +130,7 @@
                   "cli/open",
                   "cli/drive",
                   "cli/verify",
+                  "cli/try",
                   "cli/affected",
                   "cli/gate",
                   "cli/report",
