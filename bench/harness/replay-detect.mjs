@@ -19,7 +19,10 @@ import { ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
 import { recordingReachedAnchor } from './recording-reached-anchor.mjs';
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+// The daemon saves flows under ITS working directory: bench-all's scratch folder, or this checkout
+// when the pass is run on its own.
+const DAEMON_CWD =
+  process.env.BENCH_RETICLE_CWD ?? resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LLM_REDRIVE = { playwright_mcp: 30249, chrome_devtools_mcp: 32296 };
@@ -88,7 +91,7 @@ async function detectFor(flow) {
     const reached = recordingReachedAnchor(
       flow.name,
       flow.breakId,
-      JSON.parse(readFileSync(join(REPO_ROOT, '.reticle', 'flows', `${flow.name}.json`), 'utf8')),
+      JSON.parse(readFileSync(join(DAEMON_CWD, '.reticle', 'flows', `${flow.name}.json`), 'utf8')),
     );
     if (!reached.ok) throw new Error(reached.reason);
 

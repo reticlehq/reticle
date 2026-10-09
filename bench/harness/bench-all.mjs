@@ -30,6 +30,10 @@ const NO_BOOT = process.argv.includes('--no-boot');
 // saved. Started in the checkout, they read the flows its developer had saved there: the suite
 // verdict listed routes from other apps, and the measured tokens counted them.
 process.env.BENCH_RETICLE_CWD ??= mkdtempSync(join(tmpdir(), 'reticle-bench-'));
+// And it holds a `.reticle/`, which is what tells the daemon the directory is a project it may write
+// into. Without one the directory is a guest, so the first pass's flows went to
+// `~/.reticle/unmatched/origin-*` and replay-detect found nothing to read (ENOENT on every row).
+mkdirSync(join(process.env.BENCH_RETICLE_CWD, '.reticle'), { recursive: true });
 // Ports live in one module — see the note there on why disagreeing about them silently
 // invalidated the benchmark twice.
 const { RETICLE_PORT, API_PORT, DEMO_PORT, BENCH_URL } = PORTS;
