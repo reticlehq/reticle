@@ -412,7 +412,7 @@ describe('turning the harness off', () => {
  * A drive through the platform proxy spends Reticle's model budget. Free for three months, included
  * on a paid plan, and otherwise nobody is paying for it. Told as "the harness is off" that becomes a
  * support ticket from somebody who never turned anything off, so it is refused in its own words —
- * and the Harness runs on nothing else: it is the platform's, on the workspace's monthly runs.
+ * and the Harness runs on nothing else: it is the platform's, on the workspace's credits.
  */
 describe('a workspace with no entitlement', () => {
   const platformSays = (body: Record<string, unknown>) => () =>
@@ -424,7 +424,7 @@ describe('a workspace with no entitlement', () => {
   });
   const linked = { [ReticleEnv.API_KEY]: 'rk_live_x', [ReticleEnv.CLOUD_URL]: 'https://api.test' };
 
-  it('is pointed at its Harness runs, never at an offer that does not exist', async () => {
+  it('is pointed at its Harness credits, never at an offer that does not exist', async () => {
     await expect(
       exploreApp(depsWithFlows([]), linked, {
         maxSteps: 1,
@@ -436,8 +436,6 @@ describe('a workspace with no entitlement', () => {
     // old "claim the free 3 months" sent people looking for something that is not there.
     expect(MSG_HARNESS_UNCLAIMED).not.toMatch(/free 3 months|claim/i);
     expect(MSG_HARNESS_UNCLAIMED).toContain('Settings → Plan');
-    // The platform counts one unit, runs, so a refusal never speaks of credits.
-    expect(MSG_HARNESS_UNCLAIMED).not.toMatch(/credit/i);
   });
 
   /**

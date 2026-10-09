@@ -140,7 +140,7 @@ export interface ExploreResult {
  */
 export const MSG_NO_HARNESS_KEY =
   `The Reticle Harness runs on the Reticle platform, and every plan includes it (Free comes with ` +
-  `monthly Harness runs): run \`reticle connect\` to link this project and sign in. ` +
+  `monthly Harness credits): run \`reticle connect\` to link this project and sign in. ` +
   `Without it, drive the journey yourself with reticle_act_and_wait and an \`until\` on its last step: ` +
   `what you drive is saved as a flow just the same.`;
 
@@ -475,11 +475,11 @@ export const MSG_HARNESS_DISABLED =
  * The other reason a drive can be refused, and it is NOT the same reason.
  *
  * A drive through the platform spends Reticle's model budget, bounded by the workspace's monthly
- * Harness runs. The platform answers this only when something other than the switch stops it.
+ * Harness credits. The platform answers this only when something other than the switch stops it.
  */
 export const MSG_HARNESS_UNCLAIMED =
   'The Reticle platform says this workspace cannot drive the Harness right now. Every workspace, ' +
-  'Free included, gets Harness runs each month: see Settings → Plan in the Reticle dashboard.';
+  'Free included, gets Harness credits each month: see Settings → Plan in the Reticle dashboard.';
 
 /** The platform could not be asked, and the drive would spend Reticle's budget without its yes. */
 export const MSG_HARNESS_UNCONFIRMED =
@@ -510,7 +510,7 @@ export async function refusedByPlatform(
   options: ExploreOptions,
 ): Promise<string | undefined> {
   if (true === options.skipPlatformConfig) return undefined;
-  // No platform, no Harness: it runs there, on the workspace's monthly runs.
+  // No platform, no Harness: it runs there, on the workspace's credits.
   if (serverOptionsFromEnv(env) === undefined) return MSG_NO_HARNESS_KEY;
   const config = await platformConfig(env, options);
   // It needs a confirmed yes, not the absence of a no. The platform also checks on every turn.

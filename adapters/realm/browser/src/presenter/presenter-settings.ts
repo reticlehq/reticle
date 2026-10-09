@@ -278,15 +278,15 @@ const HARNESS_HELP =
   'Let Reticle test this app by itself to find defects, from Run Harness or from your coding agent. Off blocks every run. Set here or in your dashboard — both write to the same place.';
 /** Shown instead of the switch when the platform says this workspace cannot drive right now. */
 const HARNESS_LOCKED_HELP =
-  'The Harness is not available to this workspace right now. Every workspace gets free Harness runs each month: see Plan in your Reticle dashboard.';
+  'The Harness is not available to this workspace right now. Every workspace gets free Harness credits each month: see Plan in your Reticle dashboard.';
 
-/** "47 of 50 Harness runs left this month", or nothing for an unbounded plan. */
+/** "47 of 50 Harness credits left", from the platform's numbers, or nothing for an unbounded plan. */
 export function creditsLeft(credits: { used: number; limit: number } | undefined): string {
   if (credits === undefined) return '';
   const left = Math.max(0, credits.limit - credits.used);
   return 0 === left
-    ? `All ${String(credits.limit)} Harness runs used this month`
-    : `${String(left)} of ${String(credits.limit)} Harness runs left this month`;
+    ? `All ${String(credits.limit)} Harness credits used`
+    : `${String(left)} of ${String(credits.limit)} Harness credits left`;
 }
 /** Sign-in is a device flow the HUD opens in the browser; the terminal is only the fallback. */
 const ACCOUNT_HELP = `Whether this machine is signed in to a Reticle workspace. Press ${ACCOUNT_TEXT.SIGNED_OUT} to sign in through your browser.`;

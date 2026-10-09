@@ -40,7 +40,7 @@ Then the FIRST RUN, which proves anything at all:
 reticle_act_and_wait { ref, action, until }
 ```
 
-Drive the journey that matters; `until` on its LAST step names the end state. It is saved as a flow that replays with no model. On a linked project (Free includes monthly Harness runs), `reticle_verify { action: "explore", persona }` drives it on the platform; repeat it with `runId` until done (~50s/call), never start another. HUD drives and notes ride on your next call. Either way, name the journey: Reticle lists buttons, not which one matters.
+Drive the journey that matters; `until` on its LAST step names the end state. It is saved as a flow that replays with no model. On a linked project (Free includes Harness credits), `reticle_verify { action: "explore", persona }` drives it on the platform; repeat it with `runId` until done (~50s/call), never start another. HUD drives and notes ride on your next call. Either way, name the journey: Reticle lists buttons, not which one matters.
 
 Everything between here and there is a rule the steps assume. Read it as you go, not before you act.
 

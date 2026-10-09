@@ -12,7 +12,7 @@ npx @reticlehq/server connect --project "My App"
 
 If your daemon is not on the default port 4400, run `npx @reticlehq/server init --port <N>` first: `connect` takes no `--port`, and the `init` it runs for an unwired app uses the default.
 
-Use `--url https://your-cloud-origin` for a self-hosted cloud. `connect` checks a saved sign-in against that exact host before reuse; if it has expired, the browser approval opens again. It mints or reuses a project-scoped key, so there is no key to paste. The browser asks you to sign in, or to create a free account at app.reticle.sh. The Free plan includes monthly Harness runs. What syncs, and how to switch each part off, is in [What is recorded](/what-is-recorded). A newly wired app may have no run to sync yet: ask your agent to verify one flow and the linked daemon will sync the result. Run `reticle whoami` to check the binding and `reticle push` to send anything still pending.
+Use `--url https://your-cloud-origin` for a self-hosted cloud. `connect` checks a saved sign-in against that exact host before reuse; if it has expired, the browser approval opens again. It mints or reuses a project-scoped key, so there is no key to paste. The browser asks you to sign in, or to create a free account at app.reticle.sh. The Free plan includes monthly Harness credits. What syncs, and how to switch each part off, is in [What is recorded](/what-is-recorded). A newly wired app may have no run to sync yet: ask your agent to verify one flow and the linked daemon will sync the result. Run `reticle whoami` to check the binding and `reticle push` to send anything still pending.
 
 The other cloud commands are thin clients over the `/v1` API. Their logic is server-side.
 
