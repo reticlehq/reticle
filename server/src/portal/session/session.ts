@@ -2,7 +2,8 @@ import type { WebSocket } from 'ws';
 import { asProjectId, type ChannelId, type ImpactSnapshot, type ProjectId } from '@reticlehq/core';
 import type { HandshakeFacts } from './facts/handshake-facts.js';
 import { refusedResult } from './page-commands/undeclared-command.js';
-import { recordImpact } from '@/memory/impact/impact-recorder.js';
+import { impactSnapshot, recordImpact } from '@/memory/impact/impact-recorder.js';
+import { callingAgent } from '@/hooks/coding-agents.js';
 import { recordNotes } from './human/notes-ledger.js';
 import { commandPayload } from './command-payload.js';
 import { LastAct } from './last-act.js';
@@ -105,13 +106,8 @@ export class Session implements HandshakeFacts {
   readonly projectId: ProjectId | undefined;
   /**
    * The `.reticle` directory this session's evidence belongs in — impact counters AND capsules.
-   *
-   * Stamped once when the session is created, from the project it declared in HELLO, rather than
-   * resolved per call: the answer cannot change while the tab is connected, and resolving it once
-   * means every counter that fires for this session agrees about where it goes.
-   *
-   * Undefined when nothing could name a project — the caller then falls back to the daemon's own
-   * root, which is what every counter did unconditionally before this existed.
+   * Stamped once, from the project it declared in HELLO, so every counter agrees where it goes.
+   * Undefined when nothing could name a project: callers fall back to the daemon's own root.
    */
   artifactRoot: string | undefined;
   /**
@@ -760,13 +756,9 @@ export class Session implements HandshakeFacts {
   }
 
   /**
-   * The replacement, but only while it can actually answer.
-   *
-   * A successor is recorded once and never cleared, so without this a session that was replaced an
-   * hour ago keeps handing commands to a socket that has since closed — and the caller pays the full
-   * timeout to learn it, turning an instant "session replaced" into a wait. The point of delegating
-   * was to save the caller a round trip; delegating to a dead socket costs them more than the error
-   * did.
+   * The replacement, but only while it can actually answer. A successor is never cleared, so without
+   * this a session replaced an hour ago hands commands to a closed socket and the caller pays the
+   * full timeout to learn it — more than the "session replaced" error it was meant to save.
    */
   #liveSuccessor(): Session | undefined {
     // Walked, not just read one hop. Two replacements in quick succession — a page that reloads
@@ -821,14 +813,21 @@ export class Session implements HandshakeFacts {
     this.pushPresenter(next, text, tone);
   }
 
-  /** Push a human note onto the inbox (see LiveControl). */
+  /** Push a human note onto the inbox (see LiveControl); the HUD shows it as sent. */
   pushMessage(text: string): void {
     this.#live.push(text, this.elapsed());
+    this.#repaintNotes();
   }
 
-  /** Queued human notes, cleared as they are read (delivered-once). */
+  /** Queued human notes, cleared as they are read (delivered-once); the HUD shows them as seen. */
   drainInbox(): InboxMessage[] {
-    return this.#live.drain();
+    const taken = this.#live.drain(callingAgent());
+    if (0 < taken.length) this.#repaintNotes();
+    return taken;
+  }
+
+  #repaintNotes(): void {
+    this.pushImpact(() => impactSnapshot(this.artifactRoot), true);
   }
 
   /** Diagnostic read of the inbox depth (does not clear). */

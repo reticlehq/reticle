@@ -2,6 +2,7 @@ import {
   DEFAULT_PLATFORM_URL,
   type AccountState,
   type HarnessConfig,
+  type AgentLink,
   type HarnessDrive,
 } from '@reticlehq/core';
 import type { AnnotationItem } from '@/review/annotator.js';
@@ -22,6 +23,16 @@ import { HUD_GLASS_PAINT } from './chrome/presenter-hud-chrome.js';
 import { creditsLeft } from './presenter-settings.js';
 import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';
 import { ReticleStorageKey } from '@/storage-keys.js';
+import {
+  DEFAULT_PERSONA,
+  PERSONA_PICK_ID,
+  knownPick,
+  personaFieldHtml,
+  personaText,
+  readPick,
+  savePick,
+} from './presenter-personas.js';
+import { AGENT_LINK_CSS, AGENT_LINK_HTML, AgentLinkView } from './presenter-agent-link.js';
 
 export type ChatView = 'activity' | 'flows' | 'annotations';
 const HISTORY_KEY = ReticleStorageKey.ANNOTATION_HISTORY;
@@ -104,15 +115,12 @@ const HARNESS_TEXT = {
     'Allowed by default. Turning it off blocks every Harness run on this project, from here and from your coding agent.',
   ON: 'Allowed',
   OFF: 'Not allowed',
-  PERSONA: 'Act as… (optional)',
-  PERSONA_HINT: 'e.g. a first-time shopper',
   RUN: 'Run Harness',
   STOP: 'Stop',
   DRIVING: 'Reticle is testing this page',
   steps: (steps: number): string =>
     `${String(steps)} step${1 === steps ? '' : 's'} so far. Each one shows in the log above.`,
 } as const;
-const PERSONA_ID = 'reticle-harness-persona';
 
 /** The block's heading and one-line explanation: the shape every Harness state shares. */
 function harnessHead(line: string, side = ''): string {
@@ -124,15 +132,15 @@ function harnessBlocked(line: string, href: string, label: string): string {
   return `${harnessHead(line)}<a class="reticle-harness-link" href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 }
 
-/** Run Harness with an optional persona, or the running drive's progress and Stop. */
-function driveRowHtml(drive: HarnessDrive | undefined, enabled: boolean): string {
+/** Run Harness as the picked persona, or the running drive's progress and Stop. */
+function driveRowHtml(drive: HarnessDrive | undefined, enabled: boolean, pick: string): string {
   if (drive !== undefined)
     return `<button type="button" data-reticle-harness-stop class="reticle-harness-run reticle-harness-stop">${HARNESS_TEXT.STOP}</button>`;
   const off = enabled ? '' : ' disabled';
-  return `<label class="reticle-harness-label" for="${PERSONA_ID}">${HARNESS_TEXT.PERSONA}</label><input type="text" id="${PERSONA_ID}" data-reticle-harness-persona class="reticle-harness-persona" placeholder="${HARNESS_TEXT.PERSONA_HINT}"${off}><button type="button" data-reticle-harness-run class="reticle-harness-run"${off}>${HARNESS_TEXT.RUN}</button>`;
+  return `${personaFieldHtml(pick, enabled)}<button type="button" data-reticle-harness-run class="reticle-harness-run"${off}>${HARNESS_TEXT.RUN}</button>`;
 }
 
-export const CHAT_VIEWS_HTML = `
+export const CHAT_VIEWS_HTML = `${AGENT_LINK_HTML}
   <div data-reticle-harness-spot class="reticle-harness-spot" hidden></div>`;
 
 export const FLOWS_PAGE_HTML: string = `<section data-reticle-page-panel="flows" class="reticle-page-panel reticle-flows-view" role="region" aria-label="Saved Flows" hidden>
@@ -183,6 +191,8 @@ export const CHAT_VIEWS_CSS = `
 [data-reticle-chat-panel] .reticle-harness-label{margin-top:2px;font-size:var(--reticle-hud-size-xs);font-weight:500;color:var(--reticle-hud-text);}
 [data-reticle-chat-panel] .reticle-harness-persona{box-sizing:border-box;width:100%;height:30px;font:inherit;font-size:var(--reticle-hud-size-sm);color:var(--reticle-hud-text);
   background:var(--reticle-hud-ground);border:1px solid var(--reticle-hud-border-strong);border-radius:var(--reticle-hud-radius-sm);padding:0 var(--reticle-hud-space-2);}
+[data-reticle-chat-panel] select.reticle-harness-persona{padding-right:4px;}
+[data-reticle-chat-panel] .reticle-harness-hint{margin:0;font-size:var(--reticle-hud-size-xs);line-height:1.4;color:var(--reticle-hud-text-muted);}
 [data-reticle-chat-panel] .reticle-harness-persona::placeholder{color:var(--reticle-hud-text-faint);}
 [data-reticle-chat-panel] .reticle-harness-persona:focus-visible{outline:2px solid var(--reticle-hud-brand);outline-offset:0;}
 [data-reticle-chat-panel] .reticle-harness-run{box-sizing:border-box;width:100%;height:32px;border:0;border-radius:var(--reticle-hud-radius-sm);cursor:pointer;
@@ -245,7 +255,7 @@ export const CHAT_VIEWS_CSS = `
 [data-reticle-page-panel="annotations"] .reticle-annotation-content span{display:block;margin-top:3px;font-size:var(--reticle-hud-size-xs);color:var(--reticle-hud-text-muted);overflow-wrap:anywhere;}
 [data-reticle-page-panel="annotations"] .reticle-annotation-item button{flex:none;border:1px solid var(--reticle-line);border-radius:6px;background:rgba(255,255,255,.04);color:var(--reticle-muted);font:inherit;font-size:11px;padding:4px 6px;cursor:pointer;}
 [data-reticle-page-panel="annotations"] .reticle-annotation-item button:hover{color:#fff;background:rgba(255,255,255,.1);}
-`;
+${AGENT_LINK_CSS}`;
 
 /** UI state only. The daemon remains the authority for Harness and replay. */
 export class ChatViews {
@@ -265,17 +275,23 @@ export class ChatViews {
   #drive: HudDriveHost | undefined;
   #driving: HarnessDrive | undefined;
   #projectId: string | undefined;
+  #personaPick: string = DEFAULT_PERSONA;
+  #customPersona = '';
+  #harnessHtml = '';
+  #agent: AgentLinkView;
 
   constructor(
     onHarness: (enabled: boolean) => void,
     onImpact: () => void,
     onOpenChat: (view: ChatView) => void,
     drive?: HudDriveHost,
+    onNote: (text: string) => void = () => undefined,
   ) {
     this.#onHarness = onHarness;
     this.#onImpact = onImpact;
     this.#onOpenChat = onOpenChat;
     this.#drive = drive;
+    this.#agent = new AgentLinkView(onNote);
   }
 
   mount(root: HTMLElement): void {
@@ -304,10 +320,7 @@ export class ChatViews {
         const run = target.closest<HTMLButtonElement>('[data-reticle-harness-run]');
         if (null !== run) {
           if (run.disabled) return;
-          const persona = this.#root
-            ?.querySelector<HTMLInputElement>('[data-reticle-harness-persona]')
-            ?.value.trim();
-          this.#drive?.run(persona === undefined || 0 === persona.length ? undefined : persona);
+          this.#drive?.run(personaText(this.#personaPick, this.#customPersona));
           return;
         }
         if (null !== target.closest('[data-reticle-harness-stop]')) {
@@ -327,6 +340,30 @@ export class ChatViews {
       },
       { signal },
     );
+    const spot = root.querySelector('[data-reticle-harness-spot]');
+    spot?.addEventListener(
+      'change',
+      (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement)) return;
+        const pick = knownPick(target.value);
+        if (pick === undefined) return;
+        this.#personaPick = pick;
+        savePick(this.#projectId, pick);
+        this.#paintHarness();
+        // The picker was redrawn under the person choosing from it: give it back its focus.
+        this.#root?.querySelector<HTMLElement>(`#${PERSONA_PICK_ID}`)?.focus();
+      },
+      { signal },
+    );
+    spot?.addEventListener(
+      'input',
+      (event) => {
+        if (event.target instanceof HTMLInputElement) this.#customPersona = event.target.value;
+      },
+      { signal },
+    );
+    this.#agent.mount(root, signal);
     root.querySelectorAll<HTMLElement>('[data-reticle-annotation-tab]').forEach((button) =>
       button.addEventListener(
         'click',
@@ -379,6 +416,8 @@ export class ChatViews {
     this.#listeners?.abort();
     this.#listeners = undefined;
     this.#root = undefined;
+    this.#harnessHtml = '';
+    this.#agent.teardown();
   }
 
   open(view: ChatView): void {
@@ -416,7 +455,12 @@ export class ChatViews {
   /** The project this page reports to, so the dashboard links open on it. */
   setProjectId(projectId: string | undefined): void {
     this.#projectId = projectId;
+    this.#personaPick = readPick(projectId);
     this.#paintHarness();
+  }
+  /** Who is coding against this daemon, and this tab's notes to them. */
+  paintAgent(link: AgentLink | undefined): void {
+    this.#agent.paint(link);
   }
   paintAccount(account: AccountState | undefined): void {
     this.#account = account;
@@ -473,31 +517,40 @@ export class ChatViews {
       this.#projectId === undefined ? '' : `&project=${encodeURIComponent(this.#projectId)}`;
     const setupUrl = `${base}${HARNESS_SETUP_PATH}${project}${HARNESS_SETUP_HASH}`;
     const planUrl = `${base}${HARNESS_PLAN_PATH}`;
-    if (config === undefined) {
-      spot.innerHTML = harnessBlocked(HARNESS_TEXT.UNLINKED, setupUrl, HARNESS_TEXT.SET_UP);
-    } else if (!config.harnessEntitled) {
-      spot.innerHTML = harnessBlocked(HARNESS_TEXT.NOT_ENTITLED, planUrl, HARNESS_TEXT.PLANS);
-    } else if (config.credits !== undefined && config.credits.used >= config.credits.limit) {
-      spot.innerHTML = harnessBlocked(
+    const html = this.#harnessBody(config, setupUrl, planUrl);
+    // Unchanged markup is not redrawn, so a repaint mid-typing never drops focus or the cursor.
+    if (html !== this.#harnessHtml) {
+      spot.innerHTML = html;
+      this.#harnessHtml = html;
+    }
+    const custom = spot.querySelector<HTMLInputElement>('[data-reticle-harness-persona]');
+    if (custom !== null && custom.value !== this.#customPersona) custom.value = this.#customPersona;
+  }
+
+  #harnessBody(config: HarnessConfig | undefined, setupUrl: string, planUrl: string): string {
+    if (config === undefined)
+      return harnessBlocked(HARNESS_TEXT.UNLINKED, setupUrl, HARNESS_TEXT.SET_UP);
+    if (!config.harnessEntitled)
+      return harnessBlocked(HARNESS_TEXT.NOT_ENTITLED, planUrl, HARNESS_TEXT.PLANS);
+    if (config.credits !== undefined && config.credits.used >= config.credits.limit)
+      return harnessBlocked(
         `${creditsLeft(config.credits)}. ${HARNESS_TEXT.RENEW}`,
         planUrl,
         HARNESS_TEXT.PRO,
       );
-    } else if (false === config.providerReady) {
-      spot.innerHTML = harnessBlocked(HARNESS_TEXT.NO_PROVIDER, setupUrl, HARNESS_TEXT.SET_UP);
-    } else if (this.#driving !== undefined && this.#drive !== undefined) {
-      spot.innerHTML = `<div class="reticle-harness-head"><strong class="reticle-harness-title">${HARNESS_TEXT.DRIVING}</strong></div><p class="reticle-harness-line">${HARNESS_TEXT.steps(this.#driving.steps)}</p>${driveRowHtml(this.#driving, true)}`;
-    } else {
-      const enabled = this.#pendingHarness ?? config.harnessEnabled;
-      const credits = creditsLeft(config.credits);
-      const line = enabled
-        ? `${HARNESS_TEXT.READY}${'' === credits ? '' : ` ${credits}.`}`
-        : HARNESS_TEXT.SWITCHED_OFF;
-      // The switch is the project's permission, shared with the agent's runs and with Settings. It
-      // says so in words beside it, and Run follows it, so the two can never disagree.
-      const toggle = `<span class="reticle-harness-toggle" title="${HARNESS_TEXT.SWITCH_TITLE}"><span class="reticle-harness-switch-label">${enabled ? HARNESS_TEXT.ON : HARNESS_TEXT.OFF}</span><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="${HARNESS_TEXT.SWITCH}" aria-checked="${String(enabled)}" ${this.#pendingHarness === undefined ? '' : 'disabled'}></button></span>`;
-      spot.innerHTML = `${harnessHead(line, toggle)}${this.#drive === undefined ? '' : driveRowHtml(undefined, enabled)}`;
-    }
+    if (false === config.providerReady)
+      return harnessBlocked(HARNESS_TEXT.NO_PROVIDER, setupUrl, HARNESS_TEXT.SET_UP);
+    if (this.#driving !== undefined && this.#drive !== undefined)
+      return `<div class="reticle-harness-head"><strong class="reticle-harness-title">${HARNESS_TEXT.DRIVING}</strong></div><p class="reticle-harness-line">${HARNESS_TEXT.steps(this.#driving.steps)}</p>${driveRowHtml(this.#driving, true, this.#personaPick)}`;
+    const enabled = this.#pendingHarness ?? config.harnessEnabled;
+    const credits = creditsLeft(config.credits);
+    const line = enabled
+      ? `${HARNESS_TEXT.READY}${'' === credits ? '' : ` ${credits}.`}`
+      : HARNESS_TEXT.SWITCHED_OFF;
+    // The switch is the project's permission, shared with the agent's runs and with Settings. It
+    // says so in words beside it, and Run follows it, so the two can never disagree.
+    const toggle = `<span class="reticle-harness-toggle" title="${HARNESS_TEXT.SWITCH_TITLE}"><span class="reticle-harness-switch-label">${enabled ? HARNESS_TEXT.ON : HARNESS_TEXT.OFF}</span><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="${HARNESS_TEXT.SWITCH}" aria-checked="${String(enabled)}" ${this.#pendingHarness === undefined ? '' : 'disabled'}></button></span>`;
+    return `${harnessHead(line, toggle)}${this.#drive === undefined ? '' : driveRowHtml(undefined, enabled, this.#personaPick)}`;
   }
 
   #visibleAnnotations(): readonly (AnnotationItem | HistoricalAnnotation)[] {

@@ -64,6 +64,9 @@ const PLAIN_CONTROLS = [
   // Run Harness beside it, and Stop while the drive it started runs.
   'harness-run',
   'harness-stop',
+  // The coding-agent block on the Agent Log: send a note, or copy a prompt when none is connected.
+  'agent-send',
+  'agent-copy',
   // "See all" beside the Agent Log's replay row, and below Impact's recent bugs.
   'flows-all',
   'defects-all',

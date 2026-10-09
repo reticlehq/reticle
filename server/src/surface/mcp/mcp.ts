@@ -46,6 +46,7 @@ import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { setMcpClientNameHook } from '@/telemetry/feedback-context.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { reportMcpConnected } from '@/telemetry/mcp-connection.js';
+import { noteAgentAttached, noteAgentDetached } from '@/hooks/coding-agents.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 
 /**
@@ -677,12 +678,15 @@ export function createMcpServer(
     const info = server.server.getClientVersion();
     if (info?.name === undefined) return;
     getSessionMetrics().recordClient(info.name, info.version);
+    // So the HUD can say which agent is connected, and credit a note to the one that read it.
+    noteAgentAttached(deps.attachId, info.name);
     // The one signal that separates "Reticle is running" from "somebody is USING it", reported from
     // the first moment it can carry WHO. It used to fire from the SSE `connect()` resolution, which
     // happens before the handshake — so every connect row was anonymous, and the field meant to say
     // which agent client converts best was empty on every event ever sent.
     reportMcpConnected(info.name);
   };
+  server.server.onclose = () => noteAgentDetached(deps.attachId);
   // Which agent is on the other end, for a feedback report. Registered as a lazy hook rather than
   // read here: the handshake has not happened yet at construction time, and a report filed twenty
   // tool calls later is exactly when we want the answer.

@@ -1,5 +1,5 @@
 import { appModalOpen } from '@/dom/dom-ignore.js';
-import type { HarnessConfig, HarnessDrive } from '@reticlehq/core';
+import type { AgentLink, HarnessConfig, HarnessDrive } from '@reticlehq/core';
 import { PresenterReport, reportPanelHtml } from './presenter-report.js';
 import type { AccountState } from '@reticlehq/core';
 import { paintToolbarAccount, TOOLBAR_ACCOUNT_ATTR } from './presenter-workspace.js';
@@ -94,6 +94,8 @@ interface HudShellCallbacks {
   onHarnessRun?: (persona?: string) => void;
   /** Stop on the drive running in this tab. */
   onHarnessStop?: () => void;
+  /** Send a note to the coding agent, read on its next Reticle call. */
+  onAgentNote?: (text: string) => void;
   /** Any Sign in button. The daemon owns the credential, so it starts the browser sign-in. */
   onSignIn?: () => void;
   settings?: SettingsHost;
@@ -188,6 +190,10 @@ export class HudShell {
   paintHarnessDrive(drive: HarnessDrive | undefined): void {
     this.#chatViews.paintDrive(drive);
   }
+  /** Which coding agent is connected, and this tab's notes to it. */
+  paintAgent(link: AgentLink | undefined): void {
+    this.#chatViews.paintAgent(link);
+  }
   paintHarness(config: HarnessConfig | undefined): void {
     this.#pushedHarness = config;
     this.#settings.paintHarness(config);
@@ -276,6 +282,7 @@ export class HudShell {
         run: (persona) => callbacks.onHarnessRun?.(persona),
         stop: () => callbacks.onHarnessStop?.(),
       },
+      (text) => callbacks.onAgentNote?.(text),
     );
     this.#settings = new PresenterSettingsPanel({
       ...callbacks.settings,

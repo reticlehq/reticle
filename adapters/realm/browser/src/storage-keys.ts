@@ -25,10 +25,14 @@ export const ReticleStorageKey = {
 
 /** The tour's per-project "seen" flags: one key per project, so a prefix. */
 export const TOUR_SEEN_KEY_PREFIX = 'reticle.tour.seen.';
+/** The Harness persona last picked, per project. */
+export const PERSONA_KEY_PREFIX = 'reticle.harness.persona.';
 
 const OWN_KEYS: ReadonlySet<string> = new Set(Object.values(ReticleStorageKey));
 
 /** Whether Reticle wrote this key, rather than the app under test. */
 export function isReticleStorageKey(key: string): boolean {
-  return OWN_KEYS.has(key) || key.startsWith(TOUR_SEEN_KEY_PREFIX);
+  return (
+    OWN_KEYS.has(key) || key.startsWith(TOUR_SEEN_KEY_PREFIX) || key.startsWith(PERSONA_KEY_PREFIX)
+  );
 }

@@ -493,6 +493,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   journal: ['on-disk', 'artifact', 'dir', 'fs', 'hooks', 'project', 'runs'],
   license: ['config'],
   mcp: [
+    // The handshake names the coding agent on each connection, for the HUD's "Connected:" line.
+    'hooks',
     'binding',
     'daemon',
     'faults',

@@ -7,6 +7,7 @@ import {
   FLOWS_PAGE_HTML,
   ChatViews,
 } from './presenter-chat-views.js';
+import { PERSONAS } from './presenter-personas.js';
 
 const mountViews = (onHarness = vi.fn()) => {
   document.body.innerHTML = `<div data-reticle-overlay><div data-reticle-chat-panel>${CHAT_VIEWS_HTML}<section class="reticle-chat-view" aria-label="Agent Log"></section></div>${FLOWS_PAGE_HTML}${ANNOTATIONS_HTML}${CHAT_VIEWS_NAV_HTML}</div>`;
@@ -281,14 +282,81 @@ describe('running the Harness from the panel', () => {
     return { root, views, drive };
   };
 
-  it('labels the persona field and gives Run Harness the full width', () => {
+  const pick = (root: HTMLElement, value: string): void => {
+    const select = root.querySelector<HTMLSelectElement>('[data-reticle-harness-persona-pick]');
+    if (null === select) throw new Error('no persona picker');
+    select.value = value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  it('offers labelled presets with a one-line hint, First-time visitor by default', () => {
     const { root } = mountWithDrive();
+    const select = root.querySelector<HTMLSelectElement>('[data-reticle-harness-persona-pick]');
+    expect(root.querySelector(`label[for="${select?.id ?? ''}"]`)?.textContent).toBe('Act as');
+    expect([...(select?.options ?? [])].map((o) => o.textContent)).toEqual([
+      ...PERSONAS.map((p) => p.label),
+      'Custom…',
+    ]);
+    expect(select?.value).toBe('first-time');
+    expect(root.querySelector('.reticle-harness-hint')?.textContent).toBe(PERSONAS[0].hint);
+    // No free-text box until Custom is chosen.
+    expect(root.querySelector('[data-reticle-harness-persona]')).toBeNull();
+  });
+
+  it('runs as the picked preset, sending its sentence as the persona', () => {
+    const { root, drive } = mountWithDrive();
+    pick(root, 'keyboard');
+    expect(root.querySelector('.reticle-harness-hint')?.textContent).toBe(PERSONAS[3].hint);
+    root.querySelector<HTMLElement>('[data-reticle-harness-run]')?.click();
+    expect(drive.run).toHaveBeenCalledWith(`Keyboard only: ${PERSONAS[3].hint}`);
+  });
+
+  it('reveals the text box for Custom and runs with the words typed there', () => {
+    const { root, drive } = mountWithDrive();
+    pick(root, 'custom');
     const input = root.querySelector<HTMLInputElement>('[data-reticle-harness-persona]');
-    const label = root.querySelector(`label[for="${input?.id ?? ''}"]`);
-    expect(label?.textContent).toBe('Act as… (optional)');
-    expect(input?.placeholder).toBe('e.g. a first-time shopper');
-    expect(root.querySelector('[data-reticle-harness-run]')?.classList).toContain(
-      'reticle-harness-run',
+    if (null === input) throw new Error('no custom field');
+    input.value = '  a returning shopper ';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    root.querySelector<HTMLElement>('[data-reticle-harness-run]')?.click();
+    expect(drive.run).toHaveBeenCalledWith('a returning shopper');
+  });
+
+  it('runs with no persona when Custom is empty', () => {
+    const { root, drive } = mountWithDrive();
+    pick(root, 'custom');
+    root.querySelector<HTMLElement>('[data-reticle-harness-run]')?.click();
+    expect(drive.run).toHaveBeenCalledWith(undefined);
+  });
+
+  it('remembers the last pick per project, and works when storage throws', () => {
+    localStorage.clear();
+    const first = mountWithDrive();
+    first.views.setProjectId('shop');
+    pick(first.root, 'admin');
+    const again = mountWithDrive();
+    again.views.setProjectId('shop');
+    expect(again.root.querySelector<HTMLSelectElement>('select')?.value).toBe('admin');
+    again.views.setProjectId('other');
+    expect(again.root.querySelector<HTMLSelectElement>('select')?.value).toBe('first-time');
+    const broken = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    again.views.setProjectId('shop');
+    expect(again.root.querySelector<HTMLSelectElement>('select')?.value).toBe('first-time');
+    broken.mockRestore();
+  });
+
+  it('keeps the custom words through a repaint', () => {
+    const { root, views } = mountWithDrive();
+    pick(root, 'custom');
+    const input = root.querySelector<HTMLInputElement>('[data-reticle-harness-persona]');
+    if (null === input) throw new Error('no custom field');
+    input.value = 'half typed';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    views.paintHarness({ ...entitled });
+    expect(root.querySelector<HTMLInputElement>('[data-reticle-harness-persona]')?.value).toBe(
+      'half typed',
     );
   });
 
@@ -299,21 +367,6 @@ describe('running the Harness from the panel', () => {
     expect(run?.disabled).toBe(true);
     run?.click();
     expect(drive.run).not.toHaveBeenCalled();
-  });
-
-  it('starts a drive with the persona typed beside Run Harness', () => {
-    const { root, drive } = mountWithDrive();
-    const input = root.querySelector<HTMLInputElement>('[data-reticle-harness-persona]');
-    if (null === input) throw new Error('no persona field');
-    input.value = '  a returning shopper ';
-    root.querySelector<HTMLElement>('[data-reticle-harness-run]')?.click();
-    expect(drive.run).toHaveBeenCalledWith('a returning shopper');
-  });
-
-  it('starts a drive with no persona when none was typed', () => {
-    const { root, drive } = mountWithDrive();
-    root.querySelector<HTMLElement>('[data-reticle-harness-run]')?.click();
-    expect(drive.run).toHaveBeenCalledWith(undefined);
   });
 
   it('shows the running drive with Stop, and Run again once it has ended', () => {

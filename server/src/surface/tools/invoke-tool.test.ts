@@ -487,19 +487,13 @@ describe('a Harness drive the agent did not start', () => {
         persist: () => Promise.resolve(),
         run: () => new Promise(() => undefined),
       });
-      const first = (await runTool(
-        stubTool(ReticleTool.PROJECT, { ok: true }),
-        fakeDeps(),
-        {},
-      )) as {
+      // An agent's call is one on an MCP connection, which is what carries an attach id.
+      const agent = { ...fakeDeps(), attachId: 'agent-1' };
+      const first = (await runTool(stubTool(ReticleTool.PROJECT, { ok: true }), agent, {})) as {
         harness?: string;
       };
-      expect(first.harness).toContain('harness-hud-1 running');
-      const second = (await runTool(
-        stubTool(ReticleTool.PROJECT, { ok: true }),
-        fakeDeps(),
-        {},
-      )) as {
+      expect(first.harness).toContain('harness-hud-1 (started from the HUD) is running');
+      const second = (await runTool(stubTool(ReticleTool.PROJECT, { ok: true }), agent, {})) as {
         harness?: string;
       };
       expect(second.harness).toBeUndefined();

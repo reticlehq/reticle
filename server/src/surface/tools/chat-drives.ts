@@ -61,6 +61,7 @@ import {
   type FreeDrive,
 } from '../../features/harness/platform/platform-drives.js';
 import { HumanControlKind } from '@reticlehq/core';
+import { onAgentsChange } from '../../hooks/coding-agents.js';
 
 /** Why a platform drive with no tab of its own runs no tool. */
 const NO_DRIVEN_TAB = 'No tab was picked for this drive, so no tool runs.';
@@ -439,4 +440,6 @@ export function attachHudHarness(
   onDriveChange(daemon.repaint);
   // Each step too, so the panel's "N steps so far" counts up instead of sitting at zero.
   onDriveStep(daemon.repaint);
+  // And "Connected: Claude Code" follows an agent attaching or leaving.
+  onAgentsChange(daemon.repaint);
 }

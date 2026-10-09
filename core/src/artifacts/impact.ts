@@ -229,6 +229,28 @@ export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 export const HarnessDriveSchema = z.object({ runId: z.string(), steps: z.number().int().min(0) });
 export type HarnessDrive = z.infer<typeof HarnessDriveSchema>;
 
+/** The longest note a person can send their coding agent from the HUD. */
+export const AGENT_NOTE_MAX = 500;
+/** How many of a tab's latest notes the HUD shows. */
+export const AGENT_NOTES_SHOWN = 5;
+const AGENT_LABEL_MAX = 64;
+
+/** A note sent to the coding agent from this tab. `seen` only once an agent's tool call took it. */
+export const AgentNoteSchema = z.object({
+  text: z.string().max(AGENT_NOTE_MAX),
+  seen: z.boolean(),
+  /** Which agent took it, when the daemon knows. */
+  by: z.string().max(AGENT_LABEL_MAX).optional(),
+});
+export type AgentNote = z.infer<typeof AgentNoteSchema>;
+
+/** The coding agents attached to the daemon now (friendly names), and this tab's latest notes. */
+export const AgentLinkSchema = z.object({
+  agents: z.array(z.string().max(AGENT_LABEL_MAX)).max(8),
+  notes: z.array(AgentNoteSchema).max(AGENT_NOTES_SHOWN),
+});
+export type AgentLink = z.infer<typeof AgentLinkSchema>;
+
 export const ImpactSnapshotSchema = z.object({
   schemaVersion: z.number().int().positive(),
   project: ImpactScopeSchema,
@@ -267,6 +289,8 @@ export const ImpactSnapshotSchema = z.object({
   harnessConfig: HarnessConfigSchema.optional(),
   /** The drive running now, when there is one. Absent: nothing is driving. */
   harnessDrive: HarnessDriveSchema.optional(),
+  /** Who is coding against this daemon, and what this tab said to them. Absent: an older daemon. */
+  agent: AgentLinkSchema.optional(),
   /**
    * The rail's notices, already chosen for this machine by the daemon (see `hud-notices.ts`).
    * Absent means the daemon has nothing newer than the SDK's bundled slides, which then show.

@@ -277,13 +277,11 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       return Promise.resolve(
         noteEmptyRead({ messages }, 'messages', {
           noun: 'messages from the human since the last poll',
-          // The HUD no longer carries a text input — two boxes on one screen, and nothing said which
-          // was which. Nothing in the shipped product produces one of these today, so an empty queue
-          // here is structural rather than a quiet human, and a caller polling it deserves to know
-          // that rather than infer silence.
+          // The HUD's note box is the one producer, and every tool result already carries what it
+          // sends, so polling this is rarely needed and silence here is only silence so far.
           caveat:
-            'the HUD has no message box, so nothing currently sends on this channel — an empty ' +
-            'queue here is not evidence about what the human thinks',
+            'notes from the HUD also arrive inline on any Reticle tool result (`control.guidance`), ' +
+            'so an empty queue means nothing new since the last call, not that the human agrees',
         }),
       );
     },

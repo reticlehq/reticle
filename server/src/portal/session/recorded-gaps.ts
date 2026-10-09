@@ -7,6 +7,8 @@
  * Deduped by kind + missing, newest first, bounded per session.
  */
 import { withRunningDrive } from '@/features/harness/drive-runs.js';
+import { agentLinkOf } from './agent-link.js';
+import type { InboxMessage } from './human/live-control.js';
 import {
   CoverageMarker,
   InstrumentationGapKind,
@@ -85,6 +87,8 @@ export interface InstrumentedTab {
   readonly url?: string | undefined;
   readonly channels?: readonly string[] | undefined;
   readonly sourceMapping?: boolean | undefined;
+  /** What the person said to the agent from this tab. Absent on a test double. */
+  inboxHistory?(): readonly InboxMessage[];
 }
 
 const SOURCE_GAPS: ReadonlySet<string> = new Set([
@@ -128,13 +132,18 @@ export function instrumentationOf(tab: InstrumentedTab): Coverage & { prompt?: s
 }
 
 /**
- * The impact snapshot a tab is pushed, carrying that tab's own coverage and running drive. Every
+ * The impact snapshot a tab is pushed, carrying that tab's own coverage, running drive and agent
+ * link (who is attached, and this tab's notes to them). Every
  * push needs the drive: one without it reads as "no drive", and the drive's own tool calls push.
  */
 export function withInstrumentation(
   tab: InstrumentedTab,
   snapshot: ImpactSnapshot,
 ): ImpactSnapshot {
-  const pushed = { ...snapshot, instrumentation: { ...instrumentationOf(tab) } };
+  const pushed = {
+    ...snapshot,
+    instrumentation: { ...instrumentationOf(tab) },
+    agent: agentLinkOf(tab.inboxHistory?.() ?? []),
+  };
   return withRunningDrive(pushed, tab.id) ?? pushed;
 }

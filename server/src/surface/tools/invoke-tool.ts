@@ -2,6 +2,8 @@ import { healthEnvelope } from '@/portal/session/session-health.js';
 import { logToolCall, toolLogPath } from '@/hooks/tool-log.js';
 import { nextStep } from './next-step.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
+import { runAsAgent } from '@/hooks/coding-agents.js';
+import { takeHumanNotes } from './human-notes.js';
 import { takeDriveNotes } from '@/features/harness/drive-runs.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { takePlatformMoment } from './platform-moment.js';
@@ -549,7 +551,8 @@ async function dispatchTool<Ext>(
       );
     // The Harness's own inner calls carry their drive in an async context (`runDrivenBy`), which is
     // what attributes their verdicts; the outer explore call adjudicates nothing of its own.
-    raw = await invokeHandler();
+    // As the agent on this connection, so a note it reads is marked seen by that agent.
+    raw = await runAsAgent(deps.attachId, invokeHandler);
   } catch (error) {
     // The commonest refusal shape by far, and the one nothing could see: the message is built, handed
     // to the agent by the MCP boundary, and discarded. Reported here rather than at that boundary
@@ -682,14 +685,26 @@ async function dispatchTool<Ext>(
           now: 'function' === typeof deps.now ? deps.now() : Date.now(),
         })
       : undefined;
+  // Only an agent's own call (an MCP connection, not the Harness, not the HUD's or the chat's calls
+  // into the same tools) takes what is waiting for the agent: those calls answer nobody who reads.
+  const answer = isPlainObject(raw) ? raw : undefined;
+  const agentCall =
+    answer !== undefined && deps.attachId !== undefined && currentDrivenBy() === undefined;
   // A Harness drive started or finished, from the HUD, the platform's chat or this agent: one line,
-  // once. Not for the Harness's own calls, and not about the run this very result already reports.
-  const drives =
-    isPlainObject(raw) && currentDrivenBy() === undefined
-      ? takeDriveNotes('string' === typeof raw['runId'] ? raw['runId'] : undefined)
-      : [];
+  // once. Not about the run this very result already reports.
+  const drives = agentCall
+    ? takeDriveNotes('string' === typeof answer?.['runId'] ? answer['runId'] : undefined)
+    : [];
+  // The person's notes from the HUD, on ANY tool. Act tools splice their own `control` first.
+  const notes =
+    agentCall && answer !== undefined && !(EnvelopeKey.CONTROL in answer)
+      ? await runAsAgent(deps.attachId, () =>
+          Promise.resolve(takeHumanNotes(deps.sessions, rawSessionId, session)),
+        )
+      : undefined;
   const result =
     0 === drives.length &&
+    notes === undefined &&
     prompt === undefined &&
     update === undefined &&
     skew === undefined &&
@@ -714,6 +729,7 @@ async function dispatchTool<Ext>(
           ...(skew !== undefined ? { [EnvelopeKey.VERSION_SKEW]: skew } : {}),
           ...(platform !== undefined ? { [EnvelopeKey.PLATFORM]: platform } : {}),
           ...(0 === drives.length ? {} : { [EnvelopeKey.HARNESS]: drives.join('\n') }),
+          ...(notes === undefined ? {} : { [EnvelopeKey.CONTROL]: notes }),
           ...(undelivered !== undefined
             ? {
                 [EnvelopeKey.FEEDBACK_UNDELIVERED]: `your earlier report did NOT send: ${undelivered}. Tell the human what you found so it is not lost.`,

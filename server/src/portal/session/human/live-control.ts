@@ -4,6 +4,10 @@ import { HumanControlKind, SessionState, type HumanControlData } from '@reticleh
 export interface InboxMessage {
   text: string;
   t: number;
+  /** Set once an agent's tool call took it: what lets the HUD say "Seen" and never before. */
+  seen?: boolean;
+  /** The agent whose call took it, when the daemon knows. */
+  by?: string;
 }
 
 /**
@@ -78,9 +82,17 @@ export class LiveControl {
     return this.#history;
   }
 
-  /** Return the queued notes AND clear them — delivered once, so a hint never repeats. */
-  drain(): InboxMessage[] {
-    return this.#inbox.splice(0, this.#inbox.length);
+  /**
+   * Return the queued notes AND clear them — delivered once, so a hint never repeats. Each is marked
+   * seen (by `by` when known) on the same object the history holds, so the HUD can show it.
+   */
+  drain(by?: string): InboxMessage[] {
+    const taken = this.#inbox.splice(0, this.#inbox.length);
+    for (const message of taken) {
+      message.seen = true;
+      if (by !== undefined) message.by = by;
+    }
+    return taken;
   }
 
   /** Diagnostic read of the inbox depth (does not clear). */
