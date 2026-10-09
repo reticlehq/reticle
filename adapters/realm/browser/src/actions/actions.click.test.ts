@@ -201,3 +201,47 @@ describe('click: SVG targets', () => {
     expect(seen).toEqual(['enter']);
   });
 });
+
+describe('click: a target that is not a control (#1356)', () => {
+  it('warns when the click lands on a wrapper that is not a control and sits inside none', async () => {
+    // `{ text: "Sign in" }` matched the div's own text, not the icon button inside it. The click hit
+    // the div, the form never submitted, and the act used to report a clean click.
+    document.body.innerHTML =
+      '<div id="wrap">Sign in <button aria-label="Continue"><svg></svg></button></div>';
+
+    const r = await executeAction(refOf('#wrap'), 'click');
+
+    expect(r.warning).toBe(ActionWarning.CLICK_NOT_A_CONTROL);
+  });
+
+  it.each([
+    ['a real button', '<button id="t">Save</button>'],
+    ['text inside a button', '<button><span id="t">Save</span></button>'],
+    [
+      'text inside a label',
+      '<label><span id="t">Remember me</span><input type="checkbox"></label>',
+    ],
+    ['an element with an onclick attribute', '<div id="t" onclick="void 0">Open</div>'],
+    ['an element with a tabindex', '<div id="t" tabindex="0">Open</div>'],
+    [
+      'an element styled as clickable',
+      '<div style="cursor: pointer"><span id="t">Open</span></div>',
+    ],
+    ['an element with an interactive role', '<div id="t" role="menuitem">Open</div>'],
+  ])('does not warn on %s', async (_label, html) => {
+    document.body.innerHTML = html;
+
+    const r = await executeAction(refOf('#t'), 'click');
+
+    expect(r.warning).toBeUndefined();
+  });
+
+  it('does not warn on a non-click action aimed at a plain element', async () => {
+    // Hovering or scrolling a wrapper is a legitimate thing to do; only a click means "a control".
+    document.body.innerHTML = '<div id="t">Section</div>';
+
+    const r = await executeAction(refOf('#t'), 'hover');
+
+    expect(r.warning).toBeUndefined();
+  });
+});
