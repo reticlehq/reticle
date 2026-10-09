@@ -1,5 +1,5 @@
 import { appModalOpen } from '@/dom/dom-ignore.js';
-import type { HarnessConfig } from '@reticlehq/core';
+import type { HarnessConfig, HarnessDrive } from '@reticlehq/core';
 import { PresenterReport, reportPanelHtml } from './presenter-report.js';
 import type { AccountState } from '@reticlehq/core';
 import { paintToolbarAccount, TOOLBAR_ACCOUNT_ATTR } from './presenter-workspace.js';
@@ -90,6 +90,10 @@ interface HudShellCallbacks {
   /** The report panel's sync button. The shell owns the socket; the panel only knows it was asked. */
   onSyncNow?: () => void;
   onHarness?: (enabled: boolean) => void;
+  /** Run Harness in the Agent Log, with the persona typed beside it, if any. */
+  onHarnessRun?: (persona?: string) => void;
+  /** Stop on the drive running in this tab. */
+  onHarnessStop?: () => void;
   /** Any Sign in button. The daemon owns the credential, so it starts the browser sign-in. */
   onSignIn?: () => void;
   settings?: SettingsHost;
@@ -176,6 +180,10 @@ export class HudShell {
    * Routed through the shell like every other painter rather than reaching into the panel: the
    * panel may not be mounted yet, and the shell is the layer that knows.
    */
+  /** The drive running in this tab's project, so the Agent Log shows its steps and Stop. */
+  paintHarnessDrive(drive: HarnessDrive | undefined): void {
+    this.#chatViews.paintDrive(drive);
+  }
   paintHarness(config: HarnessConfig | undefined): void {
     this.#pushedHarness = config;
     this.#settings.paintHarness(config);
@@ -259,6 +267,10 @@ export class HudShell {
         this.closeChat();
         this.#settings.close();
         this.#report.close();
+      },
+      {
+        run: (persona) => callbacks.onHarnessRun?.(persona),
+        stop: () => callbacks.onHarnessStop?.(),
       },
     );
     this.#settings = new PresenterSettingsPanel({

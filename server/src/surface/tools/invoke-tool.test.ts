@@ -459,3 +459,42 @@ describe('the feedback invitation is counted wherever friction actually happens'
     expect(getSessionMetrics().summarize(true)).not.toHaveProperty('feedbackPrompted');
   });
 });
+
+/*
+ * The agent never heard about a drive it did not start: the HUD's button or the platform's chat
+ * could drive the app under it. A start or an end now rides out once on its next tool result.
+ */
+describe('a Harness drive the agent did not start', () => {
+  it('is told once, on the next tool result, with how to read it', async () => {
+    const { startDrive, forgetDrives, DriveOrigin } =
+      await import('@/features/harness/drive-runs.js');
+    try {
+      startDrive({
+        harness: 'hud-1',
+        runId: 'harness-hud-1',
+        origin: DriveOrigin.HUD,
+        now,
+        persist: () => Promise.resolve(),
+        run: () => new Promise(() => undefined),
+      });
+      const first = (await runTool(
+        stubTool(ReticleTool.PROJECT, { ok: true }),
+        fakeDeps(),
+        {},
+      )) as {
+        harness?: string;
+      };
+      expect(first.harness).toContain('harness-hud-1 running');
+      const second = (await runTool(
+        stubTool(ReticleTool.PROJECT, { ok: true }),
+        fakeDeps(),
+        {},
+      )) as {
+        harness?: string;
+      };
+      expect(second.harness).toBeUndefined();
+    } finally {
+      forgetDrives();
+    }
+  });
+});

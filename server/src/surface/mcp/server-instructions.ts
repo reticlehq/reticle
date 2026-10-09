@@ -80,8 +80,17 @@ const replayFirst = (v: SurfaceVocabulary): string => {
   if (0 === v.replayChange.length) return '';
   const ask =
     v.affected.length > 0 ? `${v.affected} names the saved flows covering your edits; ` : '';
-  return `Changed code? Replay before you drive. ${ask}${v.replayChange} replays them for one verified + because — hundreds of tokens where driving the same journey costs tens of thousands. "yes": proved, stop. "no": names the step that broke. "unknown": NO saved flow covers it, so nothing was proved — drive it, and never report it as passing. What you drive by hand is saved as a flow automatically.`;
+  return `Changed code? Replay before you drive. ${ask}${v.replayChange} replays them for one verified + because — far cheaper than driving it again. "yes": proved, stop. "no": names the step that broke. "unknown": NO saved flow covers it, so nothing was proved — drive it, and never report it as passing. What you drive by hand is saved as a flow automatically.${driveOnce(v)}`;
 };
+
+/**
+ * A drive outlives a client's timeout, so its call answers with a run id instead of waiting for the
+ * end; an agent that retried instead of polling paid for a second drive.
+ */
+const driveOnce = (v: SurfaceVocabulary): string =>
+  0 === v.explore.length
+    ? ''
+    : ` A Harness drive (${v.explore}) returns a runId in ~45s; poll it by runId until done, never start a second.`;
 
 /**
  * The first move, for a project no app has ever connected to.
@@ -155,7 +164,7 @@ const feedbackAsk = (
 - You wished it could do something, or something works but costs too many calls (\`feature_request\` / \`improvement\`).
 - The install, the wiring, or the setup itself gave you trouble — including anything you had to work around by hand.
 
-Nothing is too minor, and a report costs one call. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell instead: \`reticle feedback --agent --kind <one of those kinds> "what happened"\`. Report defects in RETICLE — a bug you find in the app under test is Reticle working, and belongs in your answer to the user.`;
+Nothing is too minor, and a report costs one call. If the tools are unreachable, file it from the shell: \`reticle feedback --agent --kind <one of those kinds> "what happened"\`. Report defects in RETICLE — a bug you find in the app under test is Reticle working, and belongs in your answer to the user.`;
 
 export interface InstructionState {
   /**

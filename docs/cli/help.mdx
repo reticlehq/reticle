@@ -100,7 +100,7 @@ Cloud (link this project to Reticle; runs/flows recorded on the dashboard):
   reticle project <ls|create <name>>                   (list or create cloud projects)
   reticle config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]
   reticle push | sync [--watch]                        (one sync cycle: send the difference, collect decisions)
-  reticle runs | regression | share <runId>            (read cloud state; regression exits 3 if any flow broke)
+  reticle runs [<runId>] | regression | share <runId>  (read cloud state; regression exits 3 if any flow broke)
 
 A browser Reticle opens for your agent (serve, mcp, drive) is shown, so you can watch the run;
 verify and tutorial --run stay hidden. --headed / --headless override; CI, RETICLE_HEADLESS=1, or a

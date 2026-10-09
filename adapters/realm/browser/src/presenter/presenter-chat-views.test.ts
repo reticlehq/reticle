@@ -218,3 +218,48 @@ describe('chat views and harness access states', () => {
     expect(actions.hidden).toBe(false);
   });
 });
+
+/*
+ * The Harness switch only toggled the platform's autonomous mode; nothing on the panel could start
+ * a drive. Run Harness starts one (persona optional); while it runs the panel shows its steps and
+ * Stop, from the daemon's snapshot.
+ */
+describe('running the Harness from the panel', () => {
+  const mountWithDrive = () => {
+    const drive = { run: vi.fn(), stop: vi.fn() };
+    document.body.innerHTML = `<div data-reticle-overlay><div data-reticle-chat-panel>${CHAT_VIEWS_HTML}</div></div>`;
+    const root = document.querySelector<HTMLElement>('[data-reticle-overlay]');
+    if (null === root) throw new Error('chat panel failed to mount');
+    const views = new ChatViews(vi.fn(), vi.fn(), vi.fn(), drive);
+    views.mount(root);
+    views.paintAccount({ signedIn: true });
+    views.paintHarness(entitled);
+    return { root, views, drive };
+  };
+
+  it('starts a drive with the persona typed beside Run Harness', () => {
+    const { root, drive } = mountWithDrive();
+    const input = root.querySelector<HTMLInputElement>('[data-reticle-harness-persona]');
+    if (null === input) throw new Error('no persona field');
+    input.value = '  a returning shopper ';
+    root.querySelector<HTMLElement>('[data-reticle-harness-run]')?.click();
+    expect(drive.run).toHaveBeenCalledWith('a returning shopper');
+  });
+
+  it('starts a drive with no persona when none was typed', () => {
+    const { root, drive } = mountWithDrive();
+    root.querySelector<HTMLElement>('[data-reticle-harness-run]')?.click();
+    expect(drive.run).toHaveBeenCalledWith(undefined);
+  });
+
+  it('shows the running drive with Stop, and Run again once it has ended', () => {
+    const { root, views, drive } = mountWithDrive();
+    views.paintDrive({ runId: 'harness-1', steps: 7 });
+    expect(root.querySelector('[data-reticle-harness-run]')).toBeNull();
+    expect(root.textContent).toContain('7 steps');
+    root.querySelector<HTMLElement>('[data-reticle-harness-stop]')?.click();
+    expect(drive.stop).toHaveBeenCalled();
+    views.paintDrive(undefined);
+    expect(root.querySelector('[data-reticle-harness-run]')).not.toBeNull();
+  });
+});

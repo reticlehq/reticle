@@ -18,6 +18,7 @@ import { ReticleTool } from '@reticlehq/core';
 import {
   connectOverSse,
   endpointFor,
+  exploreToEnd,
   leaseIfNoTab,
   releaseLease,
   refusalText,
@@ -41,7 +42,6 @@ export interface AdhocSuiteOptions {
 const PASSED = 'pass';
 
 /** The `reticle_verify` actions this file asks for. */
-const EXPLORE_ACTION = 'explore';
 
 /**
  * How long a SUITE may take, against the SDK's 60s default for one request.
@@ -133,6 +133,8 @@ export interface AdhocExploreOptions {
   connect?: (endpoint: URL) => Promise<ToolCaller>;
   /** The tabs the daemon has connected. See runAdhocVerdict. */
   sessions: () => Promise<readonly { url: string }[]>;
+  /** The caller's project `.reticle`: a lease opened here writes its runs there. */
+  root?: string;
 }
 
 /**
@@ -160,14 +162,13 @@ export async function runAdhocExplore(options: AdhocExploreOptions): Promise<Adh
   }
   let leased: string | undefined;
   try {
-    const opened = await leaseIfNoTab(caller, options.url, options.sessions);
+    const opened = await leaseIfNoTab(caller, options.url, options.sessions, options.root);
     if ('failed' in opened) return { code: 1, lines: ['status: unverifiable', ...opened.failed] };
     leased = opened.leased;
     const pin = leased === undefined ? {} : { sessionId: leased };
-    const drove = await caller.call(
-      ReticleTool.VERIFY,
+    const drove = await exploreToEnd(
+      caller,
       {
-        action: EXPLORE_ACTION,
         ...(options.persona === undefined ? {} : { persona: options.persona }),
         ...pin,
       },

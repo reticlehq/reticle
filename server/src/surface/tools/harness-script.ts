@@ -64,6 +64,7 @@ import {
   reconcileFlows,
   recordPersona,
   refusedByPlatform,
+  steering,
   withProjectFlows,
   type ExploreOptions,
   type ExploreResult,
@@ -152,7 +153,7 @@ export async function exploreScript(
         )
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driverName = driverFor().name;
-  const harness = randomUUID();
+  const harness = options.harnessId ?? randomUUID();
   const narrate = narrator(deps, options);
 
   // Lanes run side by side only in leased contexts; without a pool they take turns on this tab.
@@ -174,7 +175,7 @@ export async function exploreScript(
 
   const ports: ScriptPorts = {
     parallel: leasing ? Math.max(1, Math.min(script.lanes.length, pool.capacity(), MAX_LANES)) : 1,
-    stopped: () => off,
+    stopped: () => off || true === options.stopped?.(),
     lease: async () => {
       if (!leasing) return { ...pinned(options), release: () => Promise.resolve() };
       const acquire = () => acquireLeasedSession(pool, deps.sessions, appUrl, projectId);
@@ -202,6 +203,7 @@ export async function exploreScript(
           : goal);
       const ahead = new Set(await reads.flows.list());
       const result = await runHarness(driverFor(persona, goal).driver, toolset, {
+        ...steering(options),
         maxSteps: Math.min(steps, maxSteps),
         focus: [planAsText(planFor(goal)), `Focus: ${goal}`].join('\n\n'),
       });

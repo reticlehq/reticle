@@ -103,7 +103,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * a shallow walk over the contract's own type belongs beside the contract. Moving it here took a
    * cross-layer reach out of the server and left the file count as the only cost.
    */
-  'core/src/verdict': 16,
+  'core/src/verdict': 17,
   // 17 since `hold.ts`: `clampHoldMs` is the bound BOTH input paths clamp `holdMs` with, so it
   // belongs to the contract rather than to either caller. The reason it is a file of its own rather
   // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
@@ -262,7 +262,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // to read daemon state and port holders -- every other home needed two new reaches for it.
   // 25 with `command-payload.ts`: the command's wire JSON, moved out of `session.ts` (at its cap)
   // when it gained the mark that says the Harness sent it.
-  'server/src/portal/session': 25,
+  'server/src/portal/session': 26,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others
@@ -308,25 +308,22 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `dir -> resolve` and `dir -> project`, turning a leaf directory into one that reaches for four
   // others. A flat file is cheaper than a new mutual pair. Group them when the address question
   // stops needing the caller's dependencies to answer it.
-  'server/src/memory/project': 12,
+  'server/src/memory/project': 14,
   // 11 when `memory-scope.ts` landed: which project a shared-memory READ is about, on the wire and
   // in the response. Recorded rather than grouped, for the sibling reason above it. Its natural
   // group would be `cloud/memory/`, and a directory named `memory` beside `server/src/memory` is a
   // name collision the reach guard refuses outright; `cloud/scope/` would be a category invented
   // for one member. The file is the sibling of `cloud-sync.ts`'s path constants and belongs flat.
-  'server/src/memory/cloud': 12,
+  'server/src/memory/cloud': 13,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there
   // was a CLI). Three files rather than one: they answer at three different moments.
-  // 36 with `harness-drive.ts`: the span that says a verdict came from Reticle driving the app
-  // rather than from the user's own agent. It is a module and not a flag on a call because the two
-  // are indistinguishable at the emit site otherwise, and every activation number built on verdicts
-  // reads a drive we performed as adoption we did not earn. Raised rather than grouped: this
-  // directory is already the largest flat one here and grouping it is its own piece of work.
   // 37 since `hud-metrics.ts`, which rolls HUD use into the session summary beside the tool counts.
   // Its own file so the 700-line session aggregator did not grow a second concern.
-  'server/src/telemetry': 37,
+  // 36 again when the drive-attribution counter went: the async context in `hooks/driven-by.ts`
+  // already says which drive a call belongs to, per call, so a second module-wide copy was removed.
+  'server/src/telemetry': 36,
   'spec-runner/src': 11,
 };
 

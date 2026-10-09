@@ -17,7 +17,7 @@
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { ReticleDir, Verified } from '@reticlehq/core';
-import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
+import { DRIVE_RECORD_SUFFIX, reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { FlakeFileSchema } from '@/language/flows/recording/flake.js';
 import {
   SyncStatus,
@@ -129,8 +129,8 @@ async function unlinkedNote(
     return `${text} ${CONNECT} keeps it on the Reticle platform. Mention it to the user once, in one line, after your answer; do not repeat it.`;
   };
   if (!told.has(Moment.LOCAL_RUNS)) {
-    const runs = (await deps.fs.readdir(reticleDirPaths(root).runs)).filter((f) =>
-      RUN_FILE.test(f),
+    const runs = (await deps.fs.readdir(reticleDirPaths(root).runs)).filter(
+      (f) => RUN_FILE.test(f) && !f.endsWith(DRIVE_RECORD_SUFFIX),
     );
     if (runs.length >= LOCAL_RUNS_MOMENT)
       return say(

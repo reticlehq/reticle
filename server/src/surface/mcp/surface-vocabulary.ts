@@ -43,6 +43,8 @@ export interface SurfaceVocabulary {
   replayAll: string;
   /** Rebind a drifted locator, or empty when the surface cannot reach it. */
   heal: string;
+  /** Start or poll a Harness drive, or empty when the surface cannot reach it. */
+  explore: string;
 }
 
 /** `reticle_look { action: "find" }` when the family is merged, `reticle_query` when it is not. */
@@ -105,5 +107,6 @@ export function surfaceVocabulary(advertisedNames: readonly string[]): SurfaceVo
     replayChange: call(ReticleTool.VERIFY_CHANGE, ReticleTool.VERIFY, 'change'),
     replayAll: call(ReticleTool.FLOW_REPLAY, ReticleTool.VERIFY, 'flows'),
     heal: advertised.has(ReticleTool.FLOW_HEAL) ? ReticleTool.FLOW_HEAL : '',
+    explore: call(ReticleTool.VERIFY_EXPLORE, ReticleTool.VERIFY, 'explore'),
   };
 }

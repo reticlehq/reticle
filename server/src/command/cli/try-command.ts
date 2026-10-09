@@ -12,14 +12,14 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import {
-  RETICLE_DEFAULT_PORT,
-  ReticleDir,
-  ReticleEnv,
-  ReticleTool,
-  ScriptStatus,
-} from '@reticlehq/core';
+import { RETICLE_DEFAULT_PORT, ReticleDir, ReticleEnv, ScriptStatus } from '@reticlehq/core';
 import type { CloudConfig } from '@/memory/cloud/cloud-sync.js';
+import {
+  FreeDriveKind,
+  planUrl,
+  requestFreeDrive,
+  type FreeDrive,
+} from '@/features/harness/platform/platform-drives.js';
 import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
@@ -36,11 +36,14 @@ import {
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { probeDaemon, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
 import { readProjectPort } from '@/command/cli/ports/resolve/cli-port.js';
+import { callerArtifactRoot } from '@/memory/project/link-directory.js';
+import { seeRunLine } from '@/memory/project/sync-status.js';
 import { DAEMON_INNER_COMMAND, PORT_FLAG } from '@/command/cli/cli-parse.js';
 import {
   acquireLease,
   connectOverSse,
   endpointFor,
+  exploreToEnd,
   refusalText,
   releaseLease,
   verdictOf,
@@ -48,23 +51,7 @@ import {
 
 export const MSG_SIGN_IN_FIRST = 'Sign in first: reticle connect (it is free, no card)';
 
-const FREE_DRIVE_PATH = '/v1/harness/free-drive';
-const FREE_DRIVE_KIND = 'try';
-const NEEDS_CARD = 'needs_card';
-const HTTP_PAYMENT_REQUIRED = 402;
-/** Where a workspace starts its trial: the dashboard's billing settings, at its origin. */
-const PLAN_PATH = '/settings?group=billing';
-
-/** The dashboard's origin, whatever path the link it gave us carried. */
-function originOf(base: string): string {
-  try {
-    return new URL(base).origin;
-  } catch {
-    return base.replace(/\/+$/, '');
-  }
-}
 const PERSONA_FLAG = '--persona';
-const EXPLORE_ACTION = 'explore';
 
 /** The whole drive, model turns and browser included, before the CLI stops waiting for it. */
 export const TRY_BUDGET_MS = 120_000;
@@ -76,11 +63,6 @@ const RUN_WRITE_POLL_MS = 250;
 
 const EXIT_OK = 0;
 const EXIT_FAIL = 1;
-
-/** The drive the platform granted, or why it would not. */
-export type FreeDrive =
-  | { granted: true; driveId: string }
-  | { granted: false; needsCard: boolean; message: string; hint?: string };
 
 export interface TryJourney {
   title: string;
@@ -171,7 +153,7 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
     if (grant.hint !== undefined) ports.fail(grant.hint);
     if (grant.needsCard) {
       const base = (await ports.dashboardUrl(cloud).catch(() => undefined)) ?? cloud.url;
-      ports.fail(`Plans: ${originOf(base)}${PLAN_PATH}`);
+      ports.fail(`Plans: ${planUrl(base)}`);
     }
     return EXIT_FAIL;
   }
@@ -188,8 +170,13 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
   for (const line of summarizeTry(drive.journeys)) ports.out(line);
   // Saying "saved" over a sync that failed would be this command lying about its own work.
   if (await ports.sync(drive.runIds).catch(() => false)) {
-    const where = (await ports.dashboardUrl(cloud).catch(() => undefined)) ?? cloud.url;
-    ports.out(`Saved to your dashboard: ${where}`);
+    const dashboard = await ports.dashboardUrl(cloud).catch(() => undefined);
+    // Each run on its own page when the dashboard is known; the dashboard itself otherwise.
+    const lines =
+      dashboard === undefined || 0 === drive.runIds.length
+        ? [`Saved to your dashboard: ${dashboard ?? cloud.url}`]
+        : drive.runIds.map((runId) => seeRunLine(dashboard, runId));
+    for (const line of lines) ports.out(line);
   } else {
     ports.fail(
       'The run is kept on this machine; it could not be sent. Run `reticle push` to retry.',
@@ -198,55 +185,7 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
   return EXIT_OK;
 }
 
-/** One HTTP request, narrowed so a test answers it without a network. */
-export type TryFetch = (
-  url: string,
-  init: { method: string; headers: Record<string, string>; body: string },
-) => Promise<{ status: number; text(): Promise<string> }>;
-
-function record(text: string): Record<string, unknown> {
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return 'object' === typeof parsed && null !== parsed ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
 const str = (value: unknown): string | undefined => ('string' === typeof value ? value : undefined);
-
-/** Ask the platform for the one free drive. Every failure is an answer, never a throw. */
-export async function requestFreeDrive(
-  cloud: CloudConfig,
-  doFetch: TryFetch = (url, init) => fetch(url, init),
-): Promise<FreeDrive> {
-  try {
-    const res = await doFetch(`${cloud.url.replace(/\/+$/, '')}${FREE_DRIVE_PATH}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${cloud.apiKey}` },
-      body: JSON.stringify({ kind: FREE_DRIVE_KIND }),
-    });
-    const body = record(await res.text());
-    const driveId = str(body['driveId']);
-    if (true === body['granted'] && driveId !== undefined) return { granted: true, driveId };
-    const message =
-      str(body['message']) ??
-      `The Reticle platform did not grant a drive (it answered ${String(res.status)}).`;
-    const hint = str(body['hint']);
-    return {
-      granted: false,
-      needsCard: HTTP_PAYMENT_REQUIRED === res.status || NEEDS_CARD === body['error'],
-      message,
-      ...(hint === undefined ? {} : { hint }),
-    };
-  } catch (error) {
-    return {
-      granted: false,
-      needsCard: false,
-      message: `Could not reach the Reticle platform: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
-}
 
 /** The journeys out of an explore report, or one journey graded from the drive when unplanned. */
 export function journeysOf(report: Record<string, unknown>, persona?: string): TryJourney[] {
@@ -294,6 +233,8 @@ async function ensureTryDaemon(port: number): Promise<string | undefined> {
 async function driveThroughDaemon(
   port: number,
   request: { url: string; driveId: string; persona?: string },
+  /** Where the drive's run must land: the folder `try` waits on and pushes from. */
+  reticleRoot: string,
 ): Promise<TryDrive> {
   const unavailable = await ensureTryDaemon(port);
   if (unavailable !== undefined) return { journeys: [], runIds: [], error: unavailable };
@@ -302,13 +243,12 @@ async function driveThroughDaemon(
   try {
     // Headed whatever the daemon was started as: the point of `try` is watching it happen. An app
     // with no Reticle SDK gets one supplied by the lease.
-    const opened = await acquireLease(caller, request.url, true);
+    const opened = await acquireLease(caller, request.url, true, reticleRoot);
     if ('failed' in opened) return { journeys: [], runIds: [], error: opened.failed.join('\n') };
     try {
-      const drove = await caller.call(
-        ReticleTool.VERIFY,
+      const drove = await exploreToEnd(
+        caller,
         {
-          action: EXPLORE_ACTION,
           sessionId: opened.leased,
           driveId: request.driveId,
           maxSteps: TRY_MAX_STEPS,
@@ -360,12 +300,14 @@ export async function cmdTry(argv: readonly string[], cloudCommands: TryCloud): 
     return EXIT_FAIL;
   }
   const cwd = process.cwd();
-  const reticleRoot = join(cwd, ReticleDir.ROOT);
+  // The project this folder belongs to, else this folder: the lease writes the run here, and this is
+  // where try waits for it and pushes it from — wherever the daemon happened to be started.
+  const reticleRoot = callerArtifactRoot(cwd) ?? join(cwd, ReticleDir.ROOT);
   const port = tryPort(cwd);
   return runTry(parsed, {
     linked: linkedCloudPort(createNodeFileSystem(), reticleRoot, homedir(), process.env),
-    requestDrive: (cloud) => requestFreeDrive(cloud),
-    drive: (request) => driveThroughDaemon(port, request),
+    requestDrive: (cloud) => requestFreeDrive(cloud, FreeDriveKind.TRY),
+    drive: (request) => driveThroughDaemon(port, request, reticleRoot),
     sync: async (runIds) => {
       await waitForRuns(reticleRoot, runIds);
       return EXIT_OK === (await cloudCommands.push());

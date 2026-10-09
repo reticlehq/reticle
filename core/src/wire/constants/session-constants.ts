@@ -65,6 +65,13 @@ export const HumanControlKind = {
    * and an impatient finger both need.
    */
   HARNESS: 'harness',
+  /**
+   * Human pressed Run Harness in the panel. `text` carries the persona, or nothing. The daemon asks
+   * the platform for the drive's grant and starts it exactly as an agent's explore would.
+   */
+  HARNESS_RUN: 'harness-run',
+  /** Human pressed Stop on the drive running in this tab. Carries nothing. */
+  HARNESS_STOP: 'harness-stop',
 } as const;
 export type HumanControlKind = (typeof HumanControlKind)[keyof typeof HumanControlKind];
 

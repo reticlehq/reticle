@@ -13,6 +13,12 @@
 import { diskSource, readCloudState } from '@/memory/cloud/sync-disk.js';
 import { hashPayload } from '@/memory/cloud/sync-hash.js';
 import type { CloudSyncState } from '@/memory/cloud/sync-cycle.js';
+import { join } from 'node:path';
+import { ReticleDir } from '@reticlehq/core';
+import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import { unsyncedRoots, type UnsyncedRoot } from '@/memory/cloud/unsynced-roots.js';
+import type { FileSystemPort } from './fs/fs-port.js';
+import { knownProjectCandidates } from './artifact-root-resolver.js';
 
 export const SyncStatus = {
   ON_PLATFORM: 'on-platform',
@@ -38,6 +44,8 @@ export interface SyncSummary {
   lastPushAt?: number;
   /** Why the last cycle failed, when it did. */
   lastError?: string;
+  /** The newest run the platform holds in its current form: what "see it in your dashboard" opens. */
+  latestOnPlatform?: string;
 }
 
 export function summarizeSync(input: {
@@ -49,10 +57,14 @@ export function summarizeSync(input: {
   let onPlatform = 0;
   let pending = 0;
   const refused: { runId: string; reason: string }[] = [];
+  let latest: { runId: string; at: number } | undefined;
   if (linked) {
     for (const run of runs) {
       const hash = hashPayload(run.payload);
       const refusal = state.refusedRuns?.[run.runId];
+      const at = createdAtOf(run.payload);
+      if (state.sentRunHashes?.[run.runId] === hash && (latest === undefined || at > latest.at))
+        latest = { runId: run.runId, at };
       if (state.sentRunHashes?.[run.runId] === hash) onPlatform += 1;
       else if (refusal !== undefined && refusal.payloadHash === hash)
         refused.push({ runId: run.runId, reason: refusal.reason });
@@ -70,7 +82,35 @@ export function summarizeSync(input: {
     ...(state.lastError === undefined || 0 === state.lastError.length
       ? {}
       : { lastError: state.lastError }),
+    ...(latest === undefined ? {} : { latestOnPlatform: latest.runId }),
   };
+}
+
+/** A run artifact's `createdAt`, or 0 when it has none. */
+function createdAtOf(payload: unknown): number {
+  const at =
+    'object' === typeof payload && null !== payload
+      ? (payload as Record<string, unknown>)['createdAt']
+      : undefined;
+  return 'number' === typeof at ? at : 0;
+}
+
+/** The dashboard's page for one run: the console's `/runs/:runId` route, at the dashboard's origin. */
+export const DASHBOARD_RUN_PATH = '/runs/';
+
+export function dashboardRunUrl(dashboardUrl: string, runId: string): string {
+  let origin = dashboardUrl.replace(/\/+$/, '');
+  try {
+    origin = new URL(dashboardUrl).origin;
+  } catch {
+    // Not a url: use it as given.
+  }
+  return `${origin}${DASHBOARD_RUN_PATH}${encodeURIComponent(runId)}`;
+}
+
+/** The line a command prints once its run reached the platform. */
+export function seeRunLine(dashboardUrl: string, runId: string): string {
+  return `See it in your dashboard: ${dashboardRunUrl(dashboardUrl, runId)}`;
 }
 
 /** This project's summary, read from its `.reticle`. Never throws: an unreadable record is empty. */
@@ -109,4 +149,20 @@ export function describeSync(summary: SyncSummary, now: number): string {
     );
   if (summary.lastError !== undefined) parts.push(`the last push failed: ${summary.lastError}`);
   return `${parts.join('; ')} (${ago}).`;
+}
+
+/**
+ * Every project folder this machine knows with runs the platform never got, linked by its OWN link
+ * file or not. `reticle sync` and `doctor` print these; a daemon tracks the same through its cycle.
+ */
+export async function machineUnsyncedRoots(
+  fs: FileSystemPort,
+  home: string,
+  env: NodeJS.ProcessEnv,
+): Promise<UnsyncedRoot[]> {
+  const roots = knownProjectCandidates().map((c) => join(c.directory, ReticleDir.ROOT));
+  return unsyncedRoots(roots, async (root) => {
+    const cloud = await resolveProjectCloud(fs, root, home, env);
+    return null !== cloud.config && null !== cloud.projectId;
+  });
 }

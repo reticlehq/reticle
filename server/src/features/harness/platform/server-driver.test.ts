@@ -183,3 +183,36 @@ describe('a free drive names itself on every call', () => {
     expect(platformHeaders({ apiKey: 'k' })[DRIVE_HEADER]).toBeUndefined();
   });
 });
+
+/*
+ * The platform holds the conversation, so what somebody says to a running drive has to travel on
+ * the turn: kept only in local history, the platform's model never heard it.
+ */
+describe('a word to a running drive', () => {
+  it('rides the next turn as `say`, once, and is absent when nobody spoke', async () => {
+    const { asked, fetch } = platform({
+      '/v1/harness/runs': () => ({ runId: 'hr_2' }),
+      '/v1/harness/runs/hr_2/turn': (body) => ({
+        turn: body['turn'],
+        calls:
+          0 === body['turn']
+            ? [{ id: 't1', name: 'reticle_act_and_wait', args: { ref: 'e1' } }]
+            : [],
+        text: '',
+        done: 0 !== body['turn'],
+        status: 'running',
+      }),
+    });
+    let said = ['open the refund page'];
+    await runHarness(serverDriver({ url: 'https://p.test', apiKey: 'k', fetch }), toolset([]), {
+      inbox: () => {
+        const taken = said;
+        said = [];
+        return taken;
+      },
+    });
+    const turns = asked.filter((a) => a.path.endsWith('/turn')).map((a) => a.body);
+    expect(turns[0]?.['say']).toEqual(['open the refund page']);
+    expect(turns[1] !== undefined && 'say' in turns[1]).toBe(false);
+  });
+});
