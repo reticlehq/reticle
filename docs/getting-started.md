@@ -119,7 +119,7 @@ The bridge + MCP server is a single process that serves all your projects, so it
 
 Re-running is safe: already-registered and already-patched steps are skipped, and on a wired project it goes straight to proving the app still works. Preview without writing via `npx @reticlehq/server init --dry-run`.
 
-`init` does not stop at writing files. It starts your dev server, opens the app, and waits for a session to connect from inside it. That connection is the whole proof that onboarding worked. If a dev server was already running without Reticle, restart it once: it read the build config before `init` edited it. It exits non-zero if nothing connected and prints what is left to do. It does NOT drive. Then prove a flow. That is the FIRST RUN, and it is a separate call: drive one journey with `reticle_act_and_wait` and an `until` on its last step. On a project linked with `reticle connect`, `reticle_verify { action: "explore", persona: "<who does what>" }` lets the Reticle Harness drive it on the platform instead (every plan includes Harness credits, Free too). Either way what was driven is saved as a flow, so later checks replay it with no model in the loop.
+`init` does not stop at writing files. It starts your dev server, opens the app, and waits for a session to connect from inside it. That connection is the whole proof that onboarding worked. If a dev server was already running without Reticle, restart it once: it read the build config before `init` edited it. It exits non-zero if nothing connected and prints what is left to do. It does NOT drive. Then prove a flow. That is the FIRST RUN, and it is a separate call: drive one journey with `reticle_act_and_wait` and an `until` on its last step. On a project linked with `reticle connect`, `reticle_verify { action: "explore", persona: "<who does what>" }` lets the Reticle Harness drive it on the platform instead (every plan includes Harness runs, Free too). Either way what was driven is saved as a flow, so later checks replay it with no model in the loop.
 
 These carry what the command cannot work out for itself:
 
@@ -143,7 +143,7 @@ Optional. Instead of, or after, `init`, run this in your app directory:
 npx @reticlehq/server connect --project "My App"
 ```
 
-Approve the short browser code if Reticle asks you to sign in. The browser asks you to sign in, or to create a free account at app.reticle.sh. The Free plan includes monthly Harness credits. What syncs, and how to switch each part off, is in [What is recorded](what-is-recorded.md). The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
+Approve the short browser code if Reticle asks you to sign in. The browser asks you to sign in, or to create a free account at app.reticle.sh. The Free plan includes monthly Harness runs. What syncs, and how to switch each part off, is in [What is recorded](what-is-recorded.md). The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
 
 ## Step 2: Embed the SDK in your app
 

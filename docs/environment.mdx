@@ -64,7 +64,7 @@ Reticle works with none of these set. Each one changes a single behaviour, and m
 | `RETICLE_CLOUD_KEY` | CLI, daemon | The key's earlier name. Still honoured. |
 | `RETICLE_CLOUD_URL`, `RETICLE_URL` | CLI, daemon | The platform host. `RETICLE_CLOUD_URL` wins when both are set. |
 | `RETICLE_SYNC_INTERVAL_MS` | `reticle push --watch`, `reticle sync --watch` | How often the watching sync runs. Every 60 seconds by default. |
-| `RETICLE_HARNESS_MAX_STEPS` | autonomous drive | A hard ceiling on steps in one drive. It bounds cost. The drive itself runs on the platform and needs a linked project; every plan, Free included, has monthly Harness credits. |
+| `RETICLE_HARNESS_MAX_STEPS` | autonomous drive | A hard ceiling on steps in one drive. It bounds cost. The drive itself runs on the platform and needs a linked project; every plan, Free included, has monthly Harness runs. |
 | `RETICLE_DRIVE_ID` | autonomous drive | The free drive the platform granted, sent with every Harness call. `reticle try` sets it; you do not need to. |
 | `RETICLE_SECRET_<FIELD>` | autonomous drive, replay | The value of a secret field, typed in on this machine. Only the field's name goes to the platform. |
 

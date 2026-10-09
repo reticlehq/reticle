@@ -17,7 +17,7 @@ icon: shield-check
 | `affected` | Names the saved flows that must re-verify for `files` or `since`, without running them | no |
 | `coverage` | Lists the controls you have and have not driven this session | no |
 | `crawl` | Drives every reachable control itself and reports faults and contradictions. **Destructive:** it really clicks | no |
-| `explore` | The Harness, Reticle's model-driven explorer, drives the journey you name in `persona` and saves what it drove as flows. Runs on the Reticle platform: run `reticle connect` first. Free includes monthly Harness credits. **Destructive** | no |
+| `explore` | The Harness, Reticle's model-driven explorer, drives the journey you name in `persona` and saves what it drove as flows. Runs on the Reticle platform: run `reticle connect` first. Free includes monthly Harness runs. **Destructive** | no |
 | `mutate` | Grades a saved flow: breaks the endpoint it depends on and replays it. A flow that stays green is a click sequence, not a test | no |
 | `heal` | Rebinds a flow whose locator was renamed. Re-asserts the saved consequence first and refuses if it stops firing. `apply: true` writes the fix | no |
 

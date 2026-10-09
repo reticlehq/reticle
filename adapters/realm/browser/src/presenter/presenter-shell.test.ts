@@ -430,7 +430,7 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     expect(signin()?.hidden).toBe(false);
     expect(signin()?.querySelector('[data-reticle-account-signin]')).not.toBeNull();
     expect(signin()?.textContent).toContain('Harness');
-    // Signing in is the step: every workspace gets Harness credits. The rail says "try".
+    // Signing in is the step: every workspace gets Harness runs. The rail says "try".
     expect(signin()?.textContent).toContain('Sign in to try Reticle Harness');
     expect(promo()?.hidden).toBe(true);
     shell.paintAccount({ signedIn: true, org: 'Acme' }, undefined);

@@ -583,7 +583,7 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   note(
     '  2. Or hand over the whole drive: `reticle_verify { action: "explore", persona: "<who does ' +
       'what>" }` records what it drove, so later runs replay with no model in the loop. Runs on ' +
-      'the Reticle platform: needs a linked project (`reticle connect`); Free includes monthly Harness credits.',
+      'the Reticle platform: needs a linked project (`reticle connect`); Free includes monthly Harness runs.',
   );
   return {
     ok: true,
