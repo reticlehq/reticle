@@ -47,6 +47,7 @@ import { describeUnsynced } from '@/memory/cloud/unsynced-roots.js';
 import { machineUnsyncedRoots } from '@/memory/project/sync-status.js';
 import { describeSync, runSyncCycle } from '@/memory/cloud/sync-cycle.js';
 import { diskSink, diskSource, readCloudIssues, readCloudState } from '@/memory/cloud/sync-disk.js';
+import { fetchPlatformRun } from '@/features/harness/platform/platform-drives.js';
 
 /**
  * Where `reticle login` dials when nothing says otherwise: the hosted service.
@@ -744,9 +745,26 @@ const repoCloud = async (): Promise<{
 };
 
 /** `reticle runs` — the linked project's recent run artifacts (the key scopes it server-side). */
-const cmdRuns = async (): Promise<number> => {
+/**
+ * `reticle runs [<id>]` — the project's runs, or one of them by id.
+ *
+ * With an id it is the way back to a Harness drive whose local record is gone (another machine, a
+ * cleaned checkout): the platform keeps the run. A 404 is "not synced yet, or not found", never a
+ * crash, since a run written a minute ago may simply not have been pushed.
+ */
+const cmdRuns = async (argv: readonly string[]): Promise<number> => {
   const { url, apiKey } = await repoCloud();
-  emit(await api('GET', `${url}/v1/runs`, apiKey));
+  const id = argv[0];
+  if (id === undefined) {
+    emit(await api('GET', `${url}/v1/runs`, apiKey));
+    return 0;
+  }
+  const got = await fetchPlatformRun({ url, apiKey }, id);
+  if ('error' in got) {
+    err(got.error);
+    return 1;
+  }
+  emit(got.run);
   return 0;
 };
 
@@ -908,7 +926,7 @@ export const runCloudCommand = async (argv: readonly string[]): Promise<number> 
       case 'sync':
         return await cmdSync(rest);
       case 'runs':
-        return await cmdRuns();
+        return await cmdRuns(rest);
       case 'issues':
         return await cmdIssues(rest);
       case 'memory':
