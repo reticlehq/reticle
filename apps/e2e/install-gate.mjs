@@ -27,7 +27,12 @@
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { evaluateInstallControl, SESSION_CHECK, sessionMatchesPage } from './install-control.mjs';
+import {
+  evaluateInstallControl,
+  SESSION_CHECK,
+  sessionMatchesPage,
+  waitForVerifiableSession,
+} from './install-control.mjs';
 import { requireAssertion, requireVerdict } from './smoke-checks.mjs';
 import { restoreInstallPackages } from './install-packages.mjs';
 
@@ -157,7 +162,10 @@ const HANDOVER_ANSWER_MS = 15_000;
  */
 const EDIT_LOG_WAIT_MS = 15_000;
 const CONNECT_TIMEOUT_MS = 45_000;
-/** After a session appears, how long to wait for `hasCapabilities` to flip true on reannounce. */
+/**
+ * After a session appears, how long to wait for `hasCapabilities` to flip true on reannounce. A
+ * budget of its own, not a slice of CONNECT_TIMEOUT_MS: see `waitForVerifiableSession`.
+ */
 const CAPABILITIES_WAIT_MS = 10_000;
 const KEEP = process.argv.includes('--keep');
 /**
@@ -1470,9 +1478,9 @@ async function driveScaffold(scaffold, index) {
     // POLL. Steps 6 and 7 of the connection sequence race, and a gate that samples once sits outside
     // the product's own protection against it — see docs/system-map.md.
     //
-    // Connected is not verifiable. `hasCapabilities` is announced in HELLO at connect() and
-    // re-announced when `registerCapabilities` runs after, so the first snapshot can be false even
-    // on a file that registers a testid. Wait for a session, then keep polling for capabilities.
+    // Connected is not verifiable. `waitForVerifiableSession` waits for a session and THEN gives
+    // `hasCapabilities` its own budget to flip true on reannounce; the loop lives in
+    // install-control.mjs so a fake clock can drive its edges, which no self-test reaches.
     //
     // And it must be THIS app's session. The daemon answers with every session it holds, and the
     // check used to accept any of them — so a dev server left behind by an earlier scaffold, still
@@ -1482,25 +1490,21 @@ async function driveScaffold(scaffold, index) {
     // from a different framework. That is the exact failure this whole file exists to prevent, one
     // level up. The browser above was pointed at init's url, so that is the only session that can
     // answer for what was installed here.
-    const isOurs = (s) => sessionMatchesPage(s, probeUrl);
-    const connectDeadline = Date.now() + CONNECT_TIMEOUT_MS;
-    let sessions = [];
-    while (Date.now() < connectDeadline) {
-      sessions = (await sessionsOn(bridgePort)).filter(isOurs);
-      if (sessions.length > 0) break;
-      await sleep(500);
-    }
-    const capDeadline = Math.min(connectDeadline, Date.now() + CAPABILITIES_WAIT_MS);
-    while (Date.now() < capDeadline && !sessions.some((s) => true === s.hasCapabilities)) {
-      sessions = (await sessionsOn(bridgePort)).filter(isOurs);
-      await sleep(500);
-    }
+    const { sessions, connected, verifiable } = await waitForVerifiableSession(
+      () => sessionsOn(bridgePort),
+      (s) => sessionMatchesPage(s, probeUrl),
+      {
+        connectTimeoutMs: CONNECT_TIMEOUT_MS,
+        capabilitiesWaitMs: CAPABILITIES_WAIT_MS,
+        now: Date.now,
+        sleep,
+      },
+    );
 
     // ── 6. attribute honestly (harness rule 4) ─────────────────────────────────────────────────
     const { aliveThroughout } = transport.stop();
-    const verifiable = sessions.some((s) => true === s.hasCapabilities);
     const verdict = attributeOutcome({
-      connected: sessions.length > 0,
+      connected,
       hasCapabilities: verifiable,
       transportAliveThroughout: aliveThroughout,
     });
