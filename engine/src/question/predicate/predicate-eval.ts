@@ -430,6 +430,16 @@ export function evalNet(
   /** A response key whose captured value is `[REDACTED]`, so a `bodyMatches` clause is unjudgeable. */
   let redactedResponseField: string | undefined;
   const requestState = newRequestBodyState();
+  /**
+   * Number of calls that passed the REQUEST-side filter (url/method/status/ok + requestBody).
+   *
+   * On a multiplexed endpoint the same URL carries many query types. Before #1365 the response-body
+   * check ran BEFORE `checkRequestBody`, so an unrelated call's response was recorded as
+   * `bodyMismatch` even though that call never matched the request filter. The miss then named the
+   * wrong body. Tracking request matches separately lets `requestBodyVerdict` know whether at least
+   * one call matched the request side — if so, a response mismatch must win over a request verdict.
+   */
+  let requestMatchCount = 0;
   const matches = events.filter((e) => {
     if (e.type !== EventType.NET_REQUEST || e.t < since) return false;
     const d = e.data;
@@ -452,6 +462,11 @@ export function evalNet(
       if (status !== p.status) return false;
     }
     if (p.ok !== undefined && callSucceeded(d) !== p.ok) return false;
+    // Request-body check MUST run before the response-body check. On a multiplexed endpoint an
+    // unrelated call shares the URL, and if its response is checked first it poisons `bodyMismatch`
+    // with a body the caller never asked about (#1365).
+    if (!checkRequestBody(d, p, requestState)) return false;
+    requestMatchCount += 1;
     if (p.bodyContains !== undefined || p.bodyMatches !== undefined) {
       // The RESPONSE body only, and this is the whole point of these fields. Searching the request
       // too would let `bodyContains: "1187.01"` pass on the very defect it exists to catch: the app
@@ -491,7 +506,6 @@ export function evalNet(
         }
       }
     }
-    if (!checkRequestBody(d, p, requestState)) return false;
     return true;
   });
   if (unobservableStatus && 0 === matches.length) {
@@ -535,7 +549,11 @@ export function evalNet(
       assertion: NetBodyAssertion.MATCHES,
     };
   }
-  const requestVerdict = requestBodyVerdict(requestState, p, matches.length);
+  // Use requestMatchCount (calls that passed the REQUEST-side filter) rather than matches.length
+  // (calls that also passed the RESPONSE-side filter). When at least one call matched the request
+  // side, a response mismatch must win over a request-body verdict — otherwise a multiplexed endpoint
+  // with a matching request but mismatching response would incorrectly report a request failure (#1365).
+  const requestVerdict = requestBodyVerdict(requestState, p, requestMatchCount);
   if (requestVerdict !== undefined) return requestVerdict;
   // Ranked ABOVE the mismatch branch: when both a truncated and a full body missed the needle,
   // the honest verdict is the undecidable one. Deciding on the full body would report a failure
@@ -744,7 +762,7 @@ export function evalSignal(
       sameName.length > 0
         ? `signal '${p.name ?? '(any)'}' fired ${String(sameName.length)}x, payload: ${JSON.stringify(first)}${fieldMiss === undefined ? '' : `; ${fieldMiss}`}`
         : // Name what DID fire: a typo'd signal name and a genuinely dead action produce the same
-          // sentence otherwise, and the agent cannot tell them apart. See observed-in-window.ts.
+          // sentence otherwise, and the agent cannot tell them apart by reading the sentence. See observed-in-window.ts.
           `signal '${p.name ?? '(any)'}' never fired; ${describeObserved(
             'signals',
             events.filter((e) => e.type === EventType.SIGNAL).map((e) => str(e.data['name']) ?? ''),
