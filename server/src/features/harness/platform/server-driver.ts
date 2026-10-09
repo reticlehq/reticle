@@ -167,9 +167,15 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
       const outcomes = fresh.flatMap((entry) =>
         'tool' === entry.role ? entry.outcomes.map(outcomeOf) : [],
       );
+      // What somebody said to the drive since the last turn. The opening line is the loop's own and
+      // the platform writes its own, so only words that arrived after it travel.
+      const say = fresh.flatMap((entry, i) =>
+        'user' === entry.role && (0 < turn || 0 < i) ? [entry.text] : [],
+      );
       const reply = (await call(`${RUNS_PATH}/${encodeURIComponent(runId)}/turn`, {
         turn,
         outcomes,
+        ...(0 === say.length ? {} : { say }),
       })) as TurnReply;
       turn = reply.turn + 1;
       // The platform's spend, reported so the drive's cost is visible here as it is for a local one.
