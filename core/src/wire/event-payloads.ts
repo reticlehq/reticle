@@ -44,6 +44,23 @@ export const ScrollDirection = { UP: 'up', DOWN: 'down' } as const;
 export type ScrollDirection = (typeof ScrollDirection)[keyof typeof ScrollDirection];
 
 /**
+ * How a `route.change` happened.
+ *
+ * `push` is `history.pushState`, `replace` is `history.replaceState`, and `pop` is the session
+ * history moving under the page (`popstate`, or a `hashchange` the page did not push). A
+ * same-pathname replace records UI state in the URL; it is not a navigation to a new view.
+ */
+export const RouteChangeHow = {
+  PUSH: 'push',
+  REPLACE: 'replace',
+  POP: 'pop',
+} as const;
+export type RouteChangeHow = (typeof RouteChangeHow)[keyof typeof RouteChangeHow];
+
+/** Wire field on `route.change` carrying a `RouteChangeHow`. */
+export const ROUTE_CHANGE_HOW_FIELD = 'how';
+
+/**
  * The three readable client-side storage areas.
  *
  * `cookies` is plural because that is what the storage tool accepts, what the browser returns and
@@ -175,6 +192,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     pathname: z.string(),
     search: z.string(),
     hash: z.string(),
+    [ROUTE_CHANGE_HOW_FIELD]: z.nativeEnum(RouteChangeHow),
   }),
   [EventType.CONSOLE_LOG]: consoleSchema,
   [EventType.CONSOLE_WARN]: consoleSchema,

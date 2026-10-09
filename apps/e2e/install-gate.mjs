@@ -1140,7 +1140,18 @@ async function driveScaffold(scaffold, index) {
   try {
     // ── 1. a surface that has never seen Reticle ──────────────────────────────────────────────
     note('scaffolding…');
-    if (scaffold.create !== undefined) await run(scaffold.create[0], scaffold.create[1], workdir);
+    // Once more on failure, after clearing what the first attempt left: the generators fetch their
+    // templates over the network, and one blip in `npm create astro@latest` dropped #1497 from the
+    // merge queue on 2026-10-09 with nothing of ours involved. A real breakage fails twice.
+    if (scaffold.create !== undefined) {
+      try {
+        await run(scaffold.create[0], scaffold.create[1], workdir);
+      } catch (first) {
+        note(`scaffold failed once, retrying: ${String(first).slice(0, 160)}`);
+        rmSync(app, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+        await run(scaffold.create[0], scaffold.create[1], workdir);
+      }
+    }
     // Files that ARE the scaffold, for a framework with no generator left to run (see CRA_FILES).
     // Before the probe stamp, which needs the app directory to exist.
     for (const [rel, content] of Object.entries(scaffold.files ?? {})) {

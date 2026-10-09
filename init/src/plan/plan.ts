@@ -7,7 +7,13 @@
 import { Framework, UiLibrary, installCommand, installCommandParts } from '@/detect/detect.js';
 import { installFailureHint } from '@/diagnose/install-hint.js';
 import { installRetries } from '@/diagnose/install-retries.js';
-import { claudeAddCommand, claudeProjectMcpJson, mcpManual } from '@/register/mcp.js';
+import {
+  claudeAddCommand,
+  claudeProjectMcpJson,
+  codexAddCommand,
+  mcpManual,
+} from '@/register/mcp.js';
+import { codexNamesOurServer } from '@/register/codex-toml.js';
 import {
   mergeClientConfig,
   ClientMergeStatus,
@@ -145,9 +151,40 @@ function claudeMcpStep(input: PlanInput): Step | null {
  * parse is reported with a paste-able block rather than overwritten, and everything else is written.
  */
 function otherClientSteps(input: PlanInput): Step[] {
-  return (input.detectedClients ?? []).map((detected) =>
-    clientStep(clientSpec(detected.id), detected.configPath, detected.existing),
-  );
+  return (input.detectedClients ?? []).map((detected) => {
+    const spec = clientSpec(detected.id);
+    return (
+      codexCliStep(spec, detected.configPath, detected.existing, input) ??
+      clientStep(spec, detected.configPath, detected.existing)
+    );
+  });
+}
+
+/**
+ * Codex, registered through its own CLI instead of a printed block (#1238).
+ *
+ * `mergeClientConfig` answers MANUAL for TOML, since we never edit it blind. `codex mcp add` does
+ * the editing, so with the binary on PATH nothing is left for a human. It REPLACES an entry of the
+ * same name and exits 0, so this answers only when the config names no `reticle` server at all, in
+ * any shape. An entry somebody wrote — a local build, a `url` — falls through to `clientStep`, which
+ * leaves it alone (ALREADY) or hands over the block (MANUAL), exactly as before.
+ */
+function codexCliStep(
+  spec: ClientSpec,
+  configPath: string,
+  existing: string | null,
+  input: PlanInput,
+): Step | null {
+  if (McpClient.CODEX !== spec.id || true !== input.codexCli) return null;
+  if (codexNamesOurServer(existing, spec.serversKey)) return null;
+  const cmd = codexAddCommand();
+  return {
+    title: `MCP server (${spec.label})`,
+    target: configPath,
+    status: StepStatus.APPLY,
+    detail: `register reticle with ${spec.label} (${cmd.display})`,
+    exec: { command: cmd.command, args: cmd.args, fallback: cmd.display },
+  };
 }
 
 /** One client's step: already-correct is left alone, an unparseable file gets a paste-able block. */

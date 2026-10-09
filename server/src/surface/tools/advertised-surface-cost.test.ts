@@ -325,9 +325,14 @@ describe('advertised surface cost', () => {
 // 149_950 -> 150_300 for the `harness` envelope key on every output schema (150,251 B): a drive the
 // HUD or the platform's chat started reaches the agent only on its next tool result, and a
 // validating client strips an undeclared key. The default surface sends no output schemas.
-// 150_300 -> 151_279: measured 150,279 B on main at c02824992, plus the 1,000 B headroom described
-// at DEFAULT_SURFACE_BYTE_BUDGET above.
-const ALL_SURFACE_BYTE_BUDGET = 151_279;
+// 150_300 -> 150_400 for `repeatable` on a net clause (#1353), 150,379 B merged with the above: a
+// read over POST declared as one is kept out of duplicate-request, and the field rides every schema
+// that carries a predicate, so a validating client would strip it otherwise.
+// 150_400 -> 151_400 when #1487 met today's other merges in the queue (150,407 B, 7 B over): the
+// ceiling now carries ~1KB of headroom, so two small PRs no longer both have to move it.
+// From here on: measured plus the 1,000 B headroom described at DEFAULT_SURFACE_BYTE_BUDGET above.
+// 150,407 B on main after #1487 landed, so 151,407.
+const ALL_SURFACE_BYTE_BUDGET = 151_407;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

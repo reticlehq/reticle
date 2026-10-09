@@ -15,6 +15,8 @@
 import {
   EventType,
   MUTATING_METHODS,
+  ROUTE_CHANGE_HOW_FIELD,
+  RouteChangeHow,
   asNumber,
   asString,
   isDevToolingUrl,
@@ -142,6 +144,24 @@ export function isSameDocumentHashAnchor(event: ReticleEvent): boolean {
   }
   if (from.hash === to.hash) return false;
   return isInPageFragment(to.hash);
+}
+
+/**
+ * A `replaceState` that keeps the pathname recorded state in the URL. It is not a navigation.
+ *
+ * Search and an in-page fragment may change (`?zoom=125`, `#main-content`). A hash-router fragment
+ * (`#/invoices`) is still a new view, and so is a replace onto a different pathname. Missing hrefs
+ * stay under the blank-destination rule: an event that cannot show the path stayed put is not exempt.
+ */
+export function isSamePathnameReplace(event: ReticleEvent): boolean {
+  if (event.type !== EventType.ROUTE_CHANGE) return false;
+  if (asString(event.data[ROUTE_CHANGE_HOW_FIELD]) !== RouteChangeHow.REPLACE) return false;
+  const from = hrefAsUrl(asString(event.data['from']));
+  const to = hrefAsUrl(asString(event.data['to']));
+  if (from === undefined || to === undefined) return false;
+  if (from.origin !== to.origin || from.pathname !== to.pathname) return false;
+  if (from.hash !== to.hash && !isInPageFragment(to.hash)) return false;
+  return true;
 }
 
 /**

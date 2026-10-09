@@ -77,6 +77,8 @@ export type Predicate =
       requestBodyContains?: string;
       /** JSON field match over the REQUEST body, in the style of `signal.dataMatches`. */
       requestBodyMatches?: Record<string, unknown>;
+      /** Repeats of this call are expected (a read over POST), so they are not a double submit. */
+      repeatable?: boolean;
     }
   | { kind: typeof PredicateKind.ROUTE; pathname?: string; contains?: string; since?: number }
   | {
@@ -353,6 +355,14 @@ function predicateUnion() {
          * instead of reporting a mismatch: a redacted field is unknown, not different.
          */
         requestBodyMatches: z.record(z.string(), z.unknown()).optional(),
+        /**
+         * The endpoint READS, so running twice in one window is not a double submit (#1353). GraphQL
+         * queries, tRPC batches, query buses and read Server Actions all read over POST, and React
+         * StrictMode runs the effect behind them twice in development. Scoped to this verdict and to
+         * the duplicate rule only: the request is still waited for and still counted. Needs a
+         * non-empty `urlContains`, and honours `method` when one is given (`checkRepeatableShape`).
+         */
+        repeatable: z.boolean().optional(),
       })
       .strict(),
     z
@@ -468,14 +478,20 @@ function predicateUnion() {
 function checkPredicateShape(predicate: unknown, ctx: z.RefinementCtx): void {
   // Structural and narrowed HERE, not in the signature: the refinement runs on the union zod
   // inferred, whose optional fields are spelled `| undefined`, and naming any concrete type in the
-  // parameter makes the overload unresolvable. Only the four fields this reads are looked at.
+  // parameter makes the overload unresolvable. Only the fields this reads are looked at.
   if ('object' !== typeof predicate || null === predicate) return;
   const p = predicate as {
     kind?: unknown;
     contains?: unknown;
     satisfies?: unknown;
     scope?: unknown;
+    repeatable?: unknown;
+    urlContains?: unknown;
   };
+  if (PredicateKind.NET === p.kind) {
+    checkRepeatableShape(p.repeatable, p.urlContains, ctx);
+    return;
+  }
   if (PredicateKind.COMPARE === p.kind) {
     checkCompareShape(predicate as Extract<Predicate, { kind: typeof PredicateKind.COMPARE }>, ctx);
     return;
@@ -499,6 +515,27 @@ function checkPredicateShape(predicate: unknown, ctx: z.RefinementCtx): void {
         'whichever one happened to match first',
     });
   }
+}
+
+/**
+ * `repeatable` exempts the endpoint it names from `duplicate-request`, so it has to name one. On a
+ * clause with no `urlContains` it would exempt every request in the window, and two identical
+ * writes, a real double submit, would pass as reads (#1353).
+ */
+function checkRepeatableShape(
+  repeatable: unknown,
+  urlContains: unknown,
+  ctx: z.RefinementCtx,
+): void {
+  if (true !== repeatable) return;
+  if ('string' === typeof urlContains && urlContains.trim().length > 0) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message:
+      '`repeatable: true` needs a non-empty `urlContains` naming the read endpoint, for example ' +
+      '`{ kind: "net", method: "POST", urlContains: "/graphql", repeatable: true }`. Without one it ' +
+      'would excuse every request in the window from duplicate-request, a real double submit included',
+  });
 }
 
 /**

@@ -4,10 +4,14 @@ import {
   claudeAddCommand,
   claudeAvailableProbe,
   claudeHasReticle,
+  codexAddCommand,
+  codexAvailableProbe,
+  codexNamesOurServer,
   detectMcpClients,
   mergeClientConfig,
   clientSpec,
   ClientMergeStatus,
+  type DetectedClient,
 } from '@reticlehq/init';
 import {
   OnboardingPhase,
@@ -71,6 +75,27 @@ export interface ManualClient {
   readonly docs: string | undefined;
 }
 
+/**
+ * Codex registers through `codex mcp add`, which does the TOML editing we refuse to do (#1238).
+ * `undefined` when that does not apply, and the caller reports a hand edit exactly as before: not
+ * Codex, the `codex` binary is not here, or the config already names a `reticle` server. That last
+ * one matters: `codex mcp add` REPLACES an entry of the same name and still exits 0, so an entry
+ * somebody wrote themselves, in any shape, must never reach it. Otherwise: did the command take.
+ */
+function registerWithCodexCli(
+  io: SetupMcpIo,
+  client: DetectedClient,
+  serversKey: string,
+): boolean | undefined {
+  if (McpClient.CODEX !== client.id || codexNamesOurServer(client.existing, serversKey)) {
+    return undefined;
+  }
+  const probe = codexAvailableProbe();
+  if (!io.runCli(probe.command, probe.args)) return undefined;
+  const cmd = codexAddCommand();
+  return io.runCli(cmd.command, cmd.args);
+}
+
 export function setupMcp(io: SetupMcpIo): SetupMcpResult {
   const detected: string[] = [];
   const registered: string[] = [];
@@ -117,7 +142,10 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
     // on an existing file and would CREATE an empty one otherwise, and either way claiming success
     // sends somebody to an agent that has no Reticle tools in it.
     if (ClientMergeStatus.MANUAL === merged.status) {
-      manual.push({ id: client.id, configPath: client.configPath, docs: spec.docs });
+      const viaCli = registerWithCodexCli(io, client, spec.serversKey);
+      if (true === viaCli) registered.push(client.id);
+      else if (false === viaCli) failed.push(client.id);
+      else manual.push({ id: client.id, configPath: client.configPath, docs: spec.docs });
       continue;
     }
     try {
