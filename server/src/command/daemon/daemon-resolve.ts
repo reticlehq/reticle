@@ -25,7 +25,7 @@ import {
   pickDaemonPort,
   type DaemonRegistryEntry,
 } from '@reticlehq/core/artifacts';
-import { ReticleEnv } from '@reticlehq/core';
+import { ReticleEnv, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 
 const RETICLE_PORT_ENV = ReticleEnv.PORT;
 
@@ -257,8 +257,12 @@ export async function resolveMcpPort(
     // A caller outside any project (an editor's user-scope MCP, launched from $HOME) used to dial the
     // default and never see the one project that had moved off it (#1240). With exactly one project
     // daemon live, that is the one; with several, the no-session answer names them instead.
+    // Only on the DEFAULT port, which is the guess #1240 corrects. A port passed with --port or
+    // RETICLE_PORT is a choice: relocating it attached an unwired app to another project's daemon.
     const projects =
-      projectId === undefined ? projectDaemonsElsewhere(preferred, home, deps.alive) : [];
+      projectId === undefined && RETICLE_DEFAULT_PORT === preferred
+        ? projectDaemonsElsewhere(preferred, home, deps.alive)
+        : [];
     return 1 === projects.length ? (projects[0]?.port ?? preferred) : preferred;
   }
   return adoptable(daemonProjectAt(preferred, home), projectId)
