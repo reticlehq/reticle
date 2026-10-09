@@ -58,6 +58,7 @@ import {
   releaseLease,
   verdictOf,
 } from '@/command/cli/adhoc-verdict.js';
+import { cutOffReason } from '@/surface/tools/harness-explore.js';
 
 export const MSG_SIGN_IN_FIRST = 'Sign in first: reticle connect (it is free, no card)';
 
@@ -491,6 +492,11 @@ export async function runFirstFlow(
     return NOT_SAVED;
   }
   const report = verdictOf(result, 'savedFlows') ?? {};
+  const cut = cutOffReason(report);
+  if (cut !== undefined) {
+    say(`? not proved — ${cut}`);
+    return NOT_SAVED;
+  }
   say(firstFlowVerdict(report));
   const saved = [...names(report['savedFlows']), ...names(report['rewroteFlows'])];
   if (0 === saved.length) {

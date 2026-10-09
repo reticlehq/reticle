@@ -297,6 +297,7 @@ export async function runHarness(
         toolCalls,
         usage,
         proved: proved(),
+        goalMet: false,
       };
     }
     for (const text of options.inbox?.() ?? []) history.push({ role: 'user', text });
@@ -315,6 +316,9 @@ export async function runHarness(
         toolCalls,
         usage,
         proved: proved(),
+        // Cut off is not done: the checks that held before a refusal (credits gone, a 5xx) prove
+        // the steps before it, never the journey, and every verdict downstream reads this.
+        goalMet: false,
         error: error instanceof Error ? error.message : String(error),
       };
     }

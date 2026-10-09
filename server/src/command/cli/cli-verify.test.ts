@@ -286,6 +286,49 @@ describe('exploring an app that has no saved flows', () => {
     expect(rec.fail.join('\n')).toContain('Nothing was proved');
   });
 
+  it('never passes a drive the platform cut off, and says why', async () => {
+    // A drive refused mid-way (credits gone: 402 needs_card) had saved one partial flow; replaying
+    // that flow printed PASS with no word about the credits.
+    const credits = 'Your 10 free credits are used. Add a card to start your 14-day trial.';
+    let flows: readonly string[] = [];
+    const { ports, rec } = harness({
+      listFlows: () => Promise.resolve([...flows]),
+      explore: () => {
+        flows = ['half-a-journey'];
+        return Promise.resolve({
+          savedFlows: ['half-a-journey'],
+          steps: 7,
+          stopReason: 'broken',
+          error: credits,
+        });
+      },
+    });
+
+    await runVerify(EXPLORING, ports);
+
+    expect(rec.verifyCalls).toBe(0);
+    expect(rec.exit).toEqual([1]);
+    expect(rec.out.join('\n')).not.toContain('PASS');
+    expect(rec.fail.join('\n')).toContain(credits);
+    expect(rec.fail.join('\n')).toContain('Nothing was proved');
+  });
+
+  it('never passes a drive somebody switched off part-way', async () => {
+    let flows: readonly string[] = [];
+    const { ports, rec } = harness({
+      listFlows: () => Promise.resolve([...flows]),
+      explore: () => {
+        flows = ['half'];
+        return Promise.resolve({ savedFlows: ['half'], steps: 3, stopReason: 'stopped' });
+      },
+    });
+
+    await runVerify(EXPLORING, ports);
+
+    expect(rec.verifyCalls).toBe(0);
+    expect(rec.exit).toEqual([1]);
+  });
+
   it('says how to make exploring available when the project is not on the platform', async () => {
     const { ports, rec } = harness({ listFlows: () => Promise.resolve([]) });
 

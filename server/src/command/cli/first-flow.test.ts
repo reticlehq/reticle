@@ -130,6 +130,27 @@ describe('the first flow', () => {
     expect(p.lines.join('\n')).toContain('switched off');
   });
 
+  it('a drive the platform cut off is never "verified: yes", and says the platform’s reason', async () => {
+    const credits = 'Your 10 free credits are used. Add a card to start your 14-day trial.';
+    const p = ports({
+      drive: () =>
+        Promise.resolve(
+          answer({
+            status: 'broken',
+            stopReason: 'broken',
+            error: credits,
+            savedFlows: ['half'],
+            checks: { held: 1, failed: 0 },
+          }),
+        ),
+    });
+    const outcome = await runFirstFlow(SESSION, URL, p);
+    const said = p.lines.join('\n');
+    expect(said).not.toContain('verified: yes');
+    expect(said).toContain(credits);
+    expect(outcome.flowSaved).toBe(false);
+  });
+
   it('a refused grant says why and points at the plan, without driving', async () => {
     let drove = false;
     const p = ports({

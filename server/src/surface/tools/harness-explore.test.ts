@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ReticleEnv } from '@reticlehq/core';
+import { ReticleEnv, Verified } from '@reticlehq/core';
+import { driveRunsFrom } from '@/judgement/runs/drive-run.js';
 import type { ToolDeps } from './tools.js';
 import {
   DEFAULT_MAX_STEPS,
@@ -132,6 +133,36 @@ describe('exploring an app', () => {
 
     expect(result.savedFlows).toEqual(['checkout']);
     expect(result.drive.summary).toBe('drove checkout');
+  });
+
+  it('a drive cut off part-way never syncs as proved, though a check held before it', async () => {
+    const refused: ModelDriver = {
+      turn: () => Promise.reject(new Error('Your 10 free credits are used.')),
+    };
+    const result = await exploreApp(
+      depsWithFlows([]),
+      {},
+      {
+        driver: refused,
+        skipPlatformConfig: true,
+        harnessId: 'h-cut',
+      },
+    );
+    expect(result.drive.error).toBe('Your 10 free credits are used.');
+    const held = {
+      v: 1 as const,
+      actionId: 'c1',
+      tool: 'reticle_act_and_wait',
+      args: {},
+      effect: { claim: 'saved', verified: Verified.YES },
+      tRange: { from: 0, to: 1 },
+      at: 1,
+      drivenBy: { harness: 'h-cut', driver: 'custom' },
+    };
+    const run = driveRunsFrom([held], { runId: 'run_1', projectId: 'p-1' }).find(
+      (r) => 'harness-h-cut' === r.runId,
+    );
+    expect(run?.flows[0]?.status).toBe('skipped');
   });
 
   it('believes the disk and not the model about what was saved', async () => {

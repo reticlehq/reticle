@@ -216,6 +216,19 @@ describe('exploring through the running daemon', () => {
     expect(result.lines).toContain('No model configured');
   });
 
+  it('never passes a drive the platform cut off, and prints why', async () => {
+    const credits = 'Your 10 free credits are used. Add a card to start your 14-day trial.';
+    const c = recording({
+      explore: {
+        structuredContent: { stopReason: 'broken', savedFlows: ['half'], error: credits },
+      },
+    });
+    const result = await explore(c.tool, [{ url: 'http://localhost:5190/' }]);
+    expect(result.code).toBe(1);
+    expect(c.actions()).not.toContain('flows');
+    expect(result.lines.join('\n')).toContain(credits);
+  });
+
   it('fails the run when the replay fails', async () => {
     const c = recording({ flows: { structuredContent: { status: 'fail' } } });
     expect((await explore(c.tool)).code).toBe(1);

@@ -11,7 +11,7 @@
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { exploreScript } from './harness-script.js';
 import { randomUUID } from 'node:crypto';
-import { harnessRunId } from '@/judgement/runs/drive-run.js';
+import { harnessRunId, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
 import {
   ReticleEnv,
   ReticleTool,
@@ -274,10 +274,15 @@ export async function exploreApp(
     ].join('\n\n'),
   });
 
+  // Before the session ends and is graded: a drive whose goal was missed, or that was cut off part-way,
+  // must not sync as "Proved" on the checks that held before it stopped.
+  noteHarnessGoal(harnessId, drive.goalMet);
   narrate(
     StopReason.STOPPED === drive.stopReason
       ? `Autonomous driving switched off — the Harness stopped after ${String(drive.steps)} steps. What it drove is kept.`
-      : `Harness finished — ${verdictLine(checkTally(drive.toolCalls))}`,
+      : StopReason.BROKEN === drive.stopReason
+        ? msgDriveCutOff(drive.error)
+        : `Harness finished — ${verdictLine(checkTally(drive.toolCalls))}`,
   );
   // MANDATORY, and deliberately outside the loop. A drive that runs out of budget mid-journey, or
   // breaks, or whose model simply stops asking for tools, leaves a recording open and everything it
@@ -480,6 +485,27 @@ export const MSG_HARNESS_DISABLED =
 export const MSG_HARNESS_UNCLAIMED =
   'The Reticle platform says this workspace cannot drive the Harness right now, usually because its ' +
   'credits are spent: see Settings → Plan in the Reticle dashboard.';
+
+/**
+ * Why a drive must not be replayed into a verdict, or undefined when it may. A drive the platform
+ * cut off (credits gone: 402 needs_card) had saved one partial flow, and replaying it printed PASS
+ * with no word about the credits. The one test both CLI explore paths answer through.
+ */
+export function cutOffReason(drive: { stopReason?: unknown; error?: unknown }): string | undefined {
+  if (StopReason.BROKEN !== drive.stopReason && StopReason.STOPPED !== drive.stopReason)
+    return undefined;
+  const why =
+    'string' === typeof drive.error && 0 < drive.error.length
+      ? drive.error
+      : StopReason.STOPPED === drive.stopReason
+        ? 'autonomous driving was switched off.'
+        : 'the drive broke.';
+  return `The drive stopped before it finished: ${why} Nothing was proved; what it saved stays, and the next run replays it.`;
+}
+
+/** The Agent Log's last line for a drive the platform cut off: its reason, and that it proved nothing. */
+export const msgDriveCutOff = (error: string | undefined): string =>
+  `Harness stopped before it finished, so nothing is proved: ${error ?? 'the drive broke.'}`;
 
 /** The platform could not be asked, and the drive would spend Reticle's budget without its yes. */
 export const MSG_HARNESS_UNCONFIRMED =
