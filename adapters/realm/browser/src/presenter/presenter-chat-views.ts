@@ -21,10 +21,13 @@ import {
 } from './icons/presenter-icons.js';
 import { HUD_GLASS_PAINT } from './chrome/presenter-hud-chrome.js';
 import {
+  HARNESS_COPY_PROMPT_ATTR,
+  HARNESS_ROW_TEXT,
   HARNESS_SETTINGS_ATTR,
   creditsShort,
   harnessRowHtml,
   HARNESS_ROW_CSS,
+  type HarnessGateView,
 } from './presenter-harness-row.js';
 import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';
 import { ReticleStorageKey } from '@/storage-keys.js';
@@ -204,6 +207,7 @@ export class ChatViews {
   #history: HistoricalAnnotation[] = readHistory();
   #account: AccountState | undefined;
   #harness: HarnessConfig | undefined;
+  #gate: HarnessGateView | undefined;
   #verdicts = 0;
   #onOpenSettings: () => void;
   #onImpact: () => void;
@@ -267,6 +271,16 @@ export class ChatViews {
         }
         if (null !== target.closest('[data-reticle-harness-stop]')) {
           this.#drive?.stop();
+          return;
+        }
+        const copy = target.closest<HTMLButtonElement>(`[${HARNESS_COPY_PROMPT_ATTR}]`);
+        if (null !== copy) {
+          const prompt = this.#gate?.prompt;
+          if (prompt !== undefined)
+            void navigator.clipboard
+              ?.writeText(prompt)
+              .then(() => (copy.textContent = HARNESS_ROW_TEXT.COPIED))
+              .catch(() => undefined);
           return;
         }
         if (null !== target.closest(`[${HARNESS_SETTINGS_ATTR}]`)) this.#onOpenSettings();
@@ -407,8 +421,9 @@ export class ChatViews {
     if (drive === undefined) this.#startedAs = undefined;
     this.#paintHarness();
   }
-  paintHarness(config: HarnessConfig | undefined): void {
+  paintHarness(config: HarnessConfig | undefined, gate?: HarnessGateView): void {
     this.#harness = config;
+    this.#gate = gate;
     this.#paintHarness();
   }
   paintImpact(verdicts: number): void {
@@ -447,6 +462,7 @@ export class ChatViews {
     const html = harnessRowHtml({
       account,
       config,
+      gate: this.#gate,
       drive: this.#driving,
       canDrive: this.#drive !== undefined,
       pick: this.#personaPick,

@@ -6,6 +6,7 @@ import {
   HARNESS_LOCKED_HELP,
   creditsLeft,
   loadPresenterSettings,
+  paintHarnessRow,
   settingsPanelHtml,
 } from './presenter-settings.js';
 
@@ -339,5 +340,30 @@ describe('the Harness switch help, in credits', () => {
       'Your 10 free credits are used.',
     );
     expect(HARNESS_LOCKED_HELP).not.toMatch(/each month|monthly/);
+  });
+});
+
+describe('the Harness switch and the coverage gate', () => {
+  const config = { provider: 'jev', harnessEnabled: false, harnessEntitled: true };
+  const toggle = (): Element | null =>
+    document.querySelector('[data-reticle-setting="harnessEnabled"]');
+
+  it('is locked below 80%, and its help says why', () => {
+    document.body.innerHTML = settingsPanelHtml();
+    const reason = 'Harness unlocks at 80% instrumentation. This app is at 62%: missing x.';
+    paintHarnessRow(document.body, config, { percent: 62, unlocked: false, reason });
+    expect(toggle()?.getAttribute('aria-disabled')).toBe('true');
+    expect(
+      document
+        .querySelector('[data-reticle-settings-harness-row] [data-reticle-settings-help]')
+        ?.getAttribute('title'),
+    ).toBe(reason);
+  });
+
+  it('can be switched on at 80% or more', () => {
+    document.body.innerHTML = settingsPanelHtml();
+    paintHarnessRow(document.body, config, { percent: 87, unlocked: true });
+    expect(toggle()?.getAttribute('aria-disabled')).toBe('false');
+    expect(toggle()?.getAttribute('aria-checked')).toBe('false');
   });
 });

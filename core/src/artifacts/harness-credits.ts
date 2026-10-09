@@ -12,11 +12,21 @@ import { CreditKind } from './impact.js';
 
 /** The trial a card starts. Not on the wire; the platform's own sentence names it the same. */
 export const TRIAL_DAYS = 14;
+/** What a new account is granted, and what a card's trial grants. The platform's numbers, said. */
+export const FREE_CREDITS = 10;
+export const TRIAL_CREDITS = 500;
+
+/** What a signed-out HUD says the Harness costs to try. */
+export const SIGN_UP_PITCH =
+  `Sign up: ${String(FREE_CREDITS)} free credits to try Reticle Harness · ` +
+  `add a card for a ${String(TRIAL_CREDITS)}-credit, ${String(TRIAL_DAYS)}-day trial`;
 
 export interface Credits {
   used: number;
   limit: number;
   kind?: CreditKind | undefined;
+  /** Whole days the grant has left, when the platform gave an end date. Absent: not said. */
+  daysLeft?: number | undefined;
 }
 
 const count = (n: number): string => n.toLocaleString('en-US');
@@ -32,6 +42,22 @@ export function creditsLeftText(credits: Credits): string {
   if (CreditKind.FREE === credits.kind) return `${of} free credits`;
   if (CreditKind.TRIAL === credits.kind) return `${of} trial credits`;
   return `${of} credits left`;
+}
+
+const GRANT_LABEL: Partial<Record<CreditKind, string>> = {
+  [CreditKind.FREE]: 'Free',
+  [CreditKind.TRIAL]: 'Trial',
+};
+
+/** "Trial: 120 of 500 credits used · 380 left · 9 days left"; days only when the platform said. */
+export function creditsUsageText(credits: Credits): string {
+  const label = credits.kind === undefined ? undefined : GRANT_LABEL[credits.kind];
+  const left = Math.max(0, credits.limit - credits.used);
+  const days =
+    credits.daysLeft === undefined
+      ? ''
+      : ` · ${String(credits.daysLeft)} day${1 === credits.daysLeft ? '' : 's'} left`;
+  return `${label === undefined ? '' : `${label}: `}${count(credits.used)} of ${count(credits.limit)} credits used · ${count(left)} left${days}`;
 }
 
 /** The sentence for no credits left, and the one thing that gets more when there is one. */

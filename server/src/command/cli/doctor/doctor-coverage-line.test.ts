@@ -22,6 +22,15 @@ describe('doctor coverage rows', () => {
     expect(lines.join('\n')).toContain('Report the coverage line it prints.');
   });
 
+  it('says the Harness gate in the sentence a refused drive says', () => {
+    const reason =
+      'Harness unlocks at 80% instrumentation. This app is at 75%: missing stable test ids.';
+    const lines = coverageLines({
+      coverage: [{ covered: 6, total: 8, harnessGate: { percent: 75, unlocked: false, reason } }],
+    });
+    expect(lines[1]).toBe(`    ${reason}`);
+  });
+
   it('prints nothing for a daemon too old to report coverage', () => {
     expect(coverageLines({ running: true })).toEqual([]);
   });

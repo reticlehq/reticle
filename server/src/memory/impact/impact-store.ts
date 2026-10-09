@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { readAccountState } from '@/memory/cloud/account-state.js';
 import { harnessOfferSource, type OfferSource } from '@/memory/cloud/harness-offer.js';
-import type { ConfigSource } from '@/memory/cloud/harness-config.js';
+import { configForHud, type ConfigSource } from '@/memory/cloud/harness-config.js';
 import { hudNoticesSource, type NoticesSource } from '@/memory/cloud/hud-notices-source.js';
 import { selectNotices } from '@reticlehq/core/hud';
 import {
@@ -424,7 +424,7 @@ export class ImpactStore {
     if (offer !== undefined) snap.harnessOffer = offer;
     // Absent stays absent: the HUD reads that as "we have not heard" and renders no control.
     const cfg = this.#config.read();
-    if (cfg !== undefined) snap.harnessConfig = cfg;
+    if (cfg !== undefined) snap.harnessConfig = configForHud(cfg, this.#now());
     // Chosen here, where the account and the entitlement are both known. Absent when nothing applies,
     // so the HUD falls back to the slides bundled with the SDK.
     const notices = selectNotices(this.#notices.read(), {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { harnessConfigSource } from './harness-config.js';
+import { configForHud, harnessConfigSource } from './harness-config.js';
 
 const config = (enabled: boolean) => ({
   provider: 'jev',
@@ -67,5 +67,33 @@ describe('HUD Harness configuration cache', () => {
     await flush();
     expect(changed).toHaveBeenCalledTimes(1);
     expect(source.read()?.harnessEnabled).toBe(false);
+  });
+});
+
+describe('configForHud', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const base = {
+    provider: 'jev',
+    harnessEnabled: true,
+    harnessEntitled: true,
+    providerReady: true,
+  };
+
+  it('turns the grant end date into whole days left on the daemon clock', () => {
+    const out = configForHud(
+      { ...base, credits: { used: 120, limit: 500, kind: 'trial', endsAt: 9 * DAY - 1 } },
+      0,
+    );
+    expect(out.credits).toEqual({ used: 120, limit: 500, kind: 'trial', daysLeft: 9 });
+  });
+
+  it('says no days when the platform gave no end date, and never fewer than zero', () => {
+    expect(configForHud({ ...base, credits: { used: 1, limit: 10 } }, 0).credits).toEqual({
+      used: 1,
+      limit: 10,
+    });
+    expect(
+      configForHud({ ...base, credits: { used: 1, limit: 10, endsAt: 0 } }, DAY).credits,
+    ).toEqual({ used: 1, limit: 10, daysLeft: 0 });
   });
 });

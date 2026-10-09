@@ -64,11 +64,30 @@ describe('a tab’s coverage', () => {
     expect(announcedChannels(plain)).not.toContain(CoverageMarker.SOURCE);
   });
 
-  it('carries a prompt only once a verdict recorded a gap, naming only that gap', () => {
-    expect(instrumentationOf(tab).prompt).toBeUndefined();
+  /** Every channel but test ids: 7 of 8, above the Harness gate. */
+  const open = {
+    id: 's1',
+    url: 'http://localhost:3000/',
+    channels: ['ui', 'net', 'log', 'state', 'signal'],
+    sourceMapping: true,
+  };
+
+  it('above the gate, carries a prompt only once a verdict recorded a gap, naming only that gap', () => {
+    expect(instrumentationOf(open).harnessGate).toEqual({ percent: 87, unlocked: true });
+    expect(instrumentationOf(open).prompt).toBeUndefined();
     recordGaps('s1', [gap('e1')], 1);
-    const prompt = instrumentationOf(tab).prompt ?? '';
+    const prompt = instrumentationOf(open).prompt ?? '';
     expect(prompt).toContain('missing: e1');
     expect(prompt).toContain('reticle verify http://localhost:3000/');
+  });
+
+  it('below the gate, says why and always carries the prompt that closes it', () => {
+    const below = instrumentationOf(tab);
+    expect(below.harnessGate.unlocked).toBe(false);
+    expect(below.harnessGate.reason).toMatch(
+      /^Harness unlocks at 80% instrumentation\. This app is at 62%: missing /,
+    );
+    expect(below.prompt).toContain(CoverageCapability.TEST_IDS);
+    expect(below.prompt).toContain('reticle verify http://localhost:3000/');
   });
 });

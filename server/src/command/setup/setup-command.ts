@@ -94,18 +94,18 @@ interface SetupCommandInput extends Omit<SetupInput, 'shape'> {
   readonly registerAgents: boolean;
   /** The bridge's pairing token, for the MCP transport a connect-proof lease is opened over. */
   readonly pairingToken?: string | undefined;
-  /** False for `--no-first-run`: connect, and drive nothing. */
+  /** False for `--no-first-run`: connect, and say nothing more. */
   readonly firstRun: boolean;
   /** `--json`: an agent is reading, so nothing is driven on its behalf. */
   readonly json: boolean;
   /**
-   * What happens once the connection is proved: the first flow. A port, because driving it is the
-   * CLI's `try` machinery and this directory does not reach for that. Absent, nothing is driven.
+   * What happens once the connection is proved: the coverage summary and the agent prompt. A port,
+   * because it reads the daemon's status and the link, which this directory does not reach for.
    */
   readonly firstFlow?: FirstFlowPort | undefined;
 }
 
-/** The first flow, as `command/cli/try-command.ts` runs it. Structural, so setup imports nothing. */
+/** init's ending, as `command/cli/try-command.ts` says it. Structural, so setup imports nothing. */
 export type FirstFlowPort = (
   ctx: {
     appDir: string;
@@ -236,7 +236,7 @@ async function restartHandedOverServer(appDir: string): Promise<boolean> {
 }
 
 /**
- * The first flow, inside the dev server's lifetime: the drive needs the app up, and the `finally`
+ * init's ending, inside the dev server's lifetime: coverage is read off the open tab, and the `finally`
  * in `runSetupCommand` only stops a server that was not handed over. Its lines join the notes, so
  * `--json` carries the next step too.
  */

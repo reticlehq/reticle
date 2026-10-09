@@ -186,7 +186,7 @@ describe('a Harness drive, started then polled', () => {
     const d = held();
     const pending = answerExplore(deps(), { wait: 30 }, undefined, d.drive);
     await d.started();
-    d.fail(new Error('Autonomous driving is turned OFF'));
-    await expect(pending).rejects.toThrow('turned OFF');
+    d.fail(new Error('The Reticle Harness is off for this project'));
+    await expect(pending).rejects.toThrow('is off for this project');
   });
 });

@@ -279,6 +279,12 @@ export const LinkReportKey = {
   GAPS: 'gaps',
   /** Per app: the framework adapters its page announced. */
   ADAPTERS: 'adapters',
+  /**
+   * Per app: coverage capabilities that do not apply to it (`CoverageCapability` values, see
+   * `NotApplicableSchema`), excluded from both sides of the coverage score. Always sent, empty when
+   * every capability applies.
+   */
+  NOT_APPLICABLE: 'notApplicable',
   /** Top level: dev servers listening on this machine that no Reticle page has connected from. */
   DEV_SERVERS: 'devServers',
   /** Top level: the last page handshake this daemon refused, and why. */

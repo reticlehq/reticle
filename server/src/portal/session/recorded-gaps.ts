@@ -15,7 +15,10 @@ import {
   LINK_APP_GAPS_MAX,
   agentPromptFor,
   coverageOf,
+  harnessGateOf,
+  harnessUnlockPrompt,
   type Coverage,
+  type CoverageCapability,
   type ImpactSnapshot,
 } from '@reticlehq/core';
 
@@ -121,14 +124,50 @@ const appNameOf = (url: string): string => {
   }
 };
 
-/** This tab's coverage, with the coding-agent prompt when its verdicts recorded any gap. */
-export function instrumentationOf(tab: InstrumentedTab): Coverage & { prompt?: string } {
+/**
+ * The coverage capabilities that do not apply to this tab's app, excluded from both sides of the
+ * score. ponytail: nothing declares one yet, so every capability applies; the platform reads the
+ * same list from the local-apps report, so the day something declares one both sides move together.
+ */
+export function notApplicableOf(_tab: InstrumentedTab): CoverageCapability[] {
+  return [];
+}
+
+/** Whether the Harness may drive this tab's app (see core's `instrumentation-coverage.ts`), as pushed. */
+export interface TabHarnessGate {
+  percent: number;
+  unlocked: boolean;
+  reason?: string;
+}
+
+/**
+ * This tab's coverage and its Harness gate, with the coding-agent prompt when its verdicts recorded
+ * any gap or the gate is shut: below the gate the prompt names every unseen capability, so there is
+ * always something to hand the agent.
+ */
+export function instrumentationOf(
+  tab: InstrumentedTab,
+): Coverage & { prompt?: string; harnessGate: TabHarnessGate } {
   const gaps = recordedGaps(tab.id);
   const coverage = coverageOf({ channels: announcedChannels(tab), gaps });
   const url = tab.url ?? '';
+  const appName = appNameOf(url);
+  const notApplicable = notApplicableOf(tab);
+  const gate = harnessGateOf(coverage, notApplicable);
+  const harnessGate = {
+    percent: gate.percent,
+    unlocked: gate.unlocked,
+    ...(gate.reason === undefined ? {} : { reason: gate.reason }),
+  };
+  if (!gate.unlocked)
+    return {
+      ...coverage,
+      harnessGate,
+      prompt: harnessUnlockPrompt({ coverage, gaps, appName, url, notApplicable }),
+    };
   return 0 === gaps.length
-    ? coverage
-    : { ...coverage, prompt: agentPromptFor({ gaps, appName: appNameOf(url), url }) };
+    ? { ...coverage, harnessGate }
+    : { ...coverage, harnessGate, prompt: agentPromptFor({ gaps, appName, url }) };
 }
 
 /**

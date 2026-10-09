@@ -8,6 +8,7 @@ import {
   ChatViews,
 } from './presenter-chat-views.js';
 import { PERSONAS } from './presenter-personas.js';
+import { harnessGateIn } from './presenter-harness-row.js';
 
 const mountViews = (onHarness = vi.fn()) => {
   document.body.innerHTML = `<div data-reticle-overlay><div data-reticle-chat-panel>${CHAT_VIEWS_HTML}<section class="reticle-chat-view" aria-label="Agent Log"></section></div>${FLOWS_PAGE_HTML}${ANNOTATIONS_HTML}${CHAT_VIEWS_NAV_HTML}</div>`;
@@ -35,11 +36,13 @@ describe('chat views and harness access states', () => {
   const rows = (root: HTMLElement): number =>
     root.querySelectorAll('[data-reticle-harness-spot] .reticle-harness-row').length;
 
-  it('signed out, is one row: a sentence and Sign in', () => {
+  it('signed out, is one row: the free credits and the trial, and Sign in', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: false });
     expect(rows(root)).toBe(1);
-    expect(root.textContent).toContain('Sign in to use Harness');
+    expect(root.textContent).toContain(
+      'Sign up: 10 free credits to try Reticle Harness · add a card for a 500-credit, 14-day trial',
+    );
     expect(root.querySelector('[data-reticle-account-signin]')).not.toBeNull();
   });
 
@@ -88,21 +91,68 @@ describe('chat views and harness access states', () => {
     expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
   });
 
-  it("says how many credits are left in one small line, the platform's numbers", () => {
+  it("says credits used and left in one small line, the platform's numbers", () => {
     const { root, views } = mountViews();
+    const meta = (): string | null | undefined =>
+      root.querySelector('[data-reticle-foot-meta]')?.textContent;
     views.paintAccount({ signedIn: true });
     views.paintHarness({ ...entitled, credits: { used: 294, limit: 5000 } });
-    expect(root.querySelector('[data-reticle-foot-meta]')?.textContent).toBe(
-      '4,706 of 5,000 credits left',
-    );
+    expect(meta()).toBe('294 of 5,000 credits used · 4,706 left');
     views.paintHarness({ ...entitled, credits: { used: 2, limit: 10, kind: 'free' } });
-    expect(root.querySelector('[data-reticle-foot-meta]')?.textContent).toBe(
-      '8 of 10 free credits',
-    );
-    views.paintHarness({ ...entitled, credits: { used: 80, limit: 500, kind: 'trial' } });
-    expect(root.querySelector('[data-reticle-foot-meta]')?.textContent).toBe(
-      '420 of 500 trial credits',
-    );
+    expect(meta()).toBe('Free: 2 of 10 credits used · 8 left');
+    views.paintHarness({
+      ...entitled,
+      credits: { used: 120, limit: 500, kind: 'trial', daysLeft: 9 },
+    });
+    expect(meta()).toBe('Trial: 120 of 500 credits used · 380 left · 9 days left');
+  });
+
+  describe('the coverage gate', () => {
+    const locked = {
+      percent: 62,
+      unlocked: false,
+      reason:
+        'Harness unlocks at 80% instrumentation. This app is at 62%: missing stable test ids.',
+      prompt: 'Read https://reticle.sh/SKILL.md, then improve',
+    };
+
+    it('below 80%, says why in one row with the copy-prompt button, and no Run', () => {
+      const { root, views } = mountViews();
+      views.paintAccount({ signedIn: true });
+      views.paintHarness(entitled, locked);
+      expect(rows(root)).toBe(1);
+      expect(root.textContent).toContain(locked.reason);
+      expect(root.querySelector('[data-reticle-harness-copy-prompt]')?.textContent).toBe(
+        'Copy prompt for your coding agent',
+      );
+      expect(root.querySelector('[data-reticle-harness-run]')).toBeNull();
+    });
+
+    it('copies the prompt, never renders it', async () => {
+      const written: string[] = [];
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: (t: string) => (written.push(t), Promise.resolve()) },
+      });
+      const { root, views } = mountViews();
+      views.paintAccount({ signedIn: true });
+      views.paintHarness(entitled, locked);
+      expect(root.textContent).not.toContain(locked.prompt);
+      root.querySelector<HTMLElement>('[data-reticle-harness-copy-prompt]')?.click();
+      await Promise.resolve();
+      expect(written).toEqual([locked.prompt]);
+      Reflect.deleteProperty(navigator, 'clipboard');
+    });
+
+    it('at 80% or more with Harness off, says it can be switched on', () => {
+      const { root, views } = mountViews();
+      views.paintAccount({ signedIn: true });
+      views.paintHarness({ ...entitled, harnessEnabled: false }, { percent: 87, unlocked: true });
+      expect(root.textContent).toContain(
+        'This app is at 87% instrumentation: Harness can be switched on',
+      );
+      expect(root.querySelector('[data-reticle-harness-settings]')).not.toBeNull();
+    });
   });
 
   it('once the credits are spent, says so in its row with the way to get more', () => {
@@ -439,5 +489,38 @@ describe('running the Harness from the panel', () => {
     expect(drive.stop).toHaveBeenCalled();
     views.paintDrive(undefined);
     expect(root.querySelector('[data-reticle-harness-run]')).not.toBeNull();
+  });
+});
+
+describe('whose coverage gate the HUD shows', () => {
+  const local = {
+    harnessGate: { percent: 87, unlocked: true },
+    prompt: 'local prompt',
+  };
+  const config: HarnessConfig = { provider: 'jev', harnessEnabled: false, harnessEntitled: true };
+
+  it("prefers the platform's verdict, which it enforces, keeping the local prompt when it sent none", () => {
+    const gate = harnessGateIn(local, {
+      ...config,
+      gate: {
+        unlocked: false,
+        percent: 75,
+        reason: 'Harness unlocks at 80% instrumentation. This app is at 75%: missing x.',
+      },
+    });
+    expect(gate).toEqual({
+      percent: 75,
+      unlocked: false,
+      reason: 'Harness unlocks at 80% instrumentation. This app is at 75%: missing x.',
+      prompt: 'local prompt',
+    });
+  });
+
+  it('falls back to the local score from an older platform', () => {
+    expect(harnessGateIn(local, config)).toEqual({
+      percent: 87,
+      unlocked: true,
+      prompt: 'local prompt',
+    });
   });
 });

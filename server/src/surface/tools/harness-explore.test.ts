@@ -511,9 +511,20 @@ describe('a workspace with no entitlement', () => {
     const result = await exploreApp(depsWithFlows([]), linked, {
       maxSteps: 1,
       driver: finishing(''),
-      configFetch: platformSays({ provider: 'jev' }),
+      configFetch: platformSays({ provider: 'jev', harnessEnabled: true }),
     });
     expect(result.drive).toBeDefined();
+  });
+
+  /** The Harness is opt-in: a platform that does not say it is on has not switched it on. */
+  it('refuses when the platform says nothing about the switch', async () => {
+    await expect(
+      exploreApp(depsWithFlows([]), linked, {
+        maxSteps: 1,
+        driver: finishing(''),
+        configFetch: platformSays({ provider: 'jev' }),
+      }),
+    ).rejects.toThrow(MSG_HARNESS_DISABLED);
   });
 });
 

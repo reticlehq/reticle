@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { CreditKind, HarnessConfigSchema } from './impact.js';
-import { creditsLeftText, creditsSpent, creditsUsedText } from './harness-credits.js';
+import {
+  SIGN_UP_PITCH,
+  creditsLeftText,
+  creditsSpent,
+  creditsUsageText,
+  creditsUsedText,
+} from './harness-credits.js';
 
 describe('the platform credits on the wire', () => {
   it('carries the grant kind, and still reads an older platform that sends none', () => {
@@ -58,5 +64,28 @@ describe('credits used up, said the same on the HUD and in the terminal', () => 
     expect(creditsUsedText({ used: 4000, limit: 4000, kind: CreditKind.PAID })).toEqual({
       said: "This month's credits are used. They renew over the next 30 days.",
     });
+  });
+});
+
+describe('creditsUsageText', () => {
+  it('says used and left by grant, and days only when the platform gave an end date', () => {
+    expect(creditsUsageText({ used: 120, limit: 500, kind: CreditKind.TRIAL, daysLeft: 9 })).toBe(
+      'Trial: 120 of 500 credits used · 380 left · 9 days left',
+    );
+    expect(creditsUsageText({ used: 120, limit: 500, kind: CreditKind.TRIAL })).toBe(
+      'Trial: 120 of 500 credits used · 380 left',
+    );
+    expect(creditsUsageText({ used: 2, limit: 10, kind: CreditKind.FREE })).toBe(
+      'Free: 2 of 10 credits used · 8 left',
+    );
+    expect(creditsUsageText({ used: 294, limit: 5000 })).toBe(
+      '294 of 5,000 credits used · 4,706 left',
+    );
+  });
+
+  it('signed out, pitches the free credits and the trial in one line', () => {
+    expect(SIGN_UP_PITCH).toBe(
+      'Sign up: 10 free credits to try Reticle Harness · add a card for a 500-credit, 14-day trial',
+    );
   });
 });

@@ -83,9 +83,14 @@ describe('recoveryFor — every known error carries an actionable next move', ()
   it('treats a switched-off or unclaimed harness as a decision, not a defect', () => {
     expect(
       recoveryFor(
-        'Autonomous driving is turned OFF for this project. Turn it back on in the Reticle dashboard.',
+        'The Reticle Harness is off for this project. The user can switch it on in the HUD.',
       ),
     ).toBe(RECOVERY.HARNESS_OFF);
+    expect(
+      recoveryFor(
+        'Harness unlocks at 80% instrumentation. This app is at 62%: missing stable test ids.',
+      ),
+    ).toBe(RECOVERY.HARNESS_LOCKED);
     expect(
       recoveryFor(
         'This workspace has no harness entitlement, so autonomous driving would run on Reticle\u2019s model budget.',

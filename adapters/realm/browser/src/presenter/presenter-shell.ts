@@ -1,5 +1,6 @@
 import { appModalOpen } from '@/dom/dom-ignore.js';
 import type { AgentLink, HarnessConfig, HarnessDrive } from '@reticlehq/core';
+import type { HarnessGateView } from './presenter-harness-row.js';
 import { PresenterReport, reportPanelHtml } from './presenter-report.js';
 import type { AccountState } from '@reticlehq/core';
 import { paintToolbarAccount, TOOLBAR_ACCOUNT_ATTR } from './presenter-workspace.js';
@@ -194,10 +195,10 @@ export class HudShell {
   paintAgent(link: AgentLink | undefined): void {
     this.#chatViews.paintAgent(link);
   }
-  paintHarness(config: HarnessConfig | undefined): void {
+  paintHarness(config: HarnessConfig | undefined, gate?: HarnessGateView): void {
     this.#pushedHarness = config;
-    this.#settings.paintHarness(config);
-    this.#chatViews.paintHarness(config);
+    this.#settings.paintHarness(config, gate);
+    this.#chatViews.paintHarness(config, gate);
     this.#repaintPromoIfMoved();
   }
 

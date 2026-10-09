@@ -31,6 +31,7 @@ import {
 } from './chrome/presenter-log.js';
 import { PRESENTER_CSS } from './presenter-styles.js';
 import { HudShell } from './presenter-shell.js';
+import { harnessGateIn } from './presenter-harness-row.js';
 import { parseImpactSnapshot } from './chrome/presenter-report-copy.js';
 import { scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import {
@@ -277,7 +278,10 @@ export class Presenter {
         // The one thing this HUD advertises, from the same snapshot as everything else it shows.
         this.#shell.paintOffer(snapshot.harnessOffer, snapshot.notices);
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
-        this.#shell.paintHarness(snapshot.harnessConfig);
+        this.#shell.paintHarness(
+          snapshot.harnessConfig,
+          harnessGateIn(snapshot.instrumentation, snapshot.harnessConfig),
+        );
         this.#shell.paintHarnessDrive(snapshot.harnessDrive);
         this.#shell.paintAgent(snapshot.agent);
         this.#shell.paintImpact(snapshot.project.counts.verdicts);

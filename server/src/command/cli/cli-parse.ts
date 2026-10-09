@@ -191,7 +191,7 @@ const HOOKS_FLAG = '--hooks';
 const JSON_FLAG = '--json';
 const NO_DRIVE_FLAG = '--no-drive';
 const NO_OPEN_FLAG = '--no-open';
-/** Connect and stop: no first flow, which init otherwise drives in the open tab of a linked project. */
+/** Connect and stop: no coverage summary and no prompt at the end. */
 const NO_FIRST_RUN_FLAG = '--no-first-run';
 const NO_AGENTS_FLAG = '--no-agents';
 /**

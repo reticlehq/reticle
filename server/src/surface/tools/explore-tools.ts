@@ -43,6 +43,7 @@ import { sessionRoot } from '@/memory/project/session-root.js';
 import { runTool } from './invoke-tool.js';
 import { driveVerdict, type RemoteDriveOutcome } from '@/features/harness/platform/remote-drive.js';
 import {
+  coverageRefusal,
   exploreApp,
   harnessAvailable,
   withLinkedCredential,
@@ -224,6 +225,9 @@ export async function answerExplore(
     // Billed to the one free drive the platform granted, never to another.
     ...('string' === typeof driveId ? { [ReticleEnv.DRIVE_ID]: driveId } : {}),
   };
+  // The coverage gate first: it is local, and the one thing to fix before anything else matters.
+  const locked = coverageRefusal(deps, sessionId);
+  if (locked !== undefined) throw new Error(locked);
   if (!harnessAvailable(env)) throw new Error(MSG_NO_HARNESS_KEY);
   const harness = randomUUID();
   const runId = harnessRunId(harness);

@@ -67,7 +67,7 @@ interface InitRuntimeArgs {
   readonly dryRun: boolean;
   readonly filesOnly?: boolean | undefined;
   readonly json?: boolean | undefined;
-  /** `--no-first-run` sets it false: connect, and drive no first flow. */
+  /** `--no-first-run` sets it false: connect, and stop without the coverage summary. */
   readonly firstRun?: boolean | undefined;
   readonly open?: boolean | undefined;
   readonly agents?: boolean | undefined;
@@ -131,7 +131,7 @@ export async function continueAfterInit(
   result: InitResult,
   io: RuntimePrintIo,
   cwd: string,
-  /** The first flow, driven once the connection is proved. See `FirstFlowPort`. */
+  /** init's ending once the connection is proved: coverage and the agent prompt. See `FirstFlowPort`. */
   firstFlow?: FirstFlowPort,
 ): Promise<void> {
   const port = parsed.port ?? RETICLE_DEFAULT_PORT;

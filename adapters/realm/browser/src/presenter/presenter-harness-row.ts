@@ -13,21 +13,33 @@ import {
   type HarnessConfig,
   type HarnessDrive,
 } from '@reticlehq/core';
-import { creditsLeftText, creditsSpent, creditsUsedText, type Credits } from '@reticlehq/core/hud';
+import {
+  SIGN_UP_PITCH,
+  creditsSpent,
+  creditsUsageText,
+  creditsUsedText,
+  type Credits,
+} from '@reticlehq/core/hud';
+import { esc } from './chrome/presenter-safe-html.js';
 import { ACCOUNT_SIGNIN_ATTR } from './presenter-account.js';
 import { personaPickHtml, personaCustomHtml, personaLabel } from './presenter-personas.js';
 
 export const HARNESS_ROW_TEXT = {
   RUN: 'Run Harness',
   STOP: 'Stop',
-  SIGNED_OUT: 'Sign in to use Harness',
+  SIGNED_OUT: SIGN_UP_PITCH,
   SIGN_IN: 'Sign in',
   UNLINKED: 'Not linked: run <code>reticle connect</code>',
   NOT_ENTITLED: 'Harness is not on your plan',
   NO_CREDITS: 'No Harness credits left',
   NO_PROVIDER: 'No model provider set',
   OFF: 'Harness is off',
+  /** At the coverage gate with the Harness off: it can be switched on now. */
+  canSwitchOn: (percent: number): string =>
+    `This app is at ${String(percent)}% instrumentation: Harness can be switched on`,
   TURN_ON: 'Turn on',
+  COPY_PROMPT: 'Copy prompt for your coding agent',
+  COPIED: 'Copied',
   SET_UP: 'Set up ↗',
   PLANS: 'See plans ↗',
   PLAN: 'Plan ↗',
@@ -38,10 +50,64 @@ export const HARNESS_ROW_TEXT = {
 
 /** Opens Settings on the Harness switch, the one place it lives. */
 export const HARNESS_SETTINGS_ATTR = 'data-reticle-harness-settings';
+/** Copies the prompt that closes the coverage gate. */
+export const HARNESS_COPY_PROMPT_ATTR = 'data-reticle-harness-copy-prompt';
+
+/** The Harness coverage gate, as the daemon pushes it on this tab's instrumentation. */
+export interface HarnessGateView {
+  percent: number;
+  unlocked: boolean;
+  reason?: string;
+  /** The prompt for the coding agent that closes the gate. Copied, never rendered. */
+  prompt?: string;
+}
+
+/**
+ * The gate the HUD shows: the platform's when it sent one (it enforces it), with the local prompt
+ * when it sent none; else the daemon's local score from this tab's instrumentation.
+ */
+export function harnessGateIn(
+  instrumentation: Readonly<Record<string, unknown>> | undefined,
+  config?: HarnessConfig,
+): HarnessGateView | undefined {
+  const local = localGateIn(instrumentation);
+  const platform = config?.gate;
+  if (platform === undefined) return local;
+  const prompt = platform.prompt ?? local?.prompt;
+  const reason = platform.unlocked ? undefined : (platform.reason ?? local?.reason);
+  return {
+    percent: platform.percent ?? local?.percent ?? 0,
+    unlocked: platform.unlocked,
+    ...(reason === undefined ? {} : { reason }),
+    ...(prompt === undefined ? {} : { prompt }),
+  };
+}
+
+/** The gate out of the loose `instrumentation` record, or undefined when an older daemon sent none. */
+function localGateIn(
+  instrumentation: Readonly<Record<string, unknown>> | undefined,
+): HarnessGateView | undefined {
+  const raw = instrumentation?.['harnessGate'];
+  if ('object' !== typeof raw || null === raw) return undefined;
+  const gate = raw as Record<string, unknown>;
+  const percent = gate['percent'];
+  const unlocked = gate['unlocked'];
+  if ('number' !== typeof percent || 'boolean' !== typeof unlocked) return undefined;
+  const reason = gate['reason'];
+  const prompt = instrumentation?.['prompt'];
+  return {
+    percent: Math.round(percent),
+    unlocked,
+    ...('string' === typeof reason ? { reason } : {}),
+    ...('string' === typeof prompt ? { prompt } : {}),
+  };
+}
 
 export interface HarnessRowState {
   account: AccountState | undefined;
   config: HarnessConfig | undefined;
+  /** This tab's coverage gate. Absent: an older daemon, which never locks. */
+  gate?: HarnessGateView | undefined;
   drive: HarnessDrive | undefined;
   /** Whether this panel can start and stop drives at all. */
   canDrive: boolean;
@@ -53,13 +119,16 @@ export interface HarnessRowState {
 }
 
 const row = (inner: string): string => `<div class="reticle-harness-row">${inner}</div>`;
+/** A row whose sentence wraps rather than truncates: one the person has to read whole. */
+const wrapRow = (inner: string): string =>
+  `<div class="reticle-harness-row reticle-harness-row-wrap">${inner}</div>`;
 const said = (text: string): string => `<span class="reticle-harness-said">${text}</span>`;
 const link = (href: string, label: string): string =>
   `<a class="reticle-harness-link" href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 
-/** "8 of 10 free credits", or nothing for an unbounded plan or none left (the row says that). */
+/** "Trial: 120 of 500 credits used · 380 left", or nothing for an unbounded plan or none left. */
 export function creditsShort(credits: Credits | undefined): string {
-  return credits === undefined || creditsSpent(credits) ? '' : creditsLeftText(credits);
+  return credits === undefined || creditsSpent(credits) ? '' : creditsUsageText(credits);
 }
 
 /** No credits left: the platform's sentence for the grant, and the one link that gets more. */
@@ -73,7 +142,7 @@ function creditsUsedRow(credits: Credits, planUrl: string): string {
       : CreditKind.TRIAL === credits.kind
         ? link(planUrl, HARNESS_ROW_TEXT.PLAN)
         : '';
-  return `<div class="reticle-harness-row reticle-harness-row-wrap">${said(text.said)}${action}</div>`;
+  return wrapRow(`${said(text.said)}${action}`);
 }
 
 /** The row for this state. Never more than one row, plus the custom box when Custom is picked. */
@@ -81,8 +150,22 @@ export function harnessRowHtml(s: HarnessRowState): string {
   // Unknown is not signed out: an older daemon, or the first push not here yet. Show nothing.
   if (s.account === undefined) return '';
   if (!s.account.signedIn)
-    return row(
+    return wrapRow(
       `${said(HARNESS_ROW_TEXT.SIGNED_OUT)}<button type="button" ${ACCOUNT_SIGNIN_ATTR} class="reticle-harness-link">${HARNESS_ROW_TEXT.SIGN_IN}</button>`,
+    );
+  if (s.drive !== undefined && s.canDrive)
+    return row(
+      `${said(HARNESS_ROW_TEXT.driving(s.startedAs === undefined ? undefined : personaLabel(s.startedAs), s.drive.steps))}<button type="button" data-reticle-harness-stop class="reticle-harness-run reticle-harness-stop">${HARNESS_ROW_TEXT.STOP}</button>`,
+    );
+  // The coverage gate before the platform's answers: it is this app's to fix, whatever the plan.
+  const gate = s.gate;
+  if (gate !== undefined && !gate.unlocked && gate.reason !== undefined)
+    return wrapRow(
+      `${said(esc(gate.reason))}${
+        gate.prompt === undefined
+          ? ''
+          : `<button type="button" ${HARNESS_COPY_PROMPT_ATTR} class="reticle-harness-link">${HARNESS_ROW_TEXT.COPY_PROMPT}</button>`
+      }`,
     );
   const config = s.config;
   if (config === undefined)
@@ -94,13 +177,9 @@ export function harnessRowHtml(s: HarnessRowState): string {
     return row(`${said(HARNESS_ROW_TEXT.NOT_ENTITLED)}${link(s.planUrl, HARNESS_ROW_TEXT.PLANS)}`);
   if (false === config.providerReady)
     return row(`${said(HARNESS_ROW_TEXT.NO_PROVIDER)}${link(s.setupUrl, HARNESS_ROW_TEXT.SET_UP)}`);
-  if (s.drive !== undefined && s.canDrive)
-    return row(
-      `${said(HARNESS_ROW_TEXT.driving(s.startedAs === undefined ? undefined : personaLabel(s.startedAs), s.drive.steps))}<button type="button" data-reticle-harness-stop class="reticle-harness-run reticle-harness-stop">${HARNESS_ROW_TEXT.STOP}</button>`,
-    );
   if (!config.harnessEnabled)
     return row(
-      `${said(HARNESS_ROW_TEXT.OFF)}<button type="button" ${HARNESS_SETTINGS_ATTR} class="reticle-harness-link">${HARNESS_ROW_TEXT.TURN_ON}</button>`,
+      `${said(gate === undefined ? HARNESS_ROW_TEXT.OFF : HARNESS_ROW_TEXT.canSwitchOn(gate.percent))}<button type="button" ${HARNESS_SETTINGS_ATTR} class="reticle-harness-link">${HARNESS_ROW_TEXT.TURN_ON}</button>`,
     );
   if (!s.canDrive) return '';
   return (

@@ -2,8 +2,8 @@
  * The half of setup that happens after the files are written.
  *
  * `init` wires a project; this gets the app running with the SDK inside it and proves a session
- * connected. That is where ONBOARDING ends. The first flow comes after it, in `first-flow.ts`,
- * driven through the daemon that already holds the tools — this file never drives.
+ * connected. That is where ONBOARDING ends. Then init says what Reticle sees and hands the first
+ * flow to the coding agent (`try-command.ts`'s `initFirstFlow`); nothing in init drives.
  *
  * Every effect is injected. That is not ceremony: the sequence has five phases, each with its own
  * way of going wrong, and the alternative to injecting them is a test that boots a real dev server
@@ -75,8 +75,7 @@ export interface SetupOutcome {
   readonly url?: string | undefined;
   readonly sessionId?: string | undefined;
   /**
-   * Always false from these phases, which never drive. `first-flow.ts` sets it when the first flow
-   * it drove after them was saved.
+   * Always false: init never drives, and the coding agent proves the first flow after it.
    */
   readonly flowSaved: boolean;
   /**

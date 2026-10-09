@@ -6,7 +6,7 @@ import { runAsAgent } from '@/hooks/coding-agents.js';
 import { takeHumanNotes } from './human-notes.js';
 import { takeDriveNotes } from '@/features/harness/drive-runs.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
-import { takePlatformMoment } from './platform-moment.js';
+import { agentNudge, takePlatformMoment } from './platform-moment.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
   type BrowserBrand,
@@ -692,6 +692,22 @@ async function dispatchTool<Ext>(
     answer !== undefined && deps.attachId !== undefined && currentDrivenBy() === undefined;
   // A Harness drive started or finished, from the HUD, the platform's chat or this agent: one line,
   // once. Not about the run this very result already reports.
+  // One-time advisories toward the platform and the Harness (`platform-moment.ts`), only on the agent's
+  // own calls, riding the same platform line as the moments above.
+  const nudge =
+    agentCall && answer !== undefined
+      ? await agentNudge({
+          deps,
+          tool: tool.name,
+          raw: answer,
+          isError: resultIsError(answer),
+          tab: session,
+          root: safeRoot(() => sessionRoot(deps, rawSessionId)),
+          harnessOn: () => impactSnapshot(artifactRoot)?.harnessConfig?.harnessEnabled,
+        })
+      : undefined;
+  const platformLine =
+    platform === undefined ? nudge : nudge === undefined ? platform : `${platform}\n${nudge}`;
   const drives = agentCall
     ? takeDriveNotes('string' === typeof answer?.['runId'] ? answer['runId'] : undefined)
     : [];
@@ -710,7 +726,7 @@ async function dispatchTool<Ext>(
     skew === undefined &&
     undelivered === undefined &&
     friction === undefined &&
-    platform === undefined &&
+    platformLine === undefined &&
     next === undefined
       ? raw
       : {
@@ -727,7 +743,7 @@ async function dispatchTool<Ext>(
           ...(prompt !== undefined ? { [EnvelopeKey.FEEDBACK_PROMPT]: prompt } : {}),
           ...(update !== undefined ? { [EnvelopeKey.UPDATE_AVAILABLE]: update } : {}),
           ...(skew !== undefined ? { [EnvelopeKey.VERSION_SKEW]: skew } : {}),
-          ...(platform !== undefined ? { [EnvelopeKey.PLATFORM]: platform } : {}),
+          ...(platformLine !== undefined ? { [EnvelopeKey.PLATFORM]: platformLine } : {}),
           ...(0 === drives.length ? {} : { [EnvelopeKey.HARNESS]: drives.join('\n') }),
           ...(notes === undefined ? {} : { [EnvelopeKey.CONTROL]: notes }),
           ...(undelivered !== undefined

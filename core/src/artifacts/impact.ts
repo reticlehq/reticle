@@ -216,7 +216,7 @@ export type CreditKind = (typeof CreditKind)[keyof typeof CreditKind];
  */
 export const HarnessConfigSchema = z.object({
   provider: z.string(),
-  /** The switch somebody set. The platform's default is on. */
+  /** The switch somebody set. Off for a new project: the Harness is opt-in. */
   harnessEnabled: z.boolean(),
   /** Whether this workspace may drive on OUR model spend. Never folded into the switch. */
   harnessEntitled: z.boolean(),
@@ -229,10 +229,25 @@ export const HarnessConfigSchema = z.object({
       limit: z.number().int().min(0),
       /** The grant they came from. Optional on the wire: an older platform omits it. */
       kind: z.enum([CreditKind.FREE, CreditKind.TRIAL, CreditKind.PAID]).optional(),
+      /** Whole days the grant has left, counted by the daemon from the platform's end date. */
+      daysLeft: z.number().int().min(0).optional(),
     })
     .optional(),
   /** The platform this answer came from, so the HUD's links go there and not to the hosted one. */
   platformUrl: z.string().optional(),
+  /**
+   * The platform's own Harness coverage gate, which it enforces. The HUD prefers it to the daemon's
+   * local score; absent from an older platform, which leaves the local score to decide.
+   */
+  gate: z
+    .object({
+      unlocked: z.boolean(),
+      /** floor(score × 100); absent before any app reported. */
+      percent: z.number().int().min(0).max(100).optional(),
+      reason: z.string().max(400).optional(),
+      prompt: z.string().max(4000).optional(),
+    })
+    .optional(),
 });
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 

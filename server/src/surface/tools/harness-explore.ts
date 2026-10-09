@@ -47,6 +47,8 @@ import {
 import { reticleToolset } from './harness-toolset.js';
 import { noteDriveLine } from '@/features/harness/drive-runs.js';
 import { checkExpect, checkGoals, goalsIn, type GoalCheck } from '@/features/harness/goals.js';
+import { instrumentationOf } from '@/portal/session/recorded-gaps.js';
+import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 
 export interface ExploreOptions {
   /** Who to be, or what to accomplish. Appended to the standing instruction. */
@@ -187,6 +189,32 @@ export async function withLinkedCredential(
     // and its absence is a routine answer; a drive must never fail because a JSON file was odd.
     return env;
   }
+}
+
+/** Introduces the prompt under a coverage refusal, so the agent knows it is for itself. */
+export const MSG_GATE_PROMPT_LEAD = 'To unlock it, do this (or hand it to your coding agent):';
+
+/**
+ * Why the Harness must not drive this tab's app yet, or undefined when it may: below the coverage
+ * gate (core's `instrumentation-coverage.ts`), one reason sentence and the prompt that closes it. Every Harness
+ * start passes here (an agent's explore, Run Harness, `reticle try`, the platform's chat), so the
+ * gate holds wherever a drive starts; every other tool works at any coverage. A tab that cannot be
+ * resolved is not refused here: the drive itself answers for a missing tab. Counted once per refusal.
+ */
+export function coverageRefusal(deps: ToolDeps, sessionId: string | undefined): string | undefined {
+  let tab: ReturnType<ToolDeps['sessions']['resolve']>;
+  try {
+    tab = deps.sessions.resolve(sessionId);
+  } catch {
+    return undefined;
+  }
+  const coverage = instrumentationOf(tab);
+  const gate = coverage.harnessGate;
+  if (gate.unlocked || gate.reason === undefined) return undefined;
+  getSessionMetrics().recordHarnessRefused(gate.percent);
+  return coverage.prompt === undefined
+    ? gate.reason
+    : `${gate.reason}\n\n${MSG_GATE_PROMPT_LEAD}\n${coverage.prompt}`;
 }
 
 /**
@@ -471,12 +499,13 @@ export function reconcileFlows(
  * control anything is worse than no control: somebody turns it off, watches Reticle drive their app
  * anyway, and now correctly distrusts every other switch in the product.
  *
- * Absent means ON. The platform's own default is on, and a machine that cannot reach the platform —
- * offline, CI, no link — must not silently lose a feature it was never told to stop using.
+ * Absent means OFF. The Harness is opt-in: a new project starts with it off, and an answer that does
+ * not say it is on is not a yes to spend credits on.
  */
 export const MSG_HARNESS_DISABLED =
-  'Autonomous driving is turned OFF for this project. Turn it back on in the Reticle dashboard ' +
-  '(Settings → Verification model), or drive the app yourself through the MCP tools.';
+  "The Reticle Harness is off for this project. The user can switch it on in the HUD's Settings " +
+  'or the Reticle dashboard (Settings → Verification model); until then, drive the app yourself ' +
+  'through the MCP tools.';
 
 /**
  * The other reason a drive can be refused, and it is NOT the same reason.

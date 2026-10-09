@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import { relative, sep } from 'node:path';
 import {
   LinkReportKey,
+  type CoverageCapability,
   LinkPath,
   type LinkAppGap,
   type LinkDevServer,
@@ -59,6 +60,8 @@ export interface AppTab extends DriveCandidate {
   channels?: string[];
   /** Instrumentation gaps this tab's verdicts recorded, newest first. */
   gaps?: LinkAppGap[];
+  /** Coverage capabilities that do not apply to this app. */
+  notApplicable?: CoverageCapability[];
 }
 
 export interface ReportedApp {
@@ -71,6 +74,7 @@ export interface ReportedApp {
   channels?: string[];
   gaps?: LinkAppGap[];
   adapters?: string[];
+  notApplicable?: CoverageCapability[];
 }
 
 /** What a report carries beside its apps. Every field additive; see `LinkReportKey`. */
@@ -195,6 +199,9 @@ export async function appsByPlatform(
         ? {}
         : { [LinkReportKey.GAPS]: tab.gaps }),
       ...(0 === tab.adapters.length ? {} : { [LinkReportKey.ADAPTERS]: tab.adapters }),
+      ...(tab.notApplicable === undefined
+        ? {}
+        : { [LinkReportKey.NOT_APPLICABLE]: tab.notApplicable }),
     });
   }
   return [...groups.values()].map(({ platform, apps }) => ({ platform, apps: [...apps.values()] }));
