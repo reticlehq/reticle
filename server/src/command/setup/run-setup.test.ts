@@ -80,10 +80,12 @@ describe('the whole sequence, when everything works', () => {
     expect(r.fallback).toEqual([]);
   });
 
-  // The stage that DOES prove a flow has to be named, or "connected" reads as "finished".
-  it('names the first run, so the caller knows this is not the end', async () => {
+  // "Connected" must not read as "finished": the first flow, which first-flow.ts drives or names,
+  // is what proves anything.
+  it('says nothing is verified yet, and that its own tab was not a lease', async () => {
     const r = await runSetupPhases(INPUT, world());
-    expect(r.notes.join(' ')).toContain('explore');
+    expect(r.notes.join(' ')).toContain('nothing is verified yet');
+    expect(r.leased).toBe(false);
   });
 
   it('opens the url the dev server announced, never one it composed', async () => {
@@ -466,6 +468,8 @@ describe('the connect proof without a system browser', () => {
     expect(r.ok).toBe(true);
     expect(w.released()).toBe(1);
     expect(w.lines.join(' ')).toMatch(/Reticle-owned headless browser/);
+    // The tab is gone, so no first flow can be driven in it.
+    expect(r.leased).toBe(true);
   });
 
   it('falls back to a lease when the system browser could not be opened', async () => {

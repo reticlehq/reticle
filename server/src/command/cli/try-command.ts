@@ -28,7 +28,9 @@ import {
   requestFreeDrive,
   type FreeDrive,
 } from '@/features/harness/platform/platform-drives.js';
-import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
+import { linkedCloudPort, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import { describeUnsynced, unsyncedRoots } from '@/memory/cloud/unsynced-roots.js';
+import { headlessByDefault } from '@/command/cli/daemon-start-options.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
   defaultPairingTokenDir,
@@ -332,4 +334,242 @@ export async function cmdTry(argv: readonly string[], cloudCommands: TryCloud): 
     out: (line) => process.stdout.write(`${line}\n`),
     fail: (line) => process.stderr.write(`${line}\n`),
   });
+}
+
+// ── `init`'s first flow ───────────────────────────────────────────────────────────────────────
+/**
+ * The first flow: what `init` does once the connection is proved. Here beside `try` because it is
+ * the same thing — one Harness drive on the platform's grant, summarised the same way — run in the
+ * tab `init` just proved instead of one Reticle opens.
+ *
+ * Getting started has three stages, and onboarding used to hand the third to the reader as a
+ * numbered list. With a linked project the Harness drives one flow itself, in the tab the person is
+ * already watching, and saves it, so the first thing on the dashboard's Flows page comes out of
+ * `init` rather than out of somebody remembering to ask an agent. Without a link there is no model
+ * to drive with: the Harness runs on the platform. Then the one next step is said, and nothing more.
+ *
+ * Every effect is a port, so each branch is tested without a daemon, a platform or a browser.
+ */
+/** Who the first drive is. The one journey every app has, whatever it is for. */
+export const FIRST_FLOW_PERSONA = 'a first-time visitor';
+/** Model turns in the first drive: enough for one journey, and a bound on what it costs. */
+export const FIRST_FLOW_MAX_STEPS = 20;
+/** The whole drive before `init` stops waiting for it. The drive itself keeps its own ceiling. */
+export const FIRST_FLOW_BUDGET_MS = 180_000;
+
+/** Why the first flow was not driven. Each is a run where a drive nobody asked for is wrong. */
+export const FirstFlowSkip = {
+  /** `--no-first-run`. */
+  FLAG: 'flag',
+  /** `--json`: an agent reads one object, and drives with its own tools. */
+  JSON: 'json',
+  /** `--no-open`: the person asked for no window, so there is no tab of theirs to drive in. */
+  NO_OPEN: 'no-open',
+  /** CI, or a box with no display: never a surprise drive, never a surprise bill. */
+  HEADLESS: 'headless',
+  /** The connect was proved in a Reticle-owned browser that has already closed. */
+  LEASED: 'leased',
+} as const;
+export type FirstFlowSkip = (typeof FirstFlowSkip)[keyof typeof FirstFlowSkip];
+
+export function firstFlowSkip(run: {
+  firstRun: boolean;
+  json: boolean;
+  openBrowser: boolean;
+  headless: boolean;
+  leased: boolean;
+}): FirstFlowSkip | undefined {
+  if (!run.firstRun) return FirstFlowSkip.FLAG;
+  if (run.json) return FirstFlowSkip.JSON;
+  if (!run.openBrowser) return FirstFlowSkip.NO_OPEN;
+  if (run.headless) return FirstFlowSkip.HEADLESS;
+  if (run.leased) return FirstFlowSkip.LEASED;
+  return undefined;
+}
+
+export interface FirstFlowRequest {
+  sessionId: string;
+  driveId: string;
+  persona: string;
+  maxSteps: number;
+}
+
+export interface FirstFlowPorts {
+  /** The credential `reticle connect` filed for this project, or null when it is not linked. */
+  linked: () => Promise<CloudConfig | null>;
+  /** The platform's grant for one drive. */
+  grant: (cloud: CloudConfig) => Promise<FreeDrive>;
+  /** One explore through the daemon, polled to its end: the tool's raw result. */
+  drive: (request: FirstFlowRequest) => Promise<unknown>;
+  note: (line: string) => void;
+}
+
+export interface FirstFlowOutcome {
+  readonly flowSaved: boolean;
+}
+
+/**
+ * What to do next when `init` did not drive: the agent route, which needs nothing, and the link that
+ * lets Reticle drive it. Printed on every run that ended without a first flow.
+ */
+export function proveOneFlowLines(url: string): string[] {
+  return [
+    'Next, prove one flow:',
+    `  1. Ask your coding agent: "Use Reticle to prove one flow in ${url}: drive it, and end ` +
+      'with reticle_act_and_wait and an until on the last step." Only reticle_act_and_wait and ' +
+      'reticle_assert produce a verdict.',
+    '  2. Or let Reticle drive it: run `reticle connect` (free, no card), then re-run ' +
+      '`reticle init` or press Run Harness in the HUD. The Harness runs on the Reticle platform, ' +
+      'so it needs a linked project.',
+  ];
+}
+
+const NOT_SAVED: FirstFlowOutcome = { flowSaved: false };
+
+const names = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((v): v is string => 'string' === typeof v) : [];
+
+export async function runFirstFlow(
+  sessionId: string,
+  url: string,
+  ports: FirstFlowPorts,
+): Promise<FirstFlowOutcome> {
+  const say = ports.note;
+  const cloud = await ports.linked().catch(() => null);
+  if (null === cloud) {
+    say('No first flow yet: this project is not linked, so there is no model to drive it with.');
+    for (const line of proveOneFlowLines(url)) say(line);
+    return NOT_SAVED;
+  }
+  const grant = await ports.grant(cloud);
+  if (!grant.granted) {
+    say(`No first flow yet: ${grant.message}`);
+    if (grant.hint !== undefined) say(grant.hint);
+    if (grant.needsCard) say(`Plans: ${planUrl(cloud.url)}`);
+    for (const line of proveOneFlowLines(url).slice(0, 2)) say(line);
+    return NOT_SAVED;
+  }
+  say('');
+  say(`Driving the first flow in your open tab, as ${FIRST_FLOW_PERSONA}. Watch it.`);
+  let result: unknown;
+  try {
+    result = await ports.drive({
+      sessionId,
+      driveId: grant.driveId,
+      persona: FIRST_FLOW_PERSONA,
+      maxSteps: FIRST_FLOW_MAX_STEPS,
+    });
+  } catch (error) {
+    say(`The first flow could not run: ${error instanceof Error ? error.message : String(error)}`);
+    return NOT_SAVED;
+  }
+  const refusal = refusalText(result);
+  if (refusal !== undefined) {
+    say(`The first flow did not run: ${refusal}`);
+    return NOT_SAVED;
+  }
+  const report = verdictOf(result, 'savedFlows') ?? {};
+  for (const line of summarizeTry(journeysOf(report, FIRST_FLOW_PERSONA))) say(line);
+  const saved = [...names(report['savedFlows']), ...names(report['rewroteFlows'])];
+  if (0 === saved.length) {
+    const why = report['note'] ?? report['error'];
+    say(
+      'The drive saved no flow' +
+        ('string' === typeof why ? `: ${why}` : '.') +
+        ' Prove one with your coding agent instead.',
+    );
+    return NOT_SAVED;
+  }
+  say(
+    `✓ Saved ${String(saved.length)} flow(s): ${saved.join(', ')}. Later runs replay ${
+      1 === saved.length ? 'it' : 'them'
+    } with no model in the loop; your tab stays open.`,
+  );
+  return { flowSaved: true };
+}
+
+/** The project's own `.reticle`, where the drive's flow and run land and where its link lives. */
+const projectRoot = (appDir: string): string =>
+  callerArtifactRoot(appDir) ?? join(appDir, ReticleDir.ROOT);
+
+/** The ports, wired to this machine: the project's link, the platform's grant, the daemon's tools. */
+export function nodeFirstFlowPorts(
+  appDir: string,
+  bridgePort: number,
+  pairingToken: string | undefined,
+  note: (line: string) => void,
+): FirstFlowPorts {
+  return {
+    linked: linkedCloudPort(createNodeFileSystem(), projectRoot(appDir), homedir(), process.env),
+    grant: (cloud) => requestFreeDrive(cloud, FreeDriveKind.EXPLORE),
+    drive: async (request) => {
+      const caller = await connectOverSse(endpointFor(bridgePort, pairingToken));
+      try {
+        return await exploreToEnd(caller, { ...request }, FIRST_FLOW_BUDGET_MS);
+      } finally {
+        await caller.close().catch(() => undefined);
+      }
+    },
+    note,
+  };
+}
+
+/**
+ * This project's runs and flows that will never reach the dashboard as things stand, one line each:
+ * not linked, no key for its host, flow sync off, or refused. A linked root's pending runs are left
+ * out, because the daemon sends them within seconds and saying so would be noise.
+ */
+export async function strandedWorkLines(appDir: string): Promise<string[]> {
+  const fs = createNodeFileSystem();
+  const cloud = () => resolveProjectCloud(fs, projectRoot(appDir), homedir(), process.env);
+  const roots = await unsyncedRoots(
+    [projectRoot(appDir)],
+    async () => {
+      const c = await cloud();
+      return null !== c.config && null !== c.projectId;
+    },
+    async () => (await cloud()).policy.flows,
+  );
+  return roots
+    .filter((entry) => !entry.linked || 0 < entry.flows)
+    .map((entry) => `⚠ ${describeUnsynced(entry, appDir)}`);
+}
+
+/** What `init` hands the first flow, once the connection is proved. */
+export interface FirstFlowContext {
+  appDir: string;
+  bridgePort: number;
+  pairingToken?: string | undefined;
+  url: string;
+  sessionId: string;
+  /** The proof came from a Reticle-owned browser, now closed. */
+  leased: boolean;
+  openBrowser: boolean;
+  /** False for `--no-first-run`. */
+  firstRun: boolean;
+  json: boolean;
+}
+
+/**
+ * The first flow as `init` runs it: drive it when nothing says not to, else name the next step; then
+ * say what this project holds that will never reach the dashboard. Never throws.
+ */
+export async function initFirstFlow(
+  ctx: FirstFlowContext,
+  say: (line: string) => void,
+): Promise<{ flowSaved: boolean }> {
+  const skip = firstFlowSkip({
+    ...ctx,
+    headless: headlessByDefault(process.env, process.platform),
+  });
+  let flowSaved = false;
+  if (undefined === skip) {
+    const ports = nodeFirstFlowPorts(ctx.appDir, ctx.bridgePort, ctx.pairingToken, say);
+    flowSaved = (await runFirstFlow(ctx.sessionId, ctx.url, ports)).flowSaved;
+  } else {
+    say('');
+    for (const line of proveOneFlowLines(ctx.url)) say(line);
+  }
+  for (const line of await strandedWorkLines(ctx.appDir).catch(() => [])) say(line);
+  return { flowSaved };
 }

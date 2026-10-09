@@ -83,6 +83,7 @@ import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';
 import { runInit, buildNodeIo } from '@reticlehq/init';
 import { continueAfterInit } from './setup/init/init-runtime.js';
+import { initFirstFlow } from './cli/try-command.js';
 import { handleDoctor } from './cli/cli-doctor.js';
 import { serverInitHost } from './setup/init/init-host.js';
 import { describeLicense } from '@/features/license/license.js';
@@ -186,7 +187,7 @@ async function handleInit(parsed: {
     },
     io,
   );
-  await continueAfterInit({ ...parsed, port }, result, io, cwd);
+  await continueAfterInit({ ...parsed, port }, result, io, cwd, initFirstFlow);
 }
 
 // `serve`, `stop` and `restart` live in `cli/lifecycle/daemon-lifecycle.ts`: one idea, and the

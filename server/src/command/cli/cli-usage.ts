@@ -34,9 +34,9 @@ interface CommandDoc {
   readonly detail?: string;
 }
 
-const INIT_DETAIL = `init wires the project, boots the app and proves a page connected. It does not drive.
-After it, have your agent drive one journey with reticle_act_and_wait and an \`until\`
-on its last step.
+const INIT_DETAIL = `init wires the project, boots the app and proves a page connected. With a linked
+project it then drives the first flow in your open tab and saves it; without one it names
+the next step (your coding agent, or reticle connect).
 
   --app <dir>        which app in a monorepo, when several are found
   --env KEY=VALUE    what the app needs to reach a usable state (repeatable)
@@ -50,6 +50,7 @@ on its last step.
   --no-open, --no-agents, --url <url>, --timeout <s>
                      runtime dials for CI, a headless box, or an app you already run
   --dry-run          show the plan without writing anything
+  --no-first-run     connect and stop; CI, --json and --no-open never drive
   --port N           the Reticle daemon port`;
 
 const VERIFY_DETAIL = `Drives the URL and verifies the saved flows. Exit 0 means every one passed.

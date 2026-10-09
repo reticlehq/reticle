@@ -191,6 +191,8 @@ const HOOKS_FLAG = '--hooks';
 const JSON_FLAG = '--json';
 const NO_DRIVE_FLAG = '--no-drive';
 const NO_OPEN_FLAG = '--no-open';
+/** Connect and stop: no first flow, which init otherwise drives in the open tab of a linked project. */
+const NO_FIRST_RUN_FLAG = '--no-first-run';
 const NO_AGENTS_FLAG = '--no-agents';
 /**
  * Restart the calling client so IT gets the tools.
@@ -240,6 +242,7 @@ export type CliResult =
       json: boolean;
       relaunch: boolean;
       open: boolean;
+      firstRun: boolean;
       agents: boolean;
       url: string | undefined;
       timeoutSeconds: number | undefined;
@@ -456,6 +459,7 @@ type InitFlags =
       json: boolean;
       relaunch: boolean;
       open: boolean;
+      firstRun: boolean;
       agents: boolean;
       url: string | undefined;
       timeoutSeconds: number | undefined;
@@ -476,6 +480,7 @@ function parseInitFlags(args: string[]): InitFlags {
   let hooks = false;
   let json = false;
   let open = true;
+  let firstRun = true;
   let relaunch = false;
   let agents = true;
   let url: string | undefined;
@@ -516,6 +521,8 @@ function parseInitFlags(args: string[]): InitFlags {
       json = true;
     } else if (arg === NO_OPEN_FLAG) {
       open = false;
+    } else if (arg === NO_FIRST_RUN_FLAG) {
+      firstRun = false;
     } else if (arg === RELAUNCH_FLAG) {
       relaunch = true;
     } else if (arg === NO_AGENTS_FLAG) {
@@ -563,6 +570,7 @@ function parseInitFlags(args: string[]): InitFlags {
     hooks,
     json,
     open,
+    firstRun,
     relaunch,
     agents,
     url,
@@ -679,6 +687,7 @@ export function parseCliArgs(
         hooks: r.hooks,
         json: r.json,
         open: r.open,
+        firstRun: r.firstRun,
         relaunch: r.relaunch,
         agents: r.agents,
         url: r.url,

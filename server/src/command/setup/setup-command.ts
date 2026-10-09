@@ -94,7 +94,32 @@ interface SetupCommandInput extends Omit<SetupInput, 'shape'> {
   readonly registerAgents: boolean;
   /** The bridge's pairing token, for the MCP transport a connect-proof lease is opened over. */
   readonly pairingToken?: string | undefined;
+  /** False for `--no-first-run`: connect, and drive nothing. */
+  readonly firstRun: boolean;
+  /** `--json`: an agent is reading, so nothing is driven on its behalf. */
+  readonly json: boolean;
+  /**
+   * What happens once the connection is proved: the first flow. A port, because driving it is the
+   * CLI's `try` machinery and this directory does not reach for that. Absent, nothing is driven.
+   */
+  readonly firstFlow?: FirstFlowPort | undefined;
 }
+
+/** The first flow, as `command/cli/try-command.ts` runs it. Structural, so setup imports nothing. */
+export type FirstFlowPort = (
+  ctx: {
+    appDir: string;
+    bridgePort: number;
+    pairingToken?: string | undefined;
+    url: string;
+    sessionId: string;
+    leased: boolean;
+    openBrowser: boolean;
+    firstRun: boolean;
+    json: boolean;
+  },
+  say: (line: string) => void,
+) => Promise<{ flowSaved: boolean }>;
 
 /** `electron` in either dependency list, read the same way init's desktop doctor reads it. */
 function hasElectronDependency(dir: string): boolean {
@@ -208,6 +233,40 @@ async function restartHandedOverServer(appDir: string): Promise<boolean> {
     await new Promise((done) => setTimeout(done, HANDED_OVER_EXIT_POLL_MS));
   }
   return stopped;
+}
+
+/**
+ * The first flow, inside the dev server's lifetime: the drive needs the app up, and the `finally`
+ * in `runSetupCommand` only stops a server that was not handed over. Its lines join the notes, so
+ * `--json` carries the next step too.
+ */
+async function afterConnect(
+  input: SetupCommandInput,
+  url: string,
+  sessionId: string,
+  outcome: SetupOutcome,
+  print: (line: string) => void,
+): Promise<Pick<SetupOutcome, 'flowSaved' | 'notes'>> {
+  const notes = [...outcome.notes];
+  if (input.firstFlow === undefined) return { flowSaved: false, notes };
+  const { flowSaved } = await input.firstFlow(
+    {
+      appDir: input.appDir,
+      bridgePort: input.bridgePort,
+      pairingToken: input.pairingToken,
+      url,
+      sessionId,
+      leased: true === outcome.leased,
+      openBrowser: input.openBrowser,
+      firstRun: input.firstRun,
+      json: input.json,
+    },
+    (line) => {
+      notes.push(line);
+      print(line);
+    },
+  );
+  return { flowSaved, notes };
 }
 
 export async function runSetupCommand(
@@ -355,8 +414,10 @@ export async function runSetupCommand(
       const log = server.logPath();
       if (undefined !== log) print(`The dev server keeps running; its output goes to ${log}`);
     }
+    if (!outcome.ok || undefined === outcome.url || undefined === outcome.sessionId) return outcome;
     return {
       ...outcome,
+      ...(await afterConnect(input, outcome.url, outcome.sessionId, outcome, print)),
     };
   } finally {
     releaseDaemon();

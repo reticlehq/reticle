@@ -12,7 +12,11 @@ import { InitConfirmation, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import { FEEDBACK_HINT, Framework, InitFailure, type InitResult } from '@reticlehq/init';
 import { confirmInstall, nodeConfirmDeps } from '@/command/setup/terminal/confirm.js';
 import { writeLicenseKey } from '@/command/setup/license-key.js';
-import { registerOtherAgents, runSetupCommand } from '@/command/setup/setup-command.js';
+import {
+  registerOtherAgents,
+  runSetupCommand,
+  type FirstFlowPort,
+} from '@/command/setup/setup-command.js';
 import { bridgeOccupied } from '@/command/setup/bringup/bridge-port.js';
 import {
   defaultPairingTokenDir,
@@ -63,7 +67,8 @@ interface InitRuntimeArgs {
   readonly dryRun: boolean;
   readonly filesOnly?: boolean | undefined;
   readonly json?: boolean | undefined;
-  readonly drive?: boolean | undefined;
+  /** `--no-first-run` sets it false: connect, and drive no first flow. */
+  readonly firstRun?: boolean | undefined;
   readonly open?: boolean | undefined;
   readonly agents?: boolean | undefined;
   /**
@@ -126,6 +131,8 @@ export async function continueAfterInit(
   result: InitResult,
   io: RuntimePrintIo,
   cwd: string,
+  /** The first flow, driven once the connection is proved. See `FirstFlowPort`. */
+  firstFlow?: FirstFlowPort,
 ): Promise<void> {
   const port = parsed.port ?? RETICLE_DEFAULT_PORT;
 
@@ -224,6 +231,9 @@ export async function continueAfterInit(
       pairingToken: readOrCreatePairingTokenSync(defaultPairingTokenDir()),
       env: collectEnv(parsed.env ?? []),
       openBrowser: false !== parsed.open,
+      firstRun: false !== parsed.firstRun,
+      json: true === parsed.json,
+      firstFlow,
       registerAgents: wantsAgents(parsed),
       phaseTimeoutMs:
         undefined === parsed.timeoutSeconds
@@ -313,13 +323,8 @@ export async function continueAfterInit(
       }
       if (outcome.ok) {
         io.print(
-          `✓ setup complete — ${outcome.url ?? 'the app'} is instrumented and a flow was driven.`,
-        );
-        // A passing flow shows the mechanism working. What the run SAW is the part nobody can get for
-        // themselves, and it deserves a line of its own rather than a paragraph that gets skimmed.
-        io.print(
-          '  Read the FINDINGS above before moving on: a flow can pass with a failed request or a ' +
-            'console error behind it, and that is the app, not the check.',
+          `✓ setup complete — ${outcome.url ?? 'the app'} is instrumented and its first flow is ` +
+            'saved. The tab stays open; a linked project sends the flow and its run to your dashboard.',
         );
         ask();
         return;
