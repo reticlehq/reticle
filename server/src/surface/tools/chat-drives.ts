@@ -49,9 +49,9 @@ import { announcedChannels, recordedGaps } from '../../portal/session/recorded-g
 import { probeDevServers } from '../../portal/session/dev-server/dev-server-probe.js';
 import {
   DriveOrigin,
+  onDriveChange,
   runningDrive,
   stopDrive,
-  type DriveRecord,
 } from '../../features/harness/drive-runs.js';
 import {
   FreeDriveKind,
@@ -59,7 +59,7 @@ import {
   requestFreeDrive,
   type FreeDrive,
 } from '../../features/harness/platform/platform-drives.js';
-import { HumanControlKind, type HarnessDrive, type ImpactSnapshot } from '@reticlehq/core';
+import { HumanControlKind } from '@reticlehq/core';
 
 /** Why a platform drive with no tab of its own runs no tool. */
 const NO_DRIVEN_TAB = 'No tab was picked for this drive, so no tool runs.';
@@ -408,13 +408,32 @@ export async function hudDrive(
   }
 }
 
-/** The impact snapshot, with the drive running on this tab when there is one. */
-export function withRunningDrive(
-  snapshot: ImpactSnapshot | undefined,
-  sessionId: string,
-): ImpactSnapshot | undefined {
-  const running: DriveRecord | undefined = runningDrive(sessionId);
-  if (running === undefined || snapshot === undefined) return snapshot;
-  const drive: HarnessDrive = { runId: running.harnessRun, steps: running.steps };
-  return { ...snapshot, harnessDrive: drive };
+/**
+ * The panel's Harness controls on a bridge: the switch writes through to the platform, so console
+ * and panel cannot disagree; Run and Stop drive, in the project of the tab that asked.
+ */
+export function attachHudHarness(
+  bridge: {
+    attachHarnessRequest(
+      handler: (
+        request: Parameters<typeof hudDrive>[2],
+        session: { id: string; artifactRoot?: string | undefined },
+      ) => void,
+    ): void;
+  },
+  daemon: {
+    /** Read when a control arrives: the daemon builds its deps after it wires the bridge. */
+    deps: () => ToolDeps;
+    /** Where a tab with no project of its own drives. */
+    root: string;
+    /** Repaint every panel, so a running drive shows its Stop button and a finished one hides it. */
+    repaint: () => void;
+  },
+  applySwitch: (root: string, on: boolean) => void,
+): void {
+  bridge.attachHarnessRequest((request, s) => {
+    const root = s.artifactRoot ?? daemon.root;
+    void hudDrive(daemon.deps(), s.id, request, (on) => applySwitch(root, on));
+  });
+  onDriveChange(daemon.repaint);
 }

@@ -10,7 +10,7 @@
  * No I/O and no tool surface: what to run and where to write it arrive as functions, so this stays
  * a sink the surface hands things to.
  */
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, type HarnessDrive, type ImpactSnapshot } from '@reticlehq/core';
 
 export const DriveStatus = {
   RUNNING: 'running',
@@ -292,4 +292,15 @@ function prune(): void {
     entries.delete(runId);
     byHarness.delete(entry.harness);
   }
+}
+
+/** The impact snapshot, with the drive running on this tab when there is one. */
+export function withRunningDrive(
+  snapshot: ImpactSnapshot | undefined,
+  sessionId: string,
+): ImpactSnapshot | undefined {
+  const running = runningDrive(sessionId);
+  if (running === undefined || snapshot === undefined) return snapshot;
+  const drive: HarnessDrive = { runId: running.harnessRun, steps: running.steps };
+  return { ...snapshot, harnessDrive: drive };
 }

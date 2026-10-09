@@ -62,8 +62,8 @@ import { startVerifyServer } from './judgement/runs/verify-server.js';
 import { createMcpServer } from './surface/mcp/mcp.js';
 import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
-import { hudDrive, startChatDrives, withRunningDrive } from './surface/tools/chat-drives.js';
-import { onDriveChange } from './features/harness/drive-runs.js';
+import { attachHudHarness, startChatDrives } from './surface/tools/chat-drives.js';
+import { withRunningDrive } from './features/harness/drive-runs.js';
 import { runTool } from './surface/tools/invoke-tool.js';
 import {
   SessionReaper,
@@ -679,14 +679,11 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   bridge.attachSessionReady((s) =>
     accountFiles.watch(join(s.artifactRoot ?? reticleRoot, ReticleDir.CLOUD_LINK_FILE)),
   );
-  // The panel's Harness controls: the switch writes through to the platform; Run and Stop drive.
-  bridge.attachHarnessRequest((request, s) => {
-    const root = s.artifactRoot ?? reticleRoot;
-    void hudDrive(deps, s.id, request, (on) =>
-      applyHarnessSwitch(configForRoot, root, on, platformEnvFor(root)),
-    );
-  });
-  onDriveChange(() => repaint());
+  attachHudHarness(
+    bridge,
+    { deps: () => deps, root: reticleRoot, repaint: () => repaint() },
+    (r, on) => applyHarnessSwitch(configForRoot, r, on, platformEnvFor(r)),
+  );
   // Scope auto-selection to the active project (from .reticle.json) so a stray tab from another app is
   // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
   // Scope + the no-session diagnosis: "no browser session connected" is the error that ends most
