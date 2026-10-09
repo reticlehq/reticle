@@ -175,8 +175,11 @@ export interface AppReportDeps {
   /** What this daemon can do for the platform: it offers a person only what is here. */
   capabilities: readonly LinkCapability[];
   apps: () => Promise<{ platform: Platform; apps: ReportedApp[] }[]>;
-  /** Open an app so it connects: one somebody asked to bring back. A throw is logged, never fatal. */
-  open: (url: string) => Promise<void>;
+  /**
+   * Open an app so it connects: one somebody asked to bring back, named by its app key so the tab
+   * writes into that app's own `.reticle`. A throw is logged, never fatal.
+   */
+  open: (url: string, appKey?: string) => Promise<void>;
   /** A drive is waiting for the project this credential is for. */
   drivePending: (platform: Platform) => void;
   /**
@@ -238,7 +241,7 @@ export function startAppReports(deps: AppReportDeps): AppReports {
             if ('string' !== typeof key || 'string' !== typeof url || open.has(key)) continue;
             open.add(key);
             deps.log?.(`reticle: opening ${url}, asked for from the platform chat`);
-            await deps.open(url).catch((error: unknown) => {
+            await deps.open(url, key).catch((error: unknown) => {
               deps.log?.(`reticle: could not open ${url}: ${String(error)}`);
             });
           }

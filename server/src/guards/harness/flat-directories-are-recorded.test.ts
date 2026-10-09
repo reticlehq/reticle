@@ -103,7 +103,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * a shallow walk over the contract's own type belongs beside the contract. Moving it here took a
    * cross-layer reach out of the server and left the file count as the only cost.
    */
-  'core/src/verdict': 16,
+  'core/src/verdict': 17,
   // 17 since `hold.ts`: `clampHoldMs` is the bound BOTH input paths clamp `holdMs` with, so it
   // belongs to the contract rather than to either caller. The reason it is a file of its own rather
   // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
@@ -308,7 +308,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `dir -> resolve` and `dir -> project`, turning a leaf directory into one that reaches for four
   // others. A flat file is cheaper than a new mutual pair. Group them when the address question
   // stops needing the caller's dependencies to answer it.
-  'server/src/memory/project': 12,
+  'server/src/memory/project': 14,
   // 11 when `memory-scope.ts` landed: which project a shared-memory READ is about, on the wire and
   // in the response. Recorded rather than grouped, for the sibling reason above it. Its natural
   // group would be `cloud/memory/`, and a directory named `memory` beside `server/src/memory` is a

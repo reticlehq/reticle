@@ -6,10 +6,11 @@
  * is `<repo>/.reticle/cloud.json`. Auth for a command = `RETICLE_API_KEY` env (agent) OR the login token.
  */
 import { apiKeyFrom } from '@reticlehq/core';
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
@@ -21,6 +22,7 @@ import {
 } from '@/memory/cloud/memory-scope.js';
 import { applyCredential, findCredential } from './auth/cloud-keystore.js';
 import { defaultProjectFor } from './project-name.js';
+import { linkDirectoryFrom } from '@/memory/project/link-directory.js';
 import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
 import { normalizeUrl } from './auth/cloud-session.js';
 import { cmdLogin, cmdLogout } from './cloud-login.js';
@@ -184,24 +186,32 @@ const resolveProjectId = async (url: string, token: string, wanted: string): Pro
 };
 
 /**
+ * The `.reticle` this folder's commands read and write: the project `link` binds (see
+ * `linkDirectoryFor`), so `sync` from a monorepo root reaches the app it linked — unless only this
+ * folder holds a link, made before `link` followed the project, which keeps working.
+ */
+const linkedRoot = (): string => {
+  const project = join(linkDirectoryFrom(process.cwd()), RETICLE_DIR);
+  const here = join(process.cwd(), RETICLE_DIR);
+  const onlyHere =
+    !existsSync(join(project, CLOUD_LINK_FILE)) && existsSync(join(here, CLOUD_LINK_FILE));
+  return onlyHere ? here : project;
+};
+
+/**
  * `reticle whoami` — the one call an agent (or a confused human) makes to know its state: who am I logged
  * in as, and is THIS repo attached to a cloud project (and with what sync policy / verify mode)?
  */
 const cmdWhoami = async (): Promise<number> => {
   const session = await readSession();
   const fs = createNodeFileSystem();
-  const cloud = await resolveProjectCloud(
-    fs,
-    join(process.cwd(), RETICLE_DIR),
-    homedir(),
-    process.env,
-  );
+  const cloud = await resolveProjectCloud(fs, linkedRoot(), homedir(), process.env);
   /*
    * The sync half of "what is my state". Without it the honest answer to "why does the dashboard
    * look old?" was to go and read a JSON file — and the two failure modes a person actually hits
    * (nothing has synced yet, and the last attempt errored) looked identical from out here.
    */
-  const reticleRoot = join(process.cwd(), RETICLE_DIR);
+  const reticleRoot = linkedRoot();
   const state = readCloudState(reticleRoot);
   const decisions = Object.keys(readCloudIssues(reticleRoot).triage).length;
   emit({
@@ -307,7 +317,12 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
    * Re-running `link` is ordinary — rotating a key, repointing an environment — and it must land in
    * the project this repo already reports to, or its history splits in two without saying so.
    */
-  const priorLink = await readJson(join(process.cwd(), RETICLE_DIR, CLOUD_LINK_FILE));
+  // The project's own folder, which is where a session from here writes its runs. A link made before
+  // this, in the folder `link` was run from, is still read as the prior binding.
+  const projectDir = linkDirectoryFrom(process.cwd());
+  const priorLink =
+    (await readJson(join(projectDir, RETICLE_DIR, CLOUD_LINK_FILE))) ??
+    (await readJson(join(process.cwd(), RETICLE_DIR, CLOUD_LINK_FILE)));
   const priorProjectId =
     'object' === typeof priorLink && priorLink !== null
       ? (priorLink as Record<string, unknown>)['projectId']
@@ -355,7 +370,7 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
      * project id is only as distinct as the ids are.
      */
     const fallback = defaultProjectFor(
-      basename(process.cwd()),
+      basename(projectDir),
       'string' === typeof priorProjectId ? priorProjectId : undefined,
     );
     const targetId =
@@ -431,7 +446,7 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
     return 2;
   }
 
-  const reticleDir = join(process.cwd(), RETICLE_DIR);
+  const reticleDir = join(projectDir, RETICLE_DIR);
   await mkdir(reticleDir, { recursive: true });
   const linkPath = join(reticleDir, CLOUD_LINK_FILE);
   const prev = await readJson(linkPath);
@@ -487,6 +502,10 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
    * this can be read aloud, pasted into an issue, or left in a terminal without leaking anything.
    */
   hint(`bound this repo to project "${projectName}"`);
+  if (projectDir !== resolve(process.cwd()))
+    hint(
+      `linked ${relative(process.cwd(), projectDir)}: that is where this app's runs are written`,
+    );
   hint(
     reusedKey
       ? `reusing key ${keyHint(key)} — already stored in ${credPath}, not in your repo`
@@ -508,7 +527,7 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
    * correct, and the missing half is one command away. Refusing would strand somebody who links
    * before they install, which is a legitimate order to work in.
    */
-  if (!(await createNodeFileSystem().exists(join(process.cwd(), RETICLE_CONFIG_BASENAME)))) {
+  if (!(await createNodeFileSystem().exists(join(projectDir, RETICLE_CONFIG_BASENAME)))) {
     hint(
       `no ${RETICLE_CONFIG_BASENAME} here: this app's runs reach this binding only while its dev ` +
         'server runs with the Reticle build plugin, which announces it. Run `reticle init` in the app ' +
@@ -576,7 +595,7 @@ const cmdConnect = async (argv: readonly string[]): Promise<number> => {
 /** `reticle config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]`. */
 const cmdConfig = async (argv: readonly string[]): Promise<number> => {
   const f = flags(argv);
-  const linkPath = join(process.cwd(), RETICLE_DIR, CLOUD_LINK_FILE);
+  const linkPath = join(linkedRoot(), CLOUD_LINK_FILE);
   const raw = await readJson(linkPath);
   if (null === raw || typeof raw !== 'object') {
     err('no .reticle/cloud.json here — run `reticle link` first');
@@ -623,7 +642,7 @@ const cmdConfig = async (argv: readonly string[]): Promise<number> => {
  */
 const cmdSync = async (argv: readonly string[]): Promise<number> => {
   const fs = createNodeFileSystem();
-  const reticleRoot = join(process.cwd(), RETICLE_DIR);
+  const reticleRoot = linkedRoot();
   const cloud = await resolveProjectCloud(fs, reticleRoot, homedir(), process.env);
   if (null === cloud.config) {
     err(cloud.reason ?? 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY');
@@ -703,12 +722,7 @@ const repoCloud = async (): Promise<{
   projectId: string | null;
 }> => {
   const fs = createNodeFileSystem();
-  const cloud = await resolveProjectCloud(
-    fs,
-    join(process.cwd(), RETICLE_DIR),
-    homedir(),
-    process.env,
-  );
+  const cloud = await resolveProjectCloud(fs, linkedRoot(), homedir(), process.env);
   if (null === cloud.config)
     throw new Error(
       cloud.reason ?? 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY',

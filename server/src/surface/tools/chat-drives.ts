@@ -6,7 +6,7 @@
  * app, and keeping them together is what stops a drive attached to one app landing in another that
  * happens to be on the same port. See `local-apps.ts` and `remote-drive.ts` for each half.
  */
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { homedir, hostname } from 'node:os';
 import type { SessionInfo } from '../../portal/session/session-info.js';
 import { LinkCapability, ReticleTool, asRecord, type PresenterTone } from '@reticlehq/core';
@@ -15,7 +15,7 @@ import { reticleToolset } from './harness-toolset.js';
 import type { AttachedApp } from '../../features/harness/platform/remote-drive.js';
 import type { ToolDeps } from './tool-kit.js';
 import type { FileSystemPort } from '../../memory/project/fs/fs-port.js';
-import { projectDirFor } from '../../memory/project/session-root.js';
+import { projectDirFor, sessionRoot } from '../../memory/project/session-root.js';
 import { driveFrame } from '../../features/visual/visual-tools.js';
 import { LEASE_ACQUIRE_TOOL } from './lease-tools.js';
 import {
@@ -122,9 +122,19 @@ export function startChatDrives(
     )
       throw new Error(NOT_AN_APP_ADDRESS);
   };
-  const open = async (url: string): Promise<void> => {
+  /**
+   * The `.reticle` each reported app writes into, learned from its tabs. A tab the chat opens for an
+   * app is leased into that root: resolved from the page alone, an app with no project id would land
+   * in `unmatched/`, which nothing syncs.
+   */
+  const rootByApp = new Map<string, string>();
+  const claimFor = (appKey: string | undefined): { root?: string } => {
+    const root = appKey === undefined ? undefined : rootByApp.get(appKey);
+    return root === undefined ? {} : { root };
+  };
+  const open = async (url: string, appKey?: string): Promise<void> => {
     openable(url);
-    await runTool(LEASE_ACQUIRE_TOOL, deps, { url });
+    await runTool(LEASE_ACQUIRE_TOOL, deps, { url, ...claimFor(appKey) });
   };
 
   const pick = (
@@ -134,7 +144,13 @@ export function startChatDrives(
   ): Promise<string | null | undefined> =>
     undefined === app
       ? pickOwnDriveSession(sessions.list(), goal, key, sessionKey)
-      : pickAppTab(app, goal, () => sessions.list(), appOf, open).then(async (id) =>
+      : pickAppTab(
+          app,
+          goal,
+          () => sessions.list(),
+          appOf,
+          (url) => open(url, app.key),
+        ).then(async (id) =>
           // The app the platform named must be one this credential's project owns.
           'string' === typeof id && (await sessionKey(id)) !== key ? null : id,
         );
@@ -153,6 +169,7 @@ export function startChatDrives(
               url,
               ...(headed ? { headed } : {}),
               ...(hud === undefined ? {} : { hud }),
+              ...claimFor(app?.key),
             }),
           );
           const id = lease['sessionId'];
@@ -199,7 +216,9 @@ export function startChatDrives(
         serverOptionsFromEnv(await withLinkedCredential(deps, env)),
         machine.id,
         async (tab) => {
-          const dir = projectDirFor(deps, tab.sessionId);
+          const root = sessionRoot(deps, tab.sessionId);
+          const dir = dirname(root);
+          rootByApp.set(appKeyOf(machine.id, dir, tab.projectId), root);
           const platform = await sessionCloud(tab.sessionId);
           return {
             dir,

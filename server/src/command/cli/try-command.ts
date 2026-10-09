@@ -36,6 +36,7 @@ import {
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { probeDaemon, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
 import { readProjectPort } from '@/command/cli/ports/resolve/cli-port.js';
+import { callerArtifactRoot } from '@/memory/project/link-directory.js';
 import { DAEMON_INNER_COMMAND, PORT_FLAG } from '@/command/cli/cli-parse.js';
 import {
   acquireLease,
@@ -294,6 +295,8 @@ async function ensureTryDaemon(port: number): Promise<string | undefined> {
 async function driveThroughDaemon(
   port: number,
   request: { url: string; driveId: string; persona?: string },
+  /** Where the drive's run must land: the folder `try` waits on and pushes from. */
+  reticleRoot: string,
 ): Promise<TryDrive> {
   const unavailable = await ensureTryDaemon(port);
   if (unavailable !== undefined) return { journeys: [], runIds: [], error: unavailable };
@@ -302,7 +305,7 @@ async function driveThroughDaemon(
   try {
     // Headed whatever the daemon was started as: the point of `try` is watching it happen. An app
     // with no Reticle SDK gets one supplied by the lease.
-    const opened = await acquireLease(caller, request.url, true);
+    const opened = await acquireLease(caller, request.url, true, reticleRoot);
     if ('failed' in opened) return { journeys: [], runIds: [], error: opened.failed.join('\n') };
     try {
       const drove = await caller.call(
@@ -360,12 +363,14 @@ export async function cmdTry(argv: readonly string[], cloudCommands: TryCloud): 
     return EXIT_FAIL;
   }
   const cwd = process.cwd();
-  const reticleRoot = join(cwd, ReticleDir.ROOT);
+  // The project this folder belongs to, else this folder: the lease writes the run here, and this is
+  // where try waits for it and pushes it from — wherever the daemon happened to be started.
+  const reticleRoot = callerArtifactRoot(cwd) ?? join(cwd, ReticleDir.ROOT);
   const port = tryPort(cwd);
   return runTry(parsed, {
     linked: linkedCloudPort(createNodeFileSystem(), reticleRoot, homedir(), process.env),
     requestDrive: (cloud) => requestFreeDrive(cloud),
-    drive: (request) => driveThroughDaemon(port, request),
+    drive: (request) => driveThroughDaemon(port, request, reticleRoot),
     sync: async (runIds) => {
       await waitForRuns(reticleRoot, runIds);
       return EXIT_OK === (await cloudCommands.push());

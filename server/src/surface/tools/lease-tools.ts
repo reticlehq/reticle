@@ -32,6 +32,7 @@ import {
   watchersToNotify,
 } from '@/portal/session/lease-visibility.js';
 import { reticleStateHome } from '@/command/daemon/daemon.js';
+import { claimArtifactRoot, dropArtifactRootClaim } from '@/memory/project/root-claims.js';
 import {
   LeaseNotReadyReason,
   RETICLE_URL_PARAM,
@@ -395,6 +396,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .optional()
       .describe('How the HUD starts on the page: shown (default), hidden, or removed.'),
     permissions: LEASE_PERMISSIONS_ARG,
+    root: z
+      .string()
+      .optional()
+      .describe(
+        "Absolute path of the .reticle folder this lease's runs belong in — the caller's project. Without it, the page's project id decides, and a page with none lands in ~/.reticle/unmatched, which nothing syncs.",
+      ),
   },
   outputSchema: {
     sessionId: z.string(),
@@ -465,6 +472,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       if (refusal !== undefined) throw new Error(refusal);
     }
     const projectId = asString(args['projectId']);
+    const root = asString(args['root']);
     const headed = true === args['headed'];
     const hud = Object.values(HudVisibility).find((v) => v === args['hud']);
     const permissions = parseLeasePermissions(args['permissions']);
@@ -560,6 +568,8 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         await pool.release(existing);
       }
       const sessionId = newLeaseId();
+      // Before the page can dial in: the session is stamped with its root the moment it registers.
+      if (root !== undefined) claimArtifactRoot(sessionId, root);
       const navUrl = appendReticleParams(url, sessionId, projectId, hud);
       let lease;
       try {
@@ -693,6 +703,7 @@ const LEASE_RELEASE_TOOL: ToolDef = {
     // ask which project it belonged to.
     const projectId = deps.sessions.get(sessionId)?.projectId;
     await pool.release(sessionId);
+    dropArtifactRootClaim(sessionId);
     // Only once the LAST lease is gone. Announcing "live again" while another lease still drives
     // would be a lie, and a HUD that says the wrong thing is worse than one that says nothing.
     if (0 === pool.activeCount()) tellWatchers(deps, projectId, AGENT_DRIVING_HERE_AGAIN);

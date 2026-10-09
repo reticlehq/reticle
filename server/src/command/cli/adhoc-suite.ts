@@ -133,6 +133,8 @@ export interface AdhocExploreOptions {
   connect?: (endpoint: URL) => Promise<ToolCaller>;
   /** The tabs the daemon has connected. See runAdhocVerdict. */
   sessions: () => Promise<readonly { url: string }[]>;
+  /** The caller's project `.reticle`: a lease opened here writes its runs there. */
+  root?: string;
 }
 
 /**
@@ -160,7 +162,7 @@ export async function runAdhocExplore(options: AdhocExploreOptions): Promise<Adh
   }
   let leased: string | undefined;
   try {
-    const opened = await leaseIfNoTab(caller, options.url, options.sessions);
+    const opened = await leaseIfNoTab(caller, options.url, options.sessions, options.root);
     if ('failed' in opened) return { code: 1, lines: ['status: unverifiable', ...opened.failed] };
     leased = opened.leased;
     const pin = leased === undefined ? {} : { sessionId: leased };
