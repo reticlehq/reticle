@@ -48,7 +48,7 @@ describe('unsynced roots', () => {
 
   it('tells an unlinked folder to link, and a linked one to sync', () => {
     expect(describeUnsynced({ root: '/w/apps/web/.reticle', runs: 31, linked: false }, '/w')).toBe(
-      '31 run(s) in apps/web/.reticle were never sent: run `reticle link` there',
+      '31 run(s) in apps/web/.reticle were never sent: run `reticle connect` there',
     );
     expect(describeUnsynced({ root: '/w/.reticle', runs: 2, linked: true }, '/w')).toContain(
       '`reticle sync`',

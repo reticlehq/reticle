@@ -20,7 +20,7 @@ import {
   type VerifyPorts,
 } from './cli-verify.js';
 import { PortPresence } from '../daemon/binding/port-presence.js';
-import { CLI_USAGE } from './cli-parse.js';
+import { renderHelp } from './cli-usage.js';
 import { verifyResults } from './verify-results.js';
 
 const NOW = 1_700_000_000_000;
@@ -369,8 +369,8 @@ describe('the run is pushed with the linked credential', () => {
 });
 
 describe('the HTTP transport is named wherever --expect refuses', () => {
-  it('CLI_USAGE and the daemon-needed refusal both point at http-transport', () => {
-    expect(CLI_USAGE).toContain('http-transport');
+  it('verify --help and the daemon-needed refusal both point at http-transport', () => {
+    expect(renderHelp('verify')).toContain('http-transport');
     expect(expectNeedsDaemonMessage(4400, PortPresence.FOREIGN)).toContain('http-transport');
   });
 });

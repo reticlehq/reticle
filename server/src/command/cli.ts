@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 import { hudSignIn } from './cli/cloud-login.js';
 import { handleSetupMcp, handleSetupInstall } from './cli/setup-mcp-cli.js';
-import { reportStepFromCli, reportTutorialShown } from './cli-onboarding.js';
-import { runDemoTour } from './cli/demo/demo-run.js';
-
-import { renderTutorial } from './cli/tutorial.js';
+import { reportStepFromCli } from './cli-onboarding.js';
 import { pathToFileURL } from 'node:url';
 import { openFailureNote, openLaunchFailureNote } from './cli/answers/open-note.js';
 import { realpathSync } from 'node:fs';
@@ -28,13 +25,7 @@ import {
 import { pickDaemonPortToBind } from './daemon/binding/free-port.js';
 import { isSameOrAbove, portForInit, portFromEnv } from './setup/init/init-port.js';
 import { daemonStartOptions } from './cli/daemon-start-options.js';
-import {
-  handleWatch,
-  handleCapsules,
-  handleGate,
-  loadNamedFlows,
-  resolveChangedFiles,
-} from './cli/cli-flow-commands.js';
+import { handleGate, loadNamedFlows, resolveChangedFiles } from './cli/cli-flow-commands.js';
 import {
   RETICLE_DEFAULT_PORT,
   ReticleDir,
@@ -52,7 +43,7 @@ import { handleUpdate, handleRollback } from './cli/cli-update-commands.js';
 import { headlessByDefault } from './cli/daemon-start-options.js';
 
 import { startDaemon } from '@/index.js';
-import { isCloudCommand, runCloudCommand } from './cli/cloud-cli.js';
+import { accountStatusFields, isCloudCommand, runCloudCommand } from './cli/cloud-cli.js';
 import { SERVER_VERSION } from './version/identity/server-version.js';
 import { log } from '@/log.js';
 import {
@@ -90,7 +81,6 @@ import { fetchStatus } from './daemon/binding/daemon-status-probe.js';
 import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';
-import { summarizeHunt, type HuntAnomaly, type HuntRun } from '@/judgement/hunt/hunt-report.js';
 import { runInit, buildNodeIo } from '@reticlehq/init';
 import { continueAfterInit } from './setup/init/init-runtime.js';
 import { handleDoctor } from './cli/cli-doctor.js';
@@ -122,7 +112,9 @@ import {
   CLI_USAGE,
   dialsTheDaemon,
 } from './cli/cli-parse.js';
-import { handleFeedback, handleIdentify, handleTelemetry } from '@/telemetry/feedback-cli.js';
+import { renderHelp } from './cli/cli-usage.js';
+import { RENAMED_COMMANDS, renamedNote } from './cli/cli-parse-grammar.js';
+import { handleFeedback, handleTelemetry } from '@/telemetry/feedback-cli.js';
 import { installDaemonTelemetry } from '@/telemetry/daemon-telemetry.js';
 import { reportCliRun } from '@/telemetry/cli-telemetry.js';
 
@@ -221,7 +213,10 @@ export function reportStatus(fields: Record<string, unknown>, json: boolean): vo
 }
 
 export async function handleStatus(port: number, json = false): Promise<void> {
-  const report = (fields: Record<string, unknown>): void => reportStatus(fields, json);
+  // A broken session file must not cost the reader the rest of the status.
+  const account = await accountStatusFields().catch(() => ({}));
+  const report = (fields: Record<string, unknown>): void =>
+    reportStatus({ ...fields, ...account }, json);
   const pid = readPid(port);
   // Durable, so it survives the daemon idling out — which is the state `status` is most often run in.
   const projectId = readProjectId(process.cwd());
@@ -367,41 +362,6 @@ async function handleAffected(files: string[], since: string | undefined): Promi
     });
   } catch (error) {
     log('reticle_affected_failed', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-/**
- * `reticle hunt <dir>` — aggregate crawl reports from many checkouts into one number.
- *
- * Detection already exists (`reticle_crawl`). This is the arithmetic that turns a pile of runs into
- * the claim worth making: over N already-merged, already-green changes, how many carried a candidate
- * false green? No control arm is needed, because those changes SHIPPED — the counterfactual is
- * already established, which is what makes this the cheapest credible evidence available.
- *
- * Each file in <dir> is one crawl result. Producing them is a shell loop over a commit range:
- * check out, boot the app, `reticle_crawl`, write the JSON here.
- */
-async function handleHunt(dir: string): Promise<void> {
-  try {
-    const fs = createNodeFileSystem();
-    const names: string[] = await fs.readdir(dir);
-    const runs: HuntRun[] = [];
-    for (const name of names.filter((n) => n.endsWith('.json'))) {
-      const raw = await fs.readFile(join(dir, name));
-      if (raw === undefined) continue;
-      const parsed: unknown = JSON.parse(raw);
-      const report = parsed as { anomalies?: HuntAnomaly[]; stepsRun?: number; label?: string };
-      runs.push({
-        label: report.label ?? name.replace(/\.json$/, ''),
-        anomalies: report.anomalies ?? [],
-        ...(report.stepsRun === undefined ? {} : { stepsRun: report.stepsRun }),
-      });
-    }
-    log('reticle_hunt', { ...summarizeHunt(runs) });
-  } catch (error) {
-    log('reticle_hunt_failed', {
       error: error instanceof Error ? error.message : String(error),
     });
   }
@@ -713,6 +673,13 @@ export function main(): void {
   // just the scale, which is the kind of error you cannot correct for after the fact. The daemon's
   // own lifecycle is already reported by `daemon_started` / `daemon_stopped`; it is not a CLI run.
   reportCliRun(argv);
+  // An old name still runs, for one release, and says once what it is called now. Not when the
+  // person only asked for help: that answer names the new command itself, on stdout.
+  const renamedTo = argv[0] === undefined ? undefined : RENAMED_COMMANDS.get(argv[0]);
+  if (renamedTo !== undefined && !argv.some((arg) => '--help' === arg || '-h' === arg)) {
+    const colour = true === process.stderr.isTTY && process.env['NO_COLOR'] === undefined;
+    process.stderr.write(`${renamedNote(argv[0] ?? '', renamedTo, colour)}\n`);
+  }
   // Cloud subcommands (login/link/project/config/push) are a distinct family with their own async client;
   // handle them before the local typed parser so `reticle login` etc. work as one tool.
   if (isCloudCommand(argv[0])) {
@@ -721,7 +688,7 @@ export function main(): void {
     // `reticle link --help` used to run the command: it reached for the network and answered
     // `fetch failed` with exit 1, to somebody who had asked what the command was for.
     if (argv.some((arg) => '--help' === arg || '-h' === arg)) {
-      process.stdout.write(`${CLI_USAGE}\n`);
+      process.stdout.write(`${renderHelp(argv[0], RENAMED_COMMANDS)}\n`);
       return;
     }
     if ('connect' === argv[0]) {
@@ -827,14 +794,15 @@ export function main(): void {
         parsed.agent,
       );
       break;
-    case 'identify':
-      void handleIdentify(parsed);
-      break;
     case 'version':
       handleVersion();
       break;
     case 'help':
-      process.stdout.write(`${CLI_USAGE}\n`);
+      process.stdout.write(`${renderHelp(parsed.topic, RENAMED_COMMANDS)}\n`);
+      break;
+    case 'removed':
+      process.stderr.write(`${parsed.message}\n`);
+      process.exit(1);
       break;
     case 'doctor':
       void handleDoctor(parsed.port);
@@ -852,22 +820,6 @@ export function main(): void {
         reportStepFromCli,
       );
       break;
-    case 'tutorial':
-      // Reported for BOTH paths, and before either: a run is a tour too, and these two steps are
-      // about the tour being asked for, which is already true by the time we get here.
-      reportTutorialShown();
-      if (parsed.run) {
-        void runDemoTour({
-          port: parsed.port,
-          headless: parsed.headless,
-          say: (line) => process.stdout.write(`${line}\n`),
-        }).then((result) => {
-          process.exit(result.code);
-        });
-        break;
-      }
-      process.stdout.write(`${renderTutorial(parsed.audience)}\n`);
-      break;
     case 'open':
       handleOpen(parsed.port, parsed.url);
       break;
@@ -877,23 +829,14 @@ export function main(): void {
     case 'verify':
       handleVerify(parsed);
       break;
-    case 'capsules':
-      void handleCapsules();
-      break;
     case 'affected':
       void handleAffected(parsed.files, parsed.since);
-      break;
-    case 'hunt':
-      void handleHunt(parsed.dir);
       break;
     case 'gate':
       void handleGate(parsed.files, parsed.since, parsed.hook, parsed.acceptCoverage);
       break;
     case 'report':
       void handleReport(parsed.session, parsed.hook);
-      break;
-    case 'watch':
-      handleWatch();
       break;
     case 'update':
       void handleUpdate();

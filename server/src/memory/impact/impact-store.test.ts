@@ -284,7 +284,7 @@ describe('the sync status in the snapshot', () => {
       notices: { read: () => [] },
     }).snapshot();
     expect(snap.sync).toMatchObject({ status: 'local-only', pending: 1 });
-    expect(String(snap.sync?.['said'])).toContain('reticle link');
+    expect(String(snap.sync?.['said'])).toContain('reticle connect');
   });
 
   it('links the newest run the platform holds, on its own dashboard page', () => {

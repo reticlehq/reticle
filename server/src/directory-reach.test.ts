@@ -322,7 +322,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'auth',
     'bridge',
     'browser',
-    'capsule',
     'cloud',
     'daemon',
     'doctor',
@@ -364,7 +363,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   cloud: ['cli', 'dir', 'fs', 'hooks', 'intent'],
   command: [
     'answers',
-    'demo',
     // Rendering `status` for a person, rather than only logging it as an event. Out of `cli.ts`
     // because that file is a composition root already close to the cap, and because a pure
     // renderer is testable in a way a branch inside a command is not.
@@ -380,7 +378,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'daemon',
     'change',
     'fs',
-    'hunt',
     'identity',
     'launch',
     'license',
@@ -404,21 +401,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'update',
   ],
-  /**
-   * The tutorial's demo run: a page carrying the real SDK, driven to a verdict.
-   *
-   * Four reaches, and each is the thing itself rather than a convenience. `tools` is the registry
-   * and the dispatch chokepoint, because the tour calls tools — in-process, since it starts the
-   * daemon it drives and going back out over a socket would add a transport that can fail to a
-   * command whose whole job is to not fail. `bridge` is the pairing token, which the page must
-   * present or the daemon refuses its hello. `cli` is the tutorial script and the safe-control rule,
-   * shared with the printed tour so one sequence cannot become two.
-   *
-   * It was EIGHT. Five of those existed only to rebuild `ToolDeps` — a constructor `cli-verify`
-   * already had, kept private, so the demo grew a second copy of it. Reaching for the one that
-   * exists removed five edges and the second place to forget a field when that type grows one.
-   */
-  demo: ['tools', 'bridge', 'cli'],
   // `exhaustive` is crawl's mode: the explorer and ledger it runs, the fill values the harness
   // already chooses (and the RETICLE_SECRET_* names replay reads), and the mocks that break a write.
   crawl: ['args', 'project', 'tools', 'facts', 'exhaust', 'flows', 'harness', 'input'],

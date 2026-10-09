@@ -99,7 +99,7 @@ describe('reticle try', () => {
     const { ports: p, seen } = ports({ sync: false, drive: { journeys: [], runIds: [] } });
     expect(await runTry({ url: URL_UNDER_TEST }, p)).toBe(0);
     expect(seen.out.some((line) => line.startsWith('Saved to your dashboard'))).toBe(false);
-    expect(seen.fail.join('\n')).toContain('reticle push');
+    expect(seen.fail.join('\n')).toContain('reticle sync');
   });
 
   it('reports a drive that could not run, and syncs nothing', async () => {

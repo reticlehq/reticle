@@ -303,7 +303,7 @@ The one kind that carries author-written free text, which is exactly why it is n
 
 ## identified
 
-**Wire name:** `identified`. **Emitted from:** `server/src/telemetry/identify.ts:77`. **Session-scoped:** no. **Payload block:** `identity`.
+**Wire name:** `identified`. **Emitted from:** nothing in this version (the command that sent it was removed). **Session-scoped:** no. **Payload block:** `identity`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -311,7 +311,7 @@ The one kind that carries author-written free text, which is exactly why it is n
 | `company` | string, 1 to 128, optional |  |
 | `email` | string, 3 to 254, optional |  |
 
-**The question it answers:** who is this, when they have chosen to say? The only personal data Reticle ever transmits, and it transmits it only because a human ran [`reticle identify`](/cli/identify). Reticle never infers an identity from a git remote, a git config email, or anything else. That refusal is deliberate.
+**The question it answers:** who is this, when they have chosen to say? The only personal data Reticle ever transmits, and it was transmitted only because a human ran `reticle identify`, which has been removed: this version never sends the event, and older versions may still. Reticle never infers an identity from a git remote, a git config email, or anything else. That refusal is deliberate.
 
 ---
 

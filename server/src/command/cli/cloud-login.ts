@@ -136,9 +136,7 @@ const linkAfterLogin = async (
    * two verdicts had been recorded. Measured, on this very repo's bench app.
    */
   if (!(await fs.exists(join(process.cwd(), RETICLE_CONFIG_BASENAME)))) {
-    hint(
-      'next: `reticle init` here first, then `reticle link` — or log in from a project directory',
-    );
+    hint('next: `reticle init` here first, then `reticle connect`');
     return;
   }
   /*
@@ -150,13 +148,13 @@ const linkAfterLogin = async (
     project === undefined &&
     (await fs.exists(join(process.cwd(), RETICLE_DIR, CLOUD_LINK_FILE)))
   ) {
-    hint('this repo is already linked — `reticle push` to send what it has recorded');
+    hint('this repo is already linked — `reticle sync` to send what it has recorded');
     return;
   }
   try {
     await link(project === undefined ? ['--url', url] : ['--url', url, '--project', project]);
   } catch {
-    hint('signed in, but linking this repo failed — run `reticle link` to retry');
+    hint('signed in, but linking this repo failed — run `reticle connect` to retry');
   }
 };
 
@@ -200,7 +198,7 @@ const cmdLoginDevice = async (
     }
     if ('pending' === poll.status) {
       if (Date.now() > started.expiresAt) {
-        err('device login expired — run `reticle login` again');
+        err('device login expired — run `reticle connect` again');
         return 1;
       }
       continue;
@@ -208,7 +206,7 @@ const cmdLoginDevice = async (
     err(
       'denied' === poll.status
         ? 'device login was denied in the browser'
-        : 'device login expired — run `reticle login` again',
+        : 'device login expired — run `reticle connect` again',
     );
     return 1;
   }

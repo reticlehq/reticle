@@ -280,7 +280,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // pair is the whole rule.
   // 36 with `replay-from-hud.ts`: the ▶ replay a person starts from the HUD, moved out of
   // `server/src/index.ts` (at its cap) when it gained a progress push per step.
-  'server/src/language/flows': 36,
+  'server/src/language/flows': 35,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the
@@ -323,7 +323,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // Its own file so the 700-line session aggregator did not grow a second concern.
   // 36 again when the drive-attribution counter went: the async context in `hooks/driven-by.ts`
   // already says which drive a call belongs to, per call, so a second module-wide copy was removed.
-  'server/src/telemetry': 36,
+  'server/src/telemetry': 35,
   'spec-runner/src': 11,
 };
 

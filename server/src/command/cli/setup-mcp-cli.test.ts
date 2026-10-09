@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { handleSetupMcp } from './setup-mcp-cli.js';
+import { handleSetupInstall, handleSetupMcp } from './setup-mcp-cli.js';
 import { setupMcp } from '@/command/setup/setup-mcp.js';
 import { registerOtherAgents } from '@/command/setup/setup-command.js';
 
@@ -52,5 +52,21 @@ describe('MCP registration failures reach the user and caller', () => {
     });
     handleSetupMcp(vi.fn());
     expect(process.exitCode).toBeUndefined();
+  });
+});
+
+describe('setup install prints progress only', () => {
+  it('leaves the next step and the agent prompt to the installer', () => {
+    vi.mocked(setupMcp).mockReturnValue({
+      detected: ['claude-code'],
+      registered: ['claude-code'],
+      alreadyThere: [],
+      manual: [],
+      failed: [],
+    });
+    handleSetupInstall({ runtimeSecs: 1, installSecs: 1, mcp: true }, vi.fn());
+    const output = lines.join('');
+    expect(output).not.toContain('Reticle is installed');
+    expect(output).not.toContain('Next:');
   });
 });

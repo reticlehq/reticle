@@ -1,92 +1,303 @@
-/** The `reticle` help text: one block, printed by `help`, `--help` and every usage error. */
+/**
+ * The `reticle` help text.
+ *
+ * `reticle --help` is short: the commands a person needs, one line each, in four groups. Every other
+ * command is still there and still works; `reticle help all` lists it, and `reticle <command> --help`
+ * carries the detail that used to sit in the one long page.
+ *
+ * The lines say `reticle <command>`, which is the bin this package installs. Copied into `npx` it is
+ * not: `npx reticle` resolves the PACKAGE named `reticle`, which belongs to somebody else, and npx
+ * will happily fetch and run it. So the npx spelling leads every page.
+ */
+
+export const HelpGroup = {
+  START: 'Get started',
+  CHECK: 'Check your app',
+  MACHINE: 'Reticle on this machine',
+  ACCOUNT: 'Account',
+  /** Listed only by `reticle help all`. */
+  MORE: 'More commands',
+} as const;
+export type HelpGroup = (typeof HelpGroup)[keyof typeof HelpGroup];
+
+/** `reticle help all` and `reticle --help all`. */
+export const HELP_ALL_TOPIC = 'all';
+
+interface CommandDoc {
+  readonly name: string;
+  /** What follows `reticle` on the usage line. */
+  readonly synopsis: string;
+  /** One line, plain words. */
+  readonly summary: string;
+  readonly group: HelpGroup;
+  /** Shown only by `reticle <name> --help`. */
+  readonly detail?: string;
+}
+
+const INIT_DETAIL = `init wires the project, boots the app and proves a page connected. It does not drive.
+After it, have your agent drive one journey with reticle_act_and_wait and an \`until\`
+on its last step.
+
+  --app <dir>        which app in a monorepo, when several are found
+  --env KEY=VALUE    what the app needs to reach a usable state (repeatable)
+  --files-only       write the files and stop; do not boot the app
+  --no-install       do not install packages
+  --no-mcp           skip the MCP registration, the agent rule files and the /reticle command
+  --hooks            also install the agent hooks
+  --relaunch         print the command that restarts this agent conversation with the tools loaded
+  --license <key>    write an enterprise key to .env and keep .env out of git
+  --json             print the result as one JSON object on stdout
+  --no-open, --no-agents, --url <url>, --timeout <s>
+                     runtime dials for CI, a headless box, or an app you already run
+  --dry-run          show the plan without writing anything
+  --port N           the Reticle daemon port`;
+
+const VERIFY_DETAIL = `Drives the URL and verifies the saved flows. Exit 0 means every one passed.
+
+  --explore [--persona <who>]   no saved flows? let Reticle drive the app and record them
+  --select <label>              repeatable: verify only flows carrying these labels
+  --results-json <file>         also write one verdict per journey as JSON, for CI
+  --storage-state <file>        start signed in
+  --session-id <id>, --timeout N, --headed, --port N
+  --expect '<json predicate>' | --expect-file <path>
+                                one verdict, no saved flows needed. Asks a running daemon,
+                                never starts one. Exit 0 only on verified:"yes". For an
+                                action --expect cannot do, use the HTTP MCP transport:
+                                https://docs.reticle.sh/http-transport.md`;
+
+const BROWSER_NOTE = `The browser Reticle opens for your agent is shown so you can watch the run. --headless hides
+it; CI, RETICLE_HEADLESS=1, or a Linux machine with no display hides it too.`;
+
+const COMMANDS: readonly CommandDoc[] = [
+  {
+    name: 'init',
+    synopsis: 'init [--app <dir>] [--env KEY=VALUE] [--no-mcp] [--files-only] [--dry-run]',
+    summary: 'Wire Reticle into the app in this folder',
+    group: HelpGroup.START,
+    detail: INIT_DETAIL,
+  },
+  {
+    name: 'connect',
+    synopsis: 'connect [--project <name|id>] [--url <cloud origin>]',
+    summary: 'Sign in and link this project to the dashboard',
+    group: HelpGroup.START,
+    detail:
+      'Wires the app first if it is not wired, signs in through your browser, links this repo to\n' +
+      'the project (created if it does not exist; named after the folder by default), and sends\n' +
+      'local history.',
+  },
+  {
+    name: 'try',
+    synopsis: 'try <url> [--persona <who>]',
+    summary: 'Watch Reticle drive a URL once and say which journeys work',
+    group: HelpGroup.START,
+    detail: 'Needs a signed-in account (`reticle connect`).',
+  },
+  {
+    name: 'verify',
+    synopsis: 'verify <url> [--explore] [--expect <json>]',
+    summary: 'Check the saved flows against the running app; exit 0 means pass',
+    group: HelpGroup.CHECK,
+    detail: VERIFY_DETAIL,
+  },
+  {
+    name: 'gate',
+    synopsis: 'gate [--since <ref>] [--accept-coverage] [--hook] [file...]',
+    summary: 'Fail unless passing checks cover the flows your changes touch',
+    group: HelpGroup.CHECK,
+  },
+  {
+    name: 'status',
+    synopsis: 'status [--json] [--port N]',
+    summary: 'Is Reticle running, is your app connected, are you signed in',
+    group: HelpGroup.MACHINE,
+  },
+  {
+    name: 'doctor',
+    synopsis: 'doctor [--port N]',
+    summary: 'Find what is wrong with the setup, and what is missing from coverage',
+    group: HelpGroup.MACHINE,
+  },
+  {
+    name: 'open',
+    synopsis: 'open [url] [--port N]',
+    summary: 'Show the app in the browser Reticle drives',
+    group: HelpGroup.MACHINE,
+  },
+  {
+    name: 'stop',
+    synopsis: 'stop [--force] [--quiet] [--port N]',
+    summary: 'Stop Reticle; --force frees its port even without a recorded pid',
+    group: HelpGroup.MACHINE,
+    detail:
+      'Without --force, stops the daemon Reticle started, by its recorded pid.\n' +
+      "With --force, frees the port by the Reticle daemon LISTENING on it, never the agent's MCP\n" +
+      'proxy, and refuses a listener that is not Reticle.',
+  },
+  {
+    name: 'restart',
+    synopsis: 'restart [--force] [--port N]',
+    summary: 'Stop Reticle, then start it and wait until it is listening',
+    group: HelpGroup.MACHINE,
+  },
+  {
+    name: 'update',
+    synopsis: 'update',
+    summary: 'Install the latest version and restart',
+    group: HelpGroup.MACHINE,
+  },
+  {
+    name: 'logout',
+    synopsis: 'logout [--url <cloud origin>]',
+    summary: 'Sign out (of one host; others stay signed in)',
+    group: HelpGroup.ACCOUNT,
+  },
+  {
+    name: 'feedback',
+    synopsis: 'feedback [--rating 1-5] [--bug] "message"',
+    summary: "Tell us what worked and what didn't; prints exactly what it sends",
+    group: HelpGroup.ACCOUNT,
+    detail:
+      'Agents: reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "message"\n' +
+      'works from anywhere, including a setup that never finished.',
+  },
+  {
+    name: 'telemetry',
+    synopsis: 'telemetry [status|enable|disable]',
+    summary: 'Show or change anonymous usage metrics',
+    group: HelpGroup.ACCOUNT,
+  },
+  {
+    name: 'sync',
+    synopsis: 'sync [--watch]',
+    summary: 'Send local runs to the dashboard and collect decisions',
+    group: HelpGroup.MORE,
+  },
+  {
+    name: 'runs',
+    synopsis: 'runs [<runId> | regression | share <runId> | issues [--fix <fp>] | memory]',
+    summary: "Read the linked project's runs, regressions, issues and memory",
+    group: HelpGroup.MORE,
+    detail:
+      '  runs                 recent runs\n' +
+      '  runs <runId>         one run\n' +
+      '  runs regression      flows broken since before; exits 3 if any\n' +
+      '  runs share <runId>   mint a public proof link\n' +
+      '  runs issues [--fix <fingerprint>]   the triage queue; --fix prints one fix prompt\n' +
+      '  runs memory          what the project has learned',
+  },
+  {
+    name: 'config',
+    synopsis: 'config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]',
+    summary: 'What this project sends to the dashboard',
+    group: HelpGroup.MORE,
+  },
+  {
+    name: 'affected',
+    synopsis: 'affected [--since <ref>] [file...]',
+    summary: 'Which saved flows must re-verify for the changed files',
+    group: HelpGroup.MORE,
+  },
+  {
+    name: 'report',
+    synopsis: 'report [--session <id>] [--hook]',
+    summary: 'What the latest session claimed, and what held',
+    group: HelpGroup.MORE,
+  },
+  {
+    name: 'mcp',
+    synopsis: 'mcp [--port N] [--drive <url>] [--headless]',
+    summary: 'The MCP stdio server your agent runs; starts the daemon if needed',
+    group: HelpGroup.MORE,
+    detail: BROWSER_NOTE,
+  },
+  {
+    name: 'serve',
+    synopsis:
+      'serve [--port N] [--drive <url>] [--headless] [--http] [--http-port N] [--http-token T]',
+    summary: 'Run the daemon in the foreground',
+    group: HelpGroup.MORE,
+    detail: BROWSER_NOTE,
+  },
+  {
+    name: 'drive',
+    synopsis: 'drive <url> [--headless]',
+    summary: 'Open a URL in the foreground, for debugging',
+    group: HelpGroup.MORE,
+  },
+  {
+    name: 'setup',
+    synopsis: 'setup mcp',
+    summary: 'Register the MCP server with the coding agents on this machine',
+    group: HelpGroup.MORE,
+  },
+  {
+    name: 'license',
+    synopsis: 'license',
+    summary: 'Show the enterprise license status',
+    group: HelpGroup.MORE,
+  },
+  {
+    name: 'rollback',
+    synopsis: 'rollback',
+    summary: 'Restore the previous version and restart',
+    group: HelpGroup.MORE,
+  },
+  {
+    name: 'version',
+    synopsis: 'version',
+    summary: 'Print the version',
+    group: HelpGroup.MORE,
+  },
+];
+
+const HEAD = 'usage:  reticle <command>   (or npx @reticlehq/server <command>)';
+const FOOT = 'All commands: reticle help all     One command: reticle <command> --help';
+const NAME_COLUMN = COMMANDS.reduce((w, c) => Math.max(w, c.name.length), 0) + 3;
+
+const line = (c: CommandDoc): string => `  ${c.name.padEnd(NAME_COLUMN)}${c.summary}`;
+
+function grouped(groups: readonly HelpGroup[]): string[] {
+  return groups.flatMap((g) => ['', g, ...COMMANDS.filter((c) => c.group === g).map(line)]);
+}
+
+const SHORT_GROUPS: readonly HelpGroup[] = [
+  HelpGroup.START,
+  HelpGroup.CHECK,
+  HelpGroup.MACHINE,
+  HelpGroup.ACCOUNT,
+];
+
+/** `reticle --help`: printed by `help`, `--help` and under every usage error. */
+export const CLI_USAGE = [HEAD, ...grouped(SHORT_GROUPS), '', FOOT].join('\n');
+
+/** `reticle help all`. */
+export const CLI_USAGE_ALL = [HEAD, ...grouped([...SHORT_GROUPS, HelpGroup.MORE]), '', FOOT].join(
+  '\n',
+);
+
+/** Every command the help names, for checks that each one really parses. */
+export const DOCUMENTED_COMMANDS: readonly string[] = COMMANDS.map((c) => c.name);
 
 /**
- * The lines below say `reticle <command>`, which is the bin this package installs and is correct
- * once it is on PATH. Copied into `npx`, it is not: `npx reticle` resolves the PACKAGE named
- * `reticle`, which belongs to somebody else, and npx will happily fetch and run it. The docs were
- * telling readers to do exactly that on 110 lines before it was caught, so the invocation now leads
- * the usage block rather than being a footnote somewhere else.
+ * The help for one topic: the short page, every command, or one command's detail. An old name
+ * answers with the page of the command that replaced it, and says so.
  */
-export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticle <command>\` once the bin is on your PATH)
-
-  reticle tutorial [--run] [--headless] [--port N]   (watch Reticle verify a demo app, in seconds)
-  reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
-                [--env KEY=VALUE]... [--files-only] [--hooks]  (wire Reticle into the project in this directory)
-                init is ONBOARDING: it wires the project, boots the app and proves a session
-                connected. It does not drive. The FIRST RUN is the stage that proves a flow:
-                an agent drives one journey with reticle_act_and_wait and an \`until\` on its last
-                step; with a linked project, reticle_verify { action: "explore", persona: "…" }
-                (or reticle verify <url> --explore --persona "…") drives it instead
-                --app picks WHICH app in a monorepo, when several are found
-                --env is what the app needs to reach a usable state: the key from
-                .env.example, the mock backend, the variable that skips an auth wall.
-                Repeatable, and a value may contain spaces and equals signs
-                --files-only writes the files and stops, which is what init did before it
-                learned to boot the app and prove the install works
-                --relaunch prints the exact command that restarts THIS conversation with
-                the tools loaded, so the restart is not a chore handed to a human. It
-                refuses when the session id has no transcript behind it, because
-                --resume on an empty id opens a blank conversation that looks like
-                success. Works with --files-only
-                --license writes the key to .env and keeps .env out of git
-                --json puts the result on stdout, so an agent reads one object
-                --no-open / --no-agents / --url / --timeout are the runtime dials: CI, a
-                headless box, or an app you already run
-                --no-mcp skips MORE than the server registration: also the agent rule files
-                (CLAUDE.md / AGENTS.md / .cursor) and the /reticle command, because all three
-                only make sense once the tools are reachable.
-  reticle serve [--port N] [--drive <url>] [--headless] [--http] [--http-port N] [--http-token T]
-  reticle stop  [--port N] [--quiet]                    (stop the daemon we started, by its recorded pid)
-  reticle kill  [--port N] [--force]                   (free the port by its LISTENER, never the agent's mcp proxy)
-  reticle restart [--port N] [--force]                 (kill, then start a daemon and wait for a real bind)
-  reticle status [--port N] [--json]                   (a readable block; --json for the event)
-  reticle doctor [--port N]                            (one command to diagnose setup: Chromium, daemon, port)
-  reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
-  reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
-                       [--explore] [--persona <who>]   (no saved flows? let Reticle drive the app itself and record them)
-                       [--select <label>]              (repeatable: verify only flows carrying these labels — no model, exit 0=pass)
-                       [--results-json <file>]         (also write one verdict per journey as JSON, for CI)
-                [--expect '<json predicate>' | --expect-file <path>]   (one verdict, no saved
-                flows needed. --expect-file avoids cmd.exe and PowerShell quote mangling. It
-                asks an existing daemon, never binds or stops one; with none, it refuses.
-                Cannot combine with --storage-state. Use when the client lacks reticle_*
-                tools. exit 0 ONLY on verified:"yes" — "unknown" is not a pass. For an
-                action --expect cannot do, drive the daemon's HTTP MCP transport instead — see
-                https://docs.reticle.sh/http-transport.md)
-  reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
-  reticle gate [--since <ref>] [--accept-coverage] [file...]  (exit non-zero unless passing artifacts cover the affected flows)
-  reticle report [--session <id>] [--hook]             (what the latest session claimed, and what held)
-  reticle setup mcp                                    (register the MCP server with your agents; the installer's registration half)
-  reticle capsules                                     (list the saved fail-to-pass bug capsules in .reticle/capsules)
-  reticle hunt <dir>                                   (aggregate a directory of crawl reports into one false-green rate)
-  reticle watch [url]                                  (on save, report which saved flows must re-verify)
-  reticle drive <url> [--headless]                     (foreground mode, for debugging)
-  reticle mcp   [--port N] [--drive <url>] [--headless] (MCP stdio proxy; auto-starts daemon if needed)
-  reticle update                                       (install the latest server version and restart)
-  reticle rollback                                     (restore the previous server version and restart)
-  reticle license                                      (show enterprise license status: active | eval | missing)
-  reticle telemetry [status|enable|disable]            (anonymous usage metrics; status shows what's sent + the policy)
-  reticle feedback [--rating 1-5] [--bug] "message"    (tell us what worked and what didn't; prints exactly what it sends)
-  reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "message"
-                                                       (agents: file from anywhere, including a setup that never finished)
-  reticle identify --context company|side_project|open_source|learning [--company N] [--email E] [--forget]
-                                                       (OPT-IN: tell us who you are, e.g. for support or an enterprise trial)
-
-Cloud (link this project to Reticle; runs/flows recorded on the dashboard):
-  reticle try <url> [--persona <who>]                  (signed in: Reticle drives the url once, in a window
-                                                       you watch, and says which journeys work)
-  reticle connect [--project <name|id>] [--url <cloud origin>]
-                                                       (wire this app if needed, sign in, link, send local history)
-  reticle login [--url <u>] [--email <e>] [--code <c>] [--org <n>]
-                                                       (browser device flow by default; --email mails a code)
-  reticle logout [--url <u>]                           (sign out of ONE host; others stay signed in)
-  reticle link  [--project <name|id>]                  (bind this repo: mints a scoped key, writes .reticle/cloud.json)
-  reticle whoami                                        (who am I signed in as, and is this repo attached?)
-  reticle project <ls|create <name>>                   (list or create cloud projects)
-  reticle config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]
-  reticle push | sync [--watch]                        (one sync cycle: send the difference, collect decisions)
-  reticle runs [<runId>] | regression | share <runId>  (read cloud state; regression exits 3 if any flow broke)
-
-A browser Reticle opens for your agent (serve, mcp, drive) is shown, so you can watch the run;
-verify and tutorial --run stay hidden. --headed / --headless override; CI, RETICLE_HEADLESS=1, or a
-Linux machine with no display hides it.`;
+export function renderHelp(
+  topic: string | undefined,
+  renamed: ReadonlyMap<string, string> = new Map(),
+): string {
+  if (topic === undefined) return CLI_USAGE;
+  if (HELP_ALL_TOPIC === topic) return CLI_USAGE_ALL;
+  const now = renamed.get(topic);
+  const target = now?.split(' ')[0] ?? topic;
+  const doc = COMMANDS.find((c) => c.name === target);
+  if (doc === undefined) return CLI_USAGE;
+  return [
+    `usage:  reticle ${doc.synopsis}`,
+    ...(now === undefined ? [] : [`        (\`reticle ${topic}\` is now \`reticle ${now}\`)`]),
+    '',
+    doc.summary,
+    ...(doc.detail === undefined ? [] : ['', doc.detail]),
+  ].join('\n');
+}

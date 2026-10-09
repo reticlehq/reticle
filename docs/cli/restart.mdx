@@ -4,7 +4,7 @@ description: Free the bridge port and put a daemon back on it, reporting each ha
 icon: rotate
 ---
 
-`reticle restart` is [`reticle kill`](/cli/kill) followed by a daemon start that waits for a real bind.
+`reticle restart` is [`reticle stop --force`](/cli/stop#freeing-the-port-force) followed by a daemon start that waits for a real bind.
 
 ```bash
 npx @reticlehq/server restart [--port N] [--force]
@@ -55,6 +55,6 @@ npx @reticlehq/server restart         # after an upgrade, so the new version is 
 npx @reticlehq/server status
 ```
 
-<Card title="Why not lsof" icon="skull" href="/cli/kill">
+<Card title="Why not lsof" icon="skull" href="/cli/stop#freeing-the-port-force">
   The pipeline everyone reaches for kills the agent's own MCP proxy along with the daemon.
 </Card>

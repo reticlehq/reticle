@@ -177,7 +177,7 @@ It runs four things in order and asks you nothing:
    args = ["@reticlehq/server", "mcp"]
    ```
 
-It ends by telling you Reticle is **not in your app yet**: run `reticle init` in your app's folder next. Want to see a verdict first? `reticle tutorial --run` drives Reticle's own demo app and touches nothing of yours.
+It ends by telling you Reticle is **not in your app yet**: run `reticle init` in your app's folder next. Want to see a verdict first? Signed in, `reticle try <url>` drives a URL once in a window you watch.
 
 **Claude Code plugin:**
 
@@ -328,11 +328,11 @@ It opens your browser so you can sign in, or create a free account, then links t
 After that, runs sync on their own. To sync right now:
 
 ```bash
-reticle push            # sync once
-reticle push --watch    # keep syncing while you work
+reticle sync            # sync once
+reticle sync --watch    # keep syncing while you work
 ```
 
-**✅ It worked when** `reticle whoami` shows this folder linked to your project.
+**✅ It worked when** `reticle status` shows this folder linked to your project.
 
 > `reticle: command not found`? Every command works as `npx @reticlehq/server <command>`, e.g. `npx @reticlehq/server init`.
 
@@ -527,7 +527,7 @@ You don't start Reticle yourself. Your agent starts it when it first calls a Ret
 | --- | --- | --- |
 | **Setting up** | `reticle setup mcp` | Registers Reticle with your coding agents. The installer already runs this; rerun it after you install a new agent |
 |  | `reticle init` | Wires the app in this folder. `--dry-run` shows the changes without writing them, `--app <dir>` picks one app in a monorepo, `--env KEY=VALUE` passes what the app needs to boot, `--json` prints one object for agents |
-|  | `reticle tutorial --run` | Watch Reticle verify a demo app. Touches nothing of yours |
+|  | `reticle try <url>` | Signed in: Reticle drives a URL once, in a window you watch, and says which journeys work |
 | **Running** | `reticle open [url]` | Shows your app in a browser connected to Reticle |
 |  | `reticle status` | Whether Reticle is running and which apps are connected |
 |  | `reticle doctor` | Diagnoses setup in one go: the browser, the background service, the port |
@@ -537,10 +537,10 @@ You don't start Reticle yourself. Your agent starts it when it first calls a Ret
 |  | `reticle affected` | Lists which saved flows your changes touch |
 |  | `reticle report` | What the last session claimed, and what actually held |
 | **Dashboard** _(optional)_ | `reticle connect --project "My App"` | Signs in, links this folder to a project on app.reticle.sh and sends your local history. Wires the app first if needed |
-|  | `reticle push` | Syncs now. `--watch` keeps syncing |
-|  | `reticle whoami` | Who you're signed in as, and which project this folder is linked to |
+|  | `reticle sync` | Syncs now. `--watch` keeps syncing |
+|  | `reticle status` | Whether Reticle is running, who you're signed in as, and which project this folder is linked to |
 |  | `reticle config --runs off` | Chooses what syncs: `--runs`, `--memory` and `--flows`, each `on` or `off` |
-|  | `reticle runs` / `reticle regression` | Reads your runs back from the dashboard. `regression` exits 3 if any flow broke |
+|  | `reticle runs` / `reticle runs regression` | Reads your runs back from the dashboard. `runs regression` exits 3 if any flow broke |
 |  | `reticle logout` | Signs out |
 | **Keeping it current** | `reticle update` / `reticle rollback` | Installs the latest version, or goes back to the previous one |
 |  | `reticle telemetry disable` | Turns off anonymous usage counts |

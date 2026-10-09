@@ -3,7 +3,6 @@
  * The parser stays pure and unit-testable; `cli.ts` owns the side-effecting handlers and dispatch,
  * and re-exports this surface.
  */
-import { TutorialAudience } from './tutorial.js';
 import { parseFeedbackArgs, type ParsedFeedback } from './cli-parse-feedback.js';
 import { parseVerifySuffix } from './cli-parse-verify.js';
 import {
@@ -17,6 +16,8 @@ import {
   unknownArgument,
   type ParseError,
   CLOUD_COMMANDS,
+  REMOVED_COMMANDS,
+  removedNote,
 } from './cli-parse-grammar.js';
 
 // Re-exported because the daemon's own argv builder reaches for these through this module, which is
@@ -46,8 +47,6 @@ const STATUS_COMMAND = 'status';
 const OPEN_COMMAND = 'open';
 const DRIVE_COMMAND = 'drive';
 const AFFECTED_COMMAND = 'affected';
-const HUNT_COMMAND = 'hunt';
-const CAPSULES_COMMAND = 'capsules';
 const GATE_COMMAND = 'gate';
 /** Hook mode: prose a human can read, and silence when there was simply nothing to check. */
 const HOOK_FLAG = '--hook';
@@ -55,7 +54,6 @@ const ACCEPT_COVERAGE_FLAG = '--accept-coverage';
 /** `reticle report [--session <id>] [--hook]` — what the latest session claimed, and what held. */
 const REPORT_COMMAND = 'report';
 const SESSION_FLAG = '--session';
-const WATCH_COMMAND = 'watch';
 const UPDATE_COMMAND = 'update';
 const ROLLBACK_COMMAND = 'rollback';
 const MCP_COMMAND = 'mcp';
@@ -63,14 +61,8 @@ const LICENSE_COMMAND = 'license';
 const VERSION_COMMAND = 'version';
 const TELEMETRY_COMMAND = 'telemetry';
 const FEEDBACK_COMMAND = 'feedback';
-const IDENTIFY_COMMAND = 'identify';
 const DOCTOR_COMMAND = 'doctor';
 const SETUP_COMMAND = 'setup';
-const TUTORIAL_COMMAND = 'tutorial';
-const COMPANY_FLAG = '--company';
-const EMAIL_FLAG = '--email';
-const CONTEXT_FLAG = '--context';
-const FORGET_FLAG = '--forget';
 /** The `reticle telemetry` sub-actions. Bare `reticle telemetry` means `status`. */
 export const TelemetryAction = {
   STATUS: 'status',
@@ -91,6 +83,7 @@ export const DAEMON_INNER_COMMAND = '_daemon';
  */
 export const UNKNOWN_COMMAND = 'unknown';
 const HELP_COMMAND = 'help';
+const HELP_FLAGS: ReadonlySet<string> = new Set(['--help', '-h']);
 /** Every command the typed parser below routes. The parser refuses any word not in this list. */
 export const LOCAL_COMMANDS: readonly string[] = [
   INIT_COMMAND,
@@ -103,11 +96,8 @@ export const LOCAL_COMMANDS: readonly string[] = [
   DRIVE_COMMAND,
   VERIFY_COMMAND,
   AFFECTED_COMMAND,
-  HUNT_COMMAND,
-  CAPSULES_COMMAND,
   GATE_COMMAND,
   REPORT_COMMAND,
-  WATCH_COMMAND,
   UPDATE_COMMAND,
   ROLLBACK_COMMAND,
   MCP_COMMAND,
@@ -115,16 +105,15 @@ export const LOCAL_COMMANDS: readonly string[] = [
   VERSION_COMMAND,
   TELEMETRY_COMMAND,
   FEEDBACK_COMMAND,
-  IDENTIFY_COMMAND,
   DAEMON_INNER_COMMAND,
   DOCTOR_COMMAND,
   SETUP_COMMAND,
-  TUTORIAL_COMMAND,
 ];
 const LOCAL_COMMAND_SET: ReadonlySet<string> = new Set(LOCAL_COMMANDS);
 const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
   ...LOCAL_COMMANDS,
   ...CLOUD_COMMANDS,
+  ...REMOVED_COMMANDS.keys(),
   HELP_COMMAND,
 ]);
 /** The conventional flag spellings of two commands, reported as the command they ask for. */
@@ -272,13 +261,12 @@ export type CliResult =
   | { kind: 'license' }
   | { kind: 'telemetry'; action: TelemetryAction }
   | Extract<ParsedFeedback, { kind: 'feedback' }>
-  | { kind: 'identify'; context?: string; company?: string; email?: string; forget: boolean }
   | { kind: 'version' }
-  | { kind: 'help' }
+  | { kind: 'help'; topic?: string }
+  | { kind: 'removed'; message: string }
   | { kind: 'doctor'; port: number }
   | { kind: 'setup-mcp' }
   | { kind: 'setup-install'; runtimeSecs: number; installSecs: number; mcp: boolean }
-  | { kind: 'tutorial'; audience: TutorialAudience; run: boolean; port: number; headless: boolean }
   | { kind: 'open'; port: number; url?: string }
   | {
       kind: '_daemon';
@@ -306,11 +294,8 @@ export type CliResult =
       resultsJson?: string;
     }
   | { kind: 'affected'; files: string[]; since?: string }
-  | { kind: 'hunt'; dir: string }
-  | { kind: 'capsules' }
   | { kind: 'gate'; files: string[]; since?: string; hook?: boolean; acceptCoverage?: boolean }
   | { kind: 'report'; session?: string; hook: boolean }
-  | { kind: 'watch'; url?: string }
   | { kind: 'update' }
   | { kind: 'rollback' }
   | {
@@ -628,7 +613,6 @@ function parseTargetArgs(rest: string[]): { files: string[]; since?: string } {
  */
 export function dialsTheDaemon(parsed: CliResult): boolean {
   if ('init' === parsed.kind) return false;
-  if ('tutorial' === parsed.kind) return parsed.run;
   return 'port' in parsed;
 }
 
@@ -664,9 +648,17 @@ export function parseCliArgs(
   // `reticle_usage_error: unknown argument '--help'` on stderr with exit 1. The usage text was
   // printed underneath it, so the request was in fact answered; it was simply answered as a failure,
   // which is the wrong first impression to give somebody who has just asked a tool what it does.
-  if ('help' === cmd || argv.some((arg) => '--help' === arg || '-h' === arg)) {
-    return { kind: 'help' };
+  //
+  // Removed commands answer before help does: `reticle hunt --help` should say it is gone, not
+  // describe something that no longer runs.
+  const removed = REMOVED_COMMANDS.get(cmd);
+  if (removed !== undefined) return { kind: 'removed', message: removedNote(cmd, removed) };
+  if (HELP_COMMAND === cmd || HELP_FLAGS.has(cmd)) {
+    // `reticle help all`, `reticle --help all`, `reticle help init`.
+    const topic = rest.find((arg) => !HELP_FLAGS.has(arg));
+    return topic === undefined ? { kind: 'help' } : { kind: 'help', topic };
   }
+  if (argv.some((arg) => HELP_FLAGS.has(arg))) return { kind: 'help', topic: cmd };
 
   // The list is the gate, so a command cannot be routed without also being named in telemetry.
   if (!LOCAL_COMMAND_SET.has(cmd)) return unknownCommand(cmd);
@@ -709,6 +701,9 @@ export function parseCliArgs(
     }
     case STOP_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
+      // `stop --force` is what `kill` was: free the port by its listener, which must still be a
+      // Reticle daemon. Overriding that refusal stays on `restart --force` and the old `kill --force`.
+      if (rest.includes(FORCE_FLAG)) return { kind: 'kill', port, force: false };
       const quiet = rest.includes(QUIET_FLAG);
       return { kind: 'stop', port, quiet };
     }
@@ -726,21 +721,6 @@ export function parseCliArgs(
       // already settled on: a person typing this should not have to ask for prose, and a caller
       // parsing it knows to ask for the object.
       return { kind: 'status', port, json: rest.includes(JSON_FLAG) };
-    }
-    case TUTORIAL_COMMAND: {
-      // `--agent` is the opt-in, because a person typing this is the common case and should not have
-      // to ask for prose. An agent knows to pass the flag; a human would not know to avoid it.
-      const audience = argv.includes('--agent') ? TutorialAudience.AGENT : TutorialAudience.HUMAN;
-      // `--run` drives the demo instead of describing it. Opt-in rather than the default: the tour
-      // starts a daemon and opens a browser, and a command that did that to somebody who typed it
-      // expecting a page of text would be a surprise in the one place surprises are least welcome.
-      return {
-        kind: 'tutorial',
-        audience,
-        run: argv.includes('--run'),
-        port: parsePortFlag(rest, defaultPort),
-        headless: !argv.includes('--headed'),
-      };
     }
     case DOCTOR_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
@@ -778,7 +758,7 @@ export function parseCliArgs(
       }
       // Only `mcp` today. A bare `reticle setup` falls to help rather than guessing, because the
       // next subcommand here will not be a synonym for this one.
-      if (what !== 'mcp') return { kind: 'help' };
+      if (what !== 'mcp') return { kind: 'help', topic: SETUP_COMMAND };
       return { kind: 'setup-mcp' };
     }
     case LICENSE_COMMAND:
@@ -793,22 +773,6 @@ export function parseCliArgs(
         return { kind: 'error', message: `unknown telemetry action: ${action}` };
       }
       return { kind: 'telemetry', action };
-    }
-    case IDENTIFY_COMMAND: {
-      const flag = (name: string): string | undefined => {
-        const at = rest.indexOf(name);
-        return -1 === at ? undefined : rest[at + 1];
-      };
-      const context = flag(CONTEXT_FLAG);
-      const company = flag(COMPANY_FLAG);
-      const email = flag(EMAIL_FLAG);
-      return {
-        kind: 'identify',
-        ...(context !== undefined ? { context } : {}),
-        ...(company !== undefined ? { company } : {}),
-        ...(email !== undefined ? { email } : {}),
-        forget: rest.includes(FORGET_FLAG),
-      };
     }
     case FEEDBACK_COMMAND:
       return parseFeedbackArgs(rest);
@@ -855,14 +819,6 @@ export function parseCliArgs(
         ...(r.resultsJson !== undefined ? { resultsJson: r.resultsJson } : {}),
       };
     }
-    case CAPSULES_COMMAND:
-      return { kind: 'capsules' };
-    case HUNT_COMMAND: {
-      const dir = rest.find((a) => !a.startsWith('-'));
-      return dir === undefined
-        ? { kind: 'error', message: 'usage: reticle hunt <dir-of-crawl-reports>' }
-        : { kind: 'hunt', dir };
-    }
     case AFFECTED_COMMAND: {
       const t = parseTargetArgs(rest);
       const since = t.since ?? implicitSince(t.files);
@@ -890,11 +846,6 @@ export function parseCliArgs(
         hook: rest.includes(HOOK_FLAG),
         ...(session === undefined ? {} : { session }),
       };
-    }
-    case WATCH_COMMAND: {
-      // `reticle watch [url]` — on file save, report which saved flows must re-verify.
-      const url = rest.find((arg) => !arg.startsWith('-'));
-      return url === undefined ? { kind: 'watch' } : { kind: 'watch', url };
     }
     case UPDATE_COMMAND:
       return { kind: 'update' };

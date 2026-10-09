@@ -61,5 +61,5 @@ export function describeUnsynced(entry: UnsyncedRoot, from: string): string {
   const where = (relative(from, entry.root) || entry.root).split(sep).join('/');
   return entry.linked
     ? `${String(entry.runs)} run(s) in ${where} are waiting to be sent: run \`reticle sync\` there`
-    : `${String(entry.runs)} run(s) in ${where} were never sent: run \`reticle link\` there`;
+    : `${String(entry.runs)} run(s) in ${where} were never sent: run \`reticle connect\` there`;
 }

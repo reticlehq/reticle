@@ -34,7 +34,7 @@ Run [`reticle connect`](/cli/cloud) in the folder, then run `try` again. It exit
 1. `try` asks the platform for one free drive. If the workspace needs a card first, it prints the platform's message and the plan page, then exits `1` without opening anything.
 2. It opens the URL in a window you can watch, through the Reticle daemon, and starting one if none is running.
 3. The Harness drives for up to two minutes and 40 steps, and records what it drove as saved flows.
-4. It prints the result and sends the run to your dashboard, the same way [`reticle push`](/cli/cloud#reticle-push) does.
+4. It prints the result and sends the run to your dashboard, the same way [`reticle sync`](/cli/cloud#reticle-sync) does.
 
 ## What it prints
 
@@ -48,7 +48,7 @@ Saved to your dashboard: <your dashboard url>
 
 Each verdict comes from the engine. A journey that neither passed nor failed is reported as **not proved**. It is never counted as working.
 
-If the run could not be sent, `try` says so, keeps the run on this machine and tells you to run `reticle push`. It never prints "Saved" in that case.
+If the run could not be sent, `try` says so, keeps the run on this machine and tells you to run `reticle sync`. It never prints "Saved" in that case.
 
 ## Exit codes
 

@@ -80,7 +80,7 @@ const UNSENDABLE_HEADER_CHAR = /[^ -ÿ]/;
 
 /** Which knob holds the credential behind a header, so the error can name the thing to go and edit. */
 const CREDENTIAL_SOURCE: Readonly<Record<string, string>> = {
-  authorization: `${CloudEnv.KEY} (or the session from \`reticle login\`)`,
+  authorization: `${CloudEnv.KEY} (or the session from \`reticle connect\`)`,
 };
 
 /**

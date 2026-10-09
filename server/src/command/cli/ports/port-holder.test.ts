@@ -107,7 +107,7 @@ describe('a wedged daemon of our own', () => {
    */
   it('names the command that frees the port instead of leaving the reader to invent one', () => {
     const msg = describeForeignHolder(4411, { pid: 999, command: 'python' }, 65704);
-    expect(msg).toContain('reticle kill');
+    expect(msg).toContain('reticle restart --force');
     expect(msg).not.toMatch(/-ti\b/);
   });
 

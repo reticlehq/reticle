@@ -187,7 +187,7 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
     for (const line of lines) ports.out(line);
   } else {
     ports.fail(
-      'The run is kept on this machine; it could not be sent. Run `reticle push` to retry.',
+      'The run is kept on this machine; it could not be sent. Run `reticle sync` to retry.',
     );
   }
   return EXIT_OK;
