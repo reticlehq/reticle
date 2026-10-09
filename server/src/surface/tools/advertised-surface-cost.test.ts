@@ -320,7 +320,9 @@ describe('advertised surface cost', () => {
 // 150_300 -> 150_400 for `repeatable` on a net clause (#1353), 150,379 B merged with the above: a
 // read over POST declared as one is kept out of duplicate-request, and the field rides every schema
 // that carries a predicate, so a validating client would strip it otherwise.
-const ALL_SURFACE_BYTE_BUDGET = 150_400;
+// 150_400 -> 151_400 when #1487 met today's other merges in the queue (150,407 B, 7 B over): the
+// ceiling now carries ~1KB of headroom, so two small PRs no longer both have to move it.
+const ALL_SURFACE_BYTE_BUDGET = 151_400;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {
