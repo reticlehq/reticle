@@ -22,6 +22,7 @@ import { runTool } from './invoke-tool.js';
 import { TOOL_SURFACE, filterTools } from './tool-surface.js';
 import { withTimeout } from '@/features/harness/with-timeout.js';
 import { runDrivenBy } from '@/hooks/driven-by.js';
+import { noteDriveStep } from '@/features/harness/drive-runs.js';
 import type { HarnessTool, HarnessToolset } from '@/features/harness/harness.js';
 
 /**
@@ -188,6 +189,7 @@ export function reticleToolset(
         ? desktopBackendClaims(pinned)
         : pinned;
       const drivenBy = options.drivenBy;
+      if (drivenBy !== undefined) noteDriveStep(drivenBy.harness, tool.name);
       return withTimeout(
         drivenBy === undefined
           ? runTool(tool, deps, scoped)

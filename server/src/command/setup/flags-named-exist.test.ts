@@ -40,7 +40,10 @@ const NOT_INIT_FLAGS = new Set([
 
 describe('every flag a setup message names', () => {
   it('is one the CLI actually accepts', () => {
-    const parser = readFileSync(join(__dirname, '..', 'cli', 'cli-parse.ts'), 'utf8');
+    // The grammar and the help text it prints, which lives in its own file.
+    const parser = ['cli-parse.ts', 'cli-usage.ts']
+      .map((file) => readFileSync(join(__dirname, '..', 'cli', file), 'utf8'))
+      .join('\n');
     const unknown: string[] = [];
     for (const file of SETUP_SOURCES) {
       for (const flag of flagsIn(read(file))) {

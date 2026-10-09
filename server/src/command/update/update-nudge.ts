@@ -29,7 +29,7 @@ import { creditNudge } from './nudge-credit.js';
  * prompts a downgrade is one people learn to ignore. Numeric per segment, so a 10 patch correctly
  * beats a 9 (string order does not), and a bare release beats its own prerelease.
  */
-function isNewerVersion(candidate: string, current: string): boolean {
+export function isNewerVersion(candidate: string, current: string): boolean {
   const parse = (v: string): { parts: number[]; pre: boolean } => {
     const [core = '', ...rest] = v.split(/[-+]/);
     return { parts: core.split('.').map((n) => Number.parseInt(n, 10) || 0), pre: rest.length > 0 };

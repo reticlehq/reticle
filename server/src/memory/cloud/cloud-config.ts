@@ -9,6 +9,7 @@
  * Vercel-style split: `.reticle/cloud.json` is the safe-to-commit-but-gitignored binding, the key is a
  * user-level credential. "Cloud attached" = a valid link file AND a key for its project id (or env creds).
  */
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_PLATFORM_URL, ReticleDir, ReticleEnv } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
@@ -289,3 +290,24 @@ export const platformEnvPort =
       ? env
       : { ...env, [ReticleEnv.API_KEY]: config.apiKey, [ReticleEnv.CLOUD_URL]: config.url };
   };
+
+/**
+ * Where this project's dashboard lives, if `reticle link` recorded one.
+ *
+ * Read from the link file rather than derived from the API url, because the API origin and the
+ * console origin are different hosts in every deployment that is not a laptop. Synchronous and
+ * best-effort, like every other read in this file: a missing or malformed link file means no link
+ * in the HUD, never a failed tool call.
+ */
+export function readDashboardUrl(reticleRoot: string): string | undefined {
+  try {
+    const raw: unknown = JSON.parse(
+      readFileSync(join(reticleRoot, ReticleDir.CLOUD_LINK_FILE), 'utf8'),
+    );
+    if ('object' !== typeof raw || null === raw) return undefined;
+    const value = (raw as Record<string, unknown>)['dashboardUrl'];
+    return 'string' === typeof value && value.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}

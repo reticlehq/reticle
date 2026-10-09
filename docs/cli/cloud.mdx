@@ -133,6 +133,8 @@ What the platform cannot read is not sent at all, and a `notSent` array says why
 
 The linked project's recent run artifacts. The key scopes the query server-side.
 
+`reticle runs <runId>` reads one run, which is how to get back a Harness drive whose local `.reticle/runs/<runId>.drive.json` is gone. It exits `1` with "not synced yet, or not found" when the platform does not have it.
+
 ### `reticle regression`
 
 The CI gate: which flows broke relative to before. **Exits `3`** when any flow regressed, which is the whole point of it being a separate command.

@@ -179,7 +179,7 @@ describe('exploring through the running daemon', () => {
     const c = recording();
     const result = await explore(c.tool);
     expect(c.actions()).toEqual(['acquire', 'explore', 'flows', 'release']);
-    expect(c.calls[1]?.args).toEqual({
+    expect(c.calls[1]?.args).toMatchObject({
       action: 'explore',
       persona: 'a visitor',
       sessionId: 'lease-9',

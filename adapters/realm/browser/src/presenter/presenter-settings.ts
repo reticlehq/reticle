@@ -347,6 +347,24 @@ const KILL_TEXT = {
     'Disconnects Reticle from this page: no HUD, no agent, nothing recorded. To bring it back, restart your dev server or reload the page.',
 } as const;
 
+const SDK_VERSION_ATTR = 'data-reticle-sdk-version';
+const SDK_VERSION_TEXT = {
+  UNKNOWN: 'Reticle SDK version unknown',
+  KNOWN: (version: string): string => `Reticle SDK ${version}`,
+} as const;
+
+/**
+ * Name the SDK this page actually loaded. A dev server can keep serving an old pre-bundled copy after
+ * an upgrade, so the CLI's version says nothing about the page's; this line is the page's own answer.
+ * Painted by the SDK instance after mount, because the version arrives as a connect option.
+ */
+export function paintSdkVersion(root: ParentNode, version: string | undefined): void {
+  const line = root.querySelector(`[${SDK_VERSION_ATTR}]`);
+  if (line !== null)
+    line.textContent =
+      version === undefined ? SDK_VERSION_TEXT.UNKNOWN : SDK_VERSION_TEXT.KNOWN(version);
+}
+
 export function settingsPanelHtml(): string {
   const close = hiIconHtml(PresenterIcon.REMOVE, PRESENTER_ICON_SIZE.MIN);
   const caret = hiIconHtml(PresenterIcon.CARET_RIGHT, PRESENTER_ICON_SIZE.HELP);
@@ -398,6 +416,7 @@ export function settingsPanelHtml(): string {
         <button type="button" class="reticle-settings-link" data-reticle-settings-mcp>MCP setup guide<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></button>
         <a class="reticle-settings-link" data-reticle-feedback-email href="${FOUNDER_MAILTO}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.EMAIL_TITLE}">${FEEDBACK_TEXT.EMAIL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
         <a class="reticle-settings-link" data-reticle-feedback-call href="${DISCOVERY_CALL_URL}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.CALL_TITLE}">${FEEDBACK_TEXT.CALL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
+        <p class="reticle-settings-kill-sub" ${SDK_VERSION_ATTR}>${SDK_VERSION_TEXT.UNKNOWN}</p>
         <div class="reticle-settings-kill-row">
           <button type="button" class="reticle-settings-kill" ${KILL_ATTR}><span data-reticle-kill-label>${KILL_TEXT.LABEL}</span></button>
           <p class="reticle-settings-kill-sub">${KILL_TEXT.WARNING}</p>

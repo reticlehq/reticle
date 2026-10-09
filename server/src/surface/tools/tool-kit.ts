@@ -183,7 +183,18 @@ export interface ToolDef<Ext = unknown> {
    * handed a bag carrying no `ext` at all. That costs nothing here, because `ext` is optional by
    * design: any handler reading it already has to survive `undefined`.
    */
-  handler(deps: ToolDeps<Ext>, args: Record<string, unknown>): Promise<unknown>;
+  handler(deps: ToolDeps<Ext>, args: Record<string, unknown>, call?: ToolCall): Promise<unknown>;
+}
+
+/**
+ * What the MCP request itself offers a handler: its cancellation, and a way to say it is still
+ * working. Absent off the MCP path (the Harness's own calls, the CLI, tests).
+ */
+export interface ToolCall {
+  /** Aborts when the client cancels or the connection drops. */
+  signal?: AbortSignal;
+  /** Present when the client asked for progress: tells it the call is alive, and how far along. */
+  progress?: (progress: number, message: string) => void;
 }
 
 /**
@@ -272,6 +283,8 @@ export const EnvelopeKey = {
   PLATFORM: 'platform',
   /** The one thing to do next: declare the request, yield, fix sync, connect. See next-step.ts. */
   NEXT: 'next',
+  /** One-shot: a Harness drive started or finished, from any origin, and how to read it. */
+  HARNESS: 'harness',
 } as const;
 export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
 

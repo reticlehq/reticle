@@ -64,12 +64,12 @@ type DerivedKind = (typeof DERIVED_RECORDS)[number]['kind'];
 export interface SyncSource {
   /** Every run artifact currently on disk. */
   runs: () => ReadonlyArray<{ runId: string; payload: unknown }>;
-  /** Every saved flow. Small, upserted by name, so they ride along whenever anything else does. */
+  /** Every saved flow. Upserted by name, so the set is sent only when it changed. */
   flows: () => readonly unknown[];
   /**
    * Every bug capsule on disk — the minimal failing flow that reproduces a defect, plus its evidence.
    *
-   * Rides along with flows, and for the same reason: small, upserted by id, and worth nothing on the
+   * Sent like flows, only when the set changed: upserted by id, and worth nothing on the
    * machine that found the bug. A verdict count tells a dashboard THAT something broke; the capsule
    * is the only artifact that lets somebody else make it break again.
    */
@@ -479,7 +479,8 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
     if (unsupported.length > 0)
       heldBack.push(`this platform does not accept ${unsupported.join(', ')} yet`);
     // Flows and capsules are upserted by name/id, so the whole set goes whenever it differs from the
-    // set the platform last answered for, and rides along with anything else being sent.
+    // set the platform last answered for — and only then. Riding along with every run push re-sent
+    // ~1.3 MB per push on a real repo, and a POST that size timed out and failed the run with it.
     const flows = deps.source.flows().filter((flow, index) => {
       const version = numberAt(flow, 'version');
       if (flowVersions === undefined || version === undefined || flowVersions.includes(version))
@@ -520,10 +521,8 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       capsulesAll.length,
       deps.state.sentCapsulesHash,
     );
-    const ridesAlong =
-      sendable.length > 0 || derivedOffered.length > 0 || flowsChanged || capsulesChanged;
-    if (ridesAlong && flows.length > 0) bundle['flows'] = flows;
-    const capsules = ridesAlong ? capsulesAll : [];
+    if (flowsChanged) bundle['flows'] = flows;
+    const capsules = capsulesChanged ? capsulesAll : [];
     if (capsules.length > 0) bundle['capsules'] = capsules;
 
     let runsSent = 0;
@@ -623,7 +622,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       nextState.lastPushAt = deps.now();
       // The platform answered for these sets, refusals included (reported above, and not re-offered
       // until the set changes — the same rule as a refused run).
-      if (ridesAlong && flows.length > 0) nextState.sentFlowsHash = flowsHash;
+      if (flowsChanged) nextState.sentFlowsHash = flowsHash;
       if (capsules.length > 0) nextState.sentCapsulesHash = capsulesHash;
     }
     nextState.refusedRuns = refusedRuns;

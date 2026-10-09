@@ -196,6 +196,10 @@ export interface HarnessOptions {
   focus?: string;
   /** How long one model turn may take. Injected so a test can prove the bound without waiting for it. */
   turnTimeoutMs?: number;
+  /** Asked before every turn: true ends the drive as STOPPED. Whoever started it may stop it. */
+  stopped?: () => boolean;
+  /** Asked before every turn: what somebody said to the drive since, handed over as user turns. */
+  inbox?: () => readonly string[];
 }
 
 export const DEFAULT_MAX_STEPS = 40;
@@ -285,6 +289,17 @@ export async function runHarness(
   let askedToProve = false;
 
   for (let step = 0; step < maxSteps; step += 1) {
+    if (true === options.stopped?.()) {
+      return {
+        stopReason: StopReason.STOPPED,
+        summary: '',
+        steps: step,
+        toolCalls,
+        usage,
+        proved: proved(),
+      };
+    }
+    for (const text of options.inbox?.() ?? []) history.push({ role: 'user', text });
     let turn: ModelTurn;
     try {
       turn = await withTimeout(

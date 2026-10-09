@@ -30,7 +30,9 @@ export class McpStdioClient {
   async start() {
     this.proc = spawn(this.command, this.args, {
       ...(this.cwd === undefined ? {} : { cwd: this.cwd }),
-      env: { ...process.env, ...this.env },
+      // Benches and batteries are not watched, and a shown browser shifts their timing: hidden unless
+      // the caller asks otherwise. A person running a bench to watch it sets RETICLE_HEADLESS=0.
+      env: { RETICLE_HEADLESS: '1', ...process.env, ...this.env },
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: this.command !== 'node' && 'win32' === process.platform,
     });

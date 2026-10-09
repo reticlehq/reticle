@@ -1,13 +1,15 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerCapabilities, registerStore } from '@reticlehq/browser';
-import { install } from '@reticlehq/react';
+// Aliased: the demo build (`desktop: true`) prepends its own `import { reticle, install }` to this
+// module, and a second binding named `install` is a SyntaxError.
+import { install as installReactAdapter } from '@reticlehq/react';
 import { ShipmentsTable } from './ShipmentsTable.js';
 import { EmbeddedPanels } from './EmbeddedPanels.js';
 import { WriteStorm } from './WriteStorm.js';
 import { useAtlas } from './store.js';
 
-install();
+installReactAdapter();
 registerStore('atlas', useAtlas);
 registerCapabilities({
   testids: [
