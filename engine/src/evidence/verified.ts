@@ -1,5 +1,6 @@
 import { bodyCaptureRemedy } from './body-capture-remedy.js';
 import {
+  CaptureLoss,
   type ChannelId,
   ContradictionKind,
   MUTATING_METHODS,
@@ -334,6 +335,21 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
       because:
         `a write returned 202 Accepted (${outcomePending.join('; ')}), so the server has not finished ` +
         'processing it — this window cannot contain the outcome; re-check that call once it reconciles',
+    };
+  }
+
+  // A failure whose evidence was lost from the buffer or the ledger is UNKNOWN, not NO: the
+  // evidence the assertion needed may have been evicted, so the failure is about what REMAINED.
+  // Expressed through `truncated`/`ledgerClosed` in the honesty block rather than through `pass`
+  // being absent, so the check is explicit and does not depend on the ordering of later branches.
+  const evidenceLost = (honesty.integrity.losses ?? []).some(
+    (l) => l === CaptureLoss.BUFFER_LOSS || l === CaptureLoss.JOURNAL_LOSS,
+  );
+  if (false === pass && evidenceLost) {
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.UNCLEAN_CAPTURE,
+      because: `capture was not clean (${honesty.integrity.issues.join('; ')}), so a failure here may blame the app for evidence the buffer no longer holds`,
     };
   }
 

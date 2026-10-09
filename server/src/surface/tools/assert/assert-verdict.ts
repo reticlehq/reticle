@@ -1,4 +1,4 @@
-import { CaptureLoss, channelsReadBy, PredicateKind } from '@reticlehq/core';
+import { CaptureLoss, ChannelId, channelsReadBy, PredicateKind } from '@reticlehq/core';
 import { sessionVerdictFacts } from '@/portal/session/session-verdict-facts.js';
 import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
@@ -201,9 +201,24 @@ export async function assertVerdict(
    * absence of evidence read as evidence of absence. The act path needs no `restsOnComplete` guard:
    * its cursor is the action's own.
    */
-  const bufferLost = session.lostSince(since) && restsOnComplete;
+  const EVENT_HISTORY_CHANNELS: ReadonlySet<ChannelId> = new Set([
+    ChannelId.NET,
+    ChannelId.SIGNAL,
+    ChannelId.LOG,
+  ]);
+  // For an `allOf`, a failure is trustworthy when ANY child reads only live DOM: that child's
+  // failure is unaffected by buffer loss. Impeach only when every child reads event history,
+  // because only then could every possible failure be caused by lost data (#1231).
+  const readsEventHistory =
+    PredicateKind.ALL_OF === predicate.kind && predicate.predicates.length > 0
+      ? predicate.predicates.every((child) =>
+          channelsReadBy(child).some((ch) => EVENT_HISTORY_CHANNELS.has(ch)),
+        )
+      : channelsReadBy(predicate).some((ch) => EVENT_HISTORY_CHANNELS.has(ch));
+  const bufferLost =
+    session.lostSince(since) && (restsOnComplete || (false === pass && readsEventHistory));
   /** The durable ledger refused writes, on a query path that read from it. Same rule, other store. */
-  const ledgerLost = ledgerClosed && restsOnComplete;
+  const ledgerLost = ledgerClosed && (restsOnComplete || (false === pass && readsEventHistory));
   const decision = decideVerified({
     pass,
     // What this claim needs to read, against what the page said it can see -- the protocol's

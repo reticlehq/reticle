@@ -36,6 +36,13 @@ function depsWithBuffer(
     })(),
     bufferHealth: () => ({ total: 12, dropped }),
     lostSince: () => lost,
+    command: () =>
+      Promise.resolve({
+        kind: 'command_result' as const,
+        id: 'x',
+        ok: true,
+        result: { matched: false, count: 0, elements: [] },
+      }),
     blindSpots: () => ({}),
     eventsSince: () => events,
     queryEvents: () => Promise.resolve(events),
@@ -227,6 +234,93 @@ describe('buffer loss impeaches an absence claim, not every claim', () => {
     )) as { verified?: string; pass?: boolean };
     expect(result.pass).toBe(true);
     expect(result.verified).toBe(Verified.YES);
+  });
+});
+
+/**
+ * A FAILING positive assertion whose evidence was evicted says `unknown`, not `no` (#1231).
+ *
+ * The rule above correctly leaves a PASSING positive assertion alone: it found its evidence.
+ * But a positive assertion that FAILED over a window with lost evidence is different: the
+ * evidence it needed may have been evicted, so the failure is about what REMAINED, not what
+ * happened. Returning `no` blames the app for something that may not be wrong.
+ */
+describe('a failing positive assertion with evicted evidence is unknown (#1231)', () => {
+  const netPositive = {
+    predicate: { kind: 'net', urlContains: '/api/save' },
+    timeout_ms: 0,
+  };
+
+  it('returns UNKNOWN when a positive assertion fails and evidence was lost', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(
+      depsWithBuffer(0, undefined, true),
+      netPositive,
+    )) as { pass?: boolean; verified?: string; verifiedReason?: string };
+    expect(result.pass).toBe(false);
+    expect(result.verified).toBe(Verified.UNKNOWN);
+    expect(result.verifiedReason).toBe(VerifiedReason.UNCLEAN_CAPTURE);
+  });
+
+  it('still returns NO when a positive assertion fails on a clean buffer', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(
+      depsWithBuffer(0, undefined, false),
+      netPositive,
+    )) as { pass?: boolean; verified?: string; verifiedReason?: string };
+    expect(result.pass).toBe(false);
+    expect(result.verified).toBe(Verified.NO);
+    expect(result.verifiedReason).toBe(VerifiedReason.ASSERTION_FAILED);
+  });
+
+  it('covers an allOf with two net predicates — the repro from #1231', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(depsWithBuffer(0, undefined, true), {
+      predicate: {
+        kind: 'allOf',
+        predicates: [
+          { kind: 'net', urlContains: '/api/first' },
+          { kind: 'net', urlContains: '/api/second' },
+        ],
+      },
+      timeout_ms: 0,
+    })) as { pass?: boolean; verified?: string; verifiedReason?: string };
+    expect(result.pass).toBe(false);
+    expect(result.verified).toBe(Verified.UNKNOWN);
+    expect(result.verifiedReason).toBe(VerifiedReason.UNCLEAN_CAPTURE);
+  });
+
+  it('a live-DOM failure (element) still grades NO even with buffer loss (#1231)', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(depsWithBuffer(0, undefined, true), {
+      predicate: { kind: 'element', query: { role: 'button', name: 'Submit' } },
+      timeout_ms: 0,
+    })) as { pass?: boolean; verified?: string; verifiedReason?: string };
+    expect(result.pass).toBe(false);
+    expect(result.verified).toBe(Verified.NO);
+    expect(result.verifiedReason).toBe(VerifiedReason.ASSERTION_FAILED);
+  });
+
+  it('allOf[net, element] where the net passed but the button is missing grades NO, not unknown', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(
+      depsWithBuffer(0, undefined, true, [
+        {
+          t: 1,
+          type: EventType.NET_REQUEST,
+          sessionId: 'demo',
+          data: { method: 'POST', url: 'http://localhost/api/save', status: 200, ok: true },
+        },
+      ]),
+      {
+        predicate: {
+          kind: 'allOf',
+          predicates: [
+            { kind: 'net', urlContains: '/api/save' },
+            { kind: 'element', query: { role: 'button', name: 'Submit' } },
+          ],
+        },
+        timeout_ms: 0,
+      },
+    )) as { pass?: boolean; verified?: string; verifiedReason?: string };
+    expect(result.pass).toBe(false);
+    expect(result.verified).toBe(Verified.NO);
+    expect(result.verifiedReason).toBe(VerifiedReason.ASSERTION_FAILED);
   });
 });
 
