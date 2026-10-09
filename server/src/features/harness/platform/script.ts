@@ -21,6 +21,7 @@ import {
   type PlanView,
 } from '@reticlehq/core';
 import { DriveScriptSchema, checkScript, type DriveScript } from '@reticlehq/core/artifacts';
+import { platformHeaders, type PlatformCredential } from './server-driver.js';
 
 const SCRIPTS_PATH = '/v1/harness/scripts';
 const RESULTS_PATH = '/results';
@@ -75,14 +76,14 @@ export function stepHash(step: FlowStep): string {
 }
 
 export async function proposeScript(
-  platform: { url: string; apiKey: string },
+  platform: PlatformCredential,
   ask: ScriptAsk,
   doFetch: FetchLike = (url, init) => fetch(url, init),
 ): Promise<{ script: DriveScript; planId?: string } | undefined> {
   try {
     const res = await doFetch(`${platform.url}${SCRIPTS_PATH}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${platform.apiKey}` },
+      headers: platformHeaders(platform),
       body: JSON.stringify({
         about: ask.about,
         flows: ask.flows.map((flow) => ({
@@ -151,7 +152,7 @@ export function journeyResults(view: PlanView): JourneyResult[] {
 
 /** Tell the platform how its plan went. A failure costs the next plan its memory, never this run. */
 export async function reportPlanResults(
-  platform: { url: string; apiKey: string },
+  platform: PlatformCredential,
   planId: string,
   results: readonly JourneyResult[],
   doFetch: FetchLike = (url, init) => fetch(url, init),
@@ -161,7 +162,7 @@ export async function reportPlanResults(
       `${platform.url}${SCRIPTS_PATH}/${encodeURIComponent(planId)}${RESULTS_PATH}`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${platform.apiKey}` },
+        headers: platformHeaders(platform),
         body: JSON.stringify({ results }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       },

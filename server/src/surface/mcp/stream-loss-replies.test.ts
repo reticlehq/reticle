@@ -19,6 +19,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { PendingRequests, streamLossReplies } from './mcp-proxy.js';
+import { MSG_DRIVE_MAY_BE_RUNNING } from './proxy/drive-calls.js';
 
 describe('streamLossReplies', () => {
   it('answers every unanswered request, under its own id', () => {
@@ -55,5 +56,39 @@ describe('streamLossReplies', () => {
     pending.observeOutbound(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call' }));
     expect(streamLossReplies(pending, 'sse_ended')).toHaveLength(1);
     expect(streamLossReplies(pending, 'sse_closed')).toEqual([]);
+  });
+});
+
+/*
+ * A Harness drive lives in the daemon, not in the call. The old reply told the agent the call "did
+ * NOT complete" and to retry, so a dropped connection under a drive paid for a second one.
+ */
+describe('a lost connection under a Harness drive', () => {
+  const explore = (id: number, params: Record<string, unknown>) =>
+    JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params });
+
+  it('says the drive may still be running and how to get it back, not to retry', () => {
+    const pending = new PendingRequests();
+    pending.observeOutbound(
+      explore(1, { name: 'reticle_verify', arguments: { action: 'explore', persona: 'p' } }),
+    );
+    pending.observeOutbound(
+      explore(2, {
+        name: 'reticle_run',
+        arguments: { tool: 'reticle_verify', args: { action: 'explore' } },
+      }),
+    );
+    pending.observeOutbound(explore(3, { name: 'reticle_act', arguments: {} }));
+    const byId = new Map(
+      streamLossReplies(pending, 'sse_ended').map((line) => {
+        const r = JSON.parse(line) as { id: number; error: { message: string } };
+        return [r.id, r.error.message];
+      }),
+    );
+    for (const id of [1, 2]) {
+      expect(byId.get(id)).toContain(MSG_DRIVE_MAY_BE_RUNNING);
+      expect(byId.get(id)).not.toContain('did NOT');
+    }
+    expect(byId.get(3)).toContain('did NOT');
   });
 });

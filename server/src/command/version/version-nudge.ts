@@ -85,6 +85,8 @@ export function takeVersionSkewOnto(
 ): Record<string, unknown> {
   const skew = takeVersionSkew(connection);
   if (skew === undefined) return payload;
+  // Compatible, so it did not cause this error: ride along, and leave the advice and the ask alone.
+  if (SkewPair.SDK_BEHIND === skew.pair) return { ...payload, [EnvelopeKey.VERSION_SKEW]: skew };
   const { feedback, ...rest } = payload;
   return {
     ...rest,

@@ -8,6 +8,7 @@
  * the 1000-line backstop is what asked for the split.
  */
 import { artifactRootResolver } from './memory/project/artifact-root-resolver.js';
+import { claimedArtifactRoot } from './memory/project/root-claims.js';
 import { servingDirectoryOf } from './portal/session/serving-directory.js';
 import { originOf } from './portal/session/session-manager.js';
 import { Bridge } from './portal/bridge/bridge.js';
@@ -69,7 +70,11 @@ export function attachJournal(
     // reached a different account's production dashboard.
     // The origin is passed for the case where the page never stamped a project id: it is the only
     // distinguishing fact left, and without it every such app shares one bucket.
-    session.artifactRoot = resolveArtifactRoot(session.projectId, originOf(session.url)).root;
+    // A lease opened by `try`, a chat drive or `verify` carries the root of whoever opened it; the
+    // resolver would send a page with no project id to `unmatched/`, which nothing syncs.
+    session.artifactRoot =
+      claimedArtifactRoot(session.id, session.url) ??
+      resolveArtifactRoot(session.projectId, originOf(session.url)).root;
     // The project's config sits beside its `.reticle/`, so the declaration is read from the tab's
     // own project rather than from wherever the daemon was started.
     session.background = readBackgroundTraffic(findProjectConfig(dirname(session.artifactRoot)));

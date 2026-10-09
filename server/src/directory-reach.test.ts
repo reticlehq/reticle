@@ -296,6 +296,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    // `reticle try` asks the platform for its free drive through the same call the HUD's Run
+    // Harness button makes (platform-drives.ts), so the two grants cannot drift apart.
+    'platform',
     // doctor reads the document the dev server serves (served-document.ts) to judge its CSP.
     'dev-server',
     // `reticle gate` ratchets on the coverage ledger and blocks changed code that never ran.
@@ -540,6 +543,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // is the only module that exports it, so the alternative was a second copy of the reader.
   setup: ['binding', 'bringup', 'daemon', 'launch', 'probe', 'resolve', 'terminal'],
   telemetry: [
+    // The run count skips a Harness drive's own record (`DRIVE_RECORD_SUFFIX`), named once beside
+    // the runs directory it sits in rather than spelled again here.
+    'dir',
     'cli',
     'daemon',
     'identity',

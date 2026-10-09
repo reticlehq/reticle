@@ -77,6 +77,12 @@ export function reticleDirPaths(root: string): ReticleDirPaths {
   };
 }
 
+/**
+ * A Harness drive's own record beside its run —.reticle/runs/<runId>.drive.json. Not a run: every
+ * reader that counts or syncs run files skips it.
+ */
+export const DRIVE_RECORD_SUFFIX = '.drive.json';
+
 /** The verification-run artifact path for `runId`.reticle/runs/<runId>.json). */
 export function runPath(root: string, runId: RunId): string {
   return join(root, ReticleDir.RUNS_SUBDIR, `${runId}.json`);

@@ -28,6 +28,7 @@ import {
 import { Session } from '@/portal/session/session.js';
 import { SessionManager, type RefusedPage } from '@/portal/session/session-manager.js';
 import { tokensMatch } from './token-auth.js';
+import { harnessRequest, type HarnessRequest } from './harness-request.js';
 import { pairingTokenSource } from './pairing-token.js';
 import { log } from '@/log.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
@@ -35,7 +36,13 @@ import {
   SESSION_PARKED_REASON,
   sessionReplacedReason,
 } from '@/portal/session/facts/session-replaced.js';
-import { describeSkew, sdkFix, SkewPair } from '@/command/version/version-skew.js';
+import {
+  describeSdkBehind,
+  describeSkew,
+  sdkFix,
+  SDK_BEHIND_NARRATION,
+  SkewPair,
+} from '@/command/version/version-skew.js';
 import { noteVersionSkew } from '@/command/version/version-nudge.js';
 import { protocolSkewReason } from './protocol-skew.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
@@ -164,24 +171,6 @@ function replayRequest(event: { type: string; data: Record<string, unknown> }): 
   if (event.data['kind'] !== HumanControlKind.REPLAY) return undefined;
   const name = event.data['text'];
   return 'string' === typeof name && name.length > 0 ? name : undefined;
-}
-
-/**
- * The desired harness state if this event is the panel's switch, else undefined.
- *
- * Carries `on`/`off` rather than meaning "toggle": a double-click on a flaky connection sends two,
- * and two toggles land back where they started while two `on`s are the same as one.
- */
-function harnessRequest(event: {
-  type: string;
-  data: Record<string, unknown>;
-}): boolean | undefined {
-  if (event.type !== EventType.HUMAN_CONTROL) return undefined;
-  if (event.data['kind'] !== HumanControlKind.HARNESS) return undefined;
-  const want = event.data['text'];
-  if ('on' === want) return true;
-  if ('off' === want) return false;
-  return undefined;
 }
 
 /** True when this event is the panel's Sign in. Pure boundary narrowing, like the above. */
@@ -339,7 +328,7 @@ export class Bridge {
   #onSessionEnd: ((session: Session) => Promise<void>) | undefined;
   /** Wired by the daemon: push to the dashboard now, because somebody asked in the panel. */
   #onSyncRequest: (() => void) | undefined;
-  #onHarnessRequest: ((enabled: boolean, session: Session) => void) | undefined;
+  #onHarnessRequest: ((request: HarnessRequest, session: Session) => void) | undefined;
   #onSigninRequest: (() => void) | undefined;
 
   constructor(options: BridgeOptions) {
@@ -752,6 +741,15 @@ export class Bridge {
             });
             session.versionSkew = skew;
             noteVersionSkew(SkewPair.SDK, skew);
+          } else {
+            // Wire-compatible but a minor or more behind: the agent hears it on its next tool call
+            // and the person on the overlay. Not `versionSkew`, which marks the pair as broken.
+            const behind = describeSdkBehind(parsed.sdkVersion, SERVER_VERSION, fixForThisProject);
+            if (behind !== undefined && parsed.sdkVersion !== undefined) {
+              log('sdk_behind', { sessionId: session.id, sdk: parsed.sdkVersion });
+              noteVersionSkew(SkewPair.SDK_BEHIND, behind);
+              session.pushNarration(SDK_BEHIND_NARRATION(parsed.sdkVersion, SERVER_VERSION));
+            }
           }
           log('session_connected', { sessionId: session.id, url: session.url });
           // The one fact that separates a broken install from an unused one. Best-effort and wrapped:
@@ -929,10 +927,10 @@ export class Bridge {
   }
 
   /**
-   * Register a handler for the panel's harness switch. Optional for the same reason as the above: a
-   * bridge built without one ignores the request rather than refusing it.
+   * Register a handler for the panel's Harness controls (switch, Run, Stop). Optional for the same
+   * reason as the above: a bridge built without one ignores the request rather than refusing it.
    */
-  attachHarnessRequest(handler: (enabled: boolean, session: Session) => void): void {
+  attachHarnessRequest(handler: (request: HarnessRequest, session: Session) => void): void {
     this.#onHarnessRequest = handler;
   }
 

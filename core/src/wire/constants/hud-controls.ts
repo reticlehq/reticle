@@ -61,6 +61,9 @@ const PLAIN_CONTROLS = [
   'mark-send',
   // The Agent Log's own Harness switch; the Settings one is `setting.harnessEnabled`.
   'harness-switch',
+  // Run Harness beside it, and Stop while the drive it started runs.
+  'harness-run',
+  'harness-stop',
   // "See all" beside the Agent Log's replay row, and below Impact's recent bugs.
   'flows-all',
   'defects-all',

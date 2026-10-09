@@ -143,7 +143,18 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * hide or move a HUD sitting over the control it has to test, which was otherwise untestable. The
  * two parameters it started as were merged into one, and its description dropped, to get here.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 25_650;
+/*
+ * 25_700 for `driveId` on reticle_verify explore (25,676 B measured), with no description: the one
+ * free drive `reticle try` was granted has to reach the daemon that drives, and an argument on that
+ * call is the only channel to it.
+ */
+/*
+ * 25_850 for `wait`, `runId`, `stop` and `say` on reticle_verify explore (25,840 B measured), only
+ * `wait` described: a drive awaited inside one call outlived a 60s client timeout, so the agent got
+ * no run id and a retry paid for a second drive. Starting it and polling by id needs the id passed
+ * back, and stop/say are the only way to steer a drive short of the project-wide switch.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_850;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -297,9 +308,19 @@ describe('advertised surface cost', () => {
 // 149_500 -> 149_700 for `window` and `documentStatus` on reticle_sessions and `disconnected` on
 // session end (149,593 B): two windows of one desktop app share a url, and a validating client strips
 // an undeclared field, so the label that tells them apart has to be in the schema.
-// 149_700 -> 149_800 for `repeatable` on a net clause (#1353), 149,731 B: a read over POST declared
-// as one is kept out of duplicate-request, and the field rides every schema that carries a predicate.
-const ALL_SURFACE_BYTE_BUDGET = 149_800;
+// 149_700 -> 149_800 for `expect` on reticle_verify explore (149,734 B): a drive graded only on
+// quoted text passed without using the app, so the outcome it must end in has to be declarable.
+// Typed as a plain record, not the predicate schema, which would have cost ~700 tokens.
+// 149_800 -> 149_950 for the start-then-poll explore (149,926 B): `wait`/`runId`/`stop`/`say` in,
+// and `status`/`runId`/`lastLine`/`next` out, because a running drive answers only those and a
+// validating client strips an undeclared field.
+// 149_950 -> 150_300 for the `harness` envelope key on every output schema (150,251 B): a drive the
+// HUD or the platform's chat started reaches the agent only on its next tool result, and a
+// validating client strips an undeclared key. The default surface sends no output schemas.
+// 150_300 -> 150_400 for `repeatable` on a net clause (#1353), 150,379 B merged with the above: a
+// read over POST declared as one is kept out of duplicate-request, and the field rides every schema
+// that carries a predicate, so a validating client would strip it otherwise.
+const ALL_SURFACE_BYTE_BUDGET = 150_400;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

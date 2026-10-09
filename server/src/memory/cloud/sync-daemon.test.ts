@@ -605,3 +605,36 @@ describe('a refusal is not silence', () => {
     vi.restoreAllMocks();
   });
 });
+
+/*
+ * An unlinked root was skipped with a bare `continue`: a repo held 31 unsent runs and nothing said
+ * so. Every root with unsent runs is now one log line and one entry in `unsyncedRoots()`.
+ */
+describe('a root nothing will send is said out loud', () => {
+  it('logs an unlinked root with runs once, and lists it with its count', async () => {
+    const sibling = join(mkdtempSync(join(tmpdir(), 'reticle-unsent-')), '.reticle');
+    mkdirSync(join(sibling, 'runs'), { recursive: true });
+    for (const id of ['r1', 'r2', 'r3'])
+      writeFileSync(join(sibling, 'runs', `${id}.json`), JSON.stringify({ runId: id }));
+    const lines: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown): boolean => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      otherRoots: () => Promise.resolve([sibling]),
+      cloudFor: () => Promise.resolve(UNLINKED),
+      request: counting().request,
+      intervalMs: 1000,
+    });
+    await vi.advanceTimersByTimeAsync(20_000);
+    d.stop();
+    spy.mockRestore();
+    const said = lines.filter((l) => l.includes('reticle_cloud_unsynced_root'));
+    expect(said).toHaveLength(1);
+    expect(JSON.parse(String(said[0]))).toMatchObject({ root: sibling, runs: 3, linked: false });
+    expect(d.unsyncedRoots()).toEqual([{ root: sibling, runs: 3, linked: false }]);
+  });
+});

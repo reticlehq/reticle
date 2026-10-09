@@ -54,6 +54,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * a different shell, not to test a factoring.
  */
 import { ELECTRON_SMOKE_SUBJECT as SUBJECT } from './subjects/electron-smoke.mjs';
+// Batteries are not watched, and a shown browser changes their timing: hide every browser Reticle opens.
+process.env.RETICLE_HEADLESS ??= '1';
 
 /** Electron, as the desktop battery resolves it. */
 function electronBinary() {

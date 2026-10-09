@@ -20,6 +20,7 @@ It uses the same runner and the same verdict as the MCP and HTTP paths, so a pla
 | `--headed` | boolean | `false` (headless) | Show the browser |
 | `--timeout N` | number, ms | `15000` | How long to wait for a browser session to dial back |
 | `--storage-state <file>` | string | unset | A Playwright storage state file. This is how you verify flows behind a login without scripting the login every time |
+| `--results-json <file>` | string | unset | Also write one verdict per journey to this file: `{ verdict, results: [{ journey, verdict, reason? }] }`, each verdict `yes`, `no` or `unknown`. A skipped journey is `unknown`, and the run is `yes` only when every journey is. Written when verify boots its own browser and a run finishes; a refusal before that writes nothing. The [GitHub Action](https://github.com/reticlehq/reticle/tree/main/action) posts this file |
 
 ## What it prints
 

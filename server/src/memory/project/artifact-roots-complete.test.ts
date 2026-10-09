@@ -79,8 +79,8 @@ const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
     why: 'Opens the impact record for the daemon (a per-root store keyed inside the recorder) and falls back when a call has no session.',
   },
   'memory/cloud/sync-daemon.ts': {
-    uses: 6,
-    why: 'Sync walks EVERY root it can find and treats the daemon root as one of them; the comparison at :183 exists to avoid pushing it twice.',
+    uses: 7,
+    why: "Sync walks EVERY root it can find and treats the daemon root as one of them; the comparison at :183 exists to avoid pushing it twice. The seventh records whether the daemon root is linked, so its unsent runs are counted with every other root's.",
   },
   'features/visual/visual-tools.ts': {
     uses: 2,

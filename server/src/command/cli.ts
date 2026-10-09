@@ -49,6 +49,7 @@ import { affectedSavedFlows } from '@/language/flows/change/flow-sources.js';
 
 import { availableUpdate } from './update/update-nudge.js';
 import { handleUpdate, handleRollback } from './cli/cli-update-commands.js';
+import { headlessByDefault } from './cli/daemon-start-options.js';
 
 import { startDaemon } from '@/index.js';
 import { isCloudCommand, runCloudCommand } from './cli/cloud-cli.js';
@@ -764,7 +765,7 @@ export function main(): void {
   const defaultPort = envPort ?? projectPort ?? myDaemonPort ?? RETICLE_DEFAULT_PORT;
   // Headed by default; hidden only where there is no display to be headed on. A run nobody can see
   // is a run nobody trusts, and every "did it actually do anything?" cost a human round-trip.
-  const parsed = parseCliArgs(argv, defaultPort, process.env['CI'] !== undefined);
+  const parsed = parseCliArgs(argv, defaultPort, headlessByDefault(process.env, process.platform));
   // The refusal the line above promised. Printing it and carrying on let the default port answer
   // anyway, for whichever project's daemon owned it.
   if (portConflict !== undefined && dialsTheDaemon(parsed)) {

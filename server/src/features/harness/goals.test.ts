@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
-import { checkGoals, goalsIn, unprovedGoals } from './goals.js';
+import { checkExpect, checkGoals, goalsIn, unprovedGoals } from './goals.js';
 
 describe('the goals a drive was asked to prove (#1316)', () => {
   it('are the strings the persona quoted', () => {
@@ -59,5 +59,26 @@ describe('the goals a drive was asked to prove (#1316)', () => {
     const checks = await checkGoals(() => Promise.reject(new Error('tab gone')), ['Ada']);
     expect(checks).toEqual([{ text: 'Ada', verified: 'unknown' }]);
     expect(unprovedGoals([{ text: 'Ada', verified: 'yes' }])).toBeUndefined();
+  });
+});
+
+describe('an outcome the journey must end in', () => {
+  const route = { kind: 'route', path: '/orders/confirmed' };
+
+  it('is asserted as given and graded by the engine', async () => {
+    const asked: [string, Record<string, unknown>][] = [];
+    const check = await checkExpect((name, args) => {
+      asked.push([name, args]);
+      return Promise.resolve({ verified: 'no' });
+    }, route);
+    expect(asked).toEqual([[ReticleTool.ASSERT, { predicate: route }]]);
+    expect(check.verified).toBe('no');
+    expect(check.text).toContain('/orders/confirmed');
+    expect(unprovedGoals([check])).toContain('/orders/confirmed');
+  });
+
+  it('is unknown, never a pass, when the assert cannot run', async () => {
+    const check = await checkExpect(() => Promise.reject(new Error('gone')), route);
+    expect(check.verified).toBe('unknown');
   });
 });

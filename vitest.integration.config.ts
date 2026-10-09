@@ -11,6 +11,8 @@ export default defineConfig({
     testTimeout: 60_000,
     hookTimeout: 60_000,
     fileParallelism: false,
+    // Batteries are not watched, and a shown browser changes their timing.
+    env: { RETICLE_HEADLESS: '1' },
     // Refuse occupied fixture ports and isolate daemon state; never kill another process.
     globalSetup: ['./test/global-setup.ts'],
   },

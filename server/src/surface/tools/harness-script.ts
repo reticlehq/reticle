@@ -48,7 +48,7 @@ import {
   reportPlanResults,
   type JourneyResult,
 } from '@/features/harness/platform/script.js';
-import { checkGoals, goalsIn } from '@/features/harness/goals.js';
+import { checkExpect, checkGoals, goalsIn, type GoalCheck } from '@/features/harness/goals.js';
 import { serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import {
   MSG_HARNESS_DISABLED,
@@ -64,6 +64,7 @@ import {
   reconcileFlows,
   recordPersona,
   refusedByPlatform,
+  steering,
   withProjectFlows,
   type ExploreOptions,
   type ExploreResult,
@@ -152,7 +153,7 @@ export async function exploreScript(
         )
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driverName = driverFor().name;
-  const harness = randomUUID();
+  const harness = options.harnessId ?? randomUUID();
   const narrate = narrator(deps, options);
 
   // Lanes run side by side only in leased contexts; without a pool they take turns on this tab.
@@ -174,7 +175,7 @@ export async function exploreScript(
 
   const ports: ScriptPorts = {
     parallel: leasing ? Math.max(1, Math.min(script.lanes.length, pool.capacity(), MAX_LANES)) : 1,
-    stopped: () => off,
+    stopped: () => off || true === options.stopped?.(),
     lease: async () => {
       if (!leasing) return { ...pinned(options), release: () => Promise.resolve() };
       const acquire = () => acquireLeasedSession(pool, deps.sessions, appUrl, projectId);
@@ -202,6 +203,7 @@ export async function exploreScript(
           : goal);
       const ahead = new Set(await reads.flows.list());
       const result = await runHarness(driverFor(persona, goal).driver, toolset, {
+        ...steering(options),
         maxSteps: Math.min(steps, maxSteps),
         focus: [planAsText(planFor(goal)), `Focus: ${goal}`].join('\n\n'),
       });
@@ -305,16 +307,30 @@ export async function exploreScript(
     unverifiedFlows,
     // The texts a named journey quoted must be on the page at the end, checked as the persona
     // drive always checked them.
-    goals: await checkGoals(
+    goals: await endGoals(
       (name, args) => ports.toolset(pinned(options).sessionId, focus).invoke(name, args),
       options.goals ?? goalsIn(focus),
+      options.expect,
     ),
     ...(0 === runIds.length ? {} : { runIds }),
+    journeys: results,
     planLines: [
       `Plan · ${String(script.journeys.length)} journeys in ${String(script.lanes.length)} lane(s)`,
       ...run.lines,
     ],
   };
+}
+
+/** The quoted texts, then the declared outcome, each graded on the page the drive ended on. */
+async function endGoals(
+  invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+  texts: readonly string[],
+  expect: Record<string, unknown> | undefined,
+): Promise<GoalCheck[]> {
+  return [
+    ...(await checkGoals(invoke, texts)),
+    ...(expect === undefined ? [] : [await checkExpect(invoke, expect)]),
+  ];
 }
 
 /** What the project still owes, in its own words: the user's recent request, then open intents. */

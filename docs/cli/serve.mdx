@@ -18,8 +18,8 @@ Most people never type this. Your agent runs [`reticle mcp`](/cli/mcp), which st
 | --- | --- | --- | --- |
 | `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Bridge port to bind |
 | `--drive <url>` | string | unset | Launch Reticle's own browser at this URL instead of waiting for your tab |
-| `--headless` | boolean | `true` for `serve` | Hide the browser |
-| `--headed` | boolean | `false` | Show it. `serve` owns the pooled browser behind leases, which is batch work, so it hides by default |
+| `--headless` | boolean | on when `CI` or `RETICLE_HEADLESS` is set, or on Linux with no display | Hide the browser |
+| `--headed` | boolean | on otherwise | Show it, so you can watch the run |
 | `--http` | boolean | `false` | Also expose the HTTP verify endpoint |
 | `--http-port N` | number | unset (`7331`) | Port for that endpoint. Requires `--http`. |
 | `--http-token T` | string | unset | Bearer token the endpoint requires. Requires `--http`. |

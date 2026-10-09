@@ -96,6 +96,13 @@ async function waitForSession(running: RunningServer, now: () => number): Promis
 }
 
 /**
+ * From the field: a session connecting and `verified: yes` read as "Reticle is in my app", and the
+ * person went looking for their app on the dashboard. The demo says whose app it drove.
+ */
+const DEMO_IS_NOT_YOUR_APP =
+  "That was Reticle's demo app. Yours is not wired yet: run `reticle init` in your app's folder.";
+
+/**
  * Run the tour, and report whether it ended at a proof.
  *
  * A step that cannot be taken stops the tour and says which one. Carrying on past a failed step
@@ -130,7 +137,7 @@ export async function runDemoTour(options: DemoTourOptions): Promise<DemoTourRes
       options.say('  the demo page never dialled the bridge, so there is nothing to show.');
       return { code: 1, verified: undefined };
     }
-    options.say(`  one session connected: the demo app at ${page.url}`);
+    options.say(`  one session connected: Reticle's own demo app, not yours, at ${page.url}`);
 
     announce('look');
     const snapshot = asRecord(await call(ReticleTool.SNAPSHOT, { mode: 'interactive' }));
@@ -159,6 +166,8 @@ export async function runDemoTour(options: DemoTourOptions): Promise<DemoTourRes
     const because = asText(verdict['verifiedReason']) ?? asText(verdict['failureReason']);
     options.say(`  verified: ${verified ?? 'unknown'}`);
     if (because !== undefined) options.say(`  because: ${because}`);
+    options.say('');
+    options.say(DEMO_IS_NOT_YOUR_APP);
     return { code: PROVED === verified ? 0 : 1, verified };
   } finally {
     await page.close();

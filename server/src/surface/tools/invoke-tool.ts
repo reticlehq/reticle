@@ -2,6 +2,7 @@ import { healthEnvelope } from '@/portal/session/session-health.js';
 import { logToolCall, toolLogPath } from '@/hooks/tool-log.js';
 import { nextStep } from './next-step.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
+import { takeDriveNotes } from '@/features/harness/drive-runs.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { takePlatformMoment } from './platform-moment.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
@@ -26,7 +27,6 @@ import { verificationOf } from '@/telemetry/verification-of.js';
 import { emitBugFoundHook, emitVerdictHook } from '@/hooks/hook-emit.js';
 import { reportOnboardingStep } from '@/telemetry/onboarding-funnel.js';
 import { noteActed, noteFirstVerdict, noteOnboardingFirst } from '@/telemetry/onboarding-firsts.js';
-import { withHarnessDrive } from '@/telemetry/harness-drive.js';
 import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
 import { DiscoveryInvite, asString } from '@reticlehq/core';
 import { SESSION_ID_ARG, sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
@@ -50,7 +50,7 @@ import {
   recordImpact,
 } from '@/memory/impact/impact-recorder.js';
 import { type FrictionKind, frictionOf, inviteFor } from './feedback-invite.js';
-import type { ToolDef, ToolDeps } from './tool-kit.js';
+import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
 
 /**
  * The live-session tools whose result MUST carry the
@@ -182,18 +182,6 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.FEEDBACK,
 ]);
 
-/**
- * The merged action that hands the drive to a model inside the daemon.
- *
- * Derived from the member tool's own name rather than spelled again: the merge dispatches on
- * `action`, and `reticle_verify` plus `explore` IS `reticle_verify_explore`. A literal here would be
- * a third spelling of one name, and the one that silently stops matching when the action is renamed.
- */
-const HARNESS_DRIVE_ACTION = ReticleTool.VERIFY_EXPLORE.slice(`${ReticleTool.VERIFY}_`.length);
-function isHarnessDrive(toolName: string, args: Record<string, unknown>): boolean {
-  return ReticleTool.VERIFY === toolName && HARNESS_DRIVE_ACTION === args['action'];
-}
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return 'object' === typeof value && value !== null && !Array.isArray(value);
 }
@@ -215,7 +203,13 @@ function recordVerification(
   brand: BrowserBrand | undefined,
   sessionId: string | undefined,
 ): void {
-  const verification = verificationOf(toolName, result, durationMs, brand);
+  const verification = verificationOf(
+    toolName,
+    result,
+    durationMs,
+    brand,
+    currentDrivenBy() !== undefined,
+  );
   if (verification === undefined) return;
   getSessionMetrics().recordVerification();
   void getTelemetry().emit(TelemetryEventKind.VERIFICATION_COMPLETED, {
@@ -388,12 +382,13 @@ export async function runTool<Ext>(
   tool: ToolDef<Ext>,
   deps: ToolDeps<Ext>,
   args: Record<string, unknown>,
+  call?: ToolCall,
 ): Promise<unknown> {
   const logPath = toolLogPath();
-  if (logPath === undefined) return dispatchTool(tool, deps, args);
+  if (logPath === undefined) return dispatchTool(tool, deps, args, call);
   const at = deps.now();
   try {
-    const result = await dispatchTool(tool, deps, args);
+    const result = await dispatchTool(tool, deps, args, call);
     logToolCall(logPath, { tool: tool.name, args, at, ms: deps.now() - at, result });
     return result;
   } catch (error) {
@@ -407,6 +402,7 @@ async function dispatchTool<Ext>(
   tool: ToolDef<Ext>,
   deps: ToolDeps<Ext>,
   args: Record<string, unknown>,
+  call?: ToolCall,
 ): Promise<unknown> {
   // Both dispatch paths (MCP + programmatic) pass through here — the one place "which tool is mostly
   // used" can be counted. This used to EMIT an event per call; it now increments an in-process counter
@@ -547,19 +543,13 @@ async function dispatchTool<Ext>(
     // `dispatchArgs`, not `args`: an inferred session is pinned into the arguments before the
     // handler sees them, so a tool that resolves the session a second time cannot land on a
     // different one than the dispatcher chose.
-    const call = (): Promise<unknown> =>
+    const invokeHandler = (): Promise<unknown> =>
       span('tool.handler', { tool: tool.name, session: session?.id }, () =>
-        tool.handler(deps, dispatchArgs),
+        tool.handler(deps, dispatchArgs, call),
       );
-    // A drive we run on the user's behalf, marked for its whole span so the verdicts it produces
-    // underneath are distinguishable from the ones the user's own agent earned.
-    //
-    // The outer call emits no verdict of its own, and that is the honest answer rather than a gap:
-    // it drives and records, it adjudicates nothing, and its result carries no verified/pass field
-    // to read. Deriving one from how far the drive got would be inventing a verdict nobody reached.
-    // What was missing was never an event here — it was that a session driven BY US read exactly
-    // like one the agent earned, which is what the span fixes.
-    raw = await (isHarnessDrive(tool.name, args) ? withHarnessDrive(call) : call());
+    // The Harness's own inner calls carry their drive in an async context (`runDrivenBy`), which is
+    // what attributes their verdicts; the outer explore call adjudicates nothing of its own.
+    raw = await invokeHandler();
   } catch (error) {
     // The commonest refusal shape by far, and the one nothing could see: the message is built, handed
     // to the agent by the MCP boundary, and discarded. Reported here rather than at that boundary
@@ -692,7 +682,14 @@ async function dispatchTool<Ext>(
           now: 'function' === typeof deps.now ? deps.now() : Date.now(),
         })
       : undefined;
+  // A Harness drive started or finished, from the HUD, the platform's chat or this agent: one line,
+  // once. Not for the Harness's own calls, and not about the run this very result already reports.
+  const drives =
+    isPlainObject(raw) && currentDrivenBy() === undefined
+      ? takeDriveNotes('string' === typeof raw['runId'] ? raw['runId'] : undefined)
+      : [];
   const result =
+    0 === drives.length &&
     prompt === undefined &&
     update === undefined &&
     skew === undefined &&
@@ -716,6 +713,7 @@ async function dispatchTool<Ext>(
           ...(update !== undefined ? { [EnvelopeKey.UPDATE_AVAILABLE]: update } : {}),
           ...(skew !== undefined ? { [EnvelopeKey.VERSION_SKEW]: skew } : {}),
           ...(platform !== undefined ? { [EnvelopeKey.PLATFORM]: platform } : {}),
+          ...(0 === drives.length ? {} : { [EnvelopeKey.HARNESS]: drives.join('\n') }),
           ...(undelivered !== undefined
             ? {
                 [EnvelopeKey.FEEDBACK_UNDELIVERED]: `your earlier report did NOT send: ${undelivered}. Tell the human what you found so it is not lost.`,
