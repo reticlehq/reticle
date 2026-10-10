@@ -5,7 +5,7 @@ import {
   type Predicate,
   type ProjectId,
 } from '@reticlehq/core';
-import { REDACTED_FILL } from './fields/flow-secret-field.js';
+import { REDACTED_FILL, withDistinctSecretKeys } from './fields/flow-secret-field.js';
 export { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
 import { changeInPlace } from './narrow-write.js';
@@ -316,7 +316,7 @@ export class FlowStore {
    * of them produces byte-identical on-disk content (locked by the byte-stability tests).
    */
   #serialize(flow: FlowFile): string {
-    const stamped = { ...flow, version: flowFileVersionFor(flow) };
+    const stamped = { ...withDistinctSecretKeys(flow), version: flowFileVersionFor(flow) };
     return `${JSON.stringify(stamped, null, JSON_INDENT)}\n`;
   }
 
@@ -663,7 +663,8 @@ export class FlowStore {
       };
     }
 
-    return parseFlowFileText(text);
+    const parsed = parseFlowFileText(text);
+    return parsed.ok ? { ...parsed, value: withDistinctSecretKeys(parsed.value) } : parsed;
   }
 
   /**
