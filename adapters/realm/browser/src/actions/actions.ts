@@ -29,6 +29,7 @@ import {
   isTextArea,
 } from '@/dom/realm.js';
 import { nativeSetTimeout, settle } from '@/timers/native/native-timers.js';
+import { publishSettledField, readActedField } from '@/observers/field.js';
 import { AppearedText } from './appeared-text.js';
 import { alreadyAtCheckedState, assertAriaToggleLanded, isAriaToggle } from './check-state.js';
 import {
@@ -840,6 +841,9 @@ export async function executeAction(
   const enabled = enabledOf(el);
   const prevFocus = activeRef(el);
   const valueBefore = valueOf(el);
+  // Before dispatch, so a click that toggles `checked` during the event cannot erase the pre-action
+  // reading. Published after settle, once React has restored or committed the controlled property.
+  const fieldBefore = readActedField(el);
   // Click-like: scroll an off-viewport target in + hit-test the click point BEFORE installing the
   // mutation observer (scroll/hit-test never mutate the DOM, but keep the probe window clean).
   const geometry = CLICK_LIKE.has(action) ? clickGeometry(el) : NO_GEOMETRY;
@@ -891,6 +895,7 @@ export async function executeAction(
 
   assertAriaToggleLanded(el, action, alreadyAtValue);
   const valueAfter = valueOf(el);
+  publishSettledField(el, fieldBefore);
   const nextFocus = activeRef(el);
   const effect: ActionEffect = {
     dispatched: true,

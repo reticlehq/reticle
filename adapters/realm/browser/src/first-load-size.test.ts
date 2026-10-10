@@ -355,8 +355,14 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * "Measured, rounded up to the next hundred" left ~30 B of room, so every PR that added bytes had
  * to touch this constant and any two of them conflicted in the merge queue: #1479 and #1484 both
  * raised it on 2026-10-09. Measured 257,747 B on main after both landed; ceiling 258,747.
+ *
+ * Raised to 259,937 for a settled field read. A controlled checkbox renders by setting `checked`,
+ * which is not an attribute mutation, so the field observer now carries that property and the
+ * action publishes a post-handler reading. Both run on the way in: the observer installs with the
+ * SDK, and the action is the page. Measured 258,937 B; the ceiling is that plus the 1,000 B of
+ * headroom.
  */
-const MAX_FIRST_LOAD_BYTES = 258_747;
+const MAX_FIRST_LOAD_BYTES = 259_937;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

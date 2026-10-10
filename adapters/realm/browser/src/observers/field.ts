@@ -16,7 +16,13 @@
  * says it while carrying nobody's data.
  */
 import { readTestId } from '@/dom/addressing/testid-attr.js';
-import { DEFAULT_TESTID_ATTR, EventType, isSensitiveKey } from '@reticlehq/core';
+import {
+  DEFAULT_TESTID_ATTR,
+  EventType,
+  FieldChangeField,
+  FieldChangeKind,
+  isSensitiveKey,
+} from '@reticlehq/core';
 import { getAccessibleName } from '@/dom/a11y.js';
 import type { Emit, Teardown } from './types.js';
 
@@ -37,12 +43,53 @@ const PAYMENT_AUTOCOMPLETE = /^(cc-|current-password|new-password)/i;
 
 type Field = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
+/** A checkbox or radio. Their HTML `value` does not move when they toggle; `checked` does. */
+const CHECKBOX_TYPE = 'checkbox';
+const RADIO_TYPE = 'radio';
+
+/**
+ * Value and, for a checkbox or radio, `checked`, read off the element.
+ *
+ * Captured before an action is dispatched and again after it settles, so the two can be compared
+ * once React has restored a controlled property.
+ */
+export interface FieldReading {
+  value: string;
+  checked?: boolean;
+}
+
+/** The emitter `installField` registered, so an action can publish a settled read into the same stream. */
+let settledEmit: Emit | undefined;
+
 function isField(target: EventTarget | null): target is Field {
   return (
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement
   );
+}
+
+function isCheckable(element: Field): element is HTMLInputElement {
+  return (
+    element instanceof HTMLInputElement &&
+    (CHECKBOX_TYPE === element.type || RADIO_TYPE === element.type)
+  );
+}
+
+function readingOf(element: Field): FieldReading {
+  if (isCheckable(element)) return { value: element.value, checked: element.checked };
+  return { value: element.value };
+}
+
+function readingMoved(before: FieldReading, after: FieldReading): boolean {
+  if (before.checked !== undefined || after.checked !== undefined) {
+    return before.checked !== after.checked;
+  }
+  return before.value !== after.value;
+}
+
+function clip(value: string): string {
+  return value.length > MAX_VALUE_LEN ? `${value.slice(0, MAX_VALUE_LEN)}…` : value;
 }
 
 /**
@@ -78,6 +125,67 @@ function isSecret(element: Field): boolean {
 }
 
 /**
+ * The wire payload for one field reading.
+ *
+ * A settled read also carries the pre-action reading. Checkable fields carry `checked` rather than
+ * a previous string: their HTML value does not move, and comparing `"on"` to `"on"` would hide a
+ * toggle. Secrets omit both strings.
+ */
+function fieldPayload(
+  element: Field,
+  kind: FieldChangeKind,
+  after: FieldReading,
+  before?: FieldReading,
+): Record<string, unknown> {
+  const secret = isSecret(element);
+  const payload: Record<string, unknown> = {
+    [FieldChangeField.FIELD]: fieldName(element),
+    [FieldChangeField.KIND]: kind,
+    // Always present, and NOT derived from the clipped value: a cap must never read as a wipe.
+    [FieldChangeField.LENGTH]: after.value.length,
+  };
+  if (after.checked !== undefined) payload[FieldChangeField.CHECKED] = after.checked;
+  if (before?.checked !== undefined) payload[FieldChangeField.PREVIOUS_CHECKED] = before.checked;
+  if (secret) {
+    payload[FieldChangeField.REDACTED] = true;
+    return payload;
+  }
+  payload[FieldChangeField.VALUE] = clip(after.value);
+  if (before !== undefined && before.checked === undefined) {
+    payload[FieldChangeField.PREVIOUS] = clip(before.value);
+  }
+  return payload;
+}
+
+/**
+ * The field's value and `checked` before an action is dispatched.
+ *
+ * Undefined when `el` is not a field. The action reads this first and passes it back to
+ * `publishSettledField` after settle, which is the frame after the app's handlers ran.
+ */
+export function readActedField(el: Element): FieldReading | undefined {
+  if (!isField(el)) return undefined;
+  return readingOf(el);
+}
+
+/**
+ * Publish a settled field read into the event stream, when one differs from `before`.
+ *
+ * No-op until `installField` is running, when the element is gone, or when the settled reading
+ * matches the pre-action one — a controlled input React restored did not render. A secret text
+ * field is not published either: the values cannot ride the wire, so the event could not be
+ * compared and would only look like a change.
+ */
+export function publishSettledField(el: Element, before: FieldReading | undefined): void {
+  const emit = settledEmit;
+  if (emit === undefined || before === undefined || !isField(el) || !el.isConnected) return;
+  if (isSecret(el) && before.checked === undefined) return;
+  const after = readingOf(el);
+  if (!readingMoved(before, after)) return;
+  emit(EventType.FIELD_CHANGE, fieldPayload(el, FieldChangeKind.SETTLED, after, before));
+}
+
+/**
  * Watch every field on the page for a value that moves. Emits FIELD_CHANGE. Reversible, and a
  * teardown cancels any burst still waiting — an event emitted after `disconnect()` is the SDK
  * talking about a page it was told to leave.
@@ -85,21 +193,13 @@ function isSecret(element: Field): boolean {
 export function installField(emit: Emit): Teardown {
   const ac = new AbortController();
   const { signal } = ac;
+  const previousEmit = settledEmit;
+  settledEmit = emit;
   /** One pending burst per field, so two fields being typed into never coalesce into one event. */
   const pending = new Map<Field, ReturnType<typeof setTimeout>>();
 
-  const report = (element: Field, kind: 'input' | 'change'): void => {
-    const value = element.value;
-    const secret = isSecret(element);
-    emit(EventType.FIELD_CHANGE, {
-      field: fieldName(element),
-      kind,
-      // Always present, and NOT derived from the clipped value: a cap must never read as a wipe.
-      length: value.length,
-      ...(secret
-        ? { redacted: true }
-        : { value: value.length > MAX_VALUE_LEN ? `${value.slice(0, MAX_VALUE_LEN)}…` : value }),
-    });
+  const report = (element: Field, kind: FieldChangeKind): void => {
+    emit(EventType.FIELD_CHANGE, fieldPayload(element, kind, readingOf(element)));
   };
 
   const clear = (element: Field): void => {
@@ -116,7 +216,7 @@ export function installField(emit: Emit): Teardown {
       element,
       setTimeout(() => {
         pending.delete(element);
-        report(element, 'input');
+        report(element, FieldChangeKind.INPUT);
       }, BURST_MS),
     );
   };
@@ -126,7 +226,7 @@ export function installField(emit: Emit): Teardown {
     if (!isField(element)) return;
     // A commit supersedes the burst it ends: reporting both would double-count one edit.
     clear(element);
-    report(element, 'change');
+    report(element, FieldChangeKind.CHANGE);
   };
 
   document.addEventListener('input', onInput, { signal, capture: true });
@@ -134,6 +234,7 @@ export function installField(emit: Emit): Teardown {
   return () => {
     for (const timer of pending.values()) clearTimeout(timer);
     pending.clear();
+    if (settledEmit === emit) settledEmit = previousEmit;
     ac.abort();
   };
 }

@@ -61,6 +61,40 @@ export type RouteChangeHow = (typeof RouteChangeHow)[keyof typeof RouteChangeHow
 export const ROUTE_CHANGE_HOW_FIELD = 'how';
 
 /**
+ * Why a `field.change` was emitted.
+ *
+ * `input` is a burst of keystrokes and `change` is the commit that ends one — both are the user's
+ * own event, fired before a controlled component restores its DOM property. `settled` is a read of
+ * that property on the frame after the handlers ran. Only a settled read that differs from the
+ * pre-action value is evidence the screen moved.
+ */
+export const FieldChangeKind = {
+  INPUT: 'input',
+  CHANGE: 'change',
+  SETTLED: 'settled',
+} as const;
+export type FieldChangeKind = (typeof FieldChangeKind)[keyof typeof FieldChangeKind];
+
+/**
+ * Wire fields on `field.change` beyond `field` / `kind` / `value` / `length`.
+ *
+ * `checked` is the property a checkbox or radio actually renders; `value` on those is the HTML
+ * value (`"on"`), which does not move when the box is toggled. `previous` and `previousChecked`
+ * are the same reading from before the action, present on a settled event so a consumer can tell
+ * a render from a restore.
+ */
+export const FieldChangeField = {
+  FIELD: 'field',
+  KIND: 'kind',
+  LENGTH: 'length',
+  VALUE: 'value',
+  REDACTED: 'redacted',
+  CHECKED: 'checked',
+  PREVIOUS: 'previous',
+  PREVIOUS_CHECKED: 'previousChecked',
+} as const;
+
+/**
  * The three readable client-side storage areas.
  *
  * `cookies` is plural because that is what the storage tool accepts, what the browser returns and
@@ -279,21 +313,21 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     from: z.string().optional(),
     toBody: z.boolean(),
   }),
+  // Keys are FieldChangeField so the wire names exist once. `kind` is FieldChangeKind:
+  // input/change are the user's event; settled is the post-handler read. `length` is the REAL
+  // value's length, never the clipped one, and present even when redacted — a cap must never read
+  // as a wipe. `value` is omitted for a password, a sensitive name, or a payment autocomplete hint.
+  // `checked` is the checkbox/radio property (`value` there does not move). `previous` /
+  // `previousChecked` ride on a settled read so a restore is distinguishable from a render.
   [EventType.FIELD_CHANGE]: z.object({
-    /** What an assertion would call this field: its testid, else its name, else its accessible name. */
-    field: z.string(),
-    /** `input` is a settled burst of keystrokes; `change` is the commit that ends one. */
-    kind: z.enum(['input', 'change']),
-    /**
-     * The length of the REAL value, never of the clipped one, and present even when redacted.
-     *
-     * "It was wiped" is the assertion this event exists for, and a length says it while carrying
-     * nobody's password. A cap that shortened this would read exactly like the wipe.
-     */
-    length: z.number().int().nonnegative(),
-    /** Omitted for a password, a sensitive field name, or a payment autocomplete hint. */
-    value: z.string().optional(),
-    redacted: z.literal(true).optional(),
+    [FieldChangeField.FIELD]: z.string(),
+    [FieldChangeField.KIND]: z.nativeEnum(FieldChangeKind),
+    [FieldChangeField.LENGTH]: z.number().int().nonnegative(),
+    [FieldChangeField.VALUE]: z.string().optional(),
+    [FieldChangeField.REDACTED]: z.literal(true).optional(),
+    [FieldChangeField.CHECKED]: z.boolean().optional(),
+    [FieldChangeField.PREVIOUS]: z.string().optional(),
+    [FieldChangeField.PREVIOUS_CHECKED]: z.boolean().optional(),
   }),
   [EventType.FLOW_RECORDED]: z.object({ name: z.string(), flow: z.unknown() }),
   [EventType.TRANSPORT_OVERFLOW]: z.object({ dropped: z.number() }),

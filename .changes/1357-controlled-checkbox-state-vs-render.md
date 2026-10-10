@@ -1,0 +1,3 @@
+### Fixed
+
+- **Checking a controlled checkbox was graded `state-vs-render` even though the box checked.** React sets `checked` and `value` as properties, so the rule that the store committed and nothing rendered never saw the screen move, and `act_and_wait` came back `verified: "unknown"`. A field read after the action's handlers now counts as the screen moving when it differs from the value before the action. The input event's own field change does not, and a control that was restored to its previous value still reports the contradiction. Checkbox and radio field events carry `checked`. Closes [#1357](https://github.com/reticlehq/reticle/issues/1357).

@@ -2,10 +2,9 @@
  * What a request IS, which requests are OURS, and how to say one out loud.
  *
  * Split out of `contradictions.ts` when that file crossed the line cap — and the seam was already
- * there rather than invented for the occasion. Everything here answers a question ABOUT NETWORK
- * EVIDENCE: what did this event mean, was it a write, did a retry rescue it, is it the toolchain's
- * own traffic rather than the app's, is this cadence a poll. Nothing here knows what a
- * contradiction is.
+ * there rather than invented for the occasion. Everything here answers a question the rules ask
+ * about evidence: what a request meant, whether a route change is a navigation, whether a settled
+ * field reading shows the screen moved. Nothing here knows what a contradiction is.
  *
  * The rules next door read this vocabulary and decide what disagrees. Keeping the two apart means a
  * new rule cannot quietly redefine what "in flight" or "ours" means for itself, which is how two
@@ -14,6 +13,8 @@
 
 import {
   EventType,
+  FieldChangeField,
+  FieldChangeKind,
   MUTATING_METHODS,
   ROUTE_CHANGE_HOW_FIELD,
   RouteChangeHow,
@@ -162,6 +163,30 @@ export function isSamePathnameReplace(event: ReticleEvent): boolean {
   if (from.origin !== to.origin || from.pathname !== to.pathname) return false;
   if (from.hash !== to.hash && !isInPageFragment(to.hash)) return false;
   return true;
+}
+
+/**
+ * Did this event show a field whose post-handler reading differs from its pre-action one?
+ *
+ * React writes `checked` and `value` as properties, so a controlled checkbox that re-renders
+ * produces no attribute mutation. The field change from the input event itself cannot fill that
+ * gap: it is emitted from the user's own event, before a controlled component restores the
+ * property, and counting it would treat a box React immediately reverted as rendered.
+ *
+ * A settled read carries the value from before the action beside the value after the handlers
+ * ran. The screen moved only when those two differ.
+ */
+export function settledFieldRendered(event: ReticleEvent): boolean {
+  if (event.type !== EventType.FIELD_CHANGE) return false;
+  if (event.data[FieldChangeField.KIND] !== FieldChangeKind.SETTLED) return false;
+  const checked = event.data[FieldChangeField.CHECKED];
+  const previousChecked = event.data[FieldChangeField.PREVIOUS_CHECKED];
+  if ('boolean' === typeof checked && 'boolean' === typeof previousChecked) {
+    return checked !== previousChecked;
+  }
+  const value = event.data[FieldChangeField.VALUE];
+  const previous = event.data[FieldChangeField.PREVIOUS];
+  return 'string' === typeof value && 'string' === typeof previous && value !== previous;
 }
 
 /**

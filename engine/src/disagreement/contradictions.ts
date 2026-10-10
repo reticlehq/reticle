@@ -18,6 +18,7 @@ import {
   isSteadyCadence,
   netCall,
   recoveredByRetry,
+  settledFieldRendered,
   splitForeignTraffic,
   type NetCall,
 } from './contradiction-evidence.js';
@@ -617,7 +618,9 @@ function findWindowContradictions(
   // flight that the render could legitimately be waiting on.
   //
   // Route movement counts as the screen moving: a navigation IS a render, and a store change that
-  // drives one has been corroborated.
+  // drives one has been corroborated. So does a field whose settled value — read after the
+  // handlers ran — differs from its value before the action. The input event's own field change
+  // does not: that is the keystroke, and a controlled input React then restores looks the same.
   //
   // And only when the window carries NO NETWORK AT ALL. A request means the app reached for
   // something, and whether it failed, was ignored or never settled already belongs to three other
@@ -634,15 +637,17 @@ function findWindowContradictions(
         e.type === EventType.DOM_REMOVED ||
         e.type === EventType.DOM_ATTR ||
         e.type === EventType.DOM_TEXT ||
-        e.type === EventType.ROUTE_CHANGE,
+        e.type === EventType.ROUTE_CHANGE ||
+        settledFieldRendered(e),
     )
   ) {
     found.push({
       kind: ContradictionKind.STATE_VS_RENDER,
       claim: 'the store committed a change',
       counter:
-        'nothing rendered in the same window — no DOM node added, removed or changed, and no ' +
-        'route movement, with no request still in flight the render could be waiting on',
+        'nothing rendered in the same window — no DOM node added, removed or changed, no field ' +
+        'whose settled value differs from before the action, and no route movement, with no ' +
+        'request still in flight the render could be waiting on',
       detail:
         'a component that does not re-render on a committed change shows the OLD value while the ' +
         'app is internally consistent, which is why nothing else reports it',
