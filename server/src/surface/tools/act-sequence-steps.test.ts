@@ -58,6 +58,156 @@ describe('a step written the way reticle_act takes one', () => {
       confirmDangerous: true,
     });
   });
+
+  it('parses a valid JSON-object string in args (#1230)', () => {
+    expect(sequenceStepArgs({ ref: 'e1', action: 'fill', args: '{"value":"hi"}' })).toEqual({
+      value: 'hi',
+    });
+  });
+
+  it('refuses an invalid JSON string in args (#1230)', () => {
+    expect(() => sequenceStepArgs({ ref: 'e1', action: 'fill', args: '{broken' })).toThrow(
+      /not valid JSON/,
+    );
+  });
+
+  it('refuses a JSON string that is not an object (#1230)', () => {
+    expect(() => sequenceStepArgs({ ref: 'e1', action: 'fill', args: '"just a string"' })).toThrow(
+      /not an object/,
+    );
+  });
+});
+
+describe('string args are refused up front so no step is acted on (#1230)', () => {
+  it('refuses the whole sequence when a later step has invalid string args', () => {
+    expect(() =>
+      assertSequenceSteps([
+        { ref: 'e1', action: 'click' },
+        { ref: 'e2', action: 'fill', args: '{broken' },
+      ]),
+    ).toThrow(/not valid JSON/);
+  });
+
+  it('accepts a sequence where string args parse to a valid object', () => {
+    expect(() =>
+      assertSequenceSteps([
+        { ref: 'e1', action: 'fill', args: '{"value":"hi"}' },
+        { ref: 'e2', action: 'click' },
+      ]),
+    ).not.toThrow();
+  });
+});
+
+/**
+ * A handler-level test that drives `reticle_act_sequence` with string `args` end-to-end.
+ *
+ * The unit tests above prove that `sequenceStepArgs` parses the string and that
+ * `assertSequenceSteps` refuses a malformed one. This test proves the handler itself sends the
+ * PARSED object to the page, not the raw string — the difference between "the parser exists" and
+ * "the handler calls it".
+ */
+describe('reticle_act_sequence handler with string args (#1230)', () => {
+  // Inline a minimal fake session that records dispatched args, same pattern as
+  // act-sequence-burst.test.ts.
+  async function dispatchedArgsViaHandler(
+    steps: Record<string, unknown>[],
+  ): Promise<Record<string, unknown>[]> {
+    const { LastAct } = await import('@/portal/session/last-act.js');
+    const { SessionState } = await import('@reticlehq/core');
+    const { TOOLS } = await import('./tools.js');
+    const { ReticleTool } = await import('@reticlehq/core');
+    const { BaselineStore } = await import('@/memory/project/baselines.js');
+    const { createNodeFileSystem } = await import('@/memory/project/fs/fs-port.js');
+    const { RecordingStore } = await import('@/language/flows/recording/tape/recordings.js');
+    const { FlowStore } = await import('@/language/flows/flows.js');
+    const { ProjectStore } = await import('@/memory/project/project-store.js');
+    const { AnnotationStore } = await import('@/language/flows/stores/annotation-store.js');
+
+    const sent: Record<string, unknown>[] = [];
+    let stepIndex = 0;
+    const command = (
+      name: string,
+      args: Record<string, unknown> = {},
+    ): Promise<import('@reticlehq/core').CommandResult> => {
+      if ('act' === name) {
+        sent.push(args);
+        const i = stepIndex++;
+        return Promise.resolve({
+          kind: 'command_result' as const,
+          id: 'c',
+          ok: true,
+          result: {
+            ref: `e${String(i + 1)}`,
+            action: 'fill',
+            dispatched: true,
+            settled: true,
+            settleReason: null,
+            effect: { domMutatedWithin: 1 },
+          },
+        });
+      }
+      return Promise.resolve({
+        kind: 'command_result' as const,
+        id: 'c',
+        ok: true,
+        result: {},
+      });
+    };
+    const noEvents: import('@reticlehq/core').ReticleEvent[] = [];
+    const session = {
+      id: 'demo',
+      url: 'http://localhost:5173/app',
+      elapsed: () => 0,
+      lastAct: new LastAct(),
+      beginAction: () => 'a1',
+      finishAction: () => undefined,
+      command,
+      queryEvents: () => Promise.resolve(noEvents),
+      eventsSince: () => noEvents,
+      bufferHealth: () => ({ total: 0, dropped: 0 }),
+      lostSince: () => false,
+      blindSpots: () => ({}),
+      health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
+      throttled: () => false,
+      getState: () => SessionState.ACTIVE,
+      drainInbox: () => [],
+      inboxSize: () => 0,
+      onEvent: () => () => undefined,
+    };
+    const ROOT = '/tmp/reticle-string-args-test/.reticle';
+    const deps = {
+      sessions: { resolve: () => session },
+      baselines: new BaselineStore(),
+      recordings: new RecordingStore(),
+      flows: new FlowStore(createNodeFileSystem(), ROOT, { now: () => 0 }),
+      project: new ProjectStore(createNodeFileSystem(), ROOT, { now: () => 0 }),
+      annotations: new AnnotationStore(),
+      fs: createNodeFileSystem(),
+      reticleRoot: ROOT,
+      now: () => 0,
+    };
+    const tool = TOOLS.find((t) => t.name === ReticleTool.ACT_SEQUENCE);
+    if (tool === undefined) throw new Error('no reticle_act_sequence tool');
+    await tool.handler(deps as never, { steps });
+    return sent.map((c) => (c['args'] ?? {}) as Record<string, unknown>);
+  }
+
+  it('a JSON string args on a fill step arrives at the page as a parsed object', async () => {
+    const sent = await dispatchedArgsViaHandler([
+      { ref: 'e1', action: 'fill', args: '{"value":"hello@test.com"}' },
+    ]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ value: 'hello@test.com' });
+  });
+
+  it('an invalid JSON string args refuses the whole sequence before any step runs', async () => {
+    await expect(
+      dispatchedArgsViaHandler([
+        { ref: 'e1', action: 'click' },
+        { ref: 'e2', action: 'fill', args: '{not json' },
+      ]),
+    ).rejects.toThrow(/not valid JSON/);
+  });
 });
 
 describe('refusing a sequence that cannot act', () => {
