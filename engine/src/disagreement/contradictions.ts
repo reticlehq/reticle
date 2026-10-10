@@ -311,6 +311,7 @@ function findWindowContradictions(
     allEvents,
     options.appOrigin,
     options.background,
+    options.namedNetClauses,
   );
 
   // ── Evidence belonging to a document that has since been replaced ───────────────────────────

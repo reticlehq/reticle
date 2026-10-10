@@ -315,6 +315,7 @@ async function inspectAfterReplay(
       appOrigin: session.url,
       background: session.background,
       namedNetUrls: [],
+      namedNetClauses: [],
       // The replay is the action, and the cursor is where it started.
       actionSince: cursor,
     }) as { kind: string }[];

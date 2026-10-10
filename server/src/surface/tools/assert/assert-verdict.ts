@@ -141,6 +141,7 @@ export async function assertVerdict(
     expectedFailures: declared.netFailures,
     namedNetUrls: declared.netUrls,
     repeatableNetUrls: declared.repeatableNetUrls,
+    namedNetClauses: declared.netClauses,
     renderProved: pass && declared.rendersContent,
     ...(actCursor !== undefined && actCursor >= since ? { actionSince: actCursor } : {}),
   });

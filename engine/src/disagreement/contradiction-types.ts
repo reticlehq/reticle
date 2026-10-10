@@ -1,6 +1,6 @@
 import type { Contradiction, ContradictionKind, ReticleEvent } from '@reticlehq/core';
 import type { NoteFn } from '@/window/engine-host.js';
-import type { DeclaredNetFailure, DeclaredRead } from '@/question/declared.js';
+import type { DeclaredNetClause, DeclaredNetFailure, DeclaredRead } from '@/question/declared.js';
 
 /**
  * What a contradiction IS, separated from the rules that find one.
@@ -177,4 +177,13 @@ export interface ContradictionOptions {
    * excuses a POST. Nothing else reads it: they are still waited for and still counted.
    */
   repeatableNetUrls?: readonly DeclaredRead[] | undefined;
+  /**
+   * The net clauses the predicate carries, with URL and method constraints.
+   *
+   * Used by the foreign-traffic exemption: a request on a different host that matches a declared
+   * clause is the consequence the predicate named, and filtering it from the window is the bug
+   * (#1234). Unlike `namedNetUrls`, empty-URL clauses do NOT match all traffic (that would re-admit
+   * dev tooling and analytics), and method is checked when the clause specified one.
+   */
+  namedNetClauses?: readonly DeclaredNetClause[] | undefined;
 }

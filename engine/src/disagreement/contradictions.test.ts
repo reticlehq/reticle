@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ContradictionKind,
   EventType,
+  PredicateKind,
   ROUTE_CHANGE_HOW_FIELD,
   RouteChangeHow,
   Verified,
@@ -11,6 +12,7 @@ import {
 import { findContradictions } from './contradictions.js';
 import { decideVerified } from '../evidence/verified.js';
 import { HonestyGrade } from '../evidence/honesty.js';
+import { declaredExpectations } from '@/question/declared.js';
 
 let seq = 0;
 function ev(type: EventType, data: Record<string, unknown> = {}): ReticleEvent {
@@ -934,6 +936,136 @@ describe('the app announced a consequence and nothing else moved', () => {
     expect(kinds([signal('modal:opened')])).not.toContain(
       ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE,
     );
+  });
+
+  /**
+   * A request to a different host (e.g. `127.0.0.1:8000` while the app is on `localhost:3000`) is
+   * classified as foreign traffic and stripped from the contradiction window. But when the predicate
+   * declared a `net` clause with `urlContains: '/queue'` and that request matched it, the request
+   * IS the consequence and must not be invisible to the rule that asks "did anything happen?".
+   *
+   * Without the fix: the request is filtered as foreign → `settled.length === 0` → this rule fires
+   * and says "no request" while the predicate's own `net` clause found one (#1234).
+   */
+  it('stays silent when a declared net clause matched a request on a different host (#1234)', () => {
+    const foreignHostCall = ev(EventType.NET_REQUEST, {
+      id: 'n99',
+      method: 'GET',
+      url: 'http://127.0.0.1:8000/api/queue',
+      status: 200,
+      ok: true,
+    });
+    const found = findContradictions([signal('refresh:done'), foreignHostCall], {
+      actionSince: 0,
+      appOrigin: 'http://localhost:3000',
+      namedNetUrls: ['/api/queue'],
+      namedNetClauses: [{ urlContains: '/api/queue', method: 'GET' }],
+    });
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE);
+  });
+
+  it('still fires when the foreign-host request does NOT match any declared net clause', () => {
+    const foreignHostCall = ev(EventType.NET_REQUEST, {
+      id: 'n100',
+      method: 'GET',
+      url: 'http://127.0.0.1:8000/api/analytics',
+      status: 200,
+      ok: true,
+    });
+    const found = findContradictions([signal('refresh:done'), foreignHostCall], {
+      actionSince: 0,
+      appOrigin: 'http://localhost:3000',
+      namedNetUrls: ['/api/queue'],
+      namedNetClauses: [{ urlContains: '/api/queue' }],
+    });
+    expect(found.map((c) => c.kind)).toContain(ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE);
+  });
+
+  it('does not re-admit dev-tooling traffic even when it matches a declared URL (#1234)', () => {
+    const hmrRequest = ev(EventType.NET_REQUEST, {
+      id: 'n101',
+      method: 'GET',
+      url: 'http://localhost:3000/__nextjs_original-stack-frame?file=/api/queue',
+      status: 200,
+      ok: true,
+    });
+    const found = findContradictions([signal('refresh:done'), hmrRequest], {
+      actionSince: 0,
+      appOrigin: 'http://localhost:3000',
+      namedNetClauses: [{ urlContains: '/api/queue' }],
+    });
+    expect(found.map((c) => c.kind)).toContain(ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE);
+  });
+
+  it('does not match all traffic when a net clause has no urlContains (#1234)', () => {
+    const foreignCall = ev(EventType.NET_REQUEST, {
+      id: 'n102',
+      method: 'POST',
+      url: 'http://analytics.example.com/collect',
+      status: 200,
+      ok: true,
+    });
+    const found = findContradictions([signal('refresh:done'), foreignCall], {
+      actionSince: 0,
+      appOrigin: 'http://localhost:3000',
+      namedNetClauses: [{ method: 'POST' }],
+    });
+    expect(found.map((c) => c.kind)).toContain(ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE);
+  });
+
+  it('checks method when the clause specifies one (#1234)', () => {
+    const foreignPost = ev(EventType.NET_REQUEST, {
+      id: 'n103',
+      method: 'POST',
+      url: 'http://127.0.0.1:8000/api/queue',
+      status: 200,
+      ok: true,
+    });
+    const found = findContradictions([signal('refresh:done'), foreignPost], {
+      actionSince: 0,
+      appOrigin: 'http://localhost:3000',
+      namedNetClauses: [{ urlContains: '/api/queue', method: 'GET' }],
+    });
+    expect(found.map((c) => c.kind)).toContain(ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE);
+  });
+
+  it('matches method case-insensitively, same as the net predicate (#1234)', () => {
+    const foreignGet = ev(EventType.NET_REQUEST, {
+      id: 'n105',
+      method: 'GET',
+      url: 'http://127.0.0.1:8000/api/queue',
+      status: 200,
+      ok: true,
+    });
+    const found = findContradictions([signal('refresh:done'), foreignGet], {
+      actionSince: 0,
+      appOrigin: 'http://localhost:3000',
+      namedNetClauses: [{ urlContains: '/api/queue', method: 'get' }],
+    });
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE);
+  });
+
+  it('walks anyOf branches when collecting declared net clauses (#1234)', () => {
+    const declared = declaredExpectations({
+      kind: PredicateKind.ANY_OF,
+      predicates: [
+        { kind: PredicateKind.NET, urlContains: '/api/queue', method: 'GET' },
+        { kind: PredicateKind.TEXT, contains: 'Done' },
+      ],
+    });
+    const foreignCall = ev(EventType.NET_REQUEST, {
+      id: 'n104',
+      method: 'GET',
+      url: 'http://127.0.0.1:8000/api/queue',
+      status: 200,
+      ok: true,
+    });
+    const found = findContradictions([signal('refresh:done'), foreignCall], {
+      actionSince: 0,
+      appOrigin: 'http://localhost:3000',
+      namedNetClauses: declared.netClauses,
+    });
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE);
   });
 });
 

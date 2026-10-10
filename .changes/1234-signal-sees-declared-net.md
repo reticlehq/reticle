@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — `signal-without-consequence` no longer fires when a declared `net` clause matched a request on a different host.** The foreign-traffic filter stripped requests whose host differed from the app (e.g. `127.0.0.1:8000` from `localhost:3000`), making the contradiction window empty even when the predicate's `net` clause had matched. The exemption now checks URL, method, and clause constraints instead of bare URL inclusion; dev-tooling traffic is never re-admitted; a clause with no `urlContains` does not match all traffic; and `declaredExpectations` walks `anyOf` branches for net clause collection. Closes [#1234](https://github.com/reticlehq/reticle/issues/1234).

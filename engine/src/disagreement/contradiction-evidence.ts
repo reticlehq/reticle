@@ -24,6 +24,7 @@ import {
   urlForMatch,
   type ReticleEvent,
 } from '@reticlehq/core';
+import { matchesNetClause, type DeclaredNetClause } from '@/question/declared.js';
 
 export interface NetCall {
   method: string;
@@ -185,6 +186,7 @@ export function splitForeignTraffic(
   events: readonly ReticleEvent[],
   appOrigin: string | undefined,
   background: readonly string[] = [],
+  namedNetClauses?: readonly DeclaredNetClause[],
 ): {
   app: readonly ReticleEvent[];
   ignored: string[];
@@ -194,10 +196,21 @@ export function splitForeignTraffic(
     if (!NET_TYPES.has(e.type)) return true;
     const matchUrl = urlForMatch(e.data);
     const shown = asString(e.data['url']);
-    // Somebody else's code, twice over: the toolchain's own channel, and any site that is not the
-    // app under test. Neither can answer the question every rule below asks.
     const match = 0 === matchUrl.length ? undefined : matchUrl;
-    if (!isDevToolingUrl(match) && !isForeignTraffic(match, appOrigin, background)) return true;
+    // Dev tooling is always excluded — no declared clause can re-admit it.
+    if (isDevToolingUrl(match)) {
+      if (shown !== undefined && !ignored.includes(shown)) ignored.push(shown);
+      return false;
+    }
+    if (!isForeignTraffic(match, appOrigin, background)) return true;
+    // Foreign traffic: keep only when a declared net clause matches this specific request.
+    // A clause with no urlContains names the whole channel for duplicate-request purposes, but
+    // must NOT re-admit all foreign traffic — that is the empty-string bug from #1234.
+    if (namedNetClauses !== undefined && match !== undefined) {
+      const method = asString(e.data['method']);
+      if (namedNetClauses.some((c) => matchesNetClause(c, { method: method ?? '', url: match })))
+        return true;
+    }
     if (shown !== undefined && !ignored.includes(shown)) ignored.push(shown);
     return false;
   });
