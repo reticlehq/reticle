@@ -215,6 +215,13 @@ export interface QueryEmptyHint {
    * (`testIdAttribute` in `.reticle.json`).
    */
   testidFoundUnder?: string;
+  /**
+   * Present only when a text/name search missed and the string IS on the page but inside an
+   * `aria-hidden="true"` subtree — drawn on screen but excluded from the accessible tree. The
+   * note is the difference between "not rendered" and "rendered but hidden from assistive
+   * technology", which have opposite fixes (#1070).
+   */
+  ariaHiddenMatch?: boolean;
 }
 
 /** Result of the QUERY command / reticle_query tool. `hint` present ONLY on zero matches. */

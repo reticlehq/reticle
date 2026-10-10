@@ -422,12 +422,11 @@ function stalledFade(el: Element): boolean {
 }
 
 /**
- * Whether the element's OWN box hides it — one forced-style resolution, no composed ancestor
- * walk. The one ancestor reading is `hiddenInsideClosedDetails`, which consults only the nearest
- * `<details>` boundary; composing the chain is still isVisible's job.
+ * Whether the element's OWN box is hidden by a non-ARIA mechanism: CSS, the `hidden` attribute,
+ * or a closed `<details>`. Shared by `selfHidden` and `isHiddenByAriaOnly` so the checks stay
+ * in one place — #1111/#1112 are changing `selfHidden`, and a copy will drift.
  */
-function selfHidden(el: Element, style: CSSStyleDeclaration | null): boolean {
-  if ('true' === el.getAttribute('aria-hidden')) return true;
+function selfCssHidden(el: Element, style: CSSStyleDeclaration | null): boolean {
   if (isHtmlElement(el) && el.hidden) return true;
   if (hiddenInsideClosedDetails(el)) return true;
   if (style !== null) {
@@ -441,6 +440,53 @@ function selfHidden(el: Element, style: CSSStyleDeclaration | null): boolean {
     if (0 === Number.parseFloat(style.opacity || '1') && !stalledFade(el)) return true;
   }
   return false;
+}
+
+/**
+ * Whether the element's OWN box hides it — one forced-style resolution, no composed ancestor
+ * walk. The one ancestor reading is `hiddenInsideClosedDetails`, which consults only the nearest
+ * `<details>` boundary; composing the chain is still isVisible's job.
+ */
+function selfHidden(el: Element, style: CSSStyleDeclaration | null): boolean {
+  if ('true' === el.getAttribute('aria-hidden')) return true;
+  return selfCssHidden(el, style);
+}
+
+/**
+ * Whether the element is hidden ONLY because of `aria-hidden="true"` on itself or an ancestor,
+ * and not by any CSS/HTML mechanism. Walks the full ancestor chain across shadow boundaries.
+ *
+ * Returns `false` when ANY ancestor has `display:none`, `visibility:hidden`, `opacity:0`,
+ * `[hidden]`, or sits inside a closed `<details>` — in those cases the element is invisible
+ * regardless of `aria-hidden`, and blaming the attribute would mislead the caller (#1070).
+ */
+export function isHiddenByAriaOnly(el: Element): boolean {
+  let foundAriaHidden = false;
+  let current: Element | null = el;
+  while (null !== current) {
+    if ('true' === current.getAttribute('aria-hidden')) foundAriaHidden = true;
+    const style = current.ownerDocument.defaultView?.getComputedStyle(current) ?? null;
+    if (selfCssHidden(current, style)) return false;
+    current = parentAcrossShadowBoundary(current);
+  }
+  return foundAriaHidden;
+}
+
+/**
+ * Whether the element is rendered on screen AND not inside an `aria-hidden` subtree.
+ * Returns `false` when any ancestor is CSS-hidden OR carries `aria-hidden="true"`.
+ * Used by the hint builder to suppress the aria-hidden note when a visible, accessible
+ * element also carries the searched text (#1070).
+ */
+export function isRenderedOutsideAriaHidden(el: Element): boolean {
+  let current: Element | null = el;
+  while (null !== current) {
+    if ('true' === current.getAttribute('aria-hidden')) return false;
+    const style = current.ownerDocument.defaultView?.getComputedStyle(current) ?? null;
+    if (selfCssHidden(current, style)) return false;
+    current = parentAcrossShadowBoundary(current);
+  }
+  return true;
 }
 
 /**

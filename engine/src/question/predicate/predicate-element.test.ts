@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { ElementState } from '@reticlehq/core';
 
-import { evalElement } from './predicate-element.js';
+import { ARIA_HIDDEN_NOTE, evalElement } from './predicate-element.js';
 import type { PredicateSession } from './predicate-session.js';
 
 const session: PredicateSession = {
@@ -150,4 +150,79 @@ it('keeps the plain absent reason when a match is visible, a state is named, or 
     true,
   );
   expect(truncated.failureReason).toBe(plain);
+});
+
+it('names the aria-hidden subtree when the hint says so (#1070)', async () => {
+  const withHint: PredicateSession = {
+    ...session,
+    command: () =>
+      Promise.resolve({
+        kind: 'command_result' as const,
+        id: 'x',
+        ok: true,
+        result: {
+          matched: false,
+          count: 0,
+          elements: [],
+          hint: {
+            route: '/',
+            presentTestids: [],
+            presentRegions: [],
+            knownEmptyState: false,
+            ariaHiddenMatch: true,
+          },
+        },
+      }),
+  };
+  const result = await evalElement(withHint, { text: 'Hello' }, undefined, false, true);
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toContain(ARIA_HIDDEN_NOTE);
+});
+
+it('does not blame aria-hidden when a visible element exists in the wrong state (#1070)', async () => {
+  let call = 0;
+  const stateSession: PredicateSession = {
+    ...session,
+    command: () => {
+      call++;
+      if (1 === call) {
+        return Promise.resolve({
+          kind: 'command_result' as const,
+          id: 'x',
+          ok: true,
+          result: {
+            matched: false,
+            count: 0,
+            elements: [],
+            hint: {
+              route: '/',
+              presentTestids: [],
+              presentRegions: [],
+              knownEmptyState: false,
+              ariaHiddenMatch: true,
+            },
+          },
+        });
+      }
+      return Promise.resolve({
+        kind: 'command_result' as const,
+        id: 'x',
+        ok: true,
+        result: {
+          matched: true,
+          count: 1,
+          elements: [{ ref: 'e1', role: 'button', name: 'Go', states: ['visible'], visible: true }],
+        },
+      });
+    },
+  };
+  const result = await evalElement(
+    stateSession,
+    { role: 'button', name: 'Go' },
+    ElementState.PRESSED,
+    false,
+    true,
+  );
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).not.toContain(ARIA_HIDDEN_NOTE);
 });

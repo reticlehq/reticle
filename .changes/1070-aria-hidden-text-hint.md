@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — a text match inside an `aria-hidden` subtree now names the exclusion.** A text search that missed because the string was inside an `aria-hidden="true"` subtree reported "no element matched" with no indication that the text IS drawn on screen. The hint now says "text is inside an aria-hidden subtree", but only when the element is hidden solely by `aria-hidden` (not by CSS `display:none` or `visibility:hidden`), and only for visibility-related misses — a `state: 'checked'` failure against a visible element blames the state, not an unrelated aria-hidden twin. Closes [#1070](https://github.com/reticlehq/reticle/issues/1070).

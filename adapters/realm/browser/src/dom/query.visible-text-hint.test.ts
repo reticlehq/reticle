@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { runQuery } from './query.js';
+import { ElementState } from '@reticlehq/core';
+import { matchQuery, runQuery } from './query.js';
 import { refs } from './addressing/refs.js';
 
 /**
@@ -108,5 +109,52 @@ describe('splitText hint only speaks for visible text', () => {
     document.body.innerHTML = '<div id="row"><span>Move to </span><span>Repro Folder</span></div>';
     const r = runQuery({ text: 'Move to Repro Folder' });
     expect(r.hint?.splitText?.ref).toBeDefined();
+  });
+});
+
+describe('ariaHiddenMatch hint names the accessibility exclusion (#1070)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('reports when a text search misses and the string is inside an aria-hidden subtree', () => {
+    document.body.innerHTML =
+      '<div aria-hidden="true"><span>Order </span><span>confirmed</span></div>';
+    const r = runQuery({ text: 'Order confirmed' });
+    expect(r.elements).toHaveLength(0);
+    expect(r.hint?.ariaHiddenMatch).toBe(true);
+  });
+
+  it('stays silent when the text is hidden by CSS, not just aria-hidden', () => {
+    document.body.innerHTML =
+      '<div style="display: none" aria-hidden="true"><span>Order </span><span>confirmed</span></div>';
+    const r = runQuery({ text: 'Order confirmed' });
+    expect(r.elements).toHaveLength(0);
+    expect(r.hint?.ariaHiddenMatch).toBeUndefined();
+  });
+
+  it('stays silent when the text is genuinely absent', () => {
+    document.body.innerHTML = '<div><span>Nothing here</span></div>';
+    const r = runQuery({ text: 'Order confirmed' });
+    expect(r.elements).toHaveLength(0);
+    expect(r.hint?.ariaHiddenMatch).toBeUndefined();
+  });
+
+  it('stays silent when a visible non-aria-hidden element also has the text (#1070)', () => {
+    document.body.innerHTML =
+      '<button style="position:absolute;top:9999px">Order confirmed</button>' +
+      '<div aria-hidden="true"><span>Order confirmed</span></div>';
+    const r = matchQuery({ text: 'Order confirmed' }, ElementState.IN_VIEWPORT);
+    expect(r.count).toBe(0);
+    expect(r.hint?.ariaHiddenMatch).toBeUndefined();
+  });
+
+  it('skips the scan on interim polls (diagnose=false)', () => {
+    document.body.innerHTML =
+      '<div aria-hidden="true"><span>Order </span><span>confirmed</span></div>';
+    const interim = matchQuery({ text: 'Order confirmed' }, undefined, undefined, false);
+    expect(interim.hint?.ariaHiddenMatch).toBeUndefined();
+    const final = matchQuery({ text: 'Order confirmed' }, undefined, undefined, true);
+    expect(final.hint?.ariaHiddenMatch).toBe(true);
   });
 });
