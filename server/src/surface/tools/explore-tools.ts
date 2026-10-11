@@ -408,6 +408,7 @@ export function exploreReport(explored: ExploreResult): Record<string, unknown> 
     journeys,
     planId,
     planUrl,
+    disparity,
   } = explored;
   const checks = checkTally(drive.toolCalls);
   return {
@@ -431,6 +432,9 @@ export function exploreReport(explored: ExploreResult): Record<string, unknown> 
       ? {}
       : { journeys: journeys.map((j) => ({ title: j.title, status: j.status })) }),
     goals: [...goals],
+    // Each goal the agent also judged, compared: agent proved and Harness could not find is a
+    // discoverability finding, filed on the platform as its own kind.
+    ...(disparity === undefined ? {} : { disparity: [...disparity] }),
     // The local plan only when nothing else planned the drive. Beside a platform plan's journeys it
     // was a second, unrelated plan — fifteen replays of other people's flows — in the same answer.
     ...(journeys === undefined ? { plan: { summary: plan.summary, steps: [...plan.steps] } } : {}),

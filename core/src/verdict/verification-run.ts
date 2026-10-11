@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { SubjectRefSchema } from 'open-verification';
 import { PredicateKind } from './consequence.js';
 import { Verified } from './verified-constants.js';
+import { RunDisparitySchema } from './disparity.js';
 
 /** Schema version stamped into every run file so a reader can reject/upgrade old artifacts. */
 export const RUN_FILE_VERSION = 3;
@@ -531,6 +532,11 @@ export const ReticleVerificationRunSchema = z.object({
   repair: z.object({ failurePackets: z.array(RepairPacketSchema).default([]) }).optional(),
   verdict: RunVerdictSchema,
   signature: RunSignatureSchema.optional(),
+  /**
+   * On a Harness run: each goal the session's coding agent also judged, and how the two compare.
+   * Optional and additive; an older platform strips it and keeps the body.
+   */
+  disparity: z.array(RunDisparitySchema).optional(),
 });
 export type ReticleVerificationRun = z.infer<typeof ReticleVerificationRunSchema>;
 

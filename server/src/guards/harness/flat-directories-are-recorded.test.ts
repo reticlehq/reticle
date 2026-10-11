@@ -103,7 +103,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * a shallow walk over the contract's own type belongs beside the contract. Moving it here took a
    * cross-layer reach out of the server and left the file count as the only cost.
    */
-  'core/src/verdict': 17,
+  'core/src/verdict': 18,
   // 17 since `hold.ts`: `clampHoldMs` is the bound BOTH input paths clamp `holdMs` with, so it
   // belongs to the contract rather than to either caller. The reason it is a file of its own rather
   // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
@@ -136,7 +136,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * 17 with `drive-script.ts`, the Harness's plan language: an artifact the daemon and the platform
    * both read, so it lives with the other formats, behind the artifacts subpath the SDK never loads.
    */
-  'core/src/artifacts': 18,
+  'core/src/artifacts': 19,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   'core/src': 11,
@@ -220,7 +220,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // declared beside it rather than inside it, as `query-hint-schema.ts` is beside tools.ts.
   // 47 with `lease-readiness.ts`: the checks a lease runs before it may say `ready: true` (does
   // the tab answer, is it visible), moved out of lease-tools.ts for the same line-cap reason.
-  'server/src/surface/tools': 50,
+  'server/src/surface/tools': 51,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

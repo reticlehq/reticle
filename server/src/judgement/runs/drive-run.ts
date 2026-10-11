@@ -39,6 +39,7 @@ import {
   type DrivenBy,
   type JournalAction,
   type RunCheck,
+  type RunDisparity,
 } from '@reticlehq/core';
 import type { VerificationRunInput } from './artifact/build-verification-run.js';
 import { withCorrections } from './late-answer.js';
@@ -228,6 +229,22 @@ export function noteHarnessGoal(harness: string, met: boolean | undefined): void
   goalsMissed.set(harness, met);
 }
 
+/** How each Harness drive's goals compared with the agent's verdicts, until its run is folded. */
+const disparities = new Map<string, readonly RunDisparity[]>();
+
+/**
+ * Noted when a drive is graded, like its goal: its run artifact carries the comparison, so the
+ * platform can file a goal the agent proved and the Harness could not find.
+ */
+export function noteHarnessDisparity(harness: string, found: readonly RunDisparity[]): void {
+  if (0 === found.length) return;
+  if (MAX_GOALS_HELD <= disparities.size && !disparities.has(harness)) {
+    const oldest = disparities.keys().next().value;
+    if (oldest !== undefined) disparities.delete(oldest);
+  }
+  disparities.set(harness, found);
+}
+
 /** The phrase `describeWaitTarget` opens a route claim with, as the journal records it. */
 const ROUTE_CLAIM = 'a route change';
 const ABSENCE_OF = 'the absence of ';
@@ -274,6 +291,7 @@ function harnessRunFrom(
   return {
     ...input,
     checks,
+    ...(disparities.has(by.harness) ? { disparity: [...(disparities.get(by.harness) ?? [])] } : {}),
     durationMs: Math.max(0, input.durationMs - first),
     agent: { id: harnessAgentId(by.driver), kind: RunAgentKind.CODING_AGENT },
     trigger: {

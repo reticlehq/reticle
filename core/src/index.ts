@@ -62,6 +62,7 @@ export * from './artifacts/flow-types.js'; // FlowStep, FlowExpect, replay resul
 export * from './artifacts/step-effect.js'; // StepEffect: a leaf, so the page never downloads it
 export * from './artifacts/flow-composition.js'; // canFollow: may B replay straight after A
 export * from './verdict/verification-run.js'; // run/verdict shapes for the CI surface
+export * from './verdict/disparity.js';
 export * from './wire/types.js';
 export * from './identity/brand.js'; // RunId / SessionId / ProjectId / Ref brands + validators
 export * from './wire/net.js'; // NetInitiator / ipc:// scheme — network + desktop-IPC call vocabulary
