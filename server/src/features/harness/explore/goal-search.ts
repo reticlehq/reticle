@@ -48,7 +48,14 @@ const label = (line: TreeLine): string => `${line.role} "${line.name}"`;
 /** Hunt for `goal`, leaving the tab where it was found. */
 export async function searchForGoal(
   invoke: Invoke,
-  options: { goal: string; journey?: string; map?: HarnessMap; moves?: number },
+  options: {
+    goal: string;
+    journey?: string;
+    map?: HarnessMap;
+    moves?: number;
+    /** Text the Harness wrote itself: a match inside it is not the goal found. */
+    own?: readonly string[];
+  },
 ): Promise<GoalSearch> {
   const { goal } = options;
   const journey = options.journey ?? '';
@@ -65,7 +72,7 @@ export async function searchForGoal(
     if (page === undefined) return false;
     searched.push(page.route);
     looked.add(page.route);
-    if (await lookFor(invoke, goal)) {
+    if (await lookFor(invoke, goal, options.own)) {
       at = page.route;
       return true;
     }

@@ -273,7 +273,9 @@ async function runPlan(
   // Keyed by the tool list, which the script runner's recording wrapper passes through unchanged.
   const harnessOf = new WeakMap<object, string>();
 
+  const own = [...(focus === undefined ? [] : [focus]), ...scriptTexts(script)];
   const ports: ScriptPorts = {
+    own,
     parallel: leasing ? Math.max(1, Math.min(script.lanes.length, pool.capacity(), MAX_LANES)) : 1,
     stopped: () => off || true === options.stopped?.(),
     ...(true === options.confirmDangerous ? { confirmDangerous: true } : {}),
@@ -325,6 +327,7 @@ async function runPlan(
             opening,
             journey: goal,
             map,
+            own,
           }),
         );
       if (persona !== undefined) {
@@ -445,6 +448,7 @@ async function runPlan(
           opening,
           journey: focus,
           map,
+          own,
         });
   const goals = graded.goals;
   for (const id of lanes.all()) noteHarnessDisparity(id, graded.disparity);
@@ -466,6 +470,20 @@ async function runPlan(
       ...run.lines,
     ],
   };
+}
+
+/**
+ * Every text the plan writes down that a page could show back: journey titles, open goals, personas.
+ * The platform names the saved plan after them, so they are the Harness's words, never evidence.
+ */
+function scriptTexts(script: DriveScript): string[] {
+  return [
+    ...script.journeys.flatMap((j) => [
+      j.title,
+      ...j.steps.flatMap((s) => ('goal' in s && s.goal !== undefined ? [s.goal] : [])),
+    ]),
+    ...script.personas.map((p) => p.journey),
+  ];
 }
 
 /** What the project still owes, in its own words: the user's recent request, then open intents. */

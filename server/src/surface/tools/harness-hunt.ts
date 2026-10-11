@@ -207,8 +207,12 @@ export async function huntAndGrade(
     opening?: string | undefined;
     journey?: string | undefined;
     map?: HarnessMap | undefined;
+    /** Text the Harness wrote besides the journey: its plan's journeys, its flows' names. */
+    own?: readonly string[] | undefined;
   },
 ): Promise<Graded> {
+  // The journey names the plan and the flows this run saves: shown back on a page, it proves nothing.
+  const own = [...(ask.own ?? []), ...(ask.journey === undefined ? [] : [ask.journey])];
   const goals = ask.goals.map((g) => ('string' === typeof g ? { text: g } : g));
   const end = goals
     .filter((g) => true !== g.absent && true !== ask.opening?.includes(g.text))
@@ -218,6 +222,7 @@ export async function huntAndGrade(
       goal,
       ...(ask.journey === undefined ? {} : { journey: ask.journey }),
       ...(ask.map === undefined ? {} : { map: ask.map }),
+      own,
     });
   const search = end === undefined ? undefined : await hunt(end.text);
   // The end not found anywhere: the tab is left where an earlier goal is, so that one is graded
@@ -225,7 +230,7 @@ export async function huntAndGrade(
   if (search !== undefined && !search.found)
     for (const earlier of goals.filter((g) => g !== end && true !== g.absent).reverse())
       if ((await hunt(earlier.text)).found) break;
-  const checks = (await checkGoals(invoke, goals, ask.opening)).map((c) =>
+  const checks = (await checkGoals(invoke, goals, ask.opening, own)).map((c) =>
     end !== undefined &&
     c.text === end.text &&
     Verified.YES !== c.verified &&

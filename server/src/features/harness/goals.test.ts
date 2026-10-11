@@ -6,8 +6,10 @@ import {
   goalOfDrive,
   goalsIn,
   goalsMet,
+  lookFor,
   parseGoals,
   unprovedGoals,
+  writtenByHarness,
 } from './goals.js';
 
 describe('the goals a drive was asked to prove (#1316)', () => {
@@ -163,6 +165,62 @@ describe('the goals a drive was asked to prove (#1316)', () => {
     const checks = await checkGoals(() => Promise.reject(new Error('tab gone')), ['Ada']);
     expect(checks.map((c) => [c.text, c.verified])).toEqual([['Ada', 'unknown']]);
     expect(unprovedGoals([{ text: 'Ada', verified: 'yes' }])).toBeUndefined();
+  });
+});
+
+/*
+ * A Harness drive asked to rename a plan made two clicks, reached the /plans list and was graded
+ * PROVED on all three quoted goals: the plan it had just saved was named after the journey, and
+ * that name, listed on /plans, held every quote. Text the Harness wrote proves nothing about the app.
+ */
+describe('a goal shown only in text the Harness wrote itself', () => {
+  const journey =
+    'Go to Flows, open the Plans tab, open Checkout regression, change its name to Checkout ' +
+    'regression v2, and save. End when the page shows "Saved. The next run tests the plan as it is now."';
+  const goals = [
+    'Checkout regression',
+    'Checkout regression v2',
+    'Saved. The next run tests the plan as it is now.',
+  ];
+  /** The /plans list as the snapshot reads it: the saved plan's name, cut at 80 characters. */
+  const row = `${journey.slice(0, 80)}…`;
+  const app = (tree: string, found: string) => {
+    const asked: [string, Record<string, unknown>][] = [];
+    const invoke = (name: string, args: Record<string, unknown>): Promise<unknown> => {
+      asked.push([name, args]);
+      if (ReticleTool.SNAPSHOT === name) return Promise.resolve({ tree });
+      // The browser's text search lands on the row too, and hands back its cut text.
+      if (ReticleTool.SCROLL_TO === name)
+        return Promise.resolve({ found: true, element: { text: found } });
+      if (ReticleTool.WAIT_FOR === name) return Promise.resolve({ pass: true });
+      return Promise.resolve({ verified: 'yes' });
+    };
+    return { asked, invoke };
+  };
+
+  it('is never proved by the name of the plan the Harness saved', async () => {
+    const p = app(`- heading "Harness plans"\n- link "${row}" (ref=e1)`, row);
+    const checks = await checkGoals(p.invoke, goals, undefined, [journey]);
+    expect(p.asked.filter(([name]) => ReticleTool.ASSERT === name)).toEqual([]);
+    expect(checks.map((c) => c.verified)).toEqual(['unknown', 'unknown', 'unknown']);
+    expect(await lookFor(p.invoke, goals[2] ?? '', [journey])).toBe(false);
+  });
+
+  it('is still proved where the app shows it itself', async () => {
+    const status = 'Saved. The next run tests the plan as it is now.';
+    const p = app(`- link "${row}" (ref=e1)\n- status "${status}"`, status);
+    const checks = await checkGoals(p.invoke, [status], undefined, [journey]);
+    expect(checks).toEqual([{ text: status, verified: 'yes' }]);
+  });
+
+  it('tells a name the Harness wrote from an app text that only contains a goal', () => {
+    expect(writtenByHarness(row, 'Checkout regression', [journey])).toBe(true);
+    expect(writtenByHarness(`${journey} and 5 more`, 'Checkout regression', [journey])).toBe(true);
+    expect(writtenByHarness('Checkout regression', 'Checkout regression', [journey])).toBe(false);
+    expect(writtenByHarness('Checkout regression v2', 'Checkout regression', [journey])).toBe(
+      false,
+    );
+    expect(writtenByHarness(row, 'Checkout regression', [])).toBe(false);
   });
 });
 

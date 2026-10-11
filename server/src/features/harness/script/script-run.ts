@@ -53,6 +53,11 @@ export interface ScriptPorts {
    * them. Never applied to a step the model decides.
    */
   confirmDangerous?: boolean;
+  /**
+   * Text the Harness wrote itself (the journey asked for, the plan's titles and goals): a page
+   * showing it back, as the saved plan's name on /plans, is not a journey's end reached.
+   */
+  own?: readonly string[];
 }
 
 export interface ScriptRun {
@@ -354,7 +359,7 @@ async function runLeaf(
           .at(-1)?.text;
         if (end === undefined)
           return false !== drive.goalMet && 0 < checkTally(drive.toolCalls).held;
-        let shown = await lookFor(tools.invoke.bind(tools), end);
+        let shown = await lookFor(tools.invoke.bind(tools), end, ports.own);
         // A drive that finished with turns to spare, short of the end its own plan names (joined,
         // opened Runs, never clicked Team), is sent on once from where it stands, not graded there.
         const left = budget - drive.steps;
@@ -363,7 +368,7 @@ async function runLeaf(
           drives.push(drive);
           if (StopReason.STOPPED === drive.stopReason) stop();
           if (0 < checkTally(drive.toolCalls).failed) return false;
-          shown = await lookFor(tools.invoke.bind(tools), end);
+          shown = await lookFor(tools.invoke.bind(tools), end, ports.own);
         }
         // Never reached is the journey's miss, not a failed check on the app: no assert is kept.
         if (!shown || false === drive.goalMet) return false;

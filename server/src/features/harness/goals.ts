@@ -66,6 +66,65 @@ const NOT_REACHED = `${VerifiedReason.INCONCLUSIVE}: not on the page the drive e
 /** Said of an absence goal beside a goal the drive never reached: absent from the wrong page proves nothing. */
 const ABSENCE_UNREACHED = `${VerifiedReason.INCONCLUSIVE}: the drive did not reach the page it ends on, so its absence there proves nothing`;
 
+/** How the snapshot and the element reader end a text they cut short. */
+const CUT = '…';
+const collapse = (text: string): string => text.replace(/\s+/g, ' ').trim();
+
+/**
+ * Whether `shown` — one element's text, maybe cut short with "…" — is text the Harness wrote itself
+ * rather than the app: one of `own` (its journey, the names of the plan and the flows it saved), in
+ * full or cut short, holding `goal`. A Harness asked to rename a plan stopped on the /plans list and
+ * was graded PROVED on every quote: the plan it had just saved was named after the journey, and the
+ * journey quoted them all. An element showing exactly the goal is the app's, whoever else wrote it.
+ */
+export function writtenByHarness(shown: string, goal: string, own: readonly string[]): boolean {
+  const full = collapse(shown);
+  const cut = full.endsWith(CUT);
+  const text = cut ? full.slice(0, -CUT.length).trimEnd() : full;
+  const wanted = collapse(goal);
+  if (text.length <= wanted.length) return false;
+  return own.some((o) => {
+    const mine = collapse(o);
+    if (0 === mine.length || !mine.includes(wanted)) return false;
+    if (cut && mine.startsWith(text)) return true;
+    // Its own text first ("<journey> and 5 more"): what follows it is not the Harness's.
+    return text.startsWith(mine) && !text.slice(mine.length).includes(wanted);
+  });
+}
+
+/**
+ * Whether a snapshot shows `goal` anywhere but inside text the Harness wrote itself. Read as text,
+ * not parsed: the journey quotes its goals, so its quotes cut a parsed name short.
+ */
+function shownByApp(tree: string, goal: string, own: readonly string[]): boolean {
+  const wanted = collapse(goal);
+  const mine = own.map(collapse).filter((o) => wanted.length < o.length && o.includes(wanted));
+  if (0 === mine.length) return tree.includes(goal);
+  return tree.split('\n').some((line) => {
+    let rest = collapse(line);
+    for (const o of mine) {
+      rest = rest.split(o).join('');
+      rest = withoutCutStart(rest, o, wanted.length);
+    }
+    return rest.includes(wanted);
+  });
+}
+
+/** `line` without each start of `own` the snapshot cut short with "…" (longer than `min`). */
+function withoutCutStart(line: string, own: string, min: number): string {
+  let rest = line;
+  for (let at = rest.indexOf(CUT); -1 !== at; at = rest.indexOf(CUT, at + 1)) {
+    const before = rest.slice(0, at);
+    for (let n = Math.min(own.length, before.length); min < n; n -= 1) {
+      if (!before.endsWith(own.slice(0, n))) continue;
+      rest = `${rest.slice(0, at - n)}${rest.slice(at + CUT.length)}`;
+      at -= n;
+      break;
+    }
+  }
+  return rest;
+}
+
 /** The observable goals in a persona: whatever it quoted, each marked absent when it was negated. */
 export function parseGoals(persona: string | undefined): Goal[] {
   if (persona === undefined) return [];
@@ -100,6 +159,8 @@ export async function checkGoals(
   goals: readonly (string | Goal)[],
   /** The page as it read before the drive: a goal it already showed proves nothing at the end. */
   opening?: string,
+  /** Text the Harness wrote itself (its journey, its plan's and flows' names): never evidence. */
+  own: readonly string[] = [],
 ): Promise<GoalCheck[]> {
   const byText = new Map<string, Goal>();
   for (const goal of goals.slice(0, MAX_GOALS)) {
@@ -124,7 +185,8 @@ export async function checkGoals(
   const found = new Set<string>();
   for (const g of todo) {
     if (true === g.absent) continue;
-    if ((await scrolledTo(invoke, g.text)) || true === page?.includes(g.text)) found.add(g.text);
+    if ((await scrolledTo(invoke, g.text, own)) || shownByApp(page ?? '', g.text, own))
+      found.add(g.text);
   }
   const unreached = todo.some((g) => true !== g.absent && !found.has(g.text));
   const absences = unreached ? [] : todo.filter((g) => true === g.absent);
@@ -154,10 +216,12 @@ export async function checkGoals(
 export async function lookFor(
   invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
   text: string,
+  /** Text the Harness wrote itself: a match inside it is not the page showing the goal. */
+  own: readonly string[] = [],
 ): Promise<boolean> {
   await settle(invoke);
-  if (true === (await readOpening(invoke))?.includes(text)) return true;
-  return scrolledTo(invoke, text);
+  if (shownByApp((await readOpening(invoke)) ?? '', text, own)) return true;
+  return scrolledTo(invoke, text, own);
 }
 
 /** Long enough for a lazy route to render; short enough that a page that never quiets costs little. */
@@ -179,10 +243,14 @@ async function settle(
   }
 }
 
-/** Bring a goal's text into view, the way a person scrolls to it. True when it was found. */
+/**
+ * Bring a goal's text into view, the way a person scrolls to it. True when it was found, and not
+ * inside text the Harness wrote itself.
+ */
 async function scrolledTo(
   invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
   text: string,
+  own: readonly string[],
 ): Promise<boolean> {
   try {
     const result = asRecord(
@@ -192,7 +260,11 @@ async function scrolledTo(
         maxScrolls: GOAL_SCROLLS,
       }),
     );
-    return true === result['found'];
+    const element = asRecord(result['element']);
+    const shown = element['text'] ?? element['name'];
+    return (
+      true === result['found'] && !('string' === typeof shown && writtenByHarness(shown, text, own))
+    );
   } catch {
     return false;
   }

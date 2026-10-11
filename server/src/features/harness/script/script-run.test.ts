@@ -396,6 +396,15 @@ describe('an open goal that quotes where it ends', () => {
     ]);
   });
 
+  // The saved plan is named after the journey; listed back on a page, it is not the journey's end.
+  it('fails when the end shows only inside the journey the Harness wrote', async () => {
+    const run = await runScript(counter, {
+      ...onPage(`- link "${COUNTER}" (ref=e1)`),
+      own: [COUNTER],
+    });
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
+  });
+
   it('fails when the page still shows where it started', async () => {
     const run = await runScript(counter, onPage('button "count: 0"'));
     expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
