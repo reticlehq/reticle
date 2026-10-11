@@ -260,3 +260,19 @@ describe('hiddenMatchNote — did a green rest on a match nobody can see', () =>
     expect(verdict.because).toContain('visible: true');
   });
 });
+
+/*
+ * Every `hidden_match` answer advised "add `visible: true`", and an element check refuses that
+ * field ("element accepts: query, state, absent"). The advice names what the check accepts.
+ */
+describe('the hidden-match advice', () => {
+  const hidden = { ref: 'e1', role: 'button', name: 'x', visible: false, states: [] };
+  it('tells an element check to ask for state "visible", which it accepts', () => {
+    const note = hiddenMatchNote({ kind: 'element', query: { testid: 'x' } }, [hidden]);
+    expect(note).toContain('state: "visible"');
+    expect(note).not.toContain('visible: true');
+  });
+  it('tells a text check to add visible: true', () => {
+    expect(hiddenMatchNote({ kind: 'text', contains: 'x' }, [hidden])).toContain('visible: true');
+  });
+});

@@ -496,7 +496,7 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
       because:
         'the declared consequence was already true before this action, so it proves nothing about it — assert something the action CHANGES (a signal, a request, a route, or store state)' +
         (true === inputs.alreadyTrueHiddenMatch
-          ? '. That prior match was against a HIDDEN element — this predicate checks DOM presence, not visibility, by default; add `visible: true` if you meant "this is showing", not merely "this exists"'
+          ? '. That prior match was against a HIDDEN element — this predicate checks DOM presence, not visibility, by default; add `visible: true` to a text check, or `state: "visible"` to an element check, if you meant "this is showing", not merely "this exists"'
           : ''),
     };
   }
