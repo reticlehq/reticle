@@ -160,10 +160,35 @@ describe('takeStepShot', () => {
     });
   });
 
+  /*
+   * From a persona drive: the first recorded act had no screenshot — its path was named, but the
+   * file never landed (shots.jsonl started at 2). The first capture of a tab is the one nothing has
+   * vouched for yet (the in-page renderer loads on first use), so it is waited for, tried again
+   * once, and the answer is a path that landed or the reason it did not.
+   */
+  it('makes the first capture of a fresh tab land, trying again once', async () => {
+    let calls = 0;
+    const image = fakeJpeg(8, 6);
+    const { deps, root, sessionId } = await setup({
+      render: () => {
+        calls += 1;
+        return 1 === calls ? undefined : rendered(image)();
+      },
+    });
+    const first = await takeStepShot(deps, sessionId, 'reticle_act');
+    expect(first).toMatchObject({ source: ScreenshotSource.RENDERED });
+    expect(new Uint8Array(await readFile('path' in first ? first.path : ''))).toEqual(image);
+    expect((await readStepShots(deps.fs, root, `drive-${sessionId}`)).map((s) => s.seq)).toEqual([
+      1,
+    ]);
+  });
+
   it('says why when no picture could be taken, rather than leaving the field out', async () => {
     const { deps, root, sessionId } = await setup({});
 
-    await takeStepShot(deps, sessionId, 'reticle_act');
+    // The first capture of a tab is waited for, so its answer is the reason already.
+    const first = await takeStepShot(deps, sessionId, 'reticle_act');
+    expect('error' in first ? first.error : '').toContain('render');
     await shotsLanded(root, `drive-${sessionId}`);
 
     // Nothing worked last time, so this one waits for the capture and reports what happened.

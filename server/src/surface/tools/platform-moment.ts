@@ -262,8 +262,10 @@ export const NudgeText = {
     `Tell the user, once, in one line: this app is at ${String(percent)}% instrumentation ` +
     `(${String(UNLOCK_PERCENT)}% unlocks it), so Reticle Harness can be switched on in the HUD's ` +
     'Settings or the dashboard; it drives whole journeys on the platform and saves them as flows.',
-  explore: (acts: number): string =>
-    `Reticle Harness is on for this project (you have driven ${String(acts)} step${1 === acts ? '' : 's'} by hand), so ` +
+  // No count: it was kept per agent connection, which a client may open per call, so "you have
+  // driven 1 step by hand" was said after twenty.
+  explore: (): string =>
+    'Reticle Harness is on for this project and you are driving it step by step by hand, so ' +
     'the user wants journeys driven by the Harness, not step by step: call reticle_verify ' +
     '{ action: "explore", persona: "<the journey, with the text the page must show at the end in quotes>" }, ' +
     'then repeat the call with the runId it returns until it finishes, and report its verdict. ' +
@@ -322,7 +324,7 @@ export async function takeNudge(
       input.acted &&
       fresh(AgentNudgeKind.EXPLORE)
     )
-      return say(AgentNudgeKind.EXPLORE, NudgeText.explore(driven + 1));
+      return say(AgentNudgeKind.EXPLORE, NudgeText.explore());
     if (!input.verdict) return undefined;
     const linked = await input.linked();
     if (!linked)

@@ -221,9 +221,15 @@ async function shoot(
       error: `no screenshot: this run already holds ${String(STEP_SCREENSHOT.MAX_PER_RUN)}, the most one run keeps`,
     };
   }
+  // The first capture of a tab is one nothing has vouched for yet (the in-page renderer loads on
+  // first use): it is tried again once and waited for, so its answer is a path that landed or the
+  // reason. A first act was handed a path whose file never landed.
+  const fresh = !lastSource.has(session.id);
   // Started before anything else is awaited: the picture is of THIS moment.
-  const taken = capture(deps, session);
-  const predicted = await predict(deps, session);
+  const taken = capture(deps, session).then((pixels) =>
+    fresh && 'string' === typeof pixels ? capture(deps, session) : pixels,
+  );
+  const predicted = fresh ? undefined : await predict(deps, session);
   const file = `${String(seq).padStart(SEQ_WIDTH, '0')}-${tool.replace(TOOL_PREFIX, '')}${JPEG_EXT}`;
   const path = join(dir, file);
   const land = taken.then(async (pixels) => {

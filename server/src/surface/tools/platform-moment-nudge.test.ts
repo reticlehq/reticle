@@ -65,6 +65,11 @@ describe('agent nudges', () => {
     expect(nudge).toEqual({ kind: AgentNudgeKind.SWITCH_ON, text: NudgeText.switchOn(87) });
   });
 
+  // "you have driven 1 step by hand" was said after twenty: the count was per agent connection.
+  it('claims no count of steps it cannot know', () => {
+    expect(NudgeText.explore()).not.toMatch(/\d+ step/);
+  });
+
   it('with the Harness on, hands a long hand-driven journey to explore, once', async () => {
     const on = input({
       verdict: false,
@@ -74,7 +79,7 @@ describe('agent nudges', () => {
     const said = [];
     for (let i = 0; i < LONG_JOURNEY_ACTS + 3; i++) said.push(await takeNudge(on));
     expect(said.filter((n) => n !== undefined)).toEqual([
-      { kind: AgentNudgeKind.EXPLORE, text: NudgeText.explore(LONG_JOURNEY_ACTS) },
+      { kind: AgentNudgeKind.EXPLORE, text: NudgeText.explore() },
     ]);
   });
 
