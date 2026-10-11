@@ -358,8 +358,14 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  *
  * The HUD round on feat/hud-clarity (Harness page and switch, the one-driver-per-log split that
  * tags every narration with who sent it) measured 258,797 B; ceiling 259,797 by the convention.
+ *
+ * Reading the page as a person reads it, from a persona drive where three goals the page plainly
+ * showed could not be proved: content below the fold of a scrolling main graded hidden, a phrase
+ * split across two flex items ("found by" / "CI") never matched, and the page tree dropped a
+ * sentence's inline `<code>`. All three are answered in the page, at read time. Measured 261,198 B;
+ * ceiling 262,198 by the convention.
  */
-const MAX_FIRST_LOAD_BYTES = 259_797;
+const MAX_FIRST_LOAD_BYTES = 262_198;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

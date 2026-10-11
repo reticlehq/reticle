@@ -495,6 +495,8 @@ function parentAcrossShadowBoundary(el: Element): Element | null {
 }
 
 const CLIPPING_OVERFLOW = new Set(['hidden', 'clip']);
+/** A box a person can scroll: what it holds past its edge is below the fold, not hidden. */
+const SCROLLING_OVERFLOW = new Set(['auto', 'scroll']);
 const NON_CLIPPING_DISPLAY = new Set([
   'contents',
   'table-row',
@@ -537,6 +539,9 @@ interface VisibilityInfo {
   parent: Element | null;
   clipX: boolean;
   clipY: boolean;
+  /** Scrollable on that axis: content past the edge is reachable by scrolling. */
+  scrollX: boolean;
+  scrollY: boolean;
   hasClipping: boolean;
   clipBox?: VisibleBounds;
 }
@@ -563,7 +568,16 @@ function ownVisibilityInfo(el: Element, memo: Map<Element, VisibilityInfo>): Vis
     // Own hiding needs no ancestor metadata: preserve the early return for hidden targets,
     // including deeply nested ones. This cached CSS result never stands for clipped geometry.
     if (selfHidden(el, style)) {
-      info = { hidden: true, style, parent: null, clipX: false, clipY: false, hasClipping: false };
+      info = {
+        hidden: true,
+        style,
+        parent: null,
+        clipX: false,
+        clipY: false,
+        scrollX: false,
+        scrollY: false,
+        hasClipping: false,
+      };
       memo.set(el, info);
       return info;
     }
@@ -588,6 +602,8 @@ function ownVisibilityInfo(el: Element, memo: Map<Element, VisibilityInfo>): Vis
       parent,
       clipX,
       clipY,
+      scrollX: hasClipBox && SCROLLING_OVERFLOW.has(overflowX),
+      scrollY: hasClipBox && SCROLLING_OVERFLOW.has(overflowY),
       hasClipping: clipX || clipY || true === inherited?.hasClipping,
     };
     memo.set(el, info);
@@ -711,11 +727,43 @@ function clippingBox(el: Element, info: VisibilityInfo): VisibleBounds {
   return info.clipBox;
 }
 
+/** A box outside a scrollport, moved to its near edge on each scrolling axis, as scrolling would. */
+function scrolledInto(
+  b: VisibleBounds,
+  port: VisibleBounds,
+  alongX: boolean,
+  alongY: boolean,
+): VisibleBounds {
+  const axis = (
+    lo: number,
+    hi: number,
+    size: number,
+    from: number,
+    to: number,
+  ): [number, number] => {
+    if (hi > from && lo < to) return [lo, hi];
+    const span = Math.min(size, to - from);
+    return lo >= to ? [to - span, to] : [from, from + span];
+  };
+  const [left, right] = alongX
+    ? axis(b.left, b.right, b.width, port.left, port.right)
+    : [b.left, b.right];
+  const [top, bottom] = alongY
+    ? axis(b.top, b.bottom, b.height, port.top, port.bottom)
+    : [b.top, b.bottom];
+  return { left, right, top, bottom, width: right - left, height: bottom - top };
+}
+
 /** Undefined means no box was needed; null means hidden. Only real clipping reads layout. */
 function visibleBounds(
   el: Element,
   memo: Map<Element, VisibilityInfo>,
   initial?: VisibleBounds,
+  /**
+   * Read a box scrolled out of a scroll container as if scrolled back in, so a clip ABOVE the
+   * container judges where a person would see it. Visibility asks this; the viewport check does not.
+   */
+  throughScrollers = false,
 ): VisibleBounds | null | undefined {
   let bounds = initial;
   const target = ownVisibilityInfo(el, memo);
@@ -733,6 +781,19 @@ function visibleBounds(
     if (info.hidden) return null;
     if (current === clipFrom) clipFrom = undefined;
     const style = info.style;
+    // An app shell (`overflow: hidden`, full height) around a scrolling main read every row below
+    // the fold as hidden: the row sat outside the shell's box though one scroll brings it in.
+    if (
+      throughScrollers &&
+      current !== el &&
+      undefined === clipFrom &&
+      (info.scrollX || info.scrollY)
+    ) {
+      bounds ??= el.getBoundingClientRect();
+      if (bounds.width > 0 && bounds.height > 0) {
+        bounds = scrolledInto(bounds, clippingBox(current, info), info.scrollX, info.scrollY);
+      }
+    }
     if (current !== el && undefined === clipFrom && (info.clipX || info.clipY)) {
       bounds ??= el.getBoundingClientRect();
       // Preserve the existing visibility semantics for elements without an own layout box
@@ -777,7 +838,7 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   if (!el.isConnected) return false;
   const cached = memo?.get(el);
   if (cached !== undefined) return cached;
-  const result = visibleBounds(el, visibilityInfoMemo(memo)) !== null;
+  const result = visibleBounds(el, visibilityInfoMemo(memo), undefined, true) !== null;
   if (memo !== undefined) memo.set(el, result);
   return result;
 }

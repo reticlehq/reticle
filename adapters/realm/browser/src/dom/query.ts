@@ -120,12 +120,30 @@ function directText(el: Element): string {
 function visibleTextOf(el: Element, memo: Map<Element, boolean>): string {
   if (isNonRendered(el) || isIgnored(el)) return '';
   const visible = isVisible(el, memo);
+  const apart = laysOutApart(el);
   let text = '';
   for (const node of Array.from(el.childNodes)) {
     if (Node.TEXT_NODE === node.nodeType && visible) text += node.textContent ?? '';
-    else if (isElement(node)) text += visibleTextOf(node, memo);
+    else if (isElement(node)) {
+      // A child the layout sets apart reads as a separate word: "found by" and "CI" in two flex
+      // items with no space node between them read "found byCI", which no phrase check can match.
+      const own = visibleTextOf(node, memo);
+      text += apart || ownBox(node) ? ` ${own} ` : own;
+    }
   }
   return text;
+}
+
+/** A flex or grid container lays its children out as separate boxes, whatever they are. */
+function laysOutApart(el: Element): boolean {
+  const display = el.ownerDocument.defaultView?.getComputedStyle(el).display ?? '';
+  return display.includes('flex') || display.includes('grid');
+}
+
+/** An element that is its own box rather than a run of text inside its parent's line. */
+function ownBox(el: Element): boolean {
+  const display = el.ownerDocument.defaultView?.getComputedStyle(el).display ?? 'inline';
+  return !display.startsWith('inline') && 'contents' !== display;
 }
 
 /**
@@ -523,6 +541,11 @@ export function matchQuery(
   query: ElementQuery,
   state?: ElementState,
   limit: number = MAX_DESCRIBED,
+  /**
+   * A predicate's question, "is this text on the page", answered as a reader would. A `find` keeps
+   * asking for elements whose own text holds it, and names the container in its hint instead.
+   */
+  wholePhrase = true,
 ): MatchResult {
   // NO blanket try/catch here. It would turn ANY exception during candidate-finding into
   // `elements = []`, which is the same lie as the `default` arm above: a query that could not run
@@ -530,8 +553,14 @@ export function matchQuery(
   // selector that matches nothing - is already handled explicitly and distinctly, as `scopeMissing`,
   // so all that is left is a net that converts real faults into false negatives.
   const found = findCandidates(query);
-  const elements: HTMLElement[] = found.candidates;
   const scopeMissing = found.scopeMissing;
+  // A phrase a reader sees whole matches whole: with no element whose own text holds it, the
+  // tightest element whose visible text does is the match — the same one the splitText hint names.
+  const wanted = wholePhrase && textOnly(query) ? wantedTextOf(query) : undefined;
+  const scope = 0 === found.candidates.length ? resolveContainer(query.scope).container : null;
+  const owner =
+    null === scope || wanted === undefined ? undefined : splitTextOwner(scope, wanted, query);
+  const elements: HTMLElement[] = owner === undefined ? found.candidates : [owner];
   // One visibility cache for the synchronous pass: styles and ancestor clipping metadata resolve
   // once per unique node. Unclipped chains short-circuit; clipped candidates still intersect their
   // own boxes, because a descendant can overflow back into view from a clipped container.
@@ -699,6 +728,23 @@ function caseOnlyMatch(container: HTMLElement, wanted: string): string | undefin
   return undefined;
 }
 
+/** Fields that leave a query a pure text search; anything else names a kind of element too. */
+const TEXT_ONLY_FIELDS: ReadonlySet<string> = new Set([
+  'text',
+  'matchCase',
+  'scope',
+  'by',
+  'value',
+]);
+
+/** A query that asks only for text, which an element whose visible text holds it answers. */
+function textOnly(query: ElementQuery): boolean {
+  return (
+    (query.by === undefined || QueryBy.TEXT === query.by) &&
+    Object.keys(query).every((key) => TEXT_ONLY_FIELDS.has(key))
+  );
+}
+
 /** The text this query searched for, in either spelling, or undefined when it searched by something else. */
 function wantedTextOf(query: ElementQuery): string | undefined {
   if (query.text !== undefined) return query.text;
@@ -824,7 +870,7 @@ export function elementsMatching(query: ElementQuery): HTMLElement[] {
  * to counting survivors and calling that the answer.
  */
 export function runQuery(query: ElementQuery, limit?: number): QueryResult {
-  const result = matchQuery(query, undefined, limit);
+  const result = matchQuery(query, undefined, limit, false);
   const scopeFields = true === result.scopeMissing ? { scopeMissing: true as const } : {};
   if (0 === result.elements.length) {
     return {
