@@ -4,7 +4,13 @@
  * already knew, while `reticle runs regression` was the command that exited 3.
  */
 import { describe, expect, it } from 'vitest';
-import { GateExit, MSG_GATE_NO_FLOWS, gateExitWith, msgGateRegression } from './gate-exit.js';
+import {
+  GateExit,
+  MSG_GATE_NO_FLOWS,
+  gateExitWith,
+  msgGateRefused,
+  msgGateRegression,
+} from './gate-exit.js';
 import { renderHelp } from '../cli-usage.js';
 
 describe('the gate and a regression the platform knows about', () => {
@@ -23,6 +29,27 @@ describe('the gate and a regression the platform knows about', () => {
   it('says what to do when there are no saved flows, and that the change did not fail', () => {
     expect(MSG_GATE_NO_FLOWS).toContain('not a failure of this change');
     expect(MSG_GATE_NO_FLOWS).toContain('reticle verify');
+  });
+});
+
+/*
+ * From a CI drive: with the project's key revoked, the gate passed and said nothing — the platform's
+ * regression report it was linked to read was simply missing, and the only trace was a log line. A
+ * gate that cannot ask the platform it is linked to fails closed, and says why.
+ */
+describe('a gate whose platform refused its key', () => {
+  it('fails instead of passing, and keeps a worse local answer', () => {
+    expect(gateExitWith(GateExit.PASS, undefined, true)).toBe(GateExit.FAIL);
+    expect(gateExitWith(GateExit.NOTHING_TO_CHECK, undefined, true)).toBe(
+      GateExit.NOTHING_TO_CHECK,
+    );
+    expect(gateExitWith(GateExit.PASS, undefined, false)).toBe(GateExit.PASS);
+  });
+
+  it('says the key was refused, and that the build did not pass because of it', () => {
+    const said = msgGateRefused('the platform refused this API key (401): it was revoked');
+    expect(said).toContain('refused this API key');
+    expect(said).toContain('fails closed');
   });
 });
 

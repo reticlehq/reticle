@@ -135,10 +135,17 @@ export function statusLines(fields: Record<string, unknown>): string[] {
   if ('signedInAs' in fields) {
     const who = str(fields, 'signedInAs');
     const project = str(fields, 'linkedProject');
+    // A key the platform refused at the last sync is the answer, not "not signed in": a member
+    // removed from the workspace was told to connect while the key was set, and refused.
+    const refused = str(fields, 'keyRefused');
     lines.push(
       row(
         StatusLabel.ACCOUNT,
-        who === undefined ? `${NOT_OK} not signed in` : `${OK} signed in as ${who}`,
+        refused !== undefined
+          ? `${NOT_OK} the platform refused this API key at the last sync (${refused}): it was revoked, or you no longer have access to the workspace`
+          : who === undefined
+            ? `${NOT_OK} not signed in`
+            : `${OK} signed in as ${who}`,
       ),
     );
     lines.push(

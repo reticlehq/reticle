@@ -10,6 +10,7 @@ import {
   GateExit,
   MSG_GATE_NO_FLOWS,
   msgGateRegression,
+  msgGateRefused,
   gateExitWith,
 } from './answers/gate-exit.js';
 import { knownRegression } from './known-regression.js';
@@ -221,15 +222,18 @@ export async function handleGate(
     // A regression the platform already knows fails the build here too, with `reticle runs
     // regression`'s code, so the gate is the one command CI needs. Best-effort: unlinked or offline
     // changes nothing.
-    const regressed = await knownRegression(reticleRoot);
+    const known = await knownRegression(reticleRoot);
+    const regressed = known.broken;
     if (regressed !== undefined && 0 < regressed.length)
       log('reticle_gate_regression', { broken: regressed });
+    if (known.refused !== undefined) process.stderr.write(`${msgGateRefused(known.refused)}\n`);
     const local = pass
       ? GateExit.PASS
       : result.pass && flowCoverage.outcome !== undefined
         ? GateExit.NOTHING_TO_CHECK
         : GateExit.FAIL;
-    const code = gateExitWith(local, regressed?.length);
+    // Fails closed in CI, not in an agent's stop hook, where it would block over a key, not a change.
+    const code = gateExitWith(local, regressed?.length, !hook && known.refused !== undefined);
     if (GateExit.NOTHING_TO_CHECK === code && !hook) process.stderr.write(`${MSG_GATE_NO_FLOWS}\n`);
     if (GateExit.REGRESSION === code && !hook && regressed !== undefined)
       process.stderr.write(`${msgGateRegression(regressed)}\n`);

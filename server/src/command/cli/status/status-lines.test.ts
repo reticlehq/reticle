@@ -91,3 +91,21 @@ describe('statusLines', () => {
     expect(statusLines({}).join('\n')).toContain(StatusLabel.DAEMON);
   });
 });
+
+/*
+ * A member removed from the workspace ran `reticle status` with a key set that the platform now
+ * refused, and read "not signed in — run reticle connect": the key was there, and refused.
+ */
+describe('an account whose key the platform refused', () => {
+  it('says the key was refused, not that nobody is signed in', () => {
+    const out = statusLines({
+      port: 4400,
+      running: false,
+      signedInAs: null,
+      linkedProject: 'bench-checkout',
+      keyRefused: 'status 401',
+    }).join('\n');
+    expect(out).toContain('refused this API key');
+    expect(out).not.toContain('not signed in');
+  });
+});

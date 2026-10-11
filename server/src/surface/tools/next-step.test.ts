@@ -46,6 +46,15 @@ describe('what the agent is told to do next', () => {
     expect(verdict(r)).toBe(NextText.SYNC_PROBLEM('answered 401'));
   });
 
+  it('says a refused key was refused, not the platform’s "valid API key required"', () => {
+    const r = root({
+      'cloud.json': { projectId: 'p' },
+      'cloud-state.json': { lastError: 'status 401: valid API key required' },
+      'request.json': { at: NOW },
+    });
+    expect(verdict(r)).toContain('refused this project');
+  });
+
   /** A second checkout's evidence went to ~/.reticle/unmatched and the agent was told nothing. */
   it('names where unmatched evidence goes, the folders that claim it, and the fix — once', () => {
     const r = root({ 'request.json': { at: NOW } });

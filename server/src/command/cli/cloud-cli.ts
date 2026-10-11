@@ -240,6 +240,7 @@ const cmdWhoami = async (): Promise<number> => {
 export const accountStatusFields = async (): Promise<{
   signedInAs: string | null;
   linkedProject: string | null;
+  keyRefused?: string;
 }> => {
   const session = await readSession();
   const cloud = await resolveProjectCloud(
@@ -248,11 +249,17 @@ export const accountStatusFields = async (): Promise<{
     homedir(),
     process.env,
   );
+  // What the last sync heard, from local state: a refused key is recorded as "status 401: …".
+  const refused = REFUSED_SYNC.exec(readCloudState(linkedRoot()).lastError ?? '')?.[0];
   return {
     signedInAs: session?.orgName ?? null,
     linkedProject: null === cloud.config ? null : cloud.projectId,
+    ...(refused === undefined ? {} : { keyRefused: refused }),
   };
 };
+
+/** How the sync loop records a refused credential in its state. */
+const REFUSED_SYNC = /^status 40[13]\b/;
 
 /** `reticle project ls` / `reticle project create <name>` — key- or session-authed. */
 const cmdProject = async (argv: readonly string[]): Promise<number> => {

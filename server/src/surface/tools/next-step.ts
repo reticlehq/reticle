@@ -134,11 +134,19 @@ function syncProblem(root: string, now: number): string | undefined {
   if (0 < unsent) return `${String(unsent)} run(s) written here were never sent`;
   if (state === undefined) return undefined;
   const error = state['lastError'];
+  // A refused key read as the platform's "valid API key required" to a member removed from the
+  // workspace, whose key was set: it was refused, which is what they have to act on.
+  if ('string' === typeof error && REFUSED_SYNC.test(error)) return KEY_REFUSED;
   if ('string' === typeof error && 0 < error.length) return error.slice(0, 120);
   const refused = state['refusedRuns'];
   const count = 'object' === typeof refused && null !== refused ? Object.keys(refused).length : 0;
   return 0 < count ? `${String(count)} run(s) refused` : undefined;
 }
+
+/** How the sync loop records a refused credential. */
+const REFUSED_SYNC = /^status 40[13]\b/;
+const KEY_REFUSED =
+  "the platform refused this project's API key: it was revoked, or its owner no longer has access to the workspace";
 
 export interface NextStepInput {
   tool: string;

@@ -359,10 +359,26 @@ async function pushRunToCloud(
         : seeRunLine(dashboard, run.runId),
     );
   } else {
-    ports.fail(
-      `cloud run sync failed (${result.status ?? result.error ?? 'error'}); run kept locally`,
+    ports.fail(runSyncFailure(result.status, result.error));
+  }
+}
+
+/** The platform answered: the credential was not accepted. */
+const REFUSED_STATUSES: ReadonlySet<number> = new Set([401, 403]);
+
+/**
+ * Why the run did not reach the dashboard. A revoked key left CI green with "cloud run sync failed
+ * (401)" in the log as the only trace; a refused key is said as one, loudly.
+ */
+export function runSyncFailure(status: number | undefined, error: string | undefined): string {
+  if (status !== undefined && REFUSED_STATUSES.has(status)) {
+    return (
+      `⚠ The platform refused this project's API key (${String(status)}): this run did NOT reach ` +
+      'the dashboard, and nothing pushed with this key will. The key was revoked, or its owner no ' +
+      'longer has access to the workspace — mint a new one in Settings → API keys. Run kept locally.'
     );
   }
+  return `cloud run sync failed (${String(status ?? error ?? 'error')}); run kept locally`;
 }
 
 function delay(ms: number): Promise<void> {

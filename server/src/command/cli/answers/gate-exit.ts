@@ -27,8 +27,25 @@ export const GateExit = {
  * with `reticle runs regression`'s code, whatever the local answer was, so the gate is the one
  * command CI needs. `undefined` (not linked, or the platform did not answer) changes nothing.
  */
-export function gateExitWith(local: number, regressed: number | undefined): number {
-  return regressed !== undefined && 0 < regressed ? GateExit.REGRESSION : local;
+export function gateExitWith(
+  local: number,
+  regressed: number | undefined,
+  /** The platform the project is linked to refused its credential: the gate fails closed. */
+  refused = false,
+): number {
+  if (regressed !== undefined && 0 < regressed) return GateExit.REGRESSION;
+  return refused && GateExit.PASS === local ? GateExit.FAIL : local;
+}
+
+/**
+ * Said when the linked platform refused the key. A CI pipeline whose key was revoked stayed green
+ * and silent: the gate lost the platform's regression report and the only trace was a log line.
+ */
+export function msgGateRefused(why: string): string {
+  return (
+    `Reticle gate: ${why}. The gate could not ask the platform this project is linked to for its ` +
+    'regression report, so it fails closed rather than pass without it.'
+  );
 }
 
 /** Said when the gate had no saved flows to judge, so exit 2 does not read as the change failing. */

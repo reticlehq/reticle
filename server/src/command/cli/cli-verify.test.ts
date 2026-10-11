@@ -18,6 +18,7 @@ import {
   urlParts,
   type VerifyConnection,
   type VerifyPorts,
+  runSyncFailure,
   verifyProjectName,
 } from './cli-verify.js';
 import { PortPresence } from '../daemon/binding/port-presence.js';
@@ -456,5 +457,14 @@ describe('the project a verify run is named for', () => {
     expect(verifyProjectName(null, 'web-ci', 'ci-repo')).toBe('web-ci');
     expect(verifyProjectName(null, undefined, 'ci-repo')).toBe('ci-repo');
     expect(verifyProjectName(null, undefined, '')).toBe('app');
+  });
+});
+
+/* A revoked key's only trace was "cloud run sync failed (401)" in a log nobody reads. */
+describe('a run the platform refused', () => {
+  it('says loudly that the key was refused and the run did not reach the dashboard', () => {
+    expect(runSyncFailure(401, undefined)).toContain('refused this project');
+    expect(runSyncFailure(401, undefined)).toContain('did NOT reach');
+    expect(runSyncFailure(500, undefined)).toBe('cloud run sync failed (500); run kept locally');
   });
 });
