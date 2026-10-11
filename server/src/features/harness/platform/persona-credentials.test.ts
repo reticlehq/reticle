@@ -33,4 +33,18 @@ describe('the credentials a persona names', () => {
       secrets: {},
     });
   });
+
+  // Lena's persona put its password in parentheses; the ")" was typed with it, and every sign-in was a 401.
+  it('stops an unquoted password at a closing bracket or a sentence end', () => {
+    const lena = personaCredentials(
+      'Lena (email lena@example.com, password: DriveP17-pass-2026!): open Runs',
+    );
+    expect(lena.secrets['RETICLE_SECRET_PASSWORD']).toBe('DriveP17-pass-2026!');
+    expect(lena.persona).toBe('Lena (email lena@example.com, password: [redacted]): open Runs');
+    expect(
+      personaCredentials('Sign in, password is hunter2. Then open Runs').secrets[
+        'RETICLE_SECRET_PASSWORD'
+      ],
+    ).toBe('hunter2');
+  });
 });

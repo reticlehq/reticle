@@ -250,18 +250,19 @@ export function goalsMet(checks: readonly GoalCheck[]): boolean | undefined {
 /**
  * Whether the drive met its goal, as the answer and the run report it. The driver's own `goalMet`
  * is its word, never evidence: a run answered `goalMet: true` after zero actions on a tab that
- * already showed the end state, and another with both its goals `unknown`. Never true without an
- * action that ran; with goals, met only when every one was proved and the driver did not say it
- * missed; with none, the driver's word stands. Undefined when nothing judged it.
+ * already showed the end state, and another with both its goals `unknown`. With goals, met exactly
+ * when every one was proved; with none, the driver's word stands, and only after an action ran.
+ * Undefined when nothing judged it.
  */
 export function goalOfDrive(
   claimed: boolean | undefined,
   checks: readonly GoalCheck[],
   acted: boolean,
 ): boolean | undefined {
-  const judged = 0 < checks.length ? false !== claimed && true === goalsMet(checks) : claimed;
-  if (judged === undefined) return undefined;
-  return acted && judged;
+  // Proved goals are the evidence: a `yes` was not on the page before the drive (that reads
+  // already_true), so the run reached it, by the drive or by the hunt after it.
+  if (0 < checks.length) return true === goalsMet(checks);
+  return claimed === undefined ? undefined : acted && claimed;
 }
 
 /** One line naming the goals the drive did not prove, or undefined when it proved them all. */

@@ -39,6 +39,7 @@ import {
   type DrivenBy,
   type JournalAction,
   type RunCheck,
+  type RunDisparity,
 } from '@reticlehq/core';
 import type { VerificationRunInput } from './artifact/build-verification-run.js';
 import { withCorrections } from './late-answer.js';
@@ -234,6 +235,22 @@ const goalsMissed = new Map<string, boolean>();
  * "Proved"; it is not proved. Unmet once is unmet: a later journey of the same drive reaching its
  * goal does not undo it.
  */
+/** Told when a Harness drive's goal or comparison is noted, so its run is written again. */
+const noted = new Set<() => void>();
+
+/**
+ * Hear about every Harness note. A drive is graded after its last verdict, and the run that verdict
+ * flushed never carried the grade: live, the platform filed a failed check instead of "Hard to find".
+ */
+export function onHarnessNoted(listener: () => void): () => void {
+  noted.add(listener);
+  return () => noted.delete(listener);
+}
+
+const tellNoted = (): void => {
+  for (const listener of noted) listener();
+};
+
 export function noteHarnessGoal(harness: string, met: boolean | undefined): void {
   if (met === undefined) return;
   const before = goalsMissed.get(harness);
@@ -243,6 +260,24 @@ export function noteHarnessGoal(harness: string, met: boolean | undefined): void
     if (oldest !== undefined) goalsMissed.delete(oldest);
   }
   goalsMissed.set(harness, met);
+  tellNoted();
+}
+
+/** How each Harness drive's goals compared with the agent's verdicts, until its run is folded. */
+const disparities = new Map<string, readonly RunDisparity[]>();
+
+/**
+ * Noted when a drive is graded, like its goal: its run artifact carries the comparison, so the
+ * platform can file a goal the agent proved and the Harness could not find.
+ */
+export function noteHarnessDisparity(harness: string, found: readonly RunDisparity[]): void {
+  if (0 === found.length) return;
+  if (MAX_GOALS_HELD <= disparities.size && !disparities.has(harness)) {
+    const oldest = disparities.keys().next().value;
+    if (oldest !== undefined) disparities.delete(oldest);
+  }
+  disparities.set(harness, found);
+  tellNoted();
 }
 
 /** The phrase `describeWaitTarget` opens a route claim with, as the journal records it. */
@@ -291,6 +326,7 @@ function harnessRunFrom(
   return {
     ...input,
     checks,
+    ...(disparities.has(by.harness) ? { disparity: [...(disparities.get(by.harness) ?? [])] } : {}),
     durationMs: Math.max(0, input.durationMs - first),
     agent: { id: harnessAgentId(by.driver), kind: RunAgentKind.CODING_AGENT },
     trigger: {

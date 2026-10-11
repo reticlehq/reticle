@@ -704,6 +704,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // The Harness's drive plan: planned from flows, run lane by lane through the loop next door.
   // Handed its browser, model and tools as ports, so like `harness` it reaches nothing else.
   script: ['harness'],
+  // The exploratory Harness: the survey, the hunt before grading and the two-way comparison. Reads
+  // the goal check next door and is handed its tools, so like `script` it reaches nothing else.
+  explore: ['harness'],
   tools: [
     // A lease that never dialled reads the served page's CSP, the same reader doctor uses.
     'dev-server',
@@ -742,6 +745,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'platform',
     // The drive plan, planned and run when no journey is named.
     'script',
+    // The survey before a drive and the hunt before its goals are graded.
+    'explore',
     'impact',
     'input',
     'intent',

@@ -367,10 +367,11 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * showed could not be proved: content below the fold of a scrolling main graded hidden, a phrase
  * split across two flex items ("found by" / "CI") never matched, and the page tree dropped a
  * sentence's inline `<code>`. All three are answered in the page, at read time. With them, the DOM
- * observer's secret-field redaction (a typed password reached the session journal in clear).
- * Measured 261,810 B; ceiling 262,810 by the convention.
+ * observer's secret-field redaction (a typed password reached the session journal in clear) and the
+ * refusal to act inside a closing menu. Both branches together, measured after the merge:
+ * 262,750 B; ceiling 263,750 by the convention.
  */
-const MAX_FIRST_LOAD_BYTES = 262_810;
+const MAX_FIRST_LOAD_BYTES = 263_750;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

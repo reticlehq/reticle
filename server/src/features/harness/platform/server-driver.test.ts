@@ -75,6 +75,26 @@ describe('the platform drives, this machine executes', () => {
     });
   });
 
+  // Map first: the engine looks a goal up in the survey instead of finishing where it stands.
+  it("sends the daemon's survey of the app when the run starts", async () => {
+    const { asked, fetch } = platform({
+      '/v1/harness/runs': () => ({ runId: 'hr_map' }),
+      '/v1/harness/runs/hr_map/turn': () => ({
+        turn: 0,
+        calls: [],
+        text: '',
+        done: true,
+        status: 'finished',
+      }),
+    });
+    const siteMap = { pages: [{ route: '/overview', texts: ['Impact'], controls: [] }] };
+    await runHarness(
+      serverDriver({ url: 'https://p.test', apiKey: 'rk_live_x', siteMap, fetch }),
+      toolset([]),
+    );
+    expect(asked[0]?.body).toMatchObject({ siteMap });
+  });
+
   it('carries the credits the platform says the run spent onto the drive', async () => {
     const { fetch } = platform({
       '/v1/harness/runs': () => ({ runId: 'hr_2' }),
