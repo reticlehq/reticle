@@ -40,7 +40,7 @@ import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.j
 import { withGapNovelty } from './gap-novelty.js';
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
-import { intentDebt, openSessionIntents } from '@/memory/intent/open-intents.js';
+import { intentDebt, ledgerFor } from '@/memory/intent/open-intents.js';
 import {
   dischargeInlineIntent,
   inlineVerdictId,
@@ -520,10 +520,10 @@ export const ACT_TOOLS: ToolDef[] = [
         asString(args['intent']),
         PredicateKind.SETTLED === until.kind ? undefined : until,
       );
-
+      // Bound while the session is live: the action may take the tab off the app's origin.
+      const readLedger = ledgerFor(deps, asString(args['sessionId']));
       // Everything refusable without touching the page — see act-preflight.ts.
       preflightAct(asRecord(args['args']), until);
-
       // Resolve `target` to a ref BEFORE the action window opens, so the lookup is not attributed to
       // the act and cannot be mistaken for something the action caused.
       const resolved = await resolveActTarget(session, args);
@@ -837,7 +837,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // Read ONCE and used twice: `changeUndeclared` asks whether the ledger is empty, and the
         // undischarged-intent gap asks how much it still holds. Two reads would be two chances for
         // them to disagree about the same file.
-        const openIntents = await openSessionIntents(deps, asString(args['sessionId']));
+        const openIntents = await readLedger();
         const changeUndeclared = await isChangeUndeclared(session.currentEditEpoch, () =>
           Promise.resolve(openIntents),
         );
@@ -899,6 +899,7 @@ export const ACT_TOOLS: ToolDef[] = [
           claim: describeWaitTarget(until),
           verified: decision.verified,
           ...(actedSourceLabel === undefined ? {} : { source: actedSourceLabel }),
+          ...(verdict.observed === undefined ? {} : { observed: verdict.observed }),
           // TRUE here, and false on the `assert` path, and the difference is the point. This tool
           // takes `until` BEFORE it acts: the consequence is named in advance and can then only be
           // met or missed. A claim written after the fact can be shaped to fit whatever happened,

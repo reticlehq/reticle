@@ -60,10 +60,14 @@ export function describeWaitTarget(predicate: Predicate): string {
       }${predicate.contains === undefined ? '' : ` containing '${predicate.contains}'`}`;
     case PredicateKind.STATE:
       return `state at '${predicate.path}'`;
+    // Every part that decides the claim stays in it: the label is the check's title downstream, and
+    // one that dropped `ignoreCase` or the wanted state read as a different check from its own result.
     case PredicateKind.TEXT:
-      return `text containing '${predicate.contains}'`;
+      return `text containing '${predicate.contains}'${true === predicate.ignoreCase ? ', ignoring case' : ''}`;
     case PredicateKind.ELEMENT:
-      return `an element matching ${JSON.stringify(predicate.query)}`;
+      return `an element matching ${JSON.stringify(predicate.query)}${
+        predicate.state === undefined ? '' : ` in state '${predicate.state}'`
+      }`;
     case PredicateKind.CONSOLE:
       return 'a console message';
     case PredicateKind.ANIMATION:

@@ -113,3 +113,24 @@ export function resetHooks(): void {
   everyEvent.clear();
   reported.clear();
 }
+
+/**
+ * Writes held back on a timer, which a push must see through before it sends anything.
+ *
+ * A drive's run is written a few seconds after its last verdict, so a burst is folded once. A push
+ * asked for straight after a drive (`session end`, then `reticle_project { push: true }`) found no
+ * run to send and answered "0 of 0"; the run landed seconds later. A pure sink, like the rest of
+ * `hooks/`: the writer registers, the pusher flushes, neither imports the other.
+ */
+const flushers = new Set<() => Promise<void>>();
+
+/** Register "write what is pending now". Returns the unregister. */
+export function onPendingWrites(flush: () => Promise<void>): () => void {
+  flushers.add(flush);
+  return () => flushers.delete(flush);
+}
+
+/** Write everything held back, now. */
+export async function flushPendingWrites(): Promise<void> {
+  await Promise.all([...flushers].map((flush) => flush()));
+}

@@ -130,7 +130,14 @@ export function driveRunFrom(
     checks.push({
       predicate: verdict.claim,
       status: verdict.verified,
-      ...(verdict.source === undefined ? {} : { evidence: { source: verdict.source } }),
+      ...(verdict.source === undefined && verdict.observed === undefined
+        ? {}
+        : {
+            evidence: {
+              ...(verdict.source === undefined ? {} : { source: verdict.source }),
+              ...(verdict.observed === undefined ? {} : { observed: verdict.observed }),
+            },
+          }),
       // Carried through rather than recomputed. These were established at the moment the verdict
       // was made and written down then; a run built later cannot know any of them, and inferring
       // them here would be inventing evidence about evidence.

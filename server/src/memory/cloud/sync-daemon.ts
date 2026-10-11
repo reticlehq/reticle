@@ -24,6 +24,7 @@
 import { syncRequest } from './cloud-sync.js';
 import { log } from '@/log.js';
 import { emitSyncHook } from '@/hooks/hook-emit.js';
+import { flushPendingWrites } from '@/hooks/hook-bus.js';
 import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
 import { diskSink, diskSource, readCloudState } from './sync-disk.js';
 import { resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
@@ -383,7 +384,12 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   schedule(FIRST_CYCLE_DELAY_MS);
 
   return {
-    syncNow: cycle,
+    // A sync somebody asked for writes what is held on a timer first: a drive's run waits a few
+    // seconds after its last verdict, and a push straight after `session end` sent "0 of 0".
+    syncNow: async () => {
+      await flushPendingWrites();
+      return cycle();
+    },
     unsyncedRoots: () => unsynced,
     nudge: (): void => {
       // A cycle already in flight will not pick this up, so the nudge is still scheduled behind it

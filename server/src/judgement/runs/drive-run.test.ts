@@ -178,6 +178,34 @@ describe('the kind of evidence a check read', () => {
   });
 });
 
+/*
+ * A Pay-button check that wanted `enabled` and saw "present, visible, disabled" became an issue
+ * whose Actual read "It did not happen while the check waited": the run kept the verdict and not
+ * what it saw, so nothing downstream could say it.
+ */
+describe('what a failed check saw', () => {
+  it('rides on the check, beside its source', () => {
+    const run = driveRunFrom(
+      [
+        {
+          ...action(Verified.NO),
+          effect: {
+            claim: 'an element matching {"testid":"pay"} in state \'enabled\'',
+            verified: Verified.NO,
+            source: 'src/main.ts:12',
+            observed: 'present, visible, disabled',
+          },
+        },
+      ],
+      DEPS,
+    );
+    expect(run?.checks[0]?.evidence).toEqual({
+      source: 'src/main.ts:12',
+      observed: 'present, visible, disabled',
+    });
+  });
+});
+
 describe('the agent a drive is credited to', () => {
   it('is the MCP client that made the calls, not the generic author', () => {
     const run = driveRunFrom([{ ...action(Verified.YES), agent: 'claude-code' }], DEPS);

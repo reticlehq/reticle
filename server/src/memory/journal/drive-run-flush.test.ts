@@ -8,7 +8,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { HookEvent, type HookPayload } from '@reticlehq/core/hooks';
-import { emitHook, resetHooks } from '@/hooks/hook-bus.js';
+import { emitHook, flushPendingWrites, resetHooks } from '@/hooks/hook-bus.js';
 import { attachDriveRunFlush } from './drive-run-flush.js';
 
 afterEach(() => resetHooks());
@@ -62,6 +62,20 @@ describe('a drive publishes its evidence while the drive is still happening', ()
     emitHook(verdict('s1'));
     await tick(40);
     expect(written).toEqual(['s1', 's1']);
+    handle.stop();
+  });
+
+  /*
+   * `reticle_project { push: true }` called right after `session end` answered "0 of 0 run(s)":
+   * the session's run was still waiting out the debounce, and landed seconds after the push.
+   */
+  it('writes every pending run at once when a push asks for them, without waiting out the debounce', async () => {
+    const { written, handle } = harness(60_000);
+    emitHook(verdict('s1'));
+    await flushPendingWrites();
+    expect(written).toEqual(['s1']);
+    await flushPendingWrites();
+    expect(written, 'nothing pending is not a second write').toEqual(['s1']);
     handle.stop();
   });
 

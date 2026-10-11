@@ -21,7 +21,7 @@
  */
 
 import { HookEvent, type HookPayload } from '@reticlehq/core/hooks';
-import { onHook } from '@/hooks/hook-bus.js';
+import { onHook, onPendingWrites } from '@/hooks/hook-bus.js';
 import { log } from '@/log.js';
 
 /** Long enough to collapse a burst of verdicts, short enough that a human reads it as "live". */
@@ -87,10 +87,16 @@ export function attachDriveRunFlush<S extends FlushableSession>(
     pending.set(sessionId, timer);
   });
 
+  const flushAll = async (): Promise<void> => {
+    await Promise.all([...pending.keys()].map(flush));
+  };
+  const unregister = onPendingWrites(flushAll);
+
   return {
     flushNow: flush,
     stop: (): void => {
       off();
+      unregister();
       for (const timer of pending.values()) clearTimeout(timer);
       pending.clear();
     },

@@ -123,6 +123,11 @@ export const JournalVerdictEffectSchema = z.object({
   /** `file:line` for the element driven, when the page told us one. */
   source: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH).optional(),
   /**
+   * What the check saw, in the engine's words ("present, visible, disabled"), when it said. Kept so
+   * a failed check can say what it found rather than only that the claim did not hold.
+   */
+  observed: z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH).optional(),
+  /**
    * Which source of truth answering the claim required -- the predicate's own kind.
    *
    * A run folded from this journal has to say what a check READ, and with no field here it had
