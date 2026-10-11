@@ -213,6 +213,8 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
 }
 
 const ALERT_ROLE = 'alert';
+/** Reticle's own instrumentation's signals (core's `RETICLE_HYDRATION_SIGNAL`); not imported: coupling only shrinks. */
+const RETICLE_SIGNAL_NAMESPACE = 'reticle:';
 const ARIA_INVALID = 'aria-invalid';
 
 const MUST_DO_SOMETHING = new Set(['click', 'dblclick', 'submit']);
@@ -520,7 +522,11 @@ function findWindowContradictions(
   // A failure-shaped signal is not a success claim, so it must not be read as one: saying "the app
   // claimed success" about an app that plainly reported a failure is true in outline and wrong in
   // its reasoning, which is how a checker stops being believed.
-  const successSignals = signals.filter((name) => !signalAcknowledgesFailure(name));
+  // Nor is a signal Reticle's instrumentation fires: a revoked member's tab sent to /login by the
+  // intended 401 hydrated, and that read as a success claim graded the working revocation `no`.
+  const successSignals = signals.filter(
+    (name) => !name.startsWith(RETICLE_SIGNAL_NAMESPACE) && !signalAcknowledgesFailure(name),
+  );
   // An app that RETRACTED has not claimed success, whenever it fired the optimistic signal.
   //
   // The weaker UI rule below already consulted this and the sharper signal rule did not, so an app
