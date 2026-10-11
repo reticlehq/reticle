@@ -22,15 +22,22 @@ export const MemoryAction = {
 } as const;
 export type MemoryAction = (typeof MemoryAction)[keyof typeof MemoryAction];
 
-/** Something the agent asked for that the platform cannot do with a project key yet. */
-export const PlatformUnsupported = {
-  SET_ASIDE: 'platform-does-not-support-set-aside',
+/** Why the platform would not set a statement aside, each from its own answer. */
+export const SetAsideRefused = {
+  NO_SUCH_STATEMENT: 'no-such-statement',
+  NOT_ALLOWED: 'not-allowed',
+  REFUSED: 'refused',
 } as const;
+
+/** The status a statement set aside takes on the platform: kept, but no longer relied on. */
+const STALE = 'stale';
 
 const MEMORY_PATH = '/v1/memory';
 const FLOWS_PATH = '/v1/flows';
 const NOT_FOUND = 'not-found';
 const HTTP_NOT_FOUND = 404;
+const HTTP_FORBIDDEN = 403;
+const HTTP_BAD_REQUEST = 400;
 
 export type PlatformAnswer = Record<string, unknown>;
 
@@ -143,8 +150,43 @@ export async function pushFlow(
   return SyncOutcome.SYNCED === result.outcome ? { pushed: flow.name } : UNREACHABLE;
 }
 
-/** The platform has no project-key route to set a statement aside; said, never faked. */
-export const SET_ASIDE_REFUSAL = unavailable(
-  PlatformUnsupported.SET_ASIDE,
-  'the platform does not support setting a statement aside from an agent yet. Ask the user to set it aside on the dashboard (Memory), and meanwhile do not rely on it.',
-);
+/**
+ * Set one statement aside: the platform keeps it, marked stale, and stops offering it as known. The
+ * one change a project key may make to a statement; proving one takes a passing check, and new
+ * words on a settled one are the team's to agree.
+ */
+export async function setAsideStatement(
+  fs: FileSystemPort,
+  root: string,
+  intentId: string,
+): Promise<PlatformAnswer> {
+  const link = await linked(fs, root, (c) => c.policy.memory);
+  if (!link.ok) return link.answer;
+  const { config } = link.cloud;
+  try {
+    const res = await cloudFetch(`${config.url}${MEMORY_PATH}/${encodeURIComponent(intentId)}`, {
+      method: 'PATCH',
+      headers: headers(config.apiKey),
+      body: JSON.stringify({ status: STALE }),
+    });
+    if (HTTP_NOT_FOUND === res.status)
+      return unavailable(
+        SetAsideRefused.NO_SUCH_STATEMENT,
+        `the platform holds no statement "${intentId}" in this project. Read reticle_memory again for the current ids.`,
+      );
+    if (HTTP_FORBIDDEN === res.status)
+      return unavailable(
+        SetAsideRefused.NOT_ALLOWED,
+        'the platform refused: the teammate who made this project’s key may not change flows or memory. Ask the user to set it aside on the dashboard (Memory), and meanwhile do not rely on it.',
+      );
+    if (HTTP_BAD_REQUEST === res.status)
+      return unavailable(
+        SetAsideRefused.REFUSED,
+        'the platform refused the change: with a project key a statement can only be set aside.',
+      );
+    if (res.status >= 300) return UNREACHABLE;
+    return { setAside: intentId };
+  } catch {
+    return UNREACHABLE;
+  }
+}

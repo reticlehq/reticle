@@ -1,7 +1,7 @@
 /**
  * The agent ↔ platform round trip, through `reticle_memory`, against a fake platform that answers the
  * way the real one does: the project on the envelope, a key bound to one project, `POST /v1/memory`
- * and `POST /v1/flows` open to that key, and no key route to set a statement aside.
+ * and `POST /v1/flows` open to that key, and `PATCH /v1/memory/:id` taking `{ status: "stale" }` only.
  *
  * Before this the agent could READ the team's memory and nothing else: a teammate's flow lived only
  * on the dashboard, and what the agent learned reached the platform only if a sync cycle happened to
@@ -22,7 +22,7 @@ import { createMemoryFs } from '@/memory/project/memory-fs.js';
 import { FlowStore } from '@/language/flows/flows.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { MEMORY_TOOLS } from './memory-tools.js';
-import { MemoryAction, PlatformUnsupported } from './platform-memory.js';
+import { MemoryAction, SetAsideRefused } from './platform-memory.js';
 
 const CLOUD = 'https://cloud.test';
 const PROJECT = 'shop';
@@ -40,6 +40,9 @@ interface Call {
 }
 
 /** The platform's side: memory rows and saved flows for ONE project, reached with ONE key. */
+/** The statement whose key's member may not write: the platform's 403. */
+const FORBIDDEN_ID = 'i-locked';
+
 function fakePlatform() {
   const calls: Call[] = [];
   const memory: Record<string, unknown>[] = [
@@ -81,6 +84,16 @@ function fakePlatform() {
       if ('GET' === init.method && path.startsWith('/v1/flows/')) {
         const found = flows.get(decodeURIComponent(path.slice('/v1/flows/'.length)));
         return found === undefined ? reply(404, { error: 'flow not found' }) : reply(200, found);
+      }
+      if ('PATCH' === init.method && path.startsWith('/v1/memory/')) {
+        const id = decodeURIComponent(path.slice('/v1/memory/'.length));
+        if (FORBIDDEN_ID === id) return reply(403, {});
+        const row = memory.find((r) => r['intentId'] === id);
+        if (row === undefined) return reply(404, {});
+        const b = body as Record<string, unknown>;
+        if ('stale' !== b['status'] || 1 !== Object.keys(b).length) return reply(400, {});
+        row['status'] = 'stale';
+        return reply(200, row);
       }
       if ('POST' === init.method && '/v1/flows' === path) {
         const flow = (body as { flow: FlowFile }).flow;
@@ -194,11 +207,37 @@ describe('the agent ↔ platform round trip', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('setting a statement aside says the platform does not support it yet, and sends nothing', async () => {
-    const { calls } = fakePlatform();
+  it('sets a statement aside: PATCH with the project key, stale and nothing else', async () => {
+    const { calls, memory } = fakePlatform();
     const out = await call(deps(), { action: MemoryAction.SET_ASIDE, id: 'i1' });
-    expect(out['reason']).toBe(PlatformUnsupported.SET_ASIDE);
-    expect(String(out['error'])).toContain('does not support');
+    expect(out).toEqual({ setAside: 'i1' });
+    expect(calls.at(-1)).toMatchObject({
+      method: 'PATCH',
+      url: `${CLOUD}/v1/memory/i1`,
+      auth: `Bearer ${KEY}`,
+      body: { status: 'stale' },
+    });
+    expect(memory[0]?.['status']).toBe('stale');
+  });
+
+  it('a statement the project does not hold is answered in words, not as unreachable', async () => {
+    fakePlatform();
+    const out = await call(deps(), { action: MemoryAction.SET_ASIDE, id: 'nope' });
+    expect(out['reason']).toBe(SetAsideRefused.NO_SUCH_STATEMENT);
+    expect(String(out['error'])).toContain('"nope"');
+  });
+
+  it('a key whose member may not write is told so, and pointed at the dashboard', async () => {
+    fakePlatform();
+    const out = await call(deps(), { action: MemoryAction.SET_ASIDE, id: FORBIDDEN_ID });
+    expect(out['reason']).toBe(SetAsideRefused.NOT_ALLOWED);
+    expect(String(out['error'])).toContain('dashboard');
+  });
+
+  it('setting aside with no id refuses, and sends nothing', async () => {
+    const { calls } = fakePlatform();
+    const out = await call(deps(), { action: MemoryAction.SET_ASIDE });
+    expect(out['error']).toBeDefined();
     expect(calls).toHaveLength(0);
   });
 

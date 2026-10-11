@@ -20,10 +20,10 @@ import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { MemoryUnavailable, readProjectMemory } from './project-memory.js';
 import {
   MemoryAction,
-  SET_ASIDE_REFUSAL,
   addMemoryStatement,
   fetchPlatformFlow,
   pushFlow,
+  setAsideStatement,
 } from './platform-memory.js';
 import { flowsForSession } from '@/language/flows/flow-store-for-session.js';
 import { safeSessionTarget } from '@/memory/project/session-root.js';
@@ -59,7 +59,7 @@ export const MEMORY_TOOLS: ToolDef[] = [
     name: ReticleTool.MEMORY,
     description:
       'Ask what THIS PROJECT already knows — the shared memory its team has built up, written by every engineer who verified something and readable by every agent since. Use it BEFORE re-deriving how a feature is supposed to behave: a colleague may already have proved it, and a statement marked `proved` was established by a real verdict rather than written down. With { subject } it narrows to one area (a flow name, or a route like "checkout"); without, it returns across the project. Each entry carries the flow and the source file it is about, so a claim can be checked. The read is recorded as an agent consultation, which is what the dashboard\'s per-flow fetch counts are built from. Returns { subject, known, total } or { error, reason, advice } when this project is not linked to a workspace. ' +
-      'Other actions, each answered by the platform: "flow" { name } reads one saved flow from the platform (a teammate\'s too); "add" { subject, statement } writes a statement (lands as proposed); "push-flow" { name } uploads this machine\'s saved flow, replacing the platform copy; "set-aside" { id } is not supported by the platform yet.',
+      'Other actions, each answered by the platform: "flow" { name } reads one saved flow from the platform (a teammate\'s too); "add" { subject, statement } writes a statement (lands as proposed); "push-flow" { name } uploads this machine\'s saved flow, replacing the platform copy; "set-aside" { id } marks a statement stale so nobody relies on it (it is kept, not deleted).',
     inputSchema: {
       action: z.enum(Object.values(MemoryAction) as [MemoryAction, ...MemoryAction[]]).optional(),
       name: z.string().optional().describe('flow / push-flow: the flow name.'),
@@ -82,6 +82,7 @@ export const MEMORY_TOOLS: ToolDef[] = [
       flow: z.unknown().optional(),
       added: z.unknown().optional(),
       pushed: z.string().optional(),
+      setAside: z.string().optional(),
       subject: z.string().nullable().optional(),
       known: z.array(z.unknown()).optional(),
       total: z.number().optional(),
@@ -104,7 +105,12 @@ export const MEMORY_TOOLS: ToolDef[] = [
       const subject = asString(args['subject']);
       const action = asString(args['action']) ?? MemoryAction.READ;
       const name = asString(args['name']);
-      if (MemoryAction.SET_ASIDE === action) return SET_ASIDE_REFUSAL;
+      if (MemoryAction.SET_ASIDE === action) {
+        const id = asString(args['id']);
+        if (id === undefined || 0 === id.trim().length)
+          return { error: `${action} needs \`id\`: the statement id from a read` };
+        return setAsideStatement(deps.fs, root, id);
+      }
       if (MemoryAction.FLOW === action) {
         if (name === undefined) return { error: `${action} ${NEEDS_NAME}` };
         return fetchPlatformFlow(deps.fs, root, name);
