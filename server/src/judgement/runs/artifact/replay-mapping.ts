@@ -11,6 +11,7 @@ import {
   RUN_STEP_RESULTS_MAX,
   RUN_TEXT_MAX,
   RunFlowStatus,
+  type Contradiction,
   type FlowFile,
   type FlowReplayResult,
   type FlowStepResult,
@@ -57,6 +58,15 @@ function recordingOf(flow: FlowFile): Pick<RunFlowResult, 'recording' | 'recordi
     : { recording };
 }
 
+/** The first contradiction a replay recorded, on a step or across them. */
+function firstContradiction(replay: FlowReplayResult): Contradiction | undefined {
+  for (const step of replay.steps) {
+    const found = step.contradictions?.[0];
+    if (found !== undefined) return found;
+  }
+  return replay.crossStep?.[0];
+}
+
 /** Map one replay (plus its measured duration) into a RunFlowResult for the artifact's flows[]. */
 export function mapReplayToFlowResult(
   replay: FlowReplayResult,
@@ -66,21 +76,30 @@ export function mapReplayToFlowResult(
   // A replay that could not start or complete returns UNVERIFIABLE (or carries an unverifiable caveat).
   // Nothing was verified, so it is SKIPPED — which every reader of a run (the verdict, the gate)
   // refuses to count as a pass.
+  // A pass whose channels disagreed is the suite's `unverifiable`, and the run says the same: the
+  // CLI printed "unverifiable" and exited 1 while the dashboard listed the run as Passed.
+  const disagreed = replay.status === ReplayStatus.OK ? firstContradiction(replay) : undefined;
   const status =
-    replay.status === ReplayStatus.UNVERIFIABLE || replay.unverifiable !== undefined
+    replay.status === ReplayStatus.UNVERIFIABLE ||
+    replay.unverifiable !== undefined ||
+    disagreed !== undefined
       ? RunFlowStatus.SKIPPED
       : runFlowStatusOf(replay.status);
   const failureReason =
     replay.unverifiable !== undefined
       ? replay.unverifiable.reason
-      : status === RunFlowStatus.FAIL
-        ? (replay.decision?.whatChanged ??
-          replay.decision?.summary ??
-          replay.error?.message ??
-          'flow failed')
-        : status === RunFlowStatus.SKIPPED
-          ? 'flow could not be graded'
-          : undefined;
+      : disagreed !== undefined
+        ? clip(
+            `a channel disagreed (${disagreed.kind}): ${disagreed.counter} — ${disagreed.detail}`,
+          )
+        : status === RunFlowStatus.FAIL
+          ? (replay.decision?.whatChanged ??
+            replay.decision?.summary ??
+            replay.error?.message ??
+            'flow failed')
+          : status === RunFlowStatus.SKIPPED
+            ? 'flow could not be graded'
+            : undefined;
   // A flow with a success oracle gets a synthetic 'success' step appended by replay; surface its label
   // as the run's `oracle` so the verdict counts this flow as consequence-backed (→ HIGH confidence),
   // not a bare smoke click. Without this, an oracle-backed pass reads as MEDIUM and undersells itself.
