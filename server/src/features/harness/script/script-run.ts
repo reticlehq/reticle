@@ -28,7 +28,7 @@ import {
   type ScriptStep,
 } from '@reticlehq/core/artifacts';
 import { checkTally } from '../drive-report.js';
-import { goalsIn } from '../goals.js';
+import { lookFor, parseGoals } from '../goals.js';
 import {
   DEFAULT_MAX_STEPS,
   StopReason,
@@ -71,6 +71,14 @@ const GOAL_NOT_REACHED = 'the goal was not reached, though its checks may have h
 
 /** A planned open journey gets the same budget a named persona drive gets. */
 const OPEN_GOAL_STEPS = DEFAULT_MAX_STEPS;
+
+/** Fewer model turns left than this and a continuation could not take the step it is sent for. */
+const MIN_CONTINUE_STEPS = 3;
+
+/** What a drive that stopped short of its end state is sent back with. */
+const continueGoal = (goal: string, end: string): string =>
+  `${goal}\n\nContinue from the page you are on: it does not show "${end}" yet. ` +
+  'Take the next step this journey names; do not start over.';
 
 export async function runScript(
   script: DriveScript,
@@ -330,20 +338,36 @@ async function runLeaf(
       return holds(tools, step.predicate);
     case ScriptStepKind.ACT: {
       if (step.goal !== undefined) {
-        const drive = await ports.drive(tools, step.goal, step.maxSteps ?? OPEN_GOAL_STEPS);
+        const budget = step.maxSteps ?? OPEN_GOAL_STEPS;
+        let drive = await ports.drive(tools, step.goal, budget);
         drives.push(drive);
         if (StopReason.STOPPED === drive.stopReason) stop();
         // Passed means its checks held, not that it ran one: a refund journey whose two checks both
         // failed was marked passed because a check had run.
-        const tally = checkTally(drive.toolCalls);
-        if (0 < tally.failed || false === drive.goalMet) return false;
+        if (0 < checkTally(drive.toolCalls).failed) return false;
         // A goal that quotes where it ends is judged there, by an assert kept as the run's check:
         // the model clicked a counter with no `until` and the journey failed on a counter that worked.
-        // ponytail: the LAST quote is the end state ("from "count: 0" to "count: 1""); a goal that
-        // quotes its end first needs the planner to say which quote is the end.
-        const end = goalsIn(step.goal).at(-1);
-        if (end !== undefined) return holds(tools, { kind: PredicateKind.TEXT, contains: end });
-        return 0 < tally.held;
+        // ponytail: the LAST quote the goal does not negate is the end state ("from "count: 0" to
+        // "count: 1""); a goal that quotes its end first needs the planner to say which is the end.
+        const end = parseGoals(step.goal)
+          .filter((g) => true !== g.absent)
+          .at(-1)?.text;
+        if (end === undefined)
+          return false !== drive.goalMet && 0 < checkTally(drive.toolCalls).held;
+        let shown = await lookFor(tools.invoke.bind(tools), end);
+        // A drive that finished with turns to spare, short of the end its own plan names (joined,
+        // opened Runs, never clicked Team), is sent on once from where it stands, not graded there.
+        const left = budget - drive.steps;
+        if (!shown && StopReason.FINISHED === drive.stopReason && MIN_CONTINUE_STEPS <= left) {
+          drive = await ports.drive(tools, continueGoal(step.goal, end), left);
+          drives.push(drive);
+          if (StopReason.STOPPED === drive.stopReason) stop();
+          if (0 < checkTally(drive.toolCalls).failed) return false;
+          shown = await lookFor(tools.invoke.bind(tools), end);
+        }
+        // Never reached is the journey's miss, not a failed check on the app: no assert is kept.
+        if (!shown || false === drive.goalMet) return false;
+        return holds(tools, { kind: PredicateKind.TEXT, contains: end });
       }
       const result = await call(tools, ReticleTool.ACT_AND_WAIT, {
         ...(step.target === undefined ? {} : { target: step.target }),
