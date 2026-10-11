@@ -71,8 +71,14 @@ const HEADROOM_BYTES = 100_000;
  *
  * 1,380,000 -> 1,473,686 on 2026-10-09: measured 1,373,686 on main at c02824992, 6KB under the
  * old ceiling, plus HEADROOM_BYTES.
+ *
+ * 1,473,686 -> 1,576,245 on 2026-10-12 for 3.7.0: measured 1,476,245 on feat/hud-clarity at
+ * 37872425b, plus HEADROOM_BYTES. The ~100KB since 10-09 is the release's own SDK code: the
+ * in-page step screenshot, secret-field redaction in the DOM observer, and the HUD's in-place
+ * update (no flicker), platform sync rows and team link. Nothing packed by accident (no tests,
+ * maps or images in the tarball).
  */
-const BROWSER_MAX_BYTES = 1_473_686;
+const BROWSER_MAX_BYTES = 1_576_245;
 
 /*
  * The other package a size change is felt in, and it had no ceiling at all.
@@ -166,8 +172,14 @@ const BROWSER_MAX_BYTES = 1_473_686;
  *
  * 6,800,000 -> 6,722,559 on 2026-10-09, DOWN, to the convention above: measured 6,622,559 on main
  * at c02824992, plus HEADROOM_BYTES.
+ *
+ * 6,722,559 -> 6,999,341 on 2026-10-12 for 3.7.0: measured 6,899,341 on feat/hud-clarity at
+ * 37872425b, plus HEADROOM_BYTES. The ~277KB since 10-09 is the release's features: step
+ * screenshots and their upload, the exploratory Harness (map, hunt, two-way disparity), saved
+ * plans run replay-first, the Reticle result block, the platform memory/flow round trip and the
+ * per-call replay secrets. Checked the tarball: no tests, maps or images; one 3KB docs YAML.
  */
-const SERVER_MAX_BYTES = 6_722_559;
+const SERVER_MAX_BYTES = 6_999_341;
 
 const BUDGETS = [
   { name: '@reticlehq/browser', dir: 'adapters/realm/browser', max: BROWSER_MAX_BYTES },
