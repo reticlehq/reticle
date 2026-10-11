@@ -25,6 +25,10 @@ import { syncRequest } from './cloud-sync.js';
 import { log } from '@/log.js';
 import { homedir } from 'node:os';
 import { emitSyncHook } from '@/hooks/hook-emit.js';
+import { memoryReadUrl, scopedMemoryEntries } from './memory-scope.js';
+import { IntentShardStore } from '@/memory/intent/intent-shard-store.js';
+import { applySettledWords, settledWordsIn } from '@/memory/intent/settled-words.js';
+import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { flushPendingWrites } from '@/hooks/hook-bus.js';
 import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
 import { diskSink, diskSource, readCloudState } from './sync-disk.js';
@@ -217,6 +221,10 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   const pushRoot = async (root: string, cloud: ProjectCloud): Promise<SyncReport | undefined> => {
     if (null === cloud.config) return undefined;
     const full = diskSource(root);
+    // The team's decisions come down too: an author's record kept the words a maintainer set aside,
+    // and re-sent them every cycle as a new disagreement.
+    if (cloud.policy.memory)
+      await pullSettledWords(root, cloud.config, cloud.projectId).catch(() => 0);
     return runSyncCycle({
       config: cloud.config,
       source: {
@@ -233,6 +241,24 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       now,
       request,
     });
+  };
+
+  /** Bring the dashboard's memory decisions down to this root's records. Returns how many changed. */
+  const pullSettledWords = async (
+    root: string,
+    config: { url: string; apiKey: string },
+    projectId: string | null,
+  ): Promise<number> => {
+    const res = await request(memoryReadUrl(config.url, { projectId }), {
+      method: 'GET',
+      headers: { authorization: `Bearer ${config.apiKey}` },
+    });
+    if (200 !== res.status) return 0;
+    const entries = scopedMemoryEntries(JSON.parse(res.text) as unknown, projectId) ?? [];
+    return applySettledWords(
+      new IntentShardStore(createNodeFileSystem(), root, { now }),
+      settledWordsIn(entries),
+    );
   };
 
   /**

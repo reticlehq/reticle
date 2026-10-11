@@ -568,7 +568,9 @@ describe('the last push', () => {
 describe('a refusal is not silence', () => {
   let posts = 0;
   const refusing = (url: string): Promise<{ status: number; text: string }> => {
-    if (!url.includes('/pull') && !url.includes('/status')) posts += 1;
+    // The memory read each cycle makes (decisions coming down) is a read, not an offer of the run.
+    if (!url.includes('/pull') && !url.includes('/status') && !url.includes('/v1/memory'))
+      posts += 1;
     const body = url.includes('/pull')
       ? { triage: [], cursor: '0:' }
       : url.includes('/status')
