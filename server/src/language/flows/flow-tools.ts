@@ -1,3 +1,4 @@
+import { CALL_SECRETS_ARG, callSecretsArg } from './fields/flow-secret-field.js';
 import { flowAuthor } from './flow-author.js';
 import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
 import { seedSchema, workerCountSchema } from '@/surface/tools/args/numeric-bounds.js';
@@ -442,6 +443,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       flowName: z
         .string()
         .describe('Flow file name (without .json extension) from reticle_flow{action:"list"}.'),
+      [CALL_SECRETS_ARG]: callSecretsArg,
       confirmDangerous: confirmDangerousArg('this replay'),
       from: z
         .union([z.number().int().nonnegative(), z.string().min(1)])
@@ -584,6 +586,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       'whatChanged, whereInSource, nextAction }] } plus `flaky` (flows seen to pass AND fail on unchanged code) — passing flows are counted, only failures carry ' +
       'detail (the actionable fix). One call replaces N hand-driven replays.',
     inputSchema: {
+      [CALL_SECRETS_ARG]: callSecretsArg,
       names: z
         .array(z.string())
         .optional()

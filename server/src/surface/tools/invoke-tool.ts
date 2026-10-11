@@ -1,3 +1,4 @@
+import { takeCallSecrets, withCallSecrets } from './tool-kit.js';
 import { healthEnvelope } from '@/portal/session/session-health.js';
 import { logToolCall, toolLogPath } from '@/hooks/tool-log.js';
 import { nextStep } from './next-step.js';
@@ -384,6 +385,18 @@ function pinnedArgs(
 }
 
 export async function runTool<Ext>(
+  tool: ToolDef<Ext>,
+  deps: ToolDeps<Ext>,
+  given: Record<string, unknown>,
+  call?: ToolCall,
+): Promise<unknown> {
+  // A replay's secrets leave the arguments here, before the tool log, the journal or telemetry can
+  // see them, and are supplied to this call alone.
+  const { secrets, rest: args } = takeCallSecrets(given);
+  return withCallSecrets(secrets, () => loggedTool(tool, deps, args, call));
+}
+
+async function loggedTool<Ext>(
   tool: ToolDef<Ext>,
   deps: ToolDeps<Ext>,
   args: Record<string, unknown>,

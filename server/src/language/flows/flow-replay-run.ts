@@ -721,8 +721,8 @@ export async function replayNamedFlow(
       steps: [],
       unverifiable: {
         reason:
-          `this flow fills a redacted field and nothing supplied it, so nothing ran and nothing ` +
-          `was proved. Set ${names} in the environment the daemon runs in, then replay. Until then ` +
+          `this flow fills a redacted field and nothing supplied it, so nothing ran and nothing was ` +
+          `proved. Pass it with this call — secrets: { ${missing.map((each) => `"${each.field}": "…"`).join(', ')} } — or set ${names} where the daemon runs and restart it. Until then ` +
           `the value typed would be the placeholder itself, and any failure after it would be ` +
           `about this and not about the application.`,
       },

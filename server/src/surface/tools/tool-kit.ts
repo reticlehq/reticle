@@ -6,7 +6,15 @@
  */
 import type { FirstRunWiring } from '@/portal/session/first-run-wiring.js';
 import { z } from 'zod';
-import { type ProjectId, ReticleCommand, ReticleTool, SnapshotMode } from '@reticlehq/core';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import {
+  asRecord,
+  asString,
+  type ProjectId,
+  ReticleCommand,
+  ReticleTool,
+  SnapshotMode,
+} from '@reticlehq/core';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { RealInputProvider } from '@/portal/input/real-input.js';
 import type { BaselineStore } from '@/memory/project/baselines.js';
@@ -368,3 +376,40 @@ export async function snapshotTree(
  * imports. See `ToolDeps.snapshots` for why a daemon-wide store cannot be correct.
  */
 export const newSnapshotCache = (): SnapshotCache => new SnapshotCache();
+
+/** The argument a replay takes its redacted fields' values in, for that call only. */
+export const CALL_SECRETS_ARG = 'secrets';
+
+/** Secrets a call supplied; never written anywhere, gone when the call ends. */
+const callSecretStore = new AsyncLocalStorage<Readonly<Record<string, string>>>();
+
+/** The secrets the current call supplied, keyed as given (a field, or its variable name). */
+export function callSecrets(): Readonly<Record<string, string>> | undefined {
+  return callSecretStore.getStore();
+}
+
+/**
+ * Take the call's secrets out of its arguments, so nothing downstream — the tool log, the journal,
+ * telemetry — ever sees them.
+ */
+export function takeCallSecrets(args: Record<string, unknown>): {
+  secrets: Record<string, string> | undefined;
+  rest: Record<string, unknown>;
+} {
+  if (!(CALL_SECRETS_ARG in args)) return { secrets: undefined, rest: args };
+  const { [CALL_SECRETS_ARG]: raw, ...rest } = args;
+  const secrets: Record<string, string> = {};
+  for (const [key, value] of Object.entries(asRecord(raw))) {
+    const text = asString(value);
+    if (text !== undefined && 0 < text.length) secrets[key] = text;
+  }
+  return { secrets, rest };
+}
+
+/** Run `fn` with these secrets supplied for it alone. */
+export function withCallSecrets<T>(
+  secrets: Readonly<Record<string, string>> | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return secrets === undefined ? fn() : callSecretStore.run(secrets, fn);
+}
