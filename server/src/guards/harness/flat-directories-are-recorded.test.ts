@@ -228,7 +228,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // declared beside it rather than inside it, as `query-hint-schema.ts` is beside tools.ts.
   // 47 with `lease-readiness.ts`: the checks a lease runs before it may say `ready: true` (does
   // the tab answer, is it visible), moved out of lease-tools.ts for the same line-cap reason.
-  'server/src/surface/tools': 51,
+  // 52 with `reticle-result.ts`: the block an agent ends with, beside `platform-moment.ts` whose
+  // connect line it shares; `judgement/runs` was the other home and is at its own recorded count.
+  'server/src/surface/tools': 52,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

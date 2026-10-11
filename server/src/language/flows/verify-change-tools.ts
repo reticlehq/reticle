@@ -11,6 +11,7 @@ import { loadNamedFlows, resolveChangedFiles } from '@/command/cli/cli-flow-comm
 import { projectDirFor } from '@/memory/project/session-root.js';
 import { affectedSavedFlows } from './change/flow-sources.js';
 import { FLOW_TOOLS } from './flow-tools.js';
+import { RESULT_FIELD, changeResult } from '@/surface/tools/reticle-result.js';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import { parseControls } from '@/surface/tools/coverage-tools.js';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
@@ -39,238 +40,249 @@ interface SuiteResult {
   failures?: unknown[];
 }
 
-export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
-  {
-    name: ReticleTool.VERIFY_CHANGE,
-    description:
-      'Did my change break anything? Give it the files you edited (or `since` for a git ref) and it works out which saved flows cover them, replays exactly those, and answers with one `verified` (yes|no|unknown) plus `because`. `unknown` when NO saved flow covers the change — that is the honest answer, never a green: nothing ran, so nothing was proved. Returns { verified, because, changedFiles, flowsRun, suite, unknownProvenance }.',
-    example: { files: ['src/App.tsx'] },
-    inputSchema: {
-      files: z
-        .array(z.string())
-        .optional()
-        .describe('Changed file paths, repo-relative (e.g. ["src/App.tsx"]).'),
-      since: z
-        .string()
-        .optional()
-        .describe('Git ref to diff against (e.g. "HEAD~1", "main"). Unioned with `files`.'),
-      parallel: workerCountSchema
-        .optional()
-        .describe('Replay this many affected flows at once (needs the browser pool).'),
-      sessionId: z
-        .string()
-        .optional()
-        .describe('OMIT THIS unless you mean a specific tab — Reticle resolves it.'),
-    },
-    outputSchema: {
-      verified: z
-        .string()
-        .describe(
-          'yes | no | unknown. `unknown` means the evidence could not decide — most often that no saved flow covers these files, which is NOT a pass.',
-        ),
-      because: z.string(),
-      changedFiles: z.array(z.string()),
-      flowsRun: z.array(z.string()),
-      suite: z.unknown().optional(),
-      // Session-EXEMPT: declare the one-shot human feedback ask or a validating profile strips it.
-      feedback_prompt: z.unknown().optional(),
-      unknownProvenance: z.array(z.string()),
-      contradictions: z
-        .array(z.unknown())
-        .optional()
-        .describe(
-          'Findings from channels inspected during replay. Advisory entries are reported without changing the verdict; verdict-deciding entries can turn a green suite into no or unknown. OMITTED when clean; see `measured` when it could not be looked for.',
-        ),
-      untouched: z
-        .array(z.unknown())
-        .optional()
-        .describe(
-          'Controls on the page that the covering flows never drove. A green over a small untouched list is stronger evidence than the same green over a large one.',
-        ),
-      measured: z
-        .array(z.string())
-        .describe(
-          'What was actually looked for. An absent `contradictions` means "none found" ONLY if "contradictions" appears here — otherwise it was never measured.',
-        ),
-    },
-    handler: async (deps: ToolDeps, args) => {
-      const files = Array.isArray(args['files'])
-        ? (args['files'] as unknown[]).filter((f): f is string => 'string' === typeof f)
-        : [];
-      const since = asString(args['since']);
-      // The tree to diff is the SESSION's project, and it is neither of the two things this line
-      // used to say it was: `deps.reticleRoot` is the daemon's `.reticle` SUBDIRECTORY, and the
-      // daemon's cwd is wherever the MCP host started it — `/` or `$HOME` for a globally-registered
-      // server. Both answer about the wrong repository while reporting a clean "nothing changed",
-      // which reads as a pass. `projectDirFor` is the directory holding the resolved root.
-      const changed = await resolveChangedFiles(
-        files,
-        since,
-        projectDirFor(deps, asString(args['sessionId'])),
-      );
-      const changedFiles = changed.files;
-      // Same root flow_save wrote to. A read that resolved differently would report "no flows
-      // covered this change" over flows that exist, which reads as a clean result rather than
-      // an error, so the disagreement would be invisible.
-      // Both halves of the address from one place. The root was already resolved from the session;
-      // the id used to come from the daemon's cwd, so they named different projects.
-      const sid = asString(args['sessionId']);
-      const flows = await loadNamedFlows(
-        deps.fs,
-        sessionRoot(deps, sid),
-        sessionProjectId(deps, sid),
-      );
-      const { affected, unknownProvenance } = affectedSavedFlows(flows, changedFiles);
+const VERIFY_CHANGE: ToolDef = {
+  name: ReticleTool.VERIFY_CHANGE,
+  description:
+    'Did my change break anything? Give it the files you edited (or `since` for a git ref) and it works out which saved flows cover them, replays exactly those, and answers with one `verified` (yes|no|unknown) plus `because`. `unknown` when NO saved flow covers the change — that is the honest answer, never a green: nothing ran, so nothing was proved. Returns { verified, because, changedFiles, flowsRun, suite, unknownProvenance }.',
+  example: { files: ['src/App.tsx'] },
+  inputSchema: {
+    files: z
+      .array(z.string())
+      .optional()
+      .describe('Changed file paths, repo-relative (e.g. ["src/App.tsx"]).'),
+    since: z
+      .string()
+      .optional()
+      .describe('Git ref to diff against (e.g. "HEAD~1", "main"). Unioned with `files`.'),
+    parallel: workerCountSchema
+      .optional()
+      .describe('Replay this many affected flows at once (needs the browser pool).'),
+    sessionId: z
+      .string()
+      .optional()
+      .describe('OMIT THIS unless you mean a specific tab — Reticle resolves it.'),
+  },
+  outputSchema: {
+    verified: z
+      .string()
+      .describe(
+        'yes | no | unknown. `unknown` means the evidence could not decide — most often that no saved flow covers these files, which is NOT a pass.',
+      ),
+    because: z.string(),
+    changedFiles: z.array(z.string()),
+    flowsRun: z.array(z.string()),
+    suite: z.unknown().optional(),
+    // Session-EXEMPT: declare the one-shot human feedback ask or a validating profile strips it.
+    feedback_prompt: z.unknown().optional(),
+    unknownProvenance: z.array(z.string()),
+    contradictions: z
+      .array(z.unknown())
+      .optional()
+      .describe(
+        'Findings from channels inspected during replay. Advisory entries are reported without changing the verdict; verdict-deciding entries can turn a green suite into no or unknown. OMITTED when clean; see `measured` when it could not be looked for.',
+      ),
+    untouched: z
+      .array(z.unknown())
+      .optional()
+      .describe(
+        'Controls on the page that the covering flows never drove. A green over a small untouched list is stronger evidence than the same green over a large one.',
+      ),
+    [RESULT_FIELD]: z.string().optional(),
+    measured: z
+      .array(z.string())
+      .describe(
+        'What was actually looked for. An absent `contradictions` means "none found" ONLY if "contradictions" appears here — otherwise it was never measured.',
+      ),
+  },
+  handler: async (deps: ToolDeps, args) => {
+    const files = Array.isArray(args['files'])
+      ? (args['files'] as unknown[]).filter((f): f is string => 'string' === typeof f)
+      : [];
+    const since = asString(args['since']);
+    // The tree to diff is the SESSION's project, and it is neither of the two things this line
+    // used to say it was: `deps.reticleRoot` is the daemon's `.reticle` SUBDIRECTORY, and the
+    // daemon's cwd is wherever the MCP host started it — `/` or `$HOME` for a globally-registered
+    // server. Both answer about the wrong repository while reporting a clean "nothing changed",
+    // which reads as a pass. `projectDirFor` is the directory holding the resolved root.
+    const changed = await resolveChangedFiles(
+      files,
+      since,
+      projectDirFor(deps, asString(args['sessionId'])),
+    );
+    const changedFiles = changed.files;
+    // Same root flow_save wrote to. A read that resolved differently would report "no flows
+    // covered this change" over flows that exist, which reads as a clean result rather than
+    // an error, so the disagreement would be invisible.
+    // Both halves of the address from one place. The root was already resolved from the session;
+    // the id used to come from the daemon's cwd, so they named different projects.
+    const sid = asString(args['sessionId']);
+    const flows = await loadNamedFlows(
+      deps.fs,
+      sessionRoot(deps, sid),
+      sessionProjectId(deps, sid),
+    );
+    const { affected, unknownProvenance } = affectedSavedFlows(flows, changedFiles);
 
-      if (0 === changedFiles.length) {
-        return {
-          verified: Verified.UNKNOWN,
-          // A git failure and a clean tree both arrive here with no files, and they are opposite
-          // answers: one means there was nothing to decide about, the other means the question was
-          // never asked. `unknown` is right either way, but the REASON is what the caller acts on.
-          because: changed.failed
-            ? `could not read the diff for \`${String(since)}\`, so nothing was compared: ${changed.reason ?? 'git failed'}`
-            : 'no changed files were given, so there was nothing to decide about',
-          changedFiles,
-          flowsRun: [],
-          unknownProvenance,
-          // Nothing was looked for, and the schema requires this field to say so. Omitting it made
-          // the MCP layer reject the whole response, turning an honest UNKNOWN into a protocol error.
-          measured: [],
-        };
-      }
-
-      // The guard: an uncovered change is UNKNOWN. Reporting `yes` here would mean "your change is
-      // fine" on the strength of having run nothing at all.
-      if (0 === affected.length) {
-        return {
-          verified: Verified.UNKNOWN,
-          /*
-           * The way out named here has to be one the CALLER can take.
-           *
-           * This used to say "record one with reticle_record { action: start } then
-           * reticle_flow_save". Neither is advertised on the default surface, and that surface has
-           * no dispatch hatch — so the honest answer to "nothing covers this change" ended in two
-           * calls that come back "Tool not found". Driving is reachable from every surface, and a
-           * drive is captured as a flow automatically at teardown, so it is also the instruction
-           * that makes the NEXT change to these files replay instead of drive.
-           */
-          because: `no saved flow covers ${1 === changedFiles.length ? 'this file' : 'these files'} — nothing ran, so nothing is proved. Drive it and prove it directly; the drive is saved as a flow, so the next change here replays instead`,
-          changedFiles,
-          flowsRun: [],
-          unknownProvenance,
-          // No flow ran, so nothing was measured — said explicitly rather than left undefined.
-          measured: [],
-        };
-      }
-
-      const provenanceNote =
-        unknownProvenance.length > 0
-          ? ` (${String(unknownProvenance.length)} of them re-run only because Reticle cannot tell which sources they cover)`
-          : '';
-
-      // Marked BEFORE the replay so the contradiction sweep afterwards reads exactly the window the
-      // flows produced, and never events from whatever the agent did before calling this.
-      const cursor = cursorBeforeReplay(deps, args);
-
-      const verify = FLOW_TOOLS.find((tool) => tool.name === ReticleTool.FLOW_VERIFY);
-      if (verify === undefined) throw new Error('the whole-suite replay tool is not registered');
-      const suite = asRecord(
-        await verify.handler(deps, {
-          names: affected,
-          ...(asNumber(args['parallel']) === undefined ? {} : { parallel: args['parallel'] }),
-          ...(asString(args['sessionId']) === undefined ? {} : { sessionId: args['sessionId'] }),
-        }),
-      ) as SuiteResult;
-
-      const failed = suite.failed ?? 0;
-      const passed = suite.passed ?? 0;
-
-      // `unverifiable` is NOT a failure — the suite ran and proved nothing, which is the same fact
-      // this tool answers UNKNOWN for an uncovered change. Treating it as a red emitted a bug_found
-      // that nothing earned. See verify-change-verdict.
-      const verdict = verdictForSuite(String(suite.status), failed);
-      // A NO must be EARNED by a failing flow genuinely tied to the changed files. `affectedSavedFlows`
-      // re-runs any flow whose sources it cannot determine — over-running beats skipping — and those
-      // land in `unknownProvenance`. Judging the change on them produced a negative verdict whose own
-      // explanation admitted the evidence was not tied to the file. See attributed-failure.
-      const failingNames = Array.isArray(suite.failures)
-        ? suite.failures
-            .map((f) =>
-              'object' === typeof f && f !== null ? asString(asRecord(f)['flow']) : undefined,
-            )
-            .filter((n): n is string => n !== undefined)
-        : // No per-failure detail: the failure is somewhere in the set that ran, so ask the question
-          // of all of them rather than guessing which.
-          affected;
-      const attributed = attributedFailures(failingNames, unknownProvenance);
-      const earnedNo = verdict === Verified.NO && attributed.length > 0;
-      const reported = verdict === Verified.NO && !earnedNo ? Verified.UNKNOWN : verdict;
-      if (reported !== Verified.YES) {
-        return {
-          verified: reported,
-          because: earnedNo
-            ? `${String(failed)} of ${String(suite.total ?? affected.length)} covering flows failed, including ${attributed.join(', ')}, which cover the changed files${provenanceNote}`
-            : verdict === Verified.NO
-              ? `flows failed, but Reticle cannot tell which sources any of them cover (${failingNames.join(', ')}) — so this says nothing about the files you changed. Re-record them so their sources are stamped, or read the replay yourself`
-              : `the covering flows ran but proved nothing (${String(suite.status)}) — they assert no observable consequence, so a green from them would not have meant your change is safe${provenanceNote}`,
-          changedFiles,
-          flowsRun: affected,
-          suite,
-          unknownProvenance,
-          measured: ['flows'],
-        };
-      }
-
-      // The suite went green. That is exactly when the remaining two channels are worth reading:
-      // a replay that passes while a write fails is the false green this whole product is about.
-      const extra = await inspectAfterReplay(deps, args, cursor);
-      const decidingContradictions = extra.contradictions.filter((c) => !isAdvisory(c.kind));
-      if (decidingContradictions.length > 0) {
-        const kinds = decidingContradictions.map((c) => c.kind).join(', ');
-        const earned = attributedFailures(affected, unknownProvenance).length > 0;
-        return {
-          verified: earned ? Verified.NO : Verified.UNKNOWN,
-          because: earned
-            ? `every covering flow passed, but channels disagreed during the replay (${kinds}) — a green suite over a failed write is the false green worth looking at${provenanceNote}`
-            : `channels disagreed during the replay (${kinds}), but Reticle cannot tell which sources any of the flows that ran cover (${affected.join(', ')}), so this says nothing about the files you changed. Drive the change directly; the drive is saved as a flow with its sources stamped`,
-          changedFiles,
-          flowsRun: affected,
-          suite,
-          unknownProvenance,
-          contradictions: extra.contradictions,
-          ...(extra.untouched === undefined ? {} : { untouched: extra.untouched }),
-          measured: extra.measured,
-        };
-      }
-
-      // The mirror of `earnedNo`: a green from flows that ran only because their sources are unknown
-      // says nothing about these files either. At least one attributed flow has to have passed.
-      if (0 === attributedFailures(affected, unknownProvenance).length) {
-        return {
-          verified: Verified.UNKNOWN,
-          because: `the flows that ran passed, but Reticle cannot tell which sources any of them cover (${affected.join(', ')}), so this says nothing about the files you changed. Drive the change directly; the drive is saved as a flow with its sources stamped`,
-          changedFiles,
-          flowsRun: affected,
-          suite,
-          unknownProvenance,
-          ...(0 === extra.contradictions.length ? {} : { contradictions: extra.contradictions }),
-          measured: extra.measured,
-        };
-      }
-
+    if (0 === changedFiles.length) {
       return {
-        verified: Verified.YES,
-        because: `all ${String(passed)} flows covering these files passed${provenanceNote}${extra.untouched === undefined ? '' : `, with ${String(extra.untouched.length)} controls left undriven`}`,
+        verified: Verified.UNKNOWN,
+        // A git failure and a clean tree both arrive here with no files, and they are opposite
+        // answers: one means there was nothing to decide about, the other means the question was
+        // never asked. `unknown` is right either way, but the REASON is what the caller acts on.
+        because: changed.failed
+          ? `could not read the diff for \`${String(since)}\`, so nothing was compared: ${changed.reason ?? 'git failed'}`
+          : 'no changed files were given, so there was nothing to decide about',
+        changedFiles,
+        flowsRun: [],
+        unknownProvenance,
+        // Nothing was looked for, and the schema requires this field to say so. Omitting it made
+        // the MCP layer reject the whole response, turning an honest UNKNOWN into a protocol error.
+        measured: [],
+      };
+    }
+
+    // The guard: an uncovered change is UNKNOWN. Reporting `yes` here would mean "your change is
+    // fine" on the strength of having run nothing at all.
+    if (0 === affected.length) {
+      return {
+        verified: Verified.UNKNOWN,
+        /*
+         * The way out named here has to be one the CALLER can take.
+         *
+         * This used to say "record one with reticle_record { action: start } then
+         * reticle_flow_save". Neither is advertised on the default surface, and that surface has
+         * no dispatch hatch — so the honest answer to "nothing covers this change" ended in two
+         * calls that come back "Tool not found". Driving is reachable from every surface, and a
+         * drive is captured as a flow automatically at teardown, so it is also the instruction
+         * that makes the NEXT change to these files replay instead of drive.
+         */
+        because: `no saved flow covers ${1 === changedFiles.length ? 'this file' : 'these files'} — nothing ran, so nothing is proved. Drive it and prove it directly; the drive is saved as a flow, so the next change here replays instead`,
+        changedFiles,
+        flowsRun: [],
+        unknownProvenance,
+        // No flow ran, so nothing was measured — said explicitly rather than left undefined.
+        measured: [],
+      };
+    }
+
+    const provenanceNote =
+      unknownProvenance.length > 0
+        ? ` (${String(unknownProvenance.length)} of them re-run only because Reticle cannot tell which sources they cover)`
+        : '';
+
+    // Marked BEFORE the replay so the contradiction sweep afterwards reads exactly the window the
+    // flows produced, and never events from whatever the agent did before calling this.
+    const cursor = cursorBeforeReplay(deps, args);
+
+    const verify = FLOW_TOOLS.find((tool) => tool.name === ReticleTool.FLOW_VERIFY);
+    if (verify === undefined) throw new Error('the whole-suite replay tool is not registered');
+    const suite = asRecord(
+      await verify.handler(deps, {
+        names: affected,
+        ...(asNumber(args['parallel']) === undefined ? {} : { parallel: args['parallel'] }),
+        ...(asString(args['sessionId']) === undefined ? {} : { sessionId: args['sessionId'] }),
+      }),
+    ) as SuiteResult;
+
+    const failed = suite.failed ?? 0;
+    const passed = suite.passed ?? 0;
+
+    // `unverifiable` is NOT a failure — the suite ran and proved nothing, which is the same fact
+    // this tool answers UNKNOWN for an uncovered change. Treating it as a red emitted a bug_found
+    // that nothing earned. See verify-change-verdict.
+    const verdict = verdictForSuite(String(suite.status), failed);
+    // A NO must be EARNED by a failing flow genuinely tied to the changed files. `affectedSavedFlows`
+    // re-runs any flow whose sources it cannot determine — over-running beats skipping — and those
+    // land in `unknownProvenance`. Judging the change on them produced a negative verdict whose own
+    // explanation admitted the evidence was not tied to the file. See attributed-failure.
+    const failingNames = Array.isArray(suite.failures)
+      ? suite.failures
+          .map((f) =>
+            'object' === typeof f && f !== null ? asString(asRecord(f)['flow']) : undefined,
+          )
+          .filter((n): n is string => n !== undefined)
+      : // No per-failure detail: the failure is somewhere in the set that ran, so ask the question
+        // of all of them rather than guessing which.
+        affected;
+    const attributed = attributedFailures(failingNames, unknownProvenance);
+    const earnedNo = verdict === Verified.NO && attributed.length > 0;
+    const reported = verdict === Verified.NO && !earnedNo ? Verified.UNKNOWN : verdict;
+    if (reported !== Verified.YES) {
+      return {
+        verified: reported,
+        because: earnedNo
+          ? `${String(failed)} of ${String(suite.total ?? affected.length)} covering flows failed, including ${attributed.join(', ')}, which cover the changed files${provenanceNote}`
+          : verdict === Verified.NO
+            ? `flows failed, but Reticle cannot tell which sources any of them cover (${failingNames.join(', ')}) — so this says nothing about the files you changed. Re-record them so their sources are stamped, or read the replay yourself`
+            : `the covering flows ran but proved nothing (${String(suite.status)}) — they assert no observable consequence, so a green from them would not have meant your change is safe${provenanceNote}`,
+        changedFiles,
+        flowsRun: affected,
+        suite,
+        unknownProvenance,
+        measured: ['flows'],
+      };
+    }
+
+    // The suite went green. That is exactly when the remaining two channels are worth reading:
+    // a replay that passes while a write fails is the false green this whole product is about.
+    const extra = await inspectAfterReplay(deps, args, cursor);
+    const decidingContradictions = extra.contradictions.filter((c) => !isAdvisory(c.kind));
+    if (decidingContradictions.length > 0) {
+      const kinds = decidingContradictions.map((c) => c.kind).join(', ');
+      const earned = attributedFailures(affected, unknownProvenance).length > 0;
+      return {
+        verified: earned ? Verified.NO : Verified.UNKNOWN,
+        because: earned
+          ? `every covering flow passed, but channels disagreed during the replay (${kinds}) — a green suite over a failed write is the false green worth looking at${provenanceNote}`
+          : `channels disagreed during the replay (${kinds}), but Reticle cannot tell which sources any of the flows that ran cover (${affected.join(', ')}), so this says nothing about the files you changed. Drive the change directly; the drive is saved as a flow with its sources stamped`,
+        changedFiles,
+        flowsRun: affected,
+        suite,
+        unknownProvenance,
+        contradictions: extra.contradictions,
+        ...(extra.untouched === undefined ? {} : { untouched: extra.untouched }),
+        measured: extra.measured,
+      };
+    }
+
+    // The mirror of `earnedNo`: a green from flows that ran only because their sources are unknown
+    // says nothing about these files either. At least one attributed flow has to have passed.
+    if (0 === attributedFailures(affected, unknownProvenance).length) {
+      return {
+        verified: Verified.UNKNOWN,
+        because: `the flows that ran passed, but Reticle cannot tell which sources any of them cover (${affected.join(', ')}), so this says nothing about the files you changed. Drive the change directly; the drive is saved as a flow with its sources stamped`,
         changedFiles,
         flowsRun: affected,
         suite,
         unknownProvenance,
         ...(0 === extra.contradictions.length ? {} : { contradictions: extra.contradictions }),
-        ...(extra.untouched === undefined ? {} : { untouched: extra.untouched }),
         measured: extra.measured,
       };
-    },
+    }
+
+    return {
+      verified: Verified.YES,
+      because: `all ${String(passed)} flows covering these files passed${provenanceNote}${extra.untouched === undefined ? '' : `, with ${String(extra.untouched.length)} controls left undriven`}`,
+      changedFiles,
+      flowsRun: affected,
+      suite,
+      unknownProvenance,
+      ...(0 === extra.contradictions.length ? {} : { contradictions: extra.contradictions }),
+      ...(extra.untouched === undefined ? {} : { untouched: extra.untouched }),
+      measured: extra.measured,
+    };
+  },
+};
+
+/** Every answer carries the Reticle result block, under the verdict this tool decided. */
+export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
+  {
+    ...VERIFY_CHANGE,
+    handler: async (deps, args, call) =>
+      changeResult(
+        sessionRoot(deps, asString(args['sessionId'])),
+        await VERIFY_CHANGE.handler(deps, args, call),
+      ),
   },
 ];
 

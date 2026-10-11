@@ -46,7 +46,7 @@ const STATUS_EVERY_MS = 10_000;
 /** How many verdicts between size checks: walking `.reticle` is not free either. */
 const SIZE_EVERY = 20;
 const MOMENTS_FILE = ReticleDir.PLATFORM_MOMENTS_FILE;
-const CONNECT = '`npx @reticlehq/server connect`';
+export const CONNECT = '`npx @reticlehq/server connect`';
 const RUN_FILE = /\.json$/;
 
 const Moment = {

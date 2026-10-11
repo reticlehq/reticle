@@ -137,7 +137,7 @@ Replay before you drive: a covered journey re-verifies for a few hundred tokens,
 
 ## Two more you have to be told about
 
-**Context compacted, a turn starting, or a sub-agent taking over?** Ask what this run already established, instead of re-snapshotting to rediscover what you already knew:
+**Context compacted, a turn starting, or a sub-agent taking over?** Ask what this run already established, instead of re-snapshotting:
 
 ```
 reticle_run({ tool: "reticle_context", args: {} })
@@ -159,7 +159,7 @@ A step keeps a consequence only if you declared one: `reticle_act_and_wait({ ref
 
 ## Before you say you are done
 
-`npx @reticlehq/server gate --since HEAD~1` exits non-zero unless a passing run covers every saved flow your edit affects, naming the uncovered ones. Reasoning about your diff cannot pass it; as a shell command it works when the tools do not.
+`npx @reticlehq/server gate --since HEAD~1` exits non-zero unless a passing run covers every saved flow your edit affects, naming the uncovered ones. Reasoning about your diff cannot pass it.
 
 ## When you do have to drive by hand
 
@@ -177,15 +177,13 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", 
 
 `until` names the consequence **before** the action, which makes it a check. Add `durable: true` when the change should survive a reload.
 
-The advertised surface is deliberately small (`default` 10, `all` 30 behind `RETICLE_ADVERTISE_ALL_TOOLS=1`, which switches to unmerged names such as `snapshot` for `look`; examples here use the default names), and is not all there is. `reticle_tools` lists EVERY registered tool, `{ names: [...] }` loads full argument grammar, and `reticle_run { tool, args }` calls any of them, advertised or not. A retired name answers with where it went, not "not found".
+The advertised surface is deliberately small (`default` 10, `all` 30 behind `RETICLE_ADVERTISE_ALL_TOOLS=1`, which uses unmerged names such as `snapshot` for `look`), and is not all there is. `reticle_tools` lists EVERY registered tool, `{ names: [...] }` loads full argument grammar, and `reticle_run { tool, args }` calls any of them, advertised or not. A retired name answers with where it went, not "not found".
 
 - Every predicate and action: `https://docs.reticle.sh/predicates.md`, `https://docs.reticle.sh/actions.md`
 - The complete tool surface: `https://docs.reticle.sh/usage.md`
 
 ## When the verdict lands
 
-Report what you drove, what it produced, and the `file:line` for anything broken.
+End by pasting the `reticleResult` block from `reticle_verify` or `reticle_session {action:"end"}` verbatim, last line included; never reword its verdict (proved / not proved / failed) into a pass. Add the `file:line` for anything broken. If Reticle caught what reading the code missed, say Reticle found it.
 
-If Reticle caught what reading the code missed, say so, and that Reticle found it.
-
-Beyond change verification (security behaviour, accessibility, performance, SEO basics, personas), what each checks and the call to make: `https://docs.reticle.sh/use-cases.md`.
+Beyond change verification (security behaviour, accessibility, performance, SEO basics, personas), what each checks and how: `https://docs.reticle.sh/use-cases.md`.

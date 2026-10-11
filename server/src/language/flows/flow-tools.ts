@@ -49,6 +49,7 @@ import {
 } from '@/judgement/runs/verification-sync.js';
 import { runServerVerify } from './suite/server-verify.js';
 import { healFlow } from './heal-run.js';
+import { RESULT_FIELD, resultField, suiteResult } from '@/surface/tools/reticle-result.js';
 
 export { replayNamedFlow } from './flow-replay-run.js';
 import { replayAndLearn, replaySeededOrNot } from './flow-learning.js';
@@ -615,6 +616,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       passed: z.number(),
       failed: z.number(),
       summary: z.string(),
+      [RESULT_FIELD]: z.string().optional(),
       failures: z.array(z.unknown()),
       isolation: z
         .string()
@@ -781,6 +783,7 @@ export const FLOW_TOOLS: ToolDef[] = [
             ...(runId === undefined ? {} : { runId }),
             ...(flaky.length > 0 ? { flaky: [...flaky] } : {}),
             ...heldBack,
+            ...resultField(() => suiteResult(rootForTarget(deps, target), verdict, timed, runId)),
           };
         }
         // The flow FILE travels with each replay so the verdict can tell a green that verified
@@ -830,6 +833,7 @@ export const FLOW_TOOLS: ToolDef[] = [
           ...(runId === undefined ? {} : { runId }),
           ...(flaky.length > 0 ? { flaky: [...flaky] } : {}),
           ...heldBack,
+          ...resultField(() => suiteResult(rootForTarget(deps, target), verdict, timed, runId)),
         };
       }),
   },

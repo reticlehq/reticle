@@ -471,6 +471,8 @@ export interface SuiteVerdict {
   passed: number;
   failed: number;
   summary: string;
+  /** The ready-to-paste "Reticle result" block the agent ends with; built by the server. */
+  reticleResult?: string;
   /** Only the failing flows, with their decision (verdict, what changed, where, next action). */
   failures: SuiteFlowResult[];
   /**

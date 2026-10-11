@@ -194,6 +194,24 @@ Sessions accumulate. Four stale ones pointing at dev servers you restarted an ho
 
 `yield` when you are pausing, `end` when you are done. Both revive on your next action, so neither is destructive. The difference is what the human watching the panel is told. The panel reads "live" until you say otherwise.
 
+## End with the Reticle result
+
+`reticle_verify` (`flows` and `change`) and `reticle_session { action: "end" }` return `reticleResult`: a short markdown block the server builds from the verdicts it holds. Paste it to the user verbatim as the last thing you say. It reads the same wherever it came from:
+
+```md
+**Reticle result: proved** · 3 of 3 checks held
+
+- Checks: 3 yes · 0 no · 0 undecided
+- Covered: checkout-pay, login
+- Metrics: 3 checks · 2 flows replayed · 4.2s
+- Evidence: .reticle/visual/runs/r1/0001-act.jpg, .reticle/visual/runs/r1/0002-act.jpg
+- Run on the dashboard: https://app.reticle.sh/runs/r1
+```
+
+- The verdict line has three words only: **proved**, **not proved**, **failed**. One undecided check makes the whole result not proved. Do not reword it into a pass.
+- A metric Reticle did not measure is left out, never printed as zero. Model tokens saved by replay are not measured per run, so the block never claims them.
+- The last line is about the platform, once per result. Linked, it links the run. Not linked, it says what the platform adds (run history, your team, Reticle Harness), the trial, and `npx @reticlehq/server connect`. Keep it; do not repeat it elsewhere.
+
 ## Confirm a navigation landed
 
 `reticle_navigate` returns `confirmed: false` by design. A navigation destroys the document the SDK lives in, so it can only report dispatch. Check [`reticle_session { action: "list" }`](/tools/sessions) for a session at the new URL before acting, and re-snapshot: refs do not survive a new document.

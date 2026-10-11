@@ -16,6 +16,7 @@ import type { SessionManager } from './session-manager.js';
 import { gapReportLines } from '@/judgement/runs/artifact/gap-report.js';
 import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
 import { DiscoveryInvite } from '@reticlehq/core';
+import { RESULT_FIELD, resultField, sessionResult } from '@/surface/tools/reticle-result.js';
 
 /**
  * The session an id-less yield hands back.
@@ -110,6 +111,7 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
         .describe(
           'What this session claimed and what held — an `unknown` is never counted as held.',
         ),
+      [RESULT_FIELD]: z.string().optional(),
     },
     handler: (deps, args) => {
       const requested = asString(args['sessionId']);
@@ -164,6 +166,15 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
           sessionId: session.id,
           ...(detach ? { disconnected: true } : {}),
           gap,
+          ...resultField(() =>
+            sessionResult(
+              deps,
+              session.id,
+              actions,
+              // Optional-call: a test double is a partial Session.
+              session.elapsed?.(),
+            ),
+          ),
           talk_to_us: DiscoveryInvite.AGENT,
         };
       });

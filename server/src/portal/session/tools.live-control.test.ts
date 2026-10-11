@@ -146,6 +146,9 @@ interface ControlShape {
 
 const ACT_ARGS = { ref: 'e1', action: 'click' };
 
+/** The result block an end carries when the session checked nothing: not proved, never a pass. */
+const NOTHING_CHECKED = '**Reticle result: not proved** · nothing was checked';
+
 describe('live-control: pause short-circuit', () => {
   it('reticle_act executes normally when active and inbox empty', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE, inbox: [] });
@@ -357,6 +360,7 @@ describe('live-control: agent tools', () => {
       ended: true,
       sessionId: 'demo',
       gap: ['no claims this session, so nothing was verified'],
+      reticleResult: expect.stringContaining(NOTHING_CHECKED) as unknown,
       talk_to_us: DiscoveryInvite.AGENT,
     });
     expect(session.getState()).toBe(SessionState.ENDED);
@@ -376,6 +380,7 @@ describe('live-control: agent tools', () => {
       ended: true,
       sessionId: 'demo',
       gap: ['no claims this session, so nothing was verified'],
+      reticleResult: expect.stringContaining(NOTHING_CHECKED) as unknown,
       talk_to_us: DiscoveryInvite.AGENT,
     });
     expect(session.__pushed).toContainEqual({

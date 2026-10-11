@@ -10,6 +10,7 @@ import { harnessDriving, msgHarnessHasTheTab } from './harness-tab-guard.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { agentNudge, takePlatformMoment } from './platform-moment.js';
+import { RESULT_FIELD } from './reticle-result.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
   type BrowserBrand,
@@ -693,10 +694,12 @@ async function dispatchTool<Ext>(
   // RETURN an error. So the denominator was counting a small, unrepresentative slice of the
   // invitations and reading near-empty, which looks identical to a nudge that never fires.
   const friction = frictionInviteFor(tool.name, raw);
-  // Once per project, on a proved verdict, when the runs live only on this machine.
-  const platform = isPlainObject(raw)
-    ? await takePlatformMoment(deps, raw, () => sessionRoot(deps, rawSessionId))
-    : undefined;
+  // Once per project, on a proved verdict, when the runs live only on this machine. Not on a result
+  // whose `reticleResult` already ends with the platform line: once per result, never twice.
+  const platform =
+    isPlainObject(raw) && !(RESULT_FIELD in raw)
+      ? await takePlatformMoment(deps, raw, () => sessionRoot(deps, rawSessionId))
+      : undefined;
   // What the agent should do next, on every client that reads results. Not for the Harness, whose
   // runs the daemon syncs itself and which cannot relay the user's words, and not on `reticle_run`'s
   // outer result: the inner call already carried one.
