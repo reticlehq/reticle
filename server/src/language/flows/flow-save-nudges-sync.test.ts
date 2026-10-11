@@ -95,3 +95,30 @@ describe('a saved flow on disk', () => {
     }
   });
 });
+
+/*
+ * From a persona drive: each web drive saved its named flow AND an auto-saved `drive-saved-<email>`
+ * beside it, so one journey listed as three flows. A journey the agent already saved under its own
+ * name is not auto-saved again.
+ */
+describe('a driven journey the agent already saved under its own name', () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'reticle-flow-once-'));
+  });
+  afterEach(async () => {
+    await removeTempDir(dir);
+  });
+
+  it('is not saved a second time under an automatic name', async () => {
+    const store = new FlowStore(createNodeFileSystem(), join(dir, '.reticle'), { now: () => 1 });
+    await store.save({ name: 'checkout', version: 1, steps: [step] });
+    const again = await store.saveJourney(
+      { name: 'drive-saved-ana', version: 1, steps: [step] },
+      undefined,
+      'drive-',
+    );
+    expect(again.ok && again.value.name).toBe('checkout');
+    expect(await store.list(undefined)).toEqual(['checkout']);
+  });
+});

@@ -456,16 +456,23 @@ export class FlowStore {
     const pid = safeProjectId(projectId);
     const fresh = this.#build(program, undefined, pid);
     const saved: FlowFile[] = [];
-    for (const name of (await this.list(pid)).filter((n) => n.startsWith(prefix))) {
+    const freshPrint = journeyFingerprint(fresh);
+    for (const name of await this.list(pid)) {
       const loaded = await this.load(name, pid);
-      if (loaded.ok) saved.push(loaded.value);
+      if (!loaded.ok) continue;
+      if (name.startsWith(prefix)) saved.push(loaded.value);
+      // The agent already saved this journey under its own name: one journey, one flow. A web drive
+      // saved its named flow and an automatic `drive-saved-<email>` beside it, every time.
+      else if (journeyFingerprint(loaded.value) === freshPrint) {
+        return { ok: true, value: this.#summary(loaded.value) };
+      }
     }
     const byPrint = new Map<string, FlowFile[]>();
     for (const flow of saved) {
       const print = journeyFingerprint(flow);
       byPrint.set(print, [...(byPrint.get(print) ?? []), flow]);
     }
-    const print = journeyFingerprint(fresh);
+    const print = freshPrint;
     const taken = new Map(saved.map((flow) => [flow.name, journeyFingerprint(flow)]));
     const named = { ...fresh, name: journeyName(fresh.name, print, taken) };
     byPrint.set(print, [...(byPrint.get(print) ?? []), named]);

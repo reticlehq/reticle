@@ -129,10 +129,14 @@ describe('a saved drive', () => {
     expect(new Set(prints).size).toBe(2);
   });
 
-  it('never merges or removes a hand-named flow', async () => {
+  // Never merged or removed, and never copied either: a drive of the journey it already holds adds
+  // no automatic twin beside it (one journey listed as three flows, from a persona drive).
+  it('never merges, removes or duplicates a hand-named flow', async () => {
     await store.save({ name: 'checkout', version: 1, steps: opened, startPath: '/issues' });
+    const before = await store.load('checkout');
     await drive('drive-close-an-issue', opened);
-    expect(await store.list()).toEqual(['checkout', 'drive-close-an-issue']);
+    expect(await store.list()).toEqual(['checkout']);
+    expect(await store.load('checkout')).toEqual(before);
   });
 });
 
