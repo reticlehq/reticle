@@ -411,6 +411,7 @@ import {
   firePointerNonBubbling,
   dragElement,
   mouseEventFor,
+  assertNotLeaving,
 } from './actions-dom.js';
 import { scrollFrom } from './scroll.js';
 
@@ -832,6 +833,7 @@ export async function executeAction(
   // guard classifies the ELEMENT, and inventing a target from body/focus would be the lie this
   // path exists to avoid.
   if (named) assertActionAllowed(el, action, args);
+  if (named) assertNotLeaving(el);
   // Capture the anchor while the element is still mounted — the action may unmount it (navigation).
   // A refless press reports no anchor: minting a testid/component of whatever is focused would
   // invent a target the caller did not name.
