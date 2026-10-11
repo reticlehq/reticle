@@ -51,6 +51,17 @@ describe('chat views and harness access states', () => {
     expect(root.querySelector('[data-reticle-account-signin]')).not.toBeNull();
   });
 
+  it('signed out, the foot under the log is one line that signs in, the pitch its tooltip', () => {
+    const { root, views } = mountViews();
+    views.paintAccount({ signedIn: false });
+    const spot = foot(root);
+    expect(spot?.querySelectorAll('.reticle-harness-row')).toHaveLength(1);
+    expect(spot?.querySelector('.reticle-harness-row-wrap')).toBeNull();
+    const door = spot?.querySelector('[data-reticle-account-signin]');
+    expect(door?.textContent).toContain('10 free credits · Sign in');
+    expect(door?.getAttribute('title')).toContain('14-day trial');
+  });
+
   it('shows nothing while the account is unknown, never a sign-in nag', () => {
     const { root, views } = mountViews();
     views.paintAccount(undefined);
@@ -486,6 +497,62 @@ describe('running the Harness from the panel', () => {
     expect(
       root.querySelector('[data-reticle-harness-spot] [data-reticle-harness-open]'),
     ).not.toBeNull();
+  });
+
+  it('keeps Run in its slot through a whole run: Starting…, Stop, then Run again, never remounted', () => {
+    const { root, views } = mountWithDrive();
+    const pageButton = (): HTMLButtonElement | null =>
+      root.querySelector<HTMLButtonElement>('[data-reticle-harness-page] button');
+    const footOpen = (): Element | null =>
+      root.querySelector('[data-reticle-harness-spot] [data-reticle-harness-open]');
+    const footSlot = (): Element | null =>
+      root.querySelector('[data-reticle-harness-spot] .reticle-harness-row > :last-child');
+    const run = pageButton();
+    const open = footOpen();
+    const slot = footSlot();
+    expect(run?.textContent).toBe('Run Harness');
+    run?.click();
+    // Pressed: the same button says so at once, and a press while it starts does nothing twice.
+    expect(pageButton()).toBe(run);
+    expect(run?.disabled).toBe(true);
+    expect(run?.textContent).toBe('Starting…');
+    // Every step is a full snapshot push: account, config and drive, the way presenter.ts paints it.
+    const push = (drive: { runId: string; steps: number } | undefined): void => {
+      views.paintHarness(entitled);
+      views.paintDrive(drive);
+      views.paintAccount({ signedIn: true });
+      expect(pageButton(), JSON.stringify(drive)).toBe(run);
+      expect(footOpen(), JSON.stringify(drive)).toBe(open);
+      expect(footSlot(), JSON.stringify(drive)).toBe(slot);
+    };
+    // A push that lands before the daemon registered the drive must not bring Run back for a beat.
+    push(undefined);
+    expect(run?.textContent).toBe('Starting…');
+    for (const steps of [0, 1, 2, 3]) {
+      push({ runId: 'harness-1', steps });
+      expect(run?.textContent).toBe('Stop');
+      expect(run?.hasAttribute('data-reticle-harness-stop')).toBe(true);
+      expect(run?.disabled).toBe(false);
+    }
+    push(undefined);
+    expect(run?.textContent).toBe('Run Harness');
+    expect(run?.hasAttribute('data-reticle-harness-run')).toBe(true);
+    expect(run?.disabled).toBe(false);
+  });
+
+  it('gives Run back if the drive never starts', () => {
+    vi.useFakeTimers();
+    try {
+      const { root } = mountWithDrive();
+      const run = root.querySelector<HTMLButtonElement>('[data-reticle-harness-run]');
+      run?.click();
+      expect(run?.disabled).toBe(true);
+      vi.advanceTimersByTime(60_000);
+      expect(run?.disabled).toBe(false);
+      expect(run?.textContent).toBe('Run Harness');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reveals the text box for Custom and runs with the words typed there', () => {

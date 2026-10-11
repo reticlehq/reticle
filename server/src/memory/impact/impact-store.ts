@@ -15,7 +15,6 @@ import { readDashboardUrl } from '@/memory/project/sync-status.js';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { readAccountState } from '@/memory/cloud/account-state.js';
-import { harnessOfferSource, type OfferSource } from '@/memory/cloud/harness-offer.js';
 import { configForHud, type ConfigSource } from '@/memory/cloud/harness-config.js';
 import { hudNoticesSource, type NoticesSource } from '@/memory/cloud/hud-notices-source.js';
 import { selectNotices } from '@reticlehq/core/hud';
@@ -291,8 +290,6 @@ export class ImpactStore {
   #timer: ReturnType<typeof setTimeout> | undefined;
   #onChange: (() => void) | undefined;
   readonly #account: () => AccountState;
-  /** Where this workspace stands with the free harness offer. Cached; see harness-offer.ts. */
-  readonly #offer: OfferSource;
   readonly #config: ConfigSource;
   readonly #notices: NoticesSource;
   readonly #sdkVersion: string;
@@ -306,8 +303,6 @@ export class ImpactStore {
     globalRoot?: string;
     /** Reads whether this machine is signed in. Injected so the store stays testable and pure-ish. */
     account?: () => AccountState;
-    /** Where the workspace stands with the free harness offer. Injected so no test touches a network. */
-    offer?: OfferSource;
     config?: ConfigSource;
     /** The HUD rail's notices. Defaults to the daemon's cached copy of the published file. */
     notices?: NoticesSource;
@@ -325,9 +320,6 @@ export class ImpactStore {
     this.#projectName = opts.projectName;
     this.#dashboardUrl = readDashboardUrl(opts.reticleRoot);
     this.#root = opts.reticleRoot;
-    // The claim happens in the console, so the link this project was linked to IS the claim link —
-    // built here rather than in the HUD, which has no way to know where this project points.
-    this.#offer = opts.offer ?? harnessOfferSource(process.env, () => this.#dashboardUrl);
     this.#notices =
       opts.notices ??
       hudNoticesSource({
@@ -412,16 +404,6 @@ export class ImpactStore {
     this.#dashboardUrl = readDashboardUrl(this.#root);
     if (this.#dashboardUrl !== undefined) snap.dashboardUrl = this.#dashboardUrl;
     snap.account = this.#account();
-    const cfgForOffer = this.#config.read();
-    const offer = this.#offer.read();
-    // Joined here because this is the one place that holds BOTH the offer and the platform config.
-    // The card reads the offer, so readiness has to travel on it rather than being re-derived in a
-    // presenter that has no business knowing what a provider key is.
-    if (offer !== undefined && cfgForOffer !== undefined)
-      offer.drivable = cfgForOffer.providerReady;
-    // Absent means "we have not heard", which the HUD renders as nothing at all. Never defaulted to
-    // `{claimed:false}`: that would advertise the offer to everyone who is offline.
-    if (offer !== undefined) snap.harnessOffer = offer;
     // Absent stays absent: the HUD reads that as "we have not heard" and renders no control.
     const cfg = this.#config.read();
     if (cfg !== undefined) snap.harnessConfig = configForHud(cfg, this.#now());

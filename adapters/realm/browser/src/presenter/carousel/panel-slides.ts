@@ -1,9 +1,7 @@
 /**
- * Text-first cards for the rail under every open page: a live Harness offer first, when the
- * platform confirms it applies, then the daemon's notices, or the bundled value slides when it sent
- * none.
+ * Text-first cards for the rail under every open page: the daemon's notices, or the bundled value
+ * slides when it sent none.
  */
-import { offerHtml, type OfferState } from './offer-card.js';
 import type { Slide } from './carousel.js';
 import { HudNoticeSchema, type HudNotice } from '@reticlehq/core/hud';
 import { esc } from '../chrome/presenter-safe-html.js';
@@ -17,7 +15,6 @@ const HARNESS_PATH = '/settings?group=billing';
 export const SLIDE_ID = {
   REPLAY: 'replay-confidence',
   NOTES: 'notes-for-agent',
-  OFFER: 'harness-offer',
 } as const;
 
 /**
@@ -73,24 +70,18 @@ function noticeSlide(notice: HudNotice): Slide {
 }
 
 /**
- * The rail's slides: a live harness offer first when there is one, then the daemon's notices, or the
- * bundled value slides when the daemon sent none (offline, an older daemon, nothing applies).
+ * The rail's slides: the daemon's notices, or the bundled value slides when the daemon sent none
+ * (offline, an older daemon, nothing applies).
  */
 export function panelSlides(
-  offer: OfferState | undefined,
-  offerDeclined: boolean,
   notices: readonly unknown[] = [],
   base: string = DEFAULT_PLATFORM_URL,
 ): Slide[] {
-  const harnessOffer = offerHtml(offer, offerDeclined);
   // Validated here, in the lazy panel, with the full schema: the snapshot carries them loosely so
   // the first-load schema stays small. A notice that fails is dropped on its own.
   const valid = notices.flatMap((n): HudNotice[] => {
     const parsed = HudNoticeSchema.safeParse(n);
     return parsed.success && !parsed.data.id.startsWith(HARNESS_NOTICE_PREFIX) ? [parsed.data] : [];
   });
-  return [
-    ...('' === harnessOffer ? [] : [{ id: SLIDE_ID.OFFER, html: harnessOffer }]),
-    ...(0 < valid.length ? valid.map(noticeSlide) : valueSlides(base)),
-  ];
+  return 0 < valid.length ? valid.map(noticeSlide) : [...valueSlides(base)];
 }

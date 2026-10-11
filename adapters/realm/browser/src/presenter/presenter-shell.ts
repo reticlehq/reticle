@@ -4,7 +4,7 @@ import type { HarnessGateView } from './presenter-harness-row.js';
 import { PresenterReport, reportPanelHtml } from './presenter-report.js';
 import type { AccountState } from '@reticlehq/core';
 import { paintToolbarAccount, TOOLBAR_ACCOUNT_ATTR } from './presenter-workspace.js';
-import { mountAccountControl, type AccountDetails } from './presenter-account.js';
+import { mountAccountControl, TEAM_SLOT_ATTR, type AccountDetails } from './presenter-account.js';
 import { paintSettingsAccount } from './presenter-settings.js';
 import {
   CHAT_MIN_ATTR,
@@ -21,7 +21,6 @@ import {
   SETTINGS_BTN_ATTR,
   MINIMISED_STORAGE_KEY,
 } from './presenter-config.js';
-import { offerDismissed, type OfferState } from './carousel/offer-card.js';
 import { paintCarousel } from './carousel/carousel.js';
 import { panelSlides } from './carousel/panel-slides.js';
 import { paintRail, RAIL_HTML, RAIL_PROMO_ATTR } from './presenter-frame.js';
@@ -61,27 +60,16 @@ const CHAT_PILL_LABEL = 'Open agent chat';
 const SETTINGS_LABEL = 'Settings';
 const AGENT_LOG_TITLE = 'Reticle';
 const EXIT_LABEL = 'Exit';
-function paintPromo(
-  root: HTMLElement,
-  offer: OfferState | undefined,
-  notices: readonly unknown[] = [],
-  base?: string,
-): void {
+function paintPromo(root: HTMLElement, notices: readonly unknown[] = [], base?: string): void {
   const target = root.querySelector<HTMLElement>(`[${RAIL_PROMO_ATTR}]`);
   if (null === target) return;
-  let dismissed = false;
-  try {
-    dismissed = offerDismissed(window.localStorage);
-  } catch {
-    /* A blocked local store should not hide the value cards. */
-  }
   let storage: Storage | undefined;
   try {
     storage = window.sessionStorage;
   } catch {
     storage = undefined;
   }
-  paintCarousel(target, panelSlides(offer, dismissed, notices, base), storage);
+  paintCarousel(target, panelSlides(notices, base), storage);
 }
 
 interface HudShellCallbacks {
@@ -171,7 +159,6 @@ export class HudShell {
         details: AccountDetails;
       }
     | undefined;
-  #pushedOffer: OfferState | undefined;
   #pushedNotices: readonly unknown[] = [];
   #pushedHarness: HarnessConfig | undefined;
   /** The platform the rail's links point at; repainted only when it moves, so slides keep turning. */
@@ -213,7 +200,7 @@ export class HudShell {
     const base = this.#promoLinks();
     if (this.#root === undefined || base === this.#promoBase) return;
     this.#promoBase = base;
-    paintPromo(this.#root, this.#pushedOffer, this.#pushedNotices, base);
+    paintPromo(this.#root, this.#pushedNotices, base);
   }
 
   paintImpact(verdicts: number): void {
@@ -250,15 +237,14 @@ export class HudShell {
     this.#repaintPromoIfMoved();
   }
   /**
-   * Keep the rail's offer and notices current. Replayed at mount, as the account is: the daemon
+   * Keep the rail's notices current. Replayed at mount, as the account is: the daemon
    * pushes the impact snapshot on connect, which races this shell's mount, and on an idle page the
    * next snapshot never comes.
    */
-  paintOffer(offer: OfferState | undefined, notices: readonly unknown[] = []): void {
-    this.#pushedOffer = offer;
+  paintNotices(notices: readonly unknown[] = []): void {
     this.#pushedNotices = notices;
     this.#promoBase = this.#promoLinks();
-    if (this.#root !== undefined) paintPromo(this.#root, offer, notices, this.#promoBase);
+    if (this.#root !== undefined) paintPromo(this.#root, notices, this.#promoBase);
   }
 
   constructor(callbacks: HudShellCallbacks = {}) {
@@ -314,6 +300,7 @@ export class HudShell {
       <div ${CHAT_PANEL_ATTR} class="reticle-chat-panel ${HUD_SURFACE_CLASS}" role="region" aria-label="Agent Log" aria-hidden="true">
         <div class="reticle-chat-head">
           <span class="reticle-chat-brand">${MARK_SVG}<span class="reticle-chat-brandname">${AGENT_LOG_TITLE}</span></span>
+          <span ${TEAM_SLOT_ATTR} class="reticle-head-team"></span>
           <span ${TOOLBAR_ACCOUNT_ATTR} class="reticle-head-account"></span>
         </div>
         <button type="button" ${CHAT_MIN_ATTR} class="reticle-chat-min" title="${CHAT_MIN_LABEL}" aria-label="${CHAT_MIN_LABEL}">${hiIconHtml(PresenterIcon.CARET_DOWN, PRESENTER_ICON_SIZE.TOOLBAR)}</button>
@@ -451,7 +438,7 @@ export class HudShell {
     this.#report.mount(root);
     this.#chatViews.mount(root);
     this.#promoBase = this.#promoLinks();
-    paintPromo(root, this.#pushedOffer, this.#pushedNotices, this.#promoBase);
+    paintPromo(root, this.#pushedNotices, this.#promoBase);
     // The toolbar's lit state FOLLOWS the panels, rather than being set by whoever was clicked.
     // Set at click time, a button stayed lit after its panel was closed by the panel that replaced
     // it - two icons active, one panel open. The observer is the only place that can be right for

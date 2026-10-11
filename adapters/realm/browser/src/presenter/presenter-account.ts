@@ -25,9 +25,11 @@
  * worse than a line of text, because the person waits for it.
  */
 
-import type { AccountState } from '@reticlehq/core';
+import { CreditKind, type AccountState, type HarnessConfig } from '@reticlehq/core';
+import { TRIAL_DAYS, TRIAL_OFFER } from '@reticlehq/core/hud';
 import { hiIconHtml, PRESENTER_ICON_SIZE, PresenterIcon } from './icons/presenter-icons.js';
 import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';
+import { morphHtml } from './chrome/presenter-morph.js';
 
 /** Behaviour hooks. Attributes rather than classes: a class is styling, these are wiring. */
 export const ACCOUNT_ROOT_ATTR = 'data-reticle-account';
@@ -37,6 +39,23 @@ export const SYNC_BTN_ATTR = 'data-reticle-sync-now';
 export const ACCOUNT_TRIGGER_ATTR = 'data-reticle-account-trigger';
 export const ACCOUNT_MENU_ATTR = 'data-reticle-account-menu';
 export const ACCOUNT_SIGNOUT_ATTR = 'data-reticle-account-signout';
+/** The header's way to the platform: opens this project's dashboard once linked. */
+export const TEAM_OPEN_ATTR = 'data-reticle-team-open';
+/** The same place before it is linked: signs in, or links this project when already signed in. */
+export const TEAM_SAVE_ATTR = 'data-reticle-team-save';
+/** Where the header's way to the platform is painted. */
+export const TEAM_SLOT_ATTR = 'data-reticle-team';
+
+/** What the header says about the platform. Quiet, one line, and never a modal. */
+export const TEAM_TEXT = {
+  OPEN: 'Open on dashboard ↗',
+  OPEN_TITLE: "This project's runs, kept for your team on the Reticle dashboard",
+  /** Signed out: the trial is theirs to start, so the line says so. */
+  SAVE: `Save for your team · ${String(TRIAL_DAYS)}-day trial`,
+  /** Signed in: they may be past the trial already, so it is not promised again. */
+  SAVE_LINK: 'Save runs for your team',
+  SAVE_TITLE: `Keep every run, flow and Harness result on a dashboard your team shares. On Reticle, ${TRIAL_OFFER}.`,
+} as const;
 
 export const ACCOUNT_TEXT = {
   SIGNED_OUT: 'Sign in',
@@ -63,6 +82,11 @@ export const ACCOUNT_TEXT = {
   HOST_LABEL: 'Host',
   VERDICTS_LABEL: 'Verdicts',
   DEFECTS_LABEL: 'Defects found',
+  PLAN_LABEL: 'Plan',
+  CREDITS_LABEL: 'Credits',
+  HARNESS_RUNS_LABEL: 'Harness runs',
+  MEMORY_LABEL: 'Memory',
+  ON_PLATFORM_LABEL: 'Runs on dashboard',
 } as const;
 
 /** How long the "Copied" label stays before the control says its own name again. */
@@ -74,6 +98,13 @@ export interface AccountDetails {
   dashboardUrl?: string | undefined;
   verdicts?: number | undefined;
   defects?: number | undefined;
+  /** The platform's side, as the daemon last read it; each row is left out when it sent nothing. */
+  plan?: string | undefined;
+  credits?: string | undefined;
+  harnessRuns?: string | undefined;
+  memory?: string | undefined;
+  /** How many of this project's runs the dashboard holds. */
+  onPlatform?: string | undefined;
 }
 
 /**
@@ -167,7 +198,10 @@ function accountMenuHtml(account: AccountState, details: AccountDetails): string
     `<span class="reticle-account-org">${org.length > 0 ? esc(org) : ACCOUNT_TEXT.SIGNED_IN_AS}</span>` +
     (account.email !== undefined && account.email.length > 0
       ? `<span class="reticle-account-email" title="${esc(account.email)}">${esc(account.email)}</span>`
-      : `<span class="reticle-account-email">${ACCOUNT_TEXT.SIGNED_IN_AS}</span>`) +
+      : // No email and no org: the line above already says "Signed in", and saying it twice says less.
+        org.length > 0
+        ? `<span class="reticle-account-email">${ACCOUNT_TEXT.SIGNED_IN_AS}</span>`
+        : '') +
     `</span></div>`;
 
   const rows =
@@ -180,7 +214,12 @@ function accountMenuHtml(account: AccountState, details: AccountDetails): string
     detailRow(
       ACCOUNT_TEXT.DEFECTS_LABEL,
       details.defects !== undefined ? String(details.defects) : undefined,
-    );
+    ) +
+    detailRow(ACCOUNT_TEXT.ON_PLATFORM_LABEL, details.onPlatform) +
+    detailRow(ACCOUNT_TEXT.PLAN_LABEL, details.plan) +
+    detailRow(ACCOUNT_TEXT.CREDITS_LABEL, details.credits) +
+    detailRow(ACCOUNT_TEXT.HARNESS_RUNS_LABEL, details.harnessRuns) +
+    detailRow(ACCOUNT_TEXT.MEMORY_LABEL, details.memory);
 
   const linked = details.dashboardUrl !== undefined && isSafeDashboardUrl(details.dashboardUrl);
   const dashboard = linked
@@ -197,6 +236,81 @@ function accountMenuHtml(account: AccountState, details: AccountDetails): string
     `<div class="reticle-account-actions">${dashboard}${signOut}</div>` +
     `</div>`
   );
+}
+
+const PLAN_NAME: Record<CreditKind, string> = {
+  [CreditKind.FREE]: 'Free',
+  [CreditKind.TRIAL]: 'Trial',
+  [CreditKind.PAID]: 'Pro',
+};
+const plural = (n: number, one: string, many: string): string =>
+  `${String(n)} ${1 === n ? one : many}`;
+
+/**
+ * The platform's side of the menu, from the config the daemon last read and its sync status. Each
+ * field is absent when the platform did not say it: an older platform shows no row, never a zero.
+ */
+export function platformDetails(
+  config: HarnessConfig | undefined,
+  sync: Readonly<Record<string, unknown>> | undefined,
+): Pick<AccountDetails, 'plan' | 'credits' | 'harnessRuns' | 'memory' | 'onPlatform'> {
+  const plan = config?.plan;
+  const onPlatform = sync?.['onPlatform'];
+  return {
+    ...(plan === undefined
+      ? {}
+      : {
+          plan: [
+            PLAN_NAME[plan.kind],
+            plan.daysLeft === undefined ? '' : `${plural(plan.daysLeft, 'day', 'days')} left`,
+            plan.seats === undefined ? '' : plural(plan.seats, 'seat', 'seats'),
+          ]
+            .filter((part) => part.length > 0)
+            .join(' · '),
+        }),
+    ...(config?.credits === undefined
+      ? {}
+      : {
+          credits: `${Math.max(0, config.credits.limit - config.credits.used).toLocaleString('en-US')} of ${config.credits.limit.toLocaleString('en-US')} left`,
+        }),
+    ...(config?.harnessRuns === undefined ? {} : { harnessRuns: String(config.harnessRuns) }),
+    ...(config?.memoryEntries === undefined
+      ? {}
+      : { memory: plural(config.memoryEntries, 'entry', 'entries') }),
+    ...('number' === typeof onPlatform ? { onPlatform: String(onPlatform) } : {}),
+  };
+}
+
+/**
+ * The header's one quiet way to the platform: "Open on dashboard" once this project is linked, else
+ * "Save runs for your team" with the trial. Signed out it is the Sign in door; signed in and unlinked
+ * it links this project. Nothing while the account is unknown: an older daemon is not a prospect.
+ */
+export function teamLinkHtml(
+  account: AccountState | undefined,
+  dashboardUrl: string | undefined,
+): string {
+  if (account === undefined) return '';
+  if (account.signedIn && dashboardUrl !== undefined && isSafeDashboardUrl(dashboardUrl))
+    return `<a ${TEAM_OPEN_ATTR} class="reticle-team-link" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener" title="${esc(TEAM_TEXT.OPEN_TITLE)}">${TEAM_TEXT.OPEN}</a>`;
+  const door = account.signedIn ? '' : ` ${ACCOUNT_SIGNIN_ATTR}`;
+  const label = account.signedIn ? TEAM_TEXT.SAVE_LINK : TEAM_TEXT.SAVE;
+  return `<button type="button" ${TEAM_SAVE_ATTR}${door} class="reticle-team-link" title="${esc(TEAM_TEXT.SAVE_TITLE)}"><span>${label}</span></button>`;
+}
+
+/**
+ * Paint an account control into its slot. Every snapshot push repaints it, and a replaced trigger
+ * shut the menu the person was reading: the markup is morphed in place, and an open menu stays open.
+ */
+export function paintAccountSlot(slot: HTMLElement, html: string): void {
+  const open = null !== slot.querySelector(`[${ACCOUNT_MENU_ATTR}]:not([hidden])`);
+  morphHtml(slot, html);
+  if (!open) return;
+  const menu = slot.querySelector(`[${ACCOUNT_MENU_ATTR}]`);
+  if (null === menu) return;
+  menu.removeAttribute('hidden');
+  menu.setAttribute('aria-hidden', 'false');
+  slot.querySelector(`[${ACCOUNT_TRIGGER_ATTR}]`)?.setAttribute('aria-expanded', 'true');
 }
 
 /**

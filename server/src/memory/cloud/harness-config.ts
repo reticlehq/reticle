@@ -6,7 +6,7 @@
  * dozens of times a session, the answer changes about as often as somebody opens a settings page,
  * and a panel that awaited the network on every repaint would be a panel that stutters.
  *
- * Deliberately the same shape as `harnessOfferSource` next door rather than a shared abstraction:
+ * Deliberately its own cache rather than a shared abstraction with the notices source:
  * two callers with the same caching problem is not yet a pattern, and the day one of them needs a
  * different staleness rule the shared version becomes the awkward one.
  *
@@ -34,6 +34,9 @@ export interface HarnessConfigView {
   credits?: { used: number; limit: number; kind?: CreditKind | undefined; endsAt?: number };
   /** The platform's coverage gate, when it sent one: the HUD prefers it to the local score. */
   gate?: { unlocked: boolean; percent?: number; reason?: string; prompt?: string };
+  plan?: { kind: CreditKind; daysLeft?: number; seats?: number };
+  harnessRuns?: number;
+  memoryEntries?: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1_000;

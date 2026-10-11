@@ -13,6 +13,12 @@ import {
   ACCOUNT_TRIGGER_ATTR,
   accountControlHtml,
   mountAccountControl,
+  paintAccountSlot,
+  platformDetails,
+  teamLinkHtml,
+  TEAM_OPEN_ATTR,
+  TEAM_TEXT,
+  ACCOUNT_SIGNIN_ATTR as ACCOUNT_SIGNIN_ATTR_NAME,
 } from './presenter-account.js';
 
 const DASHBOARD = 'https://app.reticle.sh/p/acme';
@@ -228,5 +234,114 @@ describe('signing in from the HUD', () => {
     expect(asked).toBe(0);
     teardown();
     root.remove();
+  });
+});
+
+describe('the platform, as the daemon last read it', () => {
+  it('says the plan, the credits, the Harness runs and the memory when the platform sent them', () => {
+    const html = accountControlHtml(SIGNED_IN, {
+      dashboardUrl: DASHBOARD,
+      plan: 'Trial · 9 days left',
+      credits: '380 of 500 trial credits',
+      harnessRuns: '12',
+      memory: '48 entries',
+    });
+    for (const text of [
+      ACCOUNT_TEXT.PLAN_LABEL,
+      'Trial · 9 days left',
+      ACCOUNT_TEXT.CREDITS_LABEL,
+      '380 of 500 trial credits',
+      ACCOUNT_TEXT.HARNESS_RUNS_LABEL,
+      ACCOUNT_TEXT.MEMORY_LABEL,
+      '48 entries',
+    ])
+      expect(html).toContain(text);
+  });
+
+  it('says nothing about them when the platform did not', () => {
+    const html = accountControlHtml(SIGNED_IN, { dashboardUrl: DASHBOARD });
+    for (const label of [
+      ACCOUNT_TEXT.PLAN_LABEL,
+      ACCOUNT_TEXT.CREDITS_LABEL,
+      ACCOUNT_TEXT.HARNESS_RUNS_LABEL,
+      ACCOUNT_TEXT.MEMORY_LABEL,
+    ])
+      expect(html).not.toContain(label);
+  });
+
+  it('does not say "Signed in" twice when there is no email', () => {
+    const html = accountControlHtml({ signedIn: true }, {});
+    expect(html.split(ACCOUNT_TEXT.SIGNED_IN_AS).length - 1).toBe(2); // trigger label + menu head
+  });
+
+  it('a repaint keeps an open menu open and the trigger the same element', () => {
+    const { root, teardown } = mounted('<div data-slot></div>');
+    const slot = root.querySelector<HTMLElement>('[data-slot]');
+    if (null === slot) throw new Error('no slot');
+    paintAccountSlot(slot, accountControlHtml(SIGNED_IN, { verdicts: 1 }));
+    const before = trigger(root);
+    before?.click();
+    expect(menu(root)?.hidden).toBe(false);
+    paintAccountSlot(slot, accountControlHtml(SIGNED_IN, { verdicts: 2 }));
+    expect(trigger(root)).toBe(before);
+    expect(menu(root)?.hidden).toBe(false);
+    expect(trigger(root)?.getAttribute('aria-expanded')).toBe('true');
+    expect(menu(root)?.textContent).toContain('2');
+    teardown();
+    root.remove();
+  });
+});
+
+describe('platformDetails', () => {
+  it('words the plan, credits, runs and memory from the snapshot', () => {
+    expect(
+      platformDetails(
+        {
+          provider: 'jev',
+          harnessEnabled: true,
+          harnessEntitled: true,
+          credits: { used: 120, limit: 500, kind: 'trial' },
+          plan: { kind: 'trial', daysLeft: 9, seats: 3 },
+          harnessRuns: 12,
+          memoryEntries: 1,
+        },
+        { onPlatform: 4 },
+      ),
+    ).toEqual({
+      plan: 'Trial · 9 days left · 3 seats',
+      credits: '380 of 500 left',
+      harnessRuns: '12',
+      memory: '1 entry',
+      onPlatform: '4',
+    });
+  });
+
+  it('is empty when the platform said nothing', () => {
+    expect(platformDetails(undefined, undefined)).toEqual({});
+  });
+});
+
+describe('the header’s way to the platform', () => {
+  it('opens the dashboard once linked', () => {
+    const html = teamLinkHtml(SIGNED_IN, DASHBOARD);
+    expect(html).toContain(TEAM_TEXT.OPEN);
+    expect(html).toContain(`href="${DASHBOARD}"`);
+    expect(html).toContain(TEAM_OPEN_ATTR);
+  });
+
+  it('offers to save runs for the team, with the real trial, before it is linked', () => {
+    const unlinked = teamLinkHtml(SIGNED_IN, undefined);
+    expect(unlinked).toContain(TEAM_TEXT.SAVE_LINK);
+    expect(unlinked).toContain('500 Harness credits');
+    expect(teamLinkHtml({ signedIn: false }, undefined)).toContain('14-day trial');
+    expect(unlinked).not.toContain(ACCOUNT_SIGNIN_ATTR_NAME);
+    // Signed out it is the Sign in door.
+    expect(teamLinkHtml({ signedIn: false }, undefined)).toContain(ACCOUNT_SIGNIN_ATTR_NAME);
+    for (const html of [unlinked, teamLinkHtml({ signedIn: false }, undefined)])
+      expect(html).not.toMatch(/3 months|three months|UNICORN/i);
+  });
+
+  it('says nothing while the account is unknown', () => {
+    expect(teamLinkHtml(undefined, DASHBOARD)).toBe('');
   });
 });

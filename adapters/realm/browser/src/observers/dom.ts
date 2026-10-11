@@ -15,7 +15,7 @@ function regionKeyOf(target: Node): string | undefined {
   const labelled = el.closest(testIdSelector());
   return (labelled ? readTestId(labelled) : null) ?? refs.refFor(el);
 }
-import { isReticleOverlay } from '@/dom/dom-ignore.js';
+import { isUnobserved } from '@/dom/dom-ignore.js';
 import type { Emit, Teardown } from './types.js';
 import { capturedRoots, installShadowRegistry, onShadowRoot } from '@/dom/shadow-registry.js';
 import { isElement } from '@/dom/realm.js';
@@ -85,7 +85,7 @@ function describeMount(node: Element): { role: string; name: string; el: Element
   for (const child of node.querySelectorAll('*')) {
     if (scanned >= MOUNT_SCAN_LIMIT) return undefined;
     scanned += 1;
-    if (isReticleOverlay(child)) continue;
+    if (isUnobserved(child)) continue;
     const childRole = getRole(child);
     const childName = getAccessibleName(child);
     if (isMeaningful(childRole, childName)) return { role: childRole, name: childName, el: child };
@@ -146,7 +146,7 @@ export function installDom(emit: Emit): Teardown {
     for (const record of records) {
       if ('attributes' === record.type) {
         const target = record.target;
-        if (isElement(target) && record.attributeName !== null && !isReticleOverlay(target)) {
+        if (isElement(target) && record.attributeName !== null && !isUnobserved(target)) {
           if (changed >= MAX_PER_BATCH) {
             dropped += 1;
             continue;
@@ -173,7 +173,7 @@ export function installDom(emit: Emit): Teardown {
         // In-place text change inside an existing subtree (wizard steps, inline edits) —
         // childList-only would miss this.
         const parent = record.target.parentElement;
-        if (parent !== null && !isReticleOverlay(parent)) {
+        if (parent !== null && !isUnobserved(parent)) {
           if (changed >= MAX_PER_BATCH) {
             dropped += 1;
             continue;
@@ -203,7 +203,7 @@ export function installDom(emit: Emit): Teardown {
       // happened" over a screen that had visibly changed, and `settled` went quiet immediately.
       if (textOf(record.addedNodes) !== undefined || textOf(record.removedNodes) !== undefined) {
         const parent = isElement(record.target) ? record.target : null;
-        if (parent !== null && !isReticleOverlay(parent)) {
+        if (parent !== null && !isUnobserved(parent)) {
           if (changed >= MAX_PER_BATCH) dropped += 1;
           else {
             changed += 1;
@@ -226,7 +226,7 @@ export function installDom(emit: Emit): Teardown {
           dropped += 1;
           continue;
         }
-        if (isReticleOverlay(node)) continue;
+        if (isUnobserved(node)) continue;
         const mounted = describeMount(node);
         if (mounted === undefined) continue;
         const { role, name } = mounted;
@@ -253,10 +253,7 @@ export function installDom(emit: Emit): Teardown {
         // of; ask the parent it was removed from, which is still in the document. Without this every
         // node Reticle's own HUD rebuilt read as the app's DOM changing - enough to hide a route that
         // rendered nothing, which then came back verified:"yes".
-        if (
-          isReticleOverlay(node) ||
-          (isElement(record.target) && isReticleOverlay(record.target))
-        ) {
+        if (isUnobserved(node) || (isElement(record.target) && isUnobserved(record.target))) {
           continue;
         }
         // Same reasoning as the mount above, in reverse: a dismissed modal leaves as ONE record

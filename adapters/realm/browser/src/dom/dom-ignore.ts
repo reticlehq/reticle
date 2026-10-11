@@ -65,6 +65,19 @@ export function isReticleOverlay(el: Element): boolean {
   return el.closest(RETICLE_OVERLAY) !== null;
 }
 
+/** The HUD's panels and controls: what the hatch exposes to the DOM observer. */
+const HUD_DOCK = '[data-reticle-dock]';
+
+/**
+ * Whether the DOM observer skips this element's changes: Reticle's own UI, except the HUD's panels
+ * while the hatch is open, so an agent verifying the HUD sees "Run Harness became Stop" like any app
+ * change. The cursor and glow stay out even then: they move on every action and prove nothing.
+ */
+export function isUnobserved(el: Element): boolean {
+  if (!isReticleOverlay(el)) return false;
+  return !presenterVisible || null === el.closest(HUD_DOCK);
+}
+
 /**
  * True iff the element is part of Reticle's OWN UI - the presenter overlay, the HUD, the synthetic
  * cursor, the glow, or the annotator's marks - or lives inside one of them.

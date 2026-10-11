@@ -161,49 +161,6 @@ export const AccountStateSchema = z.object({
 });
 export type AccountState = z.infer<typeof AccountStateSchema>;
 
-/**
- * The standing offer on the autonomous harness, as the daemon last heard it from the platform.
- *
- * `claimed` is the only field that decides whether anything is shown, and ABSENCE of this whole
- * object means "we do not know" — never "not claimed". That distinction is the difference between
- * an offer and a nag: a machine that is offline, unlinked, or paired with an older daemon has not
- * told us the person still needs this, and advertising at them anyway is how a dev-only HUD gets
- * switched off for good. The account field beside this one already carries that warning; it applies
- * here with more force, because this one is marketing.
- */
-export const HarnessOfferSchema = z.object({
-  /** True once this org has claimed. A claimed offer is shown as remaining time, never as a pitch. */
-  claimed: z.boolean(),
-  /** When the free period ends, epoch ms. Absent when nothing has been claimed. */
-  expiresAt: z.number().optional(),
-  /** Whole days left, already computed — the HUD has no clock worth trusting for this. */
-  daysRemaining: z.number().optional(),
-  /** Where claiming happens. Absent ⇒ the HUD shows nothing, because a pitch with no door is noise. */
-  claimUrl: z.string().optional(),
-  /**
-   * Whether a drive could actually run if the offer were taken.
-   *
-   * Entitlement is not readiness. A workspace can be fully entitled against a deployment that holds
-   * no key for its provider, and then every signal reads healthy while a drive cannot start —
-   * including the card, which would sell three free months of something unusable and burn the one
-   * claim the person gets. Absent means "not told", which is treated as drivable for the same
-   * reason `claimed` is required and the rest are not: silence from an older platform must not
-   * switch the feature off.
-   */
-  drivable: z.boolean().optional(),
-  /**
-   * Whether claiming would still grant anything.
-   *
-   * Carried separately because `claimed` is "running RIGHT NOW", and an expired free period reads
-   * `claimed: false` — the same as never having taken it. Without this the HUD would advertise a
-   * three-month offer to the one group of people who can never accept it again, which is worse than
-   * saying nothing at all. Absent ⇒ treated as still offerable: an older platform that does not
-   * report it also has no expiries to get wrong.
-   */
-  eligible: z.boolean().optional(),
-});
-export type HarnessOffer = z.infer<typeof HarnessOfferSchema>;
-
 /** The grant Harness credits came from: sign-up, the card-started trial, or a paid plan. */
 export const CreditKind = { FREE: 'free', TRIAL: 'trial', PAID: 'paid' } as const;
 export type CreditKind = (typeof CreditKind)[keyof typeof CreditKind];
@@ -248,6 +205,18 @@ export const HarnessConfigSchema = z.object({
       prompt: z.string().max(4000).optional(),
     })
     .optional(),
+  /** The plan in force: which grant, trial days left, seats. Absent from a platform that sent none. */
+  plan: z
+    .object({
+      kind: z.enum([CreditKind.FREE, CreditKind.TRIAL, CreditKind.PAID]),
+      daysLeft: z.number().int().min(0).optional(),
+      seats: z.number().int().min(0).optional(),
+    })
+    .optional(),
+  /** Harness runs the platform holds for this project. Absent: the platform did not say. */
+  harnessRuns: z.number().int().min(0).optional(),
+  /** Memory entries the platform holds for this project. Absent: the platform did not say. */
+  memoryEntries: z.number().int().min(0).optional(),
 });
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 
@@ -295,11 +264,6 @@ export const ImpactSnapshotSchema = z.object({
    * kind of nag that gets a dev-only HUD switched off for good.
    */
   account: AccountStateSchema.optional(),
-  /**
-   * The harness offer, when the daemon knows it. Absent is "unknown" and shows nothing — see
-   * `HarnessOfferSchema` for why that asymmetry is deliberate.
-   */
-  harnessOffer: HarnessOfferSchema.optional(),
   /**
    * The harness switch and whether this workspace may drive on our spend.
    *

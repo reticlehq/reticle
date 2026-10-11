@@ -1,5 +1,5 @@
 /**
- * The chat panel's top carousel: the harness offer and the founder invitation, one at a time.
+ * The chat panel's top carousel: its value cards and the founder invitation, one at a time.
  *
  * It lives INSIDE the log's scroll container as its first child, so it takes no height from the panel
  * and new log rows push it up and out of view. Its slides share one fixed height, so switching never

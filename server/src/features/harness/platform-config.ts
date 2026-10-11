@@ -67,6 +67,49 @@ export interface PlatformModelConfig {
   platformUrl?: string;
   /** The platform's coverage gate (`harnessUnlocked`, `coverageScore`, `harnessLock`), when it sent one. */
   gate?: PlatformGate;
+  /** The plan in force (`plan`), for the HUD's account menu. */
+  plan?: PlatformPlan;
+  /** Harness runs the platform holds for this project (`harnessRuns.total`). */
+  harnessRuns?: number;
+  /** Memory entries the platform holds for this project (`memory.entries`). */
+  memoryEntries?: number;
+}
+
+/** The plan as the HUD is pushed it: which grant, and the trial's days and seats when said. */
+export interface PlatformPlan {
+  kind: CreditKind;
+  daysLeft?: number;
+  seats?: number;
+}
+
+const count = (value: unknown): number | undefined =>
+  'number' === typeof value && Number.isInteger(value) && value >= 0 ? value : undefined;
+const field = (value: unknown, key: string): unknown =>
+  'object' === typeof value && null !== value ? (value as Record<string, unknown>)[key] : undefined;
+
+/** `plan`, `harnessRuns` and `memory` out of `/v1/model/config`; each absent when not sent. */
+function hudFieldsOf(
+  record: Record<string, unknown>,
+): Pick<PlatformModelConfig, 'plan' | 'harnessRuns' | 'memoryEntries'> {
+  const plan = record['plan'];
+  const kind = Object.values(CreditKind).find((k) => k === field(plan, 'kind'));
+  const daysLeft = count(field(plan, 'daysLeft'));
+  const seats = count(field(plan, 'seats'));
+  const runs = count(field(record['harnessRuns'], 'total'));
+  const memory = count(field(record['memory'], 'entries'));
+  return {
+    ...(kind === undefined
+      ? {}
+      : {
+          plan: {
+            kind,
+            ...(daysLeft === undefined ? {} : { daysLeft }),
+            ...(seats === undefined ? {} : { seats }),
+          },
+        }),
+    ...(runs === undefined ? {} : { harnessRuns: runs }),
+    ...(memory === undefined ? {} : { memoryEntries: memory }),
+  };
 }
 
 /** The platform's Harness coverage gate, as the HUD is pushed it. */
@@ -155,6 +198,7 @@ function parse(body: string): PlatformModelConfig | undefined {
       harnessEntitled: 'boolean' === typeof entitled ? entitled : true,
       providerReady: 'boolean' === typeof ready ? ready : true,
       ...(gate === undefined ? {} : { gate }),
+      ...hudFieldsOf(record),
       ...('number' === typeof used && 'number' === typeof limit
         ? {
             credits: {

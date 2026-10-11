@@ -77,7 +77,7 @@ export function personaLabel(pick: string): string {
  * "As [First-time visitor ▾]": the picker, labelled. Each preset's hint of what it tries is its
  * tooltip and the select's accessible description, not a line of its own: the row stays one row.
  */
-export function personaPickHtml(pick: string): string {
+export function personaPickHtml(pick: string, disabled = false): string {
   const options = [
     ...PERSONAS.map((p) => ({ id: p.id, label: p.label, hint: p.hint })),
     { id: CUSTOM_PERSONA, label: TEXT.CUSTOM, hint: TEXT.CUSTOM_HINT },
@@ -90,15 +90,15 @@ export function personaPickHtml(pick: string): string {
   const hint = esc(presetOf(pick)?.hint ?? TEXT.CUSTOM_HINT);
   return (
     `<label class="reticle-harness-as" for="${PERSONA_PICK_ID}">${TEXT.LABEL}</label>` +
-    `<select id="${PERSONA_PICK_ID}" data-reticle-harness-persona-pick class="reticle-harness-persona" title="${hint}" aria-describedby="${PERSONA_PICK_ID}-hint">${options}</select>` +
+    `<select id="${PERSONA_PICK_ID}" data-reticle-harness-persona-pick class="reticle-harness-persona" title="${hint}" aria-describedby="${PERSONA_PICK_ID}-hint"${disabled ? ' disabled' : ''}>${options}</select>` +
     `<span id="${PERSONA_PICK_ID}-hint" class="reticle-sr">${hint}</span>`
   );
 }
 
 /** The person's own words, offered only once Custom is picked. */
-export function personaCustomHtml(pick: string): string {
+export function personaCustomHtml(pick: string, disabled = false): string {
   return CUSTOM_PERSONA === pick
-    ? `<input type="text" id="${PERSONA_TEXT_ID}" data-reticle-harness-persona class="reticle-harness-persona" aria-label="${TEXT.CUSTOM_HINT}" placeholder="${TEXT.CUSTOM_PLACEHOLDER}">`
+    ? `<input type="text" id="${PERSONA_TEXT_ID}" data-reticle-harness-persona class="reticle-harness-persona" aria-label="${TEXT.CUSTOM_HINT}" placeholder="${TEXT.CUSTOM_PLACEHOLDER}"${disabled ? ' disabled' : ''}>`
     : '';
 }
 

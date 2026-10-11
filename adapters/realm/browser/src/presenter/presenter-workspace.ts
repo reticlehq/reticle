@@ -5,6 +5,9 @@ import {
   ACCOUNT_SIGNIN_ATTR,
   ACCOUNT_TEXT,
   accountControlHtml,
+  paintAccountSlot,
+  teamLinkHtml,
+  TEAM_SLOT_ATTR,
   type AccountDetails,
 } from './presenter-account.js';
 
@@ -250,7 +253,11 @@ export function paintToolbarAccount(
   dashboardUrl: string | undefined,
   details: AccountDetails = {},
 ): void {
+  const team = root.querySelector(`[${TEAM_SLOT_ATTR}]`);
+  if (team instanceof HTMLElement) paintAccountSlot(team, teamLinkHtml(account, dashboardUrl));
   const slot = root.querySelector(`[${TOOLBAR_ACCOUNT_ATTR}]`);
   if (!(slot instanceof HTMLElement)) return;
-  slot.innerHTML = accountControlHtml(account, { ...details, dashboardUrl }, true);
+  // Signed out, the team link beside it is the Sign in door: one door, not two side by side.
+  const door = !(team instanceof HTMLElement);
+  paintAccountSlot(slot, accountControlHtml(account, { ...details, dashboardUrl }, door));
 }

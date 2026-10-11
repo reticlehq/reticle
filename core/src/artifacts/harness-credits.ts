@@ -21,6 +21,11 @@ export const SIGN_UP_PITCH =
   `Sign up: ${String(FREE_CREDITS)} free credits to try Reticle Harness · ` +
   `add a card for a ${String(TRIAL_CREDITS)}-credit, ${String(TRIAL_DAYS)}-day trial`;
 
+/** The platform's offer, worded once: what a card starts, and what an account gets without one. */
+export const TRIAL_OFFER =
+  `a card starts a ${String(TRIAL_DAYS)}-day trial with ${String(TRIAL_CREDITS)} Harness credits; ` +
+  `without one, ${String(FREE_CREDITS)} sign-up credits`;
+
 export interface Credits {
   used: number;
   limit: number;

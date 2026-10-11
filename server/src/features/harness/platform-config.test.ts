@@ -202,3 +202,30 @@ describe("the platform's coverage gate", () => {
     ).toBeUndefined();
   });
 });
+
+describe('what the HUD shows of the platform', () => {
+  it('reads the plan, the Harness run count and the memory size when the platform sends them', async () => {
+    const got = await fetchPlatformConfig(
+      LINKED,
+      answering({
+        provider: 'jev',
+        plan: { kind: 'trial', daysLeft: 9, seats: null },
+        harnessRuns: { total: 12 },
+        memory: { entries: 48 },
+      }),
+    );
+    expect(got?.plan).toEqual({ kind: 'trial', daysLeft: 9 });
+    expect(got?.harnessRuns).toBe(12);
+    expect(got?.memoryEntries).toBe(48);
+  });
+
+  it('leaves each out when the platform did not send it, or sent something else', async () => {
+    const got = await fetchPlatformConfig(
+      LINKED,
+      answering({ provider: 'jev', plan: { kind: 'gold' }, harnessRuns: 'many', memory: {} }),
+    );
+    expect(got).not.toHaveProperty('plan');
+    expect(got).not.toHaveProperty('harnessRuns');
+    expect(got).not.toHaveProperty('memoryEntries');
+  });
+});

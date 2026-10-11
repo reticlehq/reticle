@@ -31,6 +31,7 @@ import { DISCOVERY_CALL_URL, FOUNDER_EMAIL, FOUNDER_MAILTO } from '@reticlehq/co
 import {
   ACCOUNT_TEXT,
   accountControlHtml,
+  paintAccountSlot,
   type AccountDetails,
 } from '@/presenter/presenter-account.js';
 
@@ -361,7 +362,7 @@ export function paintSettingsAccount(
   // `offerSignIn` is true here: somebody who opened Settings is asking exactly this question.
   const html = accountControlHtml(account, { ...details, dashboardUrl }, true);
   row.hidden = 0 === html.length;
-  slot.innerHTML = html;
+  paintAccountSlot(slot, html);
 }
 
 /** The two ways to reach the founder from Settings: both go straight to a person. */

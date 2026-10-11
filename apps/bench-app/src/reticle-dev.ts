@@ -115,6 +115,8 @@ export function installReticle(): void {
     // high-volume case, so the SDK makes it opt-in. The streams bugs are invisible without it.
     captureNetworkBodies: true,
     ...(allowNonLocalhost ? { allowNonLocalhost: true } : {}),
+    // Dogfood: the same switch the Vite plugin reads, so Reticle can see and drive its own HUD here.
+    ...('1' === import.meta.env.VITE_RETICLE_EXPOSE_PRESENTER ? { exposePresenter: true } : {}),
     ...('string' === typeof token && token.length > 0 ? { token } : {}),
   });
   // Pass the store itself (not a getter) so Reticle wires subscribe too — every mutation emits a

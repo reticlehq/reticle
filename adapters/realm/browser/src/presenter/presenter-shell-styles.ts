@@ -150,6 +150,14 @@ export const SHELL_CSS = `
    so the two never overlap. The :empty rule keeps the gap closed when no account state was sent. */
 [${CHAT_PANEL}] .reticle-head-account{margin-left:auto;display:inline-flex;align-items:center;}
 [${CHAT_PANEL}] .reticle-head-account:empty{display:none;}
+/* The quiet way to the platform: one line of small text before the avatar, cut short before it pushes. */
+[${CHAT_PANEL}] .reticle-head-team{margin-left:auto;min-width:0;display:inline-flex;}
+[${CHAT_PANEL}] .reticle-head-team:empty{display:none;}
+[${CHAT_PANEL}] .reticle-head-team:not(:empty) + .reticle-head-account{margin-left:0;}
+[${CHAT_PANEL}] .reticle-team-link{min-width:0;max-width:100%;overflow:hidden;padding:0;border:0;background:none;cursor:pointer;font:inherit;font-size:var(--reticle-hud-size-xs);font-weight:500;color:var(--reticle-hud-text-muted);text-decoration:none;white-space:nowrap;text-overflow:ellipsis;}
+[${CHAT_PANEL}] .reticle-team-link span{display:block;overflow:hidden;text-overflow:ellipsis;}
+[${CHAT_PANEL}] .reticle-team-link:hover{color:var(--reticle-hud-brand);}
+[${CHAT_PANEL}] .reticle-team-link:focus-visible{outline:2px solid var(--reticle-hud-brand);outline-offset:2px;border-radius:var(--reticle-hud-radius-sm);}
 [${CHAT_PANEL}] .reticle-chat-brand .reticle-mark{height:14px;width:auto;}
 [${CHAT_PANEL}] .reticle-chat-brandname{font-size:12.5px;font-weight:600;letter-spacing:.01em;}
 [${CHAT_PANEL}] .reticle-view-heading{display:flex;justify-content:space-between;align-items:baseline;gap:8px;min-height:28px;box-sizing:border-box;padding:6px 12px 4px;border-bottom:1px solid var(--reticle-hud-border);}

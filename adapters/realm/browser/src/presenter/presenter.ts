@@ -34,6 +34,7 @@ import {
 import { PRESENTER_CSS } from './presenter-styles.js';
 import { HudShell } from './presenter-shell.js';
 import { HARNESS_LOG_ATTR, harnessGateIn } from './presenter-harness-row.js';
+import { platformDetails } from './presenter-account.js';
 import { parseImpactSnapshot } from './chrome/presenter-report-copy.js';
 import { scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import {
@@ -282,8 +283,7 @@ export class Presenter {
         // The menu's detail rows come from the SAME snapshot as the avatar, so the two can never
         // describe different moments. Project counts, not machine-wide: the question the menu answers
         // is "what has happened HERE".
-        // The one thing this HUD advertises, from the same snapshot as everything else it shows.
-        this.#shell.paintOffer(snapshot.harnessOffer, snapshot.notices);
+        this.#shell.paintNotices(snapshot.notices);
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
         this.#shell.paintHarness(
           snapshot.harnessConfig,
@@ -300,6 +300,7 @@ export class Presenter {
           dashboardUrl: snapshot.dashboardUrl,
           verdicts: snapshot.project.counts.verdicts,
           defects: snapshot.project.counts.failed,
+          ...platformDetails(snapshot.harnessConfig, snapshot.sync),
         });
       }
       return;

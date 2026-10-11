@@ -18,7 +18,6 @@ export const ReticleStorageKey = {
   PRESENTER_SETTINGS: 'reticle-presenter-settings',
   PRESENTER_MINIMISED: 'reticle-presenter-minimised',
   CAROUSEL_DISMISSED: 'reticle.carousel.dismissed',
-  HARNESS_OFFER_DISMISSED: 'reticle.harnessOffer.dismissed',
   ANNOTATION_HISTORY: 'reticle.annotations.history.v1',
 } as const;
 

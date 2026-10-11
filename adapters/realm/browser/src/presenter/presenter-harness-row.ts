@@ -14,6 +14,7 @@ import {
   type HarnessDrive,
 } from '@reticlehq/core';
 import {
+  FREE_CREDITS,
   SIGN_UP_PITCH,
   creditsSpent,
   creditsUsageText,
@@ -26,6 +27,8 @@ import { personaPickHtml, personaCustomHtml, personaLabel } from './presenter-pe
 
 export const HARNESS_ROW_TEXT = {
   RUN: 'Run Harness',
+  /** Pressed, and the daemon has not said the drive is running yet: the same button, disabled. */
+  STARTING: 'Starting…',
   STOP: 'Stop',
   SIGNED_OUT: SIGN_UP_PITCH,
   SIGN_IN: 'Sign in',
@@ -54,6 +57,7 @@ export const HARNESS_ROW_TEXT = {
   creditsLeft: (left: number, days: number | undefined): string =>
     `${left.toLocaleString('en-US')} credit${1 === left ? '' : 's'}${days === undefined ? '' : ` · ${String(days)} day${1 === days ? '' : 's'}`}`,
   FOOT_LINK: 'Link project',
+  FOOT_SIGNED_OUT: `${String(FREE_CREDITS)} free credits · Sign in`,
   FOOT_NO_CREDITS: 'No credits',
   FOOT_NOT_ENTITLED: 'Not on your plan',
   FOOT_NO_PROVIDER: 'No model provider',
@@ -142,6 +146,8 @@ export interface HarnessRowState {
   planUrl: string;
   /** A link the person asked for is under way: the button says so instead of offering it twice. */
   linking?: boolean;
+  /** Run pressed and no drive reported yet: Run stays where it is, disabled, saying Starting…. */
+  starting?: boolean;
 }
 
 const row = (inner: string): string => `<div class="reticle-harness-row">${inner}</div>`;
@@ -149,6 +155,13 @@ const row = (inner: string): string => `<div class="reticle-harness-row">${inner
 const wrapRow = (inner: string): string =>
   `<div class="reticle-harness-row reticle-harness-row-wrap">${inner}</div>`;
 const said = (text: string): string => `<span class="reticle-harness-said">${text}</span>`;
+/**
+ * The Harness page's run row: what it runs as, then ONE button. The button is the row's last child in
+ * every state (Run, Starting…, Stop), so a repaint changes it in place instead of swapping it out.
+ */
+const runRow = (lead: string, button: string): string =>
+  row(`<span class="reticle-harness-lead">${lead}</span>${button}`);
+const STOP_BUTTON = `<button type="button" data-reticle-harness-stop class="reticle-harness-run reticle-harness-stop">${HARNESS_ROW_TEXT.STOP}</button>`;
 const link = (href: string, label: string): string =>
   `<a class="reticle-harness-link" href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 
@@ -173,6 +186,7 @@ function creditsUsedRow(credits: Credits, planUrl: string): string {
 
 /** The two or three words the foot row says for this state. */
 function footState(s: HarnessRowState): string {
+  if (true === s.starting) return HARNESS_ROW_TEXT.STARTING;
   const gate = s.gate;
   if (gate !== undefined && !gate.unlocked && gate.reason !== undefined)
     return HARNESS_ROW_TEXT.footSetup(gate.percent);
@@ -203,11 +217,16 @@ function switchable(s: HarnessRowState): boolean {
  */
 export function harnessFootHtml(s: HarnessRowState): string {
   if (s.account === undefined) return '';
-  if (!s.account.signedIn) return harnessRowHtml(s);
+  // Signed out: one line, like every other state. The whole pitch is its tooltip and the Harness
+  // page's sentence; two wrapped lines here took the space the log is for.
+  if (!s.account.signedIn)
+    return row(
+      `<button type="button" ${ACCOUNT_SIGNIN_ATTR} class="reticle-harness-open" title="${esc(HARNESS_ROW_TEXT.SIGNED_OUT)}"><span class="reticle-harness-name">${HARNESS_ROW_TEXT.NAME}</span><span class="reticle-harness-state">${HARNESS_ROW_TEXT.FOOT_SIGNED_OUT}</span><span class="reticle-harness-chev" aria-hidden="true">›</span></button>`,
+    );
   // A run in progress: its steps open the Harness page, where the run is shown; Stop stays here.
   if (s.drive !== undefined && s.canDrive)
     return row(
-      `<button type="button" ${HARNESS_OPEN_ATTR} class="reticle-harness-open"><span class="reticle-harness-name">${HARNESS_ROW_TEXT.NAME}</span><span class="reticle-harness-state">${esc(HARNESS_ROW_TEXT.driving(s.startedAs === undefined ? undefined : personaLabel(s.startedAs), s.drive.steps))}</span><span class="reticle-harness-chev" aria-hidden="true">›</span></button><button type="button" data-reticle-harness-stop class="reticle-harness-run reticle-harness-stop">${HARNESS_ROW_TEXT.STOP}</button>`,
+      `<button type="button" ${HARNESS_OPEN_ATTR} class="reticle-harness-open"><span class="reticle-harness-name">${HARNESS_ROW_TEXT.NAME}</span><span class="reticle-harness-state">${esc(HARNESS_ROW_TEXT.driving(s.startedAs === undefined ? undefined : personaLabel(s.startedAs), s.drive.steps))}</span><span class="reticle-harness-chev" aria-hidden="true">›</span></button>${STOP_BUTTON}`,
     );
   const on = true === s.config?.harnessEnabled;
   const credits = s.config?.credits;
@@ -229,8 +248,16 @@ export function harnessRowHtml(s: HarnessRowState): string {
       `${said(HARNESS_ROW_TEXT.SIGNED_OUT)}<button type="button" ${ACCOUNT_SIGNIN_ATTR} class="reticle-harness-link">${HARNESS_ROW_TEXT.SIGN_IN}</button>`,
     );
   if (s.drive !== undefined && s.canDrive)
-    return row(
-      `${said(HARNESS_ROW_TEXT.driving(s.startedAs === undefined ? undefined : personaLabel(s.startedAs), s.drive.steps))}<button type="button" data-reticle-harness-stop class="reticle-harness-run reticle-harness-stop">${HARNESS_ROW_TEXT.STOP}</button>`,
+    return (
+      runRow(
+        said(
+          HARNESS_ROW_TEXT.driving(
+            s.startedAs === undefined ? undefined : personaLabel(s.startedAs),
+            s.drive.steps,
+          ),
+        ),
+        STOP_BUTTON,
+      ) + personaCustomHtml(s.pick, true)
     );
   // The coverage gate before the platform's answers: it is this app's to fix, whatever the plan.
   const gate = s.gate;
@@ -259,10 +286,12 @@ export function harnessRowHtml(s: HarnessRowState): string {
       `${said(gate === undefined ? HARNESS_ROW_TEXT.OFF : HARNESS_ROW_TEXT.canSwitchOn(gate.percent))}<button type="button" ${HARNESS_SWITCH_ON_ATTR} class="reticle-harness-run">${HARNESS_ROW_TEXT.TURN_ON}</button>`,
     );
   if (!s.canDrive) return '';
+  const starting = true === s.starting;
   return (
-    row(
-      `${personaPickHtml(s.pick)}<button type="button" data-reticle-harness-run class="reticle-harness-run">${HARNESS_ROW_TEXT.RUN}</button>`,
-    ) + personaCustomHtml(s.pick)
+    runRow(
+      personaPickHtml(s.pick, starting),
+      `<button type="button" data-reticle-harness-run class="reticle-harness-run"${starting ? ' disabled' : ''}>${starting ? HARNESS_ROW_TEXT.STARTING : HARNESS_ROW_TEXT.RUN}</button>`,
+    ) + personaCustomHtml(s.pick, starting)
   );
 }
 
@@ -270,6 +299,7 @@ export const HARNESS_ROW_CSS = `
 [data-reticle-chat-panel] .reticle-harness-spot{flex:none;display:flex;flex-direction:column;gap:4px;}
 [data-reticle-chat-panel] .reticle-harness-spot[hidden],[data-reticle-chat-panel] .reticle-harness-spot:empty{display:none;}
 [data-reticle-chat-panel] .reticle-harness-row{display:flex;align-items:center;gap:6px;min-height:30px;min-width:0;}
+[data-reticle-chat-panel] .reticle-harness-lead{flex:1;min-width:0;display:flex;align-items:center;gap:6px;}
 [data-reticle-chat-panel] .reticle-harness-said{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--reticle-hud-size-sm);color:var(--reticle-hud-text);}
 [data-reticle-chat-panel] .reticle-harness-row-wrap{flex-wrap:wrap;row-gap:2px;padding:4px 0;}
 [data-reticle-chat-panel] .reticle-harness-row-wrap .reticle-harness-said{flex:1 1 100%;white-space:normal;}
@@ -300,7 +330,7 @@ export const HARNESS_ROW_CSS = `
 [data-reticle-chat-panel] .reticle-harness-toggle:focus-visible{outline:2px solid var(--reticle-hud-text);outline-offset:2px;}
 [data-reticle-chat-panel] .reticle-harness-open:hover{background:var(--reticle-hud-hover);}
 [data-reticle-chat-panel] .reticle-harness-open:focus-visible{outline:2px solid var(--reticle-hud-brand);outline-offset:0;}
-[data-reticle-chat-panel] .reticle-harness-run:disabled{opacity:.6;cursor:default;}
+[data-reticle-chat-panel] .reticle-harness-run:disabled,[data-reticle-chat-panel] .reticle-harness-persona:disabled{opacity:.6;cursor:default;}
 [data-reticle-chat-panel] .reticle-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
 [data-reticle-chat-panel] .reticle-foot-meta{margin:0;font-size:11px;line-height:1.3;color:var(--reticle-hud-text-muted);overflow-wrap:anywhere;}
 [data-reticle-chat-panel] .reticle-foot-meta:empty{display:none;}

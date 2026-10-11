@@ -88,7 +88,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // fixed in one of them, so the duplicate was not an option.
   // 12 with `log-memory.ts`: the Agent Log's rows kept across the reloads a replay causes, beside
   // the log they belong to.
-  'adapters/realm/browser/src/presenter/chrome': 12,
+  // 13 with `presenter-morph.ts`: repainting a HUD region without destroying its controls, shared by
+  // the Harness rows and the account control, which each blinked on every push.
+  'adapters/realm/browser/src/presenter/chrome': 13,
   /*
    * 12 because `verdict-attribution.ts` earns its own module, and the reason is measured rather than
    * tidy: folded into `verified-constants.ts` it added 687 B to what EVERY page downloads just for
@@ -323,7 +325,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 14 with `sync-screenshots.ts`: a run's step screenshots, sent once the platform holds the run.
   // Its own file because `sync-cycle.ts` is near the line cap and this is a separate conversation
   // with a separate endpoint, which the cycle only calls.
-  'server/src/memory/cloud': 14,
+  // 13 since `harness-offer.ts` left: the free-months offer ended on the platform.
+  'server/src/memory/cloud': 13,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there

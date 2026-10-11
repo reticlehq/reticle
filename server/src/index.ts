@@ -2,7 +2,7 @@ import { applyHarnessSwitch, harnessConfigsByRoot } from '@/memory/cloud/harness
 import { coveragePercents } from './features/exhaust/ledger.js';
 import { firstRunWiring } from './portal/session/first-run-wiring.js';
 import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
-import { watchAccountFiles } from './memory/impact/account-watch.js';
+import { pushIfMoved, watchAccountFiles } from './memory/impact/account-watch.js';
 import { SESSION_FILE } from './command/cli/cloud-kit.js';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -556,11 +556,11 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     sdkFix: sdkFixForProject,
     ...security,
   });
-  const repaint = (only?: string): void => {
+  const repaint = (only?: string, ifChanged = false): void => {
     for (const session of bridge.sessions.all()) {
       const root =
         session.artifactRoot ?? options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT);
-      if (only === undefined || only === root) session.pushImpact(() => impactSnapshot(root), true);
+      if ((only ?? root) === root) pushIfMoved(session, () => impactSnapshot(root), ifChanged);
     }
   };
   pushHarnessConfig = repaint;
@@ -672,8 +672,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   bridge.attachSyncRequest(() => void cloudSync.syncNow());
   if (options.hudSignIn !== undefined)
     bridge.attachSigninRequest(options.hudSignIn(() => repaint()));
-  // logout and link run in another process: repaint when their files change. See account-watch.ts.
-  const accountFiles = watchAccountFiles(() => repaint());
+  // Logout and link run in another process: repaint when their files change, the rest on a timer.
+  const accountFiles = watchAccountFiles(repaint, undefined, () => repaint(undefined, true));
   accountFiles.watch(join(homedir(), ReticleDir.ROOT, SESSION_FILE));
   bridge.attachSessionReady((s) =>
     accountFiles.watch(join(s.artifactRoot ?? reticleRoot, ReticleDir.CLOUD_LINK_FILE)),

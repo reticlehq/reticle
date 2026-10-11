@@ -37,6 +37,7 @@ import {
   type HarnessGateView,
 } from './presenter-harness-row.js';
 import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';
+import { morphHtml } from './chrome/presenter-morph.js';
 import { ReticleStorageKey } from '@/storage-keys.js';
 import {
   DEFAULT_PERSONA,
@@ -47,6 +48,7 @@ import {
   savePick,
 } from './presenter-personas.js';
 import { AGENT_LINK_CSS, AGENT_LINK_HTML, AgentLinkView } from './presenter-agent-link.js';
+import { ACCOUNT_SIGNIN_ATTR, TEAM_SAVE_ATTR, TEAM_SLOT_ATTR } from './presenter-account.js';
 
 export type ChatView = 'activity' | 'flows' | 'annotations' | 'harness';
 const PAGE_VIEWS: readonly ChatView[] = ['flows', 'annotations', 'harness'];
@@ -58,6 +60,8 @@ const HARNESS_SETUP_PATH = '/settings?group=project';
 const HARNESS_SETUP_HASH = '#model';
 /** Credits and plans live on the Plan screen, the way in for a workspace that cannot drive. */
 const HARNESS_PLAN_PATH = '/settings?group=billing';
+/** How long Run stays "Starting…" with no drive reported before it is offered again. */
+const HARNESS_STARTING_MS = 20_000;
 
 /**
  * The platform the daemon talks to: the one this config came from, else the host this machine
@@ -149,6 +153,9 @@ const markersLabel = 'Show note markers on the page';
 const clearLabel = 'Clear notes from this page';
 const copyAllLabel = 'Copy all notes';
 const NOTES_TEXT = {
+  /** Short enough to sit beside Add notes at the HUD's width; the long form is its tooltip. */
+  SUBTITLE: 'Feedback for your agent',
+  SUBTITLE_FULL: 'Pin feedback on the page for your agent',
   PAGE_EMPTY: 'No notes on this page',
   PAGE_HINT: 'Select Add notes, then click anything on the page to pin feedback for your agent.',
   HISTORY_EMPTY: 'No saved notes yet',
@@ -164,7 +171,7 @@ export const HARNESS_PAGE_HTML: string = `<section data-reticle-page-panel="harn
 </section>`;
 
 export const ANNOTATIONS_HTML = `<section data-reticle-page-panel="annotations" class="reticle-page-panel reticle-annotations-view" role="region" aria-label="Notes" hidden>
-  <div class="reticle-page-heading"><span class="reticle-page-titles"><strong>Notes</strong><span class="reticle-page-subtitle">Pin feedback on the page for your agent</span></span><button type="button" ${ANNOTATE_BTN_ATTR} class="reticle-add-notes reticle-primary-btn" title="Add notes" aria-label="Add notes" aria-pressed="false" data-active="0"><span class="reticle-add-notes-icon">${hiIconHtml(PresenterIcon.ANNOTATE, PRESENTER_ICON_SIZE.TOOLBAR)}</span><span data-reticle-notes-toggle-label>Add notes</span></button><button type="button" data-reticle-page-close aria-label="Close Notes" title="Close">×</button></div>
+  <div class="reticle-page-heading"><span class="reticle-page-titles"><strong>Notes</strong><span class="reticle-page-subtitle" title="${NOTES_TEXT.SUBTITLE_FULL}">${NOTES_TEXT.SUBTITLE}</span></span><button type="button" ${ANNOTATE_BTN_ATTR} class="reticle-add-notes reticle-primary-btn" title="Add notes" aria-label="Add notes" aria-pressed="false" data-active="0"><span class="reticle-add-notes-icon">${hiIconHtml(PresenterIcon.ANNOTATE, PRESENTER_ICON_SIZE.TOOLBAR)}</span><span data-reticle-notes-toggle-label>Add notes</span></button><button type="button" data-reticle-page-close aria-label="Close Notes" title="Close">×</button></div>
   <div class="reticle-annotations-tabs" role="group" aria-label="Notes lists">
     <span class="reticle-segmented"><button type="button" data-reticle-annotation-tab="current" aria-pressed="true">This page</button><button type="button" data-reticle-annotation-tab="history" aria-pressed="false">History</button></span>
     <div data-reticle-current-annotation-actions class="reticle-annotation-actions" aria-label="Current page note actions">
@@ -263,6 +270,8 @@ export class ChatViews {
   #agent = new AgentLinkView();
   /** The persona this panel started the running drive as, so its row can say so. */
   #startedAs: string | undefined;
+  /** Run pressed, no drive reported yet. Cleared by the drive arriving, or by the timer. */
+  #starting: ReturnType<typeof setTimeout> | undefined;
 
   constructor(onImpact: () => void, onOpenChat: (view: ChatView) => void, drive?: HudDriveHost) {
     this.#onImpact = onImpact;
@@ -308,7 +317,10 @@ export class ChatViews {
         this.#drive?.setHarness(on);
         return;
       }
-      const linkButton = target.closest<HTMLButtonElement>(`[${HARNESS_LINK_ATTR}]`);
+      // The header's "Save runs for your team", signed in: the same link as the Harness page's.
+      const linkButton = target.closest<HTMLButtonElement>(
+        `[${HARNESS_LINK_ATTR}],[${TEAM_SAVE_ATTR}]:not([${ACCOUNT_SIGNIN_ATTR}])`,
+      );
       if (null !== linkButton) {
         if (linkButton.disabled) return;
         this.#linking = true;
@@ -320,6 +332,7 @@ export class ChatViews {
       if (null !== run) {
         if (run.disabled) return;
         this.#startedAs = this.#personaPick;
+        this.#markStarting(true);
         this.#drive?.run(personaText(this.#personaPick, this.#customPersona));
         return;
       }
@@ -342,6 +355,9 @@ export class ChatViews {
       ?.addEventListener('click', onHarnessClick, { signal });
     root
       .querySelector('[data-reticle-harness-page]')
+      ?.addEventListener('click', onHarnessClick, { signal });
+    root
+      .querySelector(`[${TEAM_SLOT_ATTR}]`)
       ?.addEventListener('click', onHarnessClick, { signal });
     const spot = root.querySelector('[data-reticle-harness-page]');
     spot?.addEventListener(
@@ -416,6 +432,7 @@ export class ChatViews {
   }
 
   teardown(): void {
+    this.#markStarting(false);
     this.#listeners?.abort();
     this.#listeners = undefined;
     this.#root = undefined;
@@ -477,8 +494,23 @@ export class ChatViews {
   /** The drive running in this tab's project, from the daemon's snapshot: Stop while one runs. */
   paintDrive(drive: HarnessDrive | undefined): void {
     this.#driving = drive;
-    if (drive === undefined) this.#startedAs = undefined;
+    // The drive has landed: Starting… becomes Stop. No drive while still starting is the push that
+    // raced the daemon registering it, and must not offer Run again for a beat.
+    if (drive !== undefined) this.#markStarting(false);
+    else if (this.#starting === undefined) this.#startedAs = undefined;
     this.#paintHarness();
+  }
+
+  #markStarting(on: boolean): void {
+    if (this.#starting !== undefined) clearTimeout(this.#starting);
+    this.#starting = on
+      ? setTimeout(() => {
+          this.#starting = undefined;
+          if (this.#driving === undefined) this.#startedAs = undefined;
+          this.#paintHarness();
+        }, HARNESS_STARTING_MS)
+      : undefined;
+    if (on) this.#paintHarness();
   }
   paintHarness(config: HarnessConfig | undefined, gate?: HarnessGateView): void {
     // A config now means the project is linked: the link the person pressed has landed.
@@ -531,11 +563,13 @@ export class ChatViews {
       setupUrl: `${base}${HARNESS_SETUP_PATH}${project}${HARNESS_SETUP_HASH}`,
       planUrl: `${base}${HARNESS_PLAN_PATH}`,
       linking: this.#linking,
+      starting: this.#starting !== undefined && this.#driving === undefined,
     };
-    // Unchanged markup is not redrawn, so a repaint mid-typing never drops focus or the cursor.
+    // Unchanged markup is not redrawn, so a repaint mid-typing never drops focus or the cursor; changed
+    // markup is morphed, so a control that only changed its words stays the same element.
     const foot = harnessFootHtml(state);
     if (foot !== this.#harnessHtml) {
-      spot.innerHTML = foot;
+      morphHtml(spot, foot);
       this.#harnessHtml = foot;
     }
     // The page is for a signed-in person only: signing out while it is open goes back to the log.
@@ -544,7 +578,7 @@ export class ChatViews {
     if (page !== null) {
       const body = harnessRowHtml(state);
       if (body !== this.#harnessPageHtml) {
-        page.innerHTML = body;
+        morphHtml(page, body);
         this.#harnessPageHtml = body;
       }
       const custom = page.querySelector<HTMLInputElement>('[data-reticle-harness-persona]');
