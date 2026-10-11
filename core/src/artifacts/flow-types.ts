@@ -312,6 +312,11 @@ export interface FlowStepResult {
   /** 0-based index of this step in the flow. */
   step: number;
   /**
+   * Where the screenshot of the page at this step's outcome is, and how it was taken — or why
+   * there is none. A path to open when the look of the page matters; never the image itself.
+   */
+  screenshot?: { path: string; source: string } | { error: string };
+  /**
    * The tool the step runs — FlowStepTool.ACT | ACT_SEQUENCE | the synthetic success oracle.
    *
    * OMITTED when it is `ACT`, which 137/137 steps in this repo's corpus are. Read it as

@@ -7,6 +7,7 @@
  * that was ever authoritative.
  */
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { FlowErrorCode, SYNC_BATCH_LIMITS } from '@reticlehq/core';
 import {
   describeSync,
@@ -1367,5 +1368,34 @@ describe('a refused run is not re-offered until something could change the answe
       first.written.state ?? {},
     );
     expect(again.calls.some((c) => 'POST' === c.method)).toBe(true);
+  });
+});
+
+describe("a run's step screenshots follow it", () => {
+  const image = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+  const shot = {
+    seq: 1,
+    file: '0001-act.jpg',
+    tool: 'reticle_act',
+    source: 'rendered',
+    width: 4,
+    height: 4,
+    sha256: createHash('sha256').update(image).digest('hex'),
+  };
+  const run = { runId: 'a', payload: { runId: 'a', screenshots: [shot] } };
+
+  it('uploads them once the platform has taken the run, never before', async () => {
+    const { report, calls } = await cycle(
+      {},
+      source({ runs: () => [run], screenshot: () => image }),
+    );
+    const paths = calls.map((c) => c.url.replace('https://cloud.test', ''));
+    expect(paths.indexOf('/v1/runs/a/screenshots')).toBeGreaterThan(paths.indexOf('/v1/sync'));
+    expect(report.screenshotsSent).toBe(1);
+  });
+
+  it('keeps them local when the project turned screenshots off', async () => {
+    const { calls } = await cycle({}, source({ runs: () => [run] }));
+    expect(calls.some((c) => c.url.includes('/screenshots'))).toBe(false);
   });
 });

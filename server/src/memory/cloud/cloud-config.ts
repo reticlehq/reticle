@@ -41,8 +41,19 @@ interface SyncPolicy {
    * the bug happen again, and a defect nobody else can reproduce is a defect nobody else can fix.
    */
   capsules: boolean;
+  /**
+   * Push each run's step screenshots after the run. Follows `runs` when the link does not say:
+   * a project that keeps its runs local has not agreed to send pictures of its pages either.
+   */
+  screenshots: boolean;
 }
-const DEFAULT_SYNC_POLICY: SyncPolicy = { runs: true, memory: true, flows: true, capsules: true };
+const DEFAULT_SYNC_POLICY: SyncPolicy = {
+  runs: true,
+  memory: true,
+  flows: true,
+  capsules: true,
+  screenshots: true,
+};
 
 /** Where a verification actually executes. Reserved for the hosted-runner path; default local. */
 export const VerifyMode = { LOCAL: 'local', SERVER: 'server' } as const;
@@ -97,6 +108,7 @@ function parseLink(raw: unknown): CloudLink | null {
       memory: asBool(sync.memory, DEFAULT_SYNC_POLICY.memory),
       flows: asBool(sync.flows, DEFAULT_SYNC_POLICY.flows),
       capsules: asBool(sync.capsules, DEFAULT_SYNC_POLICY.capsules),
+      screenshots: asBool(sync.screenshots, asBool(sync.runs, DEFAULT_SYNC_POLICY.screenshots)),
     },
     verify: o.verify === VerifyMode.SERVER ? VerifyMode.SERVER : VerifyMode.LOCAL,
   };
@@ -199,6 +211,7 @@ export async function resolveProjectCloud(
     memory: link.sync.memory ?? DEFAULT_SYNC_POLICY.memory,
     flows: link.sync.flows ?? DEFAULT_SYNC_POLICY.flows,
     capsules: link.sync.capsules ?? DEFAULT_SYNC_POLICY.capsules,
+    screenshots: link.sync.screenshots ?? DEFAULT_SYNC_POLICY.screenshots,
   };
   const stored = credentialFor(
     await readJson(fs, join(homeDir, ReticleDir.ROOT, CREDENTIALS_FILE)),

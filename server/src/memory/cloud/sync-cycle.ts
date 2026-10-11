@@ -32,6 +32,7 @@
  */
 import { FlowErrorCode, ReticleDir, SYNC_BATCH_LIMITS, flowJsonReplacer } from '@reticlehq/core';
 import { hashPayload } from './sync-hash.js';
+import { syncScreenshots, type ScreenshotSyncState } from './sync-screenshots.js';
 
 /** The server's own doors. Kept beside the code that calls them, like the other cloud paths. */
 const SYNC_PATH = '/v1/sync';
@@ -76,6 +77,8 @@ export interface SyncSource {
   capsules: () => readonly unknown[];
   /** One derived record, or undefined when the file is absent. */
   derived: (kind: DerivedKind) => unknown;
+  /** One step screenshot of a run. Absent when this project keeps its screenshots local. */
+  screenshot?: (runId: string, file: string) => Uint8Array | undefined;
 }
 
 /** What the machine writes back. Separated from reads so a dry run is a source with no sink. */
@@ -100,7 +103,7 @@ export interface PulledIssues {
 }
 
 /** `.reticle/cloud-state.json`. This machine's side of the conversation, never git-checked. */
-export interface CloudSyncState {
+export interface CloudSyncState extends ScreenshotSyncState {
   /** Opaque. Handed back to the server verbatim; the machine must never parse or invent one. */
   cursor?: string;
   lastPushAt?: number;
@@ -169,6 +172,8 @@ export interface SyncReport {
   ok: boolean;
   /** Runs the server accepted this cycle. */
   runsSent: number;
+  /** Step screenshots the server took this cycle, for runs it holds. */
+  screenshotsSent?: number;
   /** Runs it refused, with the reason, so a bad artifact is visible rather than silently stuck. */
   runsRejected: Array<{ index: number; reason: string }>;
   flowsSent: number;
@@ -657,6 +662,22 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
     nextState.sentRunIds = allRuns.map((r) => r.runId).filter((id) => known.has(id));
     nextState.sentRunHashes = heldHashes(allRuns, recorded);
 
+    // 2b. The step screenshots of every run the platform now holds, once each.
+    let screenshotsSent = 0;
+    const readImage = deps.source.screenshot;
+    if (readImage !== undefined) {
+      const shots = await syncScreenshots({
+        runs: allRuns,
+        accepted: (runId) => known.has(runId),
+        readImage,
+        state: deps.state,
+        post: (path, body) => call(path, { method: 'POST', body }),
+      });
+      screenshotsSent = shots.sent;
+      Object.assign(nextState, shots.state);
+      if (shots.error !== undefined) heldBack.push(shots.error);
+    }
+
     // 3. COLLECT — always, even when there was nothing to send.
     const query =
       nextState.cursor === undefined ? '' : `?since=${encodeURIComponent(nextState.cursor)}`;
@@ -708,6 +729,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
         0 === setsNotRetried.length &&
         !heldArtifacts,
       runsSent,
+      ...(0 === screenshotsSent ? {} : { screenshotsSent }),
       runsRejected,
       flowsSent,
       capsulesSent,
@@ -777,6 +799,8 @@ export function describeSync(report: SyncReport): string {
   if (report.runsSent > 0) sent.push(`${String(report.runsSent)} run(s)`);
   if (report.flowsSent > 0) sent.push(`${String(report.flowsSent)} flow(s)`);
   if (report.capsulesSent > 0) sent.push(`${String(report.capsulesSent)} capsule(s)`);
+  if ((report.screenshotsSent ?? 0) > 0)
+    sent.push(`${String(report.screenshotsSent)} screenshot(s)`);
   if (report.derivedSent.length > 0) sent.push(report.derivedSent.join(', '));
   /*
    * "Nothing to send" is a statement about the QUEUE, and it is false the moment the queue was full

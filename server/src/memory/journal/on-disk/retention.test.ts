@@ -12,6 +12,7 @@ import {
   pruneFeedback,
   pruneSessions,
   pruneVisualDiffs,
+  DEFAULT_STEP_SHOT_RUN_RETENTION,
   selectOverBudget,
   selectPrunable,
   type TierEntry,
@@ -155,6 +156,25 @@ describe('the visual diffs nothing reads back', () => {
 
   it('never throws when there is no visual directory at all', async () => {
     await expect(pruneVisualDiffs(vfs, vroot)).resolves.toBeUndefined();
+  });
+
+  it("keeps the step screenshots of the most recent runs only, each run's whole", async () => {
+    const runs = join(visualDir(vroot), 'runs');
+    const names = Array.from(
+      { length: DEFAULT_STEP_SHOT_RUN_RETENTION + 2 },
+      (_, i) => `r${String(i)}`,
+    );
+    for (const [i, name] of names.entries()) {
+      await mkdir(join(runs, name), { recursive: true });
+      await writeFile(join(runs, name, '0001-act.jpg'), Buffer.from([1]));
+      const when = new Date(1_700_000_000_000 + i * 1000);
+      utimesSync(join(runs, name), when, when);
+    }
+    await pruneVisualDiffs(vfs, vroot);
+    const left = await readdir(runs);
+    expect(left).toHaveLength(DEFAULT_STEP_SHOT_RUN_RETENTION);
+    expect(left).not.toContain('r0');
+    expect(left).not.toContain('r1');
   });
 });
 

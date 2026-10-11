@@ -70,6 +70,10 @@ const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
     uses: 1,
     why: 'Fallback for a session whose project could not be resolved — `session.artifactRoot` wins when it exists.',
   },
+  'features/visual/step-shots.ts': {
+    uses: 1,
+    why: 'A step screenshot lands beside the run it belongs to, and session-end writes that run at `session.artifactRoot ?? deps.reticleRoot` — the same fallback, so the picture and its run never end up in two trees.',
+  },
   'memory/journal/session-end.ts': {
     uses: 5,
     why: 'The same fallback five times — ambient map, undriven-journal drop, workspace prune, run artifact, drive flows — each written as `session.artifactRoot ?? deps.reticleRoot`. The fifth is the store a drive is saved in: it went to the daemon root and replay reads the session root, so a daemon started elsewhere saved flows nothing could replay. The fourth is the drop of a journal for a session that served no tool call, and it has to resolve the same root for the same reason the prune beside it does: teardown acts on the workspace the SESSION wrote into, never the daemon cwd.',

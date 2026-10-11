@@ -672,6 +672,9 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
     // `memory` is the project's cross-run history and the derived records that summarise it.
     derived: (kind: Parameters<typeof full.derived>[0]): unknown =>
       cloud.policy.memory ? full.derived(kind) : undefined,
+    ...(cloud.policy.screenshots && full.screenshot !== undefined
+      ? { screenshot: full.screenshot }
+      : {}),
   };
 
   const once = async (): Promise<number> => {

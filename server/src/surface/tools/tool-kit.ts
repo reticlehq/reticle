@@ -6,7 +6,7 @@
  */
 import type { FirstRunWiring } from '@/portal/session/first-run-wiring.js';
 import { z } from 'zod';
-import { type ProjectId, ReticleCommand, SnapshotMode } from '@reticlehq/core';
+import { type ProjectId, ReticleCommand, ReticleTool, SnapshotMode } from '@reticlehq/core';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { RealInputProvider } from '@/portal/input/real-input.js';
 import type { BaselineStore } from '@/memory/project/baselines.js';
@@ -285,8 +285,32 @@ export const EnvelopeKey = {
   NEXT: 'next',
   /** One-shot: a Harness drive started or finished, from any origin, and how to read it. */
   HARNESS: 'harness',
+  /** Where this step's screenshot is (`{ path, source }`), or why there is none. See step-shots.ts. */
+  SCREENSHOT: 'screenshot',
 } as const;
 export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
+
+/**
+ * The tools whose every answer leaves a screenshot of the page. A sequence (`reticle_act` with
+ * `steps`) takes one per step, inside the sequence, rather than one for the whole call.
+ */
+export const STEP_SHOT_TOOLS: ReadonlySet<string> = new Set([
+  ReticleTool.ACT,
+  ReticleTool.ACT_AND_WAIT,
+  ReticleTool.NAVIGATE,
+  ReticleTool.ASSERT,
+]);
+
+/** A step-screenshot tool, with the one sentence about its screenshot on the end of its description. */
+export function withScreenshotDoc(tool: ToolDef): ToolDef {
+  return STEP_SHOT_TOOLS.has(tool.name)
+    ? { ...tool, description: `${tool.description}${SCREENSHOT_DOC}` }
+    : tool;
+}
+
+/** The one sentence every tool that takes a step screenshot says about it. */
+export const SCREENSHOT_DOC =
+  ' `screenshot.path` is a picture of the page at the outcome: open it when the look of the page matters; reading it is your choice.';
 
 /**
  * Fields that `runTool` / `withControl` splice onto EVERY session-bound tool result at runtime.

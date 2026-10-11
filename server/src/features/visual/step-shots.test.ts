@@ -1,0 +1,193 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ReticleCommand, ScreenshotSource } from '@reticlehq/core';
+import { removeTempDir } from '@/machine/temp-dir.js';
+import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
+import { withShotRun } from '@/judgement/runs/default-run-id.js';
+import type { ToolDeps } from '@/surface/tools/tool-kit.js';
+import { readStepShots, shotsLanded } from '@/judgement/runs/artifact/run-store.js';
+import { jpegSize, takeStepShot } from './step-shots.js';
+
+/**
+ * Every action leaves a picture of the page the moment its outcome was decided. The agent is handed
+ * a PATH at once — never the image, and never a wait for the disk — and the file lands right after.
+ */
+
+/** The smallest JPEG `jpegSize` can read: SOI, one SOF0 frame header, EOI. */
+function fakeJpeg(width: number, height: number, tag = 0): Uint8Array {
+  return new Uint8Array([
+    0xff,
+    0xd8,
+    0xff,
+    0xc0,
+    0x00,
+    0x11,
+    0x08,
+    height >> 8,
+    height & 0xff,
+    width >> 8,
+    width & 0xff,
+    0x03,
+    1,
+    0x22,
+    0,
+    2,
+    0x11,
+    1,
+    3,
+    0x11,
+    tag,
+    0xff,
+    0xd9,
+  ]);
+}
+
+const dirs: string[] = [];
+let tabs = 0;
+afterEach(async () => {
+  await Promise.all(dirs.splice(0).map((d) => removeTempDir(d)));
+});
+
+interface Fakes {
+  render?: () => unknown;
+  browser?: () => Uint8Array | undefined;
+}
+
+async function setup(fakes: Fakes): Promise<{ deps: ToolDeps; root: string; sessionId: string }> {
+  const root = await mkdtemp(join(tmpdir(), 'step-shots-'));
+  dirs.push(root);
+  tabs += 1;
+  const sessionId = `s${String(tabs)}`;
+  const session = {
+    id: sessionId,
+    url: 'http://localhost:5173/',
+    artifactRoot: root,
+    command: (name: string) => {
+      if (name !== ReticleCommand.RENDER) return Promise.resolve({ ok: false, error: 'no' });
+      const result = fakes.render?.();
+      return Promise.resolve(
+        result === undefined
+          ? { ok: false, error: 'page does not serve render' }
+          : { ok: true, result },
+      );
+    },
+  };
+  const deps = {
+    fs: createNodeFileSystem(),
+    reticleRoot: root,
+    sessions: { resolve: () => session },
+    ...(fakes.browser === undefined
+      ? {}
+      : {
+          realInput: {
+            isAvailableFor: () => Promise.resolve(true),
+            screenshot: () => Promise.resolve(fakes.browser?.()),
+          },
+        }),
+  } as unknown as ToolDeps;
+  return { deps, root, sessionId };
+}
+
+const rendered = (bytes: Uint8Array) => () => ({
+  ok: true,
+  width: 8,
+  height: 6,
+  chunks: [Buffer.from(bytes).toString('base64')],
+});
+
+describe('takeStepShot', () => {
+  it('names the path at once, then lands the file and its record under the drive run', async () => {
+    const image = fakeJpeg(8, 6);
+    const { deps, root, sessionId } = await setup({ render: rendered(image) });
+
+    const shot = await takeStepShot(deps, sessionId, 'reticle_act');
+
+    expect(shot).toEqual({
+      path: join(root, 'visual', 'runs', `drive-${sessionId}`, '0001-act.jpg'),
+      source: ScreenshotSource.RENDERED,
+    });
+    await shotsLanded(root, `drive-${sessionId}`);
+    expect(new Uint8Array(await readFile('path' in shot ? shot.path : ''))).toEqual(image);
+    expect(await readStepShots(deps.fs, root, `drive-${sessionId}`)).toEqual([
+      {
+        seq: 1,
+        file: '0001-act.jpg',
+        tool: 'reticle_act',
+        source: ScreenshotSource.RENDERED,
+        width: 8,
+        height: 6,
+        sha256: createHash('sha256').update(image).digest('hex'),
+      },
+    ]);
+  });
+
+  it('takes a real browser screenshot when the tab has one, and numbers each step', async () => {
+    const { deps, root, sessionId } = await setup({
+      browser: () => fakeJpeg(1280, 720),
+      render: rendered(fakeJpeg(8, 6)),
+    });
+
+    const first = await takeStepShot(deps, sessionId, 'reticle_act_and_wait');
+    const second = await takeStepShot(deps, sessionId, 'reticle_assert');
+
+    expect(first).toMatchObject({ source: ScreenshotSource.BROWSER });
+    expect('path' in second ? second.path.endsWith('0002-assert.jpg') : false).toBe(true);
+    await shotsLanded(root, `drive-${sessionId}`);
+    const shots = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    expect(shots.map((s) => [s.file, s.width, s.height])).toEqual([
+      ['0001-act_and_wait.jpg', 1280, 720],
+      ['0002-assert.jpg', 1280, 720],
+    ]);
+  });
+
+  it('falls back to drawing the page when the browser capture fails, and records which', async () => {
+    const { deps, root, sessionId } = await setup({
+      browser: () => undefined,
+      render: rendered(fakeJpeg(8, 6)),
+    });
+
+    await takeStepShot(deps, sessionId, 'reticle_act');
+    await shotsLanded(root, `drive-${sessionId}`);
+
+    const [shot] = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    expect(shot?.source).toBe(ScreenshotSource.RENDERED);
+    // The next prediction follows what actually worked.
+    expect(await takeStepShot(deps, sessionId, 'reticle_act')).toMatchObject({
+      source: ScreenshotSource.RENDERED,
+    });
+  });
+
+  it('says why when no picture could be taken, rather than leaving the field out', async () => {
+    const { deps, root, sessionId } = await setup({});
+
+    await takeStepShot(deps, sessionId, 'reticle_act');
+    await shotsLanded(root, `drive-${sessionId}`);
+
+    // Nothing worked last time, so this one waits for the capture and reports what happened.
+    const answer = await takeStepShot(deps, sessionId, 'reticle_act');
+    expect('error' in answer ? answer.error : '').toContain('render');
+    expect(await readStepShots(deps.fs, root, `drive-${sessionId}`)).toEqual([]);
+  });
+
+  it('files a replay step under the run being verified, with the step it belongs to', async () => {
+    const { deps, root, sessionId } = await setup({ render: rendered(fakeJpeg(8, 6)) });
+
+    const shot = await withShotRun('run-1', () =>
+      takeStepShot(deps, sessionId, 'reticle_replay', { step: 'checkout#2' }),
+    );
+
+    expect(shot).toMatchObject({ path: join(root, 'visual', 'runs', 'run-1', '0001-replay.jpg') });
+    await shotsLanded(root, 'run-1');
+    expect(await readStepShots(deps.fs, root, 'run-1')).toMatchObject([{ step: 'checkout#2' }]);
+  });
+});
+
+describe('jpegSize', () => {
+  it('reads the frame size, and refuses bytes that are not a JPEG', () => {
+    expect(jpegSize(fakeJpeg(1600, 900))).toEqual({ width: 1600, height: 900 });
+    expect(jpegSize(new Uint8Array([1, 2, 3]))).toBeUndefined();
+  });
+});

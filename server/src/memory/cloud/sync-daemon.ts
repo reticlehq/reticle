@@ -221,6 +221,9 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
         flows: () => (cloud.policy.flows ? full.flows() : []),
         capsules: () => (cloud.policy.capsules ? full.capsules() : []),
         derived: (kind) => (cloud.policy.memory ? full.derived(kind) : undefined),
+        ...(cloud.policy.screenshots && full.screenshot !== undefined
+          ? { screenshot: full.screenshot }
+          : {}),
       },
       sink: diskSink(root),
       state: readCloudState(root),

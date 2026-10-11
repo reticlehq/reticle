@@ -32,6 +32,7 @@ const SHIPPED: readonly string[] = [
   'presenter',
   'impact',
   'capture',
+  'render',
   'navigate',
   'refresh',
   'flows',

@@ -438,7 +438,7 @@ describe('cloud-cli verb contracts (#555)', () => {
         url: 'http://cloud.test',
         // `capsules` defaults ON — this project's cloud.json is silent about it, and a policy names
         // what it changes rather than inheriting a neighbouring opt-out.
-        sync: { runs: false, memory: true, flows: true, capsules: true },
+        sync: { runs: false, memory: true, flows: true, capsules: true, screenshots: false },
         verify: 'server',
       },
     });

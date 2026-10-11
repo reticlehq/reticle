@@ -444,6 +444,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'session',
     'tape',
     'tools',
+    // Every replayed step leaves a screenshot, taken by the same function every action uses.
+    'visual',
   ],
   // `project` for where this project's work stands with the platform, shown beside Sync now.
   impact: ['cloud', 'project', 'session'],
@@ -766,7 +768,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   update: ['machine', 'identity', 'project', 'telemetry'],
   version: ['identity', 'project', 'tools'],
-  visual: ['args', 'dir', 'fs', 'input', 'tools'],
+  // A step screenshot is filed under the run it belongs to: `runs` names that run (the verify
+  // being replayed, else the drive's own id), `hooks` says whether the Harness is the one driving,
+  // and `artifact` is where the run reads its screenshots back.
+  visual: ['args', 'artifact', 'dir', 'fs', 'hooks', 'input', 'runs', 'tools'],
 };
 
 /**

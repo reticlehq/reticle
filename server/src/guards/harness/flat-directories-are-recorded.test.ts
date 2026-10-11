@@ -55,7 +55,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: stamping.ts, which module ids get a source stamp and the per-file @reticle-ignore opt-out.
   // The grouping this directory still wants is a `stamping/` subdirectory beside svelte-source.ts.
   'adapters/build/vite/src': 14,
-  'adapters/realm/browser/src/dom': 12,
+  // 13 with `render-page.ts`, the in-page step screenshot. It has to be its own module: the command
+  // registry imports it lazily, so a page downloads the renderer only when a picture is first drawn.
+  'adapters/realm/browser/src/dom': 13,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 25,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
@@ -136,7 +138,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * 17 with `drive-script.ts`, the Harness's plan language: an artifact the daemon and the platform
    * both read, so it lives with the other formats, behind the artifacts subpath the SDK never loads.
    */
-  'core/src/artifacts': 18,
+  // 19 with `screenshot-upload.ts`, the body of the platform's screenshot endpoint. Here rather than
+  // beside the run schema because only this subpath keeps it out of every page's first load.
+  'core/src/artifacts': 19,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   'core/src': 11,
@@ -314,7 +318,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // group would be `cloud/memory/`, and a directory named `memory` beside `server/src/memory` is a
   // name collision the reach guard refuses outright; `cloud/scope/` would be a category invented
   // for one member. The file is the sibling of `cloud-sync.ts`'s path constants and belongs flat.
-  'server/src/memory/cloud': 13,
+  // 14 with `sync-screenshots.ts`: a run's step screenshots, sent once the platform holds the run.
+  // Its own file because `sync-cycle.ts` is near the line cap and this is a separate conversation
+  // with a separate endpoint, which the cycle only calls.
+  'server/src/memory/cloud': 14,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there

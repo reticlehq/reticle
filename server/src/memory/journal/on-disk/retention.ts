@@ -1,5 +1,5 @@
 import { basename, join } from 'node:path';
-import { ReticleDir } from '@reticlehq/core';
+import { ReticleDir, STEP_SCREENSHOT } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths, visualDir } from '@/memory/project/dir/reticle-dir.js';
 import { EVIDENCE_DIRS } from './workspace-tiers.js';
@@ -20,6 +20,12 @@ export const DEFAULT_DIFF_RETENTION = 10;
 export const DEFAULT_FEEDBACK_RETENTION = 20;
 /** Harness plans kept on disk: the platform keeps every one, this machine the recent ones. */
 export const DEFAULT_PLAN_RETENTION = 50;
+
+/**
+ * Keep the step screenshots of at most this many runs. A run's are looked at while it is fresh, or
+ * on the platform it was synced to; the byte budget below is what bounds a single long one.
+ */
+export const DEFAULT_STEP_SHOT_RUN_RETENTION = 50;
 
 const DIFF_SUFFIX = '.diff.png';
 const PNG_SUFFIX = '.png';
@@ -236,7 +242,14 @@ export async function pruneVisualDiffs(
   for (const dir of await visualDirs(fs, root)) {
     await pruneByRecency(fs, dir, retention, isDiff);
   }
+  // Step screenshots are evidence of one run each, read in the minutes after it or synced with it;
+  // the oldest runs' directories go whole.
+  await pruneByRecency(fs, stepShotRunsDir(root), DEFAULT_STEP_SHOT_RUN_RETENTION);
 }
+
+/** `visual/runs/`, the parent of every run's step screenshots. */
+const stepShotRunsDir = (root: string): string =>
+  join(root, ReticleDir.VISUAL_SUBDIR, STEP_SCREENSHOT.RUNS_DIR);
 
 /** `visual/` plus its per-runtime subdirectories. Empty when nothing has been captured yet. */
 async function visualDirs(fs: FileSystemPort, root: string): Promise<string[]> {
@@ -245,7 +258,9 @@ async function visualDirs(fs: FileSystemPort, root: string): Promise<string[]> {
   try {
     // A per-runtime subdirectory is anything here that is not itself a PNG.
     for (const entry of await fs.readdir(top)) {
-      if (!entry.endsWith(PNG_SUFFIX)) dirs.push(join(top, entry));
+      // `runs/` holds step screenshots, not baselines, and is bounded on its own.
+      if (!entry.endsWith(PNG_SUFFIX) && STEP_SCREENSHOT.RUNS_DIR !== entry)
+        dirs.push(join(top, entry));
     }
   } catch {
     return [];
@@ -292,6 +307,19 @@ async function collectEvidence(fs: FileSystemPort, root: string): Promise<TierEn
   for (const under of EVIDENCE_DIRS) {
     const isVisual = ReticleDir.VISUAL_SUBDIR === under;
     const dirs = isVisual ? await visualDirs(fs, root) : [join(root, under)];
+    // Each run's step screenshots are one evidence entry, evicted whole, oldest first.
+    if (isVisual) {
+      const runs = stepShotRunsDir(root);
+      for (const name of await fs.readdir(runs).catch((): string[] => [])) {
+        const path = join(runs, name);
+        try {
+          const { mtimeMs } = await fs.stat(path);
+          entries.push({ path, under, sizeBytes: await sizeOf(fs, path), mtimeMs });
+        } catch {
+          /* unreadable entry — skip */
+        }
+      }
+    }
     for (const dir of dirs) {
       let names: string[];
       try {

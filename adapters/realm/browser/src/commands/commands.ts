@@ -347,6 +347,8 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   reg.set(ReticleCommand.STORAGE_READ, (args) => readStorage(str(args['area'])));
   reg.set(ReticleCommand.CAPABILITIES, () => getCapabilities());
   reg.set(ReticleCommand.CAPTURE, (args) => captureDesktopWindow(true === args['fullPage']));
+  // Lazy: the renderer is downloaded the first time a step screenshot is drawn in-page, never on load.
+  reg.set(ReticleCommand.RENDER, () => import('../dom/render-page.js').then((m) => m.renderPage()));
   reg.set(ReticleCommand.SCROLL, (args) => {
     const dy = args['dy'];
     const fraction = args['fraction'];
