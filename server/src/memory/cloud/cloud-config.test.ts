@@ -294,6 +294,21 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
       expect(cloud.reason).toContain('RETICLE_CLOUD_URL=http://localhost:8890');
     });
 
+    // Persona drive: `RETICLE_API_KEY=<key> reticle sync` used the stored key and said nothing.
+    it('says so when an exported key is set and the stored key is used instead', async () => {
+      await writeLink({ projectId: 'shop', url: HOSTED });
+      await writeCreds({ [`${HOSTED}::shop`]: 'rk_stored' });
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_live_ci',
+      });
+      expect(cloud.config?.apiKey).toBe('rk_stored');
+      expect(cloud.note).toContain('RETICLE_API_KEY');
+      const same = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_stored',
+      });
+      expect(same.note).toBeUndefined();
+    });
+
     it('says a linked repo has no key on this machine when none is stored or exported', async () => {
       await writeLink({ projectId: 'shop', url: HOSTED });
       const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {});
@@ -326,11 +341,11 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
 
     it('prefers the stored credential over the environment key', async () => {
       await writeLink({ projectId: 'shop', url: HOSTED });
-      await writeCreds({ shop: 'rk_live_stored' });
+      await writeCreds({ shop: 'rk_stored' });
       const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
         RETICLE_API_KEY: 'rk_live_env',
       });
-      expect(cloud.config?.apiKey).toBe('rk_live_stored');
+      expect(cloud.config?.apiKey).toBe('rk_stored');
     });
 
     it('never sends the environment key to a linked host it was not given for', async () => {
@@ -360,11 +375,11 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
   describe('the environment the platform readers are handed', () => {
     it("fills in the linked repo's stored credential", async () => {
       await writeLink({ projectId: 'shop', url: 'https://cloud.test' });
-      await writeCreds({ shop: 'rk_live_stored' });
+      await writeCreds({ shop: 'rk_stored' });
       const got = await platformEnvPort(fs, reticleRoot, homeDir, { OTHER: 'kept' })();
       expect(got).toMatchObject({
         OTHER: 'kept',
-        RETICLE_API_KEY: 'rk_live_stored',
+        RETICLE_API_KEY: 'rk_stored',
         RETICLE_CLOUD_URL: 'https://cloud.test',
       });
     });

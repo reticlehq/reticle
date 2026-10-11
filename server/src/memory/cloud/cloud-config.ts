@@ -68,6 +68,8 @@ export interface ProjectCloud {
   projectId: string | null;
   /** Why `config` is null, in words a person can act on. Absent when attached. */
   reason?: string;
+  /** Attached, but not with the key the caller exported: said, never silent. */
+  note?: string;
 }
 
 interface CloudLink {
@@ -240,12 +242,18 @@ export async function resolveProjectCloud(
         : `this repo is linked to ${linkedUrl}, and this machine has no key for it: run ` +
           '`reticle connect`, or set RETICLE_API_KEY' +
           (DEFAULT_PLATFORM_URL === linkedUrl ? '' : ` with RETICLE_CLOUD_URL=${linkedUrl}`);
+  const note =
+    stored !== null && fromEnv !== null && fromEnv.apiKey !== stored
+      ? `RETICLE_API_KEY is set, but this repo uses the key \`reticle connect\` stored for it: ` +
+        'a stored key wins over the environment, so the exported key was not used'
+      : undefined;
   return {
     config,
     policy,
     verify: link.verify,
     projectId: link.projectId,
     ...(reason === undefined ? {} : { reason }),
+    ...(note === undefined ? {} : { note }),
   };
 }
 

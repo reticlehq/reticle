@@ -786,6 +786,10 @@ export function handleVerify(parsed: {
   // long after `start` has resolved, so no `.catch` on that promise can ever see it — which is why
   // this used to reach the user as a raw node stack rather than as an answer.
   void (async () => {
+    const keyNote = (
+      await resolveProjectCloud(createNodeFileSystem(), reticleRoot, homedir(), process.env)
+    ).note;
+    if (keyNote !== undefined) process.stderr.write(`${keyNote}\n`);
     const port = parsed.port ?? RETICLE_DEFAULT_PORT;
     // A lease opened for this verdict writes its runs into this folder's project, not `unmatched/`.
     const root = callerArtifactRoot(process.cwd());

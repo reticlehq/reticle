@@ -670,6 +670,7 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
     await reportUnsynced(fs);
     return 1;
   }
+  if (cloud.note !== undefined) err(cloud.note);
   const config = cloud.config;
   const full = diskSource(reticleRoot);
   const source = {
