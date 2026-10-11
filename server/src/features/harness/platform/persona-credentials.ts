@@ -24,8 +24,12 @@ export const REDACTED_SECRET = '[redacted]';
 
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 /** "password: x", "password is x", "password = x", or a quoted value right after the word. */
+/**
+ * An unquoted value stops at a closing bracket, and a sentence's full stop is not part of it:
+ * "(password: x!)" typed "x!)" and every sign-in was refused.
+ */
 const PASSWORD =
-  /\bpass(?:word|code)\b(?:\s*(?::|=|\bis\b)\s*(?:"([^"\n]+)"|“([^”\n]+)”|([^\s"“,;]+))|\s+(?:"([^"\n]+)"|“([^”\n]+)”))/i;
+  /\bpass(?:word|code)\b(?:\s*(?::|=|\bis\b)\s*(?:"([^"\n]+)"|“([^”\n]+)”|([^\s"“,;()]+?)(?=\.?(?:\s|$|[,;)])))|\s+(?:"([^"\n]+)"|“([^”\n]+)”))/i;
 
 export interface PersonaCredentials {
   /** The persona with its password redacted: what may be sent to the platform and stored. */
