@@ -13,6 +13,13 @@ const root = (files: Record<string, unknown> = {}): string => {
     writeFileSync(join(dir, name), JSON.stringify(body));
   return dir;
 };
+/** A run this session wrote, stamped at the session's own clock. */
+const wroteNow = (r: string): void => {
+  mkdirSync(join(r, 'runs'), { recursive: true });
+  const run = join(r, 'runs', `drive-${String(Math.random()).slice(2)}.json`);
+  writeFileSync(run, '{}');
+  utimesSync(run, NOW / 1000, NOW / 1000);
+};
 const verdict = (r: string, tool = 'reticle_act_and_wait') =>
   nextStep({ tool, verdict: true, root: r, now: NOW });
 
@@ -32,6 +39,7 @@ describe('what the agent is told to do next', () => {
       'request.json': { at: NOW },
       'cloud-state.json': { lastError: 'the platform answered 401' },
     });
+    wroteNow(r);
     expect(verdict(r)).toBe(NextText.SYNC_PROBLEM('the platform answered 401'));
   });
 
@@ -40,10 +48,28 @@ describe('what the agent is told to do next', () => {
     const state = { lastError: 'drive-x: flow failed validation' };
     const r = root({ 'cloud.json': { projectId: 'p' }, 'request.json': { at: NOW } });
     writeFileSync(join(r, 'cloud-state.json'), JSON.stringify(state));
+    expect(verdict(r)).toBe(NextText.FINISH_LINKED);
+    // This session's own work is now among what the platform has not got.
+    wroteNow(r);
     expect(verdict(r)).toBe(NextText.SYNC_PROBLEM(state.lastError));
     expect(verdict(r)).toBe(NextText.FINISH_LINKED);
     writeFileSync(join(r, 'cloud-state.json'), JSON.stringify({ lastError: 'answered 401' }));
     expect(verdict(r)).toBe(NextText.SYNC_PROBLEM('answered 401'));
+  });
+
+  /*
+   * A daemon serving several agents appended "Runs are not reaching the platform (… flow
+   * drive-runs-that-failed-overview …)" to every result of a session that had written no such flow.
+   * A sync problem is said to the session whose own work it holds back; a refused key holds back all.
+   */
+  it('says nothing about work this session did not write', () => {
+    const r = root({
+      'cloud.json': { projectId: 'p' },
+      'request.json': { at: NOW },
+      'cloud-state.json': { lastError: '1 rejected — flow drive-runs-that-failed-overview' },
+    });
+    expect(verdict(r)).toBe(NextText.FINISH_LINKED);
+    expect(verdict(r)).toBe(NextText.FINISH_LINKED);
   });
 
   it('says a refused key was refused, not the platform’s "valid API key required"', () => {
@@ -153,12 +179,16 @@ describe('runs written and never sent', () => {
       'request.json': { at: NOW },
       'cloud-state.json': { lastPushAt: NOW - 60 * 60 * 1000 },
     });
+    // The session starts, writes a run, and ten minutes later it has still not been sent.
+    expect(verdict(r)).toBe(NextText.FINISH_LINKED);
     mkdirSync(join(r, 'runs'));
     const run = join(r, 'runs', 'drive-1.json');
     writeFileSync(run, '{}');
-    const tenMinutesAgo = (NOW - 10 * 60 * 1000) / 1000;
-    utimesSync(run, tenMinutesAgo, tenMinutesAgo);
-    expect(verdict(r)).toBe(NextText.SYNC_PROBLEM('1 run(s) written here were never sent'));
+    utimesSync(run, NOW / 1000, NOW / 1000);
+    const later = NOW + 10 * 60 * 1000;
+    expect(nextStep({ tool: 'reticle_act_and_wait', verdict: true, root: r, now: later })).toBe(
+      NextText.SYNC_PROBLEM('1 run(s) written here were never sent'),
+    );
   });
 });
 

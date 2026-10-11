@@ -66,6 +66,8 @@ interface RootState {
   replayTold: boolean;
   /** The unmatched evidence folder already named. */
   unmatchedTold?: string;
+  /** When this agent session first called here: what it wrote since is its own work. */
+  since: number;
   /**
    * The sync problem already said. One flow the platform refused was repeated on every answer for a
    * whole session; a problem is said once, and again only when it changes.
@@ -105,19 +107,35 @@ function requestDeclared(root: string, now: number): boolean {
   return now - when < REQUEST_FRESH_MS;
 }
 
-/** Run files written after the last push and old enough that a sync cycle should have sent them. */
-function unsentRuns(root: string, lastPushAt: number, now: number): number {
+/**
+ * Run files THIS agent session wrote (at or after `since`) after the last push, and old enough that a
+ * sync cycle should have sent them. Another session's are not this one's to be told about.
+ */
+function unsentRuns(root: string, lastPushAt: number, now: number, since: number): number {
   try {
     const dir = join(root, ReticleDir.RUNS_SUBDIR);
     return readdirSync(dir).filter((name) => {
       // A drive's own record is not a run and never syncs.
       if (name.endsWith(DRIVE_RECORD_SUFFIX)) return false;
       const at = statSync(join(dir, name)).mtimeMs;
-      return at > lastPushAt + UNSENT_AFTER_MS && now - at > UNSENT_AFTER_MS;
+      return at >= since && at > lastPushAt + UNSENT_AFTER_MS && now - at > UNSENT_AFTER_MS;
     }).length;
   } catch {
     return 0;
   }
+}
+
+/** Whether this agent session wrote a run or a flow here since it began. */
+function wroteSince(root: string, since: number): boolean {
+  for (const sub of [ReticleDir.RUNS_SUBDIR, ReticleDir.FLOWS_SUBDIR]) {
+    try {
+      const dir = join(root, sub);
+      if (readdirSync(dir).some((name) => statSync(join(dir, name)).mtimeMs >= since)) return true;
+    } catch {
+      /* nothing written there */
+    }
+  }
+  return false;
 }
 
 /**
@@ -127,16 +145,20 @@ function unsentRuns(root: string, lastPushAt: number, now: number): number {
  * error and no refusal, which is how a whole day of runs stayed on one machine with every check
  * reporting fine.
  */
-function syncProblem(root: string, now: number): string | undefined {
+function syncProblem(root: string, now: number, since: number): string | undefined {
   const state = readJson(join(root, ReticleDir.CLOUD_STATE_FILE));
   const pushed = state?.['lastPushAt'];
-  const unsent = unsentRuns(root, 'number' === typeof pushed ? pushed : 0, now);
+  const unsent = unsentRuns(root, 'number' === typeof pushed ? pushed : 0, now, since);
   if (0 < unsent) return `${String(unsent)} run(s) written here were never sent`;
   if (state === undefined) return undefined;
   const error = state['lastError'];
   // A refused key read as the platform's "valid API key required" to a member removed from the
-  // workspace, whose key was set: it was refused, which is what they have to act on.
+  // workspace, whose key was set: it was refused, which is what they have to act on — and it holds
+  // back this session's work too, so it is said whoever wrote what.
   if ('string' === typeof error && REFUSED_SYNC.test(error)) return KEY_REFUSED;
+  // Anything else the project's sync reports is said to a session whose own work it holds back: a
+  // flow another session saved was named on every result of one that had written nothing.
+  if (!wroteSince(root, since)) return undefined;
   if ('string' === typeof error && 0 < error.length) return error.slice(0, 120);
   const refused = state['refusedRuns'];
   const count = 'object' === typeof refused && null !== refused ? Object.keys(refused).length : 0;
@@ -186,6 +208,7 @@ export function nextStep(input: NextStepInput): string | undefined {
     lastQuietAt: Number.NEGATIVE_INFINITY,
     declareAsks: 0,
     replayTold: false,
+    since: input.now,
   };
   roots.set(key, state);
   state.calls += 1;
@@ -208,7 +231,7 @@ export function nextStep(input: NextStepInput): string | undefined {
     const saved = savedFlows(join(root, ReticleDir.FLOWS_SUBDIR));
     if (0 < saved) return NextText.REPLAY(saved);
   }
-  const problem = sends ? syncProblem(root, input.now) : undefined;
+  const problem = sends ? syncProblem(root, input.now, state.since) : undefined;
   if (problem !== undefined && problem !== state.problemTold && (input.verdict || quietDue)) {
     state.lastQuietAt = state.calls;
     state.problemTold = problem;
