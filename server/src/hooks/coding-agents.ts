@@ -75,6 +75,16 @@ export function callingAgent(): string | undefined {
 }
 
 /**
+ * The client whose call this is, and nobody else: no fallback to the only agent attached. A run or
+ * a journaled action is credited by this — a dashboard Re-verify, which no agent made, was credited
+ * to `claude-code` because it was the client last connected.
+ */
+export function callerClientName(): string | undefined {
+  const own = calling.getStore();
+  return own === undefined ? undefined : byAttach.get(own);
+}
+
+/**
  * The raw client name behind `callingAgent()` — the id a run is credited to, the same string
  * `mcpClientIdentity()` reports, so one agent is one facet on the dashboard.
  */

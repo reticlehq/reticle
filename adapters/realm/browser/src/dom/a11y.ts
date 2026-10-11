@@ -350,11 +350,15 @@ export function getStates(el: Element, visible: boolean = isVisible(el)): Elemen
   return states;
 }
 
+/** Every payment field (`cc-*`), both password hints, and a one-time code. */
+const SENSITIVE_AUTOCOMPLETE = /\b(cc-|current-password|new-password|one-time-code)/i;
+
 /**
  * True when a form field holds a secret the SDK must never capture verbatim — a password input, a
  * sensitive `autocomplete` (cc-number, one-time-code, …), or a name/id/testid/aria-label that trips
- * `isSensitiveKey`. The single source of truth for both live-snapshot redaction (`getValue`) and the
- * flow recorder's fill-value redaction, so recorded flows never persist typed passwords/OTPs/keys.
+ * `isSensitiveKey`. The single source of truth for live-snapshot redaction (`getValue`), the flow
+ * recorder's fill-value redaction, and the field and DOM observers, so nothing the SDK records —
+ * a flow, a field change, an attribute diff in the session journal — carries a typed secret.
  */
 export function isSensitiveField(el: Element): boolean {
   if (!isInput(el) && !isTextArea(el) && !isSelect(el)) {
@@ -368,8 +372,7 @@ export function isSensitiveField(el: Element): boolean {
     el.getAttribute(DEFAULT_TESTID_ATTR) ?? '',
     el.getAttribute('aria-label') ?? '',
   ];
-  const sensitiveAutocomplete =
-    /current-password|new-password|cc-number|cc-csc|one-time-code/i.test(autocomplete);
+  const sensitiveAutocomplete = SENSITIVE_AUTOCOMPLETE.test(autocomplete);
   return (
     (isInput(el) && 'password' === el.type.toLowerCase()) ||
     sensitiveAutocomplete ||

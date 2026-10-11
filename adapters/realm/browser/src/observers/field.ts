@@ -16,8 +16,8 @@
  * says it while carrying nobody's data.
  */
 import { readTestId } from '@/dom/addressing/testid-attr.js';
-import { DEFAULT_TESTID_ATTR, EventType, isSensitiveKey } from '@reticlehq/core';
-import { getAccessibleName } from '@/dom/a11y.js';
+import { EventType } from '@reticlehq/core';
+import { getAccessibleName, isSensitiveField } from '@/dom/a11y.js';
 import type { Emit, Teardown } from './types.js';
 
 /** Long enough for a title or a sentence, short enough that a pasted document is not the ledger. */
@@ -31,9 +31,6 @@ const MAX_VALUE_LEN = 160;
  * fortieth of the cost. `change` is a commit and is never delayed.
  */
 const BURST_MS = 150;
-
-/** Fields whose CONTENT is never recorded, whatever they are named. */
-const PAYMENT_AUTOCOMPLETE = /^(cc-|current-password|new-password)/i;
 
 type Field = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
@@ -61,22 +58,6 @@ function fieldName(element: Field): string {
   return null !== id && id.length > 0 ? id : element.tagName.toLowerCase();
 }
 
-/** Is this field's CONTENT somebody's secret? Three independent reasons, any one is enough. */
-function isSecret(element: Field): boolean {
-  if (element instanceof HTMLInputElement && 'password' === element.type) return true;
-  const hint = element.getAttribute('autocomplete');
-  if (null !== hint && PAYMENT_AUTOCOMPLETE.test(hint)) return true;
-  for (const key of [
-    element.name,
-    readTestId(element),
-    element.getAttribute(DEFAULT_TESTID_ATTR),
-    element.getAttribute('id'),
-  ]) {
-    if (null !== key && key.length > 0 && isSensitiveKey(key)) return true;
-  }
-  return false;
-}
-
 /**
  * Watch every field on the page for a value that moves. Emits FIELD_CHANGE. Reversible, and a
  * teardown cancels any burst still waiting — an event emitted after `disconnect()` is the SDK
@@ -90,7 +71,7 @@ export function installField(emit: Emit): Teardown {
 
   const report = (element: Field, kind: 'input' | 'change'): void => {
     const value = element.value;
-    const secret = isSecret(element);
+    const secret = isSensitiveField(element);
     emit(EventType.FIELD_CHANGE, {
       field: fieldName(element),
       kind,

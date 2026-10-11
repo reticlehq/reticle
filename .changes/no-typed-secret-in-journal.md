@@ -1,0 +1,3 @@
+### Security
+
+- **`@reticlehq/browser` + `@reticlehq/server` — a typed password reached the local session journal in clear.** The DOM observer recorded a password input's `value` attribute change as it was, and the action journal kept a fill's arguments, so `.reticle/sessions/<session>/events.jsonl` and `actions.jsonl` held the password (both gitignored; nothing synced carried it). The DOM observer now redacts a secret field's attribute values and text by the same rule live snapshots, the field observer and the flow recorder use — one predicate for all of them, which now also covers every `cc-*` and `one-time-code` field. The action journal keeps no typed value at all: nothing reads one back from it.

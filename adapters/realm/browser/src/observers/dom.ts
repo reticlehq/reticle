@@ -1,6 +1,6 @@
 import { readTestId, testIdSelector } from '@/dom/addressing/testid-attr.js';
-import { EventType, TruncationChannel } from '@reticlehq/core';
-import { getAccessibleName, getRole, isVisible } from '@/dom/a11y.js';
+import { EventType, REDACTED_VALUE, TruncationChannel } from '@reticlehq/core';
+import { getAccessibleName, getRole, isSensitiveField, isVisible } from '@/dom/a11y.js';
 import { refs } from '@/dom/addressing/refs.js';
 
 /**
@@ -114,6 +114,22 @@ function textOf(nodes: NodeList): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+/** Attributes that say how a field LOOKS or behaves, never what was typed into it. */
+const SAFE_ON_SECRET = new Set([
+  'class',
+  'style',
+  'type',
+  'disabled',
+  'readonly',
+  'required',
+  'hidden',
+]);
+
+/** Whether this attribute of this element could carry a typed secret: any but the safe few, on a secret field. */
+function secretAttr(el: Element, attr: string): boolean {
+  return !SAFE_ON_SECRET.has(attr) && !attr.startsWith('aria-') && isSensitiveField(el);
+}
+
 export function installDom(emit: Emit): Teardown {
   // Installed here rather than in the bootstrap list because this observer is the registry's reason
   // for existing, and the ordering matters: a root attached between the two would be missed by both.
@@ -136,9 +152,11 @@ export function installDom(emit: Emit): Teardown {
             continue;
           }
           changed += 1;
-          // Old value (attributeOldValue) + capped new value — a diff, not just a reading.
-          const value = capValue(target.getAttribute(record.attributeName));
-          const old = capValue(record.oldValue);
+          // Old value (attributeOldValue) + capped new value — a diff, not just a reading. Never a
+          // secret field's: a password input's `value` attribute reached the session journal in clear.
+          const hide = secretAttr(target, record.attributeName);
+          const value = hide ? REDACTED_VALUE : capValue(target.getAttribute(record.attributeName));
+          const old = hide && null !== record.oldValue ? REDACTED_VALUE : capValue(record.oldValue);
           emit(
             EventType.DOM_ATTR,
             {
@@ -161,8 +179,12 @@ export function installDom(emit: Emit): Teardown {
             continue;
           }
           changed += 1;
-          const text = (record.target.textContent ?? '').trim().slice(0, 80);
-          const old = capValue(record.oldValue?.trim() ?? null);
+          // A secret `<textarea>`'s content is its text node: the same rule as its value.
+          const hide = isSensitiveField(parent);
+          const text = hide
+            ? REDACTED_VALUE
+            : (record.target.textContent ?? '').trim().slice(0, 80);
+          const old = hide ? undefined : capValue(record.oldValue?.trim() ?? null);
           emit(
             EventType.DOM_TEXT,
             { text, ...(old === undefined ? {} : { old }) },
@@ -187,8 +209,9 @@ export function installDom(emit: Emit): Teardown {
             changed += 1;
             // The element's text AFTER the mutation, so a cleared node reports '' rather than the
             // text that just left — the reader wants what is on screen now.
-            const text = (parent.textContent ?? '').trim().slice(0, 80);
-            const old = capValue(textOf(record.removedNodes) ?? null);
+            const hide = isSensitiveField(parent);
+            const text = hide ? REDACTED_VALUE : (parent.textContent ?? '').trim().slice(0, 80);
+            const old = hide ? undefined : capValue(textOf(record.removedNodes) ?? null);
             emit(
               EventType.DOM_TEXT,
               { text, ...(old === undefined ? {} : { old }) },

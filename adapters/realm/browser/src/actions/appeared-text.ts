@@ -1,4 +1,5 @@
 import { isIgnored } from '@/dom/dom-ignore.js';
+import { isSensitiveField } from '@/dom/a11y.js';
 
 /** Cap on the reported text. Enough for an error message, far short of a re-rendered page. */
 const APPEARED_MAX = 200;
@@ -105,6 +106,8 @@ export class AppearedText {
     // Reticle's own overlay mutates constantly (the "live" panel); reporting it as the app's
     // response would be worse than reporting nothing.
     if (null !== owner && isIgnored(owner)) return;
+    // A secret field's own text (a password `<textarea>`) is what was typed, not what the app said.
+    if (null !== owner && isSensitiveField(owner)) return;
     const text = (raw ?? '').replace(/\s+/g, ' ').trim();
     if (0 === text.length) return;
     if (!saysSomething(text)) return;
