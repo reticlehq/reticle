@@ -169,8 +169,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * `flows` for `reticle_memory { action: "push-flow" }`: it uploads the flow the SESSION's project
    * saved, so it needs the same per-session flow store every flow tool resolves through. Reading the
    * file directly would be a second, unmigrated reader of the flow format.
+   *
+   * `hooks` for the calling MCP client's name: a memory read is credited to the agent that made it,
+   * the same name `journal` and `runs` credit a drive to. Every read reached the dashboard as
+   * `reticle-mcp` before (persona drive, 2026-10-11).
    */
-  recall: ['args', 'cloud', 'flows', 'fs', 'project', 'tools'],
+  recall: ['args', 'cloud', 'flows', 'fs', 'hooks', 'project', 'tools'],
   /**
    * The filesystem, as a port.
    *

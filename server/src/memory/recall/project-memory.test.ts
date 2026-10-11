@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import { createMemoryFs } from '@/memory/project/memory-fs.js';
+import { noteAgentAttached, noteAgentDetached, runAsAgent } from '@/hooks/coding-agents.js';
 import {
   rankKnown,
   readProjectMemory,
@@ -237,5 +238,40 @@ describe('which project a shared-memory read is about', () => {
 
     expect(result.ok).toBe(false);
     expect(result.ok ? null : result.reason).toBe(MemoryUnavailable.UNREADABLE);
+  });
+});
+
+/** Persona drive: every memory read was credited to "reticle-mcp", not the agent that read. */
+describe('who a shared-memory read is credited to', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    noteAgentDetached('attach-mem');
+  });
+
+  function headersSeen(): { agent: () => string | undefined } {
+    let agent: string | undefined;
+    vi.stubGlobal('fetch', (_url: string, init: { headers: Record<string, string> }) => {
+      agent = init.headers['x-reticle-agent'];
+      return Promise.resolve({
+        status: 200,
+        json: () => Promise.resolve({ projectId: LINKED, entries: [] }),
+      });
+    });
+    return { agent: () => agent };
+  }
+
+  it('names the MCP client the call came from', async () => {
+    const seen = headersSeen();
+    noteAgentAttached('attach-mem', 'claude-code');
+    await runAsAgent('attach-mem', () =>
+      readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 }),
+    );
+    expect(seen.agent()).toBe('claude-code');
+  });
+
+  it('keeps the generic reader when no client can be named', async () => {
+    const seen = headersSeen();
+    await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
+    expect(seen.agent()).toBe('reticle-mcp');
   });
 });

@@ -12,6 +12,7 @@
  * question the fetch counters exist to answer and could not while nothing was reading.
  */
 import { cloudFetch } from '@/memory/cloud/cloud-sync.js';
+import { callingClientName } from '@/hooks/coding-agents.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import {
   isReadableMemoryScope,
@@ -21,7 +22,10 @@ import {
 } from '@/memory/cloud/memory-scope.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 
-/** Named so a read from the tool surface is distinguishable from the CLI's and from replay's. */
+/**
+ * Named so a read from the tool surface is distinguishable from the CLI's and from replay's. The
+ * reader is the MCP client that made the call when one can be named; this only when none can.
+ */
 const MCP_AGENT_ID = 'reticle-mcp';
 
 /** Why a lookup returned nothing. Each one is a different thing for the agent to do next. */
@@ -119,7 +123,7 @@ export async function readProjectMemory(
         authorization: `Bearer ${cloud.config.apiKey}`,
         // What makes this read COUNT as an agent consulting the corpus rather than a human
         // browsing — the distinction the dashboard's "times an agent consulted it" rests on.
-        'x-reticle-agent': MCP_AGENT_ID,
+        'x-reticle-agent': callingClientName() ?? MCP_AGENT_ID,
       },
     });
     if (200 !== res.status) return { ok: false, reason: MemoryUnavailable.UNREACHABLE };
