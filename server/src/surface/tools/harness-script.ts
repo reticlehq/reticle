@@ -15,9 +15,15 @@ import {
   asRecord,
   type SeedStorage,
 } from '@reticlehq/core';
-import { PromptContextSchema, checkScript, type DriveScript } from '@reticlehq/core/artifacts';
+import {
+  JourneyBy,
+  PromptContextSchema,
+  checkScript,
+  type DriveScript,
+} from '@reticlehq/core/artifacts';
 import {
   runScript,
+  type JourneyRun,
   type ScriptPorts,
   type ScriptRun,
 } from '@/features/harness/script/script-run.js';
@@ -278,6 +284,11 @@ async function runPlan(
     own,
     parallel: leasing ? Math.max(1, Math.min(script.lanes.length, pool.capacity(), MAX_LANES)) : 1,
     stopped: () => off || true === options.stopped?.(),
+    // A replay-only plan started without the model's gates; a fallback is the model, so it asks now.
+    fallbackRefused: async () => {
+      const refusal = await refusedByPlatform(env, options);
+      return refusal === undefined ? undefined : firstLine(refusal);
+    },
     ...(true === options.confirmDangerous ? { confirmDangerous: true } : {}),
     lease: async () => {
       if (!leasing) return { ...pinned(options), release: () => Promise.resolve() };
@@ -372,7 +383,7 @@ async function runPlan(
       : undefined;
   // How each journey went: kept beside the plan here, and told to the platform, whose next plan
   // drives what failed first.
-  const results = journeyResults(run.view);
+  const results = journeyResults(run.view, run.journeys);
   await savePlan(
     deps,
     options.sessionId,
@@ -386,7 +397,7 @@ async function runPlan(
       ? 'Autonomous driving switched off — the Harness stopped. What it drove is kept.'
       : cutOff !== undefined
         ? msgDriveCutOff(cutOff.error)
-        : `Harness finished the plan — ${String(run.lines.filter((l) => l.startsWith('✓')).length)} of ${String(run.lines.length)} journeys passed. ${verdictLine(checkTally(run.toolCalls))}`,
+        : `Harness finished the plan — ${String(run.lines.filter((l) => l.startsWith('✓')).length)} of ${String(run.lines.length)} journeys passed${answeredBy(run.journeys)}. ${verdictLine(checkTally(run.toolCalls))}`,
   );
 
   const sum = (pick: (r: HarnessResult) => number): number =>
@@ -470,6 +481,18 @@ async function runPlan(
       ...run.lines,
     ],
   };
+}
+
+/**
+ * How the journeys were answered: replayed with no model, or driven by it and what that cost. Only
+ * what was measured; what a replay saved is not, since its journey was not also driven to compare.
+ */
+function answeredBy(journeys: readonly JourneyRun[]): string {
+  if (0 === journeys.length) return '';
+  const driven = journeys.filter((j) => JourneyBy.MODEL === j.by);
+  const replayed = journeys.length - driven.length;
+  const tokens = driven.reduce((n, j) => n + j.tokens, 0);
+  return ` (${String(replayed)} replayed with no model, ${String(driven.length)} driven by the model${0 === driven.length ? '' : `, ${String(tokens)} tokens`})`;
 }
 
 /**

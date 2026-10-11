@@ -178,8 +178,20 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         .optional(),
       /** Said out loud when a drive recorded nothing, because that is not a verified app. */
       note: z.string().optional(),
-      /** Each journey of a platform plan and how it ended. Only `passed` is proved. */
-      journeys: z.array(z.object({ title: z.string(), status: z.string() })).optional(),
+      /**
+       * Each journey of a platform plan and how it ended. Only `passed` is proved. `by`: its saved
+       * flows replayed (no model) or the model drove it; `tokens`: what the model spent on it.
+       */
+      journeys: z
+        .array(
+          z.object({
+            title: z.string(),
+            status: z.string(),
+            by: z.string().optional(),
+            tokens: z.number().optional(),
+          }),
+        )
+        .optional(),
     },
     handler: (deps: ToolDeps, args: Record<string, unknown>, call?: ToolCall) =>
       answerExplore(deps, args, call, exploreDrive),
@@ -431,7 +443,14 @@ export function exploreReport(explored: ExploreResult): Record<string, unknown> 
     ...(drive.creditsSpent === undefined ? {} : { creditsSpent: drive.creditsSpent }),
     ...(journeys === undefined
       ? {}
-      : { journeys: journeys.map((j) => ({ title: j.title, status: j.status })) }),
+      : {
+          journeys: journeys.map((j) => ({
+            title: j.title,
+            status: j.status,
+            ...(j.by === undefined ? {} : { by: j.by }),
+            ...(j.tokens === undefined ? {} : { tokens: j.tokens }),
+          })),
+        }),
     goals: [...goals],
     // Each goal the agent also judged, compared: agent proved and Harness could not find is a
     // discoverability finding, filed on the platform as its own kind.

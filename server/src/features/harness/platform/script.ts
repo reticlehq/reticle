@@ -23,6 +23,7 @@ import {
 import {
   DriveScriptSchema,
   ScriptStepKind,
+  type JourneyBy,
   checkScript,
   type DriveScript,
 } from '@reticlehq/core/artifacts';
@@ -167,6 +168,23 @@ export interface JourneyResult {
   status: ScriptStatus;
   /** What happened, in a line: why a journey that never ran was blocked. */
   line?: string;
+  /** Replayed with no model, or driven by it. Absent for a journey that never ran. */
+  by?: JourneyBy;
+  /** Model tokens it spent; 0 for a pure replay. */
+  tokens?: number;
+  /** Credits its model drives spent, when the platform said. */
+  credits?: number;
+  /** The flows it replayed or recorded: the platform links the journey to these. */
+  flows?: string[];
+}
+
+/** How one journey that ran was answered, from the run (`JourneyRun`). */
+export interface JourneyAnswer {
+  id: string;
+  by: JourneyBy;
+  tokens: number;
+  credits?: number;
+  flows: string[];
 }
 
 /**
@@ -225,8 +243,11 @@ const SEVERITY: readonly ScriptStatus[] = [
   ScriptStatus.PASSED,
 ];
 
-/** How each journey of a run plan went, once each. */
-export function journeyResults(view: PlanView): JourneyResult[] {
+/** How each journey of a run plan went, once each, matched to how it was answered by id. */
+export function journeyResults(
+  view: PlanView,
+  answers: readonly JourneyAnswer[] = [],
+): JourneyResult[] {
   const byId = new Map<string, JourneyResult>();
   for (const lane of view.lanes)
     for (const card of lane.journeys) {
@@ -239,7 +260,18 @@ export function journeyResults(view: PlanView): JourneyResult[] {
           ...(card.why === undefined ? {} : { line: card.why }),
         });
     }
-  return [...byId.values()];
+  const answered = new Map(answers.map((a) => [a.id, a]));
+  return [...byId.values()].map((result) => {
+    const answer = answered.get(result.id);
+    if (answer === undefined) return result;
+    return {
+      ...result,
+      by: answer.by,
+      tokens: answer.tokens,
+      ...(answer.credits === undefined ? {} : { credits: answer.credits }),
+      ...(0 === answer.flows.length ? {} : { flows: [...answer.flows] }),
+    };
+  });
 }
 
 /** Tell the platform how its plan went. A failure costs the next plan its memory, never this run. */

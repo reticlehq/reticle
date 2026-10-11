@@ -25,6 +25,10 @@ export const ScriptStepKind = {
   BRANCH: 'branch',
 } as const;
 
+/** How a journey of a plan was answered: its saved flows replayed (no model), or the model drove it. */
+export const JourneyBy = { REPLAY: 'replay', MODEL: 'model' } as const;
+export type JourneyBy = (typeof JourneyBy)[keyof typeof JourneyBy];
+
 export const ScriptSource = { LOCAL: 'local', PLATFORM: 'platform' } as const;
 
 /** How the journey a condition names must have ended for the conditional one to run. */
@@ -101,6 +105,12 @@ export const JourneySchema = z.object({
     })
     .optional(),
   steps: z.array(ScriptStepSchema).min(1),
+  /**
+   * Replay first: when every replay in `steps` decides nothing (neither held nor failed), the model
+   * drives this goal instead. A replay that failed is a regression and is never re-driven. An older
+   * platform omits it.
+   */
+  fallback: z.object({ goal: z.string().min(1) }).optional(),
 });
 
 export const LaneSchema = z.object({

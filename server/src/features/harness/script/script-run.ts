@@ -19,6 +19,7 @@ import {
   type PlanView,
 } from '@reticlehq/core';
 import {
+  JourneyBy,
   JourneyOutcome,
   ScriptStepKind,
   barriersOf,
@@ -28,7 +29,7 @@ import {
   type ScriptLeafStep,
   type ScriptStep,
 } from '@reticlehq/core/artifacts';
-import { checkTally } from '../drive-report.js';
+import { ReplayOutcome, checkTally, replayedFlows } from '../drive-report.js';
 import { lookFor, parseGoals } from '../goals.js';
 import {
   DEFAULT_MAX_STEPS,
@@ -59,6 +60,23 @@ export interface ScriptPorts {
    * showing it back, as the saved plan's name on /plans, is not a journey's end reached.
    */
   own?: readonly string[];
+  /**
+   * Why the model may not drive a journey's fallback now (credits gone, Harness off), or undefined
+   * when it may. Asked only when a fallback is about to run: a plan that only replays never pays.
+   */
+  fallbackRefused?(): Promise<string | undefined>;
+}
+
+/** How one journey was answered, as the platform is told it. */
+export interface JourneyRun {
+  id: string;
+  by: JourneyBy;
+  /** Model tokens the journey spent, cache reads and writes included; 0 for a pure replay. */
+  tokens: number;
+  /** Credits its model drives spent, when the platform said. */
+  credits?: number;
+  /** The flows it replayed or recorded. */
+  flows: string[];
 }
 
 export interface ScriptRun {
@@ -70,6 +88,8 @@ export interface ScriptRun {
   stopped: boolean;
   /** One line per journey, for the drive's report. */
   lines: string[];
+  /** Each journey that ran, once, however many lanes held it. */
+  journeys: JourneyRun[];
 }
 
 /** Why a journey failed when its goal, not a check, is what was missing. */
@@ -80,6 +100,76 @@ const OPEN_GOAL_STEPS = DEFAULT_MAX_STEPS;
 
 /** Fewer model turns left than this and a continuation could not take the step it is sent for. */
 const MIN_CONTINUE_STEPS = 3;
+
+/** Why a journey whose replays decided nothing was handed to the model. */
+const FELL_BACK = 'its replays decided nothing, so the model drove its goal';
+
+/** A replay that neither held nor failed: drifted, unverifiable, or a flow not on this computer. */
+const UNDECIDED_REPLAY: ReadonlySet<string | undefined> = new Set([
+  ReplayOutcome.DRIFT,
+  ReplayOutcome.MISSING,
+  ReplayStatus.UNVERIFIABLE,
+  undefined,
+]);
+
+/** Every replay the journey made decided nothing, and it made at least one. */
+function everyReplayUndecided(calls: readonly ToolOutcome[]): boolean {
+  const replays = replayedFlows(calls);
+  return 0 < replays.length && replays.every((r) => UNDECIDED_REPLAY.has(r.status));
+}
+
+/** The flows a journey replayed or saved, each once, in the order it touched them. */
+function flowsOf(calls: readonly ToolOutcome[]): string[] {
+  const names = calls.flatMap((call) => {
+    if (ReticleTool.FLOW_REPLAY === call.name) return [asString(asRecord(call.args)['flowName'])];
+    if (ReticleTool.FLOW_SAVE !== call.name || call.isError) return [];
+    const args = asRecord(call.args);
+    return [
+      asString(asRecord(call.result)['name']) ??
+        asString(args['saveAs']) ??
+        asString(args['flowName']),
+    ];
+  });
+  return [...new Set(names.filter((n): n is string => n !== undefined))];
+}
+
+/** What a journey's own model drives cost, and what it touched. */
+function journeyRun(id: string, calls: readonly ToolOutcome[], own: HarnessResult[]): JourneyRun {
+  const credits = own.flatMap((d) => (d.creditsSpent === undefined ? [] : [d.creditsSpent]));
+  return {
+    id,
+    by: 0 < own.length ? JourneyBy.MODEL : JourneyBy.REPLAY,
+    tokens: own.reduce(
+      (n, d) => n + d.usage.input + d.usage.output + d.usage.cacheRead + d.usage.cacheWrite,
+      0,
+    ),
+    ...(0 === credits.length ? {} : { credits: credits.reduce((a, b) => a + b, 0) }),
+    flows: flowsOf([...calls, ...own.flatMap((d) => d.toolCalls)]),
+  };
+}
+
+/** Two lanes' runs of one journey, as one: the model's cost added, every flow kept. */
+function mergeRuns(a: JourneyRun, b: JourneyRun): JourneyRun {
+  const credits =
+    a.credits === undefined && b.credits === undefined
+      ? undefined
+      : (a.credits ?? 0) + (b.credits ?? 0);
+  return {
+    id: a.id,
+    by: JourneyBy.MODEL === a.by || JourneyBy.MODEL === b.by ? JourneyBy.MODEL : JourneyBy.REPLAY,
+    tokens: a.tokens + b.tokens,
+    ...(credits === undefined ? {} : { credits }),
+    flows: [...new Set([...a.flows, ...b.flows])],
+  };
+}
+
+/** How a journey was answered, as its line says it: only what was measured. */
+function byText(run: JourneyRun | undefined): string {
+  if (run === undefined) return '';
+  return JourneyBy.REPLAY === run.by
+    ? ' · replayed, no model tokens'
+    : ` · driven by the model, ${String(run.tokens)} tokens`;
+}
 
 /** Why a journey whose end the page showed before it acted is not credited with it. */
 const msgEndAlreadyShown = (end: string): string =>
@@ -141,6 +231,9 @@ export async function runScript(
   /** Journeys whose checks may have held but whose goal the drive did not reach. */
   const goalMissed = new Set<object>();
   const broken = new Map<string, string>();
+  /** Per card, for its line; per id, for the platform. */
+  const runOf = new Map<object, JourneyRun>();
+  const runs = new Map<string, JourneyRun>();
   tell();
 
   const runLane = async (lane: DriveScript['lanes'][number], laneIndex: number): Promise<void> => {
@@ -193,19 +286,40 @@ export async function runScript(
         else if (start !== undefined && !continuesLane(journey, driven))
           await call(raw, ReticleTool.NAVIGATE, { url: start });
         driven.add(id);
-        const tools = recording(raw, toolCalls);
+        // This journey's calls alone too: lanes share `toolCalls`, and its replays decide its fallback.
+        const mine: ToolOutcome[] = [];
+        const tools = recording(recording(raw, toolCalls), mine);
         card.status = ScriptStatus.RUNNING;
         tell();
         // This journey's own drives: lanes run side by side, so a slice of the shared list after the
         // await could hold another lane's missed goal and blame it on this journey.
         const own: HarnessResult[] = [];
-        const ran = await runJourney(journey, card.steps, tools, ports, own, tell, () => {
+        const stop = (): void => {
           stopped = true;
-        });
+        };
+        let ran = await runJourney(journey, card.steps, tools, ports, own, tell, stop);
+        // Replay first: replays that decided nothing hand the journey's goal to the model. One that
+        // failed is a regression, and a regression is reported, never re-driven into a pass.
+        let refused: string | undefined;
+        if (
+          !ran.ok &&
+          ran.notTaken === undefined &&
+          journey.fallback !== undefined &&
+          !ports.stopped() &&
+          everyReplayUndecided(mine)
+        ) {
+          refused = await ports.fallbackRefused?.();
+          if (refused === undefined) {
+            if (start !== undefined) await call(raw, ReticleTool.NAVIGATE, { url: start });
+            ran = await runFallback(journey.fallback.goal, tools, ports, own, stop);
+          }
+        }
         const ok = ran.ok;
         // A drive the platform cut off (credits gone, a refusal, a 5xx) judged nothing: blocked, and
         // its reason said, never "failed" over an app nobody finished driving.
-        const cut = own.find((d) => StopReason.BROKEN === d.stopReason);
+        const cutDrive = own.find((d) => StopReason.BROKEN === d.stopReason);
+        const cut =
+          refused === undefined ? cutDrive : { error: refused, stopReason: StopReason.BROKEN };
         if (cut !== undefined) broken.set(lane.id, cut.error ?? StopReason.BROKEN);
         card.status = ok
           ? ScriptStatus.PASSED
@@ -217,6 +331,10 @@ export async function runScript(
         if (ran.notTaken !== undefined) card.why = ran.notTaken;
         if (ran.why !== undefined) card.why = ran.why;
         drives.push(...own);
+        const thisRun = journeyRun(id, mine, own);
+        runOf.set(card, thisRun);
+        const before = runs.get(id);
+        runs.set(id, before === undefined ? thisRun : mergeRuns(before, thisRun));
         if (!ok && own.some((d) => false === d.goalMet)) goalMissed.add(card);
         // A conditional journey that failed leaves the lane as it found it: it was a side road.
         if (when === undefined) blocked = !ok;
@@ -256,10 +374,17 @@ export async function runScript(
           : goalMissed.has(card)
             ? GOAL_NOT_REACHED
             : card.why;
-      return `${mark(card.status)} ${lane.id} · ${card.title} — ${card.status}${why === undefined ? '' : ` (${why.slice(0, 160)})`}`;
+      return `${mark(card.status)} ${lane.id} · ${card.title} — ${card.status}${why === undefined ? '' : ` (${why.slice(0, 160)})`}${byText(runOf.get(card))}`;
     }),
   );
-  return { view, toolCalls, drives, stopped: stopped || ports.stopped(), lines };
+  return {
+    view,
+    toolCalls,
+    drives,
+    stopped: stopped || ports.stopped(),
+    lines,
+    journeys: [...runs.values()],
+  };
 }
 
 type StepCard = PlanView['lanes'][number]['journeys'][number]['steps'][number];
@@ -319,6 +444,23 @@ async function runJourney(
     }
   }
   return { ok: true };
+}
+
+/** The journey's goal, driven by the model in place of replays that decided nothing. */
+async function runFallback(
+  goal: string,
+  tools: HarnessToolset,
+  ports: ScriptPorts,
+  drives: HarnessResult[],
+  stop: () => void,
+): Promise<{ ok: boolean; why?: string }> {
+  try {
+    const ok = await runLeaf({ kind: ScriptStepKind.ACT, goal }, tools, ports, drives, stop);
+    return ok ? { ok } : { ok, why: FELL_BACK };
+  } catch (error) {
+    if (error instanceof EndAlreadyShown) return { ok: false, why: error.message };
+    throw error;
+  }
 }
 
 /** The guard stopped a destructive step nobody acknowledged: the step was not taken, not failed. */

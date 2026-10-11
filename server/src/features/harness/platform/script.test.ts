@@ -16,7 +16,7 @@ import {
   reportPlanResults,
 } from './script.js';
 import { ScriptStatus } from '@reticlehq/core';
-import { DriveScriptSchema } from '@reticlehq/core/artifacts';
+import { DriveScriptSchema, JourneyBy } from '@reticlehq/core/artifacts';
 
 const flow = {
   version: FLOW_FILE_VERSION,
@@ -152,6 +152,47 @@ describe('how a plan went', () => {
       { id: 'signin', title: 'signin', status: ScriptStatus.FAILED },
       { id: 'refund', title: 'refund', status: ScriptStatus.FAILED },
       { id: 'settings', title: 'settings', status: ScriptStatus.BLOCKED },
+    ]);
+  });
+
+  it('carries how each journey was answered, and matches journeys by id, never by title', () => {
+    const same = (id: string, status: ScriptStatus) => ({
+      ...card(id, status),
+      title: 'Ana: pays',
+    });
+    const results = journeyResults(
+      {
+        parallel: 1,
+        lanes: [
+          {
+            id: 'A',
+            journeys: [same('j1', ScriptStatus.PASSED), same('j2', ScriptStatus.FAILED)],
+          },
+        ],
+      },
+      [
+        { id: 'j1', by: JourneyBy.REPLAY, tokens: 0, flows: ['pay'] },
+        { id: 'j2', by: JourneyBy.MODEL, tokens: 900, credits: 2, flows: ['pay', 'ana-pays'] },
+      ],
+    );
+    expect(results).toEqual([
+      {
+        id: 'j1',
+        title: 'Ana: pays',
+        status: ScriptStatus.PASSED,
+        by: JourneyBy.REPLAY,
+        tokens: 0,
+        flows: ['pay'],
+      },
+      {
+        id: 'j2',
+        title: 'Ana: pays',
+        status: ScriptStatus.FAILED,
+        by: JourneyBy.MODEL,
+        tokens: 900,
+        credits: 2,
+        flows: ['pay', 'ana-pays'],
+      },
     ]);
   });
 
