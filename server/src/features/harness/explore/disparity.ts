@@ -11,6 +11,7 @@ import {
   JournalVerdictEffectSchema,
   MAX_DISPARITY_SEARCHED,
   Verified,
+  VerifiedReason,
   type JournalAction,
   type RunDisparity,
 } from '@reticlehq/core';
@@ -43,7 +44,9 @@ export function disparityFor(
   const wanted = comparable(check.text);
   const said = agent.filter((v) => comparable(v.claim).includes(wanted)).at(-1);
   if (said === undefined) return undefined;
-  const harnessYes = Verified.YES === check.verified;
+  // On the page before the drive began: plainly findable, never "hard to find" (persona 22).
+  const alreadyShown = true === check.reason?.startsWith(VerifiedReason.ALREADY_TRUE);
+  const harnessYes = Verified.YES === check.verified || alreadyShown;
   const agentYes = Verified.YES === said.verified;
   const kind = agentYes
     ? harnessYes
@@ -59,7 +62,7 @@ export function disparityFor(
     agent: said,
     harness: {
       verified: asVerified(check.verified),
-      found: search?.found ?? harnessYes,
+      found: alreadyShown || (search?.found ?? harnessYes),
       searched,
       ...(search?.gaveUpAt === undefined ? {} : { gaveUpAt: search.gaveUpAt }),
     },

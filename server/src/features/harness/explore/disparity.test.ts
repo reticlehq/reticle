@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DisparityKind, Verified, type JournalAction } from '@reticlehq/core';
+import { DisparityKind, Verified, VerifiedReason, type JournalAction } from '@reticlehq/core';
 import { agentVerdictsIn, disparityFor } from './disparity.js';
 
 const action = (claim: string, verified: string, harness?: string): JournalAction => ({
@@ -78,5 +78,21 @@ describe('a claim in its own words', () => {
       undefined,
     );
     expect(d?.kind).toBe(DisparityKind.DISCOVERABILITY);
+  });
+});
+
+/* Persona 22: the goal was on screen from the first frame, and the comparison called it hard to find. */
+describe('a goal on the page before the drive began', () => {
+  it('is findable, never a discoverability finding', () => {
+    const d = disparityFor(
+      {
+        text: 'Order confirmed',
+        verified: Verified.UNKNOWN,
+        reason: `${VerifiedReason.ALREADY_TRUE}: it was on the page before the drive started`,
+      },
+      [{ claim: "text containing 'Order confirmed'", verified: Verified.YES }],
+      undefined,
+    );
+    expect(d).toMatchObject({ kind: DisparityKind.FINDABLE, harness: { found: true } });
   });
 });

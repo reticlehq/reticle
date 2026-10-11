@@ -217,13 +217,21 @@ describe('the goal verdict a drive reports', () => {
 
   it('is never met without an action that ran, whatever the driver said', () => {
     expect(goalOfDrive(true, [], false)).toBe(false);
-    expect(goalOfDrive(true, [yes], false)).toBe(false);
   });
 
   it('is decided by the goals, not the driver, when there are goals', () => {
     expect(goalOfDrive(true, [already], true)).toBe(false);
     expect(goalOfDrive(undefined, [yes], true)).toBe(true);
-    expect(goalOfDrive(false, [yes], true)).toBe(false);
+  });
+
+  /*
+   * Persona 22: the plan rewrote the end text, so the driver's own end check failed and it said it
+   * missed; the Harness then found the persona's own words and proved them `yes`. A goal the run
+   * proved is met, whatever the driver said and whether the drive or the hunt reached it.
+   */
+  it('is met when the run proved every goal, whatever the driver said', () => {
+    expect(goalOfDrive(false, [yes], true)).toBe(true);
+    expect(goalOfDrive(true, [yes], false)).toBe(true);
   });
 
   it("keeps the driver's word with no goals, and says nothing when nothing judged it", () => {
