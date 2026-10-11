@@ -34,12 +34,7 @@ import type { SuiteVerdict } from '@reticlehq/core';
 import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
-import {
-  rootForTarget,
-  safeSessionTarget,
-  sessionTarget,
-  type ProjectTarget,
-} from '@/memory/project/session-root.js';
+import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import { originOf } from '@/portal/session/session-manager.js';
 import { resolveSuiteSelection } from './suite-selection.js';
 import { flowErrorMessage, latestRecordedFlow, sessionProjectId } from './flow-replay-run.js';
@@ -50,9 +45,10 @@ import {
 import { runServerVerify } from './suite/server-verify.js';
 import { healFlow } from './heal-run.js';
 import { RESULT_FIELD, resultField, suiteResult } from '@/surface/tools/reticle-result.js';
+import { replayOneFlow } from './single-replay.js';
 
 export { replayNamedFlow } from './flow-replay-run.js';
-import { replayAndLearn, replaySeededOrNot } from './flow-learning.js';
+import { replayAndLearn } from './flow-learning.js';
 
 /**
  * Best-effort mirror of a just-saved flow to Reticle (only when logged in — both cloud env vars
@@ -489,6 +485,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .array(z.unknown())
         .optional()
         .describe('Present when `seed` was given: which endpoints were delayed, and by how long.'),
+      [RESULT_FIELD]: z.string().optional(),
       // The flow's name — always present in FlowReplayResult (the description promises `{ name, … }`),
       // but omitted here, so a validating profile stripped it and a replay result arrived anonymous.
       name: z.string(),
@@ -559,24 +556,8 @@ export const FLOW_TOOLS: ToolDef[] = [
     },
     // The decision envelope is attached by replayNamedFlow only on drift/fail (clean pass stays
     // token-flat). Single-flow replay and whole-suite verify share that one implementation.
-    // The run id is minted first, so each replayed step's screenshot is filed under the run.
     handler: (deps: ToolDeps, args): Promise<FlowReplayResult> =>
-      withShotRun(defaultRunId(), async (): Promise<FlowReplayResult> => {
-        const start = deps.now();
-        const replay = await replaySeededOrNot(
-          deps,
-          args,
-          leasableAppUrl(deps, asString(args['sessionId'])),
-        );
-        // Written down as a run, and named in the answer: the platform's Re-verify ties its check to
-        // it, and a check with no run could never resolve the issue it was for.
-        const runId = await persistAndSyncVerificationRun(
-          deps,
-          [{ replay, durationMs: deps.now() - start }],
-          safeSessionTarget(deps, asString(args['sessionId'])),
-        );
-        return runId === undefined ? replay : { ...replay, runId };
-      }),
+      replayOneFlow(deps, args, leasableAppUrl(deps, asString(args['sessionId']))),
   },
   {
     name: ReticleTool.FLOW_VERIFY,

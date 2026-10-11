@@ -14,7 +14,9 @@ import {
   ResultWord,
   buildReticleResult,
   changeResult,
+  exploreResult,
   platformLine,
+  replayResult,
   retitleResult,
   sessionResult,
 } from './reticle-result.js';
@@ -188,5 +190,63 @@ describe('the block on the answers an agent ends with', () => {
     const block = String(out[RESULT_FIELD]);
     expect(block.split('\n')[0]).toContain(ResultWord.NOT_PROVED);
     expect(block).toContain(CONNECT);
+  });
+});
+
+describe('the block on a single replay and on a Harness drive', () => {
+  const unlinked = (): string => mkdtempSync(join(tmpdir(), 'reticle-result-'));
+  const replay = (status: string, extra: Record<string, unknown> = {}) =>
+    ({
+      name: 'checkout',
+      status,
+      steps: [{ step: 0, anchor: 'pay', ok: true, screenshot: { path: '/shots/0.jpg' } }],
+      ...extra,
+    }) as unknown as Parameters<typeof replayResult>[1];
+
+  it('a replay that held is one proved check, one flow replayed, its time and screenshot', () => {
+    const block = replayResult(unlinked(), replay('ok'), 1500, 'run-1');
+    expect(block.split('\n')[0]).toContain(ResultWord.PROVED);
+    expect(block).toContain('- Covered: checkout');
+    expect(block).toContain('- Metrics: 1 check · 1 flow replayed · 1.5s');
+    expect(block).toContain('- Evidence: /shots/0.jpg');
+  });
+
+  it('a drifted replay is failed and names the flow; an unverifiable one is not proved', () => {
+    expect(replayResult(unlinked(), replay('drift'), 10, undefined)).toContain(
+      '- Did not hold: checkout',
+    );
+    const ok = replayResult(
+      unlinked(),
+      replay('ok', { unverifiable: { reason: 'r' } }),
+      10,
+      undefined,
+    );
+    expect(ok.split('\n')[0]).toContain(ResultWord.NOT_PROVED);
+  });
+
+  it('a Harness drive counts its checks and goals, and how many journeys were replayed or driven', () => {
+    const block = exploreResult(unlinked(), {
+      checks: { held: 2, failed: 0, undecided: 0 },
+      goals: [{ verified: Verified.YES }],
+      journeys: [
+        { title: 'Ana: pays', status: 'passed', by: 'replay' },
+        { title: 'Ben: refunds', status: 'passed', by: 'model' },
+      ],
+    });
+    expect(block.split('\n')[0]).toBe(
+      `**Reticle result: ${ResultWord.PROVED}** · 3 of 3 checks held`,
+    );
+    expect(block).toContain('- Covered: Ana: pays, Ben: refunds');
+    expect(block).toContain('1 journey replayed · 1 journey driven');
+  });
+
+  it('checks that held over a goal the drive did not reach are not proved', () => {
+    const block = exploreResult(unlinked(), {
+      checks: { held: 2, failed: 0, undecided: 0 },
+      goals: [],
+      goalMet: false,
+    });
+    expect(block.split('\n')[0]).toContain(ResultWord.NOT_PROVED);
+    expect(block.split('\n')[0]).toContain('goal');
   });
 });

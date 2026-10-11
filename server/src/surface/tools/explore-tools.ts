@@ -41,6 +41,7 @@ import { reportPlanBlocked, savedPlanDrivesNothing } from '@/features/harness/pl
 import { harnessRunId } from '@/judgement/runs/drive-run.js';
 import { DRIVE_RECORD_SUFFIX, reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
+import { RESULT_FIELD, exploreResult, resultField } from './reticle-result.js';
 import { runTool } from './invoke-tool.js';
 import { driveVerdict, type RemoteDriveOutcome } from '@/features/harness/platform/remote-drive.js';
 import {
@@ -182,6 +183,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
        * Each journey of a platform plan and how it ended. Only `passed` is proved. `by`: its saved
        * flows replayed (no model) or the model drove it; `tokens`: what the model spent on it.
        */
+      [RESULT_FIELD]: z.string().optional(),
       journeys: z
         .array(
           z.object({
@@ -402,7 +404,22 @@ const exploreDrive: ExploreDrive = async (deps, env, args, harness, control) => 
     stopped: control.stopped,
     inbox: control.takeSaid,
   });
-  return { status: statusOf(explored.drive.stopReason), result: exploreReport(explored) };
+  const result = exploreReport(explored);
+  return {
+    status: statusOf(explored.drive.stopReason),
+    result: {
+      ...result,
+      ...resultField(() =>
+        exploreResult(sessionRoot(deps, 'string' === typeof sessionId ? sessionId : undefined), {
+          checks: checkTally(explored.drive.toolCalls),
+          goals: explored.goals,
+          ...(explored.drive.goalMet === undefined ? {} : { goalMet: explored.drive.goalMet }),
+          ...(explored.journeys === undefined ? {} : { journeys: explored.journeys }),
+          ...(explored.runIds === undefined ? {} : { runIds: explored.runIds }),
+        }),
+      ),
+    },
+  };
 };
 
 /** The tool's answer for a finished drive. */

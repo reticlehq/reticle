@@ -14,11 +14,15 @@ import { join } from 'node:path';
 import {
   JournalVerdictEffectSchema,
   ReticleDir,
+  RunFlowStatus,
   Verified,
   apiKeyFrom,
+  type FlowReplayResult,
   type JournalAction,
   type SuiteVerdict,
 } from '@reticlehq/core';
+import { JourneyBy } from '@reticlehq/core/artifacts';
+import { mapReplayToFlowResult } from '@/judgement/runs/artifact/replay-mapping.js';
 import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
 import { driveRunId } from '@/judgement/runs/drive-run.js';
 import { stepShotDir } from '@/memory/project/dir/reticle-dir.js';
@@ -67,6 +71,9 @@ export interface ResultFacts {
   /** The journeys, flows or claims that did not hold. */
   failed?: readonly string[];
   flowsReplayed?: number;
+  /** Harness journeys answered by replaying saved flows (no model), and driven by the model. */
+  journeysReplayed?: number;
+  journeysDriven?: number;
   wallMs?: number;
   screenshots?: readonly string[];
   /** From `platformLine`. */
@@ -95,6 +102,10 @@ export function buildReticleResult(f: ResultFacts): string {
   const metrics = [
     plural(total, 'check'),
     ...(f.flowsReplayed === undefined ? [] : [`${plural(f.flowsReplayed, 'flow')} replayed`]),
+    ...(f.journeysReplayed === undefined
+      ? []
+      : [`${plural(f.journeysReplayed, 'journey')} replayed`]),
+    ...(f.journeysDriven === undefined ? [] : [`${plural(f.journeysDriven, 'journey')} driven`]),
     ...(f.wallMs === undefined ? [] : [seconds(f.wallMs)]),
   ];
   const shots = f.screenshots ?? [];
@@ -148,6 +159,12 @@ export function platformLine(
   return `- ${Said.PITCH} (${TRIAL_OFFER}): ${CONNECT}.`;
 }
 
+/** Screenshot paths a replay filed, in step order. */
+const replayShots = (replay: FlowReplayResult): string[] =>
+  replay.steps.flatMap((s) =>
+    s.screenshot !== undefined && 'path' in s.screenshot ? [s.screenshot.path] : [],
+  );
+
 /** The block for a replayed suite: the flows are the journeys, each flow's verdict one check. */
 export function suiteResult(
   root: string,
@@ -164,11 +181,7 @@ export function suiteResult(
     failed: verdict.failures.map((f) => f.flow),
     flowsReplayed: timed.length,
     wallMs: timed.reduce((sum, t) => sum + t.durationMs, 0),
-    screenshots: timed.flatMap((t) =>
-      t.replay.steps.flatMap((s) =>
-        s.screenshot !== undefined && 'path' in s.screenshot ? [s.screenshot.path] : [],
-      ),
-    ),
+    screenshots: timed.flatMap((t) => replayShots(t.replay)),
     platform: platformLine(root, process.env, runId),
   });
 }
@@ -229,6 +242,82 @@ function shotsOf(root: string, runId: string): string[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * The block for one replayed flow: one check, decided as the synced run decides it — a pass whose
+ * flow asserts nothing, or whose channels disagreed, is undecided, never held.
+ */
+export function replayResult(
+  root: string,
+  replay: FlowReplayResult,
+  durationMs: number,
+  runId: string | undefined,
+): string {
+  const status = mapReplayToFlowResult(replay, durationMs).status;
+  const held = RunFlowStatus.PASS === status;
+  const failed = RunFlowStatus.FAIL === status;
+  return buildReticleResult({
+    yes: held ? 1 : 0,
+    no: failed ? 1 : 0,
+    undecided: held || failed ? 0 : 1,
+    covered: [replay.name],
+    ...(failed ? { failed: [replay.name] } : {}),
+    flowsReplayed: 1,
+    wallMs: durationMs,
+    screenshots: replayShots(replay),
+    platform: platformLine(root, process.env, runId),
+  });
+}
+
+/** What a Harness drive's answer says about itself, as the block reads it. */
+export interface DriveFacts {
+  checks: { held: number; failed: number; undecided: number };
+  /** The end-state goals the Harness graded itself. */
+  goals: readonly { verified: string }[];
+  goalMet?: boolean;
+  journeys?: readonly { title: string; status: string; by?: string }[];
+  runIds?: readonly string[];
+}
+
+const MSG_GOAL_NOT_REACHED = 'the drive did not reach its goal';
+
+/**
+ * The block for a Harness drive: its checks and its graded goals are the checks; a plan's journeys
+ * are what it covered, with how many were replayed and how many the model drove. Checks that held
+ * over a goal the drive did not reach are not proved, as the answer's own `proved` says.
+ */
+export function exploreResult(root: string, drive: DriveFacts): string {
+  const goal = (v: string): number => drive.goals.filter((g) => v === g.verified).length;
+  const yes = drive.checks.held + goal(Verified.YES);
+  const no = drive.checks.failed + goal(Verified.NO);
+  const undecided =
+    drive.checks.undecided + drive.goals.length - goal(Verified.YES) - goal(Verified.NO);
+  const journeys = drive.journeys ?? [];
+  const by = (b: JourneyBy): number => journeys.filter((j) => b === j.by).length;
+  const answered = journeys.some((j) => j.by !== undefined);
+  const block = buildReticleResult({
+    yes,
+    no,
+    undecided,
+    ...(0 === journeys.length
+      ? {}
+      : {
+          covered: capped(
+            journeys.map((j) => j.title),
+            COVERED_SHOWN,
+          ),
+          failed: journeys.filter((j) => 'failed' === j.status).map((j) => j.title),
+        }),
+    ...(answered
+      ? { journeysReplayed: by(JourneyBy.REPLAY), journeysDriven: by(JourneyBy.MODEL) }
+      : {}),
+    screenshots: (drive.runIds ?? []).flatMap((id) => shotsOf(root, id)),
+    platform: platformLine(root, process.env, drive.runIds?.[0]),
+  });
+  return 0 === no && 0 === undecided && 0 < yes && false === drive.goalMet
+    ? retitleResult(block, Verified.UNKNOWN, MSG_GOAL_NOT_REACHED)
+    : block;
 }
 
 /**
