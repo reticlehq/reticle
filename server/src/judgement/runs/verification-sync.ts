@@ -8,9 +8,8 @@
  * lighter per-flow RunRecord that feeds regression memory is synced separately in flow-replay-run.ts.
  * Both are best-effort + opt-in: no creds → the artifact still lands on disk, nothing leaves the machine.
  */
-import { mcpClientIdentity } from '@/surface/mcp/peer/client-identity.js';
+import { callerClientName } from '@/hooks/coding-agents.js';
 import {
-  type ProjectId,
   RunAgentKind,
   RunFramework,
   RunProfile,
@@ -48,26 +47,27 @@ export interface TimedReplay {
 function assembleRun(
   deps: ToolDeps,
   timed: TimedReplay[],
-  projectId: ProjectId | undefined,
+  /** The dashboard project this checkout is linked to, else the session's own id. */
+  projectName: string | undefined,
 ): ReticleVerificationRun {
   const flows = timed.map((t) => mapReplayToFlowResult(t.replay, t.durationMs, t.flow));
   const input: VerificationRunInput = {
     runId: defaultRunId(),
     durationMs: flows.reduce((sum, f) => sum + f.durationMs, 0),
     profile: RunProfile.DEV,
-    project: { name: projectId ?? 'reticle', framework: RunFramework.OTHER },
+    project: { name: projectName ?? 'reticle', framework: RunFramework.OTHER },
     /*
      * WHICH agent drove this, not merely THAT one did.
      *
      * This was hardcoded to 'reticle-mcp', so every run in every workspace claimed the same author.
      * A dashboard built on it could say "an agent verified this" and never "Claude Code verified
      * this, Cursor broke it" — which is the question a team actually has once more than one agent
-     * touches the repo. The name is the client's own claim from the MCP handshake; a plain CLI run
-     * with no MCP peer keeps the old id, because inventing a vendor there would be worse than
-     * admitting we do not know.
+     * touches the repo. The name is the client's own claim from the MCP handshake, for the call that
+     * ran this suite only; a plain CLI run, or a dashboard Re-verify no agent made, keeps the old id,
+     * because inventing a vendor there would be worse than admitting we do not know.
      */
     agent: {
-      id: mcpClientIdentity().name ?? RETICLE_MCP_AGENT_ID,
+      id: callerClientName() ?? RETICLE_MCP_AGENT_ID,
       kind: RunAgentKind.CODING_AGENT,
     },
     trigger: { kind: RunTrigger.MANUAL },
@@ -99,8 +99,10 @@ export async function persistAndSyncVerificationRun(
   // a misrouted read silently meant "not attached" — and where it DID have one, the run was pushed
   // to a dashboard belonging to whoever that checkout was linked to.
   const root = rootForTarget(deps, target);
+  const cloud = await resolveProjectCloud(deps.fs, root, homedir(), process.env);
   try {
-    run = assembleRun(deps, timed, projectId);
+    // Named after the dashboard project the checkout is linked to: a Re-verify run read "reticle".
+    run = assembleRun(deps, timed, cloud.projectId ?? projectId);
     await new RunStore(deps.fs, root).write(run);
   } catch (error) {
     log('verification-run-persist-failed', {
@@ -109,7 +111,6 @@ export async function persistAndSyncVerificationRun(
     return undefined;
   }
   // Per-project cloud: only push when THIS project has cloud attached AND its policy allows runs.
-  const cloud = await resolveProjectCloud(deps.fs, root, homedir(), process.env);
   if (null === cloud.config || !cloud.policy.runs) return run.runId; // not attached / runs disabled → local only
   const result = await syncRunToCloud(run, cloud.config, cloudFetch);
   if (result.outcome !== SyncOutcome.SYNCED) {

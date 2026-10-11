@@ -18,6 +18,7 @@ import {
   urlParts,
   type VerifyConnection,
   type VerifyPorts,
+  verifyProjectName,
 } from './cli-verify.js';
 import { PortPresence } from '../daemon/binding/port-presence.js';
 import { renderHelp } from './cli-usage.js';
@@ -442,5 +443,18 @@ describe('runVerify --results-json', () => {
       results: [{ journey: 'checkout', verdict: 'unknown' }],
     });
     expect(verifyResults(makeRun(RunFlowStatus.PASS)).verdict).toBe('yes');
+  });
+});
+
+/*
+ * A CI run was named after its folder ("ci-repo") while the dashboard project it reported to was
+ * `web-ci`, the id the repo's own committed `.reticle.json` carries. One pipeline, two names.
+ */
+describe('the project a verify run is named for', () => {
+  it('is the linked project, then the configured one, then the folder', () => {
+    expect(verifyProjectName('web-ci', 'web-ci-4b3c', 'ci-repo')).toBe('web-ci');
+    expect(verifyProjectName(null, 'web-ci', 'ci-repo')).toBe('web-ci');
+    expect(verifyProjectName(null, undefined, 'ci-repo')).toBe('ci-repo');
+    expect(verifyProjectName(null, undefined, '')).toBe('app');
   });
 });

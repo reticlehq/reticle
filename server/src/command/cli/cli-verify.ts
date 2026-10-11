@@ -67,7 +67,8 @@ import {
   SyncOutcome,
   type CloudConfig,
 } from '@/memory/cloud/cloud-sync.js';
-import { linkedRunsCloudPort } from '@/memory/cloud/cloud-config.js';
+import { readProjectId } from './ports/resolve/cli-port.js';
+import { linkedRunsCloudPort, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { readDashboardUrl } from '@/memory/project/sync-status.js';
 import { seeRunLine } from '@/memory/project/sync-status.js';
 import { homedir } from 'node:os';
@@ -89,6 +90,19 @@ const EXIT_FAIL = 1;
 const DEFAULT_SESSION_TIMEOUT_MS = 15_000;
 const SESSION_POLL_MS = 250;
 const DEFAULT_PROJECT_NAME = 'app';
+
+/**
+ * The project a verify run is named for: the dashboard project this checkout is linked to, else the
+ * id its `.reticle.json` carries, else the folder. A CI run read "ci-repo" on a dashboard whose
+ * project, and the repo's own committed config, said `web-ci`.
+ */
+export function verifyProjectName(
+  linked: string | null,
+  configured: string | undefined,
+  folder: string,
+): string {
+  return linked ?? configured ?? (folder || DEFAULT_PROJECT_NAME);
+}
 const VERIFY_AGENT_ID = 'reticle-cli';
 
 const MSG_NO_SESSION =
@@ -718,14 +732,20 @@ export function handleVerify(parsed: {
     }
   }
   const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
-  const projectName = basename(process.cwd()) || DEFAULT_PROJECT_NAME;
+  const linkedName = async (): Promise<string> =>
+    verifyProjectName(
+      (await resolveProjectCloud(createNodeFileSystem(), reticleRoot, homedir(), process.env))
+        .projectId,
+      readProjectId(process.cwd()),
+      basename(process.cwd()),
+    );
   const ports: VerifyPorts = {
-    connect: () =>
+    connect: async () =>
       openLiveConnection({
         url: parsed.url,
         headless: parsed.headless,
         reticleRoot,
-        projectName,
+        projectName: await linkedName(),
         now,
         port: parsed.port ?? RETICLE_DEFAULT_PORT,
         ...(parsed.storageState !== undefined ? { storageState: parsed.storageState } : {}),
