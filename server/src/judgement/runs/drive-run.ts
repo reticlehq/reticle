@@ -73,6 +73,20 @@ function soleAgent(actions: readonly JournalAction[]): string | undefined {
   return 1 === named.size ? [...named][0] : undefined;
 }
 
+/**
+ * What a verdict required and what it saw, as the journal keeps them for its check. One place, so
+ * the act and assert paths cannot keep different halves.
+ */
+export function checkWords(verdict: { expected?: string; observed?: string }): {
+  expected?: string;
+  observed?: string;
+} {
+  return {
+    ...(verdict.expected === undefined ? {} : { expected: verdict.expected }),
+    ...(verdict.observed === undefined ? {} : { observed: verdict.observed }),
+  };
+}
+
 /** Every verdict a verification tool recorded on this session's actions, in order. */
 function verdicts(actions: readonly JournalAction[]): JournalVerdictEffect[] {
   const out: JournalVerdictEffect[] = [];
@@ -130,14 +144,10 @@ export function driveRunFrom(
     checks.push({
       predicate: verdict.claim,
       status: verdict.verified,
-      ...(verdict.source === undefined && verdict.observed === undefined
-        ? {}
-        : {
-            evidence: {
-              ...(verdict.source === undefined ? {} : { source: verdict.source }),
-              ...(verdict.observed === undefined ? {} : { observed: verdict.observed }),
-            },
-          }),
+      ...(verdict.source === undefined ? {} : { evidence: { source: verdict.source } }),
+      // What it required and what it saw, so a failed check can say both on the platform.
+      ...(verdict.expected === undefined ? {} : { expected: verdict.expected }),
+      ...(verdict.observed === undefined ? {} : { observed: verdict.observed }),
       // Carried through rather than recomputed. These were established at the moment the verdict
       // was made and written down then; a run built later cannot know any of them, and inferring
       // them here would be inventing evidence about evidence.

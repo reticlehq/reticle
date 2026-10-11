@@ -183,8 +183,8 @@ describe('the kind of evidence a check read', () => {
  * whose Actual read "It did not happen while the check waited": the run kept the verdict and not
  * what it saw, so nothing downstream could say it.
  */
-describe('what a failed check saw', () => {
-  it('rides on the check, beside its source', () => {
+describe('what a failed check wanted and saw', () => {
+  it('rides on the check as expected and observed, its source in the evidence', () => {
     const run = driveRunFrom(
       [
         {
@@ -193,15 +193,17 @@ describe('what a failed check saw', () => {
             claim: 'an element matching {"testid":"pay"} in state \'enabled\'',
             verified: Verified.NO,
             source: 'src/main.ts:12',
+            expected: 'an element matching {"testid":"pay"} in state \'enabled\'',
             observed: 'present, visible, disabled',
           },
         },
       ],
       DEPS,
     );
-    expect(run?.checks[0]?.evidence).toEqual({
-      source: 'src/main.ts:12',
+    expect(run?.checks[0]).toMatchObject({
+      expected: 'an element matching {"testid":"pay"} in state \'enabled\'',
       observed: 'present, visible, disabled',
+      evidence: { source: 'src/main.ts:12' },
     });
   });
 });

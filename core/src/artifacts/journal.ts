@@ -127,6 +127,8 @@ export const JournalVerdictEffectSchema = z.object({
    * a failed check can say what it found rather than only that the claim did not hold.
    */
   observed: z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH).optional(),
+  /** What the check required, in the engine's words ("an element … in state 'enabled'"). */
+  expected: z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH).optional(),
   /**
    * Which source of truth answering the claim required -- the predicate's own kind.
    *

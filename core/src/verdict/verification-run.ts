@@ -379,6 +379,13 @@ export const RunCheckSchema = z.object({
    */
   declaredBeforeActing: z.boolean().optional(),
   /**
+   * What the check required and what it saw, in the engine's words, when it said — "an element
+   * matching {"testid":"pay"} in state 'enabled'" and "present, visible, disabled". Without them an
+   * issue a CI run found had no Expected or Actual to show. Optional: older runs carry neither.
+   */
+  expected: z.string().optional(),
+  observed: z.string().optional(),
+  /**
    * What kind of evidence bought this answer.
    *
    * A green paid for with "something matching was on screen" is not the same green as one paid for

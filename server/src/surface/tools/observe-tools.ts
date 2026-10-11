@@ -2,6 +2,7 @@
  * Observe / wait / assert tools — reticle_observe, reticle_wait_for, reticle_assert, reticle_network,
  * reticle_console, reticle_animations. Split out of tools.ts; assembled back via...OBSERVE_TOOLS.
  */
+import { checkWords } from '@/judgement/runs/drive-run.js';
 import { noteEmptyRead } from './gaps/observed-nothing.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
@@ -621,13 +622,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // in the response lives only in the agent's context window, which is the copy a compaction
       // destroys — see runs/run-context.ts. Recorded WITHOUT an attribution window: this tool drives
       // nothing, so no event it observed was caused by it.
-      session.recordAction(
-        ReticleTool.ASSERT,
-        asRecord(args),
-        verdict.observed === undefined
-          ? verdictEffect
-          : { ...verdictEffect, observed: verdict.observed },
-      );
+      session.recordAction(ReticleTool.ASSERT, asRecord(args), {
+        ...verdictEffect,
+        ...checkWords(verdict),
+      });
       // A passing check over the default window (since the last act) is proof of that act, so it
       // joins that step in the recording — otherwise "act, then assert" saves a bare click. An
       // explicit `since` may reach back past the last step, where replay would not find it. The

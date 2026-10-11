@@ -7,6 +7,7 @@
  * re-exported through this list, which made a cycle out of nothing: that file needs `actCommand` from
  * here, and a registry is the right place to collect a definition from.
  */
+import { checkWords } from '@/judgement/runs/drive-run.js';
 import type { Session } from '@/portal/session/session.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
@@ -99,15 +100,6 @@ import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrue } from './act/already-true.js';
 import { notedAct, noteSourceSeen } from '@/portal/session/recorded-gaps.js';
-
-/**
- * Narrow the wire's `action` to a real ActionType, or undefined.
- *
- * It used to be `asString(args['action']) ?? ''`, so an unknown or missing action became the empty
- * string and travelled on — reaching the browser as a command it could not perform, and reported back
- * as a generic failure rather than "that is not an action". Validate at the boundary, per the project's
- * unknown-plus-narrowing rule, so a typo is rejected where it can still be explained.
- */
 
 /**
  * The action vocabulary, derived from ActionType — never retyped.
@@ -899,7 +891,7 @@ export const ACT_TOOLS: ToolDef[] = [
           claim: describeWaitTarget(until),
           verified: decision.verified,
           ...(actedSourceLabel === undefined ? {} : { source: actedSourceLabel }),
-          ...(verdict.observed === undefined ? {} : { observed: verdict.observed }),
+          ...checkWords(verdict),
           // TRUE here, and false on the `assert` path, and the difference is the point. This tool
           // takes `until` BEFORE it acts: the consequence is named in advance and can then only be
           // met or missed. A claim written after the fact can be shaped to fit whatever happened,
