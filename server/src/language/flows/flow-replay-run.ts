@@ -65,6 +65,7 @@ import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { memoryReadUrl, scopedMemoryEntries } from '@/memory/cloud/memory-scope.js';
 import { consultSubjectFor, selectConsulted, type ConsultedMemory } from './flow-memory-consult.js';
 import { log } from '@/log.js';
+import { replayStepShooter } from '@/features/visual/step-shots.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
@@ -766,6 +767,7 @@ export async function replayNamedFlow(
         ...(continueAt === undefined ? {} : { at: continueAt }),
         // The HUD's replay chip, when the human pressed ▶. In-process only: an agent's arguments
         // arrive as JSON and can never carry a function.
+        onStepResult: replayStepShooter(deps, session.id),
         ...('function' === typeof args['onStep']
           ? { onStep: args['onStep'] as NonNullable<ReplayFromOptions['onStep']> }
           : {}),

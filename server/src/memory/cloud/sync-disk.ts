@@ -19,7 +19,8 @@ import {
   renameSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
+import { stepShotDir } from '@/memory/project/dir/reticle-dir.js';
 import { IntentDir, ReticleDir } from '@reticlehq/core';
 import {
   DERIVED_RECORDS,
@@ -193,6 +194,16 @@ export function diskSource(reticleRoot: string): SyncSource {
     // Intent is the only derived record that is no longer one file. See readIntent.
     derived: (kind) =>
       'intent' === kind ? readIntent(reticleRoot) : readJson(join(reticleRoot, DERIVED_FILE[kind])),
+    // The file name comes from a run artifact on disk, so it is held to one segment of the run's
+    // own directory before it is read.
+    screenshot: (runId, file) => {
+      try {
+        if (basename(file) !== file) return undefined;
+        return new Uint8Array(readFileSync(join(stepShotDir(reticleRoot, runId), file)));
+      } catch {
+        return undefined;
+      }
+    },
   };
 }
 

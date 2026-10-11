@@ -358,8 +358,12 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  *
  * The HUD round on feat/hud-clarity (Harness page and switch, the one-driver-per-log split that
  * tags every narration with who sent it) measured 258,797 B; ceiling 259,797 by the convention.
+ *
+ * Step screenshots: 260,113 B. Not the renderer, which loads only when a picture is first drawn,
+ * but the run artifact's screenshot schemas, built at module scope in core's barrel (the channel
+ * the notes above name), and the one `render` command registration. Ceiling 261,113.
  */
-const MAX_FIRST_LOAD_BYTES = 259_797;
+const MAX_FIRST_LOAD_BYTES = 261_113;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

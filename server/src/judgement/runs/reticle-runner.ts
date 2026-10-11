@@ -26,6 +26,7 @@ import {
 } from './artifact/build-verification-run.js';
 import { mapReplayToFlowResult } from './artifact/replay-mapping.js';
 import { buildRepairPackets } from './repair-prompt.js';
+import { withShotRun } from './default-run-id.js';
 import {
   buildRisks,
   classifyChangedFiles,
@@ -103,6 +104,8 @@ export class ReticleRunner {
     // person watching is actually asking, which is whether to keep waiting.
     emit({ phase: VerifyPhase.FLOWS_FOUND, total, at: this.#port.now() });
 
+    // Minted first, so each replayed step's screenshot is filed under the run it belongs to.
+    const runId = this.#port.newRunId();
     const replays = [];
     const flows = [];
     for (const [index, name] of names.entries()) {
@@ -114,7 +117,7 @@ export class ReticleRunner {
         name: boundFlowName(name),
         at: start,
       });
-      const replay = await this.#port.replayFlow(name);
+      const replay = await withShotRun(runId, () => this.#port.replayFlow(name));
       replays.push(replay);
       const mapped = mapReplayToFlowResult(replay, this.#port.now() - start);
       flows.push(mapped);
@@ -136,7 +139,7 @@ export class ReticleRunner {
     const failurePackets = buildRepairPackets(replays);
 
     const input: VerificationRunInput = {
-      runId: this.#port.newRunId(),
+      runId,
       durationMs: flows.reduce((sum, f) => sum + f.durationMs, 0),
       profile: opts.profile,
       project: opts.project,

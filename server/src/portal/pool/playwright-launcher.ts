@@ -41,11 +41,17 @@ export const SCREENSHOT_DETERMINISM = {
  */
 export function screenshotOptions(opts: ScreenshotOptions): {
   fullPage: boolean;
-  style: string;
-  animations: 'disabled';
+  style?: string;
+  animations?: 'disabled';
   type?: 'jpeg';
   quality?: number;
+  scale?: 'css';
 } {
+  // A step screenshot is evidence about the page, so it must not change it: `animations: disabled`
+  // fast-forwards running animations to their end and fires their events in the app under test.
+  if (true === opts.cssScale && opts.jpegQuality !== undefined) {
+    return { fullPage: false, type: 'jpeg', quality: opts.jpegQuality, scale: 'css' };
+  }
   const base = { ...SCREENSHOT_DETERMINISM, fullPage: true === opts.fullPage };
   return opts.jpegQuality === undefined
     ? base

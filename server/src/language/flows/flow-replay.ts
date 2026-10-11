@@ -406,6 +406,11 @@ export interface ReplayFromOptions {
    */
   onStep?: (done: number, total: number, held: boolean) => void;
   /**
+   * Told each reported step the moment its outcome is decided, before it is kept, so a caller can
+   * add to it (the step's screenshot). Never allowed to fail the replay.
+   */
+  onStepResult?: (result: FlowStepResult, flow: string) => Promise<void>;
+  /**
    * Resume at this step: an index, or a step's `id` (which survives edits that shift indices).
    *
    * There is no state to restore, so the steps before it are re-driven — quickly, as setup: their
@@ -765,6 +770,7 @@ export async function replayFlow(
         continue;
       }
       if (index < from) result.note = `setup step for resuming at step ${String(from)} failed`;
+      await options.onStepResult?.(result, flow.name).catch(() => undefined);
       results.push(result);
       tell(result);
       // Under `sweep`, a failure whose action still RAN does not stop the run — the page is where the

@@ -49,7 +49,13 @@ import { VIEWPORT_TOOLS } from '@/portal/input/viewport-tools.js';
 import { SESSION_TOOLS } from '@/portal/session/session-tools.js';
 import { ANNOTATE_TOOLS } from '@/language/flows/annotate-tools.js';
 import { LIVE_CONTROL_TOOLS } from '@/portal/session/live-control-tools.js';
-import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
+import {
+  type ToolDef,
+  SCREENSHOT_DOC,
+  sessionIdShape,
+  commandOrThrow,
+  withScreenshotDoc,
+} from './tool-kit.js';
 import { TOOL_SURFACE, type ToolSurface } from './tool-surface.js';
 import { mergeActWithSequence } from './act-merged.js';
 import { INSPECT_TOOL } from './inspect-tool.js';
@@ -550,8 +556,8 @@ export const RAW_TOOLS: ToolDef[] = [
   // Live-control: reticle_end_session / reticle_resume / reticle_messages. See live-control-tools.ts.
   ...LIVE_CONTROL_TOOLS,
   // reticle_navigate / reticle_refresh — browser navigation tools. See browser-tools.ts.
-  ...BROWSER_TOOLS,
-  ...ACT_TOOLS,
+  ...BROWSER_TOOLS.map(withScreenshotDoc),
+  ...ACT_TOOLS.map(withScreenshotDoc),
   ACT_SEQUENCE_TOOL,
   ...OBSERVE_TOOLS,
   ...LINEAGE_TOOLS,
@@ -893,7 +899,8 @@ export const SURFACE_MERGE_PLANS: MergePlan[] = [
   {
     name: ReticleTool.ASSERT,
     description:
-      'Prove a consequence, by action: "now" evaluates a predicate against the window that already exists, "wait" waits for one to become true within a budget. Both return a verdict; only `verified:"yes"` is a pass.',
+      'Prove a consequence, by action: "now" evaluates a predicate against the window that already exists, "wait" waits for one to become true within a budget. Both return a verdict; only `verified:"yes"` is a pass.' +
+      SCREENSHOT_DOC,
     members: { now: ReticleTool.ASSERT, wait: ReticleTool.WAIT_FOR },
     example: { action: 'now' },
     // Evaluate against the window that already exists. `wait` spends a budget, so it is asked for.
