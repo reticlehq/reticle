@@ -81,7 +81,7 @@ import { fetchStatus } from './daemon/binding/daemon-status-probe.js';
 import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';
-import { runInit, buildNodeIo } from '@reticlehq/init';
+import { runInit, buildNodeIo, InitFailure, type InitResult } from '@reticlehq/init';
 import { continueAfterInit } from './setup/init/init-runtime.js';
 import { initFirstFlow } from './cli/try-command.js';
 import { handleDoctor } from './cli/cli-doctor.js';
@@ -126,7 +126,32 @@ export type { CliResult } from './cli/cli-parse.js';
 /** Said when `connect` carries on past an init whose setup did not finish. */
 const MSG_CONNECT_AFTER_UNFINISHED_INIT =
   'Setup did not finish (above) — signing in and linking anyway. Fix what it names, then run ' +
-  '`reticle init` again; this run will still exit non-zero.';
+  '`reticle init` again.';
+
+/**
+ * Said last, when the account is linked and the one thing left is installing a dependency. Exit 0:
+ * connect's job — signing in and linking — is done, and a non-zero exit read as a failed connect.
+ */
+export const MSG_CONNECTED_DEPS_PENDING =
+  '⚠ Connected, but the dependency install did not finish (see above). Run the install it names, ' +
+  'then `reticle init` to wire the app.';
+
+/**
+ * How `reticle connect` exits: the cloud step's code when linking failed; 0 when it linked and setup
+ * finished or left only the dependency install (said in `note`); 1 when setup stopped for anything
+ * else. `initUnfinished` is why init's setup did not finish, or undefined when it did.
+ */
+export function connectExit(
+  cloudCode: number,
+  initUnfinished: string | undefined,
+): { code: number; note?: string } {
+  if (0 !== cloudCode) return { code: cloudCode };
+  if (initUnfinished === undefined) return { code: 0 };
+  if (InitFailure.DEPENDENCY_INSTALL === initUnfinished) {
+    return { code: 0, note: MSG_CONNECTED_DEPS_PENDING };
+  }
+  return { code: 1 };
+}
 
 async function handleInit(parsed: {
   port: number | undefined;
@@ -148,7 +173,7 @@ async function handleInit(parsed: {
   timeoutSeconds?: number | undefined;
   driveModel?: string | undefined;
   keepGoing?: boolean | undefined;
-}): Promise<void> {
+}): Promise<InitResult> {
   const cwd = process.cwd();
   // RETICLE_PORT counts as explicit, as it does for every other command: resolved once here, so the
   // port written into the project and the port the runtime phase binds are the same number.
@@ -200,6 +225,7 @@ async function handleInit(parsed: {
     io,
   );
   await continueAfterInit({ ...parsed, port }, result, io, cwd, initFirstFlow);
+  return result;
 }
 
 // `serve`, `stop` and `restart` live in `cli/lifecycle/daemon-lifecycle.ts`: one idea, and the
@@ -714,19 +740,29 @@ export function main(): void {
         // Its failure exits non-zero before any cloud binding can claim this repo is ready.
         // A setup that did not finish is said above and still fails the run, but no longer ends it
         // before sign-in: the second identical run was the only way to get signed in.
+        let unfinished: string | undefined;
         if (readProjectId(process.cwd()) === undefined) {
-          await handleInit({
+          const init = await handleInit({
             port: undefined,
             mcp: true,
             dryRun: false,
             install: true,
             keepGoing: true,
           });
-          if (1 === process.exitCode)
+          if (1 === process.exitCode) {
+            // init hands no context over exactly when the dependency install failed (run.ts); its
+            // outcome's own reason is unset when the files were all written and the app was not.
+            unfinished =
+              init.context === undefined && init.outcome !== undefined
+                ? InitFailure.DEPENDENCY_INSTALL
+                : (init.outcome?.reason ?? InitFailure.OTHER);
+            process.exitCode = 0;
             process.stderr.write(`${MSG_CONNECT_AFTER_UNFINISHED_INIT}\n`);
+          }
         }
-        const code = await runCloudCommand(argv);
-        return 0 === code && 1 === process.exitCode ? 1 : code;
+        const exit = connectExit(await runCloudCommand(argv), unfinished);
+        if (exit.note !== undefined) process.stderr.write(`${exit.note}\n`);
+        return exit.code;
       })()
         .then((code) => process.exit(code))
         .catch((cause: unknown) => {
