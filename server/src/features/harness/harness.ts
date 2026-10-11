@@ -163,6 +163,36 @@ export const MSG_FINISH_UNPROVED =
   `${ReticleTool.ACT_AND_WAIT} and an \`until\` naming the end state it must reach, or ` +
   `${ReticleTool.ASSERT} on it. A drive that proves nothing replays as "verified nothing".`;
 
+/**
+ * The answer to a click repeated after it changed nothing. A persona drive clicked the logo four
+ * times on the page the logo leads to, each a wasted action and a wrong route guess.
+ */
+export const MSG_REPEAT_CHANGED_NOTHING =
+  'Not done again: the same action on the same control just changed nothing on the page — no ' +
+  'content, request, route or signal. Doing it again will not either. Look at the page and take ' +
+  'the next step the journey names.';
+
+/** The tools that act on one control, keyed by what they did to which control. */
+const ACTING_TOOLS: ReadonlySet<string> = new Set([ReticleTool.ACT, ReticleTool.ACT_AND_WAIT]);
+
+/** What an action did to which control, or undefined for a call that does not act on one. */
+function actKey(name: string, args: Record<string, unknown>): string | undefined {
+  if (!ACTING_TOOLS.has(name)) return undefined;
+  const target = args['ref'] ?? args['target'];
+  if (target === undefined) return undefined;
+  return JSON.stringify([target, args['action'] ?? null, args['value'] ?? null]);
+}
+
+/** Whether a result's reaction digest says the page did nothing at all; undefined when it has none. */
+function changedNothing(result: unknown): boolean | undefined {
+  const summary = asRecord(asRecord(asRecord(result)['trace'])['summary']);
+  if ('number' !== typeof summary['total']) return undefined;
+  const moved = ['network', 'domAdded', 'domRemoved', 'domChanged', 'routeChanges', 'signals'].some(
+    (k) => 0 < (Number(summary[k]) || 0),
+  );
+  return !moved;
+}
+
 /** A check that ran: the only thing that turns a drive into evidence. */
 function isProof(outcome: ToolOutcome): boolean {
   if (outcome.isError) return false;
@@ -254,7 +284,9 @@ export function systemPrompt(focus?: string): string {
     'the app is broken underneath.',
     '',
     'Drive the app the way a user would: complete whole journeys, not single clicks. Submit the forms.',
-    'Follow the navigation. If something looks interactive, try it.',
+    'Follow the navigation. If something looks interactive, try it — unless the focus below says',
+    'not to: "without opening a run", "changes nothing" and the like bind the whole drive. Read the',
+    'list a journey says to read; do not open what it says to leave closed.',
     '',
     'RECORD WHAT YOU DRIVE. Before each journey call reticle_record { action: "start" }, drive it, then',
     'reticle_flow_save with a short descriptive name. A saved flow replays deterministically on every',
@@ -293,6 +325,8 @@ export async function runHarness(
   const usage: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const proved = (): boolean => toolCalls.some(isProof);
   let askedToProve = false;
+  // Actions that just changed nothing; forgotten as soon as any action moves the page.
+  const inert = new Set<string>();
 
   for (let step = 0; step < maxSteps; step += 1) {
     if (true === options.stopped?.()) {
@@ -396,7 +430,27 @@ export async function runHarness(
     // Every call the model asked for is answered, including ones that fail. A dropped result leaves
     // the model waiting on an answer that never comes, and it will usually re-ask — burning the
     // budget on a call that already ran, against an app it already changed.
-    const outcomes = await Promise.all(turn.calls.map((call) => invokeOne(toolset, call)));
+    const outcomes = await Promise.all(
+      turn.calls.map((call) => {
+        const key = actKey(call.name, call.args);
+        return key !== undefined && inert.has(key)
+          ? Promise.resolve<ToolOutcome>({
+              id: call.id,
+              name: call.name,
+              args: call.args,
+              result: { error: MSG_REPEAT_CHANGED_NOTHING },
+              isError: true,
+            })
+          : invokeOne(toolset, call);
+      }),
+    );
+    for (const outcome of outcomes) {
+      const key = actKey(outcome.name, outcome.args);
+      if (key === undefined || outcome.isError) continue;
+      const nothing = changedNothing(outcome.result);
+      if (true === nothing) inert.add(key);
+      else if (false === nothing) inert.clear();
+    }
     toolCalls.push(...outcomes);
     history.push({ role: 'tool', outcomes });
   }

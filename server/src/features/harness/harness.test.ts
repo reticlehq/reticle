@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import {
   FINISH_TOOL,
+  MSG_REPEAT_CHANGED_NOTHING,
   StopReason,
   runHarness,
   systemPrompt,
@@ -220,7 +221,68 @@ describe('the harness loop', () => {
   });
 });
 
+/*
+ * A persona drive clicked the logo four times on the page the logo leads to: one route change, then
+ * a wrong route guess and two clicks that did nothing, every one a spent action.
+ */
+describe('a click that changed nothing', () => {
+  const click = (ref: string): ToolRequest => ({
+    id: `c-${ref}-${String(Math.random())}`,
+    name: ReticleTool.ACT,
+    args: { ref, action: 'click' },
+  });
+  const reacting = (moved: Record<string, boolean>) => {
+    const ran: string[] = [];
+    const invoke: HarnessToolset['invoke'] = (_name, args) => {
+      const ref = String(args['ref']);
+      ran.push(ref);
+      return Promise.resolve({
+        trace: {
+          window_ms: 50,
+          summary: true === moved[ref] ? { total: 3, domAdded: 3 } : { total: 1 },
+        },
+      });
+    };
+    return { ran, invoke };
+  };
+
+  it('is not done again until something else moves the page', async () => {
+    const app = reacting({ menu: true });
+    const result = await runHarness(
+      scripted([
+        { text: '', calls: [click('logo')] },
+        { text: '', calls: [click('logo')] },
+        { text: '', calls: [click('menu')] },
+        { text: '', calls: [click('logo')] },
+      ]),
+      toolset(app.invoke),
+      { maxSteps: 4 },
+    );
+    expect(app.ran).toEqual(['logo', 'menu', 'logo']);
+    expect(result.toolCalls[1]?.result).toEqual({ error: MSG_REPEAT_CHANGED_NOTHING });
+  });
+
+  it('may be repeated when it changed the page, like a counter clicked twice', async () => {
+    const app = reacting({ plus: true });
+    await runHarness(
+      scripted([
+        { text: '', calls: [click('plus')] },
+        { text: '', calls: [click('plus')] },
+      ]),
+      toolset(app.invoke),
+      { maxSteps: 2 },
+    );
+    expect(app.ran).toEqual(['plus', 'plus']);
+  });
+});
+
 describe('the standing instruction', () => {
+  // A drive told to "read the run list without opening any run" opened one, and ended on its page.
+  it("holds the drive to the focus's own limits, such as not opening what it says to leave closed", () => {
+    expect(systemPrompt('read the list without opening a run')).toContain('without opening a run');
+    expect(systemPrompt()).toContain('do not open what it says to leave closed');
+  });
+
   it('tells the model to record what it drives, because an unrecorded drive is paid for twice', () => {
     expect(systemPrompt()).toContain('reticle_flow_save');
   });
