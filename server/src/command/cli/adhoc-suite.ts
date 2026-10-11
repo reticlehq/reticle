@@ -16,6 +16,7 @@
  */
 import { ReticleTool } from '@reticlehq/core';
 import { cutOffReason } from '@/surface/tools/harness-explore.js';
+import { RESULT_FIELD } from '@/surface/tools/reticle-result.js';
 import {
   connectOverSse,
   endpointFor,
@@ -136,11 +137,14 @@ async function replaySuite(
   const report = verdictOf(result, 'status');
   const status = 'string' === typeof report?.['status'] ? report['status'] : 'unverifiable';
   const summary = 'string' === typeof report?.['summary'] ? report['summary'] : undefined;
+  // Its last line says where the run lives (dashboard link, or kept on this machine only).
+  const block = 'string' === typeof report?.[RESULT_FIELD] ? report[RESULT_FIELD] : undefined;
   return {
     code: PASSED === status ? 0 : 1,
     lines: [
       `status: ${status}`,
       ...(summary === undefined ? [] : [summary]),
+      ...(block === undefined ? [] : [block]),
       JSON.stringify(report ?? result, null, 2),
     ],
   };

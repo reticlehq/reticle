@@ -52,6 +52,21 @@ describe('a saved-flow suite against the running daemon', () => {
     expect(result.code).toBe(0);
   });
 
+  /*
+   * Persona drive: an unlinked `reticle verify` printed pass and a runId, and nothing said the run
+   * stayed on this computer. The daemon's result block says it in its last line; it was only inside
+   * the JSON dump below the summary.
+   */
+  it('prints the result block, so an unlinked run says it was kept on this machine', async () => {
+    const block = '**Reticle result: proved** · 2 of 2\n- Kept on this machine only: connect';
+    const { result } = await run({
+      status: 'pass',
+      summary: 'all 2 flows pass',
+      reticleResult: block,
+    });
+    expect(result.lines.slice(0, 3)).toEqual(['status: pass', 'all 2 flows pass', block]);
+  });
+
   it('exits non-zero on a failing suite', async () => {
     const { result } = await run({ status: 'fail', total: 3, passed: 2 });
     expect(result.code).toBe(1);

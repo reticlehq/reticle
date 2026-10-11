@@ -25,6 +25,7 @@ import {
   withLinkedCredential,
 } from '@/surface/tools/harness-explore.js';
 import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
+import { CONNECT } from '@/surface/tools/platform-moment.js';
 import { resolveSuiteSelection } from '@/language/flows/suite-selection.js';
 import { projectOnly } from '@/memory/project/session-root.js';
 import {
@@ -349,7 +350,13 @@ async function pushRunToCloud(
   config: CloudConfig | null,
   ports: VerifyPorts,
 ): Promise<void> {
-  if (null === config) return;
+  if (null === config) {
+    ports.out(
+      `run ${run.runId} was kept on this computer: this repo is not linked, so nothing was sent ` +
+        `to the dashboard. To save runs for your team: ${CONNECT}`,
+    );
+    return;
+  }
   const result = await syncRunToCloud(run, config, cloudFetch);
   if (result.outcome === SyncOutcome.SYNCED) {
     const dashboard = ports.dashboardUrl?.();

@@ -123,6 +123,15 @@ describe('runVerify', () => {
     expect(rec.closed).toBe(1);
   });
 
+  // Persona drive: an unlinked verify printed pass and a runId, and nothing said nothing was sent.
+  it('says an unlinked run was kept on this computer and how to send runs', async () => {
+    const { ports, rec } = harness({ verify: () => Promise.resolve(makeRun(RunFlowStatus.PASS)) });
+    await runVerify(ARGS, ports);
+    const said = rec.out.join('\n');
+    expect(said).toContain('run-test was kept on this computer');
+    expect(said).toContain('npx @reticlehq/server connect');
+  });
+
   it('exits 1 when nothing ran, so CI cannot go green on an empty run', async () => {
     // The case the exit code exists for. A project with no saved flows used to verify "successfully"
     // in seconds and hand CI a zero -- a green build that proved nothing, which is worse than a red
