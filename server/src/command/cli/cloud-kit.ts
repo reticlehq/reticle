@@ -103,6 +103,30 @@ export const baseUrl = (session: { url: string } | null, explicit?: string): str
 export const bearer = (session: { token: string } | null): string | null =>
   apiKeyFrom(process.env) ?? session?.token ?? null;
 
+/** A credential the platform answered with: not accepted, rather than not given. */
+const REFUSED_STATUSES: ReadonlySet<number> = new Set([401, 403]);
+
+/**
+ * The platform refused the credential this command sent. Its generic answer ("sign in or API key
+ * required") read as if none had been set; a revoked key, or one whose owner was removed from the
+ * workspace, needs replacing, not adding.
+ */
+export class CredentialRefusedError extends Error {
+  constructor(
+    readonly status: number,
+    readonly apiKey: boolean,
+  ) {
+    super(
+      apiKey
+        ? `the platform refused this API key (${String(status)}): it was revoked, or its owner no ` +
+            'longer has access to the workspace. Mint a new key in Settings → API keys and set ' +
+            `RETICLE_API_KEY to it.`
+        : `the platform refused your sign-in (${String(status)}): it expired, was revoked, or you ` +
+            `no longer have access to the workspace. Run \`reticle login\`.`,
+    );
+  }
+}
+
 /** One `/v1` call. Throws a friendly Error on a non-2xx so the command surfaces it and exits 1. */
 export const api = async (
   method: string,
@@ -130,7 +154,11 @@ export const api = async (
   }
   if (!res.ok) {
     const parsed = z.object({ error: z.object({ message: z.string() }) }).safeParse(json);
-    throw new Error(parsed.success ? parsed.data.error.message : `${res.status} ${res.statusText}`);
+    const said = parsed.success ? parsed.data.error.message : `${res.status} ${res.statusText}`;
+    if (token !== null && REFUSED_STATUSES.has(res.status)) {
+      throw new CredentialRefusedError(res.status, token === apiKeyFrom(process.env));
+    }
+    throw new Error(said);
   }
   return json;
 };
