@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ToolDeps } from './tool-kit.js';
 // The tool table first, as the daemon loads it: the explore module sits on an import cycle with it.
 import './tools.js';
-import { MSG_ALREADY_DRIVING, answerExplore, type ExploreDrive } from './explore-tools.js';
+import {
+  MSG_ALREADY_DRIVING,
+  answerExplore,
+  exploreReport,
+  type ExploreDrive,
+} from './explore-tools.js';
 import {
   DriveStatus,
   forgetDrives,
@@ -188,5 +193,46 @@ describe('a Harness drive, started then polled', () => {
     await d.started();
     d.fail(new Error('The Reticle Harness is off for this project'));
     await expect(pending).rejects.toThrow('is off for this project');
+  });
+});
+
+/*
+ * Persona drives ran the platform's plan and the answer still embedded a second, local plan of
+ * fifteen replays of other people's flows, and a driver account saying "saved 3 flow(s)" beside
+ * `savedFlows` listing one.
+ */
+describe('the answer of a drive that ran the platform plan', () => {
+  const drive = {
+    stopReason: 'finished' as const,
+    summary: 'Drove 2 actions and saved 3 flow(s): a, b, c.',
+    steps: 2,
+    toolCalls: [],
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    proved: false,
+  };
+  const base = {
+    drive,
+    plan: { summary: '15 replays', steps: [{ kind: 'replay', target: 'other', why: 'x' }] },
+    savedFlows: ['a'],
+    rewroteFlows: [],
+    unverifiedFlows: [],
+    goals: [],
+    driverName: 'server',
+  } as unknown as Parameters<typeof exploreReport>[0];
+
+  it('carries that plan alone, and one count of the flows it saved', () => {
+    const out = exploreReport({
+      ...base,
+      journeys: [{ title: 'Team', status: 'passed' }],
+    } as never);
+    expect(out['plan']).toBeUndefined();
+    expect(out['driverAccount']).toBeUndefined();
+    expect(out['savedFlows']).toEqual(['a']);
+  });
+
+  it('keeps the local plan and the driver account when nothing else planned it', () => {
+    const out = exploreReport(base);
+    expect(out['plan']).toEqual({ summary: '15 replays', steps: base.plan.steps });
+    expect(out['driverAccount']).toBe(drive.summary);
   });
 });

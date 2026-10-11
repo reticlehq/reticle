@@ -111,7 +111,7 @@ export function leasableAppUrl(deps: ToolDeps, sessionId: string | undefined): s
  * refusal on that path is deliberately silent — a fixture is an optimisation, and a suite must not
  * die when one is unavailable.
  */
-function sessionUrlOf(deps: ToolDeps, sessionId: string | undefined): string | undefined {
+export function sessionUrlOf(deps: ToolDeps, sessionId: string | undefined): string | undefined {
   try {
     return deps.sessions.resolve(sessionId).url;
   } catch {

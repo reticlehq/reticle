@@ -47,6 +47,8 @@ export interface ServerDriverOptions {
   planSteps?: readonly { kind: string; target: string; why: string }[];
   /** The signal names the app declares, so the engine can claim one by name. */
   vocabulary?: readonly string[];
+  /** The survey of the app taken before the drive: where each text and control lives. */
+  siteMap?: unknown;
   /** Where secret field values live. Only their NAMES go to the platform. Defaults to `process.env`. */
   env?: Record<string, string | undefined>;
   maxSteps?: number;
@@ -157,6 +159,7 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
           ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
           ...(options.planSteps === undefined ? {} : { planSteps: options.planSteps }),
           ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }),
+          ...(options.siteMap === undefined ? {} : { siteMap: options.siteMap }),
           secrets: secretNames(options.env ?? process.env),
           tools: input.tools.filter((t) => FINISH !== t.name).map(toolSpec),
         })) as { runId?: unknown };

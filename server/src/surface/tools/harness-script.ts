@@ -8,7 +8,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { ReticleCommand, ReticleTool, ScriptStatus, asRecord } from '@reticlehq/core';
+import {
+  ReticleCommand,
+  ReticleTool,
+  ScriptStatus,
+  asRecord,
+  type SeedStorage,
+} from '@reticlehq/core';
 import { PromptContextSchema, checkScript, type DriveScript } from '@reticlehq/core/artifacts';
 import {
   runScript,
@@ -25,12 +31,12 @@ import {
   type ToolOutcome,
 } from '@/features/harness/harness.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
-import { harnessRunId, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
+import { harnessRunId, noteHarnessDisparity, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
 import { openSessionIntents } from '@/memory/intent/open-intents.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
-import { leasableAppUrl } from '@/language/flows/flow-tools.js';
+import { leasableAppUrl, sessionUrlOf } from '@/language/flows/flow-tools.js';
 import type { ToolDeps } from './tool-kit.js';
-import { acquireLeasedSession } from './lease-tools.js';
+import { acquireLeasedSession, suiteFixtureSeed } from './lease-tools.js';
 import { reticleToolset } from './harness-toolset.js';
 import { laneIds } from '@/features/harness/script/lane-ids.js';
 import { appControlsOf } from '@/features/harness/script/app-controls.js';
@@ -50,14 +56,8 @@ import {
   reportPlanResults,
   type JourneyResult,
 } from '@/features/harness/platform/script.js';
-import {
-  checkExpect,
-  checkGoals,
-  goalOfDrive,
-  goalsIn,
-  readOpening,
-  type GoalCheck,
-} from '@/features/harness/goals.js';
+import { goalOfDrive, parseGoals, readOpening } from '@/features/harness/goals.js';
+import { bestOfLanes, huntAndGrade, refreshMap, siteMapFor, type Graded } from './harness-hunt.js';
 import {
   serverOptionsFromEnv,
   type PlatformCredential,
@@ -91,6 +91,24 @@ export const msgSavedPlanUnreadable = (planId: string): string =>
 /** The platform could not plan the run: the drive that follows is the journey alone, unplanned. */
 export const msgNoPlan = (why: string): string =>
   `No plan this time — ${why.replace(/\.$/, '')}. Driving the journey on its own instead.`;
+
+/** Said when a plan's lanes cannot carry this tab's sign-in into new browsers, so they take turns here. */
+export const MSG_LANES_IN_THIS_TAB =
+  "The plan's lanes take turns in this tab: a new browser would start signed out, and this tab's " +
+  'sign-in could not be copied into one.';
+
+/**
+ * The sign-in a plan's lanes start from: what this tab's browser holds, or undefined when it cannot
+ * be copied (no browser this daemon drives, nothing to copy), in which case the lanes take turns here.
+ */
+export async function laneSeed(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+  appUrl: string | undefined,
+): Promise<SeedStorage | undefined> {
+  if (appUrl === undefined) return undefined;
+  return suiteFixtureSeed(deps.realInput, sessionUrlOf(deps, sessionId) ?? appUrl);
+}
 
 /** A request older than this is about some earlier task, not the one being driven. */
 const REQUEST_FRESH_MS = 6 * 60 * 60 * 1000;
@@ -210,6 +228,11 @@ async function runPlan(
     const journey = { kind: PlanStepKind.DRIVE, target: 'this journey, to its end', why: goal };
     return { ...open, steps: [journey, ...open.steps] };
   };
+  // Map first: survey the app (no model) unless its map is fresh; every lane's engine looks goals up
+  // in it, and the hunt before grading starts from it. The tab is left where it started.
+  const map = await siteMapFor(deps, options.sessionId, (name, args) =>
+    reticleToolset(deps, pinned(options)).invoke(name, args),
+  );
   const driverFor = (persona?: string, goal?: string): { driver: ModelDriver; name: string } =>
     options.driver === undefined
       ? buildDriver(
@@ -219,6 +242,7 @@ async function runPlan(
           options.driverName,
           persona,
           persona === undefined ? goal : undefined,
+          map,
         )
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driverName = driverFor().name;
@@ -228,7 +252,12 @@ async function runPlan(
   // Lanes run side by side only in leased contexts; without a pool they take turns on this tab.
   const pool = deps.pool;
   const appUrl = leasableAppUrl(deps, options.sessionId);
-  const leasing = pool !== undefined && appUrl !== undefined && 1 < script.lanes.length;
+  const wantsLanes = pool !== undefined && appUrl !== undefined && 1 < script.lanes.length;
+  // A new context starts signed out: lanes once spent a whole run (three lanes, twelve credits) on
+  // /login, a page that was not the journey. They start from what this tab holds, or take turns here.
+  const seed = wantsLanes ? await laneSeed(deps, options.sessionId, appUrl) : undefined;
+  const leasing = wantsLanes && seed !== undefined;
+  if (wantsLanes && !leasing) narrator(deps, options)(MSG_LANES_IN_THIS_TAB);
   const projectId = safeProjectId(deps, options.sessionId);
   let off = false;
   const poll = setInterval(() => {
@@ -239,6 +268,8 @@ async function runPlan(
   poll.unref();
 
   const lanes = laneIds(harness, leasing);
+  const endGoalsAsked = options.goals ?? parseGoals(focus);
+  const laneGrades: Graded[] = [];
   // Keyed by the tool list, which the script runner's recording wrapper passes through unchanged.
   const harnessOf = new WeakMap<object, string>();
 
@@ -248,7 +279,7 @@ async function runPlan(
     ...(true === options.confirmDangerous ? { confirmDangerous: true } : {}),
     lease: async () => {
       if (!leasing) return { ...pinned(options), release: () => Promise.resolve() };
-      const acquire = () => acquireLeasedSession(pool, deps.sessions, appUrl, projectId);
+      const acquire = () => acquireLeasedSession(pool, deps.sessions, appUrl, projectId, seed);
       // A cold dev server can miss the first load while other lanes compile it; the second finds it warm.
       return acquire().catch(acquire);
     },
@@ -284,6 +315,18 @@ async function runPlan(
       // the drive did not reach.
       noteHarnessGoal(harnessOf.get(toolset.tools) ?? harness, result.goalMet);
       const banked = await bankOpenRecording(toolset, result, persona);
+      // A lane in its own browser is graded where it drove: the caller's tab never saw its pages.
+      if (leasing && 0 < endGoalsAsked.length)
+        laneGrades.push(
+          await huntAndGrade(deps, (name, args) => toolset.invoke(name, args), {
+            sessionId: options.sessionId,
+            goals: endGoalsAsked,
+            expect: options.expect,
+            opening,
+            journey: goal,
+            map,
+          }),
+        );
       if (persona !== undefined) {
         const saved = reconcileFlows(ahead, await reads.flows.list(), [
           ...result.toolCalls,
@@ -386,9 +429,25 @@ async function runPlan(
     ...reconciled.savedFlows,
     ...reconciled.rewroteFlows,
   ]);
-  // The texts a named journey quoted must be on the page at the end, checked as the persona drive
-  // always checked them, and not counted when the page showed them before the drive began.
-  const goals = await endGoals(endInvoke, options.goals ?? goalsIn(focus), options.expect, opening);
+  await refreshMap(deps, options.sessionId, map, run.toolCalls);
+  // The texts a named journey quoted must be on the page at the end, hunted for first (a goal the
+  // drive walked past or stopped short of is looked for, not graded where it stood), and not counted
+  // when the page showed them before the drive began.
+  // Lanes in their own browsers were graded where they drove, and a goal any lane proved is proved;
+  // lanes taking turns here end on this tab, so it is graded here.
+  const graded =
+    0 < laneGrades.length
+      ? bestOfLanes(laneGrades)
+      : await huntAndGrade(deps, endInvoke, {
+          sessionId: options.sessionId,
+          goals: endGoalsAsked,
+          expect: options.expect,
+          opening,
+          journey: focus,
+          map,
+        });
+  const goals = graded.goals;
+  for (const id of lanes.all()) noteHarnessDisparity(id, graded.disparity);
   const goalMet = goalOfDrive(drive.goalMet, goals, actedOnApp(run.toolCalls));
   if (0 < goals.length) for (const id of lanes.all()) noteHarnessGoal(id, goalMet);
   return {
@@ -398,6 +457,7 @@ async function runPlan(
     ...reconciled,
     unverifiedFlows,
     goals,
+    ...(0 === graded.disparity.length ? {} : { disparity: graded.disparity }),
     ...(0 === runIds.length ? {} : { runIds }),
     ...(planId === undefined ? {} : { planId }),
     journeys: results,
@@ -406,19 +466,6 @@ async function runPlan(
       ...run.lines,
     ],
   };
-}
-
-/** The quoted texts, then the declared outcome, each graded on the page the drive ended on. */
-async function endGoals(
-  invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
-  texts: readonly string[],
-  expect: Record<string, unknown> | undefined,
-  opening: string | undefined,
-): Promise<GoalCheck[]> {
-  return [
-    ...(await checkGoals(invoke, texts, opening)),
-    ...(expect === undefined ? [] : [await checkExpect(invoke, expect)]),
-  ];
 }
 
 /** What the project still owes, in its own words: the user's recent request, then open intents. */

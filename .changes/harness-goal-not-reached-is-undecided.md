@@ -1,0 +1,4 @@
+### Fixed
+
+- **`@reticlehq/server` — a Harness goal the drive never reached was graded a failure of the app.** A drive that clicked away from the page its goal is on, or never opened it, recorded a failed check on the app's code. The goal check now lets the page settle, scrolls each goal into view by its text, and grades what it finds; a goal the end page does not show even scrolled is undecided, never `no`. A planned journey that finishes with turns to spare, short of the end state its goal quotes, is sent on once from where it stands before it is graded.
+- **`@reticlehq/server` — quoted goals are read as written.** A goal quoting text with quotes inside it (an issue title such as `"Check failed: an element matching {"testid":"pay"}"`) stays one goal instead of splitting into `{`, `:` and `}`. A negated quote (`must not show "payments"`) is an absence goal, asserted as text that is not on the page, so a drive can check that something is kept out.

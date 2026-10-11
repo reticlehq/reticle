@@ -360,6 +360,7 @@ describe('an open goal that quotes where it ends', () => {
     toolset: (): HarnessToolset => ({
       tools: [],
       invoke(name, args) {
+        if (ReticleTool.SNAPSHOT === name) return Promise.resolve({ tree: page });
         if (ReticleTool.ASSERT !== name) return Promise.resolve({});
         const contains = String((args['predicate'] as { contains?: unknown }).contains);
         const shown = page.includes(contains);
@@ -398,6 +399,73 @@ describe('an open goal that quotes where it ends', () => {
   it('fails when the page still shows where it started', async () => {
     const run = await runScript(counter, onPage('button "count: 0"'));
     expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
+    // The journey missed; the app was not caught failing, so no failed check is kept.
+    expect(run.toolCalls.filter((c) => ReticleTool.ASSERT === c.name)).toEqual([]);
+  });
+});
+
+/*
+ * From a persona drive: the Harness joined the workspace, opened Runs and finished three actions
+ * into twenty steps, one click short of the "Team" step its own plan named, so "acme-checkout" was
+ * never on the page it was graded on.
+ */
+describe('a drive that finishes short of the end its goal names', () => {
+  const GOAL = 'Open Runs, select Team, and end when the page shows "acme-checkout".';
+  const journey = script({
+    version: 1,
+    source: 'platform',
+    journeys: [{ id: 'team', title: 'Team', steps: [{ kind: 'act', goal: GOAL }] }],
+    lanes: [{ id: 'A', journeys: ['team'] }],
+  });
+  const ports = (reachesOn: number) => {
+    let page = 'button "Team"';
+    const asked: [string, number][] = [];
+    const port: ScriptPorts = {
+      parallel: 1,
+      stopped: () => false,
+      lease: () => Promise.resolve({ release: () => Promise.resolve() }),
+      toolset: (): HarnessToolset => ({
+        tools: [],
+        invoke(name, args) {
+          if (ReticleTool.SNAPSHOT === name) return Promise.resolve({ tree: page });
+          if (ReticleTool.ASSERT !== name) return Promise.resolve({});
+          const contains = String((args['predicate'] as { contains?: unknown }).contains);
+          const shown = page.includes(contains);
+          return Promise.resolve({ pass: shown, verified: shown ? Verified.YES : Verified.NO });
+        },
+      }),
+      drive: (_tools, goal, maxSteps) => {
+        asked.push([goal, maxSteps]);
+        if (reachesOn === asked.length) page = 'cell "acme-checkout"';
+        return Promise.resolve({
+          stopReason: StopReason.FINISHED,
+          summary: '',
+          steps: 3,
+          toolCalls: [],
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          proved: false,
+          goalMet: reachesOn === asked.length,
+        });
+      },
+    };
+    return { port, asked };
+  };
+
+  it('is sent on once from where it stands, with the turns it has left, and passes there', async () => {
+    const p = ports(2);
+    const run = await runScript(journey, p.port);
+    expect(p.asked).toHaveLength(2);
+    expect(p.asked[1]?.[0]).toContain('does not show "acme-checkout" yet');
+    expect(p.asked[1]?.[1]).toBe(37);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
+  });
+
+  it('fails as a missed goal, with no failed check, when it still does not get there', async () => {
+    const p = ports(99);
+    const run = await runScript(journey, p.port);
+    expect(p.asked).toHaveLength(2);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
+    expect(run.toolCalls.filter((c) => ReticleTool.ASSERT === c.name)).toEqual([]);
   });
 });
 

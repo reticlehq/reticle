@@ -362,8 +362,15 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * Step screenshots: 260,113 B. Not the renderer, which loads only when a picture is first drawn,
  * but the run artifact's screenshot schemas, built at module scope in core's barrel (the channel
  * the notes above name), and the one `render` command registration. Ceiling 261,113.
+ *
+ * Reading the page as a person reads it, from a persona drive where three goals the page plainly
+ * showed could not be proved: content below the fold of a scrolling main graded hidden, a phrase
+ * split across two flex items ("found by" / "CI") never matched, and the page tree dropped a
+ * sentence's inline `<code>`. All three are answered in the page, at read time. Measured 261,198 B;
+ * ceiling 262,198 by the convention.
+ * Both together, measured after the merge: 262,304 B; ceiling 263,304 by the convention.
  */
-const MAX_FIRST_LOAD_BYTES = 261_113;
+const MAX_FIRST_LOAD_BYTES = 263_304;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

@@ -39,6 +39,7 @@ import {
   type DrivenBy,
   type JournalAction,
   type RunCheck,
+  type RunDisparity,
 } from '@reticlehq/core';
 import type { VerificationRunInput } from './artifact/build-verification-run.js';
 import { withCorrections } from './late-answer.js';
@@ -60,6 +61,17 @@ export interface DriveRunDeps {
    * Absent when nobody was counting edits, which must not be reported as "the first round".
    */
   editEpoch?: number | undefined;
+}
+
+/**
+ * The one MCP client every stamped action came from. Two clients in one tab is undefined, never a
+ * pick: crediting either would put the other's verdicts under its name.
+ */
+function soleAgent(actions: readonly JournalAction[]): string | undefined {
+  const named = new Set(
+    actions.flatMap((action) => (action.agent === undefined ? [] : [action.agent])),
+  );
+  return 1 === named.size ? [...named][0] : undefined;
 }
 
 /** Every verdict a verification tool recorded on this session's actions, in order. */
@@ -156,7 +168,10 @@ export function driveRunFrom(
       name: deps.projectId ?? UNNAMED_AGENT,
       framework: deps.framework ?? RunFramework.OTHER,
     },
-    agent: { id: deps.agentId ?? UNNAMED_AGENT, kind: RunAgentKind.CODING_AGENT },
+    agent: {
+      id: deps.agentId ?? soleAgent(actions) ?? UNNAMED_AGENT,
+      kind: RunAgentKind.CODING_AGENT,
+    },
     trigger: {
       kind: RunTrigger.EDIT,
       note: 'driven live through the Reticle tools',
@@ -214,6 +229,22 @@ export function noteHarnessGoal(harness: string, met: boolean | undefined): void
   goalsMissed.set(harness, met);
 }
 
+/** How each Harness drive's goals compared with the agent's verdicts, until its run is folded. */
+const disparities = new Map<string, readonly RunDisparity[]>();
+
+/**
+ * Noted when a drive is graded, like its goal: its run artifact carries the comparison, so the
+ * platform can file a goal the agent proved and the Harness could not find.
+ */
+export function noteHarnessDisparity(harness: string, found: readonly RunDisparity[]): void {
+  if (0 === found.length) return;
+  if (MAX_GOALS_HELD <= disparities.size && !disparities.has(harness)) {
+    const oldest = disparities.keys().next().value;
+    if (oldest !== undefined) disparities.delete(oldest);
+  }
+  disparities.set(harness, found);
+}
+
 /** The phrase `describeWaitTarget` opens a route claim with, as the journal records it. */
 const ROUTE_CLAIM = 'a route change';
 const ABSENCE_OF = 'the absence of ';
@@ -260,6 +291,7 @@ function harnessRunFrom(
   return {
     ...input,
     checks,
+    ...(disparities.has(by.harness) ? { disparity: [...(disparities.get(by.harness) ?? [])] } : {}),
     durationMs: Math.max(0, input.durationMs - first),
     agent: { id: harnessAgentId(by.driver), kind: RunAgentKind.CODING_AGENT },
     trigger: {

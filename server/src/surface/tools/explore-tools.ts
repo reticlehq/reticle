@@ -393,7 +393,7 @@ const exploreDrive: ExploreDrive = async (deps, env, args, harness, control) => 
 };
 
 /** The tool's answer for a finished drive. */
-function exploreReport(explored: ExploreResult): Record<string, unknown> {
+export function exploreReport(explored: ExploreResult): Record<string, unknown> {
   const {
     drive,
     savedFlows,
@@ -408,6 +408,7 @@ function exploreReport(explored: ExploreResult): Record<string, unknown> {
     journeys,
     planId,
     planUrl,
+    disparity,
   } = explored;
   const checks = checkTally(drive.toolCalls);
   return {
@@ -431,7 +432,12 @@ function exploreReport(explored: ExploreResult): Record<string, unknown> {
       ? {}
       : { journeys: journeys.map((j) => ({ title: j.title, status: j.status })) }),
     goals: [...goals],
-    plan: { summary: plan.summary, steps: [...plan.steps] },
+    // Each goal the agent also judged, compared: agent proved and Harness could not find is a
+    // discoverability finding, filed on the platform as its own kind.
+    ...(disparity === undefined ? {} : { disparity: [...disparity] }),
+    // The local plan only when nothing else planned the drive. Beside a platform plan's journeys it
+    // was a second, unrelated plan — fifteen replays of other people's flows — in the same answer.
+    ...(journeys === undefined ? { plan: { summary: plan.summary, steps: [...plan.steps] } } : {}),
     // Derived, not narrated. The driver's own account stays out of it, in `driverAccount`: it
     // named flows it never saved ("saved 1 flow(s)" beside "its recording was not saved"), and a
     // summary must never contradict itself.
@@ -445,7 +451,12 @@ function exploreReport(explored: ExploreResult): Record<string, unknown> {
       ),
       ...[unprovedGoals(goals)].filter((line): line is string => line !== undefined),
     ].join('\n'),
-    ...(0 === drive.summary.length ? {} : { driverAccount: drive.summary }),
+    // Not beside a platform plan: its lanes' accounts count saves the platform asked for ("saved 3
+    // flow(s)") where `savedFlows` lists what is on disk, and an answer has one count. Each journey's
+    // ending is in `journeys`, and the end state in `goals`.
+    ...(0 === drive.summary.length || journeys !== undefined
+      ? {}
+      : { driverAccount: drive.summary }),
     ...(drive.error === undefined ? {} : { error: drive.error }),
     usage: drive.usage,
     // The note only fires when the drive left NOTHING behind. A rewritten flow is a flow: it

@@ -7,7 +7,7 @@
  * artifact and therefore synced nothing.
  */
 import { describe, expect, it } from 'vitest';
-import { PredicateKind, Verified, type JournalAction } from '@reticlehq/core';
+import { DisparityKind, PredicateKind, Verified, type JournalAction } from '@reticlehq/core';
 import {
   buildVerificationRun,
   type VerificationRunInput,
@@ -17,6 +17,7 @@ import {
   driveRunId,
   driveRunsFrom,
   harnessAgentId,
+  noteHarnessDisparity,
   noteHarnessGoal,
 } from './drive-run.js';
 import { computeVerdict } from './artifact/build-verification-run.js';
@@ -178,6 +179,24 @@ describe('the kind of evidence a check read', () => {
   });
 });
 
+describe('the agent a drive is credited to', () => {
+  it('is the MCP client that made the calls, not the generic author', () => {
+    const run = driveRunFrom([{ ...action(Verified.YES), agent: 'claude-code' }], DEPS);
+    expect(run?.agent.id).toBe('claude-code');
+  });
+
+  it('stays the generic author when two clients drove the same tab — never a guess', () => {
+    const run = driveRunFrom(
+      [
+        { ...action(Verified.YES), agent: 'claude-code' },
+        { ...action(Verified.YES), agent: 'cursor' },
+      ],
+      DEPS,
+    );
+    expect(run?.agent.id).toBe('reticle-mcp');
+  });
+});
+
 describe('a Harness drive in the same tab', () => {
   const by = { harness: 'h1', driver: 'server', persona: 'a merchant refunds a payment' };
   const harness = (verified: Verified, at: number): JournalAction => ({
@@ -214,6 +233,31 @@ describe('a Harness drive in the same tab', () => {
       DEPS,
     );
     expect(runs.find((run) => 'harness-h-goal' === run.runId)?.flows[0]?.status).toBe('skipped');
+  });
+
+  /*
+   * Two-way testing reaches the platform on the run: a goal the agent proved and the Harness could
+   * not find is filed there as a discoverability finding, so the comparison rides on the artifact.
+   */
+  it('carries how its goals compared with the agent, through the artifact schema', () => {
+    const compared = { ...by, harness: 'h-two-way' };
+    const disparity = [
+      {
+        goal: 'Reopened by',
+        kind: DisparityKind.DISCOVERABILITY,
+        agent: { verified: Verified.YES, claim: "text containing 'Reopened by'" },
+        harness: {
+          verified: Verified.UNKNOWN,
+          found: false,
+          searched: ['/issues'],
+          gaveUpAt: '/issues',
+        },
+      },
+    ];
+    noteHarnessDisparity('h-two-way', disparity);
+    const [run] = driveRunsFrom([{ ...harness(Verified.YES, 40), drivenBy: compared }], DEPS);
+    expect(run?.disparity).toEqual(disparity);
+    expect(buildVerificationRun(run as VerificationRunInput, () => 1).disparity).toEqual(disparity);
   });
 
   /** A user drive with 0 failed and 2 undecided, its goal judged missed, synced as a failure. */

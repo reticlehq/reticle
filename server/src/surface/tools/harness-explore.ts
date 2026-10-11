@@ -11,7 +11,7 @@
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { exploreScript } from './harness-script.js';
 import { randomUUID } from 'node:crypto';
-import { harnessRunId, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
+import { harnessRunId, noteHarnessDisparity, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
 import {
   ReticleEnv,
   ReticleTool,
@@ -57,14 +57,16 @@ import { reticleToolset } from './harness-toolset.js';
 import { DriveRefusedError, noteDriveLine } from '@/features/harness/drive-runs.js';
 import { personaCredentials } from '@/features/harness/platform/persona-credentials.js';
 import {
-  checkExpect,
-  checkGoals,
   goalOfDrive,
+  parseGoals,
   readOpening,
-  goalsIn,
   unprovedGoals,
   type GoalCheck,
 } from '@/features/harness/goals.js';
+import type { RunDisparity } from '@reticlehq/core';
+import type { HarnessMap } from '@reticlehq/core/artifacts';
+import { mapForPlatform } from '@/features/harness/explore/site-map.js';
+import { huntAndGrade, refreshMap, siteMapFor } from './harness-hunt.js';
 import { instrumentationOf } from '@/portal/session/recorded-gaps.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 
@@ -164,6 +166,8 @@ export interface ExploreResult {
   planId?: string;
   /** That plan's page on the dashboard. */
   planUrl?: string;
+  /** Each goal the session's coding agent also judged, and how the two verdicts compare. */
+  disparity?: readonly RunDisparity[];
 }
 
 /**
@@ -371,26 +375,31 @@ export async function exploreApp(
   // tested — which is the whole of what a drive should be deciding against.
   const plan = await readPlan(reads, options.sessionId);
   const driving = drivingPlan(plan, options.focus);
-  const built =
-    options.driver === undefined
-      ? buildDriver(env, maxSteps, driving, options.driverName, options.focus)
-      : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
-  const driver = built.driver;
-
+  // Refused before anything touches the app: an unknown driver, or no platform to drive with.
+  if (options.driver === undefined)
+    buildDriver(env, maxSteps, driving, options.driverName, options.focus);
   // Every action this drive takes carries who took it, so the run it folds into is the Harness's own
   // and not mixed into the run of whichever agent shares the tab.
   const harnessId = options.harnessId ?? randomUUID();
+  const driverLabel = options.driver === undefined ? SERVER_DRIVER : CUSTOM_DRIVER_NAME;
   const toolset = reticleToolset(deps, {
     ...pinned(options),
     drivenBy: {
       harness: harnessId,
-      driver: built.name,
+      driver: driverLabel,
       ...(options.focus === undefined ? {} : { persona: options.focus }),
     },
   });
   const narrate = narrator(deps, options);
   const invoke = (name: string, args: Record<string, unknown>): Promise<unknown> =>
     toolset.invoke(name, args);
+  // Map first: survey the app (no model) unless this app's map is fresh, and leave the tab at start.
+  const map = await siteMapFor(deps, options.sessionId, invoke);
+  const built =
+    options.driver === undefined
+      ? buildDriver(env, maxSteps, driving, options.driverName, options.focus, undefined, map)
+      : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
+  const driver = built.driver;
   // Read before anything is driven: a goal this page already shows proves nothing at the end.
   const opening = await readOpening(invoke);
   narrate(`Harness is driving${options.focus === undefined ? '' : `: ${options.focus}`}`, true);
@@ -422,10 +431,18 @@ export async function exploreApp(
   // drove unsaved — work paid for and thrown away. Saving is not a decision any model gets to make
   // and not something a step budget gets to cut off, so it happens here, after the loop, always.
   const banked = await bankOpenRecording(toolset, drive, options.focus);
-  const goals = [
-    ...(await checkGoals(invoke, options.goals ?? goalsIn(options.focus), opening)),
-    ...(options.expect === undefined ? [] : [await checkExpect(invoke, options.expect)]),
-  ];
+  await refreshMap(deps, options.sessionId, map, drive.toolCalls);
+  // Hunt for the journey's end before grading: never a `no` from where the drive happened to stop.
+  const graded = await huntAndGrade(deps, invoke, {
+    sessionId: options.sessionId,
+    goals: options.goals ?? parseGoals(options.focus),
+    expect: options.expect,
+    opening,
+    journey: options.focus,
+    map,
+  });
+  const goals = graded.goals;
+  noteHarnessDisparity(harnessId, graded.disparity);
   // The goals it was given decide whether the journey was done, not a click that held on the way,
   // and never the driver's word over a drive that did nothing.
   const goalMet = goalOfDrive(drive.goalMet, goals, actedOnApp(drive.toolCalls));
@@ -454,6 +471,7 @@ export async function exploreApp(
     ...reconciled,
     unverifiedFlows,
     goals,
+    ...(0 === graded.disparity.length ? {} : { disparity: graded.disparity }),
     ...(runId === undefined ? {} : { runIds: [runId] }),
     ...runUrlFor(deps, options.sessionId, runId),
   };
@@ -869,6 +887,8 @@ export function buildDriver(
   persona?: string,
   /** A goal driven with no persona: it names the drive's flows as a persona would. */
   journey?: string,
+  /** The survey of the app, which the platform's engine looks goals up in. */
+  siteMap?: HarnessMap,
 ): { driver: ModelDriver; name: string } {
   if (requested !== undefined && SERVER_DRIVER !== requested)
     throw new Error(msgUnknownDriver(requested));
@@ -883,6 +903,7 @@ export function buildDriver(
       planSteps: plan.steps,
       vocabulary: plan.vocabulary,
       maxSteps,
+      ...(siteMap === undefined ? {} : { siteMap: mapForPlatform(siteMap) }),
       // Secret fields fill from the drive's own env: a persona's credentials ride in it.
       env,
     }),
