@@ -326,6 +326,28 @@ export class BrowserPool {
     }
   }
 
+  /** The URL a lease was opened on — the one that carries its Reticle identity. */
+  leaseUrl(sessionId: string): string | undefined {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.url;
+  }
+
+  /**
+   * Navigate a leased page through the browser. For a lease whose page has no SDK to take the
+   * command — a navigate to an image left the lease unreachable, and the next navigate answered "no
+   * connected session". False when this is not a lease or the page would not go.
+   */
+  async gotoLease(sessionId: string, url: string, timeoutMs?: number): Promise<boolean> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    if (lease === undefined) return false;
+    this.touch(sessionId);
+    try {
+      await lease.page.goto(url, timeoutMs === undefined ? {} : { timeoutMs });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Move the real pointer on a leased page, or false when this session is not a lease or cannot
    * hover. Same optional-capability contract as screenshotLease: absence must read as "could not
