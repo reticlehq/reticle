@@ -129,6 +129,7 @@ export function attachJournal(
   if (deps.enabled) {
     attachDriveRunFlush({
       resolve: (sessionId: string) => bridge.sessions.get(sessionId),
+      all: () => bridge.sessions.all(),
       write: (session) => recordDriveRun(deps, session),
     });
   }

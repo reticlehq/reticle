@@ -100,6 +100,14 @@ const pressable = (line: TreeLine): line is TreeLine & { ref: string } =>
 
 const NAV_LANDMARKS = new Set(['navigation', 'complementary', 'banner']);
 const TOGGLE_ROLES = new Set(['tab', 'radio', 'switch']);
+const TOGGLE_GROUPS = new Set(['group', 'toolbar', 'radiogroup', 'tablist']);
+/** Roles that, open, make the rest of the page inert to a reader. */
+const OVERLAYS = new Set(['menu', 'dialog', 'alertdialog', 'listbox']);
+
+/** Whether a menu or dialog is open, so the read shows it and little else. */
+export function overlayOpen(lines: readonly TreeLine[]): boolean {
+  return lines.some((l) => OVERLAYS.has(l.role));
+}
 const PRESSED = 'pressed';
 const CHECKED = 'checked';
 
@@ -119,7 +127,9 @@ export function toggles(lines: readonly TreeLine[]): (TreeLine & { ref: string }
   return lines.filter((l, i): l is TreeLine & { ref: string } => {
     if (!pressable(l) || l.states.includes(PRESSED) || l.states.includes(CHECKED)) return false;
     if (TOGGLE_ROLES.has(l.role)) return true;
-    if ('button' !== l.role) return false;
+    // Only inside a group of its kind (Mine | Team, Map | List). A banner's "Hide sidebar" is
+    // pressed too, and the workspace switcher beside it was pressed as a toggle on a live drive.
+    if ('button' !== l.role || !TOGGLE_GROUPS.has(l.within.at(-1) ?? '')) return false;
     const siblings = [lines[i - 1], lines[i + 1]].filter(
       (s): s is TreeLine => s !== undefined && s.depth === l.depth && 'button' === s.role,
     );
@@ -141,11 +151,18 @@ export function namedControls(
   journey: string,
 ): (TreeLine & { ref: string })[] {
   const said = journey.toLowerCase();
-  return lines.filter((l): l is TreeLine & { ref: string } => {
-    if (!ROLES_FOLLOWED.has(l.role) || !pressable(l)) return false;
-    const head = (l.name.split(':')[0] ?? '').trim().toLowerCase();
-    return MIN_NAMED <= head.length && new RegExp(`\\b${escape(head)}\\b`).test(said);
-  });
+  return lines.filter(
+    (l): l is TreeLine & { ref: string } =>
+      ROLES_FOLLOWED.has(l.role) && pressable(l) && journeyNames(said, l.name),
+  );
+}
+
+/** Whether the journey names a control: its name, or the part before its colon, as whole words. */
+export function journeyNames(journey: string, name: string): boolean {
+  const head = (name.split(':')[0] ?? '').trim().toLowerCase();
+  return (
+    MIN_NAMED <= head.length && new RegExp(`\\b${escape(head)}\\b`).test(journey.toLowerCase())
+  );
 }
 
 const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

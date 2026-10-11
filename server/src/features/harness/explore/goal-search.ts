@@ -15,7 +15,9 @@ import { ReticleTool } from '@reticlehq/core';
 import type { HarnessMap } from '@reticlehq/core/artifacts';
 import { lookFor } from '../goals.js';
 import {
+  journeyNames,
   namedControls,
+  overlayOpen,
   parseTree,
   readPage,
   toggles,
@@ -55,6 +57,7 @@ export async function searchForGoal(
   const pressed = new Set<string>();
   let left = options.moves ?? SEARCH_MOVES;
   let at: string | undefined;
+  let reopened = false;
 
   /** Look here, then press what a person would press here, deeper while presses are left. */
   const explore = async (depth: number): Promise<boolean> => {
@@ -68,6 +71,12 @@ export async function searchForGoal(
     }
     if (MAX_DEPTH <= depth) return false;
     const lines = parseTree(page.tree);
+    // A menu or dialog the drive left open hides the page behind it: the live drive's hunt read the
+    // workspace switcher and nothing else. Close it by reloading the page, once, and look again.
+    if (0 === depth && !reopened && overlayOpen(lines)) {
+      reopened = true;
+      return (await go(page.route)) && explore(0);
+    }
     const tries = [...toggles(lines), ...namedControls(lines, journey)].map(label);
     for (const name of tries) {
       const key = `${page.route}: ${name}`;
@@ -130,11 +139,15 @@ export function mappedPagesFor(
   const wanted = goal.toLowerCase();
   const said = journey.toLowerCase();
   const showing = map.pages.filter((p) => p.texts.some((t) => t.toLowerCase().includes(wanted)));
+  // A page whose controls name what the journey asks for: Memory is a link on Flows.
+  const leading = map.pages.filter((p) =>
+    p.controls.some((c) => journeyNames(said, /"([^"]*)"/.exec(c)?.[1] ?? '')),
+  );
   const named = map.pages.filter(
     (p) =>
       p.heading !== undefined &&
       MIN_HEADING <= p.heading.length &&
       said.includes(p.heading.toLowerCase()),
   );
-  return [...new Set([...showing, ...named].map((p) => p.route))];
+  return [...new Set([...showing, ...leading, ...named].map((p) => p.route))];
 }

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { HookEvent, type HookPayload } from '@reticlehq/core/hooks';
 import { emitHook, resetHooks } from '@/hooks/hook-bus.js';
 import { attachDriveRunFlush } from './drive-run-flush.js';
+import { noteHarnessDisparity, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
 
 afterEach(() => resetHooks());
 
@@ -119,5 +120,30 @@ describe('a drive publishes its evidence while the drive is still happening', ()
     emitHook(verdict('s1'));
     await tick(40);
     expect(written).toEqual([]);
+  });
+});
+
+/*
+ * Persona 21, live: the Harness graded its goals after its last verdict, so the run on disk, written
+ * by that verdict's flush, never carried `goalMet` or `disparity`, and the platform filed a failed
+ * check instead of "Hard to find". What the Harness notes after a drive rewrites every live run.
+ */
+describe('a Harness drive graded after its last verdict', () => {
+  it('is written again once its goal and comparison are noted', async () => {
+    const written: string[] = [];
+    const handle = attachDriveRunFlush({
+      resolve: (id) => ({ id }),
+      all: () => [{ id: 'lane-1' }, { id: 'agent-tab' }],
+      write: async (session) => {
+        written.push(session.id);
+        await Promise.resolve();
+      },
+      debounceMs: 5,
+    });
+    noteHarnessGoal('h-graded-late', false);
+    noteHarnessDisparity('h-graded-late', []);
+    await tick(40);
+    expect(written.sort()).toEqual(['agent-tab', 'lane-1']);
+    handle.stop();
   });
 });

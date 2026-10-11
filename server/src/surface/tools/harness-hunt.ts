@@ -20,7 +20,14 @@ import { agentVerdictsIn, disparityFor } from '@/features/harness/explore/dispar
 import type { Invoke } from '@/features/harness/explore/page-tree.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
-import { Verified, VerifiedReason } from '@reticlehq/core';
+import {
+  JournalActionSchema,
+  ReticleDir,
+  Verified,
+  VerifiedReason,
+  type JournalAction,
+} from '@reticlehq/core';
+import { isValidSessionId } from '@/memory/project/dir/reticle-dir.js';
 import type { ToolDeps } from './tool-kit.js';
 
 /**
@@ -29,6 +36,10 @@ import type { ToolDeps } from './tool-kit.js';
  * and the ignore file to learn it; give it its own name if it ever needs to be shared.
  */
 const HARNESS_MAP_FILE = 'harness-map.json';
+/** Fewer pages than this and the kept map is not a map of the app. */
+const MIN_MAPPED_PAGES = 2;
+/** Sessions read from disk for the agent's verdicts: the recent past of one project, not its history. */
+const MAX_JOURNALS_READ = 40;
 
 function mapPath(deps: ToolDeps, sessionId: string | undefined): string | undefined {
   try {
@@ -63,7 +74,13 @@ export async function siteMapFor(
 ): Promise<HarnessMap | undefined> {
   const path = mapPath(deps, sessionId);
   const kept = path === undefined ? undefined : await readMap(deps, path);
-  if (kept !== undefined && deps.now() - kept.surveyedAt < MAP_FRESH_MS) return kept;
+  // A map of one page is a survey that saw nothing (a menu was open): it is surveyed again.
+  if (
+    kept !== undefined &&
+    MIN_MAPPED_PAGES <= kept.pages.length &&
+    deps.now() - kept.surveyedAt < MAP_FRESH_MS
+  )
+    return kept;
   const surveyed = await surveyApp(invoke, deps.now);
   if (surveyed === undefined) return kept;
   const map = kept === undefined ? surveyed : mergePages(kept, surveyed.pages, surveyed.surveyedAt);
@@ -84,7 +101,11 @@ export async function refreshMap(
   if (0 < read.length) await writeMap(deps, path, mergePages(map, read));
 }
 
-/** The decided verdicts the connected agent made in any live tab of this app. */
+/**
+ * The decided verdicts the connected agent made on this app: in its live tabs, and in the journals
+ * on disk of tabs that have closed. Persona 21's agent proved both goals on a tab that had closed by
+ * the time the Harness graded, and the comparison was never made.
+ */
 async function agentVerdicts(deps: ToolDeps, sessionId: string | undefined) {
   let projectId: string | undefined;
   let own: string | undefined;
@@ -98,8 +119,47 @@ async function agentVerdicts(deps: ToolDeps, sessionId: string | undefined) {
   const tabs = deps.sessions
     .all()
     .filter((s) => s.id === own || (projectId !== undefined && s.projectId === projectId));
-  const read = await Promise.all(tabs.map((s) => s.readJournalActions().catch(() => [])));
-  return agentVerdictsIn(read.flat());
+  const live = await Promise.all(tabs.map((s) => s.readJournalActions().catch(() => [])));
+  const onDisk = await journalsOnDisk(deps, sessionId, new Set(tabs.map((s) => s.id)));
+  return agentVerdictsIn([...live.flat(), ...onDisk]);
+}
+
+/** A journal's lines as actions; a line that does not parse is left out, as the journal reader does. */
+function actionsIn(text: string): JournalAction[] {
+  return text.split('\n').flatMap((line) => {
+    if (0 === line.trim().length) return [];
+    try {
+      const parsed = JournalActionSchema.safeParse(JSON.parse(line));
+      return parsed.success ? [parsed.data] : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
+/** The actions of this project's sessions that are no longer live, from their journals. */
+async function journalsOnDisk(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+  live: ReadonlySet<string>,
+): Promise<JournalAction[]> {
+  try {
+    const root = sessionRoot(deps, sessionId);
+    const ids = (await deps.fs.readdir(reticleDirPaths(root).sessions))
+      .filter((id) => !live.has(id) && isValidSessionId(id))
+      .slice(-MAX_JOURNALS_READ);
+    const read = await Promise.all(
+      ids.map((id) =>
+        deps.fs
+          .readFile(join(reticleDirPaths(root).sessions, id, ReticleDir.JOURNAL_ACTIONS_FILE))
+          .then(actionsIn)
+          .catch(() => [] as JournalAction[]),
+      ),
+    );
+    return read.flat();
+  } catch {
+    return [];
+  }
 }
 
 /** A drive's goals as graded, and how each compared with the agent's verdict. */
@@ -153,14 +213,18 @@ export async function huntAndGrade(
   const end = goals
     .filter((g) => true !== g.absent && true !== ask.opening?.includes(g.text))
     .at(-1);
-  const search =
-    end === undefined
-      ? undefined
-      : await searchForGoal(invoke, {
-          goal: end.text,
-          ...(ask.journey === undefined ? {} : { journey: ask.journey }),
-          ...(ask.map === undefined ? {} : { map: ask.map }),
-        });
+  const hunt = (goal: string) =>
+    searchForGoal(invoke, {
+      goal,
+      ...(ask.journey === undefined ? {} : { journey: ask.journey }),
+      ...(ask.map === undefined ? {} : { map: ask.map }),
+    });
+  const search = end === undefined ? undefined : await hunt(end.text);
+  // The end not found anywhere: the tab is left where an earlier goal is, so that one is graded
+  // where it shows rather than where the hunt gave up.
+  if (search !== undefined && !search.found)
+    for (const earlier of goals.filter((g) => g !== end && true !== g.absent).reverse())
+      if ((await hunt(earlier.text)).found) break;
   const checks = (await checkGoals(invoke, goals, ask.opening)).map((c) =>
     end !== undefined &&
     c.text === end.text &&

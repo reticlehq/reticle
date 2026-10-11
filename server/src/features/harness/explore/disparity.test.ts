@@ -68,3 +68,15 @@ describe('one goal, judged both ways', () => {
     ).toBeUndefined();
   });
 });
+
+/* Persona 21: the agent's claim and the goal named the same words in different quotes and spacing. */
+describe('a claim in its own words', () => {
+  it('still names the goal when only quotes, case and spacing differ', () => {
+    const d = disparityFor(
+      { text: 'Free shipping threshold', verified: Verified.UNKNOWN },
+      [{ claim: 'text containing ‘free  Shipping threshold’', verified: Verified.YES }],
+      undefined,
+    );
+    expect(d?.kind).toBe(DisparityKind.DISCOVERABILITY);
+  });
+});

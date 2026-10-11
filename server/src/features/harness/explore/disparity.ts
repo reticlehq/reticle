@@ -40,8 +40,8 @@ export function disparityFor(
   search: GoalSearch | undefined,
 ): RunDisparity | undefined {
   if (true === check.absent) return undefined;
-  const wanted = check.text.toLowerCase();
-  const said = agent.filter((v) => v.claim.toLowerCase().includes(wanted)).at(-1);
+  const wanted = comparable(check.text);
+  const said = agent.filter((v) => comparable(v.claim).includes(wanted)).at(-1);
   if (said === undefined) return undefined;
   const harnessYes = Verified.YES === check.verified;
   const agentYes = Verified.YES === said.verified;
@@ -65,6 +65,17 @@ export function disparityFor(
     },
   };
 }
+
+/**
+ * Text as two writers of the same words would both put it: no case, no quote marks of any kind, one
+ * space. A claim reads `text containing ‘Free shipping threshold’`; the goal is the bare words.
+ */
+const comparable = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/["'“”‘’`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const VERIFIED: ReadonlySet<string> = new Set(Object.values(Verified));
 const asVerified = (value: string): Verified =>

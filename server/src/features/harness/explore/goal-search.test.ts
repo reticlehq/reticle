@@ -7,6 +7,12 @@ import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { fakeApp } from './fake-app.js';
 import { searchForGoal } from './goal-search.js';
+import {
+  CONSOLE_FLOWS,
+  CONSOLE_MEMORY,
+  CONSOLE_OVERVIEW,
+  CONSOLE_SWITCHER_OPEN,
+} from './console-pages.js';
 
 const NAV = [
   '- complementary',
@@ -193,5 +199,59 @@ describe('the hunt for a goal the drive did not end on', () => {
     });
     expect(found.found).toBe(false);
     expect(app.calls.filter(([n]) => ReticleTool.ACT === n)).toHaveLength(1);
+  });
+});
+
+/*
+ * Persona 21, live: the drive left the workspace switcher open on Impact. The hunt read only the
+ * menu, found nothing to press, and gave up at "/overview" with Memory two clicks away (Flows →
+ * Memory). It now closes what the drive left open, and follows the map to the page whose controls
+ * name what the journey asks for.
+ */
+describe('the hunt against the real console', () => {
+  const console21 = () =>
+    fakeApp(
+      {
+        '/overview': {
+          tree: CONSOLE_OVERVIEW,
+          press: { e102: { to: '/flows' }, e107: { opens: CONSOLE_SWITCHER_OPEN } },
+        },
+        '/flows': { tree: CONSOLE_FLOWS, press: { e150: { to: '/memory' } } },
+        '/memory': { tree: CONSOLE_MEMORY },
+      },
+      '/overview',
+    );
+  const JOURNEY =
+    'Bea opens Memory for the shared project, compares the two conflicting statements about "Free shipping threshold" and keeps the one the team agreed on';
+  const MAP = {
+    surveyedAt: 0,
+    pages: [
+      {
+        route: '/flows',
+        texts: ['Flows'],
+        controls: ['link "Flows"', 'link "Plans"', 'link "Memory"'],
+        at: 0,
+      },
+    ],
+  };
+
+  it('closes the menu the drive left open, then goes where the map says Memory is', async () => {
+    const app = console21();
+    await app.invoke(ReticleTool.ACT, { ref: 'e107', action: 'click' });
+    const found = await searchForGoal(app.invoke, {
+      goal: 'Free shipping threshold',
+      journey: JOURNEY,
+      map: MAP,
+    });
+    expect(found).toMatchObject({ found: true, at: '/memory' });
+    expect(found.searched).toContain('/flows: link "Memory"');
+  });
+
+  it('never presses a workspace switcher or a picker as though it were a toggle', async () => {
+    const app = console21();
+    await searchForGoal(app.invoke, { goal: 'nowhere at all', journey: JOURNEY, map: MAP });
+    const pressed = app.calls.filter(([n]) => ReticleTool.ACT === n).map(([, a]) => a['ref']);
+    expect(pressed).not.toContain('e107');
+    expect(pressed).not.toContain('e108');
   });
 });

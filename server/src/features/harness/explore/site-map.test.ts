@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { fakeApp } from './fake-app.js';
+import { CONSOLE_FLOWS, CONSOLE_OVERVIEW, CONSOLE_SWITCHER_OPEN } from './console-pages.js';
 import { mergePages, pagesReadIn, parseMap, surveyApp } from './site-map.js';
 
 const OVERVIEW = [
@@ -89,7 +90,7 @@ describe('the map kept between drives', () => {
         {
           id: '1',
           name: ReticleTool.SNAPSHOT,
-          args: {},
+          args: { mode: 'full' },
           result: { tree: '- heading "Team"', status: { route: '/runs?__reticle_session=x' } },
           isError: false,
         },
@@ -108,5 +109,46 @@ describe('the map kept between drives', () => {
       surveyedAt: 1,
       pages: [],
     });
+  });
+});
+
+/*
+ * Persona 21, live: the kept map was one page, /overview, read with the workspace switcher open; a
+ * drive's menu-open read had replaced the survey's. The survey closes what is open before it reads,
+ * and a drive's reads refresh the map only when they are full reads of an unobstructed page.
+ */
+describe('the map of the real console', () => {
+  it('records Flows with its Memory link, though a menu was open when the survey began', async () => {
+    const fakeWithMenu = fakeApp(
+      {
+        '/overview': {
+          tree: CONSOLE_OVERVIEW,
+          press: { e102: { to: '/flows' }, e107: { opens: CONSOLE_SWITCHER_OPEN } },
+        },
+        '/flows': { tree: CONSOLE_FLOWS },
+      },
+      '/overview',
+    );
+    await fakeWithMenu.invoke(ReticleTool.ACT, { ref: 'e107', action: 'click' });
+    const map = await surveyApp(fakeWithMenu.invoke, () => 7);
+    const flows = map?.pages.find((p) => '/flows' === p.route);
+    expect(flows?.controls).toContain('link "Memory"');
+    expect(map?.pages.find((p) => '/overview' === p.route)?.texts).toContain(
+      'What Reticle did for your team',
+    );
+    expect(fakeWithMenu.route()).toBe('/overview');
+  });
+
+  it('is not refreshed from a quick read or a page a menu covers', () => {
+    const call = (mode: string, tree: string) => ({
+      id: '1',
+      name: ReticleTool.SNAPSHOT,
+      args: { mode },
+      result: { tree, status: { route: '/overview' } },
+      isError: false,
+    });
+    expect(pagesReadIn([call('interactive', CONSOLE_OVERVIEW)], 9)).toEqual([]);
+    expect(pagesReadIn([call('full', CONSOLE_SWITCHER_OPEN)], 9)).toEqual([]);
+    expect(pagesReadIn([call('full', CONSOLE_OVERVIEW)], 9)).toHaveLength(1);
   });
 });

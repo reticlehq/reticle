@@ -109,3 +109,72 @@ describe('a plan run in several lanes', () => {
     );
   });
 });
+
+/*
+ * Persona 21, live: Memory was two clicks from where the drive stopped, the agent had proved both
+ * goals on a tab that had since closed, and the hunt gave up on the page it started on.
+ */
+describe('the live persona 21 miss', () => {
+  const NAV21 = '- complementary\n  - navigation "Main" (ref=e97)\n    - link "Flows" (ref=e102)';
+  const journalOf = (claim: string): string =>
+    `${JSON.stringify({
+      v: 1,
+      actionId: 'c1',
+      tool: 'reticle_assert',
+      args: {},
+      effect: { claim, verified: Verified.YES },
+      tRange: { from: 0, to: 1 },
+      at: 1,
+    })}\n`;
+
+  it('reaches Memory through Flows, grades the goal it can find there, and compares with a closed tab', async () => {
+    const app = fakeApp(
+      {
+        '/overview': { tree: `${NAV21}\n- heading "Impact"`, press: { e102: { to: '/flows' } } },
+        '/flows': {
+          tree: '- main\n  - navigation "Flows" (ref=e144)\n    - link "Memory" (ref=e150)',
+          press: { e150: { to: '/memory' } },
+        },
+        '/memory': { tree: '- heading "Memory"\n- button "Free shipping threshold" (ref=e162)' },
+      },
+      '/overview',
+    );
+    const files: Record<string, string> = {
+      '/p/.reticle/sessions/lease-closed/actions.jsonl': journalOf(
+        "text containing 'Free shipping threshold'",
+      ),
+    };
+    const deps = {
+      now: () => 1,
+      reticleRoot: '/p/.reticle',
+      fs: {
+        readdir: (dir: string) =>
+          Promise.resolve('/p/.reticle/sessions' === dir ? ['lease-closed'] : []),
+        readFile: (path: string) =>
+          files[path] === undefined
+            ? Promise.reject(new Error('ENOENT'))
+            : Promise.resolve(files[path]),
+        exists: (path: string) => Promise.resolve(files[path] !== undefined),
+      },
+      sessions: {
+        resolve: () => ({ id: 'harness-tab', projectId: 'web', artifactRoot: '/p/.reticle' }),
+        all: () => [],
+      },
+    } as unknown as ToolDeps;
+    const graded = await huntAndGrade(deps, app.invoke, {
+      goals: ['Free shipping threshold', 'chose to keep these words'],
+      opening: '- heading "Impact"',
+      journey: 'Bea opens Memory and keeps the words the team agreed on',
+      map: {
+        surveyedAt: 0,
+        pages: [{ route: '/flows', texts: [], controls: ['link "Memory"'], at: 0 }],
+      },
+    });
+    expect(app.route()).toBe('/memory');
+    expect(graded.goals[0]).toEqual({ text: 'Free shipping threshold', verified: Verified.YES });
+    expect(graded.goals[1]?.reason).toContain('/flows: link "Memory"');
+    expect(graded.disparity).toEqual([
+      expect.objectContaining({ goal: 'Free shipping threshold', kind: DisparityKind.FINDABLE }),
+    ]);
+  });
+});

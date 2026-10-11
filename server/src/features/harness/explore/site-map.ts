@@ -7,7 +7,7 @@
  * never-pressed list), reads where that leads, and goes back. The map is kept per app and refreshed
  * by every drive's own reads, so the survey runs again only when the map is old.
  */
-import { PredicateKind, ReticleTool, asRecord } from '@reticlehq/core';
+import { PredicateKind, ReticleTool, SnapshotMode, asRecord } from '@reticlehq/core';
 import {
   HarnessMapLimit,
   HarnessMapSchema,
@@ -17,6 +17,7 @@ import {
 import type { ToolOutcome } from '../harness.js';
 import {
   navLinks,
+  overlayOpen,
   parseTree,
   readPage,
   routeOf,
@@ -75,11 +76,15 @@ export function mergePages(
 /** The pages a drive read in full, for refreshing the map from what it saw. */
 export function pagesReadIn(calls: readonly ToolOutcome[], at: number): HarnessMapPage[] {
   return calls.flatMap((call) => {
+    // Only a full read of an unobstructed page: a quick read has no text, and a page behind an open
+    // menu reads as the menu. Either one once replaced the survey's page and emptied the map.
     if (ReticleTool.SNAPSHOT !== call.name || call.isError) return [];
+    if (SnapshotMode.FULL !== asRecord(call.args)['mode']) return [];
     const result = asRecord(call.result);
     const tree = result['tree'];
     const route = asRecord(result['status'])['route'];
     if ('string' !== typeof tree || 'string' !== typeof route) return [];
+    if (overlayOpen(parseTree(tree))) return [];
     return [pageFrom({ tree, route: routeOf(route) }, at)];
   });
 }
@@ -106,8 +111,13 @@ export async function surveyApp(
   now: () => number,
   presses = SURVEY_PRESSES,
 ): Promise<HarnessMap | undefined> {
-  const start = await readPage(invoke);
+  let start = await readPage(invoke);
   if (start === undefined) return undefined;
+  // A menu left open hides the page behind it: reload it once before reading what it offers.
+  if (overlayOpen(parseTree(start.tree))) {
+    await invoke(ReticleTool.NAVIGATE, { url: start.route }).catch(() => undefined);
+    start = (await readPage(invoke)) ?? start;
+  }
   const pages: HarnessMapPage[] = [pageFrom(start, now())];
   const startLines = parseTree(start.tree);
   const targets = [...navLinks(startLines), ...toggles(startLines)]

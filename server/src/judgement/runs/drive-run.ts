@@ -218,6 +218,22 @@ const goalsMissed = new Map<string, boolean>();
  * "Proved"; it is not proved. Unmet once is unmet: a later journey of the same drive reaching its
  * goal does not undo it.
  */
+/** Told when a Harness drive's goal or comparison is noted, so its run is written again. */
+const noted = new Set<() => void>();
+
+/**
+ * Hear about every Harness note. A drive is graded after its last verdict, and the run that verdict
+ * flushed never carried the grade: live, the platform filed a failed check instead of "Hard to find".
+ */
+export function onHarnessNoted(listener: () => void): () => void {
+  noted.add(listener);
+  return () => noted.delete(listener);
+}
+
+const tellNoted = (): void => {
+  for (const listener of noted) listener();
+};
+
 export function noteHarnessGoal(harness: string, met: boolean | undefined): void {
   if (met === undefined) return;
   const before = goalsMissed.get(harness);
@@ -227,6 +243,7 @@ export function noteHarnessGoal(harness: string, met: boolean | undefined): void
     if (oldest !== undefined) goalsMissed.delete(oldest);
   }
   goalsMissed.set(harness, met);
+  tellNoted();
 }
 
 /** How each Harness drive's goals compared with the agent's verdicts, until its run is folded. */
@@ -243,6 +260,7 @@ export function noteHarnessDisparity(harness: string, found: readonly RunDispari
     if (oldest !== undefined) disparities.delete(oldest);
   }
   disparities.set(harness, found);
+  tellNoted();
 }
 
 /** The phrase `describeWaitTarget` opens a route claim with, as the journal records it. */
