@@ -8,7 +8,7 @@
 
 import type { Browser } from 'playwright';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
-import { HIDE_RETICLE_CHROME_CSS } from '@reticlehq/core';
+import { HIDE_RETICLE_CHROME_CSS, RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
 import { launchChromium } from '@/launch-chromium.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
@@ -58,6 +58,29 @@ export function screenshotOptions(opts: ScreenshotOptions): {
     : { ...base, type: 'jpeg', quality: opts.jpegQuality };
 }
 
+/** Where the hidden hosts' own visibility waits to be put back, on the page's window. */
+const SHOT_HIDDEN_KEY = '__reticleShotHidden';
+const HIDE_CHROME_SCRIPT = `(() => { const held = []; for (const el of document.querySelectorAll(${JSON.stringify(RETICLE_OVERLAY_SELECTOR)})) { held.push([el, el.style.visibility]); el.style.visibility = 'hidden'; } window.${SHOT_HIDDEN_KEY} = held; })()`;
+const RESTORE_CHROME_SCRIPT = `(() => { for (const [el, was] of window.${SHOT_HIDDEN_KEY} ?? []) el.style.visibility = was; delete window.${SHOT_HIDDEN_KEY}; })()`;
+
+/**
+ * A step screenshot with Reticle's own UI out of it. The step path injects nothing into the page
+ * (no stylesheet, no fast-forwarded animation), so the HUD covered a third of every picture. Only
+ * our own hosts change, by their own inline `visibility`, for this one capture, and are put back
+ * whatever the capture did: the app's DOM, styles and events are not touched.
+ */
+export async function captureWithChromeHidden(
+  page: { evaluate: (script: string) => Promise<unknown> },
+  capture: () => Promise<Uint8Array>,
+): Promise<Uint8Array> {
+  await page.evaluate(HIDE_CHROME_SCRIPT);
+  try {
+    return await capture();
+  } finally {
+    await page.evaluate(RESTORE_CHROME_SCRIPT).catch(() => undefined);
+  }
+}
+
 /**
  * How a leased tab navigates. Pure, and exported, because the decision in it is worth a test while
  * the rest of this file needs a real Chromium.
@@ -98,8 +121,14 @@ function wrapBrowser(browser: Browser): PooledBrowser {
             // Playwright returns a Buffer; Uint8Array is what the visual store and differ take.
             // Same determinism as the driven path's capturePage: without it a lease baseline caught
             // the HUD, its activity log and the toolbar, and a HUD change read as a regression (#1355).
-            screenshot: async (opts) =>
-              new Uint8Array(await page.screenshot(screenshotOptions(opts ?? {}))),
+            screenshot: async (opts) => {
+              const shoot = async (): Promise<Uint8Array> =>
+                new Uint8Array(await page.screenshot(screenshotOptions(opts ?? {})));
+              // A step capture injects no stylesheet, so our own hosts are hidden another way.
+              return true === opts?.cssScale
+                ? captureWithChromeHidden({ evaluate: (script) => page.evaluate(script) }, shoot)
+                : shoot();
+            },
             // Three moves, same as performGesture: a single move to the center can be a no-op if
             // the pointer was already there, and CSS :hover needs a native hit-test to apply.
             hover: async (x, y) => {
