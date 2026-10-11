@@ -399,7 +399,7 @@ export function describeDrive(
           ];
           if (0 < missing.length)
             lines.push(
-              `  MISSING: ${missing.map((r) => r.name).join(', ')} — not saved on this computer, so nothing ran. Not a regression: pull or record them here first.`,
+              `  MISSING: ${missing.map((r) => r.name).join(', ')} — not saved on this computer, or calls a flow that is not, so it never ran. Not a regression: pull or record them here first.`,
             );
           if (0 < failed.length)
             lines.push(

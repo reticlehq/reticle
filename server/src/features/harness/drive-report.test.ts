@@ -1,3 +1,4 @@
+import { invokedFlowMissing } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
 import { checkTally, describeDrive, drivenSteps } from './drive-report.js';
 import type { ToolOutcome } from './harness.js';
@@ -509,6 +510,22 @@ describe('a replayed flow that is not on this computer', () => {
     );
     const account = describeDrive([missing], []);
     expect(account).toContain('MISSING: checkout');
+    expect(account).not.toContain('regressions');
+  });
+
+  /*
+   * Persona 25: an auto-saved flow called a flow that was never saved. Its replay failed at that
+   * call, and the plan reported it among "regressions in journeys that used to pass": it never
+   * passed, because it never ran.
+   */
+  it('is missing when the flow it calls is not on this computer, not a regression', () => {
+    const calls = call(
+      'reticle_flow_replay',
+      { flowName: 'drive-order-confirmed' },
+      { status: 'error', error: { code: 'error', message: invokedFlowMissing('harness-reload') } },
+    );
+    const account = describeDrive([calls], []);
+    expect(account).toContain('MISSING: drive-order-confirmed');
     expect(account).not.toContain('regressions');
   });
 });

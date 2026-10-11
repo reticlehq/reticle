@@ -149,6 +149,13 @@ export function flowJsonReplacer(key: string, value: unknown): unknown {
  */
 export const NO_SUCH_FLOW = 'no such flow on disk';
 
+/**
+ * A flow that calls one not on disk stops there, having never run: said with `NO_SUCH_FLOW`, so a
+ * plan does not call a flow that never passed a "regression in a journey that used to pass".
+ */
+export const invokedFlowMissing = (name: string): string =>
+  `cannot replay "${name}": ${NO_SUCH_FLOW}, so this journey would report green having never run it`;
+
 /** Structured failure codes for flow disk ops (returned, never thrown as free strings). */
 export const FlowErrorCode = {
   INVALID_NAME: 'flow_invalid_name', // path traversal / illegal chars

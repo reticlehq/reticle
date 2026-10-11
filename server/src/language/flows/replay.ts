@@ -6,7 +6,7 @@ import {
   QueryBy,
   type CommandResult,
 } from '@reticlehq/core';
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, invokedFlowMissing } from '@reticlehq/core';
 import { formatStepAddress } from 'open-verification';
 import { refFor } from './flow-anchor.js';
 import type { RecordedStep, CompiledProgram } from './recording/tape/recordings.js';
@@ -436,7 +436,7 @@ export async function replayProgram(
           tool: step.tool,
           ok: false,
           at: address,
-          error: `cannot replay "${step.invoke}": it was not found, so this journey would report green having never run it`,
+          error: invokedFlowMissing(step.invoke),
         });
         break;
       }

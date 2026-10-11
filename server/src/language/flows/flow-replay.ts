@@ -29,7 +29,7 @@ import {
   PredicateKind,
   ReplayStatus,
 } from '@reticlehq/core';
-import { asString, isConsequenceDrift } from '@reticlehq/core';
+import { asString, invokedFlowMissing, isConsequenceDrift } from '@reticlehq/core';
 import { anchorFieldName } from './fields/flow-secret-field.js';
 import {
   degradedStepResult,
@@ -543,7 +543,7 @@ async function runInvokeStep(
     return {
       ...base,
       ok: false,
-      error: `cannot replay "${name}": it was not found, so this journey would report green having never run it`,
+      error: invokedFlowMissing(name),
     };
   }
   // `from` is an offset into the CALLER's steps. A sub-journey invoked from the setup prefix runs
