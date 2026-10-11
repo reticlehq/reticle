@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: each journey in a Harness plan starts from its own start.** A plan's second journey ("place the order without the coupon, ending when the page shows "Order confirmed"") began on the page the first journey left, which already showed "Order confirmed"; it drove nothing and failed with no goal. A journey that does not build on the one before it in its lane now starts from where the lane started; an end already on the page before a journey acts is never credited to it, and no model turn is spent on it; and a quote after a comma ("without the coupon, ending on "…"") is no longer read as text that must be absent.

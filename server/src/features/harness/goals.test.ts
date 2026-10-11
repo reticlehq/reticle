@@ -40,6 +40,11 @@ describe('the goals a drive was asked to prove (#1316)', () => {
       { text: 'Publish' },
     ]);
     expect(goalsIn('must not show "payments", ending on "Passed"')).toEqual(['Passed']);
+    expect(
+      parseGoals(
+        'place the order without the coupon, ending when the page shows "Order confirmed"',
+      ),
+    ).toEqual([{ text: 'Order confirmed' }]);
   });
 
   /** A page whose snapshot reads `tree`; `below` holds text only a scroll brings into the tree. */

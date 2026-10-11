@@ -388,7 +388,24 @@ describe('an open goal that quotes where it ends', () => {
   });
 
   it('passes on the text it ends on, and keeps that assert as the run’s check', async () => {
-    const run = await runScript(counter, onPage('button "count: 1"'));
+    // The page reads "count: 1" only once the drive has clicked.
+    let clicked = false;
+    const page = onPage('');
+    const ports: ScriptPorts = {
+      ...page,
+      toolset: () => ({
+        tools: [],
+        invoke: (name, args) =>
+          onPage(clicked ? 'button "count: 1"' : 'button "count: 0"')
+            .toolset(undefined, undefined)
+            .invoke(name, args),
+      }),
+      drive: (...args) => {
+        clicked = true;
+        return page.drive(...args);
+      },
+    };
+    const run = await runScript(counter, ports);
     expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
     const asserted = run.toolCalls.filter((c) => ReticleTool.ASSERT === c.name);
     expect(asserted.map((c) => (c.result as { verified?: unknown }).verified)).toEqual([
@@ -554,5 +571,106 @@ describe('a replay the destructive-action guard stops', () => {
     const fake = fakePorts({ guarded: ['place-order'] });
     const run = await runScript(order, { ...fake.ports, confirmDangerous: true });
     expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
+  });
+});
+
+/*
+ * Persona 25: a plan's second journey ("Reload the checkout and place the order … ending when the
+ * page shows "Order confirmed"") started on the page the first journey left, which already showed
+ * "Order confirmed". It never reloaded, drove nothing, and failed with no goals. A journey that does
+ * not build on the one before it starts from where the lane started, and an end already on screen
+ * before it acted is never credited to it.
+ */
+describe('a journey that does not build on the one before it in its lane', () => {
+  const END = 'Order confirmed';
+  const checkout = script({
+    version: 1,
+    source: 'platform',
+    journeys: [
+      {
+        id: 'coupon',
+        title: 'With a coupon',
+        steps: [{ kind: 'act', goal: `Apply the coupon and place the order, ending on "${END}".` }],
+      },
+      {
+        id: 'plain',
+        title: 'Order without a coupon',
+        when: { journey: 'coupon', is: 'passed' },
+        steps: [{ kind: 'act', goal: `Place the order without the coupon, ending on "${END}".` }],
+      },
+    ],
+    lanes: [{ id: 'A', journeys: ['coupon', 'plain'] }],
+  });
+  /** A checkout that confirms an order once driven; `sticky` keeps the confirmation over a reload. */
+  const app = (sticky: boolean) => {
+    let confirmed = false;
+    let drives = 0;
+    const navigated: unknown[] = [];
+    const tree = (): string =>
+      confirmed ? `- status "${END}"` : '- button "Place order" (ref=e1)';
+    const port: ScriptPorts = {
+      parallel: 1,
+      stopped: () => false,
+      lease: () => Promise.resolve({ release: () => Promise.resolve() }),
+      toolset: (): HarnessToolset => ({
+        tools: [],
+        invoke(name, args) {
+          if (ReticleTool.SNAPSHOT === name)
+            return Promise.resolve({ tree: tree(), status: { route: '/checkout' } });
+          if (ReticleTool.NAVIGATE === name) {
+            navigated.push(args['url']);
+            confirmed = sticky && confirmed;
+            return Promise.resolve({ ok: true });
+          }
+          if (ReticleTool.ASSERT !== name) return Promise.resolve({});
+          const shown = tree().includes(
+            String((args['predicate'] as { contains?: unknown }).contains),
+          );
+          return Promise.resolve({ pass: shown, verified: shown ? Verified.YES : Verified.NO });
+        },
+      }),
+      drive: () => {
+        drives += 1;
+        confirmed = true;
+        return Promise.resolve({
+          stopReason: StopReason.FINISHED,
+          summary: '',
+          steps: 2,
+          toolCalls: [
+            {
+              id: 'c',
+              name: ReticleTool.ACT_AND_WAIT,
+              args: { ref: 'e1', action: 'click' },
+              result: { verified: 'no-fault' },
+              isError: false,
+            },
+          ],
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          proved: false,
+          goalMet: true,
+        });
+      },
+    };
+    return { port, navigated, drives: () => drives };
+  };
+
+  it('starts from where the lane started, and passes on the end it reached itself', async () => {
+    const a = app(false);
+    const run = await runScript(checkout, a.port);
+    expect(a.navigated).toEqual(['/checkout']);
+    expect(a.drives()).toBe(2);
+    expect(run.view.lanes[0]?.journeys.map((j) => j.status)).toEqual([
+      ScriptStatus.PASSED,
+      ScriptStatus.PASSED,
+    ]);
+  });
+
+  it('is never credited with an end that was on screen before it acted', async () => {
+    const a = app(true);
+    const run = await runScript(checkout, a.port);
+    expect(run.view.lanes[0]?.journeys[1]?.status).toBe(ScriptStatus.FAILED);
+    // Nothing it could do would prove it, so no model turn is spent on it.
+    expect(a.drives()).toBe(1);
+    expect(run.lines[1]).toContain('already on the page before this journey acted');
   });
 });

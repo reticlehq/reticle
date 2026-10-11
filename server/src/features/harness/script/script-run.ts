@@ -19,6 +19,7 @@ import {
   type PlanView,
 } from '@reticlehq/core';
 import {
+  JourneyOutcome,
   ScriptStepKind,
   barriersOf,
   stepLabel,
@@ -80,6 +81,23 @@ const OPEN_GOAL_STEPS = DEFAULT_MAX_STEPS;
 /** Fewer model turns left than this and a continuation could not take the step it is sent for. */
 const MIN_CONTINUE_STEPS = 3;
 
+/** Why a journey whose end the page showed before it acted is not credited with it. */
+const msgEndAlreadyShown = (end: string): string =>
+  `"${end}" was already on the page before this journey acted, so reaching it proves nothing`;
+
+/**
+ * Whether a journey picks up where the one before it in its lane left off: it builds on one there
+ * (`dependsOn`), or it looks at how one failed. Every other journey starts from the lane's start.
+ */
+function continuesLane(journey: Journey, before: ReadonlySet<string>): boolean {
+  return (
+    journey.dependsOn.some((id) => before.has(id)) ||
+    (journey.when !== undefined &&
+      JourneyOutcome.FAILED === journey.when.is &&
+      before.has(journey.when.journey))
+  );
+}
+
 /** What a drive that stopped short of its end state is sent back with. */
 const continueGoal = (goal: string, end: string): string =>
   `${goal}\n\nContinue from the page you are on: it does not show "${end}" yet. ` +
@@ -132,6 +150,9 @@ export async function runScript(
     };
     let lease: { sessionId?: string; release(): Promise<void> } | undefined;
     let blocked = false;
+    /** Where the lane's first journey started, and the journeys the lane has driven since. */
+    let start: string | undefined;
+    const driven = new Set<string>();
     try {
       for (const [position, id] of lane.journeys.entries()) {
         const card = cards[position];
@@ -163,7 +184,16 @@ export async function runScript(
           continue;
         }
         lease ??= await ports.lease(lane.id);
-        const tools = recording(ports.toolset(lease.sessionId, journey.persona), toolCalls);
+        const raw = ports.toolset(lease.sessionId, journey.persona);
+        // Unrecorded: where the journey starts is set-up, not something it drove or checked.
+        if (0 === driven.size && 1 < lane.journeys.length)
+          start = asString(
+            asRecord(asRecord(await call(raw, ReticleTool.SNAPSHOT, {}))['status'])['route'],
+          );
+        else if (start !== undefined && !continuesLane(journey, driven))
+          await call(raw, ReticleTool.NAVIGATE, { url: start });
+        driven.add(id);
+        const tools = recording(raw, toolCalls);
         card.status = ScriptStatus.RUNNING;
         tell();
         // This journey's own drives: lanes run side by side, so a slice of the shared list after the
@@ -185,6 +215,7 @@ export async function runScript(
               ? ScriptStatus.NOT_TAKEN
               : ScriptStatus.FAILED;
         if (ran.notTaken !== undefined) card.why = ran.notTaken;
+        if (ran.why !== undefined) card.why = ran.why;
         drives.push(...own);
         if (!ok && own.some((d) => false === d.goalMet)) goalMissed.add(card);
         // A conditional journey that failed leaves the lane as it found it: it was a side road.
@@ -241,7 +272,7 @@ async function runJourney(
   drives: HarnessResult[],
   tell: () => void,
   stop: () => void,
-): Promise<{ ok: boolean; notTaken?: string }> {
+): Promise<{ ok: boolean; notTaken?: string; why?: string }> {
   const checkpoints = new Map<string, { flow: string; to: number }>();
   for (const [index, step] of journey.steps.entries()) {
     const card = cards[index];
@@ -255,6 +286,7 @@ async function runJourney(
     tell();
     let ok: boolean;
     let notTaken: string | undefined;
+    let why: string | undefined;
     try {
       if (ScriptStepKind.CHECKPOINT === step.kind) {
         checkpoints.set(step.id, step.reenter);
@@ -265,9 +297,10 @@ async function runJourney(
         ok = await runLeaf(step, tools, ports, drives, stop);
       }
     } catch (error) {
-      if (!(error instanceof StepNotTaken)) throw error;
+      if (error instanceof EndAlreadyShown) why = error.message;
+      else if (error instanceof StepNotTaken) notTaken = error.message;
+      else throw error;
       ok = false;
-      notTaken = error.message;
     }
     card.status = ok
       ? ScriptStatus.PASSED
@@ -278,7 +311,11 @@ async function runJourney(
     if (!ok) {
       for (const rest of cards.slice(index + 1)) rest.status = ScriptStatus.BLOCKED;
       tell();
-      return notTaken === undefined ? { ok: false } : { ok: false, notTaken };
+      return {
+        ok: false,
+        ...(notTaken === undefined ? {} : { notTaken }),
+        ...(why === undefined ? {} : { why }),
+      };
     }
   }
   return { ok: true };
@@ -286,6 +323,9 @@ async function runJourney(
 
 /** The guard stopped a destructive step nobody acknowledged: the step was not taken, not failed. */
 class StepNotTaken extends Error {}
+
+/** The journey's end was on the page before it acted: failed, never credited, and no model spent. */
+class EndAlreadyShown extends Error {}
 
 /** What the guard's refusal names, as `drive-report.ts` reads it too. */
 const DESTRUCTIVE_REFUSAL = 'confirmDangerous';
@@ -344,6 +384,12 @@ async function runLeaf(
     case ScriptStepKind.ACT: {
       if (step.goal !== undefined) {
         const budget = step.maxSteps ?? OPEN_GOAL_STEPS;
+        // Parsed before the drive: an end the page already shows is already true, never proved.
+        const ending = parseGoals(step.goal)
+          .filter((g) => true !== g.absent)
+          .at(-1)?.text;
+        if (ending !== undefined && (await lookFor(tools.invoke.bind(tools), ending, ports.own)))
+          throw new EndAlreadyShown(msgEndAlreadyShown(ending));
         let drive = await ports.drive(tools, step.goal, budget);
         drives.push(drive);
         if (StopReason.STOPPED === drive.stopReason) stop();
@@ -354,9 +400,7 @@ async function runLeaf(
         // the model clicked a counter with no `until` and the journey failed on a counter that worked.
         // ponytail: the LAST quote the goal does not negate is the end state ("from "count: 0" to
         // "count: 1""); a goal that quotes its end first needs the planner to say which is the end.
-        const end = parseGoals(step.goal)
-          .filter((g) => true !== g.absent)
-          .at(-1)?.text;
+        const end = ending;
         if (end === undefined)
           return false !== drive.goalMet && 0 < checkTally(drive.toolCalls).held;
         let shown = await lookFor(tools.invoke.bind(tools), end, ports.own);

@@ -31,9 +31,11 @@ const QUOTED = /(?<![^\s([])"([^\n]{1,200}?)"(?![^\s.,;!?)\]])|“([^”\n]{1,20
 
 /**
  * A negation in the same clause just before a quote: "must not show "payments"". The window stops
- * at the previous quote or clause end, so `doesn't show "X" until you click "Y"` negates X only.
+ * at the previous quote or clause end, so `doesn't show "X" until you click "Y"` negates X only. A
+ * comma ends the clause too: "place the order without the coupon, ending on "Order confirmed"" read
+ * its end as text that must be absent, and the journey failed with no goal to reach.
  */
-const NEGATED_BEFORE = /(?:\b(?:not|never|no|nor|without|no longer)|n't)\b[^"“”.;!?]{0,40}$/i;
+const NEGATED_BEFORE = /(?:\b(?:not|never|no|nor|without|no longer)|n't)\b[^"“”.,;!?]{0,40}$/i;
 
 /** One goal: text the page must show, or — when the persona negated it — must not. */
 export interface Goal {
