@@ -236,10 +236,22 @@ function routeGuessMissed(args: Record<string, unknown>, result: Record<string, 
   return Verified.NO === result['verified'] && claimsOnlyRoute(args['until']);
 }
 
+/**
+ * A `reticle_run` call as the tool it ran. A navigation made through it was recorded under the
+ * run's name, and a run that navigated between two pages said it made no action against the app.
+ */
+function throughRun(call: ToolOutcome): ToolOutcome {
+  if (ReticleTool.RUN !== call.name) return call;
+  const args = asRecord(call.args);
+  const name = asString(args['tool']);
+  return name === undefined ? call : { ...call, name, args: asRecord(args['args']) };
+}
+
 /** Reduce the raw call log to the actions that actually drove the app. */
 export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
   const steps: DrivenStep[] = [];
-  for (const [index, call] of toolCalls.entries()) {
+  for (const [index, made] of toolCalls.entries()) {
+    const call = throughRun(made);
     if (!DRIVING_TOOLS.has(call.name)) continue;
     const args = asRecord(call.args);
     const result = asRecord(call.result);

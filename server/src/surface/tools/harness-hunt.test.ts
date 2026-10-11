@@ -62,6 +62,26 @@ describe('grading a Harness drive after the hunt', () => {
     expect(app.calls.some(([name]) => 'reticle_assert' === name)).toBe(false);
   });
 
+  /* Persona 22: the hunt's own navigations are the Harness driving the app, and are kept to say so. */
+  it('keeps the navigations and clicks the hunt made, and nothing that checks', async () => {
+    const app = fakeApp(
+      {
+        '/issues?q=checkout+defect': { tree: `${NAV}\n- heading "Nothing matches that filter"` },
+        '/issues': { tree: `${NAV}\n- link "Check failed: pay" (ref=e30)` },
+      },
+      '/issues?q=checkout+defect',
+    );
+    const graded = await huntAndGrade(deps([]), app.invoke, {
+      goals: ['Reopened by'],
+      opening: '- heading "Impact"',
+      journey: 'Ana opens the issue Tom also hit and reads who reopened it',
+    });
+    expect(graded.moved.length).toBeGreaterThan(0);
+    expect(
+      graded.moved.every((c) => 'reticle_navigate' === c.name || 'reticle_act' === c.name),
+    ).toBe(true);
+  });
+
   /* Persona 1, end to end: found where the map says, graded `yes` there, and findable both ways. */
   it('grades where the hunt found the goal', async () => {
     const app = fakeApp(
@@ -100,6 +120,7 @@ describe('a plan run in several lanes', () => {
     const lane = (verified: Verified) => ({
       goals: [{ text: 'acme-checkout', verified }],
       disparity: [],
+      moved: [],
     });
     expect(
       bestOfLanes([lane(Verified.UNKNOWN), lane(Verified.NO), lane(Verified.YES)]).goals,

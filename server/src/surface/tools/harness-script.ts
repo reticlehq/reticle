@@ -466,7 +466,12 @@ async function runPlan(
   const goalMet = goalOfDrive(drive.goalMet, goals, actedOnApp(run.toolCalls));
   if (0 < goals.length) for (const id of lanes.all()) noteHarnessGoal(id, goalMet);
   return {
-    drive: { ...drive, ...(goalMet === undefined ? {} : { goalMet }) },
+    // The hunt's navigations too, after the goal was decided on what the plan itself drove.
+    drive: {
+      ...drive,
+      toolCalls: [...drive.toolCalls, ...graded.moved],
+      ...(goalMet === undefined ? {} : { goalMet }),
+    },
     plan,
     driverName,
     ...reconciled,

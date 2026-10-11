@@ -480,7 +480,13 @@ export async function exploreApp(
   ]);
   const runId = harnessRunId(harnessId);
   return {
-    drive: { ...drive, ...(goalMet === undefined ? {} : { goalMet }) },
+    // The hunt's navigations after the drive's own calls: they are the Harness driving the app too.
+    // After the goal is decided, which counts only what the drive itself did.
+    drive: {
+      ...drive,
+      toolCalls: [...drive.toolCalls, ...graded.moved],
+      ...(goalMet === undefined ? {} : { goalMet }),
+    },
     plan,
     driverName: built.name,
     ...reconciled,

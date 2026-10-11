@@ -8,6 +8,7 @@ import type { RunDisparity } from '@reticlehq/core';
 import type { HarnessMap } from '@reticlehq/core/artifacts';
 import { checkExpect, checkGoals, type Goal, type GoalCheck } from '@/features/harness/goals.js';
 import type { ToolOutcome } from '@/features/harness/harness.js';
+import { ReticleTool } from '@reticlehq/core';
 import { searchForGoal } from '@/features/harness/explore/goal-search.js';
 import {
   MAP_FRESH_MS,
@@ -166,6 +167,21 @@ async function journalsOnDisk(
 export interface Graded {
   goals: GoalCheck[];
   disparity: RunDisparity[];
+  /** The navigations and clicks the hunt made: the Harness driving the app, said as such. */
+  moved: ToolOutcome[];
+}
+
+/** What the hunt does to the app. Its asserts are not kept here: they would count as checks. */
+const HUNT_MOVES: ReadonlySet<string> = new Set([ReticleTool.NAVIGATE, ReticleTool.ACT]);
+
+/** The invoke, keeping each move it makes. */
+function keepingMoves(invoke: Invoke, moved: ToolOutcome[]): Invoke {
+  return async (name, args) => {
+    const result = await invoke(name, args);
+    if (HUNT_MOVES.has(name))
+      moved.push({ id: `hunt-${String(moved.length + 1)}`, name, args, result, isError: false });
+    return result;
+  };
 }
 
 const RANK: Readonly<Record<string, number>> = { [Verified.YES]: 0, [Verified.NO]: 1 };
@@ -176,7 +192,7 @@ const RANK: Readonly<Record<string, number>> = { [Verified.YES]: 0, [Verified.NO
  * (a known-defects lane, a lane on another page) saw.
  */
 export function bestOfLanes(lanes: readonly Graded[]): Graded {
-  const first = lanes[0] ?? { goals: [], disparity: [] };
+  const first = lanes[0] ?? { goals: [], disparity: [], moved: [] };
   const goals = first.goals
     .map((_, i) => {
       const all = lanes.flatMap((l) => (l.goals[i] === undefined ? [] : [l.goals[i]]));
@@ -190,7 +206,7 @@ export function bestOfLanes(lanes: readonly Graded[]): Graded {
     const lane = lanes.find((l) => l.goals.includes(g));
     return lane?.disparity.filter((d) => d.goal === g.text) ?? [];
   });
-  return { goals, disparity };
+  return { goals, disparity, moved: lanes.flatMap((l) => l.moved) };
 }
 
 /**
@@ -199,7 +215,7 @@ export function bestOfLanes(lanes: readonly Graded[]): Graded {
  */
 export async function huntAndGrade(
   deps: ToolDeps,
-  invoke: Invoke,
+  driving: Invoke,
   ask: {
     sessionId?: string | undefined;
     goals: readonly (string | Goal)[];
@@ -211,6 +227,8 @@ export async function huntAndGrade(
     own?: readonly string[] | undefined;
   },
 ): Promise<Graded> {
+  const moved: ToolOutcome[] = [];
+  const invoke = keepingMoves(driving, moved);
   // The journey names the plan and the flows this run saves: shown back on a page, it proves nothing.
   const own = [...(ask.own ?? []), ...(ask.journey === undefined ? [] : [ask.journey])];
   const goals = ask.goals.map((g) => ('string' === typeof g ? { text: g } : g));
@@ -253,5 +271,6 @@ export async function huntAndGrade(
       ...(ask.expect === undefined ? [] : [await checkExpect(invoke, ask.expect)]),
     ],
     disparity,
+    moved,
   };
 }

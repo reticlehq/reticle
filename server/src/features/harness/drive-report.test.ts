@@ -59,6 +59,27 @@ describe('the account an agent reads', () => {
     expect(describeDrive([], [])).toContain('Nothing was driven');
   });
 
+  /*
+   * Persona 22: a read-only persona's run navigated between two pages and its summary said "Nothing
+   * was driven… no action against the app". A navigation is an action against the app, however the
+   * drive reached the tool.
+   */
+  it('counts a navigation made through reticle_run as driving', () => {
+    const summary = describeDrive(
+      [
+        call(
+          'reticle_run',
+          { tool: 'reticle_navigate', args: { url: '/share/abc' } },
+          { confirmed: true },
+        ),
+      ],
+      [],
+    );
+    expect(summary).not.toContain('Nothing was driven');
+    expect(summary).toContain('Drove 1 action(s)');
+    expect(summary).toContain('/share/abc');
+  });
+
   /**
    * The whole point. Twelve actions driven is not twelve things working, and an account that only
    * counted actions would be read as if it were.
