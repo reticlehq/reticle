@@ -56,6 +56,12 @@ export const JournalActionSchema = z.object({
   at: z.number().int().min(0),
   /** Set only when the Harness drove this action; absent means the connected agent did. */
   drivenBy: DrivenBySchema.optional(),
+  /**
+   * The MCP client that made this call, as its handshake named it (`claude-code`, `cursor`…). Read
+   * per call rather than at session end: by teardown the agent has often detached, and two agents on
+   * one daemon cannot be told apart from anything but the call itself.
+   */
+  agent: z.string().min(1).max(TRANSPORT_LIMITS.MAX_REF_LENGTH).optional(),
 });
 export type JournalAction = z.infer<typeof JournalActionSchema>;
 

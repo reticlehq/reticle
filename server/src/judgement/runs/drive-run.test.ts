@@ -178,6 +178,24 @@ describe('the kind of evidence a check read', () => {
   });
 });
 
+describe('the agent a drive is credited to', () => {
+  it('is the MCP client that made the calls, not the generic author', () => {
+    const run = driveRunFrom([{ ...action(Verified.YES), agent: 'claude-code' }], DEPS);
+    expect(run?.agent.id).toBe('claude-code');
+  });
+
+  it('stays the generic author when two clients drove the same tab — never a guess', () => {
+    const run = driveRunFrom(
+      [
+        { ...action(Verified.YES), agent: 'claude-code' },
+        { ...action(Verified.YES), agent: 'cursor' },
+      ],
+      DEPS,
+    );
+    expect(run?.agent.id).toBe('reticle-mcp');
+  });
+});
+
 describe('a Harness drive in the same tab', () => {
   const by = { harness: 'h1', driver: 'server', persona: 'a merchant refunds a payment' };
   const harness = (verified: Verified, at: number): JournalAction => ({

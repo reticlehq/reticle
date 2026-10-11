@@ -27,6 +27,7 @@ const AGENT_LABELS: readonly (readonly [string, string])[] = [
 ];
 const MAX_LABEL = 64;
 
+/** The name each connection's handshake sent, verbatim; labels are derived on read. */
 const byAttach = new Map<string, string>();
 const listeners = new Set<() => void>();
 const calling = new AsyncLocalStorage<string>();
@@ -39,7 +40,7 @@ export function agentLabel(name: string): string {
 
 /** An MCP connection finished its handshake as `name`. */
 export function noteAgentAttached(attachId: string, name: string): void {
-  byAttach.set(attachId, agentLabel(name));
+  byAttach.set(attachId, name);
   changed();
 }
 
@@ -50,7 +51,7 @@ export function noteAgentDetached(attachId: string): void {
 
 /** The friendly names of the agents attached now, each once. */
 export function connectedAgents(): string[] {
-  return [...new Set(byAttach.values())];
+  return [...new Set([...byAttach.values()].map(agentLabel))];
 }
 
 /** Hear an agent attach or leave. Returns the unsubscribe. */
@@ -69,10 +70,19 @@ export function runAsAgent<T>(attachId: string | undefined, fn: () => Promise<T>
  * and no call to say which is unknown, never a guess.
  */
 export function callingAgent(): string | undefined {
+  const name = callingClientName();
+  return name === undefined ? undefined : agentLabel(name);
+}
+
+/**
+ * The raw client name behind `callingAgent()` — the id a run is credited to, the same string
+ * `mcpClientIdentity()` reports, so one agent is one facet on the dashboard.
+ */
+export function callingClientName(): string | undefined {
   const own = calling.getStore();
-  const label = own === undefined ? undefined : byAttach.get(own);
-  if (label !== undefined) return label;
-  const all = connectedAgents();
+  const name = own === undefined ? undefined : byAttach.get(own);
+  if (name !== undefined) return name;
+  const all = [...new Set(byAttach.values())];
   return 1 === all.length ? all[0] : undefined;
 }
 

@@ -6,6 +6,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { runDrivenBy } from '@/hooks/driven-by.js';
+import { forgetAgents, noteAgentAttached, runAsAgent } from '@/hooks/coding-agents.js';
 import { JournalRecorder, type JournalSink } from './journal-recorder.js';
 
 function evt(seq: number): ReticleEvent {
@@ -58,6 +59,26 @@ describe('JournalRecorder', () => {
     rec.recordAction('c3', 'reticle_assert', {});
     await rec.flush();
     expect(sink.actions.map((a) => a.drivenBy)).toEqual([by, by, undefined]);
+  });
+
+  it('stamps the MCP client that made each call, so a drive run can say which agent drove', async () => {
+    forgetAgents();
+    noteAgentAttached('a1', 'claude-code');
+    noteAgentAttached('a2', 'cursor-vscode');
+    const sink = fakeSink();
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    await runAsAgent('a1', () => {
+      rec.beginAction('c1', 'reticle_act_and_wait', {});
+      rec.finishAction();
+      return Promise.resolve();
+    });
+    await runAsAgent('a2', () => {
+      rec.recordAction('c2', 'reticle_assert', {});
+      return Promise.resolve();
+    });
+    await rec.flush();
+    forgetAgents();
+    expect(sink.actions.map((a) => a.agent)).toEqual(['claude-code', 'cursor-vscode']);
   });
 
   it('journals ambient events with no attribution when no action is active', async () => {

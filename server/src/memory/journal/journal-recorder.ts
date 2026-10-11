@@ -8,6 +8,7 @@ import {
 } from '@reticlehq/core';
 import { isSelfObservation } from './self-observation.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
+import { callingClientName } from '@/hooks/coding-agents.js';
 import { log } from '@/log.js';
 
 /**
@@ -118,6 +119,8 @@ interface ActiveAction {
   tStart: number;
   /** Read at dispatch, where the Harness's context is still on the stack. */
   drivenBy: DrivenBy | undefined;
+  /** The MCP client the call came from, when one can be named. */
+  agent: string | undefined;
   seqFrom?: number;
   seqTo?: number;
 }
@@ -176,7 +179,14 @@ export class JournalRecorder {
 
   /** Open an attribution window. One action is active at a time (the agent drives sequentially). */
   beginAction(actionId: string, tool: string, args: Record<string, unknown>): void {
-    this.#active = { actionId, tool, args, tStart: this.#now(), drivenBy: currentDrivenBy() };
+    this.#active = {
+      actionId,
+      tool,
+      args,
+      tStart: this.#now(),
+      drivenBy: currentDrivenBy(),
+      agent: callingClientName(),
+    };
   }
 
   /** Close the active window: persist its buffered events, then the action record. No-op if none active. */
@@ -199,6 +209,7 @@ export class JournalRecorder {
       tRange: { from: active.tStart, to: this.#now() },
       at: active.tStart,
       ...(active.drivenBy === undefined ? {} : { drivenBy: active.drivenBy }),
+      ...(active.agent === undefined ? {} : { agent: active.agent }),
     };
     this.#enqueueFlush();
     this.#chain = this.#chain
@@ -245,6 +256,10 @@ export class JournalRecorder {
       ...((): { drivenBy?: DrivenBy } => {
         const by = currentDrivenBy();
         return by === undefined ? {} : { drivenBy: by };
+      })(),
+      ...((): { agent?: string } => {
+        const agent = callingClientName();
+        return agent === undefined ? {} : { agent };
       })(),
     };
     this.#enqueueFlush();

@@ -62,6 +62,17 @@ export interface DriveRunDeps {
   editEpoch?: number | undefined;
 }
 
+/**
+ * The one MCP client every stamped action came from. Two clients in one tab is undefined, never a
+ * pick: crediting either would put the other's verdicts under its name.
+ */
+function soleAgent(actions: readonly JournalAction[]): string | undefined {
+  const named = new Set(
+    actions.flatMap((action) => (action.agent === undefined ? [] : [action.agent])),
+  );
+  return 1 === named.size ? [...named][0] : undefined;
+}
+
 /** Every verdict a verification tool recorded on this session's actions, in order. */
 function verdicts(actions: readonly JournalAction[]): JournalVerdictEffect[] {
   const out: JournalVerdictEffect[] = [];
@@ -156,7 +167,10 @@ export function driveRunFrom(
       name: deps.projectId ?? UNNAMED_AGENT,
       framework: deps.framework ?? RunFramework.OTHER,
     },
-    agent: { id: deps.agentId ?? UNNAMED_AGENT, kind: RunAgentKind.CODING_AGENT },
+    agent: {
+      id: deps.agentId ?? soleAgent(actions) ?? UNNAMED_AGENT,
+      kind: RunAgentKind.CODING_AGENT,
+    },
     trigger: {
       kind: RunTrigger.EDIT,
       note: 'driven live through the Reticle tools',
