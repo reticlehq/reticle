@@ -210,9 +210,15 @@ const msgUnknownDriver = (asked: string): string =>
 export async function withLinkedCredential(
   deps: ToolDeps,
   env: Record<string, string | undefined>,
+  /**
+   * The tab a drive is for: its own project's link, not the daemon's. A plan saved with the
+   * daemon's key while its runs synced under the tab's project left every run link of the plan
+   * "Run unavailable". Absent: the daemon's own link.
+   */
+  tab?: { sessionId: string | undefined },
 ): Promise<Record<string, string | undefined>> {
   try {
-    const linked = await deps.linkedCloud?.();
+    const linked = await deps.linkedCloud?.(tab === undefined ? undefined : tabRoot(deps, tab));
     if (linked === undefined || null === linked) return env;
     return {
       ...env,
@@ -223,6 +229,15 @@ export async function withLinkedCredential(
     // A credential store that cannot be read is "not linked", not an error. The harness is optional
     // and its absence is a routine answer; a drive must never fail because a JSON file was odd.
     return env;
+  }
+}
+
+/** A tab's `.reticle`, or undefined (the daemon's) when the tab cannot be resolved to one. */
+function tabRoot(deps: ToolDeps, tab: { sessionId: string | undefined }): string | undefined {
+  try {
+    return sessionRoot(deps, tab.sessionId);
+  } catch {
+    return undefined;
   }
 }
 

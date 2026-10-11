@@ -238,7 +238,8 @@ export async function answerExplore(
   // signed in and linked does not also have to export a key by hand.
   const driveId = args['driveId'];
   const env = {
-    ...(await withLinkedCredential(deps, process.env)),
+    // The driven tab's project: the plan it saves and the runs it syncs land in one place.
+    ...(await withLinkedCredential(deps, process.env, { sessionId })),
     // Billed to the one free drive the platform granted, never to another.
     ...('string' === typeof driveId ? { [ReticleEnv.DRIVE_ID]: driveId } : {}),
   };

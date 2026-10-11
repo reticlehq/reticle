@@ -58,6 +58,15 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
       expect((await linkedCloudPort(fs, reticleRoot, homeDir, env)())?.apiKey).toBe('rk_live_web');
     });
 
+    it("resolves a tab's own .reticle when asked for it, not the daemon's", async () => {
+      await writeLink({ projectId: 'web', url: 'https://cloud.test' });
+      await writeCreds({ 'https://cloud.test::web': 'rk_live_web' });
+      const daemon = join(dir, 'daemon', '.reticle');
+      const port = linkedCloudPort(fs, daemon, homeDir, env);
+      expect(await port()).toBeNull();
+      expect((await port(reticleRoot))?.apiKey).toBe('rk_live_web');
+    });
+
     it('keeps pushing runs for a project that did not opt out', async () => {
       await writeLink({ projectId: 'web', url: 'https://cloud.test' });
       await writeCreds({ 'https://cloud.test::web': 'rk_live_web' });

@@ -399,7 +399,7 @@ export async function hudDrive(
     return;
   }
   // Before the grant: a drive the gate refuses must not take one. The panel shows the prompt.
-  const env = await withLinkedCredential(deps, process.env);
+  const env = await withLinkedCredential(deps, process.env, { sessionId });
   const locked = await harnessLockRefusal(deps, sessionId, env);
   if (locked !== undefined) return say(locked.split('\n')[0] ?? locked);
   const platform = serverOptionsFromEnv(env);

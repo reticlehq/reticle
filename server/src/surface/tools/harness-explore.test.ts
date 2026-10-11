@@ -438,6 +438,34 @@ describe('finding the key a linked machine already has', () => {
     expect(env['RETICLE_API_KEY']).toBeUndefined();
   });
 
+  /*
+   * Persona 25: the daemon was linked to one project and the driven tab's app to another. The plan
+   * was saved with the daemon's key and the runs it links to synced under the tab's, so every
+   * "Runs of this plan" link answered "Run unavailable". A drive of a tab uses that tab's project.
+   */
+  it("uses the driven tab's own project, where its plans and runs both land", async () => {
+    const TAB_ROOT = '/work/shop/.reticle';
+    const keys: Record<string, { url: string; apiKey: string }> = {
+      [TAB_ROOT]: { url: 'https://app.reticle.sh', apiKey: 'rk_shop' },
+    };
+    const deps = {
+      reticleRoot: '/work/daemon/.reticle',
+      sessions: {
+        resolve: () => ({ id: 'tab-1', projectId: 'shop', url: 'http://localhost:4397/' }),
+      },
+      artifactRootFor: () => ({ root: TAB_ROOT }),
+      linkedCloud: (root?: string) =>
+        Promise.resolve(root === undefined ? FILED : (keys[root] ?? null)),
+    } as unknown as ToolDeps;
+    expect((await withLinkedCredential(deps, {}, { sessionId: 'tab-1' }))['RETICLE_API_KEY']).toBe(
+      'rk_shop',
+    );
+    expect(
+      (await withLinkedCredential(deps, {}, { sessionId: undefined }))['RETICLE_API_KEY'],
+    ).toBe('rk_shop');
+    expect((await withLinkedCredential(deps, {}))['RETICLE_API_KEY']).toBe('rk_live_filed');
+  });
+
   /** A credential store that cannot be read is "not linked", never a failed drive. */
   it('survives a resolver that throws', async () => {
     const angry = {

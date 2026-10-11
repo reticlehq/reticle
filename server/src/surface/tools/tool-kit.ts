@@ -54,8 +54,9 @@ export interface ToolDeps<Ext = unknown> {
    * to: this is a port, and the daemon already resolves exactly this for cloud sync.
    *
    * Absent ⇒ nothing is linked, or the caller is an embedder with no filesystem. Never an error.
+   * `root` is the `.reticle` whose link is asked for; absent, the daemon's own.
    */
-  linkedCloud?: () => Promise<{ url: string; apiKey: string } | null>;
+  linkedCloud?: (root?: string) => Promise<{ url: string; apiKey: string } | null>;
   /** structured annotations accumulating for the live recording. */
   annotations: AnnotationStore;
   /**

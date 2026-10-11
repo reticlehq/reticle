@@ -259,8 +259,8 @@ export async function resolveProjectCloud(
  */
 export const linkedCloudPort =
   (fs: FileSystemPort, reticleRoot: string, homeDir: string, env: NodeJS.ProcessEnv) =>
-  async (): Promise<CloudConfig | null> =>
-    (await resolveProjectCloud(fs, reticleRoot, homeDir, env)).config;
+  async (root?: string): Promise<CloudConfig | null> =>
+    (await resolveProjectCloud(fs, root ?? reticleRoot, homeDir, env)).config;
 
 /**
  * The API key a tab's own project resolves to, so a credential is only ever used for its own tabs.
