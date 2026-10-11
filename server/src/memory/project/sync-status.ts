@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
-import { unsyncedRoots, type UnsyncedRoot } from '@/memory/cloud/unsynced-roots.js';
+import { unmatchedRoots, unsyncedRoots, type UnsyncedRoot } from '@/memory/cloud/unsynced-roots.js';
 import type { FileSystemPort } from './fs/fs-port.js';
 import { knownProjectCandidates } from './artifact-root-resolver.js';
 
@@ -190,7 +190,11 @@ export async function machineUnsyncedRoots(
   home: string,
   env: NodeJS.ProcessEnv,
 ): Promise<UnsyncedRoot[]> {
-  const roots = knownProjectCandidates().map((c) => join(c.directory, ReticleDir.ROOT));
+  const roots = [
+    ...knownProjectCandidates().map((c) => join(c.directory, ReticleDir.ROOT)),
+    // And what no project claimed: nothing sends it, and nothing named it after the first warning.
+    ...unmatchedRoots(home),
+  ];
   const cloudOf = (root: string) => resolveProjectCloud(fs, root, home, env);
   return unsyncedRoots(
     roots,

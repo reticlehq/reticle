@@ -214,6 +214,13 @@ export function artifactRootResolver(
     : undefined;
   /** Said once per project, reason and folder: one session's calls repeated it 16 times in 3s. */
   const told = new Set<string>();
+  // ponytail: asked once per origin (it shells out); a dev server moved to another folder on the
+  // same port is named stale until the daemon restarts.
+  const servedFrom = new Map<string, string | undefined>();
+  const servingOf = (origin: string): string | undefined => {
+    if (!servedFrom.has(origin)) servedFrom.set(origin, servingDirectory(origin));
+    return servedFrom.get(origin);
+  };
   return (projectId, origin) => {
     const known = candidates();
     let resolved = resolveArtifactRoot({ projectId, candidates: known, daemonRoot });
@@ -225,7 +232,7 @@ export function artifactRootResolver(
         projectId,
         candidates: known,
         daemonRoot,
-        servingDirectory: servingDirectory(origin),
+        servingDirectory: servingOf(origin),
       });
     }
     if (resolved.reason === ArtifactRootReason.MATCHED_PROJECT) return resolved;
@@ -258,6 +265,9 @@ export function artifactRootResolver(
         ...(resolved.candidates === undefined ? {} : { candidates: resolved.candidates }),
       });
     }
-    return { ...resolved, root };
+    // Named so the agent is told WHICH checkout's work is stranded: a clone serving the app was
+    // never named, only the primary checkout's folders.
+    const serving = origin === undefined ? undefined : servingOf(origin);
+    return { ...resolved, root, ...(serving === undefined ? {} : { serving }) };
   };
 }

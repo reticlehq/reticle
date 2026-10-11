@@ -9,7 +9,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
-import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
+import { DRIVE_RECORD_SUFFIX, UNMATCHED_SUBDIR } from '@/memory/project/dir/reticle-dir.js';
 import { diskSource, readCloudState } from './sync-disk.js';
 
 export interface UnsyncedRoot {
@@ -79,6 +79,28 @@ export async function unsyncedRoots(
   return out;
 }
 
+/**
+ * The buckets under `~/.reticle/unmatched/` — evidence no project claimed, which nothing sends. After
+ * the first warning nothing named them again: not `status`, not `connect`, not the dashboard's
+ * unsent list. Never throws.
+ */
+export function unmatchedRoots(home: string): string[] {
+  const dir = join(home, ReticleDir.ROOT, UNMATCHED_SUBDIR);
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(dir, entry.name));
+  } catch {
+    return [];
+  }
+}
+
+/** Whether a root is one of those buckets. */
+function isUnmatchedRoot(root: string): boolean {
+  const parent = dirname(root);
+  return UNMATCHED_SUBDIR === basename(parent) && ReticleDir.ROOT === basename(dirname(parent));
+}
+
 /** The project a `.reticle` folder belongs to: where a person runs the command that sends it. */
 export function projectFolderOf(root: string): string {
   return ReticleDir.ROOT === basename(root) ? dirname(root) : root;
@@ -95,6 +117,13 @@ export function describeUnsynced(entry: UnsyncedRoot, from: string): string {
     ...(0 < entry.runs ? [`${String(entry.runs)} run(s)`] : []),
     ...(0 < entry.flows ? [`${String(entry.flows)} flow(s)`] : []),
   ].join(' and ');
+  if (isUnmatchedRoot(entry.root)) {
+    return (
+      `${what} in ${entry.root.split(sep).join('/')} are not on your dashboard: no project claimed ` +
+      'them — the checkout that made them shares its project id with another, or has none. They stay ' +
+      'on this machine; serve the app from the checkout that owns the id, or give this one its own, so new work reaches it'
+    );
+  }
   // `connect`, not `link`: it signs in first when it has to, so it is the one command that works.
   if (!entry.linked)
     return `${what} in ${where} are not on your dashboard: run \`reticle connect\` there`;

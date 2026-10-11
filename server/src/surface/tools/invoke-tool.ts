@@ -864,14 +864,18 @@ function safeRoot(get: () => string): string | undefined {
 function unmatchedRootOf(
   deps: ToolDeps,
   sessionId: string | undefined,
-): { root: string; contenders: readonly string[] } | undefined {
+): { root: string; contenders: readonly string[]; serving?: string } | undefined {
   try {
     const target = sessionTarget(deps, sessionId);
     const resolved = deps.artifactRootFor?.(target.projectId, target.origin);
     if (resolved === undefined || ArtifactRootReason.MATCHED_PROJECT === resolved.reason)
       return undefined;
     if (resolved.root === deps.reticleRoot) return undefined;
-    return { root: resolved.root, contenders: resolved.candidates ?? [] };
+    return {
+      root: resolved.root,
+      contenders: resolved.candidates ?? [],
+      ...(resolved.serving === undefined ? {} : { serving: resolved.serving }),
+    };
   } catch {
     return undefined;
   }

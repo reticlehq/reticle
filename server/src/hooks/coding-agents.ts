@@ -74,6 +74,11 @@ export function callingAgent(): string | undefined {
   return name === undefined ? undefined : agentLabel(name);
 }
 
+/** The MCP connection the current call came over, or undefined outside one. */
+export function callingAttachId(): string | undefined {
+  return calling.getStore();
+}
+
 /**
  * The client whose call this is, and nobody else: no fallback to the only agent attached. A run or
  * a journaled action is credited by this — a dashboard Re-verify, which no agent made, was credited

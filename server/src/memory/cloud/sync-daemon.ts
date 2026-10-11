@@ -23,12 +23,13 @@
  */
 import { syncRequest } from './cloud-sync.js';
 import { log } from '@/log.js';
+import { homedir } from 'node:os';
 import { emitSyncHook } from '@/hooks/hook-emit.js';
 import { flushPendingWrites } from '@/hooks/hook-bus.js';
 import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
 import { diskSink, diskSource, readCloudState } from './sync-disk.js';
 import { resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
-import { unsyncedRoots, type UnsyncedRoot } from './unsynced-roots.js';
+import { unmatchedRoots, unsyncedRoots, type UnsyncedRoot } from './unsynced-roots.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 
 /** How often the daemon cycles. See the note above on why this is a constant and not a curve. */
@@ -193,7 +194,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     const linked = rootsLinked;
     const sendsFlows = rootsSendFlows;
     unsynced = await unsyncedRoots(
-      [...linked.keys()],
+      // With what no project claimed, which no cycle pushes: the dashboard's unsent list left it out.
+      [...linked.keys(), ...unmatchedRoots(homedir())],
       (r) => Promise.resolve(true === linked.get(r)),
       (r) => Promise.resolve(sendsFlows.has(r)),
     );

@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
+import { callingAttachId } from '@/hooks/coding-agents.js';
 
 /**
  * The one thing the agent should do next, on the result of the call it just made.
@@ -41,10 +42,18 @@ export const NextText = {
    * The evidence of this app is landing outside any project, so nothing will send it. A second
    * checkout's runs and flows went to `~/.reticle/unmatched/<id>` and the agent was told nothing.
    */
-  UNMATCHED: (root: string, contenders: readonly string[]): string =>
-    0 < contenders.length
-      ? `This app's runs and flows are going to ${root}, not your project, so they will not reach the dashboard: ${String(contenders.length)} folders claim its project id (${contenders.join(', ')}). Give each checkout its own id (\`reticle init\` in it), or serve the app from one of them.`
-      : `This app's runs and flows are going to ${root}, not your project, so they will not reach the dashboard: no folder on this machine declares its project. Run \`reticle init\` in the app's folder.`,
+  UNMATCHED: (root: string, contenders: readonly string[], serving?: string): string => {
+    const app = serving === undefined ? "This app's" : `The app served from ${serving}: its`;
+    const lead = `${app} runs and flows are going to ${root}, not your project, so they will not reach the dashboard: `;
+    if (0 === contenders.length) {
+      return `${lead}no folder on this machine declares its project. Run \`reticle init\` in the app's folder.`;
+    }
+    return (
+      `${lead}${String(contenders.length)} folders claim its project id (${contenders.join(', ')}). ` +
+      'Serve the app from the checkout that owns the id, or give this one its own id with ' +
+      "`reticle init` in it — that rewrites its committed .reticle.json, so keep the change on this checkout's branch."
+    );
+  },
   REPLAY: (flows: number): string =>
     `This app has ${String(flows)} saved flow(s). Replay them before driving anything by hand: reticle_verify { action: "flows" } re-verifies them with no model.`,
 } as const;
@@ -64,6 +73,11 @@ interface RootState {
   problemTold?: string;
 }
 
+/**
+ * Keyed by the agent session AND the folder: what is "said once" is said once to each agent. The
+ * daemon outlives agent sessions, and keyed by folder alone a fresh session in a second checkout
+ * was diverted into ~/.reticle/unmatched with nothing said, because an earlier one had been told.
+ */
 const roots = new Map<string, RootState>();
 
 /** Tests only. */
@@ -129,7 +143,7 @@ function syncProblem(root: string, now: number): string | undefined {
 export interface NextStepInput {
   tool: string;
   /** Where this app's evidence goes when no project claims it, and the folders that compete for it. */
-  unmatched?: { root: string; contenders: readonly string[] } | undefined;
+  unmatched?: { root: string; contenders: readonly string[]; serving?: string } | undefined;
   /** Whether this result carries a verdict. */
   verdict: boolean;
   root: string | undefined;
@@ -158,13 +172,14 @@ function savedFlows(dir: string): number {
 export function nextStep(input: NextStepInput): string | undefined {
   const { root } = input;
   if (root === undefined) return undefined;
-  const state = roots.get(root) ?? {
+  const key = `${callingAttachId() ?? ''}\u0000${root}`;
+  const state = roots.get(key) ?? {
     calls: 0,
     lastQuietAt: Number.NEGATIVE_INFINITY,
     declareAsks: 0,
     replayTold: false,
   };
-  roots.set(root, state);
+  roots.set(key, state);
   state.calls += 1;
   const linked = existsSync(join(root, ReticleDir.CLOUD_LINK_FILE));
   // A key in the environment syncs too, so its runs not arriving is just as much a problem.
@@ -176,7 +191,7 @@ export function nextStep(input: NextStepInput): string | undefined {
   const unmatched = input.unmatched;
   if (unmatched !== undefined && unmatched.root !== state.unmatchedTold) {
     state.unmatchedTold = unmatched.root;
-    return NextText.UNMATCHED(unmatched.root, unmatched.contenders);
+    return NextText.UNMATCHED(unmatched.root, unmatched.contenders, unmatched.serving);
   }
   // Measured on a whole-app drive: an agent re-drove everything by hand while saved flows sat
   // unreplayed, though the skill says to replay first. Said on the first call, where it is in time.

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { NextText, nextStep, resetNextStep } from './next-step.js';
+import { forgetAgents, noteAgentAttached, runAsAgent } from '@/hooks/coding-agents.js';
 
 const NOW = 1_800_000_000_000;
 const root = (files: Record<string, unknown> = {}): string => {
@@ -65,6 +66,42 @@ describe('what the agent is told to do next', () => {
     expect(
       nextStep({ tool: 'reticle_flow_save', verdict: false, root: r, now: NOW, unmatched }),
     ).not.toBe(first);
+  });
+
+  /*
+   * The warning was said once per daemon: a fresh agent session in the clone drove, proved `yes`
+   * and saved a flow into ~/.reticle/unmatched with nothing said, because an earlier session had
+   * been told. Agents restart; the daemon stays. Each agent session is told once.
+   */
+  it('tells every agent session once, not the daemon once', async () => {
+    forgetAgents();
+    noteAgentAttached('first', 'claude-code');
+    noteAgentAttached('second', 'claude-code');
+    const r = root({ 'request.json': { at: NOW } });
+    const unmatched = { root: '/home/me/.reticle/unmatched/web-1', contenders: [] };
+    const ask = (): Promise<string | undefined> =>
+      Promise.resolve(
+        nextStep({ tool: 'reticle_flow_save', verdict: false, root: r, now: NOW, unmatched }),
+      );
+    const told = NextText.UNMATCHED(unmatched.root, []);
+    expect(await runAsAgent('first', ask)).toBe(told);
+    expect(await runAsAgent('first', ask)).not.toBe(told);
+    expect(await runAsAgent('second', ask)).toBe(told);
+    forgetAgents();
+  });
+
+  /*
+   * It named the primary checkout's folders, never the clone actually serving the app, and advised
+   * `reticle init` there, which rewrites the committed .reticle.json.
+   */
+  it('names the folder serving the app, and says what init would rewrite', () => {
+    const said = NextText.UNMATCHED(
+      '/home/me/.reticle/unmatched/web-1',
+      ['/code/mono'],
+      '/code/clone',
+    );
+    expect(said).toContain('/code/clone');
+    expect(said).toContain('.reticle.json');
   });
 
   it('on a linked project with nothing wrong, says the run syncs on its own', () => {

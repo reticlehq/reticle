@@ -84,6 +84,9 @@ export function reticleDirPaths(root: string): ReticleDirPaths {
  */
 export const DRIVE_RECORD_SUFFIX = '.drive.json';
 
+/** Where evidence goes when no project could be named: `~/.reticle/unmatched/<id>`. */
+export const UNMATCHED_SUBDIR = 'unmatched';
+
 /** The verification-run artifact path for `runId`.reticle/runs/<runId>.json). */
 export function runPath(root: string, runId: RunId): string {
   return join(root, ReticleDir.RUNS_SUBDIR, `${runId}.json`);

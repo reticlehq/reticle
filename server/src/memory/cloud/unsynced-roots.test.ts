@@ -13,6 +13,7 @@ import {
   projectFolderOf,
   unsentFlowCount,
   unsentRunCount,
+  unmatchedRoots,
   unsyncedRoots,
 } from './unsynced-roots.js';
 
@@ -124,5 +125,32 @@ describe('unsynced roots', () => {
     expect(describeUnsynced({ root: '/w/.reticle', runs: 0, flows: 3, linked: false }, '/w')).toBe(
       '3 flow(s) in this folder are not on your dashboard: run `reticle connect` there',
     );
+  });
+});
+
+/*
+ * A second checkout's runs and flows went to ~/.reticle/unmatched/<id> and, after the first warning,
+ * nothing named the folder again: not `status`, not `connect`, not the dashboard's unsent list,
+ * which left every unmatched folder out. They are listed like any folder nothing sends.
+ */
+describe('evidence no project claimed', () => {
+  it('is found under ~/.reticle/unmatched, and said with where it is and why', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'reticle-home-'));
+    const bucket = join(home, ReticleDir.ROOT, 'unmatched', 'web-ce5886cd');
+    mkdirSync(join(bucket, ReticleDir.RUNS_SUBDIR), { recursive: true });
+    writeFileSync(join(bucket, ReticleDir.RUNS_SUBDIR, 'r1.json'), JSON.stringify({ runId: 'r1' }));
+    expect(unmatchedRoots(home)).toEqual([bucket]);
+    const [entry] = await unsyncedRoots(unmatchedRoots(home), () => Promise.resolve(false));
+    expect(entry?.runs).toBe(1);
+    const said = describeUnsynced(
+      { ...entry, root: bucket, runs: 1, flows: 0, linked: false },
+      '/w',
+    );
+    expect(said).toContain(bucket.split('\\').join('/'));
+    expect(said).toContain('no project claimed');
+  });
+
+  it('is nothing when there is no such folder', () => {
+    expect(unmatchedRoots(mkdtempSync(join(tmpdir(), 'reticle-home-')))).toEqual([]);
   });
 });
