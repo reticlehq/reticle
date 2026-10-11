@@ -165,8 +165,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * putting the files in the directory that already had the name is what makes the ledger honest
    * rather than what changes it. These are the union, and nothing started or stopped needing
    * anything.
+   *
+   * `flows` for `reticle_memory { action: "push-flow" }`: it uploads the flow the SESSION's project
+   * saved, so it needs the same per-session flow store every flow tool resolves through. Reading the
+   * file directly would be a second, unmigrated reader of the flow format.
    */
-  recall: ['args', 'cloud', 'fs', 'project', 'tools'],
+  recall: ['args', 'cloud', 'flows', 'fs', 'project', 'tools'],
   /**
    * The filesystem, as a port.
    *
