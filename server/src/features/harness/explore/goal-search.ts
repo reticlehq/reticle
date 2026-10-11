@@ -17,6 +17,7 @@ import { lookFor } from '../goals.js';
 import {
   journeyNames,
   namedControls,
+  navLinks,
   overlayOpen,
   parseTree,
   readPage,
@@ -77,14 +78,29 @@ export async function searchForGoal(
       return true;
     }
     if (MAX_DEPTH <= depth) return false;
-    const lines = parseTree(page.tree);
+    // Read again, settled by the look: a page read as it loaded offered none of its controls.
+    const lines = parseTree((await readPage(invoke))?.tree ?? page.tree);
     // A menu or dialog the drive left open hides the page behind it: the live drive's hunt read the
     // workspace switcher and nothing else. Close it by reloading the page, once, and look again.
     if (0 === depth && !reopened && overlayOpen(lines)) {
       reopened = true;
       return (await go(page.route)) && explore(0);
     }
-    const tries = [...toggles(lines), ...namedControls(lines, journey)].map(label);
+    // What the journey names on this page first ("press Run plan"), then the toggles, then the
+    // named links that leave it: a switcher pressed as a toggle opened its menu over the plan page,
+    // and the button the journey named was never pressed.
+    const named = namedControls(lines, journey);
+    const leaving = new Set<TreeLine>(navLinks(lines));
+    const tries = [
+      ...new Set(
+        [
+          ...named.filter((l) => !leaving.has(l)),
+          ...toggles(lines),
+          ...named.filter((l) => leaving.has(l)),
+        ].map(label),
+      ),
+    ];
+    const overlaid = overlayOpen(lines);
     for (const name of tries) {
       const key = `${page.route}: ${name}`;
       if (pressed.has(key)) continue;
@@ -102,8 +118,10 @@ export async function searchForGoal(
         continue;
       }
       if (await explore(depth + 1)) return true;
+      // Back where it pressed from, with nothing it opened left over the page to hide the rest.
       const back = await readPage(invoke);
-      if (back !== undefined && back.route !== page.route) await go(page.route);
+      const leftOpen = !overlaid && overlayOpen(parseTree(back?.tree ?? ''));
+      if (back !== undefined && (back.route !== page.route || leftOpen)) await go(page.route);
     }
     return false;
   };

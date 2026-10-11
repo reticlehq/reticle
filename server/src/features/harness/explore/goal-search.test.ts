@@ -157,6 +157,48 @@ describe('the hunt for a goal the drive did not end on', () => {
     expect(app.calls.some(([, a]) => 'e43' === a['ref'])).toBe(false);
   });
 
+  /*
+   * Persona 25: the drive stood on the plan's page with "Run plan" in view. The hunt pressed the
+   * workspace switcher beside the pressed sidebar toggle, left its menu open over the page, and never
+   * pressed the button the journey names.
+   */
+  const PLAN = '/plans/hp_1';
+  const RUNNING = 'The plan is running on your computer.';
+  const header = [
+    `${NAV}`,
+    '- group "Workspace" (ref=e60)',
+    '  - button "Hide sidebar" (ref=e61) [pressed]',
+    '  - button "Planwise F25" (ref=e62)',
+    '- heading "Checkout regression"',
+    '- button "Save" (ref=e63)',
+    '- button "Run plan" (ref=e64)',
+  ].join('\n');
+  const switcherOpen = `- menu "Planwise F25" (ref=e70)\n  - menuitem "Planwise F25" (ref=e71)`;
+  const planPage = {
+    tree: header,
+    press: { e62: { opens: switcherOpen }, e64: { opens: `${header}\n- status "${RUNNING}"` } },
+  };
+
+  it('presses the control the journey names before any toggle', async () => {
+    const app = fakeApp({ [PLAN]: planPage }, PLAN);
+    const found = await searchForGoal(app.invoke, {
+      goal: RUNNING,
+      journey: 'open the plan named "Checkout regression" and press Run plan',
+    });
+    expect(found).toMatchObject({ found: true, at: PLAN });
+    expect(found.searched).toEqual([PLAN, `${PLAN}: button "Run plan"`, PLAN]);
+  });
+
+  it('closes a menu it opened that did not hold the goal, and presses what it hid', async () => {
+    const app = fakeApp({ [PLAN]: planPage }, PLAN);
+    const found = await searchForGoal(app.invoke, {
+      goal: RUNNING,
+      journey: 'from Planwise F25 open the plan and press Run plan',
+    });
+    expect(found).toMatchObject({ found: true, at: PLAN });
+    expect(found.searched).toContain(`${PLAN}: button "Run plan"`);
+  });
+
   /* Persona 12: reached the goal page, walked past it to /runs; the map knows where it was. */
   it('finds a goal the drive walked past', async () => {
     const app = fakeApp(
