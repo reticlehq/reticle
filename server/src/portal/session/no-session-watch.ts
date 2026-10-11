@@ -366,7 +366,9 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   };
 
   const refresh = (): void => {
-    // Nothing to diagnose while a session is live, and no reason to scan.
+    // Nothing to diagnose while a session is live, and no reason to scan. What the last scan saw
+    // predates this session, so it is no observation of where the session goes on to depart from.
+    if (options.sessions.count() > 0) probed = new Set();
     if (running || options.sessions.count() > 0) return;
     running = true;
     const candidates = scanPorts();
@@ -571,6 +573,19 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     return diagnosisFor(caller);
   };
 
+  /**
+   * `listening`, plus the departed session's port when no scan has looked at it since: not looked
+   * at is not stopped. Without it `reticle status` called a running Vite stopped because the only
+   * scan ran before the app was started.
+   */
+  const observedListening = (): readonly number[] => {
+    const known = options.sessions.lastKnown?.();
+    const port = known === undefined ? undefined : portOfUrl(known.url);
+    return port === undefined || probed.has(port) || listening.includes(port)
+      ? listening
+      : [...listening, port];
+  };
+
   const nextAction = (scope: ProjectScopeFacts): NoSessionNextAction => {
     const split = splitBrain();
     return nextActionFor({
@@ -587,7 +602,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
         return refused === undefined ? {} : { helloRefused: refused.reason };
       })(),
       ...(split === undefined ? {} : { splitBrain: split }),
-      listening,
+      listening: observedListening(),
       slowListeners,
       // The url the departed tab was on — the same tombstone the prose diagnosis quotes, so the
       // command and the sentence beside it name the same page.
@@ -626,7 +641,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       // framework and its projectId, and whose real problem was a dev server older than the plugin.
       // The boot value still counts: it is the one the daemon scoped its sessions with.
       ...scope,
-      listening,
+      listening: observedListening(),
       slowListeners,
       port: options.port,
       // The directory `initialized` was decided in. Named in the message because "there is no

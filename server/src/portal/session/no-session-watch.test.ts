@@ -346,3 +346,61 @@ describe('the watch detects non-JS projects when no dev script is found', () => 
     expect(nextAction?.reason).not.toContain('Flutter');
   });
 });
+
+/**
+ * A scan older than the session it is asked about is no observation of that session's port.
+ *
+ * Reported from the persona drive: `reticle status` said "The dev server that served it has stopped
+ * — nothing answers on that port" while Vite answered on that very port. The scan that said so ran
+ * before the app was started (or while a session was live, when no scan runs at all), so the port
+ * was either never asked or asked before anything served it.
+ */
+describe('a departed port the scan has not looked at since', () => {
+  function stubWith(state: { live: number; url?: string }): ReturnType<typeof stubSessions> {
+    const stub = stubSessions();
+    const m = stub.manager as unknown as Record<string, unknown>;
+    m['count'] = () => state.live;
+    m['everConnected'] = () => state.url !== undefined;
+    m['lastKnown'] = () => (state.url === undefined ? undefined : { id: 's-gone', url: state.url });
+    return stub;
+  }
+
+  it('is not called stopped when the only scan ran before the session existed', async () => {
+    const dir = projectDir(JSON.stringify({ framework: 'vite', projectId: 'app-1' }));
+    const state: { live: number; url?: string } = { live: 0 };
+    const { manager, hint } = stubWith(state);
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: () => Promise.resolve([]),
+      occupiedSiblings: () => Promise.resolve([]),
+      routeStatus: () => Promise.resolve(undefined),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    state.url = 'http://localhost:4394/';
+    const message = hint();
+    stop();
+    expect(message).not.toMatch(/has stopped/);
+  });
+
+  it('is still called stopped once a scan after the departure found nothing there', async () => {
+    const dir = projectDir(JSON.stringify({ framework: 'vite', projectId: 'app-1' }));
+    const state: { live: number; url?: string } = { live: 0, url: 'http://localhost:4394/' };
+    const { manager, hint } = stubWith(state);
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: () => Promise.resolve([]),
+      occupiedSiblings: () => Promise.resolve([]),
+      routeStatus: () => Promise.resolve(undefined),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const message = hint();
+    stop();
+    expect(message).toMatch(/has stopped/);
+  });
+});
