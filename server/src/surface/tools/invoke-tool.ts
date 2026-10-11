@@ -34,7 +34,7 @@ import { noteActed, noteFirstVerdict, noteOnboardingFirst } from '@/telemetry/on
 import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
 import { DiscoveryInvite, asString } from '@reticlehq/core';
 import { SESSION_ID_ARG, sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
-import { EnvelopeKey } from './tool-kit.js';
+import { EnvelopeKey, STEP_SHOT_TOOLS } from './tool-kit.js';
 import { ReticleTool } from '@reticlehq/core';
 import { takeFeedbackPrompt } from './feedback-tools.js';
 import { takeFeedbackUndelivered } from '@/telemetry/feedback-delivery.js';
@@ -46,6 +46,7 @@ import {
   noteToolDispatched,
 } from '@/surface/tools/feature-capture.js';
 import { span } from '@/trace.js';
+import { takeStepShot } from '@/features/visual/step-shots.js';
 import {
   defectForToolResult,
   deltaForToolResult,
@@ -597,6 +598,7 @@ async function dispatchTool<Ext>(
     // concurrency slot and peakConcurrentTools would climb forever on an unhealthy session.
     settleTiming(Date.now() - startedAt);
   }
+  raw = await withStepShot(tool.name, deps, args, raw, session?.id ?? rawSessionId);
   // Milestones describe work that ran. Refusals and paused calls must not consume the firsts.
   // Record action before verdict: act_and_wait can complete both in this same call.
   if (isPlainObject(raw) && !resultIsError(raw) && raw['paused'] !== true && raw['ok'] !== false) {
@@ -822,6 +824,28 @@ async function dispatchTool<Ext>(
       resolved.lastAct?.effect() ?? {},
     );
   return Object.keys(envelope).length > 0 ? { ...result, ...envelope } : result;
+}
+
+/**
+ * A picture of the page the moment this call's outcome was decided, named on the result. Only on
+ * an answer that touched the page: a refusal or a paused call drove nothing worth a picture. A
+ * navigation can land the page under a new id, so the id the result reports wins.
+ */
+async function withStepShot<Ext>(
+  name: string,
+  deps: ToolDeps<Ext>,
+  args: Record<string, unknown>,
+  raw: unknown,
+  sessionId: string | undefined,
+): Promise<unknown> {
+  if (!STEP_SHOT_TOOLS.has(name) || Array.isArray(args['steps'])) return raw;
+  if (!isPlainObject(raw) || resultIsError(raw) || true === raw['paused']) return raw;
+  const tab = 'string' === typeof raw['sessionId'] ? raw['sessionId'] : sessionId;
+  if (tab === undefined) return raw;
+  // Paired with its check when the run is written: the n-th verdict picture is the n-th check.
+  const verdict =
+    'verified' in raw && (ReticleTool.ACT_AND_WAIT === name || ReticleTool.ASSERT === name);
+  return { ...raw, [EnvelopeKey.SCREENSHOT]: await takeStepShot(deps, tab, name, { verdict }) };
 }
 
 /** A root, or undefined when none can be resolved: a missing root is never a reason to throw. */

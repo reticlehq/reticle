@@ -105,7 +105,13 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
     const withEnv = { RETICLE_CLOUD_URL: 'https://cloud.test', RETICLE_CLOUD_KEY: 'rk_live_env' };
     const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, withEnv);
     expect(cloud.config).toEqual({ url: 'https://cloud.test', apiKey: 'rk_live_env' });
-    expect(cloud.policy).toEqual({ runs: true, memory: true, flows: true, capsules: true });
+    expect(cloud.policy).toEqual({
+      runs: true,
+      memory: true,
+      flows: true,
+      capsules: true,
+      screenshots: true,
+    });
     expect(cloud.projectId).toBeNull();
   });
 
@@ -135,9 +141,23 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
     const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, env);
     // `capsules` defaults ON because this project's cloud.json never mentions it: a policy names
     // what it changes, and a surface it is silent about keeps the default rather than inheriting a
-    // neighbour's opt-out.
-    expect(cloud.policy).toEqual({ runs: false, memory: false, flows: true, capsules: true });
+    // neighbour's opt-out. `screenshots` is the exception by design: they are pictures OF the runs,
+    // so a project keeping its runs local keeps them local too unless it says otherwise.
+    expect(cloud.policy).toEqual({
+      runs: false,
+      memory: false,
+      flows: true,
+      capsules: true,
+      screenshots: false,
+    });
     expect(cloud.config).not.toBeNull();
+  });
+
+  it('sends screenshots with runs unless the link turns them off on their own', async () => {
+    await writeLink({ projectId: 'shop', url: 'https://cloud.test', sync: { screenshots: false } });
+    await writeCreds({ shop: 'rk_live_shopkey' });
+    const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, env);
+    expect(cloud.policy).toMatchObject({ runs: true, screenshots: false });
   });
 
   it('parses verify:server and defaults verify to local otherwise', async () => {

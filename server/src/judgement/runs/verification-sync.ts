@@ -17,6 +17,7 @@ import {
   type FlowFile,
   type FlowReplayResult,
   type ReticleVerificationRun,
+  asRunId,
 } from '@reticlehq/core';
 import { homedir } from 'node:os';
 import {
@@ -25,6 +26,7 @@ import {
 } from './artifact/build-verification-run.js';
 import { mapReplayToFlowResult } from './artifact/replay-mapping.js';
 import { defaultRunId } from './default-run-id.js';
+import { currentShotRun } from './default-run-id.js';
 import { RunStore } from './artifact/run-store.js';
 import { cloudFetch, syncRunToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
@@ -52,7 +54,8 @@ function assembleRun(
 ): ReticleVerificationRun {
   const flows = timed.map((t) => mapReplayToFlowResult(t.replay, t.durationMs, t.flow));
   const input: VerificationRunInput = {
-    runId: defaultRunId(),
+    // The run its replays' screenshots were filed under, when the verify minted one first.
+    runId: asRunId(currentShotRun() ?? defaultRunId()),
     durationMs: flows.reduce((sum, f) => sum + f.durationMs, 0),
     profile: RunProfile.DEV,
     project: { name: projectName ?? 'reticle', framework: RunFramework.OTHER },

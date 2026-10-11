@@ -944,6 +944,8 @@ export const ReticleCommand = {
    * screen-recording permission. Answered only when the app installed the capture helper.
    */
   CAPTURE: 'capture',
+  /** The page drawn in-page to a JPEG, `{ ok, width, height, chunks }` (base64 under the string cap). */
+  RENDER: 'render',
   /** Navigate the page to a new URL. `args: { url: string }`. */
   NAVIGATE: 'navigate',
   /** Reload the page. `args: { hard?: boolean }` — hard clears the cache via location replace trick. */

@@ -25,7 +25,8 @@ import { asRecord, isAbsenceDerived, isAdvisory } from '@reticlehq/core';
 import { sessionIdFromArgs } from './tools-helpers.js';
 import { describeStepResult, runStepWithStaleRetry } from './act/act-sequence-retry.js';
 import { assertSequenceSteps } from './act/act-preflight.js';
-import { type ToolDef, sessionIdShape } from './tool-kit.js';
+import { EnvelopeKey, type ToolDef, sessionIdShape } from './tool-kit.js';
+import { takeStepShot } from '@/features/visual/step-shots.js';
 import { actCommand } from './act-tools.js';
 import {
   PredicateSchema,
@@ -161,6 +162,13 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
       assertSequenceSteps(inputSteps);
       const perStepTimeout = 'number' === typeof args['timeout_ms'] ? args['timeout_ms'] : 8000;
       const stepResults: Record<string, unknown>[] = [];
+      // Every step leaves a picture of the page as its outcome was decided — see step-shots.ts.
+      const pushStep = async (row: Record<string, unknown>): Promise<void> => {
+        stepResults.push({
+          ...row,
+          [EnvelopeKey.SCREENSHOT]: await takeStepShot(deps, session.id, ReticleTool.ACT),
+        });
+      };
       const expectations: StepExpectation[] = [];
       // `true` means the default window; a number means that window exactly. 0 is legal and means
       // "no settle at all" — useful only when the app issues its request synchronously.
@@ -230,7 +238,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           }
           if (!outcome.ok) {
             stalledAt = i;
-            stepResults.push({
+            await pushStep({
               ref: step['ref'],
               action: step['action'],
               dispatched: false,
@@ -269,7 +277,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           const disagreement = 0 === contradicted.length ? {} : { contradicted };
           if (!parsed.success) {
             expectations.push({ declared: false, ...disagreement });
-            stepResults.push(described);
+            await pushStep(described);
           } else {
             const verdict = await waitForPredicate(session, parsed.data, perStepTimeout, stepSince);
             const held = true === verdict.pass;
@@ -280,7 +288,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
               ...(verdict.observed === undefined ? {} : { observed: verdict.observed }),
               ...(verdict.expected === undefined ? {} : { expected: verdict.expected }),
             });
-            stepResults.push({
+            await pushStep({
               ...described,
               expected: verdict.expected ?? true,
               held,
@@ -293,7 +301,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           }
         } catch (err: unknown) {
           stalledAt = i;
-          stepResults.push({
+          await pushStep({
             ref: step['ref'],
             action: step['action'],
             dispatched: null,

@@ -116,4 +116,13 @@ describe('a live picture of a leased tab', () => {
       animations: 'disabled',
     });
   });
+
+  it('takes a step screenshot as the page is: CSS pixels, nothing fast-forwarded or injected', () => {
+    expect(screenshotOptions({ jpegQuality: 70, cssScale: true })).toEqual({
+      fullPage: false,
+      type: 'jpeg',
+      quality: 70,
+      scale: 'css',
+    });
+  });
 });

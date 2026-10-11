@@ -139,4 +139,6 @@ export type Launcher = () => Promise<PooledBrowser>;
 export interface ScreenshotOptions {
   fullPage?: boolean;
   jpegQuality?: number;
+  /** One image pixel per CSS pixel, so a high-density display does not double a step screenshot. */
+  cssScale?: boolean;
 }

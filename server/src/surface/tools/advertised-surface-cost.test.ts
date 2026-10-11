@@ -332,7 +332,10 @@ describe('advertised surface cost', () => {
 // ceiling now carries ~1KB of headroom, so two small PRs no longer both have to move it.
 // From here on: measured plus the 1,000 B headroom described at DEFAULT_SURFACE_BYTE_BUDGET above.
 // 150,407 B on main after #1487 landed, so 151,407.
-const ALL_SURFACE_BYTE_BUDGET = 151_407;
+// 151,466 B with the `screenshot` envelope key on every output schema: each action, assert and
+// replayed step names its screenshot's path, and a validating client strips an undeclared key.
+// The default surface sends no output schemas. Measured plus the headroom, so 152,466.
+const ALL_SURFACE_BYTE_BUDGET = 152_466;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

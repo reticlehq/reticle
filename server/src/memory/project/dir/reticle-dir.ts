@@ -7,6 +7,7 @@ import {
   FLOW_NAME_PATTERN,
   SAFE_SEGMENT_PATTERN,
   ReticleDir,
+  STEP_SCREENSHOT,
   type CapabilitiesContract,
   type ManifestGovernance,
   type RunId,
@@ -158,6 +159,15 @@ export function visualDir(root: string, runtime?: string): string {
   return realmOf(runtime).hasOwnBaselineDirectory && runtime !== undefined
     ? join(visual, runtime)
     : visual;
+}
+
+/**
+ * Where one run's step screenshots live: `.reticle/visual/runs/<runId>/`. Throws on an unsafe run id,
+ * like every other path built from one.
+ */
+export function stepShotDir(root: string, runId: string): string {
+  if (!isValidRunId(runId)) throw new Error(`invalid run id: ${JSON.stringify(runId)}`);
+  return join(root, ReticleDir.VISUAL_SUBDIR, STEP_SCREENSHOT.RUNS_DIR, runId);
 }
 
 /** The overlay-diff PNG path for `name`.reticle/visual/<name>.diff.png). */
