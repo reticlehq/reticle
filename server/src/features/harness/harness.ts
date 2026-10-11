@@ -18,7 +18,8 @@
  *    it, which is what lets the whole thing be tested against a scripted model with no API key.
  */
 
-import { ReticleTool, asRecord } from '@reticlehq/core';
+import { ReticleTool, Verified, asRecord } from '@reticlehq/core';
+import { claimsOnlyRoute } from './route-guess.js';
 import { withTimeout } from './with-timeout.js';
 
 /** One tool as the model sees it. JSON Schema, because that is what the wire wants. */
@@ -171,6 +172,26 @@ export const MSG_REPEAT_CHANGED_NOTHING =
   'Not done again: the same action on the same control just changed nothing on the page — no ' +
   'content, request, route or signal. Doing it again will not either. Look at the page and take ' +
   'the next step the journey names.';
+
+/**
+ * Said on a click whose route guess missed while it opened something on the page. A persona drive
+ * clicked the account button expecting to leave /overview; it opened a menu, the miss read as a
+ * failure, and the drive abandoned the route its plan named instead of choosing "Settings" in it.
+ */
+export const MSG_OPENED_IN_PLACE =
+  'This click opened something on this page (a menu, a panel, a dialog) instead of going where you ' +
+  'guessed. That is progress, not a dead end: look at what it opened and act on the item the ' +
+  'journey names next.';
+
+/** A route-only guess that missed, on a click that added content: it opened something in place. */
+function openedInPlace(outcome: ToolOutcome): boolean {
+  if (outcome.isError || ReticleTool.ACT_AND_WAIT !== outcome.name) return false;
+  if (!claimsOnlyRoute(asRecord(outcome.args)['until'])) return false;
+  const result = asRecord(outcome.result);
+  if (Verified.YES === result['verified']) return false;
+  const summary = asRecord(asRecord(result['trace'])['summary']);
+  return 0 < (Number(summary['domAdded']) || 0);
+}
 
 /** The tools that act on one control, keyed by what they did to which control. */
 const ACTING_TOOLS: ReadonlySet<string> = new Set([ReticleTool.ACT, ReticleTool.ACT_AND_WAIT]);
@@ -444,6 +465,14 @@ export async function runHarness(
           : invokeOne(toolset, call);
       }),
     );
+    for (const [i, outcome] of outcomes.entries()) {
+      if (openedInPlace(outcome)) {
+        outcomes[i] = {
+          ...outcome,
+          result: { ...asRecord(outcome.result), next: MSG_OPENED_IN_PLACE },
+        };
+      }
+    }
     for (const outcome of outcomes) {
       const key = actKey(outcome.name, outcome.args);
       if (key === undefined || outcome.isError) continue;

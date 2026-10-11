@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import {
   FINISH_TOOL,
+  MSG_OPENED_IN_PLACE,
   MSG_REPEAT_CHANGED_NOTHING,
   StopReason,
   runHarness,
@@ -273,6 +274,42 @@ describe('a click that changed nothing', () => {
       { maxSteps: 2 },
     );
     expect(app.ran).toEqual(['plus', 'plus']);
+  });
+});
+
+/*
+ * A persona drive clicked the account button guessing it would leave /overview; it opened a menu
+ * instead, the click read as a wrong guess, and the drive abandoned the route its plan named
+ * ("choose Settings") three actions into eighteen steps.
+ */
+describe('a click that opened something in place of the route it guessed', () => {
+  it('is told that opening it is progress, and to take the item the journey names', async () => {
+    const result = await runHarness(
+      scripted([
+        {
+          text: '',
+          calls: [
+            {
+              id: 'c1',
+              name: ReticleTool.ACT_AND_WAIT,
+              args: {
+                ref: 'e5',
+                action: 'click',
+                until: { kind: 'not', predicate: { kind: 'route', contains: '/overview' } },
+              },
+            },
+          ],
+        },
+      ]),
+      toolset(() =>
+        Promise.resolve({
+          verified: 'no',
+          trace: { window_ms: 80, summary: { total: 6, domAdded: 6 } },
+        }),
+      ),
+      { maxSteps: 1 },
+    );
+    expect(result.toolCalls[0]?.result).toMatchObject({ next: MSG_OPENED_IN_PLACE });
   });
 });
 
