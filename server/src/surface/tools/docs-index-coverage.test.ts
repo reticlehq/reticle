@@ -29,6 +29,13 @@ const INDEX = 'README.md';
 /** The site's own landing page. Mintlify serves it at `/` implicitly, so it is never in the nav. */
 const HOME = 'index.mdx';
 
+/**
+ * Not a page: the Agent Skill the docs host serves at `/skill.md` in place of one it would generate.
+ * It is the canonical `SKILL.md` byte for byte (`init/src/skill-copies-agree.test.ts`), so its rules
+ * are that file's, not this site's, and it is reached by URL rather than from the nav.
+ */
+const SKILL = 'skill.md';
+
 const docsIndex = () => readFileSync(join(DOCS, INDEX), 'utf8');
 
 /**
@@ -58,7 +65,7 @@ const markdownPages = (dir = DOCS, prefix = ''): string[] => {
       continue;
     }
     if (!entry.name.endsWith('.md') && !entry.name.endsWith('.mdx')) continue;
-    if (rel === INDEX || rel === HOME) continue;
+    if (rel === INDEX || rel === HOME || rel === SKILL) continue;
     out.push(rel);
   }
   return out;
