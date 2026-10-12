@@ -311,7 +311,9 @@ describe('the block on a single replay and on a Harness drive', () => {
     expect(ok.split('\n')[0]).toContain(ResultWord.NOT_PROVED);
   });
 
-  it('a Harness drive counts its checks and goals, and how many journeys were replayed or driven', () => {
+  // Persona drives: one Harness run said "2 of 2 check(s) held" in its summary, "3 of 3" in its
+  // block (the graded goal added on top) and another count on the dashboard. One count: the checks.
+  it('a Harness drive counts its checks once, as its summary does, and how many journeys were replayed or driven', () => {
     const block = exploreResult(unlinked(), {
       checks: { held: 2, failed: 0, undecided: 0 },
       goals: [{ verified: Verified.YES }],
@@ -321,7 +323,7 @@ describe('the block on a single replay and on a Harness drive', () => {
       ],
     });
     expect(block.split('\n')[0]).toBe(
-      `**Reticle result: ${ResultWord.PROVED}** · 3 of 3 checks held`,
+      `**Reticle result: ${ResultWord.PROVED}** · 2 of 2 checks held`,
     );
     expect(block).toContain('- Covered: Ana: pays, Ben: refunds');
     expect(block).toContain('1 journey replayed · 1 journey driven');

@@ -329,11 +329,12 @@ const MSG_GOAL_NOT_REACHED = 'the drive did not reach its goal';
  * over a goal the drive did not reach are not proved, as the answer's own `proved` says.
  */
 export function exploreResult(root: string, drive: DriveFacts): string {
-  const goal = (v: string): number => drive.goals.filter((g) => v === g.verified).length;
-  const yes = drive.checks.held + goal(Verified.YES);
-  const no = drive.checks.failed + goal(Verified.NO);
-  const undecided =
-    drive.checks.undecided + drive.goals.length - goal(Verified.YES) - goal(Verified.NO);
+  // The checks, counted once and as the run's own summary counts them: the graded goals decide
+  // `goalMet` (and the headline below) and were added on top, so one run read "2 of 2 check(s)
+  // held" in its summary and "3 of 3" here.
+  const yes = drive.checks.held;
+  const no = drive.checks.failed;
+  const undecided = drive.checks.undecided;
   const journeys = drive.journeys ?? [];
   const by = (b: JourneyBy): number => journeys.filter((j) => b === j.by).length;
   const answered = journeys.some((j) => j.by !== undefined);
