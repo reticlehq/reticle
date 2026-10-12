@@ -304,6 +304,22 @@ const tellNoted = (): void => {
   for (const listener of noted) listener();
 };
 
+/** How long each Harness drive took, timed by the drive on the injected clock. */
+const spans = new Map<string, number>();
+
+/**
+ * The drive's own measure of how long it ran. The span of one tab's journal is not it: a lane in a
+ * leased browser left only the grade's assert in the tab, and its run read "Took 0 ms".
+ */
+export function noteHarnessSpan(harness: string, ms: number): void {
+  if (MAX_GOALS_HELD <= spans.size && !spans.has(harness)) {
+    const oldest = spans.keys().next().value;
+    if (oldest !== undefined) spans.delete(oldest);
+  }
+  spans.set(harness, Math.max(0, ms));
+  tellNoted();
+}
+
 export function noteHarnessGoal(harness: string, met: boolean | undefined): void {
   if (met === undefined) return;
   const before = goalsMissed.get(harness);
@@ -376,11 +392,12 @@ function harnessRunFrom(
     goalMet: goalsMissed.get(by.harness),
   });
   const first = actions.reduce((min, action) => Math.min(min, action.at), Number.MAX_SAFE_INTEGER);
+  const durationMs = spans.get(by.harness) ?? Math.max(0, input.durationMs - first);
   return {
     ...input,
     checks,
     ...(disparities.has(by.harness) ? { disparity: [...(disparities.get(by.harness) ?? [])] } : {}),
-    durationMs: Math.max(0, input.durationMs - first),
+    durationMs,
     agent: { id: harnessAgentId(by.driver), kind: RunAgentKind.CODING_AGENT },
     trigger: {
       kind: RunTrigger.EDIT,
@@ -391,7 +408,7 @@ function harnessRunFrom(
         name: by.persona ?? UNNAMED_JOURNEY,
         status,
         steps: actions.length,
-        durationMs: Math.max(0, input.durationMs - first),
+        durationMs,
       },
     ],
   };

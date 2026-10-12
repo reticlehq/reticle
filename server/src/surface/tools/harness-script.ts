@@ -37,7 +37,12 @@ import {
   type ToolOutcome,
 } from '@/features/harness/harness.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
-import { harnessRunId, noteHarnessDisparity, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
+import {
+  harnessRunId,
+  noteHarnessDisparity,
+  noteHarnessGoal,
+  noteHarnessSpan,
+} from '@/judgement/runs/drive-run.js';
 import { openSessionIntents } from '@/memory/intent/open-intents.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { leasableAppUrl, sessionUrlOf } from '@/language/flows/flow-tools.js';
@@ -362,6 +367,7 @@ async function runPlan(
   const endInvoke = (name: string, args: Record<string, unknown>): Promise<unknown> =>
     ports.toolset(pinned(options).sessionId, focus).invoke(name, args);
   const opening = await readOpening(endInvoke);
+  const runStarted = deps.now();
   let run: ScriptRun;
   try {
     run = await runScript(script, ports, (view) => {
@@ -469,6 +475,8 @@ async function runPlan(
   for (const id of lanes.all()) noteHarnessDisparity(id, graded.disparity);
   const goalMet = goalOfDrive(drive.goalMet, goals, actedOnApp(run.toolCalls));
   if (0 < goals.length) for (const id of lanes.all()) noteHarnessGoal(id, goalMet);
+  // ponytail: every lane is given the run's time; per-lane timing if lanes ever report their own.
+  for (const id of lanes.all()) noteHarnessSpan(id, deps.now() - runStarted);
   return {
     // The hunt's navigations too, after the goal was decided on what the plan itself drove.
     drive: {

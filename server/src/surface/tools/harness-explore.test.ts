@@ -136,6 +136,7 @@ describe('exploring an app', () => {
     let call = 0;
     const lists = [[], ['checkout', 'login']];
     const deps = {
+      now: () => 0,
       flows: {
         list: () => Promise.resolve([...(lists[Math.min(call++, 1)] ?? [])]),
         load: (name: string) =>
@@ -189,6 +190,7 @@ describe('exploring an app', () => {
     const saved: { name: string; intent?: string; project?: string | undefined }[] = [];
     let call = 0;
     const deps = {
+      now: () => 0,
       flows: {
         list: () => Promise.resolve(0 === call++ ? [] : ['checkout', 'login']),
         load: (name: string) => Promise.resolve({ ok: true, value: files[name] }),

@@ -21,6 +21,7 @@ import {
   harnessAgentId,
   noteHarnessDisparity,
   noteHarnessGoal,
+  noteHarnessSpan,
 } from './drive-run.js';
 import { computeVerdict } from './artifact/build-verification-run.js';
 import { VerdictStatus } from '@reticlehq/core';
@@ -370,5 +371,20 @@ describe('an agent session ending in a tab the Harness also drove', () => {
     expect(runs.map((r) => r.runId)).toEqual(['run_1', 'run_1-2', 'harness-h9']);
     expect(runs[0]?.checks.map((c) => c.status)).toEqual([Verified.YES]);
     expect(runs[1]?.checks.map((c) => c.status)).toEqual([Verified.NO]);
+  });
+});
+
+/**
+ * A driven journey's run read "Took 0 ms" on the dashboard: the tab's journal held only the grade's
+ * one assert for it (the drive itself ran elsewhere), so the span of its actions was nothing. The
+ * Harness times its own drive, on the injected clock, and the run carries that.
+ */
+describe("a Harness run's duration", () => {
+  it('is the time the Harness measured, not the span of the actions one tab saw', () => {
+    noteHarnessSpan('h-span', 4_200);
+    const by = { harness: 'h-span', driver: 'server', persona: 'p' };
+    const [run] = driveRunsFrom([{ ...action(Verified.YES, 'x', 40), drivenBy: by }], DEPS);
+    expect(run?.durationMs).toBe(4_200);
+    expect(run?.flows[0]?.durationMs).toBe(4_200);
   });
 });

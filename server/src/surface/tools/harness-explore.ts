@@ -11,7 +11,12 @@
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { exploreScript } from './harness-script.js';
 import { randomUUID } from 'node:crypto';
-import { harnessRunId, noteHarnessDisparity, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
+import {
+  harnessRunId,
+  noteHarnessDisparity,
+  noteHarnessGoal,
+  noteHarnessSpan,
+} from '@/judgement/runs/drive-run.js';
 import {
   ReticleEnv,
   ReticleTool,
@@ -418,6 +423,7 @@ export async function exploreApp(
   // Read before anything is driven: a goal this page already shows proves nothing at the end.
   const opening = await readOpening(invoke);
   narrate(`Harness is driving${options.focus === undefined ? '' : `: ${options.focus}`}`, true);
+  const driveStarted = deps.now();
   const drive = await runHarness(driver, toolset, {
     ...steering(options),
     maxSteps,
@@ -462,6 +468,7 @@ export async function exploreApp(
   // and never the driver's word over a drive that did nothing.
   const goalMet = goalOfDrive(drive.goalMet, goals, actedOnApp(drive.toolCalls));
   noteHarnessGoal(harnessId, goalMet);
+  noteHarnessSpan(harnessId, deps.now() - driveStarted);
   const unproved = unprovedGoals(goals);
   if (unproved !== undefined) narrate(unproved, true);
 
