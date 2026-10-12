@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import {
   PredicateKind,
@@ -580,6 +581,34 @@ describe('cloud-cli verb contracts (#555)', () => {
     await runCloudCommand(['link', '--project', 'Storefront']);
     expect(stderrBuf).toContain('in workspace "Acme"');
     expect(stderrBuf).toContain('bound this repo to project "Storefront" in workspace "Acme"');
+  });
+
+  /*
+   * Two different apps whose package is `web` shared one dashboard project: link reused a project
+   * by name alone. The link now carries which repository (and folder in it) it is, and a project of
+   * the same name made for another repository is not reused.
+   */
+  it('does not reuse a same-named project made for another repository', async () => {
+    execFileSync('git', ['init', '-q'], { cwd });
+    execFileSync('git', ['remote', 'add', 'origin', 'git@github.com:acme/storefront.git'], { cwd });
+    await writeHomeFile([SESSION_FILE], `{"token":"tok","orgName":"Acme","url":"${TEST_URL}"}`);
+    let projectCalls = 0;
+    responder = (url) => {
+      if (url.endsWith('/v1/projects')) {
+        projectCalls += 1;
+        return 1 === projectCalls
+          ? { body: { projects: [{ projectId: 'proj_web', name: 'web', repo: 'another-repo' }] } }
+          : { body: { projectId: 'web-2', name: 'web' } };
+      }
+      return { body: { projectId: 'web-2', projectName: 'web', key: 'rk_live_abcd1234ef' } };
+    };
+    await runCloudCommand(['link', '--project', 'web']);
+    const created = requests.find((r) => 'POST' === r.method && r.url.endsWith('/v1/projects'));
+    expect(created?.body).toMatchObject({ name: 'web', repo: expect.any(String) as unknown });
+    const link = JSON.parse(await readFile(join(cwd, RETICLE_DIR, CLOUD_LINK_FILE), 'utf8')) as {
+      repo?: string;
+    };
+    expect(link.repo).toBe((created?.body as { repo?: string }).repo);
   });
 
   it('link --project does NOT create a duplicate when the project already exists', async () => {

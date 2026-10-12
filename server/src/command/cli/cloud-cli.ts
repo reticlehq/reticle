@@ -5,6 +5,12 @@
  * `credentials.json` (per-project api keys from `reticle link`). The non-secret repo binding + sync policy
  * is `<repo>/.reticle/cloud.json`. Auth for a command = `RETICLE_API_KEY` env (agent) OR the login token.
  */
+import {
+  CreatedProjectSchema,
+  inWorkspace,
+  repoIdentity,
+  resolveProjectId,
+} from './project-name.js';
 import { keyRefusalAtLastSync } from '@/memory/project/sync-status.js';
 import { apiKeyFrom } from '@reticlehq/core';
 import { existsSync } from 'node:fs';
@@ -147,46 +153,6 @@ const WhoamiSchema = z.object({
    */
   dashboardUrl: z.string().optional(),
 });
-const CreatedProjectSchema = z.object({ projectId: z.string(), name: z.string() });
-const ProjectsListSchema = z.object({
-  projects: z.array(z.object({ projectId: z.string(), name: z.string() })),
-});
-
-/** Resolve a --project value that may be a slug id OR a display name into the canonical projectId. */
-/**
- * The id for the project the caller named, creating it if it does not exist yet.
- *
- * It used to refuse — "create it with `reticle project create`" — which made naming a project a
- * two-command bookkeeping ritual for the COMMON case: a first repo, whose project has of course not
- * been created yet. That refusal is also the only reason the magic path existed: bare `link` binds
- * to a project called `Default` precisely so nobody has to meet this error.
- *
- * Creating is announced rather than silent. A tool that quietly invents a durable, billable object
- * is its own surprise, and the whole point of this change is that the automatic path SAYS what it
- * did.
- */
-const resolveProjectId = async (
-  url: string,
-  token: string,
-  wanted: string,
-  workspace?: string, // said beside the creation
-): Promise<string> => {
-  const { projects } = ProjectsListSchema.parse(await api('GET', `${url}/v1/projects`, token));
-  const lc = wanted.toLowerCase();
-  const match = projects.find((p) => p.projectId === wanted || p.name.toLowerCase() === lc);
-  if (match !== undefined) return match.projectId;
-  const created = CreatedProjectSchema.parse(
-    await api('POST', `${url}/v1/projects`, token, { name: wanted }),
-  );
-  hint(
-    `created project "${wanted}" (${created.projectId})${inWorkspace(workspace)} — it did not exist yet`,
-  );
-  return created.projectId;
-};
-
-/** ` in workspace "<name>"`, or nothing when no name is known. */
-const inWorkspace = (name: string | undefined): string =>
-  name === undefined || 0 === name.length ? '' : ` in workspace "${name}"`;
 
 /**
  * The `.reticle` this folder's commands read and write: the project `link` binds (see
@@ -369,6 +335,7 @@ export const cmdLink = async (
    */
   let orgId: string | undefined;
   let workspace: string | undefined; // the binding's, said when the sign-in names it
+  let repo: string | undefined; // which repository and folder, so a same-named app is not shared
   /** The key this machine already had for the slot, and whether it provably belongs to another tenant. */
   let priorKey: string | undefined;
   let priorIsForeign = false;
@@ -408,7 +375,14 @@ export const cmdLink = async (
       readProjectId(projectDir),
     );
     workspace = session.orgName;
-    const targetId = await resolveProjectId(url, session.token, wanted ?? fallback, workspace);
+    repo = repoIdentity(projectDir);
+    const targetId = await resolveProjectId(
+      url,
+      session.token,
+      wanted ?? fallback,
+      workspace,
+      repo,
+    );
     /*
      * Reuse the key this machine already holds for the project, rather than minting another.
      *
@@ -506,6 +480,7 @@ export const cmdLink = async (
     ...(orgId === undefined ? {} : { orgId }),
     url,
     ...(dashboardUrl === undefined ? {} : { dashboardUrl }),
+    ...(repo === undefined ? {} : { repo }),
     sync: prevObj['sync'] ?? { runs: true, memory: true, flows: true },
     verify: prevObj['verify'] ?? 'local',
   };
