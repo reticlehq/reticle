@@ -69,6 +69,30 @@ describe('one goal, judged both ways', () => {
   });
 });
 
+/* Persona 24: the agent's pre-check that the words were NOT shown was read as its claim that they were. */
+describe('an agent claim that the goal is absent', () => {
+  it('is not the agent claiming the goal', () => {
+    const negated = [
+      { claim: "the absence of text containing '--project 'shop''", verified: Verified.YES },
+    ];
+    expect(
+      disparityFor({ text: "--project 'shop'", verified: Verified.UNKNOWN }, negated, undefined),
+    ).toBeUndefined();
+  });
+
+  it('still counts the positive half of a claim that also names an absence', () => {
+    const mixed = [
+      {
+        claim: "all of (text containing 'Saved'; the absence of text containing 'Error')",
+        verified: Verified.YES,
+      },
+    ];
+    expect(disparityFor({ text: 'Saved', verified: Verified.YES }, mixed, undefined)?.kind).toBe(
+      DisparityKind.FINDABLE,
+    );
+  });
+});
+
 /* Persona 21: the agent's claim and the goal named the same words in different quotes and spacing. */
 describe('a claim in its own words', () => {
   it('still names the goal when only quotes, case and spacing differ', () => {

@@ -42,7 +42,7 @@ export function disparityFor(
 ): RunDisparity | undefined {
   if (true === check.absent) return undefined;
   const wanted = comparable(check.text);
-  const said = agent.filter((v) => comparable(v.claim).includes(wanted)).at(-1);
+  const said = agent.filter((v) => claimed(v.claim).includes(wanted)).at(-1);
   if (said === undefined) return undefined;
   // On the page before the drive began: plainly findable, never "hard to find" (persona 22).
   const alreadyShown = true === check.reason?.startsWith(VerifiedReason.ALREADY_TRUE);
@@ -79,6 +79,14 @@ const comparable = (text: string): string =>
     .replace(/["'“”‘’`]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+
+/**
+ * What a claim says IS there: its "the absence of …" clauses claim the opposite, so they are cut.
+ * ponytail: a clause ends at `;` or `)`, as `describeWaitTarget` writes them; a goal text holding
+ * either inside an absence would keep its tail.
+ */
+const ABSENCE = /the absence of [^;)]*/g;
+const claimed = (claim: string): string => comparable(claim).replace(ABSENCE, '');
 
 const VERIFIED: ReadonlySet<string> = new Set(Object.values(Verified));
 const asVerified = (value: string): Verified =>
