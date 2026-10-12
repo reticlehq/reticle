@@ -11,7 +11,7 @@ icon: magnifying-glass
   `allowedTools` allowlist or an MCP permission rule naming it refuses before Reticle is asked.
 </Warning>
 
-`reticle_query` answers "where is the thing I mean?" without dumping the whole page into your context window. It queries the way a testing library does. By role, label, text, testid. So your agent binds to meaning rather than to DOM structure that a refactor will move.
+`reticle_look { action: "find" }` answers "where is the thing I mean?" without dumping the whole page into your context window. It queries the way a testing library does. By role, label, text, testid. So your agent binds to meaning rather than to DOM structure that a refactor will move.
 
 ## Example
 
@@ -63,7 +63,7 @@ Seven buttons, each with a `ref` to act on and a source file to open, for 236 to
 | `attrs` | Attribute NAMES to project per match, e.g. `['href']` to inventory links. The values come back in each match's `attrs` map. It does not filter, so `name=value` is refused |
 | `self` | Return the `scope` element itself instead of searching inside it |
 
-Every argument also has a predicate spelling, so `{ "role": "button" }` works as shorthand for `{ "by": "role", "value": "button" }`.
+`role`, `text`, `label`, `placeholder`, `testid` and `alt` also have a predicate spelling, so `{ "role": "button" }` works as shorthand for `{ "by": "role", "value": "button" }`.
 
 ## Use `count_only` when you only need a number
 
@@ -119,13 +119,13 @@ The testid existed, on another route. `hint.route` says where you actually are, 
 
 ## Reading the response
 
-`ref` is the handle for every other tool: `act`, `inspect`, `state`. It stays valid until the element leaves the DOM, so you do not need to re-snapshot between actions on the same element.
+`ref` is the handle for every other call: `reticle_act`, `reticle_look { action: "element" }`, `reticle_look { action: "state" }`. It stays valid until the element leaves the DOM, so you do not need to re-snapshot between actions on the same element.
 
-`source` appears when `@reticlehq/react` is installed. Note that both sidebar buttons above report `Sidebar.tsx:41`, and so do the three trimmed out of the example. That is the line where the component renders all five in a loop, which is exactly the line you want to edit.
+`source` appears when the app is built in dev with the Reticle build plugin; production builds omit it. Note that both sidebar buttons above report `Sidebar.tsx:41`, and so do the three trimmed out of the example. That is the line where the component renders all five in a loop, which is exactly the line you want to edit.
 
 `truncated: true` with `total: 7` means `limit` cut the list, not that Reticle ran out of room. Neither field is emitted when nothing was cut, so their absence is itself the signal that you are looking at every match.
 
-`states` distinguishes `present` from `visible` from `enabled`. An element can be all three and still be covered by a modal. [`reticle_inspect`](/tools/inspect) reports `occluded` for that.
+`states` distinguishes `present` from `visible` from `enabled`. An element can be all three and still be covered by a modal. [`reticle_look { action: "element" }`](/tools/inspect) reports `occluded` for that.
 
 <Tip>
   Query by `testid` when you can. Role and text queries survive refactors well; testids survive

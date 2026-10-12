@@ -41,7 +41,7 @@ reticle_run { tool: "reticle_lease", args: { action: "release", sessionId } }   
 A lease starts with every permission undecided. Pass `permissions` to grant some on the app's origin before the first navigation, so the first render already sees them:
 
 ```text
-reticle_lease {action:"acquire"} { url: "http://localhost:3000/map", permissions: ["geolocation"] }
+reticle_run { tool: "reticle_lease", args: { action: "acquire", url: "http://localhost:3000/map", permissions: ["geolocation"] } }
 ```
 
 Acquiring again on an origin that already has a lease returns that lease, and its grants never change there, because it may be another agent's live tab. The same list is a plain reuse and a different one is refused. To change them, release the lease and acquire again. Names are Playwright's, such as `geolocation`, `clipboard-read`, `clipboard-write` and `notifications`; one the browser does not know is refused with its reason.

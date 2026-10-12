@@ -16,9 +16,9 @@ Most people never type this. Your agent runs [`reticle mcp`](/cli/mcp), which st
 
 | Flag | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Bridge port to bind |
+| `--port N` | number | `RETICLE_PORT`, else the port in `.reticle.json`, else the daemon already serving this project, else `4400` | Bridge port to bind |
 | `--drive <url>` | string | unset | Launch Reticle's own browser at this URL instead of waiting for your tab |
-| `--headless` | boolean | on when `CI` or `RETICLE_HEADLESS` is set, or on Linux with no display | Hide the browser |
+| `--headless` | boolean | on when `CI` or `RETICLE_HEADLESS` is set (and not `0` or `false`), or on Linux with no display | Hide the browser |
 | `--headed` | boolean | on otherwise | Show it, so you can watch the run |
 | `--http` | boolean | `false` | Also expose the HTTP verify endpoint |
 | `--http-port N` | number | unset (`7331`) | Port for that endpoint. Requires `--http`. |
@@ -34,7 +34,7 @@ One structured line. When a daemon already owns the port, it says so and does no
 { "t": "2026-08-15T18:43:33.065Z", "event": "reticle_daemon_already_running", "port": 4499 }
 ```
 
-A successful spawn logs `reticle_daemon_spawned` with the port:
+Once the spawned daemon answers, it logs `reticle_daemon_spawned` with the port:
 
 ```json
 { "t": "2026-08-15T18:43:32.604Z", "event": "reticle_daemon_spawned", "port": 4499 }

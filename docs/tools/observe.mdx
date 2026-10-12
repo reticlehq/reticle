@@ -6,7 +6,7 @@ icon: timeline
 
 `reticle_observe` returns the full timeline of everything the app did in a window: DOM, network, routing, console, animations and signals, in order, with a summary on top. Reach for it when you do not yet know what went wrong. It reads and diagnoses; it does not produce a verdict.
 
-It is the wide-angle lens. Where `reticle_network` and `reticle_console` answer one question each, `observe` returns everything.
+It is the wide-angle lens. Where `reticle_observe { action: "network" }` and `reticle_observe { action: "console" }` answer one question each, the default `events` action returns everything.
 
 ## Example
 
@@ -75,15 +75,15 @@ The `summary` block is the cheap answer. `consoleErrors: 0` and `network: 0` tel
 
 | Argument          | What it does                                                       |
 | ----------------- | ------------------------------------------------------------------ |
-| `window_ms`       | How far back to look                                               |
+| `window_ms`       | How far back to look. Default 2000, ignored when `since` is given  |
 | `since` / `until` | Cursors from a prior act. The precise way to scope                 |
 | `actionId`        | Only events attributed to one action: "what did that click cause?" |
 | `filters`         | Event-type allowlist. The cheapest way to shrink a big timeline    |
-| `max_events`      | Cap the timeline to the most recent N                              |
+| `max_events`      | Cap the timeline to the most recent N (default 200)                |
 
 ## Scope by cursor, not by clock
 
-Every `reticle_act` response includes a `since` cursor. Passing it to `observe` scopes the timeline to exactly what followed that action, with no guessing about how many milliseconds to look back:
+Every `reticle_act` and `reticle_act_and_wait` response includes a `since` cursor. Passing it to `observe` scopes the timeline to exactly what followed that action, with no guessing about how many milliseconds to look back:
 
 ```json
 { "since": 30224, "filters": ["signal", "net"] }
@@ -127,7 +127,7 @@ When two channels disagree, `observe` says so without being asked:
 
 Punctuation in that block is lightly normalised for the docs; the field names and values are verbatim.
 
-A successful write that moved nothing on the client is the exact shape of a false green. Note that this one was a false alarm caused by a narrow filter: the same window's DOM and state did change, and the filtered read simply could not see it. Widen the window before you act on a contradiction.
+A successful write that moved nothing on the client is the exact shape of a false green. `filters` and `max_events` shape what the call returns, never what it concludes: contradictions are computed over the whole window, so a narrow filter cannot manufacture one.
 
 ## When to use it
 
@@ -138,7 +138,7 @@ Use `observe` when you do not yet know what went wrong. Use the narrow tools whe
     "Something broke after that click, show me everything that happened."
   </Card>
   <Card title="Wasteful use" icon="circle-xmark">
-    "Did a POST fire?" [`reticle_network`](/tools/network) answers that far more cheaply.
+    "Did a POST fire?" [`reticle_observe { action: "network" }`](/tools/network) answers that far more cheaply.
   </Card>
 </CardGroup>
 

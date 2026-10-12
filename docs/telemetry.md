@@ -54,7 +54,7 @@ It also carries a snapshot of the **machine's** state (our own process's memory,
 
 ### Why a verdict came out that way
 
-`verification_completed` carries the **clause** that decided the verdict, from a fixed list we define: `proved`, `contradicted`, `assertion_failed`, `already_true`, `unclean_capture`, `vacuous_grade`, `outcome_pending`, `outcome_unread`, `unsettled`, `evidence_incomplete`, `observation_lost`, `window_closed_early`, `inconclusive`.
+`verification_completed` carries the **clause** that decided the verdict, from a fixed list we define: `proved`, `contradicted`, `assertion_failed`, `already_true`, `hidden_match`, `unclean_capture`, `vacuous_grade`, `nothing_declared`, `outcome_pending`, `outcome_unread`, `unsettled`, `evidence_incomplete`, `absence_blind_spot`, `observation_lost`, `window_closed_early`, `inconclusive`, `version_skew`, `capability-absent`.
 
 It exists because `verified: "unknown"` covered seven different situations belonging to three different owners (your app, your agent, and Reticle's own blind spots), and they arrived as one value. It is a **name from our own vocabulary**, never a description of your app: `contradicted` says two channels disagreed, not which ones, about what, or on which page.
 
@@ -124,7 +124,7 @@ Reticle verifies apps for AI agents, and for a long time it had no way to hear w
 | --- | --- | --- |
 | Your agent | Calls the `reticle_session { action: "feedback" }` MCP tool (after a failure, **or to ask for a feature**) | What it wrote: an analysis, or a request with the goal behind it, what would improve, and how it works around the gap today. Plus the model it is running, which it tells us because MCP cannot |
 | You | Run `npx @reticlehq/server feedback [--rating 1-5] [--bug] "your words"` | Your words and your rating |
-| Your agent, before Reticle works | Runs `reticle feedback --agent --kind <bug\|gap\|ambiguity\|feature_request\|improvement> "what happened"` | The same words, filed from the shell. This exists for the phase where there is no daemon and no MCP tools (a failed `init`, half-finished wiring), which is the failure we are otherwise never told about |
+| Your agent, before Reticle works | Runs `npx @reticlehq/server feedback --agent --kind <bug\|gap\|ambiguity\|feature_request\|improvement\|experience> "what happened"` | The same words, filed from the shell. This exists for the phase where there is no daemon and no MCP tools (a failed `init`, half-finished wiring), which is the failure we are otherwise never told about |
 
 Agents are instructed, in the tool description itself, never to include app source, secrets, or user data, and to describe the failure in their own words instead.
 

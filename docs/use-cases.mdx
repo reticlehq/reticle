@@ -67,7 +67,7 @@ Reticle finds elements the way assistive technology does: by role and accessible
 - **The keyboard works.** `press` with `Enter` or `Escape` fires the control's action, not just a mouse click. The [verify-keyboard-access](https://github.com/reticlehq/reticle/tree/main/skills/verify-keyboard-access) skill walks through it.
 - **Visible, enabled, checked, expanded, pressed and in-viewport** are all element states you can assert.
 
-A synthetic Tab key does not move focus in a browser, so Reticle cannot verify Tab order, and it reports that as unknown rather than as a pass.
+A synthetic Tab key does not move focus in a browser, so Reticle cannot verify Tab order. Report Tab order as unknown, never as a pass.
 
 Open the "Delete project" dialog with `press` (`args: { "text": "Enter" }`) and require focus to move into it:
 

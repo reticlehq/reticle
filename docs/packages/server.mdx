@@ -6,7 +6,7 @@ icon: server
 
 `@reticlehq/server` is the Reticle bridge, MCP server and CLI in one Node package. It hosts the WebSocket your app dials into, exposes the MCP tools your agent calls, and ships the `reticle` binary. **You do not add it to your project**: your agent runs it with `npx @reticlehq/server mcp`.
 
-**Licensed under `SEE LICENSE IN LICENSE`, not Apache 2.0 like the rest.** This is the package the enterprise terms apply to.
+**Licensed under `FSL-1.1-ALv2` (the Functional Source License, converting to Apache 2.0), not Apache 2.0 like the SDK packages.** This is the package the enterprise terms apply to.
 
 ## Why it exists
 
@@ -24,9 +24,9 @@ The `bin` entry is `reticle`, so `npx @reticlehq/server <command>` works once it
 
 ## Dependencies
 
-**Runtime:** `@modelcontextprotocol/sdk`, `@reticlehq/core`, `ws`, `zod`.
+**Runtime:** `@modelcontextprotocol/sdk`, `@reticlehq/browser`, `@reticlehq/core`, `@reticlehq/engine`, `@reticlehq/init`, `open-verification`, `ws`, `zod`, `zod-to-json-schema`.
 
-**Optional:** `playwright`, `pixelmatch`, `pngjs`. Optional on purpose: Reticle observes the browser you already have. You only need Playwright for the paths that launch or diff one, which is `reticle drive`, `reticle verify`, and visual baselines.
+**Optional:** `playwright` (also a peer dependency, `>=1.50`), `pixelmatch`, `pngjs`. Optional on purpose: Reticle observes the browser you already have. You only need Playwright for the paths that launch or diff one, which is `reticle drive`, `reticle verify`, and visual baselines.
 
 ## Exports map
 
@@ -50,7 +50,7 @@ await server.close();
 
 | Option | Type | Default |
 | --- | --- | --- |
-| `port` | `number` | `RETICLE_PORT`, else `4400` |
+| `port` | `number` | `4400`. The CLI resolves `RETICLE_PORT` before it calls `start` |
 | `host` | `string` | `RETICLE_HOST`, else loopback. A non-loopback host requires a token |
 | `token` | `string` | `RETICLE_TOKEN` |
 | `allowedOrigins` | `string[]` | `RETICLE_ALLOWED_ORIGINS` |
@@ -71,7 +71,7 @@ await server.close();
 
 ### `RunningServer`
 
-`bridge: Bridge`, `close(): Promise<void>`, and the optional `realInput`, `verifyPort`, `isIdle()`, `agentAttached()`, `token`.
+`bridge: Bridge`, `close(): Promise<void>`, and the optional `realInput`, `verifyPort`, `isIdle()`, `agentAttached()`, `token`, `announceShutdown()`.
 
 ## What else the barrel exports
 

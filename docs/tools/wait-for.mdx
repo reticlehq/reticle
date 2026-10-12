@@ -11,7 +11,7 @@ icon: hourglass
   `allowedTools` allowlist or an MCP permission rule naming it refuses before Reticle is asked.
 </Warning>
 
-`reticle_wait_for` blocks until a predicate holds, or returns straight away if it is already satisfied in the recent event buffer. Reach for it when you are waiting on something you did not cause. It reads and waits; it does not produce a verdict, so finish with [`reticle_assert`](/tools/assert).
+`reticle_wait_for` blocks until a predicate holds, or returns straight away if it is already satisfied in the recent event buffer. Reach for it when you are waiting on something you did not cause. It returns `verified` and `because`, graded the way [`reticle_assert`](/tools/assert) grades them, but the wait is not journaled: it settles the page, and the proof you keep is the assert.
 
 It takes the same predicate grammar as [`reticle_act_and_wait`](/tools/act-and-wait), without the action. Use it when the thing you are waiting for was triggered by something other than your own click. A timer, a websocket push, a background refresh.
 
@@ -24,10 +24,11 @@ It takes the same predicate grammar as [`reticle_act_and_wait`](/tools/act-and-w
 }
 ```
 
-Real response:
+Real response (abridged):
 
 ```json
 {
+  "verified": "yes",
   "pass": true,
   "evidence": [
     {
@@ -61,13 +62,16 @@ The field is `contains`. `value` and `text` are accepted as aliases and rewritte
 | Argument                 | What it does                                                      |
 | ------------------------ | ----------------------------------------------------------------- |
 | `predicate` (or `until`) | `{ kind, ...fields }`, see the [predicate reference](/predicates) |
-| `timeout_ms`             | Maximum wait. Default 4000                                        |
+| `timeout_ms`             | Maximum wait. Default 4000, up to 600000                          |
 | `since`                  | Cursor from a prior act, to widen or narrow the window explicitly |
 
-By default the wait only counts events since your last act, so a signal that fired before the action cannot satisfy it. A miss returns a near-miss diagnosis rather than a bare `false`:
+One call blocks for at most 55 seconds, because an MCP client aborts a longer request. Past that it returns `resume_ms`: call again with `timeout_ms: resume_ms` and the same `since` to keep waiting.
+
+By default the wait only counts events since your last act, so a signal that fired before the action cannot satisfy it. A miss returns a near-miss diagnosis rather than a bare `false` (abridged):
 
 ```json
 {
+  "verified": "no",
   "pass": false,
   "failureReason": "no element matched {\"text\":\"Deployments\"}",
   "observed": "no matching element on the page",

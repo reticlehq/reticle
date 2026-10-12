@@ -249,7 +249,7 @@ All three capture the visible viewport by default, so a baseline taken on a deve
 
 **`{ fullPage: true }` works on Tauri/Linux only.** WebKitGTK can render the whole document offscreen; `takeSnapshot` (macOS) and `CapturePreview` (Windows) only give what is composited, and Electron's `capturePage()` is the same. Asked for a full page they cannot produce, all of them return `{ ok: false, reason: 'full-page-unsupported' }` rather than quietly handing back the viewport, which would be a baseline that omits everything below the fold while every later diff of it reports green about a region that was never captured. No baseline is written on a refusal.
 
-An app that already has its own capture can expose `window.__reticleIpc.capture()` returning a PNG path instead; the SDK prefers it over the built-in command.
+An app that already has its own capture can expose `window.__reticleIpc.capture()` returning a PNG path instead; the SDK prefers it over the built-in command. The daemon reads only a file in the OS temp directory whose name starts with `reticle-capture-`, so write the PNG there.
 
 <Warning>
   One honest caveat. A fully occluded or minimized window is only partially composited, so parts of
@@ -326,7 +326,7 @@ Without `@reticlehq/electron/preload`, every IPC call is invisible to Reticle. A
 
 ## How it compares to Playwright MCP
 
-Both attached to the same running Electron app, same task ("archive a todo, then verify it worked"):
+Both attached to the same running Electron app, same task ("archive a todo, then verify it worked"). Measured by hand, with Reticle's `lean` tool profile, which has since been retired:
 
 | tool                    | ~tokens | ms      | verdict                                   |
 | ----------------------- | ------- | ------- | ----------------------------------------- |

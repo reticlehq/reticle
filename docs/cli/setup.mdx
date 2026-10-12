@@ -14,10 +14,10 @@ No flags, and nothing is asked. It works for your user account, not for one proj
 
 ## What it prints
 
-One line per agent: `✓ <agent>` for a new registration, `✓ <agent> (already set up)` when Reticle was there already, and `⚠ <agent>: …` when a registration failed. If it finds no agent, it names every agent it looked for.
+One line per agent: `✓ <agent>` for a new registration, `✓ <agent> (already set up)` when Reticle was there already, `⚠ <agent>: Reticle registration failed…` when a registration failed (the command then exits `1`), and `⚠ <agent>: add the reticle entry to <path> by hand` for a config it will not rewrite. If it finds no agent, it names every agent it looked for.
 
 ## How you know it worked
 
 Restart your coding agent. An agent reads its server list only when it starts. After the restart, the `reticle_*` tools are listed.
 
-Codex CLI keeps a TOML config that Reticle does not rewrite. For Codex, the installer and `init` print the lines to paste instead.
+Codex CLI keeps a TOML config that Reticle does not rewrite. When the `codex` binary is on your PATH, Reticle registers through `codex mcp add` instead; otherwise it prints the hand-edit line above.

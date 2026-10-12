@@ -42,7 +42,7 @@ There is no config file that all agents share. Each harness has its own path and
 | Cursor | `~/.cursor/mcp.json` | `mcpServers` | no |
 | VS Code | `.vscode/mcp.json` | `servers` | no |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` | no |
-| OpenCode | `opencode.json` | `mcp` | `"local"` required |
+| OpenCode | `~/.config/opencode/opencode.jsonc` | `mcp` | `"local"` required |
 | Codex CLI | `~/.codex/config.toml` | `[mcp_servers.reticle]` | no |
 | Zed | `~/.config/zed/settings.json` | `context_servers` | no |
 
@@ -139,7 +139,7 @@ That's the whole web install. The plugin stamps source locations onto elements. 
 
 Run `npx @reticlehq/server init` even here: it wires plain HTML, Angular, Remix, Astro, SvelteKit and the rest, and it is the part that gets the **pairing token** to the page without writing it into anything you ship.
 
-If you really are wiring `connect()` by hand, pass the token. The daemon writes it to `~/.reticle/pairing-token` on first start and refuses a page that does not present it, on localhost too. Without it the page console says `bridge refused the connection: authentication failed`.
+If you really are wiring `connect()` by hand, pass the token. The daemon writes it to `~/.reticle/pairing-token` on first start and refuses a page that does not present it, on localhost too. Without it the page console says `bridge refused the connection: authentication failed: no pairing token on the page…`.
 
 ```ts
 import { reticle, SESSION_AUTO } from '@reticlehq/browser';

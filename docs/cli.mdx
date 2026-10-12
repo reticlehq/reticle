@@ -41,7 +41,7 @@ npx @reticlehq/server <command>
 | Command | What it does | Page |
 | --- | --- | --- |
 | `reticle verify <url>` | One-shot: drive the URL, verify saved flows or one predicate, exit 0 on pass | [verify](/cli/verify) |
-| `reticle gate [--since <ref>]` | Exit non-zero unless passing artifacts cover the affected flows | [gate](/cli/gate) |
+| `reticle gate [--since <ref>] [--accept-coverage] [--hook]` | Exit non-zero unless passing artifacts cover the affected flows | [gate](/cli/gate) |
 
 ### Reticle on this machine
 
@@ -62,7 +62,7 @@ npx @reticlehq/server <command>
 | `reticle feedback` | Tell us what worked and what did not | [feedback](/cli/feedback) |
 | `reticle telemetry [status\|enable\|disable]` | Anonymous usage metrics: what is sent, and the switch | [telemetry](/cli/telemetry) |
 
-### Everything else (`reticle help all`)
+### More commands (`reticle help all`)
 
 | Command | What it does | Page |
 | --- | --- | --- |
@@ -78,6 +78,7 @@ npx @reticlehq/server <command>
 | `reticle mcp` | The MCP stdio proxy your agent runs; starts the daemon if needed | [mcp](/cli/mcp) |
 | `reticle drive <url>` | Foreground mode, for debugging | [drive](/cli/drive) |
 | `reticle affected [--since <ref>]` | Which saved flows must re-verify for the changed files | [affected](/cli/affected) |
+| `reticle context --compact [--session <id>]` | Resume after a compaction: what was proved, failed and is still owed | none |
 | `reticle report [--session <id>] [--hook]` | What the latest session claimed, and what held | [report](/cli/report) |
 | `reticle rollback` | Restore the previous server version and restart | [rollback](/cli/rollback) |
 | `reticle license` | Enterprise license status: active, eval or missing | [license](/cli/license) |
@@ -119,7 +120,8 @@ Wires Reticle into the project in the current directory, then boots the app and 
 reticle init  [--env KEY=VALUE]... [--app <dir>] [--license <key>]
               [--json] [--files-only] [--relaunch] [--no-open] [--no-agents]
               [--url <app url>] [--timeout S] [--dry-run] [--hooks]
-              [--port N] [--no-mcp] [--no-install]
+              [--port N] [--no-mcp] [--no-install] [--start]
+              [--capture-bodies] [--no-first-run]
 ```
 
 `--env` and `--app` are the answers the command cannot work out for itself: what the app needs to reach a usable state, and which app in a monorepo. Which journey proves what you care about is asked on the first run, as `--persona`. `--files-only` is what `init` did before it learned to boot the app: it still registers the MCP server and pre-approves Reticle's tools, so it doubles as the upgrade path for an existing install.
@@ -140,9 +142,11 @@ npx @reticlehq/server doctor
 reticle doctor
   node         v22.14.0
   chromium     ✓ installed (chromium-1234)
-  daemon       ✓ running on :4400 (pid 72698, v2.8.0)
+  daemon       ✓ running on :4400 (pid 72698, v3.7.0)
   sessions     ✓ 1 page connected
   bridge port  4400  (your app must dial THIS port, not your dev-server port)
+  agent link   ✓ an MCP client attached here and called tools before (a record, not a live check)
+  project      ✓ wired here (my-app)
   daemon log   /Users/you/.reticle/daemon-4400.log
   tracing      RETICLE_TRACE=1 on the daemon for per-stage timings in that log
 ```
@@ -230,6 +234,8 @@ Options:
 - `--select <label>`: verify only flows carrying this label. Repeatable.
 - `--expect '<json predicate>'` or `--expect-file <path>`: one verdict, no saved flows needed. Asks the running daemon; with none, it refuses. Exits `0` only on `verified: "yes"`.
 - `--explore` with `--persona "<who does what>"`: no saved flows yet? The Harness drives the app and records them. Needs a linked project (`reticle connect`).
+- `--results-json <file>`: also write one verdict per journey as JSON, for CI.
+- `--confirm-dangerous`: let this run press what the replay guard holds as destructive.
 
 ### `reticle affected`
 

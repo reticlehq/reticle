@@ -37,12 +37,12 @@ The environment key is only sent to the host it belongs to: `RETICLE_CLOUD_URL` 
 ### `reticle connect`
 
 ```bash
-npx @reticlehq/server connect [--project <name|id>] [--url <cloud origin>]
+npx @reticlehq/server connect [--project <name|id>] [--workspace <name|id>] [--url <cloud origin>] [--no-install]
 ```
 
-Signs in if needed (a browser device flow like `gh auth login`: approve in the browser, the CLI polls until confirmed), then binds this repository to a cloud project and sends local history. It **mints** a project-scoped key, so there is nothing to paste; with `RETICLE_API_KEY` already set, it resolves that key's project instead. `--project` accepts a slug id or a display name, and creates the project when no project has that name. Omitted, it uses a project named after this folder. Writes `cloud.json` and the key.
+Signs in if needed (a browser device flow like `gh auth login`: approve in the browser, the CLI polls until confirmed), then binds this repository to a cloud project and sends local history. It **mints** a project-scoped key, so there is nothing to paste; with `RETICLE_API_KEY` already set, it resolves that key's project instead. `--project` accepts a slug id or a display name, and creates the project when no project has that name. Omitted, the project is named after the `projectId` in `.reticle.json`, else after this folder. `--workspace` picks the workspace to link in when you belong to more than one. `--no-install` is passed to the `init` it runs for an unwired app. Writes `cloud.json` and the key.
 
-`reticle login`, `reticle link` and `reticle project` are the old spellings. They still work for one release and print one line naming `connect`. For CI and servers, use `RETICLE_API_KEY` rather than an interactive sign-in.
+`reticle login`, `reticle link` and `reticle project` are the old spellings. They still work for one release and print one line naming `connect`. To sign in without a browser (an agent, a server), `login` keeps a two-step email path: `reticle login --email <e> [--org <name>]` mails a 6-digit code, then `reticle login --email <e> --code <123456>` signs in and links this repo. For CI, use `RETICLE_API_KEY` rather than any sign-in.
 
 ### `reticle logout`
 
@@ -54,7 +54,7 @@ Signs out of ONE host. Which host: `--url`, else `RETICLE_CLOUD_URL`, else the a
 
 ### Who am I: `reticle status`
 
-[`reticle status`](/cli/status) says who you are signed in as and whether this folder is linked to a cloud project, beside the daemon and session facts. It reads local files only and makes no network call. `reticle whoami` is the old spelling; it still works for one release and prints one line naming `status`.
+[`reticle status`](/cli/status) says who you are signed in as and whether this folder is linked to a cloud project, beside the daemon and session facts. The account half reads local files only and makes no call to the cloud. `reticle whoami` is the old spelling; it still works for one release and prints one line naming `status`.
 
 ### `reticle config`
 
@@ -70,11 +70,11 @@ reticle: no .reticle/cloud.json here ... run `reticle connect` first
 
 ### `reticle sync`
 
-Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy. With `sync.runs` off it does nothing and says so. Prints `{ ok, project, sent, pulled }`, where `sent` carries the accepted counts and, when the server refused anything, a `rejected` array naming each run's index and reason and a `refused` array for flows, capsules and derived records. `sent.records` lists only the records the server accepted.
+Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy, and collects decisions made on the dashboard. Each switch removes only its own part: with `sync.runs` off no runs are sent, but flows and records still go unless they are off too. Prints `{ ok, project, sent, pulled }`, where `sent` carries the accepted counts and, when the server refused anything, a `rejected` array naming each run's index and reason and a `refused` array for flows, capsules and derived records. `sent.records` lists only the records the server accepted.
 
 Runs go up in batches, so a large backlog is never one oversized request.
 
-`reticle push` is the old name; it still works for one release and prints one line naming `sync`. Add `--watch` to keep syncing: it runs one cycle, waits, and runs the next, until you stop it with `Ctrl+C`. The wait is 60 seconds by default; set `RETICLE_SYNC_INTERVAL_MS` to change it.
+`reticle push` is the old name; it still works for one release and prints one line naming `sync`. Add `--watch` to keep syncing: it runs one cycle, waits, and runs the next, until you stop it with `Ctrl+C`. The wait is 60 seconds by default; set `RETICLE_SYNC_INTERVAL_MS` to change it. Add `--move-history` to also send the runs, flows and records made under this folder's previous link, after it was linked to another workspace.
 
 ```bash
 npx @reticlehq/server sync --watch
@@ -109,20 +109,20 @@ npx @reticlehq/server runs issues
 npx @reticlehq/server runs issues --fix <fingerprint>
 ```
 
-The triage queue from the dashboard. `--fix <fingerprint>` prints that one issue's fix prompt as bare text on stdout, so it can be piped straight into an agent.
+The triage queue from the dashboard. `--fix <fingerprint>` prints that one issue's fix prompt as bare text on stdout, so it can be piped straight into an agent. An unknown fingerprint exits `2`; an issue with no suggested fix prints nothing on stdout and exits `4`.
 
 ### `reticle runs memory`
 
-What the linked project has learned, scoped to the project this folder is linked to.
+What the linked project has learned, scoped to the project this folder is linked to. `--subject <name>` narrows it to one area. If the response cannot be shown to be about this project, it prints nothing on stdout and exits `1`.
 
 `reticle regression`, `reticle share`, `reticle issues` and `reticle memory` are the old spellings. They still work for one release, with the same exit codes, and print one line naming the `runs` form.
 
 ## When the repo is not attached
 
-`sync`, `runs` and `runs regression` all need a project to talk to. Without one they exit `1` with the same line on stderr, measured:
+`sync` and every `runs` command need a project to talk to. Without one they exit `1` with the same line on stderr, measured:
 
 ```
-reticle: cloud not attached here ... run `reticle connect` (or set RETICLE_API_KEY)
+reticle: cloud not attached here: run `reticle connect`, or set RETICLE_API_KEY
 ```
 
 ## Exit codes
@@ -133,6 +133,7 @@ reticle: cloud not attached here ... run `reticle connect` (or set RETICLE_API_K
 | `1` | The API call failed, the repository is not attached where attachment is required, or `sync` had an artifact refused |
 | `2` | Usage error, or not signed in and no `RETICLE_API_KEY` |
 | `3` | `runs regression` only: at least one flow broke |
+| `4` | `runs issues --fix` only: that issue carries no suggested fix |
 
 Output is pretty-printed JSON on stdout. Errors and next-step nudges go to stderr, so an agent parsing stdout is unaffected.
 
