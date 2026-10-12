@@ -14,6 +14,10 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { advanceMsSchema, depthSchema } from './args/numeric-bounds.js';
+import { aliasParam, aliasUsed } from './args/alias-args.js';
+
+/** `name` for `recordingName`: the spelling every other naming argument uses. */
+const RECORDING_NAME_ALIAS = z.string().optional().describe('Alias for `recordingName`.');
 import { proposeConsequences } from '@/judgement/oracles/propose-consequences.js';
 import type { CompiledProgram } from '@/language/flows/recording/tape/recordings.js';
 import {
@@ -180,18 +184,23 @@ export const READ_TOOLS: ToolDef[] = [
     inputSchema: {
       recordingName: z
         .string()
+        .optional()
         .describe(
           'Identifier for this recording. Pass the same name to reticle_record{action:"stop"} and reticle_replay.',
         ),
+      name: RECORDING_NAME_ALIAS,
       ...sessionIdShape,
     },
     outputSchema: {
       recordingName: z.string(),
       since: z.number(),
+      normalized: z.array(z.string()).optional(),
     },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
-      const name = asString(args['recordingName']) ?? 'default';
+      const normalized = aliasUsed(args, 'recordingName', ['name']);
+      const name =
+        asString(aliasParam(args, 'recordingName', ['name'])['recordingName']) ?? 'default';
       const cursor = session.elapsed();
       // Where the journey begins, so a saved flow can navigate here before step 1 instead of
       // replaying from wherever the page happens to be. Pathname only: a host or port belongs to
@@ -203,7 +212,11 @@ export const READ_TOOLS: ToolDef[] = [
         session.id,
         session.currentDocumentId,
       );
-      return Promise.resolve({ recordingName: name, since: cursor });
+      return Promise.resolve({
+        recordingName: name,
+        since: cursor,
+        ...(0 === normalized.length ? {} : { normalized }),
+      });
     },
   },
   {
@@ -213,7 +226,9 @@ export const READ_TOOLS: ToolDef[] = [
     inputSchema: {
       recordingName: z
         .string()
+        .optional()
         .describe('Identifier of an active recording started with reticle_record{action:"start"}.'),
+      name: RECORDING_NAME_ALIAS,
       ...sessionIdShape,
     },
     outputSchema: {
@@ -232,7 +247,10 @@ export const READ_TOOLS: ToolDef[] = [
       // The recording actually RUNNING when there is exactly one, not the literal name `default` —
       // the same defaulting that made `annotate` report "no steps" against a recording full of them.
       // With several running, `default` stays the documented answer rather than a guess.
-      const name = resolveAnnotateTarget(asString(args['recordingName']), deps.recordings.active());
+      const name = resolveAnnotateTarget(
+        asString(aliasParam(args, 'recordingName', ['name'])['recordingName']),
+        deps.recordings.active(),
+      );
       const rec = deps.recordings.stop(name);
       if (rec === undefined) {
         const active = deps.recordings.active();
@@ -315,9 +333,11 @@ export const READ_TOOLS: ToolDef[] = [
     inputSchema: {
       recordingName: z
         .string()
+        .optional()
         .describe(
           'Name of a compiled recording (from reticle_record{action:"stop"}) to re-execute.',
         ),
+      name: RECORDING_NAME_ALIAS,
       confirmDangerous: z
         .boolean()
         .optional()
@@ -337,7 +357,8 @@ export const READ_TOOLS: ToolDef[] = [
       ),
     },
     handler: async (deps, args) => {
-      const name = asString(args['recordingName']) ?? 'default';
+      const name =
+        asString(aliasParam(args, 'recordingName', ['name'])['recordingName']) ?? 'default';
       const program = deps.recordings.getCompiled(name);
       if (program === undefined) throw new Error(`no compiled recording named '${name}'`);
       const session = deps.sessions.resolve(asString(args['sessionId']));

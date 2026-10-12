@@ -5,7 +5,8 @@ import { seedSchema, workerCountSchema } from '@/surface/tools/args/numeric-boun
 import { confirmDangerousArg } from '@/surface/tools/args/confirm-dangerous-arg.js';
 import { z } from 'zod';
 import { emptyFlowRefusal } from './empty-flow.js';
-import { aliasParam } from '@/surface/tools/args/alias-args.js';
+import { aliasParam, aliasUsed } from '@/surface/tools/args/alias-args.js';
+import { resolveAnnotateTarget } from './annotate-notes/annotate-target.js';
 import {
   type ProjectId,
   FlowErrorCode,
@@ -158,10 +159,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe('Alias for `flowName` (the name reticle_annotate uses).'),
+      name: z.string().optional().describe('Alias for `flowName`.'),
       flowName: z
         .string()
+        .optional()
         .describe(
-          'Which RECORDING to save — the name reticle_record{start} was called with. This is a lookup key, not the filename: pass `saveAs` to choose that.',
+          'Which RECORDING to save — the name reticle_record{start} was called with ("last-journey" for the reticle_act {steps} just proved). Omit when only one is stopped. This is a lookup key, not the filename: pass `saveAs` to choose that.',
         ),
       saveAs: z
         .string()
@@ -202,6 +205,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         })
         .optional(),
       intentGap: INTENT_GAP_FIELD,
+      normalized: z.array(z.string()).optional(),
       warning: z
         .string()
         .optional()
@@ -212,7 +216,14 @@ export const FLOW_TOOLS: ToolDef[] = [
       code: z.string().optional(),
     },
     handler: (deps: ToolDeps, args) => {
-      const name = asString(aliasParam(args, 'flowName', ['flow'])['flowName']) ?? '';
+      const aliases = ['flow', 'name', 'recordingName'];
+      const normalized = aliasUsed(args, 'flowName', aliases);
+      // The one stopped recording when the call names none — the same defaulting record{stop} and
+      // annotate use. With several, nothing is picked: the refusal below names them.
+      const name = resolveAnnotateTarget(
+        asString(aliasParam(args, 'flowName', aliases)['flowName']),
+        deps.recordings.compiled(),
+      );
       const program = deps.recordings.getCompiled(name);
       if (program === undefined) {
         /*
@@ -292,6 +303,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         const invoked = loaded.ok ? await loadInvoked(flows, loaded.value, projectId) : new Map();
         return loaded.ok
           ? {
+              ...(0 === normalized.length ? {} : { normalized }),
               ...res.value,
               ...(path === undefined ? {} : { path }),
               assertions: classifyFlowAssertions(loaded.value, invoked),

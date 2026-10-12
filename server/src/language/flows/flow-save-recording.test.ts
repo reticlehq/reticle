@@ -130,3 +130,31 @@ describe('a recording that backtracks across pages', () => {
     expect(res.warning).toBeUndefined();
   });
 });
+
+/**
+ * The spellings an agent reaches for first, accepted and named — never guessed. Reported from a
+ * live re-drive: `flow_save` refused without `flowName`, which cost a round trip after a journey.
+ */
+describe('naming the recording to save', () => {
+  it('accepts `name` for `flowName`, and says it normalised it', async () => {
+    const result = (await save?.handler(deps(stored()), { name: 'triage' })) as Record<
+      string,
+      unknown
+    >;
+    expect(result['name']).toBe('triage');
+    expect(result['normalized']).toEqual(['name → flowName']);
+  });
+
+  it('saves the one stopped recording when the call names none', async () => {
+    const result = (await save?.handler(deps(stored()), {})) as Record<string, unknown>;
+    expect(result['name']).toBe('triage');
+    expect(result['normalized']).toBeUndefined();
+  });
+
+  it('picks nothing when several are stopped, and names them', async () => {
+    const store = stored();
+    store.saveCompiled({ name: 'other', version: 1, steps: [] });
+    const result = (await save?.handler(deps(store), {})) as Record<string, unknown>;
+    expect(String(result['error'])).toContain("'triage'");
+  });
+});

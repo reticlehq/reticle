@@ -36,6 +36,11 @@ export interface StepExpectation {
   observed?: string;
   expected?: string;
   /**
+   * The consequence was never read: the tab went away (a step that navigated to another site) or
+   * the predicate could not be evaluated. Not held and not missed — `unknown`, as act_and_wait says.
+   */
+  undecided?: boolean;
+  /**
    * Contradiction kinds positively observed in this step's window — deciding ones only, the same
    * filter act_and_wait applies. A held step with one is a UI that advanced over a failed write.
    */
@@ -74,7 +79,9 @@ export function gradeSequence(
   const declared = declaring.length;
   // `held: false` on an undeclared step means it could not be performed at all — the journey broke
   // there whether or not anything was declared about it.
-  const missed = steps.find((step) => (step.declared ? true !== step.held : false === step.held));
+  const missed = steps.find(
+    (step) => true !== step.undecided && (step.declared ? true !== step.held : false === step.held),
+  );
 
   // A miss decides the grade before coverage does. How much of the plan declared nothing is
   // context on a red, never a softening of it.
@@ -97,6 +104,16 @@ export function gradeSequence(
       declared,
       total,
       because: `step ${String(contradictedAt + 1)}: channels disagree about this action (${kinds}) even though it went on`,
+    };
+  }
+
+  const lostAt = steps.findIndex((step) => true === step.undecided);
+  if (lostAt >= 0) {
+    return {
+      verified: Verified.UNKNOWN,
+      declared,
+      total,
+      because: `step ${String(lostAt + 1)}: its consequence could not be read (${steps[lostAt]?.observed ?? 'the page went away'}), so nothing was decided there`,
     };
   }
 
@@ -178,12 +195,15 @@ export function gradeSequence(
  * two-of-twelve plan as a regression flow is a reasonable thing to do and a bad thing to do without
  * knowing it.
  */
+/** The stopped recording a proved journey is held under, so the `keep` offer can be taken. */
+export const JOURNEY_RECORDING = 'last-journey';
+
 export function offerToKeep(grade: SequenceGrade): string | undefined {
   if (grade.verified !== Verified.YES || 0 === grade.declared) return undefined;
   return (
     `this plan proved something (${String(grade.declared)} of ${String(grade.total)} steps declared a ` +
     'consequence and every one held) — keep it as a regression flow with ' +
-    'reticle_flow_save { saveAs: "<name>" }, and the steps that declared nothing will replay ' +
+    `reticle_flow_save { flowName: "${JOURNEY_RECORDING}", saveAs: "<name>" }, and the steps that declared nothing will replay ` +
     'without proving anything, exactly as they did here'
   );
 }

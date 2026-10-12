@@ -90,6 +90,7 @@ import {
 } from '@/portal/session/control-envelope.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
+import { confirmedByDeclaration } from './act/act-danger.js';
 import { dispatchAct, preflightAct } from './act/act-preflight.js';
 import { followLostObservation } from './act/act-observation.js';
 import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';
@@ -497,10 +498,11 @@ export const ACT_TOOLS: ToolDef[] = [
       // Omitting `until` waits for the page to settle (idle) — the deterministic default vs a sleep.
       // `predicate` is what reticle_assert / reticle_wait_for call this — see alias-args.ts.
       const withUntil = aliasParam(args, 'until', ['predicate']);
-      const until =
-        withUntil['until'] !== undefined
-          ? parsePredicate(withUntil['until'])
-          : ({ kind: PredicateKind.SETTLED } as const);
+      // Declared: the consequence is named, which also confirms a named dangerous control.
+      const untilNamed = withUntil['until'] !== undefined;
+      const until = untilNamed
+        ? parsePredicate(withUntil['until'])
+        : ({ kind: PredicateKind.SETTLED } as const);
       // BEFORE the action. A body clause this session cannot answer would fail whatever the app
       // did, and on a drive that mutates state the action is not always repeatable. See #801(C).
       const bodyRefusal = bodyClauseRefusal(until, session);
@@ -556,7 +558,7 @@ export const ACT_TOOLS: ToolDef[] = [
           actCommand(deps, session, {
             ref: resolved.ref,
             action: args['action'],
-            args: args['args'] ?? {},
+            args: confirmedByDeclaration(asRecord(args['args']), args['target'], untilNamed),
           }),
         );
         if (actResult !== null) {
