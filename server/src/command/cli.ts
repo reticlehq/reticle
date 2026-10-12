@@ -122,7 +122,7 @@ import {
   dialsTheDaemon,
 } from './cli/cli-parse.js';
 import { renderHelp } from './cli/cli-usage.js';
-import { RENAMED_COMMANDS, renamedNote } from './cli/cli-parse-grammar.js';
+import { RENAMED_COMMANDS, renamedCommandFor, renamedNote } from './cli/cli-parse-grammar.js';
 import { handleFeedback, handleTelemetry } from '@/telemetry/feedback-cli.js';
 import { installDaemonTelemetry } from '@/telemetry/daemon-telemetry.js';
 import { reportCliRun } from '@/telemetry/cli-telemetry.js';
@@ -732,8 +732,8 @@ export function main(): void {
   reportCliRun(argv);
   // An old name still runs, for one release, and says once what it is called now. Not when the
   // person only asked for help: that answer names the new command itself, on stdout.
-  const renamedTo = argv[0] === undefined ? undefined : RENAMED_COMMANDS.get(argv[0]);
-  if (renamedTo !== undefined && !argv.some((arg) => '--help' === arg || '-h' === arg)) {
+  const renamedTo = renamedCommandFor(argv);
+  if (renamedTo !== undefined) {
     const colour = true === process.stderr.isTTY && process.env['NO_COLOR'] === undefined;
     process.stderr.write(`${renamedNote(argv[0] ?? '', renamedTo, colour)}\n`);
   }

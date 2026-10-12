@@ -4,6 +4,7 @@ import {
   CLOUD_COMMANDS,
   REMOVED_COMMANDS,
   RENAMED_COMMANDS,
+  renamedCommandFor,
   renamedNote,
 } from './cli-parse-grammar.js';
 import { CLI_USAGE, CLI_USAGE_ALL, DOCUMENTED_COMMANDS, renderHelp } from './cli-usage.js';
@@ -131,5 +132,22 @@ describe('status says who is signed in', () => {
   it('points a signed-out reader at connect', () => {
     const out = statusLines({ running: false, signedInAs: null, linkedProject: null }).join('\n');
     expect(out).toContain('reticle connect');
+  });
+});
+
+describe('the renamed-command note', () => {
+  it('names the new command for an old one', () => {
+    expect(renamedCommandFor(['whoami'])).toBe('status');
+  });
+
+  it('says nothing to a request for help', () => {
+    expect(renamedCommandFor(['link', '--help'])).toBeUndefined();
+  });
+
+  // `connect --help` documents `login --email` as THE sign-in without a browser (CI, agents), so
+  // telling that reader "login was renamed to connect" sent them to the browser flow they cannot use.
+  it('says nothing to `login --email`, the documented sign-in without a browser', () => {
+    expect(renamedCommandFor(['login', '--email', 'a@b.c'])).toBeUndefined();
+    expect(renamedCommandFor(['login'])).toBe('connect');
   });
 });

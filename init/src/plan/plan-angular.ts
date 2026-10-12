@@ -19,7 +19,7 @@ import { alreadyOrMovedPort, retargetPort } from './port-steps.js';
 import { StepStatus, type PlanInput, type Step } from './plan-types.js';
 
 const ANGULAR_SETUP_GATED_NOTE =
-  'The install gate scaffolds an Angular app (Angular 21, no SSR) on every release and requires a ' +
+  'The install gate scaffolds an Angular app (Angular 21, no SSR) whenever the install path changes and requires a ' +
   'session, and this wiring was proven by hand on Angular 22 with and without SSR; nothing yet ' +
   'drives an Angular app to a verdict on each change. DOM, network, console and state ' +
   'tools work here; component identity does not (that is the React adapter). If no session ' +

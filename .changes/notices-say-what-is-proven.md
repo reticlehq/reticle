@@ -1,0 +1,7 @@
+### Fixed
+
+- **`@reticlehq/server` — every session told the agent that `reticle_session { action: "end" }` "revives on your next action".** An explicit end is final; only `yield` comes back. An agent that ended early to save a turn lost the session it meant to keep. The notice now says end is final.
+- **`@reticlehq/init` — the notes `init` prints for Vue, Svelte, Preact, SvelteKit, Nuxt and Angular overstated what CI proves.** They said Astro is driven to a verdict on every change, and that the install gate runs "on every change" or "on every release". CI drives Vite + React and Next.js to a verdict and checks Astro for a connected session; the install gate runs whenever the install path changes.
+- **`@reticlehq/server` — `reticle rollback` under npx reported a rollback that never happened.** npx has nothing to reinstall, yet it logged `reticle_rollback_applied` and sent a rollback `version_changed` event. It now says how to pin the old version and stops there.
+- **`@reticlehq/server` — `reticle verify <url> --explore` with a daemon on the port drove the app even when the project had saved flows.** Without a daemon it replays saved flows and explores only when there are none, since a drive spends Harness credits and a replay does not. The daemon path now keeps the same rule.
+- **`@reticlehq/server` — `reticle login --email` printed "renamed to `connect`".** It is the sign-in without a browser that `connect --help` documents for CI and agents, so the note no longer prints there.

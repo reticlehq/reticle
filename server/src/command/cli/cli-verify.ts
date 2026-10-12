@@ -684,6 +684,11 @@ export function routeVerify(args: {
    * it used to be, and `init` leaves exactly that daemon behind before recommending this command.
    */
   explore?: boolean;
+  /**
+   * Whether the project already has saved flows. `--explore` without a daemon drives only when there
+   * are none (a drive spends model credits, a replay does not), and this path keeps the same rule.
+   */
+  hasSavedFlows?: boolean;
   presence: PortPresence;
   port: number;
 }): VerifyPlan {
@@ -693,7 +698,7 @@ export function routeVerify(args: {
       : { route: VerifyRoute.REFUSE, message: expectNeedsDaemonMessage(args.port, args.presence) };
   }
   if (args.presence !== PortPresence.DAEMON) return { route: VerifyRoute.FLOWS };
-  if (true === args.explore && true !== args.wantsOwnBrowser) {
+  if (true === args.explore && true !== args.wantsOwnBrowser && true !== args.hasSavedFlows) {
     return { route: VerifyRoute.ADHOC_EXPLORE };
   }
   // No predicate, but there may be SAVED FLOWS, and a daemon already owns the port: replay them
@@ -800,6 +805,9 @@ export function handleVerify(parsed: {
       hasPredicate: expectation !== undefined,
       wantsOwnBrowser: !parsed.headless || parsed.storageState !== undefined,
       explore: true === parsed.explore || parsed.persona !== undefined,
+      hasSavedFlows:
+        0 <
+        (await new FlowStore(createNodeFileSystem(), reticleRoot, { now: Date.now }).list()).length,
       presence,
       port,
     });

@@ -140,6 +140,6 @@ and no index.html to inject into. Wire it with a dev-only CLIENT plugin, which i
 
 The package is @reticlehq/browser — the framework-neutral sensor. DOM, network, console, routing and
 source file:line all work in Vue. What you do not get is React component identity, which is the only
-thing the React adapter adds. The install gate scaffolds a Nuxt app on every release and requires a session, so this wiring
+thing the React adapter adds. The install gate scaffolds a Nuxt app whenever the install path changes and requires a session, so this wiring
 is proven; if something does not work, please open an issue.`;
 }

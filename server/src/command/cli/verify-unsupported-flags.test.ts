@@ -212,3 +212,30 @@ describe('the flag combinations verify does support', () => {
     expect(String((parsed as { message?: string }).message)).toContain('double quotes removed');
   });
 });
+
+describe('--explore against a running daemon', () => {
+  // With no daemon, `verify --explore` drives only when nothing is saved: saved flows are the cheap,
+  // deterministic path, and a drive spends model credits. The daemon path explored regardless, so a
+  // project with recorded flows paid to re-discover them.
+  it('replays saved flows instead of exploring when there are any', () => {
+    const plan = routeVerify({
+      hasPredicate: false,
+      explore: true,
+      hasSavedFlows: true,
+      presence: PortPresence.DAEMON,
+      port: PORT,
+    });
+    expect(plan).toEqual({ route: VerifyRoute.ADHOC_SUITE });
+  });
+
+  it('explores when nothing is saved yet', () => {
+    const plan = routeVerify({
+      hasPredicate: false,
+      explore: true,
+      hasSavedFlows: false,
+      presence: PortPresence.DAEMON,
+      port: PORT,
+    });
+    expect(plan).toEqual({ route: VerifyRoute.ADHOC_EXPLORE });
+  });
+});
