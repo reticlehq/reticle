@@ -31,7 +31,12 @@ import { planUrl } from '@/features/harness/platform/platform-drives.js';
 import { flowsForSession } from '@/language/flows/flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
-import { actedOnApp, checkTally, verdictLine } from '@/features/harness/drive-report.js';
+import {
+  actedOnApp,
+  checkTally,
+  pagesReached,
+  verdictLine,
+} from '@/features/harness/drive-report.js';
 import { CUSTOM_DRIVER_NAME, SERVER_DRIVER } from '@/features/harness/drivers.js';
 import { buildDomainModel } from '@/judgement/domain/domain-model.js';
 import { readContract } from '@/memory/project/dir/reticle-dir.js';
@@ -473,6 +478,7 @@ export async function exploreApp(
     opening,
     journey: options.focus,
     map,
+    reached: pagesReached(drive.toolCalls),
   });
   const goals = graded.goals;
   noteHarnessDisparity(harnessId, graded.disparity);

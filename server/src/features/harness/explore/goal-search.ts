@@ -7,7 +7,8 @@
  * answer, called an opened menu a wrong guess, and walked past a goal it had reached. This hunt is
  * deterministic (no model) and bounded: from the page the drive ended on it tries the toggles and
  * tabs, then the controls the journey names (a menu that opens is followed into its items), then the
- * same page without its query, then the pages the map says show the goal. It never fills a field
+ * same page without its query, then the pages the map says show the goal, then the pages the drive
+ * reached. It never fills a field
  * and never presses a name on the never-pressed list. Each place it looks is kept, so "not found"
  * says where it searched, and a goal it did not find is undecided, never a failure.
  */
@@ -56,6 +57,8 @@ export async function searchForGoal(
     moves?: number;
     /** Text the Harness wrote itself: a match inside it is not the goal found. */
     own?: readonly string[];
+    /** The pages the drive reached, in order: the goal may be on one it left. */
+    reached?: readonly string[];
   },
 ): Promise<GoalSearch> {
   const { goal } = options;
@@ -144,6 +147,8 @@ export async function searchForGoal(
       ? []
       : [withoutQuery(start.route)]),
     ...mappedPagesFor(options.map, goal, journey),
+    // Newest first: the drive's last page before it moved on is where a saved thing shows.
+    ...[...(options.reached ?? [])].reverse(),
   ];
   for (const route of elsewhere) {
     if (looked.has(route) || left <= 0) continue;

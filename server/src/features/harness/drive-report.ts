@@ -312,7 +312,7 @@ export function actedOnApp(toolCalls: readonly ToolOutcome[]): boolean {
 const RETICLE_PARAMS = /[?&]__reticle_[^&#]*/g;
 
 /** The pages the drive's own snapshots reported, in order, each distinct page once. */
-function pagesReached(toolCalls: readonly ToolOutcome[]): string[] {
+export function pagesReached(toolCalls: readonly ToolOutcome[]): string[] {
   const pages: string[] = [];
   for (const call of toolCalls) {
     if (ReticleTool.SNAPSHOT !== call.name || call.isError) continue;

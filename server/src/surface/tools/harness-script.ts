@@ -28,7 +28,12 @@ import {
   type ScriptRun,
 } from '@/features/harness/script/script-run.js';
 import { CUSTOM_DRIVER_NAME } from '@/features/harness/drivers.js';
-import { actedOnApp, checkTally, verdictLine } from '@/features/harness/drive-report.js';
+import {
+  actedOnApp,
+  checkTally,
+  pagesReached,
+  verdictLine,
+} from '@/features/harness/drive-report.js';
 import {
   runHarness,
   StopReason,
@@ -362,6 +367,7 @@ async function runPlan(
             journey: goal,
             map,
             own,
+            reached: pagesReached(result.toolCalls),
           }),
         );
       if (persona !== undefined) {
@@ -492,6 +498,7 @@ async function runPlan(
           journey: focus,
           map,
           own,
+          reached: pagesReached(run.toolCalls),
         });
   const goals = graded.goals;
   for (const id of lanes.all()) noteHarnessDisparity(id, graded.disparity);

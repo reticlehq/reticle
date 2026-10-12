@@ -54,6 +54,25 @@ describe('the hunt for a goal the drive did not end on', () => {
     expect(scrolled).toContain('Things it did in your app');
   });
 
+  /*
+   * Persona 25: the drive saved "Order 7" on /saved-items and ended back on /; the hunt looked at /
+   * alone and called the goal not found. A page the drive itself reached is a place to look.
+   */
+  it('looks on the pages the drive reached', async () => {
+    const app = fakeApp(
+      {
+        '/': { tree: `${NAV}\n- heading "Home"` },
+        '/saved-items': { tree: `${NAV}\n- heading "Saved items"\n- listitem "Order 7"` },
+      },
+      '/',
+    );
+    const found = await searchForGoal(app.invoke, {
+      goal: 'Order 7',
+      reached: ['/', '/saved-items'],
+    });
+    expect(found).toMatchObject({ found: true, at: '/saved-items' });
+  });
+
   /* Persona 4: joined, opened Runs, stopped one click short of "Team". */
   it('presses the toggle beside the one that is on', async () => {
     const runs = (pressed: 'Mine' | 'Team', rows: string) =>

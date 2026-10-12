@@ -11,6 +11,7 @@
  * cut off mid-predicate.
  */
 
+import { asRecord } from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import {
   awaitDocumentSuccessor,
@@ -59,4 +60,19 @@ export async function followLostObservation(input: FollowSuccessor): Promise<Fol
   const leftover = timeout - (session.elapsed() - predicateStarted);
   if (leftover <= 0) return { session: next, verdict, followed: true };
   return { session: next, verdict: await reevaluate(next, leftover), followed: true };
+}
+
+/** Why a consequence that did not follow a click on a disabled control is not the app's failure. */
+export const DISABLED_TARGET_NOTE =
+  'the control was disabled when it was acted on, so nothing a user could do there would have ' +
+  'caused the declared consequence. Check why it was disabled (an empty required field, a save ' +
+  'that already happened) before calling this a defect.';
+
+/**
+ * The page reports `enabled: false` on an act whose target was disabled at dispatch. A missed
+ * consequence then says nothing about the app, so the verdict is undecided rather than "no".
+ */
+export function disabledTargetNote(pass: boolean, actResult: unknown): string | undefined {
+  if (pass) return undefined;
+  return false === asRecord(actResult)['enabled'] ? DISABLED_TARGET_NOTE : undefined;
 }

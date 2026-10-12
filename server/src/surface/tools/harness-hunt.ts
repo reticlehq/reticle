@@ -225,6 +225,8 @@ export async function huntAndGrade(
     map?: HarnessMap | undefined;
     /** Text the Harness wrote besides the journey: its plan's journeys, its flows' names. */
     own?: readonly string[] | undefined;
+    /** The pages the drive reached (`pagesReached`), searched when the end is not where it stopped. */
+    reached?: readonly string[] | undefined;
   },
 ): Promise<Graded> {
   const moved: ToolOutcome[] = [];
@@ -240,6 +242,7 @@ export async function huntAndGrade(
       goal,
       ...(ask.journey === undefined ? {} : { journey: ask.journey }),
       ...(ask.map === undefined ? {} : { map: ask.map }),
+      ...(ask.reached === undefined ? {} : { reached: ask.reached }),
       own,
     });
   const search = end === undefined ? undefined : await hunt(end.text);

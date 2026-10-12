@@ -91,7 +91,7 @@ import {
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
 import { dispatchAct, preflightAct } from './act/act-preflight.js';
-import { followLostObservation } from './act/act-observation.js';
+import { disabledTargetNote, followLostObservation } from './act/act-observation.js';
 import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';
 import { verdictIntentGap } from '@reticlehq/engine/evidence/verdict-intent-gap.js';
 import { asActionType, gradeOf } from './act/act-helpers.js';
@@ -772,6 +772,9 @@ export const ACT_TOOLS: ToolDef[] = [
         });
         const outcomeUnread = unreadWriteLabels(windowEvents);
         const stillInFlight = inFlightRequestLabels(windowEvents, session.url, session.background);
+        // A click on a disabled control cannot cause anything: a miss there is not the app's.
+        const inconclusive =
+          verdict.inconclusive ?? disabledTargetNote(verdict.pass, actResult?.result);
         const { decision, durable } = await withDurability(
           args['durable'],
           until,
@@ -790,7 +793,7 @@ export const ACT_TOOLS: ToolDef[] = [
             ...(alreadyTrue ? { alreadyTrue } : {}),
             ...(alreadyTrueHiddenMatch ? { alreadyTrueHiddenMatch } : {}),
             // An assertion nobody could evaluate must not be reported as one the app failed.
-            ...(verdict.inconclusive === undefined ? {} : { inconclusive: verdict.inconclusive }),
+            ...(inconclusive === undefined ? {} : { inconclusive }),
             // Nor must one nobody could OBSERVE. This is the act path, so it is the one that produced
             // the measured false red: a reload mid-wait, graded assertion_failed at the clicked
             // component's own file and line.
