@@ -118,6 +118,9 @@ const INTENT_INDEX = IntentDir.INDEX_FILE;
  * Returns undefined when there is no memory at all, so a project with nothing to say sends nothing
  * rather than an empty envelope the server has to store.
  */
+/** The longest reason the platform keeps for a statement. */
+const MAX_REASON = 2000;
+
 function readIntent(reticleRoot: string): unknown {
   const legacy = readJson(join(reticleRoot, ReticleDir.INTENT_FILE));
   const merged: Record<string, unknown> = {
@@ -152,7 +155,13 @@ function readIntent(reticleRoot: string): unknown {
    * Records that already name a subject keep it: an agent's explicit choice outranks inference.
    */
   const placed = Object.fromEntries(
-    Object.entries(merged).map(([id, record]) => {
+    Object.entries(merged).map(([id, given]) => {
+      // The record's `why` is what the platform keeps as `reason`.
+      const why = (given as { why?: unknown }).why;
+      const record =
+        'string' === typeof why && 0 < why.length
+          ? { ...(given as object), reason: why.slice(0, MAX_REASON) }
+          : given;
       const held = record as { subject?: unknown; surface?: unknown; binding?: unknown };
       if ('string' === typeof held.subject && held.subject.length > 0) return [id, record];
       const subject = subjectFor({
