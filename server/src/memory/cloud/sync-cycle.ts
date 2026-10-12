@@ -142,6 +142,14 @@ export interface CloudSyncState extends ScreenshotSyncState {
   sentFlowsHash?: string;
   sentCapsulesHash?: string;
   /**
+   * The link everything above was kept for: cloud, workspace and project (`credentialSlot`). A
+   * folder re-linked elsewhere starts a fresh record, so the new link gets the flows the old one
+   * already had, and none of the old link's runs.
+   */
+  link?: string;
+  /** When this folder was re-linked: runs made before it stay here unless the person moves them. */
+  linkedAt?: number;
+  /**
    * A flow or capsule set the platform refused, kept so the refusal stays visible on the cycles that
    * do not resend it, and so the set is offered again once it changes or the platform reads more.
    */
@@ -221,6 +229,10 @@ export interface Refusal {
 
 interface SyncDeps {
   config: { url: string; apiKey: string };
+  /** The link this cycle sends for (`credentialSlot`); absent for an env-only key (CI). */
+  link?: string;
+  /** Send runs made under a previous link too: only ever because the person asked. */
+  moveHistory?: boolean;
   source: SyncSource;
   sink: SyncSink;
   state: CloudSyncState;
@@ -341,7 +353,30 @@ function batchRuns<T extends { payload: unknown }>(runs: readonly T[]): T[][] {
  * Run one cycle. Never throws: the local record is already safe on disk, and a sync that can take
  * down the thing it is backing up is worse than no sync.
  */
-export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
+/** The command that moves a folder's earlier runs to the link it has now. */
+export const MOVE_HISTORY_COMMAND = 'reticle sync --move-history';
+
+/**
+ * The record this cycle keeps, for this link. Re-linked to another cloud, workspace or project, it
+ * starts afresh from now: what the old link was sent says nothing about the new one, and the runs
+ * made under the old link are that workspace's (a person's email can be in their steps), so they go
+ * only when the person moves them. A first link, or a record from before links were kept, is
+ * adopted as it is.
+ */
+function stateForLink(deps: SyncDeps): CloudSyncState {
+  const { state, link } = deps;
+  if (link === undefined) return state;
+  if (state.link === undefined || state.link === link) {
+    const { linkedAt, ...rest } = state;
+    return true === deps.moveHistory || linkedAt === undefined
+      ? { ...rest, link }
+      : { ...rest, link, linkedAt };
+  }
+  return { link, ...(true === deps.moveHistory ? {} : { linkedAt: deps.now() }) };
+}
+
+export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
+  const deps: SyncDeps = { ...given, state: stateForLink(given) };
   const empty: SyncReport = {
     ok: false,
     runsSent: 0,
@@ -456,7 +491,17 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       notRetried.push({ runId: run.runId, reason: prior.reason });
       return false;
     });
+    // Made before this folder was linked here: the previous link's, kept until the person moves it.
+    const linkedAt = deps.state.linkedAt;
+    const earlier = unsent.filter(
+      (run) => linkedAt !== undefined && !((numberAt(run.payload, 'createdAt') ?? 0) >= linkedAt),
+    );
+    if (0 < earlier.length)
+      heldBack.push(
+        `${String(earlier.length)} run${1 === earlier.length ? '' : 's'} made before this folder was linked to this workspace stay${1 === earlier.length ? 's' : ''} on this machine (recorded under its previous link): run \`${MOVE_HISTORY_COMMAND}\` to send ${1 === earlier.length ? 'it' : 'them'} here`,
+      );
     const sendable = unsent.filter((run) => {
+      if (earlier.includes(run)) return false;
       const version = numberAt(run.payload, 'schemaVersion');
       if (runVersions === undefined || version === undefined || runVersions.includes(version))
         return true;

@@ -1399,3 +1399,66 @@ describe("a run's step screenshots follow it", () => {
     expect(calls.some((c) => c.url.includes('/screenshots'))).toBe(false);
   });
 });
+
+/*
+ * Persona drive: `reticle connect --project bigco-console`, signed in to a different workspace,
+ * "sent 7 run(s)" recorded under the previous workspace (a person's email in their steps), without a
+ * word; and `sentFlowsHash`, kept for the old link, meant the new one never received the flows.
+ */
+describe('a folder re-linked to another workspace', () => {
+  const OLD = 'https://cloud.test::org::dana::app';
+  const NEW = 'https://cloud.test::org::bigco::bigco-console';
+  const FLOW = { name: 'sign-in', version: 1, steps: [] };
+  const relink = async (state: CloudSyncState, link: string, moveHistory?: true) => {
+    const s = server({ status: {} });
+    const k = sink();
+    const report = await runSyncCycle({
+      config: { url: 'https://cloud.test', apiKey: 'rk_bigco' },
+      link,
+      ...(moveHistory === undefined ? {} : { moveHistory }),
+      source: source({
+        runs: () => [
+          { runId: 'before', payload: { runId: 'before', createdAt: NOW - 60_000 } },
+          { runId: 'after', payload: { runId: 'after', createdAt: NOW + 1 } },
+        ],
+        flows: () => [FLOW],
+      }),
+      sink: k.sink,
+      state,
+      now: () => NOW,
+      request: s.request,
+    });
+    const sent = s.calls
+      .filter((c) => 'POST' === c.method)
+      .flatMap((c) => ((c.body as { runs?: { runId: string }[] }).runs ?? []).map((r) => r.runId));
+    return { report, sent, written: k.written, calls: s.calls };
+  };
+  const synced: CloudSyncState = {
+    link: OLD,
+    sentRunHashes: { before: 'x' },
+    sentFlowsHash: hashPayload([FLOW]),
+  };
+
+  it('sends only what was made under the new link, and says what it kept back', async () => {
+    const { report, sent, written } = await relink(synced, NEW);
+    expect(sent).toEqual(['after']);
+    expect(report.held.join(' ')).toMatch(/1 run made before this folder was linked to/);
+    expect(written.state?.link).toBe(NEW);
+  });
+
+  it('sends the flows to the new link, whatever the old link was sent', async () => {
+    const { calls } = await relink(synced, NEW);
+    const flows = calls.flatMap((c) => (c.body as { flows?: unknown[] } | undefined)?.flows ?? []);
+    expect(flows).toEqual([FLOW]);
+  });
+
+  it('moves the history only when asked', async () => {
+    const { sent, written } = await relink(synced, NEW, true);
+    expect(sent.sort()).toEqual(['after', 'before']);
+    expect(written.state?.linkedAt).toBeUndefined();
+  });
+
+  it('a first link, or a record from before links were kept, sends the history as before', async () => {
+    expect((await relink({}, NEW)).sent.sort()).toEqual(['after', 'before']);
+  });
+});

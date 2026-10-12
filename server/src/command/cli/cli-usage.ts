@@ -176,10 +176,12 @@ const COMMANDS: readonly CommandDoc[] = [
   },
   {
     name: 'sync',
-    synopsis: 'sync [--watch]',
+    synopsis: 'sync [--watch] [--move-history]',
     summary: 'Send local runs to the dashboard and collect decisions',
     group: HelpGroup.MORE,
-    detail: '`reticle push` is the same command.\n\n  --watch   keep sending as runs are written',
+    detail:
+      '`reticle push` is the same command.\n\n  --watch          keep sending as runs are written\n' +
+      "  --move-history   also send runs made under this folder's previous link",
   },
   {
     name: 'runs',

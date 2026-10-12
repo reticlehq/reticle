@@ -77,6 +77,7 @@ export const isCloudCommand = (cmd: string | undefined): boolean =>
 
 /** `reticle sync --watch` — keep cycling instead of exiting. */
 const WATCH_FLAG = '--watch';
+const MOVE_HISTORY_FLAG = '--move-history';
 
 /**
  * How often `--watch` cycles.
@@ -652,7 +653,7 @@ const cmdConfig = async (argv: readonly string[]): Promise<number> => {
 };
 
 /**
- * `reticle sync [--watch]` — one full cycle: send the difference, collect what came back.
+ * `reticle sync [--watch] [--move-history]` — one full cycle: send the difference, collect what came back.
  *
  * This replaced a `push` that re-uploaded every run artifact on every invocation. That was fine with
  * three runs and absurd with three hundred, and it only ever went one way — so a bug somebody
@@ -688,6 +689,9 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
   const once = async (): Promise<number> => {
     const report = await runSyncCycle({
       config,
+      ...(cloud.link === undefined ? {} : { link: cloud.link }),
+      // Runs made under a folder's previous link go only when the person says so.
+      ...(argv.includes(MOVE_HISTORY_FLAG) ? { moveHistory: true } : {}),
       source,
       sink: diskSink(reticleRoot),
       state: readCloudState(reticleRoot),

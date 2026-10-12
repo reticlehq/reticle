@@ -232,6 +232,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       await pullSettledWords(root, cloud.config, cloud.projectId).catch(() => 0);
     return runSyncCycle({
       config: cloud.config,
+      ...(cloud.link === undefined ? {} : { link: cloud.link }),
       source: {
         runs: () => (cloud.policy.runs ? full.runs() : []),
         flows: () => (cloud.policy.flows ? full.flows() : []),

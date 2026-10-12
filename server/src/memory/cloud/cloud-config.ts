@@ -66,6 +66,8 @@ export interface ProjectCloud {
   verify: VerifyMode;
   /** The cloud project id this project is linked to (for display/logging); null when env-fallback. */
   projectId: string | null;
+  /** The link as one key, cloud + workspace + project (`credentialSlot`); absent when env-fallback. */
+  link?: string;
   /** Why `config` is null, in words a person can act on. Absent when attached. */
   reason?: string;
   /** Attached, but not with the key the caller exported: said, never silent. */
@@ -252,6 +254,7 @@ export async function resolveProjectCloud(
     policy,
     verify: link.verify,
     projectId: link.projectId,
+    link: credentialSlot(link.url, link.projectId, link.orgId),
     ...(reason === undefined ? {} : { reason }),
     ...(note === undefined ? {} : { note }),
   };
