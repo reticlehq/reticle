@@ -74,6 +74,10 @@ function effectOf(session: Session, since: number): StepEffect {
  */
 const BURST_MAX_GAP_MS = 500;
 
+/** A step error that means nothing was acted on, or the page went away with the observation. */
+const UNJUDGED_STEP =
+  /matched no element|no longer resolves|session disconnected|session (was )?replaced/i;
+
 export const ACT_SEQUENCE_TOOL: ToolDef = {
   name: ReticleTool.ACT_SEQUENCE,
   // The example is required for a core tool, and this one carries weight: the loop it replaces is
@@ -244,10 +248,13 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
               dispatched: false,
               error: outcome.error ?? 'step failed',
             });
+            const error = outcome.error ?? 'the step could not be performed';
             expectations.push({
               declared: undefined !== step['expect'],
               held: false,
-              observed: outcome.error ?? 'the step could not be performed',
+              observed: error,
+              // Nothing acted on, or the page gone with the observation: undecided, not a miss.
+              ...(UNJUDGED_STEP.test(error) ? { undecided: error } : {}),
             });
             break;
           }
@@ -284,6 +291,11 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             expectations.push({
               declared: true,
               held,
+              ...(true === verdict.observationLost
+                ? {
+                    undecided: `${verdict.failureReason ?? 'the observation was lost'} (the page left)`,
+                  }
+                : {}),
               ...disagreement,
               ...(verdict.observed === undefined ? {} : { observed: verdict.observed }),
               ...(verdict.expected === undefined ? {} : { expected: verdict.expected }),

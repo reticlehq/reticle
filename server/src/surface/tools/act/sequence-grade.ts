@@ -40,6 +40,11 @@ export interface StepExpectation {
    * filter act_and_wait applies. A held step with one is a UI that advanced over a failed write.
    */
   contradicted?: readonly string[];
+  /**
+   * Why this step could not be judged at all: its target was missing (nothing was acted on), or the
+   * page left the app and the observation went with it. Such a step is undecided, never a miss.
+   */
+  undecided?: string;
 }
 
 export interface SequenceGrade {
@@ -74,7 +79,10 @@ export function gradeSequence(
   const declared = declaring.length;
   // `held: false` on an undeclared step means it could not be performed at all — the journey broke
   // there whether or not anything was declared about it.
-  const missed = steps.find((step) => (step.declared ? true !== step.held : false === step.held));
+  const missed = steps.find(
+    (step) =>
+      step.undecided === undefined && (step.declared ? true !== step.held : false === step.held),
+  );
 
   // A miss decides the grade before coverage does. How much of the plan declared nothing is
   // context on a red, never a softening of it.
@@ -99,6 +107,16 @@ export function gradeSequence(
       because: `step ${String(contradictedAt + 1)}: channels disagree about this action (${kinds}) even though it went on`,
     };
   }
+
+  // Nothing failed that was seen: a step nobody could judge leaves the plan undecided, saying why.
+  const unjudged = steps.find((step) => step.undecided !== undefined);
+  if (unjudged !== undefined)
+    return {
+      verified: Verified.UNKNOWN,
+      declared,
+      total,
+      because: `a step could not be judged — ${unjudged.undecided ?? ''}`,
+    };
 
   /*
    * `unknown` rather than `no-fault`, and the distinction is load-bearing.
