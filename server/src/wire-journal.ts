@@ -46,7 +46,9 @@ export function attachJournal(
     fs: FileSystemPort;
     reticleRoot: string;
     enabled: boolean;
-    takeAmbientTape?: () => { steps: readonly TapeStep[]; startPath?: string } | undefined;
+    takeAmbientTape?: (
+      sessionId: string,
+    ) => { steps: readonly TapeStep[]; startPath?: string } | undefined;
     reportStep?: (step: OnboardingStep) => Promise<boolean>;
     /** Tell cloud sync a run landed, so it cycles instead of waiting for its timer. */
     onRunPersisted?: () => void;

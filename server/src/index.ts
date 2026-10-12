@@ -90,7 +90,6 @@ import {
 import { probeLaunchableChromium } from './launch-chromium.js';
 import { attachJournal } from './wire-journal.js';
 import { reportOnboardingStep } from './telemetry/onboarding-funnel.js';
-import { AMBIENT_RECORDING } from './language/flows/recording/tape/recordings.js';
 import { readRetainPolicy } from './memory/journal/on-disk/retain-policy.js';
 import type { RealInputProvider } from './portal/input/real-input.js';
 import { log } from './log.js';
@@ -427,7 +426,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       enabled: journalEnabled,
       retain,
       // Bound HERE, where the recorder is already in hand: teardown gets the tape, not the recorder.
-      takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+      takeAmbientTape: (sessionId) => recordings.takeAmbient(sessionId),
       reportStep: reportOnboardingStep,
       flows,
       author: flowAuthor,
@@ -632,7 +631,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     reticleRoot,
     enabled: journalEnabled,
     retain,
-    takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+    takeAmbientTape: (sessionId) => recordings.takeAmbient(sessionId),
     reportStep: reportOnboardingStep,
     flows,
     author: flowAuthor,

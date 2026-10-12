@@ -17,7 +17,7 @@ import {
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';
 import { DriveFlowSkipReason } from './drive-flow.js';
-import { AMBIENT_RECORDING, RecordingStore } from '@/language/flows/recording/tape/recordings.js';
+import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { NETWORK_MOCK_TOOLS } from '@/portal/input/network-mock-tools.js';
 import type { ToolDeps } from '@/surface/tools/tools.js';
 import { DEFAULT_DIFF_RETENTION, DEFAULT_SESSION_RETENTION } from './on-disk/retention.js';
@@ -510,6 +510,40 @@ describe('teardown saves what a session drove as ONE flow per journey', () => {
     expect(await new FlowStore(fs, projectRoot, { now: () => 1 }).list()).toHaveLength(1);
     expect(await new FlowStore(fs, root, { now: () => 1 }).list()).toEqual([]);
   });
+  /*
+   * Group D persona drive: one recording for the whole daemon, so a drive in ANOTHER app (the
+   * console) was saved into this repo's committed flows/ and synced to this project.
+   */
+  it("saves only this tab's own drive, never another app's tab", async () => {
+    const recordings = new RecordingStore();
+    const step = (value: string, page: string) => ({
+      tool: ReticleTool.ACT,
+      args: { by: QueryBy.TESTID, value, action: 'click', args: {} },
+      stable: true,
+      page,
+      expect: { kind: PredicateKind.SIGNAL, name: `${value}:done` },
+    });
+    recordings.capture(step('open-runs', '/overview'), '/overview', 'console-tab');
+    recordings.capture(step('pay', '/checkout'), '/checkout', 'shop-tab');
+    const flows = new FlowStore(fs, root, { now: () => 1 });
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows,
+      takeAmbientTape: (id) => recordings.takeAmbient(id),
+    });
+    await end(fakeSession('shop-tab', {}));
+    const saved = await flows.list();
+    const onDisk = JSON.stringify(
+      await Promise.all(saved.map(async (name) => (await flows.load(name)).ok)),
+    );
+    expect(saved).toHaveLength(1);
+    expect(JSON.stringify(await flows.load(saved[0] ?? ''))).toContain('pay');
+    expect(JSON.stringify(await flows.load(saved[0] ?? ''))).not.toContain('open-runs');
+    expect(onDisk).toBe('[true]');
+  });
+
   it('does not auto-save a journey proved under network mocks, and says why (#1459)', async () => {
     const recordings = new RecordingStore();
     const mock = NETWORK_MOCK_TOOLS.find((t) => t.name === ReticleTool.NETWORK_MOCK);
@@ -539,7 +573,7 @@ describe('teardown saves what a session drove as ONE flow per journey', () => {
       reticleRoot: root,
       enabled: true,
       flows,
-      takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+      takeAmbientTape: (id) => recordings.takeAmbient(id),
       reportStep: (step) => {
         reported.push(step);
         return Promise.resolve(true);
@@ -587,7 +621,7 @@ describe('teardown saves what a session drove as ONE flow per journey', () => {
       reticleRoot: root,
       enabled: true,
       flows,
-      takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+      takeAmbientTape: (id) => recordings.takeAmbient(id),
     });
     await end(fakeSession('tab-1', {}));
     expect(await flows.list()).toEqual([]);

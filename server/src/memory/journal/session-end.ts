@@ -91,7 +91,10 @@ interface SessionEndDeps {
    * directories into `language/flows/recording/tape/` for a constant and two types was a dependency
    * nobody needed. `directory-reach.test.ts` refused it, and its advice was right.
    */
-  takeAmbientTape?: () => { steps: readonly TapeStep[]; startPath?: string } | undefined;
+  /** The tape of THIS tab's steps: another app's drive is never saved into this project. */
+  takeAmbientTape?: (
+    sessionId: string,
+  ) => { steps: readonly TapeStep[]; startPath?: string } | undefined;
   /**
    * Report one funnel step. Injected rather than imported, because this module is teardown and the
    * reach guard is right that it should not grow a dependency on the telemetry tree to say so.
@@ -355,7 +358,7 @@ async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): 
   const flows = deps.flowsAt?.(session.artifactRoot ?? deps.reticleRoot) ?? deps.flows;
   if (takeTape === undefined || flows === undefined) return;
   // One flow per journey the session contained, not one flow per session — see drive-flow.ts.
-  const { programs, outcome } = driveFlowsFrom(takeTape());
+  const { programs, outcome } = driveFlowsFrom(takeTape(session.id));
   const author = deps.author?.();
   for (const program of programs) {
     // Folded into any saved copy of the same journey, so each session does not add a near-copy.
