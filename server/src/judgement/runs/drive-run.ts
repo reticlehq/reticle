@@ -235,7 +235,15 @@ export function driveRunFrom(
       predicate: verdict.claim,
       status: verdict.verified,
       actionId: verdict.actionId,
-      ...(verdict.source === undefined ? {} : { evidence: { source: verdict.source } }),
+      // Where it was written, and on a miss the calls of its window: what an issue page shows.
+      ...(verdict.source === undefined && verdict.net === undefined
+        ? {}
+        : {
+            evidence: {
+              ...(verdict.source === undefined ? {} : { source: verdict.source }),
+              ...(verdict.net === undefined ? {} : { net: verdict.net }),
+            },
+          }),
       // What it required and what it saw, so a failed check can say both on the platform.
       ...(verdict.expected === undefined ? {} : { expected: verdict.expected }),
       ...(verdict.observed === undefined ? {} : { observed: verdict.observed }),

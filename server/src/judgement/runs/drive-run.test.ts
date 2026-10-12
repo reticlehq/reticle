@@ -61,6 +61,17 @@ describe('a drive folded into a run', () => {
     expect(run?.project.name).toBe('priya-shop');
   });
 
+  // A failed check carries the calls of its window to the run, so its issue can show the request.
+  it("carries a failed check's requests as its evidence", () => {
+    const call = { method: 'POST', url: '/api/saved-items', status: 200, body: '{}' };
+    const failed: JournalAction = {
+      ...action(Verified.NO),
+      effect: { claim: 'a POST', verified: Verified.NO, net: [call] },
+    };
+    const run = driveRunFrom([failed], DEPS);
+    expect(run?.checks[0]?.evidence).toEqual({ net: [call] });
+  });
+
   it('keeps the action each check came from, so its screenshot can find it', () => {
     const run = driveRunFrom([action(Verified.YES, 'the row disappears', 41)], DEPS);
     expect(run?.checks[0]?.actionId).toBe('c41');

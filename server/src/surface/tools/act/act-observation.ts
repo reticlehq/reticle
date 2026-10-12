@@ -11,7 +11,7 @@
  * cut off mid-predicate.
  */
 
-import { asRecord } from '@reticlehq/core';
+import { EventType, asRecord, asString, isDevToolingUrl, type ReticleEvent } from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import {
   awaitDocumentSuccessor,
@@ -75,4 +75,33 @@ export const DISABLED_TARGET_NOTE =
 export function disabledTargetNote(pass: boolean, actResult: unknown): string | undefined {
   if (pass) return undefined;
   return false === asRecord(actResult)['enabled'] ? DISABLED_TARGET_NOTE : undefined;
+}
+
+/** Calls quoted on a failed check, and how much of each response body. */
+const MAX_NET_CALLS = 5;
+const MAX_BODY_CHARS = 300;
+
+/**
+ * The requests of a failed check's window, as its record carries them: method, url, status and the
+ * start of the response body (redacted in the page before it was ever sent). Dev tooling is left out.
+ */
+export function windowNet(
+  events: readonly ReticleEvent[],
+): { method: string; url: string; status?: number; body?: string }[] {
+  const out: { method: string; url: string; status?: number; body?: string }[] = [];
+  for (const event of events) {
+    if (EventType.NET_REQUEST !== event.type) continue;
+    const url = asString(event.data['url']);
+    if (url === undefined || isDevToolingUrl(url)) continue;
+    const status = event.data['status'];
+    const body = asString(event.data['responseBody']);
+    out.push({
+      method: (asString(event.data['method']) ?? 'GET').toUpperCase(),
+      url,
+      ...('number' === typeof status ? { status } : {}),
+      ...(body === undefined ? {} : { body: body.slice(0, MAX_BODY_CHARS) }),
+    });
+    if (MAX_NET_CALLS <= out.length) break;
+  }
+  return out;
 }

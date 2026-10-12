@@ -152,6 +152,21 @@ export const JournalVerdictEffectSchema = z.object({
    */
   declaredBeforeActing: z.boolean().optional(),
   /**
+   * The requests seen in a failed check's window: method, url, status and a short excerpt of the
+   * (already redacted) response, so a failure's page can show the call that explains it.
+   */
+  net: z
+    .array(
+      z.object({
+        method: z.string().max(TRANSPORT_LIMITS.MAX_COMMAND_NAME_LENGTH),
+        url: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH),
+        status: z.number().optional(),
+        body: z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH).optional(),
+      }),
+    )
+    .max(5)
+    .optional(),
+  /**
    * What kind of evidence bought the answer -- the grade the verdict actually proved.
    *
    * A green paid for with "something matching was on screen" is not the green paid for with "the
