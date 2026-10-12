@@ -8,6 +8,7 @@
  * `cloud-login` is the first to move — and it is a real seam rather than a file-size dodge: nothing
  * here knows what a project, a credential or a link is.
  */
+import { KEY_REFUSED, refusalSaid } from '@/memory/project/sync-status.js';
 import { DEFAULT_PLATFORM_URL, apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -115,14 +116,21 @@ export class CredentialRefusedError extends Error {
   constructor(
     readonly status: number,
     readonly apiKey: boolean,
+    /** The platform's own reason, when it named one (`refusalSaid`). */
+    reason?: string,
   ) {
     super(
       apiKey
-        ? `the platform refused this API key (${String(status)}): it was revoked, or its owner no ` +
-            'longer has access to the workspace. Mint a new key in Settings → API keys and set ' +
-            `RETICLE_API_KEY to it.`
-        : `the platform refused your sign-in (${String(status)}): it expired, was revoked, or you ` +
-            `no longer have access to the workspace. Run \`reticle login\`.`,
+        ? `the platform refused this API key (${String(status)}): ${
+            reason === undefined || KEY_REFUSED === reason
+              ? 'it was revoked, or its owner no longer has access to the workspace'
+              : reason.replace(/\.$/, '')
+          }. Mint a new key in Settings → API keys and set RETICLE_API_KEY to it.`
+        : `the platform refused your sign-in (${String(status)}): ${
+            reason === undefined || KEY_REFUSED === reason
+              ? 'it expired, was revoked, or you no longer have access to the workspace'
+              : reason.replace(/\.$/, '')
+          }. Run \`reticle login\`.`,
     );
   }
 }
@@ -156,7 +164,11 @@ export const api = async (
     const parsed = z.object({ error: z.object({ message: z.string() }) }).safeParse(json);
     const said = parsed.success ? parsed.data.error.message : `${res.status} ${res.statusText}`;
     if (token !== null && REFUSED_STATUSES.has(res.status)) {
-      throw new CredentialRefusedError(res.status, token === apiKeyFrom(process.env));
+      throw new CredentialRefusedError(
+        res.status,
+        token === apiKeyFrom(process.env),
+        refusalSaid(text),
+      );
     }
     throw new Error(said);
   }

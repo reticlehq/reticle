@@ -16,7 +16,7 @@
  */
 import { ReticleTool } from '@reticlehq/core';
 import { cutOffReason } from '@/surface/tools/harness-explore.js';
-import { KEY_REFUSED_LINE, RESULT_FIELD } from '@/surface/tools/reticle-result.js';
+import { KEY_REFUSED_HEAD, RESULT_FIELD } from '@/surface/tools/reticle-result.js';
 import {
   connectOverSse,
   endpointFor,
@@ -140,7 +140,7 @@ async function replaySuite(
   // Its last line says where the run lives (dashboard link, or kept on this machine only).
   const block = 'string' === typeof report?.[RESULT_FIELD] ? report[RESULT_FIELD] : undefined;
   // A pass the platform will never see is not a green CI step: its key was refused.
-  const refusedKey = true === block?.includes(KEY_REFUSED_LINE);
+  const refusedKey = true === block?.includes(`- ${KEY_REFUSED_HEAD}`);
   return {
     code: PASSED === status && !refusedKey ? 0 : 1,
     lines: [

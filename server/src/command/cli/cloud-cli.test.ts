@@ -42,6 +42,23 @@ describe('cloud-cli api() JSON parse guard', () => {
     expect(stderrBuf).not.toContain('sign in or API key required');
   });
 
+  // The platform now names why a key it knows was refused; that sentence is the answer.
+  it.each([
+    ['removed_from_workspace', 'You were removed from Acme.'],
+    ['key_lost_access', "This API key's owner no longer has access to the project web."],
+  ])('says the reason the platform gave (%s)', async (code, message) => {
+    globalThis.fetch = (() =>
+      Promise.resolve({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: () => Promise.resolve(JSON.stringify({ error: { code, message } })),
+      })) as unknown as typeof fetch;
+    expect(await runCloudCommand(['project', 'ls'])).toBe(1);
+    expect(stderrBuf).toContain(message.replace(/\.$/, ''));
+    expect(stderrBuf).not.toContain('it was revoked');
+  });
+
   it('surfaces an actionable error when the response is not JSON (proxy HTML)', async () => {
     const html = '<html><body>Login Required</body></html>';
     globalThis.fetch = (() =>

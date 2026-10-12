@@ -5,6 +5,7 @@
  * `credentials.json` (per-project api keys from `reticle link`). The non-secret repo binding + sync policy
  * is `<repo>/.reticle/cloud.json`. Auth for a command = `RETICLE_API_KEY` env (agent) OR the login token.
  */
+import { keyRefusalAtLastSync } from '@/memory/project/sync-status.js';
 import { apiKeyFrom } from '@reticlehq/core';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -250,17 +251,14 @@ export const accountStatusFields = async (): Promise<{
     homedir(),
     process.env,
   );
-  // What the last sync heard, from local state: a refused key is recorded as "status 401: …".
-  const refused = REFUSED_SYNC.exec(readCloudState(linkedRoot()).lastError ?? '')?.[0];
+  // What the last sync heard, from local state, in the platform's words when it named the reason.
+  const refused = keyRefusalAtLastSync(linkedRoot());
   return {
     signedInAs: session?.orgName ?? null,
     linkedProject: null === cloud.config ? null : cloud.projectId,
     ...(refused === undefined ? {} : { keyRefused: refused }),
   };
 };
-
-/** How the sync loop records a refused credential in its state. */
-const REFUSED_SYNC = /^status 40[13]\b/;
 
 /** `reticle project ls` / `reticle project create <name>` — key- or session-authed. */
 const cmdProject = async (argv: readonly string[]): Promise<number> => {

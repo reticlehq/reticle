@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { hashPayload } from '@/memory/cloud/sync-hash.js';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ReticleDir } from '@reticlehq/core';
 import {
+  KEY_REFUSED,
   SyncStatus,
   dashboardRunUrl,
+  keyRefusalAtLastSync,
+  refusalSaid,
   describeSync,
   overallStatus,
   seeRunLine,
@@ -77,5 +84,42 @@ describe('the run a person is sent to', () => {
       'See it in your dashboard: https://app.reticle.sh/runs/run%201',
     );
     expect(dashboardRunUrl('https://app.reticle.sh/', 'r2')).toBe('https://app.reticle.sh/runs/r2');
+  });
+});
+
+/*
+ * The platform now says WHY a key it knows was refused (`key_lost_access`, naming the project, and
+ * `removed_from_workspace`). Every surface said "it was revoked, or its owner no longer has access"
+ * instead, which is a guess beside the platform's own sentence.
+ */
+describe("a refused key, in the platform's words", () => {
+  const body = (code: string, message: string): string =>
+    JSON.stringify({ error: { code, message } });
+
+  it('takes the reason the platform gave, for the two it names', () => {
+    expect(refusalSaid(body('removed_from_workspace', 'You were removed from Acme.'))).toBe(
+      'You were removed from Acme.',
+    );
+    expect(
+      refusalSaid(
+        body('key_lost_access', "This API key's owner no longer has access to the project web."),
+      ),
+    ).toContain('the project web');
+  });
+
+  it('keeps its own sentence for a generic or unreadable answer', () => {
+    expect(refusalSaid(body('unauthorized', 'sign in or API key required'))).toBe(KEY_REFUSED);
+    expect(refusalSaid('not json')).toBe(KEY_REFUSED);
+  });
+
+  it('reads it from what the last sync recorded', () => {
+    const root = mkdtempSync(join(tmpdir(), 'reticle-refused-'));
+    writeFileSync(
+      join(root, ReticleDir.CLOUD_STATE_FILE),
+      JSON.stringify({
+        lastError: `status 401: ${body('removed_from_workspace', 'You were removed from Acme.')}`,
+      }),
+    );
+    expect(keyRefusalAtLastSync(root)).toBe('You were removed from Acme.');
   });
 });

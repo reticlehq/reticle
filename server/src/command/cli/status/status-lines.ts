@@ -142,7 +142,7 @@ export function statusLines(fields: Record<string, unknown>): string[] {
       row(
         StatusLabel.ACCOUNT,
         refused !== undefined
-          ? `${NOT_OK} the platform refused this API key at the last sync (${refused}): it was revoked, or you no longer have access to the workspace`
+          ? `${NOT_OK} refused at the last sync: ${refused}`
           : who === undefined
             ? `${NOT_OK} not signed in`
             : `${OK} signed in as ${who}`,

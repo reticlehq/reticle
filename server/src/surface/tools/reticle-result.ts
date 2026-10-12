@@ -33,7 +33,7 @@ import { TRIAL_OFFER } from '@reticlehq/core/hud';
 import {
   KEY_REFUSED,
   dashboardRunUrl,
-  keyRefusedAtLastSync,
+  keyRefusalAtLastSync,
   readDashboardUrl,
 } from '@/memory/project/sync-status.js';
 import type { TimedReplay } from '@/judgement/runs/verification-sync.js';
@@ -170,7 +170,11 @@ export function retitleResult(block: string, verified: Verified, because: string
 }
 
 /** The platform line when the key was refused: one true sentence, and the fix. */
-export const KEY_REFUSED_LINE = `Not on the platform: ${KEY_REFUSED}. Mint a new key in Settings → API keys; the run is kept on this machine`;
+export const KEY_REFUSED_HEAD = 'Not on the platform: ';
+const keyRefusedLine = (why: string): string =>
+  `${KEY_REFUSED_HEAD}${why.replace(/\.$/, '')}. Mint a new key in Settings → API keys; the run is kept on this machine`;
+/** The line for a key refused for no reason the platform named. */
+export const KEY_REFUSED_LINE = keyRefusedLine(KEY_REFUSED);
 
 /** The platform line: where the run lives when linked, what linking adds when not. One line. */
 export function platformLine(
@@ -179,7 +183,8 @@ export function platformLine(
   runId?: string,
 ): string {
   // Before any link: a run the platform will refuse is not "saved" and not "on the dashboard".
-  if (keyRefusedAtLastSync(root)) return `- ${KEY_REFUSED_LINE}`;
+  const refusal = keyRefusalAtLastSync(root);
+  if (refusal !== undefined) return `- ${keyRefusedLine(refusal)}`;
   const dashboard = readDashboardUrl(root);
   if (dashboard !== undefined)
     return runId === undefined

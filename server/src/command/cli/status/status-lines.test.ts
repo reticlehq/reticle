@@ -113,9 +113,9 @@ describe('an account whose key the platform refused', () => {
       running: false,
       signedInAs: null,
       linkedProject: 'bench-checkout',
-      keyRefused: 'status 401',
+      keyRefused: 'You were removed from Acme.',
     }).join('\n');
-    expect(out).toContain('refused this API key');
+    expect(out).toContain('refused at the last sync: You were removed from Acme.');
     expect(out).not.toContain('not signed in');
   });
 });

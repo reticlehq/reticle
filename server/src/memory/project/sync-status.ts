@@ -119,15 +119,50 @@ export function readDashboardUrl(reticleRoot: string): string | undefined {
 
 /** How the sync loop records a refused credential in its state. */
 const REFUSED_SYNC = /^status 40[13]\b/;
+/** What precedes the answer's body in that record: `status 401: `. */
+const REFUSED_PREFIX = /^status \d+: /;
 
 /** The refused credential, in words: what a person has to act on. */
 export const KEY_REFUSED =
   "the platform refused this project's API key: it was revoked, or its owner no longer has access to the workspace";
 
+/** The refusals the platform explains in its own words (its `error.code`). */
+const EXPLAINED_REFUSALS: ReadonlySet<string> = new Set([
+  'removed_from_workspace',
+  'key_lost_access',
+]);
+
+/**
+ * Why a credential was refused: the platform's own sentence when it names the reason ("You were
+ * removed from Acme.", a key whose owner lost the project), else ours. Reads an answer body.
+ */
+export function refusalSaid(body: string): string {
+  try {
+    const error = (JSON.parse(body) as { error?: { code?: unknown; message?: unknown } } | null)
+      ?.error;
+    if (
+      'string' === typeof error?.code &&
+      EXPLAINED_REFUSALS.has(error.code) &&
+      'string' === typeof error.message &&
+      0 < error.message.length
+    )
+      return error.message;
+  } catch {
+    // Not the platform's JSON: our own sentence stands.
+  }
+  return KEY_REFUSED;
+}
+
+/** Why the platform refused this project's key at the last sync, or undefined. Never throws. */
+export function keyRefusalAtLastSync(reticleRoot: string): string | undefined {
+  const error = readCloudState(reticleRoot).lastError;
+  if ('string' !== typeof error || !REFUSED_SYNC.test(error)) return undefined;
+  return refusalSaid(error.replace(REFUSED_PREFIX, ''));
+}
+
 /** Whether the platform refused this project's key at the last sync. Never throws. */
 export function keyRefusedAtLastSync(reticleRoot: string): boolean {
-  const error = readCloudState(reticleRoot).lastError;
-  return 'string' === typeof error && REFUSED_SYNC.test(error);
+  return keyRefusalAtLastSync(reticleRoot) !== undefined;
 }
 
 /** The dashboard's page for one run: the console's `/runs/:runId` route, at the dashboard's origin. */
