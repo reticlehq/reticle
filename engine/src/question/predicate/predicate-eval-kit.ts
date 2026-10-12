@@ -68,6 +68,13 @@ export interface EvalResult {
   observed?: string;
   expected?: string;
   assertion?: string;
+  /**
+   * The text IS on the page, in another case. `pass` stays false — a capitalisation defect is a
+   * defect — and `wouldHold` names the check that would have held, so the retry is one decision
+   * (does case matter here?) rather than a hunt.
+   */
+  caseOnlyMiss?: boolean;
+  wouldHold?: string;
 }
 
 export function str(value: unknown): string | undefined {

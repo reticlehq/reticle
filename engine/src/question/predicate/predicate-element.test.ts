@@ -151,3 +151,65 @@ it('keeps the plain absent reason when a match is visible, a state is named, or 
   );
   expect(truncated.failureReason).toBe(plain);
 });
+
+/** A page answering MATCH from a table of query → elements; anything else matches nothing. */
+function pageWith(
+  answers: (query: Record<string, unknown>) => unknown[] | undefined,
+  hint?: unknown,
+) {
+  const s: PredicateSession = {
+    ...session,
+    command(_name, args) {
+      const query = (args as { query: Record<string, unknown> }).query;
+      const elements = answers(query) ?? [];
+      return Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'm',
+        result: {
+          matched: elements.length > 0,
+          count: elements.length,
+          elements,
+          ...(hint === undefined ? {} : { hint }),
+        },
+      });
+    },
+  };
+  return s;
+}
+
+it('a role miss names the controls carrying that name under their real role — still a failure', async () => {
+  const composer = {
+    ref: 'e7',
+    role: 'generic',
+    name: 'Ask a question',
+    states: [],
+    visible: true,
+  };
+  const page = pageWith((q) => ('Ask a question' === q['label'] ? [composer] : undefined));
+  const result = await evalElement(
+    page,
+    { role: 'textbox', name: 'Ask a question' },
+    undefined,
+    false,
+    true,
+  );
+  expect(result.pass).toBe(false);
+  expect(result.observed).toContain('generic "Ask a question" (e7)');
+  expect(result.evidence).toEqual({ nearestByName: [composer] });
+});
+
+it('a case-only text miss says what would hold, and the verdict stays a failure', async () => {
+  const page = pageWith(() => undefined, { caseMiss: 'Trial' });
+  const result = await evalElement(
+    page,
+    { text: 'trial', matchCase: true },
+    undefined,
+    false,
+    true,
+  );
+  expect(result.pass).toBe(false);
+  expect(result.caseOnlyMiss).toBe(true);
+  expect(result.wouldHold).toContain('ignoreCase: true');
+  expect(result.wouldHold).toContain('Trial');
+});

@@ -337,7 +337,15 @@ describe('advertised surface cost', () => {
 // The default surface sends no output schemas. Measured plus the headroom, so 152,466.
 // 152,555 B with `filesNotFound` on reticle_intent (a declared file that is not in the project is
 // named, not kept as the fact's source; a validating client would strip it). Plus the headroom.
-const ALL_SURFACE_BYTE_BUDGET = 153_555;
+// 153,286 B with the compact envelope: `detail` on the five compacted tools and `changed`/`ref`/
+// `source` declared on their output schemas, so a validating client keeps the one-line summary that
+// replaced the state-diff bodies. Each verdict RESULT shrank by far more than this per call (see
+// compact-envelope.ts). Measured plus the headroom, so 154,286.
+// 154,657 B with `notices` (the once-per-session advisory list, on every session-bound output schema)
+// and `normalized` / `caseOnlyMiss` / `wouldHold` declared on the verdict tools, so a validating
+// client keeps the alias note and the case-only diagnosis. Measured plus the headroom, so 155,657.
+// Merged with `filesNotFound` above: both together still fit the 155,657 B budget (test passes).
+const ALL_SURFACE_BYTE_BUDGET = 155_657;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

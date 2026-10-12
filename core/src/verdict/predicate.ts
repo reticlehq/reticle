@@ -154,8 +154,21 @@ const PREDICATE_ALIASES: Readonly<Record<string, Readonly<Record<string, string>
   // one — route's `contains` matches the WHOLE route (path + query + fragment), so "the URL
   // contains this" is precisely what it does — and asserting a redirect after login is the single
   // most common thing an agent reaches for here.
-  [PredicateKind.ROUTE]: { path: 'pathname', urlContains: 'contains', url: 'contains' },
-  [PredicateKind.NET]: { url: 'urlContains', responseBodyMatches: 'bodyMatches' },
+  // `pathContains` is the spelling agents reach for after writing `pathname`; it means what
+  // `urlContains` already means here (the route contains this), so it is the same unambiguous lift.
+  [PredicateKind.ROUTE]: {
+    path: 'pathname',
+    urlContains: 'contains',
+    url: 'contains',
+    pathContains: 'contains',
+  },
+  // `pathContains` on `net`: the request's URL contains it — `urlContains`, which matches the path
+  // the agent meant plus anything else in the URL, exactly as the route alias above does.
+  [PredicateKind.NET]: {
+    url: 'urlContains',
+    responseBodyMatches: 'bodyMatches',
+    pathContains: 'urlContains',
+  },
   // `textContains` on a `console` predicate: the reporter who hit the missing matcher reached for
   // it first, by analogy with `net { urlContains }` — and that parallel is exactly right, since
   // both mean "this entry must contain this substring". Accepted as an alias for `contains`.
@@ -208,6 +221,41 @@ function renameKindSpelling(obj: Record<string, unknown>): Record<string, unknow
   const out: Record<string, unknown> = { ...obj, kind: obj[KIND_SPELLING] };
   delete out[KIND_SPELLING];
   return out;
+}
+
+/**
+ * Which aliases a predicate as WRITTEN would have renamed, as `kind.from → to` (and `type → kind`).
+ *
+ * The parse itself is silent on purpose — it is a preprocess step — so this reads the same table
+ * to tell the caller its spelling was normalised: a forgiving parse that never says so teaches a
+ * spelling that only works here. Walks `allOf`/`anyOf`/`not` the way the schema does. Unknown
+ * fields are never guessed at: they are not in the table, so they are never reported here, and the
+ * schema still refuses them.
+ */
+export function predicateAliasesUsed(input: unknown, depth = 0): string[] {
+  if (depth > 8 || typeof input !== 'object' || null === input || Array.isArray(input)) return [];
+  const given = input as Record<string, unknown>;
+  const used: string[] = [];
+  if (given['kind'] === undefined && 'string' === typeof given[KIND_SPELLING]) {
+    used.push(`${KIND_SPELLING} → kind`);
+  }
+  const obj = renameKindSpelling(given);
+  const kind = 'string' === typeof obj['kind'] ? obj['kind'] : '';
+  for (const [from, to] of Object.entries(PREDICATE_ALIASES[kind] ?? {})) {
+    if (obj[from] !== undefined && obj[to] === undefined) used.push(`${kind}.${from} → ${to}`);
+  }
+  if (PredicateKind.ELEMENT === kind && obj['query'] === undefined) {
+    for (const field of ELEMENT_QUERY_FIELDS) {
+      if (obj[field] !== undefined) used.push(`element.${field} → query.${field}`);
+    }
+  }
+  for (const field of ['predicates', 'of', 'predicate']) {
+    const child = obj[field];
+    for (const nested of Array.isArray(child) ? child : [child]) {
+      used.push(...predicateAliasesUsed(nested, depth + 1));
+    }
+  }
+  return used;
 }
 
 /** Rename known aliases before parse; an explicit canonical key always wins. */

@@ -1,0 +1,5 @@
+### Changed
+
+- **`@reticlehq/server`, `@reticlehq/core` — a forgiving parse that says so, and a verdict that stays strict.** `pathContains` is accepted on `route` (as `contains`) and on `net` (as `urlContains`). Every alias a predicate was written in is now named on the result as `normalized` (`route.pathContains → contains`, `type → kind`, flat element fields lifted into `query`), so the canonical spelling is learned once; an unknown field is still refused, never guessed.
+- **A case-only text miss says what would hold.** The verdict stays `no` — a capitalisation defect is a defect — and the result carries `caseOnlyMiss: true` and `wouldHold` (the same check with `ignoreCase: true`, and the text the page shows).
+- **A role miss names the controls that carry the name.** When nothing on the page has the asked role, a failed `{ role, name }` check lists the elements labelled with that name under their real role and ref (a contenteditable composer is not a `textbox`), in the same answer. Still a failure.

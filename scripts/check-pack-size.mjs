@@ -178,8 +178,15 @@ const BROWSER_MAX_BYTES = 1_576_245;
  * screenshots and their upload, the exploratory Harness (map, hunt, two-way disparity), saved
  * plans run replay-first, the Reticle result block, the platform memory/flow round trip and the
  * per-call replay secrets. Checked the tarball: no tests, maps or images; one 3KB docs YAML.
+ *
+ * 6,999,341 -> 7,142,601 on 2026-10-12 for 3.7.0: measured 7,042,601 on feat/hud-clarity after merging
+ * feat/agent-experience, plus HEADROOM_BYTES. The ~143KB since the last raise is the release's own
+ * fixes from the 25-persona drive (outward-action guard, per-link sync record, journey goals, per-call
+ * secrets, workspace choice on connect, refusal reasons) and the agent-experience lane (the compact
+ * envelope, once-per-session notices, the resume block and the rules-file primer; its agent/ folder is
+ * ~44KB). Checked the tarball: no tests, maps or images; the one docs YAML as before.
  */
-const SERVER_MAX_BYTES = 6_999_341;
+const SERVER_MAX_BYTES = 7_142_601;
 
 const BUDGETS = [
   { name: '@reticlehq/browser', dir: 'adapters/realm/browser', max: BROWSER_MAX_BYTES },

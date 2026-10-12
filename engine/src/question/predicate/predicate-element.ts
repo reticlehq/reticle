@@ -321,6 +321,25 @@ export async function evalElement(
         evidence: { nearMiss: roleOnly.elements },
       };
     }
+    // Nothing on the page has that role at all. The control is often there under ANOTHER role — a
+    // contenteditable composer is not a `textbox`, a styled div is not a `button` — and the name is
+    // the part the agent got right. Name the controls carrying it, with their real roles, so the
+    // retry targets what exists instead of guessing again. A diagnosis only: `pass` stays false.
+    const byName = await nearestByName(session, query.name, state);
+    if (byName.length > 0) {
+      const seen = byName.map(
+        (e) =>
+          `${'' === e.role ? 'no role' : e.role} "${'' === e.name ? (e.text ?? '') : e.name}" (${e.ref})`,
+      );
+      return {
+        pass: false,
+        failureReason: `no '${query.role}' named '${query.name}'; that name is on: ${seen.join(', ')}`,
+        observed: `no element has role '${query.role}'; elements named '${query.name}': ${seen.join(', ')}`,
+        expected: `a '${query.role}' named '${query.name}'`,
+        assertion: 'element.role+name',
+        evidence: { nearestByName: byName },
+      };
+    }
   }
   // The testid near-miss: name what IS here, so a typo is one step from fixed rather than a dead
   // end. reticle_query has always done this; the predicate path had no equivalent. See
@@ -354,6 +373,13 @@ export async function evalElement(
   const cut = describePresentTestidsCut(present.length, total);
   return {
     pass: false,
+    // The page shows the text in another case. Still a failure — see EvalResult.caseOnlyMiss.
+    ...(caseMiss === undefined
+      ? {}
+      : {
+          caseOnlyMiss: true,
+          wouldHold: `the same check with ignoreCase: true (the page shows "${match.hint?.caseMiss ?? ''}")`,
+        }),
     failureReason: `no element matched ${subject}${state === undefined ? '' : ` in state '${state}'`}${suffix}${cut}`,
     observed: `no matching element on the page${suffix}`,
     expected: `an element matching ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
@@ -424,6 +450,25 @@ export function withTextProperty(
     assertion: `text.${assertion.property}`,
     evidence: described,
   };
+}
+
+/** How many same-name controls a role miss names. */
+const MAX_BY_NAME = 3;
+
+/**
+ * Elements carrying an accessible name, whatever their role: by label (aria-label, <label>), then by
+ * placeholder. The first locator that finds any wins; at most MAX_BY_NAME are named.
+ */
+async function nearestByName(
+  session: PredicateSession,
+  name: string,
+  state: ElementState | undefined,
+): Promise<ElementDescriptor[]> {
+  for (const query of [{ label: name }, { placeholder: name }]) {
+    const found = await matchOnce(session, query, state);
+    if (found.matched) return found.elements.slice(0, MAX_BY_NAME);
+  }
+  return [];
 }
 
 /**

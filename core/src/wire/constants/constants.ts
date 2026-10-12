@@ -455,8 +455,7 @@ export const ReticleDir = {
   JOURNAL_EVENTS_CLOSED_FILE: 'events.closed.json',
   /** learned expected-envelopes per route, accumulated across runs (the deviation-report baseline). */
   ENVELOPES_FILE: 'envelopes.json',
-  /** learned ambient (action-less churn) region map — excluded from settle/summaries/envelopes. */
-  AMBIENT_FILE: 'ambient.json',
+  AMBIENT_FILE: 'ambient.json', // learned action-less churn regions, excluded from settle/summaries
   /** per-flow flake ledger — replay outcomes that decide intermittent-failure quarantine. */
   FLAKE_FILE: 'flake.json',
   /** The app-wide coverage ledger — see server features/exhaust/ledger.ts. */
@@ -465,6 +464,7 @@ export const ReticleDir = {
   NOTES_FILE: 'notes.json',
   /** The user's latest request, as the agent relayed it. Local: it is the user's own words. */
   REQUEST_FILE: 'request.json',
+  APP_NOTES_FILE: 'app-notes.json', // confirmed targeting hints for the next session; never evidence
   PLATFORM_MOMENTS_FILE: 'platform-moments.json', // moments already said, so each is said once
   /**
    * the project's cloud binding — .reticle/cloud.json, written by `reticle connect`. Git-checked and

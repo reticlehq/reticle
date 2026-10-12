@@ -17,6 +17,7 @@ import { splitBrainFields, withNextAction } from './cli/status-fields.js';
 import { reticleStateHome } from './daemon/daemon.js';
 import { handleMcp } from './cli/mcp-command.js';
 import { handleReport } from './cli/report-command.js';
+import { handleContext } from './cli/context-command.js';
 import {
   daemonProjectAt,
   readDaemonRegistry,
@@ -901,6 +902,9 @@ export function main(): void {
       break;
     case 'report':
       void handleReport(parsed.session, parsed.hook);
+      break;
+    case 'context':
+      void handleContext(parsed.session);
       break;
     case 'update':
       void handleUpdate();

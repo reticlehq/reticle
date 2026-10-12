@@ -217,6 +217,12 @@ const COMMANDS: readonly CommandDoc[] = [
     group: HelpGroup.MORE,
   },
   {
+    name: 'context',
+    synopsis: 'context --compact [--session <id>]',
+    summary: 'Resume after a compaction: what was proved, failed and is still owed',
+    group: HelpGroup.MORE,
+  },
+  {
     name: 'mcp',
     synopsis: 'mcp [--port N] [--drive <url>] [--headless]',
     summary: 'The MCP stdio server your agent runs; starts the daemon if needed',

@@ -69,21 +69,13 @@ Two places always need the user:
 
 ## Feedback is first-class
 
-Reticle is built for agents: your experience decides what gets built or fixed, and it disappears when your context does.
-
-The moment Reticle breaks, lies, cannot see something you needed, costs too many calls, or gives you trouble during setup:
+Once per session, when Reticle got in your way (it broke, lied, could not see what you needed, cost too many calls, or setup gave you trouble), file it and carry on:
 
 ```
 reticle_session { action: "feedback", kind, text }
 ```
 
-`kind` is one of `bug`, `gap`, `ambiguity`, `feature_request`, `improvement`, `experience`. One call, then carry on with the task. If the tools are unreachable, file it from the shell:
-
-```bash
-npx @reticlehq/server feedback --agent --kind <kind> "what happened"
-```
-
-Nothing is too minor. Report defects in **Reticle**; a bug in the app under test is Reticle working, and belongs in your answer. Never put app source, secrets, or user data in a report.
+`kind`: `bug`, `gap`, `ambiguity`, `feature_request`, `improvement`, `experience`. Tools unreachable? `npx @reticlehq/server feedback --agent --kind <kind> "what happened"`. A bug in the app under test belongs in your answer, not here. Never put app source, secrets, or user data in a report.
 
 ## Do not re-read this file to look something up
 
@@ -95,14 +87,6 @@ curl https://docs.reticle.sh/frameworks.md         # per-framework SDK wiring
 curl https://docs.reticle.sh/troubleshooting.md    # nothing connected, click did nothing, verdict unknown
 curl https://docs.reticle.sh/agent-cheatsheet.md   # the verify loop on one screen
 ```
-
-Every page arrives with the rules that matter prepended, so one fetch orients you.
-
-## Which path am I on
-
-`init` is idempotent: running it is the cheapest way to find out what is wired. It never drives.
-
-Read **VERIFY** below when the question is "does this still work?" rather than "is this set up?". If `reticle_session` returns an empty list on a project that is already wired, read `docs/troubleshooting.mdx` beside this file, or fetch `https://docs.reticle.sh/troubleshooting.md`; do not restart setup.
 
 ---
 
@@ -118,7 +102,16 @@ You need it once, while setting a project up. If `reticle_session` already lists
 
 **Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`).** Everything else (a bare `act`, `look`, `navigate`, `observe`) moves or reads the app and proves nothing. A drive that ends without a verdict has no result, however many tools it used.
 
-`verified: "unknown"` is not a pass: Reticle drove the app and could not tell what happened; report it as "not proved", not "failed". Nor is `"no-fault"`: the page settled with nothing wrong, but nothing was declared to prove, so assert a consequence the action CHANGES. **Never weaken a check to make it pass.**
+**The rules, on every call** (also in your CLAUDE.md / AGENTS.md, which survive a compaction):
+
+1. Only `verified: "yes"` passes. `"unknown"` (could not tell) and `"no-fault"` (nothing declared) are "not proved", never "failed" and never "working".
+2. Name the consequence BEFORE acting: `reticle_act_and_wait { target, action, until }`; `durable: true` if it must survive a reload.
+3. A journey is ONE call: `reticle_act { steps: [{ target, action, expect }] }`; the last `expect` is the end state.
+4. Text is exact-case; `ignoreCase: true` only when case does not matter. Target by `{ testid }` or `{ role, name }`; ambiguous is refused.
+5. On a failure read `expected` / `observed` / the nearest candidates before retrying. **Never weaken a check to make it pass.**
+6. `screenshot.path` only when the look matters; `reticle_observe { since }` has the rest.
+7. Predicates: `signal {name}` · `net {method, urlContains, status}` · `route {pathname}` · `state {path, equals}` · `element {query: {role, name}}` · `text {contains}` · `allOf`/`anyOf`/`not`.
+8. No session: `reticle_session { action: "list" }`, do its `next_action`. Version skew: `npx @reticlehq/server stop`, retry.
 
 ## Take the cheapest path that answers the question
 
@@ -140,7 +133,7 @@ Replay before you drive: a covered journey re-verifies for a few hundred tokens,
 **Context compacted, a turn starting, or a sub-agent taking over?** Ask what this run already established, instead of re-snapshotting:
 
 ```
-reticle_run({ tool: "reticle_context", args: {} })
+reticle_run({ tool: "reticle_context", args: { compact: true } })
 ```
 
 **About to change something?** Declare what the change is SUPPOSED to make true, in prose, while you still know: a verdict with nothing declared can only be checked against itself. Say it on the verdict itself: `reticle_act_and_wait` and `reticle_assert` both take an optional `intent`.
@@ -174,8 +167,6 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", 
   { kind: "console", level: "error", absent: true },
 ]}})                                                 // ← the verdict
 ```
-
-`until` names the consequence **before** the action, which makes it a check. Add `durable: true` when the change should survive a reload.
 
 The advertised surface is deliberately small (`default` 10, `all` 30 behind `RETICLE_ADVERTISE_ALL_TOOLS=1`, which uses unmerged names such as `snapshot` for `look`), and is not all there is. `reticle_tools` lists EVERY registered tool, `{ names: [...] }` loads full argument grammar, and `reticle_run { tool, args }` calls any of them, advertised or not. A retired name answers with where it went, not "not found".
 

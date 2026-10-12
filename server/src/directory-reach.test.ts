@@ -513,7 +513,19 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // filed beside the proxy rather than in it. Moving it in adds an edge and removes a lie about
   // where that code lives; the count is unchanged either way.
   proxy: ['binding', 'daemon', 'identity', 'telemetry'],
-  runs: ['artifact', 'cloud', 'dir', 'flows', 'hooks', 'intent', 'project', 'telemetry', 'tools'],
+  // `agent`: the resume block reads the app notes the agent layer learns (a leaf; no pair).
+  runs: [
+    'agent',
+    'artifact',
+    'cloud',
+    'dir',
+    'flows',
+    'hooks',
+    'intent',
+    'project',
+    'telemetry',
+    'tools',
+  ],
   session: [
     // A command the Harness sends is marked as the Harness's, so the HUD can say who is driving;
     // the async context that knows lives in `hooks`, beside the journal that reads it too.
@@ -720,6 +732,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // the goal check next door and is handed its tools, so like `script` it reaches nothing else.
   explore: ['harness'],
   tools: [
+    // What an agent's own call is shaped into on the way out (compact envelope, notices). A leaf:
+    // `agent` imports nothing back, so this adds no mutual pair.
+    'agent',
     // A lease that never dialled reads the served page's CSP, the same reader doctor uses.
     'dev-server',
     // `reticle_coverage { app: true }` folds a session into the app-wide ledger.

@@ -148,7 +148,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   'core/src': 11,
-  'engine/src/evidence': 18,
+  'engine/src/evidence': 19,
   // 18 since the last two cycles in this package were removed: `predicate-eval-kit.ts` (the result
   // type and the four comparisons the oracles are written in) and `predicate-session.ts` (what the
   // engine needs from a session). Both were reached back out of the modules that call their readers.
@@ -190,7 +190,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 12 since `defaultRunId` moved out of `runner-port.ts` into its own leaf: `verification-sync`
   // wanted that one function and imported a module that pulls the whole flow-replay stack, closing a
   // cycle. Same trade as `language/flows` below — a cycle is paid for in files.
-  'server/src/judgement/runs': 12,
+  'server/src/judgement/runs': 13,
   // 33 since `act-merged.ts`: `reticle_act` absorbing `reticle_act_sequence`, routed on the shape of
   // the call rather than on an `action` name because `act` already owns that parameter. It is its
   // own file rather than a branch inside `merge-tools.ts` for exactly that reason — it is the one
@@ -244,11 +244,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    */
   // +3: durable.ts, after-match.ts and proved-controls.ts, what act_and_wait does once its
   // predicate holds.
-  'server/src/surface/tools/act': 15,
+  'server/src/surface/tools/act': 16,
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.
-  'server/src/command/cli': 25, // + known-regression.ts: the gate's read of the platform, off the library path; + try-command.ts, verify-results.ts, cli-usage.ts: commands and their output beside their siblings; a subdirectory gave each a new reach the reach guard refuses; + tutorial.ts: one sequence, two audiences, ending at a verdict; + report-command.ts, a command beside its siblings
+  'server/src/command/cli': 26, // + known-regression.ts: the gate's read of the platform, off the library path; + try-command.ts, verify-results.ts, cli-usage.ts: commands and their output beside their siblings; a subdirectory gave each a new reach the reach guard refuses; + tutorial.ts: one sequence, two audiences, ending at a verdict; + report-command.ts, a command beside its siblings
   // 17 since the installer's Node half: `setup-mcp.ts` (which agents are here, and merging into the
   // configs they already keep) and `setup-install.ts` (the three steps only the shell could time).
   // Both are pure — their telemetry reporter is INJECTED, because this directory does not own a

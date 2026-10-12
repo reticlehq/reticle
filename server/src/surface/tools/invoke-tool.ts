@@ -11,11 +11,15 @@ import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { agentNudge, takePlatformMoment } from './platform-moment.js';
 import { RESULT_FIELD, trackVerdict } from './reticle-result.js';
+import { forTheAgent } from './agent/for-the-agent.js';
+import { type NoticeFold, feedbackAlreadyAsked, noteFeedbackAsked } from './agent/notices.js';
+import { SKEW_SHORT_WARNING, SKEW_VERDICT_WARNING } from '@/portal/session/session-health.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
   type BrowserBrand,
   TelemetryActor,
   TelemetryEventKind,
+  THROTTLED_WARNING,
   TRANSPORT_LIMITS,
   fingerprintFinding,
 } from '@reticlehq/core';
@@ -394,12 +398,45 @@ export async function runTool<Ext>(
   // A replay's secrets leave the arguments here, before the tool log, the journal or telemetry can
   // see them, and are supplied to this call alone.
   const { secrets, rest: args } = takeCallSecrets(given);
-  // A verdict still being decided is waited for by a session end (`trackVerdict`).
+  // A verdict still being decided is waited for by a session end (`trackVerdict`); the result is
+  // compacted for the agent last, after telemetry and the tool log have read the full result.
   return trackVerdict(
     tool.name,
-    withCallSecrets(secrets, () => loggedTool(tool, deps, args, call)),
+    withCallSecrets(secrets, async () => {
+      const result = await loggedTool(tool, deps, args, call);
+      const attach = currentDrivenBy() === undefined ? deps.attachId : undefined;
+      const root =
+        attach === undefined
+          ? undefined
+          : safeRoot(() => sessionRoot(deps, sessionIdFromArgs(args)));
+      return forTheAgent({ name: tool.name, args, result, attach, root, fold: NOTICE_FOLD });
+    }),
   );
 }
+
+/** Advisories that become once-per-session notice lines. See agent/notices.ts. */
+export const NOTICE_FOLD: NoticeFold = {
+  advisories: [
+    EnvelopeKey.FEEDBACK_PROMPT,
+    EnvelopeKey.FEEDBACK_INVITE,
+    EnvelopeKey.TALK_TO_US,
+    EnvelopeKey.UPDATE_AVAILABLE,
+    // NOT `version_skew`: it is decisive — it explains every result after it and names the command to
+    // run — so it rides out as its own key, untouched (one-shot at its source already).
+    EnvelopeKey.PLATFORM,
+    EnvelopeKey.SESSION_LEASE,
+    EnvelopeKey.SESSION_AGE_WARNING,
+    EnvelopeKey.FEEDBACK_UNDELIVERED,
+  ],
+  notices: EnvelopeKey.NOTICES,
+  next: EnvelopeKey.NEXT,
+  warning: EnvelopeKey.WARNING,
+  onceWarnings: new Map<string, string | undefined>([
+    // `session.throttled` still rides on every result: only the paragraph explaining it goes.
+    [THROTTLED_WARNING, undefined],
+    [SKEW_VERDICT_WARNING, SKEW_SHORT_WARNING],
+  ]),
+};
 
 async function loggedTool<Ext>(
   tool: ToolDef<Ext>,
@@ -672,7 +709,10 @@ async function dispatchTool<Ext>(
     // measured against the tab that actually produced it.
     if (session !== undefined && REF_MINTING_TOOLS.has(tool.name)) noteRefsMinted(session.id);
   }
-  const prompt = isPlainObject(raw) ? takeFeedbackPrompt(tool.name) : undefined;
+  // The feedback family is asked at most once per agent session (agent/notices.ts): gated here, at
+  // the take, so a suppressed ask is never counted as one that was made.
+  const asked = feedbackAlreadyAsked(currentDrivenBy() === undefined ? deps.attachId : undefined);
+  const prompt = isPlainObject(raw) && !asked ? takeFeedbackPrompt(tool.name) : undefined;
   // Same one-shot channel as the feedback ask: the agent is mid-task, so anything it would have to go
   // and ASK for is something it will never ask for. Spliced on ANY tool result, not just a
   // verification, because an out-of-date install is worth mentioning whatever the agent is doing.
@@ -697,7 +737,9 @@ async function dispatchTool<Ext>(
   // `refused` friction the line is written for. `errored` could only ever see the handlers that
   // RETURN an error. So the denominator was counting a small, unrepresentative slice of the
   // invitations and reading near-empty, which looks identical to a nudge that never fires.
-  const friction = frictionInviteFor(tool.name, raw);
+  const friction = asked || prompt !== undefined ? undefined : frictionInviteFor(tool.name, raw);
+  if (prompt !== undefined || friction !== undefined)
+    noteFeedbackAsked(currentDrivenBy() === undefined ? deps.attachId : undefined);
   // Once per project, on a proved verdict, when the runs live only on this machine. Not on a result
   // whose `reticleResult` already ends with the platform line: once per result, never twice.
   const platform =

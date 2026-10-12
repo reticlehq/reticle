@@ -220,3 +220,43 @@ describe('the summary reports the route the router is on', () => {
     expect(s.route).toBe('/dashboard');
   });
 });
+
+describe('cache bookkeeping is counted, not listed', () => {
+  const q = (over: Record<string, unknown>) => ({
+    status: 'success',
+    fetchStatus: 'idle',
+    isStale: false,
+    dataUpdatedAt: 1,
+    error: null,
+    data: { plan: 'trial' },
+    ...over,
+  });
+  it('drops fetchStatus/isStale churn from stateDiffs and says how many', () => {
+    const summary = causalSummary([
+      e(EventType.STATE_CHANGE, {
+        name: 'queries',
+        path: 'account',
+        old: q({}),
+        value: q({ fetchStatus: 'fetching' }),
+      }),
+      e(EventType.STATE_CHANGE, {
+        name: 'queries',
+        path: 'account',
+        old: q({ fetchStatus: 'fetching' }),
+        value: q({ isStale: true, dataUpdatedAt: 2 }),
+      }),
+      e(EventType.STATE_CHANGE, {
+        name: 'queries',
+        path: 'billing',
+        old: q({}),
+        value: q({ data: { plan: 'pro' } }),
+      }),
+    ]);
+    expect(summary.stateDiffs.map((d) => d.path)).toEqual(['billing']);
+    expect(summary.ignoredBookkeeping).toBe(2);
+    expect(summary.statePathsChanged).toEqual(['queries']);
+  });
+  it('is absent when nothing was dropped', () => {
+    expect(causalSummary([]).ignoredBookkeeping).toBeUndefined();
+  });
+});
