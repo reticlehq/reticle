@@ -1408,7 +1408,8 @@ describe("a run's step screenshots follow it", () => {
 describe('a folder re-linked to another workspace', () => {
   const OLD = 'https://cloud.test::org::dana::app';
   const NEW = 'https://cloud.test::org::bigco::bigco-console';
-  const FLOW = { name: 'sign-in', version: 1, steps: [] };
+  const FLOW = { name: 'sign-in', version: 1, steps: [], createdAt: NOW - 60_000 };
+  const NEW_FLOW = { name: 'checkout', version: 1, steps: [], createdAt: NOW + 1 };
   const relink = async (state: CloudSyncState, link: string, moveHistory?: true) => {
     const s = server({ status: {} });
     const k = sink();
@@ -1421,7 +1422,7 @@ describe('a folder re-linked to another workspace', () => {
           { runId: 'before', payload: { runId: 'before', createdAt: NOW - 60_000 } },
           { runId: 'after', payload: { runId: 'after', createdAt: NOW + 1 } },
         ],
-        flows: () => [FLOW],
+        flows: () => [FLOW, NEW_FLOW],
       }),
       sink: k.sink,
       state,
@@ -1446,10 +1447,21 @@ describe('a folder re-linked to another workspace', () => {
     expect(written.state?.link).toBe(NEW);
   });
 
-  it('sends the flows to the new link, whatever the old link was sent', async () => {
-    const { calls } = await relink(synced, NEW);
+  /*
+   * A re-drive: re-linked to another workspace, the old runs stayed but the old flows went, and they
+   * carried the previous workspace's people's emails. Flows follow the runs' rule.
+   */
+  it("sends the flows made under the new link, and keeps the old link's flows here", async () => {
+    const { calls, report } = await relink(synced, NEW);
     const flows = calls.flatMap((c) => (c.body as { flows?: unknown[] } | undefined)?.flows ?? []);
-    expect(flows).toEqual([FLOW]);
+    expect(flows).toEqual([NEW_FLOW]);
+    expect(report.held.join(' ')).toMatch(/1 flow made before this folder was linked to/);
+  });
+
+  it('moves the old flows with the history, when asked', async () => {
+    const { calls } = await relink(synced, NEW, true);
+    const flows = calls.flatMap((c) => (c.body as { flows?: unknown[] } | undefined)?.flows ?? []);
+    expect(flows).toEqual([FLOW, NEW_FLOW]);
   });
 
   it('moves the history only when asked', async () => {

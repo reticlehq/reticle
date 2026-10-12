@@ -531,7 +531,19 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
     // Flows and capsules are upserted by name/id, so the whole set goes whenever it differs from the
     // set the platform last answered for — and only then. Riding along with every run push re-sent
     // ~1.3 MB per push on a real repo, and a POST that size timed out and failed the run with it.
+    // Made before this folder was linked here, like the runs: the previous link's, kept until moved.
+    // A flow carries the steps of whoever drove it, so it is that workspace's as much as a run is.
+    const flowsBefore = deps.source
+      .flows()
+      .filter(
+        (flow) => linkedAt !== undefined && !((numberAt(flow, 'createdAt') ?? 0) >= linkedAt),
+      );
+    if (0 < flowsBefore.length)
+      heldBack.push(
+        `${String(flowsBefore.length)} flow${1 === flowsBefore.length ? '' : 's'} made before this folder was linked to this workspace stay${1 === flowsBefore.length ? 's' : ''} on this machine: run \`${MOVE_HISTORY_COMMAND}\` to send ${1 === flowsBefore.length ? 'it' : 'them'} here`,
+      );
     const flows = deps.source.flows().filter((flow, index) => {
+      if (flowsBefore.includes(flow)) return false;
       const version = numberAt(flow, 'version');
       if (flowVersions === undefined || version === undefined || flowVersions.includes(version))
         return true;
