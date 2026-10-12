@@ -47,4 +47,26 @@ describe('the credentials a persona names', () => {
       ],
     ).toBe('hunter2');
   });
+
+  /*
+   * Persona drive: Nina's journey named her and her password ("Nina, … password Nina-pass-12345!").
+   * The Harness typed "reticle harness" as her first name and never typed the password: an unquoted
+   * value after the bare word was not read, and nothing offered her name for a name field.
+   */
+  it('reads a password written after the bare word, and redacts it', () => {
+    const nina = personaCredentials(
+      'Nina, new here: sign up with password Nina-pass-12345! and open Runs',
+    );
+    expect(nina.secrets['RETICLE_SECRET_PASSWORD']).toBe('Nina-pass-12345!');
+    expect(nina.secrets['RETICLE_SECRET_CREATE_A_PASSWORD']).toBe('Nina-pass-12345!');
+    expect(nina.persona).not.toContain('Nina-pass-12345!');
+  });
+
+  it("offers the persona's own name for a name field, never one it made up", () => {
+    const nina = personaCredentials('Nina Patel, who found the dashboard: sign up');
+    expect(nina.secrets['RETICLE_SECRET_FIRST_NAME']).toBe('Nina');
+    expect(nina.secrets['RETICLE_SECRET_LAST_NAME']).toBe('Patel');
+    expect(nina.secrets['RETICLE_SECRET_FULL_NAME']).toBe('Nina Patel');
+    expect(personaCredentials('an admin who checks the billing page').secrets).toEqual({});
+  });
 });

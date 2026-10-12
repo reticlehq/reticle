@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — the Harness typed "reticle harness" into a sign-up form's First name and never typed the password the journey gave ("Nina, … password Nina-pass-12345!").** A password written after the bare word was not read (and so not redacted either), a "Create a password" field was not one the persona's password was offered for, and nothing offered the persona's own name. The password is now read and redacted in that form too, offered for the usual new-password fields, and a persona that opens with a name ("Nina Patel, …") offers it for first, last and full name fields. A persona that names nobody offers no name.
