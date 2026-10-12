@@ -326,12 +326,16 @@ describe('compact envelope: decisive-evidence contract', () => {
     }
   });
 
-  it('`detail: "full"` and non-agent callers get the result untouched', () => {
+  // Compaction is opt-in: the agent-loop A/B did not show the compact arm at least as accurate.
+  it('only `detail: "compact"` compacts; the default, `full` and non-agent callers are untouched', () => {
     const full = fullResult(rng(3));
+    expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, {}, full, true)).toBe(full);
     expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, { detail: 'full' }, full, true)).toBe(full);
-    expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, {}, full, false)).toBe(full);
-    expect(shapeForAgent(ReticleTool.OBSERVE, {}, full, true)).toBe(full);
-    expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, {}, full, true)).not.toBe(full);
+    expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, { detail: 'compact' }, full, false)).toBe(full);
+    expect(shapeForAgent(ReticleTool.OBSERVE, { detail: 'compact' }, full, true)).toBe(full);
+    expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, { detail: 'compact' }, full, true)).not.toBe(
+      full,
+    );
   });
 
   it('a sequence keeps every step outcome, observed/expected and contradiction', () => {
@@ -401,14 +405,15 @@ describe('forgiving parse, strict verdict: the result names the aliases it norma
 });
 
 describe('the A/B control arm', () => {
-  it('RETICLE_RESULT_DETAIL=full answers every agent call in full', () => {
+  it('RETICLE_RESULT_DETAIL=compact compacts every agent call; a call can still ask for full', () => {
     const full = { verified: 'yes', because: 'b', trace: { window_ms: 1 }, since: 1 };
-    process.env['RETICLE_RESULT_DETAIL'] = 'full';
+    process.env['RETICLE_RESULT_DETAIL'] = 'compact';
     try {
-      expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, {}, full, true)).toBe(full);
+      expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, {}, full, true)).not.toBe(full);
+      expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, { detail: 'full' }, full, true)).toBe(full);
     } finally {
       delete process.env['RETICLE_RESULT_DETAIL'];
     }
-    expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, {}, full, true)).not.toBe(full);
+    expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, {}, full, true)).toBe(full);
   });
 });

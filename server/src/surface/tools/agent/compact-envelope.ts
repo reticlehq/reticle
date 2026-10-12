@@ -32,9 +32,21 @@ export type Detail = (typeof Detail)[keyof typeof Detail];
  */
 export const RESULT_DETAIL_ENV = 'RETICLE_RESULT_DETAIL';
 
-/** Did this call (or the daemon's environment) ask for the full envelope? */
+/**
+ * Did this call (or the daemon's environment) ask for the full envelope AND nothing else — no
+ * notices, no re-teach? Only an explicit ask: the A/B control arm, and an agent that said so.
+ */
 export function wantsFull(args: Record<string, unknown>): boolean {
   return Detail.FULL === args[DETAIL_ARG] || Detail.FULL === process.env[RESULT_DETAIL_ENV];
+}
+
+/**
+ * Did this call (or the daemon) ask for the compact envelope? Compaction is opt-in: in the
+ * agent-loop A/B the compact arm saved little per task and missed one failure the full arm caught,
+ * and a token saving ships only beside a correctness measurement that is at least as good.
+ */
+export function wantsCompact(args: Record<string, unknown>): boolean {
+  return Detail.COMPACT === (args[DETAIL_ARG] ?? process.env[RESULT_DETAIL_ENV]);
 }
 
 /** The tools whose results are compacted. Each one's full shape stays one argument away. */
@@ -48,7 +60,7 @@ export const COMPACTED_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /** Short enough for the per-turn surface; the reasoning lives in this file and the instructions. */
-export const DETAIL_ARG_DESCRIPTION = '"full" adds every evidence field.';
+export const DETAIL_ARG_DESCRIPTION = '"compact" keeps only the deciding fields.';
 
 /** Where the aliases a predicate was normalised from are named. */
 export const NORMALIZED_KEY = 'normalized';
@@ -302,7 +314,7 @@ export function compactSequence(result: Record<string, unknown>): Record<string,
 }
 
 /**
- * The result as an agent receives it: compact unless it asked for `detail: "full"`.
+ * The result as an agent receives it: full unless it asked for `detail: "compact"`.
  *
  * `agentCall` is the dispatcher's own judgement (an MCP connection, not the Harness or the HUD).
  */
@@ -315,7 +327,7 @@ export function shapeForAgent(
   if (!agentCall || !COMPACTED_TOOLS.has(tool) || !isRecord(result)) return result;
   const normalized = aliasesWritten(args);
   const noted = 0 === normalized.length ? result : { ...result, [NORMALIZED_KEY]: normalized };
-  if (wantsFull(args)) return noted;
+  if (!wantsCompact(args)) return noted;
   if (Array.isArray(noted['steps'])) return compactSequence(noted);
   return 'verified' in noted ? compactVerdict(noted) : noted;
 }
