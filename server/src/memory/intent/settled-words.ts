@@ -21,6 +21,8 @@ export interface SettledWords {
   setAside?: string;
   by?: string;
   status?: IntentStatus;
+  /** The file the platform holds for the kept words; a record re-sent without it erased it there. */
+  file?: string;
 }
 
 /** How settled each status is; a record is only ever raised along it, never lowered. */
@@ -47,6 +49,7 @@ export function settledWordsIn(entries: readonly unknown[]): SettledWords[] {
     const kept = str(entry['statement']);
     const decisions = entry['decisions'];
     const status = settledStatus(entry['status']);
+    const file = str(entry['sourceFile']);
     if (kept === undefined) return [];
     const settled = status === undefined ? [] : [{ kept, status }];
     if (!Array.isArray(decisions)) return settled;
@@ -56,7 +59,14 @@ export function settledWordsIn(entries: readonly unknown[]): SettledWords[] {
         const by = str(asRecord(d)['byEmail']);
         return setAside === undefined || setAside === kept
           ? []
-          : [{ kept, setAside, ...(by === undefined ? {} : { by }) }];
+          : [
+              {
+                kept,
+                setAside,
+                ...(by === undefined ? {} : { by }),
+                ...(file === undefined ? {} : { file }),
+              },
+            ];
       })
       .concat(settled);
   });
@@ -95,7 +105,15 @@ export async function applySettledWords(
         // The check bound to the words set aside proves nothing about the words kept.
         existing === undefined
           ? undefined
-          : { ...withoutBinding(existing), statement: decision.kept },
+          : {
+              ...withoutBinding(existing),
+              statement: decision.kept,
+              // The files were the set-aside words'; the kept words carry the platform's.
+              surface: {
+                ...existing.surface,
+                files: decision.file === undefined ? [] : [decision.file],
+              },
+            },
       { source: decidedBy(decision.by) },
     );
     if (next?.statement === decision.kept) changed += 1;

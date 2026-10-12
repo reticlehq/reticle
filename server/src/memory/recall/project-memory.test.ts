@@ -113,6 +113,29 @@ describe('which project a shared-memory read is about', () => {
     vi.unstubAllGlobals();
   });
 
+  /** Persona 21's entry exactly as the platform returned it after a decision: the file is read. */
+  it('reads the file off an entry in the platform’s own shape', async () => {
+    answering([
+      {
+        intentId: 'saved-items-shows-new-order',
+        subject: 'unsorted',
+        statement: 'Saving an order adds it to the top of Saved Items right away.',
+        status: 'agreed',
+        flowName: null,
+        sourceFile: 'src/views/SavedItems.tsx',
+        reason: null,
+        agent: null,
+        provedBy: null,
+        private: false,
+        byEmail: 'carl@example.com',
+        decisions: [],
+        conflict: null,
+      },
+    ]);
+    const read = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
+    expect(read.ok && read.known[0]?.sourceFile).toBe('src/views/SavedItems.tsx');
+  });
+
   /**
    * #1247. The key covers a whole workspace, so a read that named no project could be answered with
    * a repo B agent holding repo A's established knowledge — every entry valid, attributed to B, and

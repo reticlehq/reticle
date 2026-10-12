@@ -85,6 +85,25 @@ describe('a decision made on the dashboard', () => {
   });
 
   /*
+   * Re-drive (persona 21): Bea chose Carl's words, which named `src/views/SavedItems.tsx`. Her own
+   * record took the words but kept the files of the words set aside (none), her daemon re-sent it,
+   * and the platform's file was gone 50 s later — so `reticle_memory` answered `sourceFile: null`.
+   * The kept words come down with the file the platform holds for them.
+   */
+  it('takes the file the platform holds for the kept words', async () => {
+    await store.record({
+      id: 'shipping-free',
+      statement: 'Orders of $50 or more ship free',
+      status: IntentStatus.AGREED,
+      surface: { route: '/cart', files: ['src/old-cart.tsx'] },
+    });
+    const withFile = { ...entry, sourceFile: 'src/views/SavedItems.tsx' };
+    await applySettledWords(store, settledWordsIn([withFile]));
+    const after = await store.get('shipping-free');
+    expect(after?.surface).toEqual({ route: '/cart', files: ['src/views/SavedItems.tsx'] });
+  });
+
+  /*
    * Persona drive: Bea chose Carl's words ("Use proposed", now agreed); Carl's own daemon still held
    * them as `proposed`, re-sent them every ~5 s, and the platform took the author's copy — undoing
    * her decision. A status the team settled is brought down to the record holding the same words.
