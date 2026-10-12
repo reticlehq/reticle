@@ -17,6 +17,8 @@ tauri::Builder::default()
     .on_page_load(reticle_tauri::on_page_load)
 ```
 
+**Dev builds only.** In a release build the crate is inert: `reticle_capture` refuses and `on_page_load` does nothing, so the binary you sign and ship carries no Reticle capability. A release build you test with Reticle (a CI fixture) turns it on with `reticle-tauri = { version = "3.7", features = ["in-release"] }`.
+
 Nothing on the JavaScript side. Tauri has no preload stage where a shim could be installed, so the SDK invokes `reticle_capture` through Tauri's own internals when it needs pixels.
 
 ### Screenshots

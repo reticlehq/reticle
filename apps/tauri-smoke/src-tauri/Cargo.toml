@@ -8,7 +8,8 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-reticle-tauri = { path = "../../../adapters/realm/tauri" }
+# The desktop gate drives a RELEASE build of this fixture, so the crate is switched on there.
+reticle-tauri = { path = "../../../adapters/realm/tauri", features = ["in-release"] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -192,6 +192,8 @@ tauri::Builder::default()
     .on_page_load(reticle_tauri::on_page_load)
 ```
 
+**Dev builds only.** In a release build the crate is inert: `reticle_capture` refuses and `on_page_load` does nothing, so the binary you sign and ship carries no Reticle capability. A release build you test with Reticle (a CI fixture) turns it on with `reticle-tauri = { version = "3.7", features = ["in-release"] }`.
+
 IPC observation needs nothing on the Rust side. An `invoke('load_todos')` already reaches Reticle as `ipc://load_todos`.
 
 <Card title="Electron, and the rest of desktop" icon="display" href="/desktop">

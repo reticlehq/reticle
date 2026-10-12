@@ -42,6 +42,9 @@ pub async fn reticle_capture(
     window: tauri::WebviewWindow,
     full_page: Option<bool>,
 ) -> Result<String, String> {
+    if let Some(refusal) = crate::inert_refusal() {
+        return Err(refusal.to_string());
+    }
     tauri::async_runtime::spawn_blocking(move || capture_to_temp_file(&window, full_page))
         .await
         .map_err(|error| error.to_string())?

@@ -16,6 +16,11 @@ categories = ["development-tools::testing", "gui"]
 # packed into the .crate and rejected for size.
 exclude = ["target/", "Cargo.lock"]
 
+[features]
+# Off by default: a release build is inert (see `ACTIVE`). Turn it on only for a release build you
+# drive with Reticle, such as a CI fixture — never for the binary you sign and ship.
+in-release = []
+
 [dependencies]
 tauri = "2.12"
 
