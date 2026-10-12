@@ -14,6 +14,7 @@ import {
   AppRuntime,
   ConsequenceKind,
   NetInitiator,
+  PredicateKind,
   ReticleTool,
   type DrivenBy,
 } from '@reticlehq/core';
@@ -189,7 +190,11 @@ export function reticleToolset(
         // list, and this is the same recovery the MCP surface gives an agent that does the same.
         return { error: `unknown tool ${target ?? name}`, available: [...byName.keys()] };
       }
-      const pinned = pinSession(targetArgs, options.sessionId, true === options.locked);
+      const pinned = pinSession(
+        options.drivenBy === undefined ? targetArgs : requestMustSucceed(targetArgs),
+        options.sessionId,
+        true === options.locked,
+      );
       const scoped = isDesktopSession(deps, pinned['sessionId'])
         ? desktopBackendClaims(pinned)
         : pinned;
@@ -204,6 +209,23 @@ export function reticleToolset(
       );
     },
   };
+}
+
+/**
+ * A request the Harness declares must succeed (`ok: true`) unless its claim names a status. A net
+ * claim with no status is met by any answer, so a sign-in whose `POST /api/login` came back 401 was
+ * counted as a check that held. Applied to the top-level claim of a wait or an assert.
+ */
+export function requestMustSucceed(args: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...args };
+  for (const key of ['until', 'predicate']) {
+    const claim = args[key];
+    if ('object' !== typeof claim || null === claim) continue;
+    const p = claim as Record<string, unknown>;
+    if (PredicateKind.NET === p['kind'] && undefined === p['status'] && undefined === p['ok'])
+      out[key] = { ...p, ok: true };
+  }
+  return out;
 }
 
 /**
