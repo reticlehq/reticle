@@ -397,7 +397,8 @@ async function runPlan(
       ? 'Autonomous driving switched off — the Harness stopped. What it drove is kept.'
       : cutOff !== undefined
         ? msgDriveCutOff(cutOff.error)
-        : `Harness finished the plan — ${String(run.lines.filter((l) => l.startsWith('✓')).length)} of ${String(run.lines.length)} journeys passed${answeredBy(run.journeys)}. ${verdictLine(checkTally(run.toolCalls))}`,
+        : // One verdict, the journeys': the count of passed journeys is in it, said once.
+          `Harness finished the plan${answeredBy(run.journeys)}. ${verdictLine(checkTally(run.toolCalls), undefined, results)}`,
   );
 
   const sum = (pick: (r: HarnessResult) => number): number =>

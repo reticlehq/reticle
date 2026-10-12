@@ -276,6 +276,25 @@ describe('the block on a single replay and on a Harness drive', () => {
     expect(block).toContain('1 journey replayed · 1 journey driven');
   });
 
+  it("a plan's failed journey makes the block failed, though its checks held", () => {
+    const block = exploreResult(unlinked(), {
+      checks: { held: 1, failed: 0, undecided: 0 },
+      goals: [],
+      journeys: [{ title: 'Ana: pays', status: 'failed', by: 'model' }],
+    });
+    expect(block.split('\n')[0]).toContain(ResultWord.FAILED);
+    expect(block.split('\n')[0]).toContain('1 of 1 journey(s) failed');
+  });
+
+  it("a plan's passed replay makes the block proved", () => {
+    const block = exploreResult(unlinked(), {
+      checks: { held: 0, failed: 0, undecided: 0 },
+      goals: [],
+      journeys: [{ title: 'Ana: pays', status: 'passed', by: 'replay' }],
+    });
+    expect(block.split('\n')[0]).toContain(`**Reticle result: ${ResultWord.PROVED}**`);
+  });
+
   it('checks that held over a goal the drive did not reach are not proved', () => {
     const block = exploreResult(unlinked(), {
       checks: { held: 2, failed: 0, undecided: 0 },

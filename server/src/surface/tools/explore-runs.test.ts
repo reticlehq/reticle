@@ -230,6 +230,24 @@ describe('the answer of a drive that ran the platform plan', () => {
     expect(out['savedFlows']).toEqual(['a']);
   });
 
+  /** One verdict: "0 of 1 journeys passed … PROVED" was the run's last line beside a Failed run. */
+  it("says the journeys' verdict, in `proved` and in the summary's first line", () => {
+    const held = {
+      id: 'c1',
+      name: 'reticle_act_and_wait',
+      args: { ref: 'e1', action: 'click', until: { kind: 'signal', name: 'x' } },
+      result: { verified: 'yes' },
+      isError: false,
+    };
+    const out = exploreReport({
+      ...base,
+      drive: { ...drive, toolCalls: [held] },
+      journeys: [{ title: 'Team', status: 'failed' }],
+    } as never);
+    expect(out['proved']).toBe(false);
+    expect(String(out['summary'])).toContain('NOT PROVED — 1 of 1 journey(s) failed');
+  });
+
   it('keeps the local plan and the driver account when nothing else planned it', () => {
     const out = exploreReport(base);
     expect(out['plan']).toEqual({ summary: '15 replays', steps: base.plan.steps });

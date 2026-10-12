@@ -20,7 +20,15 @@
 
 import { appFindings } from './app-findings.js';
 import { MSG_ROUTE_GUESS_MISSED, claimsOnlyRoute } from './route-guess.js';
-import { asRecord, asString, NO_SUCH_FLOW, ReticleTool, Verified } from '@reticlehq/core';
+import {
+  asRecord,
+  asString,
+  NO_SUCH_FLOW,
+  ReplayStatus,
+  ReticleTool,
+  ScriptStatus,
+  Verified,
+} from '@reticlehq/core';
 import type { ToolOutcome } from './harness.js';
 
 /** One driven action, reduced to what a reader needs: what was done, and what it proved. */
@@ -346,9 +354,47 @@ export function checkTally(toolCalls: readonly ToolOutcome[]): {
     if (before === undefined || 'failed' === now || ('undecided' === now && 'held' === before))
       worst.set(key, now);
   }
+  // A replayed flow is a check too: its own expects decided it. A passed replay counted as "no
+  // check" and its run read NOT PROVED beside a dashboard that said Passed.
+  for (const replay of replayedFlows(toolCalls)) {
+    const now = REPLAY_CHECK[replay.status ?? ''];
+    if (now === undefined) continue;
+    const key = `${ReticleTool.FLOW_REPLAY}|${replay.name}`;
+    const before = worst.get(key);
+    if (before === undefined || 'failed' === now || ('undecided' === now && 'held' === before))
+      worst.set(key, now);
+  }
   const tally = { held: 0, failed: 0, undecided: 0 };
   for (const verdict of worst.values()) tally[verdict] += 1;
   return tally;
+}
+
+/** A replay as a check. Guarded and missing never ran, so they are no check at all. */
+const REPLAY_CHECK: Readonly<Record<string, 'held' | 'failed' | 'undecided'>> = {
+  [ReplayOutcome.OK]: 'held',
+  [ReplayOutcome.ERROR]: 'failed',
+  [ReplayOutcome.DRIFT]: 'undecided',
+  [ReplayStatus.UNVERIFIABLE]: 'undecided',
+};
+
+/** A plan journey's status, as far as the run's verdict reads it. */
+export interface JourneyStatus {
+  status: string;
+}
+
+/**
+ * A plan run's verdict is its journeys', decided as the platform decides it (`planRunVerdict`): any
+ * failed → failed, else any passed → proved, else nothing proved. Undefined when there is no plan.
+ */
+function journeysLine(journeys: readonly JourneyStatus[], counts: string): string | undefined {
+  if (0 === journeys.length) return undefined;
+  const of = (status: string): number => journeys.filter((j) => status === j.status).length;
+  const total = String(journeys.length);
+  if (0 < of(ScriptStatus.FAILED))
+    return `NOT PROVED — ${String(of(ScriptStatus.FAILED))} of ${total} journey(s) failed${counts}.`;
+  if (0 < of(ScriptStatus.PASSED))
+    return `PROVED — ${String(of(ScriptStatus.PASSED))} of ${total} journey(s) passed${counts}.`;
+  return `NOT PROVED — no journey passed${counts}.`;
 }
 
 /**
@@ -359,10 +405,14 @@ export function checkTally(toolCalls: readonly ToolOutcome[]): {
 export function verdictLine(
   tally: { held: number; failed: number; undecided: number },
   goalMet?: boolean,
+  /** A plan's journeys: when there are any, their verdict is the run's. */
+  journeys: readonly JourneyStatus[] = [],
 ): string {
   const total = tally.held + tally.failed + tally.undecided;
-  if (0 === total) return 'NOT PROVED: the drive ran no check.';
   const counts = `${String(tally.held)} of ${String(total)} check(s) held, ${String(tally.failed)} failed, ${String(tally.undecided)} undecided`;
+  const planned = journeysLine(journeys, 0 === total ? '' : `; ${counts}`);
+  if (planned !== undefined) return planned;
+  if (0 === total) return 'NOT PROVED: the drive ran no check.';
   if (0 < tally.failed) return `NOT PROVED — ${counts}. The failures below are findings.`;
   if (0 < tally.undecided) return `NOT PROVED — ${counts}.`;
   // Checks that held on the way are not the journey done.
@@ -374,8 +424,9 @@ export function verdictLine(
 export function runProved(
   tally: { held: number; failed: number; undecided: number },
   goalMet?: boolean,
+  journeys: readonly JourneyStatus[] = [],
 ): boolean {
-  return verdictLine(tally, goalMet).startsWith('PROVED');
+  return verdictLine(tally, goalMet, journeys).startsWith('PROVED');
 }
 
 export function describeDrive(
@@ -383,6 +434,7 @@ export function describeDrive(
   savedFlows: readonly string[],
   unverifiedFlows: readonly string[] = [],
   goalMet?: boolean,
+  journeys: readonly JourneyStatus[] = [],
 ): string {
   const steps = drivenSteps(toolCalls);
   const replays = replayedFlows(toolCalls);
@@ -442,7 +494,7 @@ export function describeDrive(
 
   const pages = pagesReached(toolCalls);
   const lines: string[] = [
-    verdictLine(checkTally(toolCalls), goalMet),
+    verdictLine(checkTally(toolCalls), goalMet, journeys),
     ...(replayLine === undefined ? [] : [replayLine]),
     `Drove ${String(steps.length)} action(s): ${String(proved.length)} proved, ` +
       `${String(failed.length)} failed, ${String(undecided.length)} not decided.`,

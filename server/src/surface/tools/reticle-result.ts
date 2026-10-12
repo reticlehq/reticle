@@ -15,6 +15,7 @@ import {
   JournalVerdictEffectSchema,
   ReticleDir,
   RunFlowStatus,
+  ScriptStatus,
   Verified,
   apiKeyFrom,
   type FlowReplayResult,
@@ -22,6 +23,7 @@ import {
   type SuiteVerdict,
 } from '@reticlehq/core';
 import { JourneyBy } from '@reticlehq/core/artifacts';
+import { verdictLine } from '@/features/harness/drive-report.js';
 import { mapReplayToFlowResult } from '@/judgement/runs/artifact/replay-mapping.js';
 import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
 import { driveRunId } from '@/judgement/runs/drive-run.js';
@@ -333,9 +335,28 @@ export function exploreResult(root: string, drive: DriveFacts): string {
     screenshots: (drive.runIds ?? []).flatMap((id) => shotsOf(root, id)),
     platform: platformLine(root, process.env, drive.runIds?.[0]),
   });
+  // A plan's verdict is its journeys' (the same line the run ends on), never a count beside it.
+  if (0 < journeys.length) {
+    const line = verdictLine(drive.checks, drive.goalMet, journeys);
+    const word = line.startsWith(PROVED_LINE)
+      ? Verified.YES
+      : journeys.some((j) => ScriptStatus.FAILED === j.status)
+        ? Verified.NO
+        : Verified.UNKNOWN;
+    return WORD_FOR[word] === headWord(block)
+      ? block
+      : retitleResult(block, word, (line.split(' — ')[1] ?? line).replace(/\.$/, ''));
+  }
   return 0 === no && 0 === undecided && 0 < yes && false === drive.goalMet
     ? retitleResult(block, Verified.UNKNOWN, MSG_GOAL_NOT_REACHED)
     : block;
+}
+
+const PROVED_LINE = 'PROVED';
+
+/** The verdict word a block's headline carries. */
+function headWord(block: string): string | undefined {
+  return block.slice(HEAD.length).split('**')[0];
 }
 
 /**

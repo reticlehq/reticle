@@ -449,7 +449,7 @@ export function exploreReport(explored: ExploreResult): Record<string, unknown> 
     rewroteFlows: [...rewroteFlows],
     unverifiedFlows: [...unverifiedFlows],
     // The headline's own word, so the answer never says NOT PROVED beside `proved: true`.
-    proved: runProved(checks, drive.goalMet),
+    proved: runProved(checks, drive.goalMet, journeys),
     checks,
     ...(drive.goalMet === undefined ? {} : { goalMet: drive.goalMet }),
     ...(runIds === undefined ? {} : { runIds: [...runIds] }),
@@ -485,6 +485,7 @@ export function exploreReport(explored: ExploreResult): Record<string, unknown> 
         [...savedFlows, ...rewroteFlows],
         unverifiedFlows,
         drive.goalMet,
+        journeys,
       ),
       ...[unprovedGoals(goals)].filter((line): line is string => line !== undefined),
     ].join('\n'),

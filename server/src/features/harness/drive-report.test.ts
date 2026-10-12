@@ -1,6 +1,6 @@
 import { invokedFlowMissing } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
-import { checkTally, describeDrive, drivenSteps } from './drive-report.js';
+import { checkTally, describeDrive, drivenSteps, runProved, verdictLine } from './drive-report.js';
 import type { ToolOutcome } from './harness.js';
 
 /**
@@ -548,5 +548,52 @@ describe('a replayed flow that is not on this computer', () => {
     const account = describeDrive([calls], []);
     expect(account).toContain('MISSING: drive-order-confirmed');
     expect(account).not.toContain('regressions');
+  });
+});
+
+/**
+ * A plan run has one verdict, and it is its journeys'. A live run ended "0 of 1 journeys passed …
+ * PROVED — 1 of 1 check(s) held" beside a dashboard that said Failed, and a passed replay ended
+ * "1 of 1 journeys passed … NOT PROVED: the drive ran no check" beside one that said Passed.
+ */
+describe('a plan run has one verdict: its journeys', () => {
+  const replay = (name: string, status: string): ToolOutcome =>
+    call('reticle_flow_replay', { flowName: name }, { status });
+
+  it('a failed journey is not proved, whatever its checks did', () => {
+    const tally = { held: 1, failed: 0, undecided: 0 };
+    const journeys = [{ status: 'failed' }];
+    expect(verdictLine(tally, undefined, journeys)).toMatch(/^NOT PROVED/);
+    expect(verdictLine(tally, undefined, journeys)).toContain('1 of 1 journey(s) failed');
+    expect(runProved(tally, undefined, journeys)).toBe(false);
+  });
+
+  it('a passed replay is proved, and its replay is the check it ran', () => {
+    const tally = checkTally([replay('sign-in', 'ok')]);
+    expect(tally).toEqual({ held: 1, failed: 0, undecided: 0 });
+    const journeys = [{ status: 'passed' }];
+    expect(verdictLine(tally, undefined, journeys)).toMatch(/^PROVED/);
+    expect(runProved(tally, undefined, journeys)).toBe(true);
+  });
+
+  it('a replay that failed is a failed check, and one that drifted decided nothing', () => {
+    expect(checkTally([replay('a', 'error'), replay('b', 'drift')])).toEqual({
+      held: 0,
+      failed: 1,
+      undecided: 1,
+    });
+  });
+
+  it('a plan whose journeys never ran proves nothing, like the dashboard', () => {
+    expect(
+      runProved({ held: 2, failed: 0, undecided: 0 }, undefined, [{ status: 'blocked' }]),
+    ).toBe(false);
+  });
+
+  it('the account the agent reads leads with the same verdict', () => {
+    const summary = describeDrive([replay('sign-in', 'ok')], [], [], undefined, [
+      { status: 'passed' },
+    ]);
+    expect(summary).not.toContain('NOT PROVED');
   });
 });

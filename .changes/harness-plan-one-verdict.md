@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a Harness plan run said one verdict on its last line and another on the dashboard.** A run whose only journey failed ended "0 of 1 journeys passed … PROVED — 1 of 1 check(s) held", and a journey that passed by replaying a saved flow ended "NOT PROVED: the drive ran no check". A plan's verdict is now its journeys' — any failed is not proved, otherwise any passed is proved — the same rule the dashboard uses, and the HUD's last line, the answer's `proved`, its summary and the Reticle result block all read it from one place. A replayed flow now counts as the check it is.
