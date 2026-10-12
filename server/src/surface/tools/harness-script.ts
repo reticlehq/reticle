@@ -32,6 +32,7 @@ import {
   actedOnApp,
   checkTally,
   pagesReached,
+  typedValues,
   verdictLine,
 } from '@/features/harness/drive-report.js';
 import {
@@ -368,6 +369,7 @@ async function runPlan(
             map,
             own,
             reached: pagesReached(result.toolCalls),
+            typed: typedValues(result.toolCalls),
           }),
         );
       if (persona !== undefined) {
@@ -476,7 +478,6 @@ async function runPlan(
     const runId = harnessRunId(id);
     return runId === undefined ? [] : [runId];
   });
-  if (planId !== undefined) await reportPlanResults(platform, planId, results, runIds);
   const unverifiedFlows = await flowsThatCheckNothing(reads, [
     ...reconciled.savedFlows,
     ...reconciled.rewroteFlows,
@@ -499,11 +500,21 @@ async function runPlan(
           map,
           own,
           reached: pagesReached(run.toolCalls),
+          typed: typedValues(run.toolCalls),
         });
   const goals = graded.goals;
   for (const id of lanes.all()) noteHarnessDisparity(id, graded.disparity);
   const goalMet = goalOfDrive(drive.goalMet, goals, actedOnApp(run.toolCalls));
   if (0 < goals.length) for (const id of lanes.all()) noteHarnessGoal(id, goalMet);
+  // After the goals are graded: a journey that "passed" over goals that came back unmet is not.
+  // ponytail: one run-wide goalMet on every journey; per-journey once lanes grade their own goals.
+  if (planId !== undefined)
+    await reportPlanResults(
+      platform,
+      planId,
+      goalMet === undefined ? results : results.map((r) => ({ ...r, goalMet })),
+      runIds,
+    );
   // ponytail: every lane is given the run's time; per-lane timing if lanes ever report their own.
   for (const id of lanes.all()) noteHarnessSpan(id, deps.now() - runStarted);
   return {

@@ -23,6 +23,7 @@ import { MSG_ROUTE_GUESS_MISSED, claimsOnlyRoute } from './route-guess.js';
 import {
   asRecord,
   asString,
+  ActionType,
   NO_SUCH_FLOW,
   ReplayStatus,
   ReticleTool,
@@ -322,6 +323,26 @@ export function pagesReached(toolCalls: readonly ToolOutcome[]): string[] {
     if (route !== undefined && !pages.includes(route)) pages.push(route);
   }
   return pages;
+}
+
+/** The values the drive's acts filled or typed, sequence steps included. */
+export function typedValues(toolCalls: readonly ToolOutcome[]): string[] {
+  const out: string[] = [];
+  const read = (act: Record<string, unknown>): void => {
+    const inner = asRecord(act['args']);
+    const value = asString(inner['value']) ?? asString(inner['text']);
+    if (
+      value !== undefined &&
+      (ActionType.FILL === act['action'] || ActionType.TYPE === act['action'])
+    )
+      out.push(value);
+  };
+  for (const call of toolCalls) {
+    const steps = call.args['steps'];
+    if (Array.isArray(steps)) for (const step of steps) read(asRecord(step));
+    else read(call.args);
+  }
+  return out;
 }
 
 /** How the drive's checks came out: act_and_wait with an `until`, and asserts. */

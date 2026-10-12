@@ -1,6 +1,13 @@
 import { invokedFlowMissing } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
-import { checkTally, describeDrive, drivenSteps, runProved, verdictLine } from './drive-report.js';
+import {
+  checkTally,
+  describeDrive,
+  drivenSteps,
+  runProved,
+  typedValues,
+  verdictLine,
+} from './drive-report.js';
 import type { ToolOutcome } from './harness.js';
 
 /**
@@ -629,5 +636,22 @@ describe("a plan run's summary leads with its journeys", () => {
     const summary = describeDrive([], [], [], undefined, [{ status: 'failed' }]);
     expect(summary.split('\n')[0]).toMatch(/^NOT PROVED — 1 of 1 journey\(s\) failed/);
     expect(summary).not.toContain('Nothing was driven');
+  });
+});
+
+describe('the values a drive typed', () => {
+  it('are the fill and type values of its acts, steps included', () => {
+    expect(
+      typedValues([
+        call('reticle_act', { ref: 'e1', action: 'fill', args: { value: 'Nina release 2' } }, {}),
+        call('reticle_act_and_wait', { ref: 'e2', action: 'type', args: { text: 'hello' } }, {}),
+        call(
+          'reticle_act',
+          { steps: [{ ref: 'e3', action: 'fill', args: { value: 'Fixed it' } }] },
+          {},
+        ),
+        call('reticle_act', { ref: 'e4', action: 'click' }, {}),
+      ]),
+    ).toEqual(['Nina release 2', 'hello', 'Fixed it']);
   });
 });

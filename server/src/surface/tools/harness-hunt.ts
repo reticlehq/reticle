@@ -6,7 +6,13 @@
 import { dirname, join } from 'node:path';
 import type { RunDisparity } from '@reticlehq/core';
 import type { HarnessMap } from '@reticlehq/core/artifacts';
-import { checkExpect, checkGoals, type Goal, type GoalCheck } from '@/features/harness/goals.js';
+import {
+  checkExpect,
+  checkGoals,
+  endGoalsOf,
+  type Goal,
+  type GoalCheck,
+} from '@/features/harness/goals.js';
 import type { ToolOutcome } from '@/features/harness/harness.js';
 import { ReticleTool } from '@reticlehq/core';
 import { searchForGoal } from '@/features/harness/explore/goal-search.js';
@@ -227,13 +233,18 @@ export async function huntAndGrade(
     own?: readonly string[] | undefined;
     /** The pages the drive reached (`pagesReached`), searched when the end is not where it stopped. */
     reached?: readonly string[] | undefined;
+    /** The values the drive typed (`typedValues`): inputs, graded only when one is the end. */
+    typed?: readonly string[] | undefined;
   },
 ): Promise<Graded> {
   const moved: ToolOutcome[] = [];
   const invoke = keepingMoves(driving, moved);
   // The journey names the plan and the flows this run saves: shown back on a page, it proves nothing.
   const own = [...(ask.own ?? []), ...(ask.journey === undefined ? [] : [ask.journey])];
-  const goals = ask.goals.map((g) => ('string' === typeof g ? { text: g } : g));
+  const goals = endGoalsOf(
+    ask.goals.map((g) => ('string' === typeof g ? { text: g } : g)),
+    ask.typed ?? [],
+  );
   const end = goals
     .filter((g) => true !== g.absent && true !== ask.opening?.includes(g.text))
     .at(-1);

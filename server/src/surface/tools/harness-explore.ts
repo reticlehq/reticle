@@ -35,6 +35,7 @@ import {
   actedOnApp,
   checkTally,
   pagesReached,
+  typedValues,
   verdictLine,
 } from '@/features/harness/drive-report.js';
 import { CUSTOM_DRIVER_NAME, SERVER_DRIVER } from '@/features/harness/drivers.js';
@@ -479,6 +480,7 @@ export async function exploreApp(
     journey: options.focus,
     map,
     reached: pagesReached(drive.toolCalls),
+    typed: typedValues(drive.toolCalls),
   });
   const goals = graded.goals;
   noteHarnessDisparity(harnessId, graded.disparity);

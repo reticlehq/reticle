@@ -369,3 +369,14 @@ export function unprovedGoals(checks: readonly GoalCheck[]): string | undefined 
     'The drive did not finish the job it was given, whatever its own account says.'
   );
 }
+
+/**
+ * The goals a drive is graded on: every quote, less a value the drive typed — an input, never
+ * evidence — except the journey's end (its last text to show), which stays even when typed: saving
+ * "Order 7" and then seeing it listed is the journey. Absence goals always stay.
+ */
+export function endGoalsOf(goals: readonly Goal[], typed: readonly string[]): Goal[] {
+  const end = goals.filter((g) => true !== g.absent).at(-1);
+  const inputs = new Set(typed.map((t) => t.trim()));
+  return goals.filter((g) => true === g.absent || g === end || !inputs.has(g.text.trim()));
+}

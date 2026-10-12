@@ -3,6 +3,7 @@ import { asRecord, ReticleTool } from '@reticlehq/core';
 import {
   checkExpect,
   checkGoals,
+  endGoalsOf,
   goalOfDrive,
   goalsIn,
   goalsMet,
@@ -328,5 +329,30 @@ describe('the goal verdict a drive reports', () => {
     expect(goalOfDrive(true, [], true)).toBe(true);
     expect(goalOfDrive(undefined, [], true)).toBeUndefined();
     expect(goalOfDrive(undefined, [], false)).toBeUndefined();
+  });
+});
+
+/*
+ * A re-drive graded "Nina release 2" and "Fixed the login timeout" (values the drive TYPED) as goals,
+ * "no", beside an end text the page showed. A value the drive typed is an input; only the journey's
+ * end (its last quote) is graded even when it was typed, because saving "Order 7" and then seeing
+ * "Order 7" in the list is exactly the journey.
+ */
+describe('the goals a drive is graded on', () => {
+  it('leaves out a quoted value the drive typed, but never the end', () => {
+    expect(
+      endGoalsOf(
+        [
+          { text: 'Nina release 2' },
+          { text: 'Fixed the login timeout' },
+          { text: 'Generated script' },
+        ],
+        ['Nina release 2', 'Fixed the login timeout'],
+      ),
+    ).toEqual([{ text: 'Generated script' }]);
+    expect(endGoalsOf([{ text: 'Order 7' }], ['Order 7'])).toEqual([{ text: 'Order 7' }]);
+    expect(
+      endGoalsOf([{ text: 'payments', absent: true }, { text: 'Passed' }], ['payments']),
+    ).toEqual([{ text: 'payments', absent: true }, { text: 'Passed' }]);
   });
 });

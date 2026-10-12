@@ -196,6 +196,8 @@ export interface JourneyResult {
   credits?: number;
   /** The flows it replayed or recorded: the platform links the journey to these. */
   flows?: string[];
+  /** Whether the goals the run was asked were reached, once graded. Absent when none were judged. */
+  goalMet?: boolean;
 }
 
 /** How one journey that ran was answered, from the run (`JourneyRun`). */
