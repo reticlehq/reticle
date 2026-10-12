@@ -19,7 +19,7 @@
  */
 
 import { appFindings } from './app-findings.js';
-import { MSG_ROUTE_GUESS_MISSED, claimsOnlyRoute } from './route-guess.js';
+import { MSG_OPENED_MENU, MSG_ROUTE_GUESS_MISSED, claimsOnlyRoute } from './route-guess.js';
 import {
   asRecord,
   asString,
@@ -42,6 +42,8 @@ export interface DrivenStep {
   target: string;
   /** The engine's verdict for this step, when the step declared anything. */
   verified: string | undefined;
+  /** A route claim that missed: the driver's own guess, or a menu it opened. Never a check. */
+  guess?: true;
   /** The one sentence naming the deciding evidence. */
   because: string | undefined;
   /**
@@ -272,7 +274,10 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
     const action =
       ReticleTool.NAVIGATE === call.name ? 'navigate' : (asString(args['action']) ?? 'act');
     const guessMissed = !call.isError && routeGuessMissed(args, result);
+    // A menu or dialog it opened is the way to the route it named, not a wrong guess.
+    const opened = guessMissed && 0 < openedADialog(result, toolCalls.slice(index + 1)).length;
     steps.push({
+      ...(guessMissed ? { guess: true as const } : {}),
       action,
       target: targetOf(args, result),
       verified: call.isError
@@ -282,13 +287,16 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
           : asString(result['verified']),
       because: call.isError
         ? asString(result['error'])
-        : guessMissed
-          ? MSG_ROUTE_GUESS_MISSED
-          : asString(result['because']),
+        : opened
+          ? MSG_OPENED_MENU
+          : guessMissed
+            ? MSG_ROUTE_GUESS_MISSED
+            : asString(result['because']),
       claimed: describeClaim(args['until']),
-      evidence: call.isError
-        ? []
-        : [...evidenceOf(result), ...openedADialog(result, toolCalls.slice(index + 1))],
+      evidence:
+        call.isError || opened
+          ? []
+          : [...evidenceOf(result), ...openedADialog(result, toolCalls.slice(index + 1))],
     });
   }
   return steps;
@@ -524,8 +532,11 @@ export function describeDrive(
 
   const proved = steps.filter((step) => Verified.YES === step.verified);
   const failed = steps.filter((step) => Verified.NO === step.verified);
+  // The driver's own route guesses are no check (as `checkTally` counts), so not "not decided".
+  const guesses = steps.filter((step) => true === step.guess);
   const undecided = steps.filter(
-    (step) => Verified.YES !== step.verified && Verified.NO !== step.verified,
+    (step) =>
+      true !== step.guess && Verified.YES !== step.verified && Verified.NO !== step.verified,
   );
 
   const pages = pagesReached(toolCalls);
@@ -533,7 +544,8 @@ export function describeDrive(
     verdictLine(checkTally(toolCalls), goalMet, journeys),
     ...(replayLine === undefined ? [] : [replayLine]),
     `Drove ${String(steps.length)} action(s): ${String(proved.length)} proved, ` +
-      `${String(failed.length)} failed, ${String(undecided.length)} not decided.`,
+      `${String(failed.length)} failed, ${String(undecided.length)} not decided` +
+      (0 === guesses.length ? '.' : `; ${String(guesses.length)} guess of its own, not a check.`),
     // How DEEP it got. An action count reads the same for a checkout walked to its receipt and for
     // eleven clicks on the home page; the pages reached are what tell them apart.
     ...(0 === pages.length
@@ -542,7 +554,7 @@ export function describeDrive(
     ...appFindings(toolCalls),
   ];
 
-  const listed = [...failed, ...proved, ...undecided].slice(
+  const listed = [...failed, ...proved, ...undecided, ...guesses].slice(
     0,
     Math.max(MAX_LISTED, Math.min(failed.length, MAX_FAILED)),
   );

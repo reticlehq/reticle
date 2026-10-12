@@ -522,6 +522,27 @@ describe("the driver's wrong guess about the route", () => {
     expect(account).toContain("the driver's wrong guess, not an app defect");
   });
 
+  // A re-drive: "1 of 1 check(s) held" beside "Drove 2 action(s): 1 proved, 1 not decided" — the
+  // guess was left out of one count and put in the other. One rule for both lines.
+  it('is counted the same way in the action line as in the checks', () => {
+    const account = describeDrive([guessed, held], []);
+    expect(account).toContain('0 failed, 0 not decided; 1 guess of its own');
+    expect(account).toContain('1 guess of its own');
+  });
+
+  // Pressing the workspace switcher opens a menu; the route the drive named comes after a choice
+  // in it. That is progress, never "the driver's wrong guess".
+  it('is progress when the click opened a menu', () => {
+    const menu = call(
+      'reticle_snapshot',
+      {},
+      { status: { visibleDialogs: ['menu "Workspaces"'] } },
+    );
+    const account = describeDrive([guessed, menu, held], []);
+    expect(account).not.toContain("the driver's wrong guess");
+    expect(account).toContain('opened a menu');
+  });
+
   it('still fails a click whose claim was more than a route', () => {
     const net = call(
       'reticle_act_and_wait',

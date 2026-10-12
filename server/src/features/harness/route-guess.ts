@@ -16,6 +16,10 @@ import { PredicateKind, asRecord, asString } from '@reticlehq/core';
 export const MSG_ROUTE_GUESS_MISSED =
   "the drive guessed this would change the route and it did not go where it said: the driver's wrong guess, not an app defect";
 
+/** Said of a route claim whose click opened a menu or dialog instead: the route comes after it. */
+export const MSG_OPENED_MENU =
+  'it opened a menu or dialog; the route it named comes after a choice in it — progress, not a check';
+
 /** Whether a declared predicate claims nothing but a route (or leaving one). */
 export function claimsOnlyRoute(predicate: unknown): boolean {
   const p = asRecord(predicate);
