@@ -26,7 +26,7 @@ const call = (
 const acted = (target: string, verified: string, because = 'evidence') =>
   call(
     'reticle_act_and_wait',
-    { ref: 'e1', action: 'click' },
+    { ref: 'e1', action: 'click', until: { kind: 'signal', name: target } },
     { element: target, verified, because },
   );
 
@@ -91,12 +91,16 @@ describe('the account an agent reads', () => {
    * The whole point. Twelve actions driven is not twelve things working, and an account that only
    * counted actions would be read as if it were.
    */
-  it('counts proved, failed and not-proved separately', () => {
+  // Counted once, in the checks line: a second breakdown on the action line ("3 of 3 check(s)
+  // held" beside "Drove 2 action(s): 2 proved") gave every Harness answer two counts to reconcile.
+  it('counts held, failed and undecided once, in the checks line', () => {
     const summary = describeDrive(
       [acted('a', 'yes'), acted('b', 'no'), acted('c', 'unknown'), acted('d', 'yes')],
       [],
     );
-    expect(summary).toContain('4 action(s): 2 proved, 1 failed, 1 not decided');
+    expect(summary).toContain('check(s) held, 1 failed, 1 undecided');
+    expect(summary).toContain('Drove 4 action(s).');
+    expect(summary).not.toContain('2 proved');
   });
 
   it('says which saved flows check nothing, instead of offering them as replays', () => {
@@ -133,7 +137,7 @@ describe('the account an agent reads', () => {
       [call('reticle_act', { ref: 'e1', action: 'click' }, { element: 'button "X"' })],
       [],
     );
-    expect(summary).toContain('0 proved');
+    expect(summary).toContain('Drove 1 action(s).');
     expect(summary).toContain('nothing declared');
   });
 
@@ -146,7 +150,7 @@ describe('the account an agent reads', () => {
   it('stops naming steps once there are too many to read, and says how many it left out', () => {
     const many = Array.from({ length: 20 }, (_, i) => acted(`button ${String(i)}`, 'yes'));
     const summary = describeDrive(many, []);
-    expect(summary).toContain('20 action(s): 20 proved');
+    expect(summary).toContain('Drove 20 action(s).');
     expect(summary).toContain('and 8 more');
   });
 
@@ -226,7 +230,7 @@ describe('a run that replayed rather than drove', () => {
   it('reports replays alongside actions when the run did both', () => {
     const summary = describeDrive([replay('sign-in', 'ok'), acted('button "X"', 'yes')], []);
     expect(summary).toContain('Replayed 1 recorded journey(s)');
-    expect(summary).toContain('1 proved');
+    expect(summary).toContain('Drove 1 action(s)');
   });
 
   it('still says plainly when a run did neither', () => {
@@ -526,7 +530,7 @@ describe("the driver's wrong guess about the route", () => {
   // guess was left out of one count and put in the other. One rule for both lines.
   it('is counted the same way in the action line as in the checks', () => {
     const account = describeDrive([guessed, held], []);
-    expect(account).toContain('0 failed, 0 not decided; 1 guess of its own');
+    expect(account).toContain('Drove 1 action(s); 1 guess of its own, not a check.');
     expect(account).toContain('1 guess of its own');
   });
 

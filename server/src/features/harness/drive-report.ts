@@ -543,8 +543,8 @@ export function describeDrive(
   const lines: string[] = [
     verdictLine(checkTally(toolCalls), goalMet, journeys),
     ...(replayLine === undefined ? [] : [replayLine]),
-    `Drove ${String(steps.length)} action(s): ${String(proved.length)} proved, ` +
-      `${String(failed.length)} failed, ${String(undecided.length)} not decided` +
+    // The outcomes are counted once, in the checks line above: no second breakdown here.
+    `Drove ${String(steps.length)} action(s)` +
       (0 === guesses.length ? '.' : `; ${String(guesses.length)} guess of its own, not a check.`),
     // How DEEP it got. An action count reads the same for a checkout walked to its receipt and for
     // eleven clicks on the home page; the pages reached are what tell them apart.
