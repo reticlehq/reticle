@@ -163,6 +163,18 @@ describe('what the Harness may press', () => {
     expect(outwardActionOf('Remove', 'option')).toBeUndefined();
   });
 
+  // A re-drive: in a read-only journey ("opens the fixed issue…") the Harness pressed Reassign and
+  // Reopen, declaring a write for each. Changing an item's state is an outward action too.
+  it("names changing an item's state, and a journey that only looks asks for none", () => {
+    expect(outwardActionOf('Reassign')).toBe(OutwardAction.CHANGE_STATE);
+    expect(outwardActionOf('Reopen issue')).toBe(OutwardAction.CHANGE_STATE);
+    expect(outwardActionOf('Archive')).toBe(OutwardAction.CHANGE_STATE);
+    expect(outwardActionsAsked('Ben opens the fixed issue and reads who fixed it')).toEqual([]);
+    expect(outwardActionsAsked('Reopen the issue and check it is open again')).toEqual([
+      OutwardAction.CHANGE_STATE,
+    ]);
+  });
+
   it('reads what a journey asks for, and what it forbids', () => {
     expect(outwardActionsAsked('Invite a teammate by email and check the row appears')).toEqual([
       OutwardAction.INVITE,

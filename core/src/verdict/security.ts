@@ -152,6 +152,8 @@ export const OutwardAction = {
   SIGN_OUT: 'sign out',
   CHANGE_ROLE: 'change role',
   CREATE_KEY: 'create key',
+  /** Reassigning, reopening, archiving, approving: changing an item's state for everyone. */
+  CHANGE_STATE: 'change state',
 } as const;
 export type OutwardAction = (typeof OutwardAction)[keyof typeof OutwardAction];
 
@@ -177,6 +179,10 @@ const OUTWARD_WORDS: readonly (readonly [OutwardAction, RegExp])[] = [
     /\b(?:change (?:the |their |his |her )?role|make (?:an? )?(?:admin|owner)|promote|demote|set role)\b/i,
   ],
   [OutwardAction.CREATE_KEY, /\b(?:create|generate|new|mint)(?: an?)?(?: api)? key\b|\/keys\b/i],
+  [
+    OutwardAction.CHANGE_STATE,
+    /\b(?:reassign|reassigns|reopen|reopens|re-open|archive|archives|unarchive|approve|approves|reject|rejects|mark as (?:fixed|resolved|done|closed))\b/i,
+  ],
 ];
 
 /** The outward action a control would take, from its text and role; value pickers take none. */
