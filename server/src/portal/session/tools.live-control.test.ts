@@ -370,6 +370,33 @@ describe('live-control: agent tools', () => {
     ]);
   });
 
+  /** An agent whose one check held was told "failed · 14 of 99": the tab's Harness drives counted. */
+  it("reticle_end_session counts the agent's own checks, never the Harness drives in the same tab", async () => {
+    const verdict = (claim: string, verified: Verified, at: number, harness?: string) => ({
+      v: 1 as const,
+      actionId: `c${String(at)}`,
+      tool: 'reticle_act_and_wait',
+      args: {},
+      effect: { claim, verified },
+      tRange: { from: at, to: at },
+      at,
+      ...(harness === undefined ? {} : { drivenBy: { harness, driver: 'server' } }),
+    });
+    const session = Object.assign(fakeSession({ state: SessionState.ACTIVE }), {
+      id: 'tab-with-harness',
+      readJournalActions: () =>
+        Promise.resolve([
+          verdict('a request POST matching /api/login', Verified.YES, 1),
+          verdict('refund posted', Verified.NO, 2, 'h1'),
+          verdict('row removed', Verified.NO, 3, 'h1'),
+        ]),
+    });
+    const res = (await tool(ReticleTool.SESSION).handler(fakeDeps(session), {
+      action: 'end',
+    })) as { reticleResult: string };
+    expect(res.reticleResult.split('\n')[0]).toBe('**Reticle result: proved** · 1 of 1 check held');
+  });
+
   it('reticle_end_session works with no summary', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE });
     const res = (await tool(ReticleTool.SESSION).handler(fakeDeps(session), { action: 'end' })) as {

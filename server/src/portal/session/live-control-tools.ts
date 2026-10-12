@@ -16,7 +16,12 @@ import type { SessionManager } from './session-manager.js';
 import { gapReportLines } from '@/judgement/runs/artifact/gap-report.js';
 import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
 import { DiscoveryInvite } from '@reticlehq/core';
-import { RESULT_FIELD, resultField, sessionResult } from '@/surface/tools/reticle-result.js';
+import {
+  RESULT_FIELD,
+  endedAgentSession,
+  resultField,
+  sessionResult,
+} from '@/surface/tools/reticle-result.js';
 
 /**
  * The session an id-less yield hands back.
@@ -153,7 +158,11 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       // rather than becoming a rejected promise the caller did not expect.
       const session = deps.sessions.resolve(requested);
       const summary = asString(args['summary']);
-      return session.readJournalActions().then((actions) => {
+      return session.readJournalActions().then((all) => {
+        // This agent session only: its own calls since its last end, never the Harness drives the
+        // tab also holds, and under its own run id so a later end does not overwrite this run.
+        const ended = endedAgentSession(session.id, all, session.elapsed?.());
+        const actions = ended.actions;
         // The moment the agent calls the task complete is when "and what did not hold" is worth a
         // line: the same fold `reticle_context` and `reticle report` serve, so they cannot disagree.
         const gap = gapReportLines(gapSummary(actions));
@@ -166,15 +175,7 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
           sessionId: session.id,
           ...(detach ? { disconnected: true } : {}),
           gap,
-          ...resultField(() =>
-            sessionResult(
-              deps,
-              session.id,
-              actions,
-              // Optional-call: a test double is a partial Session.
-              session.elapsed?.(),
-            ),
-          ),
+          ...resultField(() => sessionResult(deps, session.id, actions, ended.wallMs, ended.runId)),
           talk_to_us: DiscoveryInvite.AGENT,
         };
       });

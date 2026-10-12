@@ -28,7 +28,7 @@ import { type ProjectId, subjectOf, type JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { pruneWorkspace, type PruneWorkspaceOptions } from './on-disk/startup-maintenance.js';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
-import { driveRunId, driveRunsFrom } from '@/judgement/runs/drive-run.js';
+import { agentEndCounts, driveRunId, driveRunsFrom } from '@/judgement/runs/drive-run.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
 
 /**
@@ -308,6 +308,8 @@ export async function recordDriveRun(
     // the first. A stable id makes the artifact idempotent: the same session rewrites its own run,
     // and the cloud diffs by runId, so a re-push supersedes rather than duplicates.
     runId: driveRunId(session.id),
+    // Each agent session in the tab, as `reticle_session {end}` cut them, is its own run.
+    agentEnds: agentEndCounts(session.id),
     ...(session.projectId === undefined ? {} : { projectId: session.projectId }),
   });
   if (0 === inputs.length) return;

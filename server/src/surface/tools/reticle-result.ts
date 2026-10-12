@@ -26,7 +26,7 @@ import { JourneyBy } from '@reticlehq/core/artifacts';
 import { verdictLine } from '@/features/harness/drive-report.js';
 import { mapReplayToFlowResult } from '@/judgement/runs/artifact/replay-mapping.js';
 import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
-import { driveRunId } from '@/judgement/runs/drive-run.js';
+import { driveRunId, endAgentSession } from '@/judgement/runs/drive-run.js';
 import { stepShotDir } from '@/memory/project/dir/reticle-dir.js';
 import { TRIAL_OFFER } from '@reticlehq/core/hud';
 import { dashboardRunUrl, readDashboardUrl } from '@/memory/project/sync-status.js';
@@ -369,6 +369,7 @@ export function sessionResult(
   sessionId: string,
   actions: readonly JournalAction[],
   wallMs: number | undefined,
+  runId: string = driveRunId(sessionId),
 ): string {
   const gap = gapSummary(actions);
   const held = [
@@ -379,7 +380,6 @@ export function sessionResult(
       }),
     ),
   ];
-  const runId = driveRunId(sessionId);
   // The session's project, never wherever the daemon was launched.
   const root = sessionRoot(deps, sessionId);
   return buildReticleResult({
@@ -395,6 +395,18 @@ export function sessionResult(
     screenshots: shotsOf(root, runId),
     platform: platformLine(root, process.env, 0 < gap.claims ? runId : undefined),
   });
+}
+
+/**
+ * What an ending agent session reports: its own calls since its previous end in the tab, never the
+ * Harness drives the tab also holds, and the run they are kept under.
+ */
+export function endedAgentSession(
+  sessionId: string,
+  actions: readonly JournalAction[],
+  at: number | undefined,
+): { actions: JournalAction[]; runId: string; wallMs?: number } {
+  return endAgentSession(sessionId, actions, at);
 }
 
 /** The block as a field, or no field: the block is advice, never the reason a result throws. */

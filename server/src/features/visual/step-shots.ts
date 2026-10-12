@@ -31,7 +31,7 @@ import {
 } from '@reticlehq/core';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
 import { currentShotRun } from '@/judgement/runs/default-run-id.js';
-import { driveRunId, harnessRunId } from '@/judgement/runs/drive-run.js';
+import { agentRunId, harnessRunId } from '@/judgement/runs/drive-run.js';
 import { noteLanding } from '@/judgement/runs/artifact/run-store.js';
 import { isValidRunId, stepShotDir } from '@/memory/project/dir/reticle-dir.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
@@ -97,7 +97,7 @@ function runIdFor(sessionId: string): string {
   if (scoped !== undefined) return scoped;
   const by = currentDrivenBy();
   const harness = by === undefined ? undefined : harnessRunId(by.harness);
-  return harness ?? driveRunId(sessionId);
+  return harness ?? agentRunId(sessionId);
 }
 
 /** A real screenshot of a page this daemon drives, or undefined when it drives none for this tab. */

@@ -61,6 +61,8 @@ export interface DriveRunDeps {
    * Absent when nobody was counting edits, which must not be reported as "the first round".
    */
   editEpoch?: number | undefined;
+  /** Where each agent session in the tab ended (`agentEndCounts`): each is folded on its own. */
+  agentEnds?: readonly number[];
 }
 
 /**
@@ -127,6 +129,57 @@ const DRIVE_RUN_PREFIX = 'drive-';
 export function driveRunId(sessionId: string): string {
   const candidate = `${DRIVE_RUN_PREFIX}${sessionId}`;
   return isValidRunId(candidate) ? candidate : defaultRunId();
+}
+
+/** The run of the `segment`th agent session in a tab: the tab's id first, then `-2`, `-3`… */
+function segmentRunId(base: string, segment: number): string {
+  if (0 === segment) return base;
+  const id = `${base}-${String(segment + 1)}`;
+  return isValidRunId(id) ? id : base;
+}
+
+/**
+ * Where each agent session in a tab ended: how many of the agent's own actions the tab held then,
+ * and the tab's clock. Every agent session in a tab wrote one run id, so a later end overwrote the
+ * earlier run on the dashboard.
+ * ponytail: daemon memory; a restart forgets the ends and the next fold is one run, as before.
+ */
+const agentEnds = new Map<string, { count: number; at: number }[]>();
+
+/** The agent's own actions: the Harness drives in the same tab are runs of their own. */
+const agentsOwn = (actions: readonly JournalAction[]): JournalAction[] =>
+  actions.filter((action) => action.drivenBy === undefined);
+
+/** The run the agent's session now open in this tab is kept under. */
+export function agentRunId(sessionId: string): string {
+  return segmentRunId(driveRunId(sessionId), agentEnds.get(sessionId)?.length ?? 0);
+}
+
+/** The ends recorded for a tab, as counts of the agent's own actions, for the fold. */
+export function agentEndCounts(sessionId: string): number[] {
+  return (agentEnds.get(sessionId) ?? []).map((end) => end.count);
+}
+
+/**
+ * An agent session ends: its own actions since the previous end, the run they are kept under, and
+ * how long it ran. Recorded, so what the agent drives next is the next session's.
+ */
+export function endAgentSession(
+  sessionId: string,
+  actions: readonly JournalAction[],
+  at: number | undefined,
+): { actions: JournalAction[]; runId: string; wallMs?: number } {
+  const own = agentsOwn(actions);
+  const ends = agentEnds.get(sessionId) ?? [];
+  const last = ends.at(-1);
+  const runId = agentRunId(sessionId);
+  ends.push({ count: own.length, at: at ?? last?.at ?? 0 });
+  agentEnds.set(sessionId, ends);
+  return {
+    actions: own.slice(Math.min(last?.count ?? 0, own.length)),
+    runId,
+    ...(at === undefined ? {} : { wallMs: at - (last?.at ?? 0) }),
+  };
 }
 
 /**
@@ -355,7 +408,15 @@ export function driveRunsFrom(
   actions: readonly JournalAction[],
   deps: DriveRunDeps,
 ): VerificationRunInput[] {
-  const own = actions.filter((action) => action.drivenBy === undefined);
+  const own = agentsOwn(actions);
+  // Each agent session in the tab is its own run: cut at the ends `reticle_session {end}` recorded.
+  const cuts = [0, ...(deps.agentEnds ?? []).map((n) => Math.min(n, own.length)), own.length];
+  const sessions = cuts.slice(1).map((to, i) =>
+    driveRunFrom(own.slice(cuts[i] ?? 0, to), {
+      ...deps,
+      runId: segmentRunId(deps.runId, i),
+    }),
+  );
   const drives = new Map<string, { by: DrivenBy; actions: JournalAction[] }>();
   for (const action of actions) {
     const by = action.drivenBy;
@@ -365,7 +426,7 @@ export function driveRunsFrom(
     drives.set(by.harness, held);
   }
   return [
-    driveRunFrom(own, deps),
+    ...sessions,
     ...[...drives.values()].map((drive) => harnessRunFrom(drive.by, drive.actions, deps)),
   ].filter((run): run is VerificationRunInput => run !== undefined);
 }

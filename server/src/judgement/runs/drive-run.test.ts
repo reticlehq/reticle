@@ -16,6 +16,8 @@ import {
   driveRunFrom,
   driveRunId,
   driveRunsFrom,
+  endAgentSession,
+  agentRunId,
   harnessAgentId,
   noteHarnessDisparity,
   noteHarnessGoal,
@@ -327,5 +329,46 @@ describe('a Harness drive in the same tab', () => {
 
   it('leaves a session the Harness never touched exactly one run', () => {
     expect(driveRunsFrom([action(Verified.YES)], DEPS).map((run) => run.runId)).toEqual(['run_1']);
+  });
+});
+
+/**
+ * One tab, several agent sessions, and the Harness driving in between. An agent whose one check
+ * held ended on "failed · 14 of 99 checks did not hold" — the tab's Harness drives folded in — and
+ * every agent session in that tab wrote the same run id, so a later end overwrote an earlier run.
+ */
+describe('an agent session ending in a tab the Harness also drove', () => {
+  const by = { harness: 'h9', driver: 'server', persona: 'p' };
+  const own = (verified: Verified, at: number): JournalAction =>
+    action(verified, `agent claim ${String(at)}`, at);
+  const theirs = (at: number): JournalAction => ({ ...action(Verified.NO, 'h', at), drivenBy: by });
+
+  it("folds only the agent's own calls since its last end, each session under its own run", () => {
+    const tab = 'tab-ends';
+    const first = endAgentSession(tab, [own(Verified.YES, 1), theirs(2), theirs(3)], 100);
+    expect(first.actions.map((a) => a.at)).toEqual([1]);
+    expect(first.runId).toBe(driveRunId(tab));
+    expect(first.wallMs).toBe(100);
+
+    const second = endAgentSession(
+      tab,
+      [own(Verified.YES, 1), theirs(2), theirs(3), own(Verified.NO, 4)],
+      250,
+    );
+    expect(second.actions.map((a) => a.at)).toEqual([4]);
+    expect(second.runId).not.toBe(first.runId);
+    expect(second.wallMs).toBe(150);
+    // What the agent drives next belongs to the session after these two.
+    expect(agentRunId(tab)).not.toBe(second.runId);
+  });
+
+  it("writes each agent session's run under its own id", () => {
+    const runs = driveRunsFrom([own(Verified.YES, 1), theirs(2), own(Verified.NO, 3)], {
+      ...DEPS,
+      agentEnds: [1],
+    });
+    expect(runs.map((r) => r.runId)).toEqual(['run_1', 'run_1-2', 'harness-h9']);
+    expect(runs[0]?.checks.map((c) => c.status)).toEqual([Verified.YES]);
+    expect(runs[1]?.checks.map((c) => c.status)).toEqual([Verified.NO]);
   });
 });
