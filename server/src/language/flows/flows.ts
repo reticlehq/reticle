@@ -552,6 +552,7 @@ export class FlowStore {
         resolvePath: (n, p) => this.#resolveReadPath(asFlowName(n), p),
         write: (path, contents) => this.#fs.writeFile(path, contents),
         serialize: (flow) => this.#serialize(flow),
+        readRaw: (path) => this.#fs.readFile(path),
       },
       name,
       projectId,
