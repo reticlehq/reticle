@@ -155,13 +155,16 @@ function readIntent(reticleRoot: string): unknown {
    * Records that already name a subject keep it: an agent's explicit choice outranks inference.
    */
   const placed = Object.fromEntries(
-    Object.entries(merged).map(([id, given]) => {
+    Object.entries(merged).map(([id, given]): [string, unknown] => {
       // The record's `why` is what the platform keeps as `reason`.
       const why = (given as { why?: unknown }).why;
-      const record =
-        'string' === typeof why && 0 < why.length
-          ? { ...(given as object), reason: why.slice(0, MAX_REASON) }
-          : given;
+      // The run that proved it, under the name the platform reads (it does not read `provenBy`).
+      const run = (given as { provenBy?: { runId?: unknown } }).provenBy?.runId;
+      const record = {
+        ...(given as object),
+        ...('string' === typeof why && 0 < why.length ? { reason: why.slice(0, MAX_REASON) } : {}),
+        ...('string' === typeof run && 0 < run.length ? { provedBy: run } : {}),
+      };
       const held = record as { subject?: unknown; surface?: unknown; binding?: unknown };
       if ('string' === typeof held.subject && held.subject.length > 0) return [id, record];
       const subject = subjectFor({

@@ -415,6 +415,8 @@ export const RunCheckSchema = z.object({
   checkId: z.string().optional(),
   /** The journal action that produced it, kept on this machine to pair it with its screenshot. */
   actionId: z.string().optional(),
+  /** The declared intent this check was taken for, by id: what it proves, named rather than timed. */
+  intent: z.string().optional(),
   /** What the page looked like when this check was decided. */
   screenshot: StepScreenshotSchema.optional(),
   /**

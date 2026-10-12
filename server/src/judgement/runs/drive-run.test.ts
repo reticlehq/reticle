@@ -72,6 +72,19 @@ describe('a drive folded into a run', () => {
     expect(run?.checks[0]?.evidence).toEqual({ net: [call] });
   });
 
+  // The platform asked for the intent a check proves on the check itself, not guessed by time.
+  it('names the intent a check was taken for', () => {
+    const run = driveRunFrom(
+      [{ ...action(Verified.YES), args: { ref: 'e3', intent: 'saved-items-shows-new-order' } }],
+      DEPS,
+    );
+    expect(run?.checks[0]?.intent).toBe('saved-items-shows-new-order');
+    // And the artifact the platform receives keeps it.
+    const built = buildVerificationRun(run as VerificationRunInput, () => 0);
+    expect(built.checks[0]?.intent).toBe('saved-items-shows-new-order');
+    expect(driveRunFrom([action(Verified.YES)], DEPS)?.checks[0]).not.toHaveProperty('intent');
+  });
+
   it('keeps the action each check came from, so its screenshot can find it', () => {
     const run = driveRunFrom([action(Verified.YES, 'the row disappears', 41)], DEPS);
     expect(run?.checks[0]?.actionId).toBe('c41');

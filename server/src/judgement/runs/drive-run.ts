@@ -246,12 +246,15 @@ export function driveRunFrom(
   deps: DriveRunDeps,
 ): VerificationRunInput | undefined {
   const found = verdicts(actions);
+  const intentOf = new Map(actions.map((a) => [a.actionId, asString(asRecord(a.args)['intent'])]));
   const checks: RunCheck[] = [];
   for (const verdict of found) {
+    const intent = intentOf.get(verdict.actionId);
     checks.push({
       predicate: verdict.claim,
       status: verdict.verified,
       actionId: verdict.actionId,
+      ...(intent === undefined || 0 === intent.length ? {} : { intent }),
       // Where it was written, and on a miss the calls of its window: what an issue page shows.
       ...(verdict.source === undefined && verdict.net === undefined
         ? {}
