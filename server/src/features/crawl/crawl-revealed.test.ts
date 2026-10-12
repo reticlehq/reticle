@@ -77,8 +77,10 @@ describe('a crawl says so when its own clicks revealed controls it did not visit
   it('visits the controls its own clicks revealed, while budget remains', async () => {
     const session = new RevealingSession(LOGIN, DASHBOARD);
     const report = await crawl(session, { maxSteps: 12 }, noSleep);
-    expect(report.stepsRun).toBe(9);
+    // Eight, not nine: "Sign out" is left alone, or everything after it is crawled signed out.
+    expect(report.stepsRun).toBe(8);
     expect(report.visited).toContain('- button "Overview"');
+    expect(report.visited).not.toContain('- button "Sign out"');
     expect(report.truncated).toBe(false);
   });
 

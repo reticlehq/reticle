@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { fakeApp } from './fake-app.js';
 import { CONSOLE_FLOWS, CONSOLE_OVERVIEW, CONSOLE_SWITCHER_OPEN } from './console-pages.js';
-import { mergePages, pagesReadIn, parseMap, surveyApp } from './site-map.js';
+import { mergePages, pagesReadIn, parseMap, surveyApp, surveyedSince } from './site-map.js';
 
 const OVERVIEW = [
   '- complementary',
@@ -150,5 +150,18 @@ describe('the map of the real console', () => {
     expect(pagesReadIn([call('interactive', CONSOLE_OVERVIEW)], 9)).toEqual([]);
     expect(pagesReadIn([call('full', CONSOLE_SWITCHER_OPEN)], 9)).toEqual([]);
     expect(pagesReadIn([call('full', CONSOLE_OVERVIEW)], 9)).toHaveLength(1);
+  });
+});
+
+/**
+ * Every plan run clicked through the whole app after its journeys, map fresh or not. The sweep
+ * runs when the app was surveyed for this run, and a run on a fresh map leaves the app alone.
+ */
+describe('whether a run sweeps the app', () => {
+  it('sweeps when this run surveyed it, and not when a fresh map was reused', () => {
+    const startedAt = 5_000;
+    expect(surveyedSince({ surveyedAt: 5_200, pages: [] }, startedAt)).toBe(true);
+    expect(surveyedSince({ surveyedAt: 1_000, pages: [] }, startedAt)).toBe(false);
+    expect(surveyedSince(undefined, startedAt)).toBe(true);
   });
 });

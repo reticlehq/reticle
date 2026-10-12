@@ -448,3 +448,33 @@ describe('crawl on a background tab', () => {
     expect(r.notJudged).toBeUndefined();
   });
 });
+
+/**
+ * Every Harness plan run's crawl clicked through the sidebar INCLUDING "Sign out", then clicked
+ * four stale refs on the sign-in page and left the next run signed out. An unattended pass never
+ * presses a control that ends the session.
+ */
+describe('crawl never ends the session it is crawling', () => {
+  it('leaves sign-out and log-out controls unpressed, and says so', async () => {
+    const pressed: string[] = [];
+    const base = fakeSession(
+      tree([
+        'link "Saved Items" (ref=e1)',
+        'button "Sign out" (ref=e2)',
+        'menuitem "Log out" (ref=e3)',
+        'link "Logout" (ref=e4)',
+      ]),
+      { e1: domActivity },
+    );
+    const session: CrawlSession = {
+      ...base,
+      command: (name, args = {}) => {
+        if (ReticleCommand.ACT === name) pressed.push(String(args['ref']));
+        return base.command(name, args);
+      },
+    };
+    const r = await crawl(session, {}, noSleep);
+    expect(pressed).toEqual(['e1']);
+    expect(r.visited).toEqual(['link "Saved Items"']);
+  });
+});

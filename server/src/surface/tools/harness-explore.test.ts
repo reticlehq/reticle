@@ -41,6 +41,7 @@ const saveCall = (args: Record<string, unknown>, result: unknown, isError = fals
 function depsWithFlows(...lists: readonly string[][]): ToolDeps {
   let call = 0;
   return {
+    now: () => 0,
     flows: {
       list: () => {
         const answer = lists[Math.min(call, lists.length - 1)] ?? [];

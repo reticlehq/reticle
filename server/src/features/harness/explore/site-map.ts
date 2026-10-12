@@ -35,6 +35,14 @@ export const MAP_FRESH_MS = 24 * 60 * 60 * 1000;
 /** How long a page gets to settle after a press before it is read. */
 const SETTLE_MS = 3000;
 
+/**
+ * Whether the app was surveyed for the run that started at `since` (or there is no map at all): a
+ * run that reused a fresh map does not sweep the whole app again.
+ */
+export function surveyedSince(map: HarnessMap | undefined, since: number): boolean {
+  return map === undefined || since <= map.surveyedAt;
+}
+
 /** One page read, as the map keeps it. */
 export function pageFrom(read: PageRead, at: number, reachedBy?: string): HarnessMapPage {
   const lines = parseTree(read.tree);

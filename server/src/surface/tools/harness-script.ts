@@ -46,6 +46,7 @@ import { acquireLeasedSession, suiteFixtureSeed } from './lease-tools.js';
 import { reticleToolset } from './harness-toolset.js';
 import { laneIds } from '@/features/harness/script/lane-ids.js';
 import { appControlsOf } from '@/features/harness/script/app-controls.js';
+import { surveyedSince } from '@/features/harness/explore/site-map.js';
 import {
   PlanStepKind,
   aboutTheApp,
@@ -236,6 +237,7 @@ async function runPlan(
   };
   // Map first: survey the app (no model) unless its map is fresh; every lane's engine looks goals up
   // in it, and the hunt before grading starts from it. The tab is left where it started.
+  const mapAsked = deps.now();
   const map = await siteMapFor(deps, options.sessionId, (name, args) =>
     reticleToolset(deps, pinned(options)).invoke(name, args),
   );
@@ -377,8 +379,9 @@ async function runPlan(
   // error in the console. On the merchant dashboard eight blank pages went unreported without it.
   // After the journeys, so the lanes start sooner. (Run first, it once left every lane unable to
   // start; that did not reproduce on a clean install, and was the checkout's, not the order's.)
+  // Once per map: a run on a fresh map swept the whole app again, every time.
   const crawled =
-    focus === undefined && !run.stopped
+    focus === undefined && !run.stopped && surveyedSince(map, mapAsked)
       ? await crawlApp(deps, options, harness, driverName)
       : undefined;
   // How each journey went: kept beside the plan here, and told to the platform, whose next plan
