@@ -156,7 +156,15 @@ export function handleStop(port: number, quiet: boolean): void {
   const pid = readPid(port);
   if (null === pid || !isAlive(pid)) {
     removePid(port);
-    if (!quiet) log('reticle_daemon_not_running', { port });
+    // No pid on record is not "not running": a daemon whose pid file vanished still answers its
+    // port, and `kill` finds the listener and confirms it is Reticle's before signalling it.
+    void fetchStatus(port).then(async (status) => {
+      if (status !== undefined) {
+        if (!(await runKill(port, false))) process.exit(1);
+        return;
+      }
+      if (!quiet) log('reticle_daemon_not_running', { port });
+    });
     return;
   }
   process.kill(pid, 'SIGTERM');
