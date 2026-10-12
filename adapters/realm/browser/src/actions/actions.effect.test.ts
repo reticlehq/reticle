@@ -175,7 +175,9 @@ describe('action effect: valueChanged', () => {
     document.body.innerHTML =
       '<select><option value="en">English</option><option value="fr">French</option></select>';
     const sel = document.querySelector('select') as HTMLSelectElement;
-    await expect(executeAction(refs.refFor(sel), 'select', { value: 'English' })).rejects.toThrow(
+    // A label a person reads is a name too now ('English' selects `en`); a name neither carries
+    // is refused with the list.
+    await expect(executeAction(refs.refFor(sel), 'select', { value: 'German' })).rejects.toThrow(
       /en.*fr|fr.*en/s,
     );
   });

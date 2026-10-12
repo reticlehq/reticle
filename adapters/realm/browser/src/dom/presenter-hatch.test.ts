@@ -101,3 +101,26 @@ describe('the Harness never sees the HUD', () => {
     expect(isIgnored(card)).toBe(false);
   });
 });
+
+/*
+ * Platform drive: with the HUD exposed, its own narration ("Finding \"Open on dashboard\"")
+ * satisfied the agent's text predicate — already_true on words the agent itself caused.
+ */
+describe("the HUD's narration is never a match source", () => {
+  it('stays ignored with the hatch open, while the HUD controls are seen', () => {
+    setPresenterVisible(true);
+    expect(
+      isIgnored(
+        el(
+          '<div data-reticle-hud><div data-reticle-log><span>Finding x</span></div></div>',
+        ).querySelector('span') ?? el('<i></i>'),
+      ),
+    ).toBe(true);
+    expect(
+      isIgnored(
+        el('<div data-reticle-hud><button>Run Harness</button></div>').querySelector('button') ??
+          el('<i></i>'),
+      ),
+    ).toBe(false);
+  });
+});

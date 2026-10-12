@@ -245,3 +245,25 @@ describe('what a Harness command may press', () => {
     await expect(executeAction(refTo('#i'), 'click')).resolves.toBeDefined();
   });
 });
+
+/*
+ * Persona drives: `select` with the option's visible label ('Only if "Sign in" passed') was refused
+ * with its own label in the list of choices. An option is named by its value, or by the one label
+ * a person reads on it.
+ */
+describe('select by what a person reads', () => {
+  it('chooses the one option carrying that label', async () => {
+    document.body.innerHTML =
+      '<label for="w">When</label><select id="w"><option value="always">Always</option>' +
+      '<option value="persona-1|passed">Only if “Sign in” passed</option></select>';
+    await executeAction(refTo('#w'), 'select', { value: 'Only if “Sign in” passed' });
+    expect((document.querySelector('#w') as HTMLSelectElement).value).toBe('persona-1|passed');
+  });
+
+  it('still refuses a name no option has', async () => {
+    document.body.innerHTML = '<select id="w"><option value="a">A</option></select>';
+    await expect(executeAction(refTo('#w'), 'select', { value: 'Nope' })).rejects.toThrow(
+      /no <option>/,
+    );
+  });
+});

@@ -404,6 +404,13 @@ function assertActionAllowed(
   }
 }
 
+/** The value of the option `named` names: its value, else the one option whose label it is. */
+function optionValueFor(options: readonly HTMLOptionElement[], named: string): string {
+  if (options.some((option) => option.value === named)) return named;
+  const byLabel = options.filter((option) => option.label.trim() === named.trim());
+  return 1 === byLabel.length ? (byLabel[0]?.value ?? named) : named;
+}
+
 /** Best-effort click-point geometry. All-false default when there is nothing measurable to test. */
 import {
   NO_GEOMETRY,
@@ -616,8 +623,10 @@ async function dispatchOther(
             "select requires a string `value` — pass it nested, as args: { value: '…' }.",
           );
         }
-        const wanted = args['value'];
         const options = Array.from(el.options);
+        // An option is named by its value, or by the label a person reads on it when exactly one
+        // option carries that label: "Only if “Sign in” passed" was refused with its own label.
+        const wanted = optionValueFor(options, args['value']);
         // REFUSE an option that does not exist, before touching the element.
         //
         // Assigning anyway and reporting the resulting `valueChanged` delta as proof the option

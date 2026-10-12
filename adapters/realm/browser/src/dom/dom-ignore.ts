@@ -111,11 +111,20 @@ export function isReticleUi(node: Element | null): boolean {
   return node !== null && node.closest(RETICLE_OVERLAY) !== null;
 }
 
+/**
+ * What Reticle SAYS on its HUD: the log, the Harness log, the status pill and the agent's lines.
+ * Never a match source, hatch open or not: with the HUD exposed, its narration ("Finding \"Open on
+ * dashboard\"") satisfied the very text predicate the agent was proving, an `already_true` on words
+ * the agent itself caused.
+ */
+const HUD_NARRATION =
+  '[data-reticle-log],[data-reticle-harness-log],[data-reticle-chat-pill-text],[data-reticle-agent-said],[data-reticle-agent-note]';
+
 /** True if the element should be excluded from snapshots/queries (Reticle overlay or dev overlay). */
 export function isIgnored(el: Element): boolean {
   // With the hatch open, Reticle's own overlay drops out of the ignore set — but the third-party
   // dev overlays do not. They are somebody else's furniture and were never the thing being verified.
-  const ours = exposed() ? '' : RETICLE_OVERLAY;
+  const ours = exposed() ? HUD_NARRATION : RETICLE_OVERLAY;
   const sel = [ours, DEV_OVERLAYS, extraIgnore].filter((part) => part.length > 0).join(',');
   return el.closest(sel) !== null;
 }
