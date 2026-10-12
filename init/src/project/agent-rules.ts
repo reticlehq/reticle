@@ -136,7 +136,7 @@ This app is instrumented by **Reticle**, an in-app verification layer exposed as
 6. **On a failure, read \`expected\` / \`observed\` / the nearest candidates before retrying.** Never weaken a check to make it green.
 7. **Open \`screenshot.path\` only when the look matters;** \`reticle_observe { since }\` has the rest.
 8. **Predicates:** \`{ kind: "signal", name }\` · \`{ kind: "net", method, urlContains, status }\` · \`{ kind: "route", pathname }\` · \`{ kind: "state", path, equals }\` · \`{ kind: "element", query: { role, name } }\` · \`{ kind: "text", contains }\` · \`allOf\` / \`anyOf\` / \`not\`.
-9. **No session?** \`reticle_session { action: "list" }\` and do its \`next_action\`. **A version-skew warning?** \`${CLI} stop\`, then retry.
+9. **No session?** \`reticle_session { action: "list" }\` and do its \`next_action\`. **No app connected at all?** Run \`${CLI} init\` in the app's own folder yourself. **A version-skew warning?** \`${CLI} stop\`, then retry.
 10. **End with the Reticle result block the server gives you**, verbatim.
 11. **If your context was compacted or you lost track, run \`${CLI} context --compact\` first.** It is the daemon's own record of what was proved, what failed and what is still owed.
 
@@ -152,7 +152,7 @@ carries the recovery ladder; never report the install as finished without a verd
 
 ${DEV_SERVER_POLICY}
 
-A dev server that is already running does not pick up an edited build config or a newly created plugin file — restart it and hard-reload the tab. And if a server IS listening and still nothing connects, the cause is the SDK not loading in the page, not a missing dev server; do not tell the user to start one they are already running.
+If a server IS listening and still nothing connects, the cause is the SDK not loading in the page, not a missing dev server; do not tell the user to start one they are already running.
 
 **Finish \`src/reticle-dev.ts\` before you claim setup is done.** \`init\` writes it and cannot always fill it in: a store that needs an argument only reading the code supplies (Jotai atoms, an XState actor, a TanStack \`queryClient\`) is left as a commented \`registerStore\` line. A file that registers nothing looks exactly like a finished one, and \`reticle_look { action: "state" }\` then returns empty forever — which is indistinguishable from an app that has nothing to report, so it reads as success. Uncomment the line, complete it, and prove it by driving one flow and seeing your keys come back. If \`init\` told you to restart your client, this is the job waiting for you on the other side of that restart.
 

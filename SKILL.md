@@ -67,6 +67,20 @@ Two places always need the user:
 
 **A client restart is not one of them.** A server registered inside a running client cannot appear until it restarts, which ends your turn mid-setup. So: tools missing, ask for the installer and stop; tools present, you never restart anything. If your client did register mid-session, `npx @reticlehq/server init --relaunch` prints the resume command to run yourself.
 
+## Reach Harness level: 80% instrumentation
+
+The Harness drives only an app Reticle sees at least 80% of: 7 of these 8. `reticle doctor` and the HUD show which are missing, each with its fix.
+
+| Capability | How it is met |
+| --- | --- |
+| page connected, DOM actions, network, console | `init` puts the SDK in the page |
+| `file:line` source mapping | keep the build plugin `init` added (Vite plugin, `withReticle` for Next, the babel plugin); not counted on plain HTML |
+| stable test ids | `data-testid` on every control a flow uses |
+| app state | `registerStore(name, store)` from `@reticlehq/browser` where the store is created; pass the store, not a getter |
+| signals on mutation | `reticle.signal("order:placed", { id })` once each user-visible outcome is committed |
+
+List them in `registerCapabilities` in the `reticle-dev` file `init` wrote. A verdict that meets a gap (an outcome with no signal, a control with no test id) marks it missing, so the percent can drop after a drive: close what it names, drive again.
+
 ## Feedback is first-class
 
 Once per session, when Reticle got in your way (it broke, lied, could not see what you needed, cost too many calls, or setup gave you trouble), file it and carry on:

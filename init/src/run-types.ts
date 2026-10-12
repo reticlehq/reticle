@@ -144,4 +144,6 @@ export interface InitResult {
    * `deferOutcome` is set. Absent on a dry run and on the exits that report for themselves.
    */
   outcome?: InitOutcome;
+  /** No app where init ran; it listed the apps below instead. Reported as `no_package_json`. */
+  listedAppsBelow?: true;
 }

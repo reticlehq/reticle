@@ -17,20 +17,25 @@ import {
   runSetupCommand,
   type FirstFlowPort,
 } from '@/command/setup/setup-command.js';
-import { bridgeOccupied } from '@/command/setup/bringup/bridge-port.js';
+import { bridgeOccupied, freePortAfter } from '@/command/setup/bringup/bridge-port.js';
 import {
   defaultPairingTokenDir,
   readOrCreatePairingTokenSync,
 } from '@/portal/bridge/pairing-token.js';
 import { relaunchDecision } from '@/command/setup/bringup/relaunch.js';
+import { attachedAgents, restartNotice } from './agent-restart.js';
 import { claudeTranscriptExists, codexSessionFor } from '@/command/setup/terminal/transcripts.js';
-import { probePresence } from '@/command/daemon/binding/port-presence.js';
+import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
 import { probeDaemon } from '@/surface/mcp/proxy/proxy-daemon-probe.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { collectEnv, DEFAULT_PHASE_TIMEOUT_MS } from '@/command/setup/setup-options.js';
 import { staticPageDevCommand } from '@/command/setup/bringup/static-page-server.js';
 import { SetupPhase } from '@/command/setup/run-setup.js';
 import { reportInitOutcome } from '@/telemetry/init-telemetry.js';
+
+/** Claude Code marks every process it spawns with this variable set to this value. */
+const CLAUDE_CODE_ENV = 'CLAUDECODE';
+const CLAUDE_CODE_MARKER = '1';
 
 /** How often the runtime phases look again: fast enough not to be the wait, slow enough to be free. */
 const POLL_MS = 250;
@@ -211,14 +216,18 @@ export async function continueAfterInit(
   // Before the connect wait, never after: a bridge held by a stranger makes a session impossible,
   // so going ahead spends the entire budget and then reports what reads as an instrumentation
   // problem — the one place that is fine. See bridge-port.ts.
+  const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }).catch(
+    (error: unknown) => {
+      reportFailure(InitFailure.RUNTIME_ERROR);
+      throw error;
+    },
+  );
   const refusal = bridgeOccupied(
-    await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }).catch(
-      (error: unknown) => {
-        reportFailure(InitFailure.RUNTIME_ERROR);
-        throw error;
-      },
-    ),
+    presence,
     port,
+    PortPresence.FOREIGN === presence
+      ? await freePortAfter(port, (p) => probeDaemon(p))
+      : undefined,
   );
   if (refusal !== undefined) {
     reportFailure(InitFailure.BRIDGE_OCCUPIED);
@@ -280,7 +289,7 @@ export async function continueAfterInit(
     },
     (line) => io.print(line),
   ).then(
-    (outcome) => {
+    async (outcome) => {
       if (result.outcome !== undefined) {
         const init = {
           ...result.outcome,
@@ -308,17 +317,17 @@ export async function continueAfterInit(
       }
       io.print('');
       // The precondition for everything the closing asks for, printed on the path that could not say
-      // it. An agent client reads its MCP server list when it STARTS and never re-reads it, so on the
-      // run that first registers Reticle the `reticle_*` tools are not in the session that just asked
-      // for them -- and this path closes by telling that session to call `reticle_act_and_wait`.
-      // `restartHint` has said this for a long time and is printed only when init stops at the files.
-      if (true === result.mcpNewlyRegistered) {
-        io.print(
-          'Reticle was registered with your agent by this run, and an agent reads its tool list only ' +
-            'when it starts: the `reticle_*` tools are NOT in this session yet. Restart it first — ' +
-            '`npx @reticlehq/server init --relaunch` prints the exact resume command for Claude Code ' +
-            'and Codex. Once per machine.',
-        );
+      // it. An agent client reads its MCP server list when it STARTS and never re-reads it, so an
+      // agent that ran this without the `reticle_*` tools cannot do what the closing tells it to.
+      // See agent-restart.ts for the two ways that is known.
+      const restart = restartNotice({
+        insideAgent:
+          CLAUDE_CODE_MARKER === process.env[CLAUDE_CODE_ENV] || undefined !== codexSessionFor(cwd),
+        newlyRegistered: true === result.mcpNewlyRegistered,
+        attached: attachedAgents(await fetchStatus(port)),
+      });
+      if (undefined !== restart) {
+        io.print(restart);
         io.print('');
       }
       if (outcome.ok && !outcome.flowSaved) {

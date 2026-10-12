@@ -96,6 +96,11 @@ interface NextActionFacts {
    * closed, it navigated away.
    */
   departedTo?: string;
+  /**
+   * The command that wires THIS project for good — `init` in the app's own folder through the
+   * project's own runner (see `initCommandIn`). Absent means the generic npx spelling.
+   */
+  init?: string;
 }
 
 /** The port a tombstone URL names, when it names one — anything unparseable names no port. */
@@ -157,6 +162,24 @@ const CLI = 'npx @reticlehq/server';
 const INIT_COMMAND = `${CLI} init`;
 const OPEN_COMMAND = `${CLI} open`;
 const LOCALHOST = 'http://localhost';
+
+/**
+ * What a lease on an app with no SDK can see. The lease supplies the SDK itself (the zero-install
+ * reader), so an unwired app still gets a verdict — on what the page does, not on its source.
+ */
+const ZERO_INSTALL_SEES =
+  'the lease supplies the SDK itself: DOM, network, console and routes, but no component state ' +
+  'or source file:line until the app is wired';
+
+/** The zero-install call, with the URL only when it can be named without guessing. */
+function zeroInstallLease(url: string | undefined): string {
+  return `reticle_lease {action:"acquire", url:"${url ?? "<the app's URL>"}"}`;
+}
+
+/** Nothing here says this project was ever wired: no config, no recorded connection, no session. */
+function neverWired(facts: NextActionFacts): boolean {
+  return !facts.initialized && true !== facts.previouslyConnected && !facts.everConnected;
+}
 
 export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   // FIRST, above every other cause, because it is the only one supported by positive evidence about
@@ -326,7 +349,12 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         (dev.directory === undefined ? '' : `, in \`${dev.directory}\``) +
         ` — run it in the ` +
         'background, tell the human it is running, then call reticle_sessions again.' +
-        stoppedNote,
+        stoppedNote +
+        (neverWired(facts)
+          ? ` Once it is up, ${zeroInstallLease(dev.port === undefined ? undefined : `${LOCALHOST}:${String(dev.port)}`)} ` +
+            `gets a verdict with nothing installed (${ZERO_INSTALL_SEES}); ` +
+            `\`${facts.init ?? INIT_COMMAND}\` wires it for good — then restart the dev server and reload.`
+          : ''),
     };
   }
 
@@ -382,14 +410,20 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   }
 
   if (!facts.initialized && true !== facts.previouslyConnected) {
+    // The port the project's own dev script pins outranks a lone listener: the scan is machine-wide.
+    const pinned = facts.dev?.port;
+    const target = pinned !== undefined && facts.listening.includes(pinned) ? pinned : only;
     return {
       action: NoSessionAction.RUN_INIT,
-      command: INIT_COMMAND,
-      ...(only === undefined ? {} : { port: only }),
+      command: facts.init ?? INIT_COMMAND,
+      ...(target === undefined ? {} : { port: target }),
       reason:
         `something is listening (${ports}) but no \`.reticle.json\` was found, so the app may ` +
-        "carry no Reticle SDK. Run this in the APP's own directory — in a monorepo that is not " +
-        'where this daemon stands — then restart the dev server.',
+        'carry no Reticle SDK. For a verdict NOW with nothing installed: ' +
+        `${zeroInstallLease(target === undefined ? undefined : `${LOCALHOST}:${String(target)}`)} — ` +
+        `${ZERO_INSTALL_SEES}. To wire it for good, run this command yourself (it runs in the ` +
+        "APP's own folder, not where this daemon stands), then restart the dev server and reload " +
+        'the page.',
     };
   }
 

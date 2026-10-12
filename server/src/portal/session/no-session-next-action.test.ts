@@ -524,3 +524,80 @@ describe('a departed tab seen navigating away', () => {
     expect(next.reason).not.toContain('abc123');
   });
 });
+
+/**
+ * An app that was never wired — the MCP-only install, where `init` never ran — must not dead-end.
+ *
+ * Two things in one answer: the call that gets a verdict NOW with nothing installed (a lease
+ * supplies the SDK itself), and the command that wires the app for good, which the agent runs.
+ */
+describe('nextActionFor: an app nobody has wired yet', () => {
+  const INIT = 'cd web && pnpm dlx @reticlehq/server init';
+  const LEASE_5173 = 'reticle_lease {action:"acquire", url:"http://localhost:5173"}';
+
+  it('hands over THIS project’s init command, and the lease that gets a verdict now', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [5173],
+      dev: DEV,
+      init: INIT,
+    });
+    expect(next.action).toBe(NoSessionAction.RUN_INIT);
+    expect(next.command).toBe(INIT);
+    expect(next.reason).toContain(LEASE_5173);
+    // Honest about what the supplied SDK cannot see.
+    expect(next.reason).toMatch(/source file:line/);
+    expect(next.reason).toMatch(/restart the dev server/i);
+    expect(next.reason).toMatch(/reload/i);
+  });
+
+  it('leases the port the dev script pins when several are listening', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [3000, 5173],
+      dev: { ...DEV, port: 5173 },
+      init: INIT,
+    });
+    expect(next.reason).toContain(LEASE_5173);
+  });
+
+  it('names no URL it cannot attribute: several listening and none pinned', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [3000, 5173],
+      dev: DEV,
+      init: INIT,
+    });
+    expect(next.reason).not.toContain('url:"http://localhost:');
+    expect(next.reason).toContain('reticle_lease');
+  });
+
+  it('nothing listening: start it, then the lease, and still the init command', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [],
+      dev: DEV,
+      init: INIT,
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.command).toBe('pnpm run dev');
+    expect(next.reason).toContain('reticle_lease');
+    expect(next.reason).toContain(INIT);
+  });
+
+  it('a wired app is never offered the zero-install route or an init', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [],
+      dev: DEV,
+      init: INIT,
+    });
+    expect(next.reason).not.toContain(INIT);
+    expect(next.reason).not.toContain('reticle_lease');
+  });
+});

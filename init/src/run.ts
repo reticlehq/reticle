@@ -864,11 +864,11 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
   // `--app frontend`, the flag that exists for exactly this, was never read because the bail came
   // first. Reported twice by the same user, who tried the documented workaround and hit the same
   // wall. Discovery already handles the case (it scans top-level directories, not just declared
-  // workspaces); it was simply unreachable.
-  //
-  // `'{}'` because the redirect only needs the manifest to ask "is THIS directory the app", and a
-  // directory with no package.json is definitively not.
+  // workspaces); it was simply unreachable. `'{}'`: a directory with no manifest is not the app.
   const redirectedEarly = redirectToWorkspaceApp(options, io, pkgRaw ?? {}, runInit);
+  // Listing the apps below still counts as "no app here", in the same series as before.
+  if (true === redirectedEarly?.listedAppsBelow && !options.dryRun)
+    io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
   if (redirectedEarly !== null) return redirectedEarly;
   if (null === pkgRaw) return initWithoutPackageJson(options, io);
 

@@ -427,6 +427,7 @@ export const NOTICE_FOLD: NoticeFold = {
     EnvelopeKey.SESSION_LEASE,
     EnvelopeKey.SESSION_AGE_WARNING,
     EnvelopeKey.FEEDBACK_UNDELIVERED,
+    EnvelopeKey.ZERO_INSTALL,
   ],
   notices: EnvelopeKey.NOTICES,
   next: EnvelopeKey.NEXT,
@@ -529,6 +530,24 @@ async function dispatchTool<Ext>(
   // to the handler to throw the canonical no-session error.
   let session: Session | undefined;
   if (bound || CDP_TOOLS.has(tool.name)) {
+    try {
+      session = deps.sessions.resolve(rawSessionId);
+    } catch {
+      session = undefined;
+    }
+  }
+  // Nothing connected, and the app was never wired: a call that needs a page opens it zero-install
+  // rather than answering with a diagnosis the agent stops at. See zero-install-first-call.ts.
+  const openUnwired = deps.openUnwiredApp;
+  const opened =
+    openUnwired !== undefined &&
+    session === undefined &&
+    bound &&
+    rawSessionId === undefined &&
+    0 === deps.sessions.list().length
+      ? await openUnwired()
+      : undefined;
+  if (opened !== undefined) {
     try {
       session = deps.sessions.resolve(rawSessionId);
     } catch {
@@ -862,6 +881,7 @@ async function dispatchTool<Ext>(
   if (lease !== undefined && process.env['CI'] === undefined) {
     envelope[EnvelopeKey.SESSION_LEASE] = lease;
   }
+  if (opened !== undefined) envelope[EnvelopeKey.ZERO_INSTALL] = opened.notice;
   const warning = resolved.ageWarning();
   if (warning !== undefined) envelope[EnvelopeKey.SESSION_AGE_WARNING] = warning;
   // Ask for a verdict when the agent has driven the page and not asked for one: a session that never

@@ -1,6 +1,6 @@
 import { applyHarnessSwitch, harnessConfigsByRoot } from '@/memory/cloud/harness-config.js';
 import { coveragePercents } from './features/exhaust/ledger.js';
-import { firstRunWiring } from './portal/session/first-run-wiring.js';
+import { agentWiring } from './portal/session/zero-install-first-call.js';
 import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
 import { pushIfMoved, watchAccountFiles } from './memory/impact/account-watch.js';
 import { SESSION_FILE } from './command/cli/cloud-kit.js';
@@ -697,6 +697,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     (sessionId) => pool.wasReapedLease(sessionId),
     (url) => pool.acquire(url),
   );
+  const leaseUrl = (url: string): Promise<unknown> =>
+    runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, { url });
   const deps = {
     sessions: bridge.sessions,
     pool,
@@ -721,7 +723,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     now,
     bridgePort: port,
     browserProbe: probeLaunchableChromium,
-    firstRun: firstRunWiring({ port, cliPath: process.argv[1] ?? '' }),
+    ...agentWiring(port, bridge.sessions, leaseUrl),
     // A finished verification should not sit behind a one-minute timer — see ToolDeps.onRunPersisted.
     onRunPersisted: (): void => cloudSync.nudge(),
     syncNow: () => cloudSync.syncNow(),
@@ -739,8 +741,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       instructionStateAt(port, bridge.sessions.count()),
     ),
   );
-  // `reticle drive <url>` against this daemon's port, through runTool. See cli/drive/drive-attach.ts.
-  shared.attachDrive((url) => runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, { url }));
+  shared.attachDrive(leaseUrl); // `reticle drive <url>` — see cli/drive/drive-attach.ts.
   // The platform chat's apps and drives, run here. See chat-drives.ts.
   const chatDrives = startChatDrives(
     effectiveDeps,

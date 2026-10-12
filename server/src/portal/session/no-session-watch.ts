@@ -20,7 +20,7 @@ import { callingClientDirectory } from '@/hooks/client-directory.js';
 import { registeredElsewhere } from '@/memory/recall/registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
-import { detectDevCommandInProject } from './dev-server/dev-command.js';
+import { detectDevCommandInProject, initCommandIn } from './dev-server/dev-command.js';
 import { nextActionFor, portOfUrl, renderNextAction } from './no-session-next-action.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import {
@@ -567,6 +567,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
             ...(known.departedTo === undefined ? {} : { departedTo: known.departedTo }),
           }),
       dev: detectDevCommandInProject(dir),
+      init: initCommandIn(dir),
     });
     return { facts, next };
   };
@@ -625,6 +626,8 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       // Read when asked, like everything else here: a `package.json` can gain a dev script, and a
       // daemon that cached "there is none" at boot would keep saying so for the rest of the day.
       dev: detectDevCommandInProject(directory),
+      // This project's own runner and app folder, so the agent can wire it itself.
+      init: initCommandIn(directory),
     });
   };
 

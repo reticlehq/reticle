@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { detectDevCommand, detectDevCommandInProject } from './dev-command.js';
+import { detectDevCommand, detectDevCommandInProject, initCommandIn } from './dev-command.js';
 
 /** A reader over an in-memory tree — the real one reads the disk. */
 function reader(files: Record<string, string>): (path: string) => string | undefined {
@@ -216,5 +216,53 @@ describe('detectDevCommandInProject', () => {
     expect(
       detectDevCommandInProject(DIR, reader(files), listing({ [ROOT]: ['frontend'] })),
     ).toBeUndefined();
+  });
+});
+
+/**
+ * The command an agent runs to wire THIS app for good, without a global install.
+ *
+ * The MCP-only install route (a plugin, a hand-written `npx … mcp` config) never runs `init`, so the
+ * no-session answer has to hand the agent the command itself — in the app's folder, through the
+ * runner the project's own package manager provides. `init` run in a folder that is not the app is
+ * the commonest way init fails.
+ */
+describe('initCommandIn', () => {
+  const ROOT = join(DIR, '.');
+  const none = (): readonly string[] => [];
+  const DEV_PKG = JSON.stringify({ scripts: { dev: 'vite' } });
+
+  it('runs through npx when no lockfile names a manager', () => {
+    expect(initCommandIn(DIR, reader({ [PKG]: DEV_PKG }), none)).toBe('npx @reticlehq/server init');
+  });
+
+  it('runs through pnpm dlx in a pnpm project', () => {
+    const files = { [PKG]: DEV_PKG, [at('pnpm-lock.yaml')]: '' };
+    expect(initCommandIn(DIR, reader(files), none)).toBe('pnpm dlx @reticlehq/server init');
+  });
+
+  it('runs through bunx in a bun project, and starts the dev server with bun', () => {
+    const files = { [PKG]: DEV_PKG, [at('bun.lock')]: '' };
+    expect(initCommandIn(DIR, reader(files), none)).toBe('bunx @reticlehq/server init');
+    expect(detectDevCommand(DIR, reader(files))?.command).toBe('bun run dev');
+  });
+
+  it('runs through yarn dlx only on a yarn that has dlx (Berry); classic yarn gets npx', () => {
+    const classic = { [PKG]: DEV_PKG, [at('yarn.lock')]: '' };
+    const berry = { ...classic, [at('.yarnrc.yml')]: '' };
+    expect(initCommandIn(DIR, reader(classic), none)).toBe('npx @reticlehq/server init');
+    expect(initCommandIn(DIR, reader(berry), none)).toBe('yarn dlx @reticlehq/server init');
+  });
+
+  it('names the app folder when the app is one directory down', () => {
+    const files = {
+      [PKG]: JSON.stringify({ name: 'repo', private: true }),
+      [at('pnpm-lock.yaml')]: '',
+      [at('web/package.json')]: DEV_PKG,
+    };
+    const listing = (path: string): readonly string[] => (path === ROOT ? ['web'] : []);
+    expect(initCommandIn(DIR, reader(files), listing)).toBe(
+      'cd web && pnpm dlx @reticlehq/server init',
+    );
   });
 });

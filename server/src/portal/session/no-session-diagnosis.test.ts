@@ -24,7 +24,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { diagnoseNoSession, type NoSessionFacts } from './no-session-diagnosis.js';
+import { NoSessionReason } from '@reticlehq/core/telemetry';
+import {
+  diagnoseNoSession,
+  explainNoSession,
+  type NoSessionFacts,
+} from './no-session-diagnosis.js';
 import { STALL_AFTER_MS } from './stall-clock.js';
 
 describe('diagnoseNoSession', () => {
@@ -135,14 +140,18 @@ describe('diagnoseNoSession', () => {
     expect(msg).toContain('reticle_lease');
   });
 
-  it('does NOT offer it when the app has no SDK — a leased tab would never dial in either', () => {
+  // Reversed since this was first written: a lease now supplies the SDK to a page that never dials
+  // in (the zero-install reader), so on an app with no SDK the lease is the ONE way to a verdict
+  // before anybody wires it — offered with what it cannot see, never as if it were the wired app.
+  it('offers it when the app has no SDK, saying the lease supplies one and what it cannot see', () => {
     const msg = diagnoseNoSession({
       everConnected: false,
       initialized: false,
       listening: [5173],
       port: 4400,
     });
-    expect(msg).not.toContain('reticle_lease');
+    expect(msg).toContain('reticle_lease');
+    expect(msg).toMatch(/source file:line/);
   });
 
   /**
@@ -927,5 +936,38 @@ describe('diagnoseNoSession — a desktop project', () => {
     const msg = diagnoseNoSession({ ...base, listening: [5173] });
     expect(msg).not.toMatch(/desktop dev command/);
     expect(msg).toMatch(/open <url>/);
+  });
+});
+
+/**
+ * Never wired, so the lead must not stop at "run init": a lease supplies the SDK itself and gets a
+ * verdict now. Only for a project nothing says is wired — a wired app's lease needs no such offer.
+ */
+describe('an unwired app is told it can get a verdict without installing anything', () => {
+  const lead = (listening: readonly number[], initialized: boolean): string =>
+    explainNoSession({ everConnected: false, initialized, listening, port: 4400 }).message;
+
+  it('with a dev server up, the lead offers the zero-install lease', () => {
+    expect(lead([5173], false)).toMatch(/nothing installed/i);
+    expect(lead([5173], false)).toContain('reticle_lease');
+  });
+
+  it('with nothing listening, the lead still says a lease works once it is up', () => {
+    expect(lead([], false)).toMatch(/nothing installed/i);
+  });
+
+  it('keeps the reason codes it always had', () => {
+    expect(
+      explainNoSession({ everConnected: false, initialized: false, listening: [5173], port: 4400 })
+        .reason,
+    ).toBe(NoSessionReason.NO_CONFIG);
+    expect(
+      explainNoSession({ everConnected: false, initialized: false, listening: [], port: 4400 })
+        .reason,
+    ).toBe(NoSessionReason.NO_LISTENER_NO_CONFIG);
+  });
+
+  it('a wired app is not offered the zero-install route', () => {
+    expect(lead([], true)).not.toMatch(/nothing installed/i);
   });
 });

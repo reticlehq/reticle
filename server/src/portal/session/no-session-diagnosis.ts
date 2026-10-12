@@ -235,13 +235,24 @@ function leaseAdvice(base: string, facts: NoSessionFacts): string {
 /**
  * The way out that needs no human at all.
  *
- * Only offered when the app is known to carry the SDK: leasing an uninstrumented app just burns a
- * browser and comes back `ready:false`.
+ * Offered here when the app is known to carry the SDK. An app that carries none is offered
+ * {@link ZERO_INSTALL} instead, which says what a lease on it can and cannot see.
  */
 const SELF_SERVE =
   'You do not have to wait for the human: reticle_lease {action:"acquire", url} opens a browser ' +
   'Reticle drives itself, and returns a sessionId you can use immediately (reach it with ' +
   'reticle_run {tool:"reticle_lease"} if it is not advertised directly; release it when you finish).';
+
+/**
+ * The way past an app nobody wired, without waiting for the wiring.
+ *
+ * A lease on a page that never dials in hands it the zero-install reader, so an MCP-only install
+ * (a plugin, a hand-written `npx … mcp` config — `init` never ran) still gets a verdict on the first
+ * call instead of a diagnosis it stops at. The URL and the command live in the next action.
+ */
+const ZERO_INSTALL =
+  'You can get a verdict NOW with nothing installed: reticle_lease on the app URL supplies the ' +
+  'SDK itself (no component state or source file:line until it is wired) — the next action names it.';
 
 /** The hedge that is true for every vanished tab we did not watch leave. */
 const TAB_GONE_WHAT = 'The tab was closed, navigated away, or hard-reloaded.';
@@ -735,7 +746,8 @@ export function explainNoSession(facts: NoSessionFacts): {
           'dev server may not be running: START IT YOURSELF, in the background, using the command ' +
           'in `next_action`, and tell the human in one line that it is running. ' +
           `(2) There is no \`.reticle.json\` in ${where}, which is the file ${INIT_CMD} writes, so ` +
-          `the app may carry no Reticle SDK. Check the app's OWN directory before re-running it. ${RETRY}`,
+          `the app may carry no Reticle SDK. Check the app's OWN directory before re-running it. ` +
+          `${ZERO_INSTALL} ${RETRY}`,
         `The scan covers ${SCANNED_PORTS} and nothing else, so a server on any other port is ` +
           'invisible to it: if the app IS running, ask for its URL rather than assuming it is down, ' +
           `and open it with ${OPEN_CMD}. The missing config is not proof either — in a monorepo the ` +
@@ -774,7 +786,7 @@ export function explainNoSession(facts: NoSessionFacts): {
         `${INIT_CMD} writes, so the app may carry no Reticle SDK. Check the app's OWN directory: ` +
         `if it has no config, run ${INIT_CMD} ` +
         'there and restart the dev server; if it has one, the app is wired and simply has no page ' +
-        `open — ${OPEN_CMD}. ${RETRY}`,
+        `open — ${OPEN_CMD}. ${ZERO_INSTALL} ${RETRY}`,
       'That absence is not proof: the same one is expected in a monorepo whose daemon runs at the ' +
         'root while the app lives in a subdirectory, or in an app wired by the Vite or Babel ' +
         `plugin. ${unattributedListeners(listening)}${searchedClause(facts)}${siblingListenerClause(facts)}`,

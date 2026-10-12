@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import {
   claudeAddCommand,
@@ -30,7 +30,8 @@ import type { OnboardingStep } from '@reticlehq/core/telemetry';
  */
 export type StepReporter = (step: OnboardingStep) => void;
 
-export function handleSetupMcp(reportStep: StepReporter, standalone = true): void {
+/** How many coding agents on this machine have Reticle's tools after this run. */
+export function handleSetupMcp(reportStep: StepReporter, standalone = true): number {
   const io: SetupMcpIo = {
     exists: (p) => existsSync(p),
     readFile: (p) => {
@@ -72,7 +73,7 @@ export function handleSetupMcp(reportStep: StepReporter, standalone = true): voi
         ? `None of ${knownClientLabels().join(', ')} is installed here yet. The agents above are pre-registered and have Reticle's tools once installed; install one of the others, then run \`reticle setup mcp\` again.`
         : `No coding agent config found. Looked for: ${knownClientLabels().join(', ')}. Install one, then run \`reticle setup mcp\` again.`,
     );
-    return;
+    return 0;
   }
   for (const id of result.registered) io.print(`  ✓ ${id}`);
   for (const id of result.alreadyThere) io.print(`  ✓ ${id} (already set up)`);
@@ -117,6 +118,27 @@ export function handleSetupMcp(reportStep: StepReporter, standalone = true): voi
     io.print('Restart your agent for it to pick up the new server.');
     io.print('Then: cd <your project> && reticle init');
   }
+  return result.registered.length + result.alreadyThere.length;
+}
+
+/**
+ * The one line the launchers read and strip: what they cannot know and the next steps depend on.
+ *
+ * The launchers own the closing words (served from main, so wording changes on merge) and used to
+ * print "restart your coding agent" to a machine with none, and "cd your-app" to somebody already
+ * standing in it. An older launcher shows this line as is; a launcher reading an older CLI finds no
+ * line and keeps its generic wording, so neither half has to ship first.
+ */
+export const INSTALL_RESULT_PREFIX = 'RETICLE_INSTALL';
+const APP_MARKERS = ['package.json', 'index.html'] as const;
+/** Whether the folder the installer ran in is an app: `init` runs here, or after a `cd`. */
+export const InstallAppHere = { HERE: 'here', NONE: 'none' } as const;
+
+export function installResultLine(agents: number, cwd: string): string {
+  const app = APP_MARKERS.some((file) => existsSync(join(cwd, file)))
+    ? InstallAppHere.HERE
+    : InstallAppHere.NONE;
+  return `${INSTALL_RESULT_PREFIX} agents=${String(agents)} app=${app}`;
 }
 
 /**
@@ -131,8 +153,9 @@ export function handleSetupInstall(
   reportStep: StepReporter,
 ): void {
   reportInstallSteps({ runtimeSecs: opts.runtimeSecs, installSecs: opts.installSecs }, reportStep);
+  let agents = 0;
   if (opts.mcp) {
-    handleSetupMcp(reportStep, false);
+    agents = handleSetupMcp(reportStep, false);
   } else {
     process.stdout.write('Skipping MCP registration (--no-mcp).\n');
   }
@@ -140,4 +163,5 @@ export function handleSetupInstall(
   // this returns, so what this prints is progress and nothing else. Those two blocks are what the
   // ONBOARD steps below now stand for: what Reticle is for, shown before anything is asked of anyone.
   for (const step of tutorialShownSteps()) reportStep(step);
+  process.stdout.write(`${installResultLine(agents, process.cwd())}\n`);
 }

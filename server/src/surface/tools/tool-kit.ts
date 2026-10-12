@@ -85,6 +85,11 @@ export interface ToolDeps<Ext = unknown> {
   syncNow?: () => Promise<unknown>;
   /** Wires the app on the agent's first use, instead of at installation. Absent: tell, do not wire. */
   firstRun?: FirstRunWiring;
+  /**
+   * On the first page-needing call with nothing connected, opens this caller's UNWIRED app in a
+   * lease that supplies the SDK (see zero-install-first-call.ts). Absent: answer no-session as before.
+   */
+  openUnwiredApp?: () => Promise<{ url: string; notice: string } | undefined>;
   /** cross-run outcome memory (.reticle/project.json). */
   project: ProjectStore;
   /** optional native-input provider. undefined ⇒ everything stays synthetic. */
@@ -296,6 +301,11 @@ export const EnvelopeKey = {
   HARNESS: 'harness',
   /** Where this step's screenshot is (`{ path, source }`), or why there is none. See step-shots.ts. */
   SCREENSHOT: 'screenshot',
+  /**
+   * One-shot: this call's tab was opened by Reticle on an app nobody wired, with the SDK supplied —
+   * what it cannot see, and the command that wires the app for good. See zero-install-first-call.ts.
+   */
+  ZERO_INSTALL: 'zero_install',
   /** Once-per-session advisory lines an agent's own call carries. See agent/notices.ts. */
   NOTICES: 'notices',
 } as const;

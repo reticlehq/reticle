@@ -95,7 +95,7 @@ note_failure() {
 check_node() {
   command -v node >/dev/null 2>&1 || {
     note_failure runtime_ready no_node
-    die "Node $NODE_MIN_MAJOR+ is required and no \`node\` was found.
+    die "Node $NODE_MIN_MAJOR.$NODE_MIN_MINOR+ is required and no \`node\` was found.
 
   macOS   brew install node
   Linux   https://nodejs.org/en/download/package-manager
@@ -115,17 +115,18 @@ Install Node, then run the same command again. Reticle does not install a runtim
   fi
 }
 
-install_cli() {
-  command -v npm >/dev/null 2>&1 || {
-    note_failure cli_installed no_npm
-    die "npm was not found, and it ships with Node. Reinstall Node from nodejs.org."
-  }
-  # Braced, and ASCII next to a variable: `dash` swallowed a multibyte ellipsis written straight
-  # after a variable name, and bash did not, which is how a `curl | sh` bug reaches users.
-  # npm draws no progress under `curl | sh`, so a cold cache is a silent minute: a terminal gets a
-  # counter redrawn in place, anything else one line saying it takes a while. Silence reads as a hang.
+# What the closing tells the person to type. `reticle` unless the bin it landed in is not on PATH,
+# when it is the full path, so every printed command works in the shell they are reading it in.
+RETICLE_BIN="reticle"
+# Set when that bin is not on PATH: the next steps lead with the one line that puts it there.
+PATH_DIR=""
+SHADOWED_BY=""
+
+# `npm install -g`, with a counter: npm draws no progress under `curl | sh`, so a cold cache is a
+# silent minute and silence reads as a hang. Extra arguments go to npm. Leaves npm's output in $log.
+npm_global() {
   log="$(mktemp)"
-  npm install -g "$RETICLE_PKG" >"$log" 2>&1 &
+  npm install -g "$@" "$RETICLE_PKG" >"$log" 2>&1 &
   pid=$!
   [ -t 2 ] || say "  installing ${RETICLE_PKG} (up to a minute on a cold npm cache)"
   secs=0
@@ -135,20 +136,86 @@ install_cli() {
     secs=$((secs + 1))
   done
   [ -t 2 ] && printf '\r\033[K' >&2
-  wait "$pid" || {
-    cat "$log" >&2
-    note_failure cli_installed npm_install
-    die "npm could not install $RETICLE_PKG. Its output above says why; fix that, then run the same command again."
+  wait "$pid"
+}
+
+# What npm's failure means, when it is one a person meets on a company network. npm's own words for
+# both are a stack trace and "If you are behind a proxy, please make sure that the 'proxy' config is
+# set properly", which names neither setting.
+npm_failure() {
+  if grep -qE 'SELF_SIGNED|UNABLE_TO_GET_ISSUER|UNABLE_TO_VERIFY|CERT_' "$log"; then
+    printf '%s' "Something between this machine and npm re-signs HTTPS (a company proxy). Point Node at its certificate: export NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem (or npm config set cafile /path/to/company-ca.pem), then run the same command again."
+  elif grep -qE 'ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|ECONNRESET|ENETUNREACH' "$log"; then
+    printf '%s' "npm could not reach its registry ($(npm config get registry 2>/dev/null)). Behind a proxy: npm config set proxy http://host:port and npm config set https-proxy http://host:port. On a network that blocks npm, use your company's mirror: npm config set registry <url>. Then run the same command again."
+  else
+    printf '%s' "npm could not install $RETICLE_PKG. Its output above says why; fix that, then run the same command again."
+  fi
+}
+
+install_cli() {
+  command -v npm >/dev/null 2>&1 || {
+    note_failure cli_installed no_npm
+    die "npm was not found, and it ships with Node. Reinstall Node from nodejs.org."
   }
+  # Braced, and ASCII next to a variable: `dash` swallowed a multibyte ellipsis written straight
+  # after a variable name, and bash did not, which is how a `curl | sh` bug reaches users.
+  if ! npm_global; then
+    # A Node from a system package or the nodejs.org .pkg keeps its global folder root-owned, so
+    # `npm install -g` needs sudo. Telling somebody to fix npm before they can try Reticle ended the
+    # install; a folder of our own needs no sudo and nothing else on the machine changes.
+    if grep -qE 'EACCES|EPERM' "$log"; then
+      rm -f "$log"
+      user_prefix="$STATE_DIR/npm"
+      say "  npm's global folder needs sudo here; installing into $user_prefix instead"
+      npm_global --prefix "$user_prefix" || {
+        cat "$log" >&2
+        note_failure cli_installed npm_install
+        die "$(npm_failure)"
+      }
+      PATH_DIR="$user_prefix/bin"
+    else
+      cat "$log" >&2
+      note_failure cli_installed npm_install
+      die "$(npm_failure)"
+    fi
+  fi
   rm -f "$log"
-  command -v reticle >/dev/null 2>&1 || {
-    # Installed, but the global bin is not on PATH. Common, and reporting it as success would put
-    # somebody in the funnel as installed while nothing they type works.
+  [ -n "$PATH_DIR" ] || PATH_DIR="$(npm prefix -g 2>/dev/null)/bin"
+  # Installed, and the bin may not be on PATH in THIS shell (a custom npm prefix, a Node installed a
+  # minute ago, the folder above). That used to end the install before any agent was registered;
+  # the full path finishes it, and the next steps say how to put the folder on PATH.
+  found="$(command -v reticle 2>/dev/null || true)"
+  if [ -x "$PATH_DIR/reticle" ] && [ "$found" != "$PATH_DIR/reticle" ]; then
+    RETICLE_BIN="$PATH_DIR/reticle"
+    # Another `reticle` first on PATH (an older global install, another prefix) would run the OLD
+    # version on every command typed after this; the next steps name it.
+    SHADOWED_BY="$found"
+  elif [ -x "$PATH_DIR/reticle" ] || [ -n "$found" ]; then
+    # ponytail: a version manager whose shims are not in `npm prefix -g` (Volta) lands here and is
+    # trusted as is; teach it the shim directory if its users report a stale CLI.
+    PATH_DIR=""
+  else
     note_failure cli_installed not_on_path
-    die "Installed, but \`reticle\` is not on your PATH. Add npm's global bin directory:
-  export PATH=\"\$(npm prefix -g)/bin:\$PATH\""
-  }
+    die "npm says it installed $RETICLE_PKG, but no \`reticle\` was found on PATH or in $PATH_DIR."
+  fi
   ok "Installed $RETICLE_PKG"
+}
+
+# The line that puts PATH_DIR on PATH for this shell and every new one, in the person's own shell.
+# Under $HOME it is written with `$HOME`, so the line reads as a folder rather than a wall of path.
+path_line() {
+  dir="$PATH_DIR"
+  case "$dir" in "$HOME"/*) dir="\$HOME${dir#"$HOME"}" ;; esac
+  case "$(basename "${SHELL:-sh}")" in
+    fish) printf 'fish_add_path %s' "$dir" ;;
+    zsh) printf 'export PATH="%s:$PATH"; echo '"'"'export PATH="%s:$PATH"'"'"' >> ~/.zshrc' "$dir" "$dir" ;;
+    bash)
+      rc="~/.bashrc"
+      [ "$(uname -s 2>/dev/null)" = "Darwin" ] && rc="~/.bash_profile"
+      printf 'export PATH="%s:$PATH"; echo '"'"'export PATH="%s:$PATH"'"'"' >> %s' "$dir" "$dir" "$rc"
+      ;;
+    *) printf 'export PATH="%s:$PATH"; echo '"'"'export PATH="%s:$PATH"'"'"' >> ~/.profile' "$dir" "$dir" ;;
+  esac
 }
 
 # The prompt a person pastes into their coding agent to put Reticle in their project. Fetched, so
@@ -213,6 +280,9 @@ fetch_prompt() {
 
 next_step() {
   mcp="$1"
+  # From `reticle setup install`'s RETICLE_INSTALL line; empty from a CLI too old to print one.
+  agents="$2"
+  app="$3"
   if fetched="$(fetch_prompt)"; then
     title="$(printf '%s\n' "$fetched" | head -n 1)"
     prompt="$(printf '%s\n' "$fetched" | tail -n +2)"
@@ -223,17 +293,39 @@ next_step() {
   [ -n "$title" ] || title="$FALLBACK_TITLE"
   rule="------------------------------------------------------------"
   # A terminal means a person; no terminal means an agent ran this, and the words name the user.
-  if [ -t 1 ]; then app="your app"; else app="the user's app"; fi
-  printf '\n%sNext steps%s\n' "$HEAD_ON" "$OUT_OFF"
-  printf 'Reticle is on this machine, not in %s yet.\n\n' "$app"
-  if [ "$mcp" -eq 1 ]; then
-    printf '  1. Coding agent already open? Restart it so it loads Reticle'"'"'s tools.\n'
+  if [ -t 1 ]; then app_name="your app"; else app_name="the user's app"; fi
+  if [ "$app" = "here" ]; then
+    init_cmd="${BOLD_ON}${RETICLE_BIN} init${OUT_OFF} in this folder"
   else
-    printf '  1. No coding agent was registered (--no-mcp). To register one: %sreticle setup mcp%s\n' "$BOLD_ON" "$OUT_OFF"
+    init_cmd="${BOLD_ON}cd your-app && ${RETICLE_BIN} init${OUT_OFF}"
   fi
-  printf '  2. Paste the prompt below into it. It instruments %s and proves one flow.\n' "$app"
-  printf '  3. No agent? Run %scd your-app && reticle init%s,\n' "$BOLD_ON" "$OUT_OFF"
-  printf '     then press %sRun Harness%s in the Reticle panel, or run %sreticle connect%s.\n' "$BOLD_ON" "$OUT_OFF" "$BOLD_ON" "$OUT_OFF"
+  printf '\n%sNext steps%s\n' "$HEAD_ON" "$OUT_OFF"
+  printf 'Reticle is on this machine, not in %s yet.\n\n' "$app_name"
+  if [ -n "$PATH_DIR" ]; then
+    if [ -n "$SHADOWED_BY" ]; then
+      printf '  0. The %sreticle%s first on your PATH is another install (%s). Put this one first:\n' "$BOLD_ON" "$OUT_OFF" "$SHADOWED_BY"
+    else
+      printf '  0. %sreticle%s is not on your PATH yet. Put it there for this shell and new ones:\n' "$BOLD_ON" "$OUT_OFF"
+    fi
+    printf '       %s\n' "$(path_line)"
+    printf '     Until then, %s works.\n' "$RETICLE_BIN"
+  fi
+  if [ "$mcp" -eq 0 ]; then
+    printf '  1. No coding agent was registered (--no-mcp). To register one: %sreticle setup mcp%s\n' "$BOLD_ON" "$OUT_OFF"
+    printf '  2. Paste the prompt below into it. It instruments %s and proves one flow.\n' "$app_name"
+    printf '  3. No agent? Run %s,\n' "$init_cmd"
+    printf '     then press %sRun Harness%s in the Reticle panel, or run %sreticle connect%s.\n' "$BOLD_ON" "$OUT_OFF" "$BOLD_ON" "$OUT_OFF"
+  elif [ "$agents" = "0" ]; then
+    printf '  1. No coding agent was found, so none has Reticle'"'"'s tools. Run %s:\n' "$init_cmd"
+    printf '     it wires %s, starts it and connects it to Reticle.\n' "$app_name"
+    printf '  2. Then press %sRun Harness%s in the Reticle panel, or run %sreticle connect%s.\n' "$BOLD_ON" "$OUT_OFF" "$BOLD_ON" "$OUT_OFF"
+    printf '  3. Add a coding agent later? Run %sreticle setup mcp%s, then paste it the prompt below.\n' "$BOLD_ON" "$OUT_OFF"
+  else
+    printf '  1. Coding agent already open? Restart it so it loads Reticle'"'"'s tools.\n'
+    printf '  2. Paste the prompt below into it. It instruments %s and proves one flow.\n' "$app_name"
+    printf '  3. No agent? Run %s,\n' "$init_cmd"
+    printf '     then press %sRun Harness%s in the Reticle panel, or run %sreticle connect%s.\n' "$BOLD_ON" "$OUT_OFF" "$BOLD_ON" "$OUT_OFF"
+  fi
   printf '\n%s%s%s\n' "$HEAD_ON" "$rule" "$OUT_OFF"
   printf '%sPaste this into your coding agent%s  %s(%s)%s\n' "$HEAD_ON" "$OUT_OFF" "$DIM_OUT" "$title" "$OUT_OFF"
   printf '%s%s%s\n\n' "$HEAD_ON" "$rule" "$OUT_OFF"
@@ -263,7 +355,7 @@ main() {
   out="$(mktemp)"
   # Inside an `if`, so `set -e` cannot exit before the output below is printed: a failure has to
   # show the reason it failed, not just the exit code.
-  if reticle setup install \
+  if "$RETICLE_BIN" setup install \
     --runtime-secs "$((runtime_done - started))" \
     --install-secs "$((installed - runtime_done))" \
     "$@" >"$out" 2>&1; then
@@ -282,14 +374,21 @@ main() {
   fi
   mcp=1
   case " $* " in *" --no-mcp "*) mcp=0 ;; esac
-  if [ "$mcp" -eq 1 ]; then
-    ok "Registered with the coding agents on this machine"
-    sed -e '/Reticle is installed/,$d' -e '/^[[:space:]]*$/d' "$out" >&2
-  else
+  # The CLI's one machine line: how many agents have the tools, and whether this folder is an app.
+  result="$(grep '^RETICLE_INSTALL ' "$out" | tail -n 1)"
+  agents="$(printf '%s' "$result" | sed -n 's/.* agents=\([0-9]*\).*/\1/p')"
+  app="$(printf '%s' "$result" | sed -n 's/.* app=\([a-z]*\).*/\1/p')"
+  if [ "$mcp" -eq 0 ]; then
     ok "Skipped registering with coding agents (--no-mcp)"
+  elif [ "$agents" = "0" ]; then
+    say "  No coding agent found on this machine, so none was registered."
+    sed -e '/^RETICLE_INSTALL /d' -e '/Reticle is installed/,$d' -e '/^[[:space:]]*$/d' "$out" >&2
+  else
+    ok "Registered with the coding agents on this machine"
+    sed -e '/^RETICLE_INSTALL /d' -e '/Reticle is installed/,$d' -e '/^[[:space:]]*$/d' "$out" >&2
   fi
   rm -f "$out"
-  next_step "$mcp"
+  next_step "$mcp" "$agents" "$app"
 }
 
 main "$@"

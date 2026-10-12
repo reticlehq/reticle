@@ -6,6 +6,7 @@ import { LicenseWrite, writeLicenseKey } from '../license-key.js';
 import { SetupPhase } from '../run-setup.js';
 import { bridgeOccupied } from '../bringup/bridge-port.js';
 import { reportInitOutcome } from '@/telemetry/init-telemetry.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
 
 vi.mock('../setup-command.js', () => ({
@@ -16,8 +17,9 @@ vi.mock('@/command/daemon/binding/port-presence.js', async (importOriginal) => (
   ...(await importOriginal<typeof import('@/command/daemon/binding/port-presence.js')>()),
   probePresence: vi.fn(),
 }));
-vi.mock('../bringup/bridge-port.js', () => ({ bridgeOccupied: vi.fn() }));
+vi.mock('../bringup/bridge-port.js', () => ({ bridgeOccupied: vi.fn(), freePortAfter: vi.fn() }));
 vi.mock('@/telemetry/init-telemetry.js', () => ({ reportInitOutcome: vi.fn() }));
+vi.mock('@/command/daemon/binding/daemon-status-probe.js', () => ({ fetchStatus: vi.fn() }));
 vi.mock('../license-key.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../license-key.js')>()),
   writeLicenseKey: vi.fn(),
@@ -92,6 +94,24 @@ describe('init reports its deferred outcome once, after runtime setup', () => {
       'synthetic-experiment-license',
       expect.any(Object),
     );
+  });
+
+  it('tells an agent with no Reticle tools attached to restart, after the app connects', async () => {
+    vi.stubEnv('CLAUDECODE', '1');
+    vi.mocked(fetchStatus).mockResolvedValue({ running: true, version: '3.7.0', sessions: [] });
+    const print = vi.fn();
+    await continueAfterInit(ARGS, RESULT, { print }, '/app');
+    vi.unstubAllEnvs();
+    expect(print.mock.calls.flat().join('\n')).toContain('Restart your coding agent now');
+  });
+
+  it('does not tell an agent that has the tools to restart', async () => {
+    vi.stubEnv('CLAUDECODE', '1');
+    vi.mocked(fetchStatus).mockResolvedValue({ running: true, sessions: [], mcpPeers: ['3.7.0'] });
+    const print = vi.fn();
+    await continueAfterInit(ARGS, RESULT, { print }, '/app');
+    vi.unstubAllEnvs();
+    expect(print.mock.calls.flat().join('\n')).not.toContain('Restart your coding agent');
   });
 
   it('records a connected app after the default continuation', async () => {

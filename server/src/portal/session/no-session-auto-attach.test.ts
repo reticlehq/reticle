@@ -389,4 +389,25 @@ describe('the structured next action the watch publishes', () => {
     },
     TEMP_PROJECT_TIMEOUT_MS,
   );
+
+  it(
+    "hands over init through the project's own runner (pnpm dlx in a pnpm project)",
+    async () => {
+      const { manager, next } = stubSessions();
+      const directory = projectDir({ wired: false, devScript: 'vite' });
+      writeFileSync(join(directory, 'pnpm-lock.yaml'), '', 'utf8');
+      const stop = startNoSessionWatch({
+        sessions: manager,
+        port: 4400,
+        initialized: false,
+        directory,
+        probe: () => Promise.resolve([5173]),
+      });
+      await settle();
+      const action = next();
+      stop();
+      expect(action?.command).toBe('pnpm dlx @reticlehq/server init');
+    },
+    TEMP_PROJECT_TIMEOUT_MS,
+  );
 });
