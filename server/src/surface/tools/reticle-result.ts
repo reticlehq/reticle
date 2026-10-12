@@ -18,6 +18,7 @@ import {
   RunFlowStatus,
   ScriptStatus,
   Verified,
+  VerdictStatus,
   apiKeyFrom,
   type FlowReplayResult,
   type JournalAction,
@@ -27,7 +28,8 @@ import { JourneyBy } from '@reticlehq/core/artifacts';
 import { verdictLine } from '@/features/harness/drive-report.js';
 import { mapReplayToFlowResult } from '@/judgement/runs/artifact/replay-mapping.js';
 import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
-import { driveRunId, endAgentSession } from '@/judgement/runs/drive-run.js';
+import { driveRunFrom, driveRunId, endAgentSession } from '@/judgement/runs/drive-run.js';
+import { computeVerdict } from '@/judgement/runs/artifact/build-verification-run.js';
 import { stepShotDir } from '@/memory/project/dir/reticle-dir.js';
 import { TRIAL_OFFER } from '@reticlehq/core/hud';
 import {
@@ -427,13 +429,29 @@ export function endedAgentSession(
   sessionId: string,
   actions: readonly JournalAction[],
   at: number | undefined,
+  claim?: VerdictStatus,
 ): { actions: JournalAction[]; runId: string; wallMs?: number } {
-  return endAgentSession(sessionId, actions, at);
+  return endAgentSession(sessionId, actions, at, claim);
+}
+
+/**
+ * The agent's own claim beside what grading the session's checks gave: the comparison a dashboard
+ * makes, said where the agent can read it. The claim never becomes the verdict.
+ */
+export function claimAgainstGrade(
+  claim: VerdictStatus,
+  actions: readonly JournalAction[],
+): { claimed: VerdictStatus; graded: VerdictStatus; agrees: boolean } {
+  const run = driveRunFrom(actions, { runId: 'claim' });
+  const graded = run === undefined ? VerdictStatus.UNKNOWN : computeVerdict(run).status;
+  return { claimed: claim, graded, agrees: claim === graded };
 }
 
 /** The tools whose verdicts an agent session's block counts: each one is one of its checks. */
 const SESSION_VERDICT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.ACT_AND_WAIT,
+  // `reticle_act { steps }` dispatches under ACT's name: a journey still grading is waited for too.
+  ReticleTool.ACT,
   ReticleTool.ACT_SEQUENCE,
   ReticleTool.ASSERT,
   ReticleTool.WAIT_FOR,

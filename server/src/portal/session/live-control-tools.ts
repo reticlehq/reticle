@@ -5,6 +5,7 @@ import {
   AGENT_WAITING_NOTICE,
   PresenterTone,
   SessionState,
+  VerdictStatus,
   YIELD_WITHOUT_SESSION_NOTE,
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
@@ -18,6 +19,7 @@ import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
 import { DiscoveryInvite } from '@reticlehq/core';
 import {
   RESULT_FIELD,
+  claimAgainstGrade,
   endedAgentSession,
   verdictsSettled,
   resultField,
@@ -88,6 +90,16 @@ const DISCONNECT_NEEDS_SESSION_ID =
   'reticle_session{action:"list"}; it is never picked for you, because detaching the wrong window ' +
   'cuts you off from the app.';
 
+/** The agent's claim, when it is one of the words a run verdict uses. */
+function claimOf(value: unknown): VerdictStatus | undefined {
+  const claims: readonly unknown[] = [
+    VerdictStatus.PASS,
+    VerdictStatus.FAIL,
+    VerdictStatus.PARTIAL,
+  ];
+  return claims.includes(value) ? (value as VerdictStatus) : undefined;
+}
+
 export const LIVE_CONTROL_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.END_SESSION,
@@ -99,6 +111,12 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       'until the daemon restarts — for a stray window (a hidden desktop webview, a 404 page) that keeps coming back.',
     inputSchema: {
       summary: z.string().optional(),
+      claim: z
+        .enum([VerdictStatus.PASS, VerdictStatus.FAIL, VerdictStatus.PARTIAL])
+        .optional()
+        .describe(
+          'What YOU claim this session showed. Compared with the graded checks, never used as them.',
+        ),
       disconnect: z
         .boolean()
         .optional()
@@ -125,10 +143,12 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
           'What this session claimed and what held — an `unknown` is never counted as held.',
         ),
       [RESULT_FIELD]: z.string().optional(),
+      claim: z.object({ claimed: z.string(), graded: z.string(), agrees: z.boolean() }).optional(),
     },
     handler: (deps, args) => {
       const requested = asString(args['sessionId']);
       const detach = true === args['disconnect'];
+      const claim = claimOf(args['claim']);
       // Named, never auto-picked: detaching the wrong window cuts the agent off from the app.
       if (detach && requested === undefined) throw new Error(DISCONNECT_NEEDS_SESSION_ID);
       if (endingTurnWithNothingAttached(deps, requested)) {
@@ -171,7 +191,7 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       return settledJournal(session).then((all) => {
         // This agent session only: its own calls since its last end, never the Harness drives the
         // tab also holds, and under its own run id so a later end does not overwrite this run.
-        const ended = endedAgentSession(session.id, all, session.elapsed?.());
+        const ended = endedAgentSession(session.id, all, session.elapsed?.(), claim);
         const actions = ended.actions;
         // The moment the agent calls the task complete is when "and what did not hold" is worth a
         // line: the same fold `reticle_context` and `reticle report` serve, so they cannot disagree.
@@ -185,6 +205,7 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
           sessionId: session.id,
           ...(detach ? { disconnected: true } : {}),
           gap,
+          ...(claim === undefined ? {} : { claim: claimAgainstGrade(claim, actions) }),
           ...resultField(() => sessionResult(deps, session.id, actions, ended.wallMs, ended.runId)),
           talk_to_us: DiscoveryInvite.AGENT,
         };

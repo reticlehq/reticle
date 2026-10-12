@@ -37,6 +37,7 @@ import {
   VerifiedReason,
   driveFlowStatus,
   type DrivenBy,
+  type VerdictStatus,
   type JournalAction,
   type RunCheck,
   type RunDisparity,
@@ -63,6 +64,10 @@ export interface DriveRunDeps {
   editEpoch?: number | undefined;
   /** Where each agent session in the tab ended (`agentEndCounts`): each is folded on its own. */
   agentEnds?: readonly number[];
+  /** What the agent claimed at each of those ends (`agentEndClaims`), by the same index. */
+  agentClaims?: readonly (VerdictStatus | undefined)[];
+  /** The agent's own claim for this run, carried beside the graded verdict. */
+  agentClaim?: VerdictStatus | undefined;
 }
 
 /**
@@ -144,7 +149,7 @@ function segmentRunId(base: string, segment: number): string {
  * earlier run on the dashboard.
  * ponytail: daemon memory; a restart forgets the ends and the next fold is one run, as before.
  */
-const agentEnds = new Map<string, { count: number; at: number }[]>();
+const agentEnds = new Map<string, { count: number; at: number; claim?: VerdictStatus }[]>();
 
 /** The agent's own actions: the Harness drives in the same tab are runs of their own. */
 const agentsOwn = (actions: readonly JournalAction[]): JournalAction[] =>
@@ -160,6 +165,11 @@ export function agentEndCounts(sessionId: string): number[] {
   return (agentEnds.get(sessionId) ?? []).map((end) => end.count);
 }
 
+/** What the agent claimed at each end of a tab, by the index `agentEndCounts` uses. */
+export function agentEndClaims(sessionId: string): (VerdictStatus | undefined)[] {
+  return (agentEnds.get(sessionId) ?? []).map((end) => end.claim);
+}
+
 /**
  * An agent session ends: its own actions since the previous end, the run they are kept under, and
  * how long it ran. Recorded, so what the agent drives next is the next session's.
@@ -168,12 +178,17 @@ export function endAgentSession(
   sessionId: string,
   actions: readonly JournalAction[],
   at: number | undefined,
+  claim?: VerdictStatus,
 ): { actions: JournalAction[]; runId: string; wallMs?: number } {
   const own = agentsOwn(actions);
   const ends = agentEnds.get(sessionId) ?? [];
   const last = ends.at(-1);
   const runId = agentRunId(sessionId);
-  ends.push({ count: own.length, at: at ?? last?.at ?? 0 });
+  ends.push({
+    count: own.length,
+    at: at ?? last?.at ?? 0,
+    ...(claim === undefined ? {} : { claim }),
+  });
   agentEnds.set(sessionId, ends);
   const mine = own.slice(Math.min(last?.count ?? 0, own.length));
   const wallMs = at === undefined ? undefined : wallOf(mine, last?.at, at);
@@ -273,6 +288,7 @@ export function driveRunFrom(
     // about what was WRONG, and a fold that guessed at anomalies would be inventing findings — the
     // failure this artifact is supposed to make impossible. Checks are the evidence here.
     evidence: { consoleErrors: [], networkAnomalies: [], stateAssertions: [], timeline: [] },
+    ...(deps.agentClaim === undefined ? {} : { agentClaim: deps.agentClaim }),
   };
 }
 
@@ -450,6 +466,7 @@ export function driveRunsFrom(
     driveRunFrom(own.slice(cuts[i] ?? 0, to), {
       ...deps,
       runId: segmentRunId(deps.runId, i),
+      agentClaim: deps.agentClaims?.[i],
     }),
   );
   const drives = new Map<string, { by: DrivenBy; actions: JournalAction[] }>();
