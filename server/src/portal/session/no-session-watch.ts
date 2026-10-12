@@ -458,9 +458,17 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   const diagnosisFor = (dir: string): { facts: NoSessionFacts; next: NoSessionNextAction } => {
     const projectId = readProjectId(dir);
     const initialized = projectId !== undefined;
-    const known = projectId === undefined ? undefined : options.sessions.lastKnownFor?.(projectId);
+    // A tab that reported no project cannot be another project's: it is the daemon's own last tab,
+    // never "this daemon has never seen one" beside a refusal that names where it last saw it. A
+    // tab that named another project stays that project's (a second app is not told to reopen it).
+    const newest = options.sessions.lastKnown?.();
+    const unclaimed = newest !== undefined && newest.projectId === undefined ? newest : undefined;
+    const known =
+      (projectId === undefined ? undefined : options.sessions.lastKnownFor?.(projectId)) ??
+      unclaimed;
     const everConnected =
-      projectId !== undefined && true === options.sessions.everConnectedTo?.(projectId);
+      (projectId !== undefined && true === options.sessions.everConnectedTo?.(projectId)) ||
+      unclaimed !== undefined;
     const ownPorts = new Set(
       devServersForProject(readDevServers(stateDir), { projectId, root: dir }).map(
         (entry) => entry.port,

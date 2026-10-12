@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NoSessionAction } from '@reticlehq/core';
 import { startNoSessionWatch } from './no-session-watch.js';
+import { runWithClientDirectory } from '@/hooks/client-directory.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import type { SessionManager } from './session-manager.js';
 
@@ -402,5 +403,35 @@ describe('a departed port the scan has not looked at since', () => {
     const message = hint();
     stop();
     expect(message).toMatch(/has stopped/);
+  });
+});
+
+/*
+ * A re-drive: after its lease was reaped, `reticle_session {list}` said "this daemon has never seen
+ * one" while a call on the old id answered "Last seen on http://localhost:17609/". A tab that
+ * reported no project cannot be another project's: it is the one this daemon last saw.
+ */
+describe('a tab the daemon last saw, that reported no project', () => {
+  it('is not "never seen one" to a caller in a project', async () => {
+    const dir = projectDir(JSON.stringify({ framework: 'vite', projectId: 'app-1' }));
+    const { manager, hint } = stubSessions();
+    Object.assign(manager, {
+      everConnected: () => true,
+      everConnectedTo: () => false,
+      lastKnown: () => ({ id: 'lease-1', url: 'http://localhost:17609/' }),
+      lastKnownFor: () => undefined,
+    });
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: () => Promise.resolve([17609]),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    const message = runWithClientDirectory(dir, () => hint());
+    stop();
+    expect(message).not.toMatch(/never seen one/);
   });
 });
