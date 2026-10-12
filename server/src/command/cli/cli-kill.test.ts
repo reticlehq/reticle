@@ -63,6 +63,10 @@ describe('planKill', () => {
     expect(plan.reason).toContain('Docker');
     expect(plan.reason).toContain(String(STRANGER_PID));
     expect(plan.reason).toContain('--force');
+    // `stop --force` reaches this refusal too (it is `kill` without the override), so "run it again
+    // with --force" told a user who had just passed --force to repeat the call that refused them.
+    expect(plan.reason).toContain('restart --force');
+    expect(plan.reason).not.toContain('Run it again with');
   });
 
   it('kills it anyway under --force, and says the choice was forced', () => {

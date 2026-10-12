@@ -130,7 +130,7 @@ const COMMANDS: readonly CommandDoc[] = [
   {
     name: 'open',
     synopsis: 'open [url] [--port N]',
-    summary: 'Show the app in the browser Reticle drives',
+    summary: 'Open the app in your browser, or reuse a tab that is already connected',
     group: HelpGroup.MACHINE,
   },
   {

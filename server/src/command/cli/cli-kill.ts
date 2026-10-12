@@ -91,8 +91,9 @@ export function planKill(input: {
     reason:
       `pid ${String(listener.pid)} ("${listener.command}") is listening, and it is not a Reticle ` +
       `daemon — it never answered /status and it is not the pid Reticle recorded. Killing it would ` +
-      `be killing someone else's process. Run it again with ${FORCE_FLAG} if that is what you ` +
-      `meant, or start Reticle on another port.`,
+      `be killing someone else's process. If that is what you meant, \`reticle restart ${FORCE_FLAG}\` ` +
+      `stops it and starts Reticle there (\`stop ${FORCE_FLAG}\` never does); or start Reticle on ` +
+      `another port.`,
   };
 }
 

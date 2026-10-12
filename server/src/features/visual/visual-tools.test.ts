@@ -193,3 +193,14 @@ describe('visual tools — temp dir, never touches the repo', () => {
     });
   });
 });
+
+describe('visual_diff tells the agent the default it actually uses', () => {
+  it('states the threshold default from the constant the diff reads', async () => {
+    // The description said 0.01 while the diff used 0.1: an agent tuning a flaky diff from that
+    // number set a threshold ten times stricter than the default it believed it was loosening.
+    const { VISUAL_PIXEL_THRESHOLD } = await import('@reticlehq/core');
+    const tool = TOOLS.find((t) => ReticleTool.VISUAL_DIFF === t.name);
+    const threshold = tool?.inputSchema['threshold'] as { description?: string } | undefined;
+    expect(threshold?.description).toContain(`Default: ${String(VISUAL_PIXEL_THRESHOLD)}.`);
+  });
+});

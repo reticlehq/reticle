@@ -11,7 +11,7 @@ import {
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import { ratioSchema } from '@/surface/tools/args/numeric-bounds.js';
-import { asNumber, asRecord, asString } from '@reticlehq/core';
+import { VISUAL_PIXEL_THRESHOLD, asNumber, asRecord, asString } from '@reticlehq/core';
 import { diffPng, type VisualRect } from './visual-diff.js';
 import { VisualStore } from './visual-store.js';
 
@@ -386,7 +386,7 @@ export const VISUAL_TOOLS: ToolDef[] = [
       maxRatio: ratioSchema.optional(),
       threshold: ratioSchema
         .optional()
-        .describe('Pixel difference threshold (0–1). Default: 0.01.'),
+        .describe(`Pixel difference threshold (0–1). Default: ${String(VISUAL_PIXEL_THRESHOLD)}.`),
       ...sessionIdShape,
     },
     outputSchema: {
