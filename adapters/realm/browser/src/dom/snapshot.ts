@@ -299,7 +299,13 @@ interface WalkCtx {
   maxDepth: number;
   unread: string[];
   unreadOverflow: boolean;
+  /** Walk into subtrees an overlay library stamped aria-hidden (see `overlayStamped`). */
+  throughOverlay?: boolean;
 }
+
+/** `aria-hidden` an overlay library (Radix's `aria-hidden` package) stamped, beside `data-aria-hidden`. */
+const overlayStamped = (el: Element): boolean =>
+  el.hasAttribute('data-aria-hidden') && 'true' === el.getAttribute('aria-hidden');
 
 /** Record a cut branch on the frontier, declaring an overflow rather than shortening it silently. */
 function recordUnread(branches: readonly Element[], ctx: WalkCtx): void {
@@ -342,7 +348,12 @@ function pierceChildren(parent: Element): Element[] {
 /** Emit one element (if it earns a line) and descend into it. Split out of `walk` so the completion
  * re-read can start AT a branch root — the node the truncated walk stopped just before emitting. */
 function visit(child: Element, depth: number, ctx: WalkCtx, inLive: boolean): void {
-  if (skipEarly(child)) {
+  const stampedOnly =
+    true === ctx.throughOverlay &&
+    overlayStamped(child) &&
+    !isIgnored(child) &&
+    !(child instanceof HTMLElement && child.hidden);
+  if (!stampedOnly && skipEarly(child)) {
     // Only the hidden ones are counted. The others — <script>, <style>, Reticle's own HUD — are
     // noise the tree is SUPPOSED to omit, and counting them would put a number on every ordinary page and so
     // make the number mean nothing on the one page that needs it.
@@ -493,6 +504,9 @@ function collectDialogs(root: ParentNode): string[] {
  * effect because the overlay genuinely captures pointer events. Say so instead of returning a
  * near-empty tree with no explanation. (#397)
  */
+/** An open dialog, as overlay libraries and native dialogs mark one. */
+const MODAL_SELECTOR = '[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"]';
+
 function overlayHidingPage(root: ParentNode): string | undefined {
   // Only meaningful for a whole-page snapshot; a scoped snapshot is the subtree the caller chose.
   if (root !== document.body) return undefined;
@@ -582,6 +596,16 @@ export function buildSnapshot(options: SnapshotOptions = {}): SnapshotResult {
   };
   if (true === options.includeRoot) visit(root, 0, ctx, false);
   else walk(root, 0, ctx);
+  // Nothing at all, while an open dialog sits in a subtree an overlay stamped aria-hidden (a second
+  // overlay — a tooltip, a toast — hid the dialog's own portal): the dialog IS what is on screen.
+  // An agent got an empty tree over "Copy this now" and could neither read nor press its button.
+  if (0 === ctx.nodes && root === document.body) {
+    ctx.throughOverlay = true;
+    for (const child of Array.from(root.children))
+      if (overlayStamped(child) && null !== child.querySelector(MODAL_SELECTOR))
+        visit(child, 0, ctx, false);
+    ctx.throughOverlay = false;
+  }
   return {
     tree: ctx.lines.join('\n'),
     status,
