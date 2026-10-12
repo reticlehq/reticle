@@ -34,7 +34,13 @@ import { asRecord, asString } from '@reticlehq/core';
 import { applyHealChanges } from './heal.js';
 import { withLearnedSources } from './learned-sources.js';
 import { flowIntentGap, linkFlowIntent } from './flow-intent.js';
-import { journeyFingerprint, journeyName, mergeJourney, routeClaims } from './flow-journey.js';
+import {
+  journeyFingerprint,
+  journeyName,
+  mergeJourney,
+  routeClaims,
+  withinJourney,
+} from './flow-journey.js';
 import { IntentStore } from '@/memory/intent/intent-store.js';
 import type { CompiledProgram, RecordedStep } from './recording/tape/recordings.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
@@ -474,7 +480,19 @@ export class FlowStore {
     }
     const print = freshPrint;
     const taken = new Map(saved.map((flow) => [flow.name, journeyFingerprint(flow)]));
-    const named = { ...fresh, name: journeyName(fresh.name, print, taken) };
+    // The same name holding this journey driven with a step more or less: one file, the fuller drive.
+    const same = saved.find((flow) => flow.name === fresh.name && taken.get(flow.name) !== print);
+    if (same !== undefined && withinJourney(same, fresh))
+      return { ok: true, value: this.#summary(same) };
+    const extended = same !== undefined && withinJourney(fresh, same);
+    if (extended) taken.delete(fresh.name);
+    const named = {
+      ...fresh,
+      ...(extended && fresh.intent === undefined && same.intent !== undefined
+        ? { intent: same.intent }
+        : {}),
+      name: journeyName(fresh.name, print, taken),
+    };
     byPrint.set(print, [...(byPrint.get(print) ?? []), named]);
     let result: FlowFile = named;
     for (const [groupPrint, group] of byPrint) {

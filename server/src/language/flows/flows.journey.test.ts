@@ -122,11 +122,32 @@ describe('a saved drive', () => {
 
   it('keeps two different journeys that share a name apart', async () => {
     await drive('drive-close-an-issue', opened);
-    await drive('drive-close-an-issue', [click('bulk-close', opened[1])]);
+    // Its own control, not `opened[1]` spread over it (whose args name `issue-close`, making it a
+    // shorter drive of the same journey rather than a different one).
+    await drive('drive-close-an-issue', [click('bulk-close', { page: '/issues/7' })]);
     const names = await store.list();
     expect(names).toHaveLength(2);
     const prints = await Promise.all(names.map(async (n) => journeyFingerprint(await load(n))));
     expect(new Set(prints).size).toBe(2);
+  });
+
+  /*
+   * From two persona drives: "drive-api-login" and "drive-api-login-34636c" sat side by side in the
+   * git-tracked folder and on the dashboard. The second drive was the same login with a step more
+   * (a retry); one journey is one file, holding the fuller drive.
+   */
+  it('keeps one file when a drive of the same name repeats or extends the steps it holds', async () => {
+    await drive('drive-close-an-issue', opened);
+    const retried = [opened[0], opened[0], opened[1]].filter(
+      (step): step is RecordedStep => step !== undefined,
+    );
+    await drive('drive-close-an-issue', retried);
+    expect(await store.list()).toEqual(['drive-close-an-issue']);
+    expect((await load('drive-close-an-issue')).steps).toHaveLength(3);
+    // A shorter drive of it adds nothing beside the fuller one.
+    await drive('drive-close-an-issue', [click('issue-close', opened[1])]);
+    expect(await store.list()).toEqual(['drive-close-an-issue']);
+    expect((await load('drive-close-an-issue')).steps).toHaveLength(3);
   });
 
   // Never merged or removed, and never copied either: a drive of the journey it already holds adds

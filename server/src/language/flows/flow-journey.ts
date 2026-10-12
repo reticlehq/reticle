@@ -37,6 +37,27 @@ export function journeyFingerprint(flow: Pick<FlowFile, 'startPath' | 'steps'>):
     .slice(0, FINGERPRINT_LENGTH);
 }
 
+/**
+ * Whether `shorter` is `longer` driven with steps left out: same start, and its steps appear in
+ * `longer` in the same order. A re-drive that retried a step, or stopped one short, is the same
+ * journey; two flows that share only a name and a page are not.
+ */
+export function withinJourney(
+  longer: Pick<FlowFile, 'startPath' | 'steps'>,
+  shorter: Pick<FlowFile, 'startPath' | 'steps'>,
+): boolean {
+  if ((longer.startPath ?? null) !== (shorter.startPath ?? null)) return false;
+  const shapes = longer.steps.map((step) => JSON.stringify(stepShape(step)));
+  let at = 0;
+  for (const step of shorter.steps) {
+    const wanted = JSON.stringify(stepShape(step));
+    while (at < shapes.length && shapes[at] !== wanted) at += 1;
+    if (at === shapes.length) return false;
+    at += 1;
+  }
+  return true;
+}
+
 /** `kept` wins wherever it says something; `other` fills only what `kept` left unsaid. */
 function fillStep(kept: FlowStep, other: FlowStep | undefined): FlowStep {
   if (other === undefined) return kept;
