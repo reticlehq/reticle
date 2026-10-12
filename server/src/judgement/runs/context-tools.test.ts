@@ -157,3 +157,29 @@ describe('reticle_context', () => {
     });
   });
 });
+
+describe('reticle_context { compact: true } — the resume after a compaction', () => {
+  it('a resumed session still reports earlier failed and unproved claims as not done', async () => {
+    const { fs } = createMemoryFs();
+    await new IntentStore(fs, ROOT, { now: () => 1_000 }).declare([
+      { id: 'i1', statement: 'a buyer can check out' },
+    ]);
+    const verdict = (actionId: string, claim: string, verified: Verified): JournalAction =>
+      action({ actionId, effect: { claim, verified } });
+    const fake: Fake = {
+      actions: [
+        verdict('v1', 'signal auth:granted', Verified.YES),
+        verdict('v2', 'route /checkout', Verified.NO),
+        verdict('v3', 'signal order:placed', Verified.UNKNOWN),
+      ],
+    };
+    // The agent's context is gone; the daemon's journal is not. Same connection, fresh call.
+    const out = (await tool().handler(deps(fs, fake), { compact: true })) as { resume: string };
+    expect(out.resume).toContain('1 proved · 1 failed · 1 not proved');
+    expect(out.resume).toMatch(/FAILED — not done \(1\):\n {2}- route \/checkout/);
+    expect(out.resume).toContain('signal order:placed (unknown)');
+    expect(out.resume).toContain('a buyer can check out');
+    // Bounded: the point is a cheap resume.
+    expect(out.resume.length).toBeLessThan(4000);
+  });
+});

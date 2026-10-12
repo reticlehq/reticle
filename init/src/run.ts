@@ -503,8 +503,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     claudeCommandContent: io.readFile(agentFile(CLAUDE_COMMAND_PATH)),
     cursorCommandContent: io.readFile(agentFile(CURSOR_COMMAND_PATH)),
     // Read only to MERGE into: the settings file is the user's, and other tools write in it too.
-    claudeSettingsContent:
-      true === options.hooks ? io.readFile(agentFile(CLAUDE_SETTINGS_PATH)) : undefined,
+    claudeSettingsContent: io.readFile(agentFile(CLAUDE_SETTINGS_PATH)),
     ...(agentRoot === undefined
       ? {}
       : {

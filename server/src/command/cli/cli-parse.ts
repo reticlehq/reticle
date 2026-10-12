@@ -53,6 +53,8 @@ const HOOK_FLAG = '--hook';
 const ACCEPT_COVERAGE_FLAG = '--accept-coverage';
 /** `reticle report [--session <id>] [--hook]` — what the latest session claimed, and what held. */
 const REPORT_COMMAND = 'report';
+/** `reticle context --compact`: the resume block, from disk. A SessionStart hook prints it. */
+const CONTEXT_COMMAND = 'context';
 const SESSION_FLAG = '--session';
 const UPDATE_COMMAND = 'update';
 const ROLLBACK_COMMAND = 'rollback';
@@ -98,6 +100,7 @@ export const LOCAL_COMMANDS: readonly string[] = [
   AFFECTED_COMMAND,
   GATE_COMMAND,
   REPORT_COMMAND,
+  CONTEXT_COMMAND,
   UPDATE_COMMAND,
   ROLLBACK_COMMAND,
   MCP_COMMAND,
@@ -300,6 +303,7 @@ export type CliResult =
   | { kind: 'affected'; files: string[]; since?: string }
   | { kind: 'gate'; files: string[]; since?: string; hook?: boolean; acceptCoverage?: boolean }
   | { kind: 'report'; session?: string; hook: boolean }
+  | { kind: 'context'; session?: string }
   | { kind: 'update' }
   | { kind: 'rollback' }
   | {
@@ -857,6 +861,12 @@ export function parseCliArgs(
         hook: rest.includes(HOOK_FLAG),
         ...(session === undefined ? {} : { session }),
       };
+    }
+    case CONTEXT_COMMAND: {
+      // `--compact` is the only form; accepted so the hook line reads as what it does.
+      const at = rest.indexOf(SESSION_FLAG);
+      const session = -1 === at ? undefined : rest[at + 1];
+      return { kind: 'context', ...(session === undefined ? {} : { session }) };
     }
     case UPDATE_COMMAND:
       return { kind: 'update' };

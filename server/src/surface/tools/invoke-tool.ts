@@ -11,13 +11,8 @@ import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { agentNudge, takePlatformMoment } from './platform-moment.js';
 import { RESULT_FIELD } from './reticle-result.js';
-import { DETAIL_ARG, Detail, shapeForAgent } from './agent/compact-envelope.js';
-import {
-  type NoticeFold,
-  feedbackAlreadyAsked,
-  foldNotices,
-  noteFeedbackAsked,
-} from './agent/notices.js';
+import { forTheAgent } from './agent/for-the-agent.js';
+import { type NoticeFold, feedbackAlreadyAsked, noteFeedbackAsked } from './agent/notices.js';
 import { SKEW_SHORT_WARNING, SKEW_VERDICT_WARNING } from '@/portal/session/session-health.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
@@ -406,12 +401,10 @@ export async function runTool<Ext>(
   // Compacted for the agent last, after telemetry and the tool log have read the full result.
   return withCallSecrets(secrets, async () => {
     const result = await loggedTool(tool, deps, args, call);
-    return forTheAgent(
-      tool.name,
-      args,
-      result,
-      currentDrivenBy() === undefined ? deps.attachId : undefined,
-    );
+    const attach = currentDrivenBy() === undefined ? deps.attachId : undefined;
+    const root =
+      attach === undefined ? undefined : safeRoot(() => sessionRoot(deps, sessionIdFromArgs(args)));
+    return forTheAgent({ name: tool.name, args, result, attach, root, fold: NOTICE_FOLD });
   });
 }
 
@@ -437,23 +430,6 @@ const NOTICE_FOLD: NoticeFold = {
     [SKEW_VERDICT_WARNING, SKEW_SHORT_WARNING],
   ]),
 };
-
-/**
- * What an agent's own call (an MCP connection, not the Harness or HUD) receives: compacted, with its
- * advisories folded into once-per-session notices. `detail: "full"` keeps today's envelope, and
- * `reticle_run` passes its inner call's answer through, which was already shaped.
- */
-function forTheAgent(
-  name: string,
-  args: Record<string, unknown>,
-  result: unknown,
-  attach: string | undefined,
-): unknown {
-  const shaped = shapeForAgent(name, args, result, attach !== undefined);
-  if (attach === undefined || ReticleTool.RUN === name || !isPlainObject(shaped)) return shaped;
-  if (Detail.FULL === args[DETAIL_ARG]) return shaped;
-  return foldNotices(shaped, attach, NOTICE_FOLD);
-}
 
 async function loggedTool<Ext>(
   tool: ToolDef<Ext>,

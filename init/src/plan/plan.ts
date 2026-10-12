@@ -69,7 +69,7 @@ import {
   projectIdOf,
   RETICLE_CONFIG_FILE,
 } from '@/detect/existing-config.js';
-import { CLAUDE_SETTINGS_PATH, stopHookStep } from './stop-hook-step.js';
+import { CLAUDE_SETTINGS_PATH, claudeSettingsSteps } from './stop-hook-step.js';
 
 // Re-exported: it moved to the module that reads it, and every existing importer says `plan.js`.
 export { RETICLE_CONFIG_FILE };
@@ -819,16 +819,19 @@ export function buildPlan(input: PlanInput): Plan {
     ...mcpSteps(input),
     ...agentRuleSteps(input),
     ...slashCommandSteps(input),
-    ...(true === input.hooks
-      ? [stopHookStep(agentFile(input, CLAUDE_SETTINGS_PATH), input.claudeSettingsContent)]
-      : []),
+    ...claudeSettingsSteps(agentFile(input, CLAUDE_SETTINGS_PATH), input.claudeSettingsContent, {
+      stop: true === input.hooks,
+      // Beside the CLAUDE.md rule: the same agent, the same consent to write its instruction files.
+      compact: input.options.mcp && input.claudeCli,
+    }),
     ...uiLibraryStep(input),
     ...webGlCanvasStep(input),
     installStep(input),
     ...reticleConfigSteps(input),
   ];
   // Both steps can patch index.html: the connect write must keep the CSP edit that runs first.
-  const patchedIndex = cspSteps.find((step) => step.write?.path === HTML_INDEX_PATH)?.write?.content;
+  const patchedIndex = cspSteps.find((step) => step.write?.path === HTML_INDEX_PATH)?.write
+    ?.content;
   steps.push(
     ...frameworkSteps(
       patchedIndex === undefined ? input : { ...input, htmlIndexSource: patchedIndex },

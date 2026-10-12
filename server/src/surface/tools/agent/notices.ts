@@ -33,6 +33,13 @@ export interface NoticeFold {
   readonly onceWarnings: ReadonlyMap<string, string | undefined>;
 }
 
+/**
+ * The one-line pointer an agent session's first answer carries. The primer itself lives in the
+ * agent's rules file (written by `reticle init`), which survives a compaction; a tool result does not.
+ */
+export const PRIMER_POINTER =
+  'Reticle\'s rules are in the Reticle section of your CLAUDE.md / AGENTS.md. Context compacted? reticle_run { tool: "reticle_context", args: { compact: true } } first.';
+
 /** An empty session list keeps its first sentence; the executable `next_action` carries the rest. */
 const WHY_KEY = 'why';
 const SESSIONS_KEY = 'sessions';
@@ -109,6 +116,7 @@ export function foldNotices(
   result: Record<string, unknown>,
   session: string,
   fold: NoticeFold,
+  extra: readonly string[] = [],
 ): Record<string, unknown> {
   const seen = seenFor(session);
   const out: Record<string, unknown> = { ...result };
@@ -121,6 +129,7 @@ export function foldNotices(
     delete out[key];
     if (line !== undefined && firstTime(seen, `${key}\u0000${line}`)) lines.push(line);
   }
+  for (const line of extra) if (firstTime(seen, `\u0000${line}`)) lines.push(line);
   const next = out[fold.next];
   if ('string' === typeof next && !firstTime(seen, `${fold.next}\u0000${next}`)) {
     delete out[fold.next];

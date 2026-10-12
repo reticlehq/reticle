@@ -339,7 +339,10 @@ describe('advertised surface cost', () => {
 // `source` declared on their output schemas, so a validating client keeps the one-line summary that
 // replaced the state-diff bodies. Each verdict RESULT shrank by far more than this per call (see
 // compact-envelope.ts). Measured plus the headroom, so 154,286.
-const ALL_SURFACE_BYTE_BUDGET = 154_286;
+// 154,657 B with `notices` (the once-per-session advisory list, on every session-bound output schema)
+// and `normalized` / `caseOnlyMiss` / `wouldHold` declared on the verdict tools, so a validating
+// client keeps the alias note and the case-only diagnosis. Measured plus the headroom, so 155,657.
+const ALL_SURFACE_BYTE_BUDGET = 155_657;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {
