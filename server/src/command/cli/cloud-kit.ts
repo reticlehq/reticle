@@ -104,6 +104,9 @@ export const baseUrl = (session: { url: string } | null, explicit?: string): str
 export const bearer = (session: { token: string } | null): string | null =>
   apiKeyFrom(process.env) ?? session?.token ?? null;
 
+/** The platform's code for a missing or refused credential, as opposed to a permission. */
+const GENERIC_REFUSAL = 'unauthorized';
+
 /** A credential the platform answered with: not accepted, rather than not given. */
 const REFUSED_STATUSES: ReadonlySet<number> = new Set([401, 403]);
 
@@ -161,9 +164,18 @@ export const api = async (
     }
   }
   if (!res.ok) {
-    const parsed = z.object({ error: z.object({ message: z.string() }) }).safeParse(json);
+    const parsed = z
+      .object({ error: z.object({ message: z.string(), code: z.string().optional() }) })
+      .safeParse(json);
     const said = parsed.success ? parsed.data.error.message : `${res.status} ${res.statusText}`;
-    if (token !== null && REFUSED_STATUSES.has(res.status)) {
+    // A 403 the platform explains as something else (a contributor creating a project) is a
+    // permission, not a refused credential: printed as it is worded, never as "sign in again".
+    const permission =
+      403 === res.status &&
+      parsed.success &&
+      KEY_REFUSED === refusalSaid(text) &&
+      GENERIC_REFUSAL !== parsed.data.error.code;
+    if (token !== null && REFUSED_STATUSES.has(res.status) && !permission) {
       throw new CredentialRefusedError(
         res.status,
         token === apiKeyFrom(process.env),
