@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { runSetupPhases, SetupPhase, type SetupEffects, type SetupInput } from './run-setup.js';
+import {
+  runSetupPhases,
+  ServerStartedBy,
+  SetupPhase,
+  STATIC_PAGE_URL_HINT,
+  type SetupEffects,
+  type SetupInput,
+} from './run-setup.js';
 import { AppShape } from './desktop-shape.js';
 import type { CandidateSession } from './session-pick.js';
 import type { PageProbe } from './probe/page-probe.js';
@@ -174,6 +181,73 @@ describe('it never starts a second server for this project', () => {
     const r = await runSetupPhases(INPUT, fx);
     expect(r.ok).toBe(false);
     expect(r.sessionId).toBeUndefined();
+  });
+});
+
+/**
+ * A plain HTML page already served by its own server (python, php, a Node server with an API) got
+ * Reticle's static server on :5500 instead, and the success line never said so — the agent was left
+ * verifying a copy of the page with none of the real server's answers behind it (#1426).
+ */
+describe('a plain page gets Reticle’s static server only with a word about --url', () => {
+  const STATIC_INPUT: SetupInput = { ...INPUT, devCommandIsStaticPage: true };
+  const STATIC_URL = 'http://localhost:5500/';
+
+  it('names --url before starting the static server, not after', async () => {
+    const events: string[] = [];
+    const fx = world(
+      {
+        note: (line) => {
+          events.push(line);
+        },
+        startDevServer: () => {
+          events.push('<started>');
+          return Promise.resolve();
+        },
+      },
+      { url: STATIC_URL },
+    );
+    await runSetupPhases(STATIC_INPUT, fx);
+    const hint = events.indexOf(STATIC_PAGE_URL_HINT);
+    const started = events.indexOf('<started>');
+    expect(hint, 'the --url note must be printed').toBeGreaterThanOrEqual(0);
+    expect(hint, 'a note after the server is up is too late to act on').toBeLessThan(started);
+  });
+
+  it('says on the success line which origin connected and that Reticle started it', async () => {
+    const r = await runSetupPhases(STATIC_INPUT, world({}, { url: STATIC_URL }));
+    expect(r.ok).toBe(true);
+    const success = r.notes.find((line) => line.startsWith('✓'));
+    expect(success).toContain('http://localhost:5500');
+    expect(success).toContain(ServerStartedBy.RETICLE_STATIC);
+  });
+
+  it('says nothing about --url for a project with its own dev command', async () => {
+    const r = await runSetupPhases(INPUT, world());
+    expect(r.notes).not.toContain(STATIC_PAGE_URL_HINT);
+  });
+
+  it('credits the caller, not Reticle, when the url was supplied', async () => {
+    const r = await runSetupPhases(
+      { ...STATIC_INPUT, suppliedUrl: 'http://localhost:8000' },
+      world({}, { url: 'http://localhost:8000' }),
+    );
+    const success = r.notes.find((line) => line.startsWith('✓'));
+    expect(success).toContain('http://localhost:8000');
+    expect(success).toContain(ServerStartedBy.CALLER);
+  });
+
+  it('says it was already running when this project announced its server', async () => {
+    const r = await runSetupPhases(
+      STATIC_INPUT,
+      world(
+        { existingAppUrl: () => Promise.resolve('http://localhost:8000') },
+        { url: 'http://localhost:8000' },
+      ),
+    );
+    const success = r.notes.find((line) => line.startsWith('✓'));
+    expect(success).toContain('http://localhost:8000');
+    expect(success).toContain(ServerStartedBy.ALREADY_RUNNING);
   });
 });
 

@@ -61,6 +61,25 @@ const NO_BROWSER_GRACE_MS = 3_000;
  */
 const SYSTEM_BROWSER_GRACE_MS = 15_000;
 
+/**
+ * Said before Reticle starts its own static server for a plain page, while it can still be acted
+ * on: the page may already be served by something with an API behind it, and only the person
+ * running init knows that (#1426).
+ */
+export const STATIC_PAGE_URL_HINT =
+  'This page has no dev server of its own, so Reticle is starting a static one. ' +
+  'If the page is already served (python -m http.server, php -S, a Node server with an API), ' +
+  're-run with `reticle init --url <app>` to attach to that server instead.';
+
+/** Whose server the success line names, so a session on Reticle's own is never mistaken for the app. */
+export const ServerStartedBy = {
+  CALLER: 'you passed its url',
+  ALREADY_RUNNING: 'it was already running',
+  RETICLE_STATIC: 'Reticle started this static server',
+  SETUP: 'setup started the dev server',
+} as const;
+export type ServerStartedBy = (typeof ServerStartedBy)[keyof typeof ServerStartedBy];
+
 export const SetupPhase = {
   DEV_SERVER: 'dev-server',
   CONNECT: 'connect',
@@ -185,6 +204,13 @@ export interface SetupInput {
   /** This project's id, so a live tab of it can be told from another app's on the same url. */
   readonly projectId?: string | undefined;
   readonly devCommand?: string | undefined;
+  /**
+   * `devCommand` is Reticle's own static server, not the project's. The page may already be served
+   * by something else (python, php, a Node server with an API), and only the person running init
+   * can say so — with --url — so they are told before :5500 starts, and the success line says
+   * whose server it is (#1426).
+   */
+  readonly devCommandIsStaticPage?: boolean | undefined;
   /** The app is already served here, so nothing is started. */
   readonly suppliedUrl?: string | undefined;
   /**
@@ -294,6 +320,7 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       );
       return stop(input, SetupPhase.DEV_SERVER, {}, notes);
     } else {
+      if (true === input.devCommandIsStaticPage) note(STATIC_PAGE_URL_HINT);
       await fx.startDevServer(input.devCommand, input.appDir);
       const startedAt = fx.now();
       // This loop used to poll in complete silence. Reported as thirty minutes of nothing ending in a
@@ -551,7 +578,20 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   // the project, the first run proves a flow — and this command owns the middle one. A connected
   // session is the whole proof that onboarding worked: the SDK is in the page, the bridge paired,
   // and the tools now have something to talk to. What to do next is the first flow's to say.
-  note(`✓ Connected. ${url} is instrumented. Onboarding is done; nothing is verified yet.`);
+  //
+  // It names whose server that is, because a session on Reticle's static server is not the app a
+  // real server was serving, and "connected" alone let an agent verify the wrong one (#1426).
+  const startedBy =
+    undefined !== input.suppliedUrl
+      ? ServerStartedBy.CALLER
+      : attachedToExisting
+        ? ServerStartedBy.ALREADY_RUNNING
+        : true === input.devCommandIsStaticPage
+          ? ServerStartedBy.RETICLE_STATIC
+          : ServerStartedBy.SETUP;
+  note(
+    `✓ Connected to ${new URL(url).origin} (${startedBy}). Onboarding is done; nothing is verified yet.`,
+  );
   // Said, because "connected" otherwise reads as "your browser connected": the page that dialled
   // was a headless one Reticle launched and has now closed, and nothing is open on this screen.
   const leased = undefined !== lease && session.sessionId === lease.sessionId;

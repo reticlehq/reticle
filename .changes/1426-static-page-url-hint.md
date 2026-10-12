@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle init` on a plain HTML page started its own server on :5500 even when the page was already being served, and never said so.** A page served by Python, PHP or a Node server with an API behind it got a second copy on :5500, and the success line read only "Connected", so an agent went on to verify a page with none of the real server's answers behind it. `init` now says before starting its static server that `reticle init --url <app>` attaches to one that is already running, and the success line names the origin it connected to and who started that server. Closes [#1426](https://github.com/reticlehq/reticle/issues/1426).

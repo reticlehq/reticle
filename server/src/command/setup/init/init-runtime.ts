@@ -274,16 +274,14 @@ export async function continueAfterInit(
       ),
       // A plain page with no dev script gets Reticle's own static server, so the page is actually
       // served and the connect can be proved, instead of stopping at "start the app yourself".
-      ...((): { devCommand?: string } => {
-        const devCommand =
-          context.devCommand ??
-          (undefined === parsed.url
-            ? staticPageDevCommand({
-                appDir: context.appDir,
-                isStaticPage: Framework.HTML === context.framework,
-              })
-            : undefined);
-        return undefined === devCommand ? {} : { devCommand };
+      ...((): { devCommand?: string; devCommandIsStaticPage?: boolean } => {
+        if (undefined !== context.devCommand) return { devCommand: context.devCommand };
+        if (undefined !== parsed.url) return {};
+        const devCommand = staticPageDevCommand({
+          appDir: context.appDir,
+          isStaticPage: Framework.HTML === context.framework,
+        });
+        return undefined === devCommand ? {} : { devCommand, devCommandIsStaticPage: true };
       })(),
       ...(undefined === parsed.url ? {} : { suppliedUrl: parsed.url }),
     },
