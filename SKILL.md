@@ -42,6 +42,8 @@ reticle_act_and_wait { ref, action, until }
 
 Drive the journey that matters; `until` on its LAST step names the end state. It is saved as a flow that replays with no model. On a linked project (Free includes monthly Harness credits), `reticle_verify { action: "explore", persona }` drives it for you on the Reticle platform; it answers a runId in ~45s: poll by runId until done, never start a second. Either way, name the journey: Reticle lists buttons, not which one matters.
 
+**`ready` is connection, not hydration.** A session or lease answering `ready: true` has an SDK attached and answering; it does not mean the app finished hydrating. A slow-hydrating page (SvelteKit, Next) can still be mid-render, with controls not yet wired up, so an act issued immediately can miss. If reads come back empty — a `find` for buttons returns 0 matches and there are no console lines — read that as not hydrated yet, not as a page with nothing on it. Make the first act `reticle_act_and_wait` with an `until` on something hydration renders, or `reticle_assert { action: "wait" }`.
+
 Everything between here and there is a rule the steps assume. Read it as you go, not before you act.
 
 ## Installed means a verdict was produced
