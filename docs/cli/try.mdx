@@ -38,17 +38,21 @@ Run [`reticle connect`](/cli/cloud) in the folder, then run `try` again. It exit
 
 ## What it prints
 
+A `Driving <url>` line first, telling you to watch the window, then:
+
 ```
 Tried 3 journeys: 1 work, 1 broken, 1 not proved
   ✓ works: Shopper: checks out
   ✗ broken: Shopper: applies a coupon
   ? not proved (blocked): Admin: refunds
-Saved to your dashboard: <your dashboard url>
+See it in your dashboard: <the run's page>
 ```
+
+There is one `See it in your dashboard` line per run. When the dashboard address is not known, a single `Saved to your dashboard: <url>` line takes their place.
 
 Each verdict comes from the engine. A journey that neither passed nor failed is reported as **not proved**. It is never counted as working.
 
-If the run could not be sent, `try` says so, keeps the run on this machine and tells you to run `reticle sync`. It never prints "Saved" in that case.
+If the run could not be sent, `try` says so, keeps the run on this machine and tells you to run `reticle sync`. It never prints a dashboard line in that case.
 
 ## Exit codes
 

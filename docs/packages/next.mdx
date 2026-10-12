@@ -10,7 +10,7 @@ icon: n
 
 ## Why it exists
 
-Next users are on SWC. Telling them to switch to Babel for a dev tool would be a rude trade, and it would slow down every build they run. This adds a dev-only pre-loader for `.jsx` and `.tsx` and leaves the rest of the pipeline alone.
+Next users are on SWC. Telling them to switch to Babel for a dev tool would be a rude trade, and it would slow down every build they run. This adds a dev-only pre-loader for `.jsx`, `.tsx` and `.js` files that contain JSX, and leaves the rest of the pipeline alone.
 
 ## Install and use
 
@@ -35,15 +35,16 @@ module.exports = withReticle({/* your config */});
 ### `.`
 
 ```ts
-function withReticle<T = unknown>(nextConfig?: T): T;
+function withReticle<T = unknown>(nextConfig?: T, options?: { sourceMapping?: boolean }): T;
 ```
 
-Returns the config unchanged when `NODE_ENV === 'production'`. Otherwise it merges in:
+Returns the config unchanged when `NODE_ENV === 'production'`, unless `RETICLE_DEV=1` is set (for `NODE_ENV=production next dev`). `sourceMapping: false` skips the loader rules, for an app that renders through a non-DOM React reconciler. Otherwise it merges in:
 
 | Addition | What it does |
 | --- | --- |
-| `webpack` | Pushes an `enforce: 'pre'` rule for `/\.(t\|j)sx$/`, excluding `node_modules`, using this package's loader. Your own `webpack` function still runs afterwards |
-| `turbopack` | On Next 15.3 and above only: rules for `*.tsx` and `*.jsx` pointing at `@reticlehq/next/loader` |
+| `webpack` | Pushes an `enforce: 'pre'` rule for `/\.(tsx\|jsx\|js)$/`, excluding `node_modules`, using this package's loader. Your own `webpack` function still runs afterwards |
+| `turbopack` | On Next 15.3 and above only: rules for `*.tsx` and `*.jsx` (and, on Next 16, the project's own `*.js`) pointing at `@reticlehq/next/loader` |
+| `allowedDevOrigins` | Your own list plus the loopback hosts a Reticle-opened tab arrives on, on a Next that accepts the key (15.2.2 and above) |
 | `env.NEXT_PUBLIC_RETICLE_URL` | The bridge URL: a valid `RETICLE_PORT` override, otherwise project daemon discovery and `.reticle.json` |
 | `env.NEXT_PUBLIC_RETICLE_TOKEN` | The pairing token, when one exists on disk |
 | `env.NEXT_PUBLIC_RETICLE_ROOT` | `process.cwd()`, so source paths come back repository-relative |
@@ -51,7 +52,7 @@ Returns the config unchanged when `NODE_ENV === 'production'`. Otherwise it merg
 
 Daemon discovery reads `RETICLE_STATE_DIR` (default `~/.reticle`). Pairing tokens use `RETICLE_PAIRING_TOKEN_DIR` independently. The generated `ReticleDev` component reads `NEXT_PUBLIC_RETICLE_URL`; restart the dev server after changing these settings.
 
-`readPairingToken()` is also exported at runtime. It is not declared in `index.d.ts`, so TypeScript will not see it.
+`readPairingToken()`, `discoverDaemonUrl()` and `knowsAllowedDevOrigins()` are also exported at runtime. They are not declared in `index.d.ts`, so TypeScript will not see them.
 
 ### `./loader`
 
@@ -60,7 +61,7 @@ declare function reticleNextLoader(this: unknown, source: string, inputMap?: unk
 export = reticleNextLoader;
 ```
 
-An async webpack loader. It skips anything that is not `.jsx` or `.tsx`, and anything under `node_modules`. It lazily imports `@reticlehq/babel-plugin` and runs `babel.transformAsync` with `configFile: false`, `babelrc: false`, `retainLines`, and source maps on.
+An async webpack loader. It skips anything that is not `.jsx`, `.tsx` or a `.js` file containing JSX, and anything under `node_modules`. It lazily imports `@reticlehq/babel-plugin` and runs `babel.transformAsync` with `configFile: false`, `babelrc: false`, `retainLines`, and source maps on.
 
 <Note>
   The loader never fails the build. Any error falls back to the original source, because a dev-only

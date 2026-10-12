@@ -9,9 +9,9 @@ That gap is the difference between a gate and a decoration. A decoration still c
 
 ## How it works here
 
-`ci.yml` ends in a single job called **`gate`**. It waits on every other job in that file and passes only when each one either succeeded or was legitimately skipped. So one required check, `gate`, covers all fifteen jobs in `ci.yml`.
+`ci.yml` ends in a single job called **`gate`**. It waits on every other job in that file and passes only when each one either succeeded or was legitimately skipped. So one required check, `gate`, covers every other job in `ci.yml` except `fixtures-dispatch`, which notifies another repository and never runs on a pull request.
 
-That trick only reaches so far. A job can only wait on jobs in **its own workflow file**, so the five workflows below cannot be folded into `gate`. Each has to be named in branch protection separately, or it blocks nothing.
+That trick only reaches so far. A job can only wait on jobs in **its own workflow file**, so the other workflows below cannot be folded into `gate`. Each has to be named in branch protection separately, or it blocks nothing.
 
 `server/src/ci-aggregate-covers-jobs.test.ts` fails if a new workflow starts running on pull requests without being accounted for, and if a job in `ci.yml` is not watched by `gate`.
 
@@ -27,7 +27,7 @@ Set these as required status checks on the default branch:
 | `codeql` | security scan | a flagged vulnerability |
 | `dco` | contributions are signed off | an unsigned contribution |
 
-`labeler` is deliberately absent. It adds labels to a pull request; there is no result to block on.
+`labeler`, `welcome` and `dependabot-auto-merge` are deliberately absent. They label a pull request, greet a first contribution, and turn on auto-merge for Dependabot updates the queue still gates; there is no result to block on.
 
 ## Adding a workflow
 

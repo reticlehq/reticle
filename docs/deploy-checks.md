@@ -91,7 +91,7 @@ Both. For a non-loopback origin Reticle injects `reticle.connect()` with a one-t
 
 ### One of my flows logs in and the next one starts logged in. How do I stop that?
 
-`verify` replays flows sequentially against one tab, so leftover state carries. Either author each flow to be self-contained, or use `reticle_verify { action: "flows", parallel: true }`, which gives every flow its own isolated browser context with its own cookies and storage.
+`verify` replays flows sequentially against one tab, so leftover state carries. Either author each flow to be self-contained, or use `reticle_verify { action: "flows", parallel: 4 }` (`parallel` is how many flows run at once), which gives every flow its own isolated browser context with its own cookies and storage.
 
 ### Should I run reticle gate as well as reticle verify?
 

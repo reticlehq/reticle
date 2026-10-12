@@ -16,8 +16,8 @@ No flags.
 
 1. Ask the registry what is available.
 2. Compare by **direction**, not inequality. A registry version that merely differs is not a newer one, and the old check happily installed a downgrade.
-3. Nothing newer: log `reticle_update` with `ok: false` and `message: "already on the latest version"`, then stop.
-4. Otherwise sync the **app's SDK first**. `reticle update` used to swap only the CLI, so the command whose job is keeping an install current was itself a way to produce a version-skewed pair.
+3. Nothing newer: if this project's SDK is older than the CLI, bring it up to the CLI's version; then log `reticle_update` with `ok: false` and `message: "already on the latest version"`, and stop.
+4. Otherwise refresh the Reticle block in agent rule files that already carry one, then sync the **app's SDK first**. `reticle update` used to swap only the CLI, so the command whose job is keeping an install current was itself a way to produce a version-skewed pair.
 5. Then apply the CLI update, which execs and exits. Your agent client restarts it.
 
 ## What it prints
@@ -27,6 +27,7 @@ No flags.
 | `reticle_update` | `ok`, and either `from` and `to`, or `message` and `version` |
 | `reticle_update_sdk` | `synced`, `packages`, `to`, `packageManager`. Or `synced: false` with `reason: "no @reticlehq packages in this project"` |
 | `reticle_update_sdk_failed` | A `hint` naming the exact command to run by hand |
+| `reticle_rules_refreshed` | `files`, `to`: the agent rule files whose Reticle block was brought up to the new version |
 | `reticle_update_failed` | The error |
 
 The SDK sync is best effort and non-fatal on purpose. This command gets run from wherever the human happens to be standing, which is often not an app at all.
@@ -51,7 +52,7 @@ This installs the current server without going through the old updater.
 ## Worked example
 
 ```bash
-npx @reticlehq/server version     # 2.8.0
+npx @reticlehq/server version     # 3.6.0
 npx @reticlehq/server update
 ```
 

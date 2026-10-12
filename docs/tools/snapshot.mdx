@@ -39,7 +39,7 @@ icon: camera
 
 Ninety-eight bytes to answer "where am I?". Use it after a navigation instead of re-reading the page.
 
-### `interactive`. the default working view
+### `interactive`. the usual working view
 
 ```json
 { "mode": "interactive" }
@@ -61,7 +61,7 @@ Everything you can act on, with a `ref` for each, for 65 tokens. Note the passwo
 
 | Argument | What it does                                                                 |
 | -------- | ---------------------------------------------------------------------------- |
-| `mode`   | `full` · `interactive` · `status`                                            |
+| `mode`   | `full` (the default) · `interactive` · `status`                              |
 | `scope`  | CSS selector or ref, to snapshot one subtree                                 |
 | `diff`   | Return only what changed since your last snapshot of the same scope and mode |
 
@@ -112,8 +112,8 @@ When something did move, you get only what changed. This is the same call after 
 A route change resets it: the next call after one returns a full snapshot rather than a delta against a page that no longer exists.
 
 <Tip>
-  Reach for [`reticle_query`](/tools/query) instead when you already know what you're looking for.
-  Snapshot is for orientation; query is for retrieval, and it's almost always cheaper.
+  Reach for [`reticle_look { action: "find" }`](/tools/query) instead when you already know what
+  you're looking for. `page` is for orientation; `find` is for retrieval, and it's almost always cheaper.
 </Tip>
 
 ## Refs change across documents
@@ -132,5 +132,6 @@ Reticle refuses a stale ref rather than clicking whatever now occupies that slot
 <Note>
   That `recovery` string is trimmed. The full text also recommends
   [`reticle_act_and_wait`](/tools/act-and-wait) with `until`, so the next ref is taken after the
-  page settles.
+  page settles, and, on a page that keeps re-rendering, passing `target: { role, name }` instead of
+  a ref.
 </Note>

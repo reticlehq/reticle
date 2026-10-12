@@ -11,8 +11,8 @@ Reticle is a dev-only, localhost-only verification layer an AI coding agent uses
 
 <Accordion title="Does this run in production?">
   No, and it is built so that it cannot easily be made to. Keep `reticle.connect()` behind a dev
-  guard; the SDK is side-effect-free and tree-shakes out of production builds. The Vite plugin uses
-  `apply: 'serve'`, which means it is not part of a production build at all.
+  guard; the SDK is side-effect-free and tree-shakes out of production builds. In a production `vite
+  build`, the Vite plugin swaps the SDK for an inert stub and injects nothing.
 </Accordion>
 
 <Accordion title="Do I have to change my components?">

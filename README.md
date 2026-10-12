@@ -139,18 +139,18 @@ npm install -g @reticlehq/server
 reticle setup mcp
 ```
 
-**✅ It worked when** it finishes with "Reticle is installed on this machine. It is not in your app yet." It doesn't touch your project. **Run it before you open your coding agent**; an agent that's already open needs one restart to see the new tools.
+**✅ It worked when** its **Next steps** open with "Reticle is on this machine, not in your app yet." It doesn't touch your project. **Run it before you open your coding agent**; an agent that's already open needs one restart to see the new tools.
 
 <details>
 <summary>What the installer does, and other ways to install</summary>
 
 <br/>
 
-It runs four things in order and asks you nothing:
+It runs three things in order, then prints your next steps, and asks you nothing:
 
 1. Checks for Node 20.11 or newer, and stops with the fix if it's missing or too old.
 2. `npm install -g @reticlehq/server`, which puts the `reticle` command on your PATH.
-3. `reticle setup install`: registers Reticle's MCP server with every coding agent it finds on this machine (Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue, Factory Droid). Each entry runs `npx @reticlehq/server mcp`. **Codex CLI** keeps a TOML config Reticle won't rewrite, so the installer prints these lines to paste into `~/.codex/config.toml`:
+3. `reticle setup install`: registers Reticle's MCP server with every coding agent it finds on this machine (Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue, Factory Droid). Each entry runs `npx @reticlehq/server mcp`. **Codex CLI** is registered through `codex mcp add` when the `codex` command is on your PATH. Reticle never edits its TOML config itself, so without `codex` the installer names `~/.codex/config.toml` for you to add these lines by hand:
 
    ```toml
    [mcp_servers.reticle]
@@ -225,8 +225,8 @@ reticle status
 
 It detects your framework, then:
 
-1. **Installs two dev dependencies**, at the same version as the CLI: the framework adapter (`@reticlehq/react`) and the build plugin (`@reticlehq/vite-plugin`, or `@reticlehq/next` for Next.js).
-2. **Writes `.reticle.json`**: `{ "framework", "projectId", "port" }`. The `projectId` keeps two apps running at once apart; the `port` is the local bridge the app dials (4400 unless that one is taken).
+1. **Installs two dev dependencies**, at the same version as the CLI: the SDK (`@reticlehq/react` on a React app, the framework-neutral `@reticlehq/browser` on Vue, Svelte and other stacks) and the build plugin (`@reticlehq/vite-plugin`, or `@reticlehq/next` for Next.js).
+2. **Writes `.reticle.json`**: `{ "framework", "projectId", "port" }`. The `projectId` keeps two apps running at once apart; the `port` is the local bridge the app dials, written only when it is not the default 4400 (that one was taken).
 3. **Adds the plugin to your build config** (one import and one entry), which injects the connect call in development only.
 4. **Writes the dev module, `reticle-dev`** (below).
 5. **Writes agent instructions**, so every agent in this repo knows to verify with Reticle: a short rule in `CLAUDE.md` and `AGENTS.md` (appended, never overwritten), the full rules in `RETICLE.md`, and a `/reticle` command in `.claude/commands/reticle.md`. Skip these, and agent registration, with `--no-mcp`.
@@ -236,7 +236,7 @@ What it writes for the two most common setups (recorded from runs on fresh templ
 
 |  | Vite (React, Vue, Svelte…) | Next.js (App Router) |
 | --- | --- | --- |
-| Dev dependencies | `@reticlehq/react`, `@reticlehq/vite-plugin` | `@reticlehq/react`, `@reticlehq/next` |
+| Dev dependencies | `@reticlehq/react` (Vue, Svelte: `@reticlehq/browser`), `@reticlehq/vite-plugin` | `@reticlehq/react`, `@reticlehq/next` |
 | Build config | `vite.config.ts`: `plugins: [reticle({ port: 4400 }), react()]` | `next.config.ts`: `export default withReticle(nextConfig)` |
 | Dev module | `src/reticle-dev.ts`, loaded by the plugin's injected connect | `app/reticle-dev.tsx`, a client component that connects after hydration |
 | Mounted in | nothing to mount | `app/layout.tsx`: `{process.env.NODE_ENV === 'development' ? <ReticleDev /> : null}` |
@@ -381,7 +381,7 @@ Then **restart the agent**: it reads this list only when it starts.
 
 **3. Add the SDK to your app.**
 
-_Vite (React, Vue, Svelte…):_
+_Vite + React_ (on Vue or Svelte, install `@reticlehq/browser` in place of `@reticlehq/react`, and keep your own framework plugin):
 
 ```bash
 npm install -D @reticlehq/react @reticlehq/vite-plugin
@@ -472,7 +472,7 @@ A session listed means the SDK reached the page. Then run your first check ([Res
 | "no browser session connected" | The dev server was already running when `init` edited the build config, so it's serving a bundle without the SDK | Restart the dev server and hard-reload the tab |
 | Browser console: `[Reticle] this page could not open a websocket to …` | The app and Reticle disagree on the port | `RETICLE_PORT=4400 npm run dev` (Vite plugin), `reticle({ port: 4400 })` in `vite.config`, or `reticle.connect({ url: 'ws://localhost:4400/reticle' })` by hand |
 | `init` stops with "Several apps found" | A monorepo | Rerun with the `reticle init --app <dir>` line it printed |
-| Codex doesn't see the tools | Reticle never rewrites a TOML file | Paste the block `init` printed under its `⚠` into `~/.codex/config.toml` |
+| Codex doesn't see the tools | The `codex` command was not on PATH, and Reticle never edits a TOML file itself | `codex mcp add reticle -- npx @reticlehq/server mcp`, or add the block from [Wire everything by hand](#wire-everything-by-hand) to `~/.codex/config.toml` |
 | `reticle: command not found` | npm's global bin isn't on your PATH | `export PATH="$(npm prefix -g)/bin:$PATH"`, or use `npx @reticlehq/server …` |
 | Anything else |  | `reticle doctor` checks the browser, the background service and the port in one go, and names the fix |
 
@@ -502,7 +502,7 @@ The full agent guide is [SKILL.md](SKILL.md). These are the rules that matter mo
 
 <br/>
 
-You don't start Reticle yourself. Your agent starts it when it first calls a Reticle tool, and it keeps running in the background.
+You don't start Reticle yourself. Your agent starts it when it first calls a Reticle tool, and it runs in the background until it has been idle for a while.
 
 1. Start your dev server as usual (`npm run dev` or whatever your app uses).
 2. `reticle open` shows the app. It reuses a tab that's already connected, or opens one.
@@ -515,7 +515,7 @@ You don't start Reticle yourself. Your agent starts it when it first calls a Ret
 
 <br/>
 
-`reticle <command>` once installed, or `npx @reticlehq/server <command>` anywhere. `reticle --help` lists every flag.
+`reticle <command>` once installed, or `npx @reticlehq/server <command>` anywhere. `reticle help all` lists every command, and `reticle <command> --help` its flags.
 
 | When | Command | What it does |
 | --- | --- | --- |
@@ -748,7 +748,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 | --- | --- |
 | **Web** | React + Vite, Next.js, Remix and Astro are driven to a verdict in CI; more frameworks are install-gated or wired. **[Frameworks](docs/frameworks.mdx) is the one list of what is proven, and how far** |
 | **Desktop** | Electron, Tauri, including the IPC boundary a browser-only tool can't see |
-| **Agents** | anything that speaks MCP. Config written automatically for Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue, Factory Droid. Codex CLI is a printed four-line paste |
+| **Agents** | anything that speaks MCP. Config written automatically for Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue, Factory Droid. Codex CLI through `codex mcp add`, or a four-line paste when `codex` is not on PATH |
 | **Browsers** | the SDK runs in the tab you already have open; the tested and driven browser is Chromium, plus Electron and Tauri webviews |
 | **State** | zustand and Redux need no adapter. Shipped: TanStack Query, Jotai, XState, Valtio, MobX, Recoil, Svelte stores, Pinia |
 | **OS** | macOS, Linux, Windows |

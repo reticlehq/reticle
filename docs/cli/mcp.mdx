@@ -26,7 +26,7 @@ This is what `reticle init` registers, so you rarely type it yourself.
 
 ## The rule this command lives by
 
-The proxy **is** the MCP server the editor launched. Nothing respawns it, so an uncaught throw here is what a user experiences as "the MCP server disconnected". Three behaviours follow from that:
+The proxy **is** the MCP server the editor launched. Nothing respawns it, so an uncaught throw here is what a user experiences as "the MCP server disconnected". Four behaviours follow from that:
 
 - Crash handlers write to the proxy's own log file, not just stderr, because the editor swallows stderr.
 - A daemon that is not there is not fatal. The proxy answers `initialize` itself, serves the cached tool catalog, and retries a daemon on every client request. Present and complaining beats absent, because absent needs a human.
@@ -35,7 +35,7 @@ The proxy **is** the MCP server the editor launched. Nothing respawns it, so an 
 
 ## What it prints
 
-Structured lines to the proxy log (`~/.reticle/`), not to your terminal, since stdout is the MCP transport.
+Structured JSON lines on stderr, never stdout, since stdout is the MCP transport. Most editors swallow stderr, so the idle exit and the crash handlers also write to the proxy log, `~/.reticle/proxy-<port>.log`.
 
 | Event | Meaning |
 | --- | --- |

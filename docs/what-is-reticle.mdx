@@ -15,7 +15,7 @@ It exists because an agent that writes code cannot otherwise tell whether that c
 2. **A local bridge.** The SDK connects over a WebSocket to a daemon on your machine, bound to `127.0.0.1`. The daemon never manages your dev server; it attaches to the app that is running. On first setup, `npx @reticlehq/server init` starts the dev server with your project's own dev script and opens the app.
 3. **An MCP server.** The daemon exposes the app to your agent as tools. `reticle_look` to look, `reticle_act_and_wait` to act and prove in one call, `reticle_observe` to read what the app did, `reticle_assert` to check.
 
-Your app's data stays on your machine: no application code, DOM, network traffic, state or console output leaves it. Anonymous usage counts are sent by default and can be [turned off](/telemetry).
+Your app's data stays on your machine until you link a project: before that, no application code, DOM, network traffic, state or console output leaves it, and once linked, what syncs is your choice ([What is recorded](/what-is-recorded)). Anonymous usage counts are sent by default and can be [turned off](/telemetry).
 
 ## Where it fits
 

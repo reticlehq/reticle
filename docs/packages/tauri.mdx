@@ -6,16 +6,11 @@ icon: rust
 
 `reticle-tauri` is a Rust crate on crates.io, not an npm package. You need it only if your Tauri app should answer `reticle_screenshot`, or run headless in CI. Everything else about a Tauri app, including IPC observation, works without it.
 
-It is versioned **independently** of the ten npm packages. **MIT licensed, unlike the Apache 2.0 npm packages. Edition 2021.**
+It is versioned in **lockstep** with the `@reticlehq/*` npm packages, so `3.7` here and there is the same release. **MIT licensed, unlike the npm packages. Edition 2021.**
 
 ## Why it exists, and why it is small
 
 Tauri IPC observation needs nothing on the Rust side. An `invoke('load_todos')` already reaches Reticle as `ipc://load_todos` through the SDK in the webview. You only need this crate for two things: screenshots, and headless mode.
-
-<Warning>
-  Do not expect this to match the npm version. Doing so would imply a release cadence the crate does
-  not have, and it would make every npm release a crates.io release for no reason.
-</Warning>
 
 ## Install
 
@@ -45,6 +40,9 @@ Nothing is needed on the JavaScript side. Tauri has no preload stage, so the SDK
 | `reticle_capture` | `#[tauri::command] pub async fn reticle_capture(window: tauri::WebviewWindow, full_page: Option<bool>) -> Result<String, String>` |
 | `on_page_load` | `pub fn on_page_load<R: Runtime>(webview: &Webview<R>, payload: &tauri::webview::PageLoadPayload<'_>)` |
 | `FULL_PAGE_UNSUPPORTED` | `pub const FULL_PAGE_UNSUPPORTED: &str = "full-page-unsupported"` |
+| `ACTIVE` | `pub const ACTIVE: bool`: true in a debug build, or a release build with `in-release` |
+| `INERT_IN_RELEASE` | `pub const INERT_IN_RELEASE: &str`: what `reticle_capture` answers when the crate is inert |
+| `inert_refusal` | `pub fn inert_refusal() -> Option<&'static str>` |
 
 There are no public traits and no macros.
 
@@ -54,7 +52,7 @@ Runs on a blocking thread, writes a PNG into a per-process `0700` directory unde
 
 ### `on_page_load`
 
-Hides the window on `PageLoadEvent::Finished` when the environment variable `RETICLE_HEADLESS=1` is set. That ordering matters: the window exists and renders, then it is hidden, so the capture path still works.
+Hides the window on `PageLoadEvent::Finished` when the environment variable `RETICLE_HEADLESS=1` is set. That ordering matters: the window exists and renders, then it is hidden, so the capture path still works. On macOS it also keeps every window's webview scheduling while it is behind other windows (macOS 14 and later); on older macOS, headless moves the window offscreen instead of hiding it.
 
 ## The silent failure to know about
 

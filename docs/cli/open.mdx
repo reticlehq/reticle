@@ -1,10 +1,10 @@
 ---
 title: reticle open
-description: Show the app in a browser, reusing the already-connected tab when there is one.
+description: Open the app in your default browser, or reuse a tab that is already connected.
 icon: window-maximize
 ---
 
-`reticle open` is the one-command "show me the app". It resolves the port, makes sure a daemon is up, and then either reuses the tab that is already connected or opens a new one.
+`reticle open` is the one-command "show me the app". It resolves the port, makes sure a daemon is up, and then either reuses the tab that is already connected or hands the URL to your operating system's default browser. It never opens the browser Reticle drives.
 
 ```bash
 npx @reticlehq/server open [url] [--port N]
@@ -27,7 +27,7 @@ One `reticle_open` line, whose fields say which of four things happened.
 | --- | --- |
 | `reusing` | A connected tab was already on the right page. Nothing was opened |
 | `reusing` + `requested` + `note` | A tab is connected on that origin but sitting on a different page. It was **left there**, not navigated. Drive it with `reticle_navigate` or open the URL yourself |
-| `opened` + `connected: true` | A browser was launched and a Reticle session appeared |
+| `opened` + `connected: true` | The URL went to the system default browser and a new Reticle session appeared within 8 seconds |
 | `opened` + `connected: false` + `note` | The URL went to the system default browser and no session showed up within 8 seconds. Almost always means the app carries no SDK, or dials a different port |
 | `error` | No app connected and no URL given, or the browser could not be launched |
 

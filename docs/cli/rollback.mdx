@@ -1,10 +1,10 @@
 ---
 title: reticle rollback
-description: Restore the previously installed Reticle server version and restart.
+description: Reinstall the previously installed Reticle server version, then exit so your agent restarts it.
 icon: arrow-rotate-left
 ---
 
-`reticle rollback` is the undo for [`reticle update`](/cli/update). It restores the previous server version and restarts.
+`reticle rollback` is the undo for [`reticle update`](/cli/update). It reinstalls the version `update` replaced (recorded in the update manifest), then exits so the next start runs it.
 
 ```bash
 npx @reticlehq/server rollback
@@ -14,7 +14,11 @@ No flags.
 
 ## What it prints
 
-Nothing on the happy path: `rollback()` replaces the process. A failure logs `reticle_rollback_failed` with the error message.
+Two structured lines on the happy path, `reticle_rollback_applying` and `reticle_rollback_applied`, each with the `version` and the `executionKind` (`global`, `local` or `npx`). A failure logs `reticle_rollback_failed` with the error message.
+
+<Warning>
+  Run from a one-off `npx` download (no global or project install), there is nothing to reinstall. It logs `reticle_rollback_npx_strategy` with a note to pin the version in your MCP config (for example `@reticlehq/server@<version>` in `.mcp.json`), and does not exit. Pin the version there yourself.
+</Warning>
 
 Telemetry records the move as a `version_changed` event with `direction: "rollback"`, which is treated as a release-quality alarm rather than a routine version move.
 
@@ -22,14 +26,16 @@ Telemetry records the move as a `version_changed` event with `direction: "rollba
 
 | Code | Meaning                                                     |
 | ---- | ----------------------------------------------------------- |
-| `0`  | The previous version was restored (the process is replaced) |
+| `0`  | The previous version was reinstalled and the process exited |
 | `1`  | There was nothing to roll back to, or the restore threw     |
 
 ## Worked example
 
-```bash
-npx @reticlehq/server update
+On the global install the installer puts on your PATH (under `npx` there is nothing to roll back):
+
+```text
+reticle update
 # the new build misbehaves:
-npx @reticlehq/server rollback
-npx @reticlehq/server version
+reticle rollback
+reticle version
 ```

@@ -269,7 +269,7 @@ Stale sessions pointing at dev servers you restarted an hour ago look completely
 { "action": "end" }
 ```
 
-`reticle_session { action: "end" }` when you are done, `{ action: "yield" }` when pausing. Both revive on your next action.
+`reticle_session { action: "end" }` when the whole task is done, `{ action: "yield" }` when pausing. A yielded session revives on your next action; an ended one stays ended.
 
 ## Frequently asked questions
 

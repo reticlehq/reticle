@@ -51,7 +51,7 @@ A backgrounded tab adds a `recommendation` telling you what to do about it, and 
     "outages": 3,
     "lastOutage": { "startedMs": 1786818483776, "durationMs": 967 }
   },
-  "recommendation": "tab hidden/throttled and may be un-focusable from here; refocus it, or run `reticle drive <url>` for a guaranteed scriptable context"
+  "recommendation": "tab is not hidden but has not reported health recently ... Timing-sensitive work (animations, debounces, gestures) is what degrades: pass `refuseWhenThrottled: true` to refuse rather than act over events that may not land. Lease a separate context only if a drive here actually fails; ..."
 }
 ```
 
@@ -62,27 +62,27 @@ An empty list is not silent. It comes back with a `why` that separates the two c
 ```json
 {
   "sessions": [],
-  "why": "no browser session connected. Two things to weigh, and neither of them is proof. (1) Nothing is listening on the ports Reticle scans, so the dev server may not be running. That scan is narrow though: a server on any other port is invisible to it, so if the app IS running, ask for its URL rather than assuming it is down, and open it with `reticle open <url>`. (2) There is no `.reticle.json` in the directory this daemon is running in. That is the file `reticle init` writes, so the app may carry no Reticle SDK."
+  "why": "no browser session connected. Two things to weigh, and neither of them is proof. (1) Nothing is listening on the ports Reticle scans, so the dev server may not be running: START IT YOURSELF, in the background, using the command in `next_action`, and tell the human in one line that it is running. (2) There is no `.reticle.json` in the directory this daemon is running in, which is the file `reticle init` writes, so the app may carry no Reticle SDK. Check the app's OWN directory before re-running it. ..."
 }
 ```
 
-That string is trimmed. The full text also lists the exact ports it scanned and warns that in a monorepo the daemon often runs at the root while the app lives in a subdirectory, so you should check the app's own directory before re-running `init`.
+That string is trimmed. The full text also lists the exact ports it scanned, says a server on any other port is invisible to the scan (ask for the app's URL and open it with `reticle open <url>`), and warns that in a monorepo the daemon often runs at the root while the app lives in a subdirectory.
 
 ## The fields that decide whether driving will work
 
 | Field | Why it matters |
 | --- | --- |
-| `throttled` | The browser is deprioritising a background tab. Synthetic timers and pointer gestures may silently no-op |
+| `throttled` | The tab is hidden, or has not reported health recently. A hidden tab clamps timers and animation frames, so an action can land on a page that never advances; a throttled tab that is not hidden is usually just quiet and often still driveable |
 | `hidden` / `focused` | Why it's throttled, and what to do about it |
-| `hasCapabilities` | Whether the app registered testids, signals and stores. `false` means [`reticle_state`](/tools/state) has nothing to read |
+| `hasCapabilities` | Whether the app registered testids, signals and stores. `false` means [`reticle_look { action: "state" }`](/tools/state) has nothing to read |
 | `adapters` | `["react"]` means you get component names and source pointers |
 | `realInputAvailable` | `true` when native CDP input is available, under `reticle drive` |
 | `outages` | How often the connection has dropped. Non-zero is worth investigating |
 
 <Warning>
-  `throttled: true` is the most common cause of "the click did nothing". Focus the tab, or drive a
-  dedicated context. It is not your app being broken. It is the browser saving battery on a tab
-  nobody is looking at.
+  A hidden tab (`hidden: true`, which also sets `throttled`) is the most common cause of "the click
+  did nothing". Focus the tab, or drive a dedicated context. It is not your app being broken. It is
+  the browser saving battery on a tab nobody is looking at.
 </Warning>
 
 ## Confirm after navigating

@@ -312,7 +312,7 @@ Each pending mark carries the human note, the element label, the source **`file:
 
 ### `reticle_network_mock`: stub the network for error-state testing
 
-On a page Reticle drives (`reticle drive`) or a leased Playwright tab (`reticle_lease acquire`), make a request return a 500, force it offline, or delay it, so testing error/edge states is one declared rule, no backend changes:
+On a page Reticle drives (`reticle drive`) or a leased Playwright tab (`reticle_run { tool: "reticle_lease", args: { action: "acquire" } }`), make a request return a 500, force it offline, or delay it, so testing error/edge states is one declared rule, no backend changes:
 
 ```
 reticle_run({ tool: "reticle_network_mock", args: { mocks: [{ urlContains: "/api/pay", method: "POST", status: 500 }] } })
@@ -395,7 +395,7 @@ A `state` assertion is graded as a **consequence** (a wrong element or stale ren
 
 ### Timing
 
-- `timeout_ms` (on `assert`/`wait_for`): wait up to N ms for it to become true.
+- `timeout_ms` (on `reticle_assert`, either action): wait up to N ms for it to become true.
 - `since` (on `net`/`console` leaves): only consider events after this cursor (from `act`).
 
 `dataMatches` matches field by field; a key can be a dotted path (`"order.total"`, `"items.0.id"`), and `*` means "present, any value".
@@ -422,7 +422,7 @@ A `state` assertion is graded as a **consequence** (a wrong element or stale ren
 | `scroll` | `{ dy?, dx?, fraction? }` | Scrolls the nearest scrollable container (or the page, with no `ref`) by `dy`/`dx` pixels, either direction. `fraction` (0 to 1) jumps to that point of the height. No args steps down most of a screen |
 | `tap` | `{ holdMs? }` | A touch tap: pointer and touch events, then `click`. `holdMs` makes it a long press |
 | `zoom` | n/a | Page zoom. Refused inside the page, because CSS zoom changes how a page looks without changing its layout, and a passing check on it would be false |
-| `upload` | `{ name, content?, type? }` | sets a file on `<input type=file>` |
+| `upload` | `{ path }` or `{ name, content?, type? }` | sets a file on `<input type=file>`: `path` is a file on disk (absolute or relative to the project root) whose real bytes the daemon delivers; `name`/`content` supply inline bytes |
 | `drag` | `{ toRef }` | pointer-based drag (dnd-kit / rbd) + HTML5 DnD |
 
 ---
@@ -582,7 +582,7 @@ reticle_assert({ timeout_ms: 30000, predicate: {
 
 #### Keeping signals from drifting (lint)
 
-Signals only help if you actually emit one whenever user-visible state changes. The `@reticlehq/eslint-plugin` package ships `reticle/require-signal-on-mutation`, which flags any function that calls a configured store **mutator** but never fires the **signal callee** in the same body, so the signal map can't silently fall behind the store. (The package also ships `reticle/no-internal-tags`; both are on in its `recommended` config.)
+Signals only help if you actually emit one whenever user-visible state changes. The `@reticlehq/eslint-plugin` package ships `reticle/require-signal-on-mutation`, which flags any function that calls a configured store **mutator** but never fires the **signal callee** in the same body, so the signal map can't silently fall behind the store. (The package also ships `reticle/no-internal-tags` and `reticle/no-runaway-comment`; all three are on in its `recommended` config.)
 
 ```js
 // eslint.config.mjs
@@ -850,7 +850,7 @@ It does **not** freeze `requestAnimationFrame`/microtasks (React's scheduler kee
 ### Action refinements (from real-app use)
 
 - **`blur`** now fires a bubbling `focusout`, so React's commit-on-blur (`onBlur`) runs, and inline editors and form fields commit. `fill`/`type` focus first so a later `blur` commits.
-- **`hover`** accepts `{ holdMs }` to dwell, so timer-gated reveals mount; then `wait_for` the revealed nodes.
+- **`hover`** accepts `{ holdMs }` to dwell, so timer-gated reveals mount; then `reticle_assert { action: "wait" }` for the revealed nodes.
 - **`drag`** yields a frame between phases (React flushes between steps) and accepts `{ data: { mime, value } }` for custom `dataTransfer` payloads.
 
 ### Richer `dataMatches` (signals)
@@ -1094,6 +1094,6 @@ That's it. Reticle correlates the CDP page to your SDK session by URL; pointer a
 
 > **SPA navigation is handled.** The URL correlation tracks client-side route changes (`pushState`/`replaceState`/`popstate`), so real input keeps working after your app navigates into a sub-route, e.g. the hover/quick-edit cluster on a `/workspace` view stays drivable. (If you see `inputModeReason:"page-not-correlated-to-a-cdp-target"`, the reported session URL isn't correlated to a CDP target and real input silently falls back to synthetic.)
 
-> **Watching the agent (presenter).** With `present: true` the activity border now glows once while the agent is busy and fades when idle (no per-action strobe); the HUD sits **bottom-center**, shows a **READING** vs **ACTING** chip so you can tell observation from action at a glance, and `reticle_session { action: "narrate" }` lines are **queued** with a minimum on-screen dwell so none flash by unread.
+> **Watching the agent (presenter).** With `present: true` the activity border now glows once while the agent is busy and fades when idle (no per-action strobe); the HUD docks **bottom-right** by default, shows a **READING** vs **ACTING** chip so you can tell observation from action at a glance, and `reticle_session { action: "narrate" }` lines are **queued** with a minimum on-screen dwell so none flash by unread.
 
-> **Limitation: un-scriptable tabs.** Reticle observes/drives a tab through the in-page SDK + (optionally) CDP; it **cannot bring to front or recover a browser tab the OS won't let it script** (e.g. a backgrounded or non-default-browser tab reporting `hidden:true`/`throttled:true`). When that happens, `reticle_session { action: "list" }` and every act/assert result carry a `session.recommendation` saying so and pointing to `reticle drive <url>` for a guaranteed scriptable context. Refocus the tab, or use `reticle drive`.
+> **Limitation: un-scriptable tabs.** Reticle observes/drives a tab through the in-page SDK + (optionally) CDP; it **cannot bring to front or recover a browser tab the OS won't let it script** (e.g. a backgrounded or non-default-browser tab reporting `hidden:true`/`throttled:true`). When that happens, `reticle_session { action: "list" }` and every act/assert result carry a `session.recommendation` saying so. For a hidden tab it points to `reticle_run { tool: "reticle_lease", args: { action: "acquire", url } }` (or `reticle drive <url>` for a human) for a guaranteed scriptable context. Refocus the tab, or lease one.

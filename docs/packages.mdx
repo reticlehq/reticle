@@ -5,11 +5,12 @@ description: Every Reticle package. What it does, why it exists, when you actual
 icon: cubes
 ---
 
-Reticle is twelve packages, and most people install two. This page exists so you can tell which two, and so that the ones you skip stop looking mysterious.
+Reticle is fourteen packages (thirteen on npm, one Rust crate), and most people install two. This page exists so you can tell which two, and so that the ones you skip stop looking mysterious.
 
 <Note>
   Everything ships together at one version: whatever `npm view @reticlehq/core version` says, every
-  other `@reticlehq/*` package says too, and so does the `reticle-tauri` crate on crates.io.
+  other `@reticlehq/*` package says too, and so does the `reticle-tauri` crate on crates.io. The
+  one exception is `open-verification`, the specification, which carries its own version.
 
 It was versioned independently until 2.12.0, and that turned out to mean _stuck_: the crate sat at `0.1.0` from the day it was written, the publish job skipped it every release because that version already existed, and no Rust-side fix reached anybody. Lockstep costs one line in the bump script and cannot fail that way.
 
@@ -55,7 +56,7 @@ Those rules are why the browser SDK cannot accidentally pull in a filesystem cal
 
 **Why it exists:** without one shared definition, the browser and the server drift. One renames a field, the other keeps reading the old one, and the failure is silent. A verdict that quietly stops carrying evidence. Core makes that a type error instead.
 
-**Depends on:** `zod`, and nothing else. That is the whole point; it sits at the bottom of the graph so everything can depend on it without cycles.
+**Depends on:** `zod` and `open-verification`, which itself depends only on `zod`. That is the whole point; it sits at the bottom of the graph so everything can depend on it without cycles.
 
 **Do you install it?** No. It arrives as a dependency of whatever you did install.
 
@@ -89,7 +90,7 @@ if (import.meta.env.DEV) reticle.connect();
 
 **Why it exists:** agents speak MCP; browsers speak WebSocket; somebody has to be fluent in both and own the `.reticle/` directory where flows, baselines and runs are stored.
 
-**Depends on:** `@modelcontextprotocol/sdk`, `@reticlehq/core`, `@reticlehq/init`, `ws`, `zod`.
+**Depends on:** `@modelcontextprotocol/sdk`, `@reticlehq/browser`, `@reticlehq/core`, `@reticlehq/engine`, `@reticlehq/init`, `open-verification`, `ws`, `zod`, `zod-to-json-schema`. **Peer:** `playwright`.
 
 **Do you install it?** Not into your project. Your agent launches it:
 
@@ -129,7 +130,7 @@ npm i -D @reticlehq/react
 
 **One line in `vite.config.ts`, two jobs.** It stamps source locations onto your JSX and injects `connect()` so you cannot forget to.
 
-**Why it exists:** the two things everyone forgets are wiring the SDK and enabling source mapping. This does both, and `apply: 'serve'` guarantees it never reaches a production build.
+**Why it exists:** the two things everyone forgets are wiring the SDK and enabling source mapping. This does both, and in a production `vite build` it swaps the SDK for an inert stub, so it never reaches a production bundle.
 
 **Depends on:** `@babel/core`, `@reticlehq/babel-plugin`, `@reticlehq/core`. **Peer:** `vite`.
 
@@ -149,7 +150,7 @@ export default defineConfig({ plugins: [reticle(), react()] });
 
 **Why it exists:** React 19 dropped `_debugSource`, which is what source mapping used to rely on. This plugin puts the information back, at build time, in dev only. Without it, `reticle_look { action: "element" }` can still tell you the component name but not the file.
 
-**Depends on:** nothing. **Peer:** `@babel/core`.
+**Depends on:** `@reticlehq/core`. **Peer:** `@babel/core`.
 
 **Do you install it?** Only directly if you are wiring Babel yourself. The Vite and Next packages both pull it in.
 
@@ -191,7 +192,7 @@ module.exports = withReticle({/* your config */});
 
 **Why it exists:** the decision and the machinery that feeds it are different jobs with different reasons to change. Carved out of `@reticlehq/server` so the part that judges can be read, tested and reused without starting anything.
 
-**Depends on:** `@reticlehq/core`, `zod`.
+**Depends on:** `@reticlehq/core`, `open-verification`, `zod`.
 
 ---
 
@@ -211,7 +212,7 @@ module.exports = withReticle({/* your config */});
 
 ## @reticlehq/eslint-plugin
 
-**Two rules, the main one being: state changed, so a signal must fire.**
+**Three rules, the main one being: state changed, so a signal must fire.**
 
 **Why it exists:** signals are the strongest evidence Reticle can use, and they rot the way all conventions rot. Someone adds a mutation, forgets the signal, and every verdict for that flow quietly drops a grade. Nothing breaks. The tests still pass. The evidence just gets weaker.
 
@@ -233,7 +234,7 @@ A lint rule makes the signal layer self-enforcing, which is the only way a conve
 
 ## reticle-tauri
 
-**The Rust crate**, on crates.io. Versioned in lockstep with the npm packages, so `2.11` here and `2.11` there mean the same release.
+**The Rust crate**, on crates.io. Versioned in lockstep with the npm packages, so `3.7` here and `3.7` there mean the same release.
 
 **Why it exists:** Tauri IPC observation needs nothing on the Rust side; an `invoke('load_todos')` already reaches Reticle as `ipc://load_todos`. You only need this crate for screenshots and headless mode.
 
@@ -241,11 +242,6 @@ A lint rule makes the signal layer self-enforcing, which is the only way a conve
 [dependencies]
 reticle-tauri = "3.7"
 ```
-
-<Warning>
-  Do not expect this to match the npm version. Doing so would imply a release cadence the crate does
-  not have, and it would make every npm release a crates.io release for no reason.
-</Warning>
 
 <Card title="Desktop setup in full" icon="display" href="/desktop">
   Electron and Tauri wiring, including the Tauri CSP whose failure is silent.

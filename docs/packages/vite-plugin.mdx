@@ -35,7 +35,7 @@ Set `RETICLE_PORT` in the dev server or desktop build environment to use the sam
 
 ## Why it exists
 
-`apply: 'serve'` means it never reaches a production build. That is the guarantee that lets you leave it in the config permanently: there is no way to ship Reticle to your users by forgetting to remove a line.
+In a production `vite build` the plugin injects nothing and swaps the browser SDK for an inert stub, so the bundle carries no Reticle runtime code. That is the guarantee that lets you leave it in the config permanently: there is no way to ship Reticle to your users by forgetting to remove a line.
 
 ## What it injects
 
@@ -45,7 +45,10 @@ A virtual module at `/@reticle-connect`, added to the HTML, whose contents are:
 import { reticle, install } from '@reticlehq/react';
 install();
 reticle.connect({/* resolved args */});
+if (import.meta.hot) reticle.observeHotUpdates(import.meta.hot);
 ```
+
+An app with `@reticlehq/browser` and no `@reticlehq/react` (Vue, Svelte, plain TypeScript) gets the same module importing `reticle` from `@reticlehq/browser`, without `install()`.
 
 Plus a dynamic import of your dev module if one exists. It looks for `src/reticle-dev.ts`, `.js`, `.tsx` or `.jsx`, in that order, and leaves the file alone if you have one: that file is yours to edit.
 
@@ -55,7 +58,7 @@ Plus a dynamic import of your dev module if one exists. It looks for `src/reticl
 
 | Option | Type | Default |
 | --- | --- | --- |
-| `port` | `number` | Discovered from the daemon registry for this project, falling back to `4400` |
+| `port` | `number` | Used only when the daemon registry and `.reticle.json` name no port; otherwise `4400`. `RETICLE_PORT` overrides all of them |
 | `root` | `string` | Vite's `root`, else `process.cwd()` |
 | `sdkVersion` | `string` | Read from the installed `@reticlehq/react` |
 | `session` | `string` | Omitted, so the SDK generates one |
@@ -66,6 +69,11 @@ Plus a dynamic import of your dev module if one exists. It looks for `src/reticl
 | `inject` | `boolean` | `true`. Set `false` to call `connect()` yourself |
 | `desktop` | `boolean` | `false`. When `true` the connect passes `allowInProduction: true`, which an Electron or Tauri renderer needs, and a `vite build` in a non-production mode (`--mode development`) is instrumented too. A production-mode build is stubbed like a web build |
 | `captureNetworkBodies` | `boolean` | `false`. Also enabled by `VITE_RETICLE_CAPTURE_BODIES=1` |
+| `networkBodyMaxChars` | `number` | `8192`, clamped to 256 to 262144. Also `VITE_RETICLE_BODY_MAX_CHARS` |
+| `captureErrorBodies` | `boolean` | `true`: a failed response keeps its body. `VITE_RETICLE_NO_ERROR_BODIES=1` turns it off |
+| `testIdAttribute` | `string` | `.reticle.json`'s `testIdAttribute`, else `data-testid` |
+| `allowNonLocalhost` | `boolean` | `false`. Lets Reticle run off localhost; a pairing token is still required. Also `VITE_RETICLE_ALLOW_NON_LOCALHOST=1` |
+| `exposePresenter` | `boolean` | `false`. Contributors only: makes Reticle's own presenter visible to its tools |
 | `onWarn` | `(message: string) => void` | `console.warn` |
 
 `reticle({ present: false })` still lets the plugin create and configure the connection; it only hides Reticle's visible presenter. `reticle({ inject: false })` disables that generated connection, so your application must call `connect()` itself. In that manual call, pass the pairing token explicitly:
@@ -86,7 +94,7 @@ declare const __RETICLE_ROOT__: string;
 declare const __RETICLE_SDK_VERSION__: string;
 ```
 
-Vite replaces these `define` identifiers in application source at build time; the declarations let TypeScript typecheck them and do not create runtime globals. The SDK does not discover the pairing token, so pass it explicitly in a hand-written connection:
+Vite replaces these `define` identifiers in application source at build time; the declarations let TypeScript typecheck them and do not create runtime globals. The SDK does not discover the pairing token, so pass it explicitly in a hand-written connection.
 
 ## Other exports
 
@@ -100,7 +108,6 @@ Vite replaces these `define` identifiers in application source at build time; th
 | `readPairingToken` | `() => string \| undefined` | Read the pairing token from disk |
 | `findDevModule` | `(root: string, exists: (p: string) => boolean) => string \| null` | Locate the dev module |
 | `connectModuleSource` | `(options: ReticleVitePluginOptions, devModule?: string \| null) => string` | Build the injected module source |
-| `cjsDepIncludes` | `(appRoot: string, canResolve?: (dep: string) => boolean) => string[]` | CommonJS deps to add to `optimizeDeps` |
 
 Types: `ReticleVitePluginOptions`, `ReticleVitePlugin`, `ViteDevServerLike`.
 

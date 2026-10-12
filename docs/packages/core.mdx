@@ -27,7 +27,13 @@ npm i @reticlehq/core
 | Subpath | What it is |
 | --- | --- |
 | `.` | The ESM barrel. Types at `dist/index.d.ts` |
+| `./telemetry` | The analytics wire, for a Node-side importer that needs only that half |
+| `./artifacts` | The on-disk and registry formats |
+| `./hooks` | What Reticle says happened, for hook consumers |
+| `./hud` | Constants shared by the daemon and the HUD panel |
+| `./tour` | The onboarding tour |
 | `./desktop-contract` | A CommonJS shim, generated at build, for the strings the desktop adapters share |
+| `./source-constants` | A CommonJS shim, generated at build, for the source-stamp constants the build adapters share |
 | `./schema/*.json` | Generated JSON Schema for the wire types |
 | `./package.json` | The manifest |
 
@@ -38,7 +44,7 @@ npm i @reticlehq/core
 
 ## What the barrel exports
 
-`src/index.ts` is a pure barrel: a stack of `export *` re-exports plus one named export. Grouped by what they are for, and not exhaustive:
+`src/index.ts` is a pure barrel: a stack of `export *` re-exports plus two named-export lines. Grouped by what they are for, and not exhaustive:
 
 ### Wire constants
 
@@ -83,19 +89,20 @@ Pure, isomorphic, and safe on both sides of the wire:
 import { RETICLE_IPC_GLOBAL, RETICLE_CAPTURE_CHANNEL } from '@reticlehq/core/desktop-contract';
 ```
 
-Six strings shared by the Electron preload and the Tauri crate, in CommonJS because a preload script is required before any ESM transform:
+Seven strings shared by the Electron preload and the Tauri crate, in CommonJS because a preload script is required before any ESM transform:
 
 | Constant                        | Value                                                      |
 | ------------------------------- | ---------------------------------------------------------- |
 | `RETICLE_IPC_GLOBAL`            | `__reticleIpc`                                             |
 | `RETICLE_CAPTURE_CHANNEL`       | `__reticle:capture`                                        |
+| `RETICLE_WINDOW_CHANNEL`        | `__reticle:window`                                         |
 | `RETICLE_CAPTURE_FILE_PREFIX`   | `reticle-capture-`                                         |
 | `RETICLE_TAURI_CAPTURE_COMMAND` | `reticle_capture`                                          |
 | `RETICLE_FULL_PAGE_UNSUPPORTED` | `full-page-unsupported`, for a refused full-page capture   |
 | `RETICLE_NOT_COMPOSITED`        | `window-not-composited`, for a window that had not painted |
 
 <Warning>
-  The subpath exports those six constants individually and nothing else. The `DESKTOP_CONTRACT`
+  The subpath exports those seven constants individually and nothing else. The `DESKTOP_CONTRACT`
   record they are collected into exists on the ESM side only, so importing it here fails with
   `Module '"@reticlehq/core/desktop-contract"' has no exported member 'DESKTOP_CONTRACT'`. Import
   `DESKTOP_CONTRACT` from `@reticlehq/core` instead.
@@ -103,9 +110,9 @@ Six strings shared by the Electron preload and the Tauri crate, in CommonJS beca
 
 ## The JSON schemas
 
-Seven files, generated at build from the zod definitions:
+Nine files, generated at build from the zod definitions:
 
-`reticle-message.json`, `reticle-event.json`, `hello-message.json`, `command-message.json`, `command-result.json`, `event-message.json`, `event-type.json`.
+`reticle-message.json`, `reticle-event.json`, `hello-message.json`, `command-message.json`, `command-result.json`, `event-message.json`, `event-type.json`, `command-name.json`, `event-payloads.json`.
 
 ```ts
 import schema from '@reticlehq/core/schema/reticle-message.json' with { type: 'json' };

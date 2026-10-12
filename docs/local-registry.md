@@ -47,7 +47,7 @@ registry=http://127.0.0.1:4873/
 
 ```
 npm error 404 Not Found - GET https://registry.npmjs.org/open-verification
-npm error 404  The requested resource 'open-verification@3.1.0' could not be found
+npm error 404  The requested resource 'open-verification@1.0.0' could not be found
 ```
 
 `reticle init` then correctly reports `⚠ Install dependencies` and skips wiring the build plugin, so the app is left un-instrumented by a registry mistake two steps earlier.
@@ -103,10 +103,10 @@ Mount the SDK from a dev-only client component (see the Next.js section in [Gett
 
 Synthetic events can't trigger native `onMouseEnter`/pointer state (hover menus, tooltips, pointer drag). Enable **real input** so the server drives genuine pointer input and `reticle_act` reports `inputMode:"real"`:
 
-- **Easiest (`reticle drive`):** Reticle launches its own scriptable, headless-capable browser at your app URL (no flags to juggle):
+- **Easiest (`reticle drive`):** Reticle launches its own scriptable browser at your app URL, visible by default (no flags to juggle):
 
   ```bash
-  npx --registry http://127.0.0.1:4873/ @reticlehq/server drive http://localhost:4310   # add --headed to watch
+  npx --registry http://127.0.0.1:4873/ @reticlehq/server drive http://localhost:4310   # add --headless to hide the window
   ```
 
 - **Or attach to your own browser:** launch it with `--remote-debugging-port=9222`, then point the MCP server at it via `env`:

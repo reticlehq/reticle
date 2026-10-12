@@ -24,7 +24,7 @@ Real response, with the throttled-tab `session` and `warning` fields trimmed off
 
 ## `confirmed: true` when the page comes back in time
 
-The daemon waits up to `timeout_ms` (default 5000) for the SDK to re-announce itself. When it does, you are told so and can act immediately without a `reticle_sessions` round trip. This is a real reload response:
+The daemon waits up to `timeout_ms` (default 5000) for the SDK to re-announce itself. When it does, you are told so, with the `sessionId` it came back as, and can act immediately without a `reticle_session { action: "list" }` round trip. This is a real reload response:
 
 ```json
 {
@@ -42,6 +42,8 @@ A full navigation destroys the document the SDK was living in. Reticle cannot re
 
 Most tools would return `ok: true` and let you assume arrival. When the page then fails to load, or loads without instrumentation, you get a confusing cascade of "element not found" errors several calls later, with nothing pointing at the real cause.
 
+`confirmed: false` with a `landedOn` URL is a different case: the page arrived, but the app sent it somewhere else, such as a login or route-guard redirect. `landedOn` says where the browser actually is.
+
 `waitedMs` says which of two things you are looking at. Reticle stopped waiting at the budget it had, or the page never came back. The first is fixed by asking for more: a single-page app reattaching under HMR has been measured at 30–60s, which no default should wait for on every call, but which the caller who knows the app can grant.
 
 ```json
@@ -57,10 +59,10 @@ Most tools would return `ok: true` and let you assume arrival. When the page the
 then confirm a session reconnected:
 
 ```json
-{}
+{ "action": "list" }
 ```
 
-with [`reticle_sessions`](/tools/sessions), and only then snapshot. If no session appears at the new URL, the page did not load or is not instrumented. And you know that immediately rather than three calls later.
+with [`reticle_session`](/tools/sessions), and only then look at the page. If no session appears at the new URL, the page did not load or is not instrumented. And you know that immediately rather than three calls later.
 
 <Warning>
   **Refs do not survive a navigation.** A new document means new refs. Across one afternoon on the

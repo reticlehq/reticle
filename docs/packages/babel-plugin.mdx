@@ -8,7 +8,7 @@ icon: file-code
 
 React 19 dropped `_debugSource`, which is what source mapping used to rely on, so without this the tools can tell you the component name but not the file.
 
-**Apache 2.0. CommonJS. No runtime dependencies. Peer dependency: `@babel/core ^7`.**
+**Apache 2.0. CommonJS. One runtime dependency, `@reticlehq/core` (for the attribute name). Peer dependency: `@babel/core ^7`.**
 
 ## What it stamps
 
@@ -36,6 +36,8 @@ The path is relative to `process.cwd()`, with backslashes normalized to forward 
 ## What it skips
 
 - Component tags. Only lowercase host elements are stamped, because a component's own JSX gets stamped where it is defined.
+- Lowercase tags that are not HTML or SVG elements, such as react-three-fiber's `<mesh>`. Only known DOM tags are stamped, because a custom renderer can crash on the attribute.
+- Files whose first non-empty line is a comment holding exactly `@reticle-ignore`.
 - Elements that already carry the attribute.
 - Nodes with no location information.
 - Anything whose tag name is not a plain `JSXIdentifier`.
@@ -56,7 +58,7 @@ One export, via `export =`. There are no named exports and no `default` interop 
 function reticleSourcePlugin({ types }: { types: typeof BabelTypes }): PluginObj<PluginPass>;
 ```
 
-The Babel plugin name is `reticle-source`. Its visitor handles `JSXOpeningElement` only.
+The Babel plugin name is `reticle-source`. Its visitor handles `Program` (to read the ignore marker) and `JSXOpeningElement`.
 
 **It takes no options.** The plugin reads nothing from `state.opts`.
 

@@ -46,7 +46,7 @@ Codex CLI keeps a TOML config that Reticle will not rewrite itself, so with the 
   you open it. If it was already open, quit and reopen it once.
 </Note>
 
-Prefer not to pipe a script into a shell? The two commands it runs are:
+Prefer not to pipe a script into a shell? The same result by hand:
 
 ```bash
 npm install -g @reticlehq/server
@@ -63,7 +63,7 @@ RETICLE_INSTALL_SOURCE=docs_site npx @reticlehq/server init
 
 This installs the dev-only SDK, wires your build config, starts the dev server, and checks that a browser session connected. Nothing from your project leaves your machine. If your dev server was already running, restart it once and hard-reload the tab: it read your build config before `init` edited it. Open your coding agent once this command finishes; if it was already open during installation, restart it to load the new tools. The `RETICLE_INSTALL_SOURCE` prefix is optional and only tells us which page you installed from. It is idempotent: run it twice and the second run reports what was already done rather than doing it again.
 
-Step 1 is once per machine. This step is once per project. **Skipping it is the most common reason Reticle "does nothing":** the agent has the tools, but there is no app on the other end for them to see.
+Step 1 is once per machine. This step is once per project. **Skipping it is a common reason Reticle "does nothing":** the agent has the tools, but there is no app on the other end for them to see.
 
 <Note>
   **Skipped this step?** Ask your agent to verify something in the app. Its first `reticle_session`
@@ -155,8 +155,8 @@ This reuses the tab you already have open, or opens one if you don't. The SDK co
   If the browser console says `[Reticle] this page could not open a websocket to …`, your app and
   the daemon disagree about the port. Set it explicitly: `RETICLE_PORT=4400 pnpm dev` (Vite
   plugin), `reticle({ port: 4400 })` in `vite.config`, or
-  `reticle.connect({ url: 'ws://localhost:4400/reticle' })` by hand. This is
-  the single most common setup problem, and the console message names the exact address it tried.
+  `reticle.connect({ url: 'ws://localhost:4400/reticle' })` by hand. The console
+  message names the exact address it tried.
 </Warning>
 
 ## Step 6. Look at the page
@@ -285,10 +285,10 @@ That third state is the one that matters. Most tools have two outcomes and quiet
 </Accordion>
 
 <Accordion title="Will any of this end up in my production build?">
-  No. The SDK is dev-only. The Vite plugin declares `apply: 'serve'`, so it is dropped from `vite
-  build` entirely, and `connect()` self-disables when the build reports `NODE_ENV=production`. The
-  recommended wiring also guards the call behind `import.meta.env.DEV`, so there are two independent
-  locks.
+  No. The SDK is dev-only. A production `vite build` with the Vite plugin injects nothing and
+  replaces the SDK with an inert stub, and `connect()` self-disables when the build reports
+  `NODE_ENV=production`. The recommended wiring also guards the call behind `import.meta.env.DEV`,
+  so there are two independent locks.
 </Accordion>
 
 <Accordion title="Does my code or my app's data leave my machine?">

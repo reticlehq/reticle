@@ -27,7 +27,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [actions.mdx](actions.mdx) | every action and its arguments, including `press` and its history |
 | [environment.mdx](environment.mdx) | every environment variable Reticle reads, what it changes, and which process reads it |
 | [faq.mdx](faq.mdx) | production, frameworks, comparisons, and the honest limits |
-| [tools/overview.mdx](tools/overview.mdx) | the 18 advertised tools, the 30 in the cold tail, and why |
+| [tools/overview.mdx](tools/overview.mdx) | the ten advertised tools, the rest reachable on demand, and why |
 | [tools/snapshot.mdx](tools/snapshot.mdx) | `reticle_look { action: "page" }`: three modes, from full tree to a 25-token route check |
 | [tools/query.mdx](tools/query.mdx) | `reticle_look { action: "find" }` finds elements by their reported roles, names and labels |
 | [tools/inspect.mdx](tools/inspect.mdx) | `reticle_look { action: "element" }`: one element, down to source and design tokens |
@@ -42,7 +42,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [tools/wait-for.mdx](tools/wait-for.mdx) | `reticle_assert { action: "wait" }`, for consequences you did not cause |
 | [tools/assert.mdx](tools/assert.mdx) | `reticle_assert`: verdicts, and a real failure explained |
 | [tools/sessions.mdx](tools/sessions.mdx) | `reticle_session { action: "list" }`: the health fields that decide if driving works |
-| [tools/tools-and-run.mdx](tools/tools-and-run.mdx) | `reticle_tools` / `reticle_run`, reaching the other 30 |
+| [tools/tools-and-run.mdx](tools/tools-and-run.mdx) | `reticle_tools` / `reticle_run`, reaching the tools that are not advertised |
 | [tools/session-and-feedback.mdx](tools/session-and-feedback.mdx) | `reticle_session` / `reticle_session { action: "feedback" }`, the human boundary |
 | [packages.mdx](packages.mdx) | every library at a glance: what it does, why it exists, when you need it |
 | [packages/](packages/) | one page per published package, with its real exported API and dependencies |

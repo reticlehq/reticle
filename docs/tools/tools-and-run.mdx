@@ -37,7 +37,7 @@ The response also tells you which surface is active:
     "source": "RETICLE_ADVERTISE_ALL_TOOLS set in the DAEMON's environment at startup",
     "note": "The surface is read once at daemon startup: set RETICLE_ADVERTISE_ALL_TOOLS=1 and restart the daemon, or it has no effect. No surface advertises every tool: the advertised count is capped because editors budget tools across all connected MCP servers. Every tool listed here is callable through reticle_run { tool, args } whether or not it is advertised."
   },
-  "next": "Load params with reticle_tools { names:[…] }, then call reticle_run { tool, args }."
+  "next": "All <N> tools above are callable, advertised or not. Load full params with reticle_tools { names:[…] }, then call reticle_run { tool, args }. `retired` maps names that are no longer tools to the call that replaced each."
 }
 ```
 
@@ -65,17 +65,23 @@ Each named tool comes back with its full description and a `params` array of `{ 
 
 ```json
 {
-  "error": "unknown parameter for reticle_flow_save: name",
+  "error": "unknown parameter for reticle_flow_save: title",
   "tool": "reticle_flow_save",
   "params": [
-    { "name": "flow", "required": false, "description": "Alias for `flowName`." },
-    { "name": "flowName", "required": true, "description": "Name for the flow file." }
+    {
+      "name": "flow",
+      "required": false,
+      "description": "Alias for `flowName` (the name reticle_annotate uses)."
+    },
+    { "name": "name", "required": false, "description": "Alias for `flowName`." },
+    { "name": "flowName", "required": false, "description": "Which RECORDING to save …" },
+    { "name": "saveAs", "required": false, "description": "…" }
   ],
   "hint": "fix the arguments and call reticle_run again"
 }
 ```
 
-The full `error` string continues: _"NOT applied, so any result would be an answer to a different question."_
+The full `error` string continues: _"NOT applied, so any result would be an answer to a different question."_ The params list is trimmed here. When the tool has an example call, the refusal carries it as `example` too.
 
 </Warning>
 
@@ -123,7 +129,7 @@ Real response from an instrumented app, trimmed:
 }
 ```
 
-The full response on this fixture carries 49 testids and 16 signals. `source: "live"` means it was read from the running app; pass `{ "fromDisk": true }` to read the git-checked `.reticle/contract.json` instead, which works with no browser attached at all.
+`source: "live"` means it was read from the running app; pass `{ "fromDisk": true }` to read the git-checked `.reticle/contract.json` instead, which works with no browser attached at all.
 
 ## Then this, not a snapshot
 

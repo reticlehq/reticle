@@ -42,6 +42,7 @@ And with no daemon on the port:
 ```text
 reticle status
   daemon       ✗ not running on :4999
+               port presence: free
   agent link   never-attached
   next         no daemon is running on this port, which is normal. An agent starts it when it
                first calls a Reticle tool, and it exits again when idle. Ask your agent to verify
@@ -78,6 +79,7 @@ It is one line in the terminal, pretty-printed here, with `why` trimmed at the e
   "sessionId": "s223e0fad-e012-43f9-a23d-6d585470c90d",
   "url": "http://localhost:4310/",
   "throttled": false,
+  "hidden": false,
   "stale": false,
   "pendingMarks": 0
 }
@@ -86,9 +88,9 @@ It is one line in the terminal, pretty-printed here, with `why` trimmed at the e
 | Field | Meaning |
 | --- | --- |
 | `running` | Whether a usable daemon owns the port |
-| `presence` | Present when the pid file is dead: `daemon`, `foreign`, or `absent`. The port is asked, not just the pid file |
+| `presence` | Present when no usable daemon answered: `foreign` (something else holds the port) or `free`. The port is asked, not just the pid file |
 | `pid` | The daemon process |
-| `sessionCount` / `sessions` | Connected app sessions, each with `sessionId`, `url`, `throttled`, `stale`, `pendingMarks` |
+| `sessionCount` / `sessions` | Connected app sessions, each with `sessionId`, `url`, `throttled`, `hidden`, `stale`, `pendingMarks` |
 | `why` | Present when zero sessions connected. Names the two likely causes and refuses to assert either |
 | `updateAvailable` | Present when a newer server version is on the registry |
 

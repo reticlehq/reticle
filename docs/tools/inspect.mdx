@@ -1,5 +1,5 @@
 ---
-title: reticle_inspect
+title: 'reticle_look { action: "element" }'
 description: Everything about one element. Accessibility properties, geometry, computed styles, design tokens, React component stack, and the exact source file and line.
 icon: crosshairs
 ---
@@ -11,12 +11,12 @@ icon: crosshairs
   `allowedTools` allowlist or an MCP permission rule naming it refuses before Reticle is asked.
 </Warning>
 
-`reticle_query` finds elements. `reticle_inspect` tells you everything about one of them. It is the tool that turns a finding into an edit, because it ends with a file and a line number.
+`reticle_look { action: "find" }` finds elements. `reticle_look { action: "element" }` tells you everything about one of them. It is the tool that turns a finding into an edit, because it ends with a file and a line number.
 
 ## Example
 
 ```json
-{ "ref": "e120" }
+{ "action": "element", "ref": "e120" }
 ```
 
 Real response:
@@ -40,7 +40,16 @@ Real response:
     "display": "flex",
     "visibility": "visible"
   },
-  "scroll": { "scrollTop": 0, "scrollHeight": 36, "clientHeight": 36, "overflowY": "visible" },
+  "scroll": {
+    "scrollTop": 0,
+    "scrollHeight": 36,
+    "clientHeight": 36,
+    "overflowY": "visible",
+    "scrollLeft": 0,
+    "scrollWidth": 219,
+    "clientWidth": 219,
+    "overflowX": "visible"
+  },
   "theme": {
     "colorToken": "--muted",
     "backgroundToken": null,
@@ -65,7 +74,7 @@ Real response:
 
 Read `colorTokens` rather than `colorToken` when it matters. Design systems routinely give several tokens the same value, and the singular field is `null` whenever more than one matches, because naming an arbitrary winner is worse than admitting the palette cannot tell them apart. `themeScope` says which theme the reading was taken under, so two inspects either side of a theme toggle are comparable instead of quietly contradictory. It is `null`, as above, when the element sits under no scoped theme at all.
 
-**`scroll`** reports the element's own scroll box. `scrollHeight` above `clientHeight` means there is content below the fold inside this element, which is a different problem from the page being scrolled wrong.
+**`scroll`** reports the element's own scroll box on both axes. `scrollHeight` above `clientHeight` means there is content below the fold inside this element, which is a different problem from the page being scrolled wrong. `scrollWidth` above `clientWidth` means the content did not fit across, which is how a label clipped by `text-overflow: ellipsis` shows up.
 
 **`occluded`** is the difference between "visible" and "actually clickable". An element can be present, visible and enabled while sitting under a modal overlay. `states` will look perfect; `occluded: true` is the honest answer.
 
@@ -90,6 +99,6 @@ Read `colorTokens` rather than `colorToken` when it matters. Design systems rout
 </CardGroup>
 
 <Note>
-  `inspect` returns one element in detail. If you find yourself inspecting six things in a row, you
-  probably want [`reticle_query`](/tools/query) with `attrs` instead, one call, six answers.
+  `{ action: "element" }` returns one element in detail. If you find yourself inspecting six things in a row, you
+  probably want [`reticle_look { action: "find" }`](/tools/query) with `attrs` instead, one call, six answers.
 </Note>

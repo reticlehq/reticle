@@ -31,7 +31,7 @@ npx @reticlehq/server stop [--port N] [--quiet] [--force]
 | Event | When |
 | --- | --- |
 | `reticle_daemon_stopped` | It stopped. Carries `port`, `pid`, and `escalated: true` if it took a `SIGKILL` |
-| `reticle_daemon_not_running` | No live pid for that port. The stale pid file is removed |
+| `reticle_daemon_not_running` | No live pid for that port, and nothing answers `/status` on it. The stale pid file is removed |
 | `reticle_daemon_stop_timeout` | It survived everything. Exits `1` |
 
 Real capture, stopping a port with no live pid recorded for it. It exits `0`, because "already not running" is the state you asked for:
@@ -57,7 +57,7 @@ With `--quiet` that same run prints nothing at all and still exits `0`.
 
 ## Freeing the port: `--force`
 
-`stop` needs the pid Reticle recorded. If the pid file is stale, was never written, or the port is held by a daemon from another checkout, plain `stop` reports `reticle_daemon_not_running` about a port that is demonstrably occupied. `stop --force` asks the **port** instead and is the command for that case.
+`stop` starts from the pid Reticle recorded. When that pid is dead or missing but a Reticle daemon still answers `/status` on the port (a stale pid file, or a daemon from another checkout), plain `stop` frees that listener the same way `--force` does. When nothing answers `/status`, plain `stop` reports `reticle_daemon_not_running`. `stop --force` always asks the **port** first, and is the command to reach for when the pid file and the port disagree.
 
 <Warning>
   Never free the port with `lsof -ti tcp:4400 | xargs kill -9`. `reticle mcp` holds a **client**
@@ -70,8 +70,8 @@ With `--quiet` that same run prints nothing at all and still exits `0`.
 |  | `reticle stop` | `reticle stop --force` |
 | --- | --- | --- |
 | Finds the process by | the pid recorded in Reticle's own state | the **listener** on the port |
-| Works when the pid file is stale or was never written | no | yes |
-| Works on a daemon from another checkout | no | yes |
+| Works when the pid file is stale or was never written | yes, when the daemon answers `/status` | yes |
+| Works on a daemon from another checkout | yes, when it answers `/status` | yes |
 | Works without `lsof` (Windows, slim containers) | yes | yes, falling back to the recorded pid and saying so |
 
 ### How `--force` decides

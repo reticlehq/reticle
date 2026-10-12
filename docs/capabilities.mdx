@@ -4,7 +4,7 @@ description: Coverage, storage, fake clocks, autonomous crawling, visual diffing
 icon: sparkles
 ---
 
-These are the Reticle tools that do something other than look, act, observe and assert: control coverage, client storage, a fake clock, autonomous crawling, semantic and visual baselines, network mocking, flow recording and replay, and the CI artifact. Reach for them when the verify loop is not the shape of the question. They are **not advertised on the default tool surface, but they are reachable from it**: `reticle_run({ tool, args })` dispatches to any registered tool by name, advertised or not, which is the spelling used on this page. To have them advertised outright instead, with their output schemas, start the daemon with `RETICLE_ADVERTISE_ALL_TOOLS=1` (read once at startup, so restart it) and call them by name.
+These are the Reticle tools that do something other than look, act, observe and assert: control coverage, client storage, a fake clock, autonomous crawling, semantic and visual baselines, network mocking, flow recording and replay, and the CI artifact. Reach for them when the verify loop is not the shape of the question. They are **not advertised on the default tool surface, but they are reachable from it**: `reticle_run({ tool, args })` dispatches to any registered tool by name, advertised or not, which is the spelling used on this page. Starting the daemon with `RETICLE_ADVERTISE_ALL_TOOLS=1` (read once at startup, so restart it) advertises some of them outright, with their output schemas: storage, clock, screenshot, visual diff, network mocking, recording, flow save and replay. The rest stay behind `reticle_run` on every surface.
 
 Most of the time you want the verify loop. Look, act, observe, assert. These are the tools for the times you want something else, and they are the ones people are most surprised exist.
 
@@ -255,11 +255,10 @@ Records the meaningful state of a page and compares later. Structure and content
 
 ## Needs a driven browser
 
-Four tools apply their effects through the Chrome DevTools Protocol. The always-on SDK cannot do that, so they need a browser Reticle is driving.
+Four tools apply their effects through the Chrome DevTools Protocol or a browser page Reticle owns. The always-on SDK cannot do that, so they need a browser Reticle is driving (`reticle drive <url>`, or `RETICLE_CDP_URL` pointed at a Chrome started with `--remote-debugging-port`) or a leased tab (`reticle_lease { action: "acquire" }`).
 
 <Warning>
-**A pooled lease is not enough.** Re-verified on 2026-08-16: acquire one with `reticle_lease` and
-`reticle_screenshot` answers
+On a tab the SDK alone is connected to, `reticle_screenshot` answers
 
 ```json
 {
@@ -269,9 +268,7 @@ Four tools apply their effects through the Chrome DevTools Protocol. The always-
 }
 ```
 
-while `reticle_network_mock` answers `{ "applied": false, "count": 0, "ok": false, "reason": "no-cdp-provider" }`. Under a driven browser, all four work: the captures below were taken that way.
-
-Run `reticle drive <url>`, or point `RETICLE_CDP_URL` at a Chrome started with `--remote-debugging-port`.
+and `reticle_network_mock` answers `{ "applied": false, "count": 0, "ok": false, "reason": "no-cdp-provider" }`. The captures below were taken under a driven browser.
 
 </Warning>
 
@@ -317,7 +314,7 @@ Run `reticle drive <url>`, or point `RETICLE_CDP_URL` at a Chrome started with `
   mistake to make twice.
 </Warning>
 
-`fullPage` captures the whole scroll height. `ref` or `clip` scopes to one element or region. `threshold` sets the pixel-difference tolerance, defaulting to `0.01`, `maxRatio` caps the acceptable changed fraction, and `masks` excludes regions that are expected to change.
+`fullPage` captures the whole scroll height. `ref` or `clip` scopes to one element or region. `threshold` sets the pixel-difference tolerance, defaulting to `0.1`, `maxRatio` caps the acceptable changed fraction, and `masks` excludes regions that are expected to change.
 
 Reticle reads program truth, not pixels, so this is the deliberate exception: a font that failed to load or a compositing glitch is only visible in the actual frame.
 
@@ -361,11 +358,11 @@ The loop closer, and the reason Reticle is not only an interactive tool.
 { "tool": "reticle_verify", "args": { "action": "flows" } }
 ```
 
-<Warning>
-  The argument names are not interchangeable. `reticle_record` takes **`recordingName`**,
-  `reticle_flow_save` takes **`flowName`**, and neither accepts `name`. Reticle rejects the call
-  rather than guessing, which is the right call and still costs you a turn.
-</Warning>
+<Note>
+  `reticle_record` takes **`recordingName`** and `reticle_flow_save` takes **`flowName`**. Both also
+  accept `name` as an alias. `flowName` on `reticle_flow_save` is the recording to save; pass
+  `saveAs` to choose the flow's file name.
+</Note>
 
 Stopping a recording used to return a very large payload, almost all of it the raw `events` array. It no longer does. The timeline is omitted and replaced with a pointer, so a stop is under a kilobyte. This is a real capture of a one-click recording, complete rather than trimmed:
 
@@ -394,8 +391,9 @@ Each step's `args` is elided above because a recorded step is an anchor, not a c
 Nine hundred and fifty-three bytes for 445 recorded events. `timeline_omitted` hands you the exact `reticle_observe` call to make if you want them, so nothing is lost, it is only not charged for by default.
 
 <Note>
-  `reticle_record` takes `action`, `recordingName` and `sessionId` and nothing else. `max_events`
-  and `filters` are rejected, which no longer matters now that the timeline is omitted anyway.
+  `reticle_record` takes `action`, `recordingName` (or its alias `name`) and `sessionId`, and
+  nothing else. `max_events` and `filters` are rejected, which no longer matters now that the
+  timeline is omitted anyway.
 </Note>
 
 `proposedConsequences` is the useful part and the reason to record at all. Reticle watched the interaction and worked out what would have proved it, ranked by strength. Tier 0 is the app's own signal. You do not have to invent the assertion; you pick one.

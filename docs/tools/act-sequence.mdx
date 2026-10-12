@@ -29,7 +29,7 @@ This tool exists because of a measured problem: agents were driving forms one ca
 }
 ```
 
-Steps may also name a `target` instead of a `ref`, the same locator [`reticle_act`](/tools/act) takes. The sequence resolves each one before dispatch, so a login does not need a query round trip per field:
+Steps may also name a `target` instead of a `ref`, the same locator [`reticle_act`](/tools/act) takes. The sequence resolves each one when that step runs (waiting up to `timeout_ms` for it to appear), so a login does not need a query round trip per field, and a control an earlier step opens is still addressable:
 
 ```json
 {
