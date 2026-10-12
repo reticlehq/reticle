@@ -26,6 +26,8 @@
 import type { JournalVerdictEffect } from '@reticlehq/core/artifacts';
 import { isValidRunId } from '@/memory/project/dir/reticle-dir.js';
 import { defaultRunId } from './runner-port.js';
+import { currentShotRun } from './default-run-id.js';
+import { currentDrivenBy } from '@/hooks/driven-by.js';
 import {
   JournalVerdictEffectSchema,
   RunAgentKind,
@@ -157,6 +159,18 @@ const agentsOwn = (actions: readonly JournalAction[]): JournalAction[] =>
 /** The run the agent's session now open in this tab is kept under. */
 export function agentRunId(sessionId: string): string {
   return segmentRunId(driveRunId(sessionId), agentEnds.get(sessionId)?.length ?? 0);
+}
+
+/**
+ * The run the current call lands in: the flow being replayed, else the Harness drive, else the
+ * agent session open in the tab. One answer for a call's screenshot and an intent its check proves.
+ */
+export function runIdOfCall(sessionId: string): string {
+  const scoped = currentShotRun();
+  if (scoped !== undefined) return scoped;
+  const by = currentDrivenBy();
+  const harness = by === undefined ? undefined : harnessRunId(by.harness);
+  return harness ?? agentRunId(sessionId);
 }
 
 /** The ends recorded for a tab, as counts of the agent's own actions, for the fold. */

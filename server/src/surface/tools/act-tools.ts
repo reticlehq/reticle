@@ -7,7 +7,7 @@
  * re-exported through this list, which made a cycle out of nothing: that file needs `actCommand` from
  * here, and a registry is the right place to collect a definition from.
  */
-import { checkWords } from '@/judgement/runs/drive-run.js';
+import { checkWords, runIdOfCall } from '@/judgement/runs/drive-run.js';
 import type { Session } from '@/portal/session/session.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
@@ -887,6 +887,7 @@ export const ACT_TOOLS: ToolDef[] = [
               verdictId: inlineVerdictId(ReticleTool.ACT_AND_WAIT, deps.now()),
               grade,
               at: deps.now(),
+              runId: runIdOfCall(session.id), // the run it lands in: linked by id, never by time
             },
             // Where the acted element is written, so the record can name a file somebody would open
             // to change the thing it describes.

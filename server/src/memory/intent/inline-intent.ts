@@ -199,7 +199,7 @@ export async function dischargeInlineIntent(
   deps: ToolDeps,
   sessionId: string | undefined,
   id: string | undefined,
-  proof: { verdictId: string; grade: string; at: number },
+  proof: { verdictId: string; grade: string; at: number; runId?: string },
   /** `file:line` of the element this verdict acted on, when there was one. */
   sourceLabel?: string,
 ): Promise<void> {

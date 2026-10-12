@@ -2,7 +2,7 @@
  * Observe / wait / assert tools — reticle_observe, reticle_wait_for, reticle_assert, reticle_network,
  * reticle_console, reticle_animations. Split out of tools.ts; assembled back via...OBSERVE_TOOLS.
  */
-import { checkWords } from '@/judgement/runs/drive-run.js';
+import { checkWords, runIdOfCall } from '@/judgement/runs/drive-run.js';
 import { noteEmptyRead } from './gaps/observed-nothing.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
@@ -608,6 +608,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
             verdictId: inlineVerdictId(ReticleTool.ASSERT, deps.now()),
             grade: gradeOfPredicate(predicate),
             at: deps.now(),
+            // The run this check lands in, so the platform links proof and run by id, not by time.
+            runId: runIdOfCall(session.id),
           },
           /*
            * An assertion has no element of its own — it observes, it does not act. The file it names

@@ -50,6 +50,8 @@ export const IntentProofSchema = z.object({
   verdictId: z.string(),
   grade: z.string(),
   at: z.number(),
+  /** The run the proving check landed in, so a reader links proof and run by id, not by time. */
+  runId: z.string().optional(),
 });
 
 export const IntentSchema = z.object({
@@ -110,10 +112,7 @@ export function bindIntent(intent: Intent, binding: unknown): Intent {
  * evidence — the shape this whole feature exists to stop. A throw would be the wrong shape too,
  * because discharge runs off the back of a verdict and must never be why one fails to return.
  */
-export function dischargeIntent(
-  intent: Intent,
-  proof: { verdictId: string; grade: string; at: number },
-): Intent {
+export function dischargeIntent(intent: Intent, proof: z.infer<typeof IntentProofSchema>): Intent {
   if (intent.binding === undefined) return intent;
   return { ...intent, state: IntentState.PROVED, provenBy: proof };
 }

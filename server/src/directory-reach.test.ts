@@ -803,7 +803,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // A step screenshot is filed under the run it belongs to: `runs` names that run (the verify
   // being replayed, else the drive's own id), `hooks` says whether the Harness is the one driving,
   // and `artifact` is where the run reads its screenshots back.
-  visual: ['args', 'artifact', 'dir', 'fs', 'hooks', 'input', 'runs', 'tools'],
+  visual: ['args', 'artifact', 'dir', 'fs', 'input', 'runs', 'tools'],
 };
 
 /**

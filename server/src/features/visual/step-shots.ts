@@ -29,9 +29,7 @@ import {
   type FlowStepResult,
   type RunScreenshot,
 } from '@reticlehq/core';
-import { currentDrivenBy } from '@/hooks/driven-by.js';
-import { currentShotRun } from '@/judgement/runs/default-run-id.js';
-import { agentRunId, harnessRunId } from '@/judgement/runs/drive-run.js';
+import { runIdOfCall } from '@/judgement/runs/drive-run.js';
 import { noteLanding } from '@/judgement/runs/artifact/run-store.js';
 import { isValidRunId, stepShotDir } from '@/memory/project/dir/reticle-dir.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
@@ -89,15 +87,6 @@ export function jpegSize(bytes: Uint8Array): { width: number; height: number } |
     i += 2 + length;
   }
   return undefined;
-}
-
-/** The run a capture belongs to: the verify being replayed, else the Harness drive, else the tab's. */
-function runIdFor(sessionId: string): string {
-  const scoped = currentShotRun();
-  if (scoped !== undefined) return scoped;
-  const by = currentDrivenBy();
-  const harness = by === undefined ? undefined : harnessRunId(by.harness);
-  return harness ?? agentRunId(sessionId);
 }
 
 /** A real screenshot of a page this daemon drives, or undefined when it drives none for this tab. */
@@ -214,7 +203,7 @@ async function shoot(
   const root = session.artifactRoot ?? deps.reticleRoot;
   // Read before anything is awaited: the action this call's verdict was recorded on.
   const actionId = true === verdict ? session.lastActionId : undefined;
-  const runId = runIdFor(session.id);
+  const runId = runIdOfCall(session.id);
   if (!isValidRunId(runId)) return { error: `no screenshot: unusable run id ${runId}` };
   const dir = stepShotDir(root, runId);
   const seq = await allocate(deps.fs, dir);

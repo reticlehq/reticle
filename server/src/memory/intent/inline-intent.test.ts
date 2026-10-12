@@ -1,3 +1,4 @@
+import { agentRunId } from '@/judgement/runs/drive-run.js';
 import { describe, expect, it } from 'vitest';
 import type { WebSocket } from 'ws';
 import {
@@ -170,6 +171,8 @@ describe('a verdict discharges the intent it proved, and nothing it did not', ()
     const [intent] = await ledger.read();
     expect(intent?.state).toBe(IntentState.PROVED);
     expect(intent?.provenBy?.verdictId).toContain(ReticleTool.ASSERT);
+    // The run the proving check lands in, so the platform links proof and run by id, not by time.
+    expect(intent?.provenBy?.runId).toBe(agentRunId(session.id));
   });
 
   it('leaves it undischarged when the verdict failed', async () => {

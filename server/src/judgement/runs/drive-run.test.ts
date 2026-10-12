@@ -6,6 +6,7 @@
  * writer was flow replay — so a live drive, which is how every user meets Reticle, produced no
  * artifact and therefore synced nothing.
  */
+import { runDrivenBy } from '@/hooks/driven-by.js';
 import { describe, expect, it } from 'vitest';
 import { DisparityKind, PredicateKind, Verified, type JournalAction } from '@reticlehq/core';
 import {
@@ -18,6 +19,8 @@ import {
   driveRunsFrom,
   endAgentSession,
   agentRunId,
+  harnessRunId,
+  runIdOfCall,
   harnessAgentId,
   noteHarnessDisparity,
   noteHarnessGoal,
@@ -434,5 +437,19 @@ describe("a Harness run's duration", () => {
     const [run] = driveRunsFrom([{ ...action(Verified.YES, 'x', 40), drivenBy: by }], DEPS);
     expect(run?.durationMs).toBe(4_200);
     expect(run?.flows[0]?.durationMs).toBe(4_200);
+  });
+});
+
+/*
+ * The platform linked an intent's proof to its run by time, a guess: a check that proves an intent
+ * now names the run it lands in. The same run a call's screenshot is filed under.
+ */
+describe('the run a call lands in', () => {
+  it("is the agent session's run in its tab, and the Harness drive's when one drives", async () => {
+    expect(runIdOfCall('tab-call')).toBe(agentRunId('tab-call'));
+    const harness = await runDrivenBy({ harness: 'h1', driver: 'server' }, () =>
+      Promise.resolve(runIdOfCall('tab-call')),
+    );
+    expect(harness).toBe(harnessRunId('h1'));
   });
 });
