@@ -26,7 +26,7 @@
  */
 
 import { CreditKind, type AccountState, type HarnessConfig } from '@reticlehq/core';
-import { TRIAL_DAYS, TRIAL_OFFER } from '@reticlehq/core/hud';
+import { TRIAL_OFFER } from '@reticlehq/core/hud';
 import { hiIconHtml, PRESENTER_ICON_SIZE, PresenterIcon } from './icons/presenter-icons.js';
 import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';
 import { morphHtml } from './chrome/presenter-morph.js';
@@ -50,8 +50,6 @@ export const TEAM_SLOT_ATTR = 'data-reticle-team';
 export const TEAM_TEXT = {
   OPEN: 'Open on dashboard ↗',
   OPEN_TITLE: "This project's runs, kept for your team on the Reticle dashboard",
-  /** Signed out: the trial is theirs to start, so the line says so. */
-  SAVE: `Save for your team · ${String(TRIAL_DAYS)}-day trial`,
   /** Signed in: they may be past the trial already, so it is not promised again. */
   SAVE_LINK: 'Save runs for your team',
   SAVE_TITLE: `Keep every run, flow and Harness result on a dashboard your team shares. On Reticle, ${TRIAL_OFFER}.`,
@@ -283,19 +281,18 @@ export function platformDetails(
 
 /**
  * The header's one quiet way to the platform: "Open on dashboard" once this project is linked, else
- * "Save runs for your team" with the trial. Signed out it is the Sign in door; signed in and unlinked
- * it links this project. Nothing while the account is unknown: an older daemon is not a prospect.
+ * "Save runs for your team", which links this project. Nothing signed out (the rail asks) or while
+ * the account is unknown: an older daemon is not a prospect.
  */
 export function teamLinkHtml(
   account: AccountState | undefined,
   dashboardUrl: string | undefined,
 ): string {
-  if (account === undefined) return '';
-  if (account.signedIn && dashboardUrl !== undefined && isSafeDashboardUrl(dashboardUrl))
+  // Signed out the rail under every page is the one sign-in ask: three at once was two too many.
+  if (account === undefined || !account.signedIn) return '';
+  if (dashboardUrl !== undefined && isSafeDashboardUrl(dashboardUrl))
     return `<a ${TEAM_OPEN_ATTR} class="reticle-team-link" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener" title="${esc(TEAM_TEXT.OPEN_TITLE)}">${TEAM_TEXT.OPEN}</a>`;
-  const door = account.signedIn ? '' : ` ${ACCOUNT_SIGNIN_ATTR}`;
-  const label = account.signedIn ? TEAM_TEXT.SAVE_LINK : TEAM_TEXT.SAVE;
-  return `<button type="button" ${TEAM_SAVE_ATTR}${door} class="reticle-team-link" title="${esc(TEAM_TEXT.SAVE_TITLE)}"><span>${label}</span></button>`;
+  return `<button type="button" ${TEAM_SAVE_ATTR} class="reticle-team-link" title="${esc(TEAM_TEXT.SAVE_TITLE)}"><span>${TEAM_TEXT.SAVE_LINK}</span></button>`;
 }
 
 /**

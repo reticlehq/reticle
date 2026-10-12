@@ -51,15 +51,12 @@ describe('chat views and harness access states', () => {
     expect(root.querySelector('[data-reticle-account-signin]')).not.toBeNull();
   });
 
-  it('signed out, the foot under the log is one line that signs in, the pitch its tooltip', () => {
+  /** Signed out, the HUD asked three times at once; the rail under every page is the one ask. */
+  it('signed out, the foot under the log asks nothing: the rail below is the one sign-in', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: false });
-    const spot = foot(root);
-    expect(spot?.querySelectorAll('.reticle-harness-row')).toHaveLength(1);
-    expect(spot?.querySelector('.reticle-harness-row-wrap')).toBeNull();
-    const door = spot?.querySelector('[data-reticle-account-signin]');
-    expect(door?.textContent).toContain('10 free credits · Sign in');
-    expect(door?.getAttribute('title')).toContain('14-day trial');
+    expect(foot(root)?.querySelector('[data-reticle-account-signin]') ?? null).toBeNull();
+    expect(foot(root)?.textContent ?? '').toBe('');
   });
 
   it('shows nothing while the account is unknown, never a sign-in nag', () => {
@@ -111,7 +108,8 @@ describe('chat views and harness access states', () => {
     expect(root.querySelector<HTMLElement>('[data-reticle-page-panel="harness"]')?.hidden).toBe(
       true,
     );
-    expect(foot(root)?.querySelector('[data-reticle-account-signin]')).not.toBeNull();
+    // The rail under every page asks to sign in again; the foot does not ask a second time.
+    expect(foot(root)?.querySelector('[data-reticle-account-signin]') ?? null).toBeNull();
   });
 
   it('an unlinked project is linked from the page, never by a command to type', () => {

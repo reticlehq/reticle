@@ -14,7 +14,6 @@ import {
   type HarnessDrive,
 } from '@reticlehq/core';
 import {
-  FREE_CREDITS,
   SIGN_UP_PITCH,
   creditsSpent,
   creditsUsageText,
@@ -57,7 +56,6 @@ export const HARNESS_ROW_TEXT = {
   creditsLeft: (left: number, days: number | undefined): string =>
     `${left.toLocaleString('en-US')} credit${1 === left ? '' : 's'}${days === undefined ? '' : ` · ${String(days)} day${1 === days ? '' : 's'}`}`,
   FOOT_LINK: 'Link project',
-  FOOT_SIGNED_OUT: `${String(FREE_CREDITS)} free credits · Sign in`,
   FOOT_NO_CREDITS: 'No credits',
   FOOT_NOT_ENTITLED: 'Not on your plan',
   FOOT_NO_PROVIDER: 'No model provider',
@@ -216,13 +214,8 @@ function switchable(s: HarnessRowState): boolean {
  * otherwise one button that names the state and opens the Harness page.
  */
 export function harnessFootHtml(s: HarnessRowState): string {
-  if (s.account === undefined) return '';
-  // Signed out: one line, like every other state. The whole pitch is its tooltip and the Harness
-  // page's sentence; two wrapped lines here took the space the log is for.
-  if (!s.account.signedIn)
-    return row(
-      `<button type="button" ${ACCOUNT_SIGNIN_ATTR} class="reticle-harness-open" title="${esc(HARNESS_ROW_TEXT.SIGNED_OUT)}"><span class="reticle-harness-name">${HARNESS_ROW_TEXT.NAME}</span><span class="reticle-harness-state">${HARNESS_ROW_TEXT.FOOT_SIGNED_OUT}</span><span class="reticle-harness-chev" aria-hidden="true">›</span></button>`,
-    );
+  // Signed out the rail just below asks to sign in for the Harness: a row here was a second ask.
+  if (s.account === undefined || !s.account.signedIn) return '';
   // A run in progress: its steps open the Harness page, where the run is shown; Stop stays here.
   if (s.drive !== undefined && s.canDrive)
     return row(

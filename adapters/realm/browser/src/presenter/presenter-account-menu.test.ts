@@ -333,12 +333,13 @@ describe('the header’s way to the platform', () => {
     const unlinked = teamLinkHtml(SIGNED_IN, undefined);
     expect(unlinked).toContain(TEAM_TEXT.SAVE_LINK);
     expect(unlinked).toContain('500 Harness credits');
-    expect(teamLinkHtml({ signedIn: false }, undefined)).toContain('14-day trial');
     expect(unlinked).not.toContain(ACCOUNT_SIGNIN_ATTR_NAME);
-    // Signed out it is the Sign in door.
-    expect(teamLinkHtml({ signedIn: false }, undefined)).toContain(ACCOUNT_SIGNIN_ATTR_NAME);
-    for (const html of [unlinked, teamLinkHtml({ signedIn: false }, undefined)])
-      expect(html).not.toMatch(/3 months|three months|UNICORN/i);
+    expect(unlinked).not.toMatch(/3 months|three months|UNICORN/i);
+  });
+
+  /** Signed out, the HUD asked three times at once; the rail under every page is the one ask. */
+  it('is not a second sign-in ask when signed out', () => {
+    expect(teamLinkHtml({ signedIn: false }, undefined)).toBe('');
   });
 
   it('says nothing while the account is unknown', () => {
