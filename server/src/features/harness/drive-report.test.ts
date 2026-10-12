@@ -700,3 +700,62 @@ describe('the values a drive typed', () => {
     ).toEqual(['Nina release 2', 'hello', 'Fixed it']);
   });
 });
+
+/*
+ * Re-check of 3.7.0: one Harness answer carried counts that disagreed — "1 of 1 check(s) held, 0
+ * failed, 0 undecided" beside "6 action(s) were NOT PROVED", and "0 failed" beside "1 action(s)
+ * FAILED … These are findings". Every count and every step line now reads the same graded checks.
+ */
+describe('one answer, one count', () => {
+  const press = (verified: string) =>
+    call(
+      'reticle_act_and_wait',
+      { ref: 'e336', action: 'click', until: { kind: 'net', method: 'POST' } },
+      { verified, because: 'the declared consequence did not hold' },
+    );
+
+  it('never prints a re-press it graded undecided as a FAILED finding', () => {
+    const summary = describeDrive([press('yes'), press('no')], []);
+    expect(summary).toContain('1 of 2 check(s) held, 0 failed, 1 undecided');
+    expect(summary).not.toContain('FAILED');
+    expect(summary).not.toContain('findings');
+    expect(summary).not.toMatch(/click e\d+: no\b/);
+  });
+
+  it('counts a check declared through `predicate`, the alias of `until`, as a check', () => {
+    const aliased = call(
+      'reticle_act_and_wait',
+      { ref: 'e21', action: 'click', predicate: { kind: 'signal', name: 'nav' } },
+      { verified: 'unknown', because: 'only the signal moved' },
+    );
+    expect(checkTally([acted('a', 'yes'), aliased])).toEqual({
+      held: 1,
+      failed: 0,
+      undecided: 1,
+    });
+  });
+
+  it('counts a check made through reticle_run as a check', () => {
+    const wrapped = call(
+      'reticle_run',
+      {
+        tool: 'reticle_act_and_wait',
+        args: { ref: 'e2', action: 'click', until: { kind: 'signal', name: 'saved' } },
+      },
+      { verified: 'no', because: 'the declared consequence did not hold' },
+    );
+    expect(checkTally([wrapped])).toEqual({ held: 0, failed: 1, undecided: 0 });
+  });
+
+  it('states actions that declared nothing apart from the checks, never as undecided checks', () => {
+    const quiet = call(
+      'reticle_act_and_wait',
+      { ref: 'e29', action: 'click' },
+      { verified: 'no-fault', because: 'nothing was declared to prove' },
+    );
+    const summary = describeDrive([acted('a', 'yes'), quiet, quiet], []);
+    expect(summary).toContain('1 of 1 check(s) held, 0 failed, 0 undecided');
+    expect(summary).not.toMatch(/\d+ action\(s\) were NOT PROVED/);
+    expect(summary).toContain('2 action(s) declared no consequence');
+  });
+});
