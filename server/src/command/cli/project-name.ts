@@ -133,9 +133,17 @@ export async function resolveProjectId(
   wanted: string,
   workspace?: string,
   repo?: string,
+  /**
+   * The id `init` wrote into `.reticle.json`, for a project created by default: the platform is
+   * asked to keep it, so the folder and the dashboard name one project by one id. A platform that
+   * does not know the field ignores it and answers with its own, which is what gets linked.
+   */
+  localId?: string,
 ): Promise<string> {
   const { projects } = ProjectsListSchema.parse(await api('GET', `${url}/v1/projects`, token));
   const lc = wanted.toLowerCase();
+  const holding = localId === undefined ? undefined : projects.find((p) => p.projectId === localId);
+  if (holding !== undefined) return holding.projectId;
   const match = projects.find(
     (p) =>
       p.projectId === wanted ||
@@ -148,6 +156,7 @@ export async function resolveProjectId(
     answer = await api('POST', `${url}/v1/projects`, token, {
       name: wanted,
       ...(repo === undefined ? {} : { repo }),
+      ...(localId === undefined ? {} : { projectId: localId }),
     });
   } catch (error) {
     // Refused to create one (a contributor): the platform's words, then the step that works.

@@ -385,12 +385,18 @@ export const cmdLink = async (
     );
     workspace = session.orgName;
     repo = repoIdentity(projectDir);
+    // Only a default create asks for the folder's own id; a named or already-linked one is kept.
+    const localId =
+      wanted === undefined && 'string' !== typeof priorProjectId
+        ? readProjectId(projectDir)
+        : undefined;
     const targetId = await resolveProjectId(
       url,
       session.token,
       wanted ?? fallback,
       workspace,
       repo,
+      localId,
     );
     /*
      * Reuse the key this machine already holds for the project, rather than minting another.
