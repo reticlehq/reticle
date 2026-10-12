@@ -603,6 +603,18 @@ describe('the sync status beside Sync now', () => {
   it('shows nothing for a status it does not know', () => {
     expect(at({ status: '<script>' })).not.toContain('reticle-sync-status');
   });
+
+  // A refused key read "0 waiting", which says nothing is wrong; the reason was only on hover.
+  it('says the key was refused, with the platform reason on hover', () => {
+    const html = at({
+      status: 'pending',
+      pending: 0,
+      keyRefused: 'You were removed from <b>Acme</b>.',
+    });
+    expect(html).toContain('Key refused');
+    expect(html).toContain('You were removed from &lt;b&gt;Acme&lt;/b&gt;.');
+    expect(html).not.toContain('0 waiting');
+  });
 });
 
 describe('what the HUD says once a run syncs, or never will', () => {

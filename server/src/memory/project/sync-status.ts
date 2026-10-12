@@ -155,7 +155,11 @@ export function refusalSaid(body: string): string {
 
 /** Why the platform refused this project's key at the last sync, or undefined. Never throws. */
 export function keyRefusalAtLastSync(reticleRoot: string): string | undefined {
-  const error = readCloudState(reticleRoot).lastError;
+  return keyRefusalIn(readCloudState(reticleRoot).lastError);
+}
+
+/** The refusal a recorded sync error carries, in words, or undefined when it is another failure. */
+function keyRefusalIn(error: unknown): string | undefined {
   if ('string' !== typeof error || !REFUSED_SYNC.test(error)) return undefined;
   return refusalSaid(error.replace(REFUSED_PREFIX, ''));
 }
@@ -225,7 +229,10 @@ export function describeSync(summary: SyncSummary, now: number): string {
     parts.push(
       `refused by the platform: ${named.join('; ')}${0 < summary.refusedMore ? ` (+${String(summary.refusedMore)} more)` : ''}`,
     );
-  if (summary.lastError !== undefined) parts.push(`the last push failed: ${summary.lastError}`);
+  const refusal = keyRefusalIn(summary.lastError);
+  if (refusal !== undefined) parts.push(`the last push was refused: ${refusal}`);
+  else if (summary.lastError !== undefined)
+    parts.push(`the last push failed: ${summary.lastError}`);
   return `${parts.join('; ')} (${ago}).`;
 }
 

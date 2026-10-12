@@ -321,6 +321,28 @@ describe('the sync status in the snapshot', () => {
     }).snapshot();
     expect(snap.sync?.['runUrl']).toBe('https://app.reticle.sh/runs/r9');
   });
+
+  it("carries the platform's reason when it refused this project's key", () => {
+    const reticleRoot = join(mkdtempSync(join(tmpdir(), 'impact-refused-')), '.reticle');
+    mkdirSync(reticleRoot, { recursive: true });
+    writeFileSync(
+      join(reticleRoot, 'cloud.json'),
+      JSON.stringify({ dashboardUrl: 'https://app.reticle.sh/p/x' }),
+    );
+    const body = JSON.stringify({
+      error: { code: 'removed_from_workspace', message: 'You were removed from Acme.' },
+    });
+    writeFileSync(
+      join(reticleRoot, 'cloud-state.json'),
+      JSON.stringify({ lastError: `status 401: ${body}` }),
+    );
+    const snap = new ImpactStore({
+      reticleRoot,
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-refused-home-')),
+      notices: { read: () => [] },
+    }).snapshot();
+    expect(snap.sync?.['keyRefused']).toBe('You were removed from Acme.');
+  });
 });
 
 describe('Reticle Coverage in the snapshot', () => {

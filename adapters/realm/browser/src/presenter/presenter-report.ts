@@ -195,24 +195,29 @@ function syncStatusHtml(sync: Readonly<Record<string, unknown>> | undefined): st
   if (sync === undefined) return '';
   const num = (key: string): number => ('number' === typeof sync[key] ? sync[key] : 0);
   const status = sync['status'];
+  const keyRefused = 'string' === typeof sync['keyRefused'] ? sync['keyRefused'] : undefined;
   const label =
-    'refused' === status
-      ? `${String(num('refused'))} refused`
-      : 'pending' === status
-        ? `${String(num('pending'))} waiting`
-        : 'on-platform' === status
-          ? `Synced · ${String(num('onPlatform'))}`
-          : 'local-only' === status
-            ? `${String(num('pending'))} ${REPORT_TEXT.NOT_SENT}`
-            : undefined;
+    keyRefused !== undefined
+      ? REPORT_TEXT.KEY_REFUSED
+      : 'refused' === status
+        ? `${String(num('refused'))} refused`
+        : 'pending' === status
+          ? `${String(num('pending'))} waiting`
+          : 'on-platform' === status
+            ? `Synced · ${String(num('onPlatform'))}`
+            : 'local-only' === status
+              ? `${String(num('pending'))} ${REPORT_TEXT.NOT_SENT}`
+              : undefined;
   if (label === undefined) return '';
   // Local-only runs get the sentence that says what the count is and how to clear it.
   const said =
-    'local-only' === status
-      ? REPORT_TEXT.NOT_SENT_HELP
-      : 'string' === typeof sync['said']
-        ? sync['said']
-        : '';
+    keyRefused !== undefined
+      ? keyRefused
+      : 'local-only' === status
+        ? REPORT_TEXT.NOT_SENT_HELP
+        : 'string' === typeof sync['said']
+          ? sync['said']
+          : '';
   const runUrl = sync['runUrl'];
   const seeRun =
     'string' === typeof runUrl && isSafeDashboardUrl(runUrl)

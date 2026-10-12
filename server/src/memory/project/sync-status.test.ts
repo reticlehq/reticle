@@ -122,4 +122,20 @@ describe("a refused key, in the platform's words", () => {
     );
     expect(keyRefusalAtLastSync(root)).toBe('You were removed from Acme.');
   });
+
+  // The HUD's platform line is `describeSync`; it printed the raw "status 401: {json}" record.
+  it("says it in the HUD's sentence too, not as the raw answer", () => {
+    const said = describeSync(
+      summarizeSync({
+        linked: true,
+        runs: [],
+        state: {
+          lastError: `status 401: ${body('removed_from_workspace', 'You were removed from Acme.')}`,
+        },
+      }),
+      0,
+    );
+    expect(said).toContain('You were removed from Acme.');
+    expect(said).not.toContain('status 401');
+  });
 });

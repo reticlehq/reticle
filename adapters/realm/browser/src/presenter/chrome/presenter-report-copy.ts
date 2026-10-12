@@ -109,6 +109,8 @@ export const REPORT_TEXT = {
   COPIED: 'Copied',
   /** The run that just synced, on its own dashboard page. */
   SEE_RUN: 'See it in your dashboard',
+  /** The platform refused this project's key; its reason is on hover. */
+  KEY_REFUSED: 'Key refused',
   /** Runs in an unlinked project: on this machine only. */
   NOT_SENT: 'not synced',
   /** What the chip means and what to do about it, on hover. */

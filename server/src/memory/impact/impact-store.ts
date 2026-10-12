@@ -3,6 +3,7 @@ import {
   SyncStatus,
   dashboardRunUrl,
   describeSync,
+  keyRefusalAtLastSync,
   overallStatus,
   readSyncSummary,
 } from '@/memory/project/sync-status.js';
@@ -360,6 +361,7 @@ export class ImpactStore {
       return value;
     }
     const summary = readSyncSummary(this.#root, true);
+    const refusal = keyRefusalAtLastSync(this.#root);
     const latest = summary.latestOnPlatform;
     const value = {
       status: overallStatus(summary),
@@ -371,6 +373,8 @@ export class ImpactStore {
       // The run that just synced, on its own page — the HUD's "see it in your dashboard".
       ...(latest === undefined ? {} : { runUrl: dashboardRunUrl(dashboardUrl, latest) }),
       said: describeSync(summary, now),
+      // The HUD's chip: a refused key is not "0 waiting".
+      ...(refusal === undefined ? {} : { keyRefused: refusal }),
     };
     this.#sync = { at: now, value };
     return value;
