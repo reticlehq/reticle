@@ -379,7 +379,11 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
       /The Reticle Harness is off for this project|no harness entitlement|credits are used\.|cannot drive the Harness right now|Could not confirm Harness access/i,
     hint: RECOVERY.HARNESS_OFF,
   },
-  { match: /^Harness unlocks at \d+% instrumentation/, hint: RECOVERY.HARNESS_LOCKED },
+  {
+    // The gate's own words, and the platform's "locked: connect your app first": expected states.
+    match: /^Harness unlocks at \d+% instrumentation|Reticle Harness is locked\b/,
+    hint: RECOVERY.HARNESS_LOCKED,
+  },
   { match: /The Reticle Harness runs on the Reticle platform/, hint: RECOVERY.HARNESS_NOT_LINKED },
   // Three conditions the daemon understands perfectly and still asked for a bug report about. Each
   // needs its own rule: none of them contains "no browser session connected" (the scope miss is

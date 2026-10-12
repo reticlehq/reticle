@@ -95,6 +95,10 @@ describe('recoveryFor — every known error carries an actionable next move', ()
         'Harness unlocks at 80% instrumentation. This app is at 62%: missing stable test ids.',
       ),
     ).toBe(RECOVERY.HARNESS_LOCKED);
+    // A re-drive: the platform's "locked" answer came back asking for a bug report.
+    expect(
+      recoveryFor('Reticle Harness is locked. Connect your app first, then run it again.'),
+    ).toBe(RECOVERY.HARNESS_LOCKED);
     expect(
       recoveryFor(
         'This workspace has no harness entitlement, so autonomous driving would run on Reticle\u2019s model budget.',
