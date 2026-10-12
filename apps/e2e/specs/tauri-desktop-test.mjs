@@ -88,7 +88,17 @@ try {
       : String(tauriSession.url),
   );
   // Several windows of one Tauri app share an origin; the label is how the listing tells them apart.
-  chk('the session names its Tauri window', tauriSession?.window === 'main', String(tauriSession?.window));
+  // The label rides on the page's health report, which can land after the session is listed: wait
+  // for it within a bound rather than reading the listing at one instant. A label that never comes
+  // still fails here.
+  let windowLabel = tauriSession?.window;
+  for (let i = 0; i < 50 && windowLabel !== 'main'; i++) {
+    await sleep(100);
+    windowLabel = server.bridge.sessions
+      .list()
+      .find((s) => PACKAGED_TAURI_ORIGINS.includes(String(s?.url)))?.window;
+  }
+  chk('the session names its Tauri window', windowLabel === 'main', String(windowLabel));
 
   for (let i = 0; i < 40; i++) {
     if (JSON.stringify(await tool('reticle_network', {})).includes('ipc://load_todos')) break;
