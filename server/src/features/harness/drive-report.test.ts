@@ -470,6 +470,20 @@ describe('the pages a drive reached', () => {
 });
 
 /** A false green from a live drive: one "Sign in" pressed fifteen times read as fifteen proofs. */
+describe("the Harness's second press of a control whose claim already held", () => {
+  // Save held its POST, the app emptied the field, Save was pressed again: no failure of the app.
+  it('is undecided, never a failure', () => {
+    const press = (verified: string) => ({
+      id: 'x',
+      name: 'reticle_act_and_wait',
+      args: { ref: 'e138', action: 'click', until: { kind: 'net', method: 'POST' } },
+      result: { verified },
+      isError: false,
+    });
+    expect(checkTally([press('yes'), press('no')])).toEqual({ held: 1, failed: 0, undecided: 1 });
+  });
+});
+
 describe('the same check made again', () => {
   // Counted as the platform counts a run's checks: distinct (kind, claim, outcome). The answer
   // said "2 of 2 held" beside a dashboard that counted the same run's checks differently.
@@ -486,10 +500,11 @@ describe('the same check made again', () => {
       failed: 0,
       undecided: 0,
     });
+    // The same control failing after it held is the Harness's own re-press: undecided.
     expect(checkTally([press('yes'), press('no'), press('yes')])).toEqual({
       held: 1,
-      failed: 1,
-      undecided: 0,
+      failed: 0,
+      undecided: 1,
     });
     // Another control with the same claim is the same check to the platform.
     const other = { ...press('yes'), result: { verified: 'yes', effect: { testid: 'save' } } };

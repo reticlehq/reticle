@@ -283,6 +283,24 @@ describe('a Harness drive in the same tab', () => {
     expect(drive?.checks).toHaveLength(2);
   });
 
+  /*
+   * A re-drive: the Harness saved "Order 7" (POST held), the app emptied the field, and the driver
+   * pressed Save again declaring the same POST; that second press was filed as a high-severity issue
+   * against the app. The same control, the same claim, after it held, is the Harness's own extra
+   * press: undecided, never a failure of the app.
+   */
+  it('does not fail the app on its own second press of a control whose claim already held', () => {
+    const save = (verified: Verified, at: number): JournalAction => ({
+      ...harness(verified, at),
+      args: { ref: 'e138', action: 'click' },
+      drivenBy: { ...by, harness: 'h-repress' },
+    });
+    const runs = driveRunsFrom([save(Verified.YES, 40), save(Verified.NO, 70)], DEPS);
+    const drive = runs.find((run) => 'harness-h-repress' === run.runId);
+    expect(drive?.checks.map((check) => check.status)).toEqual([Verified.YES, Verified.UNKNOWN]);
+    expect(drive?.flows[0]?.status).not.toBe('fail');
+  });
+
   /** A drive that saw "Invalid email or password" and never reached its goal synced as "Proved". */
   it('is not proved when the drive did not reach its goal, though every check held', () => {
     const missed = { ...by, harness: 'h-goal' };

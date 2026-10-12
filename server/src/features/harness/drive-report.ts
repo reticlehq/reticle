@@ -365,6 +365,7 @@ export function checkTally(toolCalls: readonly ToolOutcome[]): {
   // drive pressed "Sign in" fifteen times and read "15 of 15 check(s) held" for one fact, and an
   // answer that counted by control said "2 of 2" beside a dashboard counting the same run otherwise.
   const seen = new Set<string>();
+  const heldPresses = new Set<string>();
   const tally = { held: 0, failed: 0, undecided: 0 };
   const count = (key: string, now: 'held' | 'failed' | 'undecided'): void => {
     if (seen.has(`${key}|${now}`)) return;
@@ -385,9 +386,18 @@ export function checkTally(toolCalls: readonly ToolOutcome[]): {
       ? `${predicate.data.kind}|${describeWaitTarget(predicate.data)}`
       : JSON.stringify(args['until'] ?? args['predicate'] ?? null);
     const verified = asString(result['verified']);
+    // A second press of a control whose claim already held is the Harness's own extra action.
+    const ref = asString(args['ref']);
+    const pressed = ref === undefined ? undefined : `${ref}|${key}`;
+    const repress = Verified.NO === verified && pressed !== undefined && heldPresses.has(pressed);
+    if (Verified.YES === verified && pressed !== undefined) heldPresses.add(pressed);
     count(
       key,
-      Verified.YES === verified ? 'held' : Verified.NO === verified ? 'failed' : 'undecided',
+      Verified.YES === verified
+        ? 'held'
+        : Verified.NO === verified && !repress
+          ? 'failed'
+          : 'undecided',
     );
   }
   // A replayed flow is a check too: its own expects decided it. A passed replay counted as "no

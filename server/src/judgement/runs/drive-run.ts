@@ -31,6 +31,8 @@ import { currentDrivenBy } from '@/hooks/driven-by.js';
 import {
   JournalVerdictEffectSchema,
   RunAgentKind,
+  asRecord,
+  asString,
   RunFramework,
   RunProfile,
   RunTrigger,
@@ -424,12 +426,19 @@ function harnessRunFrom(
     runId: harnessRunId(by.harness) ?? defaultRunId(),
   });
   if (input === undefined) return undefined;
-  // The driver's own wrong guess about where a click goes is not a failed check of the app.
-  const checks = input.checks.map((check) =>
-    Verified.NO === check.status && claimsOnlyRoute(check.predicate, check.kind)
+  // The driver's own wrong guess about where a click goes is not a failed check of the app; nor is
+  // its second press of a control whose claim already held (Save again on a field the app emptied).
+  const refOf = new Map(actions.map((a) => [a.actionId, asString(asRecord(a.args)['ref'])]));
+  const heldBefore = new Set<string>();
+  const checks = input.checks.map((check) => {
+    const ref = check.actionId === undefined ? undefined : refOf.get(check.actionId);
+    const key = ref === undefined ? undefined : `${ref}|${check.predicate}`;
+    const repress = Verified.NO === check.status && key !== undefined && heldBefore.has(key);
+    if (Verified.YES === check.status && key !== undefined) heldBefore.add(key);
+    return Verified.NO === check.status && (repress || claimsOnlyRoute(check.predicate, check.kind))
       ? { ...check, status: Verified.UNKNOWN, reason: VerifiedReason.INCONCLUSIVE }
-      : check,
-  );
+      : check;
+  });
   const count = (verified: string): number =>
     checks.filter((check) => verified === check.status).length;
   const status = driveFlowStatus({
