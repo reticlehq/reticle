@@ -388,7 +388,13 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * the barrel) and an empty secret field reading empty rather than `[REDACTED]`. Merged with the
  * line above, both together: 267,263 B; ceiling 268,263.
  */
-const MAX_FIRST_LOAD_BYTES = 268_263;
+/*
+ * Set 2026-10-12 by the founder's decision, as a budget for about a year of work rather than the
+ * measurement plus a sliver: it was re-raised dozens of times in a month, which made the check churn
+ * instead of a signal. Measured 267,263 B (every page that loads the SDK pays this, so the year budget is the tightest: ~27%) at 81e046201. Review it once a year, not per change; a
+ * sudden jump inside it is still worth a look in review.
+ */
+const MAX_FIRST_LOAD_BYTES = 340_000;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

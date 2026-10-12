@@ -78,7 +78,13 @@ const HEADROOM_BYTES = 100_000;
  * update (no flicker), platform sync rows and team link. Nothing packed by accident (no tests,
  * maps or images in the tarball).
  */
-const BROWSER_MAX_BYTES = 1_576_245;
+/*
+ * Set 2026-10-12 by the founder's decision, as a budget for about a year of work rather than the
+ * measurement plus a sliver: it was re-raised dozens of times in a month, which made the check churn
+ * instead of a signal. Measured 1,488,024 B at 81e046201. Review it once a year, not per change; a
+ * sudden jump inside it is still worth a look in review.
+ */
+const BROWSER_MAX_BYTES = 2_200_000;
 
 /*
  * The other package a size change is felt in, and it had no ceiling at all.
@@ -186,7 +192,13 @@ const BROWSER_MAX_BYTES = 1_576_245;
  * envelope, once-per-session notices, the resume block and the rules-file primer; its agent/ folder is
  * ~44KB). Checked the tarball: no tests, maps or images; the one docs YAML as before.
  */
-const SERVER_MAX_BYTES = 7_142_601;
+/*
+ * Set 2026-10-12 by the founder's decision, as a budget for about a year of work rather than the
+ * measurement plus a sliver: it was re-raised dozens of times in a month, which made the check churn
+ * instead of a signal. Measured 7,096,212 B at 81e046201. Review it once a year, not per change; a
+ * sudden jump inside it is still worth a look in review.
+ */
+const SERVER_MAX_BYTES = 11_000_000;
 
 const BUDGETS = [
   { name: '@reticlehq/browser', dir: 'adapters/realm/browser', max: BROWSER_MAX_BYTES },

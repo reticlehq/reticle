@@ -162,7 +162,13 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * #1493 both raised the all-tools budget on 2026-10-09. The reason for a raise is still written here.
  */
 // Measured 25,840 B on main at c02824992: 26_840.
-const DEFAULT_SURFACE_BYTE_BUDGET = 26_840;
+/*
+ * Set 2026-10-12 by the founder's decision, as a budget for about a year of work rather than the
+ * measurement plus a sliver: it was re-raised dozens of times in a month, which made the check churn
+ * instead of a signal. Measured the default surface (every agent session pays it, so ~19%) at 81e046201. Review it once a year, not per change; a
+ * sudden jump inside it is still worth a look in review.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 32_000;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -345,7 +351,13 @@ describe('advertised surface cost', () => {
 // and `normalized` / `caseOnlyMiss` / `wouldHold` declared on the verdict tools, so a validating
 // client keeps the alias note and the case-only diagnosis. Measured plus the headroom, so 155,657.
 // Merged with `filesNotFound` above: both together still fit the 155,657 B budget (test passes).
-const ALL_SURFACE_BYTE_BUDGET = 155_657;
+/*
+ * Set 2026-10-12 by the founder's decision, as a budget for about a year of work rather than the
+ * measurement plus a sliver: it was re-raised dozens of times in a month, which made the check churn
+ * instead of a signal. Measured the full surface at 81e046201. Review it once a year, not per change; a
+ * sudden jump inside it is still worth a look in review.
+ */
+const ALL_SURFACE_BYTE_BUDGET = 210_000;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {
