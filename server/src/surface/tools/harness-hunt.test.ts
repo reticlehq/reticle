@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DisparityKind, Verified, type JournalAction } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
@@ -160,8 +161,10 @@ describe('the live persona 21 miss', () => {
       },
       '/overview',
     );
+    // Keyed the way the hunt builds them (`path.join`), so Windows' separators match too.
+    const sessionsDir = join('/p/.reticle', 'sessions');
     const files: Record<string, string> = {
-      '/p/.reticle/sessions/lease-closed/actions.jsonl': journalOf(
+      [join(sessionsDir, 'lease-closed', 'actions.jsonl')]: journalOf(
         "text containing 'Free shipping threshold'",
       ),
     };
@@ -169,8 +172,7 @@ describe('the live persona 21 miss', () => {
       now: () => 1,
       reticleRoot: '/p/.reticle',
       fs: {
-        readdir: (dir: string) =>
-          Promise.resolve('/p/.reticle/sessions' === dir ? ['lease-closed'] : []),
+        readdir: (dir: string) => Promise.resolve(sessionsDir === dir ? ['lease-closed'] : []),
         readFile: (path: string) =>
           files[path] === undefined
             ? Promise.reject(new Error('ENOENT'))
