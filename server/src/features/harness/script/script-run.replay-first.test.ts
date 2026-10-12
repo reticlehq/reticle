@@ -109,7 +109,7 @@ describe('replay first', () => {
   });
 
   /*
-   * Re-check of 3.7.0: a journey saved as a sign-in flow and a mid-session flow. The sign-in held,
+   * Re-check: a journey saved as a sign-in flow and a mid-session flow. The sign-in held,
    * the second drifted, and the plan read "Failed" on an unchanged app because not EVERY replay was
    * undecided. A drift decided nothing about the app: the goal falls back to the model.
    */

@@ -34,6 +34,7 @@ import {
   pagesReached,
   typedValues,
   verdictLine,
+  type JourneyStatus,
 } from '@/features/harness/drive-report.js';
 import {
   runHarness,
@@ -475,7 +476,7 @@ async function runPlan(
       lane.journeys.some((card) => ScriptStatus.PASSED === card.status),
     ),
     // Unmet if any journey's goal was judged unmet; met only when every judged one was.
-    ...goalOfRun(run.drives),
+    ...goalOfRun(run.drives, results),
     // What every lane cost, as the platform said; a planned run dropped it and read as free.
     ...(run.drives.some((d) => d.creditsSpent !== undefined) || planned.planCredits !== undefined
       ? { creditsSpent: sum((r) => r.creditsSpent ?? 0) + (planned.planCredits ?? 0) }
@@ -637,8 +638,16 @@ async function savePlan(
   }
 }
 
-/** The run's goal verdict: false if any drive missed its goal, true if all judged ones reached it. */
-function goalOfRun(drives: readonly HarnessResult[]): { goalMet?: boolean } {
+/**
+ * The run's goal verdict: false if any drive missed its goal, true if all judged ones reached it.
+ * Every journey passed is the page's answer, already graded at each journey's end: a driver's own
+ * "not done" (a lane whose model call failed) read "but the goal was not reached" beside it.
+ */
+export function goalOfRun(
+  drives: readonly HarnessResult[],
+  journeys: readonly JourneyStatus[],
+): { goalMet?: boolean } {
+  if (0 < journeys.length && journeys.every((j) => ScriptStatus.PASSED === j.status)) return {};
   const judged = drives.flatMap((d) => (d.goalMet === undefined ? [] : [d.goalMet]));
   return 0 === judged.length ? {} : { goalMet: judged.every(Boolean) };
 }

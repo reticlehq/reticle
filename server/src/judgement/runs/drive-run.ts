@@ -210,6 +210,9 @@ export function endAgentSession(
     ...(claim === undefined ? {} : { claim }),
   });
   agentEnds.set(sessionId, ends);
+  // The end splits the tab's runs: written again now, not when the tab disconnects, so the run this
+  // end names is on disk (and the dashboard) while the tab stays open.
+  tellNoted();
   const mine = own.slice(Math.min(last?.count ?? 0, own.length));
   const wallMs = at === undefined ? undefined : wallOf(mine, last?.at, at);
   return { actions: mine, runId, ...(wallMs === undefined ? {} : { wallMs }) };
@@ -355,7 +358,7 @@ const goalsMissed = new Map<string, boolean>();
  * "Proved"; it is not proved. Unmet once is unmet: a later journey of the same drive reaching its
  * goal does not undo it.
  */
-/** Told when a Harness drive's goal or comparison is noted, so its run is written again. */
+/** Told when a Harness drive's goal or comparison is noted, or an agent session ends, so its run is written again. */
 const noted = new Set<() => void>();
 
 /**

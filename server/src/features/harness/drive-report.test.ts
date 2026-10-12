@@ -702,7 +702,7 @@ describe('the values a drive typed', () => {
 });
 
 /*
- * Re-check of 3.7.0: one Harness answer carried counts that disagreed — "1 of 1 check(s) held, 0
+ * Re-check: one Harness answer carried counts that disagreed — "1 of 1 check(s) held, 0
  * failed, 0 undecided" beside "6 action(s) were NOT PROVED", and "0 failed" beside "1 action(s)
  * FAILED … These are findings". Every count and every step line now reads the same graded checks.
  */

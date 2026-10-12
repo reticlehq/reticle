@@ -18,6 +18,7 @@ import {
   driveRunId,
   driveRunsFrom,
   endAgentSession,
+  onHarnessNoted,
   agentRunId,
   harnessRunId,
   runIdOfCall,
@@ -493,5 +494,19 @@ describe('the run a call lands in', () => {
       Promise.resolve(runIdOfCall('tab-call')),
     );
     expect(harness).toBe(harnessRunId('h1'));
+  });
+});
+
+// Re-check: the run an agent session ended was written only when its tab disconnected, so
+// the end's "Run on the dashboard" link answered not_found until the lease was released.
+describe('an agent session ending', () => {
+  it('asks for its runs to be written again, so the ended run reaches the disk', () => {
+    let told = 0;
+    const off = onHarnessNoted(() => {
+      told += 1;
+    });
+    endAgentSession('tab-written', [action(Verified.YES, 'saved', 1)], 10);
+    off();
+    expect(told).toBe(1);
   });
 });

@@ -443,7 +443,11 @@ export function claimAgainstGrade(
   actions: readonly JournalAction[],
 ): { claimed: VerdictStatus; graded: VerdictStatus; agrees: boolean } {
   const run = driveRunFrom(actions, { runId: 'claim' });
-  const graded = run === undefined ? VerdictStatus.UNKNOWN : computeVerdict(run).status;
+  const status = run === undefined ? VerdictStatus.UNKNOWN : computeVerdict(run).status;
+  // A failed check is a failed session, as its block's headline and the dashboard say: "partial"
+  // beside "Reticle result: failed" was one answer with two verdicts.
+  const failed = true === run?.checks.some((check) => Verified.NO === check.status);
+  const graded = VerdictStatus.PARTIAL === status && failed ? VerdictStatus.FAIL : status;
   return { claimed: claim, graded, agrees: claim === graded };
 }
 
