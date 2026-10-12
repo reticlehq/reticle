@@ -238,6 +238,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     return runSyncCycle({
       config: cloud.config,
       ...(cloud.link === undefined ? {} : { link: cloud.link }),
+      // Flows deleted here are deleted there, for the project they were sent to.
+      ...(cloud.policy.flows && null !== cloud.projectId ? { projectId: cloud.projectId } : {}),
       source: {
         runs: () => (cloud.policy.runs ? full.runs() : []),
         flows: () => (cloud.policy.flows ? full.flows() : []),

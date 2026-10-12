@@ -1499,3 +1499,40 @@ describe('a folder re-linked to another workspace', () => {
     expect((await relink({}, NEW)).sent.sort()).toEqual(['after', 'before']);
   });
 });
+
+/*
+ * A flow deleted on this machine stayed counted on the platform: it will not infer a deletion from a
+ * name missing in the synced set (another clone may hold it), so the daemon tells it.
+ */
+describe('a flow deleted here', () => {
+  const run = async (state: CloudSyncState, flows: unknown[], projectId?: string) => {
+    const s = server({ status: {} });
+    const k = sink();
+    await runSyncCycle({
+      config: { url: 'https://cloud.test', apiKey: 'rk_test' },
+      ...(projectId === undefined ? {} : { projectId }),
+      source: source({ flows: () => flows }),
+      sink: k.sink,
+      state,
+      now: () => NOW,
+      request: s.request,
+    });
+    return { calls: s.calls, written: k.written };
+  };
+  const A = { name: 'sign-in', version: 1, steps: [] };
+  const B = { name: 'checkout', version: 1, steps: [] };
+
+  it('is deleted on the platform once, by name, for this project', async () => {
+    const first = await run({}, [A, B], 'shop');
+    expect(first.written.state?.sentFlowNames).toEqual(['sign-in', 'checkout']);
+    const after = await run(first.written.state ?? {}, [A], 'shop');
+    const deletes = after.calls.filter((c) => 'DELETE' === c.method).map((c) => c.url);
+    expect(deletes).toEqual(['https://cloud.test/v1/flows/checkout?projectId=shop']);
+    expect(after.written.state?.sentFlowNames).toEqual(['sign-in']);
+  });
+
+  it('deletes nothing when the cycle does not send flows for a project', async () => {
+    const after = await run({ sentFlowNames: ['sign-in', 'checkout'] }, [A]);
+    expect(after.calls.some((c) => 'DELETE' === c.method)).toBe(false);
+  });
+});

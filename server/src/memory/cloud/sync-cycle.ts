@@ -38,6 +38,7 @@ import { syncScreenshots, type ScreenshotSyncState } from './sync-screenshots.js
 const SYNC_PATH = '/v1/sync';
 const SYNC_STATUS_PATH = '/v1/sync/status';
 const SYNC_PULL_PATH = '/v1/sync/pull';
+const FLOWS_PATH = '/v1/flows';
 
 /**
  * The derived records that ride along with runs, and the file each one lives in.
@@ -146,6 +147,8 @@ export interface CloudSyncState extends ScreenshotSyncState {
    * a hash of its own form of a record never matches ours, so the same record went every cycle.
    */
   sentDerivedHashes?: Record<string, string>;
+  /** The names of the flows the platform last took from here: one gone from disk is deleted there. */
+  sentFlowNames?: string[];
   /**
    * The link everything above was kept for: cloud, workspace and project (`credentialSlot`). A
    * folder re-linked elsewhere starts a fresh record, so the new link gets the flows the old one
@@ -238,6 +241,8 @@ interface SyncDeps {
   link?: string;
   /** Send runs made under a previous link too: only ever because the person asked. */
   moveHistory?: boolean;
+  /** The project flows are synced for. Absent when this cycle does not send flows: none is deleted. */
+  projectId?: string;
   source: SyncSource;
   sink: SyncSink;
   state: CloudSyncState;
@@ -698,11 +703,29 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
           refused.push({ part: kind, reason: `${kind}: ${verdict}` });
       }
     }
+    // A flow the platform took from here and that is gone from disk is deleted there by name: it
+    // does not infer a deletion from a missing name, since another clone may still hold the flow.
+    const onDisk = new Set(deps.source.flows().map(flowName));
+    const kept: string[] = [];
+    for (const name of deps.projectId === undefined ? [] : (deps.state.sentFlowNames ?? [])) {
+      if (onDisk.has(name)) {
+        kept.push(name);
+        continue;
+      }
+      const gone = await call(
+        `${FLOWS_PATH}/${encodeURIComponent(name)}?projectId=${encodeURIComponent(deps.projectId ?? '')}`,
+        { method: 'DELETE' },
+      );
+      if (2 !== Math.floor(gone.status / 100) && 404 !== gone.status) kept.push(name);
+    }
+    if (deps.projectId !== undefined) nextState.sentFlowNames = kept;
     if (requests > 0 && pushError === undefined) {
       nextState.lastPushAt = deps.now();
       // The platform answered for these sets, refusals included (reported above, and not re-offered
       // until the set changes — the same rule as a refused run).
       if (flowsChanged) nextState.sentFlowsHash = flowsHash;
+      if (flowsChanged && deps.projectId !== undefined)
+        nextState.sentFlowNames = [...new Set([...kept, ...flows.map(flowName)])];
       if (capsules.length > 0) nextState.sentCapsulesHash = capsulesHash;
     }
     nextState.refusedRuns = refusedRuns;
