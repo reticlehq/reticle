@@ -15,7 +15,11 @@ import {
 import { TOOLS } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { diagnoseNoSession } from '@/portal/session/no-session-diagnosis.js';
-import { MSG_NO_HARNESS_KEY } from './harness-explore.js';
+import {
+  MSG_HARNESS_UNCLAIMED,
+  MSG_HARNESS_UNCONFIRMED,
+  MSG_NO_HARNESS_KEY,
+} from './harness-explore.js';
 
 describe('recoveryFor — every known error carries an actionable next move', () => {
   it('maps the no-session footgun to a concrete recovery', () => {
@@ -103,6 +107,19 @@ describe('recoveryFor — every known error carries an actionable next move', ()
     // a malformed call, so the agent was told to fix arguments that were never wrong.
     expect(recoveryFor(MSG_NO_HARNESS_KEY)).toBe(RECOVERY.HARNESS_NOT_LINKED);
     expect(refusalReasonFor(MSG_NO_HARNESS_KEY)).not.toBe(RefusalReason.BAD_ARGS);
+  });
+
+  // Persona drive: the deliberate "no credits left" refusal was labelled "not one Reticle
+  // recognizes ... may be a defect in Reticle".
+  it.each([
+    'Your 10 free credits are used. Add a card to start your 14-day trial: https://app.test/settings?group=billing',
+    'Your 500 trial credits are used. Pro starts when your trial ends. Plan: https://app.test/x',
+    "This month's credits are used. They renew over the next 30 days.",
+    MSG_HARNESS_UNCLAIMED,
+    MSG_HARNESS_UNCONFIRMED,
+  ])('a deliberate Harness refusal is recognized, never asked about as a defect: %s', (said) => {
+    expect(buildErrorPayload(said).feedback).toBeUndefined();
+    expect(recoveryFor(said)).toBeDefined();
   });
 
   it('returns undefined for an unrecognized error (never invents a hint)', () => {

@@ -373,7 +373,10 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
   { match: /no (?:active|compiled) recording named/i, hint: RECOVERY.MISSING_RECORDING },
   { match: /pairing token is required/i, hint: RECOVERY.TOKEN_REQUIRED },
   {
-    match: /The Reticle Harness is off for this project|no harness entitlement/i,
+    // Credits spent, not entitled, or the platform not answering: deliberate refusals, each naming
+    // its own way out, never "may be a defect in Reticle".
+    match:
+      /The Reticle Harness is off for this project|no harness entitlement|credits are used\.|cannot drive the Harness right now|Could not confirm Harness access/i,
     hint: RECOVERY.HARNESS_OFF,
   },
   { match: /^Harness unlocks at \d+% instrumentation/, hint: RECOVERY.HARNESS_LOCKED },

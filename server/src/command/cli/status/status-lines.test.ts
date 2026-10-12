@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { StatusLabel, statusLines } from './status-lines.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  AttachState,
+  attachStatusFields,
+  rememberEnumerated,
+  rememberProxyStarted,
+  rememberToolCalled,
+} from '@/surface/mcp/attach-memory.js';
 
 describe('statusLines', () => {
   it('renders a running daemon with a connected session', () => {
@@ -107,5 +117,30 @@ describe('an account whose key the platform refused', () => {
     }).join('\n');
     expect(out).toContain('refused this API key');
     expect(out).not.toContain('not signed in');
+  });
+});
+
+/* Persona drives: the agent-link row printed the raw state name ("enumerated", "never-enumerated"). */
+describe('the agent link row', () => {
+  /** The status fields for a port whose record is in `state`, as the daemon reads them. */
+  function attachFields(state: AttachState): Record<string, unknown> {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-attach-'));
+    if (AttachState.NEVER_ATTACHED !== state) rememberProxyStarted(dir, 4400);
+    if (AttachState.NEVER_ATTACHED !== state && AttachState.NEVER_ENUMERATED !== state)
+      rememberEnumerated(dir, 4400);
+    if (AttachState.ENUMERATED === state) rememberToolCalled(dir, 4400);
+    return { ...attachStatusFields(dir, 4400) };
+  }
+  const out = (state: AttachState): string =>
+    statusLines({ port: 4400, running: true, ...attachFields(state) }).join('\n');
+
+  it('says in words that the agent has used the tools', () => {
+    expect(out(AttachState.ENUMERATED)).toMatch(/✓ your agent has read and used Reticle's tools/);
+  });
+
+  it('never prints a state name, and gives the action when there is one', () => {
+    const said = out(AttachState.NEVER_ENUMERATED);
+    expect(said).not.toContain(AttachState.NEVER_ENUMERATED);
+    expect(said).toContain('restart your MCP client');
   });
 });

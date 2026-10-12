@@ -175,11 +175,29 @@ export function endAgentSession(
   const runId = agentRunId(sessionId);
   ends.push({ count: own.length, at: at ?? last?.at ?? 0 });
   agentEnds.set(sessionId, ends);
-  return {
-    actions: own.slice(Math.min(last?.count ?? 0, own.length)),
-    runId,
-    ...(at === undefined ? {} : { wallMs: at - (last?.at ?? 0) }),
-  };
+  const mine = own.slice(Math.min(last?.count ?? 0, own.length));
+  const wallMs = at === undefined ? undefined : wallOf(mine, last?.at, at);
+  return { actions: mine, runId, ...(wallMs === undefined ? {} : { wallMs }) };
+}
+
+/**
+ * How long a session ran, `since` the previous end (else its first action) to `end`, on the tab's
+ * clock, which restarts at every page load: an action stamped before the one ahead of it starts a
+ * new stretch, and the stretches add up. Measured from the last load alone, a ten-second session
+ * that navigated read "1.2s". ponytail: the gap between a reload and the next action is not counted.
+ */
+function wallOf(actions: readonly JournalAction[], since: number | undefined, end: number): number {
+  let start = since ?? actions[0]?.tRange.from ?? end;
+  let prev = start;
+  let total = 0;
+  for (const action of actions) {
+    if (action.at < prev) {
+      total += prev - start;
+      start = action.tRange.from;
+    }
+    prev = action.at;
+  }
+  return total + (prev <= end ? end - start : prev - start + end);
 }
 
 /**

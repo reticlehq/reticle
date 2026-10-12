@@ -19,7 +19,9 @@ import {
   replayResult,
   retitleResult,
   sessionResult,
+  suiteResult,
 } from './reticle-result.js';
+import { buildSuiteVerdict } from '@/language/flows/decision.js';
 import type { JournalAction } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
 import { CONNECT } from './platform-moment.js';
@@ -245,6 +247,36 @@ describe('the block on a single replay and on a Harness drive', () => {
       platform: LINKED,
     });
     expect(block).toContain('- Evidence: /r1/a.jpg, /r2/b.jpg');
+  });
+
+  /*
+   * Persona drive: `reticle_verify { action: "flows" }` answered `status: "unverifiable"` (a channel
+   * contradicted the green) while its own block said "proved · 1 of 1 check held". One truth.
+   */
+  it('a suite whose green a channel contradicted is not proved, as its status says', () => {
+    const contradicted = replay('ok', {
+      steps: [
+        {
+          step: 0,
+          anchor: 'sign in',
+          ok: true,
+          contradictions: [
+            { kind: 'duplicate-request', counter: 'POST /api/login x2', detail: 'd' },
+          ],
+        },
+      ],
+    });
+    const verdict = buildSuiteVerdict([{ replay: contradicted }]);
+    expect(verdict.status).toBe('unverifiable');
+    const block = suiteResult(
+      unlinked(),
+      verdict,
+      [{ replay: contradicted, durationMs: 10 }],
+      undefined,
+    );
+    expect(block.split('\n')[0]).toBe(
+      `**Reticle result: ${ResultWord.NOT_PROVED}** · 1 of 1 check undecided`,
+    );
   });
 
   it('a drifted replay is failed and names the flow; an unverifiable one is not proved', () => {

@@ -185,18 +185,23 @@ const replayShots = (replay: FlowReplayResult): string[] =>
     s.screenshot !== undefined && 'path' in s.screenshot ? [s.screenshot.path] : [],
   );
 
-/** The block for a replayed suite: the flows are the journeys, each flow's verdict one check. */
+/**
+ * The block for a replayed suite: the flows are the journeys, each flow's verdict one check, decided
+ * as the run decides it (`mapReplayToFlowResult`): a green a channel contradicted is undecided, as
+ * the suite's `unverifiable` status says, never held.
+ */
 export function suiteResult(
   root: string,
   verdict: SuiteVerdict,
   timed: readonly TimedReplay[],
   runId: string | undefined,
 ): string {
+  const statuses = timed.map((t) => mapReplayToFlowResult(t.replay, t.durationMs).status);
+  const count = (s: RunFlowStatus): number => statuses.filter((each) => s === each).length;
   return buildReticleResult({
-    yes: verdict.passed,
-    no: verdict.failed,
-    // Unverifiable flows and contradicted greens: ran, and decided nothing.
-    undecided: Math.max(0, verdict.total - verdict.passed - verdict.failed),
+    yes: count(RunFlowStatus.PASS),
+    no: count(RunFlowStatus.FAIL),
+    undecided: statuses.length - count(RunFlowStatus.PASS) - count(RunFlowStatus.FAIL),
     covered: timed.map((t) => t.replay.name),
     failed: verdict.failures.map((f) => f.flow),
     flowsReplayed: timed.length,

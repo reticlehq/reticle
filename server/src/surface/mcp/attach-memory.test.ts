@@ -98,7 +98,10 @@ describe('attach memory', () => {
     rememberProxyStarted(dir, 4400);
     rememberEnumerated(dir, 4400);
     rememberToolCalled(dir, 4400);
-    expect(attachStatusFields(dir, 4400)).toEqual({ mcpClient: AttachState.ENUMERATED });
+    expect(attachStatusFields(dir, 4400)).toEqual({
+      mcpClient: AttachState.ENUMERATED,
+      mcpClientSaid: "✓ your agent has read and used Reticle's tools",
+    });
   });
 
   it('carries the restart advice for the state that has an answer', () => {

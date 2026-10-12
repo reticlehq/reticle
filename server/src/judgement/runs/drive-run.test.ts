@@ -353,14 +353,32 @@ describe('an agent session ending in a tab the Harness also drove', () => {
 
     const second = endAgentSession(
       tab,
-      [own(Verified.YES, 1), theirs(2), theirs(3), own(Verified.NO, 4)],
+      [own(Verified.YES, 1), theirs(2), theirs(3), own(Verified.NO, 120)],
       250,
     );
-    expect(second.actions.map((a) => a.at)).toEqual([4]);
+    expect(second.actions.map((a) => a.at)).toEqual([120]);
     expect(second.runId).not.toBe(first.runId);
     expect(second.wallMs).toBe(150);
     // What the agent drives next belongs to the session after these two.
     expect(agentRunId(tab)).not.toBe(second.runId);
+  });
+
+  /*
+   * Persona drive: a session that drove three steps over ~10s ended "1.2s". The tab's clock restarts
+   * with every page load (the journal is stamped on it), so "end minus last end" measured only the
+   * time since the last reload.
+   */
+  it('times a session across the reloads it caused, never only since the last one', () => {
+    const step = (from: number, at: number): JournalAction => ({
+      ...action(Verified.YES, `step ${String(at)}`, at),
+      tRange: { from, to: at },
+    });
+    const ended = endAgentSession(
+      'tab-reloads',
+      [step(0, 3000), step(3000, 8000), step(200, 1000)],
+      1200,
+    );
+    expect(ended.wallMs).toBe(9000);
   });
 
   it("writes each agent session's run under its own id", () => {

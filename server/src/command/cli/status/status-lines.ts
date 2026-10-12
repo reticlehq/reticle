@@ -158,7 +158,12 @@ export function statusLines(fields: Record<string, unknown>): string[] {
   }
 
   const client = str(fields, 'mcpClient');
-  if (client !== undefined) lines.push(row(StatusLabel.AGENT_LINK, client));
+  if (client !== undefined) {
+    // The state in words (`mcpClientSaid`), never the record's own name for it.
+    lines.push(row(StatusLabel.AGENT_LINK, str(fields, 'mcpClientSaid') ?? client));
+    const action = str(fields, 'mcpClientAction');
+    if (action !== undefined) lines.push(continuation(action));
+  }
 
   for (const [label, key] of [
     [StatusLabel.NEXT, 'nextAction'],
