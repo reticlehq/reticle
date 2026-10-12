@@ -288,9 +288,16 @@ export class IntentShardStore {
       existing !== undefined && existing.statement !== next.statement
         ? { ...existing, binding: undefined }
         : existing;
+    // Bound only while a check is bound: a record whose check was taken off (new words, a decision)
+    // said `bound` with none, and a check naming it then proved nothing and said nothing.
+    const merged = { ...kept, ...next };
+    const state =
+      IntentState.BOUND === merged.state && merged.binding === undefined
+        ? IntentState.DECLARED
+        : merged.state;
     return {
-      ...kept,
-      ...next,
+      ...merged,
+      state,
       subject,
       status: this.#statusOf(next, existing, facts.status),
       updatedAt: this.#clock.now(),

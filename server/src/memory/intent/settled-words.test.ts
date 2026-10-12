@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { IntentShardStore } from './intent-shard-store.js';
+import { IntentState } from '@reticlehq/core';
 import { IntentStatus } from './intent-shard.js';
 import { applySettledWords, keptWordsInRequest, settledWordsIn } from './settled-words.js';
 
@@ -61,6 +62,26 @@ describe('a decision made on the dashboard', () => {
     // The check bound to the old words proves nothing about the kept ones.
     expect(after?.binding).toBeUndefined();
     expect(await applySettledWords(store, settledWordsIn([entry]))).toBe(0);
+  });
+
+  // A re-drive: the record then said `state: "bound"` with no binding, so a check naming it proved
+  // nothing and said nothing. With its check gone, it is declared again, and asks to be bound.
+  it('is declared again, not bound, once its check is taken off', async () => {
+    await store.upsert(
+      'shipping-free',
+      () => ({
+        id: 'shipping-free',
+        statement: 'Orders of $50 or more ship free',
+        state: IntentState.BOUND,
+        declaredAt: 1,
+        binding: { kind: 'text', contains: 'Order 2041' },
+      }),
+      { status: IntentStatus.AGREED },
+    );
+    await applySettledWords(store, settledWordsIn([entry]));
+    const after = await store.get('shipping-free');
+    expect(after?.binding).toBeUndefined();
+    expect(after?.state).toBe(IntentState.DECLARED);
   });
 
   /*
