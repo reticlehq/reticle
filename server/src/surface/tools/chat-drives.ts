@@ -69,7 +69,7 @@ import {
   requestFreeDrive,
   type FreeDrive,
 } from '../../features/harness/platform/platform-drives.js';
-import { HumanControlKind } from '@reticlehq/core';
+import { HumanControlKind, type LinkUnsyncedRoot } from '@reticlehq/core';
 import { onAgentsChange } from '../../hooks/coding-agents.js';
 
 /** Why a platform drive with no tab of its own runs no tool. */
@@ -520,15 +520,18 @@ export function attachHudHarness(
  * an absent list as "no news" and kept a "never sent" banner for runs that had long been sent.
  */
 export function unsyncedReport(
-  unsynced: readonly { root: string; runs: number; linked: boolean }[] | undefined,
+  unsynced: readonly LinkUnsyncedRoot[] | undefined,
   home: string,
-): { unsynced?: { root: string; runs: number; linked: boolean }[] } {
+): { unsynced?: LinkUnsyncedRoot[] } {
   if (unsynced === undefined) return {};
   return {
-    unsynced: unsynced.map((u) => ({
-      ...u,
-      // The project, not its `.reticle`: the dashboard tells the person to run a command there.
-      root: homeRelative(ReticleDir.ROOT === basename(u.root) ? dirname(u.root) : u.root, home),
-    })),
+    // A folder no project claimed cannot be connected, so no board should tell anyone to.
+    unsynced: unsynced
+      .filter((u) => !isUnmatchedRoot(u.root))
+      .map((u) => ({
+        ...u,
+        // The project, not its `.reticle`: the dashboard tells the person to run a command there.
+        root: homeRelative(ReticleDir.ROOT === basename(u.root) ? dirname(u.root) : u.root, home),
+      })),
   };
 }

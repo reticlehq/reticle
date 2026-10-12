@@ -333,6 +333,8 @@ export interface LinkUnsyncedRoot {
   root: string;
   runs: number;
   linked: boolean;
+  /** The project the folder belongs to, so a board lists only its own. Absent when none is named. */
+  projectId?: string;
 }
 
 /**

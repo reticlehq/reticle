@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ReticleDir } from '@reticlehq/core';
+import { RETICLE_CONFIG_BASENAME } from '@/command/cli/ports/resolve/cli-port.js';
 import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
 import {
   describeUnsynced,
@@ -152,5 +153,28 @@ describe('evidence no project claimed', () => {
 
   it('is nothing when there is no such folder', () => {
     expect(unmatchedRoots(mkdtempSync(join(tmpdir(), 'reticle-home-')))).toEqual([]);
+  });
+});
+
+/*
+ * A board listed another workspace's folders from the same laptop: a machine reports every unsent
+ * folder to each workspace it is linked to. Each root now names its project, so the platform shows a
+ * folder only on the workspace that has that project.
+ */
+describe('which project an unsent folder belongs to', () => {
+  it('is the linked project, else the id `.reticle.json` names', async () => {
+    const linked = rootWith(['r1']);
+    writeFileSync(
+      join(linked, ReticleDir.CLOUD_LINK_FILE),
+      JSON.stringify({ projectId: 'acme-web', url: 'https://api.test' }),
+    );
+    const local = rootWith(['r2']);
+    writeFileSync(
+      join(projectFolderOf(local), RETICLE_CONFIG_BASENAME),
+      JSON.stringify({ projectId: 'acme-admin-1234abcd' }),
+    );
+    const bare = rootWith(['r3']);
+    const found = await unsyncedRoots([linked, local, bare], () => Promise.resolve(false));
+    expect(found.map((r) => r.projectId)).toEqual(['acme-web', 'acme-admin-1234abcd', undefined]);
   });
 });

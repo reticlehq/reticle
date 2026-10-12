@@ -6,7 +6,7 @@
  * ids on disk against the ids the platform accepted, so `reticle sync`, `doctor`, the HUD and the
  * platform report can each name the folder and the one command that fixes it.
  */
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import {
@@ -24,6 +24,34 @@ export interface UnsyncedRoot {
   flows: number;
   /** Whether this folder holds a link. False is the case nothing will ever send. */
   linked: boolean;
+  /**
+   * The project it belongs to: the linked one, else the id its `.reticle.json` names. A machine
+   * reports every folder to each workspace it is linked to; this is how a board keeps only its own.
+   */
+  projectId?: string;
+}
+
+/** The project's own config, beside its `.reticle` folder. */
+const PROJECT_CONFIG = '.reticle.json';
+
+/** `projectId` out of a JSON file, or undefined. Never throws. */
+function projectIdIn(path: string): string | undefined {
+  try {
+    const id = (JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown> | null)?.[
+      'projectId'
+    ];
+    return 'string' === typeof id && 0 < id.length ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The project a `.reticle` folder belongs to, as the platform keys it. */
+function projectOfRoot(root: string): string | undefined {
+  return (
+    projectIdIn(join(root, ReticleDir.CLOUD_LINK_FILE)) ??
+    projectIdIn(join(projectFolderOf(root), PROJECT_CONFIG))
+  );
 }
 
 const RUN_SUFFIX = '.json';
@@ -78,7 +106,8 @@ export async function unsyncedRoots(
     const linked = await isLinked(root).catch(() => false);
     const flows = unsentFlowCount(root, linked && (await sendsFlows(root).catch(() => false)));
     if (0 === runs && 0 === flows) continue;
-    out.push({ root, runs, flows, linked });
+    const projectId = projectOfRoot(root);
+    out.push({ root, runs, flows, linked, ...(projectId === undefined ? {} : { projectId }) });
   }
   return out;
 }

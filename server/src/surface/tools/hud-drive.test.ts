@@ -230,6 +230,22 @@ describe('what the daemon reports as never sent', () => {
     expect(unsyncedReport(undefined, '/home/me')).toEqual({});
   });
 
+  // Persona drive: a board advised `reticle connect` inside ~/.reticle/unmatched/…, a folder the
+  // CLI refuses to connect; the report carries each folder's project so a board keeps its own.
+  it("leaves out the folders no project claimed, and names each folder's project", () => {
+    expect(
+      unsyncedReport(
+        [
+          { root: '/home/me/.reticle/unmatched/acme-web-69892493', runs: 2, linked: false },
+          { root: '/home/me/mono/.reticle', runs: 1, linked: false, projectId: 'mono-1234abcd' },
+        ],
+        '/home/me',
+      ),
+    ).toEqual({
+      unsynced: [{ root: '~/mono', runs: 1, linked: false, projectId: 'mono-1234abcd' }],
+    });
+  });
+
   it('names the project folder, home-relative', () => {
     expect(
       unsyncedReport(
