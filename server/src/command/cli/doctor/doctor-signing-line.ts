@@ -6,6 +6,9 @@
  * the app that saved it, and the build Reticle runs (`tauri dev`, ad-hoc signed) is another app to
  * the keychain. Read from `codesign -dv`, through an injected runner, so the parsing is a unit test.
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { isAbsolute, join } from 'node:path';
 
 /** What `codesign -dv` says about one binary. */
 export interface Signature {
@@ -70,4 +73,56 @@ export function tauriDevBinary(
       ? { installed: `/Applications/${product}.app` }
       : {}),
   };
+}
+
+/** `codesign -dv` of one path, as it prints it (to stderr). Undefined when nothing ran. */
+function codesignOf(path: string): Signature | undefined {
+  if (!existsSync(path)) return undefined;
+  const run = spawnSync('codesign', ['-dv', '--verbose=2', path], { encoding: 'utf8' });
+  return parseCodesign(`${run.stdout}${run.stderr}`);
+}
+
+/** How to look at a project, injected so the decision is a unit test. */
+export interface SigningProbe {
+  read: (relative: string) => string | undefined;
+  codesign?: (path: string) => Signature | undefined;
+  platform?: NodeJS.Platform;
+  /** The project folder the dev build's relative path is under. */
+  dir?: string;
+}
+
+/** On macOS, the keychain note for the Tauri build Reticle drives, when it applies. */
+export function keychainNoteFor(probe: SigningProbe): string | undefined {
+  if ('darwin' !== (probe.platform ?? process.platform)) return undefined;
+  const app = tauriDevBinary(probe.read);
+  if (app === undefined) return undefined;
+  const codesign = probe.codesign ?? codesignOf;
+  return signingNote(
+    codesign(join(probe.dir ?? process.cwd(), app.build)),
+    app.installed === undefined ? undefined : codesign(app.installed),
+  );
+}
+
+/** A project folder's files, read relative to it. */
+export const projectReader =
+  (dir: string) =>
+  (relative: string): string | undefined => {
+    try {
+      return readFileSync(isAbsolute(relative) ? relative : join(dir, relative), 'utf8');
+    } catch {
+      return undefined;
+    }
+  };
+
+// ponytail: grows by one id per agent connection the daemon ever served; bound it if that matters.
+const noticed = new Set<string>();
+
+/**
+ * The note for an agent session's first answer, then never again for that session: the person
+ * flooded with password dialogs is talking to the agent, and may never run doctor.
+ */
+export function keychainNoticeOnce(attach: string, probe: SigningProbe): string | undefined {
+  if (noticed.has(attach)) return undefined;
+  noticed.add(attach);
+  return keychainNoteFor(probe);
 }

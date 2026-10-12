@@ -14,6 +14,8 @@ import { learnFromVerdict } from './app-notes-learning.js';
 import { reteachFor } from './reteach.js';
 import { staleBuildNotice } from './build-staleness.js';
 import { PRIMER_POINTER, type NoticeFold, foldNotices } from './notices.js';
+import { dirname } from 'node:path';
+import { keychainNoticeOnce, projectReader } from '@/command/cli/doctor/doctor-signing-line.js';
 
 export interface AgentAnswer {
   name: string;
@@ -39,8 +41,14 @@ export function forTheAgent(answer: AgentAnswer): unknown {
   if (wantsFull(args)) return shaped;
   const notes = root === undefined ? [] : readAppNotes(root).map((note) => `App note: ${note}`);
   const stale = staleBuildNotice();
+  const project = root === undefined ? undefined : dirname(root);
+  const keychain =
+    project === undefined
+      ? undefined
+      : keychainNoticeOnce(attach, { read: projectReader(project), dir: project });
   return foldNotices(shaped, attach, answer.fold, [
     ...(stale === undefined ? [] : [stale]),
+    ...(keychain === undefined ? [] : [keychain]),
     PRIMER_POINTER,
     ...notes,
     ...reteachFor(attach, name, args, shaped),

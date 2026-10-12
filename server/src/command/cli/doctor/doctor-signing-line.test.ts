@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   KEYCHAIN_NOTE,
+  keychainNoticeOnce,
   parseCodesign,
+  type Signature,
   signingNote,
   tauriDevBinary,
 } from './doctor-signing-line.js';
@@ -65,5 +67,40 @@ describe('the Tauri build Reticle drives', () => {
       installed: '/Applications/Shop.app',
     });
     expect(tauriDevBinary(() => undefined)).toBeUndefined();
+  });
+});
+
+/*
+ * Doctor said it, the agent's session did not — the person whose app floods them with
+ * password dialogs is talking to the agent, not running doctor. The first answer of an agent session
+ * on a Tauri project whose dev build is signed differently carries the note, once.
+ */
+describe('the keychain note on an agent session’s first answer', () => {
+  const tauriProject = (relative: string): string | undefined =>
+    ({
+      'src-tauri/Cargo.toml': 'name = "shop"',
+      'src-tauri/tauri.conf.json': '{"productName":"Shop"}',
+    })[relative];
+  const adhoc = (): Signature => ({ adhoc: true });
+
+  it('is given once per agent session on macOS, for a build signed differently', () => {
+    const note = (attach: string) =>
+      keychainNoticeOnce(attach, { read: tauriProject, codesign: adhoc, platform: 'darwin' });
+    expect(note('agent-1')).toBe(KEYCHAIN_NOTE);
+    expect(note('agent-1')).toBeUndefined();
+    expect(note('agent-2')).toBe(KEYCHAIN_NOTE);
+  });
+
+  it('is not given off macOS, for a web project, or for a build signed like the installed app', () => {
+    const signed = (): Signature => ({ adhoc: false, identifier: 'shop', teamId: 'T1' });
+    expect(
+      keychainNoticeOnce('a', { read: tauriProject, codesign: adhoc, platform: 'linux' }),
+    ).toBeUndefined();
+    expect(
+      keychainNoticeOnce('b', { read: () => undefined, codesign: adhoc, platform: 'darwin' }),
+    ).toBeUndefined();
+    expect(
+      keychainNoticeOnce('c', { read: tauriProject, codesign: signed, platform: 'darwin' }),
+    ).toBeUndefined();
   });
 });

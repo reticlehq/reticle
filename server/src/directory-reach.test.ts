@@ -148,6 +148,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * describes and the version it prints. The cli directory stopped reaching for version at all
    * in the same move, because that reach was only ever these files.
    */
+  // `doctor`: an agent session's first answer carries doctor's keychain note for a differently
+  // signed macOS build, read by the same function doctor prints it with (a leaf; no pair).
+  agent: ['doctor'],
   doctor: ['session', 'version'],
   /**
    * Getting something running and waiting for it: the bridge port, the daemon, the dev server,

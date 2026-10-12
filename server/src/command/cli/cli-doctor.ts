@@ -1,11 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
-import {
-  parseCodesign,
-  signingNote,
-  tauriDevBinary,
-  type Signature,
-} from './doctor/doctor-signing-line.js';
+import { keychainNoteFor } from './doctor/doctor-signing-line.js';
 import { join } from 'node:path';
 import { devServersForProject, ReticleEnv } from '@reticlehq/core';
 import { readPid, reticleStateHome } from '@/command/daemon/daemon.js';
@@ -327,24 +321,6 @@ export async function handleDoctor(port: number): Promise<void> {
     // findings above exist to remove.
     line(doctorRow(DoctorRow.DESKTOP, '✓ desktop wiring looks right'));
   }
-  const keychain = keychainNoteFor(readProjectFile);
+  const keychain = keychainNoteFor({ read: readProjectFile });
   if (keychain !== undefined) line(doctorRow(DoctorRow.DESKTOP, `⚠ ${keychain}`));
-}
-
-/** `codesign -dv` of one path, as it prints it (to stderr). Undefined when nothing ran. */
-function codesignOf(path: string): Signature | undefined {
-  if (!existsSync(path)) return undefined;
-  const run = spawnSync('codesign', ['-dv', '--verbose=2', path], { encoding: 'utf8' });
-  return parseCodesign(`${run.stdout}${run.stderr}`);
-}
-
-/** On macOS, the keychain note for the Tauri build Reticle drives, when it applies. */
-function keychainNoteFor(read: (relative: string) => string | undefined): string | undefined {
-  if ('darwin' !== process.platform) return undefined;
-  const app = tauriDevBinary(read);
-  if (app === undefined) return undefined;
-  return signingNote(
-    codesignOf(join(process.cwd(), app.build)),
-    app.installed === undefined ? undefined : codesignOf(app.installed),
-  );
 }
