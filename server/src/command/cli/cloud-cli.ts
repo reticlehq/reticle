@@ -47,7 +47,7 @@ import {
 import { syncRequest } from '@/memory/cloud/cloud-sync.js';
 import { GateExit, gateExitWith } from './answers/gate-exit.js';
 import { brokenOf } from './known-regression.js';
-import { describeUnsynced } from '@/memory/cloud/unsynced-roots.js';
+import { describeUnsyncedBriefly } from '@/memory/cloud/unsynced-roots.js';
 import { machineUnsyncedRoots } from '@/memory/project/sync-status.js';
 import { describeSync, runSyncCycle } from '@/memory/cloud/sync-cycle.js';
 import { diskSink, diskSource, readCloudIssues, readCloudState } from '@/memory/cloud/sync-disk.js';
@@ -733,8 +733,11 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
  * ever sends the folder it runs in, so a monorepo app's unlinked `.reticle` was invisible from here.
  */
 const reportUnsynced = async (fs: ReturnType<typeof createNodeFileSystem>): Promise<void> => {
-  for (const entry of await machineUnsyncedRoots(fs, homedir(), process.env))
-    hint(describeUnsynced(entry, process.cwd()));
+  for (const line of describeUnsyncedBriefly(
+    await machineUnsyncedRoots(fs, homedir(), process.env),
+    process.cwd(),
+  ))
+    hint(line);
 };
 
 /** `reticle push` — the name people already type. One cycle, same as `reticle sync`. */

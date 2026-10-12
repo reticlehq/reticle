@@ -11,6 +11,8 @@ import { RETICLE_CONFIG_BASENAME } from '@/command/cli/ports/resolve/cli-port.js
 import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
 import {
   describeUnsynced,
+  describeUnsyncedBriefly,
+  type UnsyncedRoot,
   projectFolderOf,
   unsentFlowCount,
   unsentRunCount,
@@ -176,5 +178,31 @@ describe('which project an unsent folder belongs to', () => {
     const bare = rootWith(['r3']);
     const found = await unsyncedRoots([linked, local, bare], () => Promise.resolve(false));
     expect(found.map((r) => r.projectId)).toEqual(['acme-web', 'acme-admin-1234abcd', undefined]);
+  });
+});
+
+/* Persona drive: `reticle connect` printed ~90 near-identical "N run(s) in ~/.reticle/unmatched/…" lines. */
+describe('unsent folders, said briefly', () => {
+  const entry = (root: string, runs = 1): UnsyncedRoot => ({ root, runs, flows: 0, linked: false });
+
+  it('folds every unclaimed bucket into one line, and caps the rest with where to see them all', () => {
+    const home = mkdtempSync(join(tmpdir(), 'reticle-home-'));
+    const buckets = Array.from({ length: 90 }, (_, i) =>
+      entry(join(home, ReticleDir.ROOT, 'unmatched', `app-${String(i)}`), 2),
+    );
+    const repos = Array.from({ length: 8 }, (_, i) =>
+      entry(join(home, `repo-${String(i)}`, ReticleDir.ROOT)),
+    );
+    const lines = describeUnsyncedBriefly([...buckets, ...repos], home);
+    expect(lines.filter((l) => l.includes('unmatched'))).toHaveLength(1);
+    expect(lines.join('\n')).toContain('180 run(s) in 90 folders');
+    expect(lines.length).toBeLessThanOrEqual(7);
+    expect(lines.at(-1)).toContain('reticle doctor');
+  });
+
+  it('says a few folders one by one, as before', () => {
+    const home = mkdtempSync(join(tmpdir(), 'reticle-home-'));
+    const one = entry(join(home, 'repo', ReticleDir.ROOT));
+    expect(describeUnsyncedBriefly([one], home)).toEqual([describeUnsynced(one, home)]);
   });
 });

@@ -99,7 +99,9 @@ export async function emptySessionList(
   deps: ToolDeps,
   sessions: unknown[],
 ): Promise<Record<string, unknown>> {
-  const why = deps.sessions.noSessionHint();
+  // The lead and its next action: the full differential (~3 KB of ranked causes) read as
+  // speculation on the call an agent makes first. Optional-call: test stubs predate the lead.
+  const why = deps.sessions.noSessionLead?.() ?? deps.sessions.noSessionHint();
   // The executable half. `why` is for the human reading the transcript; this is the one the
   // agent acts on, so it never has to parse a paragraph to find a command inside it.
   const next = deps.sessions.noSessionNextAction();

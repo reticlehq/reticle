@@ -160,3 +160,31 @@ export function describeUnsynced(entry: UnsyncedRoot, from: string): string {
         'sync is off; `reticle sync` names any the platform refused'
     : `${what} in ${where} are waiting to be sent: run \`reticle sync\` there`;
 }
+
+/** Folders named one by one before the rest are counted. */
+const FOLDERS_SHOWN = 5;
+
+/**
+ * The unsent folders as a command's few lines: every unclaimed bucket in one (they all need the same
+ * thing, and `reticle connect` printed ninety near-identical lines of them before "Connected"), the
+ * rest one by one up to a handful, then a count and where the full list is.
+ */
+export function describeUnsyncedBriefly(entries: readonly UnsyncedRoot[], from: string): string[] {
+  const unclaimed = entries.filter((entry) => isUnmatchedRoot(entry.root));
+  const claimed = entries.filter((entry) => !isUnmatchedRoot(entry.root));
+  if (entries.length <= FOLDERS_SHOWN) return entries.map((entry) => describeUnsynced(entry, from));
+  const runs = unclaimed.reduce((sum, entry) => sum + entry.runs, 0);
+  const lines = claimed.slice(0, FOLDERS_SHOWN).map((entry) => describeUnsynced(entry, from));
+  if (0 < unclaimed.length)
+    lines.unshift(
+      `${String(runs)} run(s) in ${String(unclaimed.length)} folders under ~/${ReticleDir.ROOT}/${UNMATCHED_SUBDIR} ` +
+        'are not on your dashboard: no project claimed them, so they stay on this machine',
+    );
+  const more = claimed.length - FOLDERS_SHOWN;
+  if (0 < more || 0 < unclaimed.length)
+    lines.push(
+      `${0 < more ? `${String(more)} more folder(s) hold work not on your dashboard. ` : ''}` +
+        '`reticle doctor` lists every one',
+    );
+  return lines;
+}

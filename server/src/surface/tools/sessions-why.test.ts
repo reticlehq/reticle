@@ -200,3 +200,14 @@ describe('the first session call wires an unwired project', () => {
     expect(result.next_action?.action).toBe(NoSessionAction.RUN_INIT);
   });
 });
+
+/* Persona drive: an empty list came back with ~3 KB of speculative troubleshooting. */
+describe('an empty list says the lead, not the whole differential', () => {
+  it('carries the short diagnosis when one is wired', async () => {
+    const deps = depsWith([], 'a long differential '.repeat(100));
+    (deps.sessions as unknown as { noSessionLead: () => string }).noSessionLead = () =>
+      'Nothing is connected: start the dev server (pnpm run dev).';
+    const result = (await sessionsTool?.handler(deps, {})) as { why?: string };
+    expect(result.why).toBe('Nothing is connected: start the dev server (pnpm run dev).');
+  });
+});
