@@ -97,6 +97,37 @@ function placeholderValue(input: unknown): string | undefined {
   return 'string' === typeof value && UNFILLED_PLACEHOLDER.test(value) ? value : undefined;
 }
 
+/**
+ * The one member of an `allOf`/`anyOf`/`not` every issue points into, when there is exactly one.
+ *
+ * Read at the outer level, a member's mistake was reported as the combinator's: "allOf accepts:
+ * predicates … unknown field satisfies" for a `satisfies` on a nested `element`, which sends the
+ * agent to fix the wrong level. Re-parsing that member names its own kind, fields and example.
+ */
+function onlyChildBlamed(
+  input: unknown,
+  issues: readonly z.ZodIssue[],
+): { path: string; value: unknown } | undefined {
+  if ('object' !== typeof input || null === input) return undefined;
+  const heads = new Set(
+    issues.map((issue) =>
+      'predicates' === issue.path[0] && 'number' === typeof issue.path[1]
+        ? `predicates.${issue.path[1]}`
+        : 'predicate' === issue.path[0] && 1 < issue.path.length
+          ? 'predicate'
+          : '',
+    ),
+  );
+  const [head] = heads;
+  if (1 !== heads.size || undefined === head || '' === head) return undefined;
+  const [field, index] = head.split('.');
+  const record = input as Record<string, unknown>;
+  const container = record[field ?? ''];
+  const value =
+    undefined === index ? container : (container as unknown[] | undefined)?.[Number(index)];
+  return undefined === value ? undefined : { path: head, value };
+}
+
 export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> {
   const unfilled = placeholderValue(input);
   if (unfilled !== undefined) {
@@ -110,6 +141,14 @@ export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> 
   }
   const parsed = PredicateSchema.safeParse(input);
   if (parsed.success) return parsed.data;
+  const child = onlyChildBlamed(input, parsed.error.issues);
+  if (child !== undefined) {
+    try {
+      parsePredicate(child.value);
+    } catch (error) {
+      if (error instanceof Error) throw new Error(`${child.path}: ${error.message}`);
+    }
+  }
   const asWritten = kindAsWritten(input);
   const kind = 'string' === typeof asWritten ? asWritten : 'unknown';
   // Bounded on purpose: a union rejection can produce one issue per member, and pasting all of them
