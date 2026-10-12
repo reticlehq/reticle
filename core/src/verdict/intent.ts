@@ -128,7 +128,18 @@ export function dischargeIntent(intent: Intent, proof: z.infer<typeof IntentProo
  */
 export function redeclareIntent(existing: Intent | undefined, fresh: Intent): Intent {
   if (existing === undefined) return fresh;
-  const surface = existing.surface ?? fresh.surface;
+  // What the record already says wins; a field it never had (a route, a flow, files) is filled in,
+  // so a fact first declared with nothing to file it under can be given somewhere to live.
+  const surface =
+    existing.surface === undefined
+      ? fresh.surface
+      : {
+          ...fresh.surface,
+          ...existing.surface,
+          ...(0 < (existing.surface.files?.length ?? 0) || fresh.surface?.files === undefined
+            ? {}
+            : { files: fresh.surface.files }),
+        };
   const withSurface = surface === undefined ? {} : { surface };
   if (existing.statement === fresh.statement) return { ...existing, ...withSurface };
   const { provenBy: _proof, ...unproved } = existing;

@@ -146,3 +146,34 @@ describe('a declared file that does not exist', () => {
     expect(out.intents?.[0]?.surface?.files).toEqual(['src/views/SavedItems.tsx']);
   });
 });
+
+/*
+ * Re-drive (persona 21): Bea's agent declared a fact with nothing to file it under. It landed in
+ * "unsorted", the Memory page then warned "an agent cannot find a fact without a subject", and the
+ * declare answer had said nothing. The answer asks for it, and declaring again with a route files it.
+ */
+describe('a fact declared with nothing to file it under', () => {
+  type Out = {
+    noSubject?: { ids: string[]; fix: string };
+    intents?: { subject?: string }[];
+  };
+  const fact = { id: 'saved', statement: 'Saving adds the order to the top of Saved Items' };
+
+  it('is named in the answer, with how to give it a subject', async () => {
+    const { d } = deps(1_000);
+    const out = (await intentTool?.handler(d, { action: 'declare', intents: [fact] })) as Out;
+    expect(out.noSubject?.ids).toEqual(['saved']);
+    expect(out.noSubject?.fix).toContain('surface.route');
+  });
+
+  it('is filed under its route once declared again with one', async () => {
+    const { d } = deps(1_000);
+    await intentTool?.handler(d, { action: 'declare', intents: [fact] });
+    const again = (await intentTool?.handler(d, {
+      action: 'declare',
+      intents: [{ ...fact, surface: { route: '/saved-items' } }],
+    })) as Out;
+    expect(again.noSubject).toBeUndefined();
+    expect(again.intents?.[0]?.subject).toBe('saved-items');
+  });
+});

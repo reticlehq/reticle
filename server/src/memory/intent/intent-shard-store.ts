@@ -32,7 +32,7 @@ import { IntentDir, ReticleDir } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { withFileLock } from '@/memory/project/file-lock.js';
-import { subjectFor } from './intent-subject.js';
+import { subjectFor, UNSORTED_SUBJECT } from './intent-subject.js';
 import type { Clock } from '@/machine/clock.js';
 import {
   emptyShard,
@@ -278,7 +278,8 @@ export class IntentShardStore {
       flow !== undefined
         ? subjectFor({ surface: { flow } })
         : (facts.subject ??
-          existing?.subject ??
+          // `unsorted` is the absence of a subject, so new evidence may still file the record.
+          (UNSORTED_SUBJECT === existing?.subject ? undefined : existing?.subject) ??
           subjectFor({ surface: next.surface, binding: next.binding }));
     const why = facts.why ?? existing?.why;
     const source = facts.source ?? existing?.source;

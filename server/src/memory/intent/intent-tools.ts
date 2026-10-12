@@ -12,6 +12,7 @@ import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { IntentStore } from './intent-store.js';
 import { IntentShardStore } from './intent-shard-store.js';
 import { IntentStatus } from './intent-shard.js';
+import { UNSORTED_SUBJECT } from './intent-subject.js';
 import { ReticleDir, ReticleTool, apiKeyFrom } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
@@ -125,6 +126,10 @@ export const INTENT_TOOLS: ToolDef[] = [
         .describe('declare only: statements not stored, and why.'),
       path: z.string().optional().describe('Where the ledger was written.'),
       filesNotFound: z.array(z.string()).optional().describe('surface.files not in the project'),
+      noSubject: z
+        .object({ ids: z.array(z.string()), fix: z.string() })
+        .optional()
+        .describe('declare only: intents filed under nothing, and how to file them'),
       entries: z
         .array(z.unknown())
         .optional()
@@ -203,11 +208,17 @@ export const INTENT_TOOLS: ToolDef[] = [
       const refused = entries
         .filter((entry) => isActionLabel(entry.statement))
         .map((entry) => ({ id: entry.id, reason: STEP_LABEL_REFUSAL }));
+      // Asked, not refused: prose with nowhere to live is still worth keeping, but an agent
+      // looking for it later finds it by its subject, and the Memory page warns about these.
+      const unsorted = (declared as { id: string; subject?: string }[])
+        .filter((intent) => UNSORTED_SUBJECT === intent.subject)
+        .map((intent) => intent.id);
       return {
         intents: declared,
         ...(0 === refused.length ? {} : { refused }),
         // Named, never kept as a fact's source: a path that is not in the project is a guess.
         ...(0 === missing.length ? {} : { filesNotFound: missing }),
+        ...(0 === unsorted.length ? {} : { noSubject: { ids: unsorted, fix: NO_SUBJECT_FIX } }),
         path: root,
       };
     },
@@ -239,6 +250,9 @@ async function withExistingFiles<T extends { surface?: unknown }>(
   );
   return { entries: kept, missing };
 }
+
+const NO_SUBJECT_FIX =
+  'Nothing says what these are about, so an agent looking for them cannot find them: declare each again with surface.route (the page it is about) or surface.flow.';
 
 const MAX_REQUEST = 20_000;
 const MAX_STATEMENT = 500;
