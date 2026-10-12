@@ -275,3 +275,40 @@ describe('who a shared-memory read is credited to', () => {
     expect(seen.agent()).toBe('reticle-mcp');
   });
 });
+
+/**
+ * A live read returned 10 of 13: the one statement a person wrote was cut behind six copies of one
+ * persona's intent (a flow per page), and a statement set aside seconds earlier ranked second. Each
+ * statement once, a person's own words ahead of flow intents, and nothing set aside.
+ */
+describe('what a capped read keeps', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const intent = (page: string) => ({
+    statement: 'Keyboard only: Tab, Enter and Escape only',
+    status: 'proposed',
+    flowName: `harness-keyboard-only--${page}`,
+  });
+
+  it("keeps the person's fact, each statement once, and nothing set aside", async () => {
+    answerAs(LINKED, [
+      { statement: 'Sign in reaches Saved items', status: 'proved', flowName: 'sign-in' },
+      { statement: 'Old claim nobody stands by', status: 'stale', flowName: null },
+      ...['home', 'compose', 'overview', 'saved', 'deploy', 'diag'].map(intent),
+      {
+        statement: 'First-time visitor follows the obvious path',
+        status: 'proposed',
+        flowName: 'ftv',
+      },
+      { statement: 'Saved Items lists newest first.', status: 'proposed', flowName: null },
+    ]);
+    const result = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 3 });
+    expect(result.ok).toBe(true);
+    const known = result.ok ? result.known.map((k) => k.statement) : [];
+    expect(known).toEqual([
+      'Sign in reaches Saved items',
+      'Saved Items lists newest first.',
+      'Keyboard only: Tab, Enter and Escape only',
+    ]);
+    expect(result.ok ? result.total : 0).toBe(4);
+  });
+});
