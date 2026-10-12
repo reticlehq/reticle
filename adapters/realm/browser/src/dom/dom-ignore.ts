@@ -50,6 +50,20 @@ export function setPresenterVisible(visible: boolean): void {
   presenterVisible = visible;
 }
 
+/**
+ * The Harness is the one acting. It never targets Reticle's own UI, hatch or not: with the hatch
+ * open for dogfooding, a Harness model clicked the HUD's own plan card as if it were the app.
+ */
+let harnessViewing = false;
+
+/** Set around each command by who sent it (`CommandActor.HARNESS`). */
+export function setPresenterViewer(harness: boolean): void {
+  harnessViewing = harness;
+}
+
+/** The hatch is open for whoever is looking now: never for the Harness. */
+const exposed = (): boolean => presenterVisible && !harnessViewing;
+
 /** Whether the hatch is open — reported in the app's capabilities so a verdict is never mistaken. */
 export function isPresenterVisible(): boolean {
   return presenterVisible;
@@ -75,7 +89,7 @@ const HUD_DOCK = '[data-reticle-dock]';
  */
 export function isUnobserved(el: Element): boolean {
   if (!isReticleOverlay(el)) return false;
-  return !presenterVisible || null === el.closest(HUD_DOCK);
+  return !exposed() || null === el.closest(HUD_DOCK);
 }
 
 /**
@@ -101,7 +115,7 @@ export function isReticleUi(node: Element | null): boolean {
 export function isIgnored(el: Element): boolean {
   // With the hatch open, Reticle's own overlay drops out of the ignore set — but the third-party
   // dev overlays do not. They are somebody else's furniture and were never the thing being verified.
-  const ours = presenterVisible ? '' : RETICLE_OVERLAY;
+  const ours = exposed() ? '' : RETICLE_OVERLAY;
   const sel = [ours, DEV_OVERLAYS, extraIgnore].filter((part) => part.length > 0).join(',');
   return el.closest(sel) !== null;
 }

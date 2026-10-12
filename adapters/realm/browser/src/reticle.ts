@@ -1,4 +1,4 @@
-import { setPresenterVisible } from './dom/dom-ignore.js';
+import { setPresenterViewer, setPresenterVisible } from './dom/dom-ignore.js';
 import {
   EventType,
   RETICLE_DEFAULT_PORT,
@@ -884,6 +884,8 @@ export class Reticle {
 
     this.#presenter?.sessionStart(); // first agent command → reveal the glow + panel
     await this.#presentBefore(command);
+    // ponytail: one flag for the page; an agent command overlapping a Harness one sees the HUD hidden.
+    setPresenterViewer(CommandActor.HARNESS === command.by);
     try {
       const result = await handler(command.args);
       this.#actHandle?.result(LOG_RESULT.PASS);
@@ -892,6 +894,7 @@ export class Reticle {
       this.#actHandle?.result(LOG_RESULT.FAIL);
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     } finally {
+      setPresenterViewer(false);
       this.#actHandle = undefined;
       this.#presenter?.scheduleIdle();
     }

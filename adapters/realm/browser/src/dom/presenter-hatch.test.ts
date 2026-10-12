@@ -15,6 +15,7 @@ import {
   isIgnored,
   isPresenterVisible,
   setIgnoreSelectors,
+  setPresenterViewer,
   setPresenterVisible,
 } from './dom-ignore.js';
 import { getCapabilities } from '@/registry/capabilities.js';
@@ -27,6 +28,7 @@ const el = (html: string): Element => {
 
 afterEach(() => {
   setPresenterVisible(false);
+  setPresenterViewer(false);
   setIgnoreSelectors([]);
 });
 
@@ -81,5 +83,21 @@ describe('open', () => {
       setPresenterVisible(open);
       expect(isIgnored(el('<button data-testid="submit">Go</button>')), String(open)).toBe(false);
     }
+  });
+});
+
+/**
+ * With the hatch open for dogfooding, the Harness model clicked the HUD's own plan card. The hatch is
+ * for an agent verifying the HUD; the Harness never targets Reticle's own UI, open or not.
+ */
+describe('the Harness never sees the HUD', () => {
+  it('hides the presenter from a Harness command even with the hatch open', () => {
+    setPresenterVisible(true);
+    const card = el('<div data-reticle-overlay><button>◐ Sign in with the Email</button></div>');
+    expect(isIgnored(card)).toBe(false);
+    setPresenterViewer(true);
+    expect(isIgnored(card)).toBe(true);
+    setPresenterViewer(false);
+    expect(isIgnored(card)).toBe(false);
   });
 });
