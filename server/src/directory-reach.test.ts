@@ -716,6 +716,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // the goal check next door and is handed its tools, so like `script` it reaches nothing else.
   explore: ['harness'],
   tools: [
+    // What an agent's own call is shaped into on the way out (compact envelope, notices). A leaf:
+    // `agent` imports nothing back, so this adds no mutual pair.
+    'agent',
     // A lease that never dialled reads the served page's CSP, the same reader doctor uses.
     'dev-server',
     // `reticle_coverage { app: true }` folds a session into the app-wide ledger.

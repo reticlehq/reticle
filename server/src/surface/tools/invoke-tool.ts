@@ -11,6 +11,7 @@ import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { agentNudge, takePlatformMoment } from './platform-moment.js';
 import { RESULT_FIELD } from './reticle-result.js';
+import { shapeForAgent } from './agent/compact-envelope.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
   type BrowserBrand,
@@ -394,7 +395,15 @@ export async function runTool<Ext>(
   // A replay's secrets leave the arguments here, before the tool log, the journal or telemetry can
   // see them, and are supplied to this call alone.
   const { secrets, rest: args } = takeCallSecrets(given);
-  return withCallSecrets(secrets, () => loggedTool(tool, deps, args, call));
+  // Compacted for the agent last, after telemetry and the tool log have read the full result.
+  return withCallSecrets(secrets, async () =>
+    shapeForAgent(
+      tool.name,
+      args,
+      await loggedTool(tool, deps, args, call),
+      deps.attachId !== undefined && currentDrivenBy() === undefined,
+    ),
+  );
 }
 
 async function loggedTool<Ext>(

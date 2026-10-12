@@ -62,6 +62,7 @@ import { INSPECT_TOOL } from './inspect-tool.js';
 import { applyMerges, type MergePlan } from './merge-tools.js';
 import { ACT_TOOLS } from './act-tools.js';
 import { ACT_SEQUENCE_TOOL } from './act-sequence-tool.js';
+import { withCompactEnvelope } from './agent/compact-envelope.js';
 import { OBSERVE_TOOLS } from './observe-tools.js';
 import { LINEAGE_TOOLS } from './lineage-tools.js';
 import { RECONCILE_TOOLS } from './reconcile-tools.js';
@@ -77,7 +78,7 @@ export type { ToolDef, ToolDeps } from './tool-kit.js';
 const SNAPSHOT_CACHE = new SnapshotCache();
 
 /** Every handler, including tools retired from the advertised MCP surface. */
-export const RAW_TOOLS: ToolDef[] = [
+export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
   {
     name: ReticleTool.SESSIONS,
     description:
@@ -566,7 +567,7 @@ export const RAW_TOOLS: ToolDef[] = [
   // reticle_feedback — the agent reports that RETICLE failed (not that the app did). See feedback-tools.ts.
   ...FEEDBACK_TOOLS,
   ...ACCOUNT_TOOLS,
-];
+]);
 
 /**
  * surface consolidation. Tool defs are re-sent EVERY turn, so the advertised count is a per-turn

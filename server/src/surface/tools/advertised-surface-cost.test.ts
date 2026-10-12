@@ -335,7 +335,11 @@ describe('advertised surface cost', () => {
 // 151,466 B with the `screenshot` envelope key on every output schema: each action, assert and
 // replayed step names its screenshot's path, and a validating client strips an undeclared key.
 // The default surface sends no output schemas. Measured plus the headroom, so 152,466.
-const ALL_SURFACE_BYTE_BUDGET = 152_466;
+// 153,286 B with the compact envelope: `detail` on the five compacted tools and `changed`/`ref`/
+// `source` declared on their output schemas, so a validating client keeps the one-line summary that
+// replaced the state-diff bodies. Each verdict RESULT shrank by far more than this per call (see
+// compact-envelope.ts). Measured plus the headroom, so 154,286.
+const ALL_SURFACE_BYTE_BUDGET = 154_286;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {
