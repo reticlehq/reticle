@@ -16,6 +16,7 @@ import { callingClientName } from '@/hooks/coding-agents.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import {
   isReadableMemoryScope,
+  MemoryReadHeader,
   memoryReadUrl,
   scopedMemoryEntries,
   scopeOfMemoryResponse,
@@ -123,7 +124,7 @@ export async function readProjectMemory(
         authorization: `Bearer ${cloud.config.apiKey}`,
         // What makes this read COUNT as an agent consulting the corpus rather than a human
         // browsing — the distinction the dashboard's "times an agent consulted it" rests on.
-        'x-reticle-agent': callingClientName() ?? MCP_AGENT_ID,
+        [MemoryReadHeader.AGENT]: callingClientName() ?? MCP_AGENT_ID,
       },
     });
     if (200 !== res.status) return { ok: false, reason: MemoryUnavailable.UNREACHABLE };

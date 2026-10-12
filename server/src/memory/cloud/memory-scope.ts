@@ -90,6 +90,16 @@ const projectToName = (projectId: string | null | undefined): string | undefined
   'string' === typeof projectId && projectId.length > 0 ? projectId : undefined;
 
 /**
+ * Who a memory read is for. An agent's read names the agent and the platform counts it as a
+ * consultation; the daemon's sync names its purpose and is never counted as one.
+ */
+export const MemoryReadHeader = {
+  AGENT: 'x-reticle-agent',
+  PURPOSE: 'x-reticle-read-purpose',
+} as const;
+export const MemoryReadPurpose = { SYNC: 'sync' } as const;
+
+/**
  * The URL for one memory read.
  *
  * Encoded with `encodeURIComponent` rather than `URLSearchParams`, which spells a space `+`. Both are

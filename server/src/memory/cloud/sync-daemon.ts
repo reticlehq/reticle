@@ -25,7 +25,12 @@ import { syncRequest } from './cloud-sync.js';
 import { log } from '@/log.js';
 import { homedir } from 'node:os';
 import { emitSyncHook } from '@/hooks/hook-emit.js';
-import { memoryReadUrl, scopedMemoryEntries } from './memory-scope.js';
+import {
+  MemoryReadHeader,
+  MemoryReadPurpose,
+  memoryReadUrl,
+  scopedMemoryEntries,
+} from './memory-scope.js';
 import { IntentShardStore } from '@/memory/intent/intent-shard-store.js';
 import { applySettledWords, settledWordsIn } from '@/memory/intent/settled-words.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
@@ -251,7 +256,11 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   ): Promise<number> => {
     const res = await request(memoryReadUrl(config.url, { projectId }), {
       method: 'GET',
-      headers: { authorization: `Bearer ${config.apiKey}` },
+      // The sync, not an agent: without this every cycle counted as an agent consulting memory.
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        [MemoryReadHeader.PURPOSE]: MemoryReadPurpose.SYNC,
+      },
     });
     if (200 !== res.status) return 0;
     const entries = scopedMemoryEntries(JSON.parse(res.text) as unknown, projectId) ?? [];

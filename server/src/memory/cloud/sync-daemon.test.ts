@@ -640,3 +640,35 @@ describe('a root nothing will send is said out loud', () => {
     expect(d.unsyncedRoots()).toEqual([{ root: sibling, runs: 3, flows: 0, linked: false }]);
   });
 });
+
+/**
+ * The daemon's own memory read, every cycle, was counted by the platform as an agent consulting the
+ * corpus: 127 "agent reads" by "an agent that did not name itself" in 35 minutes. The sync says it
+ * is the sync, and never claims to be an agent.
+ */
+describe("the sync's memory read", () => {
+  it('names itself as the sync, not as an agent', async () => {
+    const seen: Record<string, string>[] = [];
+    const request = (
+      url: string,
+      init?: { headers?: Record<string, string> },
+    ): Promise<{ status: number; text: string }> => {
+      if (url.includes('/v1/memory')) seen.push({ ...(init?.headers ?? {}) });
+      const body = url.includes('/pull') ? { triage: [], cursor: '0:' } : {};
+      return Promise.resolve({ status: 200, text: JSON.stringify(body) });
+    };
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      request,
+      intervalMs: 1_000,
+    });
+    await vi.advanceTimersByTimeAsync(3_000);
+    await d.flush();
+    expect(seen.length).toBeGreaterThan(0);
+    for (const headers of seen) {
+      expect(headers['x-reticle-read-purpose']).toBe('sync');
+      expect(headers['x-reticle-agent']).toBeUndefined();
+    }
+  });
+});
