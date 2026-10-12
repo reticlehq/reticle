@@ -147,10 +147,12 @@ describe('a journey`s expects are checks on the record', () => {
     // Vacuity: before the fix this read "no claims this session, so nothing was verified".
     expect(ended['gap']).toEqual(expect.arrayContaining(['1 of 2 claims held']));
     expect(String(ended['reticleResult'])).not.toMatch(/nothing was checked/i);
-    // The agent claimed pass; grading says otherwise, and the two are said side by side.
+    // The agent claimed pass; grading says otherwise, and the two are said side by side. A failed
+    // check grades the claim FAIL, the word its reticleResult and the dashboard say: "partial" beside
+    // "Reticle result: failed" gave one answer two verdicts.
     expect(ended['claim']).toEqual({
       claimed: VerdictStatus.PASS,
-      graded: VerdictStatus.PARTIAL,
+      graded: VerdictStatus.FAIL,
       agrees: false,
     });
     const runs = driveRunsFrom(journal, {

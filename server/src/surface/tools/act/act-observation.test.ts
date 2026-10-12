@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { dispatchAct } from './act-preflight.js';
 import { SessionReplacedError } from '@/portal/session/page-commands/pending-commands.js';
 import { CommandTimeoutError } from '@/portal/session/page-commands/pending-commands.js';
-import { followLostObservation } from './act-observation.js';
+import { checkNet, followLostObservation } from './act-observation.js';
 import type { Session } from '@/portal/session/session.js';
 
 describe('dispatchAct', () => {
@@ -117,5 +117,18 @@ describe('followLostObservation', () => {
       reevaluate: () => Promise.reject(new Error('must not re-ask')),
     });
     expect(out.followed).toBe(false);
+  });
+});
+
+// Re-check: a held network check reached the share page as "a POST request was seen", because only a
+// miss kept the requests it saw. A held one keeps the request that answered it.
+describe('the request a network check saw', () => {
+  it('is the matched request when the check held, and the window when it missed', () => {
+    const held = { pass: true, evidence: { method: 'POST', url: '/api/saved-items', status: 201 } };
+    expect(checkNet(held, [])).toEqual({
+      net: [{ method: 'POST', url: '/api/saved-items', status: 201 }],
+    });
+    expect(checkNet({ pass: true, evidence: { kind: 'element' } }, [])).toEqual({});
+    expect(checkNet({ pass: false }, [])).toEqual({ net: [] });
   });
 });

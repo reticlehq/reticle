@@ -46,6 +46,7 @@ import {
   dashboardPlanUrl,
   dashboardRunUrl,
   readDashboardUrl,
+  readLinkedProjectId,
 } from '@/memory/project/sync-status.js';
 import { buildHarnessPlan, drivingPlan, planAsText, type HarnessPlan } from './harness-plan.js';
 import { allSessionIntents } from '@/memory/intent/open-intents.js';
@@ -565,8 +566,11 @@ function planUrlFor(
 ): { planUrl?: string } {
   if (planId === undefined) return {};
   try {
-    const dashboard = readDashboardUrl(sessionRoot(deps, sessionId));
-    return dashboard === undefined ? {} : { planUrl: dashboardPlanUrl(dashboard, planId) };
+    const root = sessionRoot(deps, sessionId);
+    const dashboard = readDashboardUrl(root);
+    return dashboard === undefined
+      ? {}
+      : { planUrl: dashboardPlanUrl(dashboard, planId, readLinkedProjectId(root)) };
   } catch {
     return {};
   }
@@ -846,21 +850,27 @@ export const firstLine = (text: string): string => text.split('\n')[0] ?? text;
  * It used to be "Autonomous drive of X, banked after the run ended" whatever the caller asked for,
  * so a replay could never say which journey the flow was meant to prove.
  */
-export function bankedIntent(persona: string | undefined, open: string): string {
-  const named = persona?.trim();
+export function bankedIntent(
+  persona: string | undefined,
+  open: string,
+  /** The journey the drive was for, when no persona was named. */
+  journey?: string,
+): string {
+  const named = (persona ?? journey)?.trim();
   return named !== undefined && 0 < named.length
     ? named
-    : `Autonomous drive of ${open}, banked after the run ended.`;
+    : `Exploring the app, recorded as ${open} and saved after the run ended.`;
 }
 
 export async function bankOpenRecording(
   toolset: HarnessToolset,
   drive: HarnessResult,
   persona: string | undefined,
+  journey?: string,
 ): Promise<ToolOutcome[]> {
   const open = openRecordingName(drive.toolCalls);
   if (open === undefined) return [];
-  const args = { flowName: open, intent: bankedIntent(persona, open) };
+  const args = { flowName: open, intent: bankedIntent(persona, open, journey) };
   try {
     await toolset.invoke(ReticleTool.RECORD, { action: 'stop', recordingName: open });
     const result = await toolset.invoke(ReticleTool.FLOW_SAVE, args);

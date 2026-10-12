@@ -14,7 +14,7 @@ import {
   PredicateKind,
   StepEffect,
 } from '@reticlehq/core';
-import { replayFlow, resumeIndex, type FlowReplaySession } from './flow-replay.js';
+import { replayFlow, replayWindow, resumeIndex, type FlowReplaySession } from './flow-replay.js';
 import { haltedFrom } from './recording/replay-halt.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 
@@ -295,5 +295,12 @@ describe('replaying part of a flow, for a drive plan that branches', () => {
     );
     expect(session.acted).toEqual(['e-three', 'e-four']);
     expect(results.map((r) => r.step)).toEqual([2, 3]);
+  });
+
+  // A plan journey's second flow continues the page its first left: a reload there discarded the
+  // sign-in the first flow made, and a rerun of an unchanged app read "Failed".
+  it('`at: 0` continues the whole flow on the page as it is', () => {
+    expect(replayWindow({ at: 0 })).toEqual({ at: 0 });
+    expect(replayWindow({ at: -1 })).toEqual({});
   });
 });

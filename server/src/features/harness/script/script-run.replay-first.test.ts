@@ -108,17 +108,40 @@ describe('replay first', () => {
     expect(run.journeys[0]?.by).toBe(JourneyBy.REPLAY);
   });
 
-  it('a held replay beside an undecided one is not every replay undecided: no model', async () => {
-    const fake = ports({ cart: ReplayStatus.OK, pay: ReplayStatus.UNVERIFIABLE });
-    await runScript(served(['cart', 'pay']), fake.ports);
-    expect(fake.goals).toEqual([]);
+  /*
+   * Re-check: a journey saved as a sign-in flow and a mid-session flow. The sign-in held,
+   * the second drifted, and the plan read "Failed" on an unchanged app because not EVERY replay was
+   * undecided. A drift decided nothing about the app: the goal falls back to the model.
+   */
+  it('a held replay beside a drifted one decided nothing: the model drives the goal', async () => {
+    const fake = ports({ cart: ReplayStatus.OK, pay: ReplayStatus.DRIFT });
+    const run = await runScript(served(['cart', 'pay']), fake.ports);
+    expect(fake.goals).toEqual([GOAL]);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
   });
 
-  it('a journey from an older platform, with no fallback, stays as it was', async () => {
+  it('a journey from an older platform, with no fallback, is undecided, never failed', async () => {
     const fake = ports({ pay: ReplayStatus.UNVERIFIABLE });
     const run = await runScript(served(['pay'], false), fake.ports);
     expect(fake.goals).toEqual([]);
-    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.UNDECIDED);
+  });
+
+  // One journey, one chain: the flow after a held one continues on the page it left (`at: 0`), so a
+  // page load never discards the sign-in the flow before it made.
+  it("replays a journey's flows as one chain: each after the first continues the page", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const fake = ports({ cart: ReplayStatus.OK, pay: ReplayStatus.OK });
+    const inner = fake.ports.toolset('', undefined);
+    fake.ports.toolset = () => ({
+      tools: [],
+      invoke(name, args) {
+        if (ReticleTool.FLOW_REPLAY === name) calls.push(args);
+        return inner.invoke(name, args);
+      },
+    });
+    await runScript(served(['cart', 'pay']), fake.ports);
+    expect(calls.map((args) => args['at'])).toEqual([undefined, 0]);
   });
 
   it('a fallback the Harness may not drive is blocked with the reason, and costs nothing', async () => {

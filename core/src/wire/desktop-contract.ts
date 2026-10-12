@@ -47,6 +47,20 @@ export const RETICLE_CAPTURE_FILE_PREFIX = 'reticle-capture-';
 export const RETICLE_TAURI_CAPTURE_COMMAND = 'reticle_capture';
 
 /**
+ * The words `reticle-tauri` refuses a capture with in a release build without its `in-release`
+ * feature (`INERT_IN_RELEASE` in the crate's lib.rs). The daemon reads them to say THAT, not the web
+ * answer: an agent told "start with `reticle drive <url>`" about a desktop app had nothing to act on.
+ */
+export const RETICLE_TAURI_INERT_MARKER = 'inert in a release build';
+
+/** What the agent is told when the Tauri build it drives has Reticle's capture compiled out. */
+export const TAURI_INERT_RECOMMENDATION =
+  'the Reticle Tauri capture is off in this release build: reticle-tauri does nothing in a release ' +
+  'build unless its `in-release` feature is on. Drive the dev build (`tauri dev`), or for a release ' +
+  'build you test with Reticle set `reticle-tauri = { version = "…", features = ["in-release"] }` in ' +
+  'src-tauri/Cargo.toml and rebuild';
+
+/**
  * What a shell answers when asked for `fullPage` it cannot produce.
  *
  * Shared with `VisualReason.FULL_PAGE_UNSUPPORTED` rather than re-spelled, because the Electron

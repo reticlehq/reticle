@@ -105,12 +105,21 @@ function createdAtOf(payload: unknown): number {
  * in the HUD, never a failed tool call.
  */
 export function readDashboardUrl(reticleRoot: string): string | undefined {
+  return linkField(reticleRoot, 'dashboardUrl');
+}
+
+/** The platform project this folder is linked to, from the same link file. */
+export function readLinkedProjectId(reticleRoot: string): string | undefined {
+  return linkField(reticleRoot, 'projectId');
+}
+
+function linkField(reticleRoot: string, field: string): string | undefined {
   try {
     const raw: unknown = JSON.parse(
       readFileSync(join(reticleRoot, ReticleDir.CLOUD_LINK_FILE), 'utf8'),
     );
     if ('object' !== typeof raw || null === raw) return undefined;
-    const value = (raw as Record<string, unknown>)['dashboardUrl'];
+    const value = (raw as Record<string, unknown>)[field];
     return 'string' === typeof value && value.length > 0 ? value : undefined;
   } catch {
     return undefined;
@@ -190,9 +199,13 @@ export function seeRunLine(dashboardUrl: string, runId: string): string {
   return `See it in your dashboard: ${dashboardRunUrl(dashboardUrl, runId)}`;
 }
 
-/** A saved Harness plan's page on the dashboard, beside its runs. */
-export function dashboardPlanUrl(dashboardUrl: string, planId: string): string {
-  return `${dashboardOrigin(dashboardUrl)}${DASHBOARD_PLAN_PATH}${encodeURIComponent(planId)}`;
+/**
+ * A saved Harness plan's page on the dashboard, beside its runs, under its project: opened under
+ * another project's sticky scope the page answered "We could not find that plan" to its owner.
+ */
+export function dashboardPlanUrl(dashboardUrl: string, planId: string, projectId?: string): string {
+  const page = `${dashboardOrigin(dashboardUrl)}${DASHBOARD_PLAN_PATH}${encodeURIComponent(planId)}`;
+  return projectId === undefined ? page : `${page}?project=${encodeURIComponent(projectId)}`;
 }
 
 /** This project's summary, read from its `.reticle`. Never throws: an unreadable record is empty. */

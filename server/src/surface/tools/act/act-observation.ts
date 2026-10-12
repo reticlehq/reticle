@@ -85,6 +85,23 @@ const MAX_BODY_CHARS = 300;
  * The requests of a failed check's window, as its record carries them: method, url, status and the
  * start of the response body (redacted in the page before it was ever sent). Dev tooling is left out.
  */
+/**
+ * The requests a check keeps: on a miss, the window's calls that explain it; on a held network check,
+ * the request that answered it, so a share page can name "a POST to /api/…", not "a request was seen".
+ */
+export function checkNet(
+  verdict: { pass: boolean; evidence?: unknown },
+  events: readonly ReticleEvent[],
+): { net?: { method: string; url: string; status?: number; body?: string }[] } {
+  if (!verdict.pass) return { net: windowNet(events) };
+  const seen = asRecord(verdict.evidence);
+  const method = asString(seen['method']);
+  const url = asString(seen['url']);
+  if (method === undefined || url === undefined) return {};
+  const status = seen['status'];
+  return { net: [{ method, url, ...('number' === typeof status ? { status } : {}) }] };
+}
+
 export function windowNet(
   events: readonly ReticleEvent[],
 ): { method: string; url: string; status?: number; body?: string }[] {

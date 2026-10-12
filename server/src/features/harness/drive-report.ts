@@ -244,9 +244,67 @@ function describeClaim(until: unknown): string | undefined {
   return kind;
 }
 
+/** The declared consequence: `until`, or `predicate`, its alias on act_and_wait and on assert. */
+function untilOf(args: Record<string, unknown>): unknown {
+  return args['until'] ?? args['predicate'];
+}
+
 /** A `no` on a click whose only claim was a route: the driver's guess, not the app (route-guess.ts). */
 function routeGuessMissed(args: Record<string, unknown>, result: Record<string, unknown>): boolean {
-  return Verified.NO === result['verified'] && claimsOnlyRoute(args['until']);
+  return Verified.NO === result['verified'] && claimsOnlyRoute(untilOf(args));
+}
+
+/** The line a re-press graded undecided carries instead of the raw `no`. */
+const MSG_REPRESS =
+  "a second press of a control whose claim already held: the Harness's own extra action, not the app";
+
+type CheckOutcome = 'held' | 'failed' | 'undecided';
+
+/** One check the drive made, graded: the one derivation every count and step line reads. */
+interface GradedCheck {
+  /** Its index in the call log. */
+  index: number;
+  /** What the platform counts a check by: the claim's kind and target. */
+  key: string;
+  outcome: CheckOutcome;
+  /** A `no` on a press whose same claim already held: neutralised to undecided. */
+  repress: boolean;
+}
+
+/** Every check in drive order: act_and_wait with an `until` and asserts, through reticle_run too. */
+function gradedChecks(toolCalls: readonly ToolOutcome[]): GradedCheck[] {
+  const heldPresses = new Set<string>();
+  const out: GradedCheck[] = [];
+  for (const [index, made] of toolCalls.entries()) {
+    const call = throughRun(made);
+    const args = asRecord(call.args);
+    const until = untilOf(args);
+    const isCheck =
+      ReticleTool.ASSERT === call.name ||
+      (ReticleTool.ACT_AND_WAIT === call.name && until !== undefined);
+    if (!isCheck || call.isError) continue;
+    const result = asRecord(call.result);
+    // The driver's own wrong guess about the route checked the driver, not the app.
+    if (routeGuessMissed(args, result)) continue;
+    const predicate = PredicateSchema.safeParse(until);
+    const key = predicate.success
+      ? `${predicate.data.kind}|${describeWaitTarget(predicate.data)}`
+      : JSON.stringify(until ?? null);
+    const verified = asString(result['verified']);
+    // A second press of a control whose claim already held is the Harness's own extra action.
+    const ref = asString(args['ref']);
+    const pressed = ref === undefined ? undefined : `${ref}|${key}`;
+    const repress = Verified.NO === verified && pressed !== undefined && heldPresses.has(pressed);
+    if (Verified.YES === verified && pressed !== undefined) heldPresses.add(pressed);
+    const outcome: CheckOutcome =
+      Verified.YES === verified
+        ? 'held'
+        : Verified.NO === verified && !repress
+          ? 'failed'
+          : 'undecided';
+    out.push({ index, key, outcome, repress });
+  }
+  return out;
 }
 
 /**
@@ -263,6 +321,11 @@ function throughRun(call: ToolOutcome): ToolOutcome {
 /** Reduce the raw call log to the actions that actually drove the app. */
 export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
   const steps: DrivenStep[] = [];
+  const represses = new Set(
+    gradedChecks(toolCalls)
+      .filter((check) => check.repress)
+      .map((check) => check.index),
+  );
   for (const [index, made] of toolCalls.entries()) {
     const call = throughRun(made);
     if (!DRIVING_TOOLS.has(call.name)) continue;
@@ -274,6 +337,17 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
     const action =
       ReticleTool.NAVIGATE === call.name ? 'navigate' : (asString(args['action']) ?? 'act');
     const guessMissed = !call.isError && routeGuessMissed(args, result);
+    if (represses.has(index)) {
+      steps.push({
+        action,
+        target: targetOf(args, result),
+        verified: Verified.UNKNOWN,
+        because: MSG_REPRESS,
+        claimed: describeClaim(untilOf(args)),
+        evidence: [],
+      });
+      continue;
+    }
     // A menu or dialog it opened is the way to the route it named, not a wrong guess.
     const opened = guessMissed && 0 < openedADialog(result, toolCalls.slice(index + 1)).length;
     steps.push({
@@ -292,7 +366,7 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
           : guessMissed
             ? MSG_ROUTE_GUESS_MISSED
             : asString(result['because']),
-      claimed: describeClaim(args['until']),
+      claimed: describeClaim(untilOf(args)),
       evidence:
         call.isError || opened
           ? []
@@ -365,41 +439,13 @@ export function checkTally(toolCalls: readonly ToolOutcome[]): {
   // drive pressed "Sign in" fifteen times and read "15 of 15 check(s) held" for one fact, and an
   // answer that counted by control said "2 of 2" beside a dashboard counting the same run otherwise.
   const seen = new Set<string>();
-  const heldPresses = new Set<string>();
   const tally = { held: 0, failed: 0, undecided: 0 };
-  const count = (key: string, now: 'held' | 'failed' | 'undecided'): void => {
+  const count = (key: string, now: CheckOutcome): void => {
     if (seen.has(`${key}|${now}`)) return;
     seen.add(`${key}|${now}`);
     tally[now] += 1;
   };
-  for (const call of toolCalls) {
-    const args = asRecord(call.args);
-    const isCheck =
-      ReticleTool.ASSERT === call.name ||
-      (ReticleTool.ACT_AND_WAIT === call.name && args['until'] !== undefined);
-    if (!isCheck || call.isError) continue;
-    const result = asRecord(call.result);
-    // The driver's own wrong guess about the route checked the driver, not the app.
-    if (routeGuessMissed(args, result)) continue;
-    const predicate = PredicateSchema.safeParse(args['until'] ?? args['predicate']);
-    const key = predicate.success
-      ? `${predicate.data.kind}|${describeWaitTarget(predicate.data)}`
-      : JSON.stringify(args['until'] ?? args['predicate'] ?? null);
-    const verified = asString(result['verified']);
-    // A second press of a control whose claim already held is the Harness's own extra action.
-    const ref = asString(args['ref']);
-    const pressed = ref === undefined ? undefined : `${ref}|${key}`;
-    const repress = Verified.NO === verified && pressed !== undefined && heldPresses.has(pressed);
-    if (Verified.YES === verified && pressed !== undefined) heldPresses.add(pressed);
-    count(
-      key,
-      Verified.YES === verified
-        ? 'held'
-        : Verified.NO === verified && !repress
-          ? 'failed'
-          : 'undecided',
-    );
-  }
+  for (const check of gradedChecks(toolCalls)) count(check.key, check.outcome);
   // A replayed flow is a check too: its own expects decided it. A passed replay counted as "no
   // check" and its run read NOT PROVED beside a dashboard that said Passed.
   for (const replay of replayedFlows(toolCalls)) {
@@ -598,13 +644,21 @@ export function describeDrive(
       `${String(confirmed)} destructive action(s) were confirmed and REALLY RAN against the app (the drive confirms one only after the gate refuses it; the refusal itself changed nothing).`,
     );
 
-  if (0 < failed.length)
+  // Counted from the same graded checks as the checks line, never from the raw step verdicts: an
+  // answer read "0 failed" beside "1 action(s) FAILED … These are findings" about one re-press.
+  const tally = checkTally(toolCalls);
+  if (0 < tally.failed)
     lines.push(
-      `${String(failed.length)} action(s) FAILED — the app did not do what the drive declared it would. These are findings.`,
+      `${String(tally.failed)} check(s) FAILED — the app did not do what the drive declared it would. These are findings.`,
     );
-  if (0 < undecided.length)
+  if (0 < tally.undecided)
     lines.push(
-      `${String(undecided.length)} action(s) were NOT PROVED. That is undecided evidence, not a failure: it calls for a better check, not a code change.`,
+      `${String(tally.undecided)} check(s) undecided. That is undecided evidence, not a failure: it calls for a better check, not a code change.`,
+    );
+  const undeclared = undecided.filter((step) => step.claimed === undefined).length;
+  if (0 < undeclared)
+    lines.push(
+      `${String(undeclared)} action(s) declared no consequence, so they prove nothing either way: not a check, not a failure.`,
     );
   // A flow with no step that asserts anything replays as "verified nothing": offered as a replay it
   // reads as evidence, so it is named for what it is instead.

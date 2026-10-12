@@ -52,10 +52,13 @@ export function signingNote(
   return undefined;
 }
 
-/** The dev binary `tauri dev` runs, and where an installed copy of the same app would be. */
+/**
+ * The dev binary `tauri dev` runs, the release builds `tauri build` leaves (the bundle first), and
+ * where an installed copy of the same app would be.
+ */
 export function tauriDevBinary(
   read: (path: string) => string | undefined,
-): { build: string; installed?: string } | undefined {
+): { build: string; release: string[]; installed?: string } | undefined {
   const cargo = read('src-tauri/Cargo.toml');
   const name = cargo === undefined ? undefined : /^name\s*=\s*"([^"]+)"/m.exec(cargo)?.[1];
   if (name === undefined) return undefined;
@@ -67,11 +70,14 @@ export function tauriDevBinary(
   } catch {
     product = undefined;
   }
+  const named = 'string' === typeof product && 0 < product.length ? product : undefined;
   return {
     build: `src-tauri/target/debug/${name}`,
-    ...('string' === typeof product && 0 < product.length
-      ? { installed: `/Applications/${product}.app` }
-      : {}),
+    release: [
+      ...(named === undefined ? [] : [`src-tauri/target/release/bundle/macos/${named}.app`]),
+      `src-tauri/target/release/${name}`,
+    ],
+    ...(named === undefined ? {} : { installed: `/Applications/${named}.app` }),
   };
 }
 
@@ -97,10 +103,13 @@ export function keychainNoteFor(probe: SigningProbe): string | undefined {
   const app = tauriDevBinary(probe.read);
   if (app === undefined) return undefined;
   const codesign = probe.codesign ?? codesignOf;
-  return signingNote(
-    codesign(join(probe.dir ?? process.cwd(), app.build)),
-    app.installed === undefined ? undefined : codesign(app.installed),
-  );
+  const installed = app.installed === undefined ? undefined : codesign(app.installed);
+  // Every build on disk, debug and release: a person with only a release build heard nothing.
+  for (const build of [app.build, ...app.release]) {
+    const note = signingNote(codesign(join(probe.dir ?? process.cwd(), build)), installed);
+    if (note !== undefined) return note;
+  }
+  return undefined;
 }
 
 /** A project folder's files, read relative to it. */

@@ -93,6 +93,31 @@ describe('visual tools — temp dir, never touches the repo', () => {
     expect(r.recommendation).toContain('reticle drive');
   });
 
+  // Re-check: a Tauri release build without `in-release` refused the capture, and the agent
+  // heard the web answer, "start with `reticle drive <url>`", about a desktop app.
+  it('names the Tauri capture off in a release build, and how to turn it on', async () => {
+    const session = {
+      ...fakeSession('tauri'),
+      command: () =>
+        Promise.resolve({
+          ok: true,
+          result: {
+            ok: false,
+            reason:
+              'reticle-tauri is inert in a release build (enable its `in-release` feature to test one)',
+          },
+        }),
+    } as unknown as Session;
+    const d = { ...deps(), sessions: { resolve: () => session } as unknown as SessionManager };
+    const r = (await tool(ReticleTool.SCREENSHOT).handler(d, { name: 'home' })) as {
+      reason: string;
+      recommendation?: string;
+    };
+    expect(r.reason).toBe(VisualReason.NO_PROVIDER);
+    expect(r.recommendation).toContain('in-release');
+    expect(r.recommendation).not.toContain('reticle drive');
+  });
+
   it('2: reticle_screenshot saves a baseline PNG to .reticle/visual/<name>.png', async () => {
     const png = solidPng([255, 255, 255]);
     const r = (await tool(ReticleTool.SCREENSHOT).handler(deps(fakeProvider(png)), {

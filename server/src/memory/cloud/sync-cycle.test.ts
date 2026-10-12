@@ -1483,6 +1483,26 @@ describe('a folder re-linked to another workspace', () => {
     expect(report.held.join(' ')).toMatch(/1 flow made before this folder was linked to/);
   });
 
+  // Re-check: the disk source rebuilds every flow on each read, so a held-back list taken from one
+  // read never matched the next by identity, and the answer said "sent flows: 5" beside "5 flows …
+  // stay on this machine" while the new project listed the old one's flows.
+  it('keeps the old flows here when the source rebuilds them on every read', async () => {
+    const s = server({ status: {} });
+    await runSyncCycle({
+      config: { url: 'https://cloud.test', apiKey: 'rk_bigco' },
+      link: NEW,
+      source: source({ flows: () => [{ ...FLOW }, { ...NEW_FLOW }] }),
+      sink: sink().sink,
+      state: synced,
+      now: () => NOW,
+      request: s.request,
+    });
+    const flows = s.calls.flatMap(
+      (c) => (c.body as { flows?: unknown[] } | undefined)?.flows ?? [],
+    );
+    expect(flows).toEqual([NEW_FLOW]);
+  });
+
   // A re-drive: the old runs stayed, but the impact record (the previous workspace's counts and
   // defects) went into the company's new project. Derived records follow the runs' rule too.
   it('keeps the records derived under the old link here, until the history is moved', async () => {

@@ -219,7 +219,11 @@ describe('exploring an app', () => {
     expect(bankedIntent('a returning customer checking out', 'harness-drive-home')).toBe(
       'a returning customer checking out',
     );
-    expect(bankedIntent(undefined, 'harness-drive-home')).toContain('harness-drive-home');
+    // Never "Autonomous drive of …" on a screen: with no persona it is the journey it drove.
+    expect(bankedIntent(undefined, 'harness-drive-home', 'Ana pays for her cart')).toBe(
+      'Ana pays for her cart',
+    );
+    expect(bankedIntent(undefined, 'harness-drive-home')).not.toMatch(/Autonomous drive/);
   });
 
   it('does not claim a flow that appeared while it drove but that it never saved', async () => {

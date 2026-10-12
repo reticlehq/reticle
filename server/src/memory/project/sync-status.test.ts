@@ -7,6 +7,7 @@ import { ReticleDir } from '@reticlehq/core';
 import {
   KEY_REFUSED,
   SyncStatus,
+  dashboardPlanUrl,
   dashboardRunUrl,
   keyRefusalAtLastSync,
   refusalSaid,
@@ -84,6 +85,17 @@ describe('the run a person is sent to', () => {
       'See it in your dashboard: https://app.reticle.sh/runs/run%201',
     );
     expect(dashboardRunUrl('https://app.reticle.sh/', 'r2')).toBe('https://app.reticle.sh/runs/r2');
+  });
+
+  // Re-check: a plan link opened under another project's sticky scope answered "We could not find
+  // that plan" to its owner. The link names its project.
+  it('links a plan under its project', () => {
+    expect(dashboardPlanUrl('https://app.reticle.sh/x', 'hp_1', 'shop-7f')).toBe(
+      'https://app.reticle.sh/plans/hp_1?project=shop-7f',
+    );
+    expect(dashboardPlanUrl('https://app.reticle.sh/', 'hp_1')).toBe(
+      'https://app.reticle.sh/plans/hp_1',
+    );
   });
 });
 
