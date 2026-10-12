@@ -65,6 +65,12 @@ export interface PlatformModelConfig {
   credits?: Credits & { endsAt?: number };
   /** The platform that answered, no trailing slash: where the HUD's settings and plan links go. */
   platformUrl?: string;
+  /**
+   * The page where credits and the trial are bought (`planUrl`), on the console's origin. The API
+   * and the console are different origins on every deployment but a laptop, so a link built from
+   * the API's origin 404s. Absent from an older platform.
+   */
+  planUrl?: string;
   /** The platform's coverage gate (`harnessUnlocked`, `coverageScore`, `harnessLock`), when it sent one. */
   gate?: PlatformGate;
   /** The plan in force (`plan`), for the HUD's account menu. */
@@ -110,6 +116,19 @@ function hudFieldsOf(
     ...(runs === undefined ? {} : { harnessRuns: runs }),
     ...(memory === undefined ? {} : { memoryEntries: memory }),
   };
+}
+
+/** `{ [key]: value }` when `value` is an http(s) address, else nothing: a link must open. */
+function webUrl<K extends string>(value: unknown, key: K): Partial<Record<K, string>> {
+  if ('string' !== typeof value) return {};
+  try {
+    const url = new URL(value);
+    return 'http:' === url.protocol || 'https:' === url.protocol
+      ? ({ [key]: value } as Partial<Record<K, string>>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 /** The platform's Harness coverage gate, as the HUD is pushed it. */
@@ -199,6 +218,7 @@ function parse(body: string): PlatformModelConfig | undefined {
       providerReady: 'boolean' === typeof ready ? ready : true,
       ...(gate === undefined ? {} : { gate }),
       ...hudFieldsOf(record),
+      ...webUrl(record['planUrl'], 'planUrl'),
       ...('number' === typeof used && 'number' === typeof limit
         ? {
             credits: {

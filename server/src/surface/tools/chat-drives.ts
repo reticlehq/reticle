@@ -24,6 +24,7 @@ import type { AttachedApp } from '../../features/harness/platform/remote-drive.j
 import type { ToolDeps } from './tool-kit.js';
 import type { FileSystemPort } from '../../memory/project/fs/fs-port.js';
 import { projectDirFor, sessionRoot } from '../../memory/project/session-root.js';
+import { readDashboardUrl } from '../../memory/project/sync-status.js';
 import { driveFrame } from '../../features/visual/visual-tools.js';
 import { LEASE_ACQUIRE_TOOL } from './lease-tools.js';
 import {
@@ -377,6 +378,15 @@ export function startChatDrives(
   };
 }
 
+/** The dashboard the tab's project is linked to, when its link names one. */
+function dashboardOf(deps: ToolDeps, sessionId: string): string | undefined {
+  try {
+    return readDashboardUrl(sessionRoot(deps, sessionId));
+  } catch {
+    return undefined;
+  }
+}
+
 /** Said on the HUD when Link this project ends. */
 const MSG_LINKED = 'Linked. This project now reports to your dashboard.';
 const MSG_LINK_FAILED = 'Could not link this project. Run `reticle connect` in its folder.';
@@ -427,7 +437,9 @@ export async function hudDrive(
   const granted = await grant(platform);
   if (!granted.granted) {
     say(granted.message);
-    if (granted.needsCard) say(msgStartTrial(planUrl(platform.url)));
+    // At the console's origin (the tab's link names it), never the API's, which 404s when split.
+    if (granted.needsCard)
+      say(msgStartTrial(planUrl(dashboardOf(deps, sessionId) ?? platform.url)));
     return;
   }
   const explore = EXPLORE_TOOLS.find((tool) => ReticleTool.VERIFY_EXPLORE === tool.name);

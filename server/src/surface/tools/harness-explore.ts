@@ -781,7 +781,11 @@ export async function refusedByPlatform(
   if (!config.harnessEnabled) return MSG_HARNESS_DISABLED;
   // Before entitlement: no credits left is why most workspaces are not entitled, said as the HUD says it.
   if (config.credits !== undefined && creditsSpent(config.credits))
-    return creditsUsedLine(config.credits, planUrl(config.platformUrl ?? cloudUrlFrom(env) ?? ''));
+    return creditsUsedLine(
+      config.credits,
+      // The platform's own page; built from the API origin only for a platform that names none.
+      config.planUrl ?? planUrl(config.platformUrl ?? cloudUrlFrom(env) ?? ''),
+    );
   if (!config.harnessEntitled) return MSG_HARNESS_UNCLAIMED;
   return undefined;
 }

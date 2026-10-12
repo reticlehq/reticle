@@ -583,6 +583,21 @@ describe('turning the harness off', () => {
     );
   });
 
+  // Persona drive: the credits refusal linked to the API origin (`:17000/settings?group=billing`),
+  // which 404s wherever the API and the console are different origins. The platform names the page.
+  it("links the credits refusal to the platform's own plan page", async () => {
+    const refusal = await refusedByPlatform(linked, {
+      configFetch: platformSays({
+        provider: 'jev',
+        harnessEnabled: true,
+        harnessUnlocked: true,
+        credits: { used: 10, limit: 10, kind: 'free' },
+        planUrl: 'https://console.test/settings?group=billing',
+      }),
+    });
+    expect(refusal).toContain('https://console.test/settings?group=billing');
+  });
+
   it('drives when the platform says the harness is on', async () => {
     const result = await exploreApp(depsWithFlows([]), linked, {
       maxSteps: 1,

@@ -33,9 +33,15 @@ describe('a repo init already named', () => {
     expect(defaultProjectFor('app', undefined, 'nina-todo-f96721e8')).toBe('nina-todo');
   });
 
-  it('still prefers an existing binding, and falls back to the folder for an id it cannot read', () => {
+  it('still prefers an existing binding', () => {
     expect(defaultProjectFor('app', 'app', 'nina-todo-f96721e8')).toBe('app');
-    expect(defaultProjectFor('app', undefined, 'custom')).toBe('app');
+  });
+
+  // Persona drives: `.reticle.json` said `persona-oss` (and `dashboard-drive`), the dashboard project
+  // was named after the folder, and local flows lived under one name while the dashboard showed another.
+  it('takes an id written by hand as the name, never the folder', () => {
+    expect(defaultProjectFor('app', undefined, 'persona-oss')).toBe('persona-oss');
+    expect(defaultProjectFor('console-root', undefined, 'Dashboard Drive')).toBe('dashboard-drive');
   });
 });
 

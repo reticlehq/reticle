@@ -50,7 +50,11 @@ export const defaultProjectFor = (
   localProjectId?: string,
 ): string => {
   if (existingProjectId !== undefined && existingProjectId.length > 0) return existingProjectId;
-  const named = localProjectId === undefined ? undefined : nameOfLocalId(localProjectId);
+  // The name part of `init`'s `<name>-<hash>`, else the id as written: a name the owner chose.
+  const named =
+    localProjectId === undefined || 0 === localProjectId.length
+      ? undefined
+      : (nameOfLocalId(localProjectId) ?? localProjectId);
   return slugifyProjectName(named ?? cwdBasename);
 };
 
