@@ -30,6 +30,9 @@ export function anchorFieldName(anchor: FlowAnchor): string | undefined {
  */
 export const REDACTED_FILL = '<redacted: supply at replay>';
 
+/** The arg a saved redacted fill names its variable in. Dropped before the step reaches the page. */
+export const SECRET_NAME_ARG = 'secret';
+
 /** The prefix every secret's variable carries. */
 const SECRET_ENV_PREFIX = 'RETICLE_SECRET_';
 

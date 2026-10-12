@@ -5,7 +5,7 @@ import {
   type Predicate,
   type ProjectId,
 } from '@reticlehq/core';
-import { REDACTED_FILL } from './fields/flow-secret-field.js';
+import { REDACTED_FILL, SECRET_NAME_ARG, secretEnvKey } from './fields/flow-secret-field.js';
 export { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
 import { changeInPlace } from './narrow-write.js';
@@ -174,7 +174,8 @@ function redactSecretFill(
   if (typeof args['value'] !== 'string') return args;
   const field = anchorFieldName(anchor);
   if (field === undefined || !defaultIsSensitiveKey(field)) return args;
-  return { ...args, value: REDACTED_FILL };
+  // The variable that supplies it, beside the placeholder: the file alone says what to set.
+  return { ...args, value: REDACTED_FILL, [SECRET_NAME_ARG]: secretEnvKey(field) };
 }
 
 /**

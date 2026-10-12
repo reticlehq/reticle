@@ -47,6 +47,8 @@ describe('reticle_record stop redacts credentials it returns', () => {
     const text = JSON.stringify(res);
     expect(text).not.toContain(TYPED);
     expect(text).toContain(REDACTED_FILL);
+    // A teammate opening the flow learns what to set, from the file alone.
+    expect(text).toContain('RETICLE_SECRET_');
     expect(text, 'a field that is not secret is left alone').toContain(EMAIL);
     // In-session replay still types the real value; only what is RETURNED is redacted.
     expect(JSON.stringify(recordings.getCompiled('sign-in'))).toContain(TYPED);

@@ -1,4 +1,9 @@
-import { REDACTED_FILL, secretEnvKey, secretValue } from './fields/flow-secret-field.js';
+import {
+  REDACTED_FILL,
+  SECRET_NAME_ARG,
+  secretEnvKey,
+  secretValue,
+} from './fields/flow-secret-field.js';
 import { FlowPredicateSchema, Verified, type Predicate } from '@reticlehq/core';
 import {
   DANGEROUS_ACTION_CONFIRM_ARG,
@@ -58,6 +63,7 @@ export function replayActionArgs(
 ): Record<string, unknown> {
   const args = { ...asRecord(value) };
   delete args[DANGEROUS_ACTION_CONFIRM_ARG];
+  delete args[SECRET_NAME_ARG];
   if (confirmDangerous) args[DANGEROUS_ACTION_CONFIRM_ARG] = true;
   if (REDACTED_FILL === args['value'] && field !== undefined) {
     const supplied = secretValue(secretEnvKey(field), process.env);
