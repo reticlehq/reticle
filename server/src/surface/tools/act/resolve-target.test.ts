@@ -109,4 +109,17 @@ describe('an ambiguous refusal ranks the candidates it already has', () => {
     ]);
     expect(r.kind).toBe('error');
   });
+
+  /*
+   * A menu item whose accessible name carries a relative time ("billing Last run 1 minute ago")
+   * cannot be named exactly for more than a minute. The browser already says which names that role
+   * really has; the refusal dropped it and said only "widen the query".
+   */
+  it('names what that role is really called when an exact name just missed', () => {
+    const r = resolveTargetRef([], { nameNearMiss: ['billing Last run 1 minute ago'] });
+    expect(r.kind).toBe('error');
+    if (r.kind !== 'error') return;
+    expect(r.message).toContain('"billing Last run 1 minute ago"');
+    expect(r.message).toMatch(/testid|text/);
+  });
 });
