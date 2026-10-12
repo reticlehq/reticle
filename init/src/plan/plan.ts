@@ -716,6 +716,20 @@ function agentRootConfigStep(input: PlanInput, content: string): Step[] {
       },
     ];
   }
+  // Several apps: a root config names one and is wrong for the rest. Not written; an agent at the
+  // root is served whichever app's daemon is live, and one started in an app reads that app's.
+  if (true === input.agentRootSeveralApps && existingProject === undefined) {
+    return [
+      {
+        title: AGENT_ROOT_CONFIG_TITLE,
+        target: path,
+        status: StepStatus.NOTICE,
+        detail:
+          'not written: this workspace has several apps and the root can name only one. Run the ' +
+          "agent from an app's directory to pin it to that app.",
+      },
+    ];
+  }
   if (input.agentRootConfigSource === content) {
     return [
       {

@@ -103,8 +103,9 @@ Start with `reticle init --dry-run` if you want to see the app changes before an
 
 <Tip>
   In a monorepo, `init` run at the root lists every app it found, each with its own
-  `reticle init --app <dir>` line, and stops. Run the line for the app you want. With only one
-  app, it wires that one without asking.
+  `reticle init --app <dir>` line, and stops. Run the line for the app you want: it writes that
+  app's files and starts nothing (add `--start` to boot it). With only one app, it wires that one
+  without asking.
 </Tip>
 
 Prefer to wire it yourself? See [Manual install](/install-manual). It is about ten lines, and worth reading once even if you let the agent do it, because it explains what the agent actually changed.

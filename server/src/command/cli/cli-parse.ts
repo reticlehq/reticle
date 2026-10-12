@@ -174,6 +174,8 @@ const FIRST_RUN_MOVED =
   'onboarding wires the project, the FIRST RUN proves a flow. Drive one with reticle_verify { action: "explore", persona: "<who does what>" }, or npx @reticlehq/server verify <url> --explore --persona "<who does what>"';
 const ENV_FLAG = '--env';
 const FILES_ONLY_FLAG = '--files-only';
+/** With `--app`, also start the app: naming one app of a workspace otherwise writes its files only. */
+const START_FLAG = '--start';
 /**
  * Write `captureNetworkBodies: true` into the app's config. OFF unless asked (#705).
  *
@@ -481,6 +483,7 @@ function parseInitFlags(args: string[]): InitFlags {
   // Repeatable: one variable per flag, so a value containing spaces or `=` needs no quoting rules.
   const env: string[] = [];
   let filesOnly = false;
+  let start = false;
   let captureBodies = false;
   let hooks = false;
   let json = false;
@@ -518,6 +521,8 @@ function parseInitFlags(args: string[]): InitFlags {
       env.push(value);
     } else if (arg === FILES_ONLY_FLAG) {
       filesOnly = true;
+    } else if (arg === START_FLAG) {
+      start = true;
     } else if (arg === CAPTURE_BODIES_FLAG) {
       captureBodies = true;
     } else if (arg === HOOKS_FLAG) {
@@ -570,7 +575,9 @@ function parseInitFlags(args: string[]): InitFlags {
     install,
     app,
     env,
-    filesOnly,
+    // One app of a workspace, named: its files, and nothing started unless asked (`--start`). Its
+    // dev server is often run from the root, and a monorepo init started the daemon and failed it.
+    filesOnly: filesOnly || (app !== undefined && !start),
     captureBodies,
     hooks,
     json,

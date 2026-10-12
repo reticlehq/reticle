@@ -43,6 +43,8 @@ export interface InitOptions {
    * at `src/admin` ended up with no `/reticle` at all (#318).
    */
   agentRoot?: string;
+  /** The agent root is a workspace with several apps: it is pinned to none of them. */
+  severalApps?: boolean;
   /**
    * Hand the telemetry outcome back rather than emitting it here.
    *

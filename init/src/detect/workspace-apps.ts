@@ -309,3 +309,15 @@ export function enclosingWorkspaceRoot(
   }
   return undefined;
 }
+
+/** The apps of the workspace at `root`, read through an io standing somewhere else in it. */
+export function appsAt(
+  root: string,
+  io: Pick<InitIo, 'exists' | 'readFile' | 'listDirs'>,
+): string[] {
+  return findWorkspaceApps({
+    exists: (p) => io.exists(join(root, p)),
+    readFile: (p) => io.readFile(join(root, p)),
+    listDirs: (p) => io.listDirs(join(root, p)),
+  });
+}

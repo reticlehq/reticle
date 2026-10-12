@@ -41,7 +41,7 @@ import {
   VITE_CONFIG_CANDIDATES,
 } from './detect/workspace-apps.js';
 import { redirectToWorkspaceApp } from './detect/workspace-redirect.js';
-import { enclosingWorkspaceRoot } from './detect/workspace-apps.js';
+import { appsAt, enclosingWorkspaceRoot } from './detect/workspace-apps.js';
 import { isConnectStep } from './plan/connect-steps.js';
 import { CURSOR_RULE_PATH, RETICLE_MD_PATH } from './project/agent-rules.js';
 import { CLAUDE_SETTINGS_PATH } from './plan/stop-hook-step.js';
@@ -512,6 +512,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
           agentFileRoot: agentRoot,
           // The config the AGENT's cwd already has, if any — see agentRootConfigStep.
           agentRootConfigSource: io.readFile(agentFile(RETICLE_CONFIG_FILE)),
+          agentRootSeveralApps: true === options.severalApps,
         }),
     options: {
       port: options.port,
@@ -794,7 +795,8 @@ function classifyInitFailure(failed: ReadonlySet<string>): string {
 function withWorkspaceRoot(options: InitOptions, io: InitIo): InitOptions {
   if (options.agentRoot !== undefined || true === options.redirected) return options;
   const root = enclosingWorkspaceRoot(options.cwd, io);
-  return root === undefined ? options : { ...options, agentRoot: root };
+  if (root === undefined) return options;
+  return { ...options, agentRoot: root, severalApps: 1 < appsAt(root, io).length };
 }
 
 export function runInit(options: InitOptions, io: InitIo): InitResult {

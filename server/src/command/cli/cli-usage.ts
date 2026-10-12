@@ -38,7 +38,7 @@ const INIT_DETAIL = `init wires the project, boots the app and proves a page con
 instrumentation score, what is missing, and a prompt for your coding agent, which proves
 the first flow. It never drives: the Harness is opt-in and unlocks at 80% instrumentation.
 
-  --app <dir>        which app in a monorepo, when several are found
+  --app <dir>        which app in a monorepo: writes its files only (add --start to boot it)
   --env KEY=VALUE    what the app needs to reach a usable state (repeatable)
   --files-only       write the files and stop; do not boot the app
   --no-install       do not install packages

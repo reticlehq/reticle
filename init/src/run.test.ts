@@ -1086,6 +1086,34 @@ describe('runInit — an app outside the directory names anyone guessed', () => 
     expect(printed).toContain('the-other-app');
   });
 
+  /*
+   * Re-drive (persona 11): two apps, `init --app apps/web` then `init --app apps/admin`, and the root
+   * config named the first app's project — an agent at the root read web's identity whichever app it
+   * meant. With several apps the root can only be wrong for one of them, so it is not pinned.
+   */
+  it('does not pin the root to one app of a workspace that has several', () => {
+    const app = (name: string) => ({
+      [`apps/${name}/package.json`]: JSON.stringify({
+        name: `@acme/${name}`,
+        devDependencies: { vite: '^5', react: '^19' },
+      }),
+      [`apps/${name}/vite.config.ts`]: `export default { plugins: [] };\n`,
+    });
+    const io = memoryIo(
+      {
+        'package.json': JSON.stringify({ private: true, workspaces: ['apps/*'] }),
+        ...app('web'),
+        ...app('admin'),
+      },
+      { mcpExists: true },
+    );
+    runInit({ ...OPTS, app: 'apps/web' }, io);
+    const written = Object.keys(io.written).map((p) => p.replace(/\\/g, '/'));
+    expect(written).toContain('apps/web/.reticle.json');
+    expect(written).not.toContain('/app/.reticle.json');
+    expect(io.lines.join('\n')).toContain('several apps');
+  });
+
   it('still writes a root config that is merely ABSENT — the case it was added for', () => {
     const io = memoryIo(NESTED, { mcpExists: true });
     runInit(OPTS, io);

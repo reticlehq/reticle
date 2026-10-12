@@ -42,6 +42,8 @@ const AMBIGUOUS_HEADER =
   'Several apps found in this workspace. Re-run `reticle init` for the one you want:';
 
 const WORKSPACE_APP_COMMAND = 'reticle init --app';
+const ALREADY_WIRED = 'Already wired here:';
+const WIRE_ANOTHER = 'To wire another app:';
 const POWERSHELL_ONLY_LABEL = 'PowerShell only:' as const;
 const PLAIN_SHELL_ARG = /^[A-Za-z0-9_./-]+$/;
 
@@ -147,13 +149,19 @@ export function redirectToWorkspaceApp(
   const target = chosen.app ?? (1 === apps.length ? apps[0] : undefined);
   if (target === undefined) {
     if (0 === apps.length) return null; // not a workspace — fall through to the normal HTML plan
-    io.print(AMBIGUOUS_HEADER);
-    for (const a of apps) {
+    // Apps already wired answer a re-run here: nothing to do at the root, which is pinned to none.
+    const wired = apps.filter((a) => io.exists(`${a}/${RETICLE_CONFIG_FILE}`));
+    io.print(0 === wired.length ? AMBIGUOUS_HEADER : `${ALREADY_WIRED} ${wired.join(', ')}.`);
+    const rest = apps.filter((a) => !wired.includes(a));
+    if (0 < wired.length && 0 < rest.length) io.print(WIRE_ANOTHER);
+    for (const a of 0 === wired.length ? apps : rest) {
       const displayed = displayedWorkspaceAppCommand(a, process.platform);
       if (displayed.label !== undefined) io.print(`  ${displayed.label}`);
       io.print(`  ${displayed.command}`);
     }
-    return { ok: false, applied: 0, manual: apps.length };
+    return 0 === wired.length
+      ? { ok: false, applied: 0, manual: apps.length }
+      : { ok: true, applied: 0, manual: 0 };
   }
   return enterApp(options, io, target, 'No app in this directory — wiring', runInit);
 }
@@ -183,6 +191,7 @@ function enterApp(
       // Where the human is STANDING, kept across the redirect: their agent session runs here, so
       // this is the only place a `/reticle` command file can be found by it.
       agentRoot: options.agentRoot ?? options.cwd,
+      severalApps: true === options.severalApps || 1 < findWorkspaceApps(io).length,
     },
     io.scoped(target),
   );

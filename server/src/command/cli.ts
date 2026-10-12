@@ -37,6 +37,7 @@ import { loadDotEnv } from '@/telemetry/dev-repo.js';
 import { licenseKeyFromEnvFiles } from '@/features/license/license-env.js';
 import { LICENSE_KEY_ENV } from '@/features/license/license.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
+import { localLinkOf, workspaceAppLinks } from './cli/status/workspace-links.js';
 import { affectedSavedFlows } from '@/language/flows/change/flow-sources.js';
 
 import { availableUpdate } from './update/update-nudge.js';
@@ -261,6 +262,12 @@ export function reportStatus(fields: Record<string, unknown>, json: boolean): vo
 export async function handleStatus(port: number, json = false): Promise<void> {
   // A broken session file must not cost the reader the rest of the status.
   const account = await accountStatusFields().catch(() => ({}));
+  // At a workspace root that is no app of its own, each app and its link: "not linked" named none.
+  const linked = (account as { linkedProject?: unknown }).linkedProject;
+  if ('string' !== typeof linked && readProjectId(process.cwd()) === undefined)
+    Object.assign(account, {
+      workspaceApps: await workspaceAppLinks(process.cwd(), localLinkOf).catch(() => []),
+    });
   const report = (fields: Record<string, unknown>): void =>
     reportStatus({ ...fields, ...account }, json);
   const pid = readPid(port);

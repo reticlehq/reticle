@@ -315,6 +315,8 @@ export interface PlanInput {
    * that disagrees with the app's is worse than no root config, and only reading it can tell.
    */
   agentRootConfigSource?: string | null | undefined;
+  /** The agent root holds several apps, so its config would name one and mislead about the rest. */
+  agentRootSeveralApps?: boolean | undefined;
   options: {
     port: number | undefined;
     mcp: boolean;

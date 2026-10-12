@@ -150,13 +150,24 @@ export function statusLines(fields: Record<string, unknown>): string[] {
             : `${OK} signed in as ${who}`,
       ),
     );
-    lines.push(
-      continuation(
-        project === undefined
-          ? 'this repo is not linked: run `reticle connect`'
-          : `this repo is linked to ${project}${workspace === undefined ? '' : ` in workspace "${workspace}"`}`,
-      ),
-    );
+    const apps = appLinks(fields['workspaceApps']);
+    if (project === undefined && 0 < apps.length)
+      for (const { app, project: linked } of apps)
+        lines.push(
+          continuation(
+            null === linked
+              ? `${app} is not linked: run \`reticle connect\` in ${app}`
+              : `${app} is linked to ${linked}`,
+          ),
+        );
+    else
+      lines.push(
+        continuation(
+          project === undefined
+            ? 'this repo is not linked: run `reticle connect`'
+            : `this repo is linked to ${project}${workspace === undefined ? '' : ` in workspace "${workspace}"`}`,
+        ),
+      );
   }
 
   const client = str(fields, 'mcpClient');
@@ -177,4 +188,16 @@ export function statusLines(fields: Record<string, unknown>): string[] {
   }
 
   return lines;
+}
+
+/** A workspace root's apps and their links, read defensively off the status fields. */
+function appLinks(value: unknown): { app: string; project: string | null }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw: unknown) => {
+    if ('object' !== typeof raw || null === raw) return [];
+    const { app, project } = raw as Record<string, unknown>;
+    return 'string' === typeof app
+      ? [{ app, project: 'string' === typeof project ? project : null }]
+      : [];
+  });
 }
