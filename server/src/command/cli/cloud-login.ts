@@ -296,21 +296,29 @@ export function hudSignIn(
   start: (open: (url: string) => void) => Promise<number> = (open) =>
     cmdLoginDevice(undefined, undefined, NO_LINK, false, open),
   opener: (url: string) => void = openBrowser,
-): () => void {
+  /**
+   * Link the asking tab's project once signed in: "Save for your team" signed in and linked
+   * nothing, so the panel asked for the click just made. The daemon passes `projectLinkOnly`.
+   */
+  link?: (root: string) => Promise<number>,
+): (from?: { artifactRoot?: string | undefined }) => void {
   let running = false;
   let pending: string | undefined;
-  return () => {
+  return (from) => {
     if (running) {
       if (pending !== undefined) opener(pending);
       return;
     }
     running = true;
+    const root = from?.artifactRoot;
     void start((url) => {
       pending = url;
       opener(url);
     })
-      .then((code) => {
-        if (0 === code) onSignedIn();
+      .then(async (code) => {
+        if (0 !== code) return;
+        if (link !== undefined && root !== undefined) await link(root).catch(() => 1);
+        onSignedIn();
       })
       .catch(() => undefined)
       .finally(() => {

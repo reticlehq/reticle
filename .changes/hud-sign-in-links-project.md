@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — signing in from the HUD linked nothing, and linking a page with no project seemed to do nothing.** "Save for your team" ran the browser sign-in and stopped, so the panel then asked for the click the person had just made; it now links the tab's project as soon as the sign-in is approved. A page wired by hand with no `projectId` used to be linked as a project named after a hash (`origin-c97c5ca3`) that the panel never read, so the button appeared dead; it now says once what is needed — run `npx @reticlehq/server init` in the app, or pass `projectId` to `connect()` — and links nothing.

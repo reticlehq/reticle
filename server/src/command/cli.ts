@@ -561,7 +561,7 @@ function handleDaemonInner(parsed: {
   // The daemon the CLI starts is the one that can sign in for the panel: it owns ~/.reticle.
   const options: StartOptions = {
     ...daemonStartOptions(parsed),
-    hudSignIn,
+    hudSignIn: (repaint, link) => hudSignIn(repaint, undefined, undefined, link),
     hudLink: (root) => cmdLink([], root),
   };
 

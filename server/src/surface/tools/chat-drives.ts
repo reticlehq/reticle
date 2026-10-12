@@ -6,6 +6,7 @@
  * app, and keeping them together is what stops a drive attached to one app landing in another that
  * happens to be on the same port. See `local-apps.ts` and `remote-drive.ts` for each half.
  */
+import { isUnmatchedRoot } from '@/memory/project/dir/reticle-dir.js';
 import { basename, dirname, join } from 'node:path';
 import { homedir, hostname } from 'node:os';
 import type { SessionInfo } from '../../portal/session/session-info.js';
@@ -363,6 +364,9 @@ export function startChatDrives(
 /** Said on the HUD when Link this project ends. */
 const MSG_LINKED = 'Linked. This project now reports to your dashboard.';
 const MSG_LINK_FAILED = 'Could not link this project. Run `reticle connect` in its folder.';
+/** A page with no projectId: linking it would bind a hash-named project nothing here reads. */
+const MSG_LINK_NEEDS_PROJECT =
+  'This page did not say which project it is, so there is nothing to link yet. Run `npx @reticlehq/server init` in your app (or pass `projectId` to `connect()`), then Link.';
 const MSG_LINK_UNAVAILABLE =
   'This Reticle cannot link from the panel. Run `reticle connect` in the project folder.';
 /** Said on the HUD when Stop finds nothing to stop. */
@@ -426,6 +430,18 @@ export async function hudDrive(
 }
 
 /**
+ * The link a panel sign-in makes once it lands: the tab's project, never a page that did not say
+ * which project it is (that would bind a hash-named project nothing here reads).
+ */
+export function projectLinkOnly(
+  link: ((root: string) => Promise<number>) | undefined,
+): ((root: string) => Promise<number>) | undefined {
+  return link === undefined
+    ? undefined
+    : (root) => (isUnmatchedRoot(root) ? Promise.resolve(0) : link(root));
+}
+
+/**
  * The panel's Harness controls on a bridge: the switch writes through to the platform, so console
  * and panel cannot disagree; Run and Stop drive, in the project of the tab that asked.
  */
@@ -455,6 +471,7 @@ export function attachHudHarness(
     if (HumanControlKind.HARNESS_LINK === request.kind) {
       const say = (text: string): void => daemon.deps().sessions.get?.(s.id)?.pushNarration(text);
       if (link === undefined) return say(MSG_LINK_UNAVAILABLE);
+      if (isUnmatchedRoot(root)) return say(MSG_LINK_NEEDS_PROJECT);
       void link(root)
         .then((code) => say(0 === code ? MSG_LINKED : MSG_LINK_FAILED))
         .catch(() => say(MSG_LINK_FAILED))

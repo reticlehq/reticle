@@ -330,7 +330,7 @@ export class Bridge {
   /** Wired by the daemon: push to the dashboard now, because somebody asked in the panel. */
   #onSyncRequest: (() => void) | undefined;
   #onHarnessRequest: ((request: HarnessRequest, session: Session) => void) | undefined;
-  #onSigninRequest: (() => void) | undefined;
+  #onSigninRequest: ((from: Session) => void) | undefined;
 
   constructor(options: BridgeOptions) {
     const host = options.host ?? LOOPBACK_HOST;
@@ -799,7 +799,7 @@ export class Bridge {
           // Session has no cloud credential and should not grow one.
           else if (harness !== undefined) this.#onHarnessRequest?.(harness, session);
           // Signing in writes `~/.reticle`, which only the daemon may do; the panel only asks.
-          else if (isSigninRequest(parsed.event)) this.#onSigninRequest?.();
+          else if (isSigninRequest(parsed.event)) this.#onSigninRequest?.(session);
           // Pass the raw frame's byte length so the buffer doesn't re-serialize every event for accounting.
           else session.pushEvent(parsed.event, Buffer.byteLength(text, 'utf8'));
         } else if (parsed.kind === MessageKind.COMMAND_RESULT) {
@@ -944,8 +944,11 @@ export class Bridge {
     this.#onHarnessRequest = handler;
   }
 
-  /** Register a handler for the panel's Sign in. Optional, like the above: without one it is ignored. */
-  attachSigninRequest(handler: () => void): void {
+  /**
+   * Register a handler for the panel's Sign in, told which tab asked (its project is linked once the
+   * sign-in lands). Optional, like the above: without one it is ignored.
+   */
+  attachSigninRequest(handler: (from: Session) => void): void {
     this.#onSigninRequest = handler;
   }
 

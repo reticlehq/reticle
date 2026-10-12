@@ -62,7 +62,7 @@ import { startVerifyServer } from './judgement/runs/verify-server.js';
 import { createMcpServer } from './surface/mcp/mcp.js';
 import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
-import { attachHudHarness, startChatDrives } from './surface/tools/chat-drives.js';
+import { attachHudHarness, projectLinkOnly, startChatDrives } from './surface/tools/chat-drives.js';
 import { runTool } from './surface/tools/invoke-tool.js';
 import {
   SessionReaper,
@@ -671,7 +671,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // `syncNow`, not `nudge` (a cycle soon): somebody is watching the button. Never awaited.
   bridge.attachSyncRequest(() => void cloudSync.syncNow());
   if (options.hudSignIn !== undefined)
-    bridge.attachSigninRequest(options.hudSignIn(() => repaint()));
+    bridge.attachSigninRequest(options.hudSignIn(repaint, projectLinkOnly(options.hudLink)));
   // Logout and link run in another process: repaint when their files change, the rest on a timer.
   const accountFiles = watchAccountFiles(repaint, undefined, () => repaint(undefined, true));
   accountFiles.watch(join(homedir(), ReticleDir.ROOT, SESSION_FILE));

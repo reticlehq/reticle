@@ -9,7 +9,11 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
-import { DRIVE_RECORD_SUFFIX, UNMATCHED_SUBDIR } from '@/memory/project/dir/reticle-dir.js';
+import {
+  DRIVE_RECORD_SUFFIX,
+  UNMATCHED_SUBDIR,
+  isUnmatchedRoot,
+} from '@/memory/project/dir/reticle-dir.js';
 import { diskSource, readCloudState } from './sync-disk.js';
 
 export interface UnsyncedRoot {
@@ -93,12 +97,6 @@ export function unmatchedRoots(home: string): string[] {
   } catch {
     return [];
   }
-}
-
-/** Whether a root is one of those buckets. */
-function isUnmatchedRoot(root: string): boolean {
-  const parent = dirname(root);
-  return UNMATCHED_SUBDIR === basename(parent) && ReticleDir.ROOT === basename(dirname(parent));
 }
 
 /** The project a `.reticle` folder belongs to: where a person runs the command that sends it. */
