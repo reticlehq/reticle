@@ -9,13 +9,30 @@
  */
 import { asRecord, asString } from '@reticlehq/core';
 import type { IntentShardStore } from './intent-shard-store.js';
+import { IntentStatus } from './intent-shard.js';
 
-/** One settled disagreement: the words kept, the words set aside, and who chose. */
+/**
+ * One settled disagreement: the words kept, the words set aside, and who chose — or, with no words
+ * set aside, the status the team settled on the kept words.
+ */
 export interface SettledWords {
   kept: string;
-  setAside: string;
+  setAside?: string;
   by?: string;
+  status?: IntentStatus;
 }
+
+/** How settled each status is; a record is only ever raised along it, never lowered. */
+const RANK: Readonly<Record<IntentStatus, number>> = {
+  [IntentStatus.PROPOSED]: 0,
+  [IntentStatus.AGREED]: 1,
+  [IntentStatus.PROVED]: 2,
+  [IntentStatus.STALE]: 1,
+};
+
+/** A status the platform settled, read defensively; proposed settles nothing. */
+const settledStatus = (value: unknown): IntentStatus | undefined =>
+  [IntentStatus.AGREED, IntentStatus.PROVED, IntentStatus.STALE].find((s) => s === value);
 
 const str = (value: unknown): string | undefined => {
   const text = asString(value);
@@ -28,14 +45,19 @@ export function settledWordsIn(entries: readonly unknown[]): SettledWords[] {
     const entry = asRecord(raw);
     const kept = str(entry['statement']);
     const decisions = entry['decisions'];
-    if (kept === undefined || !Array.isArray(decisions)) return [];
-    return decisions.flatMap((d: unknown) => {
-      const setAside = str(asRecord(asRecord(d)['setAside'])['statement']);
-      const by = str(asRecord(d)['byEmail']);
-      return setAside === undefined || setAside === kept
-        ? []
-        : [{ kept, setAside, ...(by === undefined ? {} : { by }) }];
-    });
+    const status = settledStatus(entry['status']);
+    if (kept === undefined) return [];
+    const settled = status === undefined ? [] : [{ kept, status }];
+    if (!Array.isArray(decisions)) return settled;
+    return decisions
+      .flatMap((d: unknown): SettledWords[] => {
+        const setAside = str(asRecord(asRecord(d)['setAside'])['statement']);
+        const by = str(asRecord(d)['byEmail']);
+        return setAside === undefined || setAside === kept
+          ? []
+          : [{ kept, setAside, ...(by === undefined ? {} : { by }) }];
+      })
+      .concat(settled);
   });
 }
 
@@ -51,15 +73,37 @@ export async function applySettledWords(
   if (0 === settled.length) return 0;
   let changed = 0;
   for (const record of await store.all()) {
+    // The team settled these very words: the record takes that status, so this machine never
+    // re-sends them as proposed and undoes the decision. Raised only, never lowered.
+    const status = settled.find(
+      (s) => s.status !== undefined && s.kept === record.statement,
+    )?.status;
+    if (status !== undefined && RANK[status] > RANK[record.status]) {
+      const raised = await store.upsert(record.id, (existing) => existing, {
+        status,
+        source: decidedBy(undefined),
+      });
+      if (raised?.status === status) changed += 1;
+      continue;
+    }
     const decision = settled.find((s) => s.setAside === record.statement);
     if (decision === undefined) continue;
     const next = await store.upsert(
       record.id,
       (existing) =>
-        existing === undefined ? undefined : { ...existing, statement: decision.kept },
+        // The check bound to the words set aside proves nothing about the words kept.
+        existing === undefined
+          ? undefined
+          : { ...withoutBinding(existing), statement: decision.kept },
       { source: decidedBy(decision.by) },
     );
     if (next?.statement === decision.kept) changed += 1;
   }
   return changed;
+}
+
+/** A record with its bound check taken off: the words it was bound to were set aside. */
+function withoutBinding<T extends { binding?: unknown }>(record: T): Omit<T, 'binding'> {
+  const { binding: _dropped, ...rest } = record;
+  return rest;
 }

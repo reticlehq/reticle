@@ -282,8 +282,14 @@ export class IntentShardStore {
           subjectFor({ surface: next.surface, binding: next.binding }));
     const why = facts.why ?? existing?.why;
     const source = facts.source ?? existing?.source;
+    // New words keep no check bound to the old ones: a later green on it would "prove" words it
+    // never tested. A binding the change brings with it stands.
+    const kept =
+      existing !== undefined && existing.statement !== next.statement
+        ? { ...existing, binding: undefined }
+        : existing;
     return {
-      ...existing,
+      ...kept,
       ...next,
       subject,
       status: this.#statusOf(next, existing, facts.status),

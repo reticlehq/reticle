@@ -52,11 +52,38 @@ describe('a decision made on the dashboard', () => {
       id: 'shipping-free',
       statement: 'Orders of $50 or more ship free',
       status: IntentStatus.AGREED,
+      binding: { kind: 'text', contains: 'Order 2041' },
     });
     expect(await applySettledWords(store, settledWordsIn([entry]))).toBe(1);
     const after = await store.get('shipping-free');
     expect(after?.statement).toBe('Orders over $75 ship free');
     expect(after?.source).toContain('bea@example.com');
+    // The check bound to the old words proves nothing about the kept ones.
+    expect(after?.binding).toBeUndefined();
     expect(await applySettledWords(store, settledWordsIn([entry]))).toBe(0);
+  });
+
+  /*
+   * Persona drive: Bea chose Carl's words ("Use proposed", now agreed); Carl's own daemon still held
+   * them as `proposed`, re-sent them every ~5 s, and the platform took the author's copy — undoing
+   * her decision. A status the team settled is brought down to the record holding the same words.
+   */
+  it("raises the author's record to the status the team settled on its words", async () => {
+    await store.record({
+      id: 'saved',
+      statement: 'Saving adds it to the top',
+      status: IntentStatus.PROPOSED,
+    });
+    const agreed = { statement: 'Saving adds it to the top', status: 'agreed' };
+    expect(await applySettledWords(store, settledWordsIn([agreed]))).toBe(1);
+    expect((await store.get('saved'))?.status).toBe(IntentStatus.AGREED);
+    expect(await applySettledWords(store, settledWordsIn([agreed]))).toBe(0);
+    // Never lowered: a record this machine proved stays proved.
+    await store.record({ id: 'p', statement: 'Proved here', status: IntentStatus.PROVED });
+    await applySettledWords(
+      store,
+      settledWordsIn([{ statement: 'Proved here', status: 'agreed' }]),
+    );
+    expect((await store.get('p'))?.status).toBe(IntentStatus.PROVED);
   });
 });
