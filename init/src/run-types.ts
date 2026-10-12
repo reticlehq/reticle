@@ -77,6 +77,8 @@ export interface InitIo {
   listDirs(relPath: string): readonly string[];
   /** File (non-directory) basenames inside a project-relative directory, including dotfiles. */
   listFiles(relPath: string): readonly string[];
+  /** Whether a project-relative path is a symbolic link. Optional: an IO without it reads none. */
+  isSymlink?(relPath: string): boolean;
   /** The same IO re-rooted at a project-relative subdirectory (used for the workspace redirect). */
   scoped(relPath: string): InitIo;
   /** Runs a subprocess to completion (inherits stdio); returns true on exit code 0. */

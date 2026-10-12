@@ -89,9 +89,13 @@ export interface Plan {
   steps: Step[];
 }
 
-
 export interface PlanInput {
   detection: Detection;
+  /**
+   * `node_modules` is a link to another tree (a workspace's, a shared cache). A package manager run
+   * here replaces the link with a fresh tree, so the install is skipped and named instead.
+   */
+  nodeModulesLinked?: boolean | undefined;
   /**
    * Write `captureNetworkBodies: true` into the app's config. Off unless the caller asked (#705).
    *

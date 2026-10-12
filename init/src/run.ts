@@ -298,6 +298,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     nodeModulesMarkers,
   };
   const detection = detect(detectInput);
+  const nodeModulesLinked = true === io.isSymlink?.('node_modules');
   // Forge has no `vite.config.*`; its renderer config IS the Vite config the plugin belongs in, and
   // handing it over under that name is what lets the ordinary Vite patcher do the work.
   const plainViteConfig =
@@ -392,6 +393,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
 
   return {
     detection,
+    ...(nodeModulesLinked ? { nodeModulesLinked } : {}),
     captureBodies: options.captureBodies,
     hooks: options.hooks,
     cspSources,

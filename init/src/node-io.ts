@@ -14,6 +14,7 @@ import {
   statSync,
   accessSync,
   constants,
+  lstatSync,
 } from 'node:fs';
 import { NodePlatform } from './detect/platform.js';
 import { join, dirname, isAbsolute } from 'node:path';
@@ -177,6 +178,13 @@ export function buildNodeIo(
         return readdirSync(path).filter((name) => !statSync(join(path, name)).isDirectory());
       } catch {
         return [];
+      }
+    },
+    isSymlink(rel) {
+      try {
+        return lstatSync(abs(rel)).isSymbolicLink();
+      } catch {
+        return false;
       }
     },
     scoped(rel) {

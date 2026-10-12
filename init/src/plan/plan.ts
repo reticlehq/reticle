@@ -622,6 +622,15 @@ function installStep(input: PlanInput): Step {
       detail: `${names.join(', ')} already declared${version === undefined || 0 === version.length ? '' : ` at ${version}`}`,
     };
   }
+  // Never install into a linked tree: the package manager replaces the link (a workspace's tree).
+  if (true === input.nodeModulesLinked) {
+    return {
+      title: 'Install dependencies',
+      target: 'package.json',
+      status: StepStatus.SKIP,
+      detail: `skipped: node_modules is a link to another tree, which an install here would replace; install them where it points: ${command}`,
+    };
+  }
   // The person said `--no-install`: a choice, not a step left undone, so not a ⚠.
   if (!input.options.install) {
     return {
