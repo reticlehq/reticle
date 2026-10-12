@@ -1,0 +1,4 @@
+### Fixed
+
+- **`@reticlehq/browser` — a phrase split across elements could never be checked.** A row that shows "found by CI", with the two words in sibling flex items and no space between them in the DOM, failed `text contains "found by CI"`. A text check now matches the tightest element whose visible text holds the phrase, reading a gap between boxes the layout sets apart as the space a person sees. `find` is unchanged and still names that element in its hint.
+- **`@reticlehq/browser` — the page tree dropped inline elements from a sentence.** "On your own computer, `reticle connect` creates a key." read "On your own computer, creates a key.": a paragraph's text left out its inline `<code>`, `<strong>` and links. The sentence now reads whole, in reading order; plain inline elements no longer get a line of their own, and a link keeps its line so it can still be driven.

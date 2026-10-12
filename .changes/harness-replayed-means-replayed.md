@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a Harness journey that never replayed anything was reported as "replayed, no model tokens".** A model goal that the end-already-shown guard stopped before the model's first turn spent no tokens, and was called a replay — on the HUD, in the platform's "N replayed" count and on the plan page. A journey is now called replayed only when it replayed a flow, and a journey that neither replayed nor drove carries no "by". A replay-first journey whose replays decided nothing now hands its goal to the model from the page the journey began on, even as the only journey in its lane, so the guard never reads the page its own replay left.

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — one Harness answer carried counts that disagreed.** An `explore` answer could say "1 of 1 check(s) held, 0 failed, 0 undecided" beside "6 action(s) were NOT PROVED", or "0 failed" beside "1 action(s) FAILED … These are findings" about the Harness pressing Save a second time, which could send an agent to fix working code. Every count and every step line now comes from the same graded checks: a re-press is listed as undecided, never as a failed finding; a check declared with `predicate` (the alias of `until`) or made through `reticle_run` counts as a check; and actions that declared nothing are stated apart, as proving nothing either way.

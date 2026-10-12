@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a second checkout's evidence was stranded with nothing pointing at it.** When two checkouts claim one project id, the app's runs and flows go to `~/.reticle/unmatched/<id>`. The agent was warned once per daemon, so a later agent session in the same checkout was diverted in silence; it is now told once per agent session. The warning names the folder actually serving the app and says that `reticle init` there rewrites its committed `.reticle.json`. And those folders are now listed wherever unsent work is — `reticle sync`/`push`/`connect`, `doctor`, and the daemon's unsent list the dashboard shows — with where they are and why.

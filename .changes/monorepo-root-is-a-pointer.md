@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — in a monorepo, a second checkout of an app had its flows saved into the first checkout.** `reticle init --app apps/web` also writes web's project id into the root `.reticle.json`, so an agent started at the root reaches the app. A daemon at that root then counted itself as web's home, and a second checkout of web — same id, served from somewhere else — wrote its flows and runs into the first checkout's `.reticle` with no warning. A root whose id an app inside it also declares is now read as a pointer to that app, so such a session goes to the user's unmatched folder, which the daemon names, instead of into another checkout.

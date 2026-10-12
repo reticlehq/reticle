@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — the Harness was locked at 75% on a project the platform had unlocked at 87.5%.** File:line and test ids were remembered per tab, so a freshly leased tab (or a tab sitting on a 404 page) that had not acted yet reported the app without them, and the platform locked a run mid-drive that it had let start. What any tab of an app has shown now counts for every tab of that app, and when the project is linked the platform's gate decides whether a Harness run may start: the daemon's own reading only adds the reason when the platform says locked or cannot be reached.

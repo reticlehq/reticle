@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server`: the agent can read from and write to the team's platform, and is told whether it landed.** `reticle_memory` could only read the project's memory. It now also takes `action: "flow"` (read one saved flow from the platform by name, including a teammate's this machine never saw), `"add"` (write a statement to the project's memory, as a proposal), and `"push-flow"` (upload this machine's saved flow now, replacing the platform's copy). Each answers only after the platform has. `"set-aside" { id }` marks a statement stale on the platform with the project's key (kept, no longer relied on); a statement the project does not hold, a key whose member may not write, or any other change is refused in words.

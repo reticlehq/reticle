@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — re-linking a folder to another workspace sent that folder's earlier runs to the new workspace without asking, and never sent its flows.** The sync kept one record per folder, not per link: the new workspace did not know the old runs, so all of them went (a person's email can be in their steps), while the flow set already sent to the old link counted as sent. The record is now kept for one link (cloud, workspace and project). A folder re-linked elsewhere sends its flows and only the runs made since the new link; earlier runs stay on the machine, said in one line, until `reticle sync --move-history` sends them. A first link still sends the folder's history, as before.

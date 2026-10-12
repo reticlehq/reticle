@@ -1,0 +1,4 @@
+### Fixed
+
+- **`@reticlehq/server`, `@reticlehq/browser` — the Harness refused a fully instrumented app at 75% ("missing file:line source mapping, stable test ids").** The daemon learned that an app carries test ids and `data-reticle-source` stamps only from a control something had acted on, and only for an agent's acts, so a tab nobody had acted on yet (a hidden one `reticle connect` opened, or any tab after a daemon restart) spoke for the app. The page now says which markers its own elements carry (Reticle's HUD never counts), the daemon asks before the gate decides, before each report to the platform and before the HUD's coverage line, and what one tab shows is the app's for every tab of it. A Harness act now counts like an agent's.
+- **`@reticlehq/server` — the platform could still refuse at 75% right after the daemon's gate passed, on the report it had before the page was asked.** The gate now reports the app to the platform at once when it learned something.

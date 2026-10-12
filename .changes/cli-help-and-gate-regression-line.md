@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — CLI help and wording.** `reticle connect --help` (which `login` and `link` show) now documents signing in without a browser with `reticle login --email <e> [--org <name>] [--code <123456>]`; `reticle sync --help` says `push` is the same command; `serve` says it starts the daemon in the background and returns once it answers, which is what it does; and the daemon's "not linked" log says `reticle connect`, the name the CLI uses. `reticle gate` failing on a regression the platform knows (exit 3) now prints one plain line naming the flow, outside hook mode too.

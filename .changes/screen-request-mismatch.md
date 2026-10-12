@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server` — an opt-in screen/request consistency check.** With `RETICLE_SCREEN_REQUEST_CHECK=1`, an `act_and_wait` whose window wrote a JSON body compares each top-level field with the form control of the same `name`/`id` on the page, and reports a `screen-request-mismatch` in `contradictions` when the request carried a value the control does not show. It is advisory (it never moves a verdict) and off by default until its false-alarm rate is measured at zero across the e2e battery, the benchmark and the persona fixtures. Known limit: a control whose current value is empty is skipped rather than compared.

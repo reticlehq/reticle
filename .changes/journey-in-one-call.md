@@ -1,0 +1,3 @@
+### Changed
+
+- **`@reticlehq/server` — a journey is one call, and the briefing says so.** The connect-time instructions now name `reticle_act { steps: [{ target, action, expect }] }` as the way to drive several steps: one round trip, a verdict per step, stopping at the first `expect` that fails and handing back the un-run tail, with the last step's `expect` as the journey's end state. Each step answers in the compact shape (outcome, `source`, window, contradictions, screenshot path), and a step whose text check missed only by case says `caseOnlyMiss` and what would hold. The feedback paragraph of the briefing is shorter and asks once per session, when Reticle got in the way.
