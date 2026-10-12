@@ -657,3 +657,43 @@ describe('whose coverage gate the HUD shows', () => {
     });
   });
 });
+
+/**
+ * A drive's navigations reload the page, and the HUD with it. After a run that ended on a reload the
+ * HUD came back on an empty Agent Log, the result only under Harness, and at every lane change the
+ * Stop button a keyboard user was on was a new element without focus. The view and the focus on the
+ * run control come back with the HUD.
+ */
+describe('the HUD after the reload a drive causes', () => {
+  afterEach(() => sessionStorage.clear());
+  const signedIn = (views: ChatViews): void => {
+    views.paintAccount({ signedIn: true });
+    views.paintHarness(entitled);
+  };
+
+  it('comes back on the page that was open, before the account is known', () => {
+    const first = mountViews();
+    signedIn(first.views);
+    first.views.open('harness');
+    first.views.teardown();
+    const again = mountViews();
+    expect(again.root.getAttribute('data-reticle-page-open')).toBe('harness');
+    signedIn(again.views);
+    expect(again.root.getAttribute('data-reticle-page-open')).toBe('harness');
+  });
+
+  it('gives focus back to Stop when it had it', () => {
+    const first = mountViews();
+    signedIn(first.views);
+    first.views.open('harness');
+    first.views.paintDrive({ runId: 'harness-1', steps: 3 });
+    first.root
+      .querySelector<HTMLElement>('[data-reticle-harness-page] [data-reticle-harness-stop]')
+      ?.focus();
+    first.views.teardown();
+    const again = mountViews();
+    signedIn(again.views);
+    again.views.paintDrive({ runId: 'harness-1', steps: 4 });
+    expect(document.activeElement?.hasAttribute('data-reticle-harness-stop')).toBe(true);
+  });
+});

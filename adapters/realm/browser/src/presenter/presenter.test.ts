@@ -573,3 +573,26 @@ describe('the panel never calls a live agent idle', () => {
     p.destroy();
   });
 });
+
+/**
+ * A Harness run that ended on a reload left the HUD saying "planning next action · 13s since last
+ * action" — an agent that was never there, waiting. After the Harness's own last action, with no
+ * drive running, the strip says Ready.
+ */
+describe('liveness after the Harness acted', () => {
+  it('never says an agent is planning when the last action was the Harness', async () => {
+    document.body.innerHTML = '';
+    let clock = 0;
+    const p = new Presenter({ now: () => clock, heartbeatMs: 8, idleNoticeMs: 20 });
+    p.mount();
+    p.sessionStart();
+    p.status('Looking at the page');
+    p.log('read', 'Looking at the page', undefined, 'harness');
+    clock = 13_000;
+    await wait(24);
+    const act = document.querySelector('.reticle-act')?.textContent ?? '';
+    expect(act).not.toContain('planning next action');
+    expect(act).toBe(ACT_STRIP.READY);
+    p.destroy();
+  });
+});

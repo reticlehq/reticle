@@ -17,6 +17,8 @@ export const ReticleStorageKey = {
   PRESENTER_LOG_OWNER: 'reticle-presenter-log-owner',
   PRESENTER_SETTINGS: 'reticle-presenter-settings',
   PRESENTER_MINIMISED: 'reticle-presenter-minimised',
+  /** The HUD page that was open, and whether Run/Stop had focus, across a drive's reloads. */
+  PRESENTER_VIEW: 'reticle-presenter-view',
   CAROUSEL_DISMISSED: 'reticle.carousel.dismissed',
   ANNOTATION_HISTORY: 'reticle.annotations.history.v1',
 } as const;

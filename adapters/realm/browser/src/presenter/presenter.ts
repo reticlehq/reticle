@@ -146,6 +146,8 @@ export class Presenter {
   #glowCtl: GlowController;
   /** Liveness: the most recent action text + a 1s ticker that ages it into an "idle · {dur}" clock. */
   #lastActionText = '';
+  /** Who made the last logged action: after the Harness's, nobody is "planning" the next one. */
+  #lastActor: LogActor | undefined;
   #heartbeatTimer: ReturnType<typeof nativeSetTimeout> | undefined;
   /** Session lifecycle: idle-end window (tweakable), session id, start/end cursors, structured run log. */
   #idleEndMs: number;
@@ -681,6 +683,12 @@ export class Presenter {
     if ('' === this.#lastActionText) return;
     // The Harness is the one driving: "planning next action" would describe an agent that is waiting.
     if (this.#harnessSteps !== undefined) return;
+    // The Harness acted last and is not driving: its run is over (a run that ended on a reload never
+    // told this page so), and no agent is planning anything. Ready is what is true.
+    if (LOG_ACTOR.HARNESS === this.#lastActor) {
+      this.#paintActStrip(ACT_STRIP.READY, true);
+      return;
+    }
     const since = ACT_STRIP.SINCE_LAST;
     // Alive and between actions — NOT idle. The session is still running and the next action is
     // being decided; `#endIdle` below is the only path that says nothing more is coming.
@@ -828,6 +836,7 @@ export class Presenter {
   ): LogHandle | undefined {
     const ms = this.#now();
     this.#glowCtl.markActivity(ms);
+    this.#lastActor = actor;
     if (this.#log === undefined) return undefined;
     const trimmed = text.trim();
     if (0 === trimmed.length) return undefined;

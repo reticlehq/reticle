@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — the HUD lost its place every time a Harness run reloaded the page.** A run's navigations (a lane's start, a replay, the final look for the journey's end) reload the page and rebuild the HUD: a keyboard user on Stop lost focus at every lane change, and a run that ended on a reload came back on an empty Agent Log, the result only under Harness, with the strip saying "planning next action · 13s since last action" for an agent that was never there. The HUD now reopens the page that was open, gives focus back to Run/Stop when it had it, and says Ready once the Harness's run is over.

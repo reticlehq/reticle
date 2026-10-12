@@ -244,10 +244,48 @@ ${HARNESS_ROW_CSS.replaceAll('[data-reticle-chat-panel]', '[data-reticle-page-pa
 [data-reticle-page-panel="annotations"] .reticle-annotation-item button:hover{color:#fff;background:rgba(255,255,255,.1);}
 ${AGENT_LINK_CSS}`;
 
+/** The run control on the Harness page, in any of its states (Run, Starting…, Stop). */
+const RUN_CONTROL =
+  '[data-reticle-harness-page] :is([data-reticle-harness-run],[data-reticle-harness-stop])';
+
+/**
+ * What the HUD was showing, kept for the tab across the reloads a drive causes (a lane's start, a
+ * replay, the hunt): the page that was open, and whether the run control had focus. The HUD is
+ * rebuilt by a reload, so no element survives one; this is what comes back with it.
+ */
+interface ViewMemory {
+  view: ChatView;
+  runFocused: boolean;
+}
+
+function readViewMemory(): ViewMemory {
+  try {
+    const raw: unknown = JSON.parse(
+      globalThis.sessionStorage.getItem(ReticleStorageKey.PRESENTER_VIEW) ?? '{}',
+    );
+    const r = (null !== raw && 'object' === typeof raw ? raw : {}) as Partial<ViewMemory>;
+    const view = PAGE_VIEWS.find((v) => v === r.view) ?? 'activity';
+    return { view, runFocused: true === r.runFocused };
+  } catch {
+    return { view: 'activity', runFocused: false };
+  }
+}
+
+function rememberView(memory: ViewMemory): void {
+  try {
+    globalThis.sessionStorage.setItem(ReticleStorageKey.PRESENTER_VIEW, JSON.stringify(memory));
+  } catch {
+    /* without storage the HUD still works; a reload just opens on the Agent Log */
+  }
+}
+
 /** UI state only. The daemon remains the authority for Harness and replay. */
 export class ChatViews {
   #root: HTMLElement | undefined;
-  #view: ChatView = 'activity';
+  #view: ChatView = readViewMemory().view;
+  /** Run/Stop had focus before the reload: given back the first time the control is drawn. */
+  #refocusRun = readViewMemory().runFocused;
+  #runFocused = false;
   #annotationTab: 'current' | 'history' = 'current';
   #current: AnnotationItem[] = [];
   #history: HistoricalAnnotation[] = readHistory();
@@ -425,6 +463,21 @@ export class ChatViews {
       },
       { signal },
     );
+    // Whether the run control holds focus, so a reload mid-run can give it back.
+    root.addEventListener(
+      'focusin',
+      (event) =>
+        this.#noteRunFocus(event.target instanceof Element && event.target.matches(RUN_CONTROL)),
+      { signal },
+    );
+    root.addEventListener(
+      'focusout',
+      (event) => {
+        const next = event.relatedTarget;
+        this.#noteRunFocus(next instanceof Element && next.matches(RUN_CONTROL));
+      },
+      { signal },
+    );
     this.open(this.#view);
     this.#paintHarness();
     this.paintImpact(this.#verdicts);
@@ -441,9 +494,16 @@ export class ChatViews {
     this.#agent.teardown();
   }
 
+  #noteRunFocus(on: boolean): void {
+    if (on === this.#runFocused) return;
+    this.#runFocused = on;
+    rememberView({ view: this.#view, runFocused: on });
+  }
+
   open(view: ChatView): void {
     if (view !== 'activity' && !PAGE_VIEWS.includes(view)) return;
     this.#view = view;
+    rememberView({ view, runFocused: this.#runFocused });
     const root = this.#root;
     if (root === undefined) return;
     if ('activity' === view) root.removeAttribute('data-reticle-page-open');
@@ -468,6 +528,7 @@ export class ChatViews {
       panel.hidden = true;
     });
     this.#view = 'activity';
+    rememberView({ view: 'activity', runFocused: false });
     root.querySelectorAll<HTMLElement>('[data-reticle-chat-view-btn]').forEach((button) => {
       button.removeAttribute('aria-current');
     });
@@ -573,13 +634,19 @@ export class ChatViews {
       this.#harnessHtml = foot;
     }
     // The page is for a signed-in person only: signing out while it is open goes back to the log.
-    if (true !== account?.signedIn && 'harness' === this.#view) this.closePage();
+    // Not knowing yet is not signed out: after a reload the page the person was on stays open.
+    if (account !== undefined && !account.signedIn && 'harness' === this.#view) this.closePage();
     const page = root.querySelector<HTMLElement>('[data-reticle-harness-page]');
     if (page !== null) {
       const body = harnessRowHtml(state);
       if (body !== this.#harnessPageHtml) {
         morphHtml(page, body);
         this.#harnessPageHtml = body;
+      }
+      const control = this.#refocusRun ? page.querySelector<HTMLElement>(RUN_CONTROL) : null;
+      if (null !== control && 'harness' === this.#view) {
+        this.#refocusRun = false;
+        control.focus();
       }
       const custom = page.querySelector<HTMLInputElement>('[data-reticle-harness-persona]');
       if (custom !== null && custom.value !== this.#customPersona)
