@@ -25,6 +25,18 @@ export const DETAIL_ARG = 'detail';
 export const Detail = { COMPACT: 'compact', FULL: 'full' } as const;
 export type Detail = (typeof Detail)[keyof typeof Detail];
 
+/**
+ * The A/B control: `RETICLE_RESULT_DETAIL=full` makes every agent call answer as if it had passed
+ * `detail: "full"`, so the agent-loop benchmark can run compact against full on the same build with
+ * nothing else different — the measurement CLAUDE.md requires beside any token optimisation.
+ */
+export const RESULT_DETAIL_ENV = 'RETICLE_RESULT_DETAIL';
+
+/** Did this call (or the daemon's environment) ask for the full envelope? */
+export function wantsFull(args: Record<string, unknown>): boolean {
+  return Detail.FULL === args[DETAIL_ARG] || Detail.FULL === process.env[RESULT_DETAIL_ENV];
+}
+
 /** The tools whose results are compacted. Each one's full shape stays one argument away. */
 export const COMPACTED_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.ACT_AND_WAIT,
@@ -303,7 +315,7 @@ export function shapeForAgent(
   if (!agentCall || !COMPACTED_TOOLS.has(tool) || !isRecord(result)) return result;
   const normalized = aliasesWritten(args);
   const noted = 0 === normalized.length ? result : { ...result, [NORMALIZED_KEY]: normalized };
-  if (Detail.FULL === args[DETAIL_ARG]) return noted;
+  if (wantsFull(args)) return noted;
   if (Array.isArray(noted['steps'])) return compactSequence(noted);
   return 'verified' in noted ? compactVerdict(noted) : noted;
 }

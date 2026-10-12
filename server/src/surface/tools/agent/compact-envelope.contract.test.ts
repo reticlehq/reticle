@@ -396,3 +396,16 @@ describe('forgiving parse, strict verdict: the result names the aliases it norma
     expect(out['normalized']).toEqual(['step 0: type → kind']);
   });
 });
+
+describe('the A/B control arm', () => {
+  it('RETICLE_RESULT_DETAIL=full answers every agent call in full', () => {
+    const full = { verified: 'yes', because: 'b', trace: { window_ms: 1 }, since: 1 };
+    process.env['RETICLE_RESULT_DETAIL'] = 'full';
+    try {
+      expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, {}, full, true)).toBe(full);
+    } finally {
+      delete process.env['RETICLE_RESULT_DETAIL'];
+    }
+    expect(shapeForAgent(ReticleTool.ACT_AND_WAIT, {}, full, true)).not.toBe(full);
+  });
+});

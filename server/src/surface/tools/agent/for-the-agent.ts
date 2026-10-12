@@ -9,7 +9,7 @@
  */
 import { ReticleTool } from '@reticlehq/core';
 import { addAppNote, readAppNotes } from './app-notes.js';
-import { DETAIL_ARG, Detail, shapeForAgent } from './compact-envelope.js';
+import { shapeForAgent, wantsFull } from './compact-envelope.js';
 import { learnFromVerdict } from './app-notes-learning.js';
 import { reteachFor } from './reteach.js';
 import { staleBuildNotice } from './build-staleness.js';
@@ -36,7 +36,7 @@ export function forTheAgent(answer: AgentAnswer): unknown {
   // A corrected failure that just passed becomes an app note: a hint for the next session.
   const learned = learnFromVerdict(attach, args, shaped);
   if (learned !== undefined && root !== undefined) addAppNote(root, learned);
-  if (Detail.FULL === args[DETAIL_ARG]) return shaped;
+  if (wantsFull(args)) return shaped;
   const notes = root === undefined ? [] : readAppNotes(root).map((note) => `App note: ${note}`);
   const stale = staleBuildNotice();
   return foldNotices(shaped, attach, answer.fold, [
