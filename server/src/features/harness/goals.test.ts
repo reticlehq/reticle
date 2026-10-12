@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ReticleTool } from '@reticlehq/core';
+import { asRecord, ReticleTool } from '@reticlehq/core';
 import {
   checkExpect,
   checkGoals,
@@ -100,6 +100,33 @@ describe('the goals a drive was asked to prove (#1316)', () => {
     ]);
     expect(p.asked[2]?.[1]).toMatchObject({ by: 'text', value: 'Reopened by Tom' });
     expect(checks).toEqual([{ text: 'Reopened by Tom', verified: 'yes' }]);
+  });
+
+  /*
+   * From a re-drive: the Harness typed "Nina release 2", pressed Generate, and the page showed the end
+   * text; one allOf over all three goals came back "no" (a typed value is a field's value, which a
+   * text check does not read), and every goal was graded "no" beside a page that showed them.
+   */
+  it('grades each goal on its own when the joint check fails, and a shown one is never "no"', async () => {
+    const tree = 'textbox "Name": Nina release 2\nheading "Generated script for: Fixed it"';
+    const asked: Record<string, unknown>[] = [];
+    const invoke = (name: string, args: Record<string, unknown>): Promise<unknown> => {
+      if (ReticleTool.SNAPSHOT === name) return Promise.resolve({ tree });
+      if (ReticleTool.SCROLL_TO === name)
+        return Promise.resolve({ found: tree.includes(String(args['value'])) });
+      if (ReticleTool.ASSERT !== name) return Promise.resolve({ pass: true });
+      asked.push(asRecord(args['predicate']));
+      const contains = asRecord(args['predicate'])['contains'];
+      return Promise.resolve({
+        verified: 'Generated script for: Fixed it' === contains ? 'yes' : 'no',
+      });
+    };
+    const checks = await checkGoals(invoke, ['Nina release 2', 'Generated script for: Fixed it']);
+    expect(checks.map((c) => [c.text, c.verified])).toEqual([
+      ['Nina release 2', 'unknown'],
+      ['Generated script for: Fixed it', 'yes'],
+    ]);
+    expect(checks[0]?.reason).toMatch(/shown on the page/);
   });
 
   it('asserts an absence goal as text that is not there', async () => {

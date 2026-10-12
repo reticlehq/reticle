@@ -65,6 +65,9 @@ const ALREADY_SHOWN = `${VerifiedReason.ALREADY_TRUE}: it was on the page before
  */
 const NOT_REACHED = `${VerifiedReason.INCONCLUSIVE}: not on the page the drive ended on, even scrolled; the drive may not have reached the page that shows it`;
 
+/** Said of a goal the page showed when looked at, which the text check nonetheless did not find. */
+const SHOWN_NOT_HELD = `${VerifiedReason.INCONCLUSIVE}: shown on the page when looked at, but the text check did not find it (a field's value, or text it cannot read)`;
+
 /** Said of an absence goal beside a goal the drive never reached: absent from the wrong page proves nothing. */
 const ABSENCE_UNREACHED = `${VerifiedReason.INCONCLUSIVE}: the drive did not reach the page it ends on, so its absence there proves nothing`;
 
@@ -193,22 +196,40 @@ export async function checkGoals(
   const unreached = todo.some((g) => true !== g.absent && !found.has(g.text));
   const absences = unreached ? [] : todo.filter((g) => true === g.absent);
   const recorded = [...todo.filter((g) => found.has(g.text)), ...absences];
-  let verified: string = Verified.UNKNOWN;
-  if (0 < recorded.length) {
-    try {
-      const result = asRecord(await invoke(ReticleTool.ASSERT, { predicate: allOf(recorded) }));
-      if ('string' === typeof result['verified']) verified = result['verified'];
-    } catch {
-      /* stays unknown: the goal was not proved */
-    }
-  }
+  const verified: string =
+    0 < recorded.length ? await assertGoals(invoke, recorded) : Verified.UNKNOWN;
+  // One joint check that failed says only that SOMETHING did not hold: each goal is asked on its own,
+  // so a goal that held is not graded "no" for a neighbour that did not.
+  const each = new Map<string, string>();
+  if (Verified.NO === verified && 1 < recorded.length)
+    for (const g of recorded) each.set(g.text, await assertGoals(invoke, [g]));
+  const verdictOf = (g: Goal): string => each.get(g.text) ?? verified;
   return all.map((g) => {
     if (before.has(g.text)) return unchecked(g, ALREADY_SHOWN);
     if (true === g.absent) {
-      return unreached ? unchecked(g, ABSENCE_UNREACHED) : { text: g.text, absent: true, verified };
+      return unreached
+        ? unchecked(g, ABSENCE_UNREACHED)
+        : { text: g.text, absent: true, verified: verdictOf(g) };
     }
-    return found.has(g.text) ? { text: g.text, verified } : unchecked(g, NOT_REACHED);
+    if (!found.has(g.text)) return unchecked(g, NOT_REACHED);
+    // Seen on the page yet the text check says no: a field's value, or text the check cannot read.
+    return Verified.NO === verdictOf(g)
+      ? unchecked(g, SHOWN_NOT_HELD)
+      : { text: g.text, verified: verdictOf(g) };
   });
+}
+
+/** The verdict of one assert over `goals`, or unknown when it could not be asked. */
+async function assertGoals(
+  invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+  goals: readonly Goal[],
+): Promise<string> {
+  try {
+    const result = asRecord(await invoke(ReticleTool.ASSERT, { predicate: allOf(goals) }));
+    return 'string' === typeof result['verified'] ? result['verified'] : Verified.UNKNOWN;
+  } catch {
+    return Verified.UNKNOWN;
+  }
 }
 
 /**

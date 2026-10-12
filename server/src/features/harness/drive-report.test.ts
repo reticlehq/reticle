@@ -568,6 +568,15 @@ describe('a plan run has one verdict: its journeys', () => {
     expect(runProved(tally, undefined, journeys)).toBe(false);
   });
 
+  // A re-drive answered proved:true and "PROVED — 1 of 1 journey(s) passed" beside goalMet:false.
+  it('passed journeys over a goal the run did not reach are not proved', () => {
+    const tally = { held: 4, failed: 0, undecided: 0 };
+    const journeys = [{ status: 'passed' }];
+    expect(verdictLine(tally, false, journeys)).toMatch(/^NOT PROVED/);
+    expect(verdictLine(tally, false, journeys)).toContain('the goal was not reached');
+    expect(runProved(tally, false, journeys)).toBe(false);
+  });
+
   it('a passed replay is proved, and its replay is the check it ran', () => {
     const tally = checkTally([replay('sign-in', 'ok')]);
     expect(tally).toEqual({ held: 1, failed: 0, undecided: 0 });

@@ -411,6 +411,9 @@ export function verdictLine(
   const total = tally.held + tally.failed + tally.undecided;
   const counts = `${String(tally.held)} of ${String(total)} check(s) held, ${String(tally.failed)} failed, ${String(tally.undecided)} undecided`;
   const planned = journeysLine(journeys, 0 === total ? '' : `; ${counts}`);
+  // Journeys that passed are not the run's goal reached: the goals the run was asked decide it too.
+  if (true === planned?.startsWith('PROVED') && false === goalMet)
+    return `NOT PROVED — ${planned.slice('PROVED — '.length).replace(/\.$/, '')}, but the goal was not reached.`;
   if (planned !== undefined) return planned;
   if (0 === total) return 'NOT PROVED: the drive ran no check.';
   if (0 < tally.failed) return `NOT PROVED — ${counts}. The failures below are findings.`;
