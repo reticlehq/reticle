@@ -60,7 +60,7 @@ import {
   initImpact,
   recordImpact,
 } from '@/memory/impact/impact-recorder.js';
-import { type FrictionKind, frictionOf, inviteFor } from './feedback-invite.js';
+import { FrictionKind, frictionOf, inviteFor } from './feedback-invite.js';
 import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
 
 /**
@@ -811,8 +811,12 @@ async function dispatchTool<Ext>(
           ...(friction !== undefined
             ? {
                 [EnvelopeKey.FEEDBACK_INVITE]: inviteFor(friction),
-                // The moment Reticle got in somebody's way is the moment to offer them the founder.
-                [EnvelopeKey.TALK_TO_US]: DiscoveryInvite.AGENT,
+                // The founder's calendar only for an agent genuinely STUCK (the same call, again,
+                // with no progress). An ordinary refusal carried it too, and read as a sales pitch
+                // stapled to an error message.
+                ...(FrictionKind.REPEATING === friction
+                  ? { [EnvelopeKey.TALK_TO_US]: DiscoveryInvite.AGENT }
+                  : {}),
               }
             : {}),
           ...(prompt !== undefined ? { [EnvelopeKey.FEEDBACK_PROMPT]: prompt } : {}),
@@ -853,7 +857,11 @@ async function dispatchTool<Ext>(
   // does) — so a long-running backgrounded session, the case most likely to leak, never got the
   // one-time pool-lease reminder or the age cleanup nudge. Splice them regardless.
   const lease = resolved.takeSessionLease();
-  if (lease !== undefined) envelope[EnvelopeKey.SESSION_LEASE] = lease;
+  // In CI there is no panel and no human to hand it back to: the reminder was noise in every
+  // pipeline log. Still taken, so the once-per-session cadence is unchanged.
+  if (lease !== undefined && process.env['CI'] === undefined) {
+    envelope[EnvelopeKey.SESSION_LEASE] = lease;
+  }
   const warning = resolved.ageWarning();
   if (warning !== undefined) envelope[EnvelopeKey.SESSION_AGE_WARNING] = warning;
   // Ask for a verdict when the agent has driven the page and not asked for one: a session that never

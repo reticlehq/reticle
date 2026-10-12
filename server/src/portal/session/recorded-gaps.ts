@@ -110,6 +110,11 @@ export function noteSourceSeen(tab: NotedTab, source: string | undefined): void 
   if (source !== undefined) markSeen(sourceSeen, tab);
 }
 
+/** Whether this tab, or its app, has carried a file:line stamp: its source mapping works. */
+export function sourceMappingSeen(tab: NotedTab): boolean {
+  return wasSeen(sourceSeen, tab);
+}
+
 /** Sessions, and apps, where an acted element carried a `data-testid`. */
 const testidSeen = new Set<string>();
 

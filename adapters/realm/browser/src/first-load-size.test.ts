@@ -379,8 +379,12 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * The outward-action gate: a Harness click on Invite, Send, Remove, Pay… is refused unless the
  * person's request asked for it (the Harness invited a stranger into a customer's workspace). It is
  * judged at the click, so it cannot load later. 265,619 B; ceiling 266,619.
+ *
+ * Re-drive gaps: the run artifact's optional `agentClaim` (core's schema, built at module scope in
+ * the barrel) and an empty secret field reading empty rather than `[REDACTED]`. 266,653 B; ceiling
+ * 267,653.
  */
-const MAX_FIRST_LOAD_BYTES = 266_619;
+const MAX_FIRST_LOAD_BYTES = 267_653;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

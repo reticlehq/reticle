@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION, TRANSPORT_LIMITS } from '@reticlehq/core';
 import { TOOLS, MERGED_TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { DiscoveryInvite, ReticleTool } from '@reticlehq/core';
@@ -64,6 +64,14 @@ function fakeDeps(session: Session = throttledSession()): ToolDeps {
 function stubTool(name: string, returns: unknown): ToolDef {
   return { name, description: '', inputSchema: {}, handler: () => Promise.resolve(returns) };
 }
+
+// The lease assertions here describe a developer's machine; CI itself sets CI=true.
+beforeEach(() => {
+  vi.stubEnv('CI', undefined);
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('runTool — universal session-health invariant', () => {
   it('1: splices health onto a session-bound tool returning a plain object', async () => {
@@ -137,6 +145,18 @@ describe('runTool — universal session-health invariant', () => {
         true,
       );
     }
+  });
+
+  it('5c: in CI the lease reminder is withheld — no panel, no human to yield to', async () => {
+    vi.stubEnv('CI', 'true');
+    const lease = { sessionId: 'demo', opened_at: 0, IMPORTANT: 'yield when done' };
+    const r = (await runTool(
+      stubTool(ReticleTool.ACT, { ok: true }),
+      fakeDeps(throttledSession({ takeSessionLease: () => lease })),
+      {},
+    )) as Record<string, unknown>;
+    expect(r['ok']).toBe(true);
+    expect(r['session_lease']).toBeUndefined();
   });
 
   it('5b: lease + age-warning are spliced even when the handler already returned a session block', async () => {
@@ -365,9 +385,10 @@ describe('the feedback invitation is counted wherever friction actually happens'
     expect(getSessionMetrics().summarize(true).feedbackPrompted).toBe(1);
   });
 
-  // The same moment Reticle failed somebody is the moment to offer them the founder's calendar. For
-  // the HUMAN: the agent is told to pass it on, never to book or submit anything itself.
-  it('offers the person a call with the founder wherever it invites feedback', async () => {
+  // An ordinary refusal invites feedback, and leaves the founder's calendar out: offered on every
+  // error it read as a sales pitch stapled to an error message. It stays for a STUCK agent (the
+  // same call again with no progress) and at a session's end.
+  it('keeps the founder call out of an ordinary refusal', async () => {
     const exempt: ToolDef = {
       name: ReticleTool.FLOW_VERIFY,
       description: '',
@@ -375,7 +396,9 @@ describe('the feedback invitation is counted wherever friction actually happens'
       handler: () => Promise.resolve({ error: 'no flows to verify' }),
     };
     const result = (await runTool(exempt, fakeDeps(), {})) as Record<string, unknown>;
-    expect(result[EnvelopeKey.TALK_TO_US]).toBe(DiscoveryInvite.AGENT);
+    expect(result[EnvelopeKey.FEEDBACK_INVITE]).toBeDefined();
+    expect(result[EnvelopeKey.TALK_TO_US]).toBeUndefined();
+    expect(DiscoveryInvite.AGENT).toBeDefined();
   });
 
   it('does not offer it on a call that went fine', async () => {

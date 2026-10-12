@@ -86,6 +86,13 @@ export interface ActionInstrumentationFacts {
    */
   sourceMappingDisabled?: boolean;
   /**
+   * This tab is already known to stamp file:line (a control or a verdict carried one). A red
+   * ASSERTION that located nothing is then a locator miss, and telling the reader to install the
+   * build plugin sends them at a plugin that works. Only the assert path sets it: an act's own
+   * control lacking a stamp is a real per-control gap whatever the rest of the page carries.
+   */
+  sourceMappingSeen?: boolean;
+  /**
    * How long the OLDEST open intent has been owed, in ms.
    *
    * A count alone cannot tell "you declared this a minute ago and have not proved it yet" from
@@ -108,14 +115,16 @@ export function gapsForAction(facts: ActionInstrumentationFacts): Instrumentatio
   // a build plugin that was already there. Only a definite `false` counts — an SDK that says nothing
   // is unknown, and reading silence as an opt-out would mute the honest gap for every app that
   // simply has no source mapping at all.
-  if (!facts.pass && facts.source === undefined) {
+  if (!facts.pass && facts.source === undefined && true !== facts.sourceMappingSeen) {
     const off = true === facts.sourceMappingDisabled;
     gaps.push(
       instrumentationGap(
         off ? InstrumentationGapKind.SOURCE_MAPPING_OFF : InstrumentationGapKind.NO_SOURCE_MAPPING,
         off
           ? 'source mapping is turned off for this build, so no element carries data-reticle-source'
-          : 'the control that was driven carries no source mapping',
+          : facts.ref === undefined
+            ? 'nothing this verdict located carries a source mapping'
+            : 'the control that was driven carries no source mapping',
         'this verdict can name the control but not the file and line that render it, so finding the code is a separate search',
         { ...(facts.ref === undefined ? {} : { ref: facts.ref }) },
       ),
