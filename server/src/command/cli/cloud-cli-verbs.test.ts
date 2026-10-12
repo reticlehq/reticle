@@ -241,6 +241,36 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(connectInstalls(['connect', '--url', TEST_URL])).toBe(true);
   });
 
+  /*
+   * Two re-drive personas: an invited contributor's `connect --project <new>` was refused 403 because
+   * creating a project needs a maintainer, and the CLI said "your sign-in expired… run reticle
+   * login". It prints the platform's words and the step that works: link a project that exists.
+   */
+  it("connect as a contributor names the platform's refusal and the projects it can link", async () => {
+    await writeFile(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'local-1' }));
+    await writeHomeFile(
+      [SESSION_FILE],
+      JSON.stringify({ token: 'person-token', orgName: 'Acme', orgId: 'org_acme', url: TEST_URL }),
+    );
+    const said =
+      'Only a maintainer, an admin or the owner of this workspace can create a project. Ask one to create it on the dashboard (or run reticle connect), then connect to it.';
+    let projectCalls = 0;
+    responder = (url) => {
+      if (url.endsWith('/v1/projects')) {
+        projectCalls += 1;
+        return 1 === projectCalls
+          ? { body: { projects: [{ projectId: 'shop-1', name: 'shop' }] } }
+          : { status: 403, body: { error: { code: 'forbidden', message: said } } };
+      }
+      return { body: { orgs: [], workspaces: [] } };
+    };
+    const code = await runCloudCommand(['connect', '--url', TEST_URL, '--project', 'brand-new']);
+    expect(code).not.toBe(0);
+    expect(stderrBuf).toContain(said);
+    expect(stderrBuf).not.toContain('reticle login');
+    expect(stderrBuf).toContain('reticle connect --project shop');
+  });
+
   it('connect reuses a valid sign-in, links the named project, and syncs local history', async () => {
     await writeFile(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'local-1' }));
     await writeHomeFile(

@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process';
 import { relative } from 'node:path';
 import { z } from 'zod';
 import { PROJECT_ID_HASH_LENGTH } from '@reticlehq/core';
-import { api, hint } from './cloud-kit.js';
+import { CredentialRefusedError, api, hint } from './cloud-kit.js';
 
 /** Cap the slug so a deep or oddly-named checkout cannot produce an unreadable project id. */
 const MAX_SLUG = 48;
@@ -124,6 +124,9 @@ export function repoIdentity(dir: string): string | undefined {
  * whose package is `web` shared one dashboard project. A project with no recorded repository, or an
  * id named outright, is reused as before.
  */
+/** Projects named when creating one was refused. */
+const MAX_NAMED = 5;
+
 export async function resolveProjectId(
   url: string,
   token: string,
@@ -140,12 +143,26 @@ export async function resolveProjectId(
         (repo === undefined || p.repo === undefined || p.repo === repo)),
   );
   if (match !== undefined) return match.projectId;
-  const created = CreatedProjectSchema.parse(
-    await api('POST', `${url}/v1/projects`, token, {
+  let answer: unknown;
+  try {
+    answer = await api('POST', `${url}/v1/projects`, token, {
       name: wanted,
       ...(repo === undefined ? {} : { repo }),
-    }),
-  );
+    });
+  } catch (error) {
+    // Refused to create one (a contributor): the platform's words, then the step that works.
+    if (
+      error instanceof CredentialRefusedError ||
+      !(error instanceof Error) ||
+      0 === projects.length
+    )
+      throw error;
+    const names = projects.map((p) => p.name).slice(0, MAX_NAMED);
+    throw new Error(
+      `${error.message}\nTo link one that exists: ${names.map((n) => `\`reticle connect --project ${n}\``).join(', ')}`,
+    );
+  }
+  const created = CreatedProjectSchema.parse(answer);
   hint(
     `created project "${wanted}" (${created.projectId})${inWorkspace(workspace)} — it did not exist yet`,
   );
