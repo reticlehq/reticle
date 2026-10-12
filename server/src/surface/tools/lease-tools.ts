@@ -415,7 +415,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     ready: z
       .boolean()
       .describe(
-        'Whether the leased tab is connected AND answering — NOT that the app has hydrated. On a reused lease this is probed, not assumed — a row in the session map is presence, not liveness. Since #1449 a lease is also not ready while its tab is hidden. A slow-hydrating page (SvelteKit, Next) can still be mid-render here, with controls not yet wired up, so an act issued immediately can miss: make the first act reticle_act_and_wait with an `until` on something hydration renders, or reticle_assert { action: "wait" }. Reads that come back empty (a find for buttons returning 0 matches, no console lines) mean not hydrated yet, not a page with nothing on it. False ⇒ read notReadyReason.',
+        'Whether the leased tab is connected AND answering. It is NOT a claim that the app has hydrated. On a reused lease this is probed, not assumed — a row in the session map is presence, not liveness. Since #1449 a lease is also not ready while its tab is hidden. A slow-hydrating page (SvelteKit, Next) can still be mid-render here, with controls not yet wired up, so an act issued immediately can miss: make the first act reticle_act_and_wait with an `until` on something hydration renders, or reticle_assert { action: "wait" }. Reads that come back empty (a find for buttons returning 0 matches, no console lines) mean not hydrated yet, not a page with nothing on it. False ⇒ read notReadyReason.',
       ),
     zeroInstall: z
       .boolean()
