@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   resolveDaemonForProject,
   adoptable,
+  relocationReason,
   resolveMcpPort,
   projectlessNote,
   projectDaemonsElsewhere,
@@ -340,5 +341,39 @@ describe('splitBrainNote', () => {
   /** The advice that would be wrong: this is not an install problem and must not read as one. */
   it('does not send the reader back to init', () => {
     expect(splitBrainNote(51234, [4400])).not.toContain('init');
+  });
+});
+
+/*
+ * Re-drive (persona 02): a proxy given RETICLE_PORT=17505 attached to this project's own daemon on
+ * :4400 (started by `connect`) and logged "the requested port serves a different project" — both
+ * served the same project. The reason says what happened, and how to change it.
+ */
+describe('relocationReason', () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  function home(entries: readonly Record<string, unknown>[]): string {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-reloc-'));
+    dirs.push(dir);
+    for (const e of entries)
+      writeFileSync(join(dir, `daemon-${String(e['port'])}.json`), JSON.stringify(e));
+    return dir;
+  }
+
+  it("says this project's own daemon is elsewhere, and how to use the requested port", () => {
+    const dir = home([{ port: 4400, pid: 1, cwd: '/a', startedAt: 1, projectId: 'nina-app' }]);
+    const reason = relocationReason(17505, 4400, 'nina-app', dir, live);
+    expect(reason).toContain("this project's daemon is already running on :4400");
+    expect(reason).toContain('reticle stop --port 4400');
+    expect(reason).not.toContain('different project');
+  });
+
+  it('names the other project holding the requested port', () => {
+    const dir = home([{ port: 4400, pid: 1, cwd: '/a', startedAt: 1, projectId: 'blog' }]);
+    const reason = relocationReason(4400, 51234, 'shop', dir, live);
+    expect(reason).toContain('project "blog"');
+    expect(reason).toContain(':51234');
   });
 });

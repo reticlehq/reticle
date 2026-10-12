@@ -225,6 +225,36 @@ export function wrongDaemonNote(
 }
 
 /**
+ * Why the proxy serves `port` and not the `requested` one, in words a person can act on. It said
+ * "the requested port serves a different project" for every move, including the commonest one: this
+ * project's own daemon was already running elsewhere (a `connect` started it on the default).
+ */
+export function relocationReason(
+  requested: number,
+  port: number,
+  projectId: string | undefined,
+  home: string,
+  alive: (pid: number) => boolean,
+): string {
+  const at = `:${String(port)}`;
+  if (projectId !== undefined && resolveDaemonForProject(projectId, home, alive) === port)
+    return (
+      `this project's daemon is already running on ${at}, so the agent uses it instead of ` +
+      `:${String(requested)}. To use :${String(requested)}, run \`reticle stop --port ${String(port)}\` ` +
+      'and reconnect the agent.'
+    );
+  const holder = daemonProjectAt(requested, home);
+  if (holder !== undefined && holder !== projectId)
+    return (
+      `:${String(requested)} serves project "${holder}", so this one is served on ${at}. Give this ` +
+      'project its own port (RETICLE_PORT, or `port` in its .reticle.json) and restart the agent.'
+    );
+  if (projectId === undefined)
+    return `no project here, and the one live project daemon is on ${at}: the agent uses it.`;
+  return `nothing usable answered on :${String(requested)}, so the agent is served on ${at}.`;
+}
+
+/**
  * The port this agent's MCP proxy should serve, decided BEFORE the proxy starts.
  *
  * Resolved once rather than per reconnect because the proxy's transport is built around a fixed

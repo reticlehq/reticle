@@ -25,7 +25,11 @@ import {
 } from '@/surface/mcp/mcp-proxy.js';
 import { installProxyResilience } from '@/command/daemon/daemon-resilience.js';
 import { readProjectId, readProjectPort } from './ports/resolve/cli-port.js';
-import { resolveMcpPort, daemonProjectAt } from '@/command/daemon/daemon-resolve.js';
+import {
+  resolveMcpPort,
+  daemonProjectAt,
+  relocationReason,
+} from '@/command/daemon/daemon-resolve.js';
 import { daemonSpawnArgs } from './daemon-start-options.js';
 import { WakeAction, decideWake } from '@/command/daemon/wake-decision.js';
 import { pickDaemonPortToBind } from '@/command/daemon/binding/free-port.js';
@@ -107,7 +111,7 @@ export async function handleMcp(opts: {
     log('reticle_mcp_port_relocated', {
       requested: opts.port,
       port,
-      reason: 'the requested port serves a different project',
+      reason: relocationReason(opts.port, port, projectId, reticleStateHome(), isAlive),
     });
   }
   // The proxy IS the MCP server the editor launched. Nothing respawns it, so an uncaught throw here
