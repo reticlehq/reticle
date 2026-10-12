@@ -467,7 +467,9 @@ describe('the pages a drive reached', () => {
 
 /** A false green from a live drive: one "Sign in" pressed fifteen times read as fifteen proofs. */
 describe('the same check made again', () => {
-  it('counts once, at its worst', () => {
+  // Counted as the platform counts a run's checks: distinct (kind, claim, outcome). The answer
+  // said "2 of 2 held" beside a dashboard that counted the same run's checks differently.
+  it('counts once per claim and outcome, as the platform counts them', () => {
     const press = (verified: string) => ({
       id: 'x',
       name: 'reticle_act_and_wait',
@@ -481,10 +483,13 @@ describe('the same check made again', () => {
       undecided: 0,
     });
     expect(checkTally([press('yes'), press('no'), press('yes')])).toEqual({
-      held: 0,
+      held: 1,
       failed: 1,
       undecided: 0,
     });
+    // Another control with the same claim is the same check to the platform.
+    const other = { ...press('yes'), result: { verified: 'yes', effect: { testid: 'save' } } };
+    expect(checkTally([press('yes'), other]).held).toBe(1);
   });
 });
 

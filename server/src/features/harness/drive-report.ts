@@ -31,6 +31,8 @@ import {
   Verified,
 } from '@reticlehq/core';
 import type { ToolOutcome } from './harness.js';
+import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate-schema.js';
+import { describeWaitTarget } from '@reticlehq/engine/evidence/unsettled.js';
 
 /** One driven action, reduced to what a reader needs: what was done, and what it proved. */
 export interface DrivenStep {
@@ -351,9 +353,16 @@ export function checkTally(toolCalls: readonly ToolOutcome[]): {
   failed: number;
   undecided: number;
 } {
-  // One check per control and claim, at its worst: a live drive pressed "Sign in" fifteen times and
-  // reported "15 of 15 check(s) held" for one fact proved fifteen times over.
-  const worst = new Map<string, 'held' | 'failed' | 'undecided'>();
+  // One check per (kind, claim, outcome), exactly as the platform counts a run's checks: a live
+  // drive pressed "Sign in" fifteen times and read "15 of 15 check(s) held" for one fact, and an
+  // answer that counted by control said "2 of 2" beside a dashboard counting the same run otherwise.
+  const seen = new Set<string>();
+  const tally = { held: 0, failed: 0, undecided: 0 };
+  const count = (key: string, now: 'held' | 'failed' | 'undecided'): void => {
+    if (seen.has(`${key}|${now}`)) return;
+    seen.add(`${key}|${now}`);
+    tally[now] += 1;
+  };
   for (const call of toolCalls) {
     const args = asRecord(call.args);
     const isCheck =
@@ -363,30 +372,23 @@ export function checkTally(toolCalls: readonly ToolOutcome[]): {
     const result = asRecord(call.result);
     // The driver's own wrong guess about the route checked the driver, not the app.
     if (routeGuessMissed(args, result)) continue;
-    const effect = asRecord(result['effect']);
-    const control =
-      asString(effect['testid']) ??
-      `${asString(effect['role']) ?? ''} ${asString(effect['name']) ?? asString(args['ref']) ?? ''}`;
-    const key = `${call.name}|${control}|${JSON.stringify(args['until'] ?? args['predicate'] ?? null)}`;
+    const predicate = PredicateSchema.safeParse(args['until'] ?? args['predicate']);
+    const key = predicate.success
+      ? `${predicate.data.kind}|${describeWaitTarget(predicate.data)}`
+      : JSON.stringify(args['until'] ?? args['predicate'] ?? null);
     const verified = asString(result['verified']);
-    const now =
-      Verified.YES === verified ? 'held' : Verified.NO === verified ? 'failed' : 'undecided';
-    const before = worst.get(key);
-    if (before === undefined || 'failed' === now || ('undecided' === now && 'held' === before))
-      worst.set(key, now);
+    count(
+      key,
+      Verified.YES === verified ? 'held' : Verified.NO === verified ? 'failed' : 'undecided',
+    );
   }
   // A replayed flow is a check too: its own expects decided it. A passed replay counted as "no
   // check" and its run read NOT PROVED beside a dashboard that said Passed.
   for (const replay of replayedFlows(toolCalls)) {
     const now = REPLAY_CHECK[replay.status ?? ''];
     if (now === undefined) continue;
-    const key = `${ReticleTool.FLOW_REPLAY}|${replay.name}`;
-    const before = worst.get(key);
-    if (before === undefined || 'failed' === now || ('undecided' === now && 'held' === before))
-      worst.set(key, now);
+    count(`${ReticleTool.FLOW_REPLAY}|${replay.name}`, now);
   }
-  const tally = { held: 0, failed: 0, undecided: 0 };
-  for (const verdict of worst.values()) tally[verdict] += 1;
   return tally;
 }
 
