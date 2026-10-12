@@ -683,6 +683,22 @@ describe('a journey that does not build on the one before it in its lane', () =>
     expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.UNDECIDED);
   });
 
+  // A re-drive: started on a dead link, the drive reached the page and its end showed (graded yes),
+  // but the driver's own word was "not met" and the journey was "failed" beside a goal that held.
+  // The page is the evidence; the driver's word is not.
+  it('passes on an end the page shows, whatever the driver said', async () => {
+    const a = app(false);
+    const doubting: ScriptPorts = {
+      ...a.port,
+      drive: async (tools, goal, steps) => ({
+        ...(await a.port.drive(tools, goal, steps)),
+        goalMet: false,
+      }),
+    };
+    const run = await runScript(checkout, doubting);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
+  });
+
   it('is never credited with an end that was on screen before it acted, nor failed for it', async () => {
     const a = app(true);
     const run = await runScript(checkout, a.port);

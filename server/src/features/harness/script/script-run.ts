@@ -585,8 +585,10 @@ async function runLeaf(
           if (0 < checkTally(drive.toolCalls).failed) return false;
           shown = await lookFor(tools.invoke.bind(tools), end, ports.own);
         }
-        // Never reached is the journey's miss, not a failed check on the app: no assert is kept.
-        if (!shown || false === drive.goalMet) return false;
+        // Never reached is the journey's miss, not a failed check on the app: no assert is kept. The
+        // page decides it, not the driver's word: an end the page shows was reached, whatever the
+        // driver said (a drive started on a dead link reached it and was failed on its own "no").
+        if (!shown) return false;
         return holds(tools, { kind: PredicateKind.TEXT, contains: end });
       }
       const result = await call(tools, ReticleTool.ACT_AND_WAIT, {
