@@ -15,7 +15,6 @@ import type { Session } from './session.js';
 import type { SessionManager } from './session-manager.js';
 import { gapReportLines } from '@/judgement/runs/artifact/gap-report.js';
 import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
-import { DiscoveryInvite } from '@reticlehq/core';
 import {
   RESULT_FIELD,
   endedAgentSession,
@@ -185,8 +184,9 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
           sessionId: session.id,
           ...(detach ? { disconnected: true } : {}),
           gap,
+          // No founder's-call invite here: it is offered to someone stuck (an error, an empty
+          // session list), never at the end of every task.
           ...resultField(() => sessionResult(deps, session.id, actions, ended.wallMs, ended.runId)),
-          talk_to_us: DiscoveryInvite.AGENT,
         };
       });
     },

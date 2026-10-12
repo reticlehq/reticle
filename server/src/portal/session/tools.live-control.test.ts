@@ -13,7 +13,7 @@ import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
 import { PAUSE_HINT } from './control-envelope.js';
 import type { InboxMessage, Session } from './session.js';
 import type { SessionManager } from './session-manager.js';
-import { DiscoveryInvite, type JournalAction } from '@reticlehq/core';
+import type { JournalAction } from '@reticlehq/core';
 import { trackVerdict } from '@/surface/tools/reticle-result.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
@@ -362,7 +362,6 @@ describe('live-control: agent tools', () => {
       sessionId: 'demo',
       gap: ['no claims this session, so nothing was verified'],
       reticleResult: expect.stringContaining(NOTHING_CHECKED) as unknown,
-      talk_to_us: DiscoveryInvite.AGENT,
     });
     expect(session.getState()).toBe(SessionState.ENDED);
     // Single push carrying the summary and the gap headline — never two pushes for one transition.
@@ -457,7 +456,6 @@ describe('live-control: agent tools', () => {
       sessionId: 'demo',
       gap: ['no claims this session, so nothing was verified'],
       reticleResult: expect.stringContaining(NOTHING_CHECKED) as unknown,
-      talk_to_us: DiscoveryInvite.AGENT,
     });
     expect(session.__pushed).toContainEqual({
       state: SessionState.ENDED,
