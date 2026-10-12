@@ -11,7 +11,7 @@
 
 import { describe as vitestDescribe, expect, it, beforeEach } from 'vitest';
 import { createCommandRegistry } from './commands.js';
-import { ReticleCommand } from '@reticlehq/core';
+import { ANIMATION_TARGET_ARG, ReticleCommand } from '@reticlehq/core';
 
 type Handler = (args: Record<string, unknown>) => unknown;
 
@@ -22,8 +22,9 @@ function animationsHandler(): Handler {
 }
 
 /** A fake Animation whose effect targets a real element, the way KeyframeEffect does. */
-function fakeAnimation(target: Element | null, playState: string): Animation {
+function fakeAnimation(target: Element | null, playState: string, name?: string): Animation {
   return {
+    ...(name === undefined ? {} : { animationName: name }),
     playState,
     currentTime: 100,
     effect: {
@@ -39,9 +40,19 @@ vitestDescribe('reticle_animations names the element each animation drives', () 
       '<button id="a">Save</button><button id="b">Cancel</button><div id="c"></div>';
   });
 
-  const rowsFor = (animations: Animation[]): Record<string, unknown>[] => {
+  const resultFor = (
+    animations: Animation[],
+    args: Record<string, unknown> = {},
+  ): Record<string, unknown> => {
     (document as unknown as { getAnimations: () => Animation[] }).getAnimations = () => animations;
-    const out = animationsHandler()({}) as { animations: Record<string, unknown>[] };
+    return animationsHandler()(args) as Record<string, unknown>;
+  };
+
+  const rowsFor = (
+    animations: Animation[],
+    args: Record<string, unknown> = {},
+  ): Record<string, unknown>[] => {
+    const out = resultFor(animations, args) as { animations: Record<string, unknown>[] };
     return out.animations;
   };
 
@@ -82,5 +93,44 @@ vitestDescribe('reticle_animations names the element each animation drives', () 
     const rows = rowsFor([fakeAnimation(document.getElementById('a'), 'paused')]);
     expect(rows[0]?.['playState']).toBe('paused');
     expect(rows[0]?.['duration']).toBe(300);
+  });
+
+  it('reports animation names and which rows match a selector target', () => {
+    document.getElementById('a')?.classList.add('spinner');
+    const out = resultFor(
+      [
+        fakeAnimation(document.getElementById('a'), 'running', 'spin'),
+        fakeAnimation(document.getElementById('b'), 'running', 'fade'),
+      ],
+      { [ANIMATION_TARGET_ARG]: '.spinner' },
+    );
+    const rows = out['animations'] as Record<string, unknown>[];
+    const target = out['target'] as Record<string, unknown>;
+
+    expect(rows[0]?.['name']).toBe('spin');
+    expect(rows[0]?.['targetMatches']).toBe(true);
+    expect(rows[1]?.['targetMatches']).toBe(false);
+    expect(target['matched']).toBe(true);
+    expect(target['refs']).toHaveLength(1);
+  });
+
+  it('matches selector targets inside open shadow roots', () => {
+    const host = document.createElement('div');
+    const root = host.attachShadow({ mode: 'open' });
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner';
+    spinner.textContent = 'Loading';
+    root.append(spinner);
+    document.body.append(host);
+
+    const out = resultFor([fakeAnimation(spinner, 'running', 'spin')], {
+      [ANIMATION_TARGET_ARG]: '.spinner',
+    });
+    const rows = out['animations'] as Record<string, unknown>[];
+    const target = out['target'] as Record<string, unknown>;
+
+    expect(rows[0]?.['targetMatches']).toBe(true);
+    expect(target['matched']).toBe(true);
+    expect(target['refs']).toHaveLength(1);
   });
 });

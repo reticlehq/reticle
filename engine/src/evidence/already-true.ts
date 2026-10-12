@@ -1,12 +1,13 @@
 /**
  * Which predicates can be satisfied by something that was already true before the action.
  *
- * Event-based kinds (net, signal, console, animation, settled) are evaluated against the
+ * Event-based kinds (net, signal, console, settled) are evaluated against the
  * event buffer floored at the act's own cursor, so a stale event cannot satisfy them — that floor is
  * why `act_and_wait` can trust them at all.
  *
- * `element` and `text` read the LIVE DOM, `route` can fall back to the current route, and `state` reads
- * live store memory via STATE_READ — where no event floor applies. A condition that held before the
+ * `element` and `text` read the LIVE DOM, `route` can fall back to the current route, `animation`
+ * can fall back to the page's current `getAnimations()` state, and `state` reads live store memory
+ * via STATE_READ — where no event floor applies. A condition that held before the
  * click holds after it and passes instantly, whatever the action did. A click asserted with
  * `{ kind: 'text', contains: 'Parallel Routes' }` returns `verified: "yes"` against
  * `routeChanges: 0` when the predicate matches a nav link that was already on screen, while the real
@@ -52,6 +53,8 @@ export function readsDomState(predicate: Predicate): boolean {
     case PredicateKind.ELEMENT:
     case PredicateKind.ROUTE:
       return true;
+    case PredicateKind.ANIMATION:
+      return predicate.since === undefined;
     case PredicateKind.ALL_OF:
     case PredicateKind.ANY_OF:
       return predicate.predicates.some(readsDomState);

@@ -83,10 +83,17 @@ describe('which predicates need the before-check at all', () => {
     expect(readsDomState({ kind: 'text', contains: 'Parallel Routes' })).toBe(true);
   });
 
-  it('event-based kinds do not — they are already floored at the act cursor', () => {
+  it('event-based kinds without live fallbacks do not — they are already floored at the act cursor', () => {
     expect(readsDomState({ kind: 'signal', name: 's' })).toBe(false);
     expect(readsDomState({ kind: 'net', urlContains: '/api' })).toBe(false);
     expect(readsDomState({ kind: 'settled' })).toBe(false);
+  });
+
+  it('animation does, now that it can be answered from live getAnimations state', () => {
+    expect(readsDomState({ kind: 'animation', name: 'spin' })).toBe(true);
+    expect(readsDomState({ kind: 'animation', name: 'fade', completed: true, since: 5 })).toBe(
+      false,
+    );
   });
 
   /**
