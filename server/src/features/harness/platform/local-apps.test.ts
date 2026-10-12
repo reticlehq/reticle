@@ -13,6 +13,7 @@ import {
   machineOf,
   nameFromProjectId,
   pickAppTab,
+  reportAppsNow,
   startAppReports,
   type AppReports,
   type AppTab,
@@ -250,6 +251,24 @@ describe('reporting', () => {
       auth: 'Bearer key-a',
     });
     expect(opened).toEqual(['http://localhost:4000/']);
+  });
+
+  // Group D persona drives: the daemon's gate learned the app's markers, but the platform still
+  // refused at 75% on the report it had. The gate asks for a report at once.
+  it('reports at once when asked, rather than waiting for the next tick', async () => {
+    const p = platform({ wake: [], pendingDrive: false });
+    running = startAppReports({
+      machine: MACHINE,
+      version: '3.7.0',
+      capabilities: [],
+      apps: () => Promise.resolve([{ platform: A, apps: [shop] }]),
+      open: () => Promise.resolve(),
+      drivePending: () => undefined,
+      fetch: p.fetch,
+      intervalMs: 60_000,
+    });
+    await reportAppsNow();
+    expect(p.calls).toHaveLength(1);
   });
 
   it('never re-opens an app that is already open, and says when a drive is waiting', async () => {

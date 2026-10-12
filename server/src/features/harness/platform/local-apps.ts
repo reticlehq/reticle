@@ -356,8 +356,25 @@ export function startAppReports(deps: AppReportDeps): AppReports {
   };
   const timer = setInterval(() => void tick(), deps.intervalMs ?? LOCAL_APPS_REPORT_MS);
   timer.unref();
-  return { tick, stop: () => clearInterval(timer) };
+  const reports: AppReports = {
+    tick,
+    stop: () => {
+      clearInterval(timer);
+      if (running === reports) running = undefined;
+    },
+  };
+  running = reports;
+  return reports;
 }
+
+/** The daemon's running reports. ponytail: one per daemon, the last one started. */
+let running: AppReports | undefined;
+
+/**
+ * Report now rather than on the next tick: the Harness gate just learned what an app's pages carry,
+ * and the platform, which locks a drive on its last report, would otherwise refuse on the old one.
+ */
+export const reportAppsNow = (): Promise<void> => running?.tick() ?? Promise.resolve();
 
 /**
  * The tab a drive the chat attached to one app uses: a tab of that app and no other, even on the

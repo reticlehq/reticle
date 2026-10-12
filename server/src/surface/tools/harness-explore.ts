@@ -8,6 +8,7 @@
  * deterministically with no model in the loop at all.
  */
 
+import { reportAppsNow } from '@/features/harness/platform/local-apps.js';
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { exploreScript } from './harness-script.js';
 import { randomUUID } from 'node:crypto';
@@ -321,7 +322,9 @@ export async function harnessLockRefusal(
 ): Promise<string | undefined> {
   // What the app's pages carry decides, not what an act happened to reach: ask them first.
   const app = appTabsOf(deps, sessionId);
-  if (app !== undefined) await probeMarkers([app.tab, ...app.siblings]);
+  // Learned something: the platform hears it before it is asked, or it refuses on its old score.
+  if (app !== undefined && (await probeMarkers([app.tab, ...app.siblings])))
+    await reportAppsNow().catch(() => undefined);
   if (undefined === localGateRefusal(deps, sessionId)) return undefined;
   const platform = await fetchPlatformConfig(env, fetchConfig);
   if (true === platform?.gate?.unlocked) return undefined;
