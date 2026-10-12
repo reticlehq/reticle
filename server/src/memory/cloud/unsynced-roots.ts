@@ -68,9 +68,21 @@ export function unsentRunCount(root: string): number {
     if (!existsSync(dir)) return 0;
     const state = readCloudState(root);
     const sent = new Set([...Object.keys(state.sentRunHashes ?? {}), ...(state.sentRunIds ?? [])]);
+    // Made before the folder was linked here: held for `--move-history`, so not waiting for a sync.
+    const linkedAt = state.linkedAt;
+    const heldBack = (file: string): boolean => {
+      if (linkedAt === undefined) return false;
+      try {
+        const at = (JSON.parse(readFileSync(join(dir, file), 'utf8')) as { createdAt?: unknown })
+          .createdAt;
+        return !('number' === typeof at && at >= linkedAt);
+      } catch {
+        return false;
+      }
+    };
     return readdirSync(dir)
       .filter((file) => file.endsWith(RUN_SUFFIX) && !file.endsWith(DRIVE_RECORD_SUFFIX))
-      .filter((file) => !sent.has(file.slice(0, -RUN_SUFFIX.length))).length;
+      .filter((file) => !sent.has(file.slice(0, -RUN_SUFFIX.length)) && !heldBack(file)).length;
   } catch {
     return 0;
   }

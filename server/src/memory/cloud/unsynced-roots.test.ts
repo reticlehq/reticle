@@ -52,6 +52,23 @@ describe('unsynced roots', () => {
     expect(unsentRunCount(root)).toBe(0);
   });
 
+  // `connect --workspace` said "not sent: 1 run … run `reticle sync --move-history`" and then
+  // "1 run(s) … waiting to be sent: run `reticle sync`" for the same held-back run. A run made
+  // before the folder was linked here waits for --move-history, not for a sync.
+  it('does not count a run held back from the new link as waiting', () => {
+    const root = rootWith([]);
+    writeFileSync(
+      join(root, ReticleDir.RUNS_SUBDIR, 'old.json'),
+      JSON.stringify({ runId: 'old', createdAt: 100 }),
+    );
+    writeFileSync(
+      join(root, ReticleDir.RUNS_SUBDIR, 'new.json'),
+      JSON.stringify({ runId: 'new', createdAt: 900 }),
+    );
+    writeFileSync(join(root, ReticleDir.CLOUD_STATE_FILE), JSON.stringify({ linkedAt: 500 }));
+    expect(unsentRunCount(root)).toBe(1);
+  });
+
   it('counts nothing in a folder with no runs', () => {
     expect(unsentRunCount(join(tmpdir(), 'reticle-no-such-root'))).toBe(0);
   });
