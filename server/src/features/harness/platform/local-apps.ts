@@ -146,7 +146,7 @@ export const nameFromProjectId = (projectId: string): string =>
 const RETICLE_MARKS = new Set<string>(Object.values(RETICLE_URL_PARAM));
 
 /** The address as the app knows it: the params Reticle put on it to adopt a tab are not the app's. */
-const withoutMarks = (raw: string): string => {
+export const withoutMarks = (raw: string): string => {
   try {
     const url = new URL(raw);
     for (const mark of [...url.searchParams.keys()])

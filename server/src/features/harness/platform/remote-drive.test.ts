@@ -132,6 +132,24 @@ describe('drives the platform chat asked for', () => {
     expect(await pickOwnDriveSession(tabs, 'drive it', 'key-c', keyOf)).toBeNull();
   });
 
+  /*
+   * Persona drive: the dashboard's Re-verify, with the dev server up and no tab open, answered
+   * "No tab of this project is connected… Open this project's app, then ask again", though the
+   * daemon knew the app's address. It opens it now.
+   */
+  it("opens the project's app when no tab of it is connected, and drives that", async () => {
+    const tabs = [{ sessionId: 'b', url: 'http://localhost:5174/', lastSeenMs: 0, hidden: false }];
+    const keyOf = (id: string): Promise<string | undefined> => Promise.resolve({ b: 'key-b' }[id]);
+    expect(
+      await pickOwnDriveSession(tabs, 'Replay the saved flow', 'key-a', keyOf, () =>
+        Promise.resolve('lease-a'),
+      ),
+    ).toBe('lease-a');
+    expect(
+      await pickOwnDriveSession(tabs, 'x', 'key-a', keyOf, () => Promise.resolve(undefined)),
+    ).toBeNull();
+  });
+
   it('refuses a drive no tab of its project can take, without driving another', async () => {
     const p = platform({ id: 'ld_o', goal: 'x' });
     const drove: string[] = [];

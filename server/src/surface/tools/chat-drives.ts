@@ -43,6 +43,7 @@ import {
   nameFromProjectId,
   pickAppTab,
   startAppReports,
+  withoutMarks,
 } from '../../features/harness/platform/local-apps.js';
 import { serverOptionsFromEnv } from '../../features/harness/platform/server-driver.js';
 import { EXPLORE_TOOLS, driveForChat } from './explore-tools.js';
@@ -205,6 +206,16 @@ export function startChatDrives(
     const root = appKey === undefined ? undefined : rootByApp.get(appKey);
     return root === undefined ? {} : { root };
   };
+  /** Where each credential's project was last open on this machine, from the reports. */
+  const lastUrlByKey = new Map<string, string>();
+  /** Lease the app a credential's project was last open at, for a drive no tab of it can take. */
+  const reopenFor = async (key: string): Promise<string | undefined> => {
+    const url = lastUrlByKey.get(key);
+    if (url === undefined) return undefined;
+    openable(url);
+    const id = asRecord(await runTool(LEASE_ACQUIRE_TOOL, deps, { url }))['sessionId'];
+    return 'string' === typeof id ? id : undefined;
+  };
   const open = async (url: string, appKey?: string): Promise<void> => {
     openable(url);
     await runTool(LEASE_ACQUIRE_TOOL, deps, { url, ...claimFor(appKey) });
@@ -216,7 +227,7 @@ export function startChatDrives(
     app: AttachedApp | undefined,
   ): Promise<string | null | undefined> =>
     undefined === app
-      ? pickOwnDriveSession(sessions.list(), goal, key, sessionKey)
+      ? pickOwnDriveSession(sessions.list(), goal, key, sessionKey, () => reopenFor(key))
       : pickAppTab(
           app,
           goal,
@@ -330,6 +341,7 @@ export function startChatDrives(
           const dir = dirname(root);
           rootByApp.set(appKeyOf(machine.id, dir, tab.projectId), root);
           const platform = await sessionCloud(tab.sessionId);
+          if (undefined !== platform) lastUrlByKey.set(platform.apiKey, withoutMarks(tab.url));
           return {
             dir,
             name: await nameOf(fs, dir, tab.projectId),

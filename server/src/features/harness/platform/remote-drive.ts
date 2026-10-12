@@ -451,13 +451,21 @@ export async function pickOwnDriveSession(
   goal: string,
   apiKey: string,
   keyOf: (sessionId: string) => Promise<string | undefined>,
+  /**
+   * Open the project's app when none of its tabs is connected, and the session it opened. A
+   * dashboard Re-verify with the dev server up and no tab open was answered "Open this project's
+   * app, then ask again" by a daemon that knew the app's address.
+   */
+  reopen?: () => Promise<string | undefined>,
 ): Promise<string | null> {
   const own: DriveCandidate[] = [];
   for (const tab of tabs) {
     const key = await keyOf(tab.sessionId).catch(() => undefined);
     if (key === apiKey) own.push(tab);
   }
-  return pickDriveSession(own, goal) ?? null;
+  const picked = pickDriveSession(own, goal);
+  if (picked !== undefined) return picked;
+  return (await reopen?.().catch(() => undefined)) ?? null;
 }
 
 export interface DriveCandidate {
