@@ -38,7 +38,14 @@ const WHY_KEY = 'why';
 const SESSIONS_KEY = 'sessions';
 
 /** Fields of an advisory object that hold its sentence, in the order they are tried. */
-const SENTENCE_FIELDS: readonly string[] = ['ask', 'message', 'text', 'line', 'reason'];
+const SENTENCE_FIELDS: readonly string[] = [
+  'ask',
+  'message',
+  'text',
+  'line',
+  'reason',
+  'IMPORTANT',
+];
 
 /** Bound on remembered lines per session, and on remembered sessions: a daemon outlives both. */
 const MAX_LINES = 200;

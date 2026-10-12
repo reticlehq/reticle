@@ -114,3 +114,15 @@ describe('the feedback reflex is asked at most once per session', () => {
     expect(feedbackAlreadyAsked(undefined)).toBe(false);
   });
 });
+
+describe('a lease reminder object becomes its sentence, not a JSON blob', () => {
+  it('reads the IMPORTANT field', () => {
+    const fold = { ...FOLD, advisories: ['session_lease'] };
+    const out = foldNotices(
+      { session_lease: { sessionId: 's', opened_at: 1, IMPORTANT: 'Yield when you stop.' } },
+      'lease',
+      fold,
+    );
+    expect(out['notices']).toEqual(['Yield when you stop.']);
+  });
+});

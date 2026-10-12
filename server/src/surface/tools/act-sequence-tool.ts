@@ -293,6 +293,10 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
               expected: verdict.expected ?? true,
               held,
               ...(held ? {} : { observed: verdict.observed ?? verdict.failureReason }),
+              // What would have held, on a case-only miss — the verdict stays a miss.
+              ...(true === verdict.caseOnlyMiss
+                ? { caseOnlyMiss: true, wouldHold: verdict.wouldHold }
+                : {}),
             });
             if (!held) {
               stoppedAt ??= i;
