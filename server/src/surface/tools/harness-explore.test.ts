@@ -424,6 +424,23 @@ describe('finding the key a linked machine already has', () => {
     expect(env['RETICLE_CLOUD_KEY']).toBe('rk_live_legacy');
   });
 
+  /*
+   * A re-drive: a Run plan the daemon picked up opened a tab whose page reported no project, so its
+   * root was `unmatched/`, no credential resolved there, and a linked Pro project was answered "a
+   * new account gets 10 free credits… run reticle connect". A tab that belongs to no project drives
+   * on the daemon's own link.
+   */
+  it("drives a tab that belongs to no project on the daemon's own link", async () => {
+    const deps = {
+      linkedCloud: (root?: string) => Promise.resolve(root === undefined ? FILED : null),
+      sessions: { resolve: () => ({ id: 'lease-1', url: 'http://localhost:5173/' }) },
+      artifactRootFor: () => ({ root: '/repo/.reticle/unmatched/localhost-5173' }),
+      reticleRoot: '/repo/.reticle',
+    } as unknown as ToolDeps;
+    const env = await withLinkedCredential(deps, {}, { sessionId: 'lease-1' });
+    expect(env['RETICLE_API_KEY']).toBe('rk_live_filed');
+  });
+
   it('keeps an explicitly named host, so a proxy is not overridden by the linked one', async () => {
     const env = await withLinkedCredential(linked(FILED), {
       RETICLE_CLOUD_URL: 'http://localhost:1',

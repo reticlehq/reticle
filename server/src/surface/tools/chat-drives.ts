@@ -7,6 +7,7 @@
  * happens to be on the same port. See `local-apps.ts` and `remote-drive.ts` for each half.
  */
 import { isUnmatchedRoot } from '@/memory/project/dir/reticle-dir.js';
+import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
 import { basename, dirname, join } from 'node:path';
 import { homedir, hostname } from 'node:os';
 import type { SessionInfo } from '../../portal/session/session-info.js';
@@ -201,19 +202,22 @@ export function startChatDrives(
    * app is leased into that root: resolved from the page alone, an app with no project id would land
    * in `unmatched/`, which nothing syncs.
    */
-  const rootByApp = new Map<string, string>();
-  const claimFor = (appKey: string | undefined): { root?: string } => {
-    const root = appKey === undefined ? undefined : rootByApp.get(appKey);
-    return root === undefined ? {} : { root };
-  };
+  const rootByApp = new Map<string, { root: string; projectId?: string }>();
+  /**
+   * The root AND the project a tab the daemon opens for an app is stamped with. Stamped with the
+   * root alone, a page that reports no project of its own opened as nobody's: its run fell to
+   * `unmatched/` and the drive answered a linked project "run reticle connect".
+   */
+  const claimFor = (appKey: string | undefined): { root?: string; projectId?: string } =>
+    (appKey === undefined ? undefined : rootByApp.get(appKey)) ?? {};
   /** Where each credential's project was last open on this machine, from the reports. */
-  const lastUrlByKey = new Map<string, string>();
+  const lastUrlByKey = new Map<string, { url: string; root: string; projectId?: string }>();
   /** Lease the app a credential's project was last open at, for a drive no tab of it can take. */
   const reopenFor = async (key: string): Promise<string | undefined> => {
-    const url = lastUrlByKey.get(key);
-    if (url === undefined) return undefined;
-    openable(url);
-    const id = asRecord(await runTool(LEASE_ACQUIRE_TOOL, deps, { url }))['sessionId'];
+    const last = lastUrlByKey.get(key);
+    if (last === undefined) return undefined;
+    openable(last.url);
+    const id = asRecord(await runTool(LEASE_ACQUIRE_TOOL, deps, { ...last }))['sessionId'];
     return 'string' === typeof id ? id : undefined;
   };
   const open = async (url: string, appKey?: string): Promise<void> => {
@@ -343,9 +347,12 @@ export function startChatDrives(
         async (tab) => {
           const root = sessionRoot(deps, tab.sessionId);
           const dir = dirname(root);
-          rootByApp.set(appKeyOf(machine.id, dir, tab.projectId), root);
+          const projectId = tab.projectId ?? readProjectId(dir);
+          const stamp = { root, ...(projectId === undefined ? {} : { projectId }) };
+          rootByApp.set(appKeyOf(machine.id, dir, tab.projectId), stamp);
           const platform = await sessionCloud(tab.sessionId);
-          if (undefined !== platform) lastUrlByKey.set(platform.apiKey, withoutMarks(tab.url));
+          if (undefined !== platform)
+            lastUrlByKey.set(platform.apiKey, { url: withoutMarks(tab.url), ...stamp });
           return {
             dir,
             name: await nameOf(fs, dir, tab.projectId),

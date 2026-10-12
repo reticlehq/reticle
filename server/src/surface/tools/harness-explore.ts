@@ -40,7 +40,7 @@ import {
 } from '@/features/harness/drive-report.js';
 import { CUSTOM_DRIVER_NAME, SERVER_DRIVER } from '@/features/harness/drivers.js';
 import { buildDomainModel } from '@/judgement/domain/domain-model.js';
-import { readContract } from '@/memory/project/dir/reticle-dir.js';
+import { isUnmatchedRoot, readContract } from '@/memory/project/dir/reticle-dir.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import {
   dashboardPlanUrl,
@@ -230,7 +230,11 @@ export async function withLinkedCredential(
   tab?: { sessionId: string | undefined },
 ): Promise<Record<string, string | undefined>> {
   try {
-    const linked = await deps.linkedCloud?.(tab === undefined ? undefined : tabRoot(deps, tab));
+    const root = tab === undefined ? undefined : tabRoot(deps, tab);
+    // A tab whose page reported no project (its root is `unmatched/`) is nobody else's: it drives on
+    // the daemon's own link, never "run reticle connect" to a project that is linked.
+    const own = root !== undefined && isUnmatchedRoot(root) ? undefined : root;
+    const linked = await deps.linkedCloud?.(own);
     if (linked === undefined || null === linked) return env;
     return {
       ...env,
