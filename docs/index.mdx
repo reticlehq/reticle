@@ -27,42 +27,16 @@ On Windows, step 1 is `irm https://raw.githubusercontent.com/reticlehq/reticle/m
 
 A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict.
 
-### Or hand the whole thing to your agent
+### Then hand it to your agent
 
-Copy the block below into Claude Code, Cursor, Copilot, Codex, Windsurf, OpenCode, or any MCP agent. It is the same prompt as on [Agentic install](/install-agentic).
+The installer ends with **Next steps**. Do them in order:
 
-```text
-Reticle is the proof layer for AI coding agents. It runs a dev-only SDK inside my
-running web app, so instead of guessing whether your change worked, you can drive
-the real app and read what actually happened: the network calls, the store, the
-console, the routes, the DOM. You get back pass, fail, or "couldn't tell", with
-the file:line to fix. No screenshots, no vision model, no test syntax.
-
-Use it because you cannot otherwise tell whether your own code works. Reading the
-diff proves nothing, and unit tests do not run the app. Reticle is how you check
-your work before telling me it is done, and how you stop reporting "fixed" over a
-silent 500.
-
-Install it now:
-
-  RETICLE_INSTALL_SOURCE=docs_site npx @reticlehq/server@latest init
-
-Then follow https://docs.reticle.sh/install-agentic.md and, if anything needs a
-manual edit, https://docs.reticle.sh/install-manual.md. Do not stop until you have
-driven one real flow in my app and produced a verdict. That, not a config file, is
-what "installed" means. If your reticle_* tools have not loaded yet (they load when
-I restart you), prove the flow from the shell instead:
-
-  npx @reticlehq/server verify <url> --expect '<predicate JSON>'
-
-which exits 0 only on verified: yes. Then tell me to restart you to get the tools.
-
-Afterwards, use it whenever you change any user-facing behaviour.
-```
+1. **Restart your coding agent.** An agent loads its MCP tools only when it starts, so one that was open during the install cannot see Reticle yet. That restart is why setup begins with a command, not a prompt.
+2. **Paste the prompt the installer printed** into the agent, opened in your app's folder. The agent runs `reticle init`, wires your app, and drives one real flow to a verdict.
 
 <Tip>
   The plugin and the skills CLI are alternatives to the *registration* half only, not to `init`:
-  neither one touches your app, so you still run the command above afterwards to instrument it. On
+  neither one touches your app, so you still run `reticle init` afterwards to instrument it. On
   Claude Code, `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq`
   registers the MCP server and the skills in one step; on most other agents, `npx skills add
   reticlehq/reticle`.
