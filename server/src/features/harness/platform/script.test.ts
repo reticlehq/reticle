@@ -14,6 +14,7 @@ import {
   personasIn,
   proposeScript,
   reportPlanResults,
+  WHOLE_APP_REQUEST,
 } from './script.js';
 import { ScriptStatus } from '@reticlehq/core';
 import { DriveScriptSchema, JourneyBy } from '@reticlehq/core/artifacts';
@@ -59,6 +60,44 @@ describe('asking the platform for the drive plan', () => {
     expect(sent[0]).not.toContain('4242');
     const body = JSON.parse(sent[0] ?? '{}') as { flows: unknown[] };
     expect(body.flows[0]).toMatchObject({ name: 'refund', commits: [1] });
+  });
+
+  /*
+   * The platform now refuses a plan request that names nothing ("Nothing to plan") and no longer
+   * invents personas. A run with no journey, no saved persona and nothing to replay is a request for
+   * the whole app, and says so in words the platform splits into journeys.
+   */
+  it('asks for the whole app when nothing else is named, and never sends an empty ask', async () => {
+    sent = [];
+    await proposeScript(
+      { url: 'https://p', apiKey: 'k' },
+      { ...ask, replay: [], goals: [] },
+      answer(undefined),
+    );
+    expect((JSON.parse(sent[0] ?? '{}') as { goals: string[] }).goals).toEqual([WHOLE_APP_REQUEST]);
+    sent = [];
+    await proposeScript(
+      { url: 'https://p', apiKey: 'k' },
+      { ...ask, replay: [], goals: ['Nina signs up'] },
+      answer(undefined),
+    );
+    expect((JSON.parse(sent[0] ?? '{}') as { goals: string[] }).goals).toEqual(['Nina signs up']);
+  });
+
+  it('carries what writing the plan cost, which is part of the run', async () => {
+    const good = {
+      version: 1,
+      source: 'platform',
+      journeys: [{ id: 'refund', title: 'Refund', steps: [{ kind: 'replay', flow: 'refund' }] }],
+      lanes: [{ id: 'A', journeys: ['refund'] }],
+    };
+    const priced = () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ script: good, creditsSpent: 0.25 }), { status: 200 }),
+      );
+    expect(await proposeScript({ url: 'https://p', apiKey: 'k' }, ask, priced)).toMatchObject({
+      creditsSpent: 0.25,
+    });
   });
 
   it('runs a plan that passes the checks, and drops one that does not', async () => {

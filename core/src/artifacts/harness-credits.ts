@@ -34,7 +34,8 @@ export interface Credits {
   daysLeft?: number | undefined;
 }
 
-const count = (n: number): string => n.toLocaleString('en-US');
+/** A credit count: each model call is charged its exact share, so up to two decimals, never floored. */
+const count = (n: number): string => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
 /** Nothing left. An unbounded plan (no credits reported) never is. */
 export function creditsSpent(credits: Credits | undefined): boolean {

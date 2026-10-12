@@ -89,3 +89,11 @@ describe('creditsUsageText', () => {
     );
   });
 });
+
+/* The platform now charges each model call its exact share (a quarter credit): never floored. */
+describe('fractional credits', () => {
+  it('prints up to two decimals', () => {
+    expect(creditsUsageText({ used: 7.25, limit: 10 })).toContain('7.25 of 10 credits used');
+    expect(creditsUsageText({ used: 2.3333, limit: 10 })).toContain('2.33 of 10');
+  });
+});

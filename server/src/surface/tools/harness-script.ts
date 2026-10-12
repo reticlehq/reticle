@@ -214,6 +214,7 @@ export async function exploreScript(
     plan,
     script: proposed.script,
     ...(proposed.planId === undefined ? {} : { planId: proposed.planId }),
+    ...(proposed.creditsSpent === undefined ? {} : { planCredits: proposed.creditsSpent }),
   });
 }
 
@@ -228,6 +229,8 @@ async function runPlan(
     plan: HarnessPlan;
     script: DriveScript;
     planId?: string;
+    /** What writing the plan cost, added to what the lanes spent. */
+    planCredits?: number;
   },
 ): Promise<ExploreResult> {
   const { platform, plan, script, planId } = planned;
@@ -458,8 +461,8 @@ async function runPlan(
     // Unmet if any journey's goal was judged unmet; met only when every judged one was.
     ...goalOfRun(run.drives),
     // What every lane cost, as the platform said; a planned run dropped it and read as free.
-    ...(run.drives.some((d) => d.creditsSpent !== undefined)
-      ? { creditsSpent: sum((r) => r.creditsSpent ?? 0) }
+    ...(run.drives.some((d) => d.creditsSpent !== undefined) || planned.planCredits !== undefined
+      ? { creditsSpent: sum((r) => r.creditsSpent ?? 0) + (planned.planCredits ?? 0) }
       : {}),
   };
   const reconciled = reconcileFlows(before, await reads.flows.list(), run.toolCalls);

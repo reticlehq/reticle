@@ -81,11 +81,25 @@ export function stepHash(step: FlowStep): string {
     .slice(0, STEP_HASH_CHARS);
 }
 
+/** What a run that names nothing asks for: the whole app, which the platform splits into journeys. */
+export const WHOLE_APP_REQUEST = 'Test my app: plan the journeys this app offers and drive them';
+
+/**
+ * The goals a plan request carries. The platform refuses one that names nothing — no journey, no
+ * persona, nothing to replay — and no longer invents personas, so such a run asks for the whole app.
+ */
+function goalsToAsk(ask: ScriptAsk): readonly string[] {
+  const named = 0 < ask.goals.length || 0 < ask.replay.length || 0 < (ask.personas?.length ?? 0);
+  return named ? ask.goals : [WHOLE_APP_REQUEST];
+}
+
 export async function proposeScript(
   platform: PlatformCredential,
   ask: ScriptAsk,
   doFetch: FetchLike = (url, init) => fetch(url, init),
-): Promise<{ script: DriveScript; planId?: string } | { refused: string } | undefined> {
+): Promise<
+  { script: DriveScript; planId?: string; creditsSpent?: number } | { refused: string } | undefined
+> {
   try {
     const res = await doFetch(`${platform.url}${SCRIPTS_PATH}`, {
       method: 'POST',
@@ -105,7 +119,7 @@ export async function proposeScript(
           ).length,
         })),
         replay: ask.replay,
-        goals: ask.goals,
+        goals: goalsToAsk(ask),
         gaps: ask.gaps,
         rules: ask.rules,
         ...(ask.personas === undefined || 0 === ask.personas.length
@@ -116,12 +130,18 @@ export async function proposeScript(
     });
     // The platform's own reason, so a drive that goes on without a plan can say why.
     if (!res.ok) return { refused: await refusalOf(res) };
-    const body = (await res.json()) as { script?: unknown; planId?: unknown };
+    const body = (await res.json()) as {
+      script?: unknown;
+      planId?: unknown;
+      creditsSpent?: unknown;
+    };
     const parsed = DriveScriptSchema.safeParse(body.script);
     if (!parsed.success || 0 < checkScript(parsed.data).length) return undefined;
     return {
       script: parsed.data,
       ...('string' === typeof body.planId ? { planId: body.planId } : {}),
+      // What writing the plan cost: part of the run's spend, not free.
+      ...('number' === typeof body.creditsSpent ? { creditsSpent: body.creditsSpent } : {}),
     };
   } catch {
     return undefined;
