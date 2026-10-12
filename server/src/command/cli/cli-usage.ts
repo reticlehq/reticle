@@ -87,7 +87,7 @@ const COMMANDS: readonly CommandDoc[] = [
       'Wires the app first if it is not wired, signs in through your browser, links this repo to\n' +
       'the project (created if it does not exist; named after the projectId in .reticle.json, else\n' +
       'the folder), says which workspace it is in, and sends local history. Linked before to\n' +
-      "another workspace, the folder's earlier runs and flows stay here: `reticle sync --move-history`.\n\n" +
+      "another workspace, the folder's earlier runs, flows and records stay here: `reticle sync --move-history`.\n\n" +
       '  --project <name|id>    the dashboard project to link\n' +
       '  --workspace <name|id>  the workspace to link in, when you belong to more than one\n' +
       '  --url <origin>         the Reticle platform, when it is not the default\n\n' +
@@ -183,7 +183,7 @@ const COMMANDS: readonly CommandDoc[] = [
     group: HelpGroup.MORE,
     detail:
       '`reticle push` is the same command.\n\n  --watch          keep sending as runs are written\n' +
-      "  --move-history   also send runs and flows made under this folder's previous link",
+      '  --move-history   also send runs, flows and records made under the previous link',
   },
   {
     name: 'runs',

@@ -1483,6 +1483,36 @@ describe('a folder re-linked to another workspace', () => {
     expect(report.held.join(' ')).toMatch(/1 flow made before this folder was linked to/);
   });
 
+  // A re-drive: the old runs stayed, but the impact record (the previous workspace's counts and
+  // defects) went into the company's new project. Derived records follow the runs' rule too.
+  it('keeps the records derived under the old link here, until the history is moved', async () => {
+    const send = async (moveHistory?: true) => {
+      const s = server({ status: { stateHashes: { impact: null } } });
+      const report = await runSyncCycle({
+        config: { url: 'https://cloud.test', apiKey: 'rk_bigco' },
+        link: NEW,
+        ...(moveHistory === undefined ? {} : { moveHistory }),
+        source: source({
+          derived: (kind) => ('impact' === kind ? { counts: { calls: 9 } } : undefined),
+        }),
+        sink: sink().sink,
+        state: synced,
+        now: () => NOW,
+        request: s.request,
+      });
+      return { report, calls: s.calls };
+    };
+    const held = await send();
+    expect(
+      held.calls.some((c) => (c.body as { impact?: unknown } | undefined)?.impact !== undefined),
+    ).toBe(false);
+    expect(held.report.held.join(' ')).toMatch(/impact/);
+    const moved = await send(true);
+    expect(
+      moved.calls.some((c) => (c.body as { impact?: unknown } | undefined)?.impact !== undefined),
+    ).toBe(true);
+  });
+
   it('moves the old flows with the history, when asked', async () => {
     const { calls } = await relink(synced, NEW, true);
     const flows = calls.flatMap((c) => (c.body as { flows?: unknown[] } | undefined)?.flows ?? []);

@@ -524,9 +524,17 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
     const derivedOffered: DerivedKind[] = [];
     const unsupported: DerivedKind[] = [];
     const bundle: Record<string, unknown> = {};
+    // A folder re-linked elsewhere keeps what it derived under the old link (its counts, defects,
+    // notes) here with the runs: those records add up the whole history and cannot be split by time.
+    // ponytail: held until `--move-history`; a per-link reset of the counters would let new ones go.
+    const derivedHeld: DerivedKind[] = [];
     for (const { kind } of DERIVED_RECORDS) {
       const payload = deps.source.derived(kind);
       if (payload === undefined) continue;
+      if (linkedAt !== undefined) {
+        derivedHeld.push(kind);
+        continue;
+      }
       if (!acceptedKinds.has(kind)) {
         unsupported.push(kind);
         continue;
@@ -542,6 +550,10 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
     }
     if (unsupported.length > 0)
       heldBack.push(`this platform does not accept ${unsupported.join(', ')} yet`);
+    if (0 < derivedHeld.length)
+      heldBack.push(
+        `the ${derivedHeld.join(', ')} record${1 === derivedHeld.length ? '' : 's'} made under this folder's previous link stay${1 === derivedHeld.length ? 's' : ''} on this machine: run \`${MOVE_HISTORY_COMMAND}\` to send ${1 === derivedHeld.length ? 'it' : 'them'} here`,
+      );
     // Flows and capsules are upserted by name/id, so the whole set goes whenever it differs from the
     // set the platform last answered for — and only then. Riding along with every run push re-sent
     // ~1.3 MB per push on a real repo, and a POST that size timed out and failed the run with it.
