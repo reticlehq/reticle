@@ -411,9 +411,12 @@ describe('buildPlan — Vite', () => {
 });
 
 describe('buildPlan — install', () => {
-  it('makes install an exec step when enabled, manual otherwise', () => {
+  // `--no-install` is the person's choice, not a step left undone: it printed "[⚠] Install
+  // dependencies" on every scoped run. Skipped, still naming the command to run.
+  it('makes install an exec step when enabled, a skipped one under --no-install', () => {
     const off = buildPlan(input({ options: { port: undefined, mcp: true, install: false } }));
-    expect(step(off, 'Install dependencies').status).toBe(StepStatus.MANUAL);
+    expect(step(off, 'Install dependencies').status).toBe(StepStatus.SKIP);
+    expect(step(off, 'Install dependencies').detail).toMatch(/--no-install/);
     expect(step(off, 'Install dependencies').exec).toBeUndefined();
 
     const on = buildPlan(input({ options: { port: undefined, mcp: true, install: true } }));

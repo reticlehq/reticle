@@ -542,11 +542,18 @@ export const cmdLink = async (
   return 0;
 };
 
+const NO_INSTALL = '--no-install';
+
+/** Whether `reticle connect`'s init half installs the packages: not under `--no-install`. */
+export const connectInstalls = (argv: readonly string[]): boolean => !argv.includes(NO_INSTALL);
+
 /**
  * `reticle connect`: the cloud half of first-run setup in one go. A saved login is checked against
  * this host first; it links once, in the workspace chosen, then sends local history.
  */
-const cmdConnect = async (argv: readonly string[]): Promise<number> => {
+const cmdConnect = async (given: readonly string[]): Promise<number> => {
+  // `--no-install` is the init half's (see `connectInstalls`); the cloud half takes it and moves on.
+  const argv = given.filter((arg) => NO_INSTALL !== arg);
   for (let i = 0; i < argv.length; i += 2) {
     const flag = argv[i];
     const value = argv[i + 1];
@@ -556,7 +563,9 @@ const cmdConnect = async (argv: readonly string[]): Promise<number> => {
       0 === value.length ||
       value.startsWith('--')
     ) {
-      err('usage: reticle connect [--project <name|id>] [--workspace <name|id>] [--url <origin>]');
+      err(
+        'usage: reticle connect [--project <name|id>] [--workspace <name|id>] [--url <origin>] [--no-install]',
+      );
       return 2;
     }
   }

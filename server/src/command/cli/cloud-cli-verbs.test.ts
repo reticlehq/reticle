@@ -20,7 +20,7 @@ import {
   Verified,
 } from '@reticlehq/core';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
-import { runCloudCommand } from './cloud-cli.js';
+import { connectInstalls, runCloudCommand } from './cloud-cli.js';
 
 interface RecordedRequest {
   url: string;
@@ -222,6 +222,23 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(session['token']).toBe('tok_1');
     expect(session['orgName']).toBe('Acme');
     expect(session['url']).toBe(TEST_URL);
+  });
+
+  // `reticle connect --no-install` was refused as a usage error by the cloud half, after its init
+  // half had already run the install the flag asked it not to.
+  it('connect takes --no-install, which belongs to the init it runs first', async () => {
+    const said: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      said.push(String(chunk));
+      return true;
+    });
+    const code = await runCloudCommand(['connect', '--no-install', '--url', TEST_URL]);
+    spy.mockRestore();
+    // Not wired here, so it stops on that, not on the flag.
+    expect(code).toBe(2);
+    expect(said.join('')).not.toContain('usage:');
+    expect(connectInstalls(['connect', '--no-install'])).toBe(false);
+    expect(connectInstalls(['connect', '--url', TEST_URL])).toBe(true);
   });
 
   it('connect reuses a valid sign-in, links the named project, and syncs local history', async () => {

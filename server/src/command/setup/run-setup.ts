@@ -288,7 +288,7 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       note(
         // "stop here rather than invent one" is the SKILL.md rule, and the words are the contract —
         // inventing a dev command is how a setup script runs the wrong thing and reports success.
-        'No dev command: the project names no dev, start or serve script, and there is no --url. ' +
+        'No dev command: the project names no dev, start or serve script, and no app url was given (`reticle init --url <app>`). ' +
           'Stopping here rather than invent one — start the app yourself and pass --url to say ' +
           'where it is serving, or add a dev/start/serve script to package.json and re-run.',
       );

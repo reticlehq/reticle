@@ -44,7 +44,13 @@ import { handleUpdate, handleRollback } from './cli/cli-update-commands.js';
 import { headlessByDefault } from './cli/daemon-start-options.js';
 
 import { startDaemon } from '@/index.js';
-import { accountStatusFields, cmdLink, isCloudCommand, runCloudCommand } from './cli/cloud-cli.js';
+import {
+  accountStatusFields,
+  cmdLink,
+  connectInstalls,
+  isCloudCommand,
+  runCloudCommand,
+} from './cli/cloud-cli.js';
 import { SERVER_VERSION } from './version/identity/server-version.js';
 import { log } from '@/log.js';
 import {
@@ -747,7 +753,7 @@ export function main(): void {
             port: undefined,
             mcp: true,
             dryRun: false,
-            install: true,
+            install: connectInstalls(argv),
             keepGoing: true,
           });
           if (1 === process.exitCode) {

@@ -622,12 +622,13 @@ function installStep(input: PlanInput): Step {
       detail: `${names.join(', ')} already declared${version === undefined || 0 === version.length ? '' : ` at ${version}`}`,
     };
   }
+  // The person said `--no-install`: a choice, not a step left undone, so not a ⚠.
   if (!input.options.install) {
     return {
       title: 'Install dependencies',
       target: 'package.json',
-      status: StepStatus.MANUAL,
-      detail: command,
+      status: StepStatus.SKIP,
+      detail: `skipped (--no-install); install them yourself: ${command}`,
     };
   }
   const parts = installCommandParts(pm, packages, [], pmCommand);
