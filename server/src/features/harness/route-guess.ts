@@ -29,3 +29,30 @@ export function claimsOnlyRoute(predicate: unknown): boolean {
     PredicateKind.NOT === kind && PredicateKind.ROUTE === asString(asRecord(p['predicate'])['kind'])
   );
 }
+
+/** How many known pages a line names; a map of hundreds is a list nobody reads. */
+const MAX_ROUTES_NAMED = 20;
+
+/** The pages the map knows, as one line for the model. */
+export const knownPagesLine = (routes: readonly string[]): string =>
+  routes.slice(0, MAX_ROUTES_NAMED).join(', ');
+
+/** The route a claim names arriving at, when it names one (`not` a route names none). */
+function claimedRoute(predicate: unknown): string | undefined {
+  const p = asRecord(predicate);
+  if (PredicateKind.ROUTE !== asString(p['kind'])) return undefined;
+  return asString(p['pathname']) ?? asString(p['contains']);
+}
+
+/**
+ * What to do instead of guessing again, after a route guess missed: the known page it was after,
+ * by its route, or the pages the map knows. Undefined when the map knows none.
+ */
+export function routeHint(predicate: unknown, routes: readonly string[]): string | undefined {
+  if (0 === routes.length) return undefined;
+  const wanted = claimedRoute(predicate);
+  const known = wanted === undefined ? undefined : routes.find((r) => r.includes(wanted));
+  return known === undefined
+    ? `That control does not lead where you guessed. The pages this app has: ${knownPagesLine(routes)}. Go to one by its link or reticle_navigate, rather than guessing which control leads there.`
+    : `That control does not lead to ${known}. It is a page this app has: press its link, or reticle_navigate { url: "${known}" }, rather than guessing another control.`;
+}

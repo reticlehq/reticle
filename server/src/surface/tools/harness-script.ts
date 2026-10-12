@@ -75,7 +75,14 @@ import {
   type JourneyResult,
 } from '@/features/harness/platform/script.js';
 import { goalOfDrive, parseGoals, readOpening } from '@/features/harness/goals.js';
-import { bestOfLanes, huntAndGrade, refreshMap, siteMapFor, type Graded } from './harness-hunt.js';
+import {
+  bestOfLanes,
+  huntAndGrade,
+  knownRoutes,
+  refreshMap,
+  siteMapFor,
+  type Graded,
+} from './harness-hunt.js';
 import {
   serverOptionsFromEnv,
   type PlatformCredential,
@@ -348,6 +355,7 @@ async function runPlan(
       const driven = await runHarness(driverFor(persona, goal).driver, toolset, {
         ...steering(options),
         maxSteps: Math.min(steps, maxSteps),
+        routes: knownRoutes(map),
         focus: [planAsText(planFor(goal)), `Focus: ${goal}`].join('\n\n'),
       });
       // The driver's word, unless the lane did nothing: then its goal was not met by it.

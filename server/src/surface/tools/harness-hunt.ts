@@ -73,6 +73,10 @@ async function writeMap(deps: ToolDeps, path: string, map: HarnessMap): Promise<
   }
 }
 
+/** The pages a map knows, by route: what a drive is pointed at before it guesses. */
+export const knownRoutes = (map: HarnessMap | undefined): string[] =>
+  map === undefined ? [] : [...new Set(map.pages.map((page) => page.route))];
+
 /** The app's map: the kept one while it is fresh, else a new survey merged over it. */
 export async function siteMapFor(
   deps: ToolDeps,

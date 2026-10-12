@@ -377,3 +377,55 @@ describe('a running drive, steered between turns', () => {
     expect(heard).toContain('check the refund page too');
   });
 });
+
+/*
+ * Re-drive (persona 07): the drive spent three actions on Impact clicking controls it guessed would
+ * lead to Issues, before it took the Issues link — the map already knew `/issues`. The known pages
+ * come first: named up front, and named again, with the way there, after a guess that missed.
+ */
+describe('a route the map already knows', () => {
+  const ROUTES = ['/overview', '/impact', '/issues'];
+  const guess = (until: unknown): ModelTurn => ({
+    text: '',
+    calls: [
+      { id: 'g1', name: ReticleTool.ACT_AND_WAIT, args: { ref: 'e9', action: 'click', until } },
+    ],
+  });
+  const missed = (): Promise<unknown> =>
+    Promise.resolve({ verified: 'no', trace: { window_ms: 80, summary: { total: 0 } } });
+
+  it('is named in the standing instruction before any guess', () => {
+    const prompt = systemPrompt(undefined, ROUTES);
+    expect(prompt).toContain('/issues');
+    expect(prompt).toContain('reticle_navigate');
+  });
+
+  it('is offered by its route after a guess at it missed', async () => {
+    const result = await runHarness(
+      scripted([guess({ kind: 'route', pathname: '/issues' })]),
+      toolset(missed),
+      { maxSteps: 1, routes: ROUTES },
+    );
+    const next = String((result.toolCalls[0]?.result as { next?: unknown }).next);
+    expect(next).toContain('reticle_navigate { url: "/issues" }');
+  });
+
+  it('lists the known pages after a guess at a route the map does not know', async () => {
+    const result = await runHarness(
+      scripted([guess({ kind: 'route', contains: '/issue-list' })]),
+      toolset(missed),
+      { maxSteps: 1, routes: ROUTES },
+    );
+    const next = String((result.toolCalls[0]?.result as { next?: unknown }).next);
+    expect(next).toContain('/overview, /impact, /issues');
+  });
+
+  it('says nothing extra when the guess held', async () => {
+    const result = await runHarness(
+      scripted([guess({ kind: 'route', pathname: '/issues' })]),
+      toolset(() => Promise.resolve({ verified: 'yes' })),
+      { maxSteps: 1, routes: ROUTES },
+    );
+    expect(result.toolCalls[0]?.result).not.toHaveProperty('next');
+  });
+});

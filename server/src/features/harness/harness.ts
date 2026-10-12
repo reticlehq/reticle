@@ -19,7 +19,7 @@
  */
 
 import { ReticleTool, Verified, asRecord } from '@reticlehq/core';
-import { claimsOnlyRoute } from './route-guess.js';
+import { claimsOnlyRoute, knownPagesLine, routeHint } from './route-guess.js';
 import { withTimeout } from './with-timeout.js';
 
 /** One tool as the model sees it. JSON Schema, because that is what the wire wants. */
@@ -193,6 +193,15 @@ function openedInPlace(outcome: ToolOutcome): boolean {
   return 0 < (Number(summary['domAdded']) || 0);
 }
 
+/** A route-only guess that missed: the known page to go to instead, when the map knows any. */
+function missedRouteHint(outcome: ToolOutcome, routes: readonly string[]): string | undefined {
+  if (outcome.isError || ReticleTool.ACT_AND_WAIT !== outcome.name) return undefined;
+  const until = asRecord(outcome.args)['until'];
+  if (!claimsOnlyRoute(until) || Verified.YES === asRecord(outcome.result)['verified'])
+    return undefined;
+  return routeHint(until, routes);
+}
+
 /** The tools that act on one control, keyed by what they did to which control. */
 const ACTING_TOOLS: ReadonlySet<string> = new Set([ReticleTool.ACT, ReticleTool.ACT_AND_WAIT]);
 
@@ -257,6 +266,8 @@ export interface HarnessOptions {
   stopped?: () => boolean;
   /** Asked before every turn: what somebody said to the drive since, handed over as user turns. */
   inbox?: () => readonly string[];
+  /** The pages the app's map knows: named up front, and offered after a route guess misses. */
+  routes?: readonly string[];
 }
 
 export const DEFAULT_MAX_STEPS = 40;
@@ -290,7 +301,7 @@ const OPENING = 'The app is loaded and connected. Begin by looking at the page, 
  * deterministically for a few hundred tokens, forever. That is the whole economics of this feature,
  * so it is an instruction and not a hope.
  */
-export function systemPrompt(focus?: string): string {
+export function systemPrompt(focus?: string, routes: readonly string[] = []): string {
   return [
     'You are driving a real web application through a verification tool, to find out whether it actually works.',
     '',
@@ -323,6 +334,12 @@ export function systemPrompt(focus?: string): string {
     'expectations as you go. Do not report bugs; drive the app.',
     '',
     'Call `finish` when you have covered the app or cannot get further.',
+    ...(0 === routes.length
+      ? []
+      : [
+          '',
+          `Pages this app has: ${knownPagesLine(routes)}. To reach one, press its link or reticle_navigate to it; do not guess which control leads there.`,
+        ]),
     ...(focus === undefined ? [] : ['', `Focus for this run: ${focus}`]),
   ].join('\n');
 }
@@ -340,7 +357,8 @@ export async function runHarness(
 ): Promise<HarnessResult> {
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const tools = [...toolset.tools, FINISH_TOOL];
-  const system = systemPrompt(options.focus);
+  const routes = options.routes ?? [];
+  const system = systemPrompt(options.focus, routes);
   const history: HistoryEntry[] = [{ role: 'user', text: OPENING }];
   const toolCalls: ToolOutcome[] = [];
   const usage: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
@@ -466,12 +484,9 @@ export async function runHarness(
       }),
     );
     for (const [i, outcome] of outcomes.entries()) {
-      if (openedInPlace(outcome)) {
-        outcomes[i] = {
-          ...outcome,
-          result: { ...asRecord(outcome.result), next: MSG_OPENED_IN_PLACE },
-        };
-      }
+      const hint = openedInPlace(outcome) ? MSG_OPENED_IN_PLACE : missedRouteHint(outcome, routes);
+      if (hint !== undefined)
+        outcomes[i] = { ...outcome, result: { ...asRecord(outcome.result), next: hint } };
     }
     for (const outcome of outcomes) {
       const key = actKey(outcome.name, outcome.args);

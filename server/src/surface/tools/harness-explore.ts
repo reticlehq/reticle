@@ -78,7 +78,7 @@ import {
 import type { RunDisparity } from '@reticlehq/core';
 import type { HarnessMap } from '@reticlehq/core/artifacts';
 import { mapForPlatform } from '@/features/harness/explore/site-map.js';
-import { huntAndGrade, refreshMap, siteMapFor } from './harness-hunt.js';
+import { huntAndGrade, knownRoutes, refreshMap, siteMapFor } from './harness-hunt.js';
 import { instrumentationOf, probeMarkers } from '@/portal/session/recorded-gaps.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 
@@ -449,6 +449,7 @@ export async function exploreApp(
   const drive = await runHarness(driver, toolset, {
     ...steering(options),
     maxSteps,
+    routes: knownRoutes(map),
     // The plan rides in as standing instruction, so it is in front of the model on every turn
     // rather than remembered from a first one. `focus` is the caller's own words and goes last:
     // somebody who named a journey meant that journey, whatever the project's backlog says.
