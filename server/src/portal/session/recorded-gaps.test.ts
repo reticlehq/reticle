@@ -7,6 +7,7 @@ import {
   instrumentationOf,
   noteSourceSeen,
   noteActedElement,
+  notApplicableOf,
   probeMarkers,
   recordGaps,
   recordedGaps,
@@ -191,6 +192,24 @@ describe('what the page itself carries', () => {
     expect(
       announcedChannels({ id: 's9', url: 'http://localhost:4312/login', projectId: 'bench' }),
     ).toContain(CoverageMarker.TESTID);
+  });
+
+  // A plain-HTML app was held at 75% ("File and line") for ever: no plugin stamps a page with no
+  // components. The page says file:line does not apply, and the gate leaves it out of both sides.
+  it('leaves file:line out of a plain-HTML app, which unlocks the gate', async () => {
+    const tab = { id: 's1', url: 'http://localhost:8080/', projectId: 'plain', channels: FULL };
+    await probeMarkers([
+      {
+        ...tab,
+        command: () =>
+          Promise.resolve({
+            ok: true,
+            result: { markers: ['testid'], notApplicable: [CoverageCapability.SOURCE_MAPPING] },
+          }),
+      },
+    ]);
+    expect(notApplicableOf(tab)).toEqual([CoverageCapability.SOURCE_MAPPING]);
+    expect(instrumentationOf(tab).harnessGate).toEqual({ percent: 100, unlocked: true });
   });
 
   it('asks a page once both are known, and survives a page that cannot answer', async () => {

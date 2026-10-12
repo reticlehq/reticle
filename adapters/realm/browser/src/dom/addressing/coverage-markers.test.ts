@@ -6,8 +6,8 @@
  * Reticle's own HUD.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { CoverageMarker } from '@reticlehq/core';
-import { coverageMarkers } from './coverage-markers.js';
+import { CoverageCapability, CoverageMarker } from '@reticlehq/core';
+import { coverageMarkers, notApplicableFor } from './coverage-markers.js';
 import { setPresenterVisible } from '../dom-ignore.js';
 
 afterEach(() => {
@@ -32,5 +32,25 @@ describe('the coverage markers a page carries', () => {
     document.body.innerHTML =
       '<div data-reticle-hud><button data-testid="hud-run" data-reticle-source="hud.ts:1:1">Run</button></div>';
     expect(coverageMarkers(document)).toEqual([]);
+  });
+});
+
+/*
+ * A plain-HTML app was capped at 75% ("File and line") and its Harness stayed locked: no build
+ * plugin stamps a page that has no components, so file:line cannot apply there.
+ */
+describe('file:line that cannot apply', () => {
+  it('does not apply to a page with no build plugin, no component framework and no stamp', () => {
+    expect(notApplicableFor({ buildPlugin: false, adapters: [], markers: [] })).toEqual([
+      CoverageCapability.SOURCE_MAPPING,
+    ]);
+  });
+
+  it('applies wherever a plugin, a framework or a stamp says it could', () => {
+    expect(notApplicableFor({ buildPlugin: true, adapters: [], markers: [] })).toEqual([]);
+    expect(notApplicableFor({ buildPlugin: false, adapters: ['react'], markers: [] })).toEqual([]);
+    expect(
+      notApplicableFor({ buildPlugin: false, adapters: [], markers: [CoverageMarker.SOURCE] }),
+    ).toEqual([]);
   });
 });

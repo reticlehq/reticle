@@ -331,7 +331,11 @@ export function startChatDrives(
             ...(sdkVersion === undefined ? {} : { sdkVersion }),
             ...(0 === channels.length ? {} : { channels }),
             gaps,
-            notApplicable: notApplicableOf({ id: tab.sessionId }),
+            notApplicable: notApplicableOf({
+              id: tab.sessionId,
+              url: tab.url,
+              projectId: tab.projectId,
+            }),
           };
         }),
         serverOptionsFromEnv(await withLinkedCredential(deps, env)),

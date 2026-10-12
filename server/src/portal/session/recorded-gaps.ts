@@ -19,7 +19,7 @@ import {
   harnessGateOf,
   harnessUnlockPrompt,
   type Coverage,
-  type CoverageCapability,
+  CoverageCapability,
   type ImpactSnapshot,
 } from '@reticlehq/core';
 
@@ -147,7 +147,13 @@ function noteMarkers(tab: NotedTab, result: unknown): void {
   if (!Array.isArray(markers)) return;
   if (markers.includes(CoverageMarker.SOURCE)) markSeen(sourceSeen, tab);
   if (markers.includes(CoverageMarker.TESTID)) markSeen(testidSeen, tab);
+  const notApplicable = (result as Record<string, unknown>)['notApplicable'];
+  if (Array.isArray(notApplicable) && notApplicable.includes(CoverageCapability.SOURCE_MAPPING))
+    markSeen(sourceNotApplicable, tab);
 }
+
+/** Apps whose page said file:line cannot apply (plain HTML: no plugin, no framework, no stamp). */
+const sourceNotApplicable = new Set<string>();
 
 /** A tab the daemon can ask. Absent `command`: a test double or a tab with no page to ask. */
 export interface ProbedTab extends NotedTab {
@@ -171,7 +177,11 @@ export async function probeMarkers(tabs: readonly ProbedTab[]): Promise<boolean>
   const before = sourceSeen.size + testidSeen.size;
   await Promise.all(
     tabs
-      .filter((tab) => !wasSeen(sourceSeen, tab) || !wasSeen(testidSeen, tab))
+      .filter(
+        (tab) =>
+          !(wasSeen(sourceSeen, tab) || wasSeen(sourceNotApplicable, tab)) ||
+          !wasSeen(testidSeen, tab),
+      )
       .map(async (tab) => {
         const done = await tab
           .command?.(ReticleCommand.MARKERS, {}, MARKERS_PROBE_MS)
@@ -199,6 +209,7 @@ export function forgetAllRecordedGaps(): void {
   bySession.clear();
   sourceSeen.clear();
   testidSeen.clear();
+  sourceNotApplicable.clear();
 }
 
 /** What instrumentation coverage reads off a connected tab. */
@@ -241,11 +252,13 @@ const appNameOf = (url: string): string => {
 
 /**
  * The coverage capabilities that do not apply to this tab's app, excluded from both sides of the
- * score. ponytail: nothing declares one yet, so every capability applies; the platform reads the
- * same list from the local-apps report, so the day something declares one both sides move together.
+ * score: file:line on a page that said it cannot apply there (plain HTML), until a stamp shows up.
+ * The platform reads the same list from the local-apps report, so both sides move together.
  */
-export function notApplicableOf(_tab: InstrumentedTab): CoverageCapability[] {
-  return [];
+export function notApplicableOf(tab: NotedTab): CoverageCapability[] {
+  return wasSeen(sourceNotApplicable, tab) && !wasSeen(sourceSeen, tab)
+    ? [CoverageCapability.SOURCE_MAPPING]
+    : [];
 }
 
 /** Whether the Harness may drive this tab's app (see core's `instrumentation-coverage.ts`), as pushed. */

@@ -14,7 +14,7 @@
 import { z } from 'zod';
 import { ChannelId } from 'open-verification';
 import { InstrumentationGapKind, fixForGap } from './instrumentation-gap.js';
-import { CoverageMarker } from '../wire/platform-link.js';
+import { CoverageMarker, SOURCE_MAPPING_CAPABILITY } from '../wire/platform-link.js';
 
 /** The eight things that decide how strong a verdict on this app can be. */
 export const CoverageCapability = {
@@ -24,7 +24,7 @@ export const CoverageCapability = {
   CONSOLE: 'console',
   APP_STATE: 'app state (store registered)',
   SIGNALS: 'signals on mutation',
-  SOURCE_MAPPING: 'file:line source mapping',
+  SOURCE_MAPPING: SOURCE_MAPPING_CAPABILITY,
   TEST_IDS: 'stable test ids',
 } as const;
 export type CoverageCapability = (typeof CoverageCapability)[keyof typeof CoverageCapability];

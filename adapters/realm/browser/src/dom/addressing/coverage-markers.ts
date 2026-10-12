@@ -1,5 +1,6 @@
 import {
   CoverageMarker,
+  SOURCE_MAPPING_CAPABILITY,
   DATA_RETICLE_SOURCE_ATTR,
   RETICLE_OVERLAY_SELECTOR,
 } from '@reticlehq/core';
@@ -21,4 +22,19 @@ export function coverageMarkers(doc: Document): string[] {
     ...(appCarries(doc, `[${DATA_RETICLE_SOURCE_ATTR}]`) ? [CoverageMarker.SOURCE] : []),
     ...(appCarries(doc, testIdSelector()) ? [CoverageMarker.TESTID] : []),
   ];
+}
+
+/**
+ * The coverage capabilities that cannot apply to this page: file:line, on a page no build plugin
+ * set up, that runs no component framework and carries no stamp — plain HTML, which a plugin would
+ * have nothing to stamp in. It was counted missing and held the Harness at 75% forever.
+ */
+export function notApplicableFor(page: {
+  buildPlugin: boolean;
+  adapters: readonly string[];
+  markers: readonly string[];
+}): string[] {
+  const couldStamp =
+    page.buildPlugin || 0 < page.adapters.length || page.markers.includes(CoverageMarker.SOURCE);
+  return couldStamp ? [] : [SOURCE_MAPPING_CAPABILITY];
 }

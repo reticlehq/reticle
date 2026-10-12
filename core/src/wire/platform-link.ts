@@ -349,3 +349,9 @@ export const CoverageMarker = {
   TESTID: 'testid',
 } as const;
 export type CoverageMarker = (typeof CoverageMarker)[keyof typeof CoverageMarker];
+
+/**
+ * The file:line capability's name (`CoverageCapability.SOURCE_MAPPING` is this). Here, beside the
+ * markers, so a page can say it does not apply without loading the coverage rules into first load.
+ */
+export const SOURCE_MAPPING_CAPABILITY = 'file:line source mapping';
