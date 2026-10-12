@@ -60,7 +60,13 @@ export function screenshotOptions(opts: ScreenshotOptions): {
 
 /** Where the hidden hosts' own visibility waits to be put back, on the page's window. */
 const SHOT_HIDDEN_KEY = '__reticleShotHidden';
-const HIDE_CHROME_SCRIPT = `(() => { const held = []; for (const el of document.querySelectorAll(${JSON.stringify(RETICLE_OVERLAY_SELECTOR)})) { held.push([el, el.style.visibility]); el.style.visibility = 'hidden'; } window.${SHOT_HIDDEN_KEY} = held; })()`;
+/** A string literal safe to splice into a script: JSON plus the characters that end one early. */
+const scriptLiteral = (value: string): string =>
+  JSON.stringify(value).replace(
+    /[<>/\u2028\u2029]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+const HIDE_CHROME_SCRIPT = `(() => { const held = []; for (const el of document.querySelectorAll(${scriptLiteral(RETICLE_OVERLAY_SELECTOR)})) { held.push([el, el.style.visibility]); el.style.visibility = 'hidden'; } window.${SHOT_HIDDEN_KEY} = held; })()`;
 const RESTORE_CHROME_SCRIPT = `(() => { for (const [el, was] of window.${SHOT_HIDDEN_KEY} ?? []) el.style.visibility = was; delete window.${SHOT_HIDDEN_KEY}; })()`;
 
 /**

@@ -381,7 +381,7 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
   },
   {
     // The gate's own words, and the platform's "locked: connect your app first": expected states.
-    match: /^Harness unlocks at \d+% instrumentation|Reticle Harness is locked\b/,
+    match: /(?:^Harness unlocks at \d+% instrumentation)|(?:Reticle Harness is locked\b)/,
     hint: RECOVERY.HARNESS_LOCKED,
   },
   { match: /The Reticle Harness runs on the Reticle platform/, hint: RECOVERY.HARNESS_NOT_LINKED },

@@ -195,7 +195,7 @@ function stateSettle(diffs: readonly StateDiff[]): { stateSettleMs?: number } {
 /** `METHOD /path STATUS` — what an agent recognises a call by. */
 function requestLine(data: Record<string, unknown>): string {
   const raw = 'string' === typeof data['url'] ? data['url'] : '';
-  let path = raw;
+  let path: string;
   try {
     path = new URL(raw, 'http://local.invalid').pathname;
   } catch {
