@@ -364,6 +364,7 @@ export class HudShell {
     if (impact !== null) {
       const on = '1' === root.getAttribute(REPORT_ATTR);
       impact.setAttribute('data-active', on ? '1' : '0');
+      this.#chatViews.setImpactOpen(on);
       if (on) impact.setAttribute('aria-current', 'page');
       else impact.removeAttribute('aria-current');
     }

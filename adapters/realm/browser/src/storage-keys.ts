@@ -27,12 +27,17 @@ export const ReticleStorageKey = {
 export const TOUR_SEEN_KEY_PREFIX = 'reticle.tour.seen.';
 /** The Harness persona last picked, per project. */
 export const PERSONA_KEY_PREFIX = 'reticle.harness.persona.';
+/** The Impact verdict count when Impact was last opened, per project: the tab's "new" dot. */
+export const IMPACT_SEEN_KEY_PREFIX = 'reticle.impact.seen.';
 
 const OWN_KEYS: ReadonlySet<string> = new Set(Object.values(ReticleStorageKey));
 
 /** Whether Reticle wrote this key, rather than the app under test. */
 export function isReticleStorageKey(key: string): boolean {
   return (
-    OWN_KEYS.has(key) || key.startsWith(TOUR_SEEN_KEY_PREFIX) || key.startsWith(PERSONA_KEY_PREFIX)
+    OWN_KEYS.has(key) ||
+    key.startsWith(TOUR_SEEN_KEY_PREFIX) ||
+    key.startsWith(PERSONA_KEY_PREFIX) ||
+    key.startsWith(IMPACT_SEEN_KEY_PREFIX)
   );
 }

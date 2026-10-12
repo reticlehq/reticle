@@ -38,7 +38,7 @@ import {
 } from './presenter-harness-row.js';
 import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';
 import { morphHtml } from './chrome/presenter-morph.js';
-import { ReticleStorageKey } from '@/storage-keys.js';
+import { IMPACT_SEEN_KEY_PREFIX, ReticleStorageKey } from '@/storage-keys.js';
 import {
   DEFAULT_PERSONA,
   PERSONA_PICK_ID,
@@ -102,6 +102,23 @@ function readHistory(): HistoricalAnnotation[] {
   }
 }
 
+/** Verdicts on record when Impact was last opened; undefined when storage is unreadable. */
+function readImpactSeen(projectId: string | undefined): number | undefined {
+  try {
+    return Number(localStorage.getItem(`${IMPACT_SEEN_KEY_PREFIX}${projectId ?? ''}`) ?? 0) || 0;
+  } catch {
+    return undefined;
+  }
+}
+
+function saveImpactSeen(projectId: string | undefined, verdicts: number): void {
+  try {
+    localStorage.setItem(`${IMPACT_SEEN_KEY_PREFIX}${projectId ?? ''}`, String(verdicts));
+  } catch {
+    /* Storage blocked: the dot stays off rather than on forever. */
+  }
+}
+
 function saveHistory(items: HistoricalAnnotation[]): void {
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, HISTORY_LIMIT)));
@@ -138,6 +155,8 @@ export const NAV_LABEL = {
   SETTINGS: 'Settings',
   HIDE: 'Hide',
 } as const;
+/** The Impact control's name, with and without its "new results" dot. */
+const IMPACT_ARIA = { SEEN: 'Open Impact', NEW: 'Open Impact, new results' } as const;
 export const navLabelHtml = (text: string): string =>
   `<span class="reticle-nav-label">${text}</span>`;
 export const CHAT_VIEWS_NAV_HTML = `<nav class="reticle-chat-nav" aria-label="Reticle views">
@@ -145,7 +164,7 @@ export const CHAT_VIEWS_NAV_HTML = `<nav class="reticle-chat-nav" aria-label="Re
   <button type="button" data-reticle-chat-view-btn="harness" aria-label="${HARNESS_ROW_TEXT.PAGE_TITLE}" title="${HARNESS_ROW_TEXT.PAGE_TITLE}" hidden>${hiIconHtml(PresenterIcon.PLAY, NAV_ICON_SIZE)}${navLabelHtml(NAV_LABEL.HARNESS)}</button>
   <button type="button" data-reticle-chat-view-btn="flows" aria-label="Saved flows" title="Saved flows">${hiIconHtml(PresenterIcon.LAYOUT, NAV_ICON_SIZE)}${navLabelHtml(NAV_LABEL.FLOWS)}</button>
   <button type="button" data-reticle-chat-view-btn="annotations" aria-label="Notes" title="Notes">${hiIconHtml(PresenterIcon.NOTES, NAV_ICON_SIZE)}<span class="reticle-nav-label">${NAV_LABEL.NOTES}<span data-reticle-note-count class="reticle-nav-count" hidden></span></span></button>
-  <button type="button" data-reticle-chat-impact class="reticle-chat-impact" aria-label="Open Impact" title="Impact">${hiIconHtml(PresenterIcon.CHART, NAV_ICON_SIZE)}<span class="reticle-nav-label">${NAV_LABEL.IMPACT}<span data-reticle-chat-verdicts class="reticle-nav-count"></span></span></button>
+  <button type="button" data-reticle-chat-impact class="reticle-chat-impact" aria-label="${IMPACT_ARIA.SEEN}" title="Impact">${hiIconHtml(PresenterIcon.CHART, NAV_ICON_SIZE)}${navLabelHtml(NAV_LABEL.IMPACT)}<span data-reticle-impact-dot class="reticle-nav-dot" aria-hidden="true" hidden></span></button>
 </nav>`;
 
 const ANNOTATION_ACTION_ICON_SIZE = PRESENTER_ICON_SIZE.TOOLBAR;
@@ -207,6 +226,9 @@ ${HARNESS_ROW_CSS.replaceAll('[data-reticle-chat-panel]', '[data-reticle-page-pa
 [data-reticle-hud] .reticle-chat-nav .reticle-nav-count:empty{display:none;}
 [data-reticle-hud] .reticle-chat-nav .reticle-nav-count:not(:empty){margin-left:3px;font-variant-numeric:tabular-nums;color:var(--reticle-hud-brand);font-weight:600;}
 [data-reticle-hud] .reticle-chat-nav .reticle-nav-count[hidden]{display:none;}
+/* New results since Impact was last opened: a dot on the icon's corner, out of the flow, so no number can push the label. */
+[data-reticle-hud] .reticle-chat-nav .reticle-nav-dot{position:absolute;top:4px;left:calc(50% + 5px);width:7px;height:7px;border-radius:50%;background:var(--reticle-hud-brand);box-shadow:0 0 0 2px var(--reticle-hud-surface);pointer-events:none;}
+[data-reticle-hud] .reticle-chat-nav .reticle-nav-dot[hidden]{display:none;}
 [data-reticle-page-panel]{position:absolute;right:0;left:auto;bottom:calc(100% + 8px);z-index:6;box-sizing:border-box;width:var(--reticle-dock-w);max-width:min(var(--reticle-dock-w),calc(100vw - 16px));height:min(var(--reticle-chat-max-h,var(--reticle-chat-h)),calc(100vh - 120px));max-height:min(var(--reticle-chat-max-h,var(--reticle-chat-h)),calc(100vh - 120px));flex-direction:column;overflow:hidden;border-radius:var(--reticle-hud-radius-lg);${HUD_GLASS_PAINT}color:var(--reticle-hud-text);font-size:13px;line-height:1.5;pointer-events:auto;text-align:left;}
 [data-reticle-page-panel][hidden]{display:none!important;}
 [data-reticle-page-open="annotations"] [data-reticle-page-panel="annotations"],[data-reticle-page-open="flows"] [data-reticle-page-panel="flows"]{display:flex;}
@@ -293,6 +315,7 @@ export class ChatViews {
   #harness: HarnessConfig | undefined;
   #gate: HarnessGateView | undefined;
   #verdicts = 0;
+  #impactOpen = false;
   #onImpact: () => void;
   #onOpenChat: (view: ChatView) => void;
   #listeners: AbortController | undefined;
@@ -539,6 +562,7 @@ export class ChatViews {
     this.#projectId = projectId;
     this.#personaPick = readPick(projectId);
     this.#paintHarness();
+    this.#paintImpactDot();
   }
   /** Who is coding against this daemon, and this tab's notes to them. */
   paintAgent(link: AgentLink | undefined): void {
@@ -582,8 +606,24 @@ export class ChatViews {
   }
   paintImpact(verdicts: number): void {
     this.#verdicts = verdicts;
-    const el = this.#root?.querySelector('[data-reticle-chat-verdicts]');
-    if (el !== null && el !== undefined) el.textContent = verdicts > 0 ? String(verdicts) : '';
+    if (this.#impactOpen) saveImpactSeen(this.#projectId, verdicts);
+    this.#paintImpactDot();
+  }
+  /** Impact on screen: everything in it is seen, now and for as long as it stays open. */
+  setImpactOpen(open: boolean): void {
+    this.#impactOpen = open;
+    if (open) saveImpactSeen(this.#projectId, this.#verdicts);
+    this.#paintImpactDot();
+  }
+  #paintImpactDot(): void {
+    const button = this.#root?.querySelector<HTMLElement>('[data-reticle-chat-impact]');
+    const dot = button?.querySelector<HTMLElement>('[data-reticle-impact-dot]');
+    if (button === undefined || null === button || dot === undefined || null === dot) return;
+    const seen = this.#impactOpen ? this.#verdicts : readImpactSeen(this.#projectId);
+    // Storage blocked reads as seen: a dot nothing can ever clear is worse than none.
+    const fresh = seen !== undefined && this.#verdicts > seen;
+    dot.hidden = !fresh;
+    button.setAttribute('aria-label', fresh ? IMPACT_ARIA.NEW : IMPACT_ARIA.SEEN);
   }
   paintAnnotations(items: readonly AnnotationItem[]): void {
     this.#current = [...items];
