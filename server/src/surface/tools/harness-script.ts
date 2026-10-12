@@ -365,7 +365,7 @@ async function runPlan(
       // Before the lane's session ends and is graded, so its run cannot read "Proved" over a goal
       // the drive did not reach.
       noteHarnessGoal(harnessOf.get(toolset.tools) ?? harness, result.goalMet);
-      const banked = await bankOpenRecording(toolset, result, persona);
+      const banked = await bankOpenRecording(toolset, result, persona, goal);
       // A lane in its own browser is graded where it drove: the caller's tab never saw its pages.
       if (leasing && 0 < endGoalsAsked.length)
         laneGrades.push(

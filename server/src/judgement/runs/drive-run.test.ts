@@ -297,6 +297,13 @@ describe('a Harness drive in the same tab', () => {
     expect(drive?.checks).toHaveLength(2);
   });
 
+  // Re-check: a drive nobody named a journey for was titled "Harness drive" on every screen.
+  it('is never titled "Harness drive" when nobody named its journey', () => {
+    const unnamed = { harness: 'h0', driver: 'server' };
+    const runs = driveRunsFrom([{ ...action(Verified.YES, 'saved', 5), drivenBy: unnamed }], DEPS);
+    expect(runs[0]?.flows[0]?.name).not.toBe('Harness drive');
+  });
+
   /*
    * A re-drive: the Harness saved "Order 7" (POST held), the app emptied the field, and the driver
    * pressed Save again declaring the same POST; that second press was filed as a high-severity issue

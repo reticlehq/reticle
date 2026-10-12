@@ -346,7 +346,8 @@ export function harnessRunId(harness: string): string | undefined {
 }
 
 /** The journey a Harness drive was named for, or what it did when nobody named one. */
-const UNNAMED_JOURNEY = 'Harness drive';
+// Never "Harness drive": that read as the title of every unnamed drive's flow and finding.
+const UNNAMED_JOURNEY = 'Exploring the app';
 
 /** Goal verdicts kept for the drives a session has not yet been graded on. */
 const MAX_GOALS_HELD = 200;

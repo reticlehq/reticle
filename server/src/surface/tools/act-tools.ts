@@ -92,7 +92,7 @@ import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
 import { confirmedByDeclaration } from './act/act-danger.js';
 import { dispatchAct, preflightAct } from './act/act-preflight.js';
-import { disabledTargetNote, followLostObservation, windowNet } from './act/act-observation.js';
+import { checkNet, disabledTargetNote, followLostObservation } from './act/act-observation.js';
 import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';
 import { verdictIntentGap } from '@reticlehq/engine/evidence/verdict-intent-gap.js';
 import { asActionType, gradeOf } from './act/act-helpers.js';
@@ -900,7 +900,7 @@ export const ACT_TOOLS: ToolDef[] = [
           // met or missed. A claim written after the fact can be shaped to fit whatever happened,
           // which is why the two are recorded apart rather than assumed alike.
           declaredBeforeActing: true,
-          ...(verdict.pass ? {} : { net: windowNet(windowEvents) }), // the calls that explain a miss
+          ...checkNet(verdict, windowEvents), // the calls that explain a miss, or the one that held
           grade: gradeOfPredicate(until),
           // What the declared consequence READ: a kind absent here was invented by the run fold.
           kind: until.kind,
