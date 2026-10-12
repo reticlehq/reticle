@@ -99,7 +99,7 @@ import { resolveActTarget } from './act/act-target.js';
 import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrue } from './act/already-true.js';
-import { notedAct, noteSourceSeen } from '@/portal/session/recorded-gaps.js';
+import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
 
 /**
  * The action vocabulary, derived from ActionType — never retyped.
@@ -152,8 +152,8 @@ export async function actCommand(
     };
   }
   const bridgeArgs: Record<string, unknown> = { ...actArgs, args: rewritten };
-  const done = await session.command(ReticleCommand.ACT, bridgeArgs, timeoutMs);
-  return notedAct(session, done);
+  // What the acted element shows (test id, source) is noted in `Session.command`, Harness acts too.
+  return session.command(ReticleCommand.ACT, bridgeArgs, timeoutMs);
 }
 
 export const ACT_TOOLS: ToolDef[] = [

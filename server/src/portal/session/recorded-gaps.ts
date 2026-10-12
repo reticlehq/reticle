@@ -13,6 +13,7 @@ import {
   CoverageMarker,
   InstrumentationGapKind,
   LINK_APP_GAPS_MAX,
+  ReticleCommand,
   agentPromptFor,
   coverageOf,
   harnessGateOf,
@@ -137,6 +138,48 @@ export function noteActedElement(tab: NotedTab, result: unknown): void {
 export function notedAct<T extends { ok: boolean; result?: unknown }>(tab: NotedTab, done: T): T {
   if (done.ok) noteActedElement(tab, done.result);
   return done;
+}
+
+/** The markers a page said it carries (`ReticleCommand.MARKERS`), marked for its tab and its app. */
+function noteMarkers(tab: NotedTab, result: unknown): void {
+  if ('object' !== typeof result || null === result) return;
+  const markers = (result as Record<string, unknown>)['markers'];
+  if (!Array.isArray(markers)) return;
+  if (markers.includes(CoverageMarker.SOURCE)) markSeen(sourceSeen, tab);
+  if (markers.includes(CoverageMarker.TESTID)) markSeen(testidSeen, tab);
+}
+
+/** A tab the daemon can ask. Absent `command`: a test double or a tab with no page to ask. */
+export interface ProbedTab extends NotedTab {
+  command?(
+    name: string,
+    args?: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<{ ok: boolean; result?: unknown }>;
+}
+
+/** How long a page gets to say what it carries. Silent and cheap, so a page that cannot is skipped. */
+const MARKERS_PROBE_MS = 2_000;
+
+/**
+ * Ask each page whose app has not shown both markers yet what it carries. What an act happens to
+ * reach decides nothing then: an app with test ids is seen to have them before anything acted, and a
+ * hidden tab of it says the same. A page that cannot answer (an older SDK, a closed tab) is skipped.
+ * True when a page showed something not known before.
+ */
+export async function probeMarkers(tabs: readonly ProbedTab[]): Promise<boolean> {
+  const before = sourceSeen.size + testidSeen.size;
+  await Promise.all(
+    tabs
+      .filter((tab) => !wasSeen(sourceSeen, tab) || !wasSeen(testidSeen, tab))
+      .map(async (tab) => {
+        const done = await tab
+          .command?.(ReticleCommand.MARKERS, {}, MARKERS_PROBE_MS)
+          .catch(() => undefined);
+        if (true === done?.ok) noteMarkers(tab, done.result);
+      }),
+  );
+  return before < sourceSeen.size + testidSeen.size;
 }
 
 /** What this session's verdicts recorded, newest first. */

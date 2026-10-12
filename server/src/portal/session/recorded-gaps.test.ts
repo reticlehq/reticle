@@ -7,6 +7,7 @@ import {
   instrumentationOf,
   noteSourceSeen,
   noteActedElement,
+  probeMarkers,
   recordGaps,
   recordedGaps,
 } from './recorded-gaps.js';
@@ -158,5 +159,50 @@ describe('an app with several tabs', () => {
     expect(announcedChannels({ id: 's3', url: 'http://localhost:3001/' })).not.toContain(
       CoverageMarker.TESTID,
     );
+  });
+});
+
+/**
+ * The Harness gate scored bench-app at 75% ("missing file:line source mapping, stable test ids")
+ * while the page carried 55 test ids and a source stamp on every element: markers were learned only
+ * from a control an agent acted on, so a tab nobody acted on — a hidden one `reticle connect` opened
+ * — spoke for the app. The daemon now asks the page what it carries.
+ */
+describe('what the page itself carries', () => {
+  const FULL = ['ui', 'net', 'log', 'state', 'signal'];
+  const answering = (markers: string[], asked: string[] = []) => ({
+    command: (name: string) => {
+      asked.push(name);
+      return Promise.resolve({ ok: true, result: { markers } });
+    },
+  });
+
+  it('unlocks an app whose page carries test ids and file:line stamps before anything acted', async () => {
+    const tab = { id: 's1', url: 'http://localhost:4312/', projectId: 'bench', channels: FULL };
+    expect(instrumentationOf(tab).harnessGate.percent).toBe(75);
+    await probeMarkers([{ ...tab, ...answering(['source', 'testid']) }]);
+    expect(instrumentationOf(tab).harnessGate).toEqual({ percent: 100, unlocked: true });
+  });
+
+  it("is the app's: a hidden tab of the same project that was never asked reports it too", async () => {
+    await probeMarkers([
+      { id: 's1', url: 'http://localhost:4312/', projectId: 'bench', ...answering(['testid']) },
+    ]);
+    expect(
+      announcedChannels({ id: 's9', url: 'http://localhost:4312/login', projectId: 'bench' }),
+    ).toContain(CoverageMarker.TESTID);
+  });
+
+  it('asks a page once both are known, and survives a page that cannot answer', async () => {
+    const asked: string[] = [];
+    const tab = { id: 's1', url: 'http://localhost:4312/', projectId: 'bench' };
+    await probeMarkers([{ ...tab, ...answering(['source', 'testid'], asked) }]);
+    await probeMarkers([{ ...tab, ...answering(['source', 'testid'], asked) }]);
+    expect(asked).toEqual(['markers']);
+    await expect(
+      probeMarkers([
+        { id: 's2', url: 'http://x/', command: () => Promise.reject(new Error('gone')) },
+      ]),
+    ).resolves.toBe(false);
   });
 });

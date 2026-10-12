@@ -29,6 +29,7 @@ const SHIPPED: readonly string[] = [
   'storage_read',
   'scroll',
   'session_config',
+  'markers',
   'presenter',
   'impact',
   'capture',

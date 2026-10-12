@@ -1,4 +1,5 @@
 import { setPresenterViewer, setPresenterVisible } from './dom/dom-ignore.js';
+import { coverageMarkers } from './dom/addressing/coverage-markers.js';
 import {
   EventType,
   RETICLE_DEFAULT_PORT,
@@ -807,6 +808,9 @@ export class Reticle {
   }
 
   async #handleCommand(command: CommandMessage): Promise<CommandOutcome> {
+    // Answered before the HUD paints anything: the daemon asks tabs nobody is driving.
+    if (command.name === ReticleCommand.MARKERS)
+      return { ok: true, result: { markers: coverageMarkers(document) } };
     // NARRATE: the agent tells the human what it's about to do / decide (presenter HUD).
     if (command.name === ReticleCommand.NARRATE) {
       if (this.#presenter === undefined && this.#panelRequested) {

@@ -72,7 +72,7 @@ import type { RunDisparity } from '@reticlehq/core';
 import type { HarnessMap } from '@reticlehq/core/artifacts';
 import { mapForPlatform } from '@/features/harness/explore/site-map.js';
 import { huntAndGrade, refreshMap, siteMapFor } from './harness-hunt.js';
-import { instrumentationOf } from '@/portal/session/recorded-gaps.js';
+import { instrumentationOf, probeMarkers } from '@/portal/session/recorded-gaps.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 
 export interface ExploreOptions {
@@ -262,11 +262,8 @@ export function coverageRefusal(deps: ToolDeps, sessionId: string | undefined): 
   return refused?.text;
 }
 
-/** The daemon's own reading of the gate for this tab's app, uncounted. */
-function localGateRefusal(
-  deps: ToolDeps,
-  sessionId: string | undefined,
-): { text: string; percent: number } | undefined {
+/** This tab and every other live tab of its app, or undefined when the tab cannot be resolved. */
+function appTabsOf(deps: ToolDeps, sessionId: string | undefined) {
   let tab: ReturnType<ToolDeps['sessions']['resolve']>;
   try {
     tab = deps.sessions.resolve(sessionId);
@@ -279,18 +276,26 @@ function localGateRefusal(
     .filter((info) => info.sessionId !== tab.id && sameApp(info.projectId, tab.projectId))
     .flatMap((info) => {
       const live = deps.sessions.get?.(info.sessionId);
-      return live === undefined
-        ? []
-        : [
-            {
-              id: live.id,
-              url: live.url,
-              projectId: live.projectId,
-              channels: live.channels,
-              sourceMapping: live.sourceMapping,
-            },
-          ];
+      return live === undefined ? [] : [live];
     });
+  return { tab, siblings };
+}
+
+/** The daemon's own reading of the gate for this tab's app, uncounted. */
+function localGateRefusal(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): { text: string; percent: number } | undefined {
+  const app = appTabsOf(deps, sessionId);
+  if (app === undefined) return undefined;
+  const { tab } = app;
+  const siblings = app.siblings.map((live) => ({
+    id: live.id,
+    url: live.url,
+    projectId: live.projectId,
+    channels: live.channels,
+    sourceMapping: live.sourceMapping,
+  }));
   const coverage = instrumentationOf(tab, siblings);
   const gate = coverage.harnessGate;
   if (gate.unlocked || gate.reason === undefined) return undefined;
@@ -314,6 +319,9 @@ export async function harnessLockRefusal(
   env: Record<string, string | undefined>,
   fetchConfig?: ConfigFetch,
 ): Promise<string | undefined> {
+  // What the app's pages carry decides, not what an act happened to reach: ask them first.
+  const app = appTabsOf(deps, sessionId);
+  if (app !== undefined) await probeMarkers([app.tab, ...app.siblings]);
   if (undefined === localGateRefusal(deps, sessionId)) return undefined;
   const platform = await fetchPlatformConfig(env, fetchConfig);
   if (true === platform?.gate?.unlocked) return undefined;

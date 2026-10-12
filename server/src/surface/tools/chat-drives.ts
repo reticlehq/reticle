@@ -49,6 +49,8 @@ import { MSG_NO_HARNESS_KEY, harnessLockRefusal, withLinkedCredential } from './
 import { runTool } from './invoke-tool.js';
 import {
   announcedChannels,
+  probeMarkers,
+  type ProbedTab,
   notApplicableOf,
   recordedGaps,
 } from '../../portal/session/recorded-gaps.js';
@@ -93,6 +95,8 @@ export interface ChatDriveSessions {
         pushNarration(text: string): void;
         readonly sdkVersion?: string | undefined;
         readonly channels?: readonly string[] | undefined;
+        /** Asks the page what it carries (`probeMarkers`). Absent on a test double. */
+        command?: ProbedTab['command'];
         readonly sourceMapping?: boolean | undefined;
       }
     | undefined;
@@ -279,8 +283,19 @@ export function startChatDrives(
     machine,
     version: cloud.version,
     capabilities: CHAT_CAPABILITIES,
-    apps: async () =>
-      appsByPlatform(
+    apps: async () => {
+      // The setup score the dashboard shows is what the app's pages carry, asked of each page
+      // until its app has shown both markers: never only what an act happened to reach.
+      await probeMarkers(
+        sessions.list().flatMap((tab) => {
+          const live = sessions.get(tab.sessionId);
+          const command = live?.command?.bind(live);
+          return command === undefined
+            ? []
+            : [{ id: tab.sessionId, url: tab.url, projectId: tab.projectId, command }];
+        }),
+      );
+      return appsByPlatform(
         sessions.list().map((tab) => {
           const live = sessions.get(tab.sessionId);
           const sdkVersion = live?.sdkVersion;
@@ -322,7 +337,8 @@ export function startChatDrives(
               : { platform: { url: platform.url.replace(/\/+$/, ''), apiKey: platform.apiKey } }),
           };
         },
-      ),
+      );
+    },
     open,
     extras: async () => {
       const closure = sessions.lastClosure?.();

@@ -924,10 +924,7 @@ export const ReticleCommand = {
   SCROLL: 'scroll',
   /** Session lifecycle: agent tunes the presenter session (e.g. idle-end timeout) for the app's needs. */
   SESSION_CONFIG: 'session_config',
-  /**
-   * Live-control: bridge → browser. Pushes the current session state to the panel so an
-   * AGENT-driven pause/end keeps the presenter in sync. `args: { state, text? }`.
-   */
+  /** Bridge → browser: the session state, so an agent's pause/end syncs the panel. `{ state, text? }`. */
   PRESENTER: 'presenter',
   /**
    * Bridge -> browser: the user's own impact record, so the HUD can show what Reticle has done for
@@ -956,6 +953,8 @@ export const ReticleCommand = {
   FLOW_PROGRESS: 'flow.progress',
   /** Bridge → browser: the Harness's drive plan and each part's status, a `PlanView`. */
   PLAN: 'plan',
+  /** The coverage markers (`CoverageMarker`) the app's own page carries; silent, no HUD paint. */
+  MARKERS: 'markers',
 } as const;
 export type ReticleCommand = (typeof ReticleCommand)[keyof typeof ReticleCommand];
 

@@ -68,7 +68,7 @@ import { buildPresenterArgs } from './human/presenter-args.js';
 import { buildSessionLease, type SessionLease } from './presence/session-lease.js';
 export type { SessionInfo } from './session-info.js';
 import { buildSessionInfo, type SessionInfo } from './session-info.js';
-import { withInstrumentation } from './recorded-gaps.js';
+import { notedAct, probeMarkers, withInstrumentation } from './recorded-gaps.js';
 import { MAX_SUCCESSOR_HOPS, REBINDABLE_COMMANDS } from './rebind.js';
 
 type Clock = () => number;
@@ -700,7 +700,7 @@ export class Session implements HandshakeFacts {
         this.#unansweredCommands = 0;
         // The label is only knowable from the REPLY — the request carries a ref, and a ref dies with
         // the next re-render. Recorded here so coverage survives frameworks that replace nodes.
-        if (name === ReticleCommand.ACT) this.recordActedLabelFrom(result);
+        if (name === ReticleCommand.ACT) this.recordActedLabelFrom(notedAct(this, result));
         return result;
       })
       .finally(() => recordBrowserLatency(Date.now() - sentAt))
@@ -876,18 +876,17 @@ export class Session implements HandshakeFacts {
   }
 
   /**
-   * Push the impact record to this tab's HUD.
-   *
-   * Debounced: the record changes on every tool call, and the panel does not need 200 frames to
-   * show a counter going up. The LAST state always lands, because the timer re-reads the store
-   * when it fires rather than capturing a snapshot when it was scheduled.
+   * Push the impact record to this tab's HUD. Debounced (a counter needs no 200 frames); the LAST
+   * state always lands, because the timer re-reads the store when it fires.
    */
   pushImpact(read: () => ImpactSnapshot | undefined, immediate = false): void {
     const send = (): void => {
       const snapshot = read();
-      // Every push carries this tab's own coverage, so the HUD's line is about the app on screen.
-      if (snapshot !== undefined)
+      if (snapshot === undefined) return; // each push carries this tab's own coverage
+      const post = (): void =>
         this.#post(ReticleCommand.IMPACT, { snapshot: withInstrumentation(this, snapshot) });
+      post();
+      void probeMarkers([this]).then((learned) => learned && post()); // what the page carries
     };
     // A new tab's first record goes out at once: debounced, it reads "nothing recorded" over history.
     if (immediate) return send();

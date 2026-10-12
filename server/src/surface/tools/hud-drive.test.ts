@@ -9,6 +9,7 @@ import type { ConfigFetch } from '@/features/harness/platform-config.js';
 import { answerExplore } from './explore-tools.js';
 import { getSessionMetrics, resetSessionMetrics } from '@/telemetry/session-metrics.js';
 import { DriveOrigin, forgetDrives, startDrive } from '@/features/harness/drive-runs.js';
+import { forgetAllRecordedGaps } from '@/portal/session/recorded-gaps.js';
 
 /*
  * The HUD's Harness switch only toggled the platform's autonomous mode; nothing on the panel could
@@ -130,6 +131,43 @@ describe('the platform gate is the lock when the project is linked', () => {
     };
     expect(await harnessLockRefusal(tabDeps(ABOVE), 's1', LINKED, spy)).toBeUndefined();
     expect(asked).toBe(false);
+  });
+});
+
+/**
+ * BLOCKER from the whole-platform drive: bench-app (55 test ids, a source stamp on every element)
+ * was refused at 75% ("missing file:line source mapping, stable test ids") because nothing had acted
+ * on it yet. The gate asks the page what it carries before it refuses.
+ */
+describe('the gate reads what the page carries', () => {
+  afterEach(() => {
+    forgetAllRecordedGaps();
+  });
+  const FULL = ['ui', 'net', 'log', 'state', 'signal'];
+  function pageDeps(markers: string[]): ToolDeps {
+    const tab = {
+      id: 'bench',
+      url: 'http://localhost:4312/',
+      projectId: 'bench-app',
+      channels: FULL,
+      command: (name: string) =>
+        Promise.resolve(
+          'markers' === name ? { ok: true, result: { markers } } : { ok: false, error: 'no' },
+        ),
+    };
+    return {
+      sessions: { get: () => tab, resolve: () => tab, list: () => [] },
+    } as unknown as ToolDeps;
+  }
+
+  it('lets a fully instrumented app run before anything acted on it', async () => {
+    expect(await harnessLockRefusal(pageDeps(['source', 'testid']), 'bench', {})).toBeUndefined();
+  });
+
+  it('still refuses a page that carries neither', async () => {
+    expect(await harnessLockRefusal(pageDeps([]), 'bench', {})).toMatch(
+      /This app is at 75%: missing file:line source mapping, stable test ids/,
+    );
   });
 });
 

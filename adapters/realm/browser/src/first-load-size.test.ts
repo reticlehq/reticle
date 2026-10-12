@@ -370,8 +370,13 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * observer's secret-field redaction (a typed password reached the session journal in clear) and the
  * refusal to act inside a closing menu. Both branches together, measured after the merge:
  * 262,750 B; ceiling 263,750 by the convention.
+ *
+ * The page saying which coverage markers its own elements carry (the `markers` command): the
+ * Harness gate refused a fully instrumented app at 75% because only an acted control could show
+ * them. Answered before the panel paints, so it cannot wait on a lazy chunk (which measured larger).
+ * 263,856 B; ceiling 264,856.
  */
-const MAX_FIRST_LOAD_BYTES = 263_750;
+const MAX_FIRST_LOAD_BYTES = 264_856;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The
