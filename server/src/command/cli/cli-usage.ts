@@ -85,8 +85,9 @@ const COMMANDS: readonly CommandDoc[] = [
     group: HelpGroup.START,
     detail:
       'Wires the app first if it is not wired, signs in through your browser, links this repo to\n' +
-      'the project (created if it does not exist; named after the folder by default), and sends\n' +
-      'local history.\n\n' +
+      'the project (created if it does not exist; named after the projectId in .reticle.json, else\n' +
+      'the folder), says which workspace it is in, and sends local history. Linked before to\n' +
+      "another workspace, the folder's earlier runs stay here: `reticle sync --move-history`.\n\n" +
       '  --project <name|id>  the dashboard project to link\n' +
       '  --url <origin>       the Reticle platform, when it is not the default\n\n' +
       'Without a browser (CI, an agent), in two steps:\n' +

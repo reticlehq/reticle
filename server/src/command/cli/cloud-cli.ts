@@ -165,7 +165,12 @@ const ProjectsListSchema = z.object({
  * is its own surprise, and the whole point of this change is that the automatic path SAYS what it
  * did.
  */
-const resolveProjectId = async (url: string, token: string, wanted: string): Promise<string> => {
+const resolveProjectId = async (
+  url: string,
+  token: string,
+  wanted: string,
+  workspace?: string, // said beside the creation
+): Promise<string> => {
   const { projects } = ProjectsListSchema.parse(await api('GET', `${url}/v1/projects`, token));
   const lc = wanted.toLowerCase();
   const match = projects.find((p) => p.projectId === wanted || p.name.toLowerCase() === lc);
@@ -173,9 +178,15 @@ const resolveProjectId = async (url: string, token: string, wanted: string): Pro
   const created = CreatedProjectSchema.parse(
     await api('POST', `${url}/v1/projects`, token, { name: wanted }),
   );
-  hint(`created project "${wanted}" (${created.projectId}) — it did not exist yet`);
+  hint(
+    `created project "${wanted}" (${created.projectId})${inWorkspace(workspace)} — it did not exist yet`,
+  );
   return created.projectId;
 };
+
+/** ` in workspace "<name>"`, or nothing when no name is known. */
+const inWorkspace = (name: string | undefined): string =>
+  name === undefined || 0 === name.length ? '' : ` in workspace "${name}"`;
 
 /**
  * The `.reticle` this folder's commands read and write: the project `link` binds (see
@@ -357,6 +368,7 @@ export const cmdLink = async (
    * Undefined against an older cloud, where the slot stays cloud+project as it always was.
    */
   let orgId: string | undefined;
+  let workspace: string | undefined; // the binding's, said when the sign-in names it
   /** The key this machine already had for the slot, and whether it provably belongs to another tenant. */
   let priorKey: string | undefined;
   let priorIsForeign = false;
@@ -395,10 +407,8 @@ export const cmdLink = async (
       'string' === typeof priorProjectId ? priorProjectId : undefined,
       readProjectId(projectDir),
     );
-    const targetId =
-      wanted === undefined
-        ? await resolveProjectId(url, session.token, fallback)
-        : await resolveProjectId(url, session.token, wanted);
+    workspace = session.orgName;
+    const targetId = await resolveProjectId(url, session.token, wanted ?? fallback, workspace);
     /*
      * Reuse the key this machine already holds for the project, rather than minting another.
      *
@@ -523,7 +533,7 @@ export const cmdLink = async (
    * The key is identified the way the dashboard identifies it — a prefix, never the secret — so
    * this can be read aloud, pasted into an issue, or left in a terminal without leaking anything.
    */
-  hint(`bound this repo to project "${projectName}"`);
+  hint(`bound this repo to project "${projectName}"${inWorkspace(workspace)}`);
   if (projectDir !== resolve(cwd))
     hint(`linked ${relative(cwd, projectDir)}: that is where this app's runs are written`);
   hint(

@@ -76,6 +76,21 @@ describe('a saved-flow suite against the running daemon', () => {
     expect(result.code).toBe(1);
   });
 
+  // Group D persona drive: RETICLE_SECRET_* given to `reticle verify` was ignored when a daemon was
+  // already running — the daemon's environment is not the command's. They travel with the call.
+  it("passes the command's RETICLE_SECRET_* values with the call, for this call only", async () => {
+    process.env['RETICLE_SECRET_PASSWORD'] = 'hunter2';
+    try {
+      const { calls } = await run({ status: 'pass' });
+      expect(calls[0]?.args).toEqual({
+        action: 'flows',
+        secrets: { RETICLE_SECRET_PASSWORD: 'hunter2' },
+      });
+    } finally {
+      delete process.env['RETICLE_SECRET_PASSWORD'];
+    }
+  });
+
   it('exits non-zero on a failing suite', async () => {
     const { result } = await run({ status: 'fail', total: 3, passed: 2 });
     expect(result.code).toBe(1);

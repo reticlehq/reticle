@@ -503,6 +503,27 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(stderrBuf).toContain('created');
   });
 
+  // Group D persona drive: `connect --project X` while signed in to a personal workspace created X
+  // there without a word about which workspace. It says so, on creation and on the binding.
+  it('says which workspace it created the project in and bound the repo to', async () => {
+    await writeHomeFile([SESSION_FILE], `{"token":"tok","orgName":"Acme","url":"${TEST_URL}"}`);
+    let projectCalls = 0;
+    responder = (url) => {
+      if (url.endsWith('/v1/projects')) {
+        projectCalls += 1;
+        return 1 === projectCalls
+          ? { body: { projects: [] } }
+          : { body: { projectId: 'proj_new', name: 'Storefront' } };
+      }
+      return {
+        body: { projectId: 'proj_new', projectName: 'Storefront', key: 'rk_live_abcd1234ef' },
+      };
+    };
+    await runCloudCommand(['link', '--project', 'Storefront']);
+    expect(stderrBuf).toContain('in workspace "Acme"');
+    expect(stderrBuf).toContain('bound this repo to project "Storefront" in workspace "Acme"');
+  });
+
   it('link --project does NOT create a duplicate when the project already exists', async () => {
     await writeHomeFile([SESSION_FILE], `{"token":"tok","orgName":"Acme","url":"${TEST_URL}"}`);
     responder = (url) => {

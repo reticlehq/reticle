@@ -14,6 +14,7 @@
  * ask it, over the transport `start()` already attaches unconditionally. Nothing is bound, nothing
  * is stopped, the agent keeps its link.
  */
+import { CALL_SECRETS_ARG } from '@/surface/tools/tool-kit.js';
 import { ReticleTool } from '@reticlehq/core';
 import { cutOffReason } from '@/surface/tools/harness-explore.js';
 import { KEY_REFUSED_HEAD, RESULT_FIELD } from '@/surface/tools/reticle-result.js';
@@ -115,6 +116,22 @@ export async function runAdhocSuite(options: AdhocSuiteOptions): Promise<AdhocVe
   }
 }
 
+/** This command's `RETICLE_SECRET_*` values, as the per-call `secrets` argument; none, no field. */
+function secretsArg(env: NodeJS.ProcessEnv): { [CALL_SECRETS_ARG]?: Record<string, string> } {
+  const secrets = Object.fromEntries(
+    Object.entries(env).filter(
+      (entry): entry is [string, string] =>
+        entry[0].startsWith(SECRET_ENV_PREFIX) &&
+        'string' === typeof entry[1] &&
+        0 < entry[1].length,
+    ),
+  );
+  return 0 === Object.keys(secrets).length ? {} : { [CALL_SECRETS_ARG]: secrets };
+}
+
+/** The prefix of a variable holding one redacted field's value. */
+const SECRET_ENV_PREFIX = 'RETICLE_SECRET_';
+
 /** The saved suite through an open connection, as a verdict. Shared by the suite and explore paths. */
 async function replaySuite(
   caller: ToolCaller,
@@ -129,6 +146,9 @@ async function replaySuite(
       ...(options.select === undefined ? {} : { select: options.select }),
       ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
       ...(true === options.confirmDangerous ? { confirmDangerous: true } : {}),
+      // The running daemon's environment is not this command's: the secrets a CI step set for
+      // `reticle verify` go with the call, for this call only.
+      ...secretsArg(process.env),
     },
     SUITE_TIMEOUT_MS,
   );
