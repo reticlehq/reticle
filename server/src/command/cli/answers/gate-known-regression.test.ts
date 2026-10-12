@@ -51,6 +51,11 @@ describe('a gate whose platform refused its key', () => {
     expect(said).toContain('refused this API key');
     expect(said).toContain('fails closed');
   });
+
+  // Persona drive: "…set RETICLE_API_KEY to it.. The gate could not ask…".
+  it('says it in sentences, one period each', () => {
+    expect(msgGateRefused('mint a new key and set RETICLE_API_KEY to it.')).not.toContain('..');
+  });
 });
 
 /** Exit 3 outside a hook printed only JSON that still said "nothing was checked". */

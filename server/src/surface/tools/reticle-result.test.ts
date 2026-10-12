@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { TRIAL_OFFER } from '@reticlehq/core/hud';
 import { ReticleDir, Verified } from '@reticlehq/core';
 import {
+  KEY_REFUSED_LINE,
   RESULT_FIELD,
   ResultWord,
   buildReticleResult,
@@ -128,6 +129,24 @@ describe('the platform line', () => {
     expect(line).toContain(TRIAL_OFFER);
     expect(line).toContain(CONNECT);
     expect(line.split('\n')).toHaveLength(1);
+  });
+
+  // Persona drive (CI with a revoked key): the block said "Saved: the daemon syncs this run" and
+  // `reticle verify` exited 0, while the sync had been refused.
+  it('linked, but the platform refused the key at the last sync: says so, never "Saved"', () => {
+    const dir = root();
+    writeFileSync(
+      join(dir, ReticleDir.CLOUD_LINK_FILE),
+      JSON.stringify({ projectId: 'p', url: 'https://api.test', dashboardUrl: 'https://app.test' }),
+    );
+    writeFileSync(
+      join(dir, ReticleDir.CLOUD_STATE_FILE),
+      JSON.stringify({ lastError: 'status 401: invalid key' }),
+    );
+    const line = platformLine(dir, {}, 'r1');
+    expect(line).toContain(KEY_REFUSED_LINE);
+    expect(line).not.toContain('Saved');
+    expect(line).not.toContain('/runs/r1');
   });
 
   it('linked by a key in the environment, with no dashboard named: says it syncs, never pitches', () => {

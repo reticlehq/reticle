@@ -3,8 +3,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asProjectId, ReplayStatus, type FlowReplayResult } from '@reticlehq/core';
-import { persistAndSyncVerificationRun, type TimedReplay } from './verification-sync.js';
+import {
+  asProjectId,
+  ReplayStatus,
+  RunAgentKind,
+  RunTrigger,
+  type FlowReplayResult,
+} from '@reticlehq/core';
+import {
+  CLI_CLIENT_NAME,
+  persistAndSyncVerificationRun,
+  type TimedReplay,
+} from './verification-sync.js';
 import { RunStore } from './artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import type { RunId } from '@reticlehq/core';
@@ -133,6 +143,27 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     const agent = await store.read(byAgent as RunId);
     expect(platform.ok && platform.run.agent.id).toBe('reticle-mcp');
     expect(agent.ok && agent.run.agent.id).toBe('claude-code');
+  });
+
+  /*
+   * Persona drive (a CI pipeline): `reticle verify` against a running daemon replays the saved
+   * flows over MCP as the client `reticle-cli`, and every CI run was recorded as an ordinary coding
+   * agent, trigger manual, credited to whoever minted the key. The command line is the pipeline,
+   * exactly as the path that boots its own daemon records it.
+   */
+  it('records the Reticle command line as the pipeline, not as a coding agent', async () => {
+    forgetAgents();
+    noteAgentAttached('ci', CLI_CLIENT_NAME);
+    const id = await runAsAgent('ci', () =>
+      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }),
+    );
+    forgetAgents();
+    const read = await new RunStore(fs, root).read(id as RunId);
+    expect(read.ok && read.run.agent).toEqual({
+      id: CLI_CLIENT_NAME,
+      kind: RunAgentKind.OEM_PIPELINE,
+    });
+    expect(read.ok && read.run.trigger.kind).toBe(RunTrigger.OEM);
   });
 
   it('names the run after the project the checkout is linked to', async () => {

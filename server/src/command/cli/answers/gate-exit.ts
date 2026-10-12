@@ -43,7 +43,7 @@ export function gateExitWith(
  */
 export function msgGateRefused(why: string): string {
   return (
-    `Reticle gate: ${why}. The gate could not ask the platform this project is linked to for its ` +
+    `Reticle gate: ${why.replace(/\.+$/, '')}. The gate could not ask the platform this project is linked to for its ` +
     'regression report, so it fails closed rather than pass without it.'
   );
 }

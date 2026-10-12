@@ -48,6 +48,15 @@ describe('describeSkew — the contract decides, not the version', () => {
     expect(msg).toMatch(/different wire contracts/i);
   });
 
+  // Persona drive: both sides reported one version and the fix said to install that version — the
+  // version already installed. Two builds of one version: rebuild/restart is the fix, not install.
+  it('at the same version, names the restart and the reload, never installing that version again', () => {
+    const msg = describeSkew(page({ contract: 'bbbb2222' }), SELF) ?? '';
+    expect(msg).not.toMatch(/@2\.4\.1/);
+    expect(msg).toMatch(/reticle restart/);
+    expect(msg).toMatch(/reload/);
+  });
+
   it('names both versions and a concrete fix when the contracts differ', () => {
     const msg = describeSkew(page({ version: '2.2.1', contract: 'bbbb2222' }), SELF) ?? '';
     expect(msg).toContain('2.2.1');

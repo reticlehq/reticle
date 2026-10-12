@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { KEY_REFUSED, keyRefusedAtLastSync } from '@/memory/project/sync-status.js';
 import { join } from 'node:path';
 import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
@@ -155,7 +156,7 @@ function syncProblem(root: string, now: number, since: number): string | undefin
   // A refused key read as the platform's "valid API key required" to a member removed from the
   // workspace, whose key was set: it was refused, which is what they have to act on — and it holds
   // back this session's work too, so it is said whoever wrote what.
-  if ('string' === typeof error && REFUSED_SYNC.test(error)) return KEY_REFUSED;
+  if (keyRefusedAtLastSync(root)) return KEY_REFUSED;
   // Anything else the project's sync reports is said to a session whose own work it holds back: a
   // flow another session saved was named on every result of one that had written nothing.
   if (!wroteSince(root, since)) return undefined;
@@ -164,11 +165,6 @@ function syncProblem(root: string, now: number, since: number): string | undefin
   const count = 'object' === typeof refused && null !== refused ? Object.keys(refused).length : 0;
   return 0 < count ? `${String(count)} run(s) refused` : undefined;
 }
-
-/** How the sync loop records a refused credential. */
-const REFUSED_SYNC = /^status 40[13]\b/;
-const KEY_REFUSED =
-  "the platform refused this project's API key: it was revoked, or its owner no longer has access to the workspace";
 
 export interface NextStepInput {
   tool: string;

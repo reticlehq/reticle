@@ -117,6 +117,19 @@ export function readDashboardUrl(reticleRoot: string): string | undefined {
   }
 }
 
+/** How the sync loop records a refused credential in its state. */
+const REFUSED_SYNC = /^status 40[13]\b/;
+
+/** The refused credential, in words: what a person has to act on. */
+export const KEY_REFUSED =
+  "the platform refused this project's API key: it was revoked, or its owner no longer has access to the workspace";
+
+/** Whether the platform refused this project's key at the last sync. Never throws. */
+export function keyRefusedAtLastSync(reticleRoot: string): boolean {
+  const error = readCloudState(reticleRoot).lastError;
+  return 'string' === typeof error && REFUSED_SYNC.test(error);
+}
+
 /** The dashboard's page for one run: the console's `/runs/:runId` route, at the dashboard's origin. */
 export const DASHBOARD_RUN_PATH = '/runs/';
 export const DASHBOARD_PLAN_PATH = '/plans/';

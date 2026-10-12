@@ -1,4 +1,5 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { CLI_CLIENT_NAME } from '@/judgement/runs/verification-sync.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
 import { TOKEN_QUERY_PARAM } from '@/portal/bridge/token-auth.js';
@@ -206,7 +207,7 @@ export function endpointFor(port: number, token: string | undefined): URL {
 }
 
 export async function connectOverSse(endpoint: URL): Promise<ToolCaller> {
-  const client = new Client({ name: 'reticle-cli', version: '1' }, { capabilities: {} });
+  const client = new Client({ name: CLI_CLIENT_NAME, version: '1' }, { capabilities: {} });
   await client.connect(new SSEClientTransport(endpoint));
   return {
     call: async (name, args, timeoutMs) =>

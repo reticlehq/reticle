@@ -30,7 +30,12 @@ import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
 import { driveRunId, endAgentSession } from '@/judgement/runs/drive-run.js';
 import { stepShotDir } from '@/memory/project/dir/reticle-dir.js';
 import { TRIAL_OFFER } from '@reticlehq/core/hud';
-import { dashboardRunUrl, readDashboardUrl } from '@/memory/project/sync-status.js';
+import {
+  KEY_REFUSED,
+  dashboardRunUrl,
+  keyRefusedAtLastSync,
+  readDashboardUrl,
+} from '@/memory/project/sync-status.js';
 import type { TimedReplay } from '@/judgement/runs/verification-sync.js';
 import { CONNECT } from './platform-moment.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
@@ -164,12 +169,17 @@ export function retitleResult(block: string, verified: Verified, because: string
   return [`${HEAD}${WORD_FOR[verified]}**${SEP}${because}`, ...rest].join('\n');
 }
 
+/** The platform line when the key was refused: one true sentence, and the fix. */
+export const KEY_REFUSED_LINE = `Not on the platform: ${KEY_REFUSED}. Mint a new key in Settings → API keys; the run is kept on this machine`;
+
 /** The platform line: where the run lives when linked, what linking adds when not. One line. */
 export function platformLine(
   root: string,
   env: Record<string, string | undefined>,
   runId?: string,
 ): string {
+  // Before any link: a run the platform will refuse is not "saved" and not "on the dashboard".
+  if (keyRefusedAtLastSync(root)) return `- ${KEY_REFUSED_LINE}`;
   const dashboard = readDashboardUrl(root);
   if (dashboard !== undefined)
     return runId === undefined

@@ -10,6 +10,7 @@
  * — is unit-tested without launching a real browser.
  */
 
+import { CLI_CLIENT_NAME } from '@/judgement/runs/verification-sync.js';
 import { join, basename } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { runAdhocVerdict } from './adhoc-verdict.js';
@@ -104,7 +105,7 @@ export function verifyProjectName(
 ): string {
   return linked ?? configured ?? (folder || DEFAULT_PROJECT_NAME);
 }
-const VERIFY_AGENT_ID = 'reticle-cli';
+const VERIFY_AGENT_ID = CLI_CLIENT_NAME;
 
 const MSG_NO_SESSION =
   'No app connected: Reticle drove the URL but no @reticlehq/browser session dialed back.\n' +

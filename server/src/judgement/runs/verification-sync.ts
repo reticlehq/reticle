@@ -45,6 +45,25 @@ export interface TimedReplay {
   flow?: FlowFile;
 }
 
+/** The MCP client name `reticle verify` (the command line, CI's path) connects to a daemon as. */
+export const CLI_CLIENT_NAME = 'reticle-cli';
+
+/**
+ * Who ran a suite, and why. The command line is the pipeline, whichever daemon replays for it:
+ * through a running daemon its runs read as a coding agent, trigger manual, credited to whoever
+ * minted the key, while the path that boots its own daemon said pipeline.
+ */
+function agentAndTrigger(
+  client: string | undefined,
+): Pick<VerificationRunInput, 'agent' | 'trigger'> {
+  return CLI_CLIENT_NAME === client
+    ? { agent: { id: client, kind: RunAgentKind.OEM_PIPELINE }, trigger: { kind: RunTrigger.OEM } }
+    : {
+        agent: { id: client ?? RETICLE_MCP_AGENT_ID, kind: RunAgentKind.CODING_AGENT },
+        trigger: { kind: RunTrigger.MANUAL },
+      };
+}
+
 /** Assemble the ReticleVerificationRun artifact for a verify suite (pure — no IO). */
 function assembleRun(
   deps: ToolDeps,
@@ -69,11 +88,7 @@ function assembleRun(
      * ran this suite only; a plain CLI run, or a dashboard Re-verify no agent made, keeps the old id,
      * because inventing a vendor there would be worse than admitting we do not know.
      */
-    agent: {
-      id: callerClientName() ?? RETICLE_MCP_AGENT_ID,
-      kind: RunAgentKind.CODING_AGENT,
-    },
-    trigger: { kind: RunTrigger.MANUAL },
+    ...agentAndTrigger(callerClientName()),
     changedFiles: [],
     flows,
     checks: [],

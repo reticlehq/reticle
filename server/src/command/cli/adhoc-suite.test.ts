@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { runAdhocExplore, runAdhocSuite } from './adhoc-suite.js';
 import type { ToolCaller } from './adhoc-verdict.js';
+import { KEY_REFUSED_LINE } from '@/surface/tools/reticle-result.js';
 
 function caller(answer: unknown): { tool: ToolCaller; calls: { name: string; args: unknown }[] } {
   const calls: { name: string; args: unknown }[] = [];
@@ -65,6 +66,14 @@ describe('a saved-flow suite against the running daemon', () => {
       reticleResult: block,
     });
     expect(result.lines.slice(0, 3)).toEqual(['status: pass', 'all 2 flows pass', block]);
+  });
+
+  // Persona drive (CI, revoked key): the suite passed, the run never reached the platform, and
+  // `reticle verify` exited 0 under a block that said "Saved".
+  it('exits non-zero when the platform refused the key, whatever the suite said', async () => {
+    const block = `**Reticle result: proved** · 2 of 2 checks held\n- ${KEY_REFUSED_LINE}`;
+    const { result } = await run({ status: 'pass', reticleResult: block });
+    expect(result.code).toBe(1);
   });
 
   it('exits non-zero on a failing suite', async () => {

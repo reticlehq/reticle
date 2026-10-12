@@ -95,6 +95,11 @@ function namesWeDoNotKnow(peer: ContractParts, self: ContractParts): string[] {
   return [...new Set(unknown)].sort();
 }
 
+/** The fix for two builds of one version. */
+const SAME_VERSION_FIX =
+  'Both say the same version, so one of them is an older build of it: run `reticle restart`, then ' +
+  'reload the page so it loads the SDK the dev server serves now.';
+
 function versionPhrase(peer: PeerIdentity, self: SelfIdentity): string {
   return peer.version === undefined
     ? `${peer.what} is on an unknown version; this daemon is ${self.version}`
@@ -118,8 +123,11 @@ function versionPhrase(peer: PeerIdentity, self: SelfIdentity): string {
  * a build provably older than this daemon. With neither signal there is nothing to go on, and
  * inventing a warning would be as dishonest as staying silent about a real one.
  */
-export function describeSkew(peer: PeerIdentity, self: SelfIdentity): string | undefined {
-  if (peer.contract !== undefined && peer.contract === self.contract) return undefined;
+export function describeSkew(given: PeerIdentity, self: SelfIdentity): string | undefined {
+  if (given.contract !== undefined && given.contract === self.contract) return undefined;
+  // One version, two builds (a daemon running code older than its install, a cached page bundle):
+  // installing that version again changes nothing, so the fix is the restart and the reload.
+  const peer = given.version === self.version ? { ...given, fix: SAME_VERSION_FIX } : given;
 
   // Both sides said which names they speak, so compare the names rather than a hash over them.
   if (peer.contractParts !== undefined && self.contractParts !== undefined) {

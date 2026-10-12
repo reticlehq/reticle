@@ -200,8 +200,19 @@ export async function handleGate(
     // verdict already applies to `reticle verify`; see flowCoverageReport.
     const flowCoverage = flowCoverageReport(coverage.flows);
     const pass = result.pass && flowCoverage.outcome === undefined;
+    // What the platform knows decides too (a regression, a refused key), so the line is written
+    // once the exit code is: it said "pass": true over an exit of 1 or 3.
+    const known = await knownRegression(reticleRoot);
+    const regressed = known.broken;
+    const local = pass
+      ? GateExit.PASS
+      : result.pass && flowCoverage.outcome !== undefined
+        ? GateExit.NOTHING_TO_CHECK
+        : GateExit.FAIL;
+    // Fails closed in CI, not in an agent's stop hook, where it would block over a key, not a change.
+    const code = gateExitWith(local, regressed?.length, !hook && known.refused !== undefined);
     log('reticle_gate', {
-      pass,
+      pass: GateExit.PASS === code,
       uncovered: result.uncovered,
       quarantined: result.quarantined,
       ...(result.downgraded.length > 0 ? { downgraded: result.downgraded } : {}),
@@ -222,18 +233,9 @@ export async function handleGate(
     // A regression the platform already knows fails the build here too, with `reticle runs
     // regression`'s code, so the gate is the one command CI needs. Best-effort: unlinked or offline
     // changes nothing.
-    const known = await knownRegression(reticleRoot);
-    const regressed = known.broken;
     if (regressed !== undefined && 0 < regressed.length)
       log('reticle_gate_regression', { broken: regressed });
     if (known.refused !== undefined) process.stderr.write(`${msgGateRefused(known.refused)}\n`);
-    const local = pass
-      ? GateExit.PASS
-      : result.pass && flowCoverage.outcome !== undefined
-        ? GateExit.NOTHING_TO_CHECK
-        : GateExit.FAIL;
-    // Fails closed in CI, not in an agent's stop hook, where it would block over a key, not a change.
-    const code = gateExitWith(local, regressed?.length, !hook && known.refused !== undefined);
     if (GateExit.NOTHING_TO_CHECK === code && !hook) process.stderr.write(`${MSG_GATE_NO_FLOWS}\n`);
     if (GateExit.REGRESSION === code && !hook && regressed !== undefined)
       process.stderr.write(`${msgGateRegression(regressed)}\n`);
