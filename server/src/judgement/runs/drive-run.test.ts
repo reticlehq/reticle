@@ -381,6 +381,21 @@ describe('an agent session ending in a tab the Harness also drove', () => {
     expect(ended.wallMs).toBe(9000);
   });
 
+  // Persona drive: a second session on the same tab, after a reload, ended "Metrics: -8.3s".
+  it('never times a second session after a reload as negative', () => {
+    const tab = 'tab-negative';
+    endAgentSession(tab, [action(Verified.YES, 'first', 9000)], 9500);
+    const second = endAgentSession(
+      tab,
+      [
+        action(Verified.YES, 'first', 9000),
+        { ...action(Verified.NO, 'second', 400), tRange: { from: 300, to: 400 } },
+      ],
+      1200,
+    );
+    expect(second.wallMs).toBe(900);
+  });
+
   it("writes each agent session's run under its own id", () => {
     const runs = driveRunsFrom([own(Verified.YES, 1), theirs(2), own(Verified.NO, 3)], {
       ...DEPS,

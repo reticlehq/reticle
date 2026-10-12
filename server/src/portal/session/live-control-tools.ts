@@ -19,9 +19,17 @@ import { DiscoveryInvite } from '@reticlehq/core';
 import {
   RESULT_FIELD,
   endedAgentSession,
+  verdictsSettled,
   resultField,
   sessionResult,
 } from '@/surface/tools/reticle-result.js';
+
+/** The tab's journal once every verdict in flight has been decided and written. */
+async function settledJournal(session: Session) {
+  await verdictsSettled();
+  await session.flushJournal?.();
+  return session.readJournalActions();
+}
 
 /**
  * The session an id-less yield hands back.
@@ -158,7 +166,9 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       // rather than becoming a rejected promise the caller did not expect.
       const session = deps.sessions.resolve(requested);
       const summary = asString(args['summary']);
-      return session.readJournalActions().then((all) => {
+      // A verdict still being decided (an assert waiting out its budget) is one of this session's
+      // checks: decided and journaled before the session's result is folded, never after it.
+      return settledJournal(session).then((all) => {
         // This agent session only: its own calls since its last end, never the Harness drives the
         // tab also holds, and under its own run id so a later end does not overwrite this run.
         const ended = endedAgentSession(session.id, all, session.elapsed?.());

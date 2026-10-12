@@ -10,7 +10,7 @@ import { harnessDriving, msgHarnessHasTheTab } from './harness-tab-guard.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { agentNudge, takePlatformMoment } from './platform-moment.js';
-import { RESULT_FIELD } from './reticle-result.js';
+import { RESULT_FIELD, trackVerdict } from './reticle-result.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
   type BrowserBrand,
@@ -394,7 +394,11 @@ export async function runTool<Ext>(
   // A replay's secrets leave the arguments here, before the tool log, the journal or telemetry can
   // see them, and are supplied to this call alone.
   const { secrets, rest: args } = takeCallSecrets(given);
-  return withCallSecrets(secrets, () => loggedTool(tool, deps, args, call));
+  // A verdict still being decided is waited for by a session end (`trackVerdict`).
+  return trackVerdict(
+    tool.name,
+    withCallSecrets(secrets, () => loggedTool(tool, deps, args, call)),
+  );
 }
 
 async function loggedTool<Ext>(

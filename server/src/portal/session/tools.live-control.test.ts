@@ -13,7 +13,8 @@ import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
 import { PAUSE_HINT } from './control-envelope.js';
 import type { InboxMessage, Session } from './session.js';
 import type { SessionManager } from './session-manager.js';
-import { DiscoveryInvite } from '@reticlehq/core';
+import { DiscoveryInvite, type JournalAction } from '@reticlehq/core';
+import { trackVerdict } from '@/surface/tools/reticle-result.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
 
@@ -395,6 +396,54 @@ describe('live-control: agent tools', () => {
       action: 'end',
     })) as { reticleResult: string };
     expect(res.reticleResult.split('\n')[0]).toBe('**Reticle result: proved** · 1 of 1 check held');
+  });
+
+  /*
+   * FALSE GREEN from a persona drive: the agent ended its session while a `reticle_assert { wait }`
+   * was still waiting. The end folded the journal first ("proved · 1 of 1 check held", a PASS on the
+   * dashboard), and the wait's failure landed afterwards, in the next session's run.
+   */
+  it('reticle_end_session waits for a verdict still in flight, so its failure counts', async () => {
+    const journal: JournalAction[] = [
+      {
+        v: 1,
+        actionId: 'c1',
+        tool: 'reticle_act_and_wait',
+        args: {},
+        effect: { claim: 'a request POST matching /api/login', verified: Verified.YES },
+        tRange: { from: 1, to: 1 },
+        at: 1,
+      },
+    ];
+    const session = Object.assign(fakeSession({ state: SessionState.ACTIVE }), {
+      id: 'tab-wait-in-flight',
+      readJournalActions: () => Promise.resolve([...journal]),
+    });
+    let fail = (): void => undefined;
+    const waiting = trackVerdict(
+      ReticleTool.ASSERT,
+      new Promise<void>((resolve) => {
+        fail = () => {
+          journal.push({
+            v: 1,
+            actionId: 'c2',
+            tool: 'reticle_assert',
+            args: {},
+            effect: { claim: 'nav-compose visible', verified: Verified.NO },
+            tRange: { from: 2, to: 2 },
+            at: 2,
+          });
+          resolve();
+        };
+      }),
+    );
+    const ending = tool(ReticleTool.SESSION).handler(fakeDeps(session), { action: 'end' });
+    setTimeout(fail, 5);
+    await waiting;
+    const res = (await ending) as { reticleResult: string };
+    expect(res.reticleResult.split('\n')[0]).toBe(
+      '**Reticle result: failed** · 1 of 2 checks did not hold',
+    );
   });
 
   it('reticle_end_session works with no summary', async () => {

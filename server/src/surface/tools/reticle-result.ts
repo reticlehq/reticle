@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 import {
   JournalVerdictEffectSchema,
   ReticleDir,
+  ReticleTool,
   RunFlowStatus,
   ScriptStatus,
   Verified,
@@ -412,6 +413,38 @@ export function endedAgentSession(
   at: number | undefined,
 ): { actions: JournalAction[]; runId: string; wallMs?: number } {
   return endAgentSession(sessionId, actions, at);
+}
+
+/** The tools whose verdicts an agent session's block counts: each one is one of its checks. */
+const SESSION_VERDICT_TOOLS: ReadonlySet<string> = new Set([
+  ReticleTool.ACT_AND_WAIT,
+  ReticleTool.ACT_SEQUENCE,
+  ReticleTool.ASSERT,
+  ReticleTool.WAIT_FOR,
+]);
+
+/** Verdicts being decided right now. ponytail: daemon-wide, not per tab; an end waits for all. */
+const inFlight = new Set<Promise<unknown>>();
+
+/**
+ * A verdict tool's call, remembered until it settles, so a session that ends meanwhile counts it.
+ * An agent ended its session while a `reticle_assert { wait }` was still waiting: the end folded
+ * first ("proved · 1 of 1"), a PASS on the dashboard, and the failure landed in the next run.
+ */
+export function trackVerdict<T>(tool: string, call: Promise<T>): Promise<T> {
+  if (!SESSION_VERDICT_TOOLS.has(tool)) return call;
+  const settled = call.then(
+    () => undefined,
+    () => undefined,
+  );
+  inFlight.add(settled);
+  void settled.then(() => inFlight.delete(settled));
+  return call;
+}
+
+/** Resolves once every verdict in flight now has been decided (and journaled). */
+export async function verdictsSettled(): Promise<void> {
+  await Promise.all([...inFlight]);
 }
 
 /** The block as a field, or no field: the block is advice, never the reason a result throws. */
