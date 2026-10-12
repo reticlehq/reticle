@@ -505,7 +505,9 @@ export function exploreReport(explored: ExploreResult): Record<string, unknown> 
      * plenty. Sixteen recorded journeys re-proved for zero model tokens is the cheap half of
      * the plan doing its job, and telling its author to "raise maxSteps" reads as a failure.
      */
-    ...(0 === savedFlows.length &&
+    // A persona drive's advice: a plan run's journeys already say how each went.
+    ...(journeys === undefined &&
+    0 === savedFlows.length &&
     0 === rewroteFlows.length &&
     0 === replayedFlows(drive.toolCalls).length
       ? { note: `${NOTHING_RECORDED[drive.stopReason]}${failureDetail(drive)}` }

@@ -480,11 +480,21 @@ export function describeDrive(
           return lines.join('\n');
         })();
 
-  if (0 === steps.length)
-    return (
+  // A plan run leads with its journeys' verdict even when the model drove nothing: its replays, or
+  // a journey a guard stopped, are a result, never "no action against the app".
+  if (0 === steps.length) {
+    const lead =
+      0 === journeys.length ? undefined : verdictLine(checkTally(toolCalls), goalMet, journeys);
+    return [
+      lead,
       replayLine ??
-      'Nothing was driven and nothing was replayed: the run made no action against the app.'
-    );
+        (lead === undefined
+          ? 'Nothing was driven and nothing was replayed: the run made no action against the app.'
+          : undefined),
+    ]
+      .filter((line): line is string => line !== undefined)
+      .join('\n');
+  }
 
   const proved = steps.filter((step) => Verified.YES === step.verified);
   const failed = steps.filter((step) => Verified.NO === step.verified);

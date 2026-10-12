@@ -248,6 +248,16 @@ describe('the answer of a drive that ran the platform plan', () => {
     expect(String(out['summary'])).toContain('NOT PROVED — 1 of 1 journey(s) failed');
   });
 
+  /** "Give it a persona" was advice to a persona drive, printed under a plan run on the plan page. */
+  it('does not tell a plan run to give it a persona', () => {
+    const out = exploreReport({
+      ...base,
+      savedFlows: [],
+      journeys: [{ title: 'Team', status: 'failed' }],
+    } as never);
+    expect(out['note']).toBeUndefined();
+  });
+
   it('keeps the local plan and the driver account when nothing else planned it', () => {
     const out = exploreReport(base);
     expect(out['plan']).toEqual({ summary: '15 replays', steps: base.plan.steps });

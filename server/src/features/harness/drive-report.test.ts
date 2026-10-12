@@ -597,3 +597,28 @@ describe('a plan run has one verdict: its journeys', () => {
     expect(summary).not.toContain('NOT PROVED');
   });
 });
+
+/**
+ * A plan run's summary on the plan page read "Nothing was driven and nothing was replayed: the run
+ * made no action against the app" while the HUD showed its replay. A plan run's summary leads with
+ * its journeys' verdict, replays counted, whether or not anything was driven by the model.
+ */
+describe("a plan run's summary leads with its journeys", () => {
+  const replay = (name: string, status: string): ToolOutcome =>
+    call('reticle_flow_replay', { flowName: name }, { status });
+
+  it('a replay-only run is summarised by its verdict and its replays', () => {
+    const summary = describeDrive([replay('saved', 'ok')], [], [], undefined, [
+      { status: 'passed' },
+    ]);
+    expect(summary.split('\n')[0]).toMatch(/^PROVED — 1 of 1 journey\(s\) passed/);
+    expect(summary).toContain('Replayed 1 recorded journey(s)');
+    expect(summary).not.toContain('Nothing was driven');
+  });
+
+  it('a plan whose journeys made no call still says how its journeys went, not "no action"', () => {
+    const summary = describeDrive([], [], [], undefined, [{ status: 'failed' }]);
+    expect(summary.split('\n')[0]).toMatch(/^NOT PROVED — 1 of 1 journey\(s\) failed/);
+    expect(summary).not.toContain('Nothing was driven');
+  });
+});
