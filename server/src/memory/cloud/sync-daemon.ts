@@ -42,7 +42,8 @@ import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { flushPendingWrites } from '@/hooks/hook-bus.js';
 import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
 import { diskSink, diskSource, readCloudState } from './sync-disk.js';
-import { resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
+import { CLOUD_LINK_FILE, resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
+import { watch } from 'node:fs';
 import { unmatchedRoots, unsyncedRoots, type UnsyncedRoot } from './unsynced-roots.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 
@@ -107,6 +108,11 @@ interface SyncDaemonDeps {
   cloudFor?: (root: string) => Promise<ProjectCloud>;
   now?: () => number;
   intervalMs?: number;
+  /**
+   * Call `onChange` when this root's link file changes; returns how to stop. A re-link was read only
+   * on the next idle tick, so a daemon kept syncing to the old link for up to a minute.
+   */
+  watchLink?: (onChange: () => void) => () => void;
   /** Injected for the test; the real one is `fetch`. */
   request?: (
     url: string,
@@ -191,6 +197,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
    * so too. Once per transition, never per tick — a line every minute is a line people stop reading.
    */
   let wasLinked: boolean | undefined;
+  /** The project the last cycle synced to: a re-link to another one is announced too. */
+  let wasProject: string | null | undefined;
   /** The last count logged per root: a root is announced when its count changes, never per tick. */
   const announced = new Map<string, number>();
   let unsynced: readonly UnsyncedRoot[] = [];
@@ -342,8 +350,9 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       const own = deps.reticleRoot;
       rootsLinked.set(own, linked);
       if (linked && cloud.policy.flows) rootsSendFlows.add(own);
-      if (linked !== wasLinked) {
+      if (linked !== wasLinked || (linked && cloud.projectId !== wasProject)) {
         wasLinked = linked;
+        wasProject = cloud.projectId;
         if (linked)
           log('reticle_cloud_linked', {
             projectId: cloud.projectId,
@@ -429,6 +438,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   };
 
   schedule(FIRST_CYCLE_DELAY_MS);
+  // A nudge, not an immediate cycle: the link file and its key are written one after the other.
+  const unwatch = deps.watchLink?.(() => schedule(NUDGE_DELAY_MS));
 
   return {
     // A sync somebody asked for writes what is held on a timer first: a drive's run waits a few
@@ -444,11 +455,13 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       schedule(NUDGE_DELAY_MS);
     },
     stop: (): void => {
+      unwatch?.();
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
     },
     flush: async (): Promise<void> => {
+      unwatch?.();
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
@@ -489,5 +502,21 @@ export function attachCloudSync(deps: {
     // reporting nothing — indistinguishable, on the dashboard, from nobody having verified anything.
     otherRoots: () => Promise.resolve(deps.otherRoots()),
     cloudFor: (root) => resolveProjectCloud(deps.fs, root, deps.homeDir, deps.env),
+    // ponytail: this root only; a sibling root's re-link is still read on the next tick.
+    watchLink: (onChange) => watchLinkFile(deps.reticleRoot, onChange),
   });
+}
+
+/** Watch a root for its link file changing. A root with no `.reticle` yet is picked up per tick. */
+function watchLinkFile(reticleRoot: string, onChange: () => void): () => void {
+  try {
+    const watcher = watch(reticleRoot, (_event, name) => {
+      if (CLOUD_LINK_FILE === String(name)) onChange();
+    });
+    watcher.on('error', () => watcher.close());
+    watcher.unref();
+    return () => watcher.close();
+  } catch {
+    return () => undefined;
+  }
 }

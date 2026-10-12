@@ -672,3 +672,46 @@ describe("the sync's memory read", () => {
     }
   });
 });
+
+/*
+ * Re-drive (persona 09): after `reticle login --project rao-console` the running daemon kept
+ * syncing to the OLD link for about a minute — it read the link once per idle tick — and never said
+ * it had moved. The link is re-read the moment it changes, and the move is announced.
+ */
+describe('a re-link', () => {
+  it('is read the moment the link file changes, and announced', async () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown): boolean => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const urls: string[] = [];
+    let project = 'lind-console';
+    let changed: (() => void) | undefined;
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve({ ...LINKED, projectId: project }),
+      request: (url) => {
+        urls.push(url);
+        return Promise.resolve({ status: 200, text: '{}' });
+      },
+      intervalMs: 60_000,
+      watchLink: (onChange) => {
+        changed = onChange;
+        return () => undefined;
+      },
+    });
+    await vi.advanceTimersByTimeAsync(6_000); // the first cycle, on the old link
+    project = 'rao-console';
+    urls.length = 0;
+    changed?.();
+    await vi.advanceTimersByTimeAsync(3_000); // well inside the 60 s idle tick
+    expect(urls.some((u) => u.includes('rao-console'))).toBe(true);
+    expect(urls.some((u) => u.includes('lind-console'))).toBe(false);
+    const linked = lines.filter((l) => l.includes('reticle_cloud_linked'));
+    expect(linked).toHaveLength(2);
+    expect(linked[1]).toContain('rao-console');
+    d.stop();
+    spy.mockRestore();
+  });
+});
