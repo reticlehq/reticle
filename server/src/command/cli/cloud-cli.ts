@@ -26,7 +26,7 @@ import { defaultProjectFor } from './project-name.js';
 import { linkDirectoryFrom } from '@/memory/project/link-directory.js';
 import { RETICLE_CONFIG_BASENAME, readProjectId } from './ports/resolve/cli-port.js';
 import { normalizeUrl } from './auth/cloud-session.js';
-import { cmdLogin, cmdLogout } from './cloud-login.js';
+import { chooseWorkspace, cmdLogin, cmdLogout } from './cloud-login.js';
 import { cmdTry } from './try-command.js';
 import { CLOUD_COMMANDS } from './cli-parse-grammar.js';
 import {
@@ -568,22 +568,20 @@ export const cmdLink = async (
 };
 
 /**
- * `reticle connect` finishes the cloud half of first-run setup in one invocation. The CLI entry
- * initializes an unwired app before calling this verb. A saved login is checked against this exact
- * host before reuse; an expired one opens the normal browser approval flow. Login does not auto-link
- * here because this command links once, to the project the caller named, then sends local history.
+ * `reticle connect`: the cloud half of first-run setup in one go. A saved login is checked against
+ * this host first; it links once, in the workspace chosen, then sends local history.
  */
 const cmdConnect = async (argv: readonly string[]): Promise<number> => {
   for (let i = 0; i < argv.length; i += 2) {
     const flag = argv[i];
     const value = argv[i + 1];
     if (
-      (flag !== '--project' && flag !== '--url') ||
+      (flag !== '--project' && flag !== '--url' && flag !== '--workspace') ||
       value === undefined ||
       0 === value.length ||
       value.startsWith('--')
     ) {
-      err('usage: reticle connect [--project <name|id>] [--url <cloud origin>]');
+      err('usage: reticle connect [--project <name|id>] [--workspace <name|id>] [--url <origin>]');
       return 2;
     }
   }
@@ -609,6 +607,8 @@ const cmdConnect = async (argv: readonly string[]): Promise<number> => {
       if (code !== 0) return code;
     }
   }
+  const chosen = await chooseWorkspace(url, f['workspace']);
+  if (chosen !== 0) return chosen;
   const linkArgs = [
     '--url',
     url,

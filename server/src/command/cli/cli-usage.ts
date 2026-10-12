@@ -80,7 +80,7 @@ const COMMANDS: readonly CommandDoc[] = [
   },
   {
     name: 'connect',
-    synopsis: 'connect [--project <name|id>] [--url <cloud origin>]',
+    synopsis: 'connect [--project <name|id>] [--workspace <name|id>] [--url <cloud origin>]',
     summary: 'Sign in and link this project to the dashboard',
     group: HelpGroup.START,
     detail:
@@ -88,8 +88,9 @@ const COMMANDS: readonly CommandDoc[] = [
       'the project (created if it does not exist; named after the projectId in .reticle.json, else\n' +
       'the folder), says which workspace it is in, and sends local history. Linked before to\n' +
       "another workspace, the folder's earlier runs stay here: `reticle sync --move-history`.\n\n" +
-      '  --project <name|id>  the dashboard project to link\n' +
-      '  --url <origin>       the Reticle platform, when it is not the default\n\n' +
+      '  --project <name|id>    the dashboard project to link\n' +
+      '  --workspace <name|id>  the workspace to link in, when you belong to more than one\n' +
+      '  --url <origin>         the Reticle platform, when it is not the default\n\n' +
       'Without a browser (CI, an agent), in two steps:\n' +
       '  reticle login --email <e> [--org <name>]     emails a 6-digit code\n' +
       '  reticle login --email <e> --code <123456>    signs in, then links this repo',

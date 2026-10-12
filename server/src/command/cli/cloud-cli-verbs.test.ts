@@ -256,6 +256,64 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(link['url']).toBe(TEST_URL);
   });
 
+  /*
+   * Persona drive: Noah joined his team's workspace in the console, ran `reticle connect` as the
+   * dashboard said, and the CLI reused his personal workspace's sign-in, printed "Connected", and
+   * nothing moved. `connect --workspace <name>` switches; without it, a person in several hears it.
+   */
+  describe('connect when the person belongs to more than one workspace', () => {
+    const team = { orgId: 'org_team', name: 'Acme QA', role: 'contributor', connected: false };
+    const own = { orgId: 'org_noah', name: "Noah's workspace", role: 'owner', connected: true };
+    const stub = (activated: string[]) => (url: string) => {
+      if (url.endsWith('/v1/me/workspaces'))
+        return { body: { active: 'org_noah', memberships: [own, team], invites: [] } };
+      if (url.endsWith('/v1/me/workspaces/org_team/activate')) {
+        activated.push('org_team');
+        return { body: { token: 'team-token', org: { id: 'org_team', name: 'Acme QA' } } };
+      }
+      if (url.endsWith('/v1/projects'))
+        return { body: { projects: [], projectId: 'proj_1', name: 'noah-notes' } };
+      if (url.endsWith('/v1/keys'))
+        return { body: { projectId: 'proj_1', projectName: 'noah-notes', key: TEST_KEY } };
+      if (url.endsWith('/v1/cloud/whoami'))
+        return { body: { projectId: 'proj_1', projectName: 'noah-notes', orgId: 'org_team' } };
+      return { body: { knownRunIds: [], stateHashes: {}, triage: [], cursor: '0:' } };
+    };
+    const signedIn = async (): Promise<void> => {
+      await writeFile(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'noah-notes' }));
+      await writeHomeFile(
+        [SESSION_FILE],
+        JSON.stringify({
+          token: 'noah-token',
+          orgName: "Noah's workspace",
+          orgId: 'org_noah',
+          url: TEST_URL,
+        }),
+      );
+    };
+
+    it('switches to the workspace named, and links there', async () => {
+      await signedIn();
+      const activated: string[] = [];
+      responder = stub(activated);
+      const code = await runCloudCommand(['connect', '--url', TEST_URL, '--workspace', 'Acme QA']);
+      expect(code).toBe(0);
+      expect(activated).toEqual(['org_team']);
+      expect(requests.find((r) => r.url.endsWith('/v1/keys'))?.authorization).toBe(
+        'Bearer team-token',
+      );
+      expect(stderrBuf).toContain('in workspace "Acme QA"');
+    });
+
+    it('says which workspace it links in, and how to choose another', async () => {
+      await signedIn();
+      responder = stub([]);
+      await runCloudCommand(['connect', '--url', TEST_URL]);
+      expect(stderrBuf).toContain('Acme QA');
+      expect(stderrBuf).toContain('--workspace');
+    });
+  });
+
   it('connect refuses to claim a cloud connection before init has marked the app', async () => {
     const code = await runCloudCommand(['connect', '--url', TEST_URL]);
 

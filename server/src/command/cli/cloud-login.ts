@@ -327,3 +327,65 @@ export function hudSignIn(
       });
   };
 }
+
+const WorkspacesSchema = z.object({
+  active: z.string().optional(),
+  memberships: z.array(z.object({ orgId: z.string(), name: z.string() })).default([]),
+});
+const ActivatedSchema = z.object({
+  token: z.string(),
+  org: z.object({ id: z.string(), name: z.string() }),
+});
+
+/**
+ * The workspace `connect` links in. A person in several was linked in whichever the saved sign-in
+ * was for, told "Connected", and nothing moved on the dashboard they were looking at. `--workspace
+ * <name|id>` switches the sign-in (and saves it); without it, a person in more than one is told which
+ * one this is and how to choose. Returns non-zero when the named workspace is not theirs.
+ */
+export const chooseWorkspace = async (url: string, wanted: string | undefined): Promise<number> => {
+  const session = await readSession();
+  if (null === session) return 0;
+  let listed: z.infer<typeof WorkspacesSchema>;
+  try {
+    listed = WorkspacesSchema.parse(await api('GET', `${url}/v1/me/workspaces`, session.token));
+  } catch {
+    return 0; // an older platform: nothing to choose between
+  }
+  const names = listed.memberships.map((m) => `"${m.name}"`).join(', ');
+  if (wanted === undefined) {
+    if (1 < listed.memberships.length)
+      hint(
+        `you belong to ${String(listed.memberships.length)} workspaces (${names}); this links in ` +
+          `"${session.orgName}". Another: reticle connect --workspace <name>`,
+      );
+    return 0;
+  }
+  const lc = wanted.toLowerCase();
+  const target = listed.memberships.find((m) => m.orgId === wanted || m.name.toLowerCase() === lc);
+  if (target === undefined) {
+    err(`you are not a member of a workspace "${wanted}": yours are ${names}`);
+    return 2;
+  }
+  if (target.orgId === listed.active) return 0;
+  const activated = ActivatedSchema.parse(
+    await api(
+      'POST',
+      `${url}/v1/me/workspaces/${encodeURIComponent(target.orgId)}/activate`,
+      session.token,
+      {},
+    ),
+  );
+  await writeSession(
+    url,
+    activated.token,
+    activated.org.name,
+    activated.org.id,
+    undefined,
+    () => Promise.resolve(0),
+    session.email,
+    false,
+  );
+  hint(`signed in to workspace "${activated.org.name}"`);
+  return 0;
+};
