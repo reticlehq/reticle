@@ -392,6 +392,8 @@ export const ACT_TOOLS: ToolDef[] = [
         observed: z.string().optional(),
         expected: z.string().optional(),
         assertion: z.string().optional(),
+        caseOnlyMiss: z.boolean().optional(),
+        wouldHold: z.string().optional(),
       }),
       trace: z
         .unknown()

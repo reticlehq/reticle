@@ -18,7 +18,7 @@
  * the full result; so does telemetry, which runs before this.
  */
 import { z } from 'zod';
-import { ReticleTool, asRecord } from '@reticlehq/core';
+import { ReticleTool, asRecord, predicateAliasesUsed } from '@reticlehq/core';
 
 /** The argument that asks for today's full envelope. */
 export const DETAIL_ARG = 'detail';
@@ -37,6 +37,26 @@ export const COMPACTED_TOOLS: ReadonlySet<string> = new Set([
 
 /** Short enough for the per-turn surface; the reasoning lives in this file and the instructions. */
 export const DETAIL_ARG_DESCRIPTION = '"full" adds every evidence field.';
+
+/** Where the aliases a predicate was normalised from are named. */
+export const NORMALIZED_KEY = 'normalized';
+
+/**
+ * The aliases the call's predicates were written in (`until`/`predicate`, and each step's `expect`).
+ * The parse accepted them silently; this says so, so the canonical spelling is learned once.
+ */
+function aliasesWritten(args: Record<string, unknown>): string[] {
+  const used = [...predicateAliasesUsed(args['until']), ...predicateAliasesUsed(args['predicate'])];
+  const steps = args['steps'];
+  if (Array.isArray(steps)) {
+    steps.forEach((step, i) => {
+      for (const alias of predicateAliasesUsed(asRecord(step)['expect'])) {
+        used.push(`step ${String(i)}: ${alias}`);
+      }
+    });
+  }
+  return used;
+}
 
 /** The key the one-line "what changed" summary travels under. */
 export const CHANGED_KEY = 'changed';
@@ -281,9 +301,11 @@ export function shapeForAgent(
   agentCall: boolean,
 ): unknown {
   if (!agentCall || !COMPACTED_TOOLS.has(tool) || !isRecord(result)) return result;
-  if (Detail.FULL === args[DETAIL_ARG]) return result;
-  if (Array.isArray(result['steps'])) return compactSequence(result);
-  return 'verified' in result ? compactVerdict(result) : result;
+  const normalized = aliasesWritten(args);
+  const noted = 0 === normalized.length ? result : { ...result, [NORMALIZED_KEY]: normalized };
+  if (Detail.FULL === args[DETAIL_ARG]) return noted;
+  if (Array.isArray(noted['steps'])) return compactSequence(noted);
+  return 'verified' in noted ? compactVerdict(noted) : noted;
 }
 
 /**
@@ -314,6 +336,9 @@ export function withCompactEnvelope<
               [CHANGED_KEY]: z.string().optional(),
               ref: z.string().optional(),
               source: z.string().optional(),
+              [NORMALIZED_KEY]: z.array(z.string()).optional(),
+              caseOnlyMiss: z.boolean().optional(),
+              wouldHold: z.string().optional(),
               ...output,
             },
           }),

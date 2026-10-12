@@ -367,3 +367,32 @@ describe('compact envelope: decisive-evidence contract', () => {
     ]);
   });
 });
+
+describe('forgiving parse, strict verdict: the result names the aliases it normalised', () => {
+  it('adds `normalized` for an aliased until, in compact and full alike, and never changes the verdict', () => {
+    const full = { verified: 'no', because: 'b', verdict: { pass: false }, since: 1 };
+    const args = { until: { kind: 'route', pathContains: '/settings' } };
+    const compact = shapeForAgent(ReticleTool.ACT_AND_WAIT, args, full, true) as Record<
+      string,
+      unknown
+    >;
+    expect(compact['normalized']).toEqual(['route.pathContains → contains']);
+    expect(compact['verified']).toBe('no');
+    const asFull = shapeForAgent(
+      ReticleTool.ACT_AND_WAIT,
+      { ...args, detail: 'full' },
+      full,
+      true,
+    ) as Record<string, unknown>;
+    expect(asFull['normalized']).toEqual(['route.pathContains → contains']);
+  });
+  it('names step expects by index', () => {
+    const out = shapeForAgent(
+      ReticleTool.ACT,
+      { steps: [{ ref: 'e1', action: 'click', expect: { type: 'signal', name: 'x' } }] },
+      { verified: 'yes', because: 'b', steps: [] },
+      true,
+    ) as Record<string, unknown>;
+    expect(out['normalized']).toEqual(['step 0: type → kind']);
+  });
+});
