@@ -88,7 +88,7 @@ export function latestRecordedFlow(
 }
 
 export { flowErrorMessage } from './flow-result.js';
-import { flowErrorMessage } from './flow-result.js';
+import { flowErrorMessage, noteReplayCheck } from './flow-result.js';
 
 /** Replay statuses that represent an actual recorded run in project.json. */
 type RecordedReplayStatus = Exclude<ReplayStatus, typeof ReplayStatus.UNVERIFIABLE>;
@@ -892,13 +892,12 @@ export async function replayNamedFlow(
   const result: FlowReplayResult = { name, status, steps };
   if (halted !== undefined) result.halted = halted;
   if (knows !== undefined) result.knows = knows;
-  // A green that cannot go red is not a pass. `reticle_flow_verify` already refuses to count these,
-  // via this same function -- a single-flow caller saw a bare `ok` and had no way to learn the flow
-  // asserts nothing. Derived from the same helper on purpose: two copies of this judgement would
-  // drift, and the sibling tools would then disagree about the same flow.
+  // A green that cannot go red is not a pass: the same judgement `reticle_flow_verify` makes.
   const cannotFail =
     status === ReplayStatus.OK ? unverifiableReason(loaded.value, invokedFlows) : undefined;
   if (cannotFail !== undefined) result.unverifiable = { reason: cannotFail };
+  // One check of the session that ran it, so its end does not say "nothing was checked".
+  noteReplayCheck(session, name, status, cannotFail !== undefined);
   if (status !== ReplayStatus.OK)
     result.decision = buildDecision(result, loaded.value, intentSaid, invokedFlows);
   applyStartPathHint(result, startPathHint);
