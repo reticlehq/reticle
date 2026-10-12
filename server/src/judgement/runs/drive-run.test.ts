@@ -51,6 +51,11 @@ describe('a drive folded into a run', () => {
     expect(run?.checks[0]?.predicate).toBe('the row disappears');
   });
 
+  it('keeps the action each check came from, so its screenshot can find it', () => {
+    const run = driveRunFrom([action(Verified.YES, 'the row disappears', 41)], DEPS);
+    expect(run?.checks[0]?.actionId).toBe('c41');
+  });
+
   it('turns a disproved verdict into a failing check, and the run verdict follows', () => {
     const run = driveRunFrom([action(Verified.NO)], DEPS);
     expect(run?.checks[0]?.status).toBe(Verified.NO);

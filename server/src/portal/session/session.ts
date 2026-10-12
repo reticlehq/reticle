@@ -159,8 +159,9 @@ export class Session implements HandshakeFacts {
   readonly #live = new LiveControl();
   /** Human review marks: mistakes the human pinned to elements, for the agent to drain and fix. */
   readonly #review = new ReviewStore((marks) => recordNotes(this.artifactRoot, marks));
-  /** Whether the session_lease has already been returned (fire-once per session). */
-  #firstCommandDone = false;
+  #firstCommandDone = false; // whether the session_lease has been returned (fire-once)
+  /** The newest journal action: a verdict's screenshot names it, so the run pairs it with its check. */
+  lastActionId: string | undefined;
   /** Durable causal-journal recorder; undefined when journaling is off (opt-out or not yet attached). */
   #journal: JournalRecorder | undefined;
   #activeActionId: string | undefined; // action window, held independently of the journal
@@ -496,10 +497,7 @@ export class Session implements HandshakeFacts {
     return readJournalWriteLoss(this.#journalReader, this.#buffer);
   }
 
-  /**
-   * Open an action-attribution window: events observed until finishAction attribute to the returned
-   * action id. Ids are minted independently of command correlation ids so the journal is self-contained.
-   */
+  /** Open an attribution window: events until finishAction carry the returned (journal-own) id. */
   beginAction(tool: string, args: Record<string, unknown>): string {
     const actionId = this.#mintActionId();
     // Held here, not only in the journal: with the journal off every event was unattributed, and
@@ -521,7 +519,8 @@ export class Session implements HandshakeFacts {
 
   #mintActionId(): string {
     this.#actionSeq += 1;
-    return `${ACTION_ID_PREFIX}${String(this.#actionSeq)}`;
+    this.lastActionId = `${ACTION_ID_PREFIX}${String(this.#actionSeq)}`;
+    return this.lastActionId;
   }
 
   /**

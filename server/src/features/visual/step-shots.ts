@@ -212,6 +212,8 @@ async function shoot(
   { step, verdict }: ShotOptions,
 ): Promise<ScreenshotField> {
   const root = session.artifactRoot ?? deps.reticleRoot;
+  // Read before anything is awaited: the action this call's verdict was recorded on.
+  const actionId = true === verdict ? session.lastActionId : undefined;
   const runId = runIdFor(session.id);
   if (!isValidRunId(runId)) return { error: `no screenshot: unusable run id ${runId}` };
   const dir = stepShotDir(root, runId);
@@ -247,6 +249,7 @@ async function shoot(
         tool,
         ...(step === undefined ? {} : { step: step.slice(0, UPLOAD_TEXT_MAX) }),
         ...(true === verdict ? { verdict } : {}),
+        ...(actionId === undefined ? {} : { actionId }),
         source: pixels.source,
         width: pixels.width,
         height: pixels.height,

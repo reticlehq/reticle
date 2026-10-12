@@ -124,6 +124,17 @@ describe('takeStepShot', () => {
     ]);
   });
 
+  it("names the action a verdict's picture was taken for, so the run can pair it", async () => {
+    const { deps, root, sessionId } = await setup({ render: rendered(fakeJpeg(8, 6)) });
+    Object.assign(deps.sessions.resolve(sessionId), { lastActionId: 'a7' });
+
+    await takeStepShot(deps, sessionId, 'reticle_assert', { verdict: true });
+    await shotsLanded(root, `drive-${sessionId}`);
+
+    const [shot] = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    expect(shot).toMatchObject({ verdict: true, actionId: 'a7' });
+  });
+
   it('takes a real browser screenshot when the tab has one, and numbers each step', async () => {
     const { deps, root, sessionId } = await setup({
       browser: () => fakeJpeg(1280, 720),

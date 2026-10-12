@@ -297,6 +297,8 @@ export const RunScreenshotSchema = StepScreenshotSchema.extend({
   verdict: z.boolean().optional(),
   /** The check this picture is of (see `RunCheck.checkId`), when it could be paired with one. */
   checkId: z.string().optional(),
+  /** The journal action it was taken for: how a run pairs it with its check (`RunCheck.actionId`). */
+  actionId: z.string().optional(),
 });
 export type RunScreenshot = z.infer<typeof RunScreenshotSchema>;
 
@@ -411,6 +413,8 @@ export const RunCheckSchema = z.object({
   reason: z.string().optional(),
   /** This check's own name, so a later verdict can cite it. See revision.ts. */
   checkId: z.string().optional(),
+  /** The journal action that produced it, kept on this machine to pair it with its screenshot. */
+  actionId: z.string().optional(),
   /** What the page looked like when this check was decided. */
   screenshot: StepScreenshotSchema.optional(),
   /**

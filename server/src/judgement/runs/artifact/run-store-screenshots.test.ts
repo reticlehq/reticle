@@ -54,4 +54,25 @@ describe('withScreenshots', () => {
     expect(out.screenshots?.[0]?.checkId).toBeUndefined();
     expect(out.checks.every((c) => c.screenshot === undefined)).toBe(true);
   });
+
+  /*
+   * A check from `reticle_act{steps}` or an answer refused as an error took no verdict picture, so the
+   * counts disagreed and the whole run went unpaired: the issue on the dashboard had no screenshot.
+   * Each picture names the journal action it was taken for, and so does each check.
+   */
+  it('pairs by the action each was taken for, even when the counts disagree', () => {
+    const base = run(3);
+    const checks = base.checks.map((c, i) => ({ ...c, actionId: `a${String(i + 1)}` }));
+    const out = withScreenshots({ ...base, checks }, [
+      shot(1, { verdict: true, actionId: 'a1' }),
+      shot(2, { verdict: true, actionId: 'a3' }),
+    ]);
+
+    expect(out.checks.map((c) => c.screenshot?.file)).toEqual([
+      '0001-x.jpg',
+      undefined,
+      '0002-x.jpg',
+    ]);
+    expect(out.screenshots?.map((s) => s.checkId)).toEqual(['c1', 'c3']);
+  });
 });

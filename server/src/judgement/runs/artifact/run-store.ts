@@ -303,6 +303,50 @@ function stepShotOf(shot: RunScreenshot): StepScreenshot {
   return { file, source, width, height, sha256 };
 }
 
+/** An id that occurs once in the list; a repeated one (a reload restarts the count) pairs nothing. */
+function uniqueIds(ids: readonly (string | undefined)[]): Set<string> {
+  const seen = new Map<string, number>();
+  for (const id of ids) if (id !== undefined) seen.set(id, (seen.get(id) ?? 0) + 1);
+  return new Set([...seen].filter(([, n]) => 1 === n).map(([id]) => id));
+}
+
+/**
+ * Pair by the journal action each was taken for, when both sides name it. A check that took no
+ * picture (a `steps` call, an answer refused as an error) then costs only its own picture, where the
+ * ordinal pairing below lost every picture in the run.
+ */
+function pairByAction(
+  run: ReticleVerificationRun,
+  shots: readonly RunScreenshot[],
+): { checks: ReticleVerificationRun['checks']; shots: RunScreenshot[] } | undefined {
+  const verdictShots = shots.filter((shot) => true === shot.verdict && shot.actionId !== undefined);
+  if (0 === verdictShots.length || run.checks.every((check) => check.actionId === undefined))
+    return undefined;
+  const okChecks = uniqueIds(run.checks.map((check) => check.actionId));
+  const okShots = uniqueIds(verdictShots.map((shot) => shot.actionId));
+  const shotOf = new Map(
+    verdictShots.flatMap((shot) =>
+      shot.actionId !== undefined && okShots.has(shot.actionId) && okChecks.has(shot.actionId)
+        ? [[shot.actionId, shot] as const]
+        : [],
+    ),
+  );
+  const checkIdOf = new Map<RunScreenshot, string>();
+  const checks = run.checks.map((check) => {
+    const shot = check.actionId === undefined ? undefined : shotOf.get(check.actionId);
+    if (shot === undefined) return check;
+    if (check.checkId !== undefined) checkIdOf.set(shot, check.checkId);
+    return { ...check, screenshot: stepShotOf(shot) };
+  });
+  return {
+    checks,
+    shots: shots.map((shot) => {
+      const checkId = checkIdOf.get(shot);
+      return checkId === undefined ? shot : { ...shot, checkId };
+    }),
+  };
+}
+
 /**
  * Pair each verdict's picture with the check it produced: the n-th verdict picture is the n-th check,
  * because both are written in the order the verdicts were given. Only when the counts agree — a
@@ -313,6 +357,8 @@ function pairWithChecks(
   run: ReticleVerificationRun,
   shots: readonly RunScreenshot[],
 ): { checks: ReticleVerificationRun['checks']; shots: RunScreenshot[] } {
+  const byAction = pairByAction(run, shots);
+  if (byAction !== undefined) return byAction;
   const verdictShots = shots.filter((shot) => true === shot.verdict);
   if (
     0 === verdictShots.length ||

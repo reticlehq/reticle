@@ -91,11 +91,13 @@ export function checkWords(verdict: { expected?: string; observed?: string }): {
 }
 
 /** Every verdict a verification tool recorded on this session's actions, in order. */
-function verdicts(actions: readonly JournalAction[]): JournalVerdictEffect[] {
-  const out: JournalVerdictEffect[] = [];
+function verdicts(
+  actions: readonly JournalAction[],
+): (JournalVerdictEffect & { actionId: string })[] {
+  const out: (JournalVerdictEffect & { actionId: string })[] = [];
   for (const action of actions) {
     const parsed = JournalVerdictEffectSchema.safeParse(action.effect);
-    if (parsed.success) out.push(parsed.data);
+    if (parsed.success) out.push({ ...parsed.data, actionId: action.actionId });
   }
   return out;
 }
@@ -216,6 +218,7 @@ export function driveRunFrom(
     checks.push({
       predicate: verdict.claim,
       status: verdict.verified,
+      actionId: verdict.actionId,
       ...(verdict.source === undefined ? {} : { evidence: { source: verdict.source } }),
       // What it required and what it saw, so a failed check can say both on the platform.
       ...(verdict.expected === undefined ? {} : { expected: verdict.expected }),
