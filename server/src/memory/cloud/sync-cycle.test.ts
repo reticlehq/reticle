@@ -570,6 +570,31 @@ describe('it sends only the difference', () => {
     expect(report.derivedSent).toEqual(['impact']);
   });
 
+  /*
+   * A re-drive: an idle daemon logged "sent impact" every 5 s. The platform answered `accepted` and
+   * then reported a hash of its own form of the record, never ours, so every cycle offered it again,
+   * and a cycle that moved something comes round sooner. What it accepted is remembered here.
+   */
+  it('does not offer again a record the platform accepted, whatever hash it reports', async () => {
+    const first = await cycle(
+      {
+        status: { stateHashes: { impact: 'their-own-hash' } },
+        sync: { state: { impact: 'accepted' } },
+      },
+      source({ derived: (kind) => ('impact' === kind ? IMPACT : undefined) }),
+    );
+    expect(first.report.derivedSent).toEqual(['impact']);
+    const again = await cycle(
+      {
+        status: { stateHashes: { impact: 'their-own-hash' } },
+        sync: { state: { impact: 'accepted' } },
+      },
+      source({ derived: (kind) => ('impact' === kind ? IMPACT : undefined) }),
+      first.written.state ?? {},
+    );
+    expect(again.report.derivedSent).toEqual([]);
+  });
+
   it('sends a record the server has never seen', async () => {
     const { report } = await cycle(
       { status: { stateHashes: { impact: null } }, sync: { state: { impact: 'accepted' } } },

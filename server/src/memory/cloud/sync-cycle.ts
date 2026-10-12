@@ -142,6 +142,11 @@ export interface CloudSyncState extends ScreenshotSyncState {
   sentFlowsHash?: string;
   sentCapsulesHash?: string;
   /**
+   * The hash of each derived record the platform last ACCEPTED from here. A platform that reports
+   * a hash of its own form of a record never matches ours, so the same record went every cycle.
+   */
+  sentDerivedHashes?: Record<string, string>;
+  /**
    * The link everything above was kept for: cloud, workspace and project (`credentialSlot`). A
    * folder re-linked elsewhere starts a fresh record, so the new link gets the flows the old one
    * already had, and none of the old link's runs.
@@ -521,8 +526,12 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
         unsupported.push(kind);
         continue;
       }
-      // The one comparison the whole protocol rests on. Same hash, do not send it.
-      if (hashPayload(payload) === hashes[kind]) continue;
+      // The one comparison the whole protocol rests on. Same hash, do not send it: the platform's,
+      // or the one it accepted from here while it still holds the record (a null means it does not).
+      const hash = hashPayload(payload);
+      if (hash === hashes[kind]) continue;
+      if ('string' === typeof hashes[kind] && hash === deps.state.sentDerivedHashes?.[kind])
+        continue;
       bundle[kind] = payload;
       derivedOffered.push(kind);
     }
@@ -679,8 +688,13 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
       const state = isRecord(answer['state']) ? answer['state'] : {};
       for (const kind of derivedOffered) {
         const verdict = state[kind];
-        if ('accepted' === verdict) derivedSent.push(kind);
-        else if ('string' === typeof verdict)
+        if ('accepted' === verdict) {
+          derivedSent.push(kind);
+          nextState.sentDerivedHashes = {
+            ...nextState.sentDerivedHashes,
+            [kind]: hashPayload(bundle[kind]),
+          };
+        } else if ('string' === typeof verdict)
           refused.push({ part: kind, reason: `${kind}: ${verdict}` });
       }
     }
