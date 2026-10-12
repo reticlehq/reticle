@@ -44,7 +44,7 @@ import {
 import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource, stampedSourceIn } from './assert-source.js';
 import { VerdictAttribution, verdictAttributionOf } from '@reticlehq/core';
-import { noteSourceSeen, sourceMappingSeen } from '@/portal/session/recorded-gaps.js';
+import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
 
 /**
  * The honesty verdict for a plain `reticle_assert`.
@@ -288,8 +288,6 @@ export async function assertVerdict(
     // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
     // right fix. `false` from the page is the only value that means anything; absent is unknown.
     ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
-    // The page already stamps file:line, so a red that located nothing is a locator miss.
-    sourceMappingSeen: true === session.sourceMapping || sourceMappingSeen(session),
     domMutated: false,
     signalsFired: 0,
   });

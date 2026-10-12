@@ -122,18 +122,6 @@ describe('a failing assert reads its own evidence before claiming no source mapp
     expect(missing()).toBe('nothing this verdict located carries a source mapping');
     expect(missing('e4')).toBe('the control that was driven carries no source mapping');
   });
-
-  // On a page that already stamps file:line, a red that located nothing is a locator miss: telling
-  // the reader to install the build plugin sends them at one that works.
-  it('lists no gap on a page that announced source mapping', async () => {
-    const deps = depsFor([button('Save')]);
-    const session = deps.sessions.resolve(undefined) as unknown as { sourceMapping?: boolean };
-    Object.defineProperty(session, 'sourceMapping', { value: true, configurable: true });
-    const result = (await tool(ReticleTool.ASSERT).handler(deps, wrongName)) as {
-      instrumentationGaps?: { kind?: string }[];
-    };
-    expect((result.instrumentationGaps ?? []).map((g) => g.kind)).not.toContain(NO_SOURCE_MAPPING);
-  });
 });
 
 describe('stampedSourceIn', () => {
