@@ -8,7 +8,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, posix } from 'node:path';
 
 /** What `codesign -dv` says about one binary. */
 export interface Signature {
@@ -106,7 +106,8 @@ export function keychainNoteFor(probe: SigningProbe): string | undefined {
   const installed = app.installed === undefined ? undefined : codesign(app.installed);
   // Every build on disk, debug and release: a person with only a release build heard nothing.
   for (const build of [app.build, ...app.release]) {
-    const note = signingNote(codesign(join(probe.dir ?? process.cwd(), build)), installed);
+    // macOS only, so a POSIX path on every host the unit test runs on.
+    const note = signingNote(codesign(posix.join(probe.dir ?? process.cwd(), build)), installed);
     if (note !== undefined) return note;
   }
   return undefined;
