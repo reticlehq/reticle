@@ -84,6 +84,8 @@ jobs:
         shell: powershell
         env: { RETICLE_TELEMETRY: '0' }
         run: |
+          # The installer writes progress to stderr on purpose; under 'Stop' a native stderr line throws.
+          $ErrorActionPreference = 'Continue'
           $out = powershell -NoProfile -ExecutionPolicy Bypass -File install\install.ps1 2>&1 | Out-String
           $rc = $LASTEXITCODE
           Write-Host $out
@@ -93,6 +95,8 @@ jobs:
         shell: pwsh
         env: { RETICLE_TELEMETRY: '0' }
         run: |
+          # The installer writes progress to stderr on purpose; under 'Stop' a native stderr line throws.
+          $ErrorActionPreference = 'Continue'
           $out = pwsh -NoProfile -File install\install.ps1 2>&1 | Out-String
           $rc = $LASTEXITCODE
           Write-Host $out
