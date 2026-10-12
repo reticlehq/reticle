@@ -14,7 +14,14 @@ import { z } from 'zod';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
 import { compileSequenceStep, pathOf } from '@/language/flows/replay.js';
 import { sequenceStepArgs } from './act/act-preflight.js';
-import { ReticleTool } from '@reticlehq/core';
+import {
+  REPLAY_PROGRAM_VERSION,
+  ReticleTool,
+  Verified,
+  VerifiedReason,
+  type JournalVerdictEffect,
+} from '@reticlehq/core';
+import type { RecordedStep } from '@/language/flows/recording/tape/recordings.js';
 import { healthEnvelope } from '@/portal/session/session-health.js';
 import {
   pausedShortCircuit,
@@ -31,10 +38,12 @@ import { actCommand } from './act-tools.js';
 import {
   PredicateSchema,
   waitForPredicate,
+  type Predicate,
 } from '@reticlehq/engine/question/predicate/predicate.js';
 import {
   DeviationMode,
   gradeSequence,
+  JOURNEY_RECORDING,
   offerToKeep,
   type StepExpectation,
 } from './act/sequence-grade.js';
@@ -43,6 +52,10 @@ import type { Session } from '@/portal/session/session.js';
 // resolveActTarget moved out of act-tools into its own module on this branch; #706 was written
 // against the older layout where act-tools re-exported it.
 import { resolveActTarget } from './act/act-target.js';
+import { gradeOfPredicate } from './assert/assert-grade.js';
+import { describeWaitTarget } from '@reticlehq/engine/evidence/unsettled.js';
+import { sourceOf } from './tools-helpers.js';
+import { confirmedByDeclaration } from './act/act-danger.js';
 
 /**
  * The step's effect record, best-effort.
@@ -58,6 +71,61 @@ function effectOf(session: Session, since: number): StepEffect {
     return stepEffect(session.eventsSince(since), { since, until: session.elapsed() });
   } catch {
     return {};
+  }
+}
+
+/**
+ * A journey step's declared consequence, as the check the session journal keeps.
+ *
+ * `reticle_act { steps }` graded every `expect` and journaled none of them: the journal action for
+ * the whole journey carried no verdict effect, so `reticle_session { end }` folded "nothing was
+ * checked", and no run reached `.reticle/runs/` or the dashboard — a failed check lost from the
+ * record on the path the instructions call the default. Each evaluated `expect` is now one check,
+ * written in the same shape `reticle_act_and_wait` writes, so every fold reads it the same way.
+ */
+interface StepCheck {
+  readonly expect: Predicate;
+  readonly held: boolean;
+  /** The page went away (or the predicate could not be read) before the consequence was decided. */
+  readonly undecided: boolean;
+  /** Deciding contradiction kinds seen in the step's window. */
+  readonly contradicted: readonly string[];
+  readonly expected?: string | undefined;
+  readonly observed?: string | undefined;
+  /** The step result's `source`, as the browser reported it. */
+  readonly source?: unknown;
+}
+
+/** The verdict effect for one step: the same rules act_and_wait applies to one action. */
+function stepVerdictEffect(check: StepCheck): JournalVerdictEffect {
+  const { verified, reason } = check.held
+    ? 0 < check.contradicted.length
+      ? { verified: Verified.NO, reason: VerifiedReason.CONTRADICTED }
+      : { verified: Verified.YES, reason: undefined }
+    : check.undecided
+      ? { verified: Verified.UNKNOWN, reason: VerifiedReason.OBSERVATION_LOST }
+      : { verified: Verified.NO, reason: VerifiedReason.ASSERTION_FAILED };
+  const source = sourceOf(check.source);
+  return {
+    claim: describeWaitTarget(check.expect),
+    verified,
+    ...(source === undefined ? {} : { source: `${source.file}:${String(source.line)}` }),
+    ...(check.expected === undefined ? {} : { expected: check.expected }),
+    ...(check.observed === undefined ? {} : { observed: check.observed }),
+    // Named in the step before the step ran — a check, not a rationalisation.
+    declaredBeforeActing: true,
+    grade: gradeOfPredicate(check.expect),
+    kind: check.expect.kind,
+    ...(reason === undefined ? {} : { reason }),
+  };
+}
+
+/** One step's check, journaled best-effort: the record must never fail the drive it records. */
+function journalStep(session: Session, args: Record<string, unknown>, effect: unknown): void {
+  try {
+    session.recordAction(ReticleTool.ACT_SEQUENCE, args, effect);
+  } catch {
+    // ponytail: a session without a journal (a test double, journaling off) keeps no check.
   }
 }
 
@@ -220,10 +288,16 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
                   // race rAF and return early anyway — a budget is a CEILING, not a floor, which is
                   // why an earlier attempt to pace with `settleMs` alone produced a 12ms step and
                   // no race at all.
-                  args:
-                    burstGapMs === undefined
-                      ? sequenceStepArgs(step)
-                      : { ...sequenceStepArgs(step), settleMs: 0 },
+                  // A step that names its dangerous control and declares its consequence is
+                  // confirmed by that declaration, as act_and_wait is — see confirmedByDeclaration.
+                  args: ((stepArgs) =>
+                    burstGapMs === undefined ? stepArgs : { ...stepArgs, settleMs: 0 })(
+                    confirmedByDeclaration(
+                      sequenceStepArgs(step),
+                      step['target'],
+                      step['expect'] !== undefined,
+                    ),
+                  ),
                 },
                 perStepTimeout,
               );
@@ -288,12 +362,34 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           } else {
             const verdict = await waitForPredicate(session, parsed.data, perStepTimeout, stepSince);
             const held = true === verdict.pass;
+            // A tab that went away (an external checkout page) or a predicate that could not be
+            // read decided nothing: unknown, never a miss blamed on the app.
+            const undecided =
+              !held && (true === verdict.observationLost || verdict.inconclusive !== undefined);
+            // One check per declared step, journaled as act_and_wait journals its own, so the
+            // session's result, its run file and the dashboard all count it. See sequence-journal.ts.
+            journalStep(
+              session,
+              { step: i, expect: step['expect'] },
+              stepVerdictEffect({
+                expect: parsed.data,
+                held,
+                undecided,
+                contradicted,
+                expected: verdict.expected,
+                observed: held ? undefined : (verdict.observed ?? verdict.failureReason),
+                source: asRecord(outcome.result)['source'],
+              }),
+            );
             expectations.push({
               declared: true,
               held,
-              ...(true === verdict.observationLost
+              ...(undecided
                 ? {
-                    undecided: `${verdict.failureReason ?? 'the observation was lost'} (the page left)`,
+                    undecided:
+                      true === verdict.observationLost
+                        ? `${verdict.failureReason ?? 'the observation was lost'} (the page left)`
+                        : (verdict.failureReason ?? 'the predicate could not be read'),
                   }
                 : {}),
               ...disagreement,
@@ -346,6 +442,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
       }
       // Same as captureAct: no `active()` gate, so a sequence driven with nothing open still lands
       // in the ambient tape. A stalled plan is still excluded — those steps never ran.
+      let journey: RecordedStep | undefined;
       if (stalledAt === undefined) {
         // A sub-step keeps its `expect` only if it held — same rule as act_and_wait, so a flow
         // never replays an expectation that was never once observed to hold.
@@ -361,6 +458,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             steps: stepResults,
           },
         );
+        journey = recorded;
         deps.recordings.capture(
           pageBefore === undefined ? recorded : { ...recorded, page: pageBefore },
           undefined,
@@ -379,6 +477,17 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
         planned: inputSteps.length,
         dispatched: completed > 0,
       });
+      // The journey a `keep` offer names, held as a stopped recording so `reticle_flow_save
+      // { flowName: JOURNEY_RECORDING, saveAs }` saves exactly what was just driven. The offer used
+      // to name a save that refused with no recording, a dead end that cost a round trip.
+      if (journey !== undefined && offerToKeep(grade) !== undefined) {
+        deps.recordings.saveCompiled({
+          name: JOURNEY_RECORDING,
+          version: REPLAY_PROGRAM_VERSION,
+          steps: [journey],
+          ...(pageBefore === undefined ? {} : { startPath: pageBefore }),
+        });
+      }
       const ran = stoppedAt ?? stalledAt ?? inputSteps.length;
       const tail = inputSteps.slice(ran + (stoppedAt === undefined ? 0 : 1));
       return withControl(session, {

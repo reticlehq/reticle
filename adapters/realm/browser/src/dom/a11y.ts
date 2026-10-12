@@ -382,7 +382,9 @@ export function isSensitiveField(el: Element): boolean {
 
 export function getValue(el: Element): string | undefined {
   if (isInput(el) || isTextArea(el) || isSelect(el)) {
-    if (isSensitiveField(el)) return REDACTED_VALUE;
+    // An EMPTY secret field reads empty: `[REDACTED]` there said "has a value" about a field
+    // nobody had typed into. Emptiness discloses nothing a screenshot would not.
+    if (isSensitiveField(el)) return '' === el.value ? '' : REDACTED_VALUE;
     return el.value;
   }
   const valueNow = el.getAttribute('aria-valuenow');

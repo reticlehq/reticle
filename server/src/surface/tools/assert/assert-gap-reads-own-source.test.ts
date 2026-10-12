@@ -7,7 +7,8 @@
  * locator was wrong. Agents went and reinstalled it.
  */
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { forgetAllRecordedGaps } from '@/portal/session/recorded-gaps.js';
 import { type CommandResult, type ReticleEvent } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { LastAct } from '@/portal/session/last-act.js';
@@ -16,6 +17,7 @@ import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import { createFakeSession } from '@/portal/session/fake-session.js';
 import { stampedSourceIn } from './assert-source.js';
+import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
 
 const NO_SOURCE_MAPPING = 'no-source-mapping';
 
@@ -86,6 +88,11 @@ async function gapKinds(nearMiss: readonly Record<string, unknown>[]): Promise<s
 }
 
 describe('a failing assert reads its own evidence before claiming no source mapping', () => {
+  // What one test's page showed (a stamped near miss) is remembered for the app: start clean.
+  beforeEach(() => {
+    forgetAllRecordedGaps();
+  });
+
   it('lists no no-source-mapping gap when its near miss carries a source', async () => {
     const kinds = await gapKinds([button('Save', 'src/Toolbar.tsx:12')]);
 
@@ -96,6 +103,24 @@ describe('a failing assert reads its own evidence before claiming no source mapp
     const kinds = await gapKinds([button('Save')]);
 
     expect(kinds).toContain(NO_SOURCE_MAPPING);
+  });
+
+  // An assertion drives nothing, so "the control that was driven" described a call that never
+  // happened (reported from a live re-drive).
+  it('does not speak of a driven control when nothing was driven', () => {
+    const facts = {
+      pass: false,
+      stateAsked: false,
+      stateUnwatched: false,
+      domMutated: false,
+      signalsFired: 0,
+    };
+    const missing = (ref?: string): string | undefined =>
+      gapsForAction({ ...facts, ...(ref === undefined ? {} : { ref }) }).find(
+        (g) => NO_SOURCE_MAPPING === g.kind,
+      )?.missing;
+    expect(missing()).toBe('nothing this verdict located carries a source mapping');
+    expect(missing('e4')).toBe('the control that was driven carries no source mapping');
   });
 });
 

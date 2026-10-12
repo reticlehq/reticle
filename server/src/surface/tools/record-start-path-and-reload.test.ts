@@ -170,3 +170,20 @@ describe('a recording that crossed a full-page load', () => {
     expect(out.warning ?? '').not.toMatch(/full-page load/);
   });
 });
+
+/** `name` is the spelling every other naming argument uses; accepted for `recordingName`, and said. */
+describe('naming a recording `name`', () => {
+  it('starts and stops under the name given, and names the normalisation', async () => {
+    const recordings = new RecordingStore();
+    const session = { id: 's1', url: LEASED, elapsed: () => 100, eventsSince: () => [] };
+    const started = (await tool(ReticleTool.RECORD_START).handler(deps(session, recordings), {
+      name: 'trip',
+    })) as Record<string, unknown>;
+    expect(started['recordingName']).toBe('trip');
+    expect(started['normalized']).toEqual(['name → recordingName']);
+    const stopped = (await tool(ReticleTool.RECORD_STOP).handler(deps(session, recordings), {
+      name: 'trip',
+    })) as Record<string, unknown>;
+    expect(stopped['recordingName']).toBe('trip');
+  });
+});

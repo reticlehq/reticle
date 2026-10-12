@@ -25,3 +25,17 @@ export function aliasParam(
   }
   return args;
 }
+
+/**
+ * The alias a call used for `canonical`, named the way a verdict tool names a normalised predicate
+ * (`normalized: ["name → flowName"]`): accepted, and said, so the agent learns the real spelling.
+ */
+export function aliasUsed(
+  args: Record<string, unknown>,
+  canonical: string,
+  aliases: readonly string[],
+): string[] {
+  if (args[canonical] !== undefined) return [];
+  const alias = aliases.find((name) => args[name] !== undefined);
+  return alias === undefined ? [] : [`${alias} → ${canonical}`];
+}

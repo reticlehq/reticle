@@ -383,8 +383,12 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * A run pairs each screenshot with its check by the journal action both came from (an optional
  * `actionId` on the core run schemas, which the page bundle carries with the rest of core): an
  * issue lost its picture whenever one check in the run took none. 266,660 B; ceiling 267,660.
+ *
+ * Re-drive gaps: the run artifact's optional `agentClaim` (core's schema, built at module scope in
+ * the barrel) and an empty secret field reading empty rather than `[REDACTED]`. Merged with the
+ * line above, both together: 267,263 B; ceiling 268,263.
  */
-const MAX_FIRST_LOAD_BYTES = 267_660;
+const MAX_FIRST_LOAD_BYTES = 268_263;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

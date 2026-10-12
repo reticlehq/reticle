@@ -29,7 +29,12 @@ import { type ProjectId, subjectOf, type JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { pruneWorkspace, type PruneWorkspaceOptions } from './on-disk/startup-maintenance.js';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
-import { agentEndCounts, driveRunId, driveRunsFrom } from '@/judgement/runs/drive-run.js';
+import {
+  agentEndClaims,
+  agentEndCounts,
+  driveRunId,
+  driveRunsFrom,
+} from '@/judgement/runs/drive-run.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
 
 /**
@@ -315,6 +320,7 @@ export async function recordDriveRun(
     runId: driveRunId(session.id),
     // Each agent session in the tab, as `reticle_session {end}` cut them, is its own run.
     agentEnds: agentEndCounts(session.id),
+    agentClaims: agentEndClaims(session.id),
     ...(session.projectId === undefined ? {} : { projectId: session.projectId }),
     projectName: basename(dirname(root)),
   });

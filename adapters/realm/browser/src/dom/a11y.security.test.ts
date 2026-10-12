@@ -22,4 +22,13 @@ describe('sensitive form values', () => {
     const fields = [...document.querySelectorAll('input, textarea')];
     expect(fields.map(getValue)).toEqual([REDACTED_VALUE, REDACTED_VALUE]);
   });
+
+  it('reads an EMPTY password field as empty, not as a redacted value', () => {
+    document.body.innerHTML = '<label>Password <input type="password"></label>';
+    const input = document.querySelector('input') as HTMLInputElement;
+    expect(getValue(input)).toBe('');
+    expect(buildSnapshot().tree).not.toContain(REDACTED_VALUE);
+    input.value = 'typed';
+    expect(getValue(input)).toBe(REDACTED_VALUE);
+  });
 });

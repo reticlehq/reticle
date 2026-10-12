@@ -6,7 +6,7 @@ import {
   outwardActionOf,
   outwardRefusal,
 } from '@reticlehq/core';
-import { harnessOutwardAllowed } from '@/hooks/driven-by.js';
+import { currentDrivenBy, harnessOutwardAllowed } from '@/hooks/driven-by.js';
 import { asRecord, asString } from '@reticlehq/core';
 
 /**
@@ -100,4 +100,30 @@ export const NATIVE_INPUT_UNSUPPORTED =
 /** Refuse rather than silently drop a native-input request the act-then-wait path cannot honour. */
 export function assertNativeInputSupported(innerArgs: Record<string, unknown>): void {
   if (true === innerArgs[NATIVE_INPUT_ARG]) throw new Error(NATIVE_INPUT_UNSUPPORTED);
+}
+
+/**
+ * The agent's own declaration counts as the confirmation, for that one control.
+ *
+ * `reticle_act_and_wait { target: { role: "button", name: "Place order" }, until }` names the
+ * control by the very words the guard flags AND names the consequence before acting: asking again
+ * for `confirmDangerous` cost a round trip per step on a shop's ordinary path and protected nothing.
+ * A `ref` or `testid` does not count — neither says what the control does, and a stale ref is
+ * exactly how the wrong button gets pressed. A Harness call never takes this path: its outward
+ * guard decides alone.
+ */
+export function confirmedByDeclaration(
+  innerArgs: Record<string, unknown>,
+  target: unknown,
+  declared: boolean,
+): Record<string, unknown> {
+  if (!declared || true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG]) return innerArgs;
+  if (currentDrivenBy() !== undefined) return innerArgs;
+  const named = asRecord(target);
+  // The words must themselves be the dangerous ones: naming "Continue" on a button whose form posts
+  // to /delete-account consents to nothing, and the guard still reads the whole control.
+  const words = ['name', 'text', 'label'].map((key) => asString(named[key]) ?? '').join(' ');
+  return isDangerousActionText(words, asString(named['role']))
+    ? { ...innerArgs, [DANGEROUS_ACTION_CONFIRM_ARG]: true }
+    : innerArgs;
 }

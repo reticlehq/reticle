@@ -41,8 +41,9 @@ export interface StepExpectation {
    */
   contradicted?: readonly string[];
   /**
-   * Why this step could not be judged at all: its target was missing (nothing was acted on), or the
-   * page left the app and the observation went with it. Such a step is undecided, never a miss.
+   * Why this step could not be judged at all: its target was missing (nothing was acted on), the
+   * page left the app and the observation went with it, or the predicate could not be read. Such a
+   * step is undecided, never a miss — `unknown`, as act_and_wait says.
    */
   undecided?: string;
 }
@@ -196,12 +197,15 @@ export function gradeSequence(
  * two-of-twelve plan as a regression flow is a reasonable thing to do and a bad thing to do without
  * knowing it.
  */
+/** The stopped recording a proved journey is held under, so the `keep` offer can be taken. */
+export const JOURNEY_RECORDING = 'last-journey';
+
 export function offerToKeep(grade: SequenceGrade): string | undefined {
   if (grade.verified !== Verified.YES || 0 === grade.declared) return undefined;
   return (
     `this plan proved something (${String(grade.declared)} of ${String(grade.total)} steps declared a ` +
     'consequence and every one held) — keep it as a regression flow with ' +
-    'reticle_flow_save { saveAs: "<name>" }, and the steps that declared nothing will replay ' +
+    `reticle_flow_save { flowName: "${JOURNEY_RECORDING}", saveAs: "<name>" }, and the steps that declared nothing will replay ` +
     'without proving anything, exactly as they did here'
   );
 }

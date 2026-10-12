@@ -602,6 +602,11 @@ export const ReticleVerificationRunSchema = z.object({
    * Optional and additive; an older platform strips it and keeps the body.
    */
   disparity: z.array(RunDisparitySchema).optional(),
+  /**
+   * What the coding agent itself said the session showed (`reticle_session { end, claim }`), kept
+   * beside the graded `verdict` so claimed-vs-graded can be compared. Never read as the verdict.
+   */
+  agentClaim: z.nativeEnum(VerdictStatus).optional(),
 });
 export type ReticleVerificationRun = z.infer<typeof ReticleVerificationRunSchema>;
 

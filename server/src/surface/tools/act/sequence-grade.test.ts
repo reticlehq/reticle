@@ -114,6 +114,23 @@ describe('a journey is proved at its end, and a contradiction is a failure', () 
     expect(grade.verified).toBe(Verified.NO);
   });
 
+  it('is unknown, not no, when a step`s consequence could not be read (the page went away)', () => {
+    const grade = gradeSequence([
+      held(),
+      { declared: true, held: false, undecided: 'session disconnected (the page left)' },
+    ]);
+    expect(grade.verified).toBe(Verified.UNKNOWN);
+    expect(grade.because).toContain('session disconnected');
+  });
+
+  it('still says no when another step really missed', () => {
+    const grade = gradeSequence([
+      missed('nothing'),
+      { declared: true, held: false, undecided: 'the page left' },
+    ]);
+    expect(grade.verified).toBe(Verified.NO);
+  });
+
   it('is unknown when fewer steps ran than were planned', () => {
     const grade = gradeSequence([held()], { planned: 3, dispatched: true });
     expect(grade.verified).toBe(Verified.UNKNOWN);

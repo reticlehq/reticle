@@ -90,6 +90,7 @@ import {
 } from '@/portal/session/control-envelope.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
+import { confirmedByDeclaration } from './act/act-danger.js';
 import { dispatchAct, preflightAct } from './act/act-preflight.js';
 import { disabledTargetNote, followLostObservation, windowNet } from './act/act-observation.js';
 import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';
@@ -103,14 +104,8 @@ import { readAlreadyTrue } from './act/already-true.js';
 import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
 
 /**
- * The action vocabulary, derived from ActionType — never retyped.
- *
- * The description used to omit callable actions such as blur, upload and drag,
- * because a hand-copied list drifts the moment
- * someone adds an arm. Deriving both the schema and the prose from the enum makes that impossible.
- *
- * The handler already refused an unknown action with a good message; the schema now refuses it
- * one layer earlier, before any session is resolved or any work is done.
+ * The action vocabulary, derived from ActionType — never retyped: a hand-copied list once omitted
+ * blur, upload and drag. The schema refuses an unknown action before any session is resolved.
  */
 const ACTION_TYPE_VALUES = Object.values(ActionType);
 const actionTypeEnum = z.enum(ACTION_TYPE_VALUES as [string, ...string[]]);
@@ -497,10 +492,11 @@ export const ACT_TOOLS: ToolDef[] = [
       // Omitting `until` waits for the page to settle (idle) — the deterministic default vs a sleep.
       // `predicate` is what reticle_assert / reticle_wait_for call this — see alias-args.ts.
       const withUntil = aliasParam(args, 'until', ['predicate']);
-      const until =
-        withUntil['until'] !== undefined
-          ? parsePredicate(withUntil['until'])
-          : ({ kind: PredicateKind.SETTLED } as const);
+      // Declared: the consequence is named, which also confirms a named dangerous control.
+      const untilNamed = withUntil['until'] !== undefined;
+      const until = untilNamed
+        ? parsePredicate(withUntil['until'])
+        : ({ kind: PredicateKind.SETTLED } as const);
       // BEFORE the action. A body clause this session cannot answer would fail whatever the app
       // did, and on a drive that mutates state the action is not always repeatable. See #801(C).
       const bodyRefusal = bodyClauseRefusal(until, session);
@@ -556,7 +552,7 @@ export const ACT_TOOLS: ToolDef[] = [
           actCommand(deps, session, {
             ref: resolved.ref,
             action: args['action'],
-            args: args['args'] ?? {},
+            args: confirmedByDeclaration(asRecord(args['args']), args['target'], untilNamed),
           }),
         );
         if (actResult !== null) {
