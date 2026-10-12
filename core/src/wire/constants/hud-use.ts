@@ -76,6 +76,11 @@ export const ScriptStatus = {
    * because nobody acknowledged it. Not a failure.
    */
   NOT_TAKEN: 'not-taken',
+  /**
+   * Ran, and decided nothing: its end was on the page before it acted, or it reached its goal with
+   * no check that could have gone red. Neither proved nor a failure.
+   */
+  UNDECIDED: 'undecided',
 } as const;
 export type ScriptStatus = (typeof ScriptStatus)[keyof typeof ScriptStatus];
 

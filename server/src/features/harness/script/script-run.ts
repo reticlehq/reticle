@@ -339,7 +339,9 @@ export async function runScript(
             ? ScriptStatus.BLOCKED
             : ran.notTaken !== undefined
               ? ScriptStatus.NOT_TAKEN
-              : ScriptStatus.FAILED;
+              : true === ran.undecided
+                ? ScriptStatus.UNDECIDED
+                : ScriptStatus.FAILED;
         if (ran.notTaken !== undefined) card.why = ran.notTaken;
         if (ran.why !== undefined) card.why = ran.why;
         drives.push(...own);
@@ -409,7 +411,7 @@ async function runJourney(
   drives: HarnessResult[],
   tell: () => void,
   stop: () => void,
-): Promise<{ ok: boolean; notTaken?: string; why?: string }> {
+): Promise<{ ok: boolean; notTaken?: string; why?: string; undecided?: true }> {
   const checkpoints = new Map<string, { flow: string; to: number }>();
   for (const [index, step] of journey.steps.entries()) {
     const card = cards[index];
@@ -424,6 +426,7 @@ async function runJourney(
     let ok: boolean;
     let notTaken: string | undefined;
     let why: string | undefined;
+    let undecided = false;
     try {
       if (ScriptStepKind.CHECKPOINT === step.kind) {
         checkpoints.set(step.id, step.reenter);
@@ -434,8 +437,10 @@ async function runJourney(
         ok = await runLeaf(step, tools, ports, drives, stop);
       }
     } catch (error) {
-      if (error instanceof EndAlreadyShown) why = error.message;
-      else if (error instanceof StepNotTaken) notTaken = error.message;
+      if (error instanceof Undecided) {
+        why = error.message;
+        undecided = true;
+      } else if (error instanceof StepNotTaken) notTaken = error.message;
       else throw error;
       ok = false;
     }
@@ -452,6 +457,7 @@ async function runJourney(
         ok: false,
         ...(notTaken === undefined ? {} : { notTaken }),
         ...(why === undefined ? {} : { why }),
+        ...(undecided ? { undecided: true as const } : {}),
       };
     }
   }
@@ -465,12 +471,13 @@ async function runFallback(
   ports: ScriptPorts,
   drives: HarnessResult[],
   stop: () => void,
-): Promise<{ ok: boolean; why?: string }> {
+): Promise<{ ok: boolean; why?: string; undecided?: true }> {
   try {
     const ok = await runLeaf({ kind: ScriptStepKind.ACT, goal }, tools, ports, drives, stop);
     return ok ? { ok } : { ok, why: FELL_BACK };
   } catch (error) {
-    if (error instanceof EndAlreadyShown) return { ok: false, why: error.message };
+    if (error instanceof Undecided)
+      return { ok: false, why: error.message, undecided: true as const };
     throw error;
   }
 }
@@ -478,8 +485,14 @@ async function runFallback(
 /** The guard stopped a destructive step nobody acknowledged: the step was not taken, not failed. */
 class StepNotTaken extends Error {}
 
-/** The journey's end was on the page before it acted: failed, never credited, and no model spent. */
-class EndAlreadyShown extends Error {}
+/** The journey ran and decided nothing: neither proved nor a failure of the app. */
+class Undecided extends Error {}
+
+/** The journey's end was on the page before it acted: undecided, never credited, no model spent. */
+class EndAlreadyShown extends Undecided {}
+
+/** Why a journey that reached its goal with no check that could go red proves nothing. */
+const MSG_GOAL_WITHOUT_CHECK = 'it reached its goal, and no check could have gone red there';
 
 /** What the guard's refusal names, as `drive-report.ts` reads it too. */
 const DESTRUCTIVE_REFUSAL = 'confirmDangerous';
@@ -555,8 +568,12 @@ async function runLeaf(
         // ponytail: the LAST quote the goal does not negate is the end state ("from "count: 0" to
         // "count: 1""); a goal that quotes its end first needs the planner to say which is the end.
         const end = ending;
-        if (end === undefined)
-          return false !== drive.goalMet && 0 < checkTally(drive.toolCalls).held;
+        if (end === undefined) {
+          if (0 < checkTally(drive.toolCalls).held) return false !== drive.goalMet;
+          // Reached, by its own word, with nothing checked: not proved, and not a failure either.
+          if (true === drive.goalMet) throw new Undecided(MSG_GOAL_WITHOUT_CHECK);
+          return false;
+        }
         let shown = await lookFor(tools.invoke.bind(tools), end, ports.own);
         // A drive that finished with turns to spare, short of the end its own plan names (joined,
         // opened Runs, never clicked Team), is sent on once from where it stands, not graded there.

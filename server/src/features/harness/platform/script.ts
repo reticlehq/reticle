@@ -239,6 +239,7 @@ const SEVERITY: readonly ScriptStatus[] = [
   ScriptStatus.BLOCKED,
   ScriptStatus.RUNNING,
   ScriptStatus.PENDING,
+  ScriptStatus.UNDECIDED,
   ScriptStatus.NOT_TAKEN,
   ScriptStatus.PASSED,
 ];

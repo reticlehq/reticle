@@ -27,6 +27,7 @@ const GLYPH: Record<ScriptStatus, string> = {
   [ScriptStatus.FAILED]: '✗',
   [ScriptStatus.BLOCKED]: '⊘',
   [ScriptStatus.NOT_TAKEN]: '–',
+  [ScriptStatus.UNDECIDED]: '?',
 };
 
 export const PLAN_CSS: string = `

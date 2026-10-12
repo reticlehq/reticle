@@ -665,10 +665,28 @@ describe('a journey that does not build on the one before it in its lane', () =>
     ]);
   });
 
-  it('is never credited with an end that was on screen before it acted', async () => {
+  // Persona drive: a read-only journey whose end text is on the page before anything acts could
+  // never be proved, and was graded "failed" — a finding against an app that did nothing wrong.
+  // Persona drive: goal graded yes, goalMet true, and the journey still "failed" because nothing it
+  // drove declared a check. Reached with nothing that could go red is undecided, never failed.
+  it('a journey that reached its goal with no check is undecided, not failed', async () => {
+    const a = app(false);
+    const open = script({
+      version: 1,
+      source: 'platform',
+      journeys: [
+        { id: 'read', title: 'Read the page', steps: [{ kind: 'act', goal: 'Open it.' }] },
+      ],
+      lanes: [{ id: 'A', journeys: ['read'] }],
+    });
+    const run = await runScript(open, a.port);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.UNDECIDED);
+  });
+
+  it('is never credited with an end that was on screen before it acted, nor failed for it', async () => {
     const a = app(true);
     const run = await runScript(checkout, a.port);
-    expect(run.view.lanes[0]?.journeys[1]?.status).toBe(ScriptStatus.FAILED);
+    expect(run.view.lanes[0]?.journeys[1]?.status).toBe(ScriptStatus.UNDECIDED);
     // Nothing it could do would prove it, so no model turn is spent on it.
     expect(a.drives()).toBe(1);
     expect(run.lines[1]).toContain('already on the page before this journey acted');

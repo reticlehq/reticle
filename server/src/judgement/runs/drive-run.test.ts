@@ -86,9 +86,12 @@ describe('a drive folded into a run', () => {
     it('never counts one as a pass when there were real verdicts alongside it', () => {
       const run = driveRunFrom([action(Verified.YES), action(Verified.UNKNOWN)], DEPS);
       expect(run?.checks).toHaveLength(2);
-      // One proved, one not, and nothing failed. The undetermined one must not tip this to
-      // PARTIAL either -- it is not a failure, it is an absence of evidence.
-      expect(run === undefined ? undefined : computeVerdict(run).status).toBe(VerdictStatus.PASS);
+      // One proved, one not, and nothing failed: PARTIAL, never PASS and never FAIL. It read PASS
+      // while the agent's own result block said "not proved · 1 of 2 checks undecided" for the same
+      // run, and the dashboard shared it as Passed.
+      expect(run === undefined ? undefined : computeVerdict(run).status).toBe(
+        VerdictStatus.PARTIAL,
+      );
     });
 
     it('does not let one become a failure', () => {
