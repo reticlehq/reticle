@@ -10,8 +10,8 @@
  * only chooses what to hand it.
  */
 
-import { isDangerousActionText } from '@reticlehq/core';
-import { getAccessibleName } from '@/dom/a11y.js';
+import { isDangerousActionText, outwardActionOf, outwardRefusal } from '@reticlehq/core';
+import { getAccessibleName, getRole } from '@/dom/a11y.js';
 import { type ActionTarget, isHtmlElement } from '@/dom/realm.js';
 
 /**
@@ -100,4 +100,25 @@ export function submitControlFor(el: ActionTarget): HTMLElement | null {
 
 export function requiresDangerousConfirmation(text: string, role?: string): boolean {
   return isDangerousActionText(text, role);
+}
+
+/** The outward actions the Harness command being run may take; undefined: not gated. */
+let outwardAllowed: readonly string[] | undefined;
+
+/** Set around each command from its `outward` field: only a Harness command a model chose has one. */
+export function setOutwardPolicy(allowed: readonly string[] | undefined): void {
+  outwardAllowed = allowed;
+}
+
+/**
+ * Refuse a control that would invite, send, share, delete, pay… unless the journey asked for that
+ * action. The Harness pressed Invite in a customer's workspace when its journey said not to.
+ */
+export function assertOutwardAllowed(targets: readonly (ActionTarget | null)[]): void {
+  if (outwardAllowed === undefined) return;
+  for (const el of targets) {
+    if (null === el) continue;
+    const kind = outwardActionOf(dangerousActionContext(el), getRole(el));
+    if (kind !== undefined && !outwardAllowed.includes(kind)) throw new Error(outwardRefusal(kind));
+  }
 }

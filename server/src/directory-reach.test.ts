@@ -112,7 +112,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * nothing in it imports upward. The three reaches below are the ones these files already had
    * under their old home; they are the same edges, now attributed to the directory that owns them.
    */
-  act: ['page-commands', 'capsule', 'input', 'read', 'session'],
+  // `hooks` for whether the Harness may press an outward control: who is acting is only known there.
+  act: ['page-commands', 'capsule', 'input', 'read', 'session', 'hooks'],
   /**
    * The read leaves: what a snapshot or a query LOOKS like, with no opinion about what it means.
    *
@@ -440,6 +441,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'facts',
     'fields',
     'fs',
+    // A saved flow's replay marks itself, so the Harness's outward-action gate does not hold back
+    // steps somebody recorded on purpose; the drive context lives in hooks.
+    'hooks',
     'intent',
     'journal',
     'outcome',

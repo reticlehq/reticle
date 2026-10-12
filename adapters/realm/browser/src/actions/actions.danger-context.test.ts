@@ -18,7 +18,7 @@
  */
 import { describe, expect, it, beforeEach } from 'vitest';
 import { executeAction } from './actions.js';
-import { submitControlFor } from './danger-context.js';
+import { setOutwardPolicy, submitControlFor } from './danger-context.js';
 import { refs } from '@/dom/addressing/refs.js';
 
 const refTo = (selector: string): string => {
@@ -207,5 +207,41 @@ describe('a link is judged by where it goes, not by the text it shows', () => {
       '<a id="d" href="/account/delete">Account</a><a id="b" href="#">Delete account</a>';
     await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
     await expect(executeAction(refTo('#b'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+});
+
+/*
+ * From persona drives: the Harness pressed Invite in a customer's workspace though its journey
+ * said not to. A Harness command a model chose presses an outward control only when its journey
+ * asked for that action — `confirmDangerous` in the model's own args does not lift it.
+ */
+describe('what a Harness command may press', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    setOutwardPolicy(undefined);
+  });
+
+  it('refuses Invite, Send, Remove and Pay unless the journey asked', async () => {
+    document.body.innerHTML =
+      '<button id="i">Invite</button><button id="s">Send message</button>' +
+      '<button id="r">Remove member</button><button id="p">Add a card and start the trial</button>';
+    setOutwardPolicy([]);
+    for (const id of ['#i', '#s', '#r', '#p'])
+      await expect(executeAction(refTo(id), 'click', { confirmDangerous: true })).rejects.toThrow(
+        /not done \(outward action\)/,
+      );
+  });
+
+  it('presses the one the journey asked for, and an ordinary control always', async () => {
+    document.body.innerHTML = '<button id="i">Invite</button><button id="o">Open Runs</button>';
+    setOutwardPolicy(['invite']);
+    await expect(executeAction(refTo('#i'), 'click')).resolves.toBeDefined();
+    setOutwardPolicy([]);
+    await expect(executeAction(refTo('#o'), 'click')).resolves.toBeDefined();
+  });
+
+  it('gates nothing for an agent or a saved flow (no policy)', async () => {
+    document.body.innerHTML = '<button id="i">Invite</button>';
+    await expect(executeAction(refTo('#i'), 'click')).resolves.toBeDefined();
   });
 });

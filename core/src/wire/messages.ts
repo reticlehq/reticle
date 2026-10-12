@@ -14,6 +14,7 @@ import { DOCUMENT_ID_LENGTH } from '@/identity/document-identity.js';
 import { NO_EDITS_OBSERVED } from '@/identity/edit-epoch.js';
 import { PlatformProfile } from './platform.js';
 import { ChannelId } from './channel.js';
+import { OutwardAction } from '@/verdict/security.js';
 
 const sessionIdSchema = z.string().min(1).max(TRANSPORT_LIMITS.MAX_SESSION_ID_LENGTH);
 const refSchema = z.string().max(TRANSPORT_LIMITS.MAX_REF_LENGTH);
@@ -281,6 +282,11 @@ export const CommandMessageSchema = z.object({
   args: z.record(z.unknown()).default({}),
   /** Set when the Harness sent it, so the HUD can say who is driving. */
   by: z.nativeEnum(CommandActor).optional(),
+  /**
+   * Set on a Harness command a model chose: the outward actions (`OutwardAction`) its journey asks
+   * for. The page presses no other outward control. Absent: not gated (an agent, a saved flow).
+   */
+  outward: z.object({ allowed: z.array(z.nativeEnum(OutwardAction)).max(16) }).optional(),
 });
 export type CommandMessage = z.infer<typeof CommandMessageSchema>;
 

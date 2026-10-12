@@ -15,6 +15,7 @@ import { echoRef, refs } from '@/dom/addressing/refs.js';
 import {
   dangerousActionContext,
   requiresDangerousConfirmation,
+  assertOutwardAllowed,
   submitControlFor,
 } from './danger-context.js';
 import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
@@ -383,6 +384,8 @@ function assertActionAllowed(
   // nothing, so the form is none of its business.
   const submitter =
     action === ActionType.PRESS && 'Enter' === pressKey(args) ? submitControlFor(el) : null;
+  if (canTrigger)
+    assertOutwardAllowed([el, submitter, isActionTarget(dragTarget) ? dragTarget : null]);
   const sourceDangerous =
     requiresDangerousConfirmation(dangerousActionContext(el), getRole(el)) ||
     (submitter !== null &&

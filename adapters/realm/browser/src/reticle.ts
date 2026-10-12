@@ -1,5 +1,6 @@
 import { setPresenterViewer, setPresenterVisible } from './dom/dom-ignore.js';
 import { coverageMarkers } from './dom/addressing/coverage-markers.js';
+import { setOutwardPolicy } from './actions/danger-context.js';
 import {
   EventType,
   RETICLE_DEFAULT_PORT,
@@ -890,6 +891,7 @@ export class Reticle {
     await this.#presentBefore(command);
     // ponytail: one flag for the page; an agent command overlapping a Harness one sees the HUD hidden.
     setPresenterViewer(CommandActor.HARNESS === command.by);
+    setOutwardPolicy(command.outward?.allowed);
     try {
       const result = await handler(command.args);
       this.#actHandle?.result(LOG_RESULT.PASS);
@@ -899,6 +901,7 @@ export class Reticle {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     } finally {
       setPresenterViewer(false);
+      setOutwardPolicy(undefined);
       this.#actHandle = undefined;
       this.#presenter?.scheduleIdle();
     }

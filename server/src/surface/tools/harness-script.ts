@@ -322,6 +322,9 @@ async function runPlan(
           driver: driverName,
           ...(persona === undefined ? {} : { persona }),
         },
+        // The person's request, never the planned journey's text: a planner-invented journey
+        // ("press Invite") must not be what allows an invite.
+        ...(focus === undefined ? {} : { asked: focus }),
       });
       harnessOf.set(toolset.tools, id);
       return toolset;

@@ -143,6 +143,8 @@ export interface ReticleToolsetOptions {
   only?: readonly string[];
   /** Stamped on every action this drive journals, so its verdicts fold into a run of their own. */
   drivenBy?: DrivenBy;
+  /** The person's own request: the only text that lets the drive press an outward control. */
+  asked?: string;
   /** The pinned session wins over any a call names: a remote caller never reaches another tab. */
   locked?: boolean;
 }
@@ -196,7 +198,7 @@ export function reticleToolset(
       return withTimeout(
         drivenBy === undefined
           ? runTool(tool, deps, scoped)
-          : runDrivenBy(drivenBy, () => runTool(tool, deps, scoped)),
+          : runDrivenBy(drivenBy, () => runTool(tool, deps, scoped), options.asked),
         TOOL_TIMEOUT_MS,
         `${tool.name} never returned`,
       );

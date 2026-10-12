@@ -3,7 +3,10 @@ import {
   DANGEROUS_ACTION_CONFIRM_ARG,
   NATIVE_INPUT_ARG,
   isDangerousActionText,
+  outwardActionOf,
+  outwardRefusal,
 } from '@reticlehq/core';
+import { harnessOutwardAllowed } from '@/hooks/driven-by.js';
 import { asRecord, asString } from '@reticlehq/core';
 
 /**
@@ -38,12 +41,23 @@ function isDestructiveDescriptor(value: unknown): boolean {
   return isDangerousActionText(descriptorText(value), descriptorRole(value));
 }
 
+/** A Harness call presses an outward control only when its journey asked (`harnessOutwardAllowed`). */
+function assertOutwardAllowed(...descriptors: unknown[]): void {
+  const allowed = harnessOutwardAllowed();
+  if (allowed === undefined) return;
+  for (const descriptor of descriptors) {
+    const kind = outwardActionOf(descriptorText(descriptor), descriptorRole(descriptor));
+    if (kind !== undefined && !allowed.includes(kind)) throw new Error(outwardRefusal(kind));
+  }
+}
+
 export function assertNotDestructive(
   action: ActionType,
   innerArgs: Record<string, unknown>,
   inspected: unknown,
 ): void {
   if (action !== ActionType.CLICK && action !== ActionType.DBLCLICK) return;
+  assertOutwardAllowed(inspected);
   if (true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG]) return;
   if (!isDestructiveDescriptor(inspected)) return;
   throw new Error(
@@ -61,6 +75,7 @@ export function assertDragNotDestructive(
   from: unknown,
   to: unknown,
 ): void {
+  assertOutwardAllowed(from, to);
   if (true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG]) return;
   if (!isDestructiveDescriptor(from) && !isDestructiveDescriptor(to)) return;
   throw new Error(

@@ -420,6 +420,7 @@ export async function exploreApp(
       driver: driverLabel,
       ...(options.focus === undefined ? {} : { persona: options.focus }),
     },
+    ...(options.focus === undefined ? {} : { asked: options.focus }),
   });
   const narrate = narrator(deps, options);
   const invoke = (name: string, args: Record<string, unknown>): Promise<unknown> =>

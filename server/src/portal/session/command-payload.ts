@@ -1,5 +1,5 @@
 import { CommandActor, MessageKind } from '@reticlehq/core';
-import { currentDrivenBy } from '@/hooks/driven-by.js';
+import { currentDrivenBy, harnessOutwardAllowed } from '@/hooks/driven-by.js';
 
 /**
  * The command a session sends its page, as wire JSON.
@@ -21,5 +21,11 @@ export function commandPayload(
     name,
     args,
     ...(currentDrivenBy() === undefined ? {} : { by: CommandActor.HARNESS }),
+    // The page presses no outward control (invite, send, delete, pay…) the journey did not ask for.
+    ...outwardField(harnessOutwardAllowed()),
   });
+}
+
+function outwardField(allowed: string[] | undefined): { outward?: { allowed: string[] } } {
+  return allowed === undefined ? {} : { outward: { allowed } };
 }

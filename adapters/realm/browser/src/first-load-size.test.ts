@@ -375,8 +375,12 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * Harness gate refused a fully instrumented app at 75% because only an acted control could show
  * them. Answered before the panel paints, so it cannot wait on a lazy chunk (which measured larger).
  * 263,856 B; ceiling 264,856.
+ *
+ * The outward-action gate: a Harness click on Invite, Send, Remove, Pay… is refused unless the
+ * person's request asked for it (the Harness invited a stranger into a customer's workspace). It is
+ * judged at the click, so it cannot load later. 265,619 B; ceiling 266,619.
  */
-const MAX_FIRST_LOAD_BYTES = 264_856;
+const MAX_FIRST_LOAD_BYTES = 266_619;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

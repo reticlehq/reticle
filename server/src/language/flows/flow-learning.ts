@@ -1,4 +1,5 @@
 import type { FlowReplayResult } from '@reticlehq/core';
+import { runSavedFlow } from '@/hooks/driven-by.js';
 import { asNumber, asString, mutationTargetsFor, perturbationFor } from '@reticlehq/core';
 import { sessionPerturbationPort } from '@/surface/tools/lease-tools.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
@@ -82,10 +83,13 @@ export async function replayAndLearn(
   args: Record<string, unknown>,
 ): Promise<FlowReplayResult> {
   let recorded: ReturnType<typeof recordingSources> | undefined;
-  const result = await replayNamedFlow(deps, args, (session) => {
-    recorded = recordingSources(session);
-    return recorded.session;
-  });
+  // A saved flow's steps were asked for by whoever recorded it: no outward gate on them.
+  const result = await runSavedFlow(() =>
+    replayNamedFlow(deps, args, (session) => {
+      recorded = recordingSources(session);
+      return recorded.session;
+    }),
+  );
   // Only a clean run teaches a file: a drifted step may have resolved to the wrong element.
   if (result.status === ReplayStatus.OK && recorded !== undefined && recorded.sources.size > 0) {
     await persistSources(deps, args, recorded.sources);
@@ -140,7 +144,7 @@ export async function replaySeededOrNot(
   if (port === undefined) return replayAndLearn(deps, args);
   try {
     await port.slow(rules);
-    const replay = await replayNamedFlow(deps, args);
+    const replay = await runSavedFlow(() => replayNamedFlow(deps, args));
     return { ...replay, perturbed: rules } as FlowReplayResult;
   } finally {
     await port.clear().catch(() => undefined);
