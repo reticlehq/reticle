@@ -296,6 +296,8 @@ export const EnvelopeKey = {
   HARNESS: 'harness',
   /** Where this step's screenshot is (`{ path, source }`), or why there is none. See step-shots.ts. */
   SCREENSHOT: 'screenshot',
+  /** Once-per-session advisory lines an agent's own call carries. See agent/notices.ts. */
+  NOTICES: 'notices',
 } as const;
 export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
 

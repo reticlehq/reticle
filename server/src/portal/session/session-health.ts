@@ -88,7 +88,11 @@ export const PENDING_NAVIGATION_NOTICE_MS = 10_000;
  * before suspecting the skew banner." Stating the contradiction is the whole job here; the existing
  * banner was accurate and simply never appeared where it was needed.
  */
-const SKEW_VERDICT_WARNING =
+/** The skew warning after an agent has read the paragraph once this session. */
+export const SKEW_SHORT_WARNING =
+  'version skew: `dispatched`/`settled` here do not prove the app acted — see session.versionSkew.';
+
+export const SKEW_VERDICT_WARNING =
   'version skew: `dispatched` and `settled` on this session mean the event was sent, NOT that the ' +
   'app acted on it — a skewed pair drops actions silently. Re-read the control (aria-checked, ' +
   'data-state, its text) before trusting any verdict from this session, and converge the versions ' +
