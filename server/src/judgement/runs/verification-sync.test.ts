@@ -20,6 +20,7 @@ import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/f
 import type { RunId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tools.js';
 import { forgetAgents, noteAgentAttached, runAsAgent } from '@/hooks/coding-agents.js';
+import { runDrivenBy } from '@/hooks/driven-by.js';
 import {
   clearMcpClientIdentityHook,
   setMcpClientIdentityHook,
@@ -164,6 +165,18 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
       kind: RunAgentKind.OEM_PIPELINE,
     });
     expect(read.ok && read.run.trigger.kind).toBe(RunTrigger.OEM);
+  });
+
+  /*
+   * Persona drive: a replay inside a Harness plan run was pushed as its own run ("Passed · Flow
+   * replay · Your agent") beside the plan run ("Failed · Run the saved plan"): one run, two rows,
+   * two verdicts. A replay the Harness makes is part of the Harness's run, never a run of its own.
+   */
+  it('writes no separate run for a replay the Harness made inside its own drive', async () => {
+    const id = await runDrivenBy({ harness: 'h1', driver: 'server' }, () =>
+      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }),
+    );
+    expect(id).toBeUndefined();
   });
 
   it('names the run after the project the checkout is linked to', async () => {

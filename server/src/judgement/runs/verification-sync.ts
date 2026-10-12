@@ -9,6 +9,7 @@
  * Both are best-effort + opt-in: no creds → the artifact still lands on disk, nothing leaves the machine.
  */
 import { callerClientName } from '@/hooks/coding-agents.js';
+import { currentDrivenBy } from '@/hooks/driven-by.js';
 import {
   RunAgentKind,
   RunFramework,
@@ -110,6 +111,9 @@ export async function persistAndSyncVerificationRun(
 ): Promise<string | undefined> {
   const { projectId } = target;
   if (0 === timed.length) return undefined;
+  // A replay the Harness made inside its own drive is part of that drive's run: written on its own
+  // it was a second row ("Passed · Flow replay · Your agent") beside the plan run it belonged to.
+  if (currentDrivenBy() !== undefined) return undefined;
   let run: ReticleVerificationRun;
   // The project the suite ran for, not the directory the daemon was started in. Both halves below
   // take it: the artifact `reticle_run` reads back through `sessionRoot`, and the cloud link that
