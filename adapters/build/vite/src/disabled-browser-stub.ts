@@ -119,7 +119,10 @@ export function createReticleEmitter() {
   };
 }
 
-export function commitAndSignal() {}
+// It wraps the APP's write, so the write still runs: Reticle does nothing in production, the app does.
+export function commitAndSignal(_emitter, mutate) {
+  return mutate();
+}
 export function registerReticleDomain() {}
 
 export function buildSnapshot() {
