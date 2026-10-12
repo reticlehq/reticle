@@ -130,3 +130,100 @@ describe('replay first', () => {
     expect(run.lines[0]).toContain('No Harness credits left.');
   });
 });
+
+/**
+ * A plan run on the dashboard ended "failed (\"Saved items\" was already on the page before this
+ * journey acted…) · replayed, no model tokens": a model goal the end-already-shown guard stopped
+ * before any model turn, labelled as a replay because it spent no tokens. The guard is for model
+ * goals; a replay decides itself, and a journey is called replayed only when it replayed.
+ */
+describe('the end-already-shown guard and replays', () => {
+  const END = 'Saved items';
+  const showing = (
+    onPage: () => boolean,
+    replays: Record<string, string>,
+    onCall: (name: string) => void = () => undefined,
+  ) => {
+    const navigated: unknown[] = [];
+    const goals: string[] = [];
+    const port: ScriptPorts = {
+      parallel: 1,
+      stopped: () => false,
+      lease: () => Promise.resolve({ release: () => Promise.resolve() }),
+      toolset: () => ({
+        tools: [],
+        invoke(name, args) {
+          onCall(name);
+          if (ReticleTool.FLOW_REPLAY === name)
+            return Promise.resolve({ status: replays[String(args['flowName'])] });
+          if (ReticleTool.NAVIGATE === name) {
+            navigated.push(args['url']);
+            return Promise.resolve({ ok: true });
+          }
+          if (ReticleTool.SNAPSHOT === name)
+            return Promise.resolve({
+              tree: onPage() ? `- heading "${END}"` : '- button "Sign in" (ref=e1)',
+              status: { route: onPage() ? '/saved' : '/login' },
+            });
+          return Promise.resolve({ pass: onPage(), verified: Verified.YES });
+        },
+      }),
+      drive(_tools, goal): Promise<HarnessResult> {
+        goals.push(goal);
+        return Promise.resolve({
+          stopReason: StopReason.FINISHED,
+          summary: '',
+          steps: 1,
+          toolCalls: [],
+          usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+          proved: false,
+        });
+      },
+    };
+    return { port, navigated, goals };
+  };
+  const goalOnly = DriveScriptSchema.parse({
+    version: 1,
+    source: 'platform',
+    journeys: [
+      {
+        id: 'j1',
+        title: 'Lee: saved',
+        steps: [{ kind: 'act', goal: `End when the page shows "${END}".` }],
+      },
+    ],
+    lanes: [{ id: 'A', journeys: ['j1'] }],
+  });
+
+  it('a model goal the guard stopped is not called replayed', async () => {
+    const fake = showing(() => true, {});
+    const run = await runScript(goalOnly, fake.port);
+    expect(fake.goals).toEqual([]);
+    expect(run.lines[0]).toContain('already on the page');
+    expect(run.lines[0]).not.toContain('replayed');
+    expect(run.journeys[0]?.by).toBeUndefined();
+  });
+
+  it('a replay journey is decided by its replay, whatever the page showed before it', async () => {
+    const fake = showing(() => true, { saved: ReplayStatus.OK });
+    const run = await runScript(served(['saved']), fake.port);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
+    expect(run.journeys[0]?.by).toBe(JourneyBy.REPLAY);
+  });
+
+  it("a fallback starts where its journey began, not where the journey's own replay left the tab", async () => {
+    let page = false;
+    // The replay drifted on the way, having reached the end page; the journey began signed out.
+    const fake = showing(
+      () => page,
+      { saved: ReplayStatus.DRIFT },
+      (name) => {
+        if (ReticleTool.FLOW_REPLAY === name) page = true;
+        if (ReticleTool.NAVIGATE === name) page = false;
+      },
+    );
+    await runScript(served(['saved']), fake.port);
+    expect(fake.navigated).toEqual(['/login']);
+    expect(fake.goals).toEqual([GOAL]);
+  });
+});

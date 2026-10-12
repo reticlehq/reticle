@@ -181,7 +181,7 @@ export interface JourneyResult {
 /** How one journey that ran was answered, from the run (`JourneyRun`). */
 export interface JourneyAnswer {
   id: string;
-  by: JourneyBy;
+  by?: JourneyBy;
   tokens: number;
   credits?: number;
   flows: string[];
@@ -266,7 +266,7 @@ export function journeyResults(
     if (answer === undefined) return result;
     return {
       ...result,
-      by: answer.by,
+      ...(answer.by === undefined ? {} : { by: answer.by }),
       tokens: answer.tokens,
       ...(answer.credits === undefined ? {} : { credits: answer.credits }),
       ...(0 === answer.flows.length ? {} : { flows: [...answer.flows] }),

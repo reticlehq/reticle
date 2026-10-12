@@ -499,7 +499,7 @@ async function runPlan(
 function answeredBy(journeys: readonly JourneyRun[]): string {
   if (0 === journeys.length) return '';
   const driven = journeys.filter((j) => JourneyBy.MODEL === j.by);
-  const replayed = journeys.length - driven.length;
+  const replayed = journeys.filter((j) => JourneyBy.REPLAY === j.by).length;
   const tokens = driven.reduce((n, j) => n + j.tokens, 0);
   return ` (${String(replayed)} replayed with no model, ${String(driven.length)} driven by the model${0 === driven.length ? '' : `, ${String(tokens)} tokens`})`;
 }

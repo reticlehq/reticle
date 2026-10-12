@@ -70,7 +70,8 @@ export interface ScriptPorts {
 /** How one journey was answered, as the platform is told it. */
 export interface JourneyRun {
   id: string;
-  by: JourneyBy;
+  /** Absent when it neither replayed nor drove: a guard stopped it first. */
+  by?: JourneyBy;
   /** Model tokens the journey spent, cache reads and writes included; 0 for a pure replay. */
   tokens: number;
   /** Credits its model drives spent, when the platform said. */
@@ -136,9 +137,17 @@ function flowsOf(calls: readonly ToolOutcome[]): string[] {
 /** What a journey's own model drives cost, and what it touched. */
 function journeyRun(id: string, calls: readonly ToolOutcome[], own: HarnessResult[]): JourneyRun {
   const credits = own.flatMap((d) => (d.creditsSpent === undefined ? [] : [d.creditsSpent]));
+  // Replayed only when it replayed: a model goal the end-already-shown guard stopped spent no
+  // tokens and was called "replayed, no model tokens" on a journey that had no replay at all.
+  const by =
+    0 < own.length
+      ? JourneyBy.MODEL
+      : 0 < replayedFlows(calls).length
+        ? JourneyBy.REPLAY
+        : undefined;
   return {
     id,
-    by: 0 < own.length ? JourneyBy.MODEL : JourneyBy.REPLAY,
+    ...(by === undefined ? {} : { by }),
     tokens: own.reduce(
       (n, d) => n + d.usage.input + d.usage.output + d.usage.cacheRead + d.usage.cacheWrite,
       0,
@@ -154,9 +163,10 @@ function mergeRuns(a: JourneyRun, b: JourneyRun): JourneyRun {
     a.credits === undefined && b.credits === undefined
       ? undefined
       : (a.credits ?? 0) + (b.credits ?? 0);
+  const by = [JourneyBy.MODEL, JourneyBy.REPLAY].find((k) => k === a.by || k === b.by);
   return {
     id: a.id,
-    by: JourneyBy.MODEL === a.by || JourneyBy.MODEL === b.by ? JourneyBy.MODEL : JourneyBy.REPLAY,
+    ...(by === undefined ? {} : { by }),
     tokens: a.tokens + b.tokens,
     ...(credits === undefined ? {} : { credits }),
     flows: [...new Set([...a.flows, ...b.flows])],
@@ -165,7 +175,7 @@ function mergeRuns(a: JourneyRun, b: JourneyRun): JourneyRun {
 
 /** How a journey was answered, as its line says it: only what was measured. */
 function byText(run: JourneyRun | undefined): string {
-  if (run === undefined) return '';
+  if (run?.by === undefined) return '';
   return JourneyBy.REPLAY === run.by
     ? ' · replayed, no model tokens'
     : ` · driven by the model, ${String(run.tokens)} tokens`;
@@ -279,7 +289,9 @@ export async function runScript(
         lease ??= await ports.lease(lane.id);
         const raw = ports.toolset(lease.sessionId, journey.persona);
         // Unrecorded: where the journey starts is set-up, not something it drove or checked.
-        if (0 === driven.size && 1 < lane.journeys.length)
+        // Kept for a journey with a fallback too: its goal starts where the journey began, not
+        // on the page its own replays left (where the end may already show).
+        if (0 === driven.size && (1 < lane.journeys.length || journey.fallback !== undefined))
           start = asString(
             asRecord(asRecord(await call(raw, ReticleTool.SNAPSHOT, {}))['status'])['route'],
           );
