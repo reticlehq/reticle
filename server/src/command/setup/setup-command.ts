@@ -30,7 +30,7 @@ import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
 import { spawnSync } from 'node:child_process';
 import { isAlive, reticleStateHome } from '@/command/daemon/daemon.js';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
-import { urlOfExistingApp } from './probe/existing-app.js';
+import { connectedAppUrl, urlOfExistingApp } from './probe/existing-app.js';
 import { handedOverUrl, stopHandedOver } from './bringup/dev-server-files.js';
 import { listSessions, OwnedDevServer, probePage } from './node-effects.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
@@ -350,7 +350,9 @@ export async function runSetupCommand(
       (await handedOverUrl(reticleStateHome(), input.appDir, {
         alive: isAlive,
         answers: async (url) => (await probePage(url)).served,
-      })),
+      })) ??
+      // A desktop window of this project already connected: its renderer announces no server.
+      connectedAppUrl(await listSessions(input.bridgePort), readProjectId(input.appDir)),
     devServerOutput: () => server.output(),
     devServerExited: () => server.exited(),
     devServerQuietForMs: () => server.quietForMs(),

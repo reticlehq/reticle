@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DevServerEntry } from '@reticlehq/core';
-import { urlOfExistingApp } from './existing-app.js';
+import { connectedAppUrl, urlOfExistingApp } from './existing-app.js';
 
 const entry = (port: number, root: string, projectId: string): DevServerEntry => ({
   port,
@@ -34,5 +34,30 @@ describe('urlOfExistingApp', () => {
 
   it('is undefined when nothing has announced, so setup still starts one', () => {
     expect(urlOfExistingApp([], { projectId: 'web-1', root: '/repo/apps/web' })).toBeUndefined();
+  });
+});
+
+/*
+ * A desktop app announces no dev server when its renderer is packaged (`file://`, `tauri://`), so
+ * setup started the app a second time beside the running one. On macOS every start of a build signed
+ * differently from the installed app asks for the keychain password again. A connected window of
+ * this project is the app running: attach to it.
+ */
+describe('connectedAppUrl', () => {
+  it('names the url of a connected window of this project', () => {
+    expect(
+      connectedAppUrl(
+        [
+          { url: 'tauri://localhost/', projectId: 'other-1' },
+          { url: 'tauri://localhost/', projectId: 'desk-1' },
+        ],
+        'desk-1',
+      ),
+    ).toBe('tauri://localhost/');
+  });
+
+  it('names nothing without a project to match, or a session of another', () => {
+    expect(connectedAppUrl([{ url: 'x://a/', projectId: 'a' }], undefined)).toBe(undefined);
+    expect(connectedAppUrl([{ url: 'x://a/' }], 'a')).toBe(undefined);
   });
 });

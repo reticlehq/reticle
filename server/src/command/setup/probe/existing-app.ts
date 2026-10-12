@@ -15,3 +15,20 @@ export function urlOfExistingApp(
   const first = mine[0];
   return first === undefined ? undefined : first.url;
 }
+
+/**
+ * The url of a window of THIS project already connected to the daemon, if one is.
+ *
+ * A desktop app with a packaged renderer announces no dev server, so the registry above cannot see
+ * it, and setup started the app again beside the running one. On macOS a build signed differently
+ * from the installed app is a different app to the keychain, so every start asked for the password
+ * again. Scoped to the project the page reported, like the registry: never a sibling's window.
+ */
+export function connectedAppUrl(
+  sessions: readonly { readonly url?: string; readonly projectId?: string }[],
+  projectId: string | undefined,
+): string | undefined {
+  if (projectId === undefined) return undefined;
+  const mine = sessions.find((s) => s.projectId === projectId && 0 < (s.url ?? '').length);
+  return mine?.url;
+}
