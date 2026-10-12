@@ -5,13 +5,13 @@
  * brought down to the author's record.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { IntentShardStore } from './intent-shard-store.js';
 import { IntentStatus } from './intent-shard.js';
-import { applySettledWords, settledWordsIn } from './settled-words.js';
+import { applySettledWords, keptWordsInRequest, settledWordsIn } from './settled-words.js';
 
 const fs = createNodeFileSystem();
 const clock = { now: () => 1_700_000_000_000 };
@@ -85,5 +85,25 @@ describe('a decision made on the dashboard', () => {
       settledWordsIn([{ statement: 'Proved here', status: 'agreed' }]),
     );
     expect((await store.get('p'))?.status).toBe(IntentStatus.PROVED);
+  });
+
+  /*
+   * Persona drive: the run that proved the ACCEPTED words listed the words that were set aside as
+   * its goal ("What was asked"), because the agent's declared request still held them.
+   */
+  it('puts the kept words in the request a run reports, in place of the words set aside', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reticle-settled-req-'));
+    await mkdir(root, { recursive: true });
+    const path = join(root, 'request.json');
+    await writeFile(
+      path,
+      JSON.stringify({
+        at: 1,
+        statements: [{ text: 'Orders of $50 or more ship free', kind: 'goal', source: 'agent' }],
+      }),
+    );
+    await keptWordsInRequest(path, settledWordsIn([entry]));
+    expect(await readFile(path, 'utf8')).toContain('Orders over $75 ship free');
+    expect(await readFile(path, 'utf8')).not.toContain('$50 or more');
   });
 });

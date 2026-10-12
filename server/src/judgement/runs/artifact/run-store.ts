@@ -56,6 +56,9 @@ interface RunStoreOptions {
 /** A request older than this is about some other task, not the run being written now. */
 const REQUEST_RELEVANT_MS = 6 * 60 * 60 * 1000;
 
+/** Which run a recorded request was attached to, written into the request file. */
+const REQUEST_RUN_KEY = 'answeredByRun';
+
 export class RunStore {
   readonly #fs: FileSystemPort;
   readonly #root: string;
@@ -82,7 +85,7 @@ export class RunStore {
       throw new Error(`refusing to write run with unsafe runId: ${JSON.stringify(run.runId)}`);
     }
     await this.#fs.mkdir(reticleDirPaths(this.#root).runs);
-    const context = run.context ?? (await this.#recentRequest(run.createdAt));
+    const context = run.context ?? (await this.#recentRequest(run.createdAt, run.runId));
     if (context !== undefined) run = { ...run, context };
     // The step screenshots taken for this run, the last of which may still be landing.
     await shotsLanded(this.#root, run.runId);
@@ -107,16 +110,24 @@ export class RunStore {
    * The user's request this run answers, when the agent relayed one recently enough to be about it.
    * Read from .reticle/intent/request.json (written by `reticle_intent { declare, request }`).
    */
-  async #recentRequest(at: number): Promise<PromptContext | undefined> {
+  async #recentRequest(at: number, runId: string): Promise<PromptContext | undefined> {
     try {
-      const parsed = PromptContextSchema.safeParse(
-        JSON.parse(await this.#fs.readFile(reticleDirPaths(this.#root).request)),
-      );
+      const path = reticleDirPaths(this.#root).request;
+      const raw = JSON.parse(await this.#fs.readFile(path)) as Record<string, unknown>;
+      const parsed = PromptContextSchema.safeParse(raw);
       if (!parsed.success) return undefined;
       const given = parsed.data.at;
-      return given !== undefined && 0 <= at - given && at - given <= REQUEST_RELEVANT_MS
-        ? parsed.data
-        : undefined;
+      if (given === undefined || at - given < 0 || REQUEST_RELEVANT_MS < at - given)
+        return undefined;
+      // The first run written for a request answers it; a later run (the next agent session in the
+      // same tab) inherited it and showed a goal it never had. Its own rewrite keeps it.
+      const answeredBy = raw[REQUEST_RUN_KEY];
+      if ('string' === typeof answeredBy) return answeredBy === runId ? parsed.data : undefined;
+      await this.#fs.writeFile(
+        path,
+        `${JSON.stringify({ ...raw, [REQUEST_RUN_KEY]: runId }, null, JSON_INDENT)}\n`,
+      );
+      return parsed.data;
     } catch {
       return undefined; // no request recorded: the common case
     }

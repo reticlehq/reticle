@@ -21,6 +21,7 @@
  * laptop on a train would otherwise fill the log with the same line four hundred times and teach
  * everyone to ignore it.
  */
+import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { syncRequest } from './cloud-sync.js';
 import { log } from '@/log.js';
 import { homedir } from 'node:os';
@@ -32,7 +33,11 @@ import {
   scopedMemoryEntries,
 } from './memory-scope.js';
 import { IntentShardStore } from '@/memory/intent/intent-shard-store.js';
-import { applySettledWords, settledWordsIn } from '@/memory/intent/settled-words.js';
+import {
+  applySettledWords,
+  keptWordsInRequest,
+  settledWordsIn,
+} from '@/memory/intent/settled-words.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { flushPendingWrites } from '@/hooks/hook-bus.js';
 import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
@@ -265,10 +270,9 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     });
     if (200 !== res.status) return 0;
     const entries = scopedMemoryEntries(JSON.parse(res.text) as unknown, projectId) ?? [];
-    return applySettledWords(
-      new IntentShardStore(createNodeFileSystem(), root, { now }),
-      settledWordsIn(entries),
-    );
+    const settled = settledWordsIn(entries);
+    await keptWordsInRequest(reticleDirPaths(root).request, settled);
+    return applySettledWords(new IntentShardStore(createNodeFileSystem(), root, { now }), settled);
   };
 
   /**

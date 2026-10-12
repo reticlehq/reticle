@@ -74,6 +74,32 @@ describe('the request behind a verification', () => {
   });
 });
 
+/*
+ * Persona drive: a second agent session on the same tab declared nothing, and its run carried the
+ * first session's request as "What was asked" — a goal that run never had. A request rides on the
+ * first run written for it; that run rewritten keeps it; another run does not inherit it.
+ */
+describe('a request belongs to the run that answered it', () => {
+  it('is not inherited by the next run', async () => {
+    const { d, fs } = deps(1_000);
+    await intentTool?.handler(d, { action: 'declare', request: 'Sign in and check Diagnostics' });
+    const store = new RunStore(fs, ROOT);
+    const run = (id: string, createdAt: number) =>
+      ({ runId: id, createdAt, flows: [], checks: [] }) as never;
+    const read = async (id: string) =>
+      (
+        JSON.parse(await fs.readFile(`${ROOT}/runs/${id}.json`)) as {
+          context?: { request?: string };
+        }
+      ).context;
+    await store.write(run('drive-tab', 2_000));
+    await store.write(run('drive-tab-2', 3_000));
+    await store.write(run('drive-tab', 2_000));
+    expect((await read('drive-tab'))?.request).toBe('Sign in and check Diagnostics');
+    expect(await read('drive-tab-2')).toBeUndefined();
+  });
+});
+
 describe('who the request is shared with', () => {
   const declare = async (projectConfig?: object) => {
     const dir = mkdtempSync(join(tmpdir(), 'reticle-share-'));

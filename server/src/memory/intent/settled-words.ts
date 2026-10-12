@@ -7,6 +7,7 @@
  * times. The platform returns each memory entry with the decisions taken on it; a local record
  * whose statement one of them set aside takes the words that were kept, and says who decided.
  */
+import { readFile, writeFile } from 'node:fs/promises';
 import { asRecord, asString } from '@reticlehq/core';
 import type { IntentShardStore } from './intent-shard-store.js';
 import { IntentStatus } from './intent-shard.js';
@@ -106,4 +107,35 @@ export async function applySettledWords(
 function withoutBinding<T extends { binding?: unknown }>(record: T): Omit<T, 'binding'> {
   const { binding: _dropped, ...rest } = record;
   return rest;
+}
+
+/**
+ * The agent's recorded request, with each statement a decision set aside replaced by the words kept:
+ * a run reports it as "What was asked", and the run that proved the kept words showed the rejected
+ * ones as its goal. Never throws; no request, nothing to change.
+ */
+export async function keptWordsInRequest(
+  path: string,
+  settled: readonly SettledWords[],
+): Promise<void> {
+  const decided = settled.filter(
+    (s): s is SettledWords & { setAside: string } => s.setAside !== undefined,
+  );
+  if (0 === decided.length) return;
+  try {
+    const raw = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+    const statements = Array.isArray(raw['statements']) ? raw['statements'] : [];
+    let changed = false;
+    const next = statements.map((s: unknown) => {
+      const statement = asRecord(s);
+      const kept = decided.find((d) => d.setAside === statement['text'])?.kept;
+      if (kept === undefined) return s;
+      changed = true;
+      return { ...statement, text: kept };
+    });
+    if (changed)
+      await writeFile(path, `${JSON.stringify({ ...raw, statements: next }, null, 2)}\n`);
+  } catch {
+    // No request recorded, or one this cannot read: nothing to correct.
+  }
 }
