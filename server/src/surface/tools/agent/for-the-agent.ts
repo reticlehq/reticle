@@ -12,6 +12,7 @@ import { addAppNote, readAppNotes } from './app-notes.js';
 import { DETAIL_ARG, Detail, shapeForAgent } from './compact-envelope.js';
 import { learnFromVerdict } from './app-notes-learning.js';
 import { reteachFor } from './reteach.js';
+import { staleBuildNotice } from './build-staleness.js';
 import { PRIMER_POINTER, type NoticeFold, foldNotices } from './notices.js';
 
 export interface AgentAnswer {
@@ -37,7 +38,9 @@ export function forTheAgent(answer: AgentAnswer): unknown {
   if (learned !== undefined && root !== undefined) addAppNote(root, learned);
   if (Detail.FULL === args[DETAIL_ARG]) return shaped;
   const notes = root === undefined ? [] : readAppNotes(root).map((note) => `App note: ${note}`);
+  const stale = staleBuildNotice();
   return foldNotices(shaped, attach, answer.fold, [
+    ...(stale === undefined ? [] : [stale]),
     PRIMER_POINTER,
     ...notes,
     ...reteachFor(attach, name, args, shaped),
