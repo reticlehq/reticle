@@ -470,10 +470,12 @@ export const FLOW_TOOLS: ToolDef[] = [
       at: z
         .number()
         .int()
-        .positive()
+        .nonnegative()
         .max(MAX_REPLAY_STEP)
         .optional()
-        .describe('Continue at this step on the page as it is (after another flow ran `to` it).'),
+        .describe(
+          'Continue at this step on the page as it is (after another flow ran `to` it); 0 replays the whole flow on the page the flow before it left, with no reload.',
+        ),
       sweep: z
         .boolean()
         .optional()

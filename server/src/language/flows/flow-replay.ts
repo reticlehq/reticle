@@ -473,12 +473,15 @@ export function resumeIndex(
   return steps.slice(0, at).some((step) => StepEffect.COMMITS === step.effect) ? 0 : at;
 }
 
-/** How far a replay drives: `to` stops before a step, `at` picks up at one. Positive indices only. */
+/**
+ * How far a replay drives: `to` stops before a step (positive), `at` picks up at one on the page as
+ * it is. `at: 0` is the whole flow continuing the page the flow before it left, with no reload.
+ */
 export function replayWindow(args: Record<string, unknown>): { to?: number; at?: number } {
-  const index = (raw: unknown): number | undefined =>
-    'number' === typeof raw && Number.isInteger(raw) && 0 < raw ? raw : undefined;
-  const to = index(args['to']);
-  const at = index(args['at']);
+  const index = (raw: unknown, least: number): number | undefined =>
+    'number' === typeof raw && Number.isInteger(raw) && least <= raw ? raw : undefined;
+  const to = index(args['to'], 1);
+  const at = index(args['at'], 0);
   return { ...(to === undefined ? {} : { to }), ...(at === undefined ? {} : { at }) };
 }
 

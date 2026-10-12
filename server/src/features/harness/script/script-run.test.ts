@@ -59,7 +59,8 @@ function fakePorts(
                 'potentially destructive action blocked; retry with args.confirmDangerous=true',
               );
             const failed = true === options.failing?.includes(String(args['flowName']));
-            return { status: failed ? ReplayStatus.DRIFT : ReplayStatus.OK };
+            // A failing journey's replay ran and did not hold: a drift would be undecided.
+            return { status: failed ? ReplayStatus.ERROR : ReplayStatus.OK };
           }
           if (ReticleTool.ASSERT === name) {
             const value = String(

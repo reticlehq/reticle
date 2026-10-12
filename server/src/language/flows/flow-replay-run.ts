@@ -778,7 +778,7 @@ export async function replayNamedFlow(
     return lostDocumentResult(name, error);
   }
   // Only part of the journey was driven here: its steps were checked, nothing about the whole flow.
-  if (continueAt !== undefined || (to !== undefined && to < loaded.value.steps.length))
+  if (0 < (continueAt ?? 0) || (to !== undefined && to < loaded.value.steps.length))
     return { name, status: partialStatus(steps), steps };
   // Computed HERE, before the synthetic success row is appended below: once that row is pushed,
   // `steps.length` no longer counts only the flow's own steps and the arithmetic is wrong.

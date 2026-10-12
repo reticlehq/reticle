@@ -113,11 +113,21 @@ const UNDECIDED_REPLAY: ReadonlySet<string | undefined> = new Set([
   undefined,
 ]);
 
-/** Every replay the journey made decided nothing, and it made at least one. */
-function everyReplayUndecided(calls: readonly ToolOutcome[]): boolean {
+/**
+ * The journey's replays decided nothing about the app: one could not anchor or run, and none failed.
+ * A held sign-in beside a drifted mid-session flow is not a failure of the app, and read "Failed".
+ */
+function replaysDecidedNothing(calls: readonly ToolOutcome[]): boolean {
   const replays = replayedFlows(calls);
-  return 0 < replays.length && replays.every((r) => UNDECIDED_REPLAY.has(r.status));
+  return (
+    replays.some((r) => UNDECIDED_REPLAY.has(r.status)) &&
+    !replays.some((r) => ReplayOutcome.ERROR === r.status)
+  );
 }
+
+/** Why a journey whose replay could not anchor or run is undecided, not failed. */
+const msgReplayUndecided = (flow: string): string =>
+  `the recording ${flow} could not anchor or run on this app, which decides nothing about the app`;
 
 /** The flows a journey replayed or saved, each once, in the order it touched them. */
 function flowsOf(calls: readonly ToolOutcome[]): string[] {
@@ -318,7 +328,7 @@ export async function runScript(
           ran.notTaken === undefined &&
           journey.fallback !== undefined &&
           !ports.stopped() &&
-          everyReplayUndecided(mine)
+          replaysDecidedNothing(mine)
         ) {
           refused = await ports.fallbackRefused?.();
           if (refused === undefined) {
@@ -413,6 +423,8 @@ async function runJourney(
   stop: () => void,
 ): Promise<{ ok: boolean; notTaken?: string; why?: string; undecided?: true }> {
   const checkpoints = new Map<string, { flow: string; to: number }>();
+  // One journey is one chain: a replay after the first continues the page the one before it left.
+  let replayed = false;
   for (const [index, step] of journey.steps.entries()) {
     const card = cards[index];
     if (card === undefined) continue;
@@ -434,7 +446,8 @@ async function runJourney(
       } else if (ScriptStepKind.BRANCH === step.kind) {
         ok = await runBranch(step, checkpoints.get(step.at), tools, ports, drives, stop);
       } else {
-        ok = await runLeaf(step, tools, ports, drives, stop);
+        ok = await runLeaf(step, tools, ports, drives, stop, replayed);
+        if (ScriptStepKind.REPLAY === step.kind) replayed = true;
       }
     } catch (error) {
       if (error instanceof Undecided) {
@@ -446,9 +459,11 @@ async function runJourney(
     }
     card.status = ok
       ? ScriptStatus.PASSED
-      : notTaken === undefined
-        ? ScriptStatus.FAILED
-        : ScriptStatus.NOT_TAKEN;
+      : notTaken !== undefined
+        ? ScriptStatus.NOT_TAKEN
+        : undecided
+          ? ScriptStatus.UNDECIDED
+          : ScriptStatus.FAILED;
     tell();
     if (!ok) {
       for (const rest of cards.slice(index + 1)) rest.status = ScriptStatus.BLOCKED;
@@ -536,12 +551,14 @@ async function runLeaf(
   ports: ScriptPorts,
   drives: HarnessResult[],
   stop: () => void,
+  /** A replay ran before this one in the journey: continue its page, never reload it. */
+  chained = false,
 ): Promise<boolean> {
   switch (step.kind) {
     case ScriptStepKind.REPLAY:
       return replay(tools, {
         flowName: step.flow,
-        ...(step.at === undefined ? {} : { at: step.at }),
+        ...(step.at === undefined ? (chained ? { at: 0 } : {}) : { at: step.at }),
         ...(step.to === undefined ? {} : { to: step.to }),
         // The flow's own steps, acknowledged by the person who started the run.
         ...(true === ports.confirmDangerous ? { [DESTRUCTIVE_REFUSAL]: true } : {}),
@@ -608,6 +625,11 @@ async function replay(tools: HarnessToolset, args: Record<string, unknown>): Pro
   const error = result['error'];
   const message = asString(error) ?? asString(asRecord(error)['message']) ?? '';
   if (message.includes(DESTRUCTIVE_REFUSAL)) throw new StepNotTaken(MSG_NOT_TAKEN);
+  const [outcome] = replayedFlows([
+    { id: 'replay', name: ReticleTool.FLOW_REPLAY, args, result, isError: false },
+  ]);
+  if (UNDECIDED_REPLAY.has(outcome?.status))
+    throw new Undecided(msgReplayUndecided(String(args['flowName'])));
   return false;
 }
 
