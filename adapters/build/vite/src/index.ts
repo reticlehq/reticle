@@ -558,12 +558,10 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   const sourceMapping = options.sourceMapping !== false;
   const inject = options.inject !== false;
   const desktop = true === options.desktop;
-  // Resolve the stable projectId once (explicit option, else derived from package.json + cwd) so the
-  // app is identifiable across port changes with zero config.
-  const resolved: ReticleVitePluginOptions = {
-    ...options,
-    projectId: resolveProjectId(options.projectId, process.cwd()),
-  };
+  // The stable projectId (explicit option, else `.reticle.json` / package.json in VITE'S root), so the
+  // app is identifiable across port changes with zero config. Read from the root, never the cwd:
+  // `vite apps/admin` from a monorepo root announced the root's app and saved flows under it.
+  const projectIdIn = (dir: string): string => resolveProjectId(options.projectId, dir);
   /**
    * The specifier the HTML points at, e.g. `/src/main.tsx`.
    *
@@ -614,7 +612,9 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
    */
   const resolveLazy = (): ReticleVitePluginOptions => {
     // Wherever the daemon for this project actually is; the order is argued in discover-port.ts.
-    const { port, warning } = resolveDaemonPort(resolved.port, resolved.projectId, process.cwd());
+    const appDir = root ?? process.cwd();
+    const resolved: ReticleVitePluginOptions = { ...options, projectId: projectIdIn(appDir) };
+    const { port, warning } = resolveDaemonPort(resolved.port, resolved.projectId, appDir);
     if (warning !== undefined && warning !== lastPortWarning) {
       lastPortWarning = warning;
       warn(warning);

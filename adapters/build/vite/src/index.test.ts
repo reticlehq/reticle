@@ -181,6 +181,16 @@ describe('reticle vite plugin', () => {
     expect(code).toMatch(/projectId":"[a-z0-9-]+-[0-9a-f]{8}"/);
   });
 
+  // Persona drive: `vite apps/admin` run from the repo root announced the cwd's project id, so the
+  // admin app's flows were saved under another app's project.
+  it("reads the project id from Vite's root, not the directory Vite was started in", () => {
+    const admin = mkdtempSync(join(tmpdir(), 'reticle-vite-root-'));
+    writeFileSync(join(admin, '.reticle.json'), JSON.stringify({ projectId: 'admin-app' }));
+    const plugin = reticle();
+    plugin.configResolved?.({ root: admin, command: 'serve' });
+    expect(plugin.load?.(RETICLE_CONNECT_MODULE)).toContain('"projectId":"admin-app"');
+  });
+
   it('an explicit projectId option overrides the derived one', () => {
     const code = reticle({ projectId: 'my-fixed-id' }).load?.(RETICLE_CONNECT_MODULE);
     expect(code).toContain('my-fixed-id');
