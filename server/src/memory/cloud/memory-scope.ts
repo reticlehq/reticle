@@ -38,6 +38,8 @@
  * make `flows` reach a directory it never needed.
  */
 
+import { callingClientName } from '@/hooks/coding-agents.js';
+
 /**
  * The path this module builds, spelled once, for the same reason as the names below.
  *
@@ -98,6 +100,19 @@ export const MemoryReadHeader = {
   PURPOSE: 'x-reticle-read-purpose',
 } as const;
 export const MemoryReadPurpose = { SYNC: 'sync' } as const;
+
+/**
+ * The headers of an agent's memory read: the key, and the agent whose call made the read. A replay's
+ * read went without the agent, and the platform credited it to "an agent that did not name itself".
+ * No agent is named when no single agent made the call: a guess would credit the wrong one.
+ */
+export function memoryReadHeaders(apiKey: string): Record<string, string> {
+  const agent = callingClientName();
+  return {
+    authorization: `Bearer ${apiKey}`,
+    ...(agent === undefined ? {} : { [MemoryReadHeader.AGENT]: agent }),
+  };
+}
 
 /**
  * The URL for one memory read.

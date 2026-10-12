@@ -62,7 +62,11 @@ import type { DeviationReport } from '@/memory/journal/deviation-report.js';
 import { homedir } from 'node:os';
 import { cloudFetch, syncRunRecordToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
-import { memoryReadUrl, scopedMemoryEntries } from '@/memory/cloud/memory-scope.js';
+import {
+  memoryReadHeaders,
+  memoryReadUrl,
+  scopedMemoryEntries,
+} from '@/memory/cloud/memory-scope.js';
 import { consultSubjectFor, selectConsulted, type ConsultedMemory } from './flow-memory-consult.js';
 import { log } from '@/log.js';
 import { replayStepShooter } from '@/features/visual/step-shots.js';
@@ -196,11 +200,7 @@ async function consultProjectMemory(
   const subject = consultSubjectFor(flow);
   if (subject === undefined) return undefined;
   try {
-    // The APP's root, not the daemon's. `deps.reticleRoot` is wherever the daemon was launched,
-    // which for a user-scoped MCP registration is almost never the project being verified — so the
-    // link file it reads is the wrong one, or absent, and every project silently reads as
-    // "not attached". Same class of bug as the flow store resolving per daemon instead of per
-    // session, and it is invisible: the feature simply never appears.
+    // The APP's root, not the daemon's (wherever it was launched): its link file is this project's.
     const cloud = await resolveProjectCloud(deps.fs, root, homedir(), process.env);
     if (null === cloud.config || !cloud.policy.memory) return undefined;
     // Scoped to the linked project. The key covers a whole workspace, so a read that named no
@@ -209,7 +209,7 @@ async function consultProjectMemory(
     const url = memoryReadUrl(cloud.config.url, { projectId: cloud.projectId, subject });
     const res = await cloudFetch(url, {
       method: 'GET',
-      headers: { authorization: `Bearer ${cloud.config.apiKey}` },
+      headers: memoryReadHeaders(cloud.config.apiKey),
     });
     if (200 !== res.status) return undefined;
     // `cloudFetch` hands back a real `Response`, so the body is a METHOD. Reading `res.json` as a
