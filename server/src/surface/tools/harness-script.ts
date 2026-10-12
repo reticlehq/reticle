@@ -179,6 +179,12 @@ export async function exploreScript(
       throw error;
     }
   }
+  // The same persona runs the plan it made last time, as it stands on the platform now (edits and
+  // replay-first included): a new plan per HUD run meant a passed journey was never replayed.
+  const again = focus === undefined ? undefined : await planMadeFor(deps, options.sessionId, focus);
+  const reused = again === undefined ? undefined : await fetchScript(platform, again);
+  if (again !== undefined && reused !== undefined)
+    return runPlan(deps, env, options, before, { platform, plan, script: reused, planId: again });
   // What the screen offers, for a named journey too. The platform splits a broad request ("test my
   // app, make a plan") into journeys through these controls and leaves a narrow one whole; without
   // them, a chat-requested drive of a desktop app planned one step that restated the request.
@@ -228,7 +234,11 @@ async function runPlan(
   const reads = withProjectFlows(deps, options.sessionId);
   const focus = options.focus;
   // Saved the moment it exists, so a drive that breaks still leaves its plan behind.
-  const planFile = await savePlan(deps, options.sessionId, { planId, script });
+  const planFile = await savePlan(deps, options.sessionId, {
+    planId,
+    script,
+    ...(focus === undefined ? {} : { focus }),
+  });
 
   const maxSteps = options.maxSteps ?? maxStepsFromEnv(env);
   // The script replays the saved flows itself; a model handed them too replayed them again per goal.
@@ -396,7 +406,13 @@ async function runPlan(
   await savePlan(
     deps,
     options.sessionId,
-    { planId, script, results, ...appControlsOf(run.toolCalls, crawled) },
+    {
+      planId,
+      script,
+      ...(focus === undefined ? {} : { focus }),
+      results,
+      ...appControlsOf(run.toolCalls, crawled),
+    },
     planFile,
   );
   for (const line of run.lines) narrate(line);
@@ -570,6 +586,8 @@ async function savePlan(
   plan: {
     planId?: string | undefined;
     script: DriveScript;
+    /** The persona the run was asked for, so the next run as that persona runs this plan again. */
+    focus?: string;
     results?: JourneyResult[];
     appControls?: string[];
   },
@@ -617,6 +635,29 @@ async function crawlApp(
   } catch {
     return undefined;
   }
+}
+
+/** The platform plan the newest saved run as `focus` ran, or undefined when none did. */
+async function planMadeFor(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+  focus: string,
+): Promise<string | undefined> {
+  try {
+    const dir = reticleDirPaths(sessionRoot(deps, sessionId)).plans;
+    const files = (await deps.fs.readdir(dir))
+      .filter((f) => f.endsWith('.json'))
+      .sort()
+      .reverse();
+    for (const file of files) {
+      const saved = asRecord(JSON.parse(await deps.fs.readFile(join(dir, file))));
+      const planId = saved['planId'];
+      if (focus === saved['focus'] && 'string' === typeof planId) return planId;
+    }
+  } catch {
+    /* no plans yet: this persona is planned afresh */
+  }
+  return undefined;
 }
 
 /**

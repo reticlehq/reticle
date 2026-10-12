@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ReticleEnv, Verified } from '@reticlehq/core';
 import { driveRunsFrom } from '@/judgement/runs/drive-run.js';
+import { createMemoryFs } from '@/memory/project/memory-fs.js';
 import type { ToolDeps } from './tools.js';
 import {
   DEFAULT_MAX_STEPS,
@@ -745,6 +746,48 @@ describe('a saved plan the platform refuses', () => {
         ],
       },
     ]);
+  });
+
+  /**
+   * Every "Run Harness" from the HUD made a new plan (five runs, five plans "(1)" … "(5)"), so the
+   * replays a plan serves once a journey passed never reached a HUD run. The same persona runs the
+   * plan it made last time, as it stands on the platform now.
+   */
+  it('runs the plan it made for the same persona last time, instead of planning again', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init: RequestInit) => {
+        calls.push(`${String(init.method)} ${url.replace('https://api.test', '')}`);
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ planId: 'hp_9', script: plan({ kind: 'act', goal: 'sign in' }) }),
+          ),
+        );
+      }),
+    );
+    const unlocked = () =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({ provider: 'jev', harnessEnabled: true, harnessUnlocked: true }),
+          ),
+      });
+    const { fs } = createMemoryFs();
+    const deps = { ...depsWithFlows([]), fs, reticleRoot: '/app/.reticle' } as unknown as ToolDeps;
+    const run = (focus: string) =>
+      exploreApp(deps, linked, { focus, driver: finishing(''), configFetch: unlocked });
+    await run('Ana: pays for her cart');
+    const proposals = (): number =>
+      calls.filter((c) => c.startsWith('POST') && c.endsWith('/v1/harness/scripts')).length;
+    expect(proposals()).toBe(1);
+    await run('Ana: pays for her cart');
+    expect(proposals()).toBe(1);
+    expect(calls).toContain('GET /v1/harness/scripts/hp_9');
+    await run('Ben: refunds');
+    expect(proposals()).toBe(2);
   });
 
   /** A planned run of a model drive answered `creditsSpent` absent, read as a free 15-step run. */
