@@ -409,13 +409,14 @@ export async function runTool<Ext>(
 }
 
 /** Advisories that become once-per-session notice lines. See agent/notices.ts. */
-const NOTICE_FOLD: NoticeFold = {
+export const NOTICE_FOLD: NoticeFold = {
   advisories: [
     EnvelopeKey.FEEDBACK_PROMPT,
     EnvelopeKey.FEEDBACK_INVITE,
     EnvelopeKey.TALK_TO_US,
     EnvelopeKey.UPDATE_AVAILABLE,
-    EnvelopeKey.VERSION_SKEW,
+    // NOT `version_skew`: it is decisive — it explains every result after it and names the command to
+    // run — so it rides out as its own key, untouched (one-shot at its source already).
     EnvelopeKey.PLATFORM,
     EnvelopeKey.SESSION_LEASE,
     EnvelopeKey.SESSION_AGE_WARNING,

@@ -145,6 +145,7 @@ function fullResult(r: Rand): Record<string, unknown> {
     session: maybe(r, { lastSeenMs: 3, throttled: true, focused: false }),
     screenshot: pick(r, [{ path: '/tmp/0003.jpg', source: 'browser' }, { reason: 'no provider' }]),
     warning: maybe(r, 'tab is throttled'),
+    version_skew: maybe(r, { pair: 'daemon', action: 'run `npx @reticlehq/server stop`' }),
   });
 }
 
@@ -213,6 +214,7 @@ function decisiveOfFull(full: Record<string, unknown>): Record<string, unknown> 
     sessionId: full['sessionId'],
     session: full['session'],
     sessionWarning: full['warning'],
+    versionSkew: full['version_skew'],
     screenshotPath: rec(full['screenshot'])['path'],
     freshGaps: Array.isArray(full['instrumentationGaps'])
       ? full['instrumentationGaps'].filter((g) => true !== rec(g)['repeat'])
@@ -268,6 +270,7 @@ function decisiveOfCompact(c: Record<string, unknown>): Record<string, unknown> 
     sessionId: c['sessionId'],
     session: c['session'],
     sessionWarning: c['warning'],
+    versionSkew: c['version_skew'],
     screenshotPath: rec(c['screenshot'])['path'],
     freshGaps: c['instrumentationGaps'],
     undeclaredRequests: c['blastRadius'],
