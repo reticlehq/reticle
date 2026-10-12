@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DESKTOP_CONTRACT } from './desktop-contract.js';
+import { DESKTOP_CONTRACT, RETICLE_TAURI_INERT_MARKER } from './desktop-contract.js';
 import { renderDesktopContract } from '../../scripts/gen-desktop-contract.mjs';
 import { execFileSync } from 'node:child_process';
 
@@ -117,6 +117,13 @@ describe('desktop contract — the Rust capture helper', () => {
   it('spells the full-page refusal exactly as the daemon reads it', () => {
     expect(crateSource(LIB)).toContain(
       `pub const FULL_PAGE_UNSUPPORTED: &str = "${DESKTOP_CONTRACT.RETICLE_FULL_PAGE_UNSUPPORTED}";`,
+    );
+  });
+
+  // Re-check: the inert refusal reached the agent as the web "reticle drive" answer.
+  it('refuses an inert release build in words the daemon recognises', () => {
+    expect(crateSource(LIB)).toMatch(
+      new RegExp(`INERT_IN_RELEASE: &str =\\s*"[^"]*${RETICLE_TAURI_INERT_MARKER}`),
     );
   });
 

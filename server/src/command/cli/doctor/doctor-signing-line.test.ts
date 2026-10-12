@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   KEYCHAIN_NOTE,
+  keychainNoteFor,
   keychainNoticeOnce,
   parseCodesign,
   type Signature,
@@ -64,6 +65,7 @@ describe('the Tauri build Reticle drives', () => {
     };
     expect(tauriDevBinary((p) => files[p])).toEqual({
       build: 'src-tauri/target/debug/shop',
+      release: ['src-tauri/target/release/bundle/macos/Shop.app', 'src-tauri/target/release/shop'],
       installed: '/Applications/Shop.app',
     });
     expect(tauriDevBinary(() => undefined)).toBeUndefined();
@@ -102,5 +104,20 @@ describe('the keychain note on an agent session’s first answer', () => {
     expect(
       keychainNoticeOnce('c', { read: tauriProject, codesign: signed, platform: 'darwin' }),
     ).toBeUndefined();
+  });
+});
+
+// Re-check: with only a release build on disk, doctor read the absent debug build and said
+// nothing about a release bundle that was ad-hoc signed.
+describe('the keychain note with only a release build', () => {
+  it('reads the release bundle when there is no debug build', () => {
+    const read = (relative: string): string | undefined =>
+      ({
+        'src-tauri/Cargo.toml': 'name = "shop"',
+        'src-tauri/tauri.conf.json': '{"productName":"Shop"}',
+      })[relative];
+    const codesign = (path: string): Signature | undefined =>
+      path.endsWith('release/bundle/macos/Shop.app') ? { adhoc: true } : undefined;
+    expect(keychainNoteFor({ read, codesign, platform: 'darwin', dir: '/p' })).toBe(KEYCHAIN_NOTE);
   });
 });
