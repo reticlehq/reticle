@@ -22,6 +22,7 @@
 import { type DeterminismProfile, Surface, type SubjectRef } from 'open-verification';
 import { AppRuntime } from '@/telemetry-feedback.js';
 import { PlatformProfile } from '@/wire/platform.js';
+import { RETICLE_URL_PARAM } from '@/wire/constants/constants.js';
 
 /** What Reticle needs to know about a realm that it cannot work out by looking. */
 export interface RealmTraits {
@@ -260,8 +261,24 @@ export function subjectOf(facts: SubjectFacts): SubjectRef {
     // first document is known, never as a substitute for one.
     instance: facts.currentDocumentId ?? facts.id,
     ...(epoch === undefined ? {} : { epoch }),
-    locator: facts.url,
+    // The app's address: the marks Reticle puts on a tab to adopt it are not part of it.
+    locator: withoutReticleMarks(facts.url),
   };
+}
+
+const RETICLE_MARKS: ReadonlySet<string> = new Set(Object.values(RETICLE_URL_PARAM));
+
+/** `url` without Reticle's own query params; returned as given when it does not parse. */
+function withoutReticleMarks(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (![...parsed.searchParams.keys()].some((key) => RETICLE_MARKS.has(key))) return url;
+    for (const key of [...parsed.searchParams.keys()])
+      if (RETICLE_MARKS.has(key)) parsed.searchParams.delete(key);
+    return parsed.href;
+  } catch {
+    return url;
+  }
 }
 
 /**

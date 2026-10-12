@@ -5,6 +5,7 @@ import {
   type DriveProgram,
   type TapeStep,
 } from './drive-flow.js';
+import { basename, dirname } from 'node:path';
 import { log } from '@/log.js';
 
 /** What a session's teardown writes to the daemon log when a by-product fails to save. */
@@ -304,6 +305,7 @@ export async function recordDriveRun(
   // real Session's reader closes over the journal it was constructed with.
   if (session.readJournalActions === undefined) return;
   const actions = await session.readJournalActions();
+  const root = session.artifactRoot ?? deps.reticleRoot;
   const inputs = driveRunsFrom(actions, {
     // Derived from the session, NOT random. Teardown fires on every socket close, and a reconnecting
     // tab keeps its session id and appends to the same ledger — so a drive across two page reloads
@@ -314,6 +316,7 @@ export async function recordDriveRun(
     // Each agent session in the tab, as `reticle_session {end}` cut them, is its own run.
     agentEnds: agentEndCounts(session.id),
     ...(session.projectId === undefined ? {} : { projectId: session.projectId }),
+    projectName: basename(dirname(root)),
   });
   if (0 === inputs.length) return;
   // The protocol reaching the artifact a person actually reads. Only when the session could say
@@ -331,7 +334,7 @@ export async function recordDriveRun(
         });
   const store = new RunStore(
     deps.fs,
-    session.artifactRoot ?? deps.reticleRoot,
+    root,
     // Tell the sync daemon a run landed, rather than letting it find out on its next tick. Teardown
     // used to write this artifact with no callback at all, so the evidence from a whole session sat
     // on disk until a timer noticed — which, for the last session of the day, could be never.

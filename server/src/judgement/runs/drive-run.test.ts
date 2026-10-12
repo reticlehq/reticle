@@ -51,6 +51,13 @@ describe('a drive folded into a run', () => {
     expect(run?.checks[0]?.predicate).toBe('the row disappears');
   });
 
+  // Plan-run artifacts named the project "reticle-mcp" (the daemon's own name) when the tab reported
+  // no project: the folder it was saved in names it instead.
+  it('names the project by its folder when the tab reported none', () => {
+    const run = driveRunFrom([action(Verified.YES)], { runId: 'run_2', projectName: 'priya-shop' });
+    expect(run?.project.name).toBe('priya-shop');
+  });
+
   it('keeps the action each check came from, so its screenshot can find it', () => {
     const run = driveRunFrom([action(Verified.YES, 'the row disappears', 41)], DEPS);
     expect(run?.checks[0]?.actionId).toBe('c41');

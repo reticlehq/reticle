@@ -48,6 +48,8 @@ import { withCorrections } from './late-answer.js';
 const UNNAMED_AGENT = 'reticle-mcp';
 
 export interface DriveRunDeps {
+  /** The project's folder name, for a tab that reported no project id. */
+  projectName?: string | undefined;
   runId: string;
   /** The project this session belonged to, for the dashboard's row. */
   projectId?: string | undefined;
@@ -256,7 +258,8 @@ export function driveRunFrom(
     durationMs: spanOf(actions),
     profile: RunProfile.DEV,
     project: {
-      name: deps.projectId ?? UNNAMED_AGENT,
+      // Never the daemon's own name: a tab that reported no project is named by its folder.
+      name: deps.projectId ?? deps.projectName ?? UNNAMED_AGENT,
       framework: deps.framework ?? RunFramework.OTHER,
     },
     agent: {
