@@ -15,6 +15,8 @@
 import { createHash } from 'node:crypto';
 import {
   ScriptStatus,
+  asRecord,
+  asString,
   StepEffect,
   type FlowFile,
   type FlowStep,
@@ -174,11 +176,56 @@ export async function fetchScript(
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) return undefined;
-    const parsed = DriveScriptSchema.safeParse(((await res.json()) as { script?: unknown }).script);
-    return parsed.success && 0 === checkScript(parsed.data).length ? parsed.data : undefined;
+    const plan = (await res.json()) as { script?: unknown };
+    const parsed = DriveScriptSchema.safeParse(plan.script);
+    return parsed.success && 0 === checkScript(parsed.data).length
+      ? replayFirst(parsed.data, plan)
+      : undefined;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * A rerun replays what passed before. A journey the plan's history shows passing, with the flows it
+ * saved, replays those flows; the model drives its goal only when they decide nothing (`fallback`),
+ * and a replay that fails is a regression, never re-driven. A rerun re-drove a journey that had
+ * passed, at a model's cost, and failed it twice. Journeys that already replay are left as planned.
+ */
+export function replayFirst(script: DriveScript, plan: unknown): DriveScript {
+  const passedFlows = new Map<string, string[]>();
+  const record = asRecord(plan);
+  const runs = Array.isArray(record['runs']) ? record['runs'] : [];
+  const batches = [...runs.map((run) => asRecord(run)['results']), record['results']];
+  for (const batch of batches) {
+    if (!Array.isArray(batch)) continue;
+    for (const raw of batch) {
+      const result = asRecord(raw);
+      const id = asString(result['id']);
+      const flows = Array.isArray(result['flows'])
+        ? result['flows'].filter((f): f is string => 'string' === typeof f && 0 < f.length)
+        : [];
+      if (id !== undefined && ScriptStatus.PASSED === result['status'] && 0 < flows.length)
+        passedFlows.set(id, flows);
+    }
+  }
+  if (0 === passedFlows.size) return script;
+  return {
+    ...script,
+    journeys: script.journeys.map((journey) => {
+      const flows = passedFlows.get(journey.id);
+      const goals = journey.steps.map((step) =>
+        ScriptStepKind.ACT === step.kind ? step.goal : undefined,
+      );
+      if (flows === undefined || journey.fallback !== undefined || goals.includes(undefined))
+        return journey;
+      return {
+        ...journey,
+        steps: flows.map((flow) => ({ kind: ScriptStepKind.REPLAY, flow })),
+        fallback: { goal: goals.join('; ') },
+      };
+    }),
+  };
 }
 
 /** One journey's outcome, as the platform keeps it beside the plan. */

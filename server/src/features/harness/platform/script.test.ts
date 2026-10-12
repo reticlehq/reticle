@@ -15,6 +15,7 @@ import {
   proposeScript,
   reportPlanResults,
   WHOLE_APP_REQUEST,
+  replayFirst,
 } from './script.js';
 import { ScriptStatus } from '@reticlehq/core';
 import { DriveScriptSchema, JourneyBy } from '@reticlehq/core/artifacts';
@@ -375,5 +376,43 @@ describe('a plan that never got to run', () => {
       ],
     });
     expect(drivesNothing(branched)).toBe(false);
+  });
+});
+
+/*
+ * A re-drive: a plan's first run passed its journey and saved two flows; reruns 3 and 4 re-drove it
+ * with the model ("0 replayed · 1 driven", ~64k tokens) and failed twice. A journey that passed
+ * before replays the flows it saved, and the model drives its goal only if those decide nothing.
+ */
+describe('a rerun of a plan', () => {
+  const script = DriveScriptSchema.parse({
+    version: 1,
+    source: 'platform',
+    lanes: [{ id: 'A', journeys: ['goal-1', 'goal-2'] }],
+    journeys: [
+      { id: 'goal-1', title: 'Save', steps: [{ kind: 'act', goal: 'save "Order 7"' }] },
+      { id: 'goal-2', title: 'Reload', steps: [{ kind: 'act', goal: 'reload, "Order 7"' }] },
+    ],
+  });
+
+  it('replays the flows of a journey that passed before, with its goal as the fallback', () => {
+    const plan = {
+      runs: [
+        { at: 1, results: [{ id: 'goal-1', status: 'passed', flows: ['home', 'saved-items'] }] },
+        { at: 2, results: [{ id: 'goal-1', status: 'failed', by: 'model' }] },
+      ],
+    };
+    const out = replayFirst(script, plan);
+    expect(out.journeys[0]?.steps).toEqual([
+      { kind: 'replay', flow: 'home' },
+      { kind: 'replay', flow: 'saved-items' },
+    ]);
+    expect(out.journeys[0]?.fallback).toEqual({ goal: 'save "Order 7"' });
+    // Never passed: driven as planned.
+    expect(out.journeys[1]?.steps).toEqual([{ kind: 'act', goal: 'reload, "Order 7"' }]);
+  });
+
+  it('leaves a plan with no history as it is', () => {
+    expect(replayFirst(script, {})).toEqual(script);
   });
 });
