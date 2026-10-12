@@ -219,6 +219,7 @@ const cmdWhoami = async (): Promise<number> => {
 export const accountStatusFields = async (): Promise<{
   signedInAs: string | null;
   linkedProject: string | null;
+  linkedWorkspace?: string;
   keyRefused?: string;
 }> => {
   const session = await readSession();
@@ -230,9 +231,17 @@ export const accountStatusFields = async (): Promise<{
   );
   // What the last sync heard, from local state, in the platform's words when it named the reason.
   const refused = keyRefusalAtLastSync(linkedRoot());
+  const link = await readJson(join(linkedRoot(), CLOUD_LINK_FILE));
+  const workspace =
+    'object' === typeof link && null !== link
+      ? (link as Record<string, unknown>)['workspace']
+      : undefined;
   return {
     signedInAs: session?.orgName ?? null,
     linkedProject: null === cloud.config ? null : cloud.projectId,
+    ...(null !== cloud.config && 'string' === typeof workspace && 0 < workspace.length
+      ? { linkedWorkspace: workspace }
+      : {}),
     ...(refused === undefined ? {} : { keyRefused: refused }),
   };
 };
@@ -481,6 +490,8 @@ export const cmdLink = async (
     url,
     ...(dashboardUrl === undefined ? {} : { dashboardUrl }),
     ...(repo === undefined ? {} : { repo }),
+    // The workspace's name, so `reticle status` can say where this repo sends.
+    ...(workspace === undefined ? {} : { workspace }),
     sync: prevObj['sync'] ?? { runs: true, memory: true, flows: true },
     verify: prevObj['verify'] ?? 'local',
   };

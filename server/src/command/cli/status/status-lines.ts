@@ -135,6 +135,8 @@ export function statusLines(fields: Record<string, unknown>): string[] {
   if ('signedInAs' in fields) {
     const who = str(fields, 'signedInAs');
     const project = str(fields, 'linkedProject');
+    // Signed in to one workspace, a repo can still send to another: say which it sends to.
+    const workspace = str(fields, 'linkedWorkspace');
     // A key the platform refused at the last sync is the answer, not "not signed in": a member
     // removed from the workspace was told to connect while the key was set, and refused.
     const refused = str(fields, 'keyRefused');
@@ -152,7 +154,7 @@ export function statusLines(fields: Record<string, unknown>): string[] {
       continuation(
         project === undefined
           ? 'this repo is not linked: run `reticle connect`'
-          : `this repo is linked to ${project}`,
+          : `this repo is linked to ${project}${workspace === undefined ? '' : ` in workspace "${workspace}"`}`,
       ),
     );
   }

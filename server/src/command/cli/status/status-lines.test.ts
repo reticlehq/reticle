@@ -120,6 +120,20 @@ describe('an account whose key the platform refused', () => {
   });
 });
 
+/* A re-drive: signed in to one workspace, `reticle status` did not say which one the repo sends to. */
+describe('the workspace a linked repo sends to', () => {
+  it('is named beside the project', () => {
+    const out = statusLines({
+      port: 4400,
+      running: false,
+      signedInAs: 'Omar\u2019s workspace',
+      linkedProject: 'omar-notes',
+      linkedWorkspace: 'Northwind Retail',
+    }).join('\n');
+    expect(out).toContain('this repo is linked to omar-notes in workspace "Northwind Retail"');
+  });
+});
+
 /* Persona drives: the agent-link row printed the raw state name ("enumerated", "never-enumerated"). */
 describe('the agent link row', () => {
   /** The status fields for a port whose record is in `state`, as the daemon reads them. */
