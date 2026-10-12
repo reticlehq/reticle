@@ -96,6 +96,7 @@ import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-k
 import { verdictIntentGap } from '@reticlehq/engine/evidence/verdict-intent-gap.js';
 import { asActionType, gradeOf } from './act/act-helpers.js';
 import { resolveActTarget } from './act/act-target.js';
+import { screenRequestFindings, withAdvisories } from './act/screen-request.js';
 import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrue } from './act/already-true.js';
@@ -961,7 +962,8 @@ export const ACT_TOOLS: ToolDef[] = [
           // whole point is catching what NOBODY suspected. It now travels with the action, so an
           // agent cannot miss it by not asking. Omitted entirely when clean, so a healthy action
           // pays nothing.
-          ...(contradictions.length > 0 ? { contradictions } : {}),
+          // + the opt-in, advisory screen/request check, appended AFTER the verdict (act/screen-request.ts).
+          ...withAdvisories(contradictions, await screenRequestFindings(session, windowEvents)),
           ...(durable === undefined ? {} : { durable }),
           honesty: honestyForVerdict(String(decision.verified), honesty),
           // Without its summary: it is byte-identical to `summary` two fields up. See wireCapsule.
