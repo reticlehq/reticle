@@ -12,6 +12,27 @@ import { type ActionTarget, isHtmlElement, valuePrototypeOf } from '@/dom/realm.
  * Set a value on a controlled input the way React expects (native setter + input event).
  * Returns the `input` event's dispatchEvent result (defaultPrevented of the primary event).
  */
+/** The autocomplete tokens WebKit offers saved passwords for. */
+const PASSWORD_AUTOCOMPLETE = /\b(current|new)-password\b/;
+/** Blink and Gecko never raise WebKit's panel; Blink still spells its frozen `AppleWebKit/537.36`. */
+const NOT_WEBKIT = /Chrome|Chromium|Edg\/|Firefox|Gecko\//;
+
+/**
+ * A fill that must not focus its field: a password field in WebKit, where focus raises the system
+ * saved-password panel (a signed WKWebView app, Safari). The value setter and the input/change
+ * events are what React, Vue and a plain form read, so the app still hears the value; an editor that
+ * commits only on blur would not, which is why this is limited to password fields.
+ */
+export function isAutofillSafeTarget(el: Element, ua: string = navigator.userAgent): boolean {
+  if (!(el instanceof HTMLInputElement)) return false;
+  const password =
+    'password' === el.type.toLowerCase() ||
+    PASSWORD_AUTOCOMPLETE.test(el.getAttribute('autocomplete') ?? '');
+  if (!password || NOT_WEBKIT.test(ua)) return false;
+  // Real WebKit reports 600+; Blink froze 537.36, and so do test DOMs that borrow its string.
+  return 600 <= Number(/AppleWebKit\/(\d+)/.exec(ua)?.[1] ?? 0);
+}
+
 export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): boolean {
   // Realm-aware: a controlled input inside a same-origin frame has its own prototype.
   const proto = valuePrototypeOf(el);

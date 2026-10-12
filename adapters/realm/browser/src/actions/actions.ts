@@ -18,7 +18,12 @@ import {
   assertOutwardAllowed,
   submitControlFor,
 } from './danger-context.js';
-import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
+import {
+  assertEditable,
+  assertNotRichText,
+  isAutofillSafeTarget,
+  setNativeValue,
+} from './value-input.js';
 import { getAccessibleName, getRole, isVisible, getStates } from '@/dom/a11y.js';
 import { elementHasHoverHandlers, identifyComponent } from '@/registry/stores/adapters.js';
 import {
@@ -66,6 +71,8 @@ interface ActionEffect {
   focusMoved: string | null;
   /** fill/type/clear only: input value before !== after; else false. */
   valueChanged: boolean;
+  /** A password fill in WebKit, made without focus so no saved-password panel rose. */
+  autofillSafe?: true;
   /** Mutation records counted by a short-lived MutationObserver (one microtask + rAF window). */
   domMutatedWithin: number;
   /**
@@ -340,12 +347,8 @@ const GENERIC_ACTION_ARG_KEYS: ReadonlySet<string> = new Set([
  * because the caller chose to name a path that cannot be read in-browser. This is worse than the
  * daemon path, but better than a refusal that tells the agent "upload does not support paths".
  *
- * The refusal names the keys upload reads so a caller that guessed can correct in one turn.
- *
- * Scoped to upload deliberately. Dropping an unrecognised key in silence is a property of EVERY
- * action — `args` is `z.record(z.unknown())` at the wire boundary — but upload is the one where the
- * dropped key is replaced with fabricated content. Refusing unknown keys everywhere needs a
- * per-action arg schema in core and is a larger change than this release should carry.
+ * The refusal names the keys upload reads so a caller that guessed can correct in one turn. Scoped
+ * to upload: it is the one action where a dropped key is replaced with fabricated content.
  */
 function assertUploadArgs(args: Record<string, unknown>): void {
   const keys = Object.keys(args);
@@ -573,13 +576,8 @@ async function dispatchOther(
     }
     case ActionType.FILL:
       if (isInput(el) || isTextArea(el)) {
-        // A MISSING value is a malformed call, not a request to empty the field. `asString` defaults
-        // to '', which made such a fill indistinguishable from `clear`: it wiped what was there,
-        // dispatched a real input event so React committed the empty string to state, and reported
-        // ok:true with nothing flagged. The value is nested (`args:{value}`) at the tool boundary, so
-        // passing it at the top level lands here — measured on bench-app's login form, where
-        // "admin@reticle.dev" was destroyed by a fill that reported success. An explicit '' still
-        // clears, because that is someone asking for it.
+        // A MISSING value is a malformed call, not a request to empty the field: defaulting it to ''
+        // wiped a login form's email and reported success. An explicit '' still clears.
         if (typeof args['value'] !== 'string') {
           throw new Error(
             "fill requires a string `value` — pass it nested, as args: { value: '…' }. " +
@@ -587,7 +585,8 @@ async function dispatchOther(
           );
         }
         assertEditable(el, 'fill');
-        el.focus(); // focus first so a later blur commits (onBlur editors)
+        // Focus so a later blur commits; not a WebKit password field, where it raises AutoFill.
+        if (!isAutofillSafeTarget(el)) el.focus();
         return setNativeValue(el, args['value']);
       }
       assertNotRichText(el, 'fill');
@@ -914,6 +913,7 @@ export async function executeAction(
     defaultPrevented,
     focusMoved: prevFocus !== nextFocus ? `${prevFocus ?? 'null'}->${nextFocus ?? 'null'}` : null,
     valueChanged: isFillLike(action) ? valueBefore !== valueAfter : false,
+    ...(ActionType.FILL === action && isAutofillSafeTarget(el) ? { autofillSafe: true } : {}),
     domMutatedWithin: mutated,
     // Omitted rather than "" when nothing was said — an empty string reads as "it said nothing
     // meaningful", where absence says "it added no text at all". Those are different findings.

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — filling a password field in WebKit no longer raises the saved-password panel.** In a signed macOS app's WKWebView (and in Safari) focusing a password field raises the system AutoFill panel, so every replayed sign-in step raised it. A `fill` of an `<input type="password">` (or one marked `autocomplete="current-password"`/`"new-password"`) in WebKit now sets the value through the native setter and fires `input` and `change` without focusing the field, and the step records `autofillSafe: true`. React, Vue and plain forms still see the value. Other fields, and Chromium and Firefox, are unchanged.
