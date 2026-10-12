@@ -35,15 +35,16 @@ describe('the Reticle result block', () => {
       covered: ['checkout', 'login'],
       flowsReplayed: 2,
       wallMs: 4200,
-      screenshots: ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg'],
+      screenshots: ['/r1/a.jpg', '/r2/b.jpg', '/r3/c.jpg', '/r4/d.jpg'],
       platform: LINKED,
     });
     const lines = block.split('\n');
     expect(lines[0]).toBe(`**Reticle result: ${ResultWord.PROVED}** · 3 of 3 checks held`);
     expect(block).toContain('- Checks: 3 yes · 0 no · 0 undecided');
     expect(block).toContain('- Covered: checkout, login');
-    expect(block).toContain('- Metrics: 3 checks · 2 flows replayed · 4.2s');
-    expect(block).toContain('- Evidence: a.jpg, b.jpg, c.jpg (+1 more)');
+    // The headline already carries the check count, so the metrics do not repeat it.
+    expect(block).toContain('- Metrics: 2 flows replayed · 4.2s');
+    expect(block).toContain('- Evidence: /r1/a.jpg, /r2/b.jpg, /r3/c.jpg (+1 more)');
     // The platform line is the last line, said once.
     expect(lines.at(-1)).toBe(LINKED);
     expect(block.split(LINKED)).toHaveLength(2);
@@ -79,7 +80,7 @@ describe('the Reticle result block', () => {
 
   it('leaves out a metric it did not measure rather than printing a zero', () => {
     const block = buildReticleResult({ yes: 1, no: 0, undecided: 0, platform: LINKED });
-    expect(block).toContain('- Metrics: 1 check');
+    expect(block).not.toContain('Metrics');
     expect(block).not.toContain('replayed');
     expect(block).not.toContain('Evidence');
     expect(block).not.toContain('token');
@@ -205,10 +206,45 @@ describe('the block on a single replay and on a Harness drive', () => {
 
   it('a replay that held is one proved check, one flow replayed, its time and screenshot', () => {
     const block = replayResult(unlinked(), replay('ok'), 1500, 'run-1');
-    expect(block.split('\n')[0]).toContain(ResultWord.PROVED);
+    expect(block.split('\n')[0]).toBe(
+      `**Reticle result: ${ResultWord.PROVED}** · 1 of 1 check held`,
+    );
     expect(block).toContain('- Covered: checkout');
-    expect(block).toContain('- Metrics: 1 check · 1 flow replayed · 1.5s');
+    expect(block).toContain('- Metrics: 1 flow replayed · 1.5s');
     expect(block).toContain('- Evidence: /shots/0.jpg');
+  });
+
+  it('a single replay says each fact once: no restated counts, and its screenshots by folder', () => {
+    // The answer around this block already lists every step's screenshot path, so the block names
+    // the run's folder once instead of repeating three long paths. Measured: the block was 340 of
+    // a replay answer's tokens, 216 of them paths the steps above it already carried.
+    const dir = '/private/var/folders/06/abc/T/project/.reticle/visual/runs/0b8f5c2e-4c1d';
+    const steps = [0, 1, 2, 3, 4].map((i) => ({
+      step: i,
+      anchor: `a${String(i)}`,
+      ok: true,
+      screenshot: { path: `${dir}/000${String(i + 1)}-replay.jpg`, source: 'browser' },
+    }));
+    const block = replayResult(unlinked(), replay('ok', { steps }), 600, 'run-1');
+    const lines = block.split('\n');
+    expect(lines[0]).toContain(ResultWord.PROVED);
+    expect(block).toContain(`- Evidence: 5 screenshots in ${dir}`);
+    for (const s of steps) expect(block).not.toContain(s.screenshot.path);
+    // One check: the headline says it all, so no per-word tally restates it.
+    expect(block).not.toContain('- Checks:');
+    expect(lines.length).toBeLessThanOrEqual(5);
+    expect(block.length - (lines.at(-1) ?? '').length).toBeLessThan(260);
+  });
+
+  it('screenshots from more than one folder are still listed by path', () => {
+    const block = buildReticleResult({
+      yes: 1,
+      no: 0,
+      undecided: 0,
+      screenshots: ['/r1/a.jpg', '/r2/b.jpg'],
+      platform: LINKED,
+    });
+    expect(block).toContain('- Evidence: /r1/a.jpg, /r2/b.jpg');
   });
 
   it('a drifted replay is failed and names the flow; an unverifiable one is not proved', () => {

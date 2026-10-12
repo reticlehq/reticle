@@ -95,16 +95,24 @@ const summary = {
    * do), and `durationMs` (it was `window.until - window.since`, shipped alongside both operands).
    * That took 604 -> 431 with detection unchanged at 3/3, 2/2, 1/1.
    *
-   * What is left is evidence, not restatement, so it is declared rather than trimmed further. The
-   * next rise has to declare itself the same way.
+   * What is left is evidence, not restatement, so it is declared rather than trimmed further.
+   *
+   * The next rise, 460 -> 1155, is declared the same way and was measured key by key against main
+   * on these four flows: each step's screenshot `{ path, source }` (~370: an absolute path per step,
+   * the evidence the run uploads and the agent opens), the Reticle result block the agent pastes
+   * (~170), and the replay's `runId` (~25, what a platform Re-verify ties its check to). The block
+   * cost ~345 before it was cut to say each fact once: no restated check counts, and the run's
+   * screenshot folder named once in place of three long paths the steps above it already carry.
+   * The step contradictions (`request-never-settled`) vary with the fixture's timing: the same
+   * flow measured 1242 and 1317 on consecutive runs, so the budget covers the high side. Detection is unchanged at 3/3, 2/2, 1/1.
    */
   cost: {
     token_budget: {
-      extra_tokens: 180,
+      extra_tokens: 700,
       reason:
-        'per-step window + digest + contradictions (the deterministic effect record). Route fat ' +
-        'was cut first: 604 -> 431 via sparse digest counters, default-valued `tool`, and the ' +
-        'derived `durationMs`. Detection held at 3/3, 2/2, 1/1 across every cut.',
+        'per-step screenshot paths (~370), the Reticle result block (~170, cut from ~345 by ' +
+        'naming the screenshot folder once and not restating counts), and the replay runId ' +
+        '(~25), plus run-to-run contradiction variance (~±80). Detection held at 3/3, 2/2, 1/1.',
     },
   },
   per_run: {

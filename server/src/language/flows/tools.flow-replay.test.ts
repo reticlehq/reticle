@@ -188,6 +188,10 @@ describe('reticle_flow_replay handler — temp dir, never touches the repo', () 
     expect(block).toMatch(/^\*\*Reticle result: failed\*\*/);
     expect(block).toContain('- Did not hold: drifted');
     expect(block).toContain('1 flow replayed');
+    // The block summarises; the verdict and its evidence stay on the answer itself.
+    expect(res['status']).toBe(ReplayStatus.DRIFT);
+    expect(Array.isArray(res['steps'])).toBe(true);
+    expect(block.split('\n').length).toBeLessThanOrEqual(5);
   });
 
   it('C: a missing flow file returns a structured error envelope (no throw)', async () => {

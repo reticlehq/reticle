@@ -10,7 +10,7 @@
  * measured that was not measured: a metric with no number is left out, never printed as a zero.
  */
 import { existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   JournalVerdictEffectSchema,
   ReticleDir,
@@ -97,10 +97,30 @@ function headline(f: ResultFacts): string {
   return `${HEAD}${ResultWord.PROVED}**${SEP}${String(f.yes)} of ${plural(total, 'check')} held`;
 }
 
+/**
+ * The evidence line. Screenshots filed under one run share one folder, so the folder is named once
+ * with the count: three long paths cost a single replay more tokens than its verdict, and its answer
+ * already lists each step's own path.
+ */
+function evidenceLine(shots: readonly string[]): string[] {
+  if (0 === shots.length) return [];
+  const dirs = new Set(shots.map((s) => dirname(s)));
+  const [dir] = dirs;
+  if (1 < shots.length && 1 === dirs.size && dir !== undefined)
+    return [`- ${Said.EVIDENCE}: ${plural(shots.length, 'screenshot')} in ${dir}`];
+  const more = shots.length - EVIDENCE_SHOWN;
+  return [
+    `- ${Said.EVIDENCE}: ${shots.slice(0, EVIDENCE_SHOWN).join(', ')}${0 < more ? ` (+${String(more)} more)` : ''}`,
+  ];
+}
+
+/**
+ * Each fact once. The headline carries the check count, so the metrics do not repeat it; with one
+ * check the headline is the whole tally, so the per-word count line is left out.
+ */
 export function buildReticleResult(f: ResultFacts): string {
   const total = f.yes + f.no + f.undecided;
   const metrics = [
-    plural(total, 'check'),
     ...(f.flowsReplayed === undefined ? [] : [`${plural(f.flowsReplayed, 'flow')} replayed`]),
     ...(f.journeysReplayed === undefined
       ? []
@@ -108,21 +128,19 @@ export function buildReticleResult(f: ResultFacts): string {
     ...(f.journeysDriven === undefined ? [] : [`${plural(f.journeysDriven, 'journey')} driven`]),
     ...(f.wallMs === undefined ? [] : [seconds(f.wallMs)]),
   ];
-  const shots = f.screenshots ?? [];
-  const more = shots.length - EVIDENCE_SHOWN;
   return [
     headline(f),
-    `- ${Said.CHECKS}: ${String(f.yes)} yes${SEP}${String(f.no)} no${SEP}${String(f.undecided)} undecided`,
+    ...(1 < total
+      ? [
+          `- ${Said.CHECKS}: ${String(f.yes)} yes${SEP}${String(f.no)} no${SEP}${String(f.undecided)} undecided`,
+        ]
+      : []),
     ...(0 < (f.covered?.length ?? 0) ? [`- ${Said.COVERED}: ${(f.covered ?? []).join(', ')}`] : []),
     ...(0 < (f.failed?.length ?? 0)
       ? [`- ${Said.DID_NOT_HOLD}: ${(f.failed ?? []).join(', ')}`]
       : []),
-    `- ${Said.METRICS}: ${metrics.join(SEP)}`,
-    ...(0 === shots.length
-      ? []
-      : [
-          `- ${Said.EVIDENCE}: ${shots.slice(0, EVIDENCE_SHOWN).join(', ')}${0 < more ? ` (+${String(more)} more)` : ''}`,
-        ]),
+    ...(0 === metrics.length ? [] : [`- ${Said.METRICS}: ${metrics.join(SEP)}`]),
+    ...evidenceLine(f.screenshots ?? []),
     f.platform,
   ].join('\n');
 }
