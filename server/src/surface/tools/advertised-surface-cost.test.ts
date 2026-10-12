@@ -335,7 +335,9 @@ describe('advertised surface cost', () => {
 // 151,466 B with the `screenshot` envelope key on every output schema: each action, assert and
 // replayed step names its screenshot's path, and a validating client strips an undeclared key.
 // The default surface sends no output schemas. Measured plus the headroom, so 152,466.
-const ALL_SURFACE_BYTE_BUDGET = 152_466;
+// 152,555 B with `filesNotFound` on reticle_intent (a declared file that is not in the project is
+// named, not kept as the fact's source; a validating client would strip it). Plus the headroom.
+const ALL_SURFACE_BYTE_BUDGET = 153_555;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

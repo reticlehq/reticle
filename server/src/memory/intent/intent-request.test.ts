@@ -122,3 +122,27 @@ describe('who the request is shared with', () => {
     expect((await declare({ shareRequests: false })).shared).toBe(false);
   });
 });
+
+/*
+ * Persona drive: `reticle_intent` accepted `surface.files: ["src/pages/SavedItems.tsx"]` — the file
+ * is `src/views/SavedItems.tsx` — and the Memory page showed the wrong path as the fact's source.
+ */
+describe('a declared file that does not exist', () => {
+  it('is not stored as the source, and the answer says so', async () => {
+    const { d, fs } = deps(1_000);
+    await fs.mkdir('/repo/src/views');
+    await fs.writeFile('/repo/src/views/SavedItems.tsx', 'x');
+    const out = (await intentTool?.handler(d, {
+      action: 'declare',
+      intents: [
+        {
+          id: 'saved',
+          statement: 'Saving adds the order to the top of Saved Items',
+          surface: { files: ['src/pages/SavedItems.tsx', 'src/views/SavedItems.tsx'] },
+        },
+      ],
+    })) as { filesNotFound?: string[]; intents?: { surface?: { files?: string[] } }[] };
+    expect(out.filesNotFound).toEqual(['src/pages/SavedItems.tsx']);
+    expect(out.intents?.[0]?.surface?.files).toEqual(['src/views/SavedItems.tsx']);
+  });
+});

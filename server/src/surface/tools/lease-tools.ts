@@ -128,7 +128,9 @@ const ALREADY_HELD_LEASE = 'you already hold a lease on this origin';
 function alreadyHeldHint(sessionId: string, origin: string): string {
   return (
     `${ALREADY_HELD_LEASE} (${origin}): ${sessionId} — reused it rather than opening a second ` +
-    'tab, which would make every later call require sessionId. Release first if you want a fresh one.'
+    'tab, which would make every later call require sessionId. It is still signed in as whoever ' +
+    'used it last (cookies and storage come with it): release it first for a fresh context or ' +
+    'another identity.'
   );
 }
 

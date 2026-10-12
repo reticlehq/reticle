@@ -395,6 +395,9 @@ describe('reticle_lease_acquire', () => {
     expect(second.leased).toBe(1);
     expect(second.hint).toMatch(/already hold a lease on this origin/);
     expect(second.hint).toContain(first.sessionId);
+    // Persona drive: a fresh context was asked for and the previous persona's signed-in tab came
+    // back; the answer says the identity comes with it.
+    expect(second.hint).toMatch(/still signed in/);
     expect(acquired).toHaveLength(1);
   });
 

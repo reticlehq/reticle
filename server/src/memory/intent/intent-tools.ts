@@ -124,6 +124,7 @@ export const INTENT_TOOLS: ToolDef[] = [
         .optional()
         .describe('declare only: statements not stored, and why.'),
       path: z.string().optional().describe('Where the ledger was written.'),
+      filesNotFound: z.array(z.string()).optional().describe('surface.files not in the project'),
       entries: z
         .array(z.unknown())
         .optional()
@@ -191,17 +192,53 @@ export const INTENT_TOOLS: ToolDef[] = [
           `${ReticleTool.INTENT} declare: \`intents\` must be a non-empty array of { id, statement }, got ${raw === undefined ? 'nothing' : JSON.stringify(raw)} — nothing was stored`,
         );
       }
-      const entries = raw as { id: string; statement: string; surface?: never }[];
+      const { entries, missing } = await withExistingFiles(
+        deps,
+        dirname(root),
+        raw as { id: string; statement: string; surface?: never }[],
+      );
       const declared = await store.declare(entries);
       // Said, not swallowed: an agent that declared something and finds nothing stored would
       // otherwise conclude the ledger lost it.
       const refused = entries
         .filter((entry) => isActionLabel(entry.statement))
         .map((entry) => ({ id: entry.id, reason: STEP_LABEL_REFUSAL }));
-      return { intents: declared, ...(0 === refused.length ? {} : { refused }), path: root };
+      return {
+        intents: declared,
+        ...(0 === refused.length ? {} : { refused }),
+        // Named, never kept as a fact's source: a path that is not in the project is a guess.
+        ...(0 === missing.length ? {} : { filesNotFound: missing }),
+        path: root,
+      };
     },
   },
 ];
+
+/**
+ * The entries with each `surface.files` path that is not in the project left out, and those paths.
+ * An agent declared `src/pages/SavedItems.tsx` for `src/views/SavedItems.tsx`, and the dashboard
+ * showed the wrong file as the fact's source.
+ */
+async function withExistingFiles<T extends { surface?: unknown }>(
+  deps: ToolDeps,
+  projectDir: string,
+  entries: readonly T[],
+): Promise<{ entries: T[]; missing: string[] }> {
+  const missing: string[] = [];
+  const kept = await Promise.all(
+    entries.map(async (entry) => {
+      const surface = entry.surface as { files?: unknown } | undefined;
+      if (!Array.isArray(surface?.files)) return entry;
+      const files: string[] = [];
+      for (const file of surface.files)
+        if ('string' === typeof file && (await deps.fs.exists(join(projectDir, file))))
+          files.push(file);
+        else if ('string' === typeof file) missing.push(file);
+      return { ...entry, surface: { ...surface, files } };
+    }),
+  );
+  return { entries: kept, missing };
+}
 
 const MAX_REQUEST = 20_000;
 const MAX_STATEMENT = 500;
