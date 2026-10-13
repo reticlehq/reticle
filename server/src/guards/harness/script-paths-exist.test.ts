@@ -167,7 +167,7 @@ describe('a dist path a loose script requires still exists', () => {
  * WHY IT LIVES HERE rather than in a new guard. The check above already caught this exact defect in
  * `package.json` scripts, after `lint:docs` named six files that a regrouping had moved. Same
  * defect, same release, same kind of string — it simply happened in a file this guard did not read.
- * CLAUDE.md rule 13 says to prefer fixing the ONE shared function over adding a guard beside it, so
+ * AGENTS.md rule 13 says to prefer fixing the ONE shared function over adding a guard beside it, so
  * the input set grew instead of the guard count.
  *
  * Directories are checked only when written with a trailing slash. A bare `src/cli` is

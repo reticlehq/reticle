@@ -3,6 +3,9 @@
 # silently untracked. Same bug as `build/` vs adapters/build/, fixed the same way.
 /plan/
 
+# A maintainer's own rules for their agent. Claude Code loads it beside CLAUDE.md; it never ships.
+/CLAUDE.local.md
+
 # Cloud control plane — the paid app (moat + tenant/billing) lives OUTSIDE this repo, at the
 # sibling ReticleHQ/app/, with its own git per service. This entry is a belt-and-suspenders guard
 # so a stray app/ dir can never be committed into the Apache OSS repo by accident.

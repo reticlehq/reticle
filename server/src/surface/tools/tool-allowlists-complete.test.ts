@@ -10,7 +10,7 @@ const SERVER_SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
 /**
  * A tool's BEHAVIOUR is declared in ten separate name sets, and forgetting one is silent.
  *
- * CLAUDE.md rule 10 says "three allowlists". There are ten, and the one that matters most fails
+ * AGENTS.md rule 12 says "three allowlists". There are ten, and the one that matters most fails
  * without a sound: a tool missing from `VERDICT_TOOLS` emits no `verification_completed` and stops
  * counting toward the product's headline metric. Nothing throws. No test reddens. The data is simply gone — which is
  * the exact failure mode rule 10 exists to prevent and, until this file, did not.

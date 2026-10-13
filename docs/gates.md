@@ -138,6 +138,8 @@ node apps/e2e/matrix.mjs --self-check                # the validator still refus
 pnpm gate:install:self-test                          # mis-wires every scaffold; the gate MUST go red
 ```
 
+The install gate also compares `init`'s plan with `apps/e2e/install-baseline.json`, because a step that changes its mark or leaves the plan passes every other check. If you change the plan on purpose, run `pnpm gate:install --update-baseline` and commit the diff. Add `--only <id>` to record one scaffold again; the write merges, so the other scaffolds stay.
+
 ---
 
 ## 3. Gates that are not automatic

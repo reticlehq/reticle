@@ -1,4 +1,4 @@
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, WRITING_RULE_SHORT } from '@reticlehq/core';
 import { SHARED_PARAM_GUIDANCE } from './shared-params.js';
 import { defaultAdvertisedNames } from '@/surface/tools/tool-surface.js';
 import { surfaceVocabulary, listOf, type SurfaceVocabulary } from './surface-vocabulary.js';
@@ -223,5 +223,5 @@ export function buildServerInstructions(state: InstructionState): string {
     ? `${verdictDiscipline(v)}\n\n${reachFor(v)}\n\n${feedbackAsk(v)}`
     : `${firstMove}\n\n${verdictDiscipline(v)}\n\n${feedbackAsk(v)}`;
   const withReplay = replay.length > 0 ? `${base}\n\n${replay}` : base;
-  return `${withReplay}\n\n${SHARED_PARAM_GUIDANCE}`;
+  return `${withReplay}\n\n${SHARED_PARAM_GUIDANCE}\n\n${WRITING_RULE_SHORT}`;
 }

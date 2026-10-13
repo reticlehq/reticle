@@ -33,6 +33,7 @@ It registers Reticle with every coding agent it finds and prints the next steps:
 4. **Never weaken a check to make it pass.** On a `no`, read `expected` / `observed` / the nearest candidates, then fix the app or the target.
 5. Target by `{ testid }`, `{ role, name }`, `{ label }` or `{ text }`; an ambiguous target is refused, a missing one says what is there.
 6. Diagnosing a bug? Read the source first. Reticle proves what the app does, not why; drive to confirm a fix.
+7. Write the text that you save (flow names, notes, feedback, plans) in ASD-STE100 Simplified Technical English: short sentences, active voice, one meaning for each word, no idioms.
 
 ## The tools you have
 

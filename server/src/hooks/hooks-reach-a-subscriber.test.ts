@@ -10,7 +10,7 @@
  *     git grep -n hook-emit -- '*.test.ts'   ->   no output
  *
  * Deleting either `emitVerdictHook` or `emitBugFoundHook` from `invoke-tool.ts` left the whole
- * suite green. That is the shape CLAUDE.md rule 10 exists for — an emitter fails silently, nothing
+ * suite green. That is the shape AGENTS.md rule 12 exists for — an emitter fails silently, nothing
  * throws, no test reddens, and the data is simply never there — except that here the missing data is
  * somebody else's integration rather than our telemetry.
  *

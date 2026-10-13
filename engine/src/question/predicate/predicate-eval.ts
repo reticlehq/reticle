@@ -680,7 +680,7 @@ export interface SettleScope {
 /**
  * "The page has gone quiet": no network/DOM/animation activity for at least `quietMs`. Needs the
  * wall-clock `now` (in the buffer's time base) because "no activity in the last N ms" is relative to
- * now, not to any buffered event — so `now` is injected (CLAUDE.md rule 7), and the wait loop's
+ * now, not to any buffered event — so `now` is injected (AGENTS.md rule 7), and the wait loop's
  * poll interval is what eventually flips this to pass once activity stops.
  */
 export function evalSettled(

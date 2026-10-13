@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { REPO_ROOT } from '@/machine/repo-root.js';
 
 /**
- * The map at the top of CLAUDE.md points at directories that are there.
+ * The map at the top of AGENTS.md points at directories that are there.
  *
  * That block is the first thing anybody reads to find out where anything lives, and it is the
  * first thing an agent reads before touching this repository. It named seven directories that
@@ -22,11 +22,11 @@ import { REPO_ROOT } from '@/machine/repo-root.js';
  * whether the path exists is a fact, and it is the half that rots when directories move.
  */
 
-const CLAUDE_MD = 'CLAUDE.md';
+const LAYOUT_DOC = 'AGENTS.md';
 
 /** The fenced block holding the layout table, which is the first one in the file. */
 function layoutBlock(): string {
-  const text = readFileSync(join(REPO_ROOT, CLAUDE_MD), 'utf8');
+  const text = readFileSync(join(REPO_ROOT, LAYOUT_DOC), 'utf8');
   const open = text.indexOf('```');
   const close = text.indexOf('```', open + 3);
   return -1 === open || -1 === close ? '' : text.slice(open + 3, close);
@@ -116,7 +116,7 @@ const ignoredPaths = (): ReadonlySet<string> => {
   }
 };
 
-describe('the map at the top of CLAUDE.md', () => {
+describe('the map at the top of AGENTS.md', () => {
   it('finds paths to check, so a pass is not a pass over nothing', () => {
     // A changed fence, a reformatted table or a stricter regex would silently empty this.
     expect(mappedPaths().length).toBeGreaterThan(15);
@@ -142,7 +142,7 @@ describe('the map at the top of CLAUDE.md', () => {
     );
     expect(
       absent,
-      `${CLAUDE_MD} points at these and a fresh clone does not have them. This block is the ` +
+      `${LAYOUT_DOC} points at these and a fresh clone does not have them. This block is the ` +
         'first thing anybody reads to find out where code lives, and a wrong map sends every ' +
         'reader and every agent to the wrong place. A path that is deliberately gitignored (like ' +
         '`plan/`) is exempt automatically — if one is listed here, git is tracking nothing under it.',
@@ -161,7 +161,7 @@ describe('the map at the top of CLAUDE.md', () => {
     }
     expect(
       missing.sort(),
-      `${CLAUDE_MD} has no line for these packages. A package nobody mapped is a package ` +
+      `${LAYOUT_DOC} has no line for these packages. A package nobody mapped is a package ` +
         'nobody finds.',
     ).toEqual([]);
   });

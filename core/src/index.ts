@@ -129,3 +129,4 @@ export {
 } from './identity/contract-fingerprint.js';
 export { fingerprintFinding, type FindingIdentity } from './verdict/finding-fingerprint.js';
 export * from './words/unreachable-notice.js'; // the page's unreachable warning, as a contract the daemon parses
+export * from './words/writing-rule.js'; // how agents write the text Reticle keeps (ASD-STE100, about 80%)

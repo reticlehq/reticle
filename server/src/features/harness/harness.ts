@@ -18,7 +18,7 @@
  *    it, which is what lets the whole thing be tested against a scripted model with no API key.
  */
 
-import { ReticleTool, Verified, asRecord } from '@reticlehq/core';
+import { ReticleTool, Verified, WRITING_RULE, asRecord } from '@reticlehq/core';
 import { claimsOnlyRoute, knownPagesLine, routeHint } from './route-guess.js';
 import { withTimeout } from './with-timeout.js';
 import { lookFor } from './goals.js';
@@ -350,6 +350,8 @@ export function systemPrompt(focus?: string, routes: readonly string[] = []): st
     'expectations as you go. Do not report bugs; drive the app.',
     '',
     'Call `finish` when you have covered the app or cannot get further.',
+    '',
+    WRITING_RULE,
     ...(0 === routes.length
       ? []
       : [
