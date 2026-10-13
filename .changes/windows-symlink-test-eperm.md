@@ -1,0 +1,3 @@
+### Fixed
+
+- **`pnpm test:unit` could not pass on an ordinary Windows machine.** `adapters/realm/cli`'s snapshot suite creates a real symlink to prove a file-only walk would miss one, and `symlinkSync` throws `EPERM` on Windows without Administrator or Developer Mode — so the case failed unconditionally for any developer without either, and took the whole gate red with it. The suite now probes whether this machine can create a symlink and skips that one case when it cannot. It is a probe rather than a `process.platform` guard on purpose: a Windows box with Developer Mode on can symlink, and keeps running the case and keeps the coverage, where a platform guard would silently drop it everywhere including CI.

@@ -15,6 +15,32 @@ function scratch(): string {
   return mkdtempSync(join(tmpdir(), 'reticle-snap-'));
 }
 
+/**
+ * Can this machine create a symlink at all?
+ *
+ * On Windows `symlinkSync` needs Administrator or Developer Mode, and throws `EPERM` without
+ * either. That is a fact about the MACHINE, not about the code under test — but it failed the case
+ * below unconditionally, so `pnpm test:unit` could not pass on an ordinary Windows developer box.
+ *
+ * Probed rather than guarded on `process.platform`, because the two are not the same question: a
+ * Windows machine with Developer Mode on CAN symlink, and should keep running this case and keep
+ * the coverage. A platform guard would silently drop it on every Windows box, including CI.
+ */
+function canSymlink(): boolean {
+  const probe = mkdtempSync(join(tmpdir(), 'reticle-symlink-probe-'));
+  try {
+    writeFileSync(join(probe, 'target'), '');
+    symlinkSync(join(probe, 'target'), join(probe, 'link'));
+    return true;
+  } catch {
+    return false;
+  } finally {
+    rmSync(probe, { recursive: true, force: true });
+  }
+}
+
+const itWhenSymlinkable = canSymlink() ? it : it.skip;
+
 describe('what a snapshot notices', () => {
   it('sees a file appear', () => {
     const root = scratch();
@@ -72,7 +98,7 @@ describe('what a snapshot notices', () => {
    * `find -type f` skips it, so a tool that replaced a real file with a link to somewhere else
    * would be reported as having done nothing. That is exactly the shape of change worth catching.
    */
-  it('sees a symlink, which a file-only walk would miss', () => {
+  itWhenSymlinkable('sees a symlink, which a file-only walk would miss', () => {
     const root = scratch();
     writeFileSync(join(root, 'real.txt'), 'target');
     const before = takeSnapshot([root]);
