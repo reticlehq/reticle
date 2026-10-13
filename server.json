@@ -1,0 +1,33 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.reticlehq/reticle",
+  "title": "Reticle",
+  "description": "Verify a running web app from the inside over MCP: look, act, observe, assert. No screenshots.",
+  "version": "3.7.0",
+  "websiteUrl": "https://www.reticle.sh",
+  "repository": {
+    "url": "https://github.com/reticlehq/reticle",
+    "source": "github",
+    "subfolder": "server"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@reticlehq/server",
+      "version": "3.7.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp",
+          "valueHint": "mcp",
+          "isRequired": true,
+          "description": "Serve the Reticle tool surface over stdio"
+        }
+      ]
+    }
+  ]
+}

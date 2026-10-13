@@ -90,6 +90,14 @@ const RULES = [
         .replace(`@reticlehq/server@${from}`, `@reticlehq/server@${to}`),
   },
   {
+    what: 'MCP registry manifest',
+    files: () => ['server.json'],
+    // Two sites in one file: the server version, and the npm package version the registry resolves
+    // against. Both must move together, or `mcp-publisher publish` is rejected for naming a version
+    // npm does not have — a release that reaches npm but never reaches the registry, silently.
+    edit: (text, from, to) => text.split(`"version": "${from}"`).join(`"version": "${to}"`),
+  },
+  {
     what: 'docs.json site version',
     files: () => ['docs/docs.json'],
     edit: (text, from, to) => text.replace(`"version": "${from}"`, `"version": "${to}"`),
