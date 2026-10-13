@@ -1,7 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { CLI_CLIENT_NAME } from '@/judgement/runs/verification-sync.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
+import { DEFAULT_ASSERT_TIMEOUT_MS, LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
+import { MAX_BLOCKING_WAIT_MS } from '@/surface/tools/args/numeric-bounds.js';
 import { TOKEN_QUERY_PARAM } from '@/portal/bridge/token-auth.js';
 import { ReticleTool } from '@reticlehq/core';
 import { decideOpen } from '@/command/cli/launch/cli-launch.js';
@@ -66,6 +67,12 @@ interface AdhocVerdictOptions {
    * not care get.
    */
   sessions?: () => Promise<readonly { url: string; sessionId?: string }[]>;
+  /**
+   * How long the predicate may take to come true, from `--timeout`. It was parsed and never passed
+   * on, and the one-shot assert judged about a second after navigating, while the request the
+   * predicate named was usually still in flight (#1533).
+   */
+  timeoutMs?: number;
 }
 
 /** The lease tool is reached through `reticle_run`, the route that works on every tool profile. */
@@ -189,6 +196,36 @@ export async function releaseLease(caller: ToolCaller, sessionId: string): Promi
       args: { action: LeaseAction.RELEASE, sessionId },
     })
     .catch(() => undefined);
+}
+
+/** How long `--expect` waits without a `--timeout`: the wait form's own default. */
+const DEFAULT_EXPECT_WAIT_MS = DEFAULT_ASSERT_TIMEOUT_MS;
+/** Room for the daemon to answer after the wait it was given has run out. */
+const WAIT_CALL_SLACK_MS = 5_000;
+
+/**
+ * `reticle_assert { action: "wait" }` for the CLI, the form the file's own doc promises ("ONE
+ * `act_and_wait`", which waits). Reached through `reticle_run` because that route works on every
+ * tool profile. One call blocks no longer than an MCP request may, and returns `resume_ms` for the
+ * rest, so this calls again until the predicate is decided or the budget is spent.
+ */
+async function waitForExpectation(
+  caller: ToolCaller,
+  predicate: unknown,
+  pin: { sessionId?: string },
+  timeoutMs: number | undefined,
+): Promise<unknown> {
+  let remaining = Math.max(0, timeoutMs ?? DEFAULT_EXPECT_WAIT_MS);
+  for (;;) {
+    const result = await caller.call(
+      ReticleTool.RUN,
+      { tool: ReticleTool.WAIT_FOR, args: { predicate, timeout_ms: remaining, ...pin } },
+      Math.min(remaining, MAX_BLOCKING_WAIT_MS) + WAIT_CALL_SLACK_MS,
+    );
+    const resume = refusalText(result) === undefined ? verdictOf(result)?.['resume_ms'] : undefined;
+    if ('number' !== typeof resume || resume <= 0 || resume >= remaining) return result;
+    remaining = resume;
+  }
 }
 
 /** The narrow slice of an MCP client this needs — one call, then close. */
@@ -342,7 +379,7 @@ export async function runAdhocVerdict(options: AdhocVerdictOptions): Promise<Adh
     if (url !== undefined && leased === undefined && !alreadyAt) {
       await caller.call(ReticleTool.NAVIGATE, { url, ...pin });
     }
-    const result = await caller.call(ReticleTool.ASSERT, { predicate: options.predicate, ...pin });
+    const result = await waitForExpectation(caller, options.predicate, pin, options.timeoutMs);
     const refusal = refusalText(result);
     if (refusal !== undefined) {
       return { code: 1, lines: [`verified: unknown`, refusal] };

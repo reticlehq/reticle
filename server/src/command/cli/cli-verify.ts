@@ -830,6 +830,8 @@ export function handleVerify(parsed: {
           port,
           ...(parsed.url !== undefined && '' !== parsed.url ? { url: parsed.url } : {}),
           predicate: expectation,
+          // How long the expectation may take to come true (#1533).
+          ...(parsed.timeoutMs === undefined ? {} : { timeoutMs: parsed.timeoutMs }),
           // Read fresh, not from `presence`: that probe asks whether a daemon is on the port, and
           // this asks whether a TAB is — the difference between asserting and opening the url first.
           sessions: async () => summarizeStatus(await fetchStatus(port)).sessions,

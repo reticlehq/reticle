@@ -16,6 +16,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { acquireLease, exploreToEnd, runAdhocVerdict, type ToolCaller } from './adhoc-verdict.js';
 import { ReticleTool } from '@reticlehq/core';
 
+/** The session a call names: on the call itself, or inside the args a `reticle_run` carries. */
+const sessionOf = (args: unknown): string | undefined => {
+  const a = args as { sessionId?: string; args?: { sessionId?: string } };
+  return a.sessionId ?? a.args?.sessionId;
+};
+
 /** A fake daemon: records what was asked, answers with the verdict it was given. */
 function caller(verdict: unknown): { tool: ToolCaller; calls: { name: string; args: unknown }[] } {
   const calls: { name: string; args: unknown }[] = [];
@@ -45,17 +51,20 @@ const run = (verdict: unknown, over = {}) => {
 describe('a one-shot verdict against the running daemon', () => {
   it('navigates first, then asserts', async () => {
     const { calls } = await run({ verified: 'yes' });
-    expect(calls.map((c) => c.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+    expect(calls.map((c) => c.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.RUN]);
   });
 
   it('skips the navigation when no url is given, asserting where the session already is', async () => {
     const { calls } = await run({ verified: 'yes' }, { url: undefined });
-    expect(calls.map((c) => c.name)).toEqual([ReticleTool.ASSERT]);
+    expect(calls.map((c) => c.name)).toEqual([ReticleTool.RUN]);
   });
 
   it('passes the predicate through untouched', async () => {
     const { calls } = await run({ verified: 'yes' });
-    expect(calls[1]?.args).toEqual({ predicate: { kind: 'text', contains: 'Dashboard' } });
+    expect(calls[1]?.args).toEqual({
+      tool: ReticleTool.WAIT_FOR,
+      args: { predicate: { kind: 'text', contains: 'Dashboard' }, timeout_ms: 4000 },
+    });
   });
 });
 
@@ -121,7 +130,7 @@ describe('the session a one-shot verdict targets', () => {
     const { calls } = await run({ verified: 'yes' }, { sessionId: 's-42' });
     expect(calls).toHaveLength(2);
     for (const call of calls) {
-      expect((call.args as { sessionId?: string }).sessionId).toBe('s-42');
+      expect(sessionOf(call.args)).toBe('s-42');
     }
   });
 
@@ -129,7 +138,7 @@ describe('the session a one-shot verdict targets', () => {
   it('sends no sessionId when none was asked for', async () => {
     const { calls } = await run({ verified: 'yes' });
     for (const call of calls) {
-      expect((call.args as { sessionId?: string }).sessionId).toBeUndefined();
+      expect(sessionOf(call.args)).toBeUndefined();
     }
   });
 });
@@ -221,10 +230,10 @@ describe('a url with no connected tab', () => {
     expect(result.code).toBe(0);
     expect(c.calls.map((x) => [x.name, actionOf(x.args)])).toEqual([
       [ReticleTool.RUN, 'acquire'],
-      [ReticleTool.ASSERT, undefined],
+      [ReticleTool.RUN, undefined],
       [ReticleTool.RUN, 'release'],
     ]);
-    expect(c.calls[1]?.args['sessionId']).toBe('lease-1');
+    expect(sessionOf(c.calls[1]?.args)).toBe('lease-1');
   });
 
   it('uses the tab already open on that origin instead of leasing, navigating it there', async () => {
@@ -236,7 +245,7 @@ describe('a url with no connected tab', () => {
       connect: () => Promise.resolve(c.tool),
       sessions: () => Promise.resolve([{ url: 'http://localhost:5190/' }]),
     });
-    expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+    expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.RUN]);
   });
 
   // Navigating a tab to the url it already shows reloads it, and a reloaded Electron window is a
@@ -250,7 +259,7 @@ describe('a url with no connected tab', () => {
       connect: () => Promise.resolve(c.tool),
       sessions: () => Promise.resolve([{ url: 'http://localhost:5190/' }]),
     });
-    expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.ASSERT]);
+    expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.RUN]);
   });
 
   // `--session-id` skipped the same-document check entirely, so a pinned tab already on the url was
@@ -278,15 +287,15 @@ describe('a url with no connected tab', () => {
         { sessionId: 'tab-2', url: 'http://localhost:5190/list?page=2#top' },
       ]);
       await run('http://localhost:5190/list/?page=2');
-      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.ASSERT]);
-      expect(c.calls[0]?.args['sessionId']).toBe('tab-2');
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.RUN]);
+      expect(sessionOf(c.calls[0]?.args)).toBe('tab-2');
     });
 
     it('still navigates a pinned tab on a different url', async () => {
       const { c, run } = pinned([{ sessionId: 'tab-2', url: 'http://localhost:5190/list?page=1' }]);
       await run('http://localhost:5190/list?page=2');
-      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
-      expect(c.calls[0]?.args['sessionId']).toBe('tab-2');
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.RUN]);
+      expect(sessionOf(c.calls[0]?.args)).toBe('tab-2');
     });
 
     it('does not borrow another tab that is on the url', async () => {
@@ -295,7 +304,7 @@ describe('a url with no connected tab', () => {
         { sessionId: 'tab-2', url: 'http://localhost:5190/' },
       ]);
       await run('http://localhost:5190/list?page=2');
-      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.RUN]);
     });
 
     it('navigates, as before, when the status read fails', async () => {
@@ -308,7 +317,7 @@ describe('a url with no connected tab', () => {
         connect: () => Promise.resolve(c.tool),
         sessions: () => Promise.reject(new Error('status unreachable')),
       });
-      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.RUN]);
     });
   });
 
@@ -323,7 +332,7 @@ describe('a url with no connected tab', () => {
     });
     expect(result.code).toBe(1);
     expect(result.lines.join('\n')).toMatch(/Chromium is not installed/);
-    expect(c.calls.map((x) => x.name)).not.toContain(ReticleTool.ASSERT);
+    expect(c.calls.map((x) => x.args['tool'])).not.toContain(ReticleTool.WAIT_FOR);
   });
 });
 
@@ -388,5 +397,45 @@ describe('a Harness drive polled to its end', () => {
     };
     const result = await exploreToEnd(caller, {}, 150_000, () => t);
     expect(result).toEqual(text({ status: 'running', runId: 'harness-2' }));
+  });
+});
+
+/**
+ * `--expect` waits for the predicate (#1533). It judged once, about a second after navigating, and
+ * the request the predicate named was usually still in flight.
+ */
+describe('a one-shot verdict waits for its expectation', () => {
+  it('sends the wait form with the --timeout budget', async () => {
+    const { calls } = await run({ verified: 'yes' }, { timeoutMs: 30_000 });
+    expect(calls[1]?.name).toBe(ReticleTool.RUN);
+    expect(calls[1]?.args).toMatchObject({
+      tool: ReticleTool.WAIT_FOR,
+      args: { timeout_ms: 30_000 },
+    });
+  });
+
+  it('keeps waiting past one call when the daemon says how long is left', async () => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const answers = [
+      { pass: false, resume_ms: 20_000 },
+      { verified: 'yes', pass: true },
+    ];
+    const result = await runAdhocVerdict({
+      port: 4400,
+      predicate: { kind: 'net', urlContains: '/api/data' },
+      timeoutMs: 75_000,
+      connect: () =>
+        Promise.resolve({
+          call: (name, args) => {
+            calls.push({ name, args });
+            return Promise.resolve({ structuredContent: answers.shift() });
+          },
+          close: () => Promise.resolve(),
+        }),
+    });
+    expect(calls.map((c) => (c.args['args'] as { timeout_ms?: number }).timeout_ms)).toEqual([
+      75_000, 20_000,
+    ]);
+    expect(result.code).toBe(0);
   });
 });

@@ -232,7 +232,7 @@ Options:
 - `--storage-state <file>`: verify flows behind a login without scripting the login every time.
 - `--session-id <id>`: use a tab that is already connected.
 - `--select <label>`: verify only flows carrying this label. Repeatable.
-- `--expect '<json predicate>'` or `--expect-file <path>`: one verdict, no saved flows needed. Asks the running daemon; with none, it refuses. Exits `0` only on `verified: "yes"`.
+- `--expect '<json predicate>'` or `--expect-file <path>`: one verdict, no saved flows needed. Asks the running daemon; with none, it refuses. Waits up to `--timeout` ms (default `4000`) for the predicate to come true. Exits `0` only on `verified: "yes"`.
 - `--explore` with `--persona "<who does what>"`: no saved flows yet? The Harness drives the app and records them. Needs a linked project (`reticle connect`).
 - `--results-json <file>`: also write one verdict per journey as JSON, for CI.
 - `--confirm-dangerous`: let this run press what the replay guard holds as destructive.

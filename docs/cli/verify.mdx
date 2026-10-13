@@ -18,13 +18,13 @@ It uses the same runner and the same verdict as the MCP and HTTP paths, so a pla
 | --- | --- | --- | --- |
 | `url` | string, positional, **required** | none | The preview URL to drive |
 | `--headed` | boolean | `false` (headless) | Show the browser |
-| `--timeout N` | number, ms | `15000` | How long to wait for a browser session to dial back |
+| `--timeout N` | number, ms | `15000` | How long to wait for a browser session to dial back. With `--expect`, how long the predicate may take to come true instead, default `4000` |
 | `--storage-state <file>` | string | unset | A Playwright storage state file. This is how you verify flows behind a login without scripting the login every time |
 | `--results-json <file>` | string | unset | Also write one verdict per journey to this file: `{ verdict, results: [{ journey, verdict, reason? }] }`, each verdict `yes`, `no` or `unknown`. A skipped journey is `unknown`, and the run is `yes` only when every journey is. Written when verify boots its own browser and a run finishes; a refusal before that writes nothing. The [GitHub Action](https://github.com/reticlehq/reticle/tree/main/action) posts this file |
 | `--port N` | number | `RETICLE_PORT`, else the project's port, else `4400` | The bridge port the app dials |
 | `--session-id <id>` | string | unset | Use a tab that is already connected |
 | `--select <label>` | string, repeatable | unset | Verify only flows carrying this label |
-| `--expect '<json predicate>'` / `--expect-file <path>` | string | unset | One verdict on one predicate, no saved flows needed. Asks the daemon that owns the port and never starts one; with no daemon it refuses. Exits `0` only on `verified: "yes"`. Cannot be combined with `--storage-state` |
+| `--expect '<json predicate>'` / `--expect-file <path>` | string | unset | One verdict on one predicate, no saved flows needed. Asks the daemon that owns the port and never starts one; with no daemon it refuses. Waits up to `--timeout` for the predicate, the way `reticle_assert { action: "wait" }` does, so a request still in flight after the page loads is waited for. Exits `0` only on `verified: "yes"`. Cannot be combined with `--storage-state` |
 | `--explore` / `--persona "<who does what>"` | boolean / string | off | No saved flows yet? The Harness drives the app and records them. `--persona` implies `--explore` |
 | `--confirm-dangerous` | boolean | off | Let this run press the controls the replay guard holds as destructive, such as a "Place order" or "Delete" button in a saved flow. Without it such a step is refused, so a checkout flow cannot pass. It covers this run only and is never saved into a flow. |
 

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: `verify <url> --expect` waits for its predicate, up to `--timeout`.** It called the one-shot assert about a second after navigating and dropped `--timeout`, so a predicate naming a request the page makes shortly after load came back `unknown` with `window_closed_early`. The same predicate passed through `reticle_assert { action: "wait" }`. `--expect` now uses that wait form, through `reticle_run` so it works on every tool profile, with the `--timeout` budget or a default of 4000 ms. A budget longer than one MCP request continues on `resume_ms`. `verify --help` and the CLI docs say `--timeout` applies to `--expect`. Closes [#1533](https://github.com/reticlehq/reticle/issues/1533).
