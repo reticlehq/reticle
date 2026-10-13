@@ -2,7 +2,6 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { CLI_CLIENT_NAME } from '@/judgement/runs/verification-sync.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { DEFAULT_ASSERT_TIMEOUT_MS, LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
-import { MAX_BLOCKING_WAIT_MS } from '@/surface/tools/args/numeric-bounds.js';
 import { TOKEN_QUERY_PARAM } from '@/portal/bridge/token-auth.js';
 import { ReticleTool } from '@reticlehq/core';
 import { decideOpen } from '@/command/cli/launch/cli-launch.js';
@@ -220,7 +219,9 @@ async function waitForExpectation(
     const result = await caller.call(
       ReticleTool.RUN,
       { tool: ReticleTool.WAIT_FOR, args: { predicate, timeout_ms: remaining, ...pin } },
-      Math.min(remaining, MAX_BLOCKING_WAIT_MS) + WAIT_CALL_SLACK_MS,
+      // The daemon blocks no longer than one request allows and answers resume_ms past that, so
+      // the budget plus slack always outlasts the call.
+      remaining + WAIT_CALL_SLACK_MS,
     );
     const resume = refusalText(result) === undefined ? verdictOf(result)?.['resume_ms'] : undefined;
     if ('number' !== typeof resume || resume <= 0 || resume >= remaining) return result;
