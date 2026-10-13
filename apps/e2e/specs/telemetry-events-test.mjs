@@ -307,7 +307,8 @@ await settle();
   // whether this kind was already seen this session — and says nothing about the app it was found in.
   // `bug_attribution` is ALWAYS present and is an owner, never a description of the app: `app` |
   // `request` | `reticle` | `unclassified`, from a closed list.
-  const BUG_FIELDS = new Set(['bug_falseGreen', 'bug_fingerprint', 'bug_kind', 'bug_repeat', 'bug_source', 'bug_tool', 'bug_attribution']);
+  // `bug_occurrence` is OUR count of hits of one fingerprint in the session: an index, never app data.
+  const BUG_FIELDS = new Set(['bug_falseGreen', 'bug_fingerprint', 'bug_kind', 'bug_repeat', 'bug_source', 'bug_tool', 'bug_attribution', 'bug_occurrence']);
   check('  carries only the classified kind, source, dedup flag and attribution', bugs.every((b) =>
     Object.keys(b.properties).filter((k) => k.startsWith('bug_')).every((k) => BUG_FIELDS.has(k))));
   // Whose fault it was. It shipped twice and was wrong both times — across two real drives every
@@ -477,14 +478,17 @@ await settle(() => find('runtime_crashed').length >= 2);
   check('  leaks NO user path or app file', !blob.includes('/Users/ada') && !blob.includes('Checkout.tsx'));
   // The detail that makes a fingerprint diagnosable rather than merely rankable.
   const deep = cs.find((e) => e.properties.crash_errorType === 'TypeError');
-  check('  carries a READABLE skeleton message', typeof deep?.properties.crash_message === 'string' && deep.properties.crash_message.includes('*'));
+  // Allow-listed: a sentence Reticle wrote, else an error code plus the fingerprint. The class is
+  // already `crash_errorType`; the message is not ours, so it arrives as its group key alone.
+  check('  carries its fingerprint, never its text', /^(?:[A-Za-z_]+ )?#[0-9a-f]{12}$/.test(deep?.properties.crash_message ?? ''), String(deep?.properties.crash_message));
   check('  carries OUR OWN frames with function@file:line', JSON.stringify(deep?.properties.crash_frames ?? []).includes('act-tools.js'));
   check('  frames name the FUNCTION, not just the file', JSON.stringify(deep?.properties.crash_frames ?? []).includes('@'));
   check('  frames exclude the user\'s own app frames', !JSON.stringify(deep?.properties.crash_frames ?? []).includes('checkout'));
   check('  carries the tool in flight (the trigger point)', deep?.properties.crash_tool === 'reticle_act', String(deep?.properties.crash_tool));
   check('  carries the agent\'s approach run (breadcrumb)', JSON.stringify(deep?.properties.crash_breadcrumb ?? []).includes('reticle_assert'));
   check('  carries node version + arch', typeof deep?.properties.crash_nodeVersion === 'string' && typeof deep?.properties.crash_arch === 'string');
-  check('  attributes the crash to the agent', deep?.properties.actor === 'agent');
+  // Nobody observed who caused it: the daemon does plenty on its own, so no actor is claimed.
+  check('  claims no actor for the crash', deep !== undefined && deep.properties.actor === undefined, String(deep?.properties.actor));
   // "Out of memory" and "our bug" produce identical stack traces; this is what separates them.
   check('  carries the machine state at the moment of the crash', typeof deep?.properties.crash_machine === 'object' && deep.properties.crash_machine !== null);
   check('  machine snapshot has real memory numbers', (deep?.properties.crash_machine?.totalMemMb ?? 0) > 0);
@@ -668,7 +672,8 @@ await daemon.shutdown('idle');
   check('  counted SDK failures from the browser', arrived && p.session_sdkFailures === 3, String(p.session_sdkFailures));
   check('  grouped SDK failures by shape', arrived && sdk.length === 2, `${sdk.length} shapes`);
   check('  SDK failure names the module that reported it', sdk.some((e) => e.tool === 'network_observer'));
-  check('  SDK failure carries a readable skeleton', sdk.some((e) => e.message.includes('cannot patch fetch')));
+  // Not a sentence Reticle wrote, so it arrives as its fingerprint; the module names the defect.
+  check('  SDK failure carries its fingerprint, never the page URL', sdk.length > 0 && sdk.every((e) => /#[0-9a-f]{12}$/.test(e.message) && !e.message.includes('acme.internal')));
   check('  SDK failure leaks NO app URL', !JSON.stringify(sdk).includes('acme.internal'));
   check('  SDK failures kept separate from tool errors', arrived && (p.session_errors ?? []).every((e) => e.tool !== 'network_observer'));
 }
