@@ -57,4 +57,10 @@ describe('reportMcpConnected', () => {
     reportMcpConnected('cursor', () => 3_000);
     expect(seen().map((connection) => connection['reconnect'])).toEqual([false, true]);
   });
+
+  it('caps a client name to the wire limit, so the event is not dropped as invalid', () => {
+    const seen = connections();
+    reportMcpConnected('x'.repeat(500), () => 2_000);
+    expect(String(seen()[0]?.['client']).length).toBe(64);
+  });
 });

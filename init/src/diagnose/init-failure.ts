@@ -20,6 +20,8 @@ export const InitFailure = {
   APP_CONNECTION: 'app_connection',
   BRIDGE_OCCUPIED: 'bridge_occupied',
   RUNTIME_ERROR: 'runtime_error',
+  /** Ctrl-C (or a SIGTERM) during the runtime phase, before it could say how setup went. */
+  INTERRUPTED: 'interrupted',
   OTHER: 'other',
 } as const;
 export type InitFailure = (typeof InitFailure)[keyof typeof InitFailure];

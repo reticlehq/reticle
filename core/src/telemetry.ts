@@ -600,6 +600,12 @@ export const BugFoundSchema = z.object({
    * means "not fingerprinted", never "a different defect from one that has a fingerprint".
    */
   fingerprint: z.string().max(16).optional(),
+  /**
+   * Which hit of this `fingerprint` in the session, from 1. Two hits of one defect used to be
+   * byte-identical rows, so a duplicated delivery and a real second hit could not be told apart.
+   * `occurrence: 1` is the distinct defect within a session. Absent on older senders.
+   */
+  occurrence: z.number().int().positive().optional(),
 });
 export type BugFound = z.infer<typeof BugFoundSchema>;
 
@@ -650,6 +656,8 @@ export const AppInstrumentationSchema = z.object({
   agentAttached: z.boolean(),
   /** How long the daemon had been up. Large values mean Reticle sat there with nothing wired. */
   msToFirstApp: z.number().int().nonnegative(),
+  /** The first app ever on this machine + project, not just this run. Absent otherwise. */
+  firstEver: z.boolean().optional(),
 });
 export type AppInstrumentation = z.infer<typeof AppInstrumentationSchema>;
 
@@ -898,6 +906,16 @@ export const TelemetryEventSchema = z.object({
    * every time-of-day tile from "which continent" into "9am or 11pm".
    */
   tzOffsetMin: z.number().int().min(-900).max(900).optional(),
+  /**
+   * The Reticle team's own run (`RETICLE_INTERNAL=1`, or `~/.reticle/telemetry-internal` present):
+   * dogfooding and release sweeps. Absent for everyone else. Filter it OUT of any user count.
+   */
+  internal: z.boolean().optional(),
+  /**
+   * `anonymousId` could not be persisted (read-only home, sandbox), so it is new in every process
+   * and a distinct count over it counts processes, not people. Absent when the id persisted.
+   */
+  idEphemeral: z.boolean().optional(),
   /** Only on `feedback`: the author-submitted report + its environment context. Never sent otherwise. */
   feedback: FeedbackSchema.optional(),
   /** Human or agent. Absent on events that are neither (a crash, a version change). */

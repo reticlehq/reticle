@@ -23,11 +23,12 @@ import {
   existsSync,
   rmSync,
 } from 'node:fs';
-import { homedir, platform } from 'node:os';
+import { homedir, platform, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
   TelemetryEventKind,
   TELEMETRY_EVENT_VERSION,
+  TelemetryEventSchema,
   ProjectIdSource,
   type Crash,
   type Feedback,
@@ -52,10 +53,17 @@ import { ReticleEnv } from '@reticlehq/core';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 
 const RETICLE_DIR = join(homedir(), '.reticle');
-const ID_FILE = join(RETICLE_DIR, 'telemetry-id');
-const NOTICE_FILE = join(RETICLE_DIR, 'telemetry-notice-shown');
+const ID_FILE_NAME = 'telemetry-id';
+const ID_FILE = join(RETICLE_DIR, ID_FILE_NAME);
+const NOTICE_FILE_NAME = 'telemetry-notice-shown';
 /** Presence of this file = a persistent, machine-wide opt-out (`reticle telemetry disable`). */
-const OPT_OUT_FILE = join(RETICLE_DIR, 'telemetry-opt-out');
+const OPT_OUT_FILE_NAME = 'telemetry-opt-out';
+/**
+ * Presence of this file marks the MACHINE as the Reticle team's own: every event carries
+ * `internal: true`. The persistent twin of `RETICLE_INTERNAL=1`, for a dev machine where setting a
+ * variable in every shell would be forgotten once and pollute the numbers for good.
+ */
+export const INTERNAL_MARKER_FILE = 'telemetry-internal';
 /** Where the full disclosure lives — printed in the first-run notice and `reticle telemetry status`. */
 const POLICY_URL = 'https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md';
 /** PostHog batch-capture endpoint (US cloud). `RETICLE_TELEMETRY_URL` overrides the host (EU/self-host). */
@@ -124,10 +132,21 @@ const FEEDBACK_RETRY_BACKOFF_MS = 750;
  * likely to be dropped, and it fails silently like everything else here.
  */
 const DETACHED_SEND_TIMEOUT_MS = 15_000;
+/**
+ * The body never rides in argv: argv is readable by every user on the machine through `ps`, and
+ * the body is the whole event. It is handed over in a file only its owner can read, which the child
+ * reads and deletes before sending. A file rather than a stdin pipe because the parent is a
+ * short-lived CLI that may `process.exit` the moment this returns, and an unflushed pipe write dies
+ * with it; a file is on disk before `spawn` is even called.
+ */
 const DETACHED_SEND_SCRIPT =
+  "const fs=require('fs');const f=process.argv[2];let b='';" +
+  'try{b=fs.readFileSync(f,"utf8")}catch{}try{fs.unlinkSync(f)}catch{}' +
   "fetch(process.argv[1],{method:'POST',headers:{'content-type':'application/json'}," +
-  `body:process.argv[2],signal:AbortSignal.timeout(${DETACHED_SEND_TIMEOUT_MS})})` +
+  `body:b,signal:AbortSignal.timeout(${DETACHED_SEND_TIMEOUT_MS})})` +
   '.catch(()=>{}).finally(()=>process.exit(0))';
+/** Owner read/write only: the body file must not be readable by anyone else on the machine. */
+const BODY_FILE_MODE = 0o600;
 
 /** Env var names — mirror cloud-sync's `RETICLE_*` convention. */
 import { isReticleSourceCheckout } from './dev-repo.js';
@@ -143,6 +162,7 @@ const Env = {
   FILE: 'RETICLE_TELEMETRY_FILE', // record to a local JSONL file and send NOTHING — see the sink note
   KEY: 'RETICLE_TELEMETRY_KEY', // override the PostHog project key
   CI: 'CI', // presence marks a CI environment
+  INTERNAL: 'RETICLE_INTERNAL', // "1" marks the run as the Reticle team's own (dogfooding, sweeps)
   VITEST: 'VITEST', // set by vitest — unit tests must never phone home
 } as const;
 
@@ -201,7 +221,7 @@ const readIdFile = (file: string): string | undefined => {
  */
 export const resolveIdentity = (
   file: string = ID_FILE,
-): { anonymousId: string; firstRun: boolean } => {
+): { anonymousId: string; firstRun: boolean; ephemeral?: true } => {
   try {
     const existing = readIdFile(file);
     if (existing !== undefined) return { anonymousId: existing, firstRun: false };
@@ -218,8 +238,9 @@ export const resolveIdentity = (
     }
     return { anonymousId: id, firstRun: true };
   } catch {
-    // Can't persist (read-only home, sandbox): still report, just as a fresh ephemeral id each time.
-    return { anonymousId: randomUUID(), firstRun: false };
+    // Can't persist (read-only home, sandbox): still report, as a fresh id each process, and SAY so —
+    // otherwise every process on that machine reads as a new user.
+    return { anonymousId: randomUUID(), firstRun: false, ephemeral: true };
   }
 };
 
@@ -273,12 +294,12 @@ const packageRoot = (cwd: string): string | null => {
 };
 
 /** Print the opt-out notice exactly once per machine (honest disclosure, the OSS-trust bar). */
-const showNoticeOnce = (): void => {
+const showNoticeOnce = (dir: string): void => {
   try {
-    mkdirSync(RETICLE_DIR, { recursive: true });
+    mkdirSync(dir, { recursive: true });
     // Exclusive create IS the "once": it throws when the file is already there, so the check and
     // the write cannot be split by a second process printing the notice too.
-    writeFileSync(NOTICE_FILE, '1', { encoding: 'utf8', flag: 'wx' });
+    writeFileSync(join(dir, NOTICE_FILE_NAME), '1', { encoding: 'utf8', flag: 'wx' });
     process.stderr.write(
       'reticle: anonymous usage telemetry helps improve reticle — no code, no PII, ' +
         `and your app's data never leaves your machine (${POLICY_URL}). ` +
@@ -307,7 +328,7 @@ export const describeTelemetry = (
   if (isDisabled(env, cwd)) {
     return { enabled: false, reason: 'disabled by environment variable', policyUrl: POLICY_URL };
   }
-  if (existsSync(join(dir, 'telemetry-opt-out'))) {
+  if (existsSync(join(dir, OPT_OUT_FILE_NAME))) {
     return {
       enabled: false,
       reason: 'disabled via `reticle telemetry disable`',
@@ -323,7 +344,7 @@ export const describeTelemetry = (
 
 /** Persist (or lift) the machine-wide opt-out — `reticle telemetry disable` / `enable`. */
 export const setTelemetryEnabled = (enabled: boolean, dir: string = RETICLE_DIR): void => {
-  const optOutFile = join(dir, 'telemetry-opt-out');
+  const optOutFile = join(dir, OPT_OUT_FILE_NAME);
   if (enabled) {
     rmSync(optOutFile, { force: true });
     return;
@@ -414,15 +435,19 @@ export const createTelemetry = (opts: {
   cwd?: string;
   now?: () => number;
   fetchImpl?: typeof fetch;
-  spawnImpl?: (command: string, args: string[]) => void;
+  /** The send a `detach: true` emit hands off; `input` is written to the child's stdin. */
+  spawnImpl?: (command: string, args: string[], input: string) => void;
+  /** The state home (`~/.reticle`). Injected so a test never touches the real one. */
+  reticleDir?: string;
 }): Telemetry => {
+  const reticleDir = opts.reticleDir ?? RETICLE_DIR;
   const env = opts.env ?? process.env;
   const cwd = opts.cwd ?? process.cwd();
   // A source checkout silences metrics but must not silence FEEDBACK — see onlyBlockedBySourceCheckout.
   const feedbackOnly = onlyBlockedBySourceCheckout(env, cwd);
   if (isDisabled(env, cwd) && !feedbackOnly) return NOOP;
   try {
-    if (existsSync(OPT_OUT_FILE)) return NOOP; // the persistent `reticle telemetry disable` opt-out
+    if (existsSync(join(reticleDir, OPT_OUT_FILE_NAME))) return NOOP; // the persistent `reticle telemetry disable` opt-out
   } catch {
     /* unreadable home dir — fall through; the env-var opt-outs above still apply */
   }
@@ -439,7 +464,14 @@ export const createTelemetry = (opts: {
   const os = platform();
   // Negated so it reads the way people say it: UTC+2 is +120, not -120.
   const tzOffsetMin = -new Date().getTimezoneOffset();
-  const { anonymousId, firstRun } = resolveIdentity();
+  // Feedback-only (a source checkout) sends one kind of event, typed by a person: it borrows an
+  // existing id but never MINTS one, because minting spends `firstRun` and the machine's real first
+  // run would then never report its install.
+  const idFile = join(reticleDir, ID_FILE_NAME);
+  const { anonymousId, firstRun, ephemeral } = feedbackOnly
+    ? { anonymousId: readIdFile(idFile) ?? randomUUID(), firstRun: false, ephemeral: undefined }
+    : resolveIdentity(idFile);
+  const internal = isInternal(env, reticleDir);
   /**
    * One id per PROCESS, minted in memory and never persisted — which is exactly right: a daemon run
    * IS the session, and a restarted daemon is genuinely a new one. Ephemeral by construction, so it
@@ -453,12 +485,14 @@ export const createTelemetry = (opts: {
   // was unknown for every event that could show whether they got anywhere. Reading it here puts it
   // on all of them, which is the only shape in which the question can be asked.
   const installSource = projectInstallSource(opts.cwd ?? process.cwd());
-  showNoticeOnce();
+  if (!feedbackOnly) showNoticeOnce(reticleDir);
 
   const spawnDetached =
     opts.spawnImpl ??
-    ((command: string, args: string[]): void => {
-      spawn(command, args, { detached: true, stdio: 'ignore' }).unref();
+    ((command: string, args: string[], input: string): void => {
+      const bodyFile = join(tmpdir(), `reticle-telemetry-${randomUUID()}.json`);
+      writeFileSync(bodyFile, input, { encoding: 'utf8', mode: BODY_FILE_MODE, flag: 'wx' });
+      spawn(command, [...args, bodyFile], { detached: true, stdio: 'ignore' }).unref();
     });
 
   /**
@@ -491,6 +525,9 @@ export const createTelemetry = (opts: {
       // A SCALAR, so it needs the event build and the wire schema and no `blocks` entry — the same
       // three-place trap `outage` fell into, and `installSource` documents below.
       ...(automation !== undefined ? { automation } : {}),
+      // Two SCALARS, like `automation`: event build + wire schema, no `blocks` entry.
+      ...(internal ? { internal: true } : {}),
+      ...(true === ephemeral ? { idEphemeral: true } : {}),
       os,
       tzOffsetMin,
       projectIdSource,
@@ -526,6 +563,12 @@ export const createTelemetry = (opts: {
       // seam is actually used.
       ...licenseFacts(eventTs, env),
     };
+    // The wire schema's caps are only real if something applies them. An event that fails is
+    // DROPPED, never sent and never repaired: the payload is exactly what the caps exist to stop.
+    if (!TelemetryEventSchema.safeParse(event).success) {
+      invalidDropped += 1;
+      return false;
+    }
     // Map the core contract onto PostHog's capture shape: id/name/time move up, the rest are properties.
     // The feedback body is FLATTENED into `feedback_*` properties rather than sent as a nested object:
     // PostHog filters and breakdowns operate on top-level properties, so a nested `feedback.stack`
@@ -618,7 +661,7 @@ export const createTelemetry = (opts: {
     }
     try {
       if (true === extra?.detach && opts.fetchImpl === undefined) {
-        spawnDetached(process.execPath, ['-e', DETACHED_SEND_SCRIPT, url, body]);
+        spawnDetached(process.execPath, ['-e', DETACHED_SEND_SCRIPT, url], body);
         return false; // handed off, outcome unknowable from here
       }
       // Feedback is slower and retried; everything else keeps the fire-and-forget budget.
@@ -652,6 +695,23 @@ export const createTelemetry = (opts: {
   };
 
   return { emit, enabled: true, firstRun };
+};
+
+/**
+ * Events dropped because they failed the wire schema, this process. Local only: the bad payload is
+ * the thing that must not leave, so not even a count of it is sent from here.
+ */
+let invalidDropped = 0;
+export const droppedInvalidEvents = (): number => invalidDropped;
+
+/** `RETICLE_INTERNAL=1`, or the machine-wide marker file. Unreadable home → not internal. */
+const isInternal = (env: NodeJS.ProcessEnv, dir: string): boolean => {
+  if ('1' === env[Env.INTERNAL] || 'true' === env[Env.INTERNAL]) return true;
+  try {
+    return existsSync(join(dir, INTERNAL_MARKER_FILE));
+  } catch {
+    return false;
+  }
 };
 
 /**

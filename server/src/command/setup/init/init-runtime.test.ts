@@ -284,3 +284,52 @@ describe('init run as the first half of connect', () => {
     await expect(continueAfterInit(ARGS, RESULT, IO, '/app')).rejects.toThrow('exit');
   });
 });
+
+/**
+ * `init` defers its outcome to this phase on every run, so every exit from here has to report it.
+ * Three did not: a run with nothing to continue (the dependency install failed), a runtime phase
+ * that threw, and a Ctrl-C during the wait. Each left a machine that ran init with no
+ * `init_completed` at all.
+ */
+describe('every exit reports init_completed, once', () => {
+  it('reports when there is nothing to continue with', async () => {
+    const { context: _dropped, ...noContext } = RESULT;
+    const failed = {
+      ...noContext,
+      ok: false,
+      outcome: { ok: false, reason: 'dependency_install' },
+    };
+    await expect(continueAfterInit(ARGS, failed, IO, '/app')).rejects.toThrow('exit');
+    expect(reportInitOutcome).toHaveBeenCalledExactlyOnceWith(failed.outcome);
+  });
+
+  it('reports a runtime phase that threw', async () => {
+    vi.mocked(runSetupCommand).mockRejectedValue(new Error('boom'));
+    await expect(continueAfterInit(ARGS, RESULT, IO, '/app')).rejects.toThrow('boom');
+    expect(reportInitOutcome).toHaveBeenCalledExactlyOnceWith({
+      ...RESULT.outcome,
+      ok: false,
+      reason: 'runtime_error',
+    });
+  });
+
+  it('reports an interrupt during the runtime phase, before the process goes', async () => {
+    let interrupt: (() => void) | undefined;
+    // The handler exits when it is the only listener; here the process must survive to be asserted.
+    vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    vi.mocked(runSetupCommand).mockImplementation(() => {
+      interrupt = process.listeners('SIGINT').at(-1) as (() => void) | undefined;
+      interrupt?.();
+      return Promise.resolve(SUCCESS);
+    });
+    await continueAfterInit(ARGS, RESULT, IO, '/app');
+    expect(interrupt, 'no interrupt handler was installed').toBeDefined();
+    expect(reportInitOutcome).toHaveBeenNthCalledWith(1, {
+      ...RESULT.outcome,
+      ok: false,
+      reason: 'interrupted',
+    });
+    expect(reportInitOutcome, 'reported once, not again on the way out').toHaveBeenCalledOnce();
+    expect(process.listeners('SIGINT')).not.toContain(interrupt);
+  });
+});

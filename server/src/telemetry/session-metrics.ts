@@ -47,6 +47,8 @@ const MAX_REPEAT_TOOLS = 64;
  */
 const NO_SESSION_ERROR =
   /no browser session connected|no connected session with id|multiple sessions connected/i;
+/** Distinct findings a session numbers occurrences for. A real session finds far fewer. */
+const MAX_BUG_FINGERPRINTS = 500;
 /** Cap distinct MCP clients recorded; more than a handful on one daemon is already the story. */
 const MAX_CLIENTS = 8;
 /** Bounds on the parameter map. Our own schemas are already finite; these are a belt-and-braces cap. */
@@ -78,19 +80,12 @@ export class SessionMetrics {
   #toolErrors = 0;
   #verifications = 0;
   /**
-   * Session-LIFETIME totals for the four numbers the funnel is computed from.
-   *
-   * `reset()` zeroes every window counter on each periodic flush, but `durationMs` is measured from
-   * `#startedAt` and is never reset. Without these, the FINAL summary — the one whose docstring
-   * promises "the whole session in a single event" — reports a long session containing zero tool
-   * calls, because it carries only the residue since the last flush, and anyone computing "did this
-   * session use Reticle" off the event named for the end of the session reads `no`.
-   *
-   * Window semantics are unchanged: `session_progress` still reports its own window, so nothing that
-   * already sums those events double-counts. Only `final: true` swaps in the lifetime numbers.
+   * Session-LIFETIME totals, never reset by a flush. The final summary carries them as
+   * `lifetime*` fields BESIDE its windowed counters, never in place of them: a final event whose
+   * `toolCalls` was the lifetime made every query summing a session's events count each flushed
+   * window twice.
    */
   #lifetimeToolCalls = 0;
-  #lifetimeToolErrors = 0;
   #lifetimeVerifications = 0;
   #lifetimeBugsFound = 0;
   readonly #toolCounts = new Map<string, number>();
@@ -109,11 +104,10 @@ export class SessionMetrics {
   #peakConcurrent = 0;
   #unknownToolCalls = 0;
   /**
-   * Names the agent guessed at, session-LIFETIME — a guess made early must still be reported at
-   * the end, so this is deliberately not cleared by a flush.
+   * Names the agent guessed at, this window. Reported in the window the guess was made; a lifetime
+   * map here restated every early guess on each later flush, which a sum over windows counts again.
    */
   readonly #unknownTools = new Map<string, number>();
-  #lifetimeUnknownToolCalls = 0;
   #bugsFound = 0;
   #browserMs = 0;
   #browserCommands = 0;
@@ -128,16 +122,19 @@ export class SessionMetrics {
    */
   readonly #seenBugKinds = new Set<string>();
   /**
+   * Occurrences per finding fingerprint, session-lifetime like `#seenBugKinds`, so two hits of one
+   * defect are never byte-identical rows. Capped; past the cap a new fingerprint gets no index.
+   */
+  readonly #bugOccurrences = new Map<string, number>();
+  /**
    * Tool errors meaning "the agent could not reach an app at all" — counted as a field of its own
    * because the alternative is unpacking `errors[]` in HogQL.
    */
   #noSessionErrors = 0;
   /** Connection-level MCP POST failures the SSE stream cannot see. See SessionSummary. */
   #postSocketFailures = 0;
-  #lifetimePostSocketFailures = 0;
   /** Retries of those POSTs that then delivered. */
   #postRetriesSaved = 0;
-  #lifetimePostRetriesSaved = 0;
   /** Longest back-to-back run per tool — a retry loop, which `toolCounts` cannot distinguish. */
   readonly #repeatRuns = new Map<string, number>();
   #lastTool: string | undefined;
@@ -161,7 +158,7 @@ export class SessionMetrics {
   readonly #nudges = new Map<string, number>();
   /** Harness drives refused for coverage this window, by coverage bucket. */
   readonly #harnessRefused = new Map<string, number>();
-  /** Error buckets by whose defect. Session-lifetime: the mix is a fact about the session. */
+  /** Error buckets by whose defect, this window. */
   readonly #errorClasses = new Map<string, number>();
   /**
    * The recovery hinge. A call's outcome is only known once the NEXT one starts, so the verdict for
@@ -245,7 +242,6 @@ export class SessionMetrics {
    */
   recordUnknownTool(name?: string): void {
     this.#unknownToolCalls += 1;
-    this.#lifetimeUnknownToolCalls += 1;
     if (name === undefined || 0 === name.length) return;
     const key = name.slice(0, 64);
     const seen = this.#unknownTools.get(key);
@@ -304,7 +300,6 @@ export class SessionMetrics {
    */
   recordToolError(message: string, tool?: string): void {
     this.#toolErrors += 1;
-    this.#lifetimeToolErrors += 1;
     // Whose defect. Only the `schema` bucket is fixable by writing better descriptions, and it was
     // indistinguishable from the rest inside one `toolErrors` count.
     bump(this.#errorClasses, classifyError(message));
@@ -358,7 +353,6 @@ export class SessionMetrics {
    */
   recordPostSocketFailure(): void {
     this.#postSocketFailures += 1;
-    this.#lifetimePostSocketFailures += 1;
   }
 
   /**
@@ -367,7 +361,6 @@ export class SessionMetrics {
    */
   recordPostRetrySaved(): void {
     this.#postRetriesSaved += 1;
-    this.#lifetimePostRetriesSaved += 1;
   }
 
   /** The agent's recent approach run + the call in flight — context for a crash report. */
@@ -433,6 +426,15 @@ export class SessionMetrics {
    * only lets a reader separate "how many distinct defects" from "how often they were hit", which
    * are different claims and were previously indistinguishable in the data.
    */
+  /** The 1-based occurrence of this finding in the session, or undefined past the cap. */
+  recordBugOccurrence(fingerprint: string): number | undefined {
+    const seen = this.#bugOccurrences.get(fingerprint);
+    if (seen === undefined && this.#bugOccurrences.size >= MAX_BUG_FINGERPRINTS) return undefined;
+    const occurrence = (seen ?? 0) + 1;
+    this.#bugOccurrences.set(fingerprint, occurrence);
+    return occurrence;
+  }
+
   recordBug(kind: string): boolean {
     this.#bugsFound += 1;
     this.#lifetimeBugsFound += 1;
@@ -523,28 +525,18 @@ export class SessionMetrics {
     // a periodic flush is not the end of anything and would resolve a call still in flight.
     if (final) this.#resolveRecovery();
     const machine = machineSnapshot();
-    // A FINAL summary reports the session; a periodic flush reports its window. `durationMs` was
-    // always session-lifetime, so a windowed count next to it described a 30-minute session that
-    // made no calls. The histograms below stay windowed by design — summing them across a session's
-    // events is correct, and duplicating every map to make them lifetime would double the memory
-    // this class exists to keep small.
-    const scalars = final
-      ? {
-          toolCalls: this.#lifetimeToolCalls,
-          toolErrors: this.#lifetimeToolErrors,
-          verifications: this.#lifetimeVerifications,
-          bugsFound: this.#lifetimeBugsFound,
-          postSocketFailures: this.#lifetimePostSocketFailures,
-          postRetriesSaved: this.#lifetimePostRetriesSaved,
-        }
-      : {
-          toolCalls: this.#toolCalls,
-          toolErrors: this.#toolErrors,
-          verifications: this.#verifications,
-          bugsFound: this.#bugsFound,
-          postSocketFailures: this.#postSocketFailures,
-          postRetriesSaved: this.#postRetriesSaved,
-        };
+    // EVERY event reports its own window, the final one included: summing a session's
+    // `session_progress` + `daemon_stopped` rows is then its total. The final event used to swap in
+    // the lifetime numbers, so every flushed window was counted twice by exactly that sum. The
+    // session totals ride beside them under their own names, on the final event only.
+    const scalars = {
+      toolCalls: this.#toolCalls,
+      toolErrors: this.#toolErrors,
+      verifications: this.#verifications,
+      bugsFound: this.#bugsFound,
+      postSocketFailures: this.#postSocketFailures,
+      postRetriesSaved: this.#postRetriesSaved,
+    };
     return {
       durationMs: Math.max(0, this.#now() - this.#startedAt),
       toolCalls: scalars.toolCalls,
@@ -577,7 +569,7 @@ export class SessionMetrics {
       browserMs: this.#browserMs,
       browserCommands: this.#browserCommands,
       peakConcurrentTools: this.#peakConcurrent,
-      unknownToolCalls: final ? this.#lifetimeUnknownToolCalls : this.#unknownToolCalls,
+      unknownToolCalls: this.#unknownToolCalls,
       ...(this.#unknownTools.size > 0
         ? { unknownTools: Object.fromEntries(this.#unknownTools) }
         : {}),
@@ -592,7 +584,14 @@ export class SessionMetrics {
       // verification number in this payload is windowed and a reader who summed the wrong one got a
       // different question's answer. `false` is sent, not omitted: a session that drove an app and
       // never asked whether it worked is the whole finding.
-      ...(final ? { endedWithVerdict: this.#lifetimeVerifications > 0 } : {}),
+      ...(final
+        ? {
+            endedWithVerdict: this.#lifetimeVerifications > 0,
+            lifetimeToolCalls: this.#lifetimeToolCalls,
+            lifetimeVerifications: this.#lifetimeVerifications,
+            lifetimeBugsFound: this.#lifetimeBugsFound,
+          }
+        : {}),
       ...(this.#feedbackPrompted > 0 ? { feedbackPrompted: this.#feedbackPrompted } : {}),
       ...(this.#nudges.size > 0 ? { nudgesShown: Object.fromEntries(this.#nudges) } : {}),
       ...(this.#harnessRefused.size > 0
@@ -703,6 +702,14 @@ export class SessionMetrics {
     this.#hud.reset();
     this.#nudges.clear();
     this.#harnessRefused.clear();
+    // These five were never cleared, so every flush restated them and a sum over a session's
+    // windows came out larger than its tool calls. Counts are windowed, all of them; only the
+    // facts below (an app ever connected, which clients, which bug kinds seen) outlive a window.
+    this.#errorClasses.clear();
+    this.#errorsRecovered = 0;
+    this.#errorsRepeated = 0;
+    this.#feedbackPrompted = 0;
+    this.#unknownTools.clear();
     // #seenBugKinds is deliberately NOT cleared. It is not a window counter — it is the
     // session-lifetime memory behind `repeat` on bug_found, and zeroing it made the same defect,
     // found again after a flush, report as a newly distinct one. Sessions run to 11.5 hours in the

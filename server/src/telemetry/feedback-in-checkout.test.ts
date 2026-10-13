@@ -33,7 +33,7 @@ describe('a source checkout silences metrics, not feedback', () => {
       fetchImpl,
     });
     await telemetry.emit(TelemetryEventKind.FEEDBACK_SUBMITTED, {
-      feedback: { kind: 'bug', text: 'x' },
+      feedback: { source: 'agent', kind: 'bug', text: 'x' },
     } as never);
     expect(sent.length, 'feedback from a checkout must reach the collector').toBe(1);
   });
@@ -59,7 +59,7 @@ describe('a source checkout silences metrics, not feedback', () => {
       fetchImpl,
     });
     await telemetry.emit(TelemetryEventKind.FEEDBACK_SUBMITTED, {
-      feedback: { kind: 'bug', text: 'x' },
+      feedback: { source: 'agent', kind: 'bug', text: 'x' },
     } as never);
     expect(sent).toEqual([]);
   });

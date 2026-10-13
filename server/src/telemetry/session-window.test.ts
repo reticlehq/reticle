@@ -50,10 +50,9 @@ describe('the flush must not forget which defects it has already reported', () =
     // the defect in item 3 above: the end-of-session event describing only the residue after the
     // last tick. Same intent, now asserted on the call the intent is about.
     expect(m.summarize(false).bugsFound, 'a flush reports its own window').toBe(0);
-    expect(
-      m.summarize(true).bugsFound,
-      'the FINAL event reports the session — item 3 of this file, finally fixed',
-    ).toBe(1);
+    // The FINAL event is windowed too, or summing a session's events counts every flushed window
+    // twice. The session total rides beside it under its own name.
+    expect(m.summarize(true).lifetimeBugsFound, 'the session total, on the final event').toBe(1);
   });
 });
 

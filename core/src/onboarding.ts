@@ -148,5 +148,11 @@ export const OnboardingStepSchema = z.object({
    * neither: a human abandons a step, an agent's run exits.
    */
   unattended: z.boolean().optional(),
+  /**
+   * The first time this machine + project crossed this step, ever. The daemon's "first" steps are
+   * claimed on disk and fire once; absent on a step that is not a first, and on one reported from a
+   * home that could not be written (which fires once per process instead).
+   */
+  firstEver: z.boolean().optional(),
 });
 export type OnboardingStep = z.infer<typeof OnboardingStepSchema>;

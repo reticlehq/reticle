@@ -144,18 +144,18 @@ describe('telemetry emitter', () => {
   });
 
   it('hands a detached emit to a disowned child instead of fetching in-process', async () => {
-    const spawns: Array<{ command: string; args: string[] }> = [];
+    const spawns: Array<{ command: string; args: string[]; input: string }> = [];
     const t = createTelemetry({
       cwd: USER_PROJECT,
       version: '1',
       env: TEST_ENV,
-      spawnImpl: (command, args) => spawns.push({ command, args }),
+      spawnImpl: (command, args, input) => spawns.push({ command, args, input }),
     });
     await t.emit(TelemetryEventKind.CLI_COMMAND_RUN, { detach: true });
     expect(spawns).toHaveLength(1);
     const args = spawns[0]?.args ?? [];
     expect(args[2]).toBe('http://example.test/batch/');
-    const body = JSON.parse(args[3] ?? '{}') as CapturedBatch;
+    const body = JSON.parse(spawns[0]?.input ?? '{}') as CapturedBatch;
     expect(body.api_key).toBe('phc_test');
     expect(body.batch[0]?.event).toBe(TelemetryEventKind.CLI_COMMAND_RUN);
   });

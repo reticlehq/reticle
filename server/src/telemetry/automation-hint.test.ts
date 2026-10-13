@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AutomationHint } from '@reticlehq/core/telemetry';
-import { resolveAutomationHint } from './automation-hint.js';
+import { isServerProcess, resolveAutomationHint } from './automation-hint.js';
 
 const noFiles = (): boolean => false;
 
@@ -39,6 +39,24 @@ describe('resolveAutomationHint', () => {
         hasTty: false,
       }),
     ).toBe(AutomationHint.CONTAINER);
+  });
+
+  it('does not call a daemon or an MCP server headless: it never has a terminal, by design', () => {
+    expect(
+      resolveAutomationHint({ env: {}, fileExists: noFiles, hasTty: false, serverProcess: true }),
+    ).toBeUndefined();
+  });
+
+  it.each([
+    [[], true],
+    [['serve'], true],
+    [['serve', '--port', '4400'], true],
+    [['mcp'], true],
+    [['--port', '4400'], true],
+    [['init'], false],
+    [['status'], false],
+  ])('treats argv %j as a server process: %s', (argv, expected) => {
+    expect(isServerProcess(argv)).toBe(expected);
   });
 
   it('ignores a marker that is present but empty', () => {

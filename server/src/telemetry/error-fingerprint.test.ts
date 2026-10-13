@@ -52,13 +52,6 @@ describe('errorSkeleton redacts what must never leave the machine', () => {
     expect(errorSkeleton(message)).not.toContain(secret);
   });
 
-  it('still leaves the message groupable — the shape survives', () => {
-    // The point of the skeleton is that the SAME defect hashes the same on every machine. Redacting
-    // must not turn every message into a row of asterisks.
-    const skeleton = errorSkeleton('login failed for bob@acme.com');
-    expect(skeleton).toContain('login failed for');
-  });
-
   it('gives two users of the same defect the SAME fingerprint', () => {
     expect(fingerprintError('login failed for bob@acme.com')).toBe(
       fingerprintError('login failed for alice@other.org'),
@@ -111,5 +104,61 @@ describe('a hostile error message cannot make the skeleton expensive', () => {
 
   it('is unchanged for a message shorter than the cap', () => {
     expect(errorSkeleton('no browser session connected')).toBe('no browser session connected');
+  });
+});
+
+/**
+ * Redaction by deny-list cannot win: a hostname, a Windows home directory with a space in it, a
+ * `~` path and a person's name in free text all walked through the old rules. So the message is
+ * ALLOW-listed now: it survives only as a sentence Reticle itself authors, or as the bare error
+ * code, and everything else is replaced by its fingerprint.
+ */
+describe('errorSkeleton sends only what Reticle wrote', () => {
+  it.each([
+    ['a hostname', 'getaddrinfo ENOTFOUND db.internal.acmecorp.com', 'acmecorp'],
+    ['a Windows path with a space', "ENOENT: open 'C:\\Users\\Jane Doe\\code\\app.ts'", 'Doe'],
+    [
+      'an unquoted Windows path with a space',
+      'cannot read C:\\Users\\Jane Doe\\code\\app.ts',
+      'Doe',
+    ],
+    ['a home-relative path', 'cannot read ~/secret/plans.txt', 'secret'],
+    ['a person named in free text', 'login failed for John Smith', 'Smith'],
+    ['free text with no variable part at all', 'order for customer Acme Ltd was rejected', 'Acme'],
+    ['an IP address', 'connect ECONNREFUSED 10.1.2.3:5432', '10.1.2.3'],
+    ['a URL with a query', 'fetch https://api.acme.io/v1/users?email=x failed', 'acme'],
+    ['an email', 'no account for bob@acme.com', 'bob'],
+  ])('removes %s', (_label, message, leak) => {
+    const out = errorSkeleton(message);
+    expect(out).not.toContain(leak);
+    expect(out, 'still groupable: the fingerprint rides in its place').toMatch(/#[0-9a-f]{12}$/);
+  });
+
+  it.each([
+    ['getaddrinfo ENOTFOUND db.internal.acmecorp.com', 'ENOTFOUND'],
+    ['connect ECONNREFUSED 127.0.0.1:4400', 'ECONNREFUSED'],
+    ['write EPIPE', 'EPIPE'],
+    ["TypeError: Cannot read properties of undefined (reading 'x')", 'TypeError'],
+  ])('keeps the error code of %s', (message, code) => {
+    expect(errorSkeleton(message).startsWith(`${code} #`)).toBe(true);
+  });
+
+  it.each([
+    ["no baseline named 'checkout-v3'", 'no baseline named *'],
+    ['no browser session connected. Two things to check: ...', 'no browser session connected'],
+    ["ref 'e12' no longer resolves to an element", 'ref * no longer resolves to an element'],
+    ['session disconnected', 'session disconnected'],
+    [
+      'multiple sessions connected — pass sessionId to target one: a, b',
+      'multiple sessions connected',
+    ],
+  ])('keeps the Reticle-authored message %s', (message, expected) => {
+    expect(errorSkeleton(message)).toBe(expected);
+  });
+
+  it('groups the same unknown defect across machines', () => {
+    expect(fingerprintError('getaddrinfo ENOTFOUND db.a.com')).toBe(
+      fingerprintError('getaddrinfo ENOTFOUND cache.b.org'),
+    );
   });
 });

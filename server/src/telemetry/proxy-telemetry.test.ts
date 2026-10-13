@@ -65,6 +65,10 @@ describe('the proxy flushes those counts on an existing event, and awaits the se
     expect(calls[0]?.batch[0]?.event).toBe(TelemetryEventKind.SESSION_PROGRESS);
     expect(properties.session_postSocketFailures, 'the count was dropped').toBe(1);
     expect(properties.session_postRetriesSaved, 'the saved-retry count was dropped').toBe(1);
+    // A session_progress is a window. Sending the FINAL summary here restated the lifetime totals
+    // on a row that every query sums.
+    expect(properties.session_final).toBe(false);
+    expect(properties.session_lifetimeToolCalls).toBeUndefined();
   });
 
   it('emits nothing when the proxy never saw a socket failure', async () => {

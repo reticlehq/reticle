@@ -19,6 +19,9 @@ export async function flushProxySessionMetrics(
 ): Promise<void> {
   if (metrics.empty) return;
   await telemetry.emit(TelemetryEventKind.SESSION_PROGRESS, {
-    session: metrics.summarize(true),
+    // A window, not the final roll-up: this rides `session_progress`, which every query sums, and a
+    // final summary would also resolve calls and stamp an end reason for a process that is not the
+    // daemon whose session this is.
+    session: metrics.summarize(false),
   });
 }

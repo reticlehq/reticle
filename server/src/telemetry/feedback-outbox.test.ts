@@ -3,6 +3,8 @@ import { appendFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { markDelivered, outboxPath, queueFeedback, readOutbox } from './feedback-outbox.js';
+import { drainFeedbackOutbox } from './feedback.js';
+import { createTelemetry } from './telemetry.js';
 
 /**
  * Feedback is written down BEFORE the network is touched.
@@ -13,6 +15,61 @@ import { markDelivered, outboxPath, queueFeedback, readOutbox } from './feedback
  * GOOD path. The report that exposed this survived only because its author happened to have written
  * the markdown by hand first.
  */
+/**
+ * The receipt for an undelivered report says "It will be retried", and nothing ever retried it: the
+ * outbox was written and never read. A daemon start now drains it, bounded, re-redacting each report
+ * under today's rules before it goes.
+ */
+describe('draining the outbox on daemon start', () => {
+  let home: string;
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'reticle-outbox-drain-'));
+  });
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  const telemetryWith = (ok: boolean) => {
+    const sent: Array<Record<string, unknown>> = [];
+    const fetchImpl = ((_url: string, init: { body?: string }) => {
+      const body = JSON.parse(init.body ?? '{}') as {
+        batch: Array<{ properties: Record<string, unknown> }>;
+      };
+      sent.push(body.batch[0]?.properties ?? {});
+      return Promise.resolve(new Response(null, { status: ok ? 200 : 500 }));
+    }) as unknown as typeof fetch;
+    const telemetry = createTelemetry({
+      version: '1',
+      env: { RETICLE_TELEMETRY_KEY: 'phc_test', RETICLE_TELEMETRY_URL: 'http://example.test' },
+      cwd: '/tmp/some-user-app',
+      fetchImpl,
+      reticleDir: home,
+    });
+    return { sent, telemetry };
+  };
+  const REPORT = {
+    source: 'agent',
+    kind: 'bug',
+    text: 'broke on db.internal.acmecorp.com',
+  };
+
+  it('sends what was queued, re-redacted, and empties the outbox', async () => {
+    queueFeedback(REPORT, () => new Date(0), home);
+    const { sent, telemetry } = telemetryWith(true);
+    expect(await drainFeedbackOutbox(telemetry, home)).toBe(1);
+    expect(sent).toHaveLength(1);
+    expect(String(sent[0]?.['feedback_text'])).not.toContain('acmecorp');
+    expect(readOutbox(home)).toEqual([]);
+  });
+
+  it('keeps a report the endpoint did not accept', async () => {
+    queueFeedback(REPORT, () => new Date(0), home);
+    const { telemetry } = telemetryWith(false);
+    expect(await drainFeedbackOutbox(telemetry, home)).toBe(0);
+    expect(readOutbox(home)).toHaveLength(1);
+  });
+});
+
 describe('the feedback outbox', () => {
   let home: string;
   beforeEach(() => {

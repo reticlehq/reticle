@@ -41,8 +41,13 @@ const VARIABLE_PARTS: readonly RegExp[] = [
   // ── Then the grouping rules ──────────────────────────────────────────────────────────────────
   /"[^"]*"|'[^']*'|`[^`]*`/g, // quoted values — names, selectors, snippets
   /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, // URLs
+  // Windows paths run to the end of the message: a directory name may hold a space, and
+  // `C:\Users\Jane Doe\…` cut at the first space sent the surname.
+  /(?:\\\\\?\\)?[A-Za-z]:[\\/].*$/g,
+  /~[\\/]\S*/g, // home-relative paths
   /(?:\/[\w.-]+){2,}\/?/g, // POSIX-ish paths
-  /[A-Za-z]:\\[^\s]*/g, // Windows paths
+  /\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g, // IPv4 (+ port)
+  /\b[\w-]+(?:\.[\w-]+)+\b/g, // hostnames and other dotted names
   /\b[0-9a-f]{8,}\b/gi, // hex ids, hashes, uuids-without-dashes
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, // uuids
   /\d+/g, // any remaining number — ports, counts, timeouts
@@ -74,16 +79,69 @@ const VARIABLE_PARTS: readonly RegExp[] = [
  */
 const MAX_SKELETON_INPUT = 1024;
 
-/** The skeleton of a message: variable parts blanked, whitespace collapsed, length bounded. */
-export function errorSkeleton(message: string): string {
+/** Variable parts blanked, whitespace collapsed, length bounded. The GROUPING basis; never sent. */
+function redactedShape(message: string): string {
   let skeleton = message.slice(0, MAX_SKELETON_INPUT);
   for (const pattern of VARIABLE_PARTS) skeleton = skeleton.replace(pattern, '*');
   return skeleton.replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
+/**
+ * Sentences Reticle itself authors, and the fixed text sent for each. The OUTPUT is always the
+ * label, never the matched message, so text appended to one of ours cannot ride along.
+ */
+const RETICLE_MESSAGES: readonly { readonly match: RegExp; readonly label: string }[] = [
+  { match: /^no browser session connected\b/i, label: 'no browser session connected' },
+  { match: /^multiple sessions connected\b/i, label: 'multiple sessions connected' },
+  { match: /^no connected session with id\b/i, label: 'no connected session with id *' },
+  { match: /^no baseline named\b/i, label: 'no baseline named *' },
+  { match: /^no (?:active|compiled) recording named\b/i, label: 'no recording named *' },
+  { match: /no longer resolves to an element/i, label: 'ref * no longer resolves to an element' },
+  { match: /^session disconnected$/i, label: 'session disconnected' },
+  { match: /^command '[^']*' timed out after\b/i, label: 'command * timed out after *' },
+  {
+    match: /did not resolve in current page/i,
+    label: 'flow step * did not resolve in current page',
+  },
+  {
+    match: /potentially destructive (?:\w+ )*(?:action|tool) blocked/i,
+    label: 'potentially destructive action blocked',
+  },
+  { match: /^pairing token is required\b/i, label: 'pairing token is required' },
+  { match: /no <option> with value/i, label: 'no <option> with value *' },
+  { match: /cannot hover without a real pointer/i, label: 'cannot hover without a real pointer' },
+  { match: /browser pool (?:unavailable|is shut down)/i, label: 'browser pool unavailable' },
+  { match: /Chromium is not installed/i, label: 'Chromium is not installed' },
+  { match: /^act failed$/i, label: 'act failed' },
+];
+
+/** A Node error code (`ENOENT`, `ERR_INVALID_ARG_TYPE`): an identifier Node defines, never data. */
+const NODE_ERROR_CODE = /\b(?:E[A-Z]{2,}|ERR_[A-Z_]{2,})\b/;
+/** The built-in error classes. A custom class name is the app's own word, so it is not kept. */
+const BUILTIN_ERROR_CLASS =
+  /^(?:Error|TypeError|RangeError|SyntaxError|ReferenceError|EvalError|URIError|AggregateError|AbortError|TimeoutError|DOMException|ZodError)\b/;
+
+/**
+ * What an error message may say on the wire, and it is ALLOW-listed: a sentence Reticle authors
+ * (sent as our own fixed label), else the bare Node error code or built-in class plus the
+ * fingerprint, else the fingerprint alone.
+ *
+ * It used to be the message with known-variable parts blanked, which is a deny-list, and a
+ * deny-list loses: a hostname after `getaddrinfo ENOTFOUND`, a Windows home directory with a space
+ * in it, a `~` path and a person's name in free text all reached the wire. Nothing written by
+ * anybody else survives this function, because it never echoes its input.
+ */
+export function errorSkeleton(message: string): string {
+  const head = message.slice(0, MAX_SKELETON_INPUT).trim();
+  for (const { match, label } of RETICLE_MESSAGES) if (match.test(head)) return label;
+  const fingerprint = `#${fingerprintError(message)}`;
+  const code = BUILTIN_ERROR_CLASS.exec(head)?.[0] ?? NODE_ERROR_CODE.exec(head)?.[0];
+  return code === undefined ? fingerprint : `${code} ${fingerprint}`;
+}
+
 /** A stable, opaque group key for an error message. Same defect ⇒ same key, on every machine. */
 export function fingerprintError(message: string): string {
-  return createHash('sha256').update(errorSkeleton(message)).digest('hex').slice(0, 12);
+  return createHash('sha256').update(redactedShape(message)).digest('hex').slice(0, 12);
 }
 
 /**
@@ -126,7 +184,7 @@ export function fingerprintCrash(errorType: string, stack: string, message: stri
   const basis =
     frames.length > 0
       ? `${errorType}|${frames.join('|')}`
-      : `${errorType}|${errorSkeleton(message)}`;
+      : `${errorType}|${redactedShape(message)}`;
   return createHash('sha256').update(basis).digest('hex').slice(0, 12);
 }
 

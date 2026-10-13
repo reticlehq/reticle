@@ -20,9 +20,11 @@ import {
   TelemetryEventKind,
 } from '@reticlehq/core/telemetry';
 import { getTelemetry } from './telemetry.js';
-import { reportOnboardingStep } from './onboarding-funnel.js';
+import { FirstEver, claimFirstEver, reportFirstStep } from './onboarding-firsts.js';
 
 let reported = false;
+/** The on-disk claim for the EVENT, kept apart from the `app_connected` step's own claim. */
+const APP_INSTRUMENTED_CLAIM = 'app_instrumented';
 /** Set at daemon start so the first connect can report how long the install sat un-instrumented. */
 let daemonStartedAt: number | undefined;
 
@@ -55,8 +57,13 @@ export function reportAppInstrumented(
   if (reported) return;
   reported = true;
   try {
+    // Still once per RUN: `daemon_started` minus `app_instrumented`, joined on sessionId, is the
+    // documented failure side and needs a row per run. Only the true first on this machine +
+    // project says `firstEver`, so a per-machine count no longer counts daemon restarts.
+    const firstEver = FirstEver.FIRST === claimFirstEver(APP_INSTRUMENTED_CLAIM);
     void getTelemetry().emit(TelemetryEventKind.APP_INSTRUMENTED, {
       instrumentation: {
+        ...(firstEver ? { firstEver: true } : {}),
         initialized: facts.initialized,
         agentAttached: facts.agentAttached,
         // How long the daemon ran before an app showed up. Large values are the interesting ones:
@@ -70,7 +77,7 @@ export function reportAppInstrumented(
     //
     // `instrumented` means files were written; THIS means a page actually dialled the bridge. Every
     // silent install bug so far has lived in the gap between those two.
-    void reportOnboardingStep({
+    reportFirstStep({
       phase: OnboardingPhase.FIRST_RUN,
       step: 'app_connected',
       status: OnboardingStepStatus.COMPLETED,

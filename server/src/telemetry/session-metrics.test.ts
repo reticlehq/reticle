@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BrowserLaunchKind, ConnectFailure } from '@reticlehq/core/telemetry';
+import { BrowserLaunchKind, ConnectFailure, type SessionSummary } from '@reticlehq/core/telemetry';
 import { SessionMetrics } from './session-metrics.js';
 import {
   errorSkeleton,
@@ -318,56 +318,68 @@ describe('the session summary says WHY the daemon exited', () => {
  * the same daemon carries real histograms, is that residue. Anything computed off the end-of-session
  * event then reads zero at the step it is meant to measure.
  */
-describe('a final summary reports the whole session, not the last window', () => {
-  it('counts tool calls made BEFORE a flush', () => {
+describe('every event is windowed, so summing a session never double counts', () => {
+  it('two windows + the final event sum to the true total for every scalar counter', () => {
     const m = new SessionMetrics(() => 0);
+    const events: SessionSummary[] = [];
+    m.recordToolCall('reticle_act');
+    m.recordVerification();
+    m.recordBug('a');
+    events.push(m.summarize(false));
+    m.reset();
     m.recordToolCall('reticle_act');
     m.recordToolCall('reticle_act');
-    m.reset(); // the periodic flush
+    m.recordToolError('boom', 'reticle_act');
+    events.push(m.summarize(false));
+    m.reset();
+    m.recordToolCall('reticle_query');
+    m.recordVerification();
+    events.push(m.summarize(true));
 
-    expect(m.summarize(true).toolCalls, 'this read 0 for two days').toBe(2);
+    const sum = (key: 'toolCalls' | 'verifications' | 'toolErrors'): number =>
+      events.reduce((n, e) => n + e[key], 0);
+    expect(sum('toolCalls'), 'the final event used to restate the lifetime').toBe(4);
+    expect(sum('verifications')).toBe(2);
+    expect(sum('toolErrors')).toBe(1);
+    expect(events.reduce((n, e) => n + (e.bugsFound ?? 0), 0)).toBe(1);
   });
 
-  it('still reports the WINDOW on a periodic flush, so summing those does not double-count', () => {
+  it('resets the error-class, recovery and prompt counters per window too', () => {
     const m = new SessionMetrics(() => 0);
     m.recordToolCall('reticle_act');
+    m.recordToolError('no browser session connected', 'reticle_act');
+    m.recordToolCall('reticle_act');
+    m.recordToolError('no browser session connected', 'reticle_act');
+    m.recordToolCall('reticle_look'); // the second failed again after the first: repeated
+    m.recordToolCall('reticle_look'); // the third succeeded after the second: recovered
+    m.recordFeedbackPrompt();
+    const first = m.summarize(false);
+    expect(first.errorClasses).toEqual({ state: 2 });
+    expect(first.errorsRepeated).toBe(1);
+    expect(first.errorsRecovered).toBe(1);
+    expect(first.feedbackPrompted).toBe(1);
+    m.reset();
+    const next = m.summarize(false);
+    for (const key of ['errorClasses', 'errorsRepeated', 'errorsRecovered', 'feedbackPrompted']) {
+      expect(next, `${key} restated the previous window`).not.toHaveProperty(key);
+    }
+  });
+
+  it('carries the lifetime totals on the FINAL event only, under their own names', () => {
+    const m = new SessionMetrics(() => 0);
+    m.recordToolCall('reticle_act');
+    m.recordToolCall('reticle_act');
+    m.recordVerification();
+    m.recordBug('a');
+    expect(m.summarize(false).lifetimeToolCalls, 'a flush carries no lifetime').toBeUndefined();
     m.reset();
     m.recordToolCall('reticle_query');
 
-    expect(m.summarize(false).toolCalls, 'window semantics must not change').toBe(1);
-    expect(m.summarize(true).toolCalls, 'lifetime on the final event').toBe(2);
-  });
-
-  it('does the same for verifications — the number this release is measured by', () => {
-    const m = new SessionMetrics(() => 0);
-    m.recordVerification();
-    m.reset();
-
-    expect(m.summarize(true).verifications).toBe(1);
-  });
-
-  it('does the same for tool errors and bugs found', () => {
-    const m = new SessionMetrics(() => 0);
-    m.recordToolError('boom', 'reticle_act');
-    m.recordBug('assertion-failed');
-    m.reset();
-
     const final = m.summarize(true);
-    expect(final.toolErrors).toBe(1);
-    expect(final.bugsFound).toBe(1);
-  });
-
-  it('never reports a session that acted as having made no calls', () => {
-    // The internally inconsistent row: a non-zero duration next to a zero count.
-    let t = 0;
-    const m = new SessionMetrics(() => t);
-    m.recordToolCall('reticle_snapshot');
-    t = 30 * 60 * 1000;
-    m.reset();
-
-    const final = m.summarize(true);
-    expect(final.durationMs).toBeGreaterThan(0);
-    expect(final.toolCalls, 'duration and counts must describe the same span').toBeGreaterThan(0);
+    expect(final.toolCalls, 'windowed').toBe(1);
+    expect(final.lifetimeToolCalls).toBe(3);
+    expect(final.lifetimeVerifications).toBe(1);
+    expect(final.lifetimeBugsFound).toBe(1);
   });
 });
 
@@ -509,11 +521,12 @@ describe('an unknown tool records WHAT the agent reached for', () => {
     expect(m.summarize(true).unknownTools).toEqual({ reticle_login: 2, reticle_wait: 1 });
   });
 
-  it('survives a flush — a guess made early must still be reported at the end', () => {
+  it('is reported in the window it happened in, once — summing windows must not restate it', () => {
     const m = new SessionMetrics(() => 0);
     m.recordUnknownTool('reticle_login');
+    expect(m.summarize(false).unknownTools).toEqual({ reticle_login: 1 });
     m.reset();
-    expect(m.summarize(true).unknownTools).toEqual({ reticle_login: 1 });
+    expect(m.summarize(true)).not.toHaveProperty('unknownTools');
   });
 
   it('omits the field entirely when nothing was guessed', () => {
@@ -714,11 +727,14 @@ describe('the feedback invitation is itself measured', () => {
     expect(new SessionMetrics(() => 0).summarize(true)).not.toHaveProperty('feedbackPrompted');
   });
 
-  it('survives a flush — prompts and submissions must be comparable over the session', () => {
+  it('is windowed like every count, so summing a session compares prompts with submissions', () => {
     const m = new SessionMetrics(() => 0);
     m.recordFeedbackPrompt();
+    const window = m.summarize(false);
     m.reset();
-    expect(m.summarize(true).feedbackPrompted).toBe(1);
+    m.recordFeedbackPrompt();
+    const final = m.summarize(true);
+    expect((window.feedbackPrompted ?? 0) + (final.feedbackPrompted ?? 0)).toBe(2);
   });
 });
 

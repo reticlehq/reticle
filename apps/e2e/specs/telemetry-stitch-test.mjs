@@ -365,10 +365,10 @@ const final = summaries.find((e) => prop(e, 'session_final') === true);
 chk('the daemon reported a FINAL session summary', final !== undefined, `${summaries.length} summary event(s)`);
 chk(
   'the summary carries the session it actually ran',
-  Number(prop(final, 'session_toolCalls')) > 0 &&
-    Number(prop(final, 'session_verifications')) > 0 &&
+  Number(prop(final, 'session_lifetimeToolCalls')) > 0 &&
+    Number(prop(final, 'session_lifetimeVerifications')) > 0 &&
     Number(prop(final, 'session_busyMs')) > 0,
-  `toolCalls=${prop(final, 'session_toolCalls')} verifications=${prop(final, 'session_verifications')} bugs=${prop(final, 'session_bugsFound')} busyMs=${prop(final, 'session_busyMs')}`,
+  `toolCalls=${prop(final, 'session_lifetimeToolCalls')} verifications=${prop(final, 'session_lifetimeVerifications')} bugs=${prop(final, 'session_lifetimeBugsFound')} busyMs=${prop(final, 'session_busyMs')}`,
 );
 chk(
   'a periodic flush is NOT reported as a daemon exit',
@@ -377,8 +377,8 @@ chk(
 );
 chk(
   'the summary and the discrete events agree on the bug count',
-  Number(prop(final, 'session_bugsFound')) === bugs.length,
-  `summary=${prop(final, 'session_bugsFound')} events=${bugs.length}`,
+  Number(prop(final, 'session_lifetimeBugsFound')) === bugs.length,
+  `summary=${prop(final, 'session_lifetimeBugsFound')} events=${bugs.length}`,
 );
 
 capture.close();

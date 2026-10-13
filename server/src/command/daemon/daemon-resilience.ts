@@ -9,7 +9,7 @@
  * daemon, which beats crashing silently or limping along corrupt.
  */
 
-import { RETICLE_DEFAULT_PORT, TelemetryActor, TelemetryEventKind } from '@reticlehq/core';
+import { RETICLE_DEFAULT_PORT, TelemetryEventKind } from '@reticlehq/core';
 import {
   errorSkeleton,
   errorTypeOf,
@@ -182,9 +182,9 @@ function reportCrash(kind: CrashKind, value: unknown): void {
        * gone for months.
        */
       detach: true,
-      // A crash is ALWAYS reached through something the agent asked for — the daemon does nothing on
-      // its own — so attributing it to the agent is accurate rather than a guess.
-      actor: TelemetryActor.AGENT,
+      // No `actor`. The daemon does plenty on its own (timers, the bridge, a page's SDK, the update
+      // check), and the core contract says a crash is neither human nor agent: tagging every one
+      // `agent` put the whole crash count on the agent side of every actor split.
       crash: {
         kind,
         errorType,

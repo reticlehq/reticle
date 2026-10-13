@@ -15,6 +15,7 @@ import { reticleStateHome } from '@/command/daemon/daemon.js';
 import { startUpdateCheck, updateNudgeState } from '@/command/update/update-nudge.js';
 import { markDaemonStart } from './mcp-connection.js';
 import { markInstrumentationClock } from './app-instrumented.js';
+import { drainFeedbackOutbox } from './feedback.js';
 import { markStallClock, STALL_AFTER_MS, stallUptime } from '@/portal/session/stall-clock.js';
 
 /**
@@ -112,6 +113,8 @@ export function installDaemonTelemetry(
 ): DaemonTelemetry {
   const metrics = getSessionMetrics(now);
   void getTelemetry().emit(TelemetryEventKind.DAEMON_STARTED);
+  // Reports a past send could not deliver. Off the boot path, and never able to throw into it.
+  void drainFeedbackOutbox().catch(() => undefined);
   // Ask npm whether a newer Reticle exists, so the agent can tell the human. Nothing checked before
   // this, so a published fix was invisible until someone manually ran `reticle update`.
   startUpdateCheck(now);

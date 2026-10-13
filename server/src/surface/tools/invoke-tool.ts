@@ -35,9 +35,12 @@ import { buildErrorPayload, refusalReasonFor } from './error-recovery.js';
 import { resultIsError } from '@/surface/mcp/faults/mcp-is-error.js';
 import { verificationOf } from '@/telemetry/verification-of.js';
 import { emitBugFoundHook, emitVerdictHook } from '@/hooks/hook-emit.js';
-import { reportOnboardingStep } from '@/telemetry/onboarding-funnel.js';
-import { noteActed, noteFirstVerdict, noteOnboardingFirst } from '@/telemetry/onboarding-firsts.js';
-import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
+import {
+  noteActed,
+  noteFirstVerdict,
+  noteOnboardingFirst,
+  noteVerdictProduced,
+} from '@/telemetry/onboarding-firsts.js';
 import { DiscoveryInvite } from '@reticlehq/core';
 import { SESSION_ID_ARG, sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
 import { EnvelopeKey, HOST_STUB_NOTE, STEP_SHOT_TOOLS } from './tool-kit.js';
@@ -234,12 +237,8 @@ function recordVerification(
   emitVerdictHook(toolName, result, verification.verified, sessionId);
   // The ONBOARD half of the same moment: the first verdict of this run, once.
   noteFirstVerdict();
-  void reportOnboardingStep({
-    phase: OnboardingPhase.FIRST_RUN,
-    step: 'verdict_produced',
-    status: OnboardingStepStatus.COMPLETED,
-    elapsedMs: Math.max(0, Math.round(durationMs)),
-  });
+  // The FIRST_RUN rung: once per machine + project, not once per verdict.
+  noteVerdictProduced(durationMs);
 }
 
 /**
@@ -268,9 +267,15 @@ function reportBugsFound(
         ? { kind: bug.kind, source: bug.source, route }
         : { kind: bug.kind, source: bug.source };
     const fingerprint = fingerprintFinding(identity);
+    const occurrence = metrics.recordBugOccurrence(fingerprint);
     void getTelemetry().emit(TelemetryEventKind.BUG_FOUND, {
       actor: TelemetryActor.AGENT,
-      bug: { ...bug, repeat: !first, fingerprint },
+      bug: {
+        ...bug,
+        repeat: !first,
+        fingerprint,
+        ...(occurrence === undefined ? {} : { occurrence }),
+      },
     });
     // The same defect, said out loud to whoever is building on Reticle. Inside the loop rather than
     // after it because the event is PER DEFECT — one event carrying a list would make a consumer

@@ -36,6 +36,9 @@ export function markDaemonStart(now: number): void {
  * not a client attaching, and counting it was what put an unattributable row exactly where the name
  * belonged.
  */
+/** `connection.client`'s wire cap. */
+const MAX_CLIENT_NAME = 64;
+
 export function reportMcpConnected(client?: string, now: () => number = () => Date.now()): void {
   if (client === undefined) return;
   try {
@@ -47,7 +50,9 @@ export function reportMcpConnected(client?: string, now: () => number = () => Da
         // A large value on the FIRST connect is the interesting case: Reticle was started and then
         // sat there. On a reconnect it is just how long the daemon has been up.
         daemonAgeMs: daemonStartedAt === undefined ? 0 : Math.max(0, now() - daemonStartedAt),
-        client,
+        // Capped at the wire limit: the client names itself, and an over-long name would fail the
+        // schema and drop the whole event.
+        client: client.slice(0, MAX_CLIENT_NAME),
         // WHAT THE AGENT HAD TO LOOK AT. Most clients that attach never call a tool, and that cohort
         // emits nothing at all — an agent that reads the instructions, learns nothing is wired and
         // stops has refused nothing, so `tool_refused` cannot see it either. Read off the same flag

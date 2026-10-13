@@ -42,6 +42,12 @@ interface AutomationInput {
   env: NodeJS.ProcessEnv;
   fileExists: (path: string) => boolean;
   hasTty: boolean;
+  /**
+   * A daemon or an MCP server: it runs detached or on a client's pipes, so it NEVER has a terminal,
+   * and `no_tty` on it described the process model rather than whether anybody was there. Every
+   * daemon and stdio MCP process carried it, which made the weakest signal the loudest one.
+   */
+  serverProcess?: boolean;
 }
 
 /**
@@ -56,13 +62,23 @@ export function resolveAutomationHint(input: AutomationInput): AutomationHint | 
   if (CONTAINER_MARKERS.some((m) => input.fileExists(m))) return AutomationHint.CONTAINER;
   if (HOSTED_WORKSPACE_ENV.some((k) => (input.env[k] ?? '') !== ''))
     return AutomationHint.HOSTED_WORKSPACE;
-  if (!input.hasTty) return AutomationHint.NO_TTY;
+  if (!input.hasTty && true !== input.serverProcess) return AutomationHint.NO_TTY;
   return undefined;
 }
 
 /** The real reading, taken once per process. */
+/** The commands that run as a server. A bare `reticle`, or one opening on a flag, is `serve`. */
+const SERVER_COMMANDS: ReadonlySet<string> = new Set(['serve', 'mcp']);
+
+/** Is this CLI invocation (argv after the script) a daemon or an MCP server? */
+export function isServerProcess(argv: readonly string[]): boolean {
+  const command = argv[0];
+  return command === undefined || command.startsWith('-') || SERVER_COMMANDS.has(command);
+}
+
 export function currentAutomationHint(env: NodeJS.ProcessEnv): AutomationHint | undefined {
   return resolveAutomationHint({
+    serverProcess: isServerProcess(process.argv.slice(2)),
     env,
     fileExists: (p) => {
       try {

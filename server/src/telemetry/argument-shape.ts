@@ -26,7 +26,7 @@ import { ActionType, FeedbackKind, QueryBy, SnapshotMode } from '@reticlehq/core
  * unrecognized value reports `other` rather than itself; that fallback is what makes this safe
  * against a future where one of these params starts accepting free text.
  */
-const SAFE_ENUM_PARAMS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+const SAFE_ENUM_PARAMS: ReadonlyMap<string, Set<string>> = new Map([
   // Every entry DERIVED from the enum core already owns, never hand-listed. The first version listed
   // them literally and was wrong on the day it shipped, not merely at risk: `action` was missing
   // `fill`, `dblclick`, `submit`, `scrollIntoView` and `drag` — so `fill`, one of the most
@@ -44,6 +44,18 @@ const SAFE_ENUM_PARAMS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
 ]);
 
 export const OTHER_VALUE = 'other';
+
+/**
+ * Add values WE define to a parameter's allow-list. The merged tools call this for their `action`
+ * values (`reticle_look`'s `page` / `find` / ...): those are keys of a plan in this repository, not
+ * input, and without them every grouped call reported `action:other`. Only for a parameter already
+ * listed above, so this can widen an enum and never start forwarding a free-text parameter.
+ */
+export function allowParamValues(name: string, values: Iterable<string>): void {
+  const allowed = SAFE_ENUM_PARAMS.get(name);
+  if (allowed === undefined) return;
+  for (const value of values) allowed.add(value);
+}
 
 /**
  * The reportable form of one parameter: `name` on its own, or `name:value` when the parameter is a
@@ -87,10 +99,83 @@ export function describeToolParams(args: Record<string, unknown>): string[] {
 export function describeCliFlags(argv: readonly string[]): string[] {
   const flags = new Set<string>();
   for (const arg of argv) {
+    // A bare `--` ends the options: everything after it is passed through to something else.
+    if (END_OF_OPTIONS === arg) break;
     if (!arg.startsWith('--')) continue;
     // `--port=9000` — split so the NAME is reported and the value is discarded with everything else.
     const name = arg.split('=')[0] ?? arg;
-    flags.add(name);
+    flags.add(KNOWN_CLI_FLAGS.has(name) ? name : OTHER_VALUE);
   }
   return [...flags].sort();
 }
+
+const END_OF_OPTIONS = '--';
+
+/**
+ * The flags the CLI defines. Anything else is reported as `other`: a flag NAME the user typed can
+ * carry their own word as easily as a value can. Hand-listed because the CLI parses its flags in
+ * many places with no shared table; a flag missing here reports `other`, which loses a count and
+ * leaks nothing.
+ */
+const KNOWN_CLI_FLAGS: ReadonlySet<string> = new Set([
+  '--accept-coverage',
+  '--agent',
+  '--app',
+  '--bug',
+  '--capture-bodies',
+  '--confirm-dangerous',
+  '--dir',
+  '--drive',
+  '--drive-model',
+  '--dry-run',
+  '--email',
+  '--env',
+  '--expect',
+  '--expect-file',
+  '--explore',
+  '--files-only',
+  '--fix',
+  '--flow',
+  '--force',
+  '--headed',
+  '--headless',
+  '--help',
+  '--hook',
+  '--hooks',
+  '--http',
+  '--http-port',
+  '--http-token',
+  '--install-secs',
+  '--json',
+  '--kind',
+  '--license',
+  '--move-history',
+  '--no-agents',
+  '--no-drive',
+  '--no-first-run',
+  '--no-install',
+  '--no-mcp',
+  '--no-open',
+  '--persona',
+  '--porcelain',
+  '--port',
+  '--project',
+  '--quiet',
+  '--rating',
+  '--relaunch',
+  '--results-json',
+  '--runtime-secs',
+  '--select',
+  '--session',
+  '--session-id',
+  '--since',
+  '--start',
+  '--storage-state',
+  '--subject',
+  '--timeout',
+  '--url',
+  '--version',
+  '--watch',
+  '--workspace',
+  '--yes',
+]);

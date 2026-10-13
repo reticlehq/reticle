@@ -620,6 +620,8 @@ await daemon.shutdown('idle');
   const p = s?.properties ?? {};
   check('  marked final', arrived && p.session_final === true);
   check('  counted tool calls', arrived && p.session_toolCalls === 12, String(p.session_toolCalls));
+  // Windowed like every other event, so the session total rides beside it under its own name.
+  check('  carries the session total under its own name', arrived && p.session_lifetimeToolCalls === 12, String(p.session_lifetimeToolCalls));
   check('  histogram by tool name', arrived && JSON.stringify(p.session_toolCounts ?? {}).includes('reticle_act'));
   check('  counted verifications', arrived && p.session_verifications === 4, String(p.session_verifications));
   check('  counted tool errors', arrived && p.session_toolErrors === 3, String(p.session_toolErrors));

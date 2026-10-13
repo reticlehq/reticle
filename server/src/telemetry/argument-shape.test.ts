@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   OTHER_VALUE,
   describeCliFlags,
@@ -39,7 +39,40 @@ describe('CLI flags — names only, never values', () => {
   });
 
   it('deduplicates and sorts, so the property is stable across invocations', () => {
-    expect(describeCliFlags(['a', '--b', '--a', '--b'])).toEqual(['--a', '--b']);
+    expect(describeCliFlags(['a', '--headed', '--json', '--headed'])).toEqual([
+      '--headed',
+      '--json',
+    ]);
+  });
+
+  it('reports an unknown flag as `other`, never by its own spelling', () => {
+    // `--acme-billing-token` is somebody's word, and a flag NAME can carry one as easily as a value.
+    expect(describeCliFlags(['serve', '--acme-billing-token'])).toEqual([OTHER_VALUE]);
+  });
+
+  it('stops at `--`: everything after it is passed through, and is the user’s', () => {
+    expect(describeCliFlags(['run', '--json', '--', '--secret-arg=1', '--url'])).toEqual([
+      '--json',
+    ]);
+  });
+});
+
+describe('grouped tools — their sub-actions are our enum too', () => {
+  // Importing the real surface builds the merged tools, which is what registers their actions. A
+  // bound on a slow import, not a duration.
+  beforeAll(async () => {
+    await import('@/surface/tools/tools.js');
+  }, 60_000);
+
+  it.each([['page'], ['find'], ['events'], ['yield'], ['acquire'], ['change'], ['now']])(
+    'reports action:%s, not action:other',
+    (action) => {
+      expect(describeParam('action', action)).toBe(`action:${action}`);
+    },
+  );
+
+  it('still reports a value that is not one of ours as other', () => {
+    expect(describeParam('action', 'Jane Smith')).toBe(`action:${OTHER_VALUE}`);
   });
 });
 

@@ -376,6 +376,15 @@ export const SessionSummarySchema = z.object({
    */
   endedWithVerdict: z.boolean().optional(),
   /**
+   * Session totals, on the FINAL summary only. Every scalar counter above (`toolCalls`,
+   * `verifications`, `bugsFound`, ...) is windowed on EVERY event, the final one included, so the
+   * counts summed across a session's `session_progress` + `daemon_stopped` rows are the session's
+   * total. These are the same totals read off one row, under names a sum cannot pick up by mistake.
+   */
+  lifetimeToolCalls: z.number().int().nonnegative().optional(),
+  lifetimeVerifications: z.number().int().nonnegative().optional(),
+  lifetimeBugsFound: z.number().int().nonnegative().optional(),
+  /**
    * Was the update nudge actually delivered to an agent during this daemon run.
    *
    * The nudge is the entire adoption mechanism for a published fix — it rides the tool-result

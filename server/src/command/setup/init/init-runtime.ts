@@ -8,7 +8,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { InitConfirmation, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
+import { InitConfirmation, RETICLE_DEFAULT_PORT, type InitOutcome } from '@reticlehq/core';
 import { FEEDBACK_HINT, Framework, InitFailure, type InitResult } from '@reticlehq/init';
 import { confirmInstall, nodeConfirmDeps } from '@/command/setup/terminal/confirm.js';
 import { writeLicenseKey } from '@/command/setup/license-key.js';
@@ -187,9 +187,20 @@ export async function continueAfterInit(
     if (spaced) io.print('');
     io.print(FEEDBACK_HINT);
   };
+  // `init` deferred its outcome to this phase, so every exit below reports it, and only once: the
+  // success path, a failure, a throw and an interrupt can each reach here, and two rows for one run
+  // would double the funnel this event exists to measure.
+  let outcomeReported = false;
+  const reportOnce = (init: InitOutcome): void => {
+    if (outcomeReported) return;
+    outcomeReported = true;
+    reportInitOutcome(init);
+  };
   const context = result.context;
   if (context === undefined) {
-    // Nothing was established, so there is nothing to run against. init has already said why.
+    // Nothing was established, so there is nothing to run against. init has already said why, and
+    // the outcome it deferred (a failed dependency install, usually) is reported here or nowhere.
+    if (result.outcome !== undefined) reportOnce(result.outcome);
     ask();
     if (true === parsed.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     stop();
@@ -197,7 +208,7 @@ export async function continueAfterInit(
   }
   const reportFailure = (reason: InitFailure): void => {
     if (result.outcome !== undefined) {
-      reportInitOutcome({ ...result.outcome, ok: false, reason });
+      reportOnce({ ...result.outcome, ok: false, reason });
     }
   };
   // A PENDING connect step is not a reason to skip the runtime phase, and treating it as one made
@@ -242,6 +253,9 @@ export async function continueAfterInit(
     return;
   }
 
+  // A Ctrl-C during the wait ends the process with no `finally`, so the outcome is reported from the
+  // signal itself. The send is detached, so it survives the exit that follows.
+  const releaseInterrupt = reportOnInterrupt(() => reportFailure(InitFailure.INTERRUPTED));
   return runSetupCommand(
     {
       appDir: context.appDir,
@@ -286,78 +300,102 @@ export async function continueAfterInit(
       ...(undefined === parsed.url ? {} : { suppliedUrl: parsed.url }),
     },
     (line) => io.print(line),
-  ).then(
-    async (outcome) => {
-      if (result.outcome !== undefined) {
-        const init = {
-          ...result.outcome,
-          ok: outcome.ok,
-        };
-        if (outcome.ok) {
-          delete init.reason;
-          init.confirmation = InitConfirmation.CONNECTED;
-        } else {
-          // A failed startup does not establish whether a daemon or instrumented page exists.
-          // Keep the watcher's no_daemon/no_session/no_page classifications for observed facts.
-          delete init.confirmation;
-          init.reason =
-            outcome.reachedPhase === SetupPhase.DEV_SERVER
-              ? InitFailure.DEV_SERVER
-              : InitFailure.APP_CONNECTION;
+  )
+    .then(
+      async (outcome) => {
+        if (result.outcome !== undefined) {
+          const init = {
+            ...result.outcome,
+            ok: outcome.ok,
+          };
+          if (outcome.ok) {
+            delete init.reason;
+            init.confirmation = InitConfirmation.CONNECTED;
+          } else {
+            // A failed startup does not establish whether a daemon or instrumented page exists.
+            // Keep the watcher's no_daemon/no_session/no_page classifications for observed facts.
+            delete init.confirmation;
+            init.reason =
+              outcome.reachedPhase === SetupPhase.DEV_SERVER
+                ? InitFailure.DEV_SERVER
+                : InitFailure.APP_CONNECTION;
+          }
+          reportOnce(init);
         }
-        reportInitOutcome(init);
-      }
-      // One object, so an agent reads a result instead of interpreting a report.
-      if (true === parsed.json) {
-        process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
-        if (!outcome.ok) stop();
-        return;
-      }
-      io.print('');
-      // The precondition for everything the closing asks for, printed on the path that could not say
-      // it. An agent client reads its MCP server list when it STARTS and never re-reads it, so an
-      // agent that ran this without the `reticle_*` tools cannot do what the closing tells it to.
-      // See agent-restart.ts for the two ways that is known.
-      const restart = restartNotice({
-        insideAgent:
-          CLAUDE_CODE_MARKER === process.env[CLAUDE_CODE_ENV] || undefined !== codexSessionFor(cwd),
-        newlyRegistered: true === result.mcpNewlyRegistered,
-        attached: attachedAgents(await fetchStatus(port)),
-      });
-      if (undefined !== restart) {
-        io.print(restart);
+        // One object, so an agent reads a result instead of interpreting a report.
+        if (true === parsed.json) {
+          process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
+          if (!outcome.ok) stop();
+          return;
+        }
         io.print('');
-      }
-      if (outcome.ok && !outcome.flowSaved) {
-        // Success, and no flow. Saying "a flow was driven" here would replace a wrong exit code with
-        // a wrong sentence, which is the worse of the two: the exit code is read by CI and the
-        // sentence is read by a person deciding whether their app is verified. It is not.
-        // The connect already said "connected, nothing verified yet" and listed what to do next;
-        // repeating it here was the same sentence twice, three lines apart.
-        for (const [i, step] of outcome.fallback.entries())
-          io.print(`   ${String(i + 1)}. ${step}`);
-        // Already spaced by the blank line above when nothing was listed.
-        ask(0 < outcome.fallback.length);
-        return;
-      }
-      if (outcome.ok) {
-        io.print(
-          `✓ setup complete — ${outcome.url ?? 'the app'} is instrumented and its first flow is ` +
-            'saved. The tab stays open; a linked project sends the flow and its run to your dashboard.',
-        );
+        // The precondition for everything the closing asks for, printed on the path that could not say
+        // it. An agent client reads its MCP server list when it STARTS and never re-reads it, so an
+        // agent that ran this without the `reticle_*` tools cannot do what the closing tells it to.
+        // See agent-restart.ts for the two ways that is known.
+        const restart = restartNotice({
+          insideAgent:
+            CLAUDE_CODE_MARKER === process.env[CLAUDE_CODE_ENV] ||
+            undefined !== codexSessionFor(cwd),
+          newlyRegistered: true === result.mcpNewlyRegistered,
+          attached: attachedAgents(await fetchStatus(port)),
+        });
+        if (undefined !== restart) {
+          io.print(restart);
+          io.print('');
+        }
+        if (outcome.ok && !outcome.flowSaved) {
+          // Success, and no flow. Saying "a flow was driven" here would replace a wrong exit code with
+          // a wrong sentence, which is the worse of the two: the exit code is read by CI and the
+          // sentence is read by a person deciding whether their app is verified. It is not.
+          // The connect already said "connected, nothing verified yet" and listed what to do next;
+          // repeating it here was the same sentence twice, three lines apart.
+          for (const [i, step] of outcome.fallback.entries())
+            io.print(`   ${String(i + 1)}. ${step}`);
+          // Already spaced by the blank line above when nothing was listed.
+          ask(0 < outcome.fallback.length);
+          return;
+        }
+        if (outcome.ok) {
+          io.print(
+            `✓ setup complete — ${outcome.url ?? 'the app'} is instrumented and its first flow is ` +
+              'saved. The tab stays open; a linked project sends the flow and its run to your dashboard.',
+          );
+          ask();
+          return;
+        }
+        // A run that produced no verdict did not succeed, and the exit code is the one place a caller
+        // reads that without parsing anything.
+        io.print('⚠ setup did not finish. To carry on from here:');
+        for (const [i, step] of outcome.fallback.entries()) io.print(`   ${i + 1}. ${step}`);
         ask();
-        return;
-      }
-      // A run that produced no verdict did not succeed, and the exit code is the one place a caller
-      // reads that without parsing anything.
-      io.print('⚠ setup did not finish. To carry on from here:');
-      for (const [i, step] of outcome.fallback.entries()) io.print(`   ${i + 1}. ${step}`);
-      ask();
-      stop();
-    },
-    (error: unknown) => {
-      reportFailure(InitFailure.RUNTIME_ERROR);
-      throw error;
-    },
-  );
+        stop();
+      },
+      (error: unknown) => {
+        reportFailure(InitFailure.RUNTIME_ERROR);
+        throw error;
+      },
+    )
+    .finally(releaseInterrupt);
+}
+
+const INTERRUPT_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
+/** 128 + the signal number, which is what a shell reports. */
+const INTERRUPT_EXIT_CODE = { SIGINT: 130, SIGTERM: 143 } as const;
+
+/** Run `report` if the process is interrupted. Returns the disposer. */
+function reportOnInterrupt(report: () => void): () => void {
+  const handlers = INTERRUPT_SIGNALS.map((signal) => {
+    const handler = (): void => {
+      report();
+      // Before setup installs its own handler ours may be the only one, and a listener present
+      // means Node no longer exits on the signal by itself: without this, Ctrl-C would be ignored.
+      if (1 === process.listenerCount(signal)) process.exit(INTERRUPT_EXIT_CODE[signal]);
+    };
+    process.on(signal, handler);
+    return { signal, handler };
+  });
+  return () => {
+    for (const { signal, handler } of handlers) process.off(signal, handler);
+  };
 }

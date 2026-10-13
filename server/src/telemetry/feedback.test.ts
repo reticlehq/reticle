@@ -9,6 +9,7 @@ import {
   feedbackDisabled,
   redactFeedbackText,
   submitFeedback,
+  summarizeTrace,
 } from './feedback.js';
 import { detectMcpScope, detectStack } from './feedback-context.js';
 
@@ -63,6 +64,44 @@ describe('redactFeedbackText', () => {
     const out = redactFeedbackText(clean, FEEDBACK_TEXT_MAX);
     expect(out.text).toBe(clean);
     expect(out.removed).toEqual([]);
+  });
+
+  /**
+   * Each of these walked through the old rules: the home-path rule stopped at a space, so a
+   * Windows surname survived; nothing covered a path outside home, a hostname, or a URL's query.
+   */
+  it.each([
+    ['a Windows home with a space', 'failed at C:\\Users\\Jane Doe\\code\\app.ts', ['Jane', 'Doe']],
+    ['a forward-slash Windows home', 'see C:/Users/jdoe/code/app.ts', ['jdoe']],
+    ['a long-path Windows home', 'open \\\\?\\C:\\Users\\jdoe\\x.ts', ['jdoe']],
+    ['a macOS home with a space', 'at "/Users/Jane Doe/app/x.ts" line 3', ['Jane', 'Doe']],
+    ['an absolute path outside home', 'read /srv/acme-billing/config.yml', ['acme-billing']],
+    ['a home-relative path', 'read ~/clients/acme/notes.txt', ['acme']],
+    ['an internal hostname', 'getaddrinfo ENOTFOUND db.internal.acmecorp.com', ['acmecorp']],
+    [
+      'a staging host in a URL',
+      'open https://staging.acme.io/orders/991?token=x#frag',
+      ['acme', '991', 'token'],
+    ],
+    [
+      'a localhost URL query',
+      'GET http://localhost:3000/search?q=jane.doe@x.com&id=7',
+      ['q=', 'id=7', 'jane'],
+    ],
+    ['a private IP', 'connect ECONNREFUSED 10.20.30.40:5432', ['10.20.30.40']],
+  ])('redacts %s', (_label, input, leaks) => {
+    const out = redactFeedbackText(input, FEEDBACK_TEXT_MAX);
+    for (const leak of leaks) expect(out.text, out.text).not.toContain(leak);
+  });
+
+  it('keeps what makes a report readable: the local app, file names, versions', () => {
+    const out = redactFeedbackText(
+      'on http://localhost:5173/checkout the vite.config.ts change broke invoke-tool.ts',
+      FEEDBACK_TEXT_MAX,
+    );
+    expect(out.text).toContain('http://localhost:5173/checkout');
+    expect(out.text).toContain('vite.config.ts');
+    expect(out.text).toContain('invoke-tool.ts');
   });
 
   it('caps the length so a pasted log cannot become an unbounded upload', () => {
@@ -239,7 +278,8 @@ describe('agents can ask for things, not only report failures', () => {
     ['need', 'need', 'ada@example.com', 'email'],
     ['impact', 'impact', 'ada@example.com', 'email'],
     ['currentApproach', 'currentApproach', 'sk-abcdefghijklmnopqrstuvwx', 'vendor-key'],
-    ['trace', 'trace', 'sk-abcdefghijklmnopqrstuvwx', 'vendor-key'],
+    // The trace is reduced to tool names and verdict words, so its values go by construction.
+    ['trace', 'trace', 'sk-abcdefghijklmnopqrstuvwx', 'trace-values'],
   ])(
     'redacts %s — every author-written field, not just the ones named first',
     async (_label, field, secret, rule) => {
@@ -253,4 +293,21 @@ describe('agents can ask for things, not only report failures', () => {
       expect(receipt.redacted, `${field} was not redacted`).toContain(rule);
     },
   );
+});
+
+/**
+ * A trace is the literal call/response trail, and the responses carry what the page showed and
+ * what was typed into it. Only Reticle's own words survive: tool names and verdict words.
+ */
+describe('summarizeTrace', () => {
+  it('keeps tool names and verdict words, drops every value', () => {
+    const trace =
+      'reticle_act {"ref":"e3","action":"fill","args":{"text":"hunter2"}} -> ok\n' +
+      'reticle_act_and_wait -> verified: "no" text "Welcome, Jane Smith"';
+    const out = summarizeTrace(trace);
+    expect(out).toBe('reticle_act ok reticle_act_and_wait verified no');
+    for (const leak of ['hunter2', 'Jane', 'Smith', 'e3', 'Welcome']) {
+      expect(out).not.toContain(leak);
+    }
+  });
 });

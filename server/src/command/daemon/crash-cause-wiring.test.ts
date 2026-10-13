@@ -81,6 +81,18 @@ describe('a crash with no Reticle frames still reports where it was', () => {
     expect(crash['internalFrame']).toBe('node:net:1637');
   });
 
+  it('does not claim an agent caused it: a crash has no actor anybody observed', () => {
+    const proc = fakeProc();
+    installDaemonResilience(
+      proc,
+      () => undefined,
+      () => undefined,
+    );
+    proc.fire('unhandledRejection', refusedLoopback(4400));
+    const call = emit.mock.calls.find(([kind]) => kind === TelemetryEventKind.RUNTIME_CRASHED);
+    expect(call?.[1]).not.toHaveProperty('actor');
+  });
+
   it('never sends the address or the port number', () => {
     const proc = fakeProc();
     installDaemonResilience(

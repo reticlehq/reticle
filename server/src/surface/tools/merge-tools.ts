@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
+import { allowParamValues } from '@/telemetry/argument-shape.js';
 
 /**
  * Surface consolidation. Tool definitions are re-sent to the model EVERY turn, so the named-def
@@ -191,6 +192,8 @@ function discriminatorSchema(
 export function mergeTools(spec: MergeSpec): ToolDef {
   const actionNames = Object.keys(spec.actions);
   if (0 === actionNames.length) throw new Error(`mergeTools(${spec.name}): no actions`);
+  // Our own action names: telemetry may report them by value rather than as `other`.
+  allowParamValues(DISCRIMINATOR, actionNames);
   refuseDiscriminatorCollision(spec.name, spec.actions);
   if (spec.defaultAction !== undefined && !(spec.defaultAction in spec.actions)) {
     throw new Error(

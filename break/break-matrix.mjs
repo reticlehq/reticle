@@ -26,6 +26,10 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Every scenario runs `init` and a daemon in a temp dir, outside the source checkout whose marker
+// would silence telemetry, so each run reported as a real user. Inherited by every child below.
+process.env.RETICLE_TELEMETRY ??= '0';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 /**
  * What ships, not the prototype beside it.

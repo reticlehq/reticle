@@ -29,20 +29,82 @@ import {
   TelemetryEventKind,
   type Feedback,
 } from '@reticlehq/core/telemetry';
-import { platform } from 'node:os';
-import { getTelemetry } from './telemetry.js';
+import { homedir, platform } from 'node:os';
+import { getTelemetry, type Telemetry } from './telemetry.js';
 import { noteFeedbackUndelivered } from './feedback-delivery.js';
 import { isReticleSourceCheckout } from './dev-repo.js';
 import { saveFeedbackLocally } from './feedback-local.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { feedbackContext, type SessionFacts } from './feedback-context.js';
-import { markDelivered, outboxPath, queueFeedback } from './feedback-outbox.js';
+import { markDelivered, outboxPath, queueFeedback, readOutbox } from './feedback-outbox.js';
 
 /** Kills the feedback channel ONLY — adoption counters keep flowing. */
 export const FEEDBACK_ENV = 'RETICLE_FEEDBACK';
 
 /** What replaces a redacted match. Visible on purpose: a reader must see that something was removed. */
 export const REDACTED = '[redacted]';
+
+/** This machine, as a host: the app under test, never anybody's infrastructure. Port allowed. */
+const LOCAL_HOST = /^(?:localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|0\.0\.0\.0|\[::1\])(?::\d+)?$/i;
+
+/** A dotted name ending in one of these is a source file, not a host. */
+const FILE_EXTENSIONS: ReadonlySet<string> = new Set([
+  'ts',
+  'tsx',
+  'mts',
+  'cts',
+  'js',
+  'jsx',
+  'mjs',
+  'cjs',
+  'json',
+  'md',
+  'mdx',
+  'css',
+  'scss',
+  'html',
+  'vue',
+  'svelte',
+  'astro',
+  'py',
+  'rs',
+  'go',
+  'yml',
+  'yaml',
+  'toml',
+  'lock',
+  'log',
+  'txt',
+  'map',
+  'sh',
+  'env',
+  'd',
+]);
+
+/** Top-level domains common enough that a one-dot name ending in one is a host. */
+const COMMON_TLDS: ReadonlySet<string> = new Set([
+  'com',
+  'net',
+  'org',
+  'io',
+  'dev',
+  'app',
+  'co',
+  'ai',
+  'cloud',
+  'internal',
+  'local',
+  'corp',
+  'lan',
+  'site',
+  'tech',
+  'xyz',
+  'us',
+  'uk',
+  'de',
+  'in',
+  'eu',
+]);
 
 /**
  * The shapes that leak. Ordered most-specific first — a URL carrying inline credentials must be
@@ -52,9 +114,24 @@ export const REDACTED = '[redacted]';
  * exactly why the tool description tells the agent not to paste app source or user data in the first
  * place. Defense in depth: instruct first, redact second, cap third.
  */
-const REDACTIONS: readonly { readonly pattern: RegExp; readonly label: string }[] = [
+const REDACTIONS: readonly {
+  readonly pattern: RegExp;
+  readonly label: string;
+  /** Builds the replacement; when absent, a leading capture is kept and the rest is redacted. */
+  readonly replace?: (match: string, ...groups: string[]) => string;
+}[] = [
   // scheme://user:pass@host — the credential is in the authority section.
   { pattern: /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+:[^\s/@]+@/gi, label: 'url-credentials' },
+  // A URL keeps its scheme, and its host and path ONLY when the host is this machine (the app under
+  // test, which is what a report is about). Any other host is a staging site, a customer's domain
+  // or an internal service, so it goes with its path. The query and fragment always go: that is
+  // where ids, emails and tokens ride.
+  {
+    pattern: /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/?#"'<>`]+)([^\s?#"'<>`]*)(?:[?#][^\s"'<>`]*)?/gi,
+    label: 'url',
+    replace: (_m, scheme = '', host = '', path = '') =>
+      LOCAL_HOST.test(host) ? `${scheme}${host}${path}` : `${scheme}${REDACTED}`,
+  },
   { pattern: /\b[\w.%+-]+@[\w.-]+\.[a-z]{2,}\b/gi, label: 'email' },
   // Credential assignments: the KEY stays (it is the useful part), the VALUE goes. The auth SCHEME
   // (`Bearer`, `Basic`, `Token`) is consumed as part of the value, not left as the value — matching
@@ -70,8 +147,42 @@ const REDACTIONS: readonly { readonly pattern: RegExp; readonly label: string }[
   { pattern: /\bAKIA[0-9A-Z]{16}\b/g, label: 'aws-key' },
   { pattern: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, label: 'slack-token' },
   { pattern: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, label: 'jwt' },
-  // Home directories carry the account name, and a trace is full of them.
-  { pattern: /(?:\/Users\/|\/home\/|[A-Z]:\\Users\\)[^\s/\\:"']+/g, label: 'home-path' },
+  // Home directories carry the account name, and a trace is full of them. The name runs to the next
+  // separator, quote or line end, NOT the next space: `C:\Users\Jane Doe\…` stopped at the space and
+  // sent the surname. Then the rest of the path goes with it. Over-redacting a sentence that follows
+  // a bare home directory is the price, and it is the right way round.
+  {
+    pattern:
+      /(?:\\\\\?\\)?(?:\/Users\/|\/home\/|[A-Za-z]:[\\/]Users[\\/])[^\\/\r\n"'`]+(?:[\\/][^\s\\/"'`]*)*/g,
+    label: 'home-path',
+  },
+  // Any other absolute path: a Windows one (segments may hold spaces when a separator follows)...
+  {
+    pattern: /(?:\\\\\?\\)?\b[A-Za-z]:[\\/](?:[^\\/\r\n"'`<>|*?]+[\\/])*[^\s\\/"'`<>|*?]*/g,
+    label: 'path',
+  },
+  // ...a home-relative one, and a POSIX one of two or more segments. A path is a directory layout,
+  // and a directory layout names clients, projects and people.
+  { pattern: /~[\\/][^\s"'`]*/g, label: 'path' },
+  { pattern: /(?<![\w.~])\/[\w.@+-]+(?:\/[\w.@+-]+)+\/?/g, label: 'path' },
+  {
+    pattern: /\b\d{1,3}(?:\.\d{1,3}){3}\b/g,
+    label: 'ip',
+    replace: (ip) => (LOCAL_HOST.test(ip) ? ip : REDACTED),
+  },
+  // Hostnames: a staging site, an internal service, a customer's domain. A dotted name is a host when
+  // it has two or more dots or ends in a common top-level domain, and never when it ends in a source
+  // file's extension — `vite.config.ts` is what a report is about, `db.internal.acme.com` is not.
+  {
+    pattern: /\b(?:[a-z0-9-]+\.)+[a-z][a-z0-9-]*\b/gi,
+    label: 'hostname',
+    replace: (name) => {
+      const labels = name.toLowerCase().split('.');
+      const last = labels[labels.length - 1] ?? '';
+      if (FILE_EXTENSIONS.has(last)) return name;
+      return labels.length > 2 || COMMON_TLDS.has(last) ? REDACTED : name;
+    },
+  },
 ];
 
 interface Redaction {
@@ -84,17 +195,35 @@ interface Redaction {
 export function redactFeedbackText(input: string, max: number): Redaction {
   const removed = new Set<string>();
   let text = input;
-  for (const { pattern, label } of REDACTIONS) {
-    text = text.replace(pattern, (_match, ...groups) => {
-      removed.add(label);
+  for (const { pattern, label, replace } of REDACTIONS) {
+    text = text.replace(pattern, (match: string, ...groups: unknown[]) => {
+      const captures = groups.map((g) => ('string' === typeof g ? g : ''));
       // A rule with a leading capture keeps it (the scheme, the `api_key=` key) so the reader still
       // sees WHAT was removed, not just that something was.
-      const prefix = 'string' === typeof groups[0] ? groups[0] : '';
-      return `${prefix}${REDACTED}`;
+      const out =
+        replace === undefined ? `${captures[0] ?? ''}${REDACTED}` : replace(match, ...captures);
+      if (out !== match) removed.add(label);
+      return out;
     });
   }
   return { text: text.slice(0, max), removed: [...removed] };
 }
+
+/** Our words in a trace: tool names and the verdict vocabulary. Nothing else is kept. */
+const TRACE_WORDS =
+  /\breticle_[a-z_]+\b|\b(?:verified|yes|no|unknown|no-fault|ok|passed|failed|refused|error|timeout)\b/gi;
+
+/**
+ * A trace reduced to Reticle's own words, in order: which tools were called and what verdict each
+ * gave. The raw trace is the call/response trail, and the responses carry the page's text and what
+ * was typed into it, which no redaction rule can tell from prose. So nothing else is kept.
+ */
+export function summarizeTrace(trace: string): string {
+  return (trace.match(TRACE_WORDS) ?? []).join(' ').slice(0, FEEDBACK_TRACE_MAX);
+}
+
+/** The removal label when a trace lost anything to `summarizeTrace`. */
+const TRACE_VALUES_LABEL = 'trace-values';
 
 /** True when the feedback channel is switched off on its own (the emitter's switches apply as well). */
 export function feedbackDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -118,6 +247,8 @@ const AUTHOR_WRITTEN_FIELDS: ReadonlySet<string> = new Set([
   'currentApproach',
   'model',
 ]);
+
+const TRACE_FIELD = 'trace';
 
 /** Per-field caps; anything unlisted uses the standard field cap. */
 const FIELD_CAPS: Record<string, number> = {
@@ -197,12 +328,7 @@ export async function submitFeedback(
   // sk-…" would have shipped the token. Enumerating the fields to protect is the same class of
   // mistake as hand-copying an enum: correct on the day it is written, quietly wrong at the next
   // addition. Deriving the set means a sixth field is covered the moment it exists.
-  const redactions = new Map<string, Redaction>();
-  for (const [key, value] of Object.entries(input)) {
-    if (typeof value !== 'string' || '' === value) continue;
-    if (!AUTHOR_WRITTEN_FIELDS.has(key)) continue;
-    redactions.set(key, redactFeedbackText(value, FIELD_CAPS[key] ?? FEEDBACK_FIELD_MAX));
-  }
+  const redactions = redactAuthorFields(input);
   const body = redactions.get('text') ?? { text: '', removed: [] };
   const redacted = [...new Set([...redactions.values()].flatMap((r) => r.removed))];
 
@@ -310,6 +436,64 @@ export async function submitFeedback(
     redacted,
     context,
   };
+}
+
+/**
+ * Every author-written field of a report, redacted under the CURRENT rules. One function for the
+ * send and for the outbox drain, so a report queued under older, weaker rules is re-redacted before
+ * it finally goes.
+ */
+function redactAuthorFields(input: Record<string, unknown>): Map<string, Redaction> {
+  const redactions = new Map<string, Redaction>();
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value !== 'string' || '' === value) continue;
+    if (!AUTHOR_WRITTEN_FIELDS.has(key)) continue;
+    if (TRACE_FIELD === key) {
+      const summary = summarizeTrace(value);
+      redactions.set(key, {
+        text: summary,
+        removed: summary === value ? [] : [TRACE_VALUES_LABEL],
+      });
+      continue;
+    }
+    redactions.set(key, redactFeedbackText(value, FIELD_CAPS[key] ?? FEEDBACK_FIELD_MAX));
+  }
+  return redactions;
+}
+
+/** Reports one daemon start retries. A backlog drains over several starts, never in one burst. */
+const OUTBOX_DRAIN_MAX = 5;
+
+/**
+ * Retry what the outbox holds: the receipt for an undelivered report promises "It will be retried",
+ * and until this ran on daemon start nothing ever read the outbox back. Bounded, sequential, and
+ * best-effort; a report the endpoint does not accept stays queued. Returns how many were delivered.
+ */
+export async function drainFeedbackOutbox(
+  telemetry: Telemetry = getTelemetry(),
+  home: string = homedir(),
+): Promise<number> {
+  if (!telemetry.enabled || feedbackDisabled()) return 0;
+  let delivered = 0;
+  for (const entry of readOutbox(home).slice(0, OUTBOX_DRAIN_MAX)) {
+    const queued = FeedbackSchema.safeParse(entry.payload);
+    // A payload that cannot pass the schema can never be sent; it stays where a person can read it.
+    if (!queued.success) continue;
+    const fields = Object.fromEntries(
+      [...redactAuthorFields(queued.data)].map(([key, r]) => [key, r.text]),
+    );
+    const parsed = FeedbackSchema.safeParse({ ...queued.data, ...fields });
+    if (!parsed.success) continue;
+    try {
+      if (await telemetry.emit(TelemetryEventKind.FEEDBACK_SUBMITTED, { feedback: parsed.data })) {
+        markDelivered(entry.id, home);
+        delivered += 1;
+      }
+    } catch {
+      /* stays queued for the next start */
+    }
+  }
+  return delivered;
 }
 
 /**
