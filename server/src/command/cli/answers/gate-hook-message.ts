@@ -70,7 +70,7 @@ export function gateHookMessage(exit: number, input: GateHookInput): string | un
   if (input.unflowed !== undefined && input.unflowed.length > 0)
     lines.push(
       true === input.flowsWithoutSources
-        ? `  changed, but the saved flows record no \`sources\` (no source stamping), so none can be matched to them: ${name(input.unflowed)} — add \`sources\` to the flow that drives them`
+        ? `  changed, but the saved flows carry no source locations, because this stack has no source stamping, so the gate cannot match a flow to them: ${name(input.unflowed)} — a build adapter such as @reticlehq/vite-plugin stamps each step's \`source\``
         : `  changed, and no saved flow drives it: ${name(input.unflowed)} — drive it with reticle_act_and_wait and a declared \`until\``,
     );
   if (input.coverageRegressed !== undefined && input.coverageRegressed.length > 0)

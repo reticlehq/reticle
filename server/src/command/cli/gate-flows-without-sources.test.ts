@@ -75,8 +75,6 @@ describe('handleGate when the saved flows carry no sources', () => {
     await removeTempDir(dir);
   });
 
-  // Saved as a recorder saves them; a `source` is then stamped onto the steps the way a build with
-  // source stamping would have recorded it.
   // Saved as a recorder saves it; a `source` is then stamped onto its steps the way a build with
   // source stamping would have recorded it.
   const saveFlow = async (name: string, source?: string): Promise<void> => {
@@ -97,14 +95,14 @@ describe('handleGate when the saved flows carry no sources', () => {
     return JSON.parse(line ?? '{}') as Record<string, unknown>;
   };
 
-  it('says the flows record no sources instead of claiming nothing drove the file', async () => {
+  it('says the flows carry no source locations instead of claiming nothing drove the file', async () => {
     await saveFlow('flow-a');
     await saveFlow('flow-b');
     await new RunStore(createNodeFileSystem(), root).write(passingRun(['flow-a', 'flow-b']));
     await handleGate(['src/Badge.vue'], undefined, true);
     const out = stderr.join('');
     expect(gateJson()).toMatchObject({ unflowed: ['src/Badge.vue'], flowsWithoutSources: true });
-    expect(out).toContain('record no `sources`');
+    expect(out).toContain('carry no source locations');
     expect(out).toContain('src/Badge.vue');
     expect(out).not.toContain('no saved flow drives it');
   });
@@ -119,6 +117,6 @@ describe('handleGate when the saved flows carry no sources', () => {
     expect(json).toMatchObject({ unflowed: ['src/Badge.vue'] });
     expect(json).not.toHaveProperty('flowsWithoutSources');
     expect(out).toContain('no saved flow drives it');
-    expect(out).not.toContain('record no `sources`');
+    expect(out).not.toContain('carry no source locations');
   });
 });

@@ -95,8 +95,8 @@ describe('a changed component when no saved flow records sources', () => {
         flowsWithoutSources: true,
       }) ?? '';
     expect(out).toContain('src/Badge.vue');
-    expect(out).toContain('record no `sources`');
-    expect(out).toContain('add `sources` to the flow');
+    expect(out).toContain('carry no source locations');
+    expect(out).toContain("stamps each step's `source`");
     expect(out).not.toContain('no saved flow drives it');
   });
 });
