@@ -14,10 +14,11 @@ const step = (expectIt: boolean, route?: string): RecordedStep => ({
 
 describe('a drive becomes a flow without anybody asking', () => {
   it('saves a tape that declared a consequence', () => {
-    const { programs, outcome } = driveFlowsFrom({ steps: [step(false), step(true)] });
+    const open = { ...step(false), args: { ref: 'e0', action: 'click' } };
+    const { programs, outcome } = driveFlowsFrom({ steps: [open, step(true)] });
     expect(programs[0]?.steps).toHaveLength(2);
     // The name now carries the claim, so it is derived from the same steps the tape held.
-    expect(outcome.saved).toEqual([driveFlowName(undefined, [step(false), step(true)])]);
+    expect(outcome.saved).toEqual([driveFlowName(undefined, [open, step(true)])]);
     expect(outcome.saved?.[0]).toContain('saved');
     expect(outcome.unprovenSteps).toBeUndefined();
   });
@@ -29,11 +30,40 @@ describe('a drive becomes a flow without anybody asking', () => {
    * manufacture a permanent pass per drive — a false-green factory, built by the product whose whole
    * purpose is to prevent them, running unattended. So it is counted and not written.
    */
+  it('keeps one step for an action tried again with its consequence declared', () => {
+    // Sign-in clicked bare, then clicked again with `until`: saved as two clicks, every replay
+    // signed in on the first and failed on the second, which found no form.
+    expect(driveFlowsFrom({ steps: [step(false), step(true)] }).programs[0]?.steps).toEqual([
+      {
+        tool: ReticleTool.ACT,
+        args: { ref: 'e1', action: 'click' },
+        stable: true,
+        expect: { kind: 'signal', name: 'saved' },
+      },
+    ]);
+    // Declared both times: a double submit on purpose, two steps.
+    expect(driveFlowsFrom({ steps: [step(true), step(true)] }).programs[0]?.steps).toHaveLength(2);
+  });
+
   it('REFUSES to save a tape that asserts nothing, and says how much was driven', () => {
     const { programs, outcome } = driveFlowsFrom({ steps: [step(false), step(false)] });
     expect(programs, 'a flow that cannot go red is not a regression test').toEqual([]);
     expect(outcome.saved).toBeUndefined();
     expect(outcome.unprovenSteps, 'drove and proved nothing must stay visible').toBe(2);
+  });
+
+  it('does not save a journey that ran under network mocks, and counts it (#1459)', () => {
+    const mocked: TapeStep = { ...step(true, '/checkout'), mocked: true };
+    const { programs, outcome } = driveFlowsFrom({
+      steps: [step(false, '/checkout'), mocked, step(true, '/issues')],
+    });
+    expect(programs.map((p) => p.startPath)).toEqual(['/issues']);
+    expect(outcome.mockedSteps).toBe(2);
+    expect(outcome.unprovenSteps).toBeUndefined();
+    // A mocked journey that proved nothing is unproven first: the mocks are not why it was dropped.
+    expect(driveFlowsFrom({ steps: [{ ...step(false), mocked: true }] }).outcome).toEqual({
+      unprovenSteps: 1,
+    });
   });
 
   it('writes nothing for a session that drove nothing', () => {

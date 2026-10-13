@@ -11,7 +11,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { desktopLaunch, workspacePackageDirs } from '@reticlehq/init';
+import { RETICLE_NPM_PACKAGE, desktopLaunch, workspacePackageDirs } from '@reticlehq/init';
 
 /** A dev script, as something an agent can actually run. */
 export interface DevCommand {
@@ -38,7 +38,18 @@ const DEV_SCRIPTS = ['dev', 'develop', 'start'] as const;
 const LOCKFILES = [
   { file: 'pnpm-lock.yaml', manager: 'pnpm' },
   { file: 'yarn.lock', manager: 'yarn' },
+  { file: 'bun.lockb', manager: 'bun' },
+  { file: 'bun.lock', manager: 'bun' },
 ] as const;
+
+/** The one-off runner each manager ships, for running Reticle's CLI without installing it. */
+const RUNNER: Readonly<Record<string, string>> = { pnpm: 'pnpm dlx', bun: 'bunx' };
+const NPX = 'npx';
+const YARN = 'yarn';
+/** `yarn dlx` exists only on Yarn 2+, which is the yarn that writes this file; classic yarn has none. */
+const YARN_BERRY_MARKER = '.yarnrc.yml';
+const YARN_DLX = 'yarn dlx';
+const INIT_VERB = 'init';
 
 const DEFAULT_PACKAGE_MANAGER = 'npm';
 const PACKAGE_JSON = 'package.json';
@@ -181,4 +192,25 @@ export function detectDevCommandInProject(
     if (found !== undefined) return { ...found, directory: sub };
   }
   return undefined;
+}
+
+/**
+ * The command that wires THIS project for good: `init`, in the app's own folder, through the
+ * one-off runner the project's package manager ships.
+ *
+ * Handed to an agent whose install never ran `init` (an MCP-only route), so it has to be right first
+ * time: `init` run in a folder that is not the app stops on a missing package.json, and a runner the
+ * machine does not have is "command not found". npx whenever there is doubt — it ships with Node.
+ */
+export function initCommandIn(
+  directory: string,
+  read: (path: string) => string | undefined = readTextFile,
+  listDirs: (path: string) => readonly string[] = readDirNames,
+): string {
+  const manager = packageManager(directory, read);
+  const berry = read(join(directory, YARN_BERRY_MARKER)) !== undefined;
+  const runner = YARN === manager ? (berry ? YARN_DLX : NPX) : (RUNNER[manager] ?? NPX);
+  const command = `${runner} ${RETICLE_NPM_PACKAGE} ${INIT_VERB}`;
+  const app = detectDevCommandInProject(directory, read, listDirs)?.directory;
+  return app === undefined ? command : `cd ${app} && ${command}`;
 }

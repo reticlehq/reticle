@@ -787,6 +787,21 @@ describe('installNetwork (XMLHttpRequest)', () => {
     expect(done.map((e) => e.data['url'])).toEqual(['/first', '/second']);
     expect(done.map((e) => e.data['status'])).toEqual([200, 201]);
   });
+
+  it('fingerprints the body as it was sent, not as the app left the buffer (#1347)', () => {
+    window.XMLHttpRequest = FakeXHR as unknown as typeof XMLHttpRequest;
+    const { emit, events } = collect();
+    const teardown = installNetwork(emit);
+    const xhr = new window.XMLHttpRequest() as unknown as FakeXHR;
+    const body = new TextEncoder().encode('{"q":1}');
+    xhr.open('POST', '/api/query');
+    xhr.send(body);
+    body.fill(0); // the app reuses its buffer while the request is pending
+    xhr.complete({ status: 200 });
+    teardown();
+
+    expect(eventOf(events, EventType.NET_REQUEST)[REQUEST_SHAPE_FIELD]).toMatch(/^[0-9a-f]{8}$/);
+  });
 });
 
 describe('document-initiated subresources (PerformanceObserver)', () => {
@@ -963,11 +978,143 @@ describe('installNetwork (request-body shape fingerprint)', () => {
   });
 
   it('stamps no fingerprint at all on a body it cannot read as text', async () => {
-    // FormData, a Blob, a stream: the field's absence is what says the identity is unknown, which is
-    // also what an SDK too old to compute one says.
-    const form = new FormData();
-    form.append('name', 'ada');
-    expect(await shapeOfPost(form)).toBeUndefined();
+    // A Blob, a stream, bytes that are not text: the field's absence is what says the identity is
+    // unknown, which is also what an SDK too old to compute one says.
+    expect(await shapeOfPost(new Blob(['{"name":"ada"}']))).toBeUndefined();
+    expect(await shapeOfPost(new Uint8Array([0x08, 0x96, 0x01, 0xff, 0x00]))).toBeUndefined();
+  });
+
+  describe('a JSON body sent as bytes (#1347)', () => {
+    const bytes = (value: unknown): Uint8Array<ArrayBuffer> =>
+      new Uint8Array(new TextEncoder().encode(JSON.stringify(value)));
+
+    it('is fingerprinted exactly like the same JSON sent as a string', async () => {
+      const asString = await shapeOfPost(JSON.stringify({ q: 1 }));
+      expect(await shapeOfPost(bytes({ q: 1 }))).toBe(asString);
+      expect(await shapeOfPost(bytes({ q: 1 }).buffer)).toBe(asString);
+    });
+
+    it('tells distinct payloads apart and groups identical ones', async () => {
+      const shapes = [
+        await shapeOfPost(bytes({ q: 1, mode: 'a' })),
+        await shapeOfPost(bytes({ q: 1, kind: 'b' })),
+        await shapeOfPost(bytes({ q: 1, page: 'cc' })),
+      ];
+      expect(new Set(shapes).size).toBe(3);
+      expect(await shapeOfPost(bytes({ q: 1, mode: 'a' }))).toBe(shapes[0]);
+    });
+
+    it('captures the decoded body, redacted, when capture is on', async () => {
+      const { emit, events } = collect();
+      teardown = installNetwork(emit, { captureBodies: true });
+      await window.fetch('http://localhost:8787/api/login', {
+        method: 'POST',
+        body: bytes({ user: 'ada', password: 'hunter2-secret' }),
+      });
+      await flushBody();
+      const request = eventOf(events, EventType.NET_REQUEST);
+      expect(String(request['requestBody'])).toContain('"user":"ada"');
+      expect(String(request['requestBody'])).not.toContain('hunter2-secret');
+      expect(request['requestBodyType']).toBeUndefined();
+    });
+
+    it('rejects valid UTF-8 carrying control bytes, and keeps tab, newline and return', async () => {
+      const encode = (text: string): Uint8Array<ArrayBuffer> =>
+        new Uint8Array(new TextEncoder().encode(text));
+      expect(await shapeOfPost(encode('{"q":1}\u0000'))).toBeUndefined();
+      expect(await shapeOfPost(encode('{"q":1}\u007f'))).toBeUndefined();
+      expect(await shapeOfPost(encode('{\t"q":\r\n1}'))).toMatch(/^[0-9a-f]{8}$/);
+    });
+
+    it('treats exactly the controls below space except tab, newline and return, and DEL, as not text', async () => {
+      const encode = (text: string): Uint8Array<ArrayBuffer> =>
+        new Uint8Array(new TextEncoder().encode(text));
+      const allowed = new Set([0x09, 0x0a, 0x0d]);
+      for (let code = 0; code <= 0xa0; code += 1) {
+        const control = (code < 0x20 && !allowed.has(code)) || 0x7f === code;
+        const shape = await shapeOfPost(encode(`{"q":"${String.fromCharCode(code)}"}`));
+        expect({ code, text: shape !== undefined }).toEqual({ code, text: !control });
+      }
+    });
+
+    it('does not decode an upload over the size bound', async () => {
+      const big = bytes({ blob: 'x'.repeat((1 << 20) + 1) });
+      expect(await shapeOfPost(big)).toBeUndefined();
+    });
+
+    it('fingerprints what fetch was given, before the app could change the buffer', async () => {
+      const body = bytes({ q: 1 });
+      window.fetch = vi.fn(() => {
+        body.fill(0);
+        return Promise.resolve(fakeResponse(200));
+      });
+      expect(await shapeOfPost(body)).toBe(await shapeOfPost(JSON.stringify({ q: 1 })));
+    });
+
+    it('keeps only the type marker for bytes that are not text', async () => {
+      const { emit, events } = collect();
+      teardown = installNetwork(emit, { captureBodies: true });
+      await window.fetch('http://localhost:8787/api/blob', {
+        method: 'POST',
+        body: new Uint8Array([0x08, 0x96, 0x01, 0xff, 0xfe]),
+      });
+      await flushBody();
+      const request = eventOf(events, EventType.NET_REQUEST);
+      expect(request['requestBodyType']).toBe('Uint8Array');
+      expect(request['requestBody']).toBeUndefined();
+      expect(request[REQUEST_SHAPE_FIELD]).toBeUndefined();
+    });
+  });
+
+  describe('a FormData body', () => {
+    const upload = (name: string, content: string, type = 'image/png'): FormData => {
+      const form = new FormData();
+      form.append('folder', 'avatars');
+      form.append('file', new File([content], name, { type }));
+      return form;
+    };
+
+    it('separates distinct uploads to one endpoint and groups identical ones', async () => {
+      const small = await shapeOfPost(upload('a.png', 'x'.repeat(10)));
+      const large = await shapeOfPost(upload('b.png', 'x'.repeat(2000)));
+      const pdf = await shapeOfPost(upload('c.pdf', 'x'.repeat(10), 'application/pdf'));
+      expect(new Set([small, large, pdf]).size).toBe(3);
+      expect(await shapeOfPost(upload('a.png', 'x'.repeat(10)))).toBe(small);
+    });
+
+    it('carries no name or value, and a text value only as part of a length', async () => {
+      const form = new FormData();
+      form.append('password', 'hunter2-secret');
+      const shape = String(await shapeOfPost(form));
+      expect(shape).toMatch(/^[0-9a-f]{8}$/);
+      expect(shape).not.toContain('hunter2');
+      const sameLength = new FormData();
+      sameLength.append('password', 'abcdefg-zzzzzz');
+      expect(await shapeOfPost(sameLength)).toBe(shape);
+    });
+
+    it('cannot be imitated by a field name that spells a separator', async () => {
+      const two = new FormData();
+      two.append('a', '');
+      two.append('b', '');
+      const one = new FormData();
+      one.append('a=&b', '');
+      expect(await shapeOfPost(two)).not.toBe(await shapeOfPost(one));
+    });
+
+    it('is still never captured, only marked', async () => {
+      const { emit, events } = collect();
+      teardown = installNetwork(emit, { captureBodies: true });
+      await window.fetch('http://localhost:8787/upload', {
+        method: 'POST',
+        body: upload('a.png', 'pixels'),
+      });
+      await flushBody();
+      const request = eventOf(events, EventType.NET_REQUEST);
+      expect(request['requestBodyType']).toBe('FormData');
+      expect(request['requestBody']).toBeUndefined();
+      expect(request[REQUEST_SHAPE_FIELD]).toMatch(/^[0-9a-f]{8}$/);
+    });
   });
 
   it('fingerprints a form-urlencoded body by its keys, not its values', async () => {
@@ -1025,8 +1172,10 @@ describe('installNetwork (Next-Action header)', () => {
     });
     const request = eventOf(events, EventType.NET_REQUEST);
     expect(request[NEXT_ACTION_FIELD]).toBe(ACTION_ID);
-    // The header is a discriminator, not a payload: the body still carries no fingerprint and no text.
-    expect(request[REQUEST_SHAPE_FIELD]).toBeUndefined();
+    // The header is a discriminator, not a payload. The form beside it is fingerprinted by its field
+    // names and kinds (#1347), and its text is never recorded.
+    expect(request[REQUEST_SHAPE_FIELD]).toMatch(/^[0-9a-f]{8}$/);
+    expect(request['requestBody']).toBeUndefined();
   });
 
   it('reads it case-insensitively from a Headers init', async () => {

@@ -77,6 +77,18 @@ describe('computeVerdict', () => {
     expect(v.reasons.some((r) => r.includes('flow b: precondition unmet'))).toBe(true);
   });
 
+  // Persona drive: the agent's session end said "not proved · 1 of 2 checks undecided" and the
+  // dashboard said Passed for the same run: an undecided check counted for nothing.
+  it('a held check beside an undecided one → PARTIAL, never PASS', () => {
+    const check = (status: Verified) => ({
+      predicate: `p-${status}`,
+      status,
+    });
+    const v = computeVerdict({ ...base, checks: [check(Verified.YES), check(Verified.UNKNOWN)] });
+    expect(v.status).toBe(VerdictStatus.PARTIAL);
+    expect(v.reasons.some((r) => r.includes('undecided'))).toBe(true);
+  });
+
   it('only failures → FAIL', () => {
     const v = computeVerdict({ ...base, flows: [flow('b', RunFlowStatus.FAIL)] });
     expect(v.status).toBe(VerdictStatus.FAIL);

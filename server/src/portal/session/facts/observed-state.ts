@@ -17,12 +17,19 @@ import { ambientKeyOf, type AmbientCounts } from '@reticlehq/engine/window/ambie
  *                page was fully observed — a positive claim to have seen what we cannot see. Holding
  *                the level here makes coverage something to ask rather than infer.
  */
+/** The resolution rate-limit drops are kept at: per second of session time. */
+const RATE_DROP_BUCKET_MS = 1000;
+/** An hour of seconds; older buckets are past any window a verdict reads. */
+const MAX_RATE_DROP_BUCKETS = 3600;
+
 export class ObservedState {
   /** What THIS session observed. Never contains seeded history — see seedAmbient. */
   readonly #ownAmbient: AmbientCounts = {};
   /** What previous sessions learned, kept separate so it is never re-persisted as if newly seen. */
   #seededAmbient: AmbientCounts = {};
   readonly #blindSpots: Record<string, number> = {};
+  /** Bridge-side sampling, by second of session time. See noteRateLimited. */
+  readonly #rateDrops: { at: number; count: number }[] = [];
 
   /** Fold one already-attributed event into the learned state. */
   observe(event: ReticleEvent): void {
@@ -133,12 +140,44 @@ export class ObservedState {
    * dropped before they reached the observer. Recording it here keeps the honesty contract intact —
    * a verdict over a sampled window says `coverage: partial` rather than implying it saw everything.
    */
-  noteRateLimited(dropped: number): void {
+  noteRateLimited(dropped: number, at?: number): void {
+    const before = this.#blindSpots[BlindSpotKind.RATE_LIMITED] ?? 0;
     this.#blindSpots[BlindSpotKind.RATE_LIMITED] = dropped;
+    // WHEN, beside how many: the running total above is a fact about the session, and read as one
+    // it made every verdict after a single burst `unclean_capture`, however quiet its own window
+    // was (#1414). Bucketed per second so a sustained flood stays a bounded list.
+    if (at === undefined || dropped <= before) return;
+    const second = Math.floor(at / RATE_DROP_BUCKET_MS) * RATE_DROP_BUCKET_MS;
+    const last = this.#rateDrops[this.#rateDrops.length - 1];
+    if (last !== undefined && last.at === second) last.count += dropped - before;
+    else this.#rateDrops.push({ at: second, count: dropped - before });
+    if (this.#rateDrops.length > MAX_RATE_DROP_BUCKETS) this.#rateDrops.shift();
   }
 
-  blindSpots(): Readonly<Record<string, number>> {
-    return this.#blindSpots;
+  /**
+   * How many events the bridge sampled away at or after `since` (session-elapsed ms).
+   *
+   * A bucket is counted when any part of its second reaches the window, so a drop in the same
+   * second as the window's start still impeaches it: erring toward unclean is the safe direction.
+   */
+  rateDroppedSince(since: number): number {
+    let total = 0;
+    for (const bucket of this.#rateDrops) {
+      if (bucket.at + RATE_DROP_BUCKET_MS > since) total += bucket.count;
+    }
+    return total;
+  }
+
+  /**
+   * The blind spots, session-wide; or, given `since`, with bridge sampling counted only from then on.
+   *
+   * Coverage reads the session-wide view: that sampling happened at all is a fact about the session.
+   * A verdict deciding whether ITS capture is clean reads the windowed one. Read session-wide there,
+   * one early burst made every later verdict on the tab `unclean_capture` (#1414).
+   */
+  blindSpots(since?: number): Readonly<Record<string, number>> {
+    if (since === undefined) return this.#blindSpots;
+    return { ...this.#blindSpots, [BlindSpotKind.RATE_LIMITED]: this.rateDroppedSince(since) };
   }
 }
 

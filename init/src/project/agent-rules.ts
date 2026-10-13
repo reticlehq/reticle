@@ -126,13 +126,21 @@ This app is instrumented by **Reticle**, an in-app verification layer exposed as
 
 **Do not reach for Reticle when the change cannot show up in the running app.** It costs tool calls and the user's patience, and a verdict over an unrelated flow proves nothing about what you changed. Skip it for: documentation, comments, tests, build config, CI, dependency bumps with no user-facing effect, backend or CLI work with no UI surface, and any change to a project that is not a running web app. Say in one line that you skipped verification and why, rather than silently not doing it.
 
-**How to verify:**
+**How to verify — the rules to keep in mind on every call:**
 
-- Drive the flow with \`reticle_act_and_wait({ ref, action, until })\`. It names the consequence you expect BEFORE the action, which is the difference between a check and a rationalisation.
-- Batch a multi-step journey (a login, a form) into one \`reticle_act { steps: [...] }\` rather than one round trip per field.
-- Read the surrounding evidence with \`reticle_look { action: "page" | "state" }\` and \`reticle_observe { action: "network" | "console" }\`.
-- **Only \`reticle_act_and_wait\` and \`reticle_assert\` produce a verdict.** \`reticle_act\` and everything else move or read the app and prove nothing, so a session ending without one of those two has no result however many tools it used.
-- Covered flows: \`${CLI} gate\` reports which recorded flows the changed files affect and whether they still pass.
+1. **Only \`verified: "yes"\` is a pass.** \`"no-fault"\` (nothing was declared — you omitted \`until\`) and \`"unknown"\` (Reticle could not tell; \`verifiedReason\` says why) are not a pass: report them as not proved, never as working.
+2. **Name the consequence BEFORE acting:** \`reticle_act_and_wait({ target, action, until })\` (add \`durable: true\` if it must survive a reload). Only it, \`reticle_assert\` and \`reticle_act { steps }\` produce a verdict; everything else proves nothing.
+3. **A journey is one call:** \`reticle_act { steps: [{ target, action, expect }] }\` runs every step and stops at the first \`expect\` that fails. The last step's \`expect\` is the end state you were asked to deliver.
+4. **Text checks are exact-case.** Add \`ignoreCase: true\` only when case truly does not matter.
+5. **Target by \`{ testid }\` or \`{ role, name }\`.** An ambiguous target is refused, never guessed.
+6. **On a failure, read \`expected\` / \`observed\` / the nearest candidates before retrying.** Never weaken a check to make it green.
+7. **Open \`screenshot.path\` only when the look matters;** \`reticle_observe { since }\` has the rest.
+8. **Predicates:** \`{ kind: "signal", name }\` · \`{ kind: "net", method, urlContains, status }\` · \`{ kind: "route", pathname }\` · \`{ kind: "state", path, equals }\` · \`{ kind: "element", query: { role, name } }\` · \`{ kind: "text", contains }\` · \`allOf\` / \`anyOf\` / \`not\`.
+9. **No session?** \`reticle_session { action: "list" }\` and do its \`next_action\`. **No app connected at all?** Run \`${CLI} init\` in the app's own folder yourself. **A version-skew warning?** \`${CLI} stop\`, then retry.
+10. **End with the Reticle result block the server gives you**, verbatim.
+11. **If your context was compacted or you lost track, run \`${CLI} context --compact\` first.** It is the daemon's own record of what was proved, what failed and what is still owed.
+
+Covered flows: \`${CLI} gate\` reports which recorded flows the changed files affect and whether they still pass.
 
 **Setting Reticle up? You are mid-sequence — do not stop until a verdict exists.** The whole of it
 is: instrument the app → get a dev server running → open the app in a browser → drive one flow →
@@ -144,7 +152,7 @@ carries the recovery ladder; never report the install as finished without a verd
 
 ${DEV_SERVER_POLICY}
 
-A dev server that is already running does not pick up an edited build config or a newly created plugin file — restart it and hard-reload the tab. And if a server IS listening and still nothing connects, the cause is the SDK not loading in the page, not a missing dev server; do not tell the user to start one they are already running.
+If a server IS listening and still nothing connects, the cause is the SDK not loading in the page, not a missing dev server; do not tell the user to start one they are already running.
 
 **Finish \`src/reticle-dev.ts\` before you claim setup is done.** \`init\` writes it and cannot always fill it in: a store that needs an argument only reading the code supplies (Jotai atoms, an XState actor, a TanStack \`queryClient\`) is left as a commented \`registerStore\` line. A file that registers nothing looks exactly like a finished one, and \`reticle_look { action: "state" }\` then returns empty forever — which is indistinguishable from an app that has nothing to report, so it reads as success. Uncomment the line, complete it, and prove it by driving one flow and seeing your keys come back. If \`init\` told you to restart your client, this is the job waiting for you on the other side of that restart.
 
@@ -154,9 +162,6 @@ A dev server that is already running does not pick up an edited build config or 
 
 **Honesty, which is the whole point:**
 
-- **\`verified: "unknown"\` is not a pass.** It means Reticle drove the app and could not tell what happened; \`verifiedReason\` says which clause decided that. Report it as unknown, never as working.
-- **\`verified: "no-fault"\` is not a pass either.** It means nothing was DECLARED to prove: the page settled and no channel complained, but you asserted nothing, so there is no verification. You get it whenever \`until\` is omitted. Name a consequence the action changes — a signal, a request, a route, or store state — and call again.
-- **Never weaken a check to make it green.** Downgrading, skipping or deleting an assertion is a finding, not a fix.
 - **If Reticle cannot run** (no daemon, or this is not a running web app), say so. Do not skip verification silently.
 - **Setup is not finished until one real flow has been driven and produced a verdict.** \`init\` exiting 0, the tools appearing, and a session being listed are all things that happen before anything has been verified.
 

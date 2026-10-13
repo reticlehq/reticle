@@ -224,3 +224,36 @@ describe('the subject a sync sends', () => {
     }
   });
 });
+
+/*
+ * The platform links a proved record to its run by the record's `provedBy`; the engine put the run
+ * in `provenBy.runId`, which the platform does not read, so it guessed the run by time. The run
+ * goes out under the name the platform reads.
+ */
+describe('a record a check proved', () => {
+  it('names the run that proved it as `provedBy`', () => {
+    const root = repo();
+    writeFileSync(
+      join(root, 'intent', 'saved.json'),
+      JSON.stringify({
+        version: 1,
+        subject: 'saved',
+        intents: {
+          saved: {
+            id: 'saved',
+            statement: 'Saving adds it to the top',
+            state: 'proved',
+            declaredAt: 1,
+            subject: 'saved',
+            status: 'proved',
+            provenBy: { verdictId: 'v1', grade: 'strong', at: 5, runId: 'drive-s1' },
+          },
+        },
+      }),
+    );
+    const intents = (diskSource(root).derived('intent') as { intents: Record<string, unknown> })
+      .intents;
+    expect(intents['saved']).toMatchObject({ provedBy: 'drive-s1' });
+    rmSync(root, { recursive: true, force: true });
+  });
+});

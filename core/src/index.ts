@@ -62,6 +62,7 @@ export * from './artifacts/flow-types.js'; // FlowStep, FlowExpect, replay resul
 export * from './artifacts/step-effect.js'; // StepEffect: a leaf, so the page never downloads it
 export * from './artifacts/flow-composition.js'; // canFollow: may B replay straight after A
 export * from './verdict/verification-run.js'; // run/verdict shapes for the CI surface
+export * from './verdict/disparity.js';
 export * from './wire/types.js';
 export * from './identity/brand.js'; // RunId / SessionId / ProjectId / Ref brands + validators
 export * from './wire/net.js'; // NetInitiator / ipc:// scheme — network + desktop-IPC call vocabulary
@@ -90,6 +91,7 @@ export * from './registry/project-registry.js'; // projectId -> directory, so a 
 export * from './verdict/intent.js'; // what a change was supposed to make true, captured while somebody knows
 export * from './verdict/run-context.js'; // what a run established, folded and capped, for the agent to pull back
 export * from './verdict/instrumentation-gap.js'; // what Reticle could not see, and the change that would let it
+export * from './verdict/instrumentation-coverage.js'; // how much of an app Reticle sees, and the prompt that closes the rest
 export * from './verdict/security.js'; // sanitize/serialize helpers shared by browser + server
 export * from './wire/redaction.js'; // isSensitiveKey / scrubKnownSecrets — the shared redaction rules
 export * from './wire/state-select.js'; // selectPath / capDepth — shared by browser SDK + server fallback

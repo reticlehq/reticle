@@ -109,7 +109,7 @@ describe('nextActionFor', () => {
       dev: DEV,
     });
     expect(next.action).toBe(NoSessionAction.RUN_INIT);
-    expect(next.command).toBe('reticle init');
+    expect(next.command).toBe('npx @reticlehq/server init');
     expect(next.command).not.toContain('run dev');
   });
 
@@ -122,7 +122,7 @@ describe('nextActionFor', () => {
       configsElsewhere: [{ directory: '/repo/apps/client', projectId: 'client-1' }],
     });
     expect(next.action).toBe(NoSessionAction.OPEN_APP);
-    expect(next.command).not.toBe('reticle init');
+    expect(next.command).not.toBe('npx @reticlehq/server init');
     expect(next.reason).toContain('/repo/apps/client');
     expect(next.reason).toContain('client-1');
     expect(next.reason).toMatch(/scope|directory/i);
@@ -137,8 +137,38 @@ describe('nextActionFor', () => {
       dev: DEV,
     });
     expect(next.action).toBe(NoSessionAction.OPEN_APP);
-    expect(next.command).toBe('reticle open http://localhost:5173');
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:5173');
     expect(next.port).toBe(5173);
+  });
+
+  // The default MCP registration runs Reticle through `npx`, with no `reticle` bin on PATH: a bare
+  // `reticle open` / `reticle init` is "command not found" exactly where it is handed out (#1456).
+  it('every Reticle command it hands back runs without a global install', () => {
+    const reopen = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [5173],
+      dev: DEV,
+    });
+    const open = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [5173],
+      dev: DEV,
+    });
+    const init = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [5173],
+      dev: DEV,
+    });
+
+    expect(reopen.action).toBe(NoSessionAction.REOPEN_APP);
+    expect(open.action).toBe(NoSessionAction.OPEN_APP);
+    expect(init.action).toBe(NoSessionAction.RUN_INIT);
+    for (const next of [reopen, open, init]) {
+      expect(next.command).toMatch(/^npx @reticlehq\/server (open|init)\b/);
+    }
   });
 
   // The prose half of this same payload says, for this exact branch, that the most likely cause is
@@ -215,9 +245,10 @@ describe('nextActionFor', () => {
     });
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
     expect(next.reason).toContain('5173');
-    expect(next.reason).toMatch(/already listening/i);
-    expect(next.reason).toMatch(/do not start a second/i);
-    expect(next.command).toBe('reticle open http://localhost:5173');
+    expect(next.reason).toMatch(/serving a page/i);
+    expect(next.reason).toMatch(/may not be this app/i);
+    expect(next.reason).toMatch(/second stack/i);
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:5173');
     expect(next.port).toBe(5173);
   });
 
@@ -234,7 +265,7 @@ describe('nextActionFor', () => {
       lastKnownUrl: 'http://localhost:5190/counter?__reticle_session=lease-1&tab=2',
     });
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
-    expect(next.command).toBe('reticle open http://localhost:5190/counter?tab=2');
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:5190/counter?tab=2');
     expect(next.port).toBe(5190);
   });
 
@@ -281,7 +312,7 @@ describe('nextActionFor', () => {
       lastKnownUrl: 'http://127.0.0.1:44549/orders',
     });
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
-    expect(next.command).toBe('reticle open http://127.0.0.1:44549/orders');
+    expect(next.command).toBe('npx @reticlehq/server open http://127.0.0.1:44549/orders');
   });
 
   it('the departed port still answers: reopen it, as before', () => {
@@ -293,7 +324,7 @@ describe('nextActionFor', () => {
       lastKnownUrl: 'http://127.0.0.1:44549/orders',
     });
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
-    expect(next.command).toBe('reticle open http://127.0.0.1:44549/orders');
+    expect(next.command).toBe('npx @reticlehq/server open http://127.0.0.1:44549/orders');
   });
 });
 
@@ -492,5 +523,82 @@ describe('a departed tab seen navigating away', () => {
     });
     expect(next.reason).not.toContain('s3cret');
     expect(next.reason).not.toContain('abc123');
+  });
+});
+
+/**
+ * An app that was never wired — the MCP-only install, where `init` never ran — must not dead-end.
+ *
+ * Two things in one answer: the call that gets a verdict NOW with nothing installed (a lease
+ * supplies the SDK itself), and the command that wires the app for good, which the agent runs.
+ */
+describe('nextActionFor: an app nobody has wired yet', () => {
+  const INIT = 'cd web && pnpm dlx @reticlehq/server init';
+  const LEASE_5173 = 'reticle_lease {action:"acquire", url:"http://localhost:5173"}';
+
+  it('hands over THIS project’s init command, and the lease that gets a verdict now', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [5173],
+      dev: DEV,
+      init: INIT,
+    });
+    expect(next.action).toBe(NoSessionAction.RUN_INIT);
+    expect(next.command).toBe(INIT);
+    expect(next.reason).toContain(LEASE_5173);
+    // Honest about what the supplied SDK cannot see.
+    expect(next.reason).toMatch(/source file:line/);
+    expect(next.reason).toMatch(/restart the dev server/i);
+    expect(next.reason).toMatch(/reload/i);
+  });
+
+  it('leases the port the dev script pins when several are listening', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [3000, 5173],
+      dev: { ...DEV, port: 5173 },
+      init: INIT,
+    });
+    expect(next.reason).toContain(LEASE_5173);
+  });
+
+  it('names no URL it cannot attribute: several listening and none pinned', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [3000, 5173],
+      dev: DEV,
+      init: INIT,
+    });
+    expect(next.reason).not.toContain('url:"http://localhost:');
+    expect(next.reason).toContain('reticle_lease');
+  });
+
+  it('nothing listening: start it, then the lease, and still the init command', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [],
+      dev: DEV,
+      init: INIT,
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.command).toBe('pnpm run dev');
+    expect(next.reason).toContain('reticle_lease');
+    expect(next.reason).toContain(INIT);
+  });
+
+  it('a wired app is never offered the zero-install route or an init', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [],
+      dev: DEV,
+      init: INIT,
+    });
+    expect(next.reason).not.toContain(INIT);
+    expect(next.reason).not.toContain('reticle_lease');
   });
 });

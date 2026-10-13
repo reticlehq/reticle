@@ -132,6 +132,30 @@ export type AnchorKind = (typeof AnchorKind)[keyof typeof AnchorKind];
  */
 export const DEGRADED_ANCHOR_ROLE = 'unresolved';
 
+/**
+ * The JSON replacer every flow is written and sent with: a predicate flag at its default is left
+ * out. An older platform's schema rejects a key it does not know (`ignoreCase` on a text check was
+ * refused on every sync), so a flow that never asked for the flag must not carry it; only a check
+ * that really is case-insensitive depends on a platform that knows the word.
+ */
+export function flowJsonReplacer(key: string, value: unknown): unknown {
+  return 'ignoreCase' === key && false === value ? undefined : value;
+}
+
+/**
+ * How a missing flow is said, so a reader of a replay's error can tell "not on this computer" from
+ * "the journey failed": a whole-app run called missing flows "regressions in journeys that used to
+ * pass".
+ */
+export const NO_SUCH_FLOW = 'no such flow on disk';
+
+/**
+ * A flow that calls one not on disk stops there, having never run: said with `NO_SUCH_FLOW`, so a
+ * plan does not call a flow that never passed a "regression in a journey that used to pass".
+ */
+export const invokedFlowMissing = (name: string): string =>
+  `cannot replay "${name}": ${NO_SUCH_FLOW}, so this journey would report green having never run it`;
+
 /** Structured failure codes for flow disk ops (returned, never thrown as free strings). */
 export const FlowErrorCode = {
   INVALID_NAME: 'flow_invalid_name', // path traversal / illegal chars

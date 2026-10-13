@@ -17,6 +17,8 @@ Same app, same bugs, same moment:
 | Avg tokens per look     | 815       | **758**             |
 | Verification efficiency | **12.27** | 10.55               |
 
+Measured on 2026-06-22 against `chrome-devtools-mcp@1.3.0`; DevTools MCP has shipped since, and this pass has not been re-run.
+
 DevTools MCP genuinely wins the cost column. We are not going to bury that. 758 against 815 is a real 7% advantage per observation, and if you are making a very large number of trivial looks it adds up.
 
 But cost per look is only half a metric. Verification efficiency combines both. Regressions caught per 1,000 tokens spent, gated on catching **all** of them with zero false alarms on a known-good control. On that measure Reticle leads 12.27 to 10.55.
@@ -45,7 +47,7 @@ Note the flip. DevTools is cheaper on a small page and more expensive on a large
 
 DevTools MCP is DOM-and-network only. It can describe what a page looks like and what it requested; it cannot ask the application what it believes.
 
-That is why the misses cluster where they do. The scenarios that separate the tools are the ones where the page is fine and the program is not. A mutation that never reached the store, a success handler that fired for the wrong reason. There is nothing in the DOM or the network log that distinguishes those from working code.
+The benchmark record keeps per-tool totals, not which two scenarios DevTools MCP missed. The class it structurally cannot reach is the one where the page is fine and the program is not. A mutation that never reached the store, a success handler that fired for the wrong reason. There is nothing in the DOM or the network log that distinguishes those from working code.
 
 Reticle can require the app's own signal:
 
@@ -86,11 +88,12 @@ Neither tool forbids the other. A reasonable setup:
 <AccordionGroup>
 
 <Accordion title="Which two bugs did Chrome DevTools MCP miss?">
-  The ones where the page is fine and the program is not: a mutation that never reached the store,
-  and a success handler that fired for the wrong reason. DevTools MCP is DOM-and-network only, so it
-  can describe what the page looks like and what it requested, but it cannot ask the application
-  what it believes. There is nothing in the DOM or the network log that separates those cases from
-  working code.
+  The benchmark record keeps per-tool totals, not the two scenarios by name. The class it cannot
+  reach is the one where the page is fine and the program is not, such as a mutation that never
+  reached the store, or a success handler that fired for the wrong reason. DevTools MCP is
+  DOM-and-network only, so it can describe what the page looks like and what it requested, but it
+  cannot ask the application what it believes. There is nothing in the DOM or the network log that
+  separates those cases from working code.
 </Accordion>
 
 <Accordion title="If DevTools MCP is cheaper, why not just use it?">

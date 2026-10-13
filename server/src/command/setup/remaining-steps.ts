@@ -55,7 +55,7 @@ export function remainingSteps(p: Progress): string[] {
         'what produce a verdict. Or hand the whole drive to Reticle with `reticle_verify { action: ' +
         '"explore", persona: "<who does what>" }`, which records what it drove so later runs replay ' +
         'with no model in the loop; that route runs on the Reticle platform and needs a linked ' +
-        'project (`reticle connect`); every plan, Free included, has monthly Harness credits.',
+        'project (`reticle connect`); a new account gets 10 free credits to try it.',
     );
   }
   // Whether anything is actually outstanding, read BEFORE the docs pointer is added -- that line is

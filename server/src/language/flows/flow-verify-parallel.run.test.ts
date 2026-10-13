@@ -89,6 +89,8 @@ describe('parallel flow_verify persists a verification run artifact', () => {
     expect(target).toEqual({ projectId: 'proj-123', origin: 'http://localhost:3000' });
     expect(timed).toHaveLength(2);
     expect(result).toHaveProperty('status');
+    // Named in the answer, so whoever ran the suite can tie its check to the run.
+    expect(result).toHaveProperty('runId', 'run-id-001');
   });
 
   it('builds TimedReplay[] with durationMs from the injected clock', async () => {
@@ -111,5 +113,30 @@ describe('parallel flow_verify persists a verification run artifact', () => {
     (deps as unknown as Record<string, unknown>)['pool'] = fakePool;
     await verify.handler(deps, { parallel: 2, names: ['checkout'] });
     expect(acquireUrls[0]).toContain('__reticle_project=proj-123');
+  });
+});
+
+vi.mock('./flow-learning.js', () => {
+  const replayed = (_deps: unknown, args: Record<string, unknown>): Promise<FlowReplayResult> =>
+    Promise.resolve({
+      name: (args['flowName'] as string) ?? '',
+      status: ReplayStatus.OK,
+      steps: [],
+    });
+  return { replayAndLearn: replayed, replaySeededOrNot: replayed };
+});
+
+/** The platform's Re-verify replayed one flow and got no run back, so its issue never resolved. */
+describe('a single replay', () => {
+  it('is written down as a run and names it', async () => {
+    persistSpy.mockClear();
+    const replay = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_REPLAY);
+    const deps = {
+      now: () => 1000,
+      sessions: { resolve: () => ({ url: 'http://localhost:3000/', projectId: 'proj-123' }) },
+    } as unknown as ToolDeps;
+    const result = await replay?.handler(deps, { flowName: 'place-order' });
+    expect(persistSpy).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ name: 'place-order', runId: 'run-id-001' });
   });
 });

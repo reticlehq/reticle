@@ -114,9 +114,50 @@ describe('a journey is proved at its end, and a contradiction is a failure', () 
     expect(grade.verified).toBe(Verified.NO);
   });
 
+  it('is unknown, not no, when a step`s consequence could not be read (the page went away)', () => {
+    const grade = gradeSequence([
+      held(),
+      { declared: true, held: false, undecided: 'session disconnected (the page left)' },
+    ]);
+    expect(grade.verified).toBe(Verified.UNKNOWN);
+    expect(grade.because).toContain('session disconnected');
+  });
+
+  it('still says no when another step really missed', () => {
+    const grade = gradeSequence([
+      missed('nothing'),
+      { declared: true, held: false, undecided: 'the page left' },
+    ]);
+    expect(grade.verified).toBe(Verified.NO);
+  });
+
   it('is unknown when fewer steps ran than were planned', () => {
     const grade = gradeSequence([held()], { planned: 3, dispatched: true });
     expect(grade.verified).toBe(Verified.UNKNOWN);
     expect(grade.because).toContain('1 of 3');
+  });
+});
+
+/*
+ * A re-drive: a step whose click left for an external page was graded "no" with "session
+ * disconnected" observed, and a step whose target was missing answered "no" beside "Nothing was
+ * acted on and no verdict is possible". Neither saw the app fail: both are undecided.
+ */
+describe('a step that could not be judged', () => {
+  it('leaves the plan undecided, saying why', () => {
+    const grade = gradeSequence([
+      { declared: true, held: true },
+      { declared: true, held: false, undecided: 'the page left the app (session disconnected)' },
+    ]);
+    expect(grade.verified).toBe(Verified.UNKNOWN);
+    expect(grade.because).toContain('session disconnected');
+  });
+
+  it('does not hide a step that did fail', () => {
+    const grade = gradeSequence([
+      { declared: true, held: false, observed: 'no POST' },
+      { declared: true, held: false, undecided: 'target matched no element' },
+    ]);
+    expect(grade.verified).toBe(Verified.NO);
   });
 });

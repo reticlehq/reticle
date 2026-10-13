@@ -4,7 +4,7 @@ description: 'Adopt Reticle on your own codebase, or embed it inside an AI app-b
 icon: plug
 ---
 
-Two ways in. **A team** runs `npx @reticlehq/server init` once and points its coding agent at the MCP server. **A platform** adds the dev-only SDK to its generated-app template, runs `npx @reticlehq/server serve --http --drive <preview-url>` beside each preview, and `POST`s to `/verify` after every generate or edit, gating the ship on `run.verdict.status === 'pass'` and feeding `run.repair.failurePackets[]` back to a fixer agent.
+Two ways in. **A team** runs the install script once, which registers the MCP server with its coding agents, and follows the next steps it prints. **A platform** adds the dev-only SDK to its generated-app template, runs `npx @reticlehq/server serve --http --drive <preview-url>` beside each preview, and `POST`s to `/verify` after every generate or edit, gating the ship on `run.verdict.status === 'pass'` and feeding `run.repair.failurePackets[]` back to a fixer agent.
 
 > The one guide for adopting Reticle, both for a team using a coding agent on its own app and for an AI app-builder platform (Lovable / Emergent / Bolt) embedding Reticle in its generation pipeline. Reticle reads the program from _inside_ a running app and returns a **verdict with evidence** ("did it actually work?"), not a screenshot. Enterprise/premium access lives in [`enterprise.md`](./enterprise.md).
 
@@ -29,10 +29,11 @@ One call replays the app's key journeys and asserts **program truth** (network c
 ### A. A team, agent on your own app (~10 min)
 
 ```bash
-npx @reticlehq/server init   # auto-detects your framework, installs the kit + build plugin
+curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh
+irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex   # Windows
 ```
 
-Paste to your agent (Claude Code / Cursor / any MCP agent): `Follow https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md` It runs the wizard once (Vite/Next plugin + SDK init + MCP config), then verifies on every change. Run your dev server, then ask the agent to _"verify it with Reticle."_
+It puts the CLI on the machine and registers the MCP server with the coding agents it finds. Then do what it prints: restart your coding agent so it loads Reticle's tools, and paste the prompt the script prints into it. The agent runs `reticle init` in your app (build plugin, SDK connect file, agent rules), then proves one flow. No agent? Run `reticle init` in the app yourself.
 
 ### B. A platform / CI, driven from your pipeline (no MCP, no human)
 
@@ -87,7 +88,7 @@ Copyable patterns: `apps/bench-app/src/reticle-dev.ts`, `apps/next-smoke/app/ret
 | Missing validation (`"abc"` becomes data) | flow oracle (error shown AND nothing created) |
 | Silent console error (logged, UI still renders) | `console { absent: true }` |
 | UI-vs-store desync (the total lies) | reads the store, contradicts the display |
-| Blast-radius (an action corrupts unrelated state) | `state { hold:true }` invariant |
+| Blast-radius (an action corrupts unrelated state) | a `state { path, equals }` invariant on the unrelated value |
 
 Live, clickable demo of each: `apps/vibe-builder-demo/` (set `BUG_MODE=…`). Proven in CI: `server/src/judgement/runs/generated-app-bugs.test.ts`.
 
@@ -133,7 +134,7 @@ The shape is identical (in-app SDK in the template → verify in the sandbox →
 2. Since the runtime is in-browser, drive via the connected session (the SDK dials the bridge) rather than `--drive`; call verify from the Bolt agent after a build.
 3. Same act-on-verdict: gate + self-heal with the repair packets. (Bolt already detects terminal/compile errors; Reticle adds the _runtime program-truth_ layer it's blind to.)
 
-> Honest note: a platform can build a verification step itself. Reticle's case is the depth (program-state and source mapping), the determinism (0% flake, no LLM in the loop), the un-hallucinatable verdict, and a stable drop-in artifact. The reproducible benchmark in [`bench/`](https://github.com/reticlehq/reticle/blob/main/bench/README.md) measures the observation-cost and detection differences against other browser-automation MCPs.
+> Honest note: a platform can build a verification step itself. Reticle's case is the depth (program-state and source mapping), the determinism (no LLM in the loop), the un-hallucinatable verdict, and a stable drop-in artifact. The reproducible benchmark in [`bench/`](https://github.com/reticlehq/reticle/blob/main/bench/README.md) measures the observation-cost and detection differences against other browser-automation MCPs.
 
 ---
 

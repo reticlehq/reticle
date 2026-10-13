@@ -15,7 +15,7 @@ npx @reticlehq/server report [--session <id>] [--hook]
 | Flag | Default | What it does |
 | --- | --- | --- |
 | `--session <id>` | the newest session | Report a specific session |
-| `--hook` | off | Print one line, and only when the working tree changed and no claim held |
+| `--hook` | off | Print a short message, and only when the working tree changed and no claim held |
 
 ## What it prints
 
@@ -27,11 +27,13 @@ session lease-85f8191b-3874-457b-973b-8ee365e5acfb
   ✗ signal order:placed
 ```
 
+The report ends with one more line, an invitation to talk to the founder or leave an email. A session with no claims prints `no claims this session, so nothing was verified`.
+
 An `unknown` is never counted as held. It is Reticle saying it could not tell, and the owner beside it says what to do next.
 
 ## As a Claude Code Stop hook
 
-With `--hook` it prints nothing when a claim held or nothing in the tree changed, and otherwise one line, such as `Reticle: not verified. 3 claims: 1 failed, 2 unknown`. It prints Claude Code's `systemMessage` shape and always exits `0`: you see the line when the agent stops, and the agent is never blocked by it. `reticle init --hooks` adds it for you, merged into whatever `.claude/settings.json` already holds. By hand:
+With `--hook` it prints nothing when a claim held or nothing in the tree changed, and otherwise one line, such as `Reticle: not verified. 3 claims: 1 failed, 2 unknown`, followed by the same invitation line. It prints Claude Code's `systemMessage` shape and always exits `0`: you see the line when the agent stops, and the agent is never blocked by it. `reticle init --hooks` adds it for you, merged into whatever `.claude/settings.json` already holds. By hand:
 
 ```json
 {

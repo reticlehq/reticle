@@ -30,7 +30,7 @@ import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
 import { spawnSync } from 'node:child_process';
 import { isAlive, reticleStateHome } from '@/command/daemon/daemon.js';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
-import { urlOfExistingApp } from './probe/existing-app.js';
+import { connectedAppUrl, urlOfExistingApp } from './probe/existing-app.js';
 import { handedOverUrl, stopHandedOver } from './bringup/dev-server-files.js';
 import { listSessions, OwnedDevServer, probePage } from './node-effects.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
@@ -94,7 +94,32 @@ interface SetupCommandInput extends Omit<SetupInput, 'shape'> {
   readonly registerAgents: boolean;
   /** The bridge's pairing token, for the MCP transport a connect-proof lease is opened over. */
   readonly pairingToken?: string | undefined;
+  /** False for `--no-first-run`: connect, and say nothing more. */
+  readonly firstRun: boolean;
+  /** `--json`: an agent is reading, so nothing is driven on its behalf. */
+  readonly json: boolean;
+  /**
+   * What happens once the connection is proved: the coverage summary and the agent prompt. A port,
+   * because it reads the daemon's status and the link, which this directory does not reach for.
+   */
+  readonly firstFlow?: FirstFlowPort | undefined;
 }
+
+/** init's ending, as `command/cli/try-command.ts` says it. Structural, so setup imports nothing. */
+export type FirstFlowPort = (
+  ctx: {
+    appDir: string;
+    bridgePort: number;
+    pairingToken?: string | undefined;
+    url: string;
+    sessionId: string;
+    leased: boolean;
+    openBrowser: boolean;
+    firstRun: boolean;
+    json: boolean;
+  },
+  say: (line: string) => void,
+) => Promise<{ flowSaved: boolean }>;
 
 /** `electron` in either dependency list, read the same way init's desktop doctor reads it. */
 function hasElectronDependency(dir: string): boolean {
@@ -210,6 +235,40 @@ async function restartHandedOverServer(appDir: string): Promise<boolean> {
   return stopped;
 }
 
+/**
+ * init's ending, inside the dev server's lifetime: coverage is read off the open tab, and the `finally`
+ * in `runSetupCommand` only stops a server that was not handed over. Its lines join the notes, so
+ * `--json` carries the next step too.
+ */
+async function afterConnect(
+  input: SetupCommandInput,
+  url: string,
+  sessionId: string,
+  outcome: SetupOutcome,
+  print: (line: string) => void,
+): Promise<Pick<SetupOutcome, 'flowSaved' | 'notes'>> {
+  const notes = [...outcome.notes];
+  if (input.firstFlow === undefined) return { flowSaved: false, notes };
+  const { flowSaved } = await input.firstFlow(
+    {
+      appDir: input.appDir,
+      bridgePort: input.bridgePort,
+      pairingToken: input.pairingToken,
+      url,
+      sessionId,
+      leased: true === outcome.leased,
+      openBrowser: input.openBrowser,
+      firstRun: input.firstRun,
+      json: input.json,
+    },
+    (line) => {
+      notes.push(line);
+      print(line);
+    },
+  );
+  return { flowSaved, notes };
+}
+
 export async function runSetupCommand(
   input: SetupCommandInput,
   print: (line: string) => void,
@@ -291,7 +350,9 @@ export async function runSetupCommand(
       (await handedOverUrl(reticleStateHome(), input.appDir, {
         alive: isAlive,
         answers: async (url) => (await probePage(url)).served,
-      })),
+      })) ??
+      // A desktop window of this project already connected: its renderer announces no server.
+      connectedAppUrl(await listSessions(input.bridgePort), readProjectId(input.appDir)),
     devServerOutput: () => server.output(),
     devServerExited: () => server.exited(),
     devServerQuietForMs: () => server.quietForMs(),
@@ -355,8 +416,10 @@ export async function runSetupCommand(
       const log = server.logPath();
       if (undefined !== log) print(`The dev server keeps running; its output goes to ${log}`);
     }
+    if (!outcome.ok || undefined === outcome.url || undefined === outcome.sessionId) return outcome;
     return {
       ...outcome,
+      ...(await afterConnect(input, outcome.url, outcome.sessionId, outcome, print)),
     };
   } finally {
     releaseDaemon();

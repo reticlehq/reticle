@@ -30,7 +30,9 @@ export class McpStdioClient {
   async start() {
     this.proc = spawn(this.command, this.args, {
       ...(this.cwd === undefined ? {} : { cwd: this.cwd }),
-      env: { ...process.env, ...this.env },
+      // Benches and batteries are not watched, and a shown browser shifts their timing: hidden unless
+      // the caller asks otherwise. A person running a bench to watch it sets RETICLE_HEADLESS=0.
+      env: { RETICLE_HEADLESS: '1', ...process.env, ...this.env },
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: this.command !== 'node' && 'win32' === process.platform,
     });
@@ -116,6 +118,12 @@ export class McpStdioClient {
     let result;
     try {
       result = await this.request('tools/call', { name, arguments: args }, timeoutMs);
+      // The refusal is an isError RESULT (a client reading only `result` saw a JSON-RPC error as an
+      // empty success), so surface it to the same hatch below.
+      const refusal = (result?.content ?? []).map((c) => c.text ?? '').join('');
+      if (true === result?.isError && /not advertised under this tool profile/.test(refusal)) {
+        throw new Error(refusal);
+      }
     } catch (e) {
       // The advertised surface is capped, so a tool can exist, work, and still not be listed. These
       // harnesses call by NAME from a dozen files, and the server itself says the way through is

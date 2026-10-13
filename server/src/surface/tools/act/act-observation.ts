@@ -11,6 +11,7 @@
  * cut off mid-predicate.
  */
 
+import { EventType, asRecord, asString, isDevToolingUrl, type ReticleEvent } from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import {
   awaitDocumentSuccessor,
@@ -59,4 +60,65 @@ export async function followLostObservation(input: FollowSuccessor): Promise<Fol
   const leftover = timeout - (session.elapsed() - predicateStarted);
   if (leftover <= 0) return { session: next, verdict, followed: true };
   return { session: next, verdict: await reevaluate(next, leftover), followed: true };
+}
+
+/** Why a consequence that did not follow a click on a disabled control is not the app's failure. */
+export const DISABLED_TARGET_NOTE =
+  'the control was disabled when it was acted on, so nothing a user could do there would have ' +
+  'caused the declared consequence. Check why it was disabled (an empty required field, a save ' +
+  'that already happened) before calling this a defect.';
+
+/**
+ * The page reports `enabled: false` on an act whose target was disabled at dispatch. A missed
+ * consequence then says nothing about the app, so the verdict is undecided rather than "no".
+ */
+export function disabledTargetNote(pass: boolean, actResult: unknown): string | undefined {
+  if (pass) return undefined;
+  return false === asRecord(actResult)['enabled'] ? DISABLED_TARGET_NOTE : undefined;
+}
+
+/** Calls quoted on a failed check, and how much of each response body. */
+const MAX_NET_CALLS = 5;
+const MAX_BODY_CHARS = 300;
+
+/**
+ * The requests of a failed check's window, as its record carries them: method, url, status and the
+ * start of the response body (redacted in the page before it was ever sent). Dev tooling is left out.
+ */
+/**
+ * The requests a check keeps: on a miss, the window's calls that explain it; on a held network check,
+ * the request that answered it, so a share page can name "a POST to /api/…", not "a request was seen".
+ */
+export function checkNet(
+  verdict: { pass: boolean; evidence?: unknown },
+  events: readonly ReticleEvent[],
+): { net?: { method: string; url: string; status?: number; body?: string }[] } {
+  if (!verdict.pass) return { net: windowNet(events) };
+  const seen = asRecord(verdict.evidence);
+  const method = asString(seen['method']);
+  const url = asString(seen['url']);
+  if (method === undefined || url === undefined) return {};
+  const status = seen['status'];
+  return { net: [{ method, url, ...('number' === typeof status ? { status } : {}) }] };
+}
+
+export function windowNet(
+  events: readonly ReticleEvent[],
+): { method: string; url: string; status?: number; body?: string }[] {
+  const out: { method: string; url: string; status?: number; body?: string }[] = [];
+  for (const event of events) {
+    if (EventType.NET_REQUEST !== event.type) continue;
+    const url = asString(event.data['url']);
+    if (url === undefined || isDevToolingUrl(url)) continue;
+    const status = event.data['status'];
+    const body = asString(event.data['responseBody']);
+    out.push({
+      method: (asString(event.data['method']) ?? 'GET').toUpperCase(),
+      url,
+      ...('number' === typeof status ? { status } : {}),
+      ...(body === undefined ? {} : { body: body.slice(0, MAX_BODY_CHARS) }),
+    });
+    if (MAX_NET_CALLS <= out.length) break;
+  }
+  return out;
 }

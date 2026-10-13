@@ -41,6 +41,8 @@ export const DoctorRow = {
    * verification." Every row in this list checks a COMPONENT; none checked a LINK.
    */
   AGENT_LINK: 'agent link',
+  /** Is the APP in this folder wired, not just the tools. Printed by `doctor-project-line.ts`. */
+  PROJECT: 'project',
   /**
    * Which of `localhost`'s two answers reaches the bridge, printed only when they disagree.
    *
@@ -59,6 +61,10 @@ export const DoctorRow = {
   DAEMON_LOG: 'daemon log',
   TRACING: 'tracing',
   DESKTOP: 'desktop',
+  /** What Reticle sees in each connected app, out of eight capabilities. Only with a live tab. */
+  COVERAGE: 'coverage',
+  /** A project folder holding runs the platform never got. Only when there is one. */
+  UNSYNCED: 'unsynced',
 } as const;
 
 type DoctorRowLabel = (typeof DoctorRow)[keyof typeof DoctorRow];

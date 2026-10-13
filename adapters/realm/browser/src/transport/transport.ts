@@ -118,6 +118,8 @@ export class Transport {
   #signalQueue: QueuedMessage[] = [];
   #insertOrder = 0;
   #closed = false;
+  /** The bridge refused this page (1008): no timed retry, only one when the person returns. */
+  #refused = false;
   /** When the current continuous outage began (nativeNow), or undefined while connected. */
   #disconnectedSince: number | undefined;
   /** Current reconnect delay; grows on each failure, resets on a successful open or on focus. */
@@ -172,6 +174,8 @@ export class Transport {
     // inheriting a delay earned while nobody was watching.
     this.#reconnectDelay = RECONNECT_DELAY_MS;
     if (this.#ws !== undefined) return;
+    // A refusal came from the daemon that was up then; the one up now may take this page.
+    this.#refused = false;
     this.#open();
   }
 
@@ -223,9 +227,11 @@ export class Transport {
       // bridge puts an actionable message there, e.g. "upgrade @reticlehq/browser") instead of a
       // silent reconnect storm. End the session cleanly so the HUD doesn't hang on "running".
       if (event.code === WS_POLICY_VIOLATION) {
-        this.#closed = true;
+        this.#refused = true;
         const reason = event.reason.length > 0 ? event.reason : 'policy violation';
-        nativeWarn(`[reticle] bridge refused the connection: ${reason} — not retrying.`);
+        nativeWarn(
+          `[reticle] bridge refused the connection: ${reason} — not retrying until you come back to this tab.`,
+        );
         this.#deps.onConnectionLost?.();
         return;
       }
@@ -249,7 +255,7 @@ export class Transport {
    * restarting must not cost 30 seconds) and only a persistent outage backs off.
    */
   #scheduleReopen(): void {
-    if (this.#closed) return;
+    if (this.#closed || this.#refused) return;
     const delay = this.#reconnectDelay;
     this.#reconnectDelay = nextReconnectDelay(delay);
     const schedule = this.#deps.schedule ?? nativeSetTimeout;

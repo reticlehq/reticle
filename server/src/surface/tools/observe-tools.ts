@@ -2,6 +2,7 @@
  * Observe / wait / assert tools — reticle_observe, reticle_wait_for, reticle_assert, reticle_network,
  * reticle_console, reticle_animations. Split out of tools.ts; assembled back via...OBSERVE_TOOLS.
  */
+import { checkWords, runIdOfCall } from '@/judgement/runs/drive-run.js';
 import { noteEmptyRead } from './gaps/observed-nothing.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
@@ -295,6 +296,13 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .describe(
           'Present when this call stopped at the per-call limit before the predicate was seen. Call again with timeout_ms set to this, the same predicate and the same since, to keep waiting.',
         ),
+      verified: z
+        .string()
+        .optional()
+        .describe(
+          'THE field to gate on, graded as reticle_assert grades it: "yes" | "no" | "unknown".',
+        ),
+      because: z.string().optional().describe('One sentence naming the deciding evidence.'),
       pass: z.boolean(),
       evidence: z.unknown().optional(),
       failureReason: z.string().optional(),
@@ -377,9 +385,23 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       });
       session = followed.session;
       const verdict = followed.verdict;
+      // The verdict, graded as `reticle_assert` grades it. This is `reticle_assert { action: "wait" }`,
+      // and it answered `pass` with no `verified` — the one field an agent is told to gate on — while
+      // `action: "now"` carried it. Not journaled: a wait settles the page; the proof is the assert.
+      const { decision } = await assertVerdict(
+        session,
+        predicate,
+        verdict.pass,
+        verdict.evidence,
+        followed.followed ? 0 : since,
+        verdict.inconclusive,
+        verdict.observationLost,
+      );
       // match reticle_assert — wrap with control + session health (throttle matters most while blocking)
       // and the buffer envelope, so a verdict reached over an evicted window says so.
       return withControl(session, {
+        verified: decision['verified'],
+        because: decision['because'],
         // #537's starved-wait note wraps the verdict (it RETURNS the verdict), so it stands where
         // `...verdict` did. The source line is #533's `assertionSource`, which superseded
         // `lastActSourceOnFailure` — an assert used to be blamed on the previous act's file:line.
@@ -586,6 +608,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
             verdictId: inlineVerdictId(ReticleTool.ASSERT, deps.now()),
             grade: gradeOfPredicate(predicate),
             at: deps.now(),
+            // The run this check lands in, so the platform links proof and run by id, not by time.
+            runId: runIdOfCall(session.id),
           },
           /*
            * An assertion has no element of its own — it observes, it does not act. The file it names
@@ -600,7 +624,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // in the response lives only in the agent's context window, which is the copy a compaction
       // destroys — see runs/run-context.ts. Recorded WITHOUT an attribution window: this tool drives
       // nothing, so no event it observed was caused by it.
-      session.recordAction(ReticleTool.ASSERT, asRecord(args), verdictEffect);
+      session.recordAction(ReticleTool.ASSERT, asRecord(args), {
+        ...verdictEffect,
+        ...checkWords(verdict),
+      });
       // A passing check over the default window (since the last act) is proof of that act, so it
       // joins that step in the recording — otherwise "act, then assert" saves a bare click. An
       // explicit `since` may reach back past the last step, where replay would not find it. The

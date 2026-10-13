@@ -1,5 +1,7 @@
 import {
+  ActionType,
   EventAttribution,
+  REDACTED_VALUE,
   JOURNAL_FILE_VERSION,
   type DrivenBy,
   type JournalAction,
@@ -8,6 +10,7 @@ import {
 } from '@reticlehq/core';
 import { isSelfObservation } from './self-observation.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
+import { callerClientName } from '@/hooks/coding-agents.js';
 import { log } from '@/log.js';
 
 /**
@@ -21,6 +24,35 @@ import { log } from '@/log.js';
  * produce one line per batch.
  */
 const JOURNAL_WRITE_LOST = 'journal_write_lost';
+
+/** The actions whose arguments carry what was typed. */
+const TYPING_ACTIONS: ReadonlySet<string> = new Set([ActionType.FILL, ActionType.TYPE]);
+const TYPED_KEYS = ['value', 'text'] as const;
+
+/**
+ * The arguments as the journal keeps them: every typed value replaced, at any depth (a sequence's
+ * steps too). A fill's arguments kept a typed password in clear in `actions.jsonl`; the page cannot
+ * tell the daemon which field was secret before the call is written, and nothing reads a typed value
+ * back from the journal — the run fold reads the ref, the target and the action — so none is kept.
+ */
+function withoutTypedInput(args: unknown): unknown {
+  if (Array.isArray(args)) return args.map(withoutTypedInput);
+  if ('object' !== typeof args || null === args) return args;
+  const record = args as Record<string, unknown>;
+  const typing = TYPING_ACTIONS.has(String(record['action']));
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    const typed =
+      typing && (TYPED_KEYS as readonly string[]).includes(key) && 'string' === typeof value;
+    out[key] = typed ? REDACTED_VALUE : withoutTypedInput(value);
+  }
+  if (typing && 'object' === typeof record['args'] && null !== record['args']) {
+    const inner = { ...(record['args'] as Record<string, unknown>) };
+    for (const key of TYPED_KEYS) if ('string' === typeof inner[key]) inner[key] = REDACTED_VALUE;
+    out['args'] = inner;
+  }
+  return out;
+}
 
 /** Where a recorder persists. `SessionJournal` satisfies this structurally. */
 export interface JournalSink {
@@ -118,6 +150,8 @@ interface ActiveAction {
   tStart: number;
   /** Read at dispatch, where the Harness's context is still on the stack. */
   drivenBy: DrivenBy | undefined;
+  /** The MCP client the call came from, when one can be named. */
+  agent: string | undefined;
   seqFrom?: number;
   seqTo?: number;
 }
@@ -176,7 +210,14 @@ export class JournalRecorder {
 
   /** Open an attribution window. One action is active at a time (the agent drives sequentially). */
   beginAction(actionId: string, tool: string, args: Record<string, unknown>): void {
-    this.#active = { actionId, tool, args, tStart: this.#now(), drivenBy: currentDrivenBy() };
+    this.#active = {
+      actionId,
+      tool,
+      args: withoutTypedInput(args) as Record<string, unknown>,
+      tStart: this.#now(),
+      drivenBy: currentDrivenBy(),
+      agent: callerClientName(),
+    };
   }
 
   /** Close the active window: persist its buffered events, then the action record. No-op if none active. */
@@ -199,6 +240,7 @@ export class JournalRecorder {
       tRange: { from: active.tStart, to: this.#now() },
       at: active.tStart,
       ...(active.drivenBy === undefined ? {} : { drivenBy: active.drivenBy }),
+      ...(active.agent === undefined ? {} : { agent: active.agent }),
     };
     this.#enqueueFlush();
     this.#chain = this.#chain
@@ -234,7 +276,7 @@ export class JournalRecorder {
       v: JOURNAL_FILE_VERSION,
       actionId,
       tool,
-      args,
+      args: withoutTypedInput(args) as Record<string, unknown>,
       effect,
       // No window was opened, so no event carries this id: `seqRange` is omitted rather than
       // invented, because any range here would claim an attribution that never happened. `tRange` is
@@ -245,6 +287,10 @@ export class JournalRecorder {
       ...((): { drivenBy?: DrivenBy } => {
         const by = currentDrivenBy();
         return by === undefined ? {} : { drivenBy: by };
+      })(),
+      ...((): { agent?: string } => {
+        const agent = callerClientName();
+        return agent === undefined ? {} : { agent };
       })(),
     };
     this.#enqueueFlush();

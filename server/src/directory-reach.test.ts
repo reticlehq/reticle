@@ -112,7 +112,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * nothing in it imports upward. The three reaches below are the ones these files already had
    * under their old home; they are the same edges, now attributed to the directory that owns them.
    */
-  act: ['page-commands', 'capsule', 'input', 'read', 'session'],
+  // `hooks` for whether the Harness may press an outward control: who is acting is only known there.
+  act: ['page-commands', 'capsule', 'input', 'read', 'session', 'hooks'],
   /**
    * The read leaves: what a snapshot or a query LOOKS like, with no opinion about what it means.
    *
@@ -147,6 +148,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * describes and the version it prints. The cli directory stopped reaching for version at all
    * in the same move, because that reach was only ever these files.
    */
+  // `doctor`: an agent session's first answer carries doctor's keychain note for a differently
+  // signed macOS build, read by the same function doctor prints it with (a leaf; no pair).
+  agent: ['doctor'],
   doctor: ['session', 'version'],
   /**
    * Getting something running and waiting for it: the bridge port, the daemon, the dev server,
@@ -165,8 +169,16 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * putting the files in the directory that already had the name is what makes the ledger honest
    * rather than what changes it. These are the union, and nothing started or stopped needing
    * anything.
+   *
+   * `flows` for `reticle_memory { action: "push-flow" }`: it uploads the flow the SESSION's project
+   * saved, so it needs the same per-session flow store every flow tool resolves through. Reading the
+   * file directly would be a second, unmigrated reader of the flow format.
+   *
+   * `hooks` for the calling MCP client's name: a memory read is credited to the agent that made it,
+   * the same name `journal` and `runs` credit a drive to. Every read reached the dashboard as
+   * `reticle-mcp` before (persona drive, 2026-10-11).
    */
-  recall: ['args', 'cloud', 'fs', 'project', 'tools'],
+  recall: ['args', 'cloud', 'flows', 'fs', 'hooks', 'project', 'tools'],
   /**
    * The filesystem, as a port.
    *
@@ -194,7 +206,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // nothing else here. `binding` replaces it, because the skew warning still asks for the status.
   launch: ['machine', 'identity', 'version', 'binding'],
   /** The mouth and ears: the tool surface and the MCP server, plus the HTTP door they answer on. */
-  surface: ['bridge', 'telemetry', 'version'],
+  surface: [
+    'bridge',
+    // The POST that carries a tool call names the proxy's project, and the diagnosis reads that
+    // directory from the same async context the Harness uses for who is driving.
+    'hooks',
+    'telemetry',
+    'version',
+  ],
   /**
    * Where `.reticle/` is for a given project, and the id derived from it.
    *
@@ -296,6 +315,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    // `reticle try` asks the platform for its free drive through the same call the HUD's Run
+    // Harness button makes (platform-drives.ts), so the two grants cannot drift apart.
+    'platform',
     // doctor reads the document the dev server serves (served-document.ts) to judge its CSP.
     'dev-server',
     // `reticle gate` ratchets on the coverage ledger and blocks changed code that never ran.
@@ -312,7 +334,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'auth',
     'bridge',
     'browser',
-    'capsule',
     'cloud',
     'daemon',
     'doctor',
@@ -348,10 +369,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * If a FOURTH kind of caller appears, the question is whether the new event is a moment something
    * became true or an internal step wearing an event's clothes — the bar stated in `hook-events.ts`.
    */
-  cloud: ['cli', 'fs', 'hooks', 'intent'],
+  // `dir` for DRIVE_RECORD_SUFFIX, as `telemetry` below: the unsent-run count read a refused
+  // drive's `.drive.json` as a run, so `reticle sync` and the dashboard asked for a sync that had
+  // nothing to send, forever.
+  cloud: ['cli', 'dir', 'fs', 'hooks', 'intent'],
   command: [
     'answers',
-    'demo',
     // Rendering `status` for a person, rather than only logging it as an event. Out of `cli.ts`
     // because that file is a composition root already close to the cap, and because a pure
     // renderer is testable in a way a branch inside a command is not.
@@ -367,7 +390,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'daemon',
     'change',
     'fs',
-    'hunt',
     'identity',
     'launch',
     'license',
@@ -391,21 +413,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'update',
   ],
-  /**
-   * The tutorial's demo run: a page carrying the real SDK, driven to a verdict.
-   *
-   * Four reaches, and each is the thing itself rather than a convenience. `tools` is the registry
-   * and the dispatch chokepoint, because the tour calls tools — in-process, since it starts the
-   * daemon it drives and going back out over a socket would add a transport that can fail to a
-   * command whose whole job is to not fail. `bridge` is the pairing token, which the page must
-   * present or the daemon refuses its hello. `cli` is the tutorial script and the safe-control rule,
-   * shared with the printed tour so one sequence cannot become two.
-   *
-   * It was EIGHT. Five of those existed only to rebuild `ToolDeps` — a constructor `cli-verify`
-   * already had, kept private, so the demo grew a second copy of it. Reaching for the one that
-   * exists removed five edges and the second place to forget a field when that type grows one.
-   */
-  demo: ['tools', 'bridge', 'cli'],
   // `exhaustive` is crawl's mode: the explorer and ledger it runs, the fill values the harness
   // already chooses (and the RETICLE_SECRET_* names replay reads), and the mocks that break a write.
   crawl: ['args', 'project', 'tools', 'facts', 'exhaust', 'flows', 'harness', 'input'],
@@ -437,6 +444,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'facts',
     'fields',
     'fs',
+    // A saved flow's replay marks itself, so the Harness's outward-action gate does not hold back
+    // steps somebody recorded on purpose; the drive context lives in hooks.
+    'hooks',
     'intent',
     'journal',
     'outcome',
@@ -449,6 +459,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'session',
     'tape',
     'tools',
+    // Every replayed step leaves a screenshot, taken by the same function every action uses.
+    'visual',
   ],
   // `project` for where this project's work stands with the platform, shown beside Sync now.
   impact: ['cloud', 'project', 'session'],
@@ -480,6 +492,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   journal: ['on-disk', 'artifact', 'dir', 'fs', 'hooks', 'project', 'runs'],
   license: ['config'],
   mcp: [
+    // The handshake names the coding agent on each connection, for the HUD's "Connected:" line.
+    'hooks',
     'binding',
     'daemon',
     'faults',
@@ -502,7 +516,19 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // filed beside the proxy rather than in it. Moving it in adds an edge and removes a lie about
   // where that code lives; the count is unchanged either way.
   proxy: ['binding', 'daemon', 'identity', 'telemetry'],
-  runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
+  // `agent`: the resume block reads the app notes the agent layer learns (a leaf; no pair).
+  runs: [
+    'agent',
+    'artifact',
+    'cloud',
+    'dir',
+    'flows',
+    'hooks',
+    'intent',
+    'project',
+    'telemetry',
+    'tools',
+  ],
   session: [
     // A command the Harness sends is marked as the Harness's, so the HUD can say who is driving;
     // the async context that knows lives in `hooks`, beside the journal that reads it too.
@@ -519,6 +545,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'config',
     'daemon',
     'gaps',
+    // Every impact push carries the drive running on its tab, or the HUD's Stop button is cleared
+    // by the next push the drive's own tool calls make.
+    'harness',
     'human',
     'impact',
     'input',
@@ -540,6 +569,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // is the only module that exports it, so the alternative was a second copy of the reader.
   setup: ['binding', 'bringup', 'daemon', 'launch', 'probe', 'resolve', 'terminal'],
   telemetry: [
+    // The run count skips a Harness drive's own record (`DRIVE_RECORD_SUFFIX`), named once beside
+    // the runs directory it sits in rather than spelled again here.
+    'dir',
     'cli',
     'daemon',
     'identity',
@@ -699,7 +731,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // The Harness's drive plan: planned from flows, run lane by lane through the loop next door.
   // Handed its browser, model and tools as ports, so like `harness` it reaches nothing else.
   script: ['harness'],
+  // The exploratory Harness: the survey, the hunt before grading and the two-way comparison. Reads
+  // the goal check next door and is handed its tools, so like `script` it reaches nothing else.
+  explore: ['harness'],
   tools: [
+    // What an agent's own call is shaped into on the way out (compact envelope, notices). A leaf:
+    // `agent` imports nothing back, so this adds no mutual pair.
+    'agent',
     // A lease that never dialled reads the served page's CSP, the same reader doctor uses.
     'dev-server',
     // `reticle_coverage { app: true }` folds a session into the app-wide ledger.
@@ -737,6 +775,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'platform',
     // The drive plan, planned and run when no journey is named.
     'script',
+    // The survey before a drive and the hunt before its goals are graded.
+    'explore',
     'impact',
     'input',
     'intent',
@@ -763,7 +803,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   update: ['machine', 'identity', 'project', 'telemetry'],
   version: ['identity', 'project', 'tools'],
-  visual: ['args', 'dir', 'fs', 'input', 'tools'],
+  // A step screenshot is filed under the run it belongs to: `runs` names that run (the verify
+  // being replayed, else the drive's own id), `hooks` says whether the Harness is the one driving,
+  // and `artifact` is where the run reads its screenshots back.
+  visual: ['args', 'artifact', 'dir', 'fs', 'input', 'runs', 'tools'],
 };
 
 /**

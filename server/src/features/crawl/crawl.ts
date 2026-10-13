@@ -135,6 +135,14 @@ export interface CrawlReport {
   notJudged?: { ref: string; desc: string; reason: string }[];
 }
 
+/**
+ * Controls that end the signed-in session. Not destructive (signing out is reversible, so the
+ * action gate lets it through), but a crawl that presses one drives everything after it signed out:
+ * every Harness plan run clicked the sidebar's "Sign out", then stale refs on the sign-in page.
+ */
+const ENDS_SESSION = /\b(?:sign ?out|log ?out|sign ?off|log ?off)\b/i;
+const ENDS_SESSION_NOT_PRESSED = 'not pressed: it ends the signed-in session the crawl is driving';
+
 /** Why a silent control on a throttled page is not reported as dead. */
 const BACKGROUND_TAB_NOT_JUDGED =
   'not judged: the page is throttled (its tab is in the background, or it has not been heard from recently), so a reaction may not show inside the sample window; bring the tab to the front and crawl again';
@@ -397,6 +405,10 @@ export async function crawl(
       const dedupeKey = item.ref !== '' ? item.ref : item.desc;
       if (seen.has(dedupeKey)) continue; // don't re-click the same control
       seen.add(dedupeKey);
+      if (ENDS_SESSION.test(item.desc)) {
+        notJudged.push({ ref: item.ref, desc: item.desc, reason: ENDS_SESSION_NOT_PRESSED });
+        continue;
+      }
       stepsRun += 1;
       visited.push(item.desc);
 
@@ -558,6 +570,8 @@ export async function crawl(
   // unvisited. Skipped when the snapshot was already capped: that case has its own note and a second
   // one would only muddy it.
   const revealed = coverageCapped ? 0 : (await revealedItems(session, opts, found)).length;
+  // Left alone on purpose, so not a step the budget ran out before.
+  const leftAlone = notJudged.filter((n) => ENDS_SESSION_NOT_PRESSED === n.reason).length;
 
   return {
     interactiveFound: found.length,
@@ -569,7 +583,7 @@ export async function crawl(
     // True when coverage was bounded for EITHER reason: the step budget ran out, or the page was
     // bigger than one snapshot. Conflating "I stopped early" with "I saw everything" is what turns a
     // partial sweep into "all controls healthy".
-    truncated: found.length > stepsRun || coverageCapped || revealed > 0,
+    truncated: found.length - leftAlone > stepsRun || coverageCapped || revealed > 0,
     ...(coverageCapped
       ? { coverageNote: CAPPED_SNAPSHOT_NOTE }
       : revealed > 0

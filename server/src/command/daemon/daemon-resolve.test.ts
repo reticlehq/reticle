@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   resolveDaemonForProject,
   adoptable,
+  relocationReason,
   resolveMcpPort,
   projectlessNote,
   projectDaemonsElsewhere,
@@ -163,6 +164,40 @@ describe('resolveMcpPort', () => {
     ).resolves.toBe(51234);
   });
 
+  /**
+   * Moved off another project's port, the proxy chose a random one; the app kept dialling the port
+   * in its own `.reticle.json`, and the agent saw no session.
+   */
+  it("relocates to the project's own port when it is free, not to a random one", async () => {
+    const dir = home([{ port: 16022, pid: 1, cwd: '/b', startedAt: 1, projectId: 'billing' }]);
+    const onlyPreferred = (p: number): Promise<boolean> => Promise.resolve(16022 === p);
+    await expect(
+      resolveMcpPort(
+        16022,
+        'auth',
+        dir,
+        { alive: live, daemonPresent: onlyPreferred, pickPort: assigned },
+        16026,
+      ),
+    ).resolves.toBe(16026);
+  });
+
+  it("still picks a fresh port when the project's own one is held by another project", async () => {
+    const dir = home([
+      { port: 16022, pid: 1, cwd: '/b', startedAt: 1, projectId: 'billing' },
+      { port: 16026, pid: 1, cwd: '/c', startedAt: 1, projectId: 'checkout' },
+    ]);
+    await expect(
+      resolveMcpPort(
+        16022,
+        'auth',
+        dir,
+        { alive: live, daemonPresent: present, pickPort: assigned },
+        16026,
+      ),
+    ).resolves.toBe(51234);
+  });
+
   /** A daemon nobody claims stays shareable, or every global install breaks. */
   it('adopts an unclaimed daemon on the preferred port', async () => {
     const dir = home([{ port: 4400, pid: 1, cwd: '/a', startedAt: 1 }]);
@@ -207,6 +242,16 @@ describe('resolveMcpPort', () => {
         pickPort: assigned,
       }),
     ).resolves.toBe(4400);
+    // A port somebody ASKED for is not a guess. Driven before release: `reticle mcp --port
+    // 15520` in an unwired app attached to the one other project's daemon on 15500, and wiring then
+    // wrote 15500 into that app's .reticle.json.
+    await expect(
+      resolveMcpPort(15520, undefined, dir, {
+        alive: live,
+        daemonPresent: absent,
+        pickPort: assigned,
+      }),
+    ).resolves.toBe(15520);
     const note = projectlessNote(4400, projectDaemonsElsewhere(4400, two, live));
     expect(note).toContain('shop on :47311');
     expect(note).toContain('RETICLE_PORT=47311');
@@ -296,5 +341,39 @@ describe('splitBrainNote', () => {
   /** The advice that would be wrong: this is not an install problem and must not read as one. */
   it('does not send the reader back to init', () => {
     expect(splitBrainNote(51234, [4400])).not.toContain('init');
+  });
+});
+
+/*
+ * Re-drive (persona 02): a proxy given RETICLE_PORT=17505 attached to this project's own daemon on
+ * :4400 (started by `connect`) and logged "the requested port serves a different project" — both
+ * served the same project. The reason says what happened, and how to change it.
+ */
+describe('relocationReason', () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  function home(entries: readonly Record<string, unknown>[]): string {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-reloc-'));
+    dirs.push(dir);
+    for (const e of entries)
+      writeFileSync(join(dir, `daemon-${String(e['port'])}.json`), JSON.stringify(e));
+    return dir;
+  }
+
+  it("says this project's own daemon is elsewhere, and how to use the requested port", () => {
+    const dir = home([{ port: 4400, pid: 1, cwd: '/a', startedAt: 1, projectId: 'nina-app' }]);
+    const reason = relocationReason(17505, 4400, 'nina-app', dir, live);
+    expect(reason).toContain("this project's daemon is already running on :4400");
+    expect(reason).toContain('reticle stop --port 4400');
+    expect(reason).not.toContain('different project');
+  });
+
+  it('names the other project holding the requested port', () => {
+    const dir = home([{ port: 4400, pid: 1, cwd: '/a', startedAt: 1, projectId: 'blog' }]);
+    const reason = relocationReason(4400, 51234, 'shop', dir, live);
+    expect(reason).toContain('project "blog"');
+    expect(reason).toContain(':51234');
   });
 });

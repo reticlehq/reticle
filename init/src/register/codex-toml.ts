@@ -146,3 +146,48 @@ export function codexServerTokens(existing: string | null, serversKey: string): 
 export function codexDeclaresOurServer(existing: string | null, serversKey: string): boolean {
   return 0 < codexServerTokens(existing, serversKey).length;
 }
+
+/**
+ * Our key, as a KEY, inside an inline table's text: `reticle = …`, `"reticle" = …`, or the dotted
+ * `reticle.command = …`. A key follows the `{` or a `,`, and its quotes match, so a value that merely
+ * starts with the name (`command = "reticle.js"`) is not one.
+ */
+const OUR_KEY_INLINE = new RegExp(
+  `(?:^|[{,])\\s*(?:${MCP_SERVER_NAME}|"${MCP_SERVER_NAME}"|'${MCP_SERVER_NAME}')\\s*[.=]`,
+);
+
+/**
+ * Does this config NAME a Reticle server at all, in any shape?
+ *
+ * Wider than {@link codexDeclaresOurServer}, which asks whether the entry holds a command we can
+ * read. A `url` entry, one that only has an `env` table, or an inline `mcp_servers = { … }` has no
+ * command and args, so it reads as absent there. `codex mcp add reticle` REPLACES such an entry
+ * without a word and exits 0, so anything that registers through that command has to ask this.
+ *
+ * Structural rather than a substring match: a project called `reticle`, under
+ * `[projects."/home/u/reticle"]`, does not name a server.
+ */
+export function codexNamesOurServer(existing: string | null, serversKey: string): boolean {
+  if (null === existing) return false;
+  const want = ourTablePath(serversKey);
+  const isOurs = (path: readonly string[]): boolean =>
+    want.every((segment, i) => path[i] === segment);
+  let table: string[] = [];
+
+  for (const rawLine of existing.split(/\r?\n/)) {
+    const line = withoutComment(rawLine).trim();
+    const header = /^\[{1,2}([^\]]+)\]{1,2}$/.exec(line);
+    if (null !== header) {
+      table = keyPath(header[1] ?? '');
+      if (isOurs(table)) return true;
+      continue;
+    }
+    const assignment = /^([^=]+)=(.*)$/.exec(line);
+    if (null === assignment) continue;
+    const path = [...table, ...keyPath(assignment[1] ?? '')];
+    if (isOurs(path)) return true;
+    // `mcp_servers = { reticle = { … } }`: the whole table is one inline value, our key inside it.
+    if (samePath(path, [serversKey]) && OUR_KEY_INLINE.test(assignment[2] ?? '')) return true;
+  }
+  return false;
+}

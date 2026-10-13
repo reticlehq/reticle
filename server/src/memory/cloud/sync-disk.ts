@@ -19,7 +19,8 @@ import {
   renameSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
+import { stepShotDir } from '@/memory/project/dir/reticle-dir.js';
 import { IntentDir, ReticleDir } from '@reticlehq/core';
 import {
   DERIVED_RECORDS,
@@ -117,6 +118,9 @@ const INTENT_INDEX = IntentDir.INDEX_FILE;
  * Returns undefined when there is no memory at all, so a project with nothing to say sends nothing
  * rather than an empty envelope the server has to store.
  */
+/** The longest reason the platform keeps for a statement. */
+const MAX_REASON = 2000;
+
 function readIntent(reticleRoot: string): unknown {
   const legacy = readJson(join(reticleRoot, ReticleDir.INTENT_FILE));
   const merged: Record<string, unknown> = {
@@ -151,7 +155,16 @@ function readIntent(reticleRoot: string): unknown {
    * Records that already name a subject keep it: an agent's explicit choice outranks inference.
    */
   const placed = Object.fromEntries(
-    Object.entries(merged).map(([id, record]) => {
+    Object.entries(merged).map(([id, given]): [string, unknown] => {
+      // The record's `why` is what the platform keeps as `reason`.
+      const why = (given as { why?: unknown }).why;
+      // The run that proved it, under the name the platform reads (it does not read `provenBy`).
+      const run = (given as { provenBy?: { runId?: unknown } }).provenBy?.runId;
+      const record = {
+        ...(given as object),
+        ...('string' === typeof why && 0 < why.length ? { reason: why.slice(0, MAX_REASON) } : {}),
+        ...('string' === typeof run && 0 < run.length ? { provedBy: run } : {}),
+      };
       const held = record as { subject?: unknown; surface?: unknown; binding?: unknown };
       if ('string' === typeof held.subject && held.subject.length > 0) return [id, record];
       const subject = subjectFor({
@@ -193,6 +206,16 @@ export function diskSource(reticleRoot: string): SyncSource {
     // Intent is the only derived record that is no longer one file. See readIntent.
     derived: (kind) =>
       'intent' === kind ? readIntent(reticleRoot) : readJson(join(reticleRoot, DERIVED_FILE[kind])),
+    // The file name comes from a run artifact on disk, so it is held to one segment of the run's
+    // own directory before it is read.
+    screenshot: (runId, file) => {
+      try {
+        if (basename(file) !== file) return undefined;
+        return new Uint8Array(readFileSync(join(stepShotDir(reticleRoot, runId), file)));
+      } catch {
+        return undefined;
+      }
+    },
   };
 }
 

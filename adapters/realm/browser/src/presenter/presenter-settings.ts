@@ -1,4 +1,5 @@
 import type { HarnessConfig } from '@reticlehq/core';
+import type { HarnessGateView } from './presenter-harness-row.js';
 import {
   SETTINGS_ATTR,
   SETTINGS_BTN_ATTR,
@@ -24,11 +25,13 @@ import { HUD_SURFACE_CLASS } from './chrome/presenter-hud-chrome.js';
 import { resetHudDockPosition } from './presenter-drag.js';
 import { findDock, scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import { SETTINGS_CSS } from './presenter-settings-styles.js';
+import { creditsLeftText, creditsSpent, creditsUsedText, type Credits } from '@reticlehq/core/hud';
 import type { AccountState } from '@reticlehq/core';
 import { DISCOVERY_CALL_URL, FOUNDER_EMAIL, FOUNDER_MAILTO } from '@reticlehq/core';
 import {
   ACCOUNT_TEXT,
   accountControlHtml,
+  paintAccountSlot,
   type AccountDetails,
 } from '@/presenter/presenter-account.js';
 
@@ -224,23 +227,48 @@ function settingsHelpIcon(): string {
   return hiIconHtml(PresenterIcon.HELP, PRESENTER_ICON_SIZE.HELP);
 }
 
-function settingsLabel(text: string, helpTitle: string): string {
+/** Each option's name and the one line under it that says what it does. */
+const SETTING_TEXT = {
+  outputDetail: ['Output detail', 'How much a copied run includes.'],
+  autoOpenChat: ['Open the log automatically', 'Opens this panel when a session starts.'],
+  showTimestamps: ['Show timestamps', 'Shows how long ago each log row happened.'],
+  showTally: ['Show pass/fail count', 'A score pill for this session in the toolbar.'],
+  reactComponents: ['React component names', 'Adds component names to copied runs.'],
+  blockPageInteractions: [
+    'Block page while adding notes',
+    'Clicks pin a note instead of using the app.',
+  ],
+  clearOnCopy: ['Clear notes after copying', 'Starts fresh once your notes are copied.'],
+  hideUntilRestart: ['Hide until reload', 'Hides the HUD until this page reloads.'],
+  harnessEnabled: [
+    'Allow Reticle to drive',
+    'Off by default. Unlocks at 80% instrumentation; lets Run Harness test this project.',
+  ],
+  reduceMotion: ['Reduce motion', 'Fewer HUD animations.'],
+  ambientGlow: ['Page glow', 'Tints the page edges while a session runs.'],
+  workspace: ['Workspace', 'The Reticle account this machine is signed in to.'],
+} as const;
+
+function settingsLabel(text: string, helpTitle: string, desc = ''): string {
   const help = settingsHelpIcon();
-  return `<span class="reticle-settings-label">${text}<button type="button" class="reticle-settings-help" data-reticle-settings-help title="${helpTitle}" aria-label="${helpTitle}">${help}</button></span>`;
+  const line = '' === desc ? '' : `<span class="reticle-settings-desc">${desc}</span>`;
+  return `<span class="reticle-settings-labelcol"><span class="reticle-settings-label">${text}<button type="button" class="reticle-settings-help" data-reticle-settings-help title="${helpTitle}" aria-label="${helpTitle}">${help}</button></span>${line}</span>`;
 }
 
-function settingsToggleRow(key: string, label: string, helpTitle: string, extra = ''): string {
+function settingsToggleRow(key: keyof typeof SETTING_TEXT, helpTitle: string, extra = ''): string {
+  const [label, desc] = SETTING_TEXT[key];
   return `<div class="reticle-settings-row" ${extra}>
-    ${settingsLabel(label, helpTitle)}
+    ${settingsLabel(label, helpTitle, desc)}
     <button type="button" class="reticle-settings-toggle" ${SETTING_KEY_ATTR}="${key}" role="switch" aria-checked="false"></button>
   </div>`;
 }
 
-function settingsCheckRow(key: string, label: string, checked: boolean): string {
+function settingsCheckRow(key: keyof typeof SETTING_TEXT, checked: boolean): string {
+  const [label, desc] = SETTING_TEXT[key];
   const on = checked ? 'true' : 'false';
   return `<label class="reticle-settings-checkrow" data-reticle-check-row="${key}">
     <span class="reticle-settings-check" data-reticle-check="${key}" role="checkbox" aria-checked="${on}" tabindex="0"></span>
-    <span class="reticle-settings-check-label">${label}</span>
+    <span class="reticle-settings-labelcol"><span class="reticle-settings-check-label">${label}</span><span class="reticle-settings-desc">${desc}</span></span>
   </label>`;
 }
 
@@ -253,18 +281,15 @@ const HELP_TEXT_ATTR = 'data-reticle-settings-helptext';
 /** The harness row, hidden until the platform has actually said something about it. */
 const SETTINGS_HARNESS_ROW_ATTR = 'data-reticle-settings-harness-row';
 const HARNESS_HELP =
-  'Let Reticle drive this app by itself to find defects. Set here or in your dashboard — both write to the same place.';
+  'Let Reticle test this app by itself to find defects, from Run Harness or from your coding agent. Off blocks every run. Set here or in your dashboard — both write to the same place.';
 /** Shown instead of the switch when the platform says this workspace cannot drive right now. */
-const HARNESS_LOCKED_HELP =
-  'The Harness is not available to this workspace right now. Every workspace gets free Harness credits each month: see Plan in your Reticle dashboard.';
+export const HARNESS_LOCKED_HELP =
+  'The Harness is not available to this workspace right now: see Plan in your Reticle dashboard.';
 
-/** "312 of 500 Harness credits left this month", or nothing for an unbounded plan. */
-export function creditsLeft(credits: { used: number; limit: number } | undefined): string {
+/** "8 of 10 free credits", from the platform's numbers by grant, or nothing for an unbounded plan. */
+export function creditsLeft(credits: Credits | undefined): string {
   if (credits === undefined) return '';
-  const left = Math.max(0, credits.limit - credits.used);
-  return 0 === left
-    ? `All ${String(credits.limit)} Harness credits used this month`
-    : `${String(left)} of ${String(credits.limit)} Harness credits left this month`;
+  return creditsSpent(credits) ? creditsUsedText(credits).said : creditsLeftText(credits);
 }
 /** Sign-in is a device flow the HUD opens in the browser; the terminal is only the fallback. */
 const ACCOUNT_HELP = `Whether this machine is signed in to a Reticle workspace. Press ${ACCOUNT_TEXT.SIGNED_OUT} to sign in through your browser.`;
@@ -283,7 +308,12 @@ const ACCOUNT_HELP = `Whether this machine is signed in to a Reticle workspace. 
  *   - heard and entitled: a live switch reflecting what the PLATFORM says, not what this panel
  *     remembers. The dashboard writes the same row; whichever surface you used last, both read this.
  */
-export function paintHarnessRow(root: ParentNode, config: HarnessConfig | undefined): void {
+export function paintHarnessRow(
+  root: ParentNode,
+  config: HarnessConfig | undefined,
+  /** This tab's coverage gate: below it the switch is locked and the help says why. */
+  gate?: HarnessGateView,
+): void {
   const row = root.querySelector(`[${SETTINGS_HARNESS_ROW_ATTR}]`);
   if (!(row instanceof HTMLElement)) return;
   if (config === undefined) {
@@ -293,15 +323,20 @@ export function paintHarnessRow(root: ParentNode, config: HarnessConfig | undefi
   row.hidden = false;
   const toggle = row.querySelector(`[${SETTING_KEY_ATTR}="harnessEnabled"]`);
   if (!(toggle instanceof HTMLElement)) return;
-  const usable = config.harnessEntitled;
+  const locked = gate !== undefined && !gate.unlocked ? gate.reason : undefined;
+  const usable = config.harnessEntitled && locked === undefined;
   toggle.setAttribute('aria-checked', config.harnessEnabled && usable ? 'true' : 'false');
   toggle.setAttribute('aria-disabled', usable ? 'false' : 'true');
-  const help = row.querySelector('[data-reticle-help]');
+  const help = row.querySelector('[data-reticle-settings-help]');
   const credits = creditsLeft(config.credits);
   if (help instanceof HTMLElement)
-    help.title = usable
-      ? [HARNESS_HELP, credits].filter((t) => 0 < t.length).join(' ')
-      : HARNESS_LOCKED_HELP;
+    help.title =
+      locked ??
+      (usable
+        ? [HARNESS_HELP, credits].filter((t) => 0 < t.length).join(' ')
+        : creditsSpent(config.credits)
+          ? credits
+          : HARNESS_LOCKED_HELP);
 }
 
 /**
@@ -327,7 +362,7 @@ export function paintSettingsAccount(
   // `offerSignIn` is true here: somebody who opened Settings is asking exactly this question.
   const html = accountControlHtml(account, { ...details, dashboardUrl }, true);
   row.hidden = 0 === html.length;
-  slot.innerHTML = html;
+  paintAccountSlot(slot, html);
 }
 
 /** The two ways to reach the founder from Settings: both go straight to a person. */
@@ -346,6 +381,24 @@ const KILL_TEXT = {
   WARNING:
     'Disconnects Reticle from this page: no HUD, no agent, nothing recorded. To bring it back, restart your dev server or reload the page.',
 } as const;
+
+const SDK_VERSION_ATTR = 'data-reticle-sdk-version';
+const SDK_VERSION_TEXT = {
+  UNKNOWN: 'Reticle SDK version unknown',
+  KNOWN: (version: string): string => `Reticle SDK ${version}`,
+} as const;
+
+/**
+ * Name the SDK this page actually loaded. A dev server can keep serving an old pre-bundled copy after
+ * an upgrade, so the CLI's version says nothing about the page's; this line is the page's own answer.
+ * Painted by the SDK instance after mount, because the version arrives as a connect option.
+ */
+export function paintSdkVersion(root: ParentNode, version: string | undefined): void {
+  const line = root.querySelector(`[${SDK_VERSION_ATTR}]`);
+  if (line !== null)
+    line.textContent =
+      version === undefined ? SDK_VERSION_TEXT.UNKNOWN : SDK_VERSION_TEXT.KNOWN(version);
+}
 
 export function settingsPanelHtml(): string {
   const close = hiIconHtml(PresenterIcon.REMOVE, PRESENTER_ICON_SIZE.MIN);
@@ -370,27 +423,27 @@ export function settingsPanelHtml(): string {
       <div class="reticle-settings-body">
         <div class="reticle-settings-section">Session</div>
         <div class="reticle-settings-row">
-          ${settingsLabel('Output Detail', outputHelp)}
+          ${settingsLabel(SETTING_TEXT.outputDetail[0], outputHelp, SETTING_TEXT.outputDetail[1])}
           <button type="button" class="reticle-settings-cycle" data-reticle-settings-cycle="outputDetail"><span data-reticle-cycle-label></span><span class="reticle-settings-dots" data-reticle-cycle-dots></span></button>
         </div>
-        ${settingsToggleRow('autoOpenChat', 'Auto-open chat', autoChatHelp)}
-        ${settingsToggleRow('showTimestamps', 'Show timestamps', timestampsHelp)}
-        ${settingsToggleRow('showTally', 'Show verdict tally', tallyHelp)}
+        ${settingsToggleRow('autoOpenChat', autoChatHelp)}
+        ${settingsToggleRow('showTimestamps', timestampsHelp)}
+        ${settingsToggleRow('showTally', tallyHelp)}
         <div class="reticle-settings-section">Inspector</div>
-        ${settingsToggleRow('reactComponents', 'React Components', reactHelp, 'data-reticle-settings-react-row')}
+        ${settingsToggleRow('reactComponents', reactHelp, 'data-reticle-settings-react-row')}
         <div class="reticle-settings-section">Interaction</div>
-        ${settingsCheckRow('blockPageInteractions', 'Block page while adding notes', true)}
-        ${settingsCheckRow('clearOnCopy', 'Clear notes after copying', false)}
-        ${settingsToggleRow('hideUntilRestart', 'Hide until reload', hideHelp)}
-        ${settingsToggleRow('harnessEnabled', 'Autonomous driving', harnessHelp, `${SETTINGS_HARNESS_ROW_ATTR} hidden`)}
-        ${settingsToggleRow('reduceMotion', 'Reduce motion', motionHelp)}
+        ${settingsCheckRow('blockPageInteractions', true)}
+        ${settingsCheckRow('clearOnCopy', false)}
+        ${settingsToggleRow('hideUntilRestart', hideHelp)}
+        ${settingsToggleRow('harnessEnabled', harnessHelp, `${SETTINGS_HARNESS_ROW_ATTR} hidden`)}
+        ${settingsToggleRow('reduceMotion', motionHelp)}
         <div class="reticle-settings-section">Account</div>
         <div class="reticle-settings-row" ${SETTINGS_ACCOUNT_ROW_ATTR} hidden>
-          ${settingsLabel('Workspace', ACCOUNT_HELP)}
+          ${settingsLabel(SETTING_TEXT.workspace[0], ACCOUNT_HELP, SETTING_TEXT.workspace[1])}
           <span ${SETTINGS_ACCOUNT_ATTR}></span>
         </div>
         <div class="reticle-settings-section">Status theme</div>
-        ${settingsToggleRow('ambientGlow', 'Page glow', glowHelp)}
+        ${settingsToggleRow('ambientGlow', glowHelp)}
         <div class="reticle-settings-themes" data-reticle-settings-themes></div>
         <div class="reticle-settings-section">Help</div>
         <div class="reticle-settings-foot">
@@ -398,6 +451,7 @@ export function settingsPanelHtml(): string {
         <button type="button" class="reticle-settings-link" data-reticle-settings-mcp>MCP setup guide<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></button>
         <a class="reticle-settings-link" data-reticle-feedback-email href="${FOUNDER_MAILTO}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.EMAIL_TITLE}">${FEEDBACK_TEXT.EMAIL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
         <a class="reticle-settings-link" data-reticle-feedback-call href="${DISCOVERY_CALL_URL}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.CALL_TITLE}">${FEEDBACK_TEXT.CALL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
+        <p class="reticle-settings-kill-sub" ${SDK_VERSION_ATTR}>${SDK_VERSION_TEXT.UNKNOWN}</p>
         <div class="reticle-settings-kill-row">
           <button type="button" class="reticle-settings-kill" ${KILL_ATTR}><span data-reticle-kill-label>${KILL_TEXT.LABEL}</span></button>
           <p class="reticle-settings-kill-sub">${KILL_TEXT.WARNING}</p>
@@ -490,7 +544,10 @@ export class PresenterSettingsPanel {
       setHiIcon(closeBtn, PresenterIcon.REMOVE, PRESENTER_ICON_SIZE.MIN);
     }
     if (this.#btn !== undefined) {
+      // The icon is set here; the name under it, from the shell's markup, is kept across the swap.
+      const label = this.#btn.querySelector('.reticle-nav-label');
       setHiIcon(this.#btn, PresenterIcon.GEAR, PRESENTER_ICON_SIZE.TOOLBAR);
+      if (null !== label) this.#btn.append(label);
       this.#btn.addEventListener('click', (e) => {
         e.stopPropagation();
         // A tab selects its page, like the four beside it; the panel's × closes it.
@@ -632,10 +689,10 @@ export class PresenterSettingsPanel {
    * Safe before mount and after teardown: the panel simply has no root, and the next snapshot after
    * a mount paints it. The daemon pushes far more often than somebody opens Settings.
    */
-  paintHarness(config: HarnessConfig | undefined): void {
+  paintHarness(config: HarnessConfig | undefined, gate?: HarnessGateView): void {
     const root = this.#panel;
     if (root === undefined) return;
-    paintHarnessRow(root, config);
+    paintHarnessRow(root, config, gate);
   }
 
   teardown(): void {

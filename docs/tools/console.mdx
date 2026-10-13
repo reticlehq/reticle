@@ -11,7 +11,7 @@ icon: terminal
   `allowedTools` allowlist or an MCP permission rule naming it refuses before Reticle is asked.
 </Warning>
 
-`reticle_console` returns the app's console log, filtered by level, and tells you whether an empty result is a real reading or a missing one. Reach for it as the fast triage read after something goes wrong, and assert `{ "kind": "console", "absent": true }` when you want a clean console to be part of the pass.
+`reticle_observe { action: "console" }` returns the app's console log, filtered by level, and tells you whether an empty result is a real reading or a missing one. Reach for it as the fast triage read after something goes wrong, and assert `{ "kind": "console", "absent": true }` when you want a clean console to be part of the pass.
 
 ```json
 { "limit": 3 }
@@ -44,12 +44,12 @@ Read both fields together. `observed: true` with a non-zero `dropped` count mean
 
 ## Arguments
 
-| Argument          | What it does                                         |
-| ----------------- | ---------------------------------------------------- |
-| `level`           | `log` · `warn` · `error` · `info`                    |
-| `limit`           | Most recent N. Older matches are dropped and counted |
-| `actionId`        | Only lines attributed to one action                  |
-| `since` / `until` | Cursors from a prior act                             |
+| Argument          | What it does                                                       |
+| ----------------- | ------------------------------------------------------------------ |
+| `level`           | `log` · `warn` · `error` · `info`                                  |
+| `limit`           | Most recent N (default 200). Older matches are dropped and counted |
+| `actionId`        | Only lines attributed to one action                                |
+| `since` / `until` | Cursors from a prior act                                           |
 
 ## The check worth making by default
 
@@ -63,8 +63,8 @@ That fails if the click succeeds _and_ logs an error, which is exactly the case 
 
 <Tip>
   `level: "error"` is the fast triage read. If it comes back empty with `observed: true`, stop
-  looking at the console and go look at [`reticle_network`](/tools/network) or
-  [`reticle_state`](/tools/state) instead. That is a real capture from this fixture:
+  looking at the console and go look at [`reticle_observe { action: "network" }`](/tools/network) or
+  [`reticle_look { action: "state" }`](/tools/state) instead. That is a real capture from this fixture:
   `{"logs":[],"observed":true,"cost":{"bytes":337,"tokens":85}}`, eighty-five tokens to rule out a
   whole class of bug.
 </Tip>

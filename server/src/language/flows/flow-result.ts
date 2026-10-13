@@ -1,4 +1,4 @@
-import { FlowErrorCode } from '@reticlehq/core';
+import { FlowErrorCode, NO_SUCH_FLOW, ReplayStatus, ReticleTool, Verified } from '@reticlehq/core';
 import { SAFE_SEGMENT_PATTERN, type ProjectId } from '@reticlehq/core';
 import { FlowParseNote } from './flow-expect-grammar.js';
 
@@ -41,7 +41,7 @@ export function flowErrorMessage(code: FlowErrorCode, detail?: string): string {
     case FlowErrorCode.INVALID_NAME:
       return 'invalid flow name — use a single safe segment (letters/digits/-/_), no path separators';
     case FlowErrorCode.NOT_FOUND:
-      return 'no such flow on disk — run reticle_flow{action:"list"} to see saved flows';
+      return `${NO_SUCH_FLOW} — run reticle_flow{action:"list"} to see saved flows`;
     case FlowErrorCode.PARSE_FAILED:
       return FlowParseNote.MALFORMED;
     case FlowErrorCode.NO_RECORDING:
@@ -55,4 +55,47 @@ export function flowErrorMessage(code: FlowErrorCode, detail?: string): string {
         detail ?? 'the step to resume at is not in this flow — pass a 0-based index or a step id'
       );
   }
+}
+
+/**
+ * A replay as one check of the session that ran it: held when it replayed clean, failed when a step
+ * failed, undecided when it drifted or its flow asserts nothing. A session whose only work was a
+ * failing replay ended "nothing was checked" beside the replay's own failure.
+ */
+export function replayVerdictEffect(
+  name: string,
+  status: ReplayStatus,
+  assertsNothing: boolean,
+): { claim: string; verified: Verified; declaredBeforeActing: true; grade: string } {
+  const verified =
+    ReplayStatus.OK === status && !assertsNothing
+      ? Verified.YES
+      : ReplayStatus.ERROR === status
+        ? Verified.NO
+        : Verified.UNKNOWN;
+  return {
+    claim: `the flow "${name}" replays and its checks hold`,
+    verified,
+    declaredBeforeActing: true,
+    grade: REPLAY_GRADE,
+  };
+}
+
+/** The grade a replay's check is recorded with. */
+const REPLAY_GRADE = 'flow';
+
+/** Record a replay as one check of the session that ran it. A session double without a journal is skipped. */
+export function noteReplayCheck(
+  session: {
+    recordAction?: (tool: string, args: Record<string, unknown>, effect?: unknown) => string;
+  },
+  name: string,
+  status: ReplayStatus,
+  assertsNothing: boolean,
+): void {
+  session.recordAction?.(
+    ReticleTool.FLOW_REPLAY,
+    { flowName: name },
+    replayVerdictEffect(name, status, assertsNothing),
+  );
 }

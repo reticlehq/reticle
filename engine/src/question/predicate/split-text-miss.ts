@@ -64,3 +64,13 @@ export function describeSplitTextMiss(
         })}`;
   return `that text IS on the page, split across the children of ${where} — no single element's own text carries it, so no text query can match it; ${recovery}`;
 }
+
+/**
+ * The clause for a case-exact check that missed only on case: what the page shows, and the one
+ * change that matches it. It used to read "split across the children" with the same check as the
+ * recovery, which fails again.
+ */
+export function describeCaseMiss(shown: string | undefined): string | undefined {
+  if (shown === undefined || 0 === shown.length) return undefined;
+  return `the page shows "${truncate(shown)}", which differs only by case — this check is case-exact; retry with ignoreCase: true if the case does not matter`;
+}

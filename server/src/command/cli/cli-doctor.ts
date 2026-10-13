@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { keychainNoteFor } from './doctor/doctor-signing-line.js';
 import { join } from 'node:path';
 import { devServersForProject, ReticleEnv } from '@reticlehq/core';
 import { readPid, reticleStateHome } from '@/command/daemon/daemon.js';
@@ -32,6 +33,11 @@ import {
   readProjectPort,
 } from './ports/resolve/cli-port.js';
 import { DoctorRow, doctorRow } from './doctor/doctor-rows.js';
+import { coverageLines } from './doctor/doctor-coverage-line.js';
+import { homedir } from 'node:os';
+import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
+import { describeUnsynced } from '@/memory/cloud/unsynced-roots.js';
+import { machineUnsyncedRoots } from '@/memory/project/sync-status.js';
 import { attachState, describeAttachState } from '@/surface/mcp/attach-memory.js';
 import { findOccupiedSiblings, siblingListenerNote } from './ports/sibling-ports.js';
 import {
@@ -159,6 +165,10 @@ export async function handleDoctor(port: number): Promise<void> {
     );
   }
   if (sessions !== undefined) line(sessions.text);
+  for (const row of coverageLines(daemonStatus)) line(row);
+  // Runs nothing will send, named by folder with the one command that sends them.
+  for (const entry of await machineUnsyncedRoots(createNodeFileSystem(), homedir(), process.env))
+    line(doctorRow(DoctorRow.UNSYNCED, `✗ ${describeUnsynced(entry, process.cwd())}`));
   line(
     doctorRow(
       DoctorRow.BRIDGE_PORT,
@@ -311,4 +321,6 @@ export async function handleDoctor(port: number): Promise<void> {
     // findings above exist to remove.
     line(doctorRow(DoctorRow.DESKTOP, '✓ desktop wiring looks right'));
   }
+  const keychain = keychainNoteFor({ read: readProjectFile });
+  if (keychain !== undefined) line(doctorRow(DoctorRow.DESKTOP, `⚠ ${keychain}`));
 }

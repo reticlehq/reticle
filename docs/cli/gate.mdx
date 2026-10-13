@@ -7,7 +7,7 @@ icon: shield-halved
 `reticle gate` is what makes verification unavoidable. It computes the [affected](/cli/affected) flows, looks for a passing artifact for each, and fails the command if any is missing. An agent that edits a covered file cannot call itself finished without re-verifying.
 
 ```bash
-npx @reticlehq/server gate [--since <ref>] [--accept-coverage] [file...]
+npx @reticlehq/server gate [--since <ref>] [--accept-coverage] [--hook] [file...]
 ```
 
 ## Arguments and flags
@@ -17,6 +17,9 @@ npx @reticlehq/server gate [--since <ref>] [--accept-coverage] [file...]
 | `file...` | strings, positional | none | Explicit changed files |
 | `--since <ref>` | string | `HEAD` when no files are given | Also include files git reports as changed since this ref |
 | `--accept-coverage` | boolean | off | Accept today's coverage levels as the new best before judging. Use it when a drop was intended, such as a control you removed on purpose. The run reports what it accepted as `coverageAccepted` |
+| `--hook` | boolean | off | For an agent's Stop hook. A failure or a known regression also prints a short prose summary for a human; exit `2` (no saved flows) prints nothing extra. A refused platform credential does not fail the gate in this mode |
+
+In hook mode only, setting `RETICLE_SKIP_GATE` turns a failing gate into exit `0` and prints that the change is unverified.
 
 ## What blocks and what does not
 
@@ -53,7 +56,9 @@ One `reticle_gate` line. Real capture from this repository, with the flow lists 
 | Code | Meaning |
 | --- | --- |
 | `0` | Every affected, non-flaky flow has a passing artifact, nothing was weakened or deleted, and coverage held |
-| `1` | Something is uncovered, downgraded, deleted, unflowed, unexecuted, or coverage fell. Also `1` on any internal fault: the gate fails closed |
+| `1` | Something is uncovered, downgraded, deleted, unflowed, unexecuted, or coverage fell. Also `1` on any internal fault, and, outside `--hook`, when the linked platform refused the project's credential: the gate fails closed |
+| `2` | No saved flows, so nothing was checked. This is not a failure of the change: the gate says how to record one |
+| `3` | The linked project's dashboard knows a flow that passed before and is broken now, the same code `reticle runs regression` exits with. Checked only when the repo is linked; offline, it changes nothing |
 
 Measured on this repository, `npx @reticlehq/server gate --since HEAD~1` exited `1` with the output above: 0 of 47 flows covered, 39 uncovered and 8 quarantined.
 

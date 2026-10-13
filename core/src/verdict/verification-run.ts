@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { SubjectRefSchema } from 'open-verification';
 import { PredicateKind } from './consequence.js';
 import { Verified } from './verified-constants.js';
+import { RunDisparitySchema } from './disparity.js';
 
 /** Schema version stamped into every run file so a reader can reject/upgrade old artifacts. */
 export const RUN_FILE_VERSION = 3;
@@ -105,6 +106,21 @@ export const RunFlowStatus = {
   HEALED: 'healed',
 } as const;
 export type RunFlowStatus = (typeof RunFlowStatus)[keyof typeof RunFlowStatus];
+
+/**
+ * What one drive came to, and the only place that is decided. A check that came back no is the only
+ * failure. Checks nobody could decide, or a goal the model judged missed with no check against it,
+ * are NOT PROVED (`skipped`): undecided evidence calls for a better check, never a code change, and
+ * a drive with nothing failed was reported "1 broken" before this rule was one rule.
+ */
+export function driveFlowStatus(checks: {
+  held: number;
+  failed: number;
+  goalMet?: boolean | undefined;
+}): RunFlowStatus {
+  if (0 < checks.failed) return RunFlowStatus.FAIL;
+  return 0 < checks.held && false !== checks.goalMet ? RunFlowStatus.PASS : RunFlowStatus.SKIPPED;
+}
 
 /**
  * The kind of standalone assertion captured outside a flow.
@@ -236,6 +252,56 @@ export const RUN_STEP_RESULTS_MAX = 200;
 export const RUN_TEXT_MAX = 300;
 export const RUN_RECORDING_MAX_BYTES = 64 * 1024;
 
+/**
+ * Where a step screenshot's pixels came from. `browser` is a real screenshot (CDP, a leased page, or
+ * the desktop shell's own window capture); `rendered` is the page drawn in-page by the SDK, which can
+ * miss cross-origin images and fonts, so a reader is told it is approximate.
+ */
+export const ScreenshotSource = {
+  BROWSER: 'browser',
+  RENDERED: 'rendered',
+} as const;
+export type ScreenshotSource = (typeof ScreenshotSource)[keyof typeof ScreenshotSource];
+
+/** How a step screenshot is taken and kept — shared by the daemon, the SDK and the platform. */
+export const STEP_SCREENSHOT = {
+  /** `.reticle/visual/runs/<runId>/<seq>-<tool>.jpg` */
+  RUNS_DIR: 'runs',
+  /** One line per landed screenshot, beside the images: what the run artifact and the upload read. */
+  MANIFEST_FILE: 'shots.jsonl',
+  JPEG_QUALITY: 0.7,
+  MAX_SIDE_PX: 1600,
+  /** The platform refuses more than this for one run, so the daemon stops taking them there. */
+  MAX_PER_RUN: 300,
+  /** The platform refuses an image larger than this, decoded. */
+  MAX_BYTES: 1.5 * 1024 * 1024,
+} as const;
+
+/** One step's screenshot as a run artifact records it. `file` is relative to the run's directory. */
+export const StepScreenshotSchema = z.object({
+  file: z.string(),
+  source: z.nativeEnum(ScreenshotSource),
+  width: z.number(),
+  height: z.number(),
+  sha256: z.string(),
+});
+export type StepScreenshot = z.infer<typeof StepScreenshotSchema>;
+
+/** Every screenshot a run took, in order — including the actions that produced no verdict. */
+export const RunScreenshotSchema = StepScreenshotSchema.extend({
+  seq: z.number(),
+  tool: z.string(),
+  /** The flow step it belongs to, as `<flow>#<step>`, when it was taken during a replay. */
+  step: z.string().optional(),
+  /** Taken for a call that produced a verdict — what lets the run pair it with its check. */
+  verdict: z.boolean().optional(),
+  /** The check this picture is of (see `RunCheck.checkId`), when it could be paired with one. */
+  checkId: z.string().optional(),
+  /** The journal action it was taken for: how a run pairs it with its check (`RunCheck.actionId`). */
+  actionId: z.string().optional(),
+});
+export type RunScreenshot = z.infer<typeof RunScreenshotSchema>;
+
 /** One step of a replayed flow, as synced: its outcome and the pages it ran on and led to. */
 export const RunStepResultSchema = z.object({
   step: z.number(),
@@ -247,6 +313,8 @@ export const RunStepResultSchema = z.object({
   error: z.string().optional(),
   /** The drift's reason kind, when the step drifted. */
   drift: z.string().optional(),
+  /** What the page looked like when this step's outcome was decided. */
+  screenshot: StepScreenshotSchema.optional(),
 });
 export type RunStepResult = z.infer<typeof RunStepResultSchema>;
 
@@ -314,6 +382,13 @@ export const RunCheckSchema = z.object({
    */
   declaredBeforeActing: z.boolean().optional(),
   /**
+   * What the check required and what it saw, in the engine's words, when it said — "an element
+   * matching {"testid":"pay"} in state 'enabled'" and "present, visible, disabled". Without them an
+   * issue a CI run found had no Expected or Actual to show. Optional: older runs carry neither.
+   */
+  expected: z.string().optional(),
+  observed: z.string().optional(),
+  /**
    * What kind of evidence bought this answer.
    *
    * A green paid for with "something matching was on screen" is not the same green as one paid for
@@ -338,6 +413,12 @@ export const RunCheckSchema = z.object({
   reason: z.string().optional(),
   /** This check's own name, so a later verdict can cite it. See revision.ts. */
   checkId: z.string().optional(),
+  /** The journal action that produced it, kept on this machine to pair it with its screenshot. */
+  actionId: z.string().optional(),
+  /** The declared intent this check was taken for, by id: what it proves, named rather than timed. */
+  intent: z.string().optional(),
+  /** What the page looked like when this check was decided. */
+  screenshot: StepScreenshotSchema.optional(),
   /**
    * The earlier check this one corrects, as `<runId>#<checkId>`.
    *
@@ -514,8 +595,20 @@ export const ReticleVerificationRunSchema = z.object({
   risks: z.array(RunRiskSchema).default([]),
   evidence: VerificationEvidenceSchema,
   repair: z.object({ failurePackets: z.array(RepairPacketSchema).default([]) }).optional(),
+  /** What the page looked like after each action, assert and replayed step. Absent on older runs. */
+  screenshots: z.array(RunScreenshotSchema).optional(),
   verdict: RunVerdictSchema,
   signature: RunSignatureSchema.optional(),
+  /**
+   * On a Harness run: each goal the session's coding agent also judged, and how the two compare.
+   * Optional and additive; an older platform strips it and keeps the body.
+   */
+  disparity: z.array(RunDisparitySchema).optional(),
+  /**
+   * What the coding agent itself said the session showed (`reticle_session { end, claim }`), kept
+   * beside the graded `verdict` so claimed-vs-graded can be compared. Never read as the verdict.
+   */
+  agentClaim: z.nativeEnum(VerdictStatus).optional(),
 });
 export type ReticleVerificationRun = z.infer<typeof ReticleVerificationRunSchema>;
 

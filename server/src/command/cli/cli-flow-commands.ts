@@ -6,7 +6,14 @@
  * verification state, and none of them touch daemon lifecycle, which is what the rest of cli.ts does.
  */
 
-import { GateExit } from './answers/gate-exit.js';
+import {
+  GateExit,
+  MSG_GATE_NO_FLOWS,
+  msgGateRegression,
+  msgGateRefused,
+  gateExitWith,
+} from './answers/gate-exit.js';
+import { knownRegression } from './known-regression.js';
 import { gateHookMessage, GATE_SKIP_ENV } from './answers/gate-hook-message.js';
 import { readProjectId } from './ports/resolve/cli-port.js';
 import { changedFilesSince, type ChangedFiles } from '@/language/flows/change/git-changed.js';
@@ -29,13 +36,10 @@ import {
 } from '@/features/exhaust/ledger.js';
 import { gateDecision, passingFlowNames } from '@/language/flows/change/gate.js';
 import { FlakeStore } from '@/language/flows/stores/flake-store.js';
-import { formatBuddyStatus } from '@/language/flows/buddy-status.js';
-import { CapsuleStore } from '@/judgement/capsule/capsule-store.js';
 import { AssertionTiersStore } from '@/language/flows/stores/assertion-tiers-store.js';
 import { detectDowngrades } from '@/judgement/outcome/assertion-integrity.js';
 import { computeCoverage, flowCoverageReport } from '@/language/flows/suite/coverage.js';
-import { createWatchBatcher } from '@/language/flows/change/watch-batcher.js';
-import { readFileSync, statSync, watch } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { log } from '@/log.js';
 /** Load the {name, steps} of every saved flow for the active project. */
 /** Explicit files plus, when --since is given, the git-changed files since that ref. */
@@ -79,109 +83,6 @@ export async function loadNamedFlows(
     if (loaded.ok) flows.push({ name: loaded.value.name, steps: loaded.value.steps });
   }
   return flows;
-}
-
-/** File-change extensions worth reacting to (skip node_modules churn, dotfiles, build output). */
-
-/**
- * The buddy channel: one ambient line a human can park in a statusline. Deliberately best-effort
- * and silent on failure — a status line that throws is worse than no status line, and it must never
- * interfere with the watch loop it rides on.
- */
-async function emitBuddyStatus(
-  fs: ReturnType<typeof createNodeFileSystem>,
-  reticleRoot: string,
-  flows: readonly NamedFlow[],
-  affected: readonly string[],
-): Promise<void> {
-  try {
-    const latest = await new RunStore(fs, reticleRoot).latest();
-    const passingNames = new Set(passingFlowNames(latest?.flows ?? []));
-    const quarantined = await new FlakeStore(fs, reticleRoot).flakyFlows();
-    const flaky = new Set(quarantined);
-    // A deviation is an at-risk flow with no passing artifact — and a quarantined flake is not a deviation.
-    const deviations = affected.filter((n) => !passingNames.has(n) && !flaky.has(n));
-    log('reticle_buddy', {
-      status: formatBuddyStatus({
-        total: flows.length,
-        passing: passingNames.size,
-        deviations,
-        quarantined,
-      }),
-    });
-  } catch {
-    // never let the ambient line break the watcher
-  }
-}
-
-const WATCHED_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|vue|svelte)$/;
-const WATCH_DEBOUNCE_MS = 200;
-
-/**
- * `reticle watch [url]` — on every save, report which saved flows must re-verify (the affected set).
- * Environment-side (costs the agent nothing per turn); the buddy loop. This v1 detects + reports on
- * change; auto-replaying the affected flows against the app is the next increment. Long-running.
- */
-export function handleWatch(): void {
-  const fs = createNodeFileSystem();
-  const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
-  const batcher = createWatchBatcher({
-    debounceMs: WATCH_DEBOUNCE_MS,
-    schedule: (fn, ms) => {
-      setTimeout(fn, ms).unref();
-    },
-    onFlush: (files) => {
-      void loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()))
-        .then(async (flows) => {
-          const result = affectedSavedFlows(flows, files);
-          if (result.affected.length > 0) {
-            log('reticle_watch_affected', { changed: files, affected: result.affected });
-          }
-          await emitBuddyStatus(fs, reticleRoot, flows, result.affected);
-        })
-        .catch((error) => {
-          log('reticle_watch_failed', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
-    },
-  });
-  log('reticle_watch_started', { cwd: process.cwd() });
-  // Print the ambient line once at startup so the human sees where they stand before touching anything.
-  void loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()))
-    .then((flows) => emitBuddyStatus(fs, reticleRoot, flows, []))
-    .catch(() => undefined);
-  watch(process.cwd(), { recursive: true }, (_event, filename) => {
-    if ('string' === typeof filename && WATCHED_EXTENSIONS.test(filename))
-      batcher.onChange(filename);
-  });
-}
-
-/**
- * `reticle capsules` — list saved fail-to-pass bug capsules (.reticle/capsules). Each is a minimal
- * failing reproduction plus the consequence that should have held; replay one with reticle_flow_replay.
- */
-export async function handleCapsules(): Promise<void> {
-  try {
-    const fs = createNodeFileSystem();
-    const capsules = await new CapsuleStore(fs, join(process.cwd(), ReticleDir.ROOT)).all();
-    log('reticle_capsules', {
-      count: capsules.length,
-      capsules: capsules.map((c) => ({
-        id: c.id,
-        ...(c.flow === undefined ? {} : { flow: c.flow }),
-        origin: c.origin,
-        expected: c.expected,
-        observed: c.observed,
-        steps: c.steps.length,
-      })),
-    });
-  } catch (error) {
-    log('reticle_capsules_failed', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    process.exitCode = 1;
-  }
 }
 
 /**
@@ -299,8 +200,19 @@ export async function handleGate(
     // verdict already applies to `reticle verify`; see flowCoverageReport.
     const flowCoverage = flowCoverageReport(coverage.flows);
     const pass = result.pass && flowCoverage.outcome === undefined;
+    // What the platform knows decides too (a regression, a refused key), so the line is written
+    // once the exit code is: it said "pass": true over an exit of 1 or 3.
+    const known = await knownRegression(reticleRoot);
+    const regressed = known.broken;
+    const local = pass
+      ? GateExit.PASS
+      : result.pass && flowCoverage.outcome !== undefined
+        ? GateExit.NOTHING_TO_CHECK
+        : GateExit.FAIL;
+    // Fails closed in CI, not in an agent's stop hook, where it would block over a key, not a change.
+    const code = gateExitWith(local, regressed?.length, !hook && known.refused !== undefined);
     log('reticle_gate', {
-      pass,
+      pass: GateExit.PASS === code,
       uncovered: result.uncovered,
       quarantined: result.quarantined,
       ...(result.downgraded.length > 0 ? { downgraded: result.downgraded } : {}),
@@ -318,11 +230,16 @@ export async function handleGate(
     // problem to fail. A Stop hook wants to block a real regression and NOT block a project that
     // has simply not recorded a flow yet — which is every project on its first day, and measured
     // before this change as an exit 1 that would have blocked every stop. See GateExit.
-    if (!pass) {
-      const code =
-        result.pass && flowCoverage.outcome !== undefined
-          ? GateExit.NOTHING_TO_CHECK
-          : GateExit.FAIL;
+    // A regression the platform already knows fails the build here too, with `reticle runs
+    // regression`'s code, so the gate is the one command CI needs. Best-effort: unlinked or offline
+    // changes nothing.
+    if (regressed !== undefined && 0 < regressed.length)
+      log('reticle_gate_regression', { broken: regressed });
+    if (known.refused !== undefined) process.stderr.write(`${msgGateRefused(known.refused)}\n`);
+    if (GateExit.NOTHING_TO_CHECK === code && !hook) process.stderr.write(`${MSG_GATE_NO_FLOWS}\n`);
+    if (GateExit.REGRESSION === code && !hook && regressed !== undefined)
+      process.stderr.write(`${msgGateRegression(regressed)}\n`);
+    if (GateExit.PASS !== code) {
       process.exitCode = code;
       if (hook) {
         // An honest escape hatch, because the alternative to one is not compliance — it is somebody
@@ -345,6 +262,7 @@ export async function handleGate(
             (r) => `${r.level} ${String(r.was)}% -> ${String(r.now)}%`,
           ),
           unexecuted: result.unexecuted,
+          regressed: regressed?.length ?? 0,
         });
         if (message !== undefined) process.stderr.write(`${message}\n`);
       }

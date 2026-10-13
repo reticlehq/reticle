@@ -75,6 +75,7 @@ export const SpecIgnoredReason = {
 export type SpecIgnoredReason = (typeof SpecIgnoredReason)[keyof typeof SpecIgnoredReason];
 
 const PERSONA_MAX = 2_000;
+const PLAN_ID_MAX = 128;
 const STEPS_MAX = 500;
 
 /** Each field of a spec, validated on its own so one bad field never costs the others. */
@@ -89,6 +90,8 @@ const SPEC_FIELDS = {
   persona: z.string().min(1).max(PERSONA_MAX),
   maxSteps: z.number().int().min(1).max(STEPS_MAX),
   record: z.boolean(),
+  plan: z.string().min(1).max(PLAN_ID_MAX),
+  confirmDangerous: z.boolean(),
 } as const;
 
 export interface DriveSpec {
@@ -101,6 +104,14 @@ export interface DriveSpec {
   maxSteps?: number;
   /** Whether pictures of the page may leave the machine. */
   record?: boolean;
+  /** A plan the platform saved: run it as it stands instead of asking for a new one. */
+  plan?: string;
+  /**
+   * A person started this run (Run plan, Re-verify, Run suite) and so acknowledged the saved flows'
+   * own destructive steps: their replays may take them. A fresh action the model decides keeps the
+   * guard whatever this says.
+   */
+  confirmDangerous?: boolean;
 }
 
 export interface SpecIgnored {
@@ -267,3 +278,80 @@ export const LinkPath = {
   driveSession: (id: string): string =>
     `/v1/harness/local-drives/${encodeURIComponent(id)}/session`,
 } as const;
+
+/**
+ * What a daemon adds to each local-apps report so the platform can say what an app is missing and
+ * why a page never connected. Every key is additive: a platform that predates one ignores it.
+ */
+export const LinkReportKey = {
+  /** Per app: the channels its page announced in its HELLO. */
+  CHANNELS: 'channels',
+  /** Per app: instrumentation gaps its verdicts recorded, deduped by kind + missing, newest first. */
+  GAPS: 'gaps',
+  /** Per app: the framework adapters its page announced. */
+  ADAPTERS: 'adapters',
+  /**
+   * Per app: coverage capabilities that do not apply to it (`CoverageCapability` values, see
+   * `NotApplicableSchema`), excluded from both sides of the coverage score. Always sent, empty when
+   * every capability applies.
+   */
+  NOT_APPLICABLE: 'notApplicable',
+  /** Top level: dev servers listening on this machine that no Reticle page has connected from. */
+  DEV_SERVERS: 'devServers',
+  /** Top level: the last page handshake this daemon refused, and why. */
+  HELLO_FAILURE: 'helloFailure',
+  /** Top level: `.reticle` folders holding runs that never reached the platform. */
+  UNSYNCED: 'unsynced',
+} as const;
+
+/** How many recorded gaps one app reports. */
+export const LINK_APP_GAPS_MAX = 20;
+
+/** One recorded instrumentation gap, as an app report carries it. */
+export interface LinkAppGap {
+  kind: string;
+  missing: string;
+  fix: string;
+  seenAt: number;
+}
+
+/** A dev server listening on localhost with no connected Reticle page. */
+export interface LinkDevServer {
+  url: string;
+  port: number;
+}
+
+/** The last refused page handshake: version skew, token, port or protocol, in `reason`. */
+export interface LinkHelloFailure {
+  reason: string;
+  at: number;
+  sdkVersion?: string;
+}
+
+/** A `.reticle` folder with runs that never reached the platform. `root` is `~`-relative. */
+export interface LinkUnsyncedRoot {
+  root: string;
+  runs: number;
+  linked: boolean;
+  /** The project the folder belongs to, so a board lists only its own. Absent when none is named. */
+  projectId?: string;
+}
+
+/**
+ * Markers a daemon adds to an app's `channels` beside the protocol channel ids, for the two
+ * capabilities no channel names. Sent only on evidence, never while the gap that names the same
+ * capability is recorded: absence of both reads as "not seen yet", never as covered.
+ */
+export const CoverageMarker = {
+  /** The page carries `data-reticle-source` (the build plugin is active). */
+  SOURCE: 'source',
+  /** The app's snapshots show `data-testid` on its controls. */
+  TESTID: 'testid',
+} as const;
+export type CoverageMarker = (typeof CoverageMarker)[keyof typeof CoverageMarker];
+
+/**
+ * The file:line capability's name (`CoverageCapability.SOURCE_MAPPING` is this). Here, beside the
+ * markers, so a page can say it does not apply without loading the coverage rules into first load.
+ */
+export const SOURCE_MAPPING_CAPABILITY = 'file:line source mapping';

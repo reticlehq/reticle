@@ -7,6 +7,7 @@ import type { MockRule } from './network-mock.js';
 import type { RealInputProvider } from './real-input.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { ToolDeps } from '@/surface/tools/tools.js';
+import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 
 function tool() {
   const t = NETWORK_MOCK_TOOLS.find((x) => x.name === ReticleTool.NETWORK_MOCK);
@@ -21,7 +22,12 @@ function depsWith(
   const sessions: Partial<SessionManager> = {
     resolve: () => ({ id: 'lease-1', url: 'http://localhost:5173/checkout' }) as never,
   };
-  return { sessions: sessions as SessionManager, realInput, pool } as unknown as ToolDeps;
+  return {
+    sessions: sessions as SessionManager,
+    realInput,
+    pool,
+    recordings: new RecordingStore(),
+  } as unknown as ToolDeps;
 }
 
 interface MockResult {

@@ -172,7 +172,14 @@ describe('tool allowlists are complete', () => {
      * `verificationOf` still requires a verdict shape this action does not return. It saves flows;
      * the replay of those flows is what produces a verdict, and that is counted where it happens.
      */
-    const PINNED_RAW_TOOL_COUNT = 64;
+    /*
+     * 65 since `reticle_session { action: "account" }` (`reticle_account`): where the user stands
+     * with Reticle. It must answer with no tab, because the agent asks it before any app is open:
+     * it does, through its facade, which SESSION_EXEMPT_TOOLS already holds (a member is not a name
+     * in TOOLS of its own). Every other set no: it acts on no page, mints no ref, and produces no
+     * verdict.
+     */
+    const PINNED_RAW_TOOL_COUNT = 65;
 
     expect(
       RAW_TOOLS.length,

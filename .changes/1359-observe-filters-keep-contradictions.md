@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`: `reticle_observe { filters }` no longer invents contradictions from the events it filtered out.** Contradictions were computed over the filtered window, so `filters: ["route"]` removed the DOM events that prove a destination rendered, and the call reported `route-rendered-nothing` where the unfiltered call on the same window did not. Contradictions are now computed over the whole window, and `filters` and `max_events` only shape the timeline that is returned. A navigation that really rendered nothing is still reported either way. Closes [#1359](https://github.com/reticlehq/reticle/issues/1359).

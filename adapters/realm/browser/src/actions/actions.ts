@@ -15,9 +15,15 @@ import { echoRef, refs } from '@/dom/addressing/refs.js';
 import {
   dangerousActionContext,
   requiresDangerousConfirmation,
+  assertOutwardAllowed,
   submitControlFor,
 } from './danger-context.js';
-import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
+import {
+  assertEditable,
+  assertNotRichText,
+  isAutofillSafeTarget,
+  setNativeValue,
+} from './value-input.js';
 import { getAccessibleName, getRole, isVisible, getStates } from '@/dom/a11y.js';
 import { elementHasHoverHandlers, identifyComponent } from '@/registry/stores/adapters.js';
 import {
@@ -65,6 +71,8 @@ interface ActionEffect {
   focusMoved: string | null;
   /** fill/type/clear only: input value before !== after; else false. */
   valueChanged: boolean;
+  /** A password fill in WebKit, made without focus so no saved-password panel rose. */
+  autofillSafe?: true;
   /** Mutation records counted by a short-lived MutationObserver (one microtask + rAF window). */
   domMutatedWithin: number;
   /**
@@ -339,12 +347,8 @@ const GENERIC_ACTION_ARG_KEYS: ReadonlySet<string> = new Set([
  * because the caller chose to name a path that cannot be read in-browser. This is worse than the
  * daemon path, but better than a refusal that tells the agent "upload does not support paths".
  *
- * The refusal names the keys upload reads so a caller that guessed can correct in one turn.
- *
- * Scoped to upload deliberately. Dropping an unrecognised key in silence is a property of EVERY
- * action — `args` is `z.record(z.unknown())` at the wire boundary — but upload is the one where the
- * dropped key is replaced with fabricated content. Refusing unknown keys everywhere needs a
- * per-action arg schema in core and is a larger change than this release should carry.
+ * The refusal names the keys upload reads so a caller that guessed can correct in one turn. Scoped
+ * to upload: it is the one action where a dropped key is replaced with fabricated content.
  */
 function assertUploadArgs(args: Record<string, unknown>): void {
   const keys = Object.keys(args);
@@ -383,6 +387,8 @@ function assertActionAllowed(
   // nothing, so the form is none of its business.
   const submitter =
     action === ActionType.PRESS && 'Enter' === pressKey(args) ? submitControlFor(el) : null;
+  if (canTrigger)
+    assertOutwardAllowed([el, submitter, isActionTarget(dragTarget) ? dragTarget : null]);
   const sourceDangerous =
     requiresDangerousConfirmation(dangerousActionContext(el), getRole(el)) ||
     (submitter !== null &&
@@ -401,6 +407,13 @@ function assertActionAllowed(
   }
 }
 
+/** The value of the option `named` names: its value, else the one option whose label it is. */
+function optionValueFor(options: readonly HTMLOptionElement[], named: string): string {
+  if (options.some((option) => option.value === named)) return named;
+  const byLabel = options.filter((option) => option.label.trim() === named.trim());
+  return 1 === byLabel.length ? (byLabel[0]?.value ?? named) : named;
+}
+
 /** Best-effort click-point geometry. All-false default when there is nothing measurable to test. */
 import {
   NO_GEOMETRY,
@@ -411,6 +424,7 @@ import {
   firePointerNonBubbling,
   dragElement,
   mouseEventFor,
+  assertNotLeaving,
 } from './actions-dom.js';
 import { scrollFrom } from './scroll.js';
 
@@ -562,13 +576,8 @@ async function dispatchOther(
     }
     case ActionType.FILL:
       if (isInput(el) || isTextArea(el)) {
-        // A MISSING value is a malformed call, not a request to empty the field. `asString` defaults
-        // to '', which made such a fill indistinguishable from `clear`: it wiped what was there,
-        // dispatched a real input event so React committed the empty string to state, and reported
-        // ok:true with nothing flagged. The value is nested (`args:{value}`) at the tool boundary, so
-        // passing it at the top level lands here — measured on bench-app's login form, where
-        // "admin@reticle.dev" was destroyed by a fill that reported success. An explicit '' still
-        // clears, because that is someone asking for it.
+        // A MISSING value is a malformed call, not a request to empty the field: defaulting it to ''
+        // wiped a login form's email and reported success. An explicit '' still clears.
         if (typeof args['value'] !== 'string') {
           throw new Error(
             "fill requires a string `value` — pass it nested, as args: { value: '…' }. " +
@@ -576,7 +585,8 @@ async function dispatchOther(
           );
         }
         assertEditable(el, 'fill');
-        el.focus(); // focus first so a later blur commits (onBlur editors)
+        // Focus so a later blur commits; not a WebKit password field, where it raises AutoFill.
+        if (!isAutofillSafeTarget(el)) el.focus();
         return setNativeValue(el, args['value']);
       }
       assertNotRichText(el, 'fill');
@@ -612,8 +622,10 @@ async function dispatchOther(
             "select requires a string `value` — pass it nested, as args: { value: '…' }.",
           );
         }
-        const wanted = args['value'];
         const options = Array.from(el.options);
+        // An option is named by its value, or by the label a person reads on it when exactly one
+        // option carries that label: "Only if “Sign in” passed" was refused with its own label.
+        const wanted = optionValueFor(options, args['value']);
         // REFUSE an option that does not exist, before touching the element.
         //
         // Assigning anyway and reporting the resulting `valueChanged` delta as proof the option
@@ -832,6 +844,7 @@ export async function executeAction(
   // guard classifies the ELEMENT, and inventing a target from body/focus would be the lie this
   // path exists to avoid.
   if (named) assertActionAllowed(el, action, args);
+  if (named) assertNotLeaving(el);
   // Capture the anchor while the element is still mounted — the action may unmount it (navigation).
   // A refless press reports no anchor: minting a testid/component of whatever is focused would
   // invent a target the caller did not name.
@@ -900,6 +913,7 @@ export async function executeAction(
     defaultPrevented,
     focusMoved: prevFocus !== nextFocus ? `${prevFocus ?? 'null'}->${nextFocus ?? 'null'}` : null,
     valueChanged: isFillLike(action) ? valueBefore !== valueAfter : false,
+    ...(ActionType.FILL === action && isAutofillSafeTarget(el) ? { autofillSafe: true } : {}),
     domMutatedWithin: mutated,
     // Omitted rather than "" when nothing was said — an empty string reads as "it said nothing
     // meaningful", where absence says "it added no text at all". Those are different findings.

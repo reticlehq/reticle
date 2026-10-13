@@ -13,9 +13,9 @@ Closes #
 ## Gates run
 
 <!-- Tick the fast gate, plus any tier your change needs. Full map: docs/gates.md.
-     CI runs everything regardless — this just tells the reviewer what you already know is green. -->
+     CI is path-routed and counts a skipped job as green, so this tells the reviewer what actually ran. -->
 
-- [ ] `pnpm lint && pnpm typecheck && pnpm test:unit` (~2 min — **always**)
+- [ ] `pnpm verify` (~2 min — **always**)
 - [ ] `pnpm test:e2e` (~8 min) — _touched the tool surface, `core`, an observer, or telemetry_
 - [ ] `pnpm gate:install` (~15 min) — _touched `reticle init`, `vite-plugin`, `next`, or `babel-plugin`_
 - [ ] `pnpm test:e2e:desktop` (~3 min) — _touched `adapters/realm/electron`, `adapters/realm/tauri`, or desktop capture_

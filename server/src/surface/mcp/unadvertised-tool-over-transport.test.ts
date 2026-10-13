@@ -80,4 +80,20 @@ describe('calling a known tool the default surface does not advertise', () => {
       await close();
     }
   });
+
+  it('answers as a failed tool result, never as a protocol error a client reads as empty', async () => {
+    // A client that reads only `result` saw `reticle_record` and `reticle_flow_save` come back
+    // with no text and no error, and the agent believed its flow was saved. A JSON-RPC error has
+    // no `result`; an `isError` result is read the same way by every client.
+    const { client, close } = await openServer();
+    try {
+      const result = (await client.callTool({ name: ReticleTool.RECORD, arguments: {} })) as {
+        isError?: unknown;
+      };
+      expect(result.isError).toBe(true);
+      expect(await replyText(Promise.resolve(result))).toContain(ReticleTool.RUN);
+    } finally {
+      await close();
+    }
+  });
 });

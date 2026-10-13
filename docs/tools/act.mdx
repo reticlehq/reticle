@@ -59,14 +59,14 @@ Real response:
 
 ## Actions
 
-`click` · `dblclick` · `hover` · `focus` · `blur` · `fill` · `type` · `clear` · `select` · `check` · `uncheck` · `submit` · `press` · `upload` · `scrollIntoView` · `drag`
+`click` · `dblclick` · `hover` · `focus` · `blur` · `fill` · `type` · `clear` · `select` · `check` · `uncheck` · `submit` · `press` · `upload` · `scrollIntoView` · `scroll` · `drag` · `tap` · `zoom`
 
 | Action           | Arguments                                                       |
 | ---------------- | --------------------------------------------------------------- |
 | `fill`, `select` | `{ value }`                                                     |
 | `type`, `press`  | `{ text }`. For `press`, the key _name_, e.g. `Escape` or `Tab` |
 | `drag`           | `{ toRef }`. The ref to drop onto                               |
-| `upload`         | file arguments                                                  |
+| `upload`         | `{ path }` (a file on disk) or `{ name, content?, type? }`      |
 
 ## Reading the effect block
 

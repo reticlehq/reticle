@@ -28,6 +28,12 @@ export interface DeclaredNetFailure {
   status?: number;
 }
 
+/** A `net { repeatable: true }` clause: the endpoint it declared a read, and its method if named. */
+export interface DeclaredRead {
+  urlContains: string;
+  method?: string;
+}
+
 interface DeclaredExpectations {
   /** Requests the caller declared would FAIL, so failing is the expected outcome, not a disagreement. */
   netFailures: readonly DeclaredNetFailure[];
@@ -44,6 +50,11 @@ interface DeclaredExpectations {
    * is why an empty-string entry is meaningful and is preserved rather than skipped.
    */
   netUrls: readonly string[];
+  /**
+   * The net clauses that said `repeatable: true`: reads, not writes (#1353). One with no
+   * `urlContains` is never here: the schema refuses it, and it would excuse every request.
+   */
+  repeatableNetUrls: readonly DeclaredRead[];
 }
 
 /** Below this, a status is a success or a redirect: not a declared failure. */
@@ -102,6 +113,7 @@ function pushAuthDenialStatuses(into: DeclaredNetFailure[]): void {
 export function declaredExpectations(predicate: Predicate | undefined): DeclaredExpectations {
   const netFailures: DeclaredNetFailure[] = [];
   const netUrls: string[] = [];
+  const repeatableNetUrls: DeclaredRead[] = [];
   let rendersContent = false;
 
   const walk = (p: Predicate): void => {
@@ -114,6 +126,12 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
         return;
       case PredicateKind.NET: {
         netUrls.push(p.urlContains ?? '');
+        if (true === p.repeatable && p.urlContains !== undefined && p.urlContains.trim() !== '') {
+          repeatableNetUrls.push({
+            urlContains: p.urlContains,
+            ...(p.method === undefined ? {} : { method: p.method }),
+          });
+        }
         const declaredFailure =
           false === p.ok || (p.status !== undefined && p.status >= FAILURE_STATUS_MIN);
         if (!declaredFailure) return;
@@ -144,7 +162,7 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
   };
 
   if (predicate !== undefined) walk(predicate);
-  return { netFailures, rendersContent, netUrls };
+  return { netFailures, rendersContent, netUrls, repeatableNetUrls };
 }
 
 /**
@@ -217,4 +235,22 @@ export function matchesDeclaredFailure(
     if (d.status !== undefined && d.status !== call.status) return false;
     return true;
   });
+}
+
+/**
+ * Was this call declared a read? Same matching as `matchesDeclaredFailure`: the URL must contain
+ * the clause's `urlContains`, and a method the clause named must agree, so a repeatable GET never
+ * excuses a POST to the same endpoint (#1353).
+ */
+export function isDeclaredRead(
+  call: { method: string; url: string; matchUrl?: string },
+  reads: readonly DeclaredRead[] | undefined,
+): boolean {
+  if (reads === undefined) return false;
+  const haystack = call.matchUrl ?? call.url;
+  return reads.some(
+    (r) =>
+      haystack.includes(r.urlContains) &&
+      (r.method === undefined || r.method.toUpperCase() === call.method.toUpperCase()),
+  );
 }

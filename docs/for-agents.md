@@ -30,13 +30,13 @@ Every Markdown page is prepended with two things before its content, so a single
 > ## Agent Instructions
 > Reticle is a dev-only, localhost-only verification layer for AI coding agents...
 > Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify`...
-> Package names are scoped `@reticlehq/*` and the CLI is `reticle`...
+> Package names are scoped `@reticlehq/*`. Run every CLI command as `npx @reticlehq/server <command>`...
 
 # reticle_query
 ...
 ```
 
-The four rules are the ones worth knowing before you drive anything, and they arrive whether or not you asked for them. You do not have to read this page first.
+These instructions are the ones worth knowing before you drive anything, and they arrive whether or not you asked for them. You do not have to read this page first.
 
 The slug is the filename in [`docs/`](https://github.com/reticlehq/reticle/tree/main/docs), so `docs/token-efficiency.md` in the repo is `/token-efficiency` on the site and `/token-efficiency.md` as raw text.
 
@@ -53,7 +53,7 @@ Start with `llms.txt`. It is small enough to read in full and tells you which si
 
 Every page has a menu in its top-right corner: copy the page as Markdown, or open it directly in Claude, ChatGPT, Cursor or VS Code with the source already attached. That is the fastest route when a human is driving and wants the agent to have the page.
 
-> None of this is Reticle itself. These endpoints serve the **documentation**. Reticle runs on your machine and verifies your app; you get it with `npx @reticlehq/server init`. See [Getting started](/getting-started).
+> None of this is Reticle itself. These endpoints serve the **documentation**. Reticle runs on your machine and verifies your app; you install it with the installer script (`curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh`), which prints the next steps. See [Getting started](/getting-started).
 
 ## Which page to read
 

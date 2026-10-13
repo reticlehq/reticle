@@ -14,12 +14,15 @@
  * headline test passed for the wrong reason — the root resolved to the worktree by ordinary matching
  * and the refusal being asserted never happened.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { join, sep } from 'node:path';
 import { asProjectId, ReticleDir } from '@reticlehq/core';
 import type { ProjectCandidate } from '@reticlehq/core/artifacts';
 import { ArtifactRootReason, UNMATCHED_SUBDIR } from './artifact-root.js';
 import { artifactRootResolver } from './artifact-root-resolver.js';
+
+const logged = vi.hoisted(() => [] as string[]);
+vi.mock('@/log.js', () => ({ log: (event: string): void => void logged.push(event) }));
 
 /**
  * Built by the platform's own path module, not spelled as POSIX literals.
@@ -246,5 +249,45 @@ describe('the projects this machine knows', () => {
       if (previous === undefined) delete process.env[ReticleEnv.STATE_DIR];
       else process.env[ReticleEnv.STATE_DIR] = previous;
     }
+  });
+});
+
+/**
+ * `init --app apps/web` writes web's projectId into the monorepo root's `.reticle.json` too: a
+ * pointer, so an agent at the root reaches the app. The root then read as web's own home, and a
+ * second checkout of web — same id, served from outside both — had its flows written into the
+ * FIRST checkout's root with no warning. A root whose id an app inside it also declares is pointing
+ * at that app; it is not the app.
+ */
+describe('a monorepo root that points at one of its apps', () => {
+  const MONO = join(sep, 'repo', 'mono');
+  const WEB = join(MONO, 'apps', 'web');
+  const WEB_ID = 'mono-web-4159';
+
+  it('does not take a second checkout’s artifacts into the root', () => {
+    const resolved = artifactRootResolver(join(MONO, ReticleDir.ROOT), {
+      candidates: () => [
+        { projectId: WEB_ID, directory: MONO },
+        { projectId: WEB_ID, directory: WEB },
+      ],
+      daemonIsProject: () => true,
+      servingDirectory: () => CLONE,
+    })(asProjectId(WEB_ID), 'http://localhost:16599');
+    expect(resolved.root).not.toBe(join(MONO, ReticleDir.ROOT));
+    expect(inUnmatched(resolved.root, WEB_ID)).toBe(true);
+  });
+});
+
+/** One session's calls logged `artifact_root_unmatched` 16 times in 3 seconds. */
+describe('an unmatched project, said in the log', () => {
+  it('is said once per project, reason and folder', () => {
+    logged.length = 0;
+    const resolve = artifactRootResolver(join(MAIN, ReticleDir.ROOT), {
+      candidates: onlyMain,
+      daemonIsProject: () => true,
+      servingDirectory: noServingDirectory,
+    });
+    for (let i = 0; i < 16; i += 1) resolve(asProjectId(WORKTREE_ID));
+    expect(logged.filter((e) => 'artifact_root_unmatched' === e)).toHaveLength(1);
   });
 });

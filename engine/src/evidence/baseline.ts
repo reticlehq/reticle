@@ -17,6 +17,7 @@ import { PredicateKind, ReticleCommand } from '@reticlehq/core';
 import type { Predicate } from '@/question/predicate/predicate.js';
 import type { Baseline } from '@/question/predicate/property.js';
 import type { PredicateSession } from '@/question/predicate/predicate-session.js';
+import { textPredicateQuery } from '@/question/predicate/predicate-element.js';
 
 /** The properties that mean nothing without a before-reading. Mirrors `RELATIVE` in property.ts. */
 const NEEDS_BASELINE: ReadonlySet<string> = new Set([
@@ -84,12 +85,7 @@ async function readText(
   session: PredicateSession,
   predicate: Extract<Predicate, { kind: typeof PredicateKind.TEXT }>,
 ): Promise<Baseline | undefined> {
-  const query = {
-    ...(predicate.contains === undefined ? {} : { text: predicate.contains }),
-    ...(predicate.scope === undefined
-      ? {}
-      : { scope: predicate.scope, ...(true === predicate.self ? { self: true } : {}) }),
-  };
+  const query = textPredicateQuery(predicate);
   const match = await session.command(ReticleCommand.MATCH, { query });
   if (!match.ok) return undefined;
   const elements = ((match.result ?? {}) as { elements?: unknown }).elements;

@@ -17,6 +17,8 @@ export interface RememberedRow {
   /** Milliseconds since the log began, so the clock carries on from here after a reload. */
   at: number;
   actor?: LogActor;
+  /** A Harness line also shown in the Agent Log: a run starting or ending. */
+  summary?: true;
   result?: LogResult;
 }
 

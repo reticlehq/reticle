@@ -6,7 +6,7 @@
  * dozens of times a session, the answer changes about as often as somebody opens a settings page,
  * and a panel that awaited the network on every repaint would be a panel that stutters.
  *
- * Deliberately the same shape as `harnessOfferSource` next door rather than a shared abstraction:
+ * Deliberately its own cache rather than a shared abstraction with the notices source:
  * two callers with the same caching problem is not yet a pattern, and the day one of them needs a
  * different staleness rule the shared version becomes the awkward one.
  *
@@ -18,6 +18,7 @@
  * guard refuses — correctly, and for the same reason it refused the tool surface reaching the other
  * way. Whoever wires the daemon owns both sides and can hand one to the other.
  */
+import type { CreditKind } from '@reticlehq/core';
 import { writeHarnessSwitch } from './harness-switch.js';
 
 /** How long a cached answer is trusted. A person who just changed it expects the panel to notice. */
@@ -30,7 +31,35 @@ export interface HarnessConfigView {
   harnessEntitled: boolean;
   /** Whether the platform holds a key for `provider`. Entitlement is not readiness — see the offer. */
   providerReady: boolean;
-  credits?: { used: number; limit: number };
+  credits?: { used: number; limit: number; kind?: CreditKind | undefined; endsAt?: number };
+  /** The platform's coverage gate, when it sent one: the HUD prefers it to the local score. */
+  gate?: { unlocked: boolean; percent?: number; reason?: string; prompt?: string };
+  plan?: { kind: CreditKind; daysLeft?: number; seats?: number };
+  harnessRuns?: number;
+  memoryEntries?: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+/**
+ * The answer as the HUD is pushed it: the grant's end date becomes whole days left, counted on the
+ * daemon's clock (the HUD has none worth trusting for this). No end date, no days. Pure.
+ */
+export function configForHud(
+  config: HarnessConfigView,
+  now: number,
+): Omit<HarnessConfigView, 'credits'> & {
+  credits?: { used: number; limit: number; kind?: CreditKind | undefined; daysLeft?: number };
+} {
+  if (config.credits === undefined) return config;
+  const { endsAt, ...credits } = config.credits;
+  return {
+    ...config,
+    credits:
+      endsAt === undefined
+        ? credits
+        : { ...credits, daysLeft: Math.max(0, Math.ceil((endsAt - now) / DAY_MS)) },
+  };
 }
 
 export interface ConfigSource {

@@ -17,13 +17,13 @@ Settings → Rules → Rulesets, or Settings → Branches:
 - [x] Require a pull request before merging. (The `main` ruleset carries a `pull_request` rule with zero required approvals, until an independent reviewer exists.)
 - [ ] Require at least one approving review from another maintainer once an independent reviewer is available.
 - [ ] Dismiss stale approvals when new commits are pushed; require code-owner review.
-- [ ] Require status checks and up-to-date branches. Include `gate` (the CI aggregate), `package-quality`, and the exact CodeQL matrix check name reported by GitHub, currently expected to be `analyze (javascript-typescript)`. Preserve other required checks.
+- [ ] Require status checks and up-to-date branches. Include `gate` (the CI aggregate) and `dco`. `package-quality` is a job inside `gate` now, not a check of its own. Preserve other required checks.
 - [ ] Require conversation resolution.
 - [x] Block force pushes and branch deletion.
 - [x] Enforce protection for administrators and remove routine bypasses. (The `main` ruleset has no bypass actors.)
 - [x] If a merge queue is enabled, ensure every required workflow runs on `merge_group` before requiring it in the queue. (CodeQL now runs on `merge_group`; require its check only after that has landed.)
 
-`verify` alone does not enforce unit tests, e2e, Rust, desktop, and the other jobs included in `gate`. Package quality and CodeQL run in separate workflows and must be required separately.
+`verify` alone does not enforce unit tests, e2e, Rust, desktop, and the other jobs included in `gate`. Package quality and the break gates run inside `ci.yml` and are covered by `gate`; CodeQL runs in its own workflow.
 
 Code-Review examines recent merge history, so enabling a rule does not repair earlier unreviewed merges. This repo's CODEOWNERS currently names one maintainer. Recruit an independent co-maintainer for reviews; another account controlled by the author and bot approvals do not supply independent human review. Until a reviewer is available, retain the CI protections and accept the review-score limitation rather than blocking all maintainer PRs.
 
@@ -50,12 +50,12 @@ Signed tags and signed commits are useful separate controls. They do not substit
 - [ ] Confirm CodeQL runs successfully and uploads results; review unresolved findings.
 - [ ] Enable secret scanning, push protection, and private vulnerability reporting.
 - [ ] Scan committed dependency trees with OSV-Scanner and remediate findings. Scorecard's Vulnerabilities check uses OSV; a clean `pnpm audit` alone does not establish a clean Scorecard result.
-- [ ] Keep the high/critical JavaScript audit and Rust audits passing in CI. High/critical JavaScript advisories now fail `verify`, which is included in `gate`.
+- [ ] Keep the JavaScript audit and Rust audits passing in CI. Critical JavaScript advisories fail `verify`, which is included in `gate`; high ones are printed as warnings (package, path, fix version) and do not fail it (decided 2026-10-09).
 - [ ] Where a vulnerability genuinely does not apply, document a narrowly scoped exception with evidence and review it when dependencies change.
 
 ### Reviewed JavaScript audit exceptions (2026-10-03)
 
-`scripts/check-js-audit.mjs` keeps high/critical advisories fatal except for the exact lockfile paths below. It also checks that both direct dependencies stay in private development-tool manifests. Its self-test proves that a new advisory, unknown severity, changed path, available patch, stale exception, muted finding, or move into production dependencies fails CI. Remove an exception as soon as a patched release can be installed; dependency-path changes also require a new review.
+`scripts/check-js-audit.mjs` keeps critical advisories fatal and reports high ones without failing. The reviewed exceptions below cover the exact lockfile paths of two high advisories, and a stale exception still fails. It also checks that both direct dependencies stay in private development-tool manifests. Its self-test proves that a new critical advisory, unknown severity, changed path, available patch, stale exception, muted finding, or move into production dependencies fails CI. Remove an exception as soon as a patched release can be installed; dependency-path changes also require a new review.
 
 - `GHSA-ch52-4w7c-c8xp`: `http-cache-semantics@4.2.0` is reached only through `apps/e2e`'s `verdaccio@6.10.4` test-registry dependency. The install gate now binds that ephemeral registry to `127.0.0.1`; it stores test packages and an ephemeral test user, not production sessions or cross-user cached responses. The advisory concerns max-stale exposure of another user's cached session response. There is no upstream patch yet, so this exact development path is excepted. If this package reaches a shipped runtime or another path, the guard fails.
 - `GHSA-vfj7-8cjw-p6xm`: `braces@3.0.3` is reached only through the root build tool `tsc-alias > chokidar`. Reticle invokes `tsc-alias` to rewrite its own compiled output, without watch mode or untrusted brace patterns. The advisory concerns stack exhaustion from a deeply nested attacker-supplied pattern. There is no upstream patch yet, so this exact build path is excepted. If this package reaches another path, the guard fails.

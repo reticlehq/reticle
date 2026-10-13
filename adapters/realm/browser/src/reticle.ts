@@ -1,4 +1,6 @@
-import { setPresenterVisible } from './dom/dom-ignore.js';
+import { setPresenterViewer, setPresenterVisible } from './dom/dom-ignore.js';
+import { setOutwardPolicy } from './actions/danger-context.js';
+import { coverageMarkers, notApplicableFor } from './dom/addressing/coverage-markers.js';
 import {
   EventType,
   RETICLE_DEFAULT_PORT,
@@ -63,7 +65,7 @@ import type {
   ControlIntent,
 } from './presenter/presenter.js';
 // Values, from a leaf file that pulls nothing in behind it. See log-kinds.ts.
-import { LOG_ACTOR, LOG_KIND, LOG_RESULT } from './presenter/chrome/log-kinds.js';
+import { LOG_ACTOR, LOG_KIND, LOG_RESULT, type LogActor } from './presenter/chrome/log-kinds.js';
 import { actionVerb } from './presenter/chrome/presenter-verbs.js';
 import { str, refLabel, modeForCommand, presentStatus } from './reticle-presenter-helpers.js';
 import { resetClock } from './timers/clock.js';
@@ -154,6 +156,9 @@ export function connectionPolicy(
 }
 
 /** Console line after the HUD's Kill Reticle, so the way back is written down somewhere. */
+/** Narration rows held for a panel that has not arrived yet. */
+const MAX_PENDING_NARRATIONS = 20;
+
 const KILLED_MESSAGE =
   '[Reticle] killed for this page. Restart your dev server or reload the page to bring it back.';
 
@@ -294,6 +299,17 @@ export class Reticle {
   #presenter: Presenter | undefined;
   /** Presenter pushes that arrived before the presenter existed, replayed on construction. */
   readonly #pendingPushes = new Map<string, { name: string; args: Record<string, unknown> }>();
+  /**
+   * Narration that arrived before the panel did. The daemon tells a page about ITSELF (its SDK is
+   * behind) the instant it connects, while the panel is still being fetched; dropped, that notice
+   * only ever appeared mirrored from another tab, under a raw session id.
+   */
+  readonly #pendingNarrations: {
+    text: string;
+    level: string;
+    actor: LogActor;
+    summary: boolean;
+  }[] = [];
   /** The HUD asked for (by the page's address, or a command) before the panel mounted. */
   #pendingHud: HudVisibility | undefined;
   /**
@@ -550,6 +566,7 @@ export class Reticle {
         if (options.endedFadeMs !== undefined) panelOptions.endedFadeMs = options.endedFadeMs;
         if (options.idleEndMs !== undefined) panelOptions.idleEndMs = options.idleEndMs;
         panelOptions.sessionId = this.#session;
+        if (this.#projectId !== undefined) panelOptions.projectId = this.#projectId;
         // The panel calls this when the human pauses, resumes, ends, or sends a message. We emit a
         // HUMAN_CONTROL event over the existing transport; #emit stamps `t` from the elapsed clock.
         panelOptions.onControl = (intent: ControlIntent) =>
@@ -571,10 +588,14 @@ export class Reticle {
         const panel = new Presenter(panelOptions);
         this.#presenter = panel;
         panel.mount();
+        panel.showSdkVersion(this.#sdkVersion);
         // Drain pushes that arrived before this existed. After mount(), so the DOM they paint into is
         // there; the presenter's own painters no-op on a missing element rather than throwing.
         for (const buffered of this.#pendingPushes.values()) panel.handlePush(buffered);
         this.#pendingPushes.clear();
+        if (0 < this.#pendingNarrations.length) panel.sessionStart();
+        for (const early of this.#pendingNarrations.splice(0))
+          panel.narrate(early.text, early.level, early.actor, early.summary);
         if (this.#pendingHud !== undefined) panel.placeHud(this.#pendingHud, undefined);
         this.#pendingHud = undefined;
         /*
@@ -788,10 +809,33 @@ export class Reticle {
   }
 
   async #handleCommand(command: CommandMessage): Promise<CommandOutcome> {
+    // Answered before the HUD paints anything: the daemon asks tabs nobody is driving.
+    if (command.name === ReticleCommand.MARKERS) {
+      const markers = coverageMarkers(document);
+      const buildPlugin = this.#sdkVersion !== undefined || this.#sourceMapping !== undefined;
+      const na = notApplicableFor({ buildPlugin, adapters: adapterNames(), markers });
+      return { ok: true, result: { markers, ...(0 === na.length ? {} : { notApplicable: na }) } };
+    }
     // NARRATE: the agent tells the human what it's about to do / decide (presenter HUD).
     if (command.name === ReticleCommand.NARRATE) {
+      if (this.#presenter === undefined && this.#panelRequested) {
+        // ponytail: bounded, the oldest kept; a page that never gets its panel drops the rest.
+        if (this.#pendingNarrations.length < MAX_PENDING_NARRATIONS)
+          this.#pendingNarrations.push({
+            text: str(command.args['text']),
+            level: str(command.args['level'], 'info'),
+            actor: narrationActor(command.args),
+            summary: true === command.args['summary'],
+          });
+        return { ok: true, result: { shown: false, buffered: true } };
+      }
       this.#presenter?.sessionStart(); // first agent activity → reveal the glow + panel
-      this.#presenter?.narrate(str(command.args['text']), str(command.args['level'], 'info'));
+      this.#presenter?.narrate(
+        str(command.args['text']),
+        str(command.args['level'], 'info'),
+        narrationActor(command.args),
+        true === command.args['summary'],
+      );
       return { ok: true, result: { shown: this.#presenter !== undefined } };
     }
 
@@ -849,6 +893,9 @@ export class Reticle {
 
     this.#presenter?.sessionStart(); // first agent command → reveal the glow + panel
     await this.#presentBefore(command);
+    // ponytail: one flag for the page; an agent command overlapping a Harness one sees the HUD hidden.
+    setPresenterViewer(CommandActor.HARNESS === command.by);
+    setOutwardPolicy(command.outward?.allowed);
     try {
       const result = await handler(command.args);
       this.#actHandle?.result(LOG_RESULT.PASS);
@@ -857,6 +904,8 @@ export class Reticle {
       this.#actHandle?.result(LOG_RESULT.FAIL);
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     } finally {
+      setPresenterViewer(false);
+      setOutwardPolicy(undefined);
       this.#actHandle = undefined;
       this.#presenter?.scheduleIdle();
     }
@@ -900,6 +949,11 @@ export class Reticle {
       p.log(LOG_KIND.READ, label, undefined, actor);
     }
   }
+}
+
+/** Who a narration line is from: the Harness when the daemon says so, else the connected agent. */
+function narrationActor(args: Record<string, unknown>): LogActor {
+  return CommandActor.HARNESS === args['actor'] ? LOG_ACTOR.HARNESS : LOG_ACTOR.AGENT;
 }
 
 /** The value when it is one of the enum's, else undefined: a page never trusts a free string. */

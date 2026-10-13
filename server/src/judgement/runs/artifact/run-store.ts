@@ -12,12 +12,22 @@ import {
   RUN_RETENTION,
   RUN_RETENTION_SLACK,
   RunReadError,
+  RunScreenshotSchema,
+  STEP_SCREENSHOT,
   type ReticleVerificationRun,
   type RunId,
+  type RunScreenshot,
+  type StepScreenshot,
 } from '@reticlehq/core';
 import { PromptContextSchema, type PromptContext } from '@reticlehq/core/artifacts';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
-import { reticleDirPaths, isValidRunId, runPath } from '@/memory/project/dir/reticle-dir.js';
+import {
+  reticleDirPaths,
+  isValidRunId,
+  runPath,
+  stepShotDir,
+} from '@/memory/project/dir/reticle-dir.js';
+import { join } from 'node:path';
 
 const JSON_INDENT = 2;
 const JSON_EXT = '.json';
@@ -46,6 +56,9 @@ interface RunStoreOptions {
 /** A request older than this is about some other task, not the run being written now. */
 const REQUEST_RELEVANT_MS = 6 * 60 * 60 * 1000;
 
+/** Which run a recorded request was attached to, written into the request file. */
+const REQUEST_RUN_KEY = 'answeredByRun';
+
 export class RunStore {
   readonly #fs: FileSystemPort;
   readonly #root: string;
@@ -72,8 +85,11 @@ export class RunStore {
       throw new Error(`refusing to write run with unsafe runId: ${JSON.stringify(run.runId)}`);
     }
     await this.#fs.mkdir(reticleDirPaths(this.#root).runs);
-    const context = run.context ?? (await this.#recentRequest(run.createdAt));
+    const context = run.context ?? (await this.#recentRequest(run.createdAt, run.runId));
     if (context !== undefined) run = { ...run, context };
+    // The step screenshots taken for this run, the last of which may still be landing.
+    await shotsLanded(this.#root, run.runId);
+    run = withScreenshots(run, await readStepShots(this.#fs, this.#root, run.runId));
     // Atomic publish: write a temp file then rename, so a crash mid-write never leaves a half-written
     // artifact (a partial.json would otherwise read back as MALFORMED).
     const path = runPath(this.#root, run.runId);
@@ -94,16 +110,24 @@ export class RunStore {
    * The user's request this run answers, when the agent relayed one recently enough to be about it.
    * Read from .reticle/intent/request.json (written by `reticle_intent { declare, request }`).
    */
-  async #recentRequest(at: number): Promise<PromptContext | undefined> {
+  async #recentRequest(at: number, runId: string): Promise<PromptContext | undefined> {
     try {
-      const parsed = PromptContextSchema.safeParse(
-        JSON.parse(await this.#fs.readFile(reticleDirPaths(this.#root).request)),
-      );
+      const path = reticleDirPaths(this.#root).request;
+      const raw = JSON.parse(await this.#fs.readFile(path)) as Record<string, unknown>;
+      const parsed = PromptContextSchema.safeParse(raw);
       if (!parsed.success) return undefined;
       const given = parsed.data.at;
-      return given !== undefined && 0 <= at - given && at - given <= REQUEST_RELEVANT_MS
-        ? parsed.data
-        : undefined;
+      if (given === undefined || at - given < 0 || REQUEST_RELEVANT_MS < at - given)
+        return undefined;
+      // The first run written for a request answers it; a later run (the next agent session in the
+      // same tab) inherited it and showed a goal it never had. Its own rewrite keeps it.
+      const answeredBy = raw[REQUEST_RUN_KEY];
+      if ('string' === typeof answeredBy) return answeredBy === runId ? parsed.data : undefined;
+      await this.#fs.writeFile(
+        path,
+        `${JSON.stringify({ ...raw, [REQUEST_RUN_KEY]: runId }, null, JSON_INDENT)}\n`,
+      );
+      return parsed.data;
     } catch {
       return undefined; // no request recorded: the common case
     }
@@ -203,4 +227,182 @@ export class RunStore {
     if (previous === undefined || current === undefined) return undefined;
     return [previous, current];
   }
+}
+
+/*
+ * A run's step screenshots, as its artifact records them. The images are written beside the run
+ * (`.reticle/visual/runs/<runId>/`) with one record line each in `shots.jsonl` by
+ * `features/visual/step-shots.ts`; this is the reading half.
+ */
+
+/** How long a run write waits for screenshots still landing. A capture is never worth a stuck run. */
+const LANDING_WAIT_MS = 10_000;
+
+/** Captures still landing, per run directory. */
+const landing = new Map<string, Set<Promise<void>>>();
+
+/** Remember a capture that has not landed yet, so a run written now can wait for it. */
+export function noteLanding(dir: string, land: Promise<void>): void {
+  const pending = landing.get(dir) ?? new Set<Promise<void>>();
+  landing.set(dir, pending);
+  pending.add(land);
+  void land.finally(() => pending.delete(land));
+}
+
+/** Wait for this run's screenshots still landing, so a run written now can list them. Bounded. */
+export async function shotsLanded(root: string, runId: string): Promise<void> {
+  if (!isValidRunId(runId)) return;
+  const pending = landing.get(stepShotDir(root, runId));
+  if (pending === undefined || 0 === pending.size) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    Promise.allSettled([...pending]),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, LANDING_WAIT_MS);
+    }),
+  ]);
+  if (timer !== undefined) clearTimeout(timer);
+}
+
+/** One line of a run's record, read back; anything malformed is skipped. */
+function parseLine(line: string): RunScreenshot | undefined {
+  try {
+    const parsed = RunScreenshotSchema.safeParse(JSON.parse(line));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Every screenshot a run has landed, in the order they were taken (by seq). Never throws. */
+export async function readStepShots(
+  fs: FileSystemPort,
+  root: string,
+  runId: string,
+): Promise<RunScreenshot[]> {
+  if (!isValidRunId(runId)) return [];
+  try {
+    const text = await fs.readFile(join(stepShotDir(root, runId), STEP_SCREENSHOT.MANIFEST_FILE));
+    return (
+      text
+        .split('\n')
+        .filter((line) => line.length > 0)
+        .map(parseLine)
+        .filter((shot): shot is RunScreenshot => shot !== undefined)
+        // In the order they were TAKEN: captures land in whatever order they finish.
+        .sort((a, b) => a.seq - b.seq)
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** The four facts a step records about its picture, out of the run-wide entry. */
+function stepShotOf(shot: RunScreenshot): StepScreenshot {
+  const { file, source, width, height, sha256 } = shot;
+  return { file, source, width, height, sha256 };
+}
+
+/** An id that occurs once in the list; a repeated one (a reload restarts the count) pairs nothing. */
+function uniqueIds(ids: readonly (string | undefined)[]): Set<string> {
+  const seen = new Map<string, number>();
+  for (const id of ids) if (id !== undefined) seen.set(id, (seen.get(id) ?? 0) + 1);
+  return new Set([...seen].filter(([, n]) => 1 === n).map(([id]) => id));
+}
+
+/**
+ * Pair by the journal action each was taken for, when both sides name it. A check that took no
+ * picture (a `steps` call, an answer refused as an error) then costs only its own picture, where the
+ * ordinal pairing below lost every picture in the run.
+ */
+function pairByAction(
+  run: ReticleVerificationRun,
+  shots: readonly RunScreenshot[],
+): { checks: ReticleVerificationRun['checks']; shots: RunScreenshot[] } | undefined {
+  const verdictShots = shots.filter((shot) => true === shot.verdict && shot.actionId !== undefined);
+  if (0 === verdictShots.length || run.checks.every((check) => check.actionId === undefined))
+    return undefined;
+  const okChecks = uniqueIds(run.checks.map((check) => check.actionId));
+  const okShots = uniqueIds(verdictShots.map((shot) => shot.actionId));
+  const shotOf = new Map(
+    verdictShots.flatMap((shot) =>
+      shot.actionId !== undefined && okShots.has(shot.actionId) && okChecks.has(shot.actionId)
+        ? [[shot.actionId, shot] as const]
+        : [],
+    ),
+  );
+  const checkIdOf = new Map<RunScreenshot, string>();
+  const checks = run.checks.map((check) => {
+    const shot = check.actionId === undefined ? undefined : shotOf.get(check.actionId);
+    if (shot === undefined) return check;
+    if (check.checkId !== undefined) checkIdOf.set(shot, check.checkId);
+    return { ...check, screenshot: stepShotOf(shot) };
+  });
+  return {
+    checks,
+    shots: shots.map((shot) => {
+      const checkId = checkIdOf.get(shot);
+      return checkId === undefined ? shot : { ...shot, checkId };
+    }),
+  };
+}
+
+/**
+ * Pair each verdict's picture with the check it produced: the n-th verdict picture is the n-th check,
+ * because both are written in the order the verdicts were given. Only when the counts agree — a
+ * verdict this run did not fold, or one taken while the capture failed, would shift every pairing
+ * after it, and an unpaired picture is better than one shown beside the wrong check.
+ */
+function pairWithChecks(
+  run: ReticleVerificationRun,
+  shots: readonly RunScreenshot[],
+): { checks: ReticleVerificationRun['checks']; shots: RunScreenshot[] } {
+  const byAction = pairByAction(run, shots);
+  if (byAction !== undefined) return byAction;
+  const verdictShots = shots.filter((shot) => true === shot.verdict);
+  if (
+    0 === verdictShots.length ||
+    verdictShots.length !== run.checks.length ||
+    run.checks.some((check) => check.checkId === undefined)
+  )
+    return { checks: run.checks, shots: [...shots] };
+  const checkIdOf = new Map(verdictShots.map((shot, i) => [shot, run.checks[i]?.checkId]));
+  return {
+    checks: run.checks.map((check, i) => {
+      const shot = verdictShots[i];
+      return shot === undefined ? check : { ...check, screenshot: stepShotOf(shot) };
+    }),
+    shots: shots.map((shot) => {
+      const checkId = checkIdOf.get(shot);
+      return checkId === undefined ? shot : { ...shot, checkId };
+    }),
+  };
+}
+
+/**
+ * The run with its screenshots: every one in `screenshots`, each replayed step's pinned to that
+ * step (matched as `<flow>#<step>`), and each verdict's to its check. Pure. A run with none comes
+ * back unchanged.
+ */
+export function withScreenshots(
+  run: ReticleVerificationRun,
+  taken: readonly RunScreenshot[],
+): ReticleVerificationRun {
+  if (0 === taken.length) return run;
+  const { checks, shots } = pairWithChecks(run, taken);
+  const byStep = new Map(
+    shots.flatMap((shot) => (shot.step === undefined ? [] : [[shot.step, shot] as const])),
+  );
+  const flows = run.flows.map((flow) =>
+    flow.stepResults === undefined
+      ? flow
+      : {
+          ...flow,
+          stepResults: flow.stepResults.map((result) => {
+            const shot = byStep.get(`${flow.name}#${String(result.step)}`);
+            return shot === undefined ? result : { ...result, screenshot: stepShotOf(shot) };
+          }),
+        },
+  );
+  return { ...run, checks, flows, screenshots: shots };
 }

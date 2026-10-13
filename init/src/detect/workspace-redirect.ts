@@ -12,7 +12,12 @@
 import { join } from 'node:path';
 import { detect, Framework } from './detect.js';
 import { detectNonJsEcosystem, noPackageJsonMessage } from './non-js-project.js';
-import { findWorkspaceApps, PACKAGE_JSON, workspacePackageDirs } from './workspace-apps.js';
+import {
+  findAppsBelow,
+  findWorkspaceApps,
+  PACKAGE_JSON,
+  workspacePackageDirs,
+} from './workspace-apps.js';
 import { projectIdOf, RETICLE_CONFIG_FILE } from './existing-config.js';
 import { chooseWorkspaceApp, withoutTrailingSlashes } from './declared/app-choice.js';
 import type { InitIo, InitOptions, InitResult } from '@/run-types.js';
@@ -40,8 +45,32 @@ function appNamedByRootConfig(io: InitIo): string | undefined {
 
 const AMBIGUOUS_HEADER =
   'Several apps found in this workspace. Re-run `reticle init` for the one you want:';
+const BELOW_HEADER =
+  'No app in this folder. Several below it; re-run `reticle init` for the one you want:';
+const HOME_HEADER =
+  'This is your home folder, so init wires nothing on its own here. Apps found below it; run one:';
+const STATIC_PAGE = 'index.html';
+
+/** The folder `init` was run in is the person's home: a place to find apps, never to wire one. */
+function inHome(io: InitIo): boolean {
+  const trim = (p: string): string => withoutTrailingSlashes(p.replace(/\\/g, '/'));
+  return trim(io.cwd()) === trim(io.homeDir());
+}
+
+/** Print the candidates as commands to paste, and stop: the choice is the person's. */
+function listApps(io: InitIo, header: string, apps: readonly string[]): InitResult {
+  io.print(header);
+  for (const a of apps) {
+    const displayed = displayedWorkspaceAppCommand(a, process.platform);
+    if (displayed.label !== undefined) io.print(`  ${displayed.label}`);
+    io.print(`  ${displayed.command}`);
+  }
+  return { ok: false, applied: 0, manual: apps.length, listedAppsBelow: true };
+}
 
 const WORKSPACE_APP_COMMAND = 'reticle init --app';
+const ALREADY_WIRED = 'Already wired here:';
+const WIRE_ANOTHER = 'To wire another app:';
 const POWERSHELL_ONLY_LABEL = 'PowerShell only:' as const;
 const PLAIN_SHELL_ARG = /^[A-Za-z0-9_./-]+$/;
 
@@ -117,7 +146,8 @@ export function redirectToWorkspaceApp(
   const named = options.app === undefined || '' === options.app ? undefined : options.app;
   if (named !== undefined) {
     const wanted = withoutTrailingSlashes(named);
-    if (io.exists(`${wanted}/${PACKAGE_JSON}`))
+    // A plain page is an app too: `init` wires its index.html once it is standing in that folder.
+    if (io.exists(`${wanted}/${PACKAGE_JSON}`) || io.exists(`${wanted}/${STATIC_PAGE}`))
       return enterApp(options, io, wanted, 'Wiring', runInit);
     const inWanted = (file: string): boolean => io.exists(`${wanted}/${file}`);
     io.print(
@@ -144,16 +174,35 @@ export function redirectToWorkspaceApp(
     io.print(chosen.message);
     return { ok: false, applied: 0, manual: 1 };
   }
+  // A home folder holds every project the person has; picking one for them is a guess.
+  if (chosen.app === undefined && inHome(io)) {
+    const found = 0 < apps.length ? apps : findAppsBelow(io);
+    return 0 < found.length ? listApps(io, HOME_HEADER, found) : null;
+  }
+  // No app one or two levels down and no manifest here: look deeper before giving up, so a repo
+  // whose web app sits at `client/web/app`, or a bare page in `site/`, is wired rather than refused.
+  if (0 === apps.length && !io.exists(PACKAGE_JSON) && chosen.app === undefined) {
+    const below = findAppsBelow(io);
+    if (1 === below.length && below[0] !== undefined)
+      return enterApp(options, io, below[0], 'No app in this directory — wiring', runInit);
+    if (1 < below.length) return listApps(io, BELOW_HEADER, below);
+  }
   const target = chosen.app ?? (1 === apps.length ? apps[0] : undefined);
   if (target === undefined) {
     if (0 === apps.length) return null; // not a workspace — fall through to the normal HTML plan
-    io.print(AMBIGUOUS_HEADER);
-    for (const a of apps) {
+    // Apps already wired answer a re-run here: nothing to do at the root, which is pinned to none.
+    const wired = apps.filter((a) => io.exists(`${a}/${RETICLE_CONFIG_FILE}`));
+    io.print(0 === wired.length ? AMBIGUOUS_HEADER : `${ALREADY_WIRED} ${wired.join(', ')}.`);
+    const rest = apps.filter((a) => !wired.includes(a));
+    if (0 < wired.length && 0 < rest.length) io.print(WIRE_ANOTHER);
+    for (const a of 0 === wired.length ? apps : rest) {
       const displayed = displayedWorkspaceAppCommand(a, process.platform);
       if (displayed.label !== undefined) io.print(`  ${displayed.label}`);
       io.print(`  ${displayed.command}`);
     }
-    return { ok: false, applied: 0, manual: apps.length };
+    return 0 === wired.length
+      ? { ok: false, applied: 0, manual: apps.length }
+      : { ok: true, applied: 0, manual: 0 };
   }
   return enterApp(options, io, target, 'No app in this directory — wiring', runInit);
 }
@@ -183,6 +232,7 @@ function enterApp(
       // Where the human is STANDING, kept across the redirect: their agent session runs here, so
       // this is the only place a `/reticle` command file can be found by it.
       agentRoot: options.agentRoot ?? options.cwd,
+      severalApps: true === options.severalApps || 1 < findWorkspaceApps(io).length,
     },
     io.scoped(target),
   );

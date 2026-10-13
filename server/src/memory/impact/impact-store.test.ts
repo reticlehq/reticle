@@ -1,3 +1,4 @@
+import { hashPayload } from '@/memory/cloud/sync-hash.js';
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -270,6 +271,77 @@ describe('the sync status in the snapshot', () => {
     );
     const linked = new ImpactStore({ ...base, reticleRoot }).snapshot();
     expect(linked.sync).toMatchObject({ status: 'on-platform', runs: 0, onPlatform: 0 });
+  });
+
+  // An unlinked folder with runs was silent in the HUD: those runs were on this machine only.
+  it('says how many runs an unlinked project holds that nothing will send', () => {
+    const reticleRoot = join(mkdtempSync(join(tmpdir(), 'impact-unsent-')), '.reticle');
+    mkdirSync(join(reticleRoot, 'runs'), { recursive: true });
+    writeFileSync(join(reticleRoot, 'runs', 'r1.json'), JSON.stringify({ runId: 'r1' }));
+    const snap = new ImpactStore({
+      reticleRoot,
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-unsent-home-')),
+      notices: { read: () => [] },
+    }).snapshot();
+    expect(snap.sync).toMatchObject({ status: 'local-only', pending: 1 });
+    expect(String(snap.sync?.['said'])).toContain('reticle connect');
+  });
+
+  // A flow saved in an unlinked folder with no run beside it was only a daemon log line.
+  it('counts the flows an unlinked project holds in the same not-sent number', () => {
+    const reticleRoot = join(mkdtempSync(join(tmpdir(), 'impact-unsent-flows-')), '.reticle');
+    mkdirSync(join(reticleRoot, 'flows'), { recursive: true });
+    writeFileSync(join(reticleRoot, 'flows', 'checkout.json'), JSON.stringify({ name: 'c' }));
+    const snap = new ImpactStore({
+      reticleRoot,
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-unsent-flows-home-')),
+      notices: { read: () => [] },
+    }).snapshot();
+    expect(snap.sync).toMatchObject({ status: 'local-only', pending: 1, runs: 0, flows: 1 });
+    expect(String(snap.sync?.['said'])).toContain('1 flow(s)');
+  });
+
+  it('links the newest run the platform holds, on its own dashboard page', () => {
+    const reticleRoot = join(mkdtempSync(join(tmpdir(), 'impact-runurl-')), '.reticle');
+    mkdirSync(join(reticleRoot, 'runs'), { recursive: true });
+    const payload = { runId: 'r9', createdAt: 3 };
+    writeFileSync(join(reticleRoot, 'runs', 'r9.json'), JSON.stringify(payload));
+    writeFileSync(
+      join(reticleRoot, 'cloud.json'),
+      JSON.stringify({ dashboardUrl: 'https://app.reticle.sh/p/x' }),
+    );
+    writeFileSync(
+      join(reticleRoot, 'cloud-state.json'),
+      JSON.stringify({ sentRunHashes: { r9: hashPayload(payload) } }),
+    );
+    const snap = new ImpactStore({
+      reticleRoot,
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-runurl-home-')),
+      notices: { read: () => [] },
+    }).snapshot();
+    expect(snap.sync?.['runUrl']).toBe('https://app.reticle.sh/runs/r9');
+  });
+
+  it("carries the platform's reason when it refused this project's key", () => {
+    const reticleRoot = join(mkdtempSync(join(tmpdir(), 'impact-refused-')), '.reticle');
+    mkdirSync(reticleRoot, { recursive: true });
+    writeFileSync(
+      join(reticleRoot, 'cloud.json'),
+      JSON.stringify({ dashboardUrl: 'https://app.reticle.sh/p/x' }),
+    );
+    const body = JSON.stringify({
+      error: { code: 'removed_from_workspace', message: 'You were removed from Acme.' },
+    });
+    writeFileSync(
+      join(reticleRoot, 'cloud-state.json'),
+      JSON.stringify({ lastError: `status 401: ${body}` }),
+    );
+    const snap = new ImpactStore({
+      reticleRoot,
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-refused-home-')),
+      notices: { read: () => [] },
+    }).snapshot();
+    expect(snap.sync?.['keyRefused']).toBe('You were removed from Acme.');
   });
 });
 

@@ -18,6 +18,21 @@ const withTempProject = (build: (root: string) => void, assert: (root: string) =
 };
 
 describe('project profiling', () => {
+  // A Harness drive writes its own record beside its run; counting it read every drive as two runs.
+  it('counts runs, not the drive records kept beside them', () => {
+    withTempProject(
+      (root) => {
+        const runs = join(root, '.reticle', 'runs');
+        mkdirSync(runs, { recursive: true });
+        writeFileSync(join(runs, 'harness-1.json'), '{}');
+        writeFileSync(join(runs, 'harness-1.drive.json'), '{}');
+      },
+      (root) => {
+        expect(profileProject(root, 0).runCount).toBe(1);
+      },
+    );
+  });
+
   it.each([
     [10, ProjectSize.TINY],
     [200, ProjectSize.SMALL],

@@ -6,7 +6,15 @@
  */
 import type { FirstRunWiring } from '@/portal/session/first-run-wiring.js';
 import { z } from 'zod';
-import { type ProjectId, ReticleCommand, SnapshotMode } from '@reticlehq/core';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import {
+  asRecord,
+  asString,
+  type ProjectId,
+  ReticleCommand,
+  ReticleTool,
+  SnapshotMode,
+} from '@reticlehq/core';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { RealInputProvider } from '@/portal/input/real-input.js';
 import type { BaselineStore } from '@/memory/project/baselines.js';
@@ -46,8 +54,9 @@ export interface ToolDeps<Ext = unknown> {
    * to: this is a port, and the daemon already resolves exactly this for cloud sync.
    *
    * Absent ⇒ nothing is linked, or the caller is an embedder with no filesystem. Never an error.
+   * `root` is the `.reticle` whose link is asked for; absent, the daemon's own.
    */
-  linkedCloud?: () => Promise<{ url: string; apiKey: string } | null>;
+  linkedCloud?: (root?: string) => Promise<{ url: string; apiKey: string } | null>;
   /** structured annotations accumulating for the live recording. */
   annotations: AnnotationStore;
   /**
@@ -76,6 +85,11 @@ export interface ToolDeps<Ext = unknown> {
   syncNow?: () => Promise<unknown>;
   /** Wires the app on the agent's first use, instead of at installation. Absent: tell, do not wire. */
   firstRun?: FirstRunWiring;
+  /**
+   * On the first page-needing call with nothing connected, opens this caller's UNWIRED app in a
+   * lease that supplies the SDK (see zero-install-first-call.ts). Absent: answer no-session as before.
+   */
+  openUnwiredApp?: () => Promise<{ url: string; notice: string } | undefined>;
   /** cross-run outcome memory (.reticle/project.json). */
   project: ProjectStore;
   /** optional native-input provider. undefined ⇒ everything stays synthetic. */
@@ -183,7 +197,18 @@ export interface ToolDef<Ext = unknown> {
    * handed a bag carrying no `ext` at all. That costs nothing here, because `ext` is optional by
    * design: any handler reading it already has to survive `undefined`.
    */
-  handler(deps: ToolDeps<Ext>, args: Record<string, unknown>): Promise<unknown>;
+  handler(deps: ToolDeps<Ext>, args: Record<string, unknown>, call?: ToolCall): Promise<unknown>;
+}
+
+/**
+ * What the MCP request itself offers a handler: its cancellation, and a way to say it is still
+ * working. Absent off the MCP path (the Harness's own calls, the CLI, tests).
+ */
+export interface ToolCall {
+  /** Aborts when the client cancels or the connection drops. */
+  signal?: AbortSignal;
+  /** Present when the client asked for progress: tells it the call is alive, and how far along. */
+  progress?: (progress: number, message: string) => void;
 }
 
 /**
@@ -272,8 +297,41 @@ export const EnvelopeKey = {
   PLATFORM: 'platform',
   /** The one thing to do next: declare the request, yield, fix sync, connect. See next-step.ts. */
   NEXT: 'next',
+  /** One-shot: a Harness drive started or finished, from any origin, and how to read it. */
+  HARNESS: 'harness',
+  /** Where this step's screenshot is (`{ path, source }`), or why there is none. See step-shots.ts. */
+  SCREENSHOT: 'screenshot',
+  /**
+   * One-shot: this call's tab was opened by Reticle on an app nobody wired, with the SDK supplied —
+   * what it cannot see, and the command that wires the app for good. See zero-install-first-call.ts.
+   */
+  ZERO_INSTALL: 'zero_install',
+  /** Once-per-session advisory lines an agent's own call carries. See agent/notices.ts. */
+  NOTICES: 'notices',
 } as const;
 export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
+
+/**
+ * The tools whose every answer leaves a screenshot of the page. A sequence (`reticle_act` with
+ * `steps`) takes one per step, inside the sequence, rather than one for the whole call.
+ */
+export const STEP_SHOT_TOOLS: ReadonlySet<string> = new Set([
+  ReticleTool.ACT,
+  ReticleTool.ACT_AND_WAIT,
+  ReticleTool.NAVIGATE,
+  ReticleTool.ASSERT,
+]);
+
+/** A step-screenshot tool, with the one sentence about its screenshot on the end of its description. */
+export function withScreenshotDoc(tool: ToolDef): ToolDef {
+  return STEP_SHOT_TOOLS.has(tool.name)
+    ? { ...tool, description: `${tool.description}${SCREENSHOT_DOC}` }
+    : tool;
+}
+
+/** The one sentence every tool that takes a step screenshot says about it. */
+export const SCREENSHOT_DOC =
+  ' `screenshot.path` is a picture of the page at the outcome: open it when the look of the page matters; reading it is your choice.';
 
 /**
  * Fields that `runTool` / `withControl` splice onto EVERY session-bound tool result at runtime.
@@ -331,3 +389,40 @@ export async function snapshotTree(
  * imports. See `ToolDeps.snapshots` for why a daemon-wide store cannot be correct.
  */
 export const newSnapshotCache = (): SnapshotCache => new SnapshotCache();
+
+/** The argument a replay takes its redacted fields' values in, for that call only. */
+export const CALL_SECRETS_ARG = 'secrets';
+
+/** Secrets a call supplied; never written anywhere, gone when the call ends. */
+const callSecretStore = new AsyncLocalStorage<Readonly<Record<string, string>>>();
+
+/** The secrets the current call supplied, keyed as given (a field, or its variable name). */
+export function callSecrets(): Readonly<Record<string, string>> | undefined {
+  return callSecretStore.getStore();
+}
+
+/**
+ * Take the call's secrets out of its arguments, so nothing downstream — the tool log, the journal,
+ * telemetry — ever sees them.
+ */
+export function takeCallSecrets(args: Record<string, unknown>): {
+  secrets: Record<string, string> | undefined;
+  rest: Record<string, unknown>;
+} {
+  if (!(CALL_SECRETS_ARG in args)) return { secrets: undefined, rest: args };
+  const { [CALL_SECRETS_ARG]: raw, ...rest } = args;
+  const secrets: Record<string, string> = {};
+  for (const [key, value] of Object.entries(asRecord(raw))) {
+    const text = asString(value);
+    if (text !== undefined && 0 < text.length) secrets[key] = text;
+  }
+  return { secrets, rest };
+}
+
+/** Run `fn` with these secrets supplied for it alone. */
+export function withCallSecrets<T>(
+  secrets: Readonly<Record<string, string>> | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return secrets === undefined ? fn() : callSecretStore.run(secrets, fn);
+}

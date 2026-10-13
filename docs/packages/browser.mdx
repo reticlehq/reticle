@@ -31,16 +31,17 @@ if (import.meta.env.DEV) reticle.connect();
 
 One instance, memoized on `globalThis` so hot module replacement does not create a second one.
 
-| Method         | Signature                                                |
-| -------------- | -------------------------------------------------------- |
-| `connect`      | `(options?: ReticleConnectOptions) => void`              |
-| `connected`    | `get connected(): boolean`                               |
-| `signal`       | `(name: string, data?: Record<string, unknown>) => void` |
-| `state`        | `(name: string, value: unknown) => void`                 |
-| `renderCommit` | `(commits: number) => void`                              |
-| `describe`     | `(input: CapabilitiesInput) => void`                     |
-| `endSession`   | `() => void`                                             |
-| `disconnect`   | `() => void`                                             |
+| Method              | Signature                                                  |
+| ------------------- | ---------------------------------------------------------- |
+| `connect`           | `(options?: ReticleConnectOptions) => void`                |
+| `connected`         | `get connected(): boolean`                                 |
+| `signal`            | `(name: string, data?: Record<string, unknown>) => void`   |
+| `state`             | `(name: string, value: unknown) => void`                   |
+| `renderCommit`      | `(commits: number) => void`                                |
+| `describe`          | `(input: CapabilitiesInput) => void`                       |
+| `endSession`        | `() => void`                                               |
+| `disconnect`        | `() => void`                                               |
+| `observeHotUpdates` | `(hot: unknown) => void` (called by the build integration) |
 
 Everything else on the class is private. `Reticle` itself is exported for typing.
 
@@ -56,8 +57,13 @@ Every field is optional.
 | `token` | `string` | Pairing token, required for a non-loopback page |
 | `allowNonLocalhost` | `boolean` | Opt in to connecting from a non-localhost origin |
 | `allowInProduction` | `boolean` | Opt in to connecting from a production build. Desktop apps need this |
+| `testIdAttribute` | `string` | The attribute the app marks controls with, when it is not `data-testid` |
 | `overlay` | `boolean` | The in-page overlay |
 | `captureNetworkBodies` | `boolean` | Record request and response bodies |
+| `networkBodyMaxChars` | `number` | Per-body cap for captured bodies (default 8192) |
+| `captureErrorBodies` | `boolean` | Keep the body of a failed request even with body capture off (default true) |
+| `sourceMapping` | `boolean` | Whether the build stamps source locations. Set by the build plugin |
+| `exposePresenter` | `boolean` | Make Reticle's own presenter visible to tools. For Reticle contributors only |
 | `root` | `string` | Repository root, so source paths come back relative |
 | `sdkVersion` | `string` | Reported on the handshake for skew detection |
 | `present` | `boolean` | Presenter mode |

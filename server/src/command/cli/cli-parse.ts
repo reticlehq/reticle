@@ -3,7 +3,6 @@
  * The parser stays pure and unit-testable; `cli.ts` owns the side-effecting handlers and dispatch,
  * and re-exports this surface.
  */
-import { TutorialAudience } from './tutorial.js';
 import { parseFeedbackArgs, type ParsedFeedback } from './cli-parse-feedback.js';
 import { parseVerifySuffix } from './cli-parse-verify.js';
 import {
@@ -16,6 +15,9 @@ import {
   retiredFlag,
   unknownArgument,
   type ParseError,
+  CLOUD_COMMANDS,
+  REMOVED_COMMANDS,
+  removedNote,
 } from './cli-parse-grammar.js';
 
 // Re-exported because the daemon's own argv builder reaches for these through this module, which is
@@ -32,92 +34,9 @@ export {
   RATING_FLAG,
 } from './cli-parse-feedback.js';
 
-/**
- * The lines below say `reticle <command>`, which is the bin this package installs and is correct
- * once it is on PATH. Copied into `npx`, it is not: `npx reticle` resolves the PACKAGE named
- * `reticle`, which belongs to somebody else, and npx will happily fetch and run it. The docs were
- * telling readers to do exactly that on 110 lines before it was caught, so the invocation now leads
- * the usage block rather than being a footnote somewhere else.
- */
-export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticle <command>\` once the bin is on your PATH)
-
-  reticle tutorial [--run] [--headless] [--port N]   (watch Reticle verify a demo app, in seconds)
-  reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
-                [--env KEY=VALUE]... [--files-only] [--hooks]  (wire Reticle into the project in this directory)
-                init is ONBOARDING: it wires the project, boots the app and proves a session
-                connected. It does not drive. The FIRST RUN is the stage that proves a flow:
-                an agent drives one journey with reticle_act_and_wait and an \`until\` on its last
-                step; with a linked project, reticle_verify { action: "explore", persona: "…" }
-                (or reticle verify <url> --explore --persona "…") drives it instead
-                --app picks WHICH app in a monorepo, when several are found
-                --env is what the app needs to reach a usable state: the key from
-                .env.example, the mock backend, the variable that skips an auth wall.
-                Repeatable, and a value may contain spaces and equals signs
-                --files-only writes the files and stops, which is what init did before it
-                learned to boot the app and prove the install works
-                --relaunch prints the exact command that restarts THIS conversation with
-                the tools loaded, so the restart is not a chore handed to a human. It
-                refuses when the session id has no transcript behind it, because
-                --resume on an empty id opens a blank conversation that looks like
-                success. Works with --files-only
-                --license writes the key to .env and keeps .env out of git
-                --json puts the result on stdout, so an agent reads one object
-                --no-open / --no-agents / --url / --timeout are the runtime dials: CI, a
-                headless box, or an app you already run
-                --no-mcp skips MORE than the server registration: also the agent rule files
-                (CLAUDE.md / AGENTS.md / .cursor) and the /reticle command, because all three
-                only make sense once the tools are reachable.
-  reticle serve [--port N] [--drive <url>] [--headless] [--http] [--http-port N] [--http-token T]
-  reticle stop  [--port N] [--quiet]                    (stop the daemon we started, by its recorded pid)
-  reticle kill  [--port N] [--force]                   (free the port by its LISTENER, never the agent's mcp proxy)
-  reticle restart [--port N] [--force]                 (kill, then start a daemon and wait for a real bind)
-  reticle status [--port N] [--json]                   (a readable block; --json for the event)
-  reticle doctor [--port N]                            (one command to diagnose setup: Chromium, daemon, port)
-  reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
-  reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
-                       [--explore] [--persona <who>]   (no saved flows? let Reticle drive the app itself and record them)
-                       [--select <label>]              (repeatable: verify only flows carrying these labels — no model, exit 0=pass)
-                [--expect '<json predicate>' | --expect-file <path>]   (one verdict, no saved
-                flows needed. --expect-file avoids cmd.exe and PowerShell quote mangling. It
-                asks an existing daemon, never binds or stops one; with none, it refuses.
-                Cannot combine with --storage-state. Use when the client lacks reticle_*
-                tools. exit 0 ONLY on verified:"yes" — "unknown" is not a pass. For an
-                action --expect cannot do, drive the daemon's HTTP MCP transport instead — see
-                https://docs.reticle.sh/http-transport.md)
-  reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
-  reticle gate [--since <ref>] [--accept-coverage] [file...]  (exit non-zero unless passing artifacts cover the affected flows)
-  reticle report [--session <id>] [--hook]             (what the latest session claimed, and what held)
-  reticle setup mcp                                    (register the MCP server with your agents; the installer's registration half)
-  reticle capsules                                     (list the saved fail-to-pass bug capsules in .reticle/capsules)
-  reticle hunt <dir>                                   (aggregate a directory of crawl reports into one false-green rate)
-  reticle watch [url]                                  (on save, report which saved flows must re-verify)
-  reticle drive <url> [--headless]                     (foreground mode, for debugging)
-  reticle mcp   [--port N] [--drive <url>] [--headless] (MCP stdio proxy; auto-starts daemon if needed)
-  reticle update                                       (install the latest server version and restart)
-  reticle rollback                                     (restore the previous server version and restart)
-  reticle license                                      (show enterprise license status: active | eval | missing)
-  reticle telemetry [status|enable|disable]            (anonymous usage metrics; status shows what's sent + the policy)
-  reticle feedback [--rating 1-5] [--bug] "message"    (tell us what worked and what didn't; prints exactly what it sends)
-  reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "message"
-                                                       (agents: file from anywhere, including a setup that never finished)
-  reticle identify --context company|side_project|open_source|learning [--company N] [--email E] [--forget]
-                                                       (OPT-IN: tell us who you are, e.g. for support or an enterprise trial)
-
-Cloud (link this project to Reticle; runs/flows recorded on the dashboard):
-  reticle connect [--project <name|id>] [--url <cloud origin>]
-                                                       (wire this app if needed, sign in, link, send local history)
-  reticle login [--url <u>] [--email <e>] [--code <c>] [--org <n>]
-                                                       (browser device flow by default; --email mails a code)
-  reticle logout [--url <u>]                           (sign out of ONE host; others stay signed in)
-  reticle link  [--project <name|id>]                  (bind this repo: mints a scoped key, writes .reticle/cloud.json)
-  reticle whoami                                        (who am I signed in as, and is this repo attached?)
-  reticle project <ls|create <name>>                   (list or create cloud projects)
-  reticle config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]
-  reticle push | sync [--watch]                        (one sync cycle: send the difference, collect decisions)
-  reticle runs | regression | share <runId>            (read cloud state; regression exits 3 if any flow broke)
-
-'drive' shows the browser; everything else is hidden (serve/mcp own the pool behind leases, replay
-and the spec runner: batch work). --headed opts any of them in, --headless hides drive, CI hides it.`;
+// The help text lives on its own page; re-exported so every importer of it is unaffected.
+import { CLI_USAGE } from './cli-usage.js';
+export { CLI_USAGE };
 
 const INIT_COMMAND = 'init';
 const SERVE_COMMAND = 'serve';
@@ -128,16 +47,15 @@ const STATUS_COMMAND = 'status';
 const OPEN_COMMAND = 'open';
 const DRIVE_COMMAND = 'drive';
 const AFFECTED_COMMAND = 'affected';
-const HUNT_COMMAND = 'hunt';
-const CAPSULES_COMMAND = 'capsules';
 const GATE_COMMAND = 'gate';
 /** Hook mode: prose a human can read, and silence when there was simply nothing to check. */
 const HOOK_FLAG = '--hook';
 const ACCEPT_COVERAGE_FLAG = '--accept-coverage';
 /** `reticle report [--session <id>] [--hook]` — what the latest session claimed, and what held. */
 const REPORT_COMMAND = 'report';
+/** `reticle context --compact`: the resume block, from disk. A SessionStart hook prints it. */
+const CONTEXT_COMMAND = 'context';
 const SESSION_FLAG = '--session';
-const WATCH_COMMAND = 'watch';
 const UPDATE_COMMAND = 'update';
 const ROLLBACK_COMMAND = 'rollback';
 const MCP_COMMAND = 'mcp';
@@ -145,11 +63,8 @@ const LICENSE_COMMAND = 'license';
 const VERSION_COMMAND = 'version';
 const TELEMETRY_COMMAND = 'telemetry';
 const FEEDBACK_COMMAND = 'feedback';
-const IDENTIFY_COMMAND = 'identify';
-const COMPANY_FLAG = '--company';
-const EMAIL_FLAG = '--email';
-const CONTEXT_FLAG = '--context';
-const FORGET_FLAG = '--forget';
+const DOCTOR_COMMAND = 'doctor';
+const SETUP_COMMAND = 'setup';
 /** The `reticle telemetry` sub-actions. Bare `reticle telemetry` means `status`. */
 export const TelemetryAction = {
   STATUS: 'status',
@@ -169,7 +84,10 @@ export const DAEMON_INNER_COMMAND = '_daemon';
  * defined; a second list somewhere else would drift the first time a command is added.
  */
 export const UNKNOWN_COMMAND = 'unknown';
-const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
+const HELP_COMMAND = 'help';
+const HELP_FLAGS: ReadonlySet<string> = new Set(['--help', '-h']);
+/** Every command the typed parser below routes. The parser refuses any word not in this list. */
+export const LOCAL_COMMANDS: readonly string[] = [
   INIT_COMMAND,
   SERVE_COMMAND,
   STOP_COMMAND,
@@ -180,11 +98,9 @@ const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
   DRIVE_COMMAND,
   VERIFY_COMMAND,
   AFFECTED_COMMAND,
-  HUNT_COMMAND,
-  CAPSULES_COMMAND,
   GATE_COMMAND,
   REPORT_COMMAND,
-  WATCH_COMMAND,
+  CONTEXT_COMMAND,
   UPDATE_COMMAND,
   ROLLBACK_COMMAND,
   MCP_COMMAND,
@@ -192,25 +108,23 @@ const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
   VERSION_COMMAND,
   TELEMETRY_COMMAND,
   FEEDBACK_COMMAND,
-  IDENTIFY_COMMAND,
   DAEMON_INNER_COMMAND,
-  'connect',
-  'login',
-  'logout',
-  'whoami',
-  'link',
-  'project',
-  'config',
-  'push',
-  'runs',
-  'issues',
-  'memory',
-  'regression',
-  'share',
-  'doctor',
-  'setup',
-  'tutorial',
-  'help',
+  DOCTOR_COMMAND,
+  SETUP_COMMAND,
+];
+const LOCAL_COMMAND_SET: ReadonlySet<string> = new Set(LOCAL_COMMANDS);
+const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
+  ...LOCAL_COMMANDS,
+  ...CLOUD_COMMANDS,
+  ...REMOVED_COMMANDS.keys(),
+  HELP_COMMAND,
+]);
+/** The conventional flag spellings of two commands, reported as the command they ask for. */
+const COMMAND_FLAG_ALIASES: ReadonlyMap<string, string> = new Map([
+  ['--version', VERSION_COMMAND],
+  ['-v', VERSION_COMMAND],
+  ['--help', HELP_COMMAND],
+  ['-h', HELP_COMMAND],
 ]);
 
 /**
@@ -229,8 +143,8 @@ function numberFlag(args: readonly string[], name: string): number {
 
 /** The subcommand name if we recognize it, else `unknown`. Bare `reticle` reports `help`. */
 export function knownCommand(arg: string | undefined): string {
-  if (arg === undefined || '' === arg) return 'help';
-  return KNOWN_COMMANDS.has(arg) ? arg : UNKNOWN_COMMAND;
+  if (arg === undefined || '' === arg) return HELP_COMMAND;
+  return KNOWN_COMMANDS.has(arg) ? arg : (COMMAND_FLAG_ALIASES.get(arg) ?? UNKNOWN_COMMAND);
 }
 
 /**
@@ -238,7 +152,7 @@ export function knownCommand(arg: string | undefined): string {
  * and every "did it actually do anything?" question cost a round-trip. CI passes this (or just sets
  * CI, which flips the default) because there is no display there to be headed on.
  */
-const HEADLESS_FLAG = '--headless';
+export const HEADLESS_FLAG = '--headless';
 export const DRIVE_FLAG = '--drive';
 const QUIET_FLAG = '--quiet';
 const DRY_RUN_FLAG = '--dry-run';
@@ -260,6 +174,8 @@ const FIRST_RUN_MOVED =
   'onboarding wires the project, the FIRST RUN proves a flow. Drive one with reticle_verify { action: "explore", persona: "<who does what>" }, or npx @reticlehq/server verify <url> --explore --persona "<who does what>"';
 const ENV_FLAG = '--env';
 const FILES_ONLY_FLAG = '--files-only';
+/** With `--app`, also start the app: naming one app of a workspace otherwise writes its files only. */
+const START_FLAG = '--start';
 /**
  * Write `captureNetworkBodies: true` into the app's config. OFF unless asked (#705).
  *
@@ -280,6 +196,8 @@ const HOOKS_FLAG = '--hooks';
 const JSON_FLAG = '--json';
 const NO_DRIVE_FLAG = '--no-drive';
 const NO_OPEN_FLAG = '--no-open';
+/** Connect and stop: no coverage summary and no prompt at the end. */
+const NO_FIRST_RUN_FLAG = '--no-first-run';
 const NO_AGENTS_FLAG = '--no-agents';
 /**
  * Restart the calling client so IT gets the tools.
@@ -329,6 +247,7 @@ export type CliResult =
       json: boolean;
       relaunch: boolean;
       open: boolean;
+      firstRun: boolean;
       agents: boolean;
       url: string | undefined;
       timeoutSeconds: number | undefined;
@@ -350,13 +269,12 @@ export type CliResult =
   | { kind: 'license' }
   | { kind: 'telemetry'; action: TelemetryAction }
   | Extract<ParsedFeedback, { kind: 'feedback' }>
-  | { kind: 'identify'; context?: string; company?: string; email?: string; forget: boolean }
   | { kind: 'version' }
-  | { kind: 'help' }
+  | { kind: 'help'; topic?: string }
+  | { kind: 'removed'; message: string }
   | { kind: 'doctor'; port: number }
   | { kind: 'setup-mcp' }
   | { kind: 'setup-install'; runtimeSecs: number; installSecs: number; mcp: boolean }
-  | { kind: 'tutorial'; audience: TutorialAudience; run: boolean; port: number; headless: boolean }
   | { kind: 'open'; port: number; url?: string }
   | {
       kind: '_daemon';
@@ -381,13 +299,13 @@ export type CliResult =
       explore?: boolean;
       persona?: string;
       select?: string[];
+      resultsJson?: string;
+      confirmDangerous?: boolean;
     }
   | { kind: 'affected'; files: string[]; since?: string }
-  | { kind: 'hunt'; dir: string }
-  | { kind: 'capsules' }
   | { kind: 'gate'; files: string[]; since?: string; hook?: boolean; acceptCoverage?: boolean }
   | { kind: 'report'; session?: string; hook: boolean }
-  | { kind: 'watch'; url?: string }
+  | { kind: 'context'; session?: string }
   | { kind: 'update' }
   | { kind: 'rollback' }
   | {
@@ -414,12 +332,6 @@ type ServeFlags =
   | { kind: 'error'; message: string };
 
 /**
- * `serve` / `mcp` / `_daemon` own the browser POOL, which backs automated work — leased contexts for
- * parallel agents, flow replay, the spec runner. Those are batch: nobody is watching, and launching
- * them headed changed timing enough to break four e2e specs. The headed default belongs to the
- * INTERACTIVE command (`drive`), where a human asked to see the run. `--headed` still opts in here.
- */
-/**
  * A usage error names the thing that was wrong.
  *
  * These used to return CLI_USAGE as the MESSAGE, so every mistake — a typo'd flag, a flag missing
@@ -443,11 +355,11 @@ const unknownCommand = (command: string): ParseError => ({
 function parseServeFlags(
   args: string[],
   defaultPort: number,
-  _defaultHeadless: boolean,
+  defaultHeadless: boolean,
 ): ServeFlags {
   let port = defaultPort;
   let driveUrl: string | undefined;
-  let headless = true;
+  let headless = defaultHeadless;
   let http = false;
   let httpPort: number | undefined;
   let httpToken: string | undefined;
@@ -554,6 +466,7 @@ type InitFlags =
       json: boolean;
       relaunch: boolean;
       open: boolean;
+      firstRun: boolean;
       agents: boolean;
       url: string | undefined;
       timeoutSeconds: number | undefined;
@@ -570,10 +483,12 @@ function parseInitFlags(args: string[]): InitFlags {
   // Repeatable: one variable per flag, so a value containing spaces or `=` needs no quoting rules.
   const env: string[] = [];
   let filesOnly = false;
+  let start = false;
   let captureBodies = false;
   let hooks = false;
   let json = false;
   let open = true;
+  let firstRun = true;
   let relaunch = false;
   let agents = true;
   let url: string | undefined;
@@ -606,6 +521,8 @@ function parseInitFlags(args: string[]): InitFlags {
       env.push(value);
     } else if (arg === FILES_ONLY_FLAG) {
       filesOnly = true;
+    } else if (arg === START_FLAG) {
+      start = true;
     } else if (arg === CAPTURE_BODIES_FLAG) {
       captureBodies = true;
     } else if (arg === HOOKS_FLAG) {
@@ -614,6 +531,8 @@ function parseInitFlags(args: string[]): InitFlags {
       json = true;
     } else if (arg === NO_OPEN_FLAG) {
       open = false;
+    } else if (arg === NO_FIRST_RUN_FLAG) {
+      firstRun = false;
     } else if (arg === RELAUNCH_FLAG) {
       relaunch = true;
     } else if (arg === NO_AGENTS_FLAG) {
@@ -656,11 +575,14 @@ function parseInitFlags(args: string[]): InitFlags {
     install,
     app,
     env,
-    filesOnly,
+    // One app of a workspace, named: its files, and nothing started unless asked (`--start`). Its
+    // dev server is often run from the root, and a monorepo init started the daemon and failed it.
+    filesOnly: filesOnly || (app !== undefined && !start),
     captureBodies,
     hooks,
     json,
     open,
+    firstRun,
     relaunch,
     agents,
     url,
@@ -711,7 +633,6 @@ function parseTargetArgs(rest: string[]): { files: string[]; since?: string } {
  */
 export function dialsTheDaemon(parsed: CliResult): boolean {
   if ('init' === parsed.kind) return false;
-  if ('tutorial' === parsed.kind) return parsed.run;
   return 'port' in parsed;
 }
 
@@ -726,8 +647,9 @@ export function parseCliArgs(
   defaultPort: number,
   defaultHeadless = false,
 ): CliResult {
-  // Bare `reticle` is `serve` — a pool-owning command, so headless like the rest of that family.
-  if (0 === argv.length) return { kind: 'serve', port: defaultPort, headless: true, http: false };
+  // Bare `reticle` is `serve`.
+  if (0 === argv.length)
+    return { kind: 'serve', port: defaultPort, headless: defaultHeadless, http: false };
 
   const [cmd, ...rest] = argv;
   // Guaranteed by the bare-argv check above; restated so the unknown-command error can name it.
@@ -746,10 +668,20 @@ export function parseCliArgs(
   // `reticle_usage_error: unknown argument '--help'` on stderr with exit 1. The usage text was
   // printed underneath it, so the request was in fact answered; it was simply answered as a failure,
   // which is the wrong first impression to give somebody who has just asked a tool what it does.
-  if ('help' === cmd || argv.some((arg) => '--help' === arg || '-h' === arg)) {
-    return { kind: 'help' };
+  //
+  // Removed commands answer before help does: `reticle hunt --help` should say it is gone, not
+  // describe something that no longer runs.
+  const removed = REMOVED_COMMANDS.get(cmd);
+  if (removed !== undefined) return { kind: 'removed', message: removedNote(cmd, removed) };
+  if (HELP_COMMAND === cmd || HELP_FLAGS.has(cmd)) {
+    // `reticle help all`, `reticle --help all`, `reticle help init`.
+    const topic = rest.find((arg) => !HELP_FLAGS.has(arg));
+    return topic === undefined ? { kind: 'help' } : { kind: 'help', topic };
   }
+  if (argv.some((arg) => HELP_FLAGS.has(arg))) return { kind: 'help', topic: cmd };
 
+  // The list is the gate, so a command cannot be routed without also being named in telemetry.
+  if (!LOCAL_COMMAND_SET.has(cmd)) return unknownCommand(cmd);
   switch (cmd) {
     case INIT_COMMAND: {
       const r = parseInitFlags(rest);
@@ -767,6 +699,7 @@ export function parseCliArgs(
         hooks: r.hooks,
         json: r.json,
         open: r.open,
+        firstRun: r.firstRun,
         relaunch: r.relaunch,
         agents: r.agents,
         url: r.url,
@@ -789,6 +722,9 @@ export function parseCliArgs(
     }
     case STOP_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
+      // `stop --force` is what `kill` was: free the port by its listener, which must still be a
+      // Reticle daemon. Overriding that refusal stays on `restart --force` and the old `kill --force`.
+      if (rest.includes(FORCE_FLAG)) return { kind: 'kill', port, force: false };
       const quiet = rest.includes(QUIET_FLAG);
       return { kind: 'stop', port, quiet };
     }
@@ -807,22 +743,7 @@ export function parseCliArgs(
       // parsing it knows to ask for the object.
       return { kind: 'status', port, json: rest.includes(JSON_FLAG) };
     }
-    case 'tutorial': {
-      // `--agent` is the opt-in, because a person typing this is the common case and should not have
-      // to ask for prose. An agent knows to pass the flag; a human would not know to avoid it.
-      const audience = argv.includes('--agent') ? TutorialAudience.AGENT : TutorialAudience.HUMAN;
-      // `--run` drives the demo instead of describing it. Opt-in rather than the default: the tour
-      // starts a daemon and opens a browser, and a command that did that to somebody who typed it
-      // expecting a page of text would be a surprise in the one place surprises are least welcome.
-      return {
-        kind: 'tutorial',
-        audience,
-        run: argv.includes('--run'),
-        port: parsePortFlag(rest, defaultPort),
-        headless: !argv.includes('--headed'),
-      };
-    }
-    case 'doctor': {
+    case DOCTOR_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
       return { kind: 'doctor', port };
     }
@@ -838,7 +759,7 @@ export function parseCliArgs(
      * no flag: it tells a reader a confirmation exists. What this writes is stated before it runs
      * and printed after, which is the honest version of the same reassurance.
      */
-    case 'setup': {
+    case SETUP_COMMAND: {
       const what = rest[0];
       /*
        * `setup install` — the Node half of the one-line installer.
@@ -858,7 +779,7 @@ export function parseCliArgs(
       }
       // Only `mcp` today. A bare `reticle setup` falls to help rather than guessing, because the
       // next subcommand here will not be a synonym for this one.
-      if (what !== 'mcp') return { kind: 'help' };
+      if (what !== 'mcp') return { kind: 'help', topic: SETUP_COMMAND };
       return { kind: 'setup-mcp' };
     }
     case LICENSE_COMMAND:
@@ -873,22 +794,6 @@ export function parseCliArgs(
         return { kind: 'error', message: `unknown telemetry action: ${action}` };
       }
       return { kind: 'telemetry', action };
-    }
-    case IDENTIFY_COMMAND: {
-      const flag = (name: string): string | undefined => {
-        const at = rest.indexOf(name);
-        return -1 === at ? undefined : rest[at + 1];
-      };
-      const context = flag(CONTEXT_FLAG);
-      const company = flag(COMPANY_FLAG);
-      const email = flag(EMAIL_FLAG);
-      return {
-        kind: 'identify',
-        ...(context !== undefined ? { context } : {}),
-        ...(company !== undefined ? { company } : {}),
-        ...(email !== undefined ? { email } : {}),
-        forget: rest.includes(FORGET_FLAG),
-      };
     }
     case FEEDBACK_COMMAND:
       return parseFeedbackArgs(rest);
@@ -932,15 +837,9 @@ export function parseCliArgs(
         ...(true === r.explore ? { explore: true } : {}),
         ...(r.persona !== undefined ? { persona: r.persona } : {}),
         ...(r.select !== undefined ? { select: r.select } : {}),
+        ...(r.resultsJson !== undefined ? { resultsJson: r.resultsJson } : {}),
+        ...(true === r.confirmDangerous ? { confirmDangerous: true } : {}),
       };
-    }
-    case CAPSULES_COMMAND:
-      return { kind: 'capsules' };
-    case HUNT_COMMAND: {
-      const dir = rest.find((a) => !a.startsWith('-'));
-      return dir === undefined
-        ? { kind: 'error', message: 'usage: reticle hunt <dir-of-crawl-reports>' }
-        : { kind: 'hunt', dir };
     }
     case AFFECTED_COMMAND: {
       const t = parseTargetArgs(rest);
@@ -970,10 +869,11 @@ export function parseCliArgs(
         ...(session === undefined ? {} : { session }),
       };
     }
-    case WATCH_COMMAND: {
-      // `reticle watch [url]` — on file save, report which saved flows must re-verify.
-      const url = rest.find((arg) => !arg.startsWith('-'));
-      return url === undefined ? { kind: 'watch' } : { kind: 'watch', url };
+    case CONTEXT_COMMAND: {
+      // `--compact` is the only form; accepted so the hook line reads as what it does.
+      const at = rest.indexOf(SESSION_FLAG);
+      const session = -1 === at ? undefined : rest[at + 1];
+      return { kind: 'context', ...(session === undefined ? {} : { session }) };
     }
     case UPDATE_COMMAND:
       return { kind: 'update' };

@@ -59,11 +59,11 @@ A daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises 30 tools outrig
 
 Each one earned its slot, and a couple are there because of measured mistakes.
 
-`reticle_inspect` maps a DOM node to `src/components/Sidebar.tsx:41`. Finding a bug is half the job. Knowing which file to open is the half that makes an agent useful.
+`reticle_look { action: "element" }` (unmerged name `reticle_inspect`) maps a DOM node to `src/components/Sidebar.tsx:41`. Finding a bug is half the job. Knowing which file to open is the half that makes an agent useful.
 
 It used to be reachable only through `reticle_run`, which meant an agent had to already know it existed to use it.
 
-`reticle_act_sequence` batches a multi-step interaction into one round trip. It was also reachable only through `reticle_run`, and the consequence is a login form driven one call at a time, over and over.
+`reticle_act { steps }` (unmerged name `reticle_act_sequence`) batches a multi-step interaction into one round trip. It was also reachable only through `reticle_run`, and the consequence is a login form driven one call at a time, over and over.
 
 Those repeats were not retries. The calls succeeded and got repeated, because the batching tool was invisible. A tool an agent must already know about is a tool that never gets called.
 
@@ -84,15 +84,15 @@ Those repeats were not retries. The calls succeeded and got repeated, because th
 
 Notable residents of the cold tail: flow recording and replay, visual diffing and screenshots, network mocking, viewport pinning, coverage, autonomous crawling, and the human-in-the-loop session controls.
 
-## Every response carries its cost
+## Read responses carry their cost
 
-Reticle tells you what each answer cost, because a verification tool that quietly eats your context window is not saving you anything:
+The read tools (`reticle_look` page and find, `reticle_observe` network and console) tell you what each answer cost, because a verification tool that quietly eats your context window is not saving you anything:
 
 ```json
 "cost": { "bytes": 944, "tokens": 236 }
 ```
 
-That is a real `reticle_query` response: seven buttons found, with source pointers, for 236 tokens.
+That is from a real `reticle_look { action: "find" }` response: seven buttons found, with source pointers, for 236 tokens.
 
 ## Every response tells you when not to trust it
 

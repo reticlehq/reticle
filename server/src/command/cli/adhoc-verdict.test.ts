@@ -13,7 +13,7 @@
  * editor.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { acquireLease, runAdhocVerdict, type ToolCaller } from './adhoc-verdict.js';
+import { acquireLease, exploreToEnd, runAdhocVerdict, type ToolCaller } from './adhoc-verdict.js';
 import { ReticleTool } from '@reticlehq/core';
 
 /** A fake daemon: records what was asked, answers with the verdict it was given. */
@@ -343,5 +343,50 @@ describe('a lease that had to supply its own reader', () => {
   it('is not one when the app dialled in itself', async () => {
     const got = await acquireLease(answering({ sessionId: 's' }), 'http://x/');
     expect(got).toEqual({ leased: 's', zeroInstall: false });
+  });
+});
+
+/*
+ * `reticle try` and the ad-hoc suite want the finished report, and an explore now answers
+ * `running` when its drive outlasts the call. Asking again by run id is the only way to get it
+ * without paying for a second drive.
+ */
+describe('a Harness drive polled to its end', () => {
+  const text = (body: unknown) => ({ content: [{ type: 'text', text: JSON.stringify(body) }] });
+
+  it('polls by run id until the drive stops running, and never starts another', async () => {
+    const asked: Record<string, unknown>[] = [];
+    const answers = [
+      text({ status: 'running', runId: 'harness-1' }),
+      text({ status: 'running', runId: 'harness-1' }),
+      text({ status: 'done', runId: 'harness-1', stopReason: 'finished' }),
+    ];
+    const caller: ToolCaller = {
+      call: (_name, args) => {
+        asked.push(args);
+        return Promise.resolve(answers.shift());
+      },
+      close: () => Promise.resolve(),
+    };
+    const result = await exploreToEnd(caller, { persona: 'a shopper' }, 600_000, () => 0);
+    expect(result).toEqual(text({ status: 'done', runId: 'harness-1', stopReason: 'finished' }));
+    expect(asked.map((a) => a['runId'] ?? a['persona'])).toEqual([
+      'a shopper',
+      'harness-1',
+      'harness-1',
+    ]);
+  });
+
+  it('hands back the running answer once its budget is spent', async () => {
+    let t = 0;
+    const caller: ToolCaller = {
+      call: () => {
+        t += 100_000;
+        return Promise.resolve(text({ status: 'running', runId: 'harness-2' }));
+      },
+      close: () => Promise.resolve(),
+    };
+    const result = await exploreToEnd(caller, {}, 150_000, () => t);
+    expect(result).toEqual(text({ status: 'running', runId: 'harness-2' }));
   });
 });

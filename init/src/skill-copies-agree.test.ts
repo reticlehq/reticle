@@ -62,7 +62,12 @@ const SHARED_RULES = [
  * verifying, not installing, and have no business repeating install guidance. That is what makes
  * this a drift check rather than a demand that every file say everything.
  */
-const HAND_MAINTAINED = ['SKILL.md', 'plugin/SKILL.md', 'skills/install-and-verify/SKILL.md'];
+const HAND_MAINTAINED = [
+  'SKILL.md',
+  'docs/skill.md',
+  'plugin/SKILL.md',
+  'skills/install-and-verify/SKILL.md',
+];
 
 describe('the skill copies agree about the rules', () => {
   it('carries every normative sentence in every hand-maintained copy', () => {
@@ -129,6 +134,22 @@ describe('the skill copies agree about the rules', () => {
         `RETICLE_INSTALL_SOURCE=${source}`,
       );
     }
+  });
+
+  /**
+   * `docs/skill.md` is what the docs host serves at `docs.reticle.sh/skill.md`, the URL the platform
+   * hands agents. Without it the host published a skill it GENERATED from the docs, which disagreed
+   * with this one and never named it (the docs-site gate went red on main on 2026-10-12), and the
+   * platform's own link, `reticle.sh/SKILL.md`, was a 404. Frontmatter is its own; the body is the
+   * canonical file, byte for byte, so an agent reads the same rules from every URL.
+   */
+  it('serves the canonical skill from the docs site, under its own frontmatter', () => {
+    const served = read('docs/skill.md');
+    const frontmatter = /^---\n[\s\S]*?\n---\n\n/.exec(served)?.[0];
+    expect(frontmatter, 'docs/skill.md needs Agent Skills frontmatter').toBeDefined();
+    expect(served.slice(frontmatter?.length ?? 0), 'copy SKILL.md into docs/skill.md').toBe(
+      read('SKILL.md'),
+    );
   });
 
   it('registers the plugin channel where the plugin actually declares it', () => {

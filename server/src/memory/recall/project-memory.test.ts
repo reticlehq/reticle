@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import { createMemoryFs } from '@/memory/project/memory-fs.js';
+import { noteAgentAttached, noteAgentDetached, runAsAgent } from '@/hooks/coding-agents.js';
 import {
   rankKnown,
   readProjectMemory,
@@ -110,6 +111,29 @@ function answerWith(body: unknown): { urls: string[] } {
 describe('which project a shared-memory read is about', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  /** Persona 21's entry exactly as the platform returned it after a decision: the file is read. */
+  it('reads the file off an entry in the platform’s own shape', async () => {
+    answering([
+      {
+        intentId: 'saved-items-shows-new-order',
+        subject: 'unsorted',
+        statement: 'Saving an order adds it to the top of Saved Items right away.',
+        status: 'agreed',
+        flowName: null,
+        sourceFile: 'src/views/SavedItems.tsx',
+        reason: null,
+        agent: null,
+        provedBy: null,
+        private: false,
+        byEmail: 'carl@example.com',
+        decisions: [],
+        conflict: null,
+      },
+    ]);
+    const read = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
+    expect(read.ok && read.known[0]?.sourceFile).toBe('src/views/SavedItems.tsx');
   });
 
   /**
@@ -237,5 +261,77 @@ describe('which project a shared-memory read is about', () => {
 
     expect(result.ok).toBe(false);
     expect(result.ok ? null : result.reason).toBe(MemoryUnavailable.UNREADABLE);
+  });
+});
+
+/** Persona drive: every memory read was credited to "reticle-mcp", not the agent that read. */
+describe('who a shared-memory read is credited to', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    noteAgentDetached('attach-mem');
+  });
+
+  function headersSeen(): { agent: () => string | undefined } {
+    let agent: string | undefined;
+    vi.stubGlobal('fetch', (_url: string, init: { headers: Record<string, string> }) => {
+      agent = init.headers['x-reticle-agent'];
+      return Promise.resolve({
+        status: 200,
+        json: () => Promise.resolve({ projectId: LINKED, entries: [] }),
+      });
+    });
+    return { agent: () => agent };
+  }
+
+  it('names the MCP client the call came from', async () => {
+    const seen = headersSeen();
+    noteAgentAttached('attach-mem', 'claude-code');
+    await runAsAgent('attach-mem', () =>
+      readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 }),
+    );
+    expect(seen.agent()).toBe('claude-code');
+  });
+
+  it('keeps the generic reader when no client can be named', async () => {
+    const seen = headersSeen();
+    await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
+    expect(seen.agent()).toBe('reticle-mcp');
+  });
+});
+
+/**
+ * A live read returned 10 of 13: the one statement a person wrote was cut behind six copies of one
+ * persona's intent (a flow per page), and a statement set aside seconds earlier ranked second. Each
+ * statement once, a person's own words ahead of flow intents, and nothing set aside.
+ */
+describe('what a capped read keeps', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const intent = (page: string) => ({
+    statement: 'Keyboard only: Tab, Enter and Escape only',
+    status: 'proposed',
+    flowName: `harness-keyboard-only--${page}`,
+  });
+
+  it("keeps the person's fact, each statement once, and nothing set aside", async () => {
+    answerAs(LINKED, [
+      { statement: 'Sign in reaches Saved items', status: 'proved', flowName: 'sign-in' },
+      { statement: 'Old claim nobody stands by', status: 'stale', flowName: null },
+      ...['home', 'compose', 'overview', 'saved', 'deploy', 'diag'].map(intent),
+      {
+        statement: 'First-time visitor follows the obvious path',
+        status: 'proposed',
+        flowName: 'ftv',
+      },
+      { statement: 'Saved Items lists newest first.', status: 'proposed', flowName: null },
+    ]);
+    const result = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 3 });
+    expect(result.ok).toBe(true);
+    const known = result.ok ? result.known.map((k) => k.statement) : [];
+    expect(known).toEqual([
+      'Sign in reaches Saved items',
+      'Saved Items lists newest first.',
+      'Keyboard only: Tab, Enter and Escape only',
+    ]);
+    expect(result.ok ? result.total : 0).toBe(4);
   });
 });

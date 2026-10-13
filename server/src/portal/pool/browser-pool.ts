@@ -11,7 +11,8 @@
  */
 
 import { unreachableUrlIn, type SeedStorage } from '@reticlehq/core';
-import { seedStorageInto } from './storage-seed.js';
+import { seedStorageInto, targetOriginOf } from './storage-seed.js';
+import { installLeaseMarker, leaseMarkerOf } from './lease-marker-stamp.js';
 import {
   grantLeasePermissions,
   NOTIFICATION_PERMISSION_READ,
@@ -123,6 +124,8 @@ interface ActiveLease {
   lastDialogMessage?: string;
   /** What this lease was granted when it opened. It never changes on an open lease. */
   permissions: readonly string[];
+  /** Whether its context accepts any TLS certificate (#1255). Fixed when the context is made. */
+  ignoresHTTPSErrors: boolean;
 }
 
 /**
@@ -324,6 +327,28 @@ export class BrowserPool {
     }
   }
 
+  /** The URL a lease was opened on — the one that carries its Reticle identity. */
+  leaseUrl(sessionId: string): string | undefined {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.url;
+  }
+
+  /**
+   * Navigate a leased page through the browser. For a lease whose page has no SDK to take the
+   * command — a navigate to an image left the lease unreachable, and the next navigate answered "no
+   * connected session". False when this is not a lease or the page would not go.
+   */
+  async gotoLease(sessionId: string, url: string, timeoutMs?: number): Promise<boolean> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    if (lease === undefined) return false;
+    this.touch(sessionId);
+    try {
+      await lease.page.goto(url, timeoutMs === undefined ? {} : { timeoutMs });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Move the real pointer on a leased page, or false when this session is not a lease or cannot
    * hover. Same optional-capability contract as screenshotLease: absence must read as "could not
@@ -470,6 +495,8 @@ export class BrowserPool {
       headed?: boolean;
       /** Granted on the lease's origin before the first navigation, so the first render sees them. */
       permissions?: readonly string[];
+      /** Accept a self-signed or local-CA dev certificate for this lease's context only (#1255). */
+      ignoreHTTPSErrors?: boolean;
     } = {},
   ): Promise<Lease> {
     if (this.#closed) throw new Error('browser pool is shut down');
@@ -485,7 +512,9 @@ export class BrowserPool {
     let pendingDialogMessage: string | undefined;
     try {
       const browser = await this.#ensureBrowser(slot);
-      context = await browser.newContext();
+      context = await browser.newContext(
+        true === opts.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : undefined,
+      );
       if (opts.permissions !== undefined)
         await grantLeasePermissions(context, opts.permissions, url);
       const page = await context.newPage();
@@ -513,6 +542,10 @@ export class BrowserPool {
         else pendingDialogMessage = dialog.message;
         void dialog.dismiss();
       });
+      const marker = leaseMarkerOf(url);
+      if (marker?.session === sessionId) {
+        await installLeaseMarker(page, sessionId, targetOriginOf(url), marker.project);
+      }
       let seedHandle: InitScriptHandle | undefined;
       let checkSeedError: (() => void) | undefined;
       if (opts.seedStorage !== undefined) {
@@ -559,6 +592,7 @@ export class BrowserPool {
         ...(opts.owner === undefined ? {} : { owner: opts.owner }),
         touchedAt: this.#now(),
         permissions: opts.permissions ?? [],
+        ignoresHTTPSErrors: true === opts.ignoreHTTPSErrors,
         ...(pending === undefined ? {} : { dialFailureUrl: pending }),
         ...(pendingDialogMessage === undefined ? {} : { lastDialogMessage: pendingDialogMessage }),
       });
@@ -730,6 +764,11 @@ export class BrowserPool {
     // every lease belonged to this browser, nothing else can be holding one.
     this.#occupied = 0 === this.#active.size ? 0 : Math.max(0, this.#occupied - freed);
     for (const waiter of this.#waiters.splice(0)) waiter(); // let them re-claim + relaunch
+  }
+
+  /** Whether this lease's context skips certificate checks. A context cannot change it later. */
+  ignoresHTTPSErrors(sessionId: string): boolean {
+    return true === this.#active.get(this.#leaseIdOf(sessionId))?.ignoresHTTPSErrors;
   }
 
   /** Whether this lease lives in the headed browser. */

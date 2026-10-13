@@ -1,3 +1,4 @@
+import { emptyImpactCounts, emptyImpactRecords, estimateImpactSavings } from '@reticlehq/core';
 import { beforeEach, describe, it, expect } from 'vitest';
 import { PresenterMode } from '@reticlehq/core';
 import { Presenter } from './presenter.js';
@@ -143,23 +144,76 @@ describe('presenter v2 activity log', () => {
     p.destroy();
   });
 
-  it('marks the moment the Harness takes over, and the moment the agent takes back', () => {
+  /*
+   * Two drivers in one log read as one muddle, and credited the agent with the Harness's steps. The
+   * agent's rows stay in the Agent Log, the Harness's go to the Harness page's own log, and a run
+   * starting or ending (a summary) is in both, because the agent that asked reports its result.
+   */
+  it('keeps each driver in its own log, and a Harness run start and end in both', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     p.mount();
     p.log('act', 'Clicking Save');
+    p.narrate('Harness is driving: a shopper', 'info', 'harness', true);
     p.log('act', 'Clicking Refund', undefined, 'harness');
     p.log('read', 'Looking at the page', undefined, 'harness');
+    p.narrate('Harness finished — 1 check held', 'info', 'harness', true);
     p.log('act', 'Clicking Settings');
-    const rows = logRows().map((r) => [r.getAttribute('data-kind'), r.textContent?.trim()]);
-    expect(rows).toEqual([
-      ['act', expect.stringContaining('Clicking Save')],
-      ['handover', 'Reticle Harness is driving'],
-      ['act', expect.stringContaining('Clicking Refund')],
-      ['read', expect.stringContaining('Looking at the page')],
-      ['handover', 'Your agent is driving'],
-      ['act', expect.stringContaining('Clicking Settings')],
+    const textsIn = (sel: string): (string | undefined)[] =>
+      Array.from(document.querySelectorAll<HTMLElement>(`${sel} [data-reticle-log-row]`)).map((r) =>
+        r.querySelector('.reticle-log-text')?.textContent?.trim(),
+      );
+    expect(textsIn('[data-reticle-log]')).toEqual([
+      'Clicking Save',
+      'Harness is driving: a shopper',
+      'Harness finished — 1 check held',
+      'Clicking Settings',
     ]);
+    expect(textsIn('[data-reticle-harness-log]')).toEqual([
+      'Harness is driving: a shopper',
+      'Clicking Refund',
+      'Looking at the page',
+      'Harness finished — 1 check held',
+    ]);
+    // One driver per log: no handover dividers are needed in either.
+    expect(document.querySelector('[data-kind="handover"]')).toBeNull();
+    p.destroy();
+  });
+
+  it('says the Harness is testing in the header while it drives, on any page', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    const counts = emptyImpactCounts();
+    const scope = {
+      counts,
+      days: [],
+      records: emptyImpactRecords(),
+      savings: estimateImpactSavings(counts),
+      since: 0,
+    };
+    const push = (harnessDrive?: { runId: string; steps: number }): void =>
+      p.handlePush({
+        name: 'impact',
+        args: {
+          snapshot: {
+            schemaVersion: 1,
+            project: scope,
+            global: scope,
+            ...(harnessDrive === undefined ? {} : { harnessDrive }),
+          },
+        },
+      });
+    const header = (): string | null | undefined =>
+      document.querySelector('.reticle-act')?.textContent;
+    p.status('Clicking Save');
+    push({ runId: 'harness-1', steps: 3 });
+    expect(header()).toBe('Testing · Harness · 3 steps');
+    // A Harness step does not replace it: the header names who is driving.
+    p.status('Clicking Refund');
+    expect(header()).toBe('Testing · Harness · 3 steps');
+    push();
+    expect(header()).toBe('Ready');
     p.destroy();
   });
 
@@ -516,6 +570,29 @@ describe('the panel never calls a live agent idle', () => {
     expect(document.querySelector('.reticle-act')?.textContent ?? '').toContain(
       'planning next action',
     );
+    p.destroy();
+  });
+});
+
+/**
+ * A Harness run that ended on a reload left the HUD saying "planning next action · 13s since last
+ * action" — an agent that was never there, waiting. After the Harness's own last action, with no
+ * drive running, the strip says Ready.
+ */
+describe('liveness after the Harness acted', () => {
+  it('never says an agent is planning when the last action was the Harness', async () => {
+    document.body.innerHTML = '';
+    let clock = 0;
+    const p = new Presenter({ now: () => clock, heartbeatMs: 8, idleNoticeMs: 20 });
+    p.mount();
+    p.sessionStart();
+    p.status('Looking at the page');
+    p.log('read', 'Looking at the page', undefined, 'harness');
+    clock = 13_000;
+    await wait(24);
+    const act = document.querySelector('.reticle-act')?.textContent ?? '';
+    expect(act).not.toContain('planning next action');
+    expect(act).toBe(ACT_STRIP.READY);
     p.destroy();
   });
 });

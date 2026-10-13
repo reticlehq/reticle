@@ -44,14 +44,14 @@ Reticle is a pnpm + Turborepo monorepo. The split is not cosmetic: each boundary
 | `@reticlehq/babel-plugin`, `@reticlehq/next`, `@reticlehq/vite-plugin` | build time | Stamp `data-reticle-source` for source mapping (and, for Vite, inject `connect()`) | Plain tooling |
 | `@reticlehq/electron` | Electron main process | Adapter for the desktop runtime: IPC observer, main-process capture | Desktop-only, outside the web gates |
 | `adapters/realm/tauri` (`reticle-tauri`) | Tauri (Rust) | Capture backend for the Tauri desktop runtime | Rust, outside every JS gate; compiled by CI's `rust`/`rust-macos` jobs |
-| `@reticlehq/test` | Node (dev dependency) | Spec runner + matchers used by CI's own test suites | Peer dependency on `vitest` |
-| `@reticlehq/eslint-plugin` | dev tooling | Repo-internal lint rule: a state change must fire a signal | Dev-only, never shipped in a user's bundle |
+| `@reticlehq/test` | Node (dev dependency) | Spec runner + matchers for running Reticle checks in your CI | Peer dependency on `vitest` |
+| `@reticlehq/eslint-plugin` | dev tooling | Lint rule for your app: a state change must fire a signal | Dev-only, never shipped in a user's bundle |
 
 > Note: pre-2.0, `@reticlehq/core` was a single umbrella package that re-exported all of the above under subpaths. In 2.0 the umbrella was retired and `@reticlehq/core` became the bottom-of-graph wire contract.
 
 **Why core-as-contract matters:** because the browser and the server are two different runtimes (a DOM and a Node process) that must agree exactly on every message, the temptation is to inline a string like `"net.request"` in both. That's how drift and silent breakage start. Instead, every such string and shape lives once in `@reticlehq/core` as a named constant + a zod schema.
 
-The browser and server both import it; neither can invent a message the other doesn't understand. The server zod-parses **every** inbound WebSocket message; malformed input closes the socket rather than flowing into logic.
+The browser and server both import it; neither can invent a message the other doesn't understand. The server zod-parses **every** inbound WebSocket message; malformed input never flows into logic. A malformed `HELLO` is refused, and a malformed frame on a live session is dropped and recorded as a gap in that window.
 
 ---
 
@@ -87,7 +87,7 @@ The same verification runs over and over, every commit, every CI run. Reticle re
 
 ### 4. Dev-only, localhost-only, your app data stays local
 
-The SDK is tree-shaken out of production builds and connects only to a local bridge. The bridge binds to loopback by default; exposing it beyond localhost _requires_ a pairing token (the server refuses to bind a non-loopback host without one). Every environment variable that gates a security control is a single named constant, so a typo can't silently disable auth. Nothing from the app under test ever leaves your machine: no DOM, network, console, state, or source. The CLI reports anonymous, opt-out usage metrics only (a random id + event names like `invoke`/`session_start`; no code, no PII; see [telemetry](telemetry.md)); opt out with `reticle telemetry disable`, `RETICLE_TELEMETRY=0`, or `DO_NOT_TRACK=1`. The one thing that carries free text is feedback you or your agent deliberately send (`reticle feedback` / `reticle_session { action: "feedback" }`). It is never collected passively, it is redacted before sending, and it is disabled separately with `RETICLE_FEEDBACK=0`.
+The SDK is tree-shaken out of production builds and connects only to a local bridge. The bridge binds to loopback by default; exposing it beyond localhost _requires_ a pairing token (and the server refuses to start on a non-loopback host unless `RETICLE_ALLOWED_ORIGINS` names the app's origins). Every environment variable that gates a security control is a single named constant, so a typo can't silently disable auth. Nothing from the app under test leaves your machine unless you link a project: no DOM, network, console, state, or source. What a linked project syncs is set by `reticle config`; see [what is recorded](what-is-recorded.md). The CLI reports anonymous, opt-out usage metrics only (a random id + event names like `cli_command_run`/`daemon_started`; no code, no PII; see [telemetry](telemetry.md)); opt out with `reticle telemetry disable`, `RETICLE_TELEMETRY=0`, or `DO_NOT_TRACK=1`. The one thing that carries free text is feedback you or your agent deliberately send (`reticle feedback` / `reticle_session { action: "feedback" }`). It is never collected passively, it is redacted before sending, and it is disabled separately with `RETICLE_FEEDBACK=0`.
 
 ---
 

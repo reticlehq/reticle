@@ -1,9 +1,12 @@
+import { CALL_SECRETS_ARG, callSecretsArg } from './fields/flow-secret-field.js';
 import { flowAuthor } from './flow-author.js';
 import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
-import { seedSchema } from '@/surface/tools/args/numeric-bounds.js';
+import { seedSchema, workerCountSchema } from '@/surface/tools/args/numeric-bounds.js';
+import { confirmDangerousArg } from '@/surface/tools/args/confirm-dangerous-arg.js';
 import { z } from 'zod';
 import { emptyFlowRefusal } from './empty-flow.js';
-import { aliasParam } from '@/surface/tools/args/alias-args.js';
+import { aliasParam, aliasUsed } from '@/surface/tools/args/alias-args.js';
+import { resolveAnnotateTarget } from './annotate-notes/annotate-target.js';
 import {
   type ProjectId,
   FlowErrorCode,
@@ -15,17 +18,14 @@ import {
 import type { FlowFile } from '@reticlehq/core';
 import { recordSuiteFlakes } from './suite/suite-flakes.js';
 import { AppRuntime, ReticleTool } from '@reticlehq/core';
-import { asNumber, asString, mutationTargetsFor, perturbationFor } from '@reticlehq/core';
-import { workerCountSchema } from '@/surface/tools/args/numeric-bounds.js';
+import { asNumber, asString } from '@reticlehq/core';
 import { log } from '@/log.js';
 import { cloudFetch, syncFlowToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { mapWithConcurrency, resolveConcurrency } from './suite/parallel-suite.js';
-import {
-  acquireLeasedSession,
-  sessionPerturbationPort,
-  suiteFixtureSeed,
-} from '@/surface/tools/lease-tools.js';
+import { acquireLeasedSession, suiteFixtureSeed } from '@/surface/tools/lease-tools.js';
 import { homedir } from 'node:os';
+import { withShotRun } from '@/judgement/runs/default-run-id.js';
+import { defaultRunId } from '@/judgement/runs/default-run-id.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
 import { classifyFlowAssertions, flattenSteps } from './flow-classify.js';
@@ -38,18 +38,15 @@ import { flowsForSession } from './flow-store-for-session.js';
 import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import { originOf } from '@/portal/session/session-manager.js';
 import { resolveSuiteSelection } from './suite-selection.js';
-import {
-  replayNamedFlow,
-  flowErrorMessage,
-  latestRecordedFlow,
-  sessionProjectId,
-} from './flow-replay-run.js';
+import { flowErrorMessage, latestRecordedFlow, sessionProjectId } from './flow-replay-run.js';
 import {
   persistAndSyncVerificationRun,
   type TimedReplay,
 } from '@/judgement/runs/verification-sync.js';
 import { runServerVerify } from './suite/server-verify.js';
 import { healFlow } from './heal-run.js';
+import { RESULT_FIELD, resultField, suiteResult } from '@/surface/tools/reticle-result.js';
+import { replayOneFlow } from './single-replay.js';
 
 export { replayNamedFlow } from './flow-replay-run.js';
 import { replayAndLearn } from './flow-learning.js';
@@ -113,7 +110,7 @@ export function leasableAppUrl(deps: ToolDeps, sessionId: string | undefined): s
  * refusal on that path is deliberately silent — a fixture is an optimisation, and a suite must not
  * die when one is unavailable.
  */
-function sessionUrlOf(deps: ToolDeps, sessionId: string | undefined): string | undefined {
+export function sessionUrlOf(deps: ToolDeps, sessionId: string | undefined): string | undefined {
   try {
     return deps.sessions.resolve(sessionId).url;
   } catch {
@@ -162,10 +159,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe('Alias for `flowName` (the name reticle_annotate uses).'),
+      name: z.string().optional().describe('Alias for `flowName`.'),
       flowName: z
         .string()
+        .optional()
         .describe(
-          'Which RECORDING to save — the name reticle_record{start} was called with. This is a lookup key, not the filename: pass `saveAs` to choose that.',
+          'Which RECORDING to save — the name reticle_record{start} was called with ("last-journey" for the reticle_act {steps} just proved). Omit when only one is stopped. This is a lookup key, not the filename: pass `saveAs` to choose that.',
         ),
       saveAs: z
         .string()
@@ -206,6 +205,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         })
         .optional(),
       intentGap: INTENT_GAP_FIELD,
+      normalized: z.array(z.string()).optional(),
       warning: z
         .string()
         .optional()
@@ -216,7 +216,14 @@ export const FLOW_TOOLS: ToolDef[] = [
       code: z.string().optional(),
     },
     handler: (deps: ToolDeps, args) => {
-      const name = asString(aliasParam(args, 'flowName', ['flow'])['flowName']) ?? '';
+      const aliases = ['flow', 'name', 'recordingName'];
+      const normalized = aliasUsed(args, 'flowName', aliases);
+      // The one stopped recording when the call names none — the same defaulting record{stop} and
+      // annotate use. With several, nothing is picked: the refusal below names them.
+      const name = resolveAnnotateTarget(
+        asString(aliasParam(args, 'flowName', aliases)['flowName']),
+        deps.recordings.compiled(),
+      );
       const program = deps.recordings.getCompiled(name);
       if (program === undefined) {
         /*
@@ -296,6 +303,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         const invoked = loaded.ok ? await loadInvoked(flows, loaded.value, projectId) : new Map();
         return loaded.ok
           ? {
+              ...(0 === normalized.length ? {} : { normalized }),
               ...res.value,
               ...(path === undefined ? {} : { path }),
               assertions: classifyFlowAssertions(loaded.value, invoked),
@@ -444,10 +452,8 @@ export const FLOW_TOOLS: ToolDef[] = [
       flowName: z
         .string()
         .describe('Flow file name (without .json extension) from reticle_flow{action:"list"}.'),
-      confirmDangerous: z
-        .boolean()
-        .optional()
-        .describe('Set true to allow destructive controls during this replay only.'),
+      [CALL_SECRETS_ARG]: callSecretsArg,
+      confirmDangerous: confirmDangerousArg('this replay'),
       from: z
         .union([z.number().int().nonnegative(), z.string().min(1)])
         .optional()
@@ -464,10 +470,12 @@ export const FLOW_TOOLS: ToolDef[] = [
       at: z
         .number()
         .int()
-        .positive()
+        .nonnegative()
         .max(MAX_REPLAY_STEP)
         .optional()
-        .describe('Continue at this step on the page as it is (after another flow ran `to` it).'),
+        .describe(
+          'Continue at this step on the page as it is (after another flow ran `to` it); 0 replays the whole flow on the page the flow before it left, with no reload.',
+        ),
       sweep: z
         .boolean()
         .optional()
@@ -491,10 +499,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         .array(z.unknown())
         .optional()
         .describe('Present when `seed` was given: which endpoints were delayed, and by how long.'),
+      [RESULT_FIELD]: z.string().optional(),
       // The flow's name — always present in FlowReplayResult (the description promises `{ name, … }`),
       // but omitted here, so a validating profile stripped it and a replay result arrived anonymous.
       name: z.string(),
       status: z.string().describe('ok | drift | error | unverifiable'),
+      runId: z.string().optional().describe('The run this replay was written down as.'),
       steps: z.array(z.unknown()),
       proposals: z.array(z.unknown()).optional(),
       deviation: z
@@ -560,40 +570,8 @@ export const FLOW_TOOLS: ToolDef[] = [
     },
     // The decision envelope is attached by replayNamedFlow only on drift/fail (clean pass stays
     // token-flat). Single-flow replay and whole-suite verify share that one implementation.
-    handler: async (deps: ToolDeps, args): Promise<FlowReplayResult> => {
-      const seed = asNumber(args['seed']);
-      if (seed === undefined) return await replayAndLearn(deps, args);
-      /*
-       * Seeded chaos, and always put the page back.
-       *
-       * The targets are the endpoints the FLOW declared it depends on, so the perturbation lands on
-       * traffic the flow claims to care about rather than on something it never mentioned. No
-       * declared endpoints means nothing to slow, and the replay runs clean rather than pretending
-       * a seed did something.
-       *
-       * `finally` is not tidiness: a page left slowed is damage the NEXT run inherits, and it would
-       * inherit it as a mystery — the same rule the mutation loop had to earn.
-       */
-      const sessionId = asString(args['sessionId']);
-      const target = sessionTarget(deps, sessionId);
-      const loaded = await flowsForSession(deps, target)
-        .flows.load(asString(args['flowName']) ?? asString(args['flow']) ?? '', target.projectId)
-        .catch(() => null);
-      const targets = loaded !== null && loaded.ok ? mutationTargetsFor(loaded.value) : [];
-      const rules = perturbationFor(seed, targets);
-      const port =
-        0 === rules.length
-          ? undefined
-          : await sessionPerturbationPort(deps.realInput, leasableAppUrl(deps, sessionId));
-      if (port === undefined) return replayAndLearn(deps, args);
-      try {
-        await port.slow(rules);
-        const replay = await replayNamedFlow(deps, args);
-        return { ...replay, perturbed: rules } as FlowReplayResult;
-      } finally {
-        await port.clear().catch(() => undefined);
-      }
-    },
+    handler: (deps: ToolDeps, args): Promise<FlowReplayResult> =>
+      replayOneFlow(deps, args, leasableAppUrl(deps, asString(args['sessionId']))),
   },
   {
     name: ReticleTool.FLOW_VERIFY,
@@ -604,6 +582,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       'whatChanged, whereInSource, nextAction }] } plus `flaky` (flows seen to pass AND fail on unchanged code) — passing flows are counted, only failures carry ' +
       'detail (the actionable fix). One call replaces N hand-driven replays.',
     inputSchema: {
+      [CALL_SECRETS_ARG]: callSecretsArg,
       names: z
         .array(z.string())
         .optional()
@@ -617,6 +596,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Run this many flows at once, each in its own isolated leased browser context (needs the browser pool). Clamped to the pool capacity and the flow count. Omit for the sequential single-tab run.',
         ),
+      confirmDangerous: confirmDangerousArg('this run of the suite'),
       sessionId: z
         .string()
         .optional()
@@ -626,10 +606,12 @@ export const FLOW_TOOLS: ToolDef[] = [
     },
     outputSchema: {
       status: z.string().describe('pass | fail'),
+      runId: z.string().optional().describe('The run this suite was written down as.'),
       total: z.number(),
       passed: z.number(),
       failed: z.number(),
       summary: z.string(),
+      [RESULT_FIELD]: z.string().optional(),
       failures: z.array(z.unknown()),
       isolation: z
         .string()
@@ -689,151 +671,166 @@ export const FLOW_TOOLS: ToolDef[] = [
       // feedback ask here or a validating profile strips it off the suite verdict.
       feedback_prompt: z.unknown().optional(),
     },
-    handler: async (deps: ToolDeps, args): Promise<SuiteVerdict> => {
-      const sessionId = asString(args['sessionId']);
-      // "Replay all" means all of THIS app's flows (+ legacy), not every project's on a shared daemon.
-      const target = sessionTarget(deps, sessionId);
-      const { projectId } = target;
-      const selected = await resolveSuiteSelection(deps, target, args);
-      const requested = selected.run;
-      /** Named rather than subtracted — a suite that returns fewer than were asked for must say so. */
-      const heldBack = {
-        ...(0 === selected.quarantined.length ? {} : { quarantined: selected.quarantined }),
-        ...(0 === selected.unmatched.length ? {} : { unmatched: selected.unmatched }),
-        ...(selected.cycles === undefined ? {} : { cycles: selected.cycles }),
-        ...(selected.unsatisfied === undefined ? {} : { unsatisfied: selected.unsatisfied }),
-      };
-      // verify:server — hand the whole suite to the hosted runner; it records the verification itself.
-      const cloud = await resolveProjectCloud(
-        deps.fs,
-        rootForTarget(deps, target),
-        homedir(),
-        process.env,
-      );
-      const server = await runServerVerify(deps, cloud, sessionId, requested);
-      if (server !== null) return server;
-      // PARALLEL: flows race the DOM only when they share ONE tab. Given the lease pool, each
-      // flow gets its own isolated context, so a large suite finishes in interactive time. Opt-in via
-      // `parallel`; a missing prerequisite (no pool, unknown app URL) falls back to the sequential path
-      // rather than failing — a suite must always be runnable.
-      //
-      // NOTE: this applies even to a ONE-flow suite. Skipping leases for a single flow looked harmless
-      // (no speedup to win) but silently downgraded an explicit `parallel` request to a shared-tab run,
-      // so the flow inherited whatever state the previous run left behind — isolation is the point here,
-      // not only concurrency.
-      const parallelArg = asNumber(args['parallel']);
-      const pool = deps.pool;
-      const appUrl = leasableAppUrl(deps, sessionId);
-      if (
-        parallelArg !== undefined &&
-        pool !== undefined &&
-        appUrl !== undefined &&
-        requested.length > 0
-      ) {
-        const concurrency = resolveConcurrency(requested.length, pool.capacity(), parallelArg);
-        /*
-         * Captured ONCE, before any flow runs, from the page the agent is already driving.
-         *
-         * Each leased flow then boots already holding it, which is what closes the gap this suite
-         * had: a flow that logs out used to leave every flow after it signed out, and no navigation
-         * repairs that — the problem is not where the subject is, it is what it holds. Seeded before
-         * the first navigation, because restoring into a page that has already decided it is signed
-         * out is a fixture that appears to work and does nothing.
-         *
-         * `undefined` whenever it cannot be had, and the suite then runs exactly as it did before:
-         * every flow from cold, which is correct and merely slower.
-         */
-        // The LIVE PAGE URL, not `appUrl`. `leasableAppUrl` returns an origin, and the provider
-        // finds a page by comparing full URLs — so an origin matched no page, the lookup answered
-        // "nothing driven here", and this returned `undefined` on every run. Silent, and it made the
-        // seeding below a no-op: every leased flow booted cold while the code read as if it did not.
-        const seed = await suiteFixtureSeed(
-          deps.realInput,
-          sessionUrlOf(deps, sessionId) ?? appUrl,
+    // The run id is minted first, so each replayed step's screenshot is filed under the run.
+    handler: (deps: ToolDeps, args): Promise<SuiteVerdict> =>
+      withShotRun(defaultRunId(), async (): Promise<SuiteVerdict> => {
+        const sessionId = asString(args['sessionId']);
+        const confirmed = true === args['confirmDangerous'] ? { confirmDangerous: true } : {};
+        // "Replay all" means all of THIS app's flows (+ legacy), not every project's on a shared daemon.
+        const target = sessionTarget(deps, sessionId);
+        const { projectId } = target;
+        const selected = await resolveSuiteSelection(deps, target, args);
+        const requested = selected.run;
+        /** Named rather than subtracted — a suite that returns fewer than were asked for must say so. */
+        const heldBack = {
+          ...(0 === selected.quarantined.length ? {} : { quarantined: selected.quarantined }),
+          ...(0 === selected.unmatched.length ? {} : { unmatched: selected.unmatched }),
+          ...(selected.cycles === undefined ? {} : { cycles: selected.cycles }),
+          ...(selected.unsatisfied === undefined ? {} : { unsatisfied: selected.unsatisfied }),
+        };
+        // verify:server — hand the whole suite to the hosted runner; it records the verification itself.
+        const cloud = await resolveProjectCloud(
+          deps.fs,
+          rootForTarget(deps, target),
+          homedir(),
+          process.env,
         );
-        const outcomes = await mapWithConcurrency(requested, concurrency, async (flowName) => {
+        const server = await runServerVerify(deps, cloud, sessionId, requested);
+        if (server !== null) return server;
+        // PARALLEL: flows race the DOM only when they share ONE tab. Given the lease pool, each
+        // flow gets its own isolated context, so a large suite finishes in interactive time. Opt-in via
+        // `parallel`; a missing prerequisite (no pool, unknown app URL) falls back to the sequential path
+        // rather than failing — a suite must always be runnable.
+        //
+        // NOTE: this applies even to a ONE-flow suite. Skipping leases for a single flow looked harmless
+        // (no speedup to win) but silently downgraded an explicit `parallel` request to a shared-tab run,
+        // so the flow inherited whatever state the previous run left behind — isolation is the point here,
+        // not only concurrency.
+        const parallelArg = asNumber(args['parallel']);
+        const pool = deps.pool;
+        const appUrl = leasableAppUrl(deps, sessionId);
+        if (
+          parallelArg !== undefined &&
+          pool !== undefined &&
+          appUrl !== undefined &&
+          requested.length > 0
+        ) {
+          const concurrency = resolveConcurrency(requested.length, pool.capacity(), parallelArg);
+          /*
+           * Captured ONCE, before any flow runs, from the page the agent is already driving.
+           *
+           * Each leased flow then boots already holding it, which is what closes the gap this suite
+           * had: a flow that logs out used to leave every flow after it signed out, and no navigation
+           * repairs that — the problem is not where the subject is, it is what it holds. Seeded before
+           * the first navigation, because restoring into a page that has already decided it is signed
+           * out is a fixture that appears to work and does nothing.
+           *
+           * `undefined` whenever it cannot be had, and the suite then runs exactly as it did before:
+           * every flow from cold, which is correct and merely slower.
+           */
+          // The LIVE PAGE URL, not `appUrl`. `leasableAppUrl` returns an origin, and the provider
+          // finds a page by comparing full URLs — so an origin matched no page, the lookup answered
+          // "nothing driven here", and this returned `undefined` on every run. Silent, and it made the
+          // seeding below a no-op: every leased flow booted cold while the code read as if it did not.
+          const seed = await suiteFixtureSeed(
+            deps.realInput,
+            sessionUrlOf(deps, sessionId) ?? appUrl,
+          );
+          const outcomes = await mapWithConcurrency(requested, concurrency, async (flowName) => {
+            const start = deps.now();
+            const lease = await acquireLeasedSession(pool, deps.sessions, appUrl, projectId, seed);
+            try {
+              const replay = await replayAndLearn(deps, {
+                flowName,
+                sessionId: lease.sessionId,
+                ...confirmed,
+              });
+              return { replay, durationMs: deps.now() - start };
+            } finally {
+              await lease.release().catch(() => undefined);
+            }
+          });
+          const parallelRuns = await Promise.all(
+            outcomes.map(async (o, i) => {
+              const name = requested[i] ?? '';
+              const replay =
+                o.ok && o.value !== undefined ? o.value.replay : leaseFailureReplay(name, o.error);
+              const loaded = await flowsForSession(deps, target)
+                .flows.load(name, projectId)
+                .catch(() => null);
+              const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
+              return flow === undefined ? { replay } : { replay, flow };
+            }),
+          );
+          const timed: TimedReplay[] = outcomes.map((o, i) => ({
+            ...(parallelRuns[i] ?? { replay: leaseFailureReplay(requested[i] ?? '', o.error) }),
+            durationMs: o.ok && o.value !== undefined ? o.value.durationMs : 0,
+          }));
+          const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), parallelRuns);
+          const runId = await persistAndSyncVerificationRun(deps, timed, target);
+          const verdict = buildSuiteVerdict(
+            parallelRuns,
+            selected.knownRoutes,
+            SuiteIsolation.PER_FLOW_LEASE,
+          );
+          return {
+            ...verdict,
+            ...(runId === undefined ? {} : { runId }),
+            ...(flaky.length > 0 ? { flaky: [...flaky] } : {}),
+            ...heldBack,
+            ...resultField(() => suiteResult(rootForTarget(deps, target), verdict, timed, runId)),
+          };
+        }
+        // The flow FILE travels with each replay so the verdict can tell a green that verified
+        // something from a green that could never have gone red. Without it the suite reported "all 1
+        // flow pass" for a flow with no steps at all.
+        const runs: { replay: FlowReplayResult; flow?: FlowFile }[] = [];
+        const timed: TimedReplay[] = [];
+        // Sequential default: every flow replays against the same live session, so they must not overlap.
+        //
+        // They also START wherever the previous flow left the app, which makes a verdict depend on RUN
+        // ORDER — measured, and the cause of a contradiction that moved between flows run by run. A
+        // reset between flows was BUILT AND REVERTED: see the ledger's 9.2. Playwright's
+        // `storageState` carries cookies and localStorage and NOT sessionStorage, so a forced reload
+        // restores part of an app's auth and drops the rest, and the suite went from noisy to FAILING
+        // (1 of 2 flows). Restoring two thirds of a session is worse than restoring none.
+        for (const flowName of requested) {
           const start = deps.now();
-          const lease = await acquireLeasedSession(pool, deps.sessions, appUrl, projectId, seed);
-          try {
-            const replay = await replayAndLearn(deps, { flowName, sessionId: lease.sessionId });
-            return { replay, durationMs: deps.now() - start };
-          } finally {
-            await lease.release().catch(() => undefined);
-          }
-        });
-        const parallelRuns = await Promise.all(
-          outcomes.map(async (o, i) => {
-            const name = requested[i] ?? '';
-            const replay =
-              o.ok && o.value !== undefined ? o.value.replay : leaseFailureReplay(name, o.error);
-            const loaded = await flowsForSession(deps, target)
-              .flows.load(name, projectId)
-              .catch(() => null);
-            const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
-            return flow === undefined ? { replay } : { replay, flow };
-          }),
-        );
-        const timed: TimedReplay[] = outcomes.map((o, i) => ({
-          ...(parallelRuns[i] ?? { replay: leaseFailureReplay(requested[i] ?? '', o.error) }),
-          durationMs: o.ok && o.value !== undefined ? o.value.durationMs : 0,
-        }));
-        const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), parallelRuns);
-        await persistAndSyncVerificationRun(deps, timed, target);
+          const replay = await replayAndLearn(deps, { flowName, sessionId, ...confirmed });
+          const loaded = await flowsForSession(deps, target)
+            .flows.load(flowName, projectId)
+            .catch(() => null);
+          const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
+          runs.push(flow === undefined ? { replay } : { replay, flow });
+          timed.push({
+            replay,
+            durationMs: deps.now() - start,
+            ...(flow === undefined ? {} : { flow }),
+          });
+        }
+        // The flake ledger the CLI gate already keeps — see FlakeStore. It was only ever written by
+        // `reticle flow` on the command line, so an AGENT running this tool a hundred times learned
+        // nothing about which flows are intermittent. Same product, same ledger, two surfaces, and the
+        // one an agent uses was the blind half.
+        const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), runs);
+        // Emit the consolidated run artifact (Runs tab) + best-effort cloud push. Never blocks the verdict.
+        const runId = await persistAndSyncVerificationRun(deps, timed, target);
         const verdict = buildSuiteVerdict(
-          parallelRuns,
+          runs,
           selected.knownRoutes,
-          SuiteIsolation.PER_FLOW_LEASE,
+          SuiteIsolation.SHARED_SESSION,
         );
+        // A flow that has both passed and failed on UNCHANGED code is a different thing from a
+        // regression, and an agent that cannot tell them apart either chases a ghost or ignores a real
+        // break. Present only when the ledger has seen enough runs to say so.
         return {
           ...verdict,
+          ...(runId === undefined ? {} : { runId }),
           ...(flaky.length > 0 ? { flaky: [...flaky] } : {}),
           ...heldBack,
+          ...resultField(() => suiteResult(rootForTarget(deps, target), verdict, timed, runId)),
         };
-      }
-      // The flow FILE travels with each replay so the verdict can tell a green that verified
-      // something from a green that could never have gone red. Without it the suite reported "all 1
-      // flow pass" for a flow with no steps at all.
-      const runs: { replay: FlowReplayResult; flow?: FlowFile }[] = [];
-      const timed: TimedReplay[] = [];
-      // Sequential default: every flow replays against the same live session, so they must not overlap.
-      //
-      // They also START wherever the previous flow left the app, which makes a verdict depend on RUN
-      // ORDER — measured, and the cause of a contradiction that moved between flows run by run. A
-      // reset between flows was BUILT AND REVERTED: see the ledger's 9.2. Playwright's
-      // `storageState` carries cookies and localStorage and NOT sessionStorage, so a forced reload
-      // restores part of an app's auth and drops the rest, and the suite went from noisy to FAILING
-      // (1 of 2 flows). Restoring two thirds of a session is worse than restoring none.
-      for (const flowName of requested) {
-        const start = deps.now();
-        const replay = await replayAndLearn(deps, { flowName, sessionId });
-        const loaded = await flowsForSession(deps, target)
-          .flows.load(flowName, projectId)
-          .catch(() => null);
-        const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
-        runs.push(flow === undefined ? { replay } : { replay, flow });
-        timed.push({
-          replay,
-          durationMs: deps.now() - start,
-          ...(flow === undefined ? {} : { flow }),
-        });
-      }
-      // The flake ledger the CLI gate already keeps — see FlakeStore. It was only ever written by
-      // `reticle flow` on the command line, so an AGENT running this tool a hundred times learned
-      // nothing about which flows are intermittent. Same product, same ledger, two surfaces, and the
-      // one an agent uses was the blind half.
-      const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), runs);
-      // Emit the consolidated run artifact (Runs tab) + best-effort cloud push. Never blocks the verdict.
-      await persistAndSyncVerificationRun(deps, timed, target);
-      const verdict = buildSuiteVerdict(runs, selected.knownRoutes, SuiteIsolation.SHARED_SESSION);
-      // A flow that has both passed and failed on UNCHANGED code is a different thing from a
-      // regression, and an agent that cannot tell them apart either chases a ghost or ignores a real
-      // break. Present only when the ledger has seen enough runs to say so.
-      return {
-        ...verdict,
-        ...(flaky.length > 0 ? { flaky: [...flaky] } : {}),
-        ...heldBack,
-      };
-    },
+      }),
   },
   {
     name: ReticleTool.FLOW_SAVE_RECORDED,
@@ -934,10 +931,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe('Alias for `flowName` (the name reticle_annotate uses).'),
       flowName: z.string().describe('Flow file name to heal (from reticle_flow{action:"list"}).'),
       apply: z.boolean().optional(),
-      confirmDangerous: z
-        .boolean()
-        .optional()
-        .describe('Set true to allow destructive controls during this heal replay only.'),
+      confirmDangerous: confirmDangerousArg('this heal replay'),
       sessionId: z
         .string()
         .optional()

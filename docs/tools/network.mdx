@@ -1,6 +1,6 @@
 ---
 title: reticle_network
-description: A filtered log of every request the app made, with bodies, status, timing, automatic credential redaction, and an honest note when evidence has expired.
+description: A filtered log of every request the app made, with status, timing, bodies when capture is on, automatic credential redaction, and an honest note when evidence has expired.
 icon: satellite-dish
 ---
 
@@ -11,7 +11,7 @@ icon: satellite-dish
   `allowedTools` allowlist or an MCP permission rule naming it refuses before Reticle is asked.
 </Warning>
 
-`reticle_network` returns a filtered log of every request the app made, with request and response bodies, status, timing, and automatic credential redaction. Reach for it to answer "did that call actually fire, and what came back?", which is the thing a screenshot fundamentally cannot show.
+`reticle_network` returns a filtered log of every request the app made, with status, timing, and automatic credential redaction. Request and response bodies are recorded only when the app connects with `captureNetworkBodies: true` (off by default); a failed response keeps its body either way. Reach for it to answer "did that call actually fire, and what came back?", which is the thing a screenshot fundamentally cannot show.
 
 ## Example
 

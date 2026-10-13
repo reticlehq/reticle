@@ -25,6 +25,7 @@ import {
   compactDuration,
   compactNumber,
   COVERAGE_LEVELS,
+  CAPABILITY_WORDS,
 } from './chrome/presenter-report-copy.js';
 
 /**
@@ -52,9 +53,10 @@ export function reportPanelHtml(): string {
         <button type="button" ${REPORT_CLOSE_ATTR} class="reticle-report-close" title="Close" aria-label="Close impact">${close}</button>
       </div>
       <div class="reticle-report-body" data-reticle-report-body></div>
-      <div class="reticle-report-foot">
-        <button type="button" ${SHARE_X_ATTR} class="reticle-report-share">Post on X</button>
-        <button type="button" ${SHARE_IN_ATTR} class="reticle-report-share">LinkedIn</button>
+      <div class="reticle-report-foot" role="group" aria-label="${REPORT_TEXT.SHARE_LABEL}">
+        <span class="reticle-report-share-label">${REPORT_TEXT.SHARE_LABEL}</span>
+        <button type="button" ${SHARE_X_ATTR} class="reticle-report-share">${REPORT_TEXT.POST_X}</button>
+        <button type="button" ${SHARE_IN_ATTR} class="reticle-report-share">${REPORT_TEXT.POST_IN}</button>
         <button type="button" ${SHARE_COPY_ATTR} class="reticle-report-share">${REPORT_TEXT.COPY}</button>
         <button type="button" ${REFER_ATTR} class="reticle-report-share reticle-report-refer">${REPORT_TEXT.REFER}</button>
       </div>
@@ -193,18 +195,94 @@ function syncStatusHtml(sync: Readonly<Record<string, unknown>> | undefined): st
   if (sync === undefined) return '';
   const num = (key: string): number => ('number' === typeof sync[key] ? sync[key] : 0);
   const status = sync['status'];
+  const keyRefused = 'string' === typeof sync['keyRefused'] ? sync['keyRefused'] : undefined;
   const label =
-    'refused' === status
-      ? `${String(num('refused'))} refused`
-      : 'pending' === status
-        ? `${String(num('pending'))} waiting`
-        : 'on-platform' === status
-          ? `Synced · ${String(num('onPlatform'))}`
-          : undefined;
+    keyRefused !== undefined
+      ? REPORT_TEXT.KEY_REFUSED
+      : 'refused' === status
+        ? `${String(num('refused'))} refused`
+        : 'pending' === status
+          ? `${String(num('pending'))} waiting`
+          : 'on-platform' === status
+            ? `Synced · ${String(num('onPlatform'))}`
+            : 'local-only' === status
+              ? `${String(num('pending'))} ${REPORT_TEXT.NOT_SENT}`
+              : undefined;
   if (label === undefined) return '';
-  const said = 'string' === typeof sync['said'] ? sync['said'] : '';
-  return `<span class="reticle-sync-status" data-reticle-sync-status="${status as string}" title="${esc(said)}">${label}</span>`;
+  // Local-only runs get the sentence that says what the count is and how to clear it.
+  const said =
+    keyRefused !== undefined
+      ? keyRefused
+      : 'local-only' === status
+        ? REPORT_TEXT.NOT_SENT_HELP
+        : 'string' === typeof sync['said']
+          ? sync['said']
+          : '';
+  const runUrl = sync['runUrl'];
+  const seeRun =
+    'string' === typeof runUrl && isSafeDashboardUrl(runUrl)
+      ? ` <a class="reticle-sync-run" data-reticle-link="run" href="${esc(runUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.SEE_RUN}</a>`
+      : '';
+  return `<span class="reticle-sync-status" data-reticle-sync-status="${esc(String(status))}" title="${esc(said)}">${label}</span>${seeRun}`;
 }
+
+/** A capability name in plain words, escaped: the daemon's list is loose on the wire. */
+const capabilityWords = (name: unknown): string | undefined =>
+  'string' === typeof name ? esc(CAPABILITY_WORDS[name] ?? name) : undefined;
+
+/** One capability chip: a mark, the plain name, and on a missing one what it costs. */
+function capabilityItem(state: 'seen' | 'missing' | 'unseen', name: string, cost = ''): string {
+  const mark = 'seen' === state ? '✓' : 'missing' === state ? '✕' : '○';
+  const why = '' === cost ? '' : `<span class="reticle-report-cap-cost">${cost}</span>`;
+  return `<li class="reticle-report-cap" data-state="${state}"><span class="reticle-report-cap-mark" aria-hidden="true">${mark}</span><span class="reticle-report-cap-name">${name}</span>${why}</li>`;
+}
+
+/**
+ * This tab's instrumentation: capabilities covered out of the total, then each one by name — seen,
+ * missing (with what that costs) or not checked yet — and, once a verdict recorded a gap, the button
+ * that copies the prompt for a coding agent. Numbers are checked as numbers, every name is escaped,
+ * and the prompt is never rendered, only copied.
+ */
+export function instrumentationHtml(
+  instrumentation: Readonly<Record<string, unknown>> | undefined,
+): string {
+  if (instrumentation === undefined) return '';
+  const covered = instrumentation['covered'];
+  const total = instrumentation['total'];
+  if ('number' !== typeof covered || 'number' !== typeof total) return '';
+  const list = (key: string): readonly unknown[] => {
+    const value = instrumentation[key];
+    return Array.isArray(value) ? (value as unknown[]) : [];
+  };
+  const seen = list('seen').flatMap((n) => {
+    const name = capabilityWords(n);
+    return name === undefined ? [] : [capabilityItem('seen', name)];
+  });
+  const missing = list('missing').flatMap((m) => {
+    if ('object' !== typeof m || null === m) return [];
+    const gap = m as Record<string, unknown>;
+    const name = capabilityWords(gap['capability']);
+    const cost = 'string' === typeof gap['cost'] ? esc(gap['cost']) : '';
+    return name === undefined ? [] : [capabilityItem('missing', name, cost)];
+  });
+  const unseen = list('notSeenYet').flatMap((n) => {
+    const name = capabilityWords(n);
+    return name === undefined ? [] : [capabilityItem('unseen', name)];
+  });
+  const items = [...missing, ...seen, ...unseen];
+  const caps =
+    0 === items.length
+      ? ''
+      : `<ul class="reticle-report-caps">${items.join('')}</ul>${0 === unseen.length ? '' : `<span class="reticle-report-caps-note">○ ${REPORT_TEXT.NOT_SEEN_YET}</span>`}`;
+  const copy =
+    'string' === typeof instrumentation['prompt']
+      ? `<button type="button" class="reticle-report-copy-prompt" ${COPY_PROMPT_ATTR}>${REPORT_TEXT.COPY_PROMPT}</button>`
+      : '';
+  return `<div class="reticle-report-instrumentation" title="${REPORT_TEXT.INSTRUMENTATION_HELP}"><div class="reticle-report-instrumentation-head"><span class="reticle-report-section">${REPORT_TEXT.INSTRUMENTATION}</span><span class="reticle-report-instrumentation-value">${REPORT_TEXT.covered(Math.round(covered), Math.round(total))}</span></div>${caps}${copy}</div>`;
+}
+
+/** Marks the copy-prompt button; the click is delegated, since the body repaints. */
+const COPY_PROMPT_ATTR = 'data-reticle-copy-prompt';
 
 /**
  * Reticle Coverage: the headline is controls PROVED, the level that is evidence rather than a visit;
@@ -230,8 +308,10 @@ export function reportBodyHtml(
   projectName?: string,
   /** This project's coverage. Passed only for the project scope: it is not a machine-wide number. */
   coverage?: Readonly<Record<string, number>>,
-  /** Where this project's work stands with the platform. Project scope only, linked only. */
+  /** Where this project's work stands with the platform. Project scope only. */
   sync?: Readonly<Record<string, unknown>>,
+  /** This tab's instrumentation coverage and agent prompt. Project scope only. */
+  instrumentation?: Readonly<Record<string, unknown>>,
 ): string {
   const c = scope.counts;
   if (0 === c.calls) return `<p class="reticle-report-empty">${REPORT_TEXT.EMPTY}</p>`;
@@ -239,7 +319,7 @@ export function reportBodyHtml(
     scope.records.streakDays > 0
       ? `<span class="reticle-report-streak" title="Consecutive days with at least one verdict">🔥 ${String(scope.records.streakDays)} <span class="reticle-report-streak-label">${REPORT_TEXT.STREAK}</span></span>`
       : '';
-  const hero = `<div class="reticle-report-hero"><span class="reticle-report-hero-value">${compactNumber(c.failed)}</span><span class="reticle-report-hero-label">${REPORT_TEXT.HERO_DEFECTS}</span></div>`;
+  const hero = `<div class="reticle-report-hero"><span class="reticle-report-hero-value">${compactNumber(c.failed)}</span><span class="reticle-report-hero-label">${REPORT_TEXT.heroDefects(c.failed)}</span></div>`;
   const verdicts = `<div class="reticle-report-verdicts" title="${REPORT_TEXT.UNKNOWN_HELP}">
     <span class="reticle-report-verdict" data-kind="pass">${compactNumber(c.passed)} ${REPORT_TEXT.PASSED}</span>
     <span class="reticle-report-verdict" data-kind="fail">${compactNumber(c.failed)} ${REPORT_TEXT.FAILED}</span>
@@ -272,15 +352,15 @@ export function reportBodyHtml(
    * will not find. The two never both render — `localOnly` is gated on there being NO dashboard.
    */
   const identity = `<div class="reticle-report-identity">${accountControlHtml(account, { dashboardUrl, projectName, verdicts: c.verdicts, defects: c.failed })}${syncButtonHtml(dashboardUrl)}${syncStatusHtml(sync)}</div>`;
-  return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}${coverageHtml(coverage)}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
+  return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}${instrumentationHtml(instrumentation)}${coverageHtml(coverage)}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
 }
 
 /**
  * The one line about where this record lives, and what the next step is — if there is one.
  *
  * NOT gated on `dashboardUrl` alone, which conflates two states with opposite remedies: "nobody on
- * this machine has signed in" (`reticle login`) and "signed in, but this repo is not linked"
- * (`reticle link`). Telling a signed-in user to sign in is the kind of nag that gets a dev-only HUD
+ * this machine has signed in" (`reticle connect`) and "signed in, but this repo is not linked"
+ * (`reticle connect`). Telling a signed-in user to sign in is the kind of nag that gets a dev-only HUD
  * switched off for good.
  *
  * An ABSENT `account` is unknown, never signed-out. An older daemon sends none, and guessing there
@@ -391,6 +471,13 @@ export class PresenterReport {
         void this.#copy(ACCOUNT_TEXT.SIGNIN_COMMAND, signin);
         return;
       }
+      const copyPrompt = target.closest(`[${COPY_PROMPT_ATTR}]`);
+      const prompt = this.#snapshot?.instrumentation?.['prompt'];
+      if (copyPrompt !== null && 'string' === typeof prompt) {
+        e.stopPropagation();
+        void this.#copy(prompt, copyPrompt);
+        return;
+      }
       const sync = target.closest(`[${SYNC_BTN_ATTR}]`);
       if (sync !== null) {
         e.stopPropagation();
@@ -474,6 +561,7 @@ export class PresenterReport {
             this.#snapshot?.projectName,
             this.#global ? undefined : this.#snapshot?.coverage,
             this.#global ? undefined : this.#snapshot?.sync,
+            this.#global ? undefined : this.#snapshot?.instrumentation,
           );
   }
 

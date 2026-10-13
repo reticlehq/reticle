@@ -18,6 +18,28 @@ pub use capture::*;
 
 use tauri::{Runtime, Webview};
 
+/// Whether this build does anything at all: debug builds, or a release build with `in-release`.
+///
+/// A signed release binary must carry no Reticle capability. On macOS a build signed differently
+/// from the installed app is a different app to the keychain, and every keychain read prompts; a
+/// dev-only crate that stays live in the shipped binary also hands a screenshot command to anything
+/// that can invoke it. So in a release build `reticle_capture` refuses and `on_page_load` does
+/// nothing, and the compiler drops the code behind them.
+pub const ACTIVE: bool = cfg!(any(debug_assertions, feature = "in-release"));
+
+/// What `reticle_capture` answers in a release build.
+pub const INERT_IN_RELEASE: &str =
+    "reticle-tauri is inert in a release build (enable its `in-release` feature to test one)";
+
+/// The refusal for a build where this crate is inert, else none.
+pub fn inert_refusal() -> Option<&'static str> {
+    if ACTIVE {
+        None
+    } else {
+        Some(INERT_IN_RELEASE)
+    }
+}
+
 /// Filename prefix the daemon requires before it will read a capture off disk.
 ///
 /// Source of truth is `RETICLE_CAPTURE_FILE_PREFIX` in `@reticlehq/core`; the two cannot share a
@@ -57,7 +79,7 @@ pub fn on_page_load<R: Runtime>(
     webview: &Webview<R>,
     payload: &tauri::webview::PageLoadPayload<'_>,
 ) {
-    if payload.event() != tauri::webview::PageLoadEvent::Finished {
+    if !ACTIVE || payload.event() != tauri::webview::PageLoadEvent::Finished {
         return;
     }
     let headless = std::env::var(HEADLESS_ENV).as_deref() == Ok("1");
@@ -98,4 +120,22 @@ fn awake_macos<R: Runtime>(webview: &Webview<R>, headless: bool) {
             let _ = window.set_position(tauri::PhysicalPosition::new(OFFSCREEN_PX, OFFSCREEN_PX));
         }
     });
+}
+
+#[cfg(test)]
+mod release_tests {
+    /// A release build of the app (the one a person signs and ships) must carry no Reticle
+    /// capability: a signed app that Reticle can screenshot or re-schedule is a dev tool in a
+    /// customer's hands. `cargo test --release` runs this with the release profile.
+    #[cfg(all(not(debug_assertions), not(feature = "in-release")))]
+    #[test]
+    fn a_release_build_is_inert() {
+        assert_eq!(crate::inert_refusal(), Some(crate::INERT_IN_RELEASE));
+    }
+
+    #[cfg(any(debug_assertions, feature = "in-release"))]
+    #[test]
+    fn a_dev_build_is_active() {
+        assert_eq!(crate::inert_refusal(), None);
+    }
 }

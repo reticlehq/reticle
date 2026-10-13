@@ -166,3 +166,39 @@ describe('what a synced run carries so a teammate can replay it', () => {
     expect(RunFlowResultSchema.safeParse(r).success).toBe(true);
   });
 });
+
+/*
+ * `reticle verify` printed "status: unverifiable" (a request never settled on sign-in) and exited 1,
+ * while the dashboard listed the same run as Passed: the suite counted the contradiction, the run
+ * artifact did not carry it. A passing replay whose channels disagreed is not graded a pass here.
+ */
+describe('a passing replay whose channels disagreed', () => {
+  const contradiction = {
+    kind: 'request-never-settled',
+    claim: 'the UI moved forward and the action reported done',
+    counter: '1 request(s) were still in flight',
+    detail: 'POST http://localhost:8787/api/login',
+  };
+
+  it('is not a pass in the run, and says which channel disagreed', () => {
+    const r = mapReplayToFlowResult(
+      replay(ReplayStatus.OK, {
+        steps: [{ step: 0, anchor: 'sign-in', ok: true, contradictions: [contradiction] }],
+      }),
+      5,
+    );
+    expect(r.status).toBe(RunFlowStatus.SKIPPED);
+    expect(r.failureReason).toContain('request-never-settled');
+  });
+
+  it('counts a contradiction across steps the same way', () => {
+    const r = mapReplayToFlowResult(
+      replay(ReplayStatus.OK, {
+        steps: [],
+        crossStep: [contradiction],
+      }),
+      5,
+    );
+    expect(r.status).toBe(RunFlowStatus.SKIPPED);
+  });
+});

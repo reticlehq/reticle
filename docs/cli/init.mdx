@@ -10,6 +10,7 @@ icon: wand-magic-sparkles
 npx @reticlehq/server init [--env KEY=VALUE]... [--app <dir>] [--license <key>] [--json]
                            [--files-only] [--relaunch] [--no-open] [--no-agents] [--url <app url>]
                            [--timeout S] [--dry-run] [--hooks] [--port N] [--no-mcp] [--no-install]
+                           [--start] [--capture-bodies] [--no-first-run]
 ```
 
 ## Flags
@@ -19,8 +20,11 @@ npx @reticlehq/server init [--env KEY=VALUE]... [--app <dir>] [--license <key>] 
 | `--dry-run` | boolean | `false` | Print the full plan and write nothing |
 | `--port N` | number | unset (resolves to `4400`) | Bridge port to write into the config |
 | `--no-mcp` | boolean | `false` (MCP is registered) | Skip the MCP registration **and** the agent rule files (`CLAUDE.md`, `AGENTS.md`, `.cursor`) and the `/reticle` command |
-| `--no-install` | boolean | `false` (deps are installed) | Do not run the install. The step becomes `[⚠]` and prints the `add -D` command for you to run by hand, rather than vanishing from the plan |
-| `--app <dir>` | string | unset | Pick which app to wire in a monorepo, without changing directory |
+| `--no-install` | boolean | `false` (deps are installed) | Do not run the install. The step becomes `[–]` ("skipped (--no-install); install them yourself: …") with the install command for you to run by hand, rather than vanishing from the plan |
+| `--app <dir>` | string | unset | Pick which app to wire in a monorepo, without changing directory. On its own it implies `--files-only` |
+| `--start` | boolean | `false` | With `--app`, also boot the app the way a plain `init` does |
+| `--capture-bodies` | boolean | `false` | Write `captureNetworkBodies: true` into the Vite plugin call, so request and response bodies are captured |
+| `--no-first-run` | boolean | `false` | Connect and stop, without the coverage summary |
 | `--hooks` | boolean | `false` | Also add a print-only Stop hook to `.claude/settings.json`, merged into what is there. When the agent stops without a claim that held, it prints one line; it never blocks. See [`reticle report`](/cli/report) |
 | `--env KEY=VALUE` | string, repeatable | none | What the app needs to reach a usable state: a key from `.env.example`, a mock backend, a variable that skips an auth wall. A value may contain spaces and `=` |
 | `--license <key>` | string | unset | Write an enterprise license key to `.env` and keep `.env` out of git |
@@ -48,8 +52,8 @@ reticle init (dry run, no files written)
 
   [·] MCP server (Claude, global) → global (claude user scope)
       reticle already registered (install once, used by every project)
-  [·] MCP server (Cursor, global) → /Users/you/.cursor/mcp.json
-      reticle already in Cursor global config
+  [·] MCP server (Cursor) → /Users/you/.cursor/mcp.json
+      reticle already registered with Cursor
   [⚠] MCP server (Codex CLI) → /Users/you/.codex/config.toml
       add this to /Users/you/.codex/config.toml by hand:
       [mcp_servers.reticle]
@@ -65,7 +69,7 @@ reticle init (dry run, no files written)
   [✓] The /reticle command → .claude/commands/reticle.md
       type /reticle to verify one flow in the browser
   [✓] Install dependencies → package.json
-      pnpm add -D @reticlehq/react@2.8.0 @reticlehq/vite-plugin@2.8.0
+      pnpm add -D @reticlehq/react@3.7.0 @reticlehq/vite-plugin@3.7.0
   [✓] Reticle config → .reticle.json
       write project config (framework + port)
   [✓] Vite plugin → vite.config.ts
@@ -73,8 +77,10 @@ reticle init (dry run, no files written)
   [·] Capabilities + store → src/reticle-dev.ts
       file exists, left alone, it is yours to edit
 
-Restart `vite`.
+Restart your dev server (`vite`).
 ```
+
+The install line pins the packages to the version of Reticle you are running. When the `codex` binary is on your PATH, the Codex row is not a hand edit: it reads `[✓] MCP server (Codex CLI)` and registers through `codex mcp add reticle -- npx @reticlehq/server mcp`.
 
 Below the plan it also prints the two things that actually finish the install: restart your agent so it re-reads its MCP server list, then run `npx @reticlehq/server status` to confirm the app connected.
 
@@ -100,7 +106,7 @@ Several apps found in this workspace. Re-run `reticle init` for the one you want
   reticle init --app apps/vibe-builder-demo
 ```
 
-Given `--app`, it says which directory it moved to before printing the plan:
+Given `--app`, it writes that app's files and starts nothing: no daemon and no dev server, since a monorepo app's dev server is often run from the root. Add `--start` to boot it the way a plain `init` does. It says which directory it moved to before printing the plan:
 
 ```
 No app in this directory ... wiring apps/bench-app instead.
@@ -115,7 +121,7 @@ In the two captures above, the punctuation that separates the two halves of the 
 | `0` | The app connected. Steps marked `⚠` still need a hand, and do not change the code |
 | `1` | No session connected, init failed, an unknown flag was passed, or several apps were found and none was chosen |
 
-An unknown flag is rejected by name: `reticle init --bogus` prints `unknown argument '--bogus'`, then the full usage block, and exits `1`.
+An unknown flag is rejected by name: `reticle init --bogus` prints `unknown argument '--bogus'`, then the short usage (`reticle --help`), and exits `1`.
 
 ## Worked example
 

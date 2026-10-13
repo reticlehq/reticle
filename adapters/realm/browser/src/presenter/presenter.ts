@@ -8,15 +8,17 @@ import {
   SessionState,
   isPresenterTone,
   isSessionState,
+  type HarnessDrive,
   type PresenterTone,
 } from '@reticlehq/core';
 import { refs } from '@/dom/addressing/refs.js';
-import { unreachableStripText } from '@/transport/unreachable-message.js';
+import { UNREACHABLE_HEADLINE, unreachableMessage } from '@/transport/unreachable-message.js';
 import { actionVerb } from './chrome/presenter-verbs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from '@/timers/native/native-timers.js';
 import {
   LOG_KIND,
   CHIP_LABEL,
+  LOG_ACTOR,
   DATA_RETICLE_LOG,
   clampLogMax,
   formatElapsed,
@@ -31,6 +33,8 @@ import {
 } from './chrome/presenter-log.js';
 import { PRESENTER_CSS } from './presenter-styles.js';
 import { HudShell } from './presenter-shell.js';
+import { HARNESS_LOG_ATTR, harnessGateIn } from './presenter-harness-row.js';
+import { platformDetails } from './presenter-account.js';
 import { parseImpactSnapshot } from './chrome/presenter-report-copy.js';
 import { scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import {
@@ -75,7 +79,6 @@ import { PresenterIcon, PRESENTER_ICON_SIZE, hiIcon } from './icons/presenter-ic
 import { renderTally } from './chrome/presenter-tally.js';
 import {
   CONTROLS_BANNER_HTML,
-  CONTROLS_FLOWS_HTML,
   CONTROLS_MARKS_HTML,
   CONTROLS_FOOT_HTML,
   CONTROLS_STATUS_HTML,
@@ -90,11 +93,12 @@ import {
   OutputDetail,
   syncPageBlocker,
   type PresenterSettings,
+  paintSdkVersion,
 } from './presenter-settings.js';
 import { Annotator, type AnnotatorChrome } from '@/review/annotator.js';
 import { shouldAutoOpenChat } from './presenter-shell.js';
 import { installHudTelemetry } from './hud-telemetry.js';
-import { PLAN_HTML, PlanBoard, parsePlanView } from './presenter-plan.js';
+import { PlanBoard, parsePlanView } from './presenter-plan.js';
 import {
   claimLog,
   readRememberedLog,
@@ -142,6 +146,8 @@ export class Presenter {
   #glowCtl: GlowController;
   /** Liveness: the most recent action text + a 1s ticker that ages it into an "idle · {dur}" clock. */
   #lastActionText = '';
+  /** Who made the last logged action: after the Harness's, nobody is "planning" the next one. */
+  #lastActor: LogActor | undefined;
   #heartbeatTimer: ReturnType<typeof nativeSetTimeout> | undefined;
   /** Session lifecycle: idle-end window (tweakable), session id, start/end cursors, structured run log. */
   #idleEndMs: number;
@@ -154,6 +160,12 @@ export class Presenter {
   // v2: narration + action status accumulate in a persistent, timestamped, scrollable log.
   #logMax: number;
   #log: HTMLElement | undefined;
+  /** The Harness page's own log: every row the Harness drove or said. */
+  #harnessLog: HTMLElement | undefined;
+  /** The Harness run the HUD last saw, so a new one starts on a clean Harness log. */
+  #harnessRunId: string | undefined;
+  /** Steps of the Harness run driving now, so the header says the Harness is testing. */
+  #harnessSteps: number | undefined;
   #plan = new PlanBoard();
   /** The rows on screen, as they are kept across a reload. */
   #remembered: RememberedRow[] = [];
@@ -205,6 +217,13 @@ export class Presenter {
       onSignIn: () => this.#onControl?.({ kind: HumanControlKind.SIGNIN }),
       onHarness: (enabled) =>
         this.#onControl?.({ kind: HumanControlKind.HARNESS, text: enabled ? 'on' : 'off' }),
+      onHarnessRun: (persona) =>
+        this.#onControl?.({
+          kind: HumanControlKind.HARNESS_RUN,
+          ...(persona === undefined ? {} : { text: persona }),
+        }),
+      onHarnessStop: () => this.#onControl?.({ kind: HumanControlKind.HARNESS_STOP }),
+      onHarnessLink: () => this.#onControl?.({ kind: HumanControlKind.HARNESS_LINK }),
       settings: {
         onBeforeOpen: () => {
           if (this.#shell.isCollapsed()) this.#shell.expand();
@@ -218,6 +237,7 @@ export class Presenter {
           this.#onControl?.({ kind: HumanControlKind.HARNESS, text: enabled ? 'on' : 'off' }),
       },
     });
+    this.#shell.setProjectId(options.projectId);
   }
   /** Setter so reticle.ts can wire the control callback after construction. */
   setControlHandler(handler: ControlHandler): void {
@@ -242,6 +262,10 @@ export class Presenter {
   refilterFlows() {
     this.#panel.refilterFlows();
   }
+  /** Name the SDK version this page runs, in settings. Called by the SDK, which holds it. */
+  showSdkVersion(version: string | undefined): void {
+    if (this.#root !== undefined) paintSdkVersion(this.#root, version);
+  }
   handlePush(command: { name: string; args: Record<string, unknown> }): void {
     const a = command.args;
     if (command.name === ReticleCommand.FLOWS) return void this.#panel.setFlows(a['flows']);
@@ -261,10 +285,15 @@ export class Presenter {
         // The menu's detail rows come from the SAME snapshot as the avatar, so the two can never
         // describe different moments. Project counts, not machine-wide: the question the menu answers
         // is "what has happened HERE".
-        // The one thing this HUD advertises, from the same snapshot as everything else it shows.
-        this.#shell.paintOffer(snapshot.harnessOffer, snapshot.notices);
+        this.#shell.paintNotices(snapshot.notices);
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
-        this.#shell.paintHarness(snapshot.harnessConfig);
+        this.#shell.paintHarness(
+          snapshot.harnessConfig,
+          harnessGateIn(snapshot.instrumentation, snapshot.harnessConfig),
+        );
+        this.#shell.paintHarnessDrive(snapshot.harnessDrive);
+        this.#paintHarnessRun(snapshot.harnessDrive);
+        this.#shell.paintAgent(snapshot.agent);
         this.#shell.paintImpact(snapshot.project.counts.verdicts);
         const owner = true === snapshot.account?.signedIn ? snapshot.account.email : undefined;
         if (claimLog(owner)) this.#clearRunLog();
@@ -273,6 +302,7 @@ export class Presenter {
           dashboardUrl: snapshot.dashboardUrl,
           verdicts: snapshot.project.counts.verdicts,
           defects: snapshot.project.counts.failed,
+          ...platformDetails(snapshot.harnessConfig, snapshot.sync),
         });
       }
       return;
@@ -308,7 +338,7 @@ export class Presenter {
       <div data-reticle-glow></div>
       <div data-reticle-cursor></div>
       <div data-reticle-ring></div>
-      ${HudShell.dockHtml(actStrip, PLAN_HTML, DATA_RETICLE_LOG, CONTROLS_MARKS_HTML + CONTROLS_FLOWS_HTML, CONTROLS_FOOT_HTML)}`;
+      ${HudShell.dockHtml(actStrip, '', DATA_RETICLE_LOG, CONTROLS_MARKS_HTML, CONTROLS_FOOT_HTML)}`;
     document.body.appendChild(root);
     this.#root = root;
     this.#glow = root.querySelector<HTMLElement>('[data-reticle-glow]') ?? undefined;
@@ -322,6 +352,7 @@ export class Presenter {
     this.#chatPillTime =
       root.querySelector<HTMLElement>('[data-reticle-chat-pill-time]') ?? undefined;
     this.#log = root.querySelector<HTMLElement>(`[${DATA_RETICLE_LOG}]`) ?? undefined;
+    this.#harnessLog = root.querySelector<HTMLElement>(`[${HARNESS_LOG_ATTR}]`) ?? undefined;
     this.#chip = root.querySelector<HTMLElement>('[data-reticle-chip]') ?? undefined;
     this.#tally = root.querySelector<HTMLElement>('[data-reticle-tally]') ?? undefined;
     this.#shell.mount(root);
@@ -339,11 +370,12 @@ export class Presenter {
   }
   /** Repaint the rows this tab showed before the page reloaded. */
   #restoreLog(): void {
-    const log = this.#log;
-    if (log === undefined || 0 < this.#remembered.length) return;
+    if (this.#log === undefined || 0 < this.#remembered.length) return;
     for (const row of readRememberedLog().slice(-this.#logMax)) {
-      const handle = appendLogRow(log, row.kind, row.text, row.ts, this.#logMax, row.actor);
-      if (row.result !== undefined) handle.result(row.result);
+      for (const log of this.#logsFor(row.actor, true === row.summary)) {
+        const handle = appendLogRow(log, row.kind, row.text, row.ts, this.#logMax, row.actor);
+        if (row.result !== undefined) handle.result(row.result);
+      }
       this.#logBaseMs = this.#now() - row.at;
       this.#runLog.push({
         at: row.at,
@@ -418,6 +450,7 @@ export class Presenter {
     this.#sessionActive = false;
     this.#logBaseMs = undefined;
     this.#log = undefined;
+    this.#harnessLog = undefined;
     // Taken down on purpose (disconnect, or the agent removed the HUD), not by a reload: start clean.
     this.#remembered = [];
     rememberLog([]);
@@ -471,8 +504,10 @@ export class Presenter {
     const dock = this.#root?.querySelector('[data-reticle-dock]');
     dock?.setAttribute(DATA_ON, GLOW_ON);
     this.#hud?.setAttribute(DATA_ON, GLOW_ON);
-    this.#lastActionText = unreachableStripText(url, attempts);
+    this.#lastActionText = UNREACHABLE_HEADLINE;
     this.#paintActStrip(this.#lastActionText, true);
+    // The plain sentence on the row, the address and the checks one hover away for debugging.
+    this.#actLine?.setAttribute('title', unreachableMessage(url, attempts));
     // The message IS the reason this state exists, and a collapsed capsule hides it. Same setting
     // a live session honours, so a user who wants the bare toolbar still gets one.
     if (shouldAutoOpenChat(getPresenterSettings().autoOpenChat)) this.#shell.openChat();
@@ -575,8 +610,28 @@ export class Presenter {
    * status COLOUR resolves against: the page glow, the collapsed FAB's halo and the minimised
    * capsule all live outside the strip and still have to say whether the agent is working.
    */
-  #paintActStrip(text: string, idle: boolean): void {
-    if (this.#actLine !== undefined) this.#actLine.textContent = text;
+  /**
+   * A Harness run on this tab: a new one starts on a clean Harness log, and while it drives the
+   * header says so on every page, whatever page the person is reading.
+   */
+  #paintHarnessRun(drive: HarnessDrive | undefined): void {
+    if (drive !== undefined && drive.runId !== this.#harnessRunId) {
+      this.#harnessRunId = drive.runId;
+      if (this.#harnessLog !== undefined) clearLogRows(this.#harnessLog);
+    }
+    const was = this.#harnessSteps;
+    this.#harnessSteps = drive?.steps;
+    if (drive !== undefined) this.#paintActStrip(this.#lastActionText, false);
+    else if (was !== undefined) this.#paintActStrip(ACT_STRIP.READY, true);
+  }
+  #paintActStrip(raw: string, idle: boolean): void {
+    // While the Harness drives, the header names it: "Testing · Harness · 7 steps".
+    const text =
+      this.#harnessSteps === undefined ? raw : ACT_STRIP.harnessTesting(this.#harnessSteps);
+    if (this.#actLine !== undefined) {
+      this.#actLine.textContent = text;
+      this.#actLine.removeAttribute('title');
+    }
     const liveness = idle ? 'idle' : 'active';
     if (this.#actStrip !== undefined) this.#actStrip.setAttribute('data-liveness', liveness);
     this.#root?.setAttribute(LIVENESS_ATTR, liveness);
@@ -626,6 +681,14 @@ export class Presenter {
      * on nothing else, so "still empty" means no action has ever been painted in this session.
      */
     if ('' === this.#lastActionText) return;
+    // The Harness is the one driving: "planning next action" would describe an agent that is waiting.
+    if (this.#harnessSteps !== undefined) return;
+    // The Harness acted last and is not driving: its run is over (a run that ended on a reload never
+    // told this page so), and no agent is planning anything. Ready is what is true.
+    if (LOG_ACTOR.HARNESS === this.#lastActor) {
+      this.#paintActStrip(ACT_STRIP.READY, true);
+      return;
+    }
     const since = ACT_STRIP.SINCE_LAST;
     // Alive and between actions — NOT idle. The session is still running and the next action is
     // being decided; `#endIdle` below is the only path that says nothing more is coming.
@@ -729,6 +792,7 @@ export class Presenter {
     rememberLog([]);
     this.#tallied = { passes: 0, fails: 0 };
     if (this.#log !== undefined) clearLogRows(this.#log);
+    if (this.#harnessLog !== undefined) clearLogRows(this.#harnessLog);
     this.#renderTally();
   }
   #applyHideUntilRestart(): void {
@@ -751,9 +815,28 @@ export class Presenter {
    * with a mode chip + text. Returns a handle to stamp the row's outcome glyph (✓/✗) later, or
    * undefined when unmounted / when the text is empty after trimming.
    */
-  log(kind: LogKind, text: string, result?: LogResult, actor?: LogActor): LogHandle | undefined {
+  /**
+   * Where a row goes. The agent's rows to the Agent Log; the Harness's to the Harness page's log, so
+   * two drivers never share one; a Harness summary (a run starting or ending) to both, because the
+   * agent that asked for the run reports its result.
+   */
+  #logsFor(actor: LogActor | undefined, summary: boolean): HTMLElement[] {
+    const agent = this.#log;
+    const harness = this.#harnessLog;
+    if (LOG_ACTOR.HARNESS !== actor || harness === undefined)
+      return agent === undefined ? [] : [agent];
+    return summary && agent !== undefined ? [agent, harness] : [harness];
+  }
+  log(
+    kind: LogKind,
+    text: string,
+    result?: LogResult,
+    actor?: LogActor,
+    summary = false,
+  ): LogHandle | undefined {
     const ms = this.#now();
     this.#glowCtl.markActivity(ms);
+    this.#lastActor = actor;
     if (this.#log === undefined) return undefined;
     const trimmed = text.trim();
     if (0 === trimmed.length) return undefined;
@@ -766,7 +849,10 @@ export class Presenter {
     this.#runLog.push(entry);
     while (this.#runLog.length > this.#logMax) this.#runLog.shift();
     const ts = formatElapsed(ms - this.#logBaseMs);
-    const handle = appendLogRow(this.#log, kind, trimmed, ts, this.#logMax, actor);
+    const handles = this.#logsFor(actor, summary).map((log) =>
+      appendLogRow(log, kind, trimmed, ts, this.#logMax, actor),
+    );
+    const handle: LogHandle = { result: (r: LogResult) => handles.forEach((h) => h.result(r)) };
     if (result !== undefined) handle.result(result);
     const kept: RememberedRow = {
       kind,
@@ -774,6 +860,7 @@ export class Presenter {
       ts,
       at: ms - this.#logBaseMs,
       ...(actor === undefined ? {} : { actor }),
+      ...(summary ? { summary: true as const } : {}),
       ...(result === undefined ? {} : { result }),
     };
     this.#remembered.push(kept);
@@ -801,13 +888,19 @@ export class Presenter {
     this.#tallied = renderTally(this.#tally, this.#runLog, this.#tallied);
   }
   /** Back-compat: narration appends to the live log (append-only, never overwrites). */
-  narrate(text: string, level = 'info'): LogHandle | undefined {
+  narrate(
+    text: string,
+    level = 'info',
+    actor: LogActor = LOG_ACTOR.AGENT,
+    summary = false,
+  ): LogHandle | undefined {
     const line = 'info' === level ? text : `[${level}] ${text}`;
-    return this.log(LOG_KIND.NARRATION, line);
+    return this.log(LOG_KIND.NARRATION, line, undefined, actor, summary);
   }
   #pruneLog(): void {
     if (this.#log === undefined) return;
     trimLogRows(this.#log, this.#logMax);
+    if (this.#harnessLog !== undefined) trimLogRows(this.#harnessLog, this.#logMax);
   }
   /**
    * Mirror the server's session.throttled state onto the HUD border. When throttled (tab

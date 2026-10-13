@@ -1,0 +1,16 @@
+{
+  "docsOnly": "^(docs/|skills/|\\.changes/|\\.claude-plugin/|plugin/|[A-Za-z0-9._-]+\\.md$|\\.github/(ISSUE_TEMPLATE|PULL_REQUEST_TEMPLATE\\.md|labeler)|LICENSE|CODEOWNERS|SECURITY\\.md|CONTRIBUTING\\.md|GOVERNANCE\\.md|ROADMAP\\.md|CHANGELOG\\.md)",
+  "allTiersPrefix": "^(\\.github/workflows/|scripts/ci/)",
+  "tiers": {
+    "e2e": "^(core|engine|server|init|open-verification|spec-runner|adapters/(build|lint|realm/browser|realm/electron|realm/cli|realm/tauri|framework)|apps/(e2e|api|bench-app|next-smoke|atlas|examples))/|^(package\\.json|pnpm-lock\\.yaml|turbo\\.json|\\.github/workflows/ci\\.yml)$",
+    "install": "^((init|core)/|server/src/command/(cli|setup)/|adapters/(build/|realm/browser/|framework/)|break/|install/|apps/e2e/(install-gate|install-control|install-packages|smoke-checks|gate-harness|install-baseline)|scripts/pack-install-gate\\.mjs|package\\.json|pnpm-lock\\.yaml|\\.github/workflows/ci\\.yml)",
+    "gateself": "^(apps/e2e/(install-gate|install-control|install-packages|smoke-checks|gate-harness|install-baseline)|scripts/pack-install-gate\\.mjs|\\.github/workflows/ci\\.yml)",
+    "desktop": "^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/browser/src/observers/ipc\\.ts|adapters/realm/browser/src/dom/desktop-capture\\.ts|server/src/command/setup/desktop-shape\\.ts|init/src/diagnose/desktop-doctor\\.ts|\\.github/workflows/ci\\.yml)",
+    "conformance": "^(open-verification/|conformance/|server/src/portal/realm/|core/src/realm/|core/src/verdict/verification-run\\.ts|apps/bench-app/|apps/electron-smoke/|\\.github/workflows/ci\\.yml)",
+    "bench": "^(core/src/|adapters/realm/browser/src/|server/src/(surface/tools|portal/session)/|engine/src/(question|disagreement|window|evidence)/|apps/bench-app/|bench/|\\.github/workflows/ci\\.yml)",
+    "windows": "^(core|engine|server|init|open-verification|spec-runner|conformance|adapters/(build|lint|realm/browser|realm/electron|realm/cli|realm/tauri|framework)|scripts)/|^apps/e2e/|^(package\\.json|pnpm-lock\\.yaml|turbo\\.json|\\.github/workflows/ci\\.yml)$",
+    "rust": "^(adapters/realm/tauri/|apps/tauri-smoke/src-tauri/|\\.github/workflows/ci\\.yml)",
+    "break": "^(break/|install/|init/|server/src/command/(setup|cli)/|\\.github/workflows/ci\\.yml)",
+    "launchers": "^install/"
+  }
+}

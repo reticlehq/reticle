@@ -106,6 +106,31 @@ describe('transport stops retrying on a 1008 policy-violation close', () => {
     expect(String(warn.mock.calls[0]?.[0])).toContain('protocol version mismatch');
   });
 
+  /*
+   * Platform drive: after a daemon outage open tabs never came back; each needed a reload. A refusal
+   * from the daemon that was up THEN says nothing about the one up when the person returns, so a
+   * return to the tab tries once more (never a timed loop).
+   */
+  it('tries again when the person comes back to the tab after a 1008', () => {
+    vi.spyOn(nativeConsole, 'nativeWarn').mockImplementation(() => undefined);
+    let becomeVisible: () => void = () => undefined;
+    const t = new Transport({
+      url: 'ws://x',
+      hello,
+      handleCommand: () => Promise.resolve({ ok: true }),
+      onVisible: (handler) => {
+        becomeVisible = handler;
+        return () => undefined;
+      },
+    });
+    t.connect();
+    FakeWebSocket.instances[0]?.closeWith(1008, 'authentication failed');
+    vi.advanceTimersByTime(60_000);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    becomeVisible();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
   it('still reconnects on an ordinary (non-1008) close', () => {
     let becomeVisible: () => void = () => undefined;
     const t = new Transport({

@@ -88,6 +88,9 @@ function differsOnlyByEnumeration(first: string, second: string): boolean {
  */
 const IDENTITY_PARAMS = new Set(['id', 'ids', 'uuid', 'slug', 'key']);
 
+/** Different projections ask for differently shaped answers, both of which the app may need. */
+const PROJECTION_PARAMS = new Set(['select', 'fields', 'columns', 'include', 'expand']);
+
 /**
  * Issued this close together, two requests came from one task (a `Promise.all`, two effects in one
  * commit), so no later intent superseded the first: they are a fan-out, not a race (#1225).
@@ -98,8 +101,8 @@ const SAME_TASK_MS = 2;
 
 /**
  * Whether the second read could have made the first obsolete. Not when they ask for differently
- * shaped answers (the key sets differ: a page of rows beside a count), not when they name different
- * resources, and not when only enumeration changed.
+ * shaped answers (different key sets or projections), not when they name different resources, and
+ * not when only enumeration changed.
  */
 function couldSupersede(first: string, second: string): boolean {
   const a = new URLSearchParams(first);
@@ -108,6 +111,7 @@ function couldSupersede(first: string, second: string): boolean {
   const keysB = [...new Set(b.keys())].sort().join('&');
   if (keysA !== keysB) return false;
   for (const key of IDENTITY_PARAMS) if (a.get(key) !== b.get(key)) return false;
+  for (const key of PROJECTION_PARAMS) if (a.get(key) !== b.get(key)) return false;
   return !differsOnlyByEnumeration(first, second);
 }
 

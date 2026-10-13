@@ -23,7 +23,7 @@ The scenario `a-bug-of-our-own-is-not-a-stack-trace` asserts that when setup has
 
 The two launcher scenarios (`node-missing`, `node-too-old`) still run a launcher rather than the CLI, and deliberately: `process.execPath` is an absolute path, so pointing them at `node dist/cli.js` does not make them fail — it makes them meaningless, because Node is found every time regardless of the PATH the scenario just constructed.
 
-The matrix is POSIX-only by construction: its scenarios build fake `node`/`npx`/`claude` shims as `/bin/sh` scripts. Windows coverage of the same refusals lives in [`break-gates.yml`](../.github/workflows/break-gates.yml), which runs them against the CLI on all three operating systems.
+The matrix is POSIX-only by construction: its scenarios build fake `node`/`npx`/`claude` shims as `/bin/sh` scripts. Windows coverage of the same refusals lives in the `early-gates` job of [`ci.yml`](../.github/workflows/ci.yml), which runs them against the CLI on all three operating systems.
 
 ## What the prototype established
 

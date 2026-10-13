@@ -252,6 +252,65 @@ export function findWorkspaceApps(io: Pick<InitIo, 'exists' | 'readFile' | 'list
   return [...new Set(found.length > 0 ? found : served)];
 }
 
+/** Folders the search for an app never enters: dependencies, output, and a home folder's own. */
+const NEVER_SEARCHED = new Set([
+  ...NEVER_A_PACKAGE,
+  'vendor',
+  'venv',
+  '__pycache__',
+  'Library',
+  'Applications',
+  'AppData',
+  'Pictures',
+  'Music',
+  'Movies',
+]);
+/** How deep the search goes: `client/web/app` is three, and nothing real is deeper than four. */
+const SEARCH_DEPTH = 4;
+/** Folders read before the search gives up, so a home folder costs a fraction of a second. */
+const SEARCH_BUDGET = 600;
+
+/**
+ * Apps anywhere below a folder that is not one, for `init` run above its app with no workspace to
+ * say where the app is: a backend + frontend repo, a home folder, a docs site in `site/`.
+ *
+ * Breadth first and bounded (depth and folders read), never into dependencies, build output or
+ * hidden folders, and never below an app it found. Apps with a page win; a bare `index.html` with
+ * no package.json counts only when there is none, as the static page it is.
+ */
+export function findAppsBelow(io: Pick<InitIo, 'exists' | 'readFile' | 'listDirs'>): string[] {
+  const apps: string[] = [];
+  const pages: string[] = [];
+  let level = io.listDirs('.').filter(searchable);
+  let read = 0;
+  for (let depth = 1; depth <= SEARCH_DEPTH && level.length > 0 && read < SEARCH_BUDGET; depth++) {
+    const next: string[] = [];
+    for (const dir of level) {
+      if (++read > SEARCH_BUDGET) break;
+      if (AppSignal.UI === appSignal(dir, io)) {
+        apps.push(dir);
+        continue;
+      }
+      if (!io.exists(`${dir}/${PACKAGE_JSON}`) && io.exists(`${dir}/index.html`)) {
+        pages.push(dir);
+        continue;
+      }
+      next.push(
+        ...io
+          .listDirs(dir)
+          .filter(searchable)
+          .map((name) => `${dir}/${name}`),
+      );
+    }
+    level = next;
+  }
+  return apps.length > 0 ? apps : pages;
+}
+
+function searchable(name: string): boolean {
+  return !name.startsWith('.') && !NEVER_SEARCHED.has(name);
+}
+
 /**
  * Every package directory the workspace declares or holds, app-shaped or not.
  *
@@ -308,4 +367,16 @@ export function enclosingWorkspaceRoot(
     dir = parent;
   }
   return undefined;
+}
+
+/** The apps of the workspace at `root`, read through an io standing somewhere else in it. */
+export function appsAt(
+  root: string,
+  io: Pick<InitIo, 'exists' | 'readFile' | 'listDirs'>,
+): string[] {
+  return findWorkspaceApps({
+    exists: (p) => io.exists(join(root, p)),
+    readFile: (p) => io.readFile(join(root, p)),
+    listDirs: (p) => io.listDirs(join(root, p)),
+  });
 }

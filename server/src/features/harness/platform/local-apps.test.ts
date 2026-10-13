@@ -1,11 +1,19 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { LinkCapability, PLATFORM_LINK_VERSION } from '@reticlehq/core';
+import {
+  CoverageCapability,
+  LinkCapability,
+  LinkReportKey,
+  NotApplicableSchema,
+  PLATFORM_LINK_VERSION,
+} from '@reticlehq/core';
 import {
   appKeyOf,
   appsByPlatform,
+  homeRelative,
   machineOf,
   nameFromProjectId,
   pickAppTab,
+  reportAppsNow,
   startAppReports,
   type AppReports,
   type AppTab,
@@ -56,10 +64,59 @@ describe('the apps reported to each platform', () => {
       name: (dirs[t.sessionId] ?? '/').split('/').pop() ?? '',
     });
 
+  /*
+   * A fresh tab opened beside the one an agent had driven reported for the app, and the setup score
+   * fell from 87% to 75%: the Harness locked again until that tab happened to close. Of two tabs of
+   * one app, the one that has seen the most speaks for it.
+   */
+  it('reports the tab of an app that has seen the most, not the one that happened to come first', async () => {
+    const groups = await appsByPlatform(
+      [
+        tab('s1', 'http://localhost:3000/', { channels: ['ui', 'net'] }),
+        tab('s3', 'http://localhost:3000/compose', { channels: ['ui', 'net', 'source', 'testid'] }),
+      ],
+      undefined,
+      MACHINE.id,
+      describeTab,
+    );
+    expect(groups[0]?.apps).toHaveLength(1);
+    expect(groups[0]?.apps[0]?.url).toBe('http://localhost:3000/compose');
+  });
+
+  /**
+   * Of two tabs of one app, the one with more channels used to speak alone, so the score depended
+   * on which tab reported: test ids seen in one tab and source in another counted as neither.
+   */
+  it('merges the channels and gaps every tab of an app has seen', async () => {
+    const gapA = { kind: 'missing-testid', missing: 'e1', fix: 'add one', seenAt: 1 };
+    const gapB = { kind: 'no-source-mapping', missing: 'e2', fix: 'stamp it', seenAt: 2 };
+    const groups = await appsByPlatform(
+      [
+        tab('s1', 'http://localhost:3000/', { channels: ['ui', 'testid'], gaps: [gapA] }),
+        tab('s3', 'http://localhost:3000/compose', {
+          channels: ['ui', 'net', 'source'],
+          gaps: [gapB, gapA],
+        }),
+      ],
+      undefined,
+      MACHINE.id,
+      describeTab,
+    );
+    const app = groups[0]?.apps[0];
+    expect([...(app?.[LinkReportKey.CHANNELS] ?? [])].sort()).toEqual(
+      ['net', 'source', 'testid', 'ui'].sort(),
+    );
+    expect(app?.[LinkReportKey.GAPS]).toHaveLength(2);
+  });
+
   it('reports each project once, to the platform its link names, with what it is built with', async () => {
     const groups = await appsByPlatform(
       [
-        tab('s1', 'http://localhost:3000/cart', { title: 'Shop', runtime: 'web' }),
+        tab('s1', 'http://localhost:3000/cart', {
+          title: 'Shop',
+          runtime: 'web',
+          sdkVersion: '9.1.0',
+        }),
         tab('s2', 'http://localhost:3000/', { adapters: ['vue'], runtime: 'electron' }),
         tab('s3', 'http://localhost:3000/other', { hidden: true }),
       ],
@@ -77,6 +134,8 @@ describe('the apps reported to each platform', () => {
             url: 'http://localhost:3000/cart',
             title: 'Shop',
             stack: ['react'],
+            sdkVersion: '9.1.0',
+            adapters: ['react'],
           },
         ],
       },
@@ -88,6 +147,7 @@ describe('the apps reported to each platform', () => {
             name: 'admin',
             url: 'http://localhost:3000/',
             stack: ['vue', 'electron'],
+            adapters: ['vue'],
           },
         ],
       },
@@ -191,6 +251,24 @@ describe('reporting', () => {
       auth: 'Bearer key-a',
     });
     expect(opened).toEqual(['http://localhost:4000/']);
+  });
+
+  // Group D persona drives: the daemon's gate learned the app's markers, but the platform still
+  // refused at 75% on the report it had. The gate asks for a report at once.
+  it('reports at once when asked, rather than waiting for the next tick', async () => {
+    const p = platform({ wake: [], pendingDrive: false });
+    running = startAppReports({
+      machine: MACHINE,
+      version: '3.7.0',
+      capabilities: [],
+      apps: () => Promise.resolve([{ platform: A, apps: [shop] }]),
+      open: () => Promise.resolve(),
+      drivePending: () => undefined,
+      fetch: p.fetch,
+      intervalMs: 60_000,
+    });
+    await reportAppsNow();
+    expect(p.calls).toHaveLength(1);
   });
 
   it('never re-opens an app that is already open, and says when a drive is waiting', async () => {
@@ -315,5 +393,72 @@ describe('what the platform tells the person', () => {
     await running.tick();
     await running.tick();
     expect(shown).toEqual([[notice, 'key-a']]);
+  });
+});
+
+/*
+ * The richer report: what the platform needs to say what an app is missing and why a page never
+ * connected. The keys are the contract with the cloud, which ignores any it does not know.
+ */
+describe('what a report says about coverage and connection', () => {
+  it('carries each app’s channels, recorded gaps and adapters', async () => {
+    const gap = { kind: 'no-source-mapping', missing: 'e1', fix: 'add the plugin', seenAt: 7 };
+    const [group] = await appsByPlatform(
+      [
+        tab('s1', 'http://localhost:3000/', {
+          channels: ['ui', 'net'],
+          gaps: [gap],
+          notApplicable: [CoverageCapability.APP_STATE],
+        }),
+      ],
+      undefined,
+      MACHINE.id,
+      () => Promise.resolve({ platform: A, dir: '/code/shop', name: 'shop' }),
+    );
+    expect(group?.apps[0]).toMatchObject({
+      [LinkReportKey.CHANNELS]: ['ui', 'net'],
+      [LinkReportKey.GAPS]: [gap],
+      [LinkReportKey.ADAPTERS]: ['react'],
+      [LinkReportKey.NOT_APPLICABLE]: [CoverageCapability.APP_STATE],
+    });
+    expect(
+      NotApplicableSchema.safeParse(group?.apps[0]?.[LinkReportKey.NOT_APPLICABLE]).success,
+    ).toBe(true);
+  });
+
+  it('sends dev servers, the last refused hello and unsent runs at the top level', async () => {
+    const bodies: unknown[] = [];
+    running = startAppReports({
+      machine: MACHINE,
+      version: '3.6.1',
+      capabilities: [],
+      apps: () => Promise.resolve([{ platform: A, apps: [] }]),
+      extras: () =>
+        Promise.resolve({
+          devServers: [{ url: 'http://localhost:5173', port: 5173 }],
+          helloFailure: { reason: 'version skew', at: 9 },
+          unsynced: [{ root: '~/code/shop/.reticle', runs: 31, linked: false }],
+        }),
+      open: () => Promise.resolve(),
+      drivePending: () => undefined,
+      fetch: (_url, init) => {
+        bodies.push(JSON.parse('string' === typeof init.body ? init.body : '{}'));
+        return Promise.resolve(new Response('{}', { status: 200 }));
+      },
+      intervalMs: 60_000,
+    });
+    await running.tick();
+    expect(bodies[0]).toMatchObject({
+      [LinkReportKey.DEV_SERVERS]: [{ url: 'http://localhost:5173', port: 5173 }],
+      [LinkReportKey.HELLO_FAILURE]: { reason: 'version skew', at: 9 },
+      [LinkReportKey.UNSYNCED]: [{ root: '~/code/shop/.reticle', runs: 31, linked: false }],
+    });
+  });
+
+  it('never sends a home directory: a root under it is written with ~', () => {
+    expect(homeRelative('/Users/dev/code/shop/.reticle', '/Users/dev')).toBe(
+      '~/code/shop/.reticle',
+    );
+    expect(homeRelative('/srv/shop/.reticle', '/Users/dev')).toBe('/srv/shop/.reticle');
   });
 });

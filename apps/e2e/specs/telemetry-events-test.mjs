@@ -70,7 +70,6 @@ const { getSessionMetrics, resetSessionMetrics } = await import(`${DIST}/telemet
 const { installDaemonTelemetry } = await import(`${DIST}/telemetry/daemon-telemetry.js`);
 const { installDaemonResilience } = await import(`${DIST}/command/daemon/daemon-resilience.js`);
 const { submitFeedback } = await import(`${DIST}/telemetry/feedback.js`);
-const { submitIdentity } = await import(`${DIST}/telemetry/identify.js`);
 const { reportCliRun } = await import(`${DIST}/telemetry/cli-telemetry.js`);
 const { runTool } = await import(`${DIST}/surface/tools/invoke-tool.js`);
 const { TOOLS } = await import(`${DIST}/surface/tools/tools.js`);
@@ -105,9 +104,16 @@ const check = (name, ok, detail = '') => results.push({ name, ok, detail });
  * spec settles fifteen times, so that is most of a second back); under load it keeps waiting up to
  * the cap. Nothing about the assertions changes — they still require the events to actually arrive.
  */
+/*
+ * Quiet alone is still a duration: an event whose emitter does real work first (the crash report
+ * snapshots the machine) can arrive after 120ms of silence. Under battery load on 2026-10-09 that
+ * failed all twelve `runtime_crashed` checks with "got 0" while the spec passed alone. So a site
+ * that knows what it is waiting FOR passes `arrived`, and settle keeps waiting until that holds
+ * (or the cap, where the assertion reports what is missing) before it starts timing the quiet.
+ */
 const SETTLE_QUIET_MS = 120;
 const SETTLE_CAP_MS = 10_000;
-const settle = async () => {
+const settle = async (arrived = () => true) => {
   const deadline = Date.now() + SETTLE_CAP_MS;
   let seen = captured.length;
   let quietSince = Date.now();
@@ -118,7 +124,7 @@ const settle = async () => {
       quietSince = Date.now();
       continue;
     }
-    if (Date.now() - quietSince >= SETTLE_QUIET_MS) return;
+    if (arrived() && Date.now() - quietSince >= SETTLE_QUIET_MS) return;
     if (Date.now() >= deadline) return; // cap: let the assertion below report what is missing
   }
 };
@@ -126,7 +132,8 @@ const find = (ev) => captured.filter((e) => e.event === ev);
 
 // ── 1. CLI command + flags ────────────────────────────────────────────────────
 reportCliRun(['status', '--port', '9000', '--http-token', 'SUPERSECRET']);
-await settle();
+// Detached like init_completed, so the same bounded wait for arrival rather than a quiet window.
+await settle(() => find('cli_command_run').length >= 1);
 {
   const e = find('cli_command_run')[0];
   check('cli_command_run fires', e !== undefined);
@@ -429,7 +436,10 @@ await settle();
 
 // ── 4e. Onboarding funnel ─────────────────────────────────────────────────────
 reportInitOutcome({ ok: false, reason: InitFailure.DEPENDENCY_INSTALL, stack: 'next', mcpRegistered: false });
-await settle();
+// init_completed is sent DETACHED (a child process does the POST), so it lands after the quiet
+// window under load: red on a CI shard, green on the same commit's next run. Wait for it, bounded
+// by SETTLE_CAP_MS, as the runtime_crashed section does.
+await settle(() => find('init_completed').length >= 1);
 {
   const i = find('init_completed')[0];
   check('init_completed fires — the onboarding funnel had NO instrumentation', i !== undefined);
@@ -455,7 +465,7 @@ installDaemonResilience({ on: (ev, fn) => (handlers[ev] = fn) }, () => {}, () =>
   handlers['unhandledRejection']?.(err);
 }
 handlers['uncaughtException']?.(new RangeError('index out of range'));
-await settle();
+await settle(() => find('runtime_crashed').length >= 2);
 {
   const cs = find('runtime_crashed');
   check('runtime_crashed fires for both crash kinds', cs.length === 2, `got ${cs.length}`);
@@ -535,15 +545,6 @@ await settle();
   // vendor-key rule sees it. Either is a correct redaction — assert that SOMETHING fired rather than
   // pinning which rule won, or this becomes a brittle test of rule ordering.
   check('  redaction is reported back for the structured field', (featureReceipt?.redacted ?? []).length > 0, JSON.stringify(featureReceipt?.redacted));
-}
-
-// ── 7. Identify (opt-in) ──────────────────────────────────────────────────────
-await submitIdentity({ context: 'company', company: 'Acme Corp', email: 'dev@acme.com' });
-await settle();
-{
-  const i = find('identified')[0];
-  check('identified fires only from an explicit call', i !== undefined);
-  check('  carries the self-declared context', i?.properties.identity_context === 'company');
 }
 
 // ── 8. Human feedback path ────────────────────────────────────────────────────

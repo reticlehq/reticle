@@ -599,8 +599,13 @@ describe('visibility inside overflow clipping ancestors', () => {
     },
   );
 
+  /*
+   * A persona drive could not prove "Reopened by" at y≈811 on an issue page: an app shell with
+   * `overflow: hidden` around a scrolling main read every row below the fold as hidden, so the
+   * check came back `hidden_match`. Below the fold of a scrollport is one scroll away, not hidden.
+   */
   it.each(['auto', 'scroll'])(
-    'still applies an outer hidden clip around an overflow:%s scrollport',
+    'keeps a row below the fold of an overflow:%s scrollport visible inside a hidden app shell',
     (overflow) => {
       const { clip, child } = mount(overflow);
       const outer = document.createElement('div');
@@ -610,6 +615,24 @@ describe('visibility inside overflow clipping ancestors', () => {
       clip.replaceWith(outer);
       outer.append(clip);
       box(outer, 0, 0, 100, 100);
+      box(child, 10, 811, 80, 20);
+      expect(isVisible(child)).toBe(true);
+    },
+  );
+
+  it.each(['auto', 'scroll'])(
+    'still applies an outer hidden clip that cuts off the overflow:%s scrollport itself',
+    (overflow) => {
+      const { clip, child } = mount(overflow);
+      const outer = document.createElement('div');
+      outer.style.overflow = 'hidden';
+      outer.style.overflowX = 'hidden';
+      outer.style.overflowY = 'hidden';
+      clip.replaceWith(outer);
+      outer.append(clip);
+      box(outer, 0, 0, 100, 100);
+      box(clip, 0, 150, 100, 100);
+      box(child, 10, 160, 80, 20);
       expect(isVisible(child)).toBe(false);
     },
   );
@@ -920,4 +943,29 @@ describe('visibility inside overflow clipping ancestors', () => {
       }
     },
   );
+});
+
+/**
+ * An open Radix menu marks the rest of the page `aria-hidden` (with `data-aria-hidden`), and the
+ * header project picker and its items were graded `hidden_match` while on screen and focused.
+ */
+describe('a page an open overlay hid from assistive tech', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('is still on screen', () => {
+    document.body.innerHTML =
+      '<header aria-hidden="true" data-aria-hidden="true"><button id="p">omar-blog</button></header>';
+    const button = document.getElementById('p');
+    if (null === button) throw new Error('no button');
+    expect(isVisible(button)).toBe(true);
+  });
+
+  it('while the app’s own aria-hidden still hides', () => {
+    document.body.innerHTML = '<div aria-hidden="true"><button id="q">Hidden</button></div>';
+    const button = document.getElementById('q');
+    if (null === button) throw new Error('no button');
+    expect(isVisible(button)).toBe(false);
+  });
 });

@@ -28,6 +28,30 @@ export interface NarrowWritePort {
   resolvePath: (name: string, projectId?: ProjectId) => Promise<string | null>;
   write: (path: string, contents: string) => Promise<void>;
   serialize: (flow: FlowFile) => string;
+  /** The file as it is on disk, so a change lands in it and nothing else moves. */
+  readRaw?: (path: string) => Promise<string>;
+}
+
+const isPlain = (v: unknown): v is Record<string, unknown> =>
+  'object' === typeof v && null !== v && !Array.isArray(v);
+const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * `raw` with only what changed between `before` and `after` applied, everything else as written:
+ * its key order, its fields the reader fills in by default, its own spelling. Pure.
+ */
+export function withChangesOnly(raw: unknown, before: unknown, after: unknown): unknown {
+  if (Array.isArray(raw) && Array.isArray(before) && Array.isArray(after))
+    return raw.length === before.length && before.length === after.length
+      ? raw.map((item, i) => withChangesOnly(item, before[i], after[i]))
+      : after;
+  if (!isPlain(raw) || !isPlain(before) || !isPlain(after)) return after;
+  const out: Record<string, unknown> = { ...raw };
+  for (const key of Object.keys(after))
+    if (!same(after[key], before[key]))
+      out[key] = key in raw ? withChangesOnly(raw[key], before[key], after[key]) : after[key];
+  for (const key of Object.keys(before)) if (!(key in after)) delete out[key];
+  return out;
 }
 
 export async function changeInPlace<T>(
@@ -51,6 +75,20 @@ export async function changeInPlace<T>(
       detail: describeFlowZodFailure(parsed.error),
     };
   }
-  await port.write(path, port.serialize(parsed.data));
+  // A replay that learned nothing new leaves a committed file alone: every replay used to rewrite
+  // it (keys reordered, defaults written in), and `git status` called it modified.
+  if (port.serialize(parsed.data) === port.serialize(loaded.value)) return { ok: true, value };
+  let raw: unknown;
+  try {
+    raw = JSON.parse((await port.readRaw?.(path)) ?? 'null');
+  } catch {
+    raw = null;
+  }
+  await port.write(
+    path,
+    isPlain(raw)
+      ? `${JSON.stringify(withChangesOnly(raw, loaded.value, parsed.data), null, 2)}\n`
+      : port.serialize(parsed.data),
+  );
   return { ok: true, value };
 }

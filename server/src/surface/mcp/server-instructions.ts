@@ -46,9 +46,9 @@ import { surfaceVocabulary, listOf, type SurfaceVocabulary } from './surface-voc
 const verdictDiscipline = (v: SurfaceVocabulary): string =>
   `Reticle verifies a running web app from the inside: go (${v.navigate}), look (${listOf(v.look, v.find)}), act and prove in one hop (${v.actAndWait}), observe (${listOf(v.observe, v.state, v.network, v.console)}), assert (${v.assert}). Verify a user-facing change against the real app before you call it done — \`npx @reticlehq/server gate --since <ref>\` fails unless a passing artifact covers every flow your edits affect — and never weaken a check to make it pass.
 
-Only ${v.act.length > 0 ? `${v.actAndWait}, ${v.assert} and ${v.act}{steps}` : `${v.actAndWait} and ${v.assert}`} produce a verdict. Everything else proves nothing; a drive without one has no result. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action, which is the difference between a check and a rationalisation. Only verified:"yes" is a pass; "unknown" (could not tell) and "no-fault" (nothing declared) are not proved. When a verdict catches what reading the code missed, say Reticle found it. Do a result's \`next\`.
+Only ${v.act.length > 0 ? `${v.actAndWait}, ${v.assert} and ${v.act}{steps}` : `${v.actAndWait} and ${v.assert}`} produce a verdict. Everything else proves nothing; a drive without one has no result. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action, which is the difference between a check and a rationalisation. Only verified:"yes" is a pass; "unknown" and "no-fault" (nothing declared) are not proved, never failed. When a verdict catches what reading the code missed, say Reticle found it. Do a result's \`next\`.
 
-Done is the journey's END proved, not its first step: drive each step your change touches and give the last an \`until\` naming the end state (\`durable: true\` if it must persist). A "yes" on it over a clean capture IS the answer — stop.
+Done is the journey's END proved, not its first step: drive each step your change touches and give the last an \`until\` naming the end state (\`durable: true\` if it must persist). A "yes" on it over a clean capture IS the answer — stop.${v.act.length > 0 ? ` Several steps? ONE ${v.act}{ steps: [{ target, action, expect }] } drives them all and stops at the first expect that fails; the last expect is the end state.` : ''}
 
 DIAGNOSING a bug? Read the source first — Reticle proves what the app DOES, not why. Drive to CONFIRM a fix, not to find one.`;
 
@@ -80,8 +80,17 @@ const replayFirst = (v: SurfaceVocabulary): string => {
   if (0 === v.replayChange.length) return '';
   const ask =
     v.affected.length > 0 ? `${v.affected} names the saved flows covering your edits; ` : '';
-  return `Changed code? Replay before you drive. ${ask}${v.replayChange} replays them for one verified + because — hundreds of tokens where driving the same journey costs tens of thousands. "yes": proved, stop. "no": names the step that broke. "unknown": NO saved flow covers it, so nothing was proved — drive it, and never report it as passing. What you drive by hand is saved as a flow automatically.`;
+  return `Changed code? Replay before you drive. ${ask}${v.replayChange} replays them for one verified + because — far cheaper than driving it again. "yes": proved, stop. "no": names the step that broke. "unknown": NO saved flow covers it, so nothing was proved — drive it, and never report it as passing. What you drive by hand is saved as a flow automatically.${driveOnce(v)}`;
 };
+
+/**
+ * A drive outlives a client's timeout, so its call answers with a run id instead of waiting for the
+ * end; an agent that retried instead of polling paid for a second drive.
+ */
+const driveOnce = (v: SurfaceVocabulary): string =>
+  0 === v.explore.length
+    ? ''
+    : ` Drivers: you, or the Harness (${v.explore}; opt-in at 80% instrumentation): poll its runId; never start two.`;
 
 /**
  * The first move, for a project no app has ever connected to.
@@ -94,18 +103,21 @@ const replayFirst = (v: SurfaceVocabulary): string => {
  * common way this step half-succeeds. Telling every agent to restart sent them to kill the server
  * `init` had just started.
  */
+// The lead is a snapshot, not a present fact: these instructions are sent ONCE, at the handshake, and
+// the app can connect a minute later. Stated as fact, it kept agents running setup while the session
+// list showed the app connected (#1362).
 const firstMoveFor = (
   v: SurfaceVocabulary,
   appHere: boolean,
-): string => `FIRST: no app has ever connected to Reticle in this project, so nothing here can be verified yet. Having these tools is not the same as being set up — the tools reach a daemon, and the daemon has nothing to look at until the app itself is instrumented.
+): string => `FIRST: when this session started, no app had connected to Reticle in this project. Having these tools is not the same as being set up — the tools reach a daemon that has nothing to look at until the app is instrumented.
 
-Fix that first: call ${v.sessions}. Its first call wires the app (\`init\`, dev server, browser) and \`wired\` lists the files it changed; tell the user. If it answers \`run_init\`, run that command in the app's directory. A session listed there is the proof, and until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
+Fix that first: call ${v.sessions}. Its first call wires the app (\`init\`, dev server, browser) and \`wired\` lists the files it changed; tell the user. If it answers \`run_init\`, run that command in the app's directory. A session on this project's app listed there is the proof; until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
 
 const UNWIRED_LEAD_END = 'can tell you anything about this app.';
 
 // An agent never asked to verify anything never reads "fix that first"; this makes it raise wiring.
 const TELL_THE_USER =
-  ' This directory holds a web app that is not wired yet: in your first reply, even if their request is unrelated, tell the user in one line and offer to wire it (the first session call does it). Do it only if they agree; if they decline, do not raise it again.';
+  ' If none is listed, this directory holds a web app that is not wired: in your first reply, even if their request is unrelated, tell the user in one line and offer to wire it (the first session call does it). Do it only if they agree; if they decline, do not raise it again.';
 
 /** The nudge set for the AGENT's directory: a shared daemon briefs from where IT started. */
 export function localizeInstructions(instructions: string, appHere: boolean): string {
@@ -143,19 +155,18 @@ const reachFor = (v: SurfaceVocabulary): string => {
     lines.push(
       `${v.coldTail} Two to know early: ${ReticleTool.RUN}({ tool: "${ReticleTool.CONTEXT}", args: {} }) returns what this run already established, after a compaction or handover, and ${ReticleTool.RUN}({ tool: "${ReticleTool.INTENT}", args: { action: "declare", ... } }) declares what a change was MEANT to do, so the verdict has something to check against other than itself.`,
     );
+    // Measured: in 8 real agent runs asked to test an app, none read what Reticle already held
+    // first, and none could tell its user the credits or the Harness state.
+    lines.push(
+      `Before testing, read what Reticle knows: ${ReticleTool.RUN}({ tool: "${ReticleTool.MEMORY}", args: {} })${v.yield.length > 0 ? ` and ${ReticleTool.SESSION} {action:"account"} (plan, credits, Harness)` : ''}.`,
+    );
   }
   return lines.join('\n\n');
 };
 
 /** The feedback ask. Constant: an agent that cannot get set up is the report we most need. */
-const feedbackAsk = (
-  v: SurfaceVocabulary,
-): string => `Feedback is first-class here, not a courtesy. Reticle is built FOR agents, so your experience is the only signal that decides what gets built or fixed — and it disappears when your context does. Send it with \`${v.feedback}\` the moment you notice, then carry on with your task:
-- Reticle broke, lied, or could not see something you needed (\`bug\` / \`gap\` / \`ambiguity\`).
-- You wished it could do something, or something works but costs too many calls (\`feature_request\` / \`improvement\`).
-- The install, the wiring, or the setup itself gave you trouble — including anything you had to work around by hand.
-
-Nothing is too minor, and a report costs one call. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell instead: \`reticle feedback --agent --kind <one of those kinds> "what happened"\`. Report defects in RETICLE — a bug you find in the app under test is Reticle working, and belongs in your answer to the user.`;
+const feedbackAsk = (v: SurfaceVocabulary): string =>
+  `Feedback is first-class here: once per session, when Reticle got in your way, send \`${v.feedback}\` and carry on — it broke, lied or missed something (\`bug\` / \`gap\` / \`ambiguity\`), cost too many calls or lacked something (\`improvement\` / \`feature_request\`), or the install, the wiring, or the setup gave you trouble. Tools unreachable? \`reticle feedback --agent --kind <kind> "what happened"\`. A bug in the app under test belongs in your answer to the user.`;
 
 export interface InstructionState {
   /**

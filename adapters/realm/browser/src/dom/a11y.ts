@@ -350,11 +350,15 @@ export function getStates(el: Element, visible: boolean = isVisible(el)): Elemen
   return states;
 }
 
+/** Every payment field (`cc-*`), both password hints, and a one-time code. */
+const SENSITIVE_AUTOCOMPLETE = /\b(cc-|current-password|new-password|one-time-code)/i;
+
 /**
  * True when a form field holds a secret the SDK must never capture verbatim — a password input, a
  * sensitive `autocomplete` (cc-number, one-time-code, …), or a name/id/testid/aria-label that trips
- * `isSensitiveKey`. The single source of truth for both live-snapshot redaction (`getValue`) and the
- * flow recorder's fill-value redaction, so recorded flows never persist typed passwords/OTPs/keys.
+ * `isSensitiveKey`. The single source of truth for live-snapshot redaction (`getValue`), the flow
+ * recorder's fill-value redaction, and the field and DOM observers, so nothing the SDK records —
+ * a flow, a field change, an attribute diff in the session journal — carries a typed secret.
  */
 export function isSensitiveField(el: Element): boolean {
   if (!isInput(el) && !isTextArea(el) && !isSelect(el)) {
@@ -368,8 +372,7 @@ export function isSensitiveField(el: Element): boolean {
     el.getAttribute(DEFAULT_TESTID_ATTR) ?? '',
     el.getAttribute('aria-label') ?? '',
   ];
-  const sensitiveAutocomplete =
-    /current-password|new-password|cc-number|cc-csc|one-time-code/i.test(autocomplete);
+  const sensitiveAutocomplete = SENSITIVE_AUTOCOMPLETE.test(autocomplete);
   return (
     (isInput(el) && 'password' === el.type.toLowerCase()) ||
     sensitiveAutocomplete ||
@@ -379,7 +382,9 @@ export function isSensitiveField(el: Element): boolean {
 
 export function getValue(el: Element): string | undefined {
   if (isInput(el) || isTextArea(el) || isSelect(el)) {
-    if (isSensitiveField(el)) return REDACTED_VALUE;
+    // An EMPTY secret field reads empty: `[REDACTED]` there said "has a value" about a field
+    // nobody had typed into. Emptiness discloses nothing a screenshot would not.
+    if (isSensitiveField(el)) return '' === el.value ? '' : REDACTED_VALUE;
     return el.value;
   }
   const valueNow = el.getAttribute('aria-valuenow');
@@ -422,12 +427,24 @@ function stalledFade(el: Element): boolean {
 }
 
 /**
+ * The attribute an open menu or dialog stamps beside the `aria-hidden` it puts on the rest of the
+ * page (the `aria-hidden` package Radix and most kits use). That hides the page from assistive tech
+ * while the overlay is up; the page is still on screen. Read as hidden, the header's project picker
+ * and the menu it opened were graded `hidden_match` while both were on screen and focused.
+ */
+const OVERLAY_ARIA_HIDDEN = 'data-aria-hidden';
+
+function hiddenByAnOverlay(el: Element): boolean {
+  return el.hasAttribute(OVERLAY_ARIA_HIDDEN);
+}
+
+/**
  * Whether the element's OWN box hides it — one forced-style resolution, no composed ancestor
  * walk. The one ancestor reading is `hiddenInsideClosedDetails`, which consults only the nearest
  * `<details>` boundary; composing the chain is still isVisible's job.
  */
 function selfHidden(el: Element, style: CSSStyleDeclaration | null): boolean {
-  if ('true' === el.getAttribute('aria-hidden')) return true;
+  if ('true' === el.getAttribute('aria-hidden') && !hiddenByAnOverlay(el)) return true;
   if (isHtmlElement(el) && el.hidden) return true;
   if (hiddenInsideClosedDetails(el)) return true;
   if (style !== null) {
@@ -483,6 +500,8 @@ function parentAcrossShadowBoundary(el: Element): Element | null {
 }
 
 const CLIPPING_OVERFLOW = new Set(['hidden', 'clip']);
+/** A box a person can scroll: what it holds past its edge is below the fold, not hidden. */
+const SCROLLING_OVERFLOW = new Set(['auto', 'scroll']);
 const NON_CLIPPING_DISPLAY = new Set([
   'contents',
   'table-row',
@@ -525,6 +544,9 @@ interface VisibilityInfo {
   parent: Element | null;
   clipX: boolean;
   clipY: boolean;
+  /** Scrollable on that axis: content past the edge is reachable by scrolling. */
+  scrollX: boolean;
+  scrollY: boolean;
   hasClipping: boolean;
   clipBox?: VisibleBounds;
 }
@@ -551,7 +573,16 @@ function ownVisibilityInfo(el: Element, memo: Map<Element, VisibilityInfo>): Vis
     // Own hiding needs no ancestor metadata: preserve the early return for hidden targets,
     // including deeply nested ones. This cached CSS result never stands for clipped geometry.
     if (selfHidden(el, style)) {
-      info = { hidden: true, style, parent: null, clipX: false, clipY: false, hasClipping: false };
+      info = {
+        hidden: true,
+        style,
+        parent: null,
+        clipX: false,
+        clipY: false,
+        scrollX: false,
+        scrollY: false,
+        hasClipping: false,
+      };
       memo.set(el, info);
       return info;
     }
@@ -576,6 +607,8 @@ function ownVisibilityInfo(el: Element, memo: Map<Element, VisibilityInfo>): Vis
       parent,
       clipX,
       clipY,
+      scrollX: hasClipBox && SCROLLING_OVERFLOW.has(overflowX),
+      scrollY: hasClipBox && SCROLLING_OVERFLOW.has(overflowY),
       hasClipping: clipX || clipY || true === inherited?.hasClipping,
     };
     memo.set(el, info);
@@ -699,11 +732,43 @@ function clippingBox(el: Element, info: VisibilityInfo): VisibleBounds {
   return info.clipBox;
 }
 
+/** A box outside a scrollport, moved to its near edge on each scrolling axis, as scrolling would. */
+function scrolledInto(
+  b: VisibleBounds,
+  port: VisibleBounds,
+  alongX: boolean,
+  alongY: boolean,
+): VisibleBounds {
+  const axis = (
+    lo: number,
+    hi: number,
+    size: number,
+    from: number,
+    to: number,
+  ): [number, number] => {
+    if (hi > from && lo < to) return [lo, hi];
+    const span = Math.min(size, to - from);
+    return lo >= to ? [to - span, to] : [from, from + span];
+  };
+  const [left, right] = alongX
+    ? axis(b.left, b.right, b.width, port.left, port.right)
+    : [b.left, b.right];
+  const [top, bottom] = alongY
+    ? axis(b.top, b.bottom, b.height, port.top, port.bottom)
+    : [b.top, b.bottom];
+  return { left, right, top, bottom, width: right - left, height: bottom - top };
+}
+
 /** Undefined means no box was needed; null means hidden. Only real clipping reads layout. */
 function visibleBounds(
   el: Element,
   memo: Map<Element, VisibilityInfo>,
   initial?: VisibleBounds,
+  /**
+   * Read a box scrolled out of a scroll container as if scrolled back in, so a clip ABOVE the
+   * container judges where a person would see it. Visibility asks this; the viewport check does not.
+   */
+  throughScrollers = false,
 ): VisibleBounds | null | undefined {
   let bounds = initial;
   const target = ownVisibilityInfo(el, memo);
@@ -721,6 +786,19 @@ function visibleBounds(
     if (info.hidden) return null;
     if (current === clipFrom) clipFrom = undefined;
     const style = info.style;
+    // An app shell (`overflow: hidden`, full height) around a scrolling main read every row below
+    // the fold as hidden: the row sat outside the shell's box though one scroll brings it in.
+    if (
+      throughScrollers &&
+      current !== el &&
+      undefined === clipFrom &&
+      (info.scrollX || info.scrollY)
+    ) {
+      bounds ??= el.getBoundingClientRect();
+      if (bounds.width > 0 && bounds.height > 0) {
+        bounds = scrolledInto(bounds, clippingBox(current, info), info.scrollX, info.scrollY);
+      }
+    }
     if (current !== el && undefined === clipFrom && (info.clipX || info.clipY)) {
       bounds ??= el.getBoundingClientRect();
       // Preserve the existing visibility semantics for elements without an own layout box
@@ -765,7 +843,7 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   if (!el.isConnected) return false;
   const cached = memo?.get(el);
   if (cached !== undefined) return cached;
-  const result = visibleBounds(el, visibilityInfoMemo(memo)) !== null;
+  const result = visibleBounds(el, visibilityInfoMemo(memo), undefined, true) !== null;
   if (memo !== undefined) memo.set(el, result);
   return result;
 }

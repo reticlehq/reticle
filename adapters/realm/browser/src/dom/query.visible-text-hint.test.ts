@@ -110,3 +110,25 @@ describe('splitText hint only speaks for visible text', () => {
     expect(r.hint?.splitText?.ref).toBeDefined();
   });
 });
+
+/** A case-exact check missed on case alone and was told the text was "split across children". */
+describe('a case-exact text check that missed only on case', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('says what the page shows instead of calling it split', () => {
+    document.body.innerHTML = '<p>Order placed for Ana</p>';
+    const r = runQuery({ text: 'order placed', matchCase: true });
+    expect(r.elements).toHaveLength(0);
+    expect(r.hint?.splitText).toBeUndefined();
+    expect(r.hint?.caseMiss).toBe('Order placed');
+  });
+
+  it('still names a genuinely split string', () => {
+    document.body.innerHTML = '<p><span>Order </span><span>placed</span></p>';
+    const r = runQuery({ text: 'Order placed', matchCase: true });
+    expect(r.hint?.splitText).toBeDefined();
+    expect(r.hint?.caseMiss).toBeUndefined();
+  });
+});

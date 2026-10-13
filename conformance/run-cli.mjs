@@ -18,6 +18,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { driveAll } from './drive.mjs';
 import { CLI_SMOKE_SUBJECT } from './subjects/cli-smoke.mjs';
+// Batteries are not watched, and a shown browser changes their timing: hide every browser Reticle opens.
+process.env.RETICLE_HEADLESS ??= '1';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);

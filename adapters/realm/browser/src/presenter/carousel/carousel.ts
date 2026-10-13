@@ -201,7 +201,7 @@ function startRotation(log: HTMLElement, root: HTMLElement, count: number): void
 export const CAROUSEL_CSS: string = `
 .reticle-carousel{position:relative;margin:8px 10px;padding:10px 12px 8px;border:1px solid var(--reticle-line,#2a2f3a);border-radius:10px;background:var(--reticle-surface-inset,rgba(255,255,255,.03));}
 .reticle-carousel-track{height:100px;overflow:hidden;}
-.reticle-carousel-slide .reticle-offer,.reticle-carousel-slide .reticle-talk{margin:0;padding:0;border:0;background:none;}
+.reticle-carousel-slide .reticle-talk{margin:0;padding:0;border:0;background:none;}
 .reticle-carousel-close{position:absolute;top:4px;right:6px;width:20px;height:20px;padding:0;border:0;background:none;color:inherit;opacity:.55;cursor:pointer;font-size:14px;line-height:20px;}
 .reticle-carousel-close:hover{opacity:1;}
 .reticle-carousel-dots{display:flex;justify-content:center;gap:6px;margin-top:6px;}
@@ -210,10 +210,5 @@ export const CAROUSEL_CSS: string = `
 .reticle-carousel-controls{display:flex;align-items:center;gap:8px;margin-top:6px;}
 .reticle-carousel-arrow{width:24px;height:24px;flex:none;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--reticle-line);border-radius:6px;background:rgba(255,255,255,.04);color:var(--reticle-fg);font:inherit;font-size:18px;line-height:1;cursor:pointer;}
 .reticle-carousel-arrow:hover{border-color:var(--reticle-accent);background:var(--reticle-accent-soft);}
-.reticle-carousel-position{margin-left:auto;color:var(--reticle-muted);font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap;}
-.reticle-carousel-slide .reticle-offer{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:3px 8px;margin:0;padding:0;border:0;background:none;}
-.reticle-carousel-slide .reticle-offer-title{grid-column:1/-1;overflow:hidden;padding:0;font-size:11px;text-overflow:ellipsis;white-space:nowrap;}
-.reticle-carousel-slide .reticle-offer-body{grid-column:1;grid-row:2;margin:0;overflow:hidden;font-size:10px;line-height:1.2;text-overflow:ellipsis;white-space:nowrap;}
-.reticle-carousel-slide .reticle-offer-claim{grid-column:2;grid-row:2;padding:3px 7px;font-size:10px;white-space:nowrap;}
-.reticle-carousel-slide .reticle-offer-claimed{overflow:hidden;margin:0;text-overflow:ellipsis;white-space:nowrap;}
+.reticle-carousel-position{margin-left:auto;color:var(--reticle-muted);font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap;}
 `;

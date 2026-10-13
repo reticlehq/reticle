@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { DriveStoppedError, runHarness, type HarnessToolset } from '../harness.js';
-import { serverDriver } from './server-driver.js';
+import {
+  DRIVE_HEADER,
+  platformHeaders,
+  serverDriver,
+  serverOptionsFromEnv,
+} from './server-driver.js';
 
 const toolset = (seen: string[]): HarnessToolset => ({
   tools: [{ name: 'reticle_act_and_wait', description: 'act', inputSchema: { type: 'object' } }],
@@ -70,6 +75,45 @@ describe('the platform drives, this machine executes', () => {
     });
   });
 
+  // Map first: the engine looks a goal up in the survey instead of finishing where it stands.
+  it("sends the daemon's survey of the app when the run starts", async () => {
+    const { asked, fetch } = platform({
+      '/v1/harness/runs': () => ({ runId: 'hr_map' }),
+      '/v1/harness/runs/hr_map/turn': () => ({
+        turn: 0,
+        calls: [],
+        text: '',
+        done: true,
+        status: 'finished',
+      }),
+    });
+    const siteMap = { pages: [{ route: '/overview', texts: ['Impact'], controls: [] }] };
+    await runHarness(
+      serverDriver({ url: 'https://p.test', apiKey: 'rk_live_x', siteMap, fetch }),
+      toolset([]),
+    );
+    expect(asked[0]?.body).toMatchObject({ siteMap });
+  });
+
+  it('carries the credits the platform says the run spent onto the drive', async () => {
+    const { fetch } = platform({
+      '/v1/harness/runs': () => ({ runId: 'hr_2' }),
+      '/v1/harness/runs/hr_2/turn': () => ({
+        turn: 0,
+        calls: [],
+        text: '',
+        done: true,
+        status: 'finished',
+        creditsSpent: 3,
+      }),
+    });
+    const result = await runHarness(
+      serverDriver({ url: 'https://p.test', apiKey: 'rk_live_x', fetch }),
+      toolset([]),
+    );
+    expect(result.creditsSpent).toBe(3);
+  });
+
   /** The Harness decides on the platform; a password it types must never travel there. */
   it('sends a secret field by name only, and fills in its value on this machine', async () => {
     const { asked, fetch } = platform({
@@ -125,6 +169,61 @@ describe('the platform drives, this machine executes', () => {
   });
 });
 
+describe('a platform refusal part-way through a drive', () => {
+  const FREE_USED =
+    'Your 10 free credits are used. Add a card to start your 14-day trial with 500 credits, in Settings → Plan.';
+  /** One proving turn, then the refusal on the next. */
+  const cutOff = (status: number, body: unknown) => {
+    const answers = [
+      { status: 201, body: { runId: 'hr_1' } },
+      {
+        status: 200,
+        body: {
+          turn: 0,
+          calls: [{ id: 't1', name: 'reticle_act_and_wait', args: { ref: 'e1', until: {} } }],
+          text: '',
+          done: false,
+          status: 'running',
+        },
+      },
+      { status, body },
+    ];
+    return serverDriver({
+      url: 'https://p.test',
+      apiKey: 'k',
+      fetch: () => {
+        const next = answers.shift() ?? { status: 500, body: {} };
+        return Promise.resolve(new Response(JSON.stringify(next.body), { status: next.status }));
+      },
+    });
+  };
+
+  it("carries the card wall's own message (402 needs_card, a flat body), and never reaches its goal", async () => {
+    const result = await runHarness(
+      cutOff(402, { error: 'needs_card', capability: 'hosted-runner', message: FREE_USED }),
+      toolset([]),
+    );
+    expect(result.stopReason).toBe('broken');
+    expect(result.error).toBe(FREE_USED);
+    expect(result.proved, 'a check held before the cut-off').toBe(true);
+    expect(result.goalMet).toBe(false);
+  });
+
+  it.each([
+    [402, 'upgrade_required', "This month's credits are used."],
+    [401, 'unauthorized', 'bad key'],
+    [403, 'forbidden', 'not your project'],
+    [429, 'rate_limited', 'slow down'],
+    [500, 'internal', 'boom'],
+    [502, 'provider_failed', 'the provider answered 503'],
+  ])('a %i ends the drive broken, unmet, with the message', async (status, code, message) => {
+    const result = await runHarness(cutOff(status, { error: { code, message } }), toolset([]));
+    expect(result.stopReason).toBe('broken');
+    expect(result.error).toBe(message);
+    expect(result.goalMet).toBe(false);
+  });
+});
+
 describe('autonomous driving switched off mid-run', () => {
   it('ends the drive as stopped, not broken', async () => {
     const answers = [
@@ -142,5 +241,72 @@ describe('autonomous driving switched off mid-run', () => {
     await expect(driver.turn({ system: '', tools: [], history: [] })).rejects.toBeInstanceOf(
       DriveStoppedError,
     );
+  });
+});
+
+describe('a free drive names itself on every call', () => {
+  it('reads the drive id from the environment and sends it as a header on each turn', async () => {
+    const headers: string[] = [];
+    const fetch = (url: string, init: RequestInit): Promise<Response> => {
+      headers.push(String(new Headers(init.headers).get(DRIVE_HEADER)));
+      const done = new URL(url).pathname.endsWith('/turn');
+      return Promise.resolve(
+        new Response(
+          JSON.stringify(
+            done
+              ? { turn: 0, calls: [], text: '', done: true, status: 'finished' }
+              : { runId: 'hr_free' },
+          ),
+          { status: 200 },
+        ),
+      );
+    };
+    const platform = serverOptionsFromEnv({
+      RETICLE_API_KEY: 'rk_live_x',
+      RETICLE_CLOUD_URL: 'https://p.test',
+      RETICLE_DRIVE_ID: 'drv_1',
+    });
+    expect(platform?.driveId).toBe('drv_1');
+    if (platform === undefined) return;
+    await runHarness(serverDriver({ ...platform, fetch }), toolset([]));
+    expect(headers.length).toBeGreaterThan(1);
+    expect(new Set(headers)).toEqual(new Set(['drv_1']));
+  });
+
+  it('sends no drive header when no free drive was granted', () => {
+    expect(platformHeaders({ apiKey: 'k' })[DRIVE_HEADER]).toBeUndefined();
+  });
+});
+
+/*
+ * The platform holds the conversation, so what somebody says to a running drive has to travel on
+ * the turn: kept only in local history, the platform's model never heard it.
+ */
+describe('a word to a running drive', () => {
+  it('rides the next turn as `say`, once, and is absent when nobody spoke', async () => {
+    const { asked, fetch } = platform({
+      '/v1/harness/runs': () => ({ runId: 'hr_2' }),
+      '/v1/harness/runs/hr_2/turn': (body) => ({
+        turn: body['turn'],
+        calls:
+          0 === body['turn']
+            ? [{ id: 't1', name: 'reticle_act_and_wait', args: { ref: 'e1' } }]
+            : [],
+        text: '',
+        done: 0 !== body['turn'],
+        status: 'running',
+      }),
+    });
+    let said = ['open the refund page'];
+    await runHarness(serverDriver({ url: 'https://p.test', apiKey: 'k', fetch }), toolset([]), {
+      inbox: () => {
+        const taken = said;
+        said = [];
+        return taken;
+      },
+    });
+    const turns = asked.filter((a) => a.path.endsWith('/turn')).map((a) => a.body);
+    expect(turns[0]?.['say']).toEqual(['open the refund page']);
+    expect(turns[1] !== undefined && 'say' in turns[1]).toBe(false);
   });
 });

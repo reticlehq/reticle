@@ -13,7 +13,8 @@ reticle_verify {
   action: "explore",
   persona: "a returning customer checking out with a saved card"
 }
-// → { stopReason, steps, savedFlows: ["checkout"], summary, usage }
+// → within `wait` seconds (default 50): { status, runId, stopReason, steps, savedFlows: ["checkout"], summary, usage, ... }
+//   still driving: { status: "running", runId }, poll again with that runId
 ```
 
 From the command line, on a project with nothing recorded yet:
@@ -46,16 +47,16 @@ Called with no `persona`, explore writes the whole drive down before it starts, 
 
 - **Journeys.** Each saved flow worth replaying, plus one open journey for each persona the platform proposes, for the request the user declared (`reticle_run { tool: "reticle_intent", args: { action: "declare" } }`), and for each intent nobody has proved. Replays need no model; only open journeys reach one.
 - **Order.** A flow that `needs` another runs after it. An open journey runs after the flow everything else needs, usually sign-in.
-- **Lanes.** Each journey nothing else needs gets a lane holding what it needs, in order. Lanes run side by side, each in its own leased browser context, four at a time. A journey that needs one from another lane waits for it, and is blocked if that journey failed. A prerequisite that commits something (a payment, an email) runs in one lane only, and the others wait on it rather than commit it twice.
+- **Lanes.** Each journey nothing else needs gets a lane holding what it needs, in order. Lanes run side by side, each in its own leased browser context, up to four at a time (fewer when the browser pool has less room). A journey that needs one from another lane waits for it, and is blocked if that journey failed. A prerequisite that commits something (a payment, an email) runs in one lane only, and the others wait on it rather than commit it twice.
 - **Branches.** Flows that start with the same steps become one journey. The shared steps are driven once and marked as a checkpoint, then each flow continues from that point. Every flow after the first replays back to the checkpoint first, so none of them starts from the page the previous one left.
 
 The plan appears at the top of the HUD's Agent Log: one row per lane, a card per journey, the running journey opened to its steps, and each card marked as it passes, fails or is blocked. The tool's answer carries one line per journey.
 
-Two `reticle_flow_replay` arguments make the branches possible, and you can use them directly. `to` stops before a step. `at` continues at a step on the page as it is, without driving the steps before it. A part-way replay checks the steps it drove and records nothing about the flow as a whole.
+Two arguments of the flow replay make the branches possible, and you can use them directly through `reticle_run { tool: "reticle_flow_replay", args: { flowName, to | at } }`. `to` stops before a step. `at` continues at a step on the page as it is, without driving the steps before it. A part-way replay checks the steps it drove and records nothing about the flow as a whole.
 
 ## What it needs
 
-**A project on the Reticle platform.** Every plan includes the Harness: Free comes with monthly Harness credits, one per decision the Harness makes. Run `reticle connect` once in your app's folder. The Harness runs on the platform: planning, personas, and every choice of what to press next. A model key of your own does not drive it, and a machine with no platform link gets the refusal and the way to fix it.
+**A project on the Reticle platform.** Every plan includes the Harness. A new account gets 10 free credits (about two full drives of a small app), a card starts a 14-day trial with 500, and the paid plan includes 1,000 credits per seat each month. Run `reticle connect` once in your app's folder. The Harness runs on the platform: planning, personas, and every choice of what to press next. A model key of your own does not drive it, and a machine with no platform link gets the refusal and the way to fix it.
 
 | Variable | What it does |
 | --- | --- |
@@ -77,8 +78,8 @@ The platform drives with Jev, a System One model that answers typed questions an
 
 A project linked to a Reticle workspace reads two things from it before a drive starts, and honours both:
 
-- **The switch.** Autonomous driving can be turned off per project, from the HUD's Reticle Harness switch or the dashboard (Settings → Verification model). A drive then refuses and says where to turn it back on. Switched off while a platform drive is running, the drive stops at its next turn with `stopReason: "stopped"`, keeps what it drove, and says so in the Agent Log. Everything else is unaffected, including the tools your own agent drives with.
-- **Credits.** Every workspace gets Harness credits each 30 days: Free 500, Pro 4,800 a seat, Enterprise as agreed. One credit is one decision the Harness makes. The HUD shows how many are left; once they are spent a drive is refused with that number and the way to get more.
+- **The switch.** Autonomous driving can be turned off per project, from the HUD's Reticle Harness switch or the dashboard (Settings → Projects → Reticle Harness on <project>). A drive then refuses and says where to turn it back on. Switched off while a platform drive is running, the drive stops at its next turn with `stopReason: "stopped"`, keeps what it drove, and says so in the Agent Log. Everything else is unaffected, including the tools your own agent drives with.
+- **Credits.** Harness drives and dashboard chat checks spend Harness credits. The platform sets the amount for your plan (see above). The HUD shows how many are left; once they are spent a drive is refused with that number and the way to get more.
 
 If only the settings endpoint is unreachable, the on/off switch and the credit check do not block a drive: an unreachable settings endpoint is not a reason to lose a feature you were never told to stop using. The drive itself still needs the platform, so with no connection at all it is refused with the reason.
 

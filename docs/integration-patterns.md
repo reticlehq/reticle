@@ -4,7 +4,7 @@ description: 'The recommended shape for a real codebase: a minimal production fo
 icon: shapes
 ---
 
-The recommended shape for a real codebase is three decisions: put `createReticleEmitter()` in one `app/emit.ts` so components depend on an interface and `@reticlehq/browser` never reaches your production bundle; emit signals from the **store layer** rather than from N call sites; and let each feature self-register its testids and signals with `registerReticleDomain`. Then turn on `reticle/require-signal-on-mutation` so the signal layer cannot silently rot.
+The recommended shape for a real codebase is three decisions: put `createReticleEmitter()` in one `app/emit.ts` so components depend on an interface and `@reticlehq/browser` is imported in exactly one place; emit signals from the **store layer** rather than from N call sites; and let each feature self-register its testids and signals with `registerReticleDomain`. Then turn on `reticle/require-signal-on-mutation` so the signal layer cannot silently rot.
 
 The basics in [Getting Started](getting-started.md) work with **zero app changes**. This doc is the _recommended_ shape for a real codebase: a minimal production footprint, a signal layer that can't silently drift, and an adoption path that starts paying off on day one, with no rewrite required.
 
@@ -49,7 +49,7 @@ That's day-one usefulness with no rewrite. The rest of this doc is how to do ste
 
 ## 2. Inject the emitter (zero prod bundle)
 
-The #1 objection: _"I don't want a test tool in my production bundle."_ The answer: components never import `@reticlehq/browser`. They depend on a tiny structural interface, `ReticleEmitter` (`{ signal, state }`), and the real emitter is injected once at the top. `createReticleEmitter()` returns an emitter that proxies to the connected `reticle` singleton and is a **safe no-op** until `reticle.connect()` runs, so nothing breaks in production or before connect, and **`@reticlehq/browser` stays out of the prod bundle.**
+The #1 objection: _"I don't want a test tool in my production bundle."_ The answer: components never import `@reticlehq/browser`. They depend on a tiny structural interface, `ReticleEmitter` (`{ signal, state }`), and the real emitter is injected once at the top. `createReticleEmitter()` returns an emitter that proxies to the connected `reticle` singleton and is a **safe no-op** until `reticle.connect()` runs, so nothing breaks in production or before connect. With the Vite plugin, a production build replaces `@reticlehq/browser` with an inert stub, so **the SDK stays out of the prod bundle**; with another bundler, `app/emit.ts` is the one import to gate.
 
 ```ts
 // app/emit.ts: the one place that touches @reticlehq/browser
@@ -158,13 +158,13 @@ export default [
 ];
 ```
 
-Or turn it on with the shipped preset: `plugin.configs.recommended`, which sets `reticle/require-signal-on-mutation` to `warn` (with empty no-op defaults you then configure) and the plugin's other rule, `reticle/no-internal-tags`, to `error`. A function that calls a mutator and a signal together passes; a mutator with no signal reports `store mutation without a mapped Reticle signal`. The documented view-level exceptions from §3 simply don't list those view callees as `mutators`, so they never fire.
+Or turn it on with the shipped preset: `plugin.configs.recommended`, which sets `reticle/require-signal-on-mutation` to `warn` (with empty no-op defaults you then configure) and the plugin's other two rules, `reticle/no-internal-tags` and `reticle/no-runaway-comment`, to `error`. A function that calls a mutator and a signal together passes; a mutator with no signal reports `store mutation without a mapped Reticle signal`. The documented view-level exceptions from §3 simply don't list those view callees as `mutators`, so they never fire.
 
 ## 6. Limitation: un-scriptable tabs, use `reticle drive`
 
 Reticle observes and drives a tab through the in-page SDK plus (optionally) CDP. It **cannot bring to front or recover a browser tab the OS won't let it script**: a backgrounded tab, say, or a non-default browser (Dia, etc.) reporting `hidden:true` / `throttled:true`.
 
-When that happens, `reticle_session { action: "list" }` and every act/assert result carry a `session.recommendation` saying so. The escape hatch is **`reticle drive <url>`** (add `--headed` to watch). Reticle launches and owns a guaranteed-scriptable browser. See [usage §18](usage.md#18-real-input-mode-native-hover--drag) for the full note.
+When that happens, `reticle_session { action: "list" }` and every act/assert result carry a `session.recommendation` saying so. The escape hatch is **`reticle drive <url>`**, which opens in the foreground (`--headless` hides it). Reticle launches and owns a guaranteed-scriptable browser. See [usage §18](usage.md#18-real-input-mode-native-hover--drag) for the full note.
 
 ## Checklist
 

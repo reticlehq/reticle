@@ -161,48 +161,9 @@ export const AccountStateSchema = z.object({
 });
 export type AccountState = z.infer<typeof AccountStateSchema>;
 
-/**
- * The standing offer on the autonomous harness, as the daemon last heard it from the platform.
- *
- * `claimed` is the only field that decides whether anything is shown, and ABSENCE of this whole
- * object means "we do not know" — never "not claimed". That distinction is the difference between
- * an offer and a nag: a machine that is offline, unlinked, or paired with an older daemon has not
- * told us the person still needs this, and advertising at them anyway is how a dev-only HUD gets
- * switched off for good. The account field beside this one already carries that warning; it applies
- * here with more force, because this one is marketing.
- */
-export const HarnessOfferSchema = z.object({
-  /** True once this org has claimed. A claimed offer is shown as remaining time, never as a pitch. */
-  claimed: z.boolean(),
-  /** When the free period ends, epoch ms. Absent when nothing has been claimed. */
-  expiresAt: z.number().optional(),
-  /** Whole days left, already computed — the HUD has no clock worth trusting for this. */
-  daysRemaining: z.number().optional(),
-  /** Where claiming happens. Absent ⇒ the HUD shows nothing, because a pitch with no door is noise. */
-  claimUrl: z.string().optional(),
-  /**
-   * Whether a drive could actually run if the offer were taken.
-   *
-   * Entitlement is not readiness. A workspace can be fully entitled against a deployment that holds
-   * no key for its provider, and then every signal reads healthy while a drive cannot start —
-   * including the card, which would sell three free months of something unusable and burn the one
-   * claim the person gets. Absent means "not told", which is treated as drivable for the same
-   * reason `claimed` is required and the rest are not: silence from an older platform must not
-   * switch the feature off.
-   */
-  drivable: z.boolean().optional(),
-  /**
-   * Whether claiming would still grant anything.
-   *
-   * Carried separately because `claimed` is "running RIGHT NOW", and an expired free period reads
-   * `claimed: false` — the same as never having taken it. Without this the HUD would advertise a
-   * three-month offer to the one group of people who can never accept it again, which is worse than
-   * saying nothing at all. Absent ⇒ treated as still offerable: an older platform that does not
-   * report it also has no expiries to get wrong.
-   */
-  eligible: z.boolean().optional(),
-});
-export type HarnessOffer = z.infer<typeof HarnessOfferSchema>;
+/** The grant Harness credits came from: sign-up, the card-started trial, or a paid plan. */
+export const CreditKind = { FREE: 'free', TRIAL: 'trial', PAID: 'paid' } as const;
+export type CreditKind = (typeof CreditKind)[keyof typeof CreditKind];
 
 /**
  * What the platform says about autonomous driving for this project.
@@ -212,18 +173,78 @@ export type HarnessOffer = z.infer<typeof HarnessOfferSchema>;
  */
 export const HarnessConfigSchema = z.object({
   provider: z.string(),
-  /** The switch somebody set. The platform's default is on. */
+  /** The switch somebody set. Off for a new project: the Harness is opt-in. */
   harnessEnabled: z.boolean(),
   /** Whether this workspace may drive on OUR model spend. Never folded into the switch. */
   harnessEntitled: z.boolean(),
   /** Whether the selected provider has a usable platform key. Older daemons may omit it. */
   providerReady: z.boolean().optional(),
   /** Harness credits used and held this 30 days; one is one Harness decision. Absent: unbounded or unknown. */
-  credits: z.object({ used: z.number().int().min(0), limit: z.number().int().min(0) }).optional(),
+  credits: z
+    .object({
+      used: z.number().int().min(0),
+      limit: z.number().int().min(0),
+      /** The grant they came from. Optional on the wire: an older platform omits it. */
+      kind: z.enum([CreditKind.FREE, CreditKind.TRIAL, CreditKind.PAID]).optional(),
+      /** Whole days the grant has left, counted by the daemon from the platform's end date. */
+      daysLeft: z.number().int().min(0).optional(),
+    })
+    .optional(),
   /** The platform this answer came from, so the HUD's links go there and not to the hosted one. */
   platformUrl: z.string().optional(),
+  /**
+   * The platform's own Harness coverage gate, which it enforces. The HUD prefers it to the daemon's
+   * local score; absent from an older platform, which leaves the local score to decide.
+   */
+  gate: z
+    .object({
+      unlocked: z.boolean(),
+      /** floor(score × 100); absent before any app reported. */
+      percent: z.number().int().min(0).max(100).optional(),
+      reason: z.string().max(400).optional(),
+      prompt: z.string().max(4000).optional(),
+    })
+    .optional(),
+  /** The plan in force: which grant, trial days left, seats. Absent from a platform that sent none. */
+  plan: z
+    .object({
+      kind: z.enum([CreditKind.FREE, CreditKind.TRIAL, CreditKind.PAID]),
+      daysLeft: z.number().int().min(0).optional(),
+      seats: z.number().int().min(0).optional(),
+    })
+    .optional(),
+  /** Harness runs the platform holds for this project. Absent: the platform did not say. */
+  harnessRuns: z.number().int().min(0).optional(),
+  /** Memory entries the platform holds for this project. Absent: the platform did not say. */
+  memoryEntries: z.number().int().min(0).optional(),
 });
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
+
+/** The Harness drive running in this tab's project, so the panel can show progress and Stop. */
+export const HarnessDriveSchema = z.object({ runId: z.string(), steps: z.number().int().min(0) });
+export type HarnessDrive = z.infer<typeof HarnessDriveSchema>;
+
+/** The longest note a person can send their coding agent from the HUD. */
+export const AGENT_NOTE_MAX = 500;
+/** How many of a tab's latest notes the HUD shows. */
+export const AGENT_NOTES_SHOWN = 5;
+const AGENT_LABEL_MAX = 64;
+
+/** A note sent to the coding agent from this tab. `seen` only once an agent's tool call took it. */
+export const AgentNoteSchema = z.object({
+  text: z.string().max(AGENT_NOTE_MAX),
+  seen: z.boolean(),
+  /** Which agent took it, when the daemon knows. */
+  by: z.string().max(AGENT_LABEL_MAX).optional(),
+});
+export type AgentNote = z.infer<typeof AgentNoteSchema>;
+
+/** The coding agents attached to the daemon now (friendly names), and this tab's latest notes. */
+export const AgentLinkSchema = z.object({
+  agents: z.array(z.string().max(AGENT_LABEL_MAX)).max(8),
+  notes: z.array(AgentNoteSchema).max(AGENT_NOTES_SHOWN),
+});
+export type AgentLink = z.infer<typeof AgentLinkSchema>;
 
 export const ImpactSnapshotSchema = z.object({
   schemaVersion: z.number().int().positive(),
@@ -244,11 +265,6 @@ export const ImpactSnapshotSchema = z.object({
    */
   account: AccountStateSchema.optional(),
   /**
-   * The harness offer, when the daemon knows it. Absent is "unknown" and shows nothing — see
-   * `HarnessOfferSchema` for why that asymmetry is deliberate.
-   */
-  harnessOffer: HarnessOfferSchema.optional(),
-  /**
    * The harness switch and whether this workspace may drive on our spend.
    *
    * Two fields, never one, and the HUD renders them differently: `harnessEnabled` is a switch the
@@ -261,6 +277,10 @@ export const ImpactSnapshotSchema = z.object({
    * cannot be honoured is worse than showing none.
    */
   harnessConfig: HarnessConfigSchema.optional(),
+  /** The drive running now, when there is one. Absent: nothing is driving. */
+  harnessDrive: HarnessDriveSchema.optional(),
+  /** Who is coding against this daemon, and what this tab said to them. Absent: an older daemon. */
+  agent: AgentLinkSchema.optional(),
   /**
    * The rail's notices, already chosen for this machine by the daemon (see `hud-notices.ts`).
    * Absent means the daemon has nothing newer than the SDK's bundled slides, which then show.
@@ -280,6 +300,11 @@ export const ImpactSnapshotSchema = z.object({
    * push, and the sentence describing it). Loose here, shaped by the daemon's sync-status.
    */
   sync: z.record(z.unknown()).optional(),
+  /**
+   * How much of THIS tab's app Reticle sees, and the prompt that asks a coding agent to close the
+   * rest (`covered`, `total`, `missing`, `prompt`). Loose here, shaped by the daemon's coverageOf.
+   */
+  instrumentation: z.record(z.unknown()).optional(),
 });
 export type ImpactSnapshot = z.infer<typeof ImpactSnapshotSchema>;
 

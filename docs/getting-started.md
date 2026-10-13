@@ -99,7 +99,7 @@ Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` 
 
 ## Wire your app: on the first run, or `reticle init`
 
-Installing Reticle changes nothing in your project. The first time your agent uses Reticle in a project that has never connected (its first `reticle_session { action: "list" }`), Reticle runs `init` there itself and returns the files it changed under `wired`, so you can skip straight to asking your agent to verify a flow. Run `init` yourself to wire a project ahead of time, to preview the changes, or when the agent's MCP server was started outside the project (the call then answers `run_init` with this same command), or when Reticle is already running for another project: the automatic wiring covers the project the daemon started in.
+Installing Reticle changes nothing in your project. The first time your agent uses Reticle in a project that has never connected (its first `reticle_session { action: "list" }`), Reticle runs `init` there itself and returns the files it changed under `wired`, so you can skip straight to asking your agent to verify a flow. That call wires the project the agent is in, including a second project on a machine where Reticle is already running for another one. Run `init` yourself to wire a project ahead of time, to preview the changes, or when the agent's MCP server was started outside the project (the call then answers `run_init` with this same command).
 
 From your project root:
 
@@ -109,11 +109,12 @@ RETICLE_INSTALL_SOURCE=docs_site npx @reticlehq/server init
 
 It detects your framework, package manager, and React version, then:
 
-- **registers the Reticle MCP server once, globally, for each agent you have installed** (Claude Code via `claude mcp add reticle -s user`, plus every other agent config it finds: Cursor, VS Code, Zed and the rest listed in the quickstart; for Codex CLI it prints the lines to paste), so every project on this machine gets it; you never re-add it per project,
+- **registers the Reticle MCP server once, globally, for each agent you have installed** (Claude Code via `claude mcp add reticle -s user`, plus every other agent config it finds: Cursor, Windsurf, VS Code, Gemini CLI, OpenCode and Antigravity; Codex CLI through `codex mcp add`, or the lines to paste when that command is missing), so every project on this machine gets it; you never re-add it per project,
 - **writes a verification rule into your agent's instruction file** (`CLAUDE.md`, `.cursor/rules/reticle.mdc`, or `AGENTS.md`), so the agent knows to verify a feature with Reticle _after building it_, not only when you remember to ask (idempotent; appended below anything you already have),
 - installs the SDK kit (`@reticlehq/react`) and the right build plugin (`@reticlehq/vite-plugin` or `@reticlehq/next`) as dev dependencies,
 - **Vite:** adds the `reticle()` plugin to your config, which wires source mapping _and_ `reticle.connect()` for you, so there is nothing else to edit,
-- **Next / other:** creates the dev component and prints the exact `withReticle` / mount / connect snippets to paste (it never half-edits a build config).
+- **Next:** wraps `next.config` in `withReticle` and mounts a generated `<ReticleDev />` component in your root layout; on a config shape it does not recognise it prints the snippet to paste instead (it never half-edits a build config).
+- **Other frameworks:** writes or prints the connect wiring for that framework (see [Frameworks](/frameworks)).
 
 The bridge + MCP server is a single process that serves all your projects, so it's registered at **user scope**, not in a per-project `.mcp.json`. Only the SDK (the `reticle()` plugin / connect call) is added per project.
 
@@ -143,7 +144,7 @@ Optional. Instead of, or after, `init`, run this in your app directory:
 npx @reticlehq/server connect --project "My App"
 ```
 
-Approve the short browser code if Reticle asks you to sign in. The browser asks you to sign in, or to create a free account at app.reticle.sh. The Free plan includes monthly Harness credits. What syncs, and how to switch each part off, is in [What is recorded](what-is-recorded.md). The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
+Approve the short browser code if Reticle asks you to sign in. The browser asks you to sign in, or to create a free account at app.reticle.sh. A new account gets 10 free credits to try the Harness. What syncs, and how to switch each part off, is in [What is recorded](what-is-recorded.md). The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
 
 ## Step 2: Embed the SDK in your app
 
@@ -170,7 +171,7 @@ export default defineConfig({
 });
 ```
 
-This injects `reticle.connect()` for you _and_ handles React 19 source mapping (Step 3), so there's no entry-file edit and no separate Babel setup. `apply: 'serve'` means it's dropped from `vite build` entirely, so it can never reach production. (This is exactly what `reticle init` adds.)
+This injects `reticle.connect()` for you _and_ handles React 19 source mapping (Step 3), so there's no entry-file edit and no separate Babel setup. A production `vite build` injects nothing and replaces the SDK with an inert stub, so it can never reach production. (This is exactly what `reticle init` adds.)
 
 <details>
 <summary>Prefer to wire it by hand instead of the plugin?</summary>
@@ -390,7 +391,7 @@ reticle_assert({ timeout_ms: 2000, predicate: { kind: "allOf", predicates: [
   { kind: "net", method: "GET", urlContains: "/api/dashboard", status: 200, since: 920 },
   { kind: "console", level: "error", absent: true }
 ]}})
-// → { pass: true }
+// → { verified: "yes", verdict: { pass: true, … } }
 ```
 
 You get a real, evidence-backed answer. If it fails, the agent sees the reason (e.g. the call 404'd, or a `TypeError` in `Dashboard.tsx:88`) and can fix it and re-check.
@@ -558,7 +559,7 @@ Yes, as long as each connection has a unique session id, which `SESSION_AUTO` gi
 
 ### Will Reticle end up in my production bundle?
 
-No. Keep `connect()` behind a dev guard (`import.meta.env.DEV` or a `NODE_ENV` check); the packages are side-effect free and tree-shake out when unused. The Vite plugin uses `apply: 'serve'`, so it is dropped from `vite build` entirely. As a backstop, `connect()` also self-disables when the build reports `NODE_ENV=production`.
+No. Keep `connect()` behind a dev guard (`import.meta.env.DEV` or a `NODE_ENV` check); the packages are side-effect free and tree-shake out when unused. A production `vite build` with the Vite plugin injects nothing and replaces the SDK with an inert stub. As a backstop, `connect()` also self-disables when the build reports `NODE_ENV=production`.
 
 ### Why is my install failing with `ERESOLVE`?
 

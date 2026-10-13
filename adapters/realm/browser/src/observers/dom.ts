@@ -1,6 +1,6 @@
 import { readTestId, testIdSelector } from '@/dom/addressing/testid-attr.js';
-import { EventType, TruncationChannel } from '@reticlehq/core';
-import { getAccessibleName, getRole, isVisible } from '@/dom/a11y.js';
+import { EventType, REDACTED_VALUE, TruncationChannel } from '@reticlehq/core';
+import { getAccessibleName, getRole, isSensitiveField, isVisible } from '@/dom/a11y.js';
 import { refs } from '@/dom/addressing/refs.js';
 
 /**
@@ -15,7 +15,7 @@ function regionKeyOf(target: Node): string | undefined {
   const labelled = el.closest(testIdSelector());
   return (labelled ? readTestId(labelled) : null) ?? refs.refFor(el);
 }
-import { isReticleOverlay } from '@/dom/dom-ignore.js';
+import { isUnobserved } from '@/dom/dom-ignore.js';
 import type { Emit, Teardown } from './types.js';
 import { capturedRoots, installShadowRegistry, onShadowRoot } from '@/dom/shadow-registry.js';
 import { isElement } from '@/dom/realm.js';
@@ -85,7 +85,7 @@ function describeMount(node: Element): { role: string; name: string; el: Element
   for (const child of node.querySelectorAll('*')) {
     if (scanned >= MOUNT_SCAN_LIMIT) return undefined;
     scanned += 1;
-    if (isReticleOverlay(child)) continue;
+    if (isUnobserved(child)) continue;
     const childRole = getRole(child);
     const childName = getAccessibleName(child);
     if (isMeaningful(childRole, childName)) return { role: childRole, name: childName, el: child };
@@ -114,6 +114,22 @@ function textOf(nodes: NodeList): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+/** Attributes that say how a field LOOKS or behaves, never what was typed into it. */
+const SAFE_ON_SECRET = new Set([
+  'class',
+  'style',
+  'type',
+  'disabled',
+  'readonly',
+  'required',
+  'hidden',
+]);
+
+/** Whether this attribute of this element could carry a typed secret: any but the safe few, on a secret field. */
+function secretAttr(el: Element, attr: string): boolean {
+  return !SAFE_ON_SECRET.has(attr) && !attr.startsWith('aria-') && isSensitiveField(el);
+}
+
 export function installDom(emit: Emit): Teardown {
   // Installed here rather than in the bootstrap list because this observer is the registry's reason
   // for existing, and the ordering matters: a root attached between the two would be missed by both.
@@ -130,15 +146,17 @@ export function installDom(emit: Emit): Teardown {
     for (const record of records) {
       if ('attributes' === record.type) {
         const target = record.target;
-        if (isElement(target) && record.attributeName !== null && !isReticleOverlay(target)) {
+        if (isElement(target) && record.attributeName !== null && !isUnobserved(target)) {
           if (changed >= MAX_PER_BATCH) {
             dropped += 1;
             continue;
           }
           changed += 1;
-          // Old value (attributeOldValue) + capped new value — a diff, not just a reading.
-          const value = capValue(target.getAttribute(record.attributeName));
-          const old = capValue(record.oldValue);
+          // Old value (attributeOldValue) + capped new value — a diff, not just a reading. Never a
+          // secret field's: a password input's `value` attribute reached the session journal in clear.
+          const hide = secretAttr(target, record.attributeName);
+          const value = hide ? REDACTED_VALUE : capValue(target.getAttribute(record.attributeName));
+          const old = hide && null !== record.oldValue ? REDACTED_VALUE : capValue(record.oldValue);
           emit(
             EventType.DOM_ATTR,
             {
@@ -155,14 +173,18 @@ export function installDom(emit: Emit): Teardown {
         // In-place text change inside an existing subtree (wizard steps, inline edits) —
         // childList-only would miss this.
         const parent = record.target.parentElement;
-        if (parent !== null && !isReticleOverlay(parent)) {
+        if (parent !== null && !isUnobserved(parent)) {
           if (changed >= MAX_PER_BATCH) {
             dropped += 1;
             continue;
           }
           changed += 1;
-          const text = (record.target.textContent ?? '').trim().slice(0, 80);
-          const old = capValue(record.oldValue?.trim() ?? null);
+          // A secret `<textarea>`'s content is its text node: the same rule as its value.
+          const hide = isSensitiveField(parent);
+          const text = hide
+            ? REDACTED_VALUE
+            : (record.target.textContent ?? '').trim().slice(0, 80);
+          const old = hide ? undefined : capValue(record.oldValue?.trim() ?? null);
           emit(
             EventType.DOM_TEXT,
             { text, ...(old === undefined ? {} : { old }) },
@@ -181,14 +203,15 @@ export function installDom(emit: Emit): Teardown {
       // happened" over a screen that had visibly changed, and `settled` went quiet immediately.
       if (textOf(record.addedNodes) !== undefined || textOf(record.removedNodes) !== undefined) {
         const parent = isElement(record.target) ? record.target : null;
-        if (parent !== null && !isReticleOverlay(parent)) {
+        if (parent !== null && !isUnobserved(parent)) {
           if (changed >= MAX_PER_BATCH) dropped += 1;
           else {
             changed += 1;
             // The element's text AFTER the mutation, so a cleared node reports '' rather than the
             // text that just left — the reader wants what is on screen now.
-            const text = (parent.textContent ?? '').trim().slice(0, 80);
-            const old = capValue(textOf(record.removedNodes) ?? null);
+            const hide = isSensitiveField(parent);
+            const text = hide ? REDACTED_VALUE : (parent.textContent ?? '').trim().slice(0, 80);
+            const old = hide ? undefined : capValue(textOf(record.removedNodes) ?? null);
             emit(
               EventType.DOM_TEXT,
               { text, ...(old === undefined ? {} : { old }) },
@@ -203,7 +226,7 @@ export function installDom(emit: Emit): Teardown {
           dropped += 1;
           continue;
         }
-        if (isReticleOverlay(node)) continue;
+        if (isUnobserved(node)) continue;
         const mounted = describeMount(node);
         if (mounted === undefined) continue;
         const { role, name } = mounted;
@@ -230,10 +253,7 @@ export function installDom(emit: Emit): Teardown {
         // of; ask the parent it was removed from, which is still in the document. Without this every
         // node Reticle's own HUD rebuilt read as the app's DOM changing - enough to hide a route that
         // rendered nothing, which then came back verified:"yes".
-        if (
-          isReticleOverlay(node) ||
-          (isElement(record.target) && isReticleOverlay(record.target))
-        ) {
+        if (isUnobserved(node) || (isElement(record.target) && isUnobserved(record.target))) {
           continue;
         }
         // Same reasoning as the mount above, in reverse: a dismissed modal leaves as ONE record

@@ -58,6 +58,7 @@ export {
 import { proxyLog } from './proxy/proxy-log.js';
 import { OutageReason, OutageStage, reportMcpOutage } from './faults/mcp-outage.js';
 import { postToSession } from './proxy/mcp-post-transport.js';
+import { MSG_DRIVE_MAY_BE_RUNNING, isHarnessDriveCall } from './proxy/drive-calls.js';
 import { reconnectDelayMs } from './proxy/proxy-backoff.js';
 import { PROXY_IDLE_EXIT_EVENT, ProxyIdleExit, resolveProxyIdleExitMs } from './proxy-idle-exit.js';
 export { reconnectDelayMs } from './proxy/proxy-backoff.js';
@@ -125,11 +126,20 @@ const INITIALIZED_METHOD = 'notifications/initialized';
  */
 export class PendingRequests {
   #ids = new Set<string>();
+  /** The pending requests that start or poll a Harness drive, which outlives a lost connection. */
+  #drives = new Set<string>();
 
   observeOutbound(line: string): void {
     const msg = parseJsonRpc(line);
     if (null === msg || msg.id === undefined || msg.method === undefined) return;
-    this.#ids.add(JSON.stringify(msg.id));
+    const id = JSON.stringify(msg.id);
+    this.#ids.add(id);
+    if (isHarnessDriveCall(msg)) this.#drives.add(id);
+  }
+
+  /** Whether this unanswered request asked for a Harness drive. */
+  isDrive(id: unknown): boolean {
+    return this.#drives.has(JSON.stringify(id));
   }
 
   observeInbound(line: string): void {
@@ -147,6 +157,7 @@ export class PendingRequests {
    * a duplicate response to one id is a protocol violation, not a belt-and-braces retry.
    */
   take(id: unknown): boolean {
+    this.#drives.delete(JSON.stringify(id));
     return this.#ids.delete(JSON.stringify(id));
   }
 
@@ -155,6 +166,11 @@ export class PendingRequests {
     const ids = [...this.#ids];
     this.#ids.clear();
     return ids;
+  }
+
+  /** Forget which requests were drives, once their replies are written. */
+  clearDrives(): void {
+    this.#drives.clear();
   }
 }
 
@@ -175,9 +191,12 @@ export function streamLossReplies(
   reason: string,
   nextStep?: string,
 ): string[] {
-  return pending
-    .drain()
-    .map((id) => transportLossReply(JSON.parse(id) as unknown, reason, nextStep));
+  const replies = pending.drain().map((id) => {
+    const parsed = JSON.parse(id) as unknown;
+    return transportLossReply(parsed, reason, nextStep, pending.isDrive(parsed));
+  });
+  pending.clearDrives();
+  return replies;
 }
 
 /**
@@ -193,15 +212,17 @@ const TRANSPORT_LOSS_CODE = -32001;
  * `nextStep` is appended when the caller knows one. Without it this reply describes a condition and
  * stops there, which is all a first-run user got out of their first ever tool call.
  */
-function transportLossReply(id: unknown, reason: string, nextStep?: string): string {
+function transportLossReply(id: unknown, reason: string, nextStep?: string, drive = false): string {
   return JSON.stringify({
     jsonrpc: '2.0',
     id,
     error: {
       code: TRANSPORT_LOSS_CODE,
       message:
-        `the daemon connection dropped (${reason}) before this call was answered — it did NOT ` +
-        'complete. Reticle is recovering the connection; retry if the action is safe to repeat.' +
+        (drive
+          ? `the daemon connection dropped (${reason}) before this call was answered. ${MSG_DRIVE_MAY_BE_RUNNING}`
+          : `the daemon connection dropped (${reason}) before this call was answered — it did NOT ` +
+            'complete. Reticle is recovering the connection; retry if the action is safe to repeat.') +
         (nextStep === undefined ? '' : ` ${nextStep}`),
     },
   });
@@ -545,6 +566,7 @@ export function startMcpProxy(
       void postToSession(url, line).then((failure) => {
         if (null === failure) return;
         const msg = parseJsonRpc(line);
+        const drive = null !== msg && pending.isDrive(msg.id);
         if (null === msg || msg.id === undefined || !pending.take(msg.id)) return;
         // No outage is reported here, deliberately. A POST leg that died while the SSE stream is
         // still up is not the agent losing its tools: `postSocketFailures` on the session summary
@@ -557,7 +579,7 @@ export function startMcpProxy(
           reason: failure.reason,
           note: 'the stream is still up, so nothing else would ever have answered this call',
         });
-        emit(transportLossReply(msg.id, failure.reason));
+        emit(transportLossReply(msg.id, failure.reason, undefined, drive));
       });
     };
 

@@ -69,6 +69,19 @@ describe('drives the platform chat asked for', () => {
     });
   });
 
+  it('runs the saved plan the dashboard named, not a new one', async () => {
+    const p = platform({ id: 'ld_2', goal: 'Run the saved plan', spec: { plan: 'hp_7' } });
+    const plans: (string | undefined)[] = [];
+    await start({
+      fetch: p.fetch,
+      drive: (_goal, _sessionId, spec) => {
+        plans.push(spec?.plan);
+        return Promise.resolve({ ok: true, summary: 'ran it' });
+      },
+    }).tick();
+    expect(plans).toEqual(['hp_7']);
+  });
+
   it('reports a drive that threw as failed, in its own words', async () => {
     const p = platform({ id: 'ld_2', goal: 'x' });
     await start({ fetch: p.fetch, drive: () => Promise.reject(new Error('not entitled')) }).tick();
@@ -117,6 +130,24 @@ describe('drives the platform chat asked for', () => {
     // Even a request naming B's address is not run in B with A's credential.
     expect(await pickOwnDriveSession(tabs, 'on http://localhost:5174', 'key-a', keyOf)).toBe('a');
     expect(await pickOwnDriveSession(tabs, 'drive it', 'key-c', keyOf)).toBeNull();
+  });
+
+  /*
+   * Persona drive: the dashboard's Re-verify, with the dev server up and no tab open, answered
+   * "No tab of this project is connected… Open this project's app, then ask again", though the
+   * daemon knew the app's address. It opens it now.
+   */
+  it("opens the project's app when no tab of it is connected, and drives that", async () => {
+    const tabs = [{ sessionId: 'b', url: 'http://localhost:5174/', lastSeenMs: 0, hidden: false }];
+    const keyOf = (id: string): Promise<string | undefined> => Promise.resolve({ b: 'key-b' }[id]);
+    expect(
+      await pickOwnDriveSession(tabs, 'Replay the saved flow', 'key-a', keyOf, () =>
+        Promise.resolve('lease-a'),
+      ),
+    ).toBe('lease-a');
+    expect(
+      await pickOwnDriveSession(tabs, 'x', 'key-a', keyOf, () => Promise.resolve(undefined)),
+    ).toBeNull();
   });
 
   it('refuses a drive no tab of its project can take, without driving another', async () => {
@@ -354,10 +385,14 @@ describe('which tab a chat-requested drive uses', () => {
 });
 
 describe('the verdict a chat-requested drive reports', () => {
-  it('is the goal judgement when the drive carries one', () => {
-    expect(driveVerdict({ goalMet: false, proved: true })).toBe('no');
-    // A journey whose goal was not reached is not "passed", so nothing reads proved: still a no.
-    expect(driveVerdict({ goalMet: false, proved: false })).toBe('no');
+  it('reads a goal judged missed, with no check against it, as not proved rather than failed', () => {
+    expect(driveVerdict({ goalMet: false, proved: true })).toBe('unknown');
+    expect(driveVerdict({ goalMet: false, proved: false })).toBe('unknown');
+    const undecided = { held: 0, failed: 0, undecided: 2 };
+    expect(driveVerdict({ goalMet: false, proved: true, checks: undecided })).toBe('unknown');
+    expect(
+      driveVerdict({ goalMet: false, proved: true, checks: { held: 2, failed: 0, undecided: 0 } }),
+    ).toBe('unknown');
     expect(
       driveVerdict({ goalMet: true, proved: true, checks: { held: 1, failed: 0, undecided: 0 } }),
     ).toBe('yes');

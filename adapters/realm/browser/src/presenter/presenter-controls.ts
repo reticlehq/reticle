@@ -14,7 +14,6 @@ import { getPresenterSettings } from './presenter-settings.js';
 import { mountWorkspaceSelector, workspaceRowHtml } from './presenter-workspace.js';
 import { CHAT_VIEWS_HTML } from './presenter-chat-views.js';
 import type { HeroIconBodyKey } from './icons/presenter-heroicons-data.js';
-import { ReticleStorageKey } from '@/storage-keys.js';
 // Live-control panel: the two-way control surface inside the floating HUD - Pause/Resume + End
 // (header), a message input + Send (footer), and the data-reticle-state visual machine.
 // All nodes carry data-reticle-* attrs so they're excluded from snapshots (see dom-ignore.ts). The
@@ -36,9 +35,6 @@ const PAUSED_BADGE_TEXT = 'PAUSED';
 const ENDED_BANNER_TEXT = 'Session ended';
 const COPY_LABEL = 'Copy run';
 const EXPORT_LABEL = 'Export';
-const FLOWS_LABEL = 'Replay a flow';
-const FLOWS_ALL_LABEL = 'See all';
-const SEE_LOGS_LABEL = 'See the logs';
 /** How long a finished replay keeps its ✓ or ✗ on the chip before the chip is just a chip again. */
 const PROGRESS_LINGER_MS = 6000;
 const PROGRESS_GLYPH: Record<FlowProgressStatus, string> = {
@@ -68,9 +64,6 @@ const RUN_FILENAME = 'reticle-run.json';
 /** Border fade-out delay after a session ends (native timer; presenter-only tunable). */
 export const ENDED_FADE_MS = 4000;
 
-/** Where the panel remembers which saved flows were replayed last, to list them first. */
-const RECENT_PLAYS_KEY = ReticleStorageKey.RECENT_PLAYS;
-
 const FLOW_TEXT = {
   REPLAYABLE: 'Replay without an agent',
   ELSEWHERE: 'Starts on another page',
@@ -86,9 +79,9 @@ export function flowTitle(name: string): string {
 
 /** CSS for the control surface (injected with the rest of the presenter stylesheet). */
 export const CONTROLS_CSS = `
-[data-reticle-chat-panel] [data-reticle-foot]{flex:none;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.07);
+[data-reticle-chat-panel] [data-reticle-foot]{flex:none;padding:6px 10px 8px;border-top:1px solid rgba(255,255,255,.07);
   background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,.55) 100%);pointer-events:auto;}
-[data-reticle-chat-panel] .reticle-foot-workspace-row{display:flex;align-items:center;min-width:0;}
+[data-reticle-chat-panel] .reticle-foot-workspace-row{display:flex;flex-wrap:wrap;align-items:center;min-width:0;}
 [data-reticle-chat-panel] .reticle-hud-log-well{margin:0 0 4px;}
 [data-reticle-chat-panel] .reticle-workspace-wrap{position:relative;align-self:flex-start;max-width:100%;}
 [data-reticle-chat-panel] .reticle-workspace-wrap[hidden]{display:none;}
@@ -97,6 +90,7 @@ export const CONTROLS_CSS = `
   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.78);
   font:inherit;font-size:11px;font-weight:500;line-height:1.2;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:background .15s,border-color .15s,color .15s;}
+[data-reticle-chat-panel] .reticle-workspace-k{color:var(--reticle-hud-text-faint);font-weight:400;}
 [data-reticle-chat-panel] .reticle-workspace:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:#fff;}
 [data-reticle-chat-panel] .reticle-workspace[aria-expanded="true"]{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:#fff;}
 [data-reticle-chat-panel] .reticle-workspace-icon,
@@ -120,7 +114,7 @@ export const CONTROLS_CSS = `
 [data-reticle-chat-panel] .reticle-workspace-menu-head{
   display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
 [data-reticle-chat-panel] .reticle-workspace-menu-title{
-  color:rgba(255,255,255,.42);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;}
+  color:rgba(255,255,255,.42);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;}
 [data-reticle-chat-panel] .reticle-workspace-copy{
   display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:none;border-radius:6px;
   background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);cursor:pointer;line-height:0;transition:background .12s,color .12s;}
@@ -156,13 +150,6 @@ export const CONTROLS_CSS = `
 [data-reticle-overlay][data-reticle-tone="ask"] [data-reticle-glow][data-on="1"],
 [data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-glow][data-on="1"]{
   box-shadow:inset 0 0 0 2px rgba(255,255,255,.22);}
-[data-reticle-chat-panel] .reticle-flows{display:none;flex:none;min-width:0;padding:8px 12px;border-top:1px solid var(--reticle-line2);pointer-events:auto;}
-[data-reticle-chat-panel] .reticle-flows[data-has="1"]{display:block;}
-[data-reticle-chat-panel] .reticle-flows-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px;}
-[data-reticle-chat-panel] .reticle-flows-all{border:0;padding:0;background:none;cursor:pointer;color:var(--reticle-c-active);font:inherit;font-size:10.5px;font-weight:500;}
-[data-reticle-chat-panel] .reticle-flows-all:hover{text-decoration:underline;}
-[data-reticle-chat-panel] .reticle-flows-links{display:inline-flex;gap:10px;}
-[data-reticle-chat-panel] .reticle-flows-all[hidden]{display:none;}
 /* A replay the person started: the chip becomes a player, its bar filling step by step. */
 [data-reticle-chat-panel] :is(.reticle-flow,.reticle-flow-row)[data-state]{position:relative;overflow:hidden;
   border-color:color-mix(in srgb,var(--reticle-c-active) 55%,transparent);color:var(--reticle-fg);}
@@ -172,10 +159,6 @@ export const CONTROLS_CSS = `
 @keyframes reticle-flow-pulse{50%{opacity:.55}}
 [data-reticle-chat-panel] :is(.reticle-flow,.reticle-flow-row)[data-state="passed"]::after{background:#4ade80;}
 [data-reticle-chat-panel] :is(.reticle-flow,.reticle-flow-row)[data-state="failed"]::after{background:#f87171;}
-[data-reticle-chat-panel] .reticle-flows-cap{display:block;color:var(--reticle-faint);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;}
-[data-reticle-chat-panel] .reticle-flow-strip{display:flex;gap:6px;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-inline:contain;pointer-events:auto;}
-[data-reticle-chat-panel] .reticle-flow-strip::-webkit-scrollbar{display:none;}
-[data-reticle-chat-panel] .reticle-flow-strip .reticle-flow{flex:none;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 [data-reticle-chat-panel] .reticle-all-flows{flex:1;min-height:0;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;align-items:stretch;gap:5px;}
 [data-reticle-chat-panel] .reticle-all-flows .reticle-flow{width:100%;height:auto;min-height:32px;text-align:left;justify-content:flex-start;}
 [data-reticle-chat-panel] .reticle-all-flows .reticle-flow:disabled{opacity:.45;cursor:not-allowed;}
@@ -225,7 +208,6 @@ export const CONTROLS_BANNER_HTML = `<div data-reticle-banner class="reticle-ban
  */
 export const CONTROLS_MARKS_HTML = `<div ${MARKS_ROW_ATTR} class="reticle-marks-row" hidden><span data-reticle-marks-text class="reticle-marks-text"></span><button type="button" ${COPY_MARKS_ATTR} class="reticle-marks-copy" title="${COPY_MARKS_LABEL}">${hiIconHtml(PresenterIcon.COPY, PRESENTER_ICON_SIZE.HELP)}<span>${COPY_MARKS_LABEL}</span></button></div>`;
 /** Replay-a-flow row (between log and footer); buttons are filled in by setFlows once flows arrive. */
-export const CONTROLS_FLOWS_HTML: string = `<div data-reticle-flows class="reticle-flows"><div class="reticle-flows-head"><span class="reticle-flows-cap">${FLOWS_LABEL}</span><span class="reticle-flows-links"><button type="button" data-reticle-see-logs class="reticle-flows-all" hidden>${SEE_LOGS_LABEL} →</button><button type="button" data-reticle-flows-all class="reticle-flows-all">${FLOWS_ALL_LABEL} →</button></span></div><div data-reticle-flow-strip class="reticle-flow-strip"></div></div>`;
 /**
  * Footer markup: the workspace row.
  *
@@ -235,7 +217,7 @@ export const CONTROLS_FLOWS_HTML: string = `<div data-reticle-flows class="retic
  *
  * The row it shared a stack with stays: it is read and clicked, not typed into.
  */
-export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-foot-stack"><div class="reticle-foot-workspace-row">${workspaceRowHtml()}${CHAT_VIEWS_HTML}</div></div></div>`;
+export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-foot-stack">${CHAT_VIEWS_HTML}<div class="reticle-foot-workspace-row">${workspaceRowHtml()}</div></div></div>`;
 
 interface ControlRefs {
   pauseBtn: HTMLButtonElement | undefined;
@@ -244,7 +226,6 @@ interface ControlRefs {
   copyBtn: HTMLButtonElement | undefined;
   exportBtn: HTMLButtonElement | undefined;
   exportMsg: HTMLElement | undefined;
-  flows: HTMLElement | undefined;
   allFlows: HTMLElement | undefined;
 }
 
@@ -256,7 +237,6 @@ function queryControlRefs(root: HTMLElement): ControlRefs {
     copyBtn: root.querySelector<HTMLButtonElement>('[data-reticle-copy]') ?? undefined,
     exportBtn: root.querySelector<HTMLButtonElement>('[data-reticle-export]') ?? undefined,
     exportMsg: root.querySelector<HTMLElement>('[data-reticle-export-msg]') ?? undefined,
-    flows: root.querySelector<HTMLElement>('[data-reticle-flows]') ?? undefined,
     allFlows: root.querySelector<HTMLElement>('[data-reticle-all-flows]') ?? undefined,
   };
 }
@@ -277,16 +257,6 @@ interface ControlPanelHost {
  * server's PRESENTER echo re-syncs via setState only (never emits) so a control is delivered once.
  */
 export class ControlPanel {
-  #recentPlays: Record<string, number> = (() => {
-    try {
-      const raw: unknown = JSON.parse(localStorage.getItem(RECENT_PLAYS_KEY) ?? '{}');
-      return 'object' === typeof raw && raw !== null && !Array.isArray(raw)
-        ? (raw as Record<string, number>)
-        : {};
-    } catch {
-      return {};
-    }
-  })();
   #refs: ControlRefs = {
     pauseBtn: undefined,
     endBtn: undefined,
@@ -294,7 +264,6 @@ export class ControlPanel {
     copyBtn: undefined,
     exportBtn: undefined,
     exportMsg: undefined,
-    flows: undefined,
     allFlows: undefined,
   };
   #state: SessionState = SessionState.ACTIVE;
@@ -335,7 +304,7 @@ export class ControlPanel {
     }
     this.#refs.pauseBtn?.addEventListener('click', () => this.#onPauseToggle(), { signal });
     this.#refs.endBtn?.addEventListener('click', () => this.#onEnd(), { signal });
-    // Replay-a-flow: one ▶ click re-runs a saved flow (no agent). Delegated so it covers all chips.
+    // One ▶ click on the Saved flows page re-runs that flow, no agent. Delegated over every row.
     const onReplay = (e: Event): void => {
       const target = e.target;
       if (!(target instanceof HTMLElement)) return;
@@ -343,45 +312,10 @@ export class ControlPanel {
       if (null === button || button.disabled) return;
       const name = button.getAttribute('data-reticle-replay');
       if (name !== null && name.length > 0) {
-        this.#recentPlays[name] = Date.now();
-        try {
-          localStorage.setItem(RECENT_PLAYS_KEY, JSON.stringify(this.#recentPlays));
-        } catch {
-          /* private browsing */
-        }
-        this.#renderFlows();
         this.#host.emit(HumanControlKind.REPLAY, name);
       }
     };
-    for (const container of [this.#refs.flows, this.#refs.allFlows])
-      container?.addEventListener('click', onReplay, { signal });
-    // The strip's scrollbar is hidden, so a mouse with only a vertical wheel scrolls it sideways.
-    this.#refs.flows?.querySelector<HTMLElement>('[data-reticle-flow-strip]')?.addEventListener(
-      'wheel',
-      (e) => {
-        const strip = e.currentTarget as HTMLElement;
-        if (0 !== e.deltaX || strip.scrollWidth <= strip.clientWidth) return;
-        strip.scrollLeft += e.deltaY;
-        e.preventDefault();
-      },
-      { signal, passive: false },
-    );
-    // "See the logs" leads to the Agent Log, where the replay's steps are rows.
-    this.#refs.flows
-      ?.querySelector('[data-reticle-see-logs]')
-      ?.addEventListener(
-        'click',
-        () => root.querySelector<HTMLElement>('[data-reticle-chat-view-btn="activity"]')?.click(),
-        { signal },
-      );
-    // "See all" opens the Flows page through its own tab, so the page opens exactly as it does there.
-    this.#refs.flows
-      ?.querySelector('[data-reticle-flows-all]')
-      ?.addEventListener(
-        'click',
-        () => root.querySelector<HTMLElement>('[data-reticle-chat-view-btn="flows"]')?.click(),
-        { signal },
-      );
+    this.#refs.allFlows?.addEventListener('click', onReplay, { signal });
     this.#refs.copyBtn?.addEventListener('click', () => this.#onCopy(), { signal });
     this.#refs.exportBtn?.addEventListener('click', () => this.#onExport(), { signal });
     this.#workspaceTeardown = mountWorkspaceSelector(root);
@@ -466,13 +400,11 @@ export class ControlPanel {
   }
 
   #paintProgress(): void {
-    const root = this.#refs.flows?.ownerDocument;
-    if (root === undefined) return;
     const progress = this.#progress;
-    const seeLogs = this.#refs.flows?.querySelector<HTMLElement>('[data-reticle-see-logs]');
-    if (seeLogs !== null && seeLogs !== undefined) seeLogs.hidden = progress === undefined;
-    for (const container of [this.#refs.flows, this.#refs.allFlows]) {
-      for (const btn of container?.querySelectorAll<HTMLElement>('[data-reticle-replay]') ?? []) {
+    {
+      for (const btn of this.#refs.allFlows?.querySelectorAll<HTMLElement>(
+        '[data-reticle-replay]',
+      ) ?? []) {
         const name = btn.getAttribute('data-reticle-replay') ?? '';
         const mine = progress !== undefined && progress.name === name;
         if (!mine) {
@@ -528,34 +460,14 @@ export class ControlPanel {
     this.#renderFlows();
   }
   #renderFlows(): void {
-    const el = this.#refs.flows;
-    if (el === undefined) return;
     const all = this.#refs.allFlows;
-    const doc = el.ownerDocument;
+    if (all === undefined) return;
+    const doc = all.ownerDocument;
     const testids = new Set(
       Array.from(doc.querySelectorAll(testIdSelector())).map((n) => readTestId(n)),
     );
     const playable = (f: FlowChip): boolean => f.start === undefined || testids.has(f.start);
-    const recent = [...this.#flowItems]
-      .filter(playable)
-      .sort(
-        (a, b) =>
-          (this.#recentPlays[b.name] ?? b.createdAt ?? 0) -
-          (this.#recentPlays[a.name] ?? a.createdAt ?? 0),
-      );
-    const strip = el.querySelector('[data-reticle-flow-strip]');
-    strip?.replaceChildren();
-    all?.replaceChildren();
-    const addButton = (container: Element, flow: FlowChip, enabled: boolean): void => {
-      const btn = doc.createElement('button');
-      btn.type = 'button';
-      btn.className = 'reticle-flow';
-      btn.setAttribute('data-reticle-replay', flow.name); // setAttribute → no markup injection from a name
-      btn.textContent = `▶ ${flow.name}`;
-      btn.disabled = !enabled;
-      if (!enabled) btn.title = 'Open the page where this flow starts to replay it';
-      container.appendChild(btn);
-    };
+    all.replaceChildren();
     // The Saved flows page gets a row, not a chip: a readable name, and what clicking it will do.
     const addRow = (container: Element, flow: FlowChip, enabled: boolean): void => {
       const btn = doc.createElement('button');
@@ -580,9 +492,7 @@ export class ControlPanel {
       btn.append(play, text);
       container.appendChild(btn);
     };
-    for (const flow of recent.slice(0, 3)) if (strip !== null) addButton(strip, flow, true);
-    el.setAttribute('data-has', recent.length > 0 ? '1' : '0');
-    if (all !== undefined) {
+    {
       if (0 === this.#flowItems.length) {
         const empty = doc.createElement('div');
         empty.className = 'reticle-flows-empty';

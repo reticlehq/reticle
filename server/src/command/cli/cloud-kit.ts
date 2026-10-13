@@ -8,6 +8,7 @@
  * `cloud-login` is the first to move — and it is a real seam rather than a file-size dodge: nothing
  * here knows what a project, a credential or a link is.
  */
+import { KEY_REFUSED, refusalSaid } from '@/memory/project/sync-status.js';
 import { DEFAULT_PLATFORM_URL, apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -103,6 +104,40 @@ export const baseUrl = (session: { url: string } | null, explicit?: string): str
 export const bearer = (session: { token: string } | null): string | null =>
   apiKeyFrom(process.env) ?? session?.token ?? null;
 
+/** The platform's code for a missing or refused credential, as opposed to a permission. */
+const GENERIC_REFUSAL = 'unauthorized';
+
+/** A credential the platform answered with: not accepted, rather than not given. */
+const REFUSED_STATUSES: ReadonlySet<number> = new Set([401, 403]);
+
+/**
+ * The platform refused the credential this command sent. Its generic answer ("sign in or API key
+ * required") read as if none had been set; a revoked key, or one whose owner was removed from the
+ * workspace, needs replacing, not adding.
+ */
+export class CredentialRefusedError extends Error {
+  constructor(
+    readonly status: number,
+    readonly apiKey: boolean,
+    /** The platform's own reason, when it named one (`refusalSaid`). */
+    reason?: string,
+  ) {
+    super(
+      apiKey
+        ? `the platform refused this API key (${String(status)}): ${
+            reason === undefined || KEY_REFUSED === reason
+              ? 'it was revoked, or its owner no longer has access to the workspace'
+              : reason.replace(/\.$/, '')
+          }. Mint a new key in Settings → API keys and set RETICLE_API_KEY to it.`
+        : `the platform refused your sign-in (${String(status)}): ${
+            reason === undefined || KEY_REFUSED === reason
+              ? 'it expired, was revoked, or you no longer have access to the workspace'
+              : reason.replace(/\.$/, '')
+          }. Run \`reticle login\`.`,
+    );
+  }
+}
+
 /** One `/v1` call. Throws a friendly Error on a non-2xx so the command surfaces it and exits 1. */
 export const api = async (
   method: string,
@@ -129,8 +164,25 @@ export const api = async (
     }
   }
   if (!res.ok) {
-    const parsed = z.object({ error: z.object({ message: z.string() }) }).safeParse(json);
-    throw new Error(parsed.success ? parsed.data.error.message : `${res.status} ${res.statusText}`);
+    const parsed = z
+      .object({ error: z.object({ message: z.string(), code: z.string().optional() }) })
+      .safeParse(json);
+    const said = parsed.success ? parsed.data.error.message : `${res.status} ${res.statusText}`;
+    // A 403 the platform explains as something else (a contributor creating a project) is a
+    // permission, not a refused credential: printed as it is worded, never as "sign in again".
+    const permission =
+      403 === res.status &&
+      parsed.success &&
+      KEY_REFUSED === refusalSaid(text) &&
+      GENERIC_REFUSAL !== parsed.data.error.code;
+    if (token !== null && REFUSED_STATUSES.has(res.status) && !permission) {
+      throw new CredentialRefusedError(
+        res.status,
+        token === apiKeyFrom(process.env),
+        refusalSaid(text),
+      );
+    }
+    throw new Error(said);
   }
   return json;
 };

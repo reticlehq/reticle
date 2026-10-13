@@ -21,8 +21,9 @@
  */
 
 import { HookEvent, type HookPayload } from '@reticlehq/core/hooks';
-import { onHook } from '@/hooks/hook-bus.js';
+import { onHook, onPendingWrites } from '@/hooks/hook-bus.js';
 import { log } from '@/log.js';
+import { onHarnessNoted } from '@/judgement/runs/drive-run.js';
 
 /** Long enough to collapse a burst of verdicts, short enough that a human reads it as "live". */
 const FLUSH_DEBOUNCE_MS = 3_000;
@@ -35,6 +36,8 @@ export interface FlushableSession {
 export interface DriveRunFlushDeps<S extends FlushableSession> {
   /** Find the live session a verdict came from, or undefined when it has already gone. */
   resolve: (sessionId: string) => S | undefined;
+  /** Every live session: a Harness note rewrites them all, since it does not say which tab drove. */
+  all?: () => readonly S[];
   /** Write this session's run artifact. The same call teardown makes. */
   write: (session: S) => Promise<void>;
   /** Injected so the test does not wait three real seconds. */
@@ -73,9 +76,7 @@ export function attachDriveRunFlush<S extends FlushableSession>(
     }
   };
 
-  const off = onHook(HookEvent.VERDICT, (payload: HookPayload) => {
-    const sessionId = 'sessionId' in payload ? payload.sessionId : undefined;
-    if (sessionId === undefined) return;
+  const schedule = (sessionId: string): void => {
     const existing = pending.get(sessionId);
     if (existing !== undefined) clearTimeout(existing);
     const timer = setTimeout(() => {
@@ -85,12 +86,28 @@ export function attachDriveRunFlush<S extends FlushableSession>(
     // obligation, and holding the process open for it would make `reticle` feel broken on exit.
     timer.unref?.();
     pending.set(sessionId, timer);
+  };
+  const off = onHook(HookEvent.VERDICT, (payload: HookPayload) => {
+    const sessionId = 'sessionId' in payload ? payload.sessionId : undefined;
+    if (sessionId !== undefined) schedule(sessionId);
   });
+  // A Harness drive is graded after its last verdict: rewrite the runs so the grade reaches them.
+  // ponytail: every live session, since a note names a drive, not a tab; drives end rarely.
+  const offNoted = onHarnessNoted(() => {
+    for (const session of deps.all?.() ?? []) schedule(session.id);
+  });
+
+  const flushAll = async (): Promise<void> => {
+    await Promise.all([...pending.keys()].map(flush));
+  };
+  const unregister = onPendingWrites(flushAll);
 
   return {
     flushNow: flush,
     stop: (): void => {
       off();
+      unregister();
+      offNoted();
       for (const timer of pending.values()) clearTimeout(timer);
       pending.clear();
     },

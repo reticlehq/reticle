@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { ReticleEnv } from '@reticlehq/core';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ReticleEnv, Verified } from '@reticlehq/core';
+import { driveRunsFrom } from '@/judgement/runs/drive-run.js';
+import { createMemoryFs } from '@/memory/project/memory-fs.js';
 import type { ToolDeps } from './tools.js';
 import {
   DEFAULT_MAX_STEPS,
@@ -15,9 +20,12 @@ import {
   reconcileFlows,
   openRecordingName,
   bankedIntent,
+  flowsThatCheckNothing,
   withLinkedCredential,
   MSG_NO_HARNESS_KEY,
   MSG_HARNESS_DISABLED,
+  MSG_GATE_PROMPT_LEAD,
+  refusedByPlatform,
   MSG_HARNESS_UNCLAIMED,
   MSG_HARNESS_UNCONFIRMED,
 } from './harness-explore.js';
@@ -34,6 +42,7 @@ const saveCall = (args: Record<string, unknown>, result: unknown, isError = fals
 function depsWithFlows(...lists: readonly string[][]): ToolDeps {
   let call = 0;
   return {
+    now: () => 0,
     flows: {
       list: () => {
         const answer = lists[Math.min(call, lists.length - 1)] ?? [];
@@ -54,6 +63,66 @@ function finishing(summary: string): ModelDriver {
   };
 }
 
+/*
+ * A run answered `goalMet: true` after zero actions on a tab that already showed the target. The
+ * driver's word is not the answer: a drive that did nothing did not meet its goal.
+ */
+/** The refusal pointed at a "Verification model" setting no settings page has. */
+describe('the Harness-off refusal', () => {
+  it('names where the switch really is', () => {
+    expect(MSG_HARNESS_DISABLED).toContain('Settings → Projects → Reticle Harness on <project>');
+    expect(MSG_HARNESS_DISABLED).not.toContain('Verification model');
+  });
+});
+
+/** A persona's typed password reached the synced run's text and the platform. */
+describe('a persona that names a password', () => {
+  it('is driven with the password redacted from everything the drive keeps', async () => {
+    const seen: string[] = [];
+    const watching: ModelDriver = {
+      turn: (input): Promise<ModelTurn> => {
+        seen.push(input.system);
+        return finishing('').turn(input);
+      },
+    };
+    const result = await exploreApp(
+      depsWithFlows([]),
+      {},
+      {
+        driver: watching,
+        skipPlatformConfig: true,
+        focus: 'Ana signs in with password: hunter2',
+      },
+    );
+    expect(seen.join(' ')).toContain('password: [redacted]');
+    expect(JSON.stringify([seen, result])).not.toContain('hunter2');
+  });
+});
+
+describe('a drive that did nothing', () => {
+  it('never reports its goal met, whatever the driver says', async () => {
+    const claiming: ModelDriver = {
+      turn: (): Promise<ModelTurn> =>
+        Promise.resolve({
+          text: '',
+          calls: [
+            { id: '1', name: 'reticle_assert', args: { predicate: { kind: 'text' } } },
+            { id: '2', name: FINISH_TOOL.name, args: { summary: 'done', goalMet: true } },
+          ],
+        }),
+    };
+    const result = await exploreApp(
+      depsWithFlows([]),
+      {},
+      {
+        driver: claiming,
+        skipPlatformConfig: true,
+      },
+    );
+    expect(result.drive.goalMet).toBe(false);
+  });
+});
+
 describe('exploring an app', () => {
   /**
    * The real drive this guards against saved `harness-drive-home`: one click, no `expect`, replayed
@@ -68,20 +137,50 @@ describe('exploring an app', () => {
     let call = 0;
     const lists = [[], ['checkout', 'login']];
     const deps = {
+      now: () => 0,
       flows: {
         list: () => Promise.resolve([...(lists[Math.min(call++, 1)] ?? [])]),
         load: (name: string) =>
           Promise.resolve({ ok: true, value: { name, steps: steps[name] ?? [] } }),
       },
     } as unknown as ToolDeps;
+    expect(await flowsThatCheckNothing(deps, ['checkout', 'login'])).toEqual(['checkout']);
     const result = await exploreApp(deps, {}, { driver: finishing(''), skipPlatformConfig: true });
-    expect(result.savedFlows).toEqual(['checkout', 'login']);
-    expect(result.unverifiedFlows).toEqual(['checkout']);
     // The run it syncs as, so the platform's chat can fold that run into the check it asked for.
     expect(result.runIds).toEqual([expect.stringMatching(/^harness-[0-9a-f-]{36}$/)]);
   });
 
-  it('records the persona as the intent of a saved flow that has none, whoever saved it', async () => {
+  /*
+   * Asked after a Harness run, agents gave no link to it (0 of 16 real runs): the answer carried run
+   * ids and nothing a person could open. A linked project's run comes back with its dashboard page.
+   */
+  it("gives the run's dashboard page when the project is linked, and no link when it is not", async () => {
+    const root = mkdtempSync(join(tmpdir(), 'reticle-runurl-'));
+    mkdirSync(join(root, '.reticle'), { recursive: true });
+    writeFileSync(
+      join(root, '.reticle', 'cloud.json'),
+      JSON.stringify({ dashboardUrl: 'http://localhost:16580/issues?project=shop' }),
+    );
+    const linked = { ...depsWithFlows([]), reticleRoot: join(root, '.reticle') } as ToolDeps;
+    const result = await exploreApp(
+      linked,
+      {},
+      { driver: finishing(''), skipPlatformConfig: true },
+    );
+    expect(result.runUrl).toBe(`http://localhost:16580/runs/${result.runIds?.[0] ?? ''}`);
+    const unlinked = await exploreApp(
+      depsWithFlows([]),
+      {},
+      { driver: finishing(''), skipPlatformConfig: true },
+    );
+    expect(unlinked.runUrl).toBeUndefined();
+  });
+
+  /*
+   * A named-persona run stamped its persona onto a flow another session saved while it drove, and
+   * listed it as its own. Only the flows this drive's own saves wrote are its.
+   */
+  it('never adopts a flow another session saved while it drove', async () => {
     const files: Record<
       string,
       { name: string; intent?: string; projectId?: string; steps: unknown[] }
@@ -92,6 +191,7 @@ describe('exploring an app', () => {
     const saved: { name: string; intent?: string; project?: string | undefined }[] = [];
     let call = 0;
     const deps = {
+      now: () => 0,
       flows: {
         list: () => Promise.resolve(0 === call++ ? [] : ['checkout', 'login']),
         load: (name: string) => Promise.resolve({ ok: true, value: files[name] }),
@@ -102,7 +202,7 @@ describe('exploring an app', () => {
         },
       },
     } as unknown as ToolDeps;
-    await exploreApp(
+    const result = await exploreApp(
       deps,
       {},
       {
@@ -111,27 +211,60 @@ describe('exploring an app', () => {
         focus: 'a visitor who clicks the counter twice',
       },
     );
-    expect(saved.map((f) => [f.name, f.intent, f.project])).toEqual([
-      ['checkout', 'a visitor who clicks the counter twice', 'shop'],
-    ]);
+    expect(result.savedFlows).toEqual([]);
+    expect(saved).toEqual([]);
   });
 
   it('banks an open recording under the persona it was driving for', () => {
     expect(bankedIntent('a returning customer checking out', 'harness-drive-home')).toBe(
       'a returning customer checking out',
     );
-    expect(bankedIntent(undefined, 'harness-drive-home')).toContain('harness-drive-home');
+    // Never "Autonomous drive of …" on a screen: with no persona it is the journey it drove.
+    expect(bankedIntent(undefined, 'harness-drive-home', 'Ana pays for her cart')).toBe(
+      'Ana pays for her cart',
+    );
+    expect(bankedIntent(undefined, 'harness-drive-home')).not.toMatch(/Autonomous drive/);
   });
 
-  it('reports the flows that now exist and did not before', async () => {
+  it('does not claim a flow that appeared while it drove but that it never saved', async () => {
     const result = await exploreApp(
       depsWithFlows(['login'], ['login', 'checkout']),
       {},
       { driver: finishing('drove checkout'), skipPlatformConfig: true },
     );
 
-    expect(result.savedFlows).toEqual(['checkout']);
+    expect(result.savedFlows).toEqual([]);
     expect(result.drive.summary).toBe('drove checkout');
+  });
+
+  it('a drive cut off part-way never syncs as proved, though a check held before it', async () => {
+    const refused: ModelDriver = {
+      turn: () => Promise.reject(new Error('Your 10 free credits are used.')),
+    };
+    const result = await exploreApp(
+      depsWithFlows([]),
+      {},
+      {
+        driver: refused,
+        skipPlatformConfig: true,
+        harnessId: 'h-cut',
+      },
+    );
+    expect(result.drive.error).toBe('Your 10 free credits are used.');
+    const held = {
+      v: 1 as const,
+      actionId: 'c1',
+      tool: 'reticle_act_and_wait',
+      args: {},
+      effect: { claim: 'saved', verified: Verified.YES },
+      tRange: { from: 0, to: 1 },
+      at: 1,
+      drivenBy: { harness: 'h-cut', driver: 'custom' },
+    };
+    const run = driveRunsFrom([held], { runId: 'run_1', projectId: 'p-1' }).find(
+      (r) => 'harness-h-cut' === r.runId,
+    );
+    expect(run?.flows[0]?.status).toBe('skipped');
   });
 
   it('believes the disk and not the model about what was saved', async () => {
@@ -198,6 +331,16 @@ describe('reconciling what a drive left behind', () => {
     );
     expect(result.savedFlows).toEqual(['checkout']);
     expect(result.rewroteFlows).toEqual([]);
+  });
+
+  /** A run listed flows other agents saved in the same project while it drove, as its own. */
+  it('claims only the flows its own saves wrote, not what others saved meanwhile', () => {
+    const result = reconcileFlows(
+      new Set(['sign-in']),
+      ['sign-in', 'checkout', 'harness-maya-other-persona', 'drive-plans-flows'],
+      [saveCall({ flowName: 'checkout' }, { name: 'checkout' })],
+    );
+    expect(result.savedFlows).toEqual(['checkout']);
   });
 
   it('counts a flow that already existed and was written again', () => {
@@ -285,6 +428,23 @@ describe('finding the key a linked machine already has', () => {
     expect(env['RETICLE_CLOUD_KEY']).toBe('rk_live_legacy');
   });
 
+  /*
+   * A re-drive: a Run plan the daemon picked up opened a tab whose page reported no project, so its
+   * root was `unmatched/`, no credential resolved there, and a linked Pro project was answered "a
+   * new account gets 10 free credits… run reticle connect". A tab that belongs to no project drives
+   * on the daemon's own link.
+   */
+  it("drives a tab that belongs to no project on the daemon's own link", async () => {
+    const deps = {
+      linkedCloud: (root?: string) => Promise.resolve(root === undefined ? FILED : null),
+      sessions: { resolve: () => ({ id: 'lease-1', url: 'http://localhost:5173/' }) },
+      artifactRootFor: () => ({ root: '/repo/.reticle/unmatched/localhost-5173' }),
+      reticleRoot: '/repo/.reticle',
+    } as unknown as ToolDeps;
+    const env = await withLinkedCredential(deps, {}, { sessionId: 'lease-1' });
+    expect(env['RETICLE_API_KEY']).toBe('rk_live_filed');
+  });
+
   it('keeps an explicitly named host, so a proxy is not overridden by the linked one', async () => {
     const env = await withLinkedCredential(linked(FILED), {
       RETICLE_CLOUD_URL: 'http://localhost:1',
@@ -301,6 +461,34 @@ describe('finding the key a linked machine already has', () => {
   it('changes nothing when the host supplies no resolver', async () => {
     const env = await withLinkedCredential({} as unknown as ToolDeps, {});
     expect(env['RETICLE_API_KEY']).toBeUndefined();
+  });
+
+  /*
+   * Persona 25: the daemon was linked to one project and the driven tab's app to another. The plan
+   * was saved with the daemon's key and the runs it links to synced under the tab's, so every
+   * "Runs of this plan" link answered "Run unavailable". A drive of a tab uses that tab's project.
+   */
+  it("uses the driven tab's own project, where its plans and runs both land", async () => {
+    const TAB_ROOT = '/work/shop/.reticle';
+    const keys: Record<string, { url: string; apiKey: string }> = {
+      [TAB_ROOT]: { url: 'https://app.reticle.sh', apiKey: 'rk_shop' },
+    };
+    const deps = {
+      reticleRoot: '/work/daemon/.reticle',
+      sessions: {
+        resolve: () => ({ id: 'tab-1', projectId: 'shop', url: 'http://localhost:4397/' }),
+      },
+      artifactRootFor: () => ({ root: TAB_ROOT }),
+      linkedCloud: (root?: string) =>
+        Promise.resolve(root === undefined ? FILED : (keys[root] ?? null)),
+    } as unknown as ToolDeps;
+    expect((await withLinkedCredential(deps, {}, { sessionId: 'tab-1' }))['RETICLE_API_KEY']).toBe(
+      'rk_shop',
+    );
+    expect(
+      (await withLinkedCredential(deps, {}, { sessionId: undefined }))['RETICLE_API_KEY'],
+    ).toBe('rk_shop');
+    expect((await withLinkedCredential(deps, {}))['RETICLE_API_KEY']).toBe('rk_live_filed');
   });
 
   /** A credential store that cannot be read is "not linked", never a failed drive. */
@@ -396,6 +584,41 @@ describe('turning the harness off', () => {
     ).rejects.toThrow(MSG_HARNESS_DISABLED);
   });
 
+  /**
+   * The platform's lock outranks its switch. A fresh tab has recorded no gaps, so the daemon's own
+   * per-tab check passed, the project-wide lock was ignored, and the person was told the Harness was
+   * "off" when it was locked below the coverage gate — the one refusal that names a fix.
+   */
+  it('says it is locked, with the prompt, before saying it is off', async () => {
+    const refusal = refusedByPlatform(linked, {
+      configFetch: platformSays({
+        provider: 'jev',
+        harnessEnabled: false,
+        harnessUnlocked: false,
+        coverageScore: 0.75,
+        harnessLock: { reason: 'Harness unlocks at 80%.', prompt: 'Add test ids.' },
+      }),
+    });
+    await expect(refusal).resolves.toBe(
+      `Harness unlocks at 80%.\n\n${MSG_GATE_PROMPT_LEAD}\nAdd test ids.`,
+    );
+  });
+
+  // Persona drive: the credits refusal linked to the API origin (`:17000/settings?group=billing`),
+  // which 404s wherever the API and the console are different origins. The platform names the page.
+  it("links the credits refusal to the platform's own plan page", async () => {
+    const refusal = await refusedByPlatform(linked, {
+      configFetch: platformSays({
+        provider: 'jev',
+        harnessEnabled: true,
+        harnessUnlocked: true,
+        credits: { used: 10, limit: 10, kind: 'free' },
+        planUrl: 'https://console.test/settings?group=billing',
+      }),
+    });
+    expect(refusal).toContain('https://console.test/settings?group=billing');
+  });
+
   it('drives when the platform says the harness is on', async () => {
     const result = await exploreApp(depsWithFlows([]), linked, {
       maxSteps: 1,
@@ -438,6 +661,27 @@ describe('a workspace with no entitlement', () => {
     expect(MSG_HARNESS_UNCLAIMED).toContain('Settings → Plan');
   });
 
+  it('with its credits used up, says what the HUD says, with the platform’s numbers', async () => {
+    const spent = (kind: string, limit: number) =>
+      exploreApp(depsWithFlows([]), linked, {
+        maxSteps: 1,
+        driver: finishing(''),
+        configFetch: platformSays({
+          provider: 'jev',
+          harnessEnabled: true,
+          harnessEntitled: false,
+          credits: { used: limit, limit, kind },
+        }),
+      });
+    await expect(spent('free', 25)).rejects.toThrow(
+      'Your 25 free credits are used. Add a card to start your 14-day trial: https://api.test/settings?group=billing',
+    );
+    await expect(spent('trial', 500)).rejects.toThrow(
+      'Your 500 trial credits are used. Pro starts when your trial ends.',
+    );
+    await expect(spent('paid', 4000)).rejects.toThrow("This month's credits are used.");
+  });
+
   /**
    * The gate used to FAIL OPEN: a platform that was slow for two seconds, or down, let the drive
    * run on Reticle's model budget with nobody's entitlement checked. A drive that would bill us
@@ -459,9 +703,20 @@ describe('a workspace with no entitlement', () => {
     const result = await exploreApp(depsWithFlows([]), linked, {
       maxSteps: 1,
       driver: finishing(''),
-      configFetch: platformSays({ provider: 'jev' }),
+      configFetch: platformSays({ provider: 'jev', harnessEnabled: true }),
     });
     expect(result.drive).toBeDefined();
+  });
+
+  /** The Harness is opt-in: a platform that does not say it is on has not switched it on. */
+  it('refuses when the platform says nothing about the switch', async () => {
+    await expect(
+      exploreApp(depsWithFlows([]), linked, {
+        maxSteps: 1,
+        driver: finishing(''),
+        configFetch: platformSays({ provider: 'jev' }),
+      }),
+    ).rejects.toThrow(MSG_HARNESS_DISABLED);
   });
 });
 
@@ -473,5 +728,144 @@ describe('what the explore tool says it needs', () => {
     expect(description).toContain(EXPLORE_NEEDS);
     expect(EXPLORE_NEEDS).toContain('reticle connect');
     expect(EXPLORE_NEEDS).not.toContain('API_KEY');
+  });
+});
+
+/**
+ * A saved plan run the platform refuses still reports against its plan, so the plan's history
+ * records the attempt; and a plan that only replays saved flows spends no model, so the gates that
+ * guard a model drive do not stop it.
+ */
+describe('a saved plan the platform refuses', () => {
+  const linked = { [ReticleEnv.API_KEY]: 'rk_live_x', [ReticleEnv.CLOUD_URL]: 'https://api.test' };
+  const locked = () =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({
+            provider: 'jev',
+            harnessEnabled: true,
+            harnessUnlocked: false,
+            harnessLock: { reason: 'Harness unlocks at 80%.' },
+          }),
+        ),
+    });
+  const plan = (step: Record<string, unknown>) => ({
+    version: 1,
+    source: 'platform',
+    journeys: [{ id: 'signin', title: 'Sign in', steps: [step] }],
+    lanes: [{ id: 'A', journeys: ['signin'] }],
+  });
+  const platformWith = (script: unknown, posted: string[]) =>
+    vi.fn((_url: string, init: RequestInit) => {
+      if ('POST' === init.method) posted.push('string' === typeof init.body ? init.body : '');
+      return Promise.resolve(new Response(JSON.stringify({ planId: 'hp_1', script })));
+    });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reports every journey blocked, with the reason, to the plan', async () => {
+    const posted: string[] = [];
+    vi.stubGlobal('fetch', platformWith(plan({ kind: 'act', goal: 'sign in' }), posted));
+    await expect(
+      exploreApp(depsWithFlows([]), linked, {
+        planId: 'hp_1',
+        driver: finishing(''),
+        configFetch: locked,
+      }),
+    ).rejects.toThrow('Harness unlocks at 80%.');
+    expect(posted.map((body) => JSON.parse(body) as unknown)).toEqual([
+      {
+        results: [
+          { id: 'signin', title: 'Sign in', status: 'blocked', line: 'Harness unlocks at 80%.' },
+        ],
+      },
+    ]);
+  });
+
+  /**
+   * Every "Run Harness" from the HUD made a new plan (five runs, five plans "(1)" … "(5)"), so the
+   * replays a plan serves once a journey passed never reached a HUD run. The same persona runs the
+   * plan it made last time, as it stands on the platform now.
+   */
+  it('runs the plan it made for the same persona last time, instead of planning again', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init: RequestInit) => {
+        calls.push(`${String(init.method)} ${url.replace('https://api.test', '')}`);
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ planId: 'hp_9', script: plan({ kind: 'act', goal: 'sign in' }) }),
+          ),
+        );
+      }),
+    );
+    const unlocked = () =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({ provider: 'jev', harnessEnabled: true, harnessUnlocked: true }),
+          ),
+      });
+    const { fs } = createMemoryFs();
+    const deps = { ...depsWithFlows([]), fs, reticleRoot: '/app/.reticle' } as unknown as ToolDeps;
+    const run = (focus: string) =>
+      exploreApp(deps, linked, { focus, driver: finishing(''), configFetch: unlocked });
+    await run('Ana: pays for her cart');
+    const proposals = (): number =>
+      calls.filter((c) => c.startsWith('POST') && c.endsWith('/v1/harness/scripts')).length;
+    expect(proposals()).toBe(1);
+    await run('Ana: pays for her cart');
+    expect(proposals()).toBe(1);
+    expect(calls).toContain('GET /v1/harness/scripts/hp_9');
+    await run('Ben: refunds');
+    expect(proposals()).toBe(2);
+  });
+
+  /** A planned run of a model drive answered `creditsSpent` absent, read as a free 15-step run. */
+  it('reports what its lanes spent', async () => {
+    vi.stubGlobal('fetch', platformWith(plan({ kind: 'act', goal: 'sign in' }), []));
+    const unlocked = () =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({ provider: 'jev', harnessEnabled: true, harnessUnlocked: true }),
+          ),
+      });
+    const spending: ModelDriver = {
+      turn: (): Promise<ModelTurn> =>
+        Promise.resolve({
+          text: '',
+          calls: [
+            { id: '1', name: 'reticle_assert', args: {} },
+            { id: '2', name: FINISH_TOOL.name, args: { summary: '', creditsSpent: 2 } },
+          ],
+        }),
+    };
+    const result = await exploreApp(depsWithFlows([]), linked, {
+      planId: 'hp_1',
+      driver: spending,
+      configFetch: unlocked,
+    });
+    expect(result.drive.creditsSpent).toBe(2);
+  });
+
+  it('is not refused by the lock when the plan only replays saved flows', async () => {
+    const posted: string[] = [];
+    vi.stubGlobal('fetch', platformWith(plan({ kind: 'replay', flow: 'signin' }), posted));
+    const run = exploreApp(depsWithFlows([]), linked, {
+      planId: 'hp_1',
+      driver: finishing(''),
+      configFetch: locked,
+    });
+    await expect(run.catch((error: unknown) => String(error))).resolves.not.toContain(
+      'Harness unlocks at 80%.',
+    );
   });
 });

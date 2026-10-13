@@ -1,4 +1,9 @@
-import { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
+import {
+  REDACTED_FILL,
+  SECRET_NAME_ARG,
+  secretEnvKey,
+  secretValue,
+} from './fields/flow-secret-field.js';
 import { FlowPredicateSchema, Verified, type Predicate } from '@reticlehq/core';
 import {
   DANGEROUS_ACTION_CONFIRM_ARG,
@@ -6,7 +11,7 @@ import {
   QueryBy,
   type CommandResult,
 } from '@reticlehq/core';
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, invokedFlowMissing } from '@reticlehq/core';
 import { formatStepAddress } from 'open-verification';
 import { refFor } from './flow-anchor.js';
 import type { RecordedStep, CompiledProgram } from './recording/tape/recordings.js';
@@ -58,9 +63,10 @@ export function replayActionArgs(
 ): Record<string, unknown> {
   const args = { ...asRecord(value) };
   delete args[DANGEROUS_ACTION_CONFIRM_ARG];
+  delete args[SECRET_NAME_ARG];
   if (confirmDangerous) args[DANGEROUS_ACTION_CONFIRM_ARG] = true;
   if (REDACTED_FILL === args['value'] && field !== undefined) {
-    const supplied = process.env[secretEnvKey(field)];
+    const supplied = secretValue(secretEnvKey(field), process.env);
     if (supplied !== undefined && supplied.length > 0) args['value'] = supplied;
   }
   return args;
@@ -209,7 +215,24 @@ export function compileActStep(args: Record<string, unknown>, res: unknown): Rec
     asString(args['action']) ?? '',
     replayActionArgs(args['args']),
   );
-  return { tool: ReticleTool.ACT, stable, args: compiled };
+  const timeoutMs = explicitTimeoutMs(args);
+  return {
+    tool: ReticleTool.ACT,
+    stable,
+    args: compiled,
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+  };
+}
+
+/** Keep only the timeout shape accepted by the public tool, including an intentional zero. */
+function explicitTimeoutMs(args: Record<string, unknown>): number | undefined {
+  const timeoutMs = args['timeout_ms'];
+  return 'number' === typeof timeoutMs &&
+    Number.isFinite(timeoutMs) &&
+    Number.isInteger(timeoutMs) &&
+    0 <= timeoutMs
+    ? timeoutMs
+    : undefined;
 }
 
 /**
@@ -298,7 +321,13 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
     const expect = enforceableExpect(step['expect']);
     return expect === undefined ? compiled.args : { ...compiled.args, expect };
   });
-  return { tool: ReticleTool.ACT_SEQUENCE, stable, args: { steps: subSteps } };
+  const timeoutMs = explicitTimeoutMs(args);
+  return {
+    tool: ReticleTool.ACT_SEQUENCE,
+    stable,
+    args: { steps: subSteps },
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+  };
 }
 
 /**
@@ -436,7 +465,7 @@ export async function replayProgram(
           tool: step.tool,
           ok: false,
           at: address,
-          error: `cannot replay "${step.invoke}": it was not found, so this journey would report green having never run it`,
+          error: invokedFlowMissing(step.invoke),
         });
         break;
       }

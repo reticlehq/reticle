@@ -8,6 +8,44 @@
 import { z } from 'zod';
 
 /**
+ * The one-time advisories that point an agent at the platform and the Harness, by kind. Closed: a
+ * nudge whose kind is not listed here never reaches the wire.
+ */
+export const AgentNudgeKind = {
+  /** Unlinked, after the first verdict: `reticle connect` keeps it and lets the Harness test the app. */
+  CONNECT: 'connect',
+  /** Linked, below the Harness's coverage: close the named gaps. */
+  CLOSE_GAPS: 'close_gaps',
+  /** Linked, at the Harness's coverage with the Harness off: the user can switch it on. */
+  SWITCH_ON: 'switch_on',
+  /** Harness on, and the agent is driving a long journey by hand: hand it to explore. */
+  EXPLORE: 'explore',
+} as const;
+export type AgentNudgeKind = (typeof AgentNudgeKind)[keyof typeof AgentNudgeKind];
+
+/**
+ * A coverage percent, in fifths. A bucket answers "how far from the gate" without an exact number
+ * that, beside the stack and the size, starts to describe one app.
+ */
+export const CoverageBucket = {
+  B0: '0-19',
+  B20: '20-39',
+  B40: '40-59',
+  B60: '60-79',
+  B80: '80-100',
+} as const;
+export type CoverageBucket = (typeof CoverageBucket)[keyof typeof CoverageBucket];
+
+const BUCKET_WIDTH = 20;
+const BUCKETS: readonly CoverageBucket[] = Object.values(CoverageBucket);
+
+/** The bucket a 0..100 percent falls in. */
+export function coverageBucketOf(percent: number): CoverageBucket {
+  const index = Math.min(BUCKETS.length - 1, Math.max(0, Math.floor(percent / BUCKET_WIDTH)));
+  return BUCKETS[index] ?? CoverageBucket.B0;
+}
+
+/**
  * One distinct error shape seen during a session, with the detail needed to fix it.
  *
  * Replaces a bare `{fingerprint: count}` map, which had the same no-dictionary problem as the crash
@@ -379,6 +417,19 @@ export const SessionSummarySchema = z.object({
   hudSlides: z.record(z.number()).optional(),
   hudJourney: z.array(z.string().max(64)).max(60).optional(),
   hudJourneyCut: z.literal(true).optional(),
+  /**
+   * The one-time platform and Harness advisories an agent was shown, by kind (`AgentNudgeKind`).
+   * Whether a connect or an explore followed is read beside it: `cli_command_run` for `connect`, and
+   * `toolCounts` / `toolParams` for `reticle_verify`'s explore. Windowed; absent when none was shown.
+   */
+  nudgesShown: z.record(z.nativeEnum(AgentNudgeKind), z.number().int().positive()).optional(),
+  /**
+   * Harness drives refused for coverage below the gate, by coverage bucket (`CoverageBucket`).
+   * Windowed; absent when none was refused.
+   */
+  harnessRefusedCoverage: z
+    .record(z.nativeEnum(CoverageBucket), z.number().int().positive())
+    .optional(),
   /** Was this a clean shutdown, or a periodic flush of a still-running session? */
   final: z.boolean(),
   /**

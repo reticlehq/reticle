@@ -50,6 +50,20 @@ export function setPresenterVisible(visible: boolean): void {
   presenterVisible = visible;
 }
 
+/**
+ * The Harness is the one acting. It never targets Reticle's own UI, hatch or not: with the hatch
+ * open for dogfooding, a Harness model clicked the HUD's own plan card as if it were the app.
+ */
+let harnessViewing = false;
+
+/** Set around each command by who sent it (`CommandActor.HARNESS`). */
+export function setPresenterViewer(harness: boolean): void {
+  harnessViewing = harness;
+}
+
+/** The hatch is open for whoever is looking now: never for the Harness. */
+const exposed = (): boolean => presenterVisible && !harnessViewing;
+
 /** Whether the hatch is open — reported in the app's capabilities so a verdict is never mistaken. */
 export function isPresenterVisible(): boolean {
   return presenterVisible;
@@ -63,6 +77,19 @@ export function setIgnoreSelectors(selectors: string[]): void {
 /** True if the element is part of Reticle's own presenter overlay. */
 export function isReticleOverlay(el: Element): boolean {
   return el.closest(RETICLE_OVERLAY) !== null;
+}
+
+/** The HUD's panels and controls: what the hatch exposes to the DOM observer. */
+const HUD_DOCK = '[data-reticle-dock]';
+
+/**
+ * Whether the DOM observer skips this element's changes: Reticle's own UI, except the HUD's panels
+ * while the hatch is open, so an agent verifying the HUD sees "Run Harness became Stop" like any app
+ * change. The cursor and glow stay out even then: they move on every action and prove nothing.
+ */
+export function isUnobserved(el: Element): boolean {
+  if (!isReticleOverlay(el)) return false;
+  return !exposed() || null === el.closest(HUD_DOCK);
 }
 
 /**
@@ -84,11 +111,20 @@ export function isReticleUi(node: Element | null): boolean {
   return node !== null && node.closest(RETICLE_OVERLAY) !== null;
 }
 
+/**
+ * What Reticle SAYS on its HUD: the log, the Harness log, the status pill and the agent's lines.
+ * Never a match source, hatch open or not: with the HUD exposed, its narration ("Finding \"Open on
+ * dashboard\"") satisfied the very text predicate the agent was proving, an `already_true` on words
+ * the agent itself caused.
+ */
+const HUD_NARRATION =
+  '[data-reticle-log],[data-reticle-harness-log],[data-reticle-chat-pill-text],[data-reticle-agent-said],[data-reticle-agent-note]';
+
 /** True if the element should be excluded from snapshots/queries (Reticle overlay or dev overlay). */
 export function isIgnored(el: Element): boolean {
   // With the hatch open, Reticle's own overlay drops out of the ignore set — but the third-party
   // dev overlays do not. They are somebody else's furniture and were never the thing being verified.
-  const ours = presenterVisible ? '' : RETICLE_OVERLAY;
+  const ours = exposed() ? HUD_NARRATION : RETICLE_OVERLAY;
   const sel = [ours, DEV_OVERLAYS, extraIgnore].filter((part) => part.length > 0).join(',');
   return el.closest(sel) !== null;
 }

@@ -16,7 +16,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { SHARED_PARAM_SHORT } from './shared-params.js';
 import { buildDynamicTools } from '@/surface/tools/dynamic-tools.js';
 import { runTool } from '@/surface/tools/invoke-tool.js';
-import { sessionEnvelopeShape, newSnapshotCache } from '@/surface/tools/tool-kit.js';
+import { sessionEnvelopeShape, newSnapshotCache, type ToolCall } from '@/surface/tools/tool-kit.js';
 import { buildErrorPayload } from '@/surface/tools/error-recovery.js';
 import { takeVersionSkewOnto } from '@/command/version/version-nudge.js';
 import { resultIsError } from './faults/mcp-is-error.js';
@@ -46,6 +46,7 @@ import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { setMcpClientNameHook } from '@/telemetry/feedback-context.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { reportMcpConnected } from '@/telemetry/mcp-connection.js';
+import { noteAgentAttached, noteAgentDetached } from '@/hooks/coding-agents.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 
 /**
@@ -233,12 +234,49 @@ type ReticleRegisterTool = (
     inputSchema: z.ZodRawShape;
     outputSchema?: z.ZodRawShape;
   },
-  handler: (args: Record<string, unknown>) => Promise<{
+  handler: (
+    args: Record<string, unknown>,
+    extra: McpRequestExtra,
+  ) => Promise<{
     content: Array<{ type: 'text'; text: string }>;
     isError?: boolean;
     structuredContent?: Record<string, unknown>;
   }>,
 ) => void;
+
+/** The slice of the SDK's per-request `extra` a tool call reads: cancellation and progress. */
+interface McpRequestExtra {
+  signal?: AbortSignal;
+  _meta?: { progressToken?: string | number };
+  sendNotification?: (notification: {
+    method: typeof PROGRESS_NOTIFICATION;
+    params: { progressToken: string | number; progress: number; message: string };
+  }) => Promise<void>;
+}
+
+const PROGRESS_NOTIFICATION = 'notifications/progress';
+
+/**
+ * The request's cancellation and, when the client sent a progress token, a progress reporter. A
+ * long call (a Harness drive's wait) reports each step, so a client that resets its timeout on
+ * progress keeps waiting instead of abandoning a call that is working.
+ */
+export function toolCallOf(extra: McpRequestExtra | undefined): ToolCall {
+  const token = extra?._meta?.progressToken;
+  const send = extra?.sendNotification;
+  return {
+    ...(extra?.signal === undefined ? {} : { signal: extra.signal }),
+    ...(token === undefined || send === undefined
+      ? {}
+      : {
+          progress: (progress: number, message: string) =>
+            void send({
+              method: PROGRESS_NOTIFICATION,
+              params: { progressToken: token, progress, message },
+            }).catch(() => undefined),
+        }),
+  };
+}
 
 /**
  * The tools a profile advertises directly.
@@ -529,7 +567,9 @@ function installUnadvertisedToolHelp(
       return original(asCallOf(request, moved.tool, moved.action), extra);
     }
     const help = name === undefined ? undefined : unadvertisedToolHelp(name, advertised, known);
-    if (help !== undefined) throw new McpError(ErrorCode.InvalidParams, help);
+    // A failed RESULT, not a JSON-RPC error: a client that reads only `result` rendered the error
+    // as an empty success, and the agent believed `reticle_flow_save` had saved its flow.
+    if (help !== undefined) return { content: [{ type: 'text', text: help }], isError: true };
     return original(request, extra);
   });
 }
@@ -640,12 +680,15 @@ export function createMcpServer(
     const info = server.server.getClientVersion();
     if (info?.name === undefined) return;
     getSessionMetrics().recordClient(info.name, info.version);
+    // So the HUD can say which agent is connected, and credit a note to the one that read it.
+    noteAgentAttached(deps.attachId, info.name);
     // The one signal that separates "Reticle is running" from "somebody is USING it", reported from
     // the first moment it can carry WHO. It used to fire from the SSE `connect()` resolution, which
     // happens before the handshake — so every connect row was anonymous, and the field meant to say
     // which agent client converts best was empty on every event ever sent.
     reportMcpConnected(info.name);
   };
+  server.server.onclose = () => noteAgentDetached(deps.attachId);
   // Which agent is on the other end, for a feedback report. Registered as a lazy hook rather than
   // read here: the handshake has not happened yet at construction time, and a report filed twenty
   // tool calls later is exactly when we want the answer.
@@ -734,9 +777,9 @@ export function createMcpServer(
     // clients. This removes the single largest remaining slice of the per-request tax (~36% of the
     // hybrid payload) with no loss the agent can observe.
     const config = advertisedConfig(tool, advertised, profile);
-    registerTool(tool.name, config, async (args: Record<string, unknown>) => {
+    registerTool(tool.name, config, async (args: Record<string, unknown>, extra) => {
       try {
-        const result = await runTool(tool, deps, args);
+        const result = await runTool(tool, deps, args, toolCallOf(extra));
         // A tool this codebase did not write may not hand the agent a verdict.
         //
         // Only reached for a tool absent from the first-party table, so the shipped surface pays a

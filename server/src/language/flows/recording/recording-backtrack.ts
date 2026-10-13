@@ -30,6 +30,19 @@ function recordingRouteOf(pathname: string, hash = ''): string {
   return pathname;
 }
 
+/**
+ * A startPath as a page key: its query dropped, hash kept. A startPath keeps the app's query so
+ * replay starts on the filtered page (#1411), but a ROUTE_CHANGE contributes only pathname and
+ * hash, so `/products?scope=X` then `/checkout` then `/products` must compare the first and last
+ * as one page or the backtrack goes unseen.
+ */
+function pageKeyOf(startPath: string): string {
+  const hashAt = startPath.indexOf('#');
+  const queryAt = startPath.indexOf('?');
+  if (queryAt < 0 || (hashAt >= 0 && queryAt > hashAt)) return startPath;
+  return startPath.slice(0, queryAt) + (hashAt >= 0 ? startPath.slice(hashAt) : '');
+}
+
 function collapseConsecutive(routes: readonly string[]): string[] {
   const out: string[] = [];
   for (const route of routes) {
@@ -67,7 +80,7 @@ export function routesFromRecording(
   events: readonly ReticleEvent[],
 ): string[] {
   const raw: string[] = [];
-  if (undefined !== startPath) raw.push(recordingRouteOf(startPath));
+  if (undefined !== startPath) raw.push(recordingRouteOf(pageKeyOf(startPath)));
   for (const event of events) {
     if (EventType.ROUTE_CHANGE !== event.type) continue;
     const pathname = asString(event.data['pathname']) ?? asString(event.data['to']);

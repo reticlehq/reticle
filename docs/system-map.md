@@ -56,13 +56,13 @@ Three different counts, all measured, and the difference between them matters:
 
 | Count | What it is |
 | --- | --- |
-| **76** | name constants in `ReticleTool` |
+| **77** | name constants in `ReticleTool` |
 | **30** | tools advertised under `RETICLE_ADVERTISE_ALL_TOOLS=1`, i.e. what `tool-surface-sweep-test` drives |
 | **10** | advertised by default; the rest are reached through `reticle_run { tool, args }` |
 
 The middle number is **family folding**: `reticle_baseline`, `reticle_session`, `reticle_record`, `reticle_flow` and `reticle_lease` each absorb their members behind an `action` parameter. So "every tool is callable" is asserted over the advertised surfaces, not over every named behaviour; a family member reachable only through an `action` value the sweep never passes is not covered by it. Worth closing when the per-tool budget lands (see [`gate-plan.md`](./gate-plan.md), Phase 4).
 
-These three were each wrong by the time somebody checked: the table read 68 / 48 / 19 against a measured 76 / 30 / 10, and the middle one had a derived token cost hanging off it. `surface-sizes.test.ts` is the authority and fails when a surface changes size, so prefer reading it to trusting this row.
+These three were each wrong by the time somebody checked: the table read 68 / 48 / 19 against a measured 76 / 30 / 10 (77 constants since), and the middle one had a derived token cost hanging off it. `surface-sizes.test.ts` is the authority and fails when a surface changes size, so prefer reading it to trusting this row.
 
 | Token | Produced by | Consumed by | Invalidated by |
 | --- | --- | --- | --- |
@@ -89,7 +89,7 @@ Two structural facts:
 
 | Failure | Silent | Guarded by |
 | --- | --- | --- |
-| proxy killed externally (the `lsof -ti` recipe) | **yes, total** | `reticle kill` frees the port and leaves the agent's own proxy alone. See [harness rule 1](https://github.com/reticlehq/reticle/blob/main/apps/e2e/harness-rules.md) |
+| proxy killed externally (the `lsof -ti` recipe) | **yes, total** | `reticle stop --force` frees the port and leaves the agent's own proxy alone. See [harness rule 1](https://github.com/reticlehq/reticle/blob/main/apps/e2e/harness-rules.md) |
 | proxy uncaught exception | no | `installProxyResilience` + `proxyLog` |
 | proxy exits when the reconnect budget is spent | _was the worst bug in the product_ | `onReconnectBudgetSpent` → DORMANT, never exit |
 | client closes stdin with calls in flight | no | `SHUTDOWN_DRAIN_MS` (5s) |
@@ -117,7 +117,7 @@ Still fragile:
 | Failure | Silent | Note |
 | --- | --- | --- |
 | `serve` exits 0 on `EADDRINUSE` | **yes** | #115: the parent reports the spawn, the child reports the bind, nothing joins them |
-| liveness is the pid file, never the port | **yes** | `daemon/daemon.ts:156` |
+| liveness is the pid file, never the port | **yes** | `isRunning` in `server/src/command/daemon/daemon.ts` |
 | idle shutdown fires mid-install | **yes** | 5min base / 30min attached; already scored three fixtures as install failures |
 | `isUselessDaemon` ends a daemon that served nothing | **yes** | lifetime facts, but a gate that installs for six minutes before its first call is that daemon |
 | a daemon spawned inside a tool call is reaped when the call ends | **yes** | `SIGTERM` within ~1s, `detached` or not |
@@ -138,7 +138,7 @@ Still fragile:
 
 | Failure | Silent | Note |
 | --- | --- | --- |
-| fixed 1s reconnect, no backoff, unbounded | **yes** | and the noise lands in the console channel we report to the agent (#116) |
+| reconnect noise | **fixed** | was a fixed 1s retry with no backoff (#116); now doubles from 1s to a 30s ceiling and resets on recovery |
 | `onUnreachable` suppressed after the first success | **yes** | a **mid-session** outage never warns at all |
 | offline queue overflow (`MAX_QUEUE = 500`) | no | gap marker stamped at the **oldest** drop, the honest floor for where the hole starts |
 | `sessionStorage` throws in a sandboxed iframe | no | falls back; a session must still start |
@@ -155,10 +155,10 @@ Still fragile:
 | tools | surface, schema, refusals | `tool-surface-sweep-test`, `tool-fuzz-test` | latency/failure budget |
 | verdict | honesty | `release-smoke-test` | transport ≠ app (#124); false-green rate |
 | telemetry | silent absence | `telemetry-events-test`, `telemetry-contract.test.ts` | chokepoint coverage |
-| install | pristine-surface wiring | nothing | the whole class |
+| install | pristine-surface wiring | `pnpm gate:install` (thirteen pristine scaffolds) | apps with many plugins: the `reticle-fixtures` repo |
 | client | per-agent MCP compatibility | nothing | the whole class |
 
-Nine of eleven layers have a gate. The two that do not are exactly the two that need a second repo and a human. The plan for both is in [`gate-plan.md`](./gate-plan.md).
+Nine of ten layers have a gate. The one that does not, per-agent MCP compatibility, needs a human driving each client. The plan for both is in [`gate-plan.md`](./gate-plan.md).
 
 ## 6. Traces already encode the invariants
 

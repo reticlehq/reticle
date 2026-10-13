@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import {
   FINISH_TOOL,
+  MSG_OPENED_IN_PLACE,
+  MSG_REPEAT_CHANGED_NOTHING,
   StopReason,
   runHarness,
   systemPrompt,
@@ -220,7 +222,104 @@ describe('the harness loop', () => {
   });
 });
 
+/*
+ * A persona drive clicked the logo four times on the page the logo leads to: one route change, then
+ * a wrong route guess and two clicks that did nothing, every one a spent action.
+ */
+describe('a click that changed nothing', () => {
+  const click = (ref: string): ToolRequest => ({
+    id: `c-${ref}-${String(Math.random())}`,
+    name: ReticleTool.ACT,
+    args: { ref, action: 'click' },
+  });
+  const reacting = (moved: Record<string, boolean>) => {
+    const ran: string[] = [];
+    const invoke: HarnessToolset['invoke'] = (_name, args) => {
+      const ref = String(args['ref']);
+      ran.push(ref);
+      return Promise.resolve({
+        trace: {
+          window_ms: 50,
+          summary: true === moved[ref] ? { total: 3, domAdded: 3 } : { total: 1 },
+        },
+      });
+    };
+    return { ran, invoke };
+  };
+
+  it('is not done again until something else moves the page', async () => {
+    const app = reacting({ menu: true });
+    const result = await runHarness(
+      scripted([
+        { text: '', calls: [click('logo')] },
+        { text: '', calls: [click('logo')] },
+        { text: '', calls: [click('menu')] },
+        { text: '', calls: [click('logo')] },
+      ]),
+      toolset(app.invoke),
+      { maxSteps: 4 },
+    );
+    expect(app.ran).toEqual(['logo', 'menu', 'logo']);
+    expect(result.toolCalls[1]?.result).toEqual({ error: MSG_REPEAT_CHANGED_NOTHING });
+  });
+
+  it('may be repeated when it changed the page, like a counter clicked twice', async () => {
+    const app = reacting({ plus: true });
+    await runHarness(
+      scripted([
+        { text: '', calls: [click('plus')] },
+        { text: '', calls: [click('plus')] },
+      ]),
+      toolset(app.invoke),
+      { maxSteps: 2 },
+    );
+    expect(app.ran).toEqual(['plus', 'plus']);
+  });
+});
+
+/*
+ * A persona drive clicked the account button guessing it would leave /overview; it opened a menu
+ * instead, the click read as a wrong guess, and the drive abandoned the route its plan named
+ * ("choose Settings") three actions into eighteen steps.
+ */
+describe('a click that opened something in place of the route it guessed', () => {
+  it('is told that opening it is progress, and to take the item the journey names', async () => {
+    const result = await runHarness(
+      scripted([
+        {
+          text: '',
+          calls: [
+            {
+              id: 'c1',
+              name: ReticleTool.ACT_AND_WAIT,
+              args: {
+                ref: 'e5',
+                action: 'click',
+                until: { kind: 'not', predicate: { kind: 'route', contains: '/overview' } },
+              },
+            },
+          ],
+        },
+      ]),
+      toolset(() =>
+        Promise.resolve({
+          verified: 'no',
+          trace: { window_ms: 80, summary: { total: 6, domAdded: 6 } },
+        }),
+      ),
+      { maxSteps: 1 },
+    );
+    expect(result.toolCalls[0]?.result).toMatchObject({ next: MSG_OPENED_IN_PLACE });
+  });
+});
+
 describe('the standing instruction', () => {
+  // A drive told to "read the run list without opening any run" opened one, and ended on its page.
+  it("holds the drive to the focus's own limits, such as not opening what it says to leave closed", () => {
+    expect(systemPrompt('read the list without opening a run')).toContain('without opening a run');
+    expect(systemPrompt()).toContain('do not open what it says to leave closed');
+  });
+
   it('tells the model to record what it drives, because an unrecorded drive is paid for twice', () => {
     expect(systemPrompt()).toContain('reticle_flow_save');
   });
@@ -230,5 +329,103 @@ describe('the standing instruction', () => {
       'checkout as a returning customer',
     );
     expect(systemPrompt()).not.toContain('Focus for this run');
+  });
+});
+
+/*
+ * A drive is started and polled now, so the person who started it can stop it or tell it something
+ * between turns, not only flip the project-wide switch.
+ */
+describe('a running drive, steered between turns', () => {
+  it('stops before its next turn when asked, and says it was stopped', async () => {
+    let asked = false;
+    const result = await runHarness(
+      scripted([
+        { text: '', calls: [call('reticle_snapshot')] },
+        { text: '', calls: [call('reticle_snapshot')] },
+      ]),
+      toolset(() => {
+        asked = true;
+        return OK();
+      }),
+      { stopped: () => asked },
+    );
+    expect(result.stopReason).toBe(StopReason.STOPPED);
+    expect(result.steps).toBe(1);
+  });
+
+  it('hands what somebody said to the model as a user turn before its next turn', async () => {
+    const heard: string[] = [];
+    let said = ['check the refund page too'];
+    const driver: ModelDriver = {
+      turn: ({ history }) => {
+        for (const entry of history) if ('user' === entry.role) heard.push(entry.text);
+        return Promise.resolve(
+          2 > heard.length
+            ? { text: '', calls: [call('reticle_snapshot')] }
+            : { text: '', calls: [] },
+        );
+      },
+    };
+    await runHarness(driver, toolset(OK), {
+      inbox: () => {
+        const taken = said;
+        said = [];
+        return taken;
+      },
+    });
+    expect(heard).toContain('check the refund page too');
+  });
+});
+
+/*
+ * Re-drive (persona 07): the drive spent three actions on Impact clicking controls it guessed would
+ * lead to Issues, before it took the Issues link — the map already knew `/issues`. The known pages
+ * come first: named up front, and named again, with the way there, after a guess that missed.
+ */
+describe('a route the map already knows', () => {
+  const ROUTES = ['/overview', '/impact', '/issues'];
+  const guess = (until: unknown): ModelTurn => ({
+    text: '',
+    calls: [
+      { id: 'g1', name: ReticleTool.ACT_AND_WAIT, args: { ref: 'e9', action: 'click', until } },
+    ],
+  });
+  const missed = (): Promise<unknown> =>
+    Promise.resolve({ verified: 'no', trace: { window_ms: 80, summary: { total: 0 } } });
+
+  it('is named in the standing instruction before any guess', () => {
+    const prompt = systemPrompt(undefined, ROUTES);
+    expect(prompt).toContain('/issues');
+    expect(prompt).toContain('reticle_navigate');
+  });
+
+  it('is offered by its route after a guess at it missed', async () => {
+    const result = await runHarness(
+      scripted([guess({ kind: 'route', pathname: '/issues' })]),
+      toolset(missed),
+      { maxSteps: 1, routes: ROUTES },
+    );
+    const next = String((result.toolCalls[0]?.result as { next?: unknown }).next);
+    expect(next).toContain('reticle_navigate { url: "/issues" }');
+  });
+
+  it('lists the known pages after a guess at a route the map does not know', async () => {
+    const result = await runHarness(
+      scripted([guess({ kind: 'route', contains: '/issue-list' })]),
+      toolset(missed),
+      { maxSteps: 1, routes: ROUTES },
+    );
+    const next = String((result.toolCalls[0]?.result as { next?: unknown }).next);
+    expect(next).toContain('/overview, /impact, /issues');
+  });
+
+  it('says nothing extra when the guess held', async () => {
+    const result = await runHarness(
+      scripted([guess({ kind: 'route', pathname: '/issues' })]),
+      toolset(() => Promise.resolve({ verified: 'yes' })),
+      { maxSteps: 1, routes: ROUTES },
+    );
+    expect(result.toolCalls[0]?.result).not.toHaveProperty('next');
   });
 });

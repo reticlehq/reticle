@@ -13,8 +13,8 @@ on:
   merge_group:
   # The full Windows install matrix, once a day, off the critical path.
   #
-  # A PR and a merge-queue entry run THREE Windows scaffolds, not ten (see `install_matrix` in the
-  # `changes` job). Ten
+  # A PR runs ONE Windows scaffold (`vite-react`); the merge queue runs none (see `install_matrix`
+  # in the `changes` job). Ten
   # windows-latest runners requested at once is more than the pool hands out: measured on run
   # 35297084015, nine cells started immediately and the tenth waited 37 minutes for a machine, then
   # ran for 8 and ended the build. A third of that run's 56-minute wall clock was one cell queuing.
@@ -132,9 +132,9 @@ jobs:
       # failure in a package nobody was editing.
       - run: pnpm lint:docs
       - run: pnpm typecheck
-      # High and critical dependency advisories fail verify and therefore the aggregate gate.
-      # The checker accepts only the two exact, reviewed, unpatched development-tool paths recorded
-      # in REPOSITORY-SETTINGS.md; any new path, patched release, or advisory fails.
+      # Critical dependency advisories fail verify and therefore the aggregate gate; high ones are
+      # printed as warnings (package, path, fix version) and do not fail it. The two reviewed,
+      # unpatched development-tool exceptions in REPOSITORY-SETTINGS.md still fail when stale.
       - name: Security audit
         run: node scripts/check-js-audit.mjs --self-test && node scripts/check-js-audit.mjs
       # format:check is its own job (format-check); running it here as well cost ~30s for nothing.
@@ -188,9 +188,13 @@ jobs:
   # only machine honest enough to lose the race.
   windows:
     runs-on: windows-latest
-    # Queue, main, nightly and on demand; not on every PR push. It was the slowest job left on the
-    # PR critical path, and the queue still runs it before anything reaches main.
-    if: github.event_name != 'pull_request'
+    # Queue, main, nightly and on demand always; on a PR only when Windows-sensitive source
+    # changed. It used to skip every PR, so Windows-only defects (path separators in messages and
+    # in tests' hard-coded POSIX paths) surfaced first in the merge queue and dropped the entry:
+    # #1468, #1490 and #1493 each cost a fix plus a 20-40 minute re-queue. A docs-only PR still
+    # does not pay for it.
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.windows == 'true'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -509,7 +513,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-Linux-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: playwright-Linux-
-      - run: pnpm exec playwright install --with-deps chromium
+      # `--with-deps` runs apt-get on Linux, and an Ubuntu mirror that stopped answering has held this
+      # step until the job timed out, 45 minutes later (reticlehq/reticle job 113700317449, and again on
+      # a fork run). It normally finishes in well under four minutes. Bound it and try once more,
+      # announced: installing the browser is idempotent and no product code has run yet.
+      - id: browser
+        continue-on-error: true
+        timeout-minutes: 8
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.browser.outcome == 'failure'
+        timeout-minutes: 8
+        run: |
+          echo "::warning::installing Chromium failed or hung on the first attempt; retrying once"
+          pnpm exec playwright install --with-deps chromium
       - run: pnpm test:smoke
       - name: Smoke evidence (including first failure)
         if: always()
@@ -544,6 +560,9 @@ jobs:
       conformance: ${{ steps.filter.outputs.conformance }}
       rust: ${{ steps.filter.outputs.rust }}
       e2e: ${{ steps.filter.outputs.e2e }}
+      windows: ${{ steps.filter.outputs.windows }}
+      break: ${{ steps.filter.outputs.break }}
+      launchers: ${{ steps.filter.outputs.launchers }}
       # WHICH scaffolds run on WHICH os, decided per event rather than hard-coded in the matrix.
       install_matrix: ${{ steps.install_matrix.outputs.value }}
     steps:
@@ -555,7 +574,7 @@ jobs:
           # Full qualification must also work when manually dispatched on a feature branch.
           case "${{ github.event_name }}" in
             schedule|workflow_dispatch)
-              for tier in install gateself desktop bench conformance rust e2e; do
+              for tier in install gateself desktop bench conformance rust e2e windows break launchers; do
                 echo "$tier=true" >> "$GITHUB_OUTPUT"
               done
               exit 0
@@ -585,7 +604,10 @@ jobs:
             echo "bench=true" >> "$GITHUB_OUTPUT"
             echo "conformance=true" >> "$GITHUB_OUTPUT"
             echo "rust=true" >> "$GITHUB_OUTPUT"
-            echo "e2e=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "windows=true" >> "$GITHUB_OUTPUT"
+            echo "break=true" >> "$GITHUB_OUTPUT"
+            echo "launchers=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CHANGED="$(git diff --name-only "$BASE"...HEAD || true)"
           # Still fails OPEN. A base that resolves but produces nothing — a force-push, an empty
@@ -599,16 +621,21 @@ jobs:
             echo "bench=true" >> "$GITHUB_OUTPUT"
             echo "conformance=true" >> "$GITHUB_OUTPUT"
             echo "rust=true" >> "$GITHUB_OUTPUT"
-            echo "e2e=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "windows=true" >> "$GITHUB_OUTPUT"
+            echo "break=true" >> "$GITHUB_OUTPUT"
+            echo "launchers=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "changed files:"; echo "$CHANGED" | sed 's/^/  /'
+          # What each tier in scripts/ci/tier-patterns.json is for. The regexes moved there; the
+          # reasons stay here, next to the jobs they turn on. `e2e` and `windows` now name each
+          # adapters/ directory, so a new adapter matches no tier and turns every tier on.
+          #
+          # `e2e`:
           # What the e2e battery can see: every package it boots or drives, and the apps it starts.
           # Docs, skills, the Rust crate and fixtures it never boots cannot change its answer.
-          if grep -qE '^(core|engine|server|init|open-verification|spec-runner|adapters|apps/(e2e|api|bench-app|next-smoke|atlas|examples))/|^(package\.json|pnpm-lock\.yaml|turbo\.json|\.github/workflows/ci\.yml)$' <<< "$CHANGED"; then
-            echo "e2e=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "e2e=false" >> "$GITHUB_OUTPUT"
-          fi
+          #
+          # `install`:
           # Anything a user runs BEFORE their first session, plus the gate itself and the dependency
           # graph it installs through. Deliberately broad — the cost of a false positive is CI time,
           # the cost of a false negative is the 0%-connect class shipping again.
@@ -625,68 +652,61 @@ jobs:
           # Tauri change is Rust that no JS gate compiles at all. The build plugins do the wiring, the
           # browser realm is what dials, and `init` installs the framework adapter, so those three
           # stay. This restores the pre-move scope exactly; it is not a new judgement about coverage.
-          if grep -qE '^((init|core)/|server/src/command/(cli|setup)/|adapters/(build/|realm/browser/|framework/)|break/|install/|apps/e2e/(install-gate|install-control|install-packages|smoke-checks|gate-harness|install-baseline)|scripts/pack-install-gate\.mjs|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
-            echo "install=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "install=false" >> "$GITHUB_OUTPUT"
-          fi
+          #
+          # `gateself`:
           # The gate's OWN machinery, which is a narrower question than "could the install break".
           # The self-test proves the gate can still FAIL. That ability changes when the gate, its
           # harness, or its recorded baseline changes -- not when somebody edits the browser SDK.
-          if grep -qE '^(apps/e2e/(install-gate|install-control|install-packages|smoke-checks|gate-harness|install-baseline)|scripts/pack-install-gate\.mjs|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
-            echo "gateself=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "gateself=false" >> "$GITHUB_OUTPUT"
-          fi
+          #
+          # `desktop`:
           # The desktop battery boots a real Electron main process and BUILDS a Tauri binary from
           # Rust — the slowest job in this file — and it ran on every PR including docs-only ones.
           # Both adapters, both smoke apps, and the three browser/server files that are desktop-only
           # by definition: the IPC observer, desktop capture, and the setup/doctor pair that shape
           # and diagnose a desktop install. Anything broader (all of adapters/realm/browser, say) would
           # route most PRs here and give the routing back for nothing.
-          if grep -qE '^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/browser/src/observers/ipc\.ts|adapters/realm/browser/src/dom/desktop-capture\.ts|server/src/command/setup/desktop-shape\.ts|init/src/diagnose/desktop-doctor\.ts|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
-            echo "desktop=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "desktop=false" >> "$GITHUB_OUTPUT"
-          fi
+          #
+          # `conformance`:
           # What can change a CONFORMANCE ANSWER, which is a different question from what can
           # break the desktop battery. The specification and its adjudicator; the suite, its
           # scenarios and its two subject maps; the realm and the client that binds Reticle to the
           # SPI; the two functions in core that build a protocol subject; and the two fixture apps
           # the scenarios are planted into. Narrower than `desktop` in some places and wider in
           # others, so it gets its own filter rather than borrowing one.
-          if grep -qE '^(open-verification/|conformance/|server/src/portal/realm/|core/src/realm/|core/src/verdict/verification-run\.ts|apps/bench-app/|apps/electron-smoke/|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
-            echo "conformance=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "conformance=false" >> "$GITHUB_OUTPUT"
-          fi
+          #
+          # `bench`:
           # What can move TOKEN COST, which is a different question from what can break the install.
           # A tool's description and input schema are charged to the agent on every turn, so an edit
           # under server/src/tools moves the bill without touching anything the install filter names.
           # The observation payloads (snapshot, query, the verdict reasons) sit in browser and events.
           # bench-app is the fixture the numbers are measured against, so changing it moves the
           # baseline whether or not any product code changed.
-          if grep -qE '^(core/src/|adapters/realm/browser/src/|server/src/(surface/tools|portal/session)/|engine/src/(question|disagreement|window|evidence)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
-            echo "bench=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "bench=false" >> "$GITHUB_OUTPUT"
-          fi
+          #
+          # `windows`:
+          # What the `windows` job can see: the TypeScript packages its build, typecheck, unit
+          # suite and daemon specs exercise, plus the scripts and lockfile they run through.
+          #
+          # `rust`:
           # Both Rust compile jobs run for crate changes. JS/docs cannot change this standalone
           # Cargo tree; scheduled/manual runs still exercise it through the full-tier fallback.
-          if grep -qE '^(adapters/realm/tauri/|apps/tauri-smoke/src-tauri/|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
-            echo "rust=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "rust=false" >> "$GITHUB_OUTPUT"
-          fi
+          #
+          # `break`: init, setup, install and break/ -- the paths the early-gate and break-matrix
+          # jobs exercise.
+          #
+          # `launchers`: install/ only. The job runs the two launchers, which install the PUBLISHED
+          # CLI from npm, so a server or init change cannot change its answer.
+          #
+          # Path routing lives in scripts/ci/changes.mjs. A changed path that matches no tier and
+          # is not docs-only turns EVERY tier on: a new adapters/realm/* used to look routed and
+          # run almost nothing. Any file under .github/workflows/ or scripts/ci/ does the same.
+          echo "$CHANGED" | node scripts/ci/changes.mjs --summary
       # WHICH install-gate cells to run, as an explicit os/scaffold list.
       #
       # Ubuntu always runs all thirteen: it is the cheap platform, a cell takes 6-7 minutes, and ten of
       # them start at once without queuing. Windows is the opposite on every count -- 8 to 28
-      # minutes for the same work -- so a PULL REQUEST runs three of them and everything else runs
-      # all thirteen. The three are chosen to cover the distinct install shapes rather than to be
-      # representative: `cra` owns its own HTML and is the heaviest tree (the 28-minute cell),
-      # `next-app-router` is the framework whose Windows install shipped broken in 2.3.0, and
-      # `vite-react` is the plain plugin path most projects take.
+      # minutes for the same work -- so a PULL REQUEST runs one Windows cell (`vite-react`) and the
+      # queue runs none. Nightly and dispatch run all thirteen on both OSes. The PR Linux three
+      # cover distinct install shapes: Vite, Next app router, and the monorepo walk-up.
       #
       # This is a SCHEDULE change, not a coverage cut. Every scaffold still runs on Windows daily
       # via the cron above, and `workflow_dispatch` runs the full matrix before merge when a change
@@ -823,8 +843,9 @@ jobs:
   install-gate:
     strategy:
       fail-fast: false
-      # The event-specific matrix lives in changes: PRs run four cells, queue entries eleven
-      # Linux cells, and nightly/manual runs all eleven scaffolds on Linux and Windows.
+      # The event-specific matrix lives in changes: PRs run four cells (3 Linux + 1 Windows),
+      # queue entries thirteen Linux cells, and nightly/manual runs all thirteen scaffolds on
+      # Linux and Windows.
       matrix: ${{ fromJSON(needs.changes.outputs.install_matrix) }}
     runs-on: ${{ matrix.os }}
     needs: [install-packages, changes]
@@ -861,7 +882,16 @@ jobs:
           path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: playwright-${{ runner.os }}-
-      - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      # Bounded with one announced retry: see the first Chromium install step in this file.
+      - id: browser
+        continue-on-error: true
+        timeout-minutes: 8
+        run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      - if: steps.browser.outcome == 'failure'
+        timeout-minutes: 8
+        run: |
+          echo "::warning::installing Chromium failed or hung on the first attempt; retrying once"
+          pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # Angular 21's dependency tree crashes npm 10's installer ("Cannot read properties of null
       # (reading 'edgesOut')") during the scaffold's own install, before Reticle is involved;
       # reproduced locally with a fresh `ng new` on npm 10, and npm 11 installs it. Node 22 ships
@@ -961,7 +991,16 @@ jobs:
           path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: playwright-${{ runner.os }}-
-      - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      # Bounded with one announced retry: see the first Chromium install step in this file.
+      - id: browser
+        continue-on-error: true
+        timeout-minutes: 8
+        run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      - if: steps.browser.outcome == 'failure'
+        timeout-minutes: 8
+        run: |
+          echo "::warning::installing Chromium failed or hung on the first attempt; retrying once"
+          pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # Headless Chromium + a multi-service boot flakes on shared runners (timing, resource
       # contention). Retry with a clean slate between attempts so a transient flake doesn't red CI;
       # a real regression still fails (it fails every attempt).
@@ -1129,7 +1168,16 @@ jobs:
           path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: playwright-${{ runner.os }}-
-      - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      # Bounded with one announced retry: see the first Chromium install step in this file.
+      - id: browser
+        continue-on-error: true
+        timeout-minutes: 8
+        run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      - if: steps.browser.outcome == 'failure'
+        timeout-minutes: 8
+        run: |
+          echo "::warning::installing Chromium failed or hung on the first attempt; retrying once"
+          pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       - run: pnpm build
       # FIRST, as the install gate's self-test is. It makes the subject answer "yes" to every
       # claim and requires the gate to go RED. If this step ever passes, the scored run below
@@ -1188,7 +1236,16 @@ jobs:
           path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: playwright-${{ runner.os }}-
-      - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      # Bounded with one announced retry: see the first Chromium install step in this file.
+      - id: browser
+        continue-on-error: true
+        timeout-minutes: 8
+        run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      - if: steps.browser.outcome == 'failure'
+        timeout-minutes: 8
+        run: |
+          echo "::warning::installing Chromium failed or hung on the first attempt; retrying once"
+          pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # The token proxy is a python package, and without it `countTokensProxy` returns null for every
       # payload — so every token dimension reads "this pass measured nothing" and the gate fails
       # having compared nothing. That is the honest failure it is designed to produce, and it fails
@@ -1260,6 +1317,184 @@ jobs:
           echo "See .changes/README.md. If this IS the release PR, branch from release/."
           exit 1
 
+  # The install path's own gates, on every OS it claims to support, folded out of the old
+  # break-gates.yml so `gate` can need them (#1514). Everything here drives the shipped CLI, or one
+  # of the two launchers a user actually pipes into a shell.
+  #
+  # The two launchers parse, on the shell that has to run them: a launcher that does not parse has
+  # no failure mode worth the name, it simply does nothing. install.ps1 was written with
+  # here-strings and typographic dashes and did exactly that -- Windows PowerShell reads a BOM-less
+  # .ps1 as ANSI, so the UTF-8 punctuation became mojibake and the file would not parse at all.
+  launchers:
+    needs: [changes]
+    if: needs.changes.outputs.launchers == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: install.sh parses
+        shell: bash
+        run: sh -n install/install.sh
+      - name: install.ps1 parses
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $errs = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            "$env:GITHUB_WORKSPACE\install\install.ps1", [ref]$null, [ref]$errs)
+          if ($errs) { $errs | ForEach-Object { Write-Host $_.Message }; throw 'install.ps1 does not parse' }
+      - name: the launchers are pure ASCII
+        shell: bash
+        run: |
+          # perl, not `grep -P`: macOS grep has no -P, and its usage error read as "no match", so
+          # the macOS cell passed whatever the launchers contained.
+          LC_ALL=C perl -ne 'if (/[^\x00-\x7F]/) { print "$ARGV:$.: non-ASCII: $_"; $bad = 1 } close ARGV if eof; END { exit($bad ? 1 : 0) }' \
+            install/install.sh install/install.ps1
+      # Executed, not only parsed: nothing ran either launcher on the OS it is for, and the
+      # PowerShell one has OS-only traps (native stderr under 5.1, .cmd shims, a stale PATH) that a
+      # parse cannot see. It installs the PUBLISHED CLI from npm, so this proves the launcher's own
+      # logic and wording, never this checkout's CLI. The runners' system Node keeps a root-owned
+      # global folder on Linux, which is the EACCES case the launcher now installs around.
+      - name: install.sh installs and prints the next steps
+        if: runner.os != 'Windows'
+        shell: bash
+        env: { RETICLE_TELEMETRY: '0' }
+        run: |
+          out="$(sh install/install.sh 2>&1)" || { echo "$out"; exit 1; }
+          echo "$out"
+          grep -q 'Next steps' <<< "$out"
+          ! grep -q 'RETICLE_INSTALL' <<< "$out"
+      - name: install.ps1 installs and prints the next steps (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env: { RETICLE_TELEMETRY: '0' }
+        run: |
+          # The installer writes progress to stderr on purpose; under 'Stop' a native stderr line throws.
+          $ErrorActionPreference = 'Continue'
+          $out = powershell -NoProfile -ExecutionPolicy Bypass -File install\install.ps1 2>&1 | Out-String
+          $rc = $LASTEXITCODE
+          Write-Host $out
+          if ($rc -ne 0 -or $out -notmatch 'Next steps' -or $out -match 'RETICLE_INSTALL') { throw "install.ps1 failed ($rc)" }
+      - name: install.ps1 installs and prints the next steps (PowerShell 7)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env: { RETICLE_TELEMETRY: '0' }
+        run: |
+          # The installer writes progress to stderr on purpose; under 'Stop' a native stderr line throws.
+          $ErrorActionPreference = 'Continue'
+          $out = pwsh -NoProfile -File install\install.ps1 2>&1 | Out-String
+          $rc = $LASTEXITCODE
+          Write-Host $out
+          if ($rc -ne 0 -or $out -notmatch 'Next steps' -or $out -match 'RETICLE_INSTALL') { throw "install.ps1 failed ($rc)" }
+
+  early-gates:
+    needs: [format-check, changes]
+    if: needs.changes.outputs.break == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 22 }
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run build --filter=@reticlehq/server...
+      - name: no package.json is refused, by path
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/empty" && cd "$RUNNER_TEMP/empty"
+          out=$(node "$GITHUB_WORKSPACE/server/dist/command/cli.js" init --timeout 2 --no-open 2>&1 || true)
+          echo "$out" | grep -qi "no package.json" || { echo "$out"; exit 1; }
+      - name: malformed package.json names the file, not a stack trace
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/bad" && cd "$RUNNER_TEMP/bad"
+          printf '{ "name": "x", }' > package.json
+          out=$(node "$GITHUB_WORKSPACE/server/dist/command/cli.js" init --timeout 2 --no-open 2>&1 || true)
+          echo "$out" | grep -q "not valid JSON" || { echo "$out"; exit 1; }
+          echo "$out" | grep -qE "^\s+at .+:[0-9]+:[0-9]+" && { echo "leaked a stack trace"; exit 1; }
+          exit 0
+      - name: a project with no dev script stops rather than inventing one
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/nodev" && cd "$RUNNER_TEMP/nodev"
+          printf '{"name":"x","version":"1.0.0","scripts":{"build":"true"}}' > package.json
+          out=$(node "$GITHUB_WORKSPACE/server/dist/command/cli.js" init --timeout 2 --no-open 2>&1 || true)
+          echo "$out" | grep -q "rather than invent" || { echo "$out"; exit 1; }
+
+  # POSIX-only by construction: its scenarios build fake `node`/`npx`/`claude` shims as /bin/sh
+  # scripts. Windows coverage of the same refusals is `early-gates`.
+  break-matrix:
+    needs: [format-check, changes]
+    if: needs.changes.outputs.break == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 22 }
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run build --filter=@reticlehq/server...
+      - run: node break/break-matrix.mjs
+        timeout-minutes: 25
+
+  package-quality:
+    runs-on: ubuntu-latest
+    needs: [format-check]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: publint (every published package)
+        run: |
+          set -e
+          dirs=$(git ls-files '*/package.json' | grep -v '^apps/' | xargs -n1 dirname)
+          checked=0
+          for dir in $dirs; do
+            name=$(node -p "try{require('./$dir/package.json').private?'':require('./$dir/package.json').name}catch(e){''}")
+            [ -z "$name" ] && continue
+            checked=$((checked+1))
+            echo "::group::publint $name"
+            (cd "$dir" && npx --yes publint@0.3.21 --strict)
+            echo "::endgroup::"
+          done
+          echo "publint checked $checked package(s)"
+          [ "$checked" -ge 10 ] || { echo "::error::publint checked $checked packages; expected at least 10"; exit 1; }
+      - name: Are the types wrong (every published package)
+        run: |
+          set -e
+          dirs=$(git ls-files '*/package.json' | grep -v '^apps/' | xargs -n1 dirname)
+          checked=0
+          for dir in $dirs; do
+            name=$(node -p "try{require('./$dir/package.json').private?'':require('./$dir/package.json').name}catch(e){''}")
+            [ -z "$name" ] && continue
+            checked=$((checked+1))
+            echo "::group::attw $name"
+            (cd "$dir" && npx --yes @arethetypeswrong/cli@0.18.5 --pack --ignore-rules cjs-resolves-to-esm no-resolution)
+            echo "::endgroup::"
+          done
+          echo "attw checked $checked package(s)"
+          [ "$checked" -ge 10 ] || { echo "::error::attw checked $checked packages; expected at least 10"; exit 1; }
+      - name: Published package size budgets
+        run: node scripts/check-pack-size.mjs
+
   gate:
     runs-on: ubuntu-latest
     # Every job that can fail a PR is listed HERE. A job missing from this list runs, reports, and is
@@ -1296,6 +1531,10 @@ jobs:
         conformance,
         bench,
         multi-agent,
+        launchers,
+        early-gates,
+        break-matrix,
+        package-quality,
       ]
     if: always()
     timeout-minutes: 5

@@ -3,12 +3,28 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asProjectId, ReplayStatus, type FlowReplayResult } from '@reticlehq/core';
-import { persistAndSyncVerificationRun, type TimedReplay } from './verification-sync.js';
+import {
+  asProjectId,
+  ReplayStatus,
+  RunAgentKind,
+  RunTrigger,
+  type FlowReplayResult,
+} from '@reticlehq/core';
+import {
+  CLI_CLIENT_NAME,
+  persistAndSyncVerificationRun,
+  type TimedReplay,
+} from './verification-sync.js';
 import { RunStore } from './artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import type { RunId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tools.js';
+import { forgetAgents, noteAgentAttached, runAsAgent } from '@/hooks/coding-agents.js';
+import { runDrivenBy } from '@/hooks/driven-by.js';
+import {
+  clearMcpClientIdentityHook,
+  setMcpClientIdentityHook,
+} from '@/surface/mcp/peer/client-identity.js';
 
 const timed = (name: string, status: ReplayStatus): TimedReplay => ({
   replay: { name, status, steps: [] } satisfies FlowReplayResult,
@@ -104,6 +120,76 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
       projectId: asProjectId('shop'),
     });
     expect(runId).toBeDefined(); // swallowed; local artifact still written
+  });
+
+  /*
+   * A dashboard Re-verify was credited to `claude-code` — the last MCP client that had connected to
+   * that daemon, not the one that asked — and its project named "reticle" instead of the project the
+   * checkout is linked to.
+   */
+  it('credits only the client that made the call, never the last one that connected', async () => {
+    forgetAgents();
+    noteAgentAttached('a1', 'claude-code');
+    setMcpClientIdentityHook(() => ({ name: 'claude-code', version: '1' }));
+    const asked = await persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], {
+      projectId: undefined,
+    });
+    const byAgent = await runAsAgent('a1', () =>
+      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }),
+    );
+    forgetAgents();
+    clearMcpClientIdentityHook();
+    const store = new RunStore(fs, root);
+    const platform = await store.read(asked as RunId);
+    const agent = await store.read(byAgent as RunId);
+    expect(platform.ok && platform.run.agent.id).toBe('reticle-mcp');
+    expect(agent.ok && agent.run.agent.id).toBe('claude-code');
+  });
+
+  /*
+   * Persona drive (a CI pipeline): `reticle verify` against a running daemon replays the saved
+   * flows over MCP as the client `reticle-cli`, and every CI run was recorded as an ordinary coding
+   * agent, trigger manual, credited to whoever minted the key. The command line is the pipeline,
+   * exactly as the path that boots its own daemon records it.
+   */
+  it('records the Reticle command line as the pipeline, not as a coding agent', async () => {
+    forgetAgents();
+    noteAgentAttached('ci', CLI_CLIENT_NAME);
+    const id = await runAsAgent('ci', () =>
+      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }),
+    );
+    forgetAgents();
+    const read = await new RunStore(fs, root).read(id as RunId);
+    expect(read.ok && read.run.agent).toEqual({
+      id: CLI_CLIENT_NAME,
+      kind: RunAgentKind.OEM_PIPELINE,
+    });
+    expect(read.ok && read.run.trigger.kind).toBe(RunTrigger.OEM);
+  });
+
+  /*
+   * Persona drive: a replay inside a Harness plan run was pushed as its own run ("Passed · Flow
+   * replay · Your agent") beside the plan run ("Failed · Run the saved plan"): one run, two rows,
+   * two verdicts. A replay the Harness makes is part of the Harness's run, never a run of its own.
+   */
+  it('writes no separate run for a replay the Harness made inside its own drive', async () => {
+    const id = await runDrivenBy({ harness: 'h1', driver: 'server' }, () =>
+      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }),
+    );
+    expect(id).toBeUndefined();
+  });
+
+  it('names the run after the project the checkout is linked to', async () => {
+    await fs.mkdir(root);
+    await fs.writeFile(
+      join(root, 'cloud.json'),
+      JSON.stringify({ url: 'https://cloud.test', projectId: 'bench-checkout' }),
+    );
+    const runId = await persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], {
+      projectId: undefined,
+    });
+    const stored = await new RunStore(fs, root).read(runId as RunId);
+    expect(stored.ok && stored.run.project.name).toBe('bench-checkout');
   });
 
   it('is a no-op for an empty suite (nothing to verify)', async () => {

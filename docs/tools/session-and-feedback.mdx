@@ -21,6 +21,7 @@ The presenter panel in your app shows a live transcript of what the agent is doi
 | `messages` | Drain the human-to-agent inbox |
 | `review` | List, and with `resolve`, retire the mistakes a human pinned to elements |
 | `narrate` | State your intent on the presenter panel, with an optional `level` |
+| `account` | Where the user stands: signed in or not, whether the project reports to the dashboard, plan and credits, whether the Harness is on, and the one thing to do next. Read it before telling the user anything about credits or the plan |
 
 ```json
 { "action": "yield", "mode": "waiting" }
@@ -42,7 +43,7 @@ And each lease carries the rule in the payload itself:
 
 ```json
 "session_lease": {
-  "IMPORTANT": "When you stop driving, call reticle_session {action:\"yield\", mode:\"waiting\"|\"ask\"}. The panel reads \"live\" until you do."
+  "IMPORTANT": "When you stop driving, call reticle_session {action:\"yield\", mode:\"waiting\"|\"ask\"}. The panel reads \"live\" until you do. {action:\"end\"} only when the task is done: it is final."
 }
 ```
 
@@ -84,13 +85,15 @@ The `rating` is secondary to that text on purpose. A score produced because some
 
 ### It will tell you when it cannot send
 
-Feedback is not fire-and-forget, and it does not pretend to succeed:
+Feedback sends in the background so you are not kept waiting, but it does not pretend to succeed: `sent` stays `false` until delivery is confirmed, `accepted` says the report was validated and queued, and a send that later fails is reported on a later tool result. A report that is not accepted says why:
 
 ```json
 {
   "sent": false,
   "accepted": false,
-  "reason": "this is a Reticle source checkout, where telemetry is disabled by design, so feedback has nowhere to go. Open an issue at https://github.com/reticlehq/reticle/issues instead, or run from the app you are verifying.",
+  "reason": "this is a Reticle source checkout, where telemetry is disabled by design, so this could not be sent (it has been written to disk instead, and nothing was lost).",
+  "savedTo": "<project>/.reticle/feedback/<timestamp>-bug.md",
+  "fileWith": "gh issue create --repo reticlehq/reticle --title \"Reticle feedback: bug\" --body-file \"<project>/.reticle/feedback/<timestamp>-bug.md\"",
   "redacted": [],
   "context": {
     "stack": "react",
@@ -106,7 +109,7 @@ Feedback is not fire-and-forget, and it does not pretend to succeed:
 
 `redacted` names anything stripped from your report before it left the machine, so you can see what was and was not sent. `context` is the environment attached automatically, which is why a useful report costs one call and no boilerplate.
 
-That is a real response, captured while writing these docs. The instruction in `note` is the important part: when the report cannot be delivered, say so in your answer to the human rather than letting the finding evaporate.
+When the report cannot be sent it is written to disk: `savedTo` is the file and `fileWith` is a ready-to-run command that turns it into an issue. The instruction in `note` is the important part: when the report cannot be delivered, say so in your answer to the human rather than letting the finding evaporate.
 
 ### From the shell, when the tools are unreachable
 

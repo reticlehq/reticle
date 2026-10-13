@@ -69,4 +69,31 @@ describe('signing in from the panel', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(repaints).toBe(0);
   });
+
+  /**
+   * "Save for your team" signed in and linked nothing, so the header asked again for the click the
+   * person had just made. Signing in from a project's panel links that project when it lands.
+   */
+  it("links the asking tab's project once the sign-in lands", async () => {
+    const linked: string[] = [];
+    const order: string[] = [];
+    const signIn = (root?: string) => {
+      const handler = hudSignIn(
+        () => order.push('repaint'),
+        () => Promise.resolve(0),
+        () => undefined,
+        (r) => {
+          linked.push(r);
+          order.push('link');
+          return Promise.resolve(0);
+        },
+      );
+      handler(root === undefined ? undefined : { artifactRoot: root });
+    };
+    signIn('/work/shop/.reticle');
+    signIn();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(linked).toEqual(['/work/shop/.reticle']);
+    expect(order.slice(0, 2)).toEqual(['link', 'repaint']);
+  });
 });

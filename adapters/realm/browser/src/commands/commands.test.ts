@@ -118,6 +118,16 @@ describe('command registry (driven by the bridge)', () => {
     unregisterStore('state_app');
   });
 
+  it('STATE_READ reports a missing scoped store as not found', () => {
+    registerStore('state_app', () => ({ ready: true }));
+    const r = run(ReticleCommand.STATE_READ, {
+      store: 'missing_store',
+      depth: 1,
+    }) as Record<string, unknown>;
+    expect(r).toMatchObject({ found: false, value: null, storeNames: ['state_app'] });
+    unregisterStore('state_app');
+  });
+
   it('STATE_READ resolves a row PAST the transport array cap (select before sanitize)', () => {
     // 300 rows > MAX_COLLECTION_ITEMS (200): the old sanitize-then-select path truncated the array
     // to 200 and lost row 250. Selecting the raw store first must still find it.

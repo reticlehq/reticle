@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — a virtualized list no longer makes every absence check on the page `absence_blind_spot`.** `absenceBlindSpotNote` treated `VIRTUALIZED_UNMOUNTED` as relevant to every absence claim regardless of what element was queried. A `dialog`, `alertdialog`, `main`, `banner`, or `contentinfo` can never be a virtualized list row, so the spot is now skipped for those roles. Both query forms — `{role: 'dialog'}` and `{by: 'role', value: 'dialog'}` — are handled. Roles that can appear inside a virtualized row (e.g. `region`, `navigation`) still get the blind-spot note. Closes [#1236](https://github.com/reticlehq/reticle/issues/1236).

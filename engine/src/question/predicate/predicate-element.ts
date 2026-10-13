@@ -29,7 +29,7 @@ import {
 // evaluator that defines it.
 import type { PredicateSession } from './predicate-session.js';
 import { describeTestidMiss } from './testid-near-miss.js';
-import { describeSplitTextMiss } from './split-text-miss.js';
+import { describeCaseMiss, describeSplitTextMiss } from './split-text-miss.js';
 import { satisfiesProperty, type Baseline, type PropertyAssertion } from './property.js';
 import { describeNameNearMiss } from './name-near-miss.js';
 
@@ -321,6 +321,25 @@ export async function evalElement(
         evidence: { nearMiss: roleOnly.elements },
       };
     }
+    // Nothing on the page has that role at all. The control is often there under ANOTHER role — a
+    // contenteditable composer is not a `textbox`, a styled div is not a `button` — and the name is
+    // the part the agent got right. Name the controls carrying it, with their real roles, so the
+    // retry targets what exists instead of guessing again. A diagnosis only: `pass` stays false.
+    const byName = await nearestByName(session, query.name, state);
+    if (byName.length > 0) {
+      const seen = byName.map(
+        (e) =>
+          `${'' === e.role ? 'no role' : e.role} "${'' === e.name ? (e.text ?? '') : e.name}" (${e.ref})`,
+      );
+      return {
+        pass: false,
+        failureReason: `no '${query.role}' named '${query.name}'; that name is on: ${seen.join(', ')}`,
+        observed: `no element has role '${query.role}'; elements named '${query.name}': ${seen.join(', ')}`,
+        expected: `a '${query.role}' named '${query.name}'`,
+        assertion: 'element.role+name',
+        evidence: { nearestByName: byName },
+      };
+    }
   }
   // The testid near-miss: name what IS here, so a typo is one step from fixed rather than a dead
   // end. reticle_query has always done this; the predicate path had no equivalent. See
@@ -340,8 +359,12 @@ export async function evalElement(
   // already limited to that role.
   const nearMissRole = QueryBy.ROLE === query.by ? query.value : query.role;
   const nearMiss = describeNameNearMiss(match.hint?.nameNearMiss, query.name, nearMissRole);
+  const caseMiss = describeCaseMiss(match.hint?.caseMiss);
   const clause =
-    splitText ?? nearMiss ?? (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
+    caseMiss ??
+    splitText ??
+    nearMiss ??
+    (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
   const suffix = clause === undefined ? '' : ` — ${clause}`;
   // The evidence list is capped in document order, so a region low on the page is exactly what it
   // drops. Handed back with no marker it reads as the whole page, and the field report this came
@@ -350,6 +373,13 @@ export async function evalElement(
   const cut = describePresentTestidsCut(present.length, total);
   return {
     pass: false,
+    // The page shows the text in another case. Still a failure — see EvalResult.caseOnlyMiss.
+    ...(caseMiss === undefined
+      ? {}
+      : {
+          caseOnlyMiss: true,
+          wouldHold: `the same check with ignoreCase: true (the page shows "${match.hint?.caseMiss ?? ''}")`,
+        }),
     failureReason: `no element matched ${subject}${state === undefined ? '' : ` in state '${state}'`}${suffix}${cut}`,
     observed: `no matching element on the page${suffix}`,
     expected: `an element matching ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
@@ -357,12 +387,14 @@ export async function evalElement(
     // `splitText` rides on the evidence because it is a POSITIVE observation: the browser found the
     // string in the rendered page. `annotateThrottledMiss` reads it so a miss on a backgrounded tab
     // is not blamed on a render that demonstrably happened.
-    ...(present.length > 0 || splitText !== undefined
+    ...(present.length > 0 || splitText !== undefined || caseMiss !== undefined
       ? {
           evidence: {
             ...(present.length > 0 ? { presentTestids: present } : {}),
             ...(total === undefined || 0 === present.length ? {} : { presentTestidsTotal: total }),
             ...(splitText === undefined ? {} : { splitText: match.hint?.splitText }),
+            // Positive too: the page rendered the text, in another case.
+            ...(caseMiss === undefined ? {} : { caseMiss: match.hint?.caseMiss }),
           },
         }
       : {}),
@@ -417,5 +449,51 @@ export function withTextProperty(
     expected: `text of ${subject} to satisfy ${assertion.property}`,
     assertion: `text.${assertion.property}`,
     evidence: described,
+  };
+}
+
+/** How many same-name controls a role miss names. */
+const MAX_BY_NAME = 3;
+
+/**
+ * Elements carrying an accessible name, whatever their role: by label (aria-label, <label>), then by
+ * placeholder. The first locator that finds any wins; at most MAX_BY_NAME are named.
+ */
+async function nearestByName(
+  session: PredicateSession,
+  name: string,
+  state: ElementState | undefined,
+): Promise<ElementDescriptor[]> {
+  for (const query of [{ label: name }, { placeholder: name }]) {
+    const found = await matchOnce(session, query, state);
+    if (found.matched) return found.elements.slice(0, MAX_BY_NAME);
+  }
+  return [];
+}
+
+/**
+ * The element query a text predicate is evaluated through — one builder for the verdict and its
+ * baseline, so the two cannot disagree about what text was asked for.
+ *
+ * `matchCase` unless the predicate opts out: a check that matched "Saved Priya" against "Saved
+ * priya" could never catch a capitalisation defect. An undefined `contains` must not reach the query
+ * as `text: undefined` — that is a locator asking for the empty string.
+ */
+export function textPredicateQuery(predicate: {
+  contains?: string | undefined;
+  ignoreCase?: boolean | undefined;
+  scope?: string | undefined;
+  self?: boolean | undefined;
+}): ElementQuery {
+  return {
+    ...(undefined === predicate.contains
+      ? {}
+      : {
+          text: predicate.contains,
+          ...(true === predicate.ignoreCase ? {} : { matchCase: true }),
+        }),
+    ...(undefined === predicate.scope
+      ? {}
+      : { scope: predicate.scope, ...(true === predicate.self ? { self: true } : {}) }),
   };
 }

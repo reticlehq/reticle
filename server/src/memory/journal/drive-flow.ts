@@ -29,6 +29,8 @@ export interface TapeStep {
   endPage?: string;
   /** The intent the agent declared on this action. The first one names the journey. */
   intent?: string;
+  /** Recorder-internal: network mocks were active when it ran (#1459). Never written to disk. */
+  mocked?: true;
 }
 
 /** The compiled shape a flow store accepts. Structural, for the same reason as `TapeStep`. */
@@ -128,6 +130,14 @@ export function driveFlowName(route?: string, steps: readonly TapeStep[] = []): 
   return asFlowName(`${DRIVE_FLOW_PREFIX}${0 === parts.length ? 'journey' : parts.join('-')}`);
 }
 
+/** Why session end saved no flow, as reported on the `flow_recorded` step. */
+export const DriveFlowSkipReason = {
+  /** The drive declared no consequence, so a saved flow could never go red. */
+  NO_DECLARED_CONSEQUENCE: 'no_declared_consequence',
+  /** What it proved rested on network mocks the flow would not carry (#1459). */
+  DRIVEN_UNDER_NETWORK_MOCKS: 'driven_under_network_mocks',
+} as const;
+
 export interface DriveFlowOutcome {
   /** The flows that were written — one per journey the session contained. */
   readonly saved?: readonly string[];
@@ -140,6 +150,13 @@ export interface DriveFlowOutcome {
    * "the agent drove and proved nothing" stays visible instead of looking like nothing happened.
    */
   readonly unprovenSteps?: number;
+  /**
+   * Steps of journeys that proved something and were NOT saved because they ran while network
+   * mocks were active (#1459). Such a journey replays against the real backend, so it either fails
+   * for a reason unrelated to the change or passes on data the original check never saw, and the
+   * flow file holds no trace of the precondition. Counted, so "not saved" has a reason.
+   */
+  readonly mockedSteps?: number;
 }
 
 /**
@@ -200,6 +217,25 @@ function typesASecret(step: TapeStep): boolean {
   return 'string' === typeof field && defaultIsSensitiveKey(field);
 }
 
+/**
+ * The tape without the attempts an agent made again. An action that declared nothing, followed at
+ * once by the same action on the same control that did, is a retry: saved, the flow clicked sign-in
+ * twice, the second click found no form, and every replay of it failed. A step repeated with the
+ * same declaration both times (a double submit on purpose) is two steps, and stays two.
+ */
+function withoutRetries(steps: readonly TapeStep[]): TapeStep[] {
+  return steps.filter((step, i) => {
+    const next = steps[i + 1];
+    if (next === undefined || step.expect !== undefined || next.expect === undefined) return true;
+    // Tried again where it was tried: a page later it is a step of the journey, not a retry.
+    if (step.route !== next.route || step.page !== next.page || step.mocked !== next.mocked)
+      return true;
+    const { expect: _declared, ...again } = next.args;
+    const { expect: _none, ...first } = step.args;
+    return step.tool !== next.tool || JSON.stringify(first) !== JSON.stringify(again);
+  });
+}
+
 /** A flow per journey, so two journeys in one session are two regression tests rather than one. */
 export function driveFlowsFrom(
   tape: { steps: readonly TapeStep[]; startPath?: string } | undefined,
@@ -207,9 +243,14 @@ export function driveFlowsFrom(
   if (tape === undefined || 0 === tape.steps.length) return { programs: [], outcome: {} };
   const programs: DriveProgram[] = [];
   let unproven = 0;
-  for (const segment of segmentsByRoute(tape.steps)) {
+  let mocked = 0;
+  for (const segment of segmentsByRoute(withoutRetries(tape.steps))) {
     if (!carriesAnAssertion(segment.steps)) {
       unproven += segment.steps.length;
+      continue;
+    }
+    if (segment.steps.some((step) => true === step.mocked)) {
+      mocked += segment.steps.length;
       continue;
     }
     const startPath = segment.route ?? tape.startPath;
@@ -218,7 +259,7 @@ export function driveFlowsFrom(
       version: REPLAY_PROGRAM_VERSION,
       // The route is recorder-internal and has no business on disk — `startPath` is where the
       // on-disk flow says the same thing, in the field replay actually reads.
-      steps: segment.steps.map(({ route: _route, ...step }) => step),
+      steps: segment.steps.map(({ route: _route, mocked: _mocked, ...step }) => step),
       ...(startPath === undefined ? {} : { startPath }),
     });
   }
@@ -227,6 +268,7 @@ export function driveFlowsFrom(
     outcome: {
       ...(0 === programs.length ? {} : { saved: programs.map((p) => p.name) }),
       ...(0 === unproven ? {} : { unprovenSteps: unproven }),
+      ...(0 === mocked ? {} : { mockedSteps: mocked }),
     },
   };
 }

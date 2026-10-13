@@ -56,8 +56,11 @@ describe('daemonSpawnArgs', () => {
     expect(a).toContain('http://localhost:3000');
   });
 
-  it('never passes --headed when headless was left on', () => {
-    expect(daemonSpawnArgs(flags())).not.toContain('--headed');
+  it('says --headless when the parent resolved hidden, never --headed', () => {
+    // The child reads its own default from its environment, so silence would let it flip.
+    const a = daemonSpawnArgs(flags());
+    expect(a).not.toContain('--headed');
+    expect(a).toContain('--headless');
   });
 
   it('names the inner command and port first', () => {

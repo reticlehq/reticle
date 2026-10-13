@@ -96,6 +96,11 @@ interface NextActionFacts {
    * closed, it navigated away.
    */
   departedTo?: string;
+  /**
+   * The command that wires THIS project for good — `init` in the app's own folder through the
+   * project's own runner (see `initCommandIn`). Absent means the generic npx spelling.
+   */
+  init?: string;
 }
 
 /** The port a tombstone URL names, when it names one — anything unparseable names no port. */
@@ -148,10 +153,33 @@ function reopenableUrl(raw: string | undefined): { url: string; port: number } |
   return { url: url.toString(), port };
 }
 
-/** `reticle init`, the only command here that is Reticle's own and so cannot be wrong. */
-const INIT_COMMAND = 'reticle init';
-const OPEN_COMMAND = 'reticle open';
+/**
+ * Reticle's own commands, the only ones here that cannot be wrong. Spelled through `npx`, like the
+ * CLI's own messages: the default MCP registration runs Reticle through `npx` and puts no `reticle`
+ * bin on PATH, so a bare `reticle init` fails with "command not found" exactly where it is handed out.
+ */
+const CLI = 'npx @reticlehq/server';
+const INIT_COMMAND = `${CLI} init`;
+const OPEN_COMMAND = `${CLI} open`;
 const LOCALHOST = 'http://localhost';
+
+/**
+ * What a lease on an app with no SDK can see. The lease supplies the SDK itself (the zero-install
+ * reader), so an unwired app still gets a verdict — on what the page does, not on its source.
+ */
+const ZERO_INSTALL_SEES =
+  'the lease supplies the SDK itself: DOM, network, console and routes, but no component state ' +
+  'or source file:line until the app is wired';
+
+/** The zero-install call, with the URL only when it can be named without guessing. */
+function zeroInstallLease(url: string | undefined): string {
+  return `reticle_lease {action:"acquire", url:"${url ?? "<the app's URL>"}"}`;
+}
+
+/** Nothing here says this project was ever wired: no config, no recorded connection, no session. */
+function neverWired(facts: NextActionFacts): boolean {
+  return !facts.initialized && true !== facts.previouslyConnected && !facts.everConnected;
+}
 
 export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   // FIRST, above every other cause, because it is the only one supported by positive evidence about
@@ -204,8 +232,8 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         : 0 === listening.length
           ? ''
           : only === undefined
-            ? ` An app is already listening on ${listening.join(', ')}; just open the URL the human names — do not start a second stack.`
-            : ` An app is already listening on ${String(only)}; just open ${LOCALHOST}:${String(only)} — do not start a second stack.`;
+            ? ` Something is serving a page on ${listening.map((p) => `:${String(p)}`).join(', ')}; it may not be this app — open the URL the human names rather than starting a second stack.`
+            : ` Something is serving a page on :${String(only)}; it may not be this app — just open ${LOCALHOST}:${String(only)} rather than starting a second stack.`;
     const target =
       known !== undefined
         ? { command: `${OPEN_COMMAND} ${known.url}`, port: known.port }
@@ -253,6 +281,58 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         `a \`.reticle.json\` was found outside this daemon's directory: ${named}. This is a ` +
         "scope problem, not an install problem. Restart the daemon from the app's directory (or " +
         `point it there), then open the app.${leaseAlternative}`,
+    };
+  }
+
+  // A current pairing-token refusal is positive evidence that the app is running and instrumented.
+  // It must outrank an empty port scan, which only says the app is outside this daemon's scan set.
+  const ports = facts.listening.join(', ');
+  const only = 1 === facts.listening.length ? facts.listening[0] : undefined;
+  const where = '' === ports ? 'on a port this daemon did not scan' : `${ports} listening`;
+
+  // A refusal against a project that IS initialised here. The daemon has the config, so this is not
+  // a scope problem — the page reached the right daemon and presented a credential it would not
+  // accept. The usual cause is a dev server that shares no filesystem with the daemon (Docker, a
+  // devcontainer, WSL): the build plugin reads-or-mints the pairing token from `$HOME/.reticle`,
+  // which over there is a different file, so it mints its own and every page is refused. The daemon
+  // holds every fact needed to say so, which is why the reason below says it rather than repeating
+  // `authentication failed`.
+  if (true === facts.initialized && true === facts.authRefused) {
+    return {
+      action: NoSessionAction.OPEN_APP,
+      ...(only === undefined ? {} : { port: only }),
+      reason:
+        `a page dialled this daemon and was refused on the pairing token (${where}), so ` +
+        'the app IS running and instrumented and this project IS wired — the page simply presented ' +
+        'a token this daemon does not own. The usual cause is a dev server that does not share a ' +
+        'filesystem with the daemon (Docker, a devcontainer, WSL): the build plugin reads the token ' +
+        'from `$HOME/.reticle/pairing-token`, which over there is a different file, so it mints its ' +
+        "own. Point the plugin at the daemon's copy — mount `~/.reticle/pairing-token` into the " +
+        `container read-only and set \`${ReticleEnv.PAIRING_TOKEN_DIR}\` to the directory holding ` +
+        'it — then ' +
+        'restart the dev server, because the token is inlined when Vite resolves its config and ' +
+        'kept in the prebundled module. Reloading the page serves that same token, whether the ' +
+        'dev server is on this machine or in a container.',
+    };
+  }
+
+  // A refused dial outranks the absence of a local config, for the same reason `previouslyConnected`
+  // does: it is positive evidence about the app, and `initialized` only ever answers "is there a
+  // `.reticle.json` in the ONE directory this daemon stands in". A globally-registered daemon stands
+  // in `/` or `$HOME`, so that answer is no for every project it serves -- and every page it turns
+  // away is proof that the project it turned away is wired.
+  if (!facts.initialized && true === facts.authRefused) {
+    return {
+      action: NoSessionAction.OPEN_APP,
+      ...(only === undefined ? {} : { port: only }),
+      reason:
+        `a page dialled this daemon and was refused on the pairing token, so the app IS running ` +
+        `and instrumented (${where}) — this is a SCOPE problem, not an install problem. ` +
+        'This daemon was started outside the project (an IDE that registers the MCP server ' +
+        'globally starts it in `/` or your home directory), so it has no `.reticle.json` to match ' +
+        'the page against. Do NOT run `reticle init`: the config it would write is already correct ' +
+        'somewhere else. Take a context you own instead with reticle_lease {action:"acquire", url, ' +
+        "projectId}, or restart the daemon from the app's own directory.",
     };
   }
 
@@ -321,70 +401,32 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         (dev.directory === undefined ? '' : `, in \`${dev.directory}\``) +
         ` — run it in the ` +
         'background, tell the human it is running, then call reticle_sessions again.' +
-        stoppedNote,
+        stoppedNote +
+        (neverWired(facts)
+          ? ` Once it is up, ${zeroInstallLease(dev.port === undefined ? undefined : `${LOCALHOST}:${String(dev.port)}`)} ` +
+            `gets a verdict with nothing installed (${ZERO_INSTALL_SEES}); ` +
+            `\`${facts.init ?? INIT_COMMAND}\` wires it for good — then restart the dev server and reload.`
+          : ''),
     };
   }
 
   // Something IS up. Whatever else is true, do NOT hand back a start command: a second dev server on
   // a second port is the exact confusion the probe exists to prevent.
-  const ports = facts.listening.join(', ');
-  const only = 1 === facts.listening.length ? facts.listening[0] : undefined;
-
-  // A refused dial outranks the absence of a local config, for the same reason `previouslyConnected`
-  // does: it is positive evidence about the app, and `initialized` only ever answers "is there a
-  // `.reticle.json` in the ONE directory this daemon stands in". A globally-registered daemon stands
-  // in `/` or `$HOME`, so that answer is no for every project it serves -- and every page it turns
-  // away is proof that the project it turned away is wired.
-  // A refusal against a project that IS initialised here. The daemon has the config, so this is not
-  // a scope problem — the page reached the right daemon and presented a credential it would not
-  // accept. The usual cause is a dev server that shares no filesystem with the daemon (Docker, a
-  // devcontainer, WSL): the build plugin reads-or-mints the pairing token from `$HOME/.reticle`,
-  // which over there is a different file, so it mints its own and every page is refused. The daemon
-  // holds every fact needed to say so, which is why the reason below says it rather than repeating
-  // `authentication failed`.
-  if (true === facts.initialized && true === facts.authRefused) {
-    return {
-      action: NoSessionAction.OPEN_APP,
-      ...(only === undefined ? {} : { port: only }),
-      reason:
-        `a page dialled this daemon and was refused on the pairing token (${ports} listening), so ` +
-        'the app IS running and instrumented and this project IS wired — the page simply presented ' +
-        'a token this daemon does not own. The usual cause is a dev server that does not share a ' +
-        'filesystem with the daemon (Docker, a devcontainer, WSL): the build plugin reads the token ' +
-        'from `$HOME/.reticle/pairing-token`, which over there is a different file, so it mints its ' +
-        "own. Point the plugin at the daemon's copy — mount `~/.reticle/pairing-token` into the " +
-        `container read-only and set \`${ReticleEnv.PAIRING_TOKEN_DIR}\` to the directory holding ` +
-        'it — then ' +
-        'restart the dev server, because the token is inlined when Vite resolves its config and ' +
-        'kept in the prebundled module. Reloading the page serves that same token, whether the ' +
-        'dev server is on this machine or in a container.',
-    };
-  }
-
-  if (!facts.initialized && true === facts.authRefused) {
-    return {
-      action: NoSessionAction.OPEN_APP,
-      ...(only === undefined ? {} : { port: only }),
-      reason:
-        `a page dialled this daemon and was refused on the pairing token, so the app IS running ` +
-        `and instrumented (${ports} listening) — this is a SCOPE problem, not an install problem. ` +
-        'This daemon was started outside the project (an IDE that registers the MCP server ' +
-        'globally starts it in `/` or your home directory), so it has no `.reticle.json` to match ' +
-        'the page against. Do NOT run `reticle init`: the config it would write is already correct ' +
-        'somewhere else. Take a context you own instead with reticle_lease {action:"acquire", url, ' +
-        "projectId}, or restart the daemon from the app's own directory.",
-    };
-  }
-
   if (!facts.initialized && true !== facts.previouslyConnected) {
+    // The port the project's own dev script pins outranks a lone listener: the scan is machine-wide.
+    const pinned = facts.dev?.port;
+    const target = pinned !== undefined && facts.listening.includes(pinned) ? pinned : only;
     return {
       action: NoSessionAction.RUN_INIT,
-      command: INIT_COMMAND,
-      ...(only === undefined ? {} : { port: only }),
+      command: facts.init ?? INIT_COMMAND,
+      ...(target === undefined ? {} : { port: target }),
       reason:
         `something is listening (${ports}) but no \`.reticle.json\` was found, so the app may ` +
-        "carry no Reticle SDK. Run this in the APP's own directory — in a monorepo that is not " +
-        'where this daemon stands — then restart the dev server.',
+        'carry no Reticle SDK. For a verdict NOW with nothing installed: ' +
+        `${zeroInstallLease(target === undefined ? undefined : `${LOCALHOST}:${String(target)}`)} — ` +
+        `${ZERO_INSTALL_SEES}. To wire it for good, run this command yourself (it runs in the ` +
+        "APP's own folder, not where this daemon stands), then restart the dev server and reload " +
+        'the page.',
     };
   }
 
@@ -414,12 +456,12 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     command: `${OPEN_COMMAND} ${LOCALHOST}:${String(only)}`,
     port: only,
     reason: neverConnected
-      ? 'this project is wired and a dev server is listening, but no app has ever connected to ' +
+      ? 'this project is wired and something is listening on that port (it may not be this app), but no app has ever connected to ' +
         'this daemon — Reticle only ever sees a page a browser has LOADED, and nothing has loaded ' +
         'one. If opening it does not produce a session, the dev server is older than the Reticle ' +
         'plugin and its bundle carries no SDK: restart the dev server (do not rely on HMR) and ' +
         'load the page again.'
-      : 'this project is wired and a dev server is listening — Reticle only ever sees a page a ' +
+      : 'this project is wired and something is listening on that port (it may not be this app) — Reticle only ever sees a page a ' +
         'browser has LOADED, and nothing has loaded one.',
   };
 }

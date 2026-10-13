@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { runAdhocExplore, runAdhocSuite } from './adhoc-suite.js';
 import type { ToolCaller } from './adhoc-verdict.js';
+import { KEY_REFUSED_LINE } from '@/surface/tools/reticle-result.js';
 
 function caller(answer: unknown): { tool: ToolCaller; calls: { name: string; args: unknown }[] } {
   const calls: { name: string; args: unknown }[] = [];
@@ -50,6 +51,44 @@ describe('a saved-flow suite against the running daemon', () => {
     expect(calls.map((c) => c.name)).toEqual([ReticleTool.VERIFY]);
     expect(calls[0]?.args).toEqual({ action: 'flows' });
     expect(result.code).toBe(0);
+  });
+
+  /*
+   * Persona drive: an unlinked `reticle verify` printed pass and a runId, and nothing said the run
+   * stayed on this computer. The daemon's result block says it in its last line; it was only inside
+   * the JSON dump below the summary.
+   */
+  it('prints the result block, so an unlinked run says it was kept on this machine', async () => {
+    const block = '**Reticle result: proved** · 2 of 2\n- Kept on this machine only: connect';
+    const { result } = await run({
+      status: 'pass',
+      summary: 'all 2 flows pass',
+      reticleResult: block,
+    });
+    expect(result.lines.slice(0, 3)).toEqual(['status: pass', 'all 2 flows pass', block]);
+  });
+
+  // Persona drive (CI, revoked key): the suite passed, the run never reached the platform, and
+  // `reticle verify` exited 0 under a block that said "Saved".
+  it('exits non-zero when the platform refused the key, whatever the suite said', async () => {
+    const block = `**Reticle result: proved** · 2 of 2 checks held\n- ${KEY_REFUSED_LINE}`;
+    const { result } = await run({ status: 'pass', reticleResult: block });
+    expect(result.code).toBe(1);
+  });
+
+  // Group D persona drive: RETICLE_SECRET_* given to `reticle verify` was ignored when a daemon was
+  // already running — the daemon's environment is not the command's. They travel with the call.
+  it("passes the command's RETICLE_SECRET_* values with the call, for this call only", async () => {
+    process.env['RETICLE_SECRET_PASSWORD'] = 'hunter2';
+    try {
+      const { calls } = await run({ status: 'pass' });
+      expect(calls[0]?.args).toEqual({
+        action: 'flows',
+        secrets: { RETICLE_SECRET_PASSWORD: 'hunter2' },
+      });
+    } finally {
+      delete process.env['RETICLE_SECRET_PASSWORD'];
+    }
   });
 
   it('exits non-zero on a failing suite', async () => {
@@ -179,7 +218,7 @@ describe('exploring through the running daemon', () => {
     const c = recording();
     const result = await explore(c.tool);
     expect(c.actions()).toEqual(['acquire', 'explore', 'flows', 'release']);
-    expect(c.calls[1]?.args).toEqual({
+    expect(c.calls[1]?.args).toMatchObject({
       action: 'explore',
       persona: 'a visitor',
       sessionId: 'lease-9',
@@ -192,6 +231,20 @@ describe('exploring through the running daemon', () => {
     const c = recording();
     await explore(c.tool, [{ url: 'http://localhost:5190/' }]);
     expect(c.actions()).toEqual(['explore', 'flows']);
+  });
+
+  /** `reticle verify <url>` with no open tab answered "no browser session connected". */
+  it('opens the url for a saved suite when no tab is on it, and releases it after', async () => {
+    const c = recording();
+    const result = await runAdhocSuite({
+      port: 4400,
+      url: 'http://localhost:5190/',
+      sessions: () => Promise.resolve([]),
+      connect: () => Promise.resolve(c.tool),
+    });
+    expect(c.actions()).toEqual(['acquire', 'flows', 'release']);
+    expect(c.calls[1]?.args['sessionId']).toBe('lease-9');
+    expect(result.code).toBe(0);
   });
 
   it('exits non-zero, and replays nothing, when the drive recorded nothing', async () => {
@@ -214,6 +267,19 @@ describe('exploring through the running daemon', () => {
     const result = await explore(c.tool, [{ url: 'http://localhost:5190/' }]);
     expect(result.code).toBe(1);
     expect(result.lines).toContain('No model configured');
+  });
+
+  it('never passes a drive the platform cut off, and prints why', async () => {
+    const credits = 'Your 10 free credits are used. Add a card to start your 14-day trial.';
+    const c = recording({
+      explore: {
+        structuredContent: { stopReason: 'broken', savedFlows: ['half'], error: credits },
+      },
+    });
+    const result = await explore(c.tool, [{ url: 'http://localhost:5190/' }]);
+    expect(result.code).toBe(1);
+    expect(c.actions()).not.toContain('flows');
+    expect(result.lines.join('\n')).toContain(credits);
   });
 
   it('fails the run when the replay fails', async () => {

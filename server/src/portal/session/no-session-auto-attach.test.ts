@@ -371,7 +371,7 @@ describe('the structured next action the watch publishes', () => {
   );
 
   it(
-    'asks for `reticle init` — never a dev command — when a server is up and nothing is wired',
+    'asks for `npx @reticlehq/server init` — never a dev command — when a server is up and nothing is wired',
     async () => {
       const { manager, next } = stubSessions();
       const stop = startNoSessionWatch({
@@ -385,7 +385,28 @@ describe('the structured next action the watch publishes', () => {
       const action = next();
       stop();
       expect(action?.action).toBe(NoSessionAction.RUN_INIT);
-      expect(action?.command).toBe('reticle init');
+      expect(action?.command).toBe('npx @reticlehq/server init');
+    },
+    TEMP_PROJECT_TIMEOUT_MS,
+  );
+
+  it(
+    "hands over init through the project's own runner (pnpm dlx in a pnpm project)",
+    async () => {
+      const { manager, next } = stubSessions();
+      const directory = projectDir({ wired: false, devScript: 'vite' });
+      writeFileSync(join(directory, 'pnpm-lock.yaml'), '', 'utf8');
+      const stop = startNoSessionWatch({
+        sessions: manager,
+        port: 4400,
+        initialized: false,
+        directory,
+        probe: () => Promise.resolve([5173]),
+      });
+      await settle();
+      const action = next();
+      stop();
+      expect(action?.command).toBe('pnpm dlx @reticlehq/server init');
     },
     TEMP_PROJECT_TIMEOUT_MS,
   );

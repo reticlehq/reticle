@@ -45,7 +45,13 @@ const SKILL = readFileSync(join(REPO_ROOT, 'SKILL.md'), 'utf8');
  * were cut, and the sections around them were tightened instead of extended. If a future raise
  * cannot show a number like that, cut a section instead of moving this again.
  */
-const SKILL_BYTE_BUDGET = 13_200;
+/*
+ * Set 2026-10-12 by the founder's decision, as a budget for about a year of work rather than the
+ * measurement plus a sliver: it was re-raised dozens of times in a month, which made the check churn
+ * instead of a signal. Measured 13,195 B (agents read it, so ~21%) at 81e046201. Review it once a year, not per change; a
+ * sudden jump inside it is still worth a look in review.
+ */
+const SKILL_BYTE_BUDGET = 16_000;
 
 /** Where the file stops being general advice and starts being about one situation or the other. */
 const SETUP_HEADING = '\n# SETUP\n';

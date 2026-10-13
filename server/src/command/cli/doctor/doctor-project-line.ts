@@ -10,6 +10,7 @@
  * Registering the MCP server and instrumenting the app are two different halves of the install, and
  * more than one route does the first without the second.
  */
+import { DoctorRow, doctorRow } from './doctor-rows.js';
 
 interface ProjectWiringFacts {
   /** The id from `.reticle.json`, or undefined when there is no config here. */
@@ -38,20 +39,25 @@ interface ProjectWiringFacts {
  */
 export function projectWiringLine(facts: ProjectWiringFacts): string {
   if (facts.projectId !== undefined) {
-    return `  project      ✓ wired here (${facts.projectId})`;
+    return doctorRow(DoctorRow.PROJECT, `✓ wired here (${facts.projectId})`);
   }
   if (facts.previouslyConnected) {
-    return '  project      ✓ an app has connected here before, so it is wired (no .reticle.json — a build plugin can wire an app without one)';
-  }
-  if (true === facts.configPresent) {
-    return (
-      '  project      ✗ .reticle.json is here but carries no readable projectId — a corrupt or ' +
-      'hand-edited config reads the same as no config, and points this project at the default ' +
-      'daemon. Run `npx @reticlehq/server init` in the app directory to rewrite it'
+    return doctorRow(
+      DoctorRow.PROJECT,
+      '✓ an app has connected here before, so it is wired (no .reticle.json — a build plugin can wire an app without one)',
     );
   }
-  return (
-    '  project      ✗ no .reticle.json here and nothing has ever connected — the tools may be ' +
-    'registered, but this app is not instrumented. Run `npx @reticlehq/server init` in the app directory'
+  if (true === facts.configPresent) {
+    return doctorRow(
+      DoctorRow.PROJECT,
+      '✗ .reticle.json is here but carries no readable projectId — a corrupt or ' +
+        'hand-edited config reads the same as no config, and points this project at the default ' +
+        'daemon. Run `npx @reticlehq/server init` in the app directory to rewrite it',
+    );
+  }
+  return doctorRow(
+    DoctorRow.PROJECT,
+    '✗ no .reticle.json here and nothing has ever connected — the tools may be ' +
+      'registered, but this app is not instrumented. Run `npx @reticlehq/server init` in the app directory',
   );
 }

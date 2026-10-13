@@ -59,6 +59,23 @@ describe('version-skew nudge', () => {
     expect(takeVersionSkew()).toBeUndefined();
   });
 
+  // A page a minor release behind is compatible: nothing it did caused this error, so the
+  // notice rides along but neither replaces the advice nor drops the feedback ask.
+  it('keeps the feedback ask when the only notice is a compatible page that is behind', () => {
+    noteVersionSkew('sdk_behind', 'This page runs Reticle SDK 2.3.0, older than Reticle 2.4.1.');
+    const out = takeVersionSkewOnto({ error: 'Timeout 30000ms exceeded.', feedback: 'ask' });
+    expect(out['feedback']).toBe('ask');
+    expect(out['recovery']).toBeUndefined();
+    expect(out['version_skew']).toMatchObject({ pair: 'sdk_behind' });
+  });
+
+  it('never lets a behind notice overwrite a real skew that has not been told yet', () => {
+    noteVersionSkew('sdk', 'page 2.2.1 vs daemon 2.4.1: contracts differ');
+    noteVersionSkew('sdk_behind', 'another tab is a minor behind');
+    const told = [takeVersionSkew()?.action, takeVersionSkew()?.action];
+    expect(told).toContain('page 2.2.1 vs daemon 2.4.1: contracts differ');
+  });
+
   it('keeps a recognized recovery and still attaches the envelope', () => {
     noteVersionSkew('sdk', 'page 2.2.1 vs daemon 2.4.1');
     const out = takeVersionSkewOnto({

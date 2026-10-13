@@ -113,6 +113,8 @@ const NOT_ADVERTISED = 'is not advertised under this tool profile';
 const rawCall = async (name, args) => {
   const r = await client.request('tools/call', { name, arguments: args }, 60_000);
   const text = (r?.content ?? []).map((c) => c.text ?? '').join('\n');
+  // The refusal arrives as an isError result, so `call` below can see it and take the hatch.
+  if (true === r?.isError && text.includes(NOT_ADVERTISED)) throw new Error(text);
   try {
     return JSON.parse(text);
   } catch {

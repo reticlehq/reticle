@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { EventType, HumanControlKind, RETICLE_WS_PATH, MessageKind } from '@reticlehq/core';
 import { Bridge } from './bridge.js';
+import type { HarnessRequest } from './harness-request.js';
 
 /**
  * Replay-from-panel wiring: a human clicks ▶ on a saved flow in the panel, which crosses the WS as a
@@ -123,7 +124,9 @@ describe('replay-from-panel wiring (bridge)', () => {
   it('routes the panel harness switch to the daemon, carrying the desired state', async () => {
     const { bridge, client } = await connect('panel-h1');
     const seen: boolean[] = [];
-    bridge.attachHarnessRequest((enabled) => seen.push(enabled));
+    bridge.attachHarnessRequest((r) => {
+      if (HumanControlKind.HARNESS === r.kind) seen.push(r.enabled);
+    });
     client.emitControl({ kind: HumanControlKind.HARNESS, text: 'off' });
     await waitUntil(() => 1 === seen.length);
     expect(seen[0]).toBe(false);
@@ -132,7 +135,9 @@ describe('replay-from-panel wiring (bridge)', () => {
   it('is idempotent: the same state twice lands on the same state, not back where it started', async () => {
     const { bridge, client } = await connect('panel-h2');
     const seen: boolean[] = [];
-    bridge.attachHarnessRequest((enabled) => seen.push(enabled));
+    bridge.attachHarnessRequest((r) => {
+      if (HumanControlKind.HARNESS === r.kind) seen.push(r.enabled);
+    });
     // A double-click on a flaky connection sends two. Carrying the DESIRED state rather than
     // meaning "toggle" is what makes the second one harmless.
     client.emitControl({ kind: HumanControlKind.HARNESS, text: 'on' });
@@ -144,11 +149,29 @@ describe('replay-from-panel wiring (bridge)', () => {
   it('ignores a state it does not recognise rather than guessing', async () => {
     const { bridge, client } = await connect('panel-h3');
     const seen: boolean[] = [];
-    bridge.attachHarnessRequest((enabled) => seen.push(enabled));
+    bridge.attachHarnessRequest((r) => {
+      if (HumanControlKind.HARNESS === r.kind) seen.push(r.enabled);
+    });
     client.emitControl({ kind: HumanControlKind.HARNESS, text: 'maybe' });
     await new Promise((r) => setTimeout(r, 60));
     // Guessing here would write a real setting from a frame we did not understand.
     expect(seen).toHaveLength(0);
+  });
+
+  // The panel's Run Harness starts a drive the way an agent's explore would; Stop ends it.
+  it('routes Run Harness with its persona, and Stop, to the daemon', async () => {
+    const { bridge, client } = await connect('panel-h5');
+    const seen: HarnessRequest[] = [];
+    bridge.attachHarnessRequest((r) => seen.push(r));
+    client.emitControl({ kind: HumanControlKind.HARNESS_RUN, text: ' a returning shopper ' });
+    client.emitControl({ kind: HumanControlKind.HARNESS_RUN, text: '' });
+    client.emitControl({ kind: HumanControlKind.HARNESS_STOP });
+    await waitUntil(() => 3 === seen.length);
+    expect(seen).toEqual([
+      { kind: HumanControlKind.HARNESS_RUN, persona: 'a returning shopper' },
+      { kind: HumanControlKind.HARNESS_RUN },
+      { kind: HumanControlKind.HARNESS_STOP },
+    ]);
   });
 
   it('does not route a harness control into the replay handler', async () => {

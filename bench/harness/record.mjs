@@ -30,7 +30,7 @@ const a = JSON.parse(readFileSync('bench/raw/analysis.json', 'utf8'));
 function assertFreshAnalysis() {
   let head = 'nogit';
   try {
-    head = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+    head = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
   } catch {
     return; // no git: nothing to check against, and the sha is already recorded as 'nogit'
   }
@@ -41,7 +41,9 @@ function assertFreshAnalysis() {
     );
     process.exit(1);
   }
-  if (a.git_sha !== head) {
+  // Both are abbreviations of one hash, and git sizes an abbreviation by the clone it runs in: CI wrote
+  // 7 characters, a larger clone writes 9, and the same commit was refused as "a different run".
+  if (String(a.git_sha).length < 7 || !head.startsWith(String(a.git_sha))) {
     console.error(
       `refusing to record: analysis.json was generated at ${a.git_sha} but HEAD is ${head}. ` +
         'That file is from a different run — recording it would create a baseline that describes ' +

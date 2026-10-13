@@ -77,6 +77,20 @@ export function toRules(value: unknown): MockRule[] {
   });
 }
 
+/**
+ * The applied result, after telling the recorder. Steps driven while a mock is active are marked
+ * on the ambient tape, so a journey proved against mocked responses is not auto-saved as a flow
+ * that would replay against the real backend (#1459).
+ */
+function mocksApplied(
+  deps: ToolDeps,
+  sessionId: string,
+  count: number,
+): { applied: true; count: number } {
+  deps.recordings.markMocked(sessionId, 0 < count);
+  return { applied: true, count };
+}
+
 export const NETWORK_MOCK_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.NETWORK_MOCK,
@@ -113,13 +127,13 @@ export const NETWORK_MOCK_TOOLS: ToolDef[] = [
       const provider = mockProvider(deps);
       if (provider !== undefined) {
         const applied = await provider.setMocks(session.url, rules);
-        if (applied) return { applied: true, count: rules.length };
+        if (applied) return mocksApplied(deps, session.id, rules.length);
       }
       // A lease is a Playwright-owned page — CDP intercept was always there, this tool just had no
       // route to it. Tried after the driven provider: when both exist, drive is the page the caller
       // means, and a lease is the fallback rather than a competitor.
       const leased = await deps.pool?.setMocksLease(session.id, rules);
-      if (true === leased) return { applied: true, count: rules.length };
+      if (true === leased) return mocksApplied(deps, session.id, rules.length);
       return {
         applied: false,
         count: 0,

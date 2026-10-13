@@ -312,20 +312,43 @@ export function attributeOutcome({ connected, transportAliveThroughout, hasCapab
 }
 
 /**
+ * Probes that must miss IN A ROW before the bridge counts as down.
+ *
+ * Any single miss used to mark the whole window down. On Windows install cells the negative control
+ * then went INCONCLUSIVE ("transport stayed available") with the gate's own daemon up and its idle
+ * shutdown off: one `/status` that missed its deadline while the runner compiled the app and drove a
+ * browser. A bridge that is gone misses every probe, so a run of misses still reports it.
+ */
+const TRANSPORT_DOWN_AFTER_MISSES = 3;
+const TRANSPORT_PROBE_TIMEOUT_MS = 2_000;
+
+/**
  * Watch the bridge for the duration of a fixture's window, so `attributeOutcome` has an input that
  * is measured rather than assumed. Returns a stop() that reports whether it was up the whole time.
+ * Probes run one at a time, so a slow answer cannot overlap the next and reorder the misses.
  */
-export function watchTransport(port, { intervalMs = 500 } = {}) {
+export function watchTransport(
+  port,
+  {
+    intervalMs = 500,
+    probe = (p) => transportAlive(p, { timeoutMs: TRANSPORT_PROBE_TIMEOUT_MS }),
+  } = {},
+) {
+  let stopped = false;
   let everDown = false;
-  const timer = setInterval(() => {
-    void transportAlive(port).then((up) => {
-      if (!up) everDown = true;
-    });
-  }, intervalMs);
-  timer.unref();
+  let misses = 0;
+  void (async () => {
+    while (!stopped) {
+      const up = await probe(port);
+      if (stopped) return;
+      misses = up ? 0 : misses + 1;
+      if (misses >= TRANSPORT_DOWN_AFTER_MISSES) everDown = true;
+      await sleep(intervalMs, undefined, { ref: false });
+    }
+  })();
   return {
     stop() {
-      clearInterval(timer);
+      stopped = true;
       return { aliveThroughout: !everDown };
     },
   };

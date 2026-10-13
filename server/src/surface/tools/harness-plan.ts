@@ -215,6 +215,14 @@ export function withoutReplays(plan: HarnessPlan): HarnessPlan {
   return { ...plan, steps: plan.steps.filter((step) => PlanStepKind.DRIVE === step.kind) };
 }
 
+/**
+ * The plan a drive is handed: the gaps, or nothing beside a journey a person named. A named run was
+ * handed every other session's open intents too, and named its flow after one of them.
+ */
+export function drivingPlan(plan: HarnessPlan, focus: string | undefined): HarnessPlan {
+  return focus === undefined ? withoutReplays(plan) : { ...plan, steps: [] };
+}
+
 /** How much of the live page the planner reads. Enough for a dashboard's nav and main controls. */
 const MAX_ABOUT_SNAPSHOT = 6_000;
 

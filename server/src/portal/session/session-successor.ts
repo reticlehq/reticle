@@ -51,7 +51,7 @@ function originOf(url: string): string | undefined {
  * deliberately so a battery addresses a known id. Either way it is a claim of identity, not a
  * coincidence of origin — which is what makes it the right thing to gate succession on.
  */
-function claimedSessionOf(url: string): string | undefined {
+export function claimedSessionOf(url: string): string | undefined {
   try {
     return new URL(url).searchParams.get(RETICLE_URL_PARAM.SESSION) ?? undefined;
   } catch {

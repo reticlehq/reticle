@@ -28,7 +28,6 @@ import {
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { HonestyGrade } from '@reticlehq/engine/evidence/honesty.js';
 import { verificationOf } from './verification-of.js';
-import { withHarnessDrive } from './harness-drive.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BrowserMode, setBrowserMode, resetBrowserMode } from './browser-mode.js';
 
@@ -321,27 +320,15 @@ describe('a flow replay carries a verdict', () => {
  * an explore was indistinguishable from one the agent earned itself.
  */
 describe('a verdict says who drove it', () => {
-  it('marks a verdict produced inside a harness drive', async () => {
-    await withHarnessDrive(() => {
-      expect(verificationOf(ASSERT, { pass: true, verified: Verified.YES }, 1)?.driven).toBe(
-        VerificationDriver.HARNESS,
-      );
-      return Promise.resolve();
-    });
+  it('marks a verdict produced inside a harness drive', () => {
+    expect(
+      verificationOf(ASSERT, { pass: true, verified: Verified.YES }, 1, undefined, true)?.driven,
+    ).toBe(VerificationDriver.HARNESS);
   });
 
   it("leaves the agent's own verdict unmarked — absent means nobody drove it for them", () => {
     const verdict = verificationOf(ASSERT, { pass: true, verified: Verified.YES }, 1);
     expect(verdict).toBeDefined();
     expect(verdict !== undefined && 'driven' in verdict).toBe(false);
-  });
-
-  it('stops marking once the drive is over, including when it threw', async () => {
-    await expect(
-      withHarnessDrive(() => Promise.reject(new Error('the driver gave up'))),
-    ).rejects.toThrow('the driver gave up');
-    expect(
-      verificationOf(ASSERT, { pass: true, verified: Verified.YES }, 1)?.driven,
-    ).toBeUndefined();
   });
 });

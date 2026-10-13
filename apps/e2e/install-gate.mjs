@@ -27,7 +27,12 @@
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { evaluateInstallControl, SESSION_CHECK, sessionMatchesPage } from './install-control.mjs';
+import {
+  evaluateInstallControl,
+  SESSION_CHECK,
+  sessionMatchesPage,
+  waitForVerifiableSession,
+} from './install-control.mjs';
 import { requireAssertion, requireVerdict } from './smoke-checks.mjs';
 import { restoreInstallPackages } from './install-packages.mjs';
 
@@ -97,6 +102,8 @@ import {
   Attribution,
   sweepBatteryOrphans,
 } from './gate-harness.mjs';
+// Batteries are not watched, and a shown browser changes their timing: hide every browser Reticle opens.
+process.env.RETICLE_HEADLESS ??= '1';
 
 const WIN = 'win32' === process.platform;
 
@@ -155,7 +162,10 @@ const HANDOVER_ANSWER_MS = 15_000;
  */
 const EDIT_LOG_WAIT_MS = 15_000;
 const CONNECT_TIMEOUT_MS = 45_000;
-/** After a session appears, how long to wait for `hasCapabilities` to flip true on reannounce. */
+/**
+ * After a session appears, how long to wait for `hasCapabilities` to flip true on reannounce. A
+ * budget of its own, not a slice of CONNECT_TIMEOUT_MS: see `waitForVerifiableSession`.
+ */
 const CAPABILITIES_WAIT_MS = 10_000;
 const KEEP = process.argv.includes('--keep');
 /**
@@ -854,14 +864,32 @@ async function sessionsOn(port) {
   }
 }
 
-/** Answers at all, polled: a server that is up but busy compiling gets the whole bound. */
+/**
+ * Answers at all, polled: a server that is up but busy compiling gets the whole bound.
+ *
+ * Each attempt used to be cut off at 1.5s, so a page whose first render took longer than that never
+ * counted, however long the bound. On a loaded Windows runner the sveltekit negative control failed
+ * "init's dev server still answers after init exited" with a server that was up: its log showed no
+ * error, the session reconnected, and the same url answered a minute later (upstream run
+ * 38235070888). Every abandoned request also kept rendering, which loaded the runner further. Now
+ * one request may use the whole remaining budget, and `why` says what the last attempt got.
+ */
 async function answersWithin(url, ms) {
   const deadline = Date.now() + ms;
+  let why = 'no attempt';
   while (Date.now() < deadline) {
-    if (await reachable(url)) return true;
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+      });
+      if (res.status < 500) return { ok: true, why: '' };
+      why = `status ${String(res.status)}`;
+    } catch (err) {
+      why = String(err?.cause?.code ?? err?.name ?? err);
+    }
     await sleep(500);
   }
-  return false;
+  return { ok: false, why };
 }
 
 /**
@@ -1138,7 +1166,18 @@ async function driveScaffold(scaffold, index) {
   try {
     // ── 1. a surface that has never seen Reticle ──────────────────────────────────────────────
     note('scaffolding…');
-    if (scaffold.create !== undefined) await run(scaffold.create[0], scaffold.create[1], workdir);
+    // Once more on failure, after clearing what the first attempt left: the generators fetch their
+    // templates over the network, and one blip in `npm create astro@latest` dropped #1497 from the
+    // merge queue on 2026-10-09 with nothing of ours involved. A real breakage fails twice.
+    if (scaffold.create !== undefined) {
+      try {
+        await run(scaffold.create[0], scaffold.create[1], workdir);
+      } catch (first) {
+        note(`scaffold failed once, retrying: ${String(first).slice(0, 160)}`);
+        rmSync(app, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+        await run(scaffold.create[0], scaffold.create[1], workdir);
+      }
+    }
     // Files that ARE the scaffold, for a framework with no generator left to run (see CRA_FILES).
     // Before the probe stamp, which needs the app directory to exist.
     for (const [rel, content] of Object.entries(scaffold.files ?? {})) {
@@ -1200,6 +1239,7 @@ async function driveScaffold(scaffold, index) {
     let report = '';
     let initStderr = '';
     let initExit = 0;
+    let initKilled = '';
     try {
       const output = await runCaptured(
         'node',
@@ -1216,6 +1256,9 @@ async function driveScaffold(scaffold, index) {
       initStderr = output.stderr;
     } catch (err) {
       initExit = err.status ?? 1;
+      // A timeout kills init and has no exit status. Saying "exit 1" sent the reader looking for an
+      // error init never printed; it had hung (next-app-router, Windows, upstream run 38129228877).
+      if (true === err.killed) initKilled = ` (killed by ${String(err.signal)}: no exit within the timeout)`;
       report = err.stdout ?? '';
       initStderr = err.stderr ?? '';
     }
@@ -1231,7 +1274,7 @@ async function driveScaffold(scaffold, index) {
     );
 
     handedOverPorts = portsMentionedIn(report);
-    chk('init exits 0', initExit === 0, `exit ${String(initExit)}`);
+    chk('init exits 0', initExit === 0, `exit ${String(initExit)}${initKilled}`);
     // Evidence for the OTHER failure path, which had none (#818).
     //
     // `dumpEvidence` ran only when the gate's own session check failed. The intermittent Windows
@@ -1407,10 +1450,13 @@ async function driveScaffold(scaffold, index) {
     transport = watchTransport(bridgePort);
 
     // ── 6. the handed-over server, after init has exited, in a real browser ─────────────────────
+    const handedOver =
+      appUrl === undefined ? { ok: false, why: '' } : await answersWithin(appUrl, HANDOVER_ANSWER_MS);
     chk(
       "init's dev server still answers after init exited",
-      appUrl !== undefined && (await answersWithin(appUrl, HANDOVER_ANSWER_MS)),
-      `${String(appUrl)}${devLogPath === undefined ? ' (init named no dev-server log)' : ''}`,
+      handedOver.ok,
+      `${String(appUrl)}${devLogPath === undefined ? ' (init named no dev-server log)' : ''}` +
+        `${handedOver.ok || '' === handedOver.why ? '' : ` (last attempt: ${handedOver.why})`}`,
     );
 
     const { chromium } = await import('playwright');
@@ -1457,9 +1503,9 @@ async function driveScaffold(scaffold, index) {
     // POLL. Steps 6 and 7 of the connection sequence race, and a gate that samples once sits outside
     // the product's own protection against it — see docs/system-map.md.
     //
-    // Connected is not verifiable. `hasCapabilities` is announced in HELLO at connect() and
-    // re-announced when `registerCapabilities` runs after, so the first snapshot can be false even
-    // on a file that registers a testid. Wait for a session, then keep polling for capabilities.
+    // Connected is not verifiable. `waitForVerifiableSession` waits for a session and THEN gives
+    // `hasCapabilities` its own budget to flip true on reannounce; the loop lives in
+    // install-control.mjs so a fake clock can drive its edges, which no self-test reaches.
     //
     // And it must be THIS app's session. The daemon answers with every session it holds, and the
     // check used to accept any of them — so a dev server left behind by an earlier scaffold, still
@@ -1469,25 +1515,21 @@ async function driveScaffold(scaffold, index) {
     // from a different framework. That is the exact failure this whole file exists to prevent, one
     // level up. The browser above was pointed at init's url, so that is the only session that can
     // answer for what was installed here.
-    const isOurs = (s) => sessionMatchesPage(s, probeUrl);
-    const connectDeadline = Date.now() + CONNECT_TIMEOUT_MS;
-    let sessions = [];
-    while (Date.now() < connectDeadline) {
-      sessions = (await sessionsOn(bridgePort)).filter(isOurs);
-      if (sessions.length > 0) break;
-      await sleep(500);
-    }
-    const capDeadline = Math.min(connectDeadline, Date.now() + CAPABILITIES_WAIT_MS);
-    while (Date.now() < capDeadline && !sessions.some((s) => true === s.hasCapabilities)) {
-      sessions = (await sessionsOn(bridgePort)).filter(isOurs);
-      await sleep(500);
-    }
+    const { sessions, connected, verifiable } = await waitForVerifiableSession(
+      () => sessionsOn(bridgePort),
+      (s) => sessionMatchesPage(s, probeUrl),
+      {
+        connectTimeoutMs: CONNECT_TIMEOUT_MS,
+        capabilitiesWaitMs: CAPABILITIES_WAIT_MS,
+        now: Date.now,
+        sleep,
+      },
+    );
 
     // ── 6. attribute honestly (harness rule 4) ─────────────────────────────────────────────────
     const { aliveThroughout } = transport.stop();
-    const verifiable = sessions.some((s) => true === s.hasCapabilities);
     const verdict = attributeOutcome({
-      connected: sessions.length > 0,
+      connected,
       hasCapabilities: verifiable,
       transportAliveThroughout: aliveThroughout,
     });
@@ -1539,10 +1581,23 @@ async function driveScaffold(scaffold, index) {
         timeout_ms: 5000,
       }), true);
       chk('the installed SDK answers a true assertion over MCP', true);
-      requireVerdict(await call('reticle_act_and_wait', {
+      const acted = await call('reticle_act_and_wait', {
         sessionId, action: 'click', target: { testid: INSTALL_PROBE_TESTID },
         until: { kind: 'text', contains: 'Reticle install probe clicked' }, timeout_ms: 5000,
-      }), true);
+      });
+      // `unknown` is not a pass and not a failure: the wait could not be judged, which on a loaded
+      // Windows runner is a starved tab, not a broken install (next-pages-router, upstream run
+      // 38041305928, whose reason this gate cut off). The click was still sent, so its consequence
+      // must then be PROVEN by a separate assertion. A `no` is never retried.
+      if ('unknown' === acted?.verified) {
+        note(`act_and_wait could not judge its wait, re-asserting the consequence: ${JSON.stringify(acted)}`);
+        requireAssertion(await call('reticle_assert', {
+          sessionId, predicate: { kind: 'text', contains: 'Reticle install probe clicked' },
+          timeout_ms: 5000,
+        }), true);
+      } else {
+        requireVerdict(acted, true);
+      }
       chk('an MCP action changes the installed page',
         await page.getByTestId(INSTALL_PROBE_TESTID).textContent() === 'Reticle install probe clicked');
       requireAssertion(await call('reticle_assert', {
@@ -1563,7 +1618,9 @@ async function driveScaffold(scaffold, index) {
     );
     chk(
       '  and still answers after a source edit',
-      edited !== undefined && appUrl !== undefined && (await answersWithin(appUrl, HANDOVER_ANSWER_MS)),
+      edited !== undefined &&
+        appUrl !== undefined &&
+        (await answersWithin(appUrl, HANDOVER_ANSWER_MS)).ok,
       edited === undefined
         ? `none of ${EDIT_CANDIDATES.join(', ')} exists in this scaffold`
         : `edited ${edited}; log tail: ${devLog().slice(-200).replace(/\s+/g, ' ')}`,
@@ -1587,7 +1644,7 @@ async function driveScaffold(scaffold, index) {
 
     if (SELF_TEST) chk('the negative control intercepted a Reticle socket', blockedConnections > 0);
   } catch (err) {
-    chk('the scaffold ran to completion', false, String(err).slice(0, 300));
+    chk('the scaffold ran to completion', false, String(err).slice(0, 2000));
   } finally {
     transport?.stop();
     await client?.stop();

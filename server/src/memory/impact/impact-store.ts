@@ -1,10 +1,22 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { describeSync, overallStatus, readSyncSummary } from '@/memory/project/sync-status.js';
+import {
+  SyncStatus,
+  dashboardRunUrl,
+  describeSync,
+  keyRefusalAtLastSync,
+  overallStatus,
+  readSyncSummary,
+} from '@/memory/project/sync-status.js';
+import {
+  describeUnsynced,
+  unsentFlowCount,
+  unsentRunCount,
+} from '@/memory/cloud/unsynced-roots.js';
+import { readDashboardUrl } from '@/memory/project/sync-status.js';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { readAccountState } from '@/memory/cloud/account-state.js';
-import { harnessOfferSource, type OfferSource } from '@/memory/cloud/harness-offer.js';
-import type { ConfigSource } from '@/memory/cloud/harness-config.js';
+import { configForHud, type ConfigSource } from '@/memory/cloud/harness-config.js';
 import { hudNoticesSource, type NoticesSource } from '@/memory/cloud/hud-notices-source.js';
 import { selectNotices } from '@reticlehq/core/hud';
 import {
@@ -57,27 +69,6 @@ function impactPaths(reticleRoot: string, globalRoot: string): ImpactPaths {
     project: join(reticleRoot, ReticleDir.IMPACT_FILE),
     global: join(globalRoot, ReticleDir.ROOT, ReticleDir.IMPACT_FILE),
   };
-}
-
-/**
- * Where this project's dashboard lives, if `reticle link` recorded one.
- *
- * Read from the link file rather than derived from the API url, because the API origin and the
- * console origin are different hosts in every deployment that is not a laptop. Synchronous and
- * best-effort, like every other read in this file: a missing or malformed link file means no link
- * in the HUD, never a failed tool call.
- */
-function readDashboardUrl(reticleRoot: string): string | undefined {
-  try {
-    const raw: unknown = JSON.parse(
-      readFileSync(join(reticleRoot, ReticleDir.CLOUD_LINK_FILE), 'utf8'),
-    );
-    if ('object' !== typeof raw || null === raw) return undefined;
-    const value = (raw as Record<string, unknown>)['dashboardUrl'];
-    return 'string' === typeof value && value.length > 0 ? value : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function emptyScope(now: number): ImpactScope {
@@ -282,7 +273,7 @@ export class ImpactStore {
   readonly #paths: ImpactPaths;
   readonly #root: string;
   /** The sync status, re-read at most every SYNC_STATUS_EVERY_MS: it reads every run file. */
-  #sync: { at: number; value: Record<string, unknown> } | undefined;
+  #sync: { at: number; value: Record<string, unknown> | undefined } | undefined;
   readonly #now: () => number;
   readonly #projectName: string | undefined;
   #dashboardUrl: string | undefined;
@@ -300,8 +291,6 @@ export class ImpactStore {
   #timer: ReturnType<typeof setTimeout> | undefined;
   #onChange: (() => void) | undefined;
   readonly #account: () => AccountState;
-  /** Where this workspace stands with the free harness offer. Cached; see harness-offer.ts. */
-  readonly #offer: OfferSource;
   readonly #config: ConfigSource;
   readonly #notices: NoticesSource;
   readonly #sdkVersion: string;
@@ -315,8 +304,6 @@ export class ImpactStore {
     globalRoot?: string;
     /** Reads whether this machine is signed in. Injected so the store stays testable and pure-ish. */
     account?: () => AccountState;
-    /** Where the workspace stands with the free harness offer. Injected so no test touches a network. */
-    offer?: OfferSource;
     config?: ConfigSource;
     /** The HUD rail's notices. Defaults to the daemon's cached copy of the published file. */
     notices?: NoticesSource;
@@ -334,9 +321,6 @@ export class ImpactStore {
     this.#projectName = opts.projectName;
     this.#dashboardUrl = readDashboardUrl(opts.reticleRoot);
     this.#root = opts.reticleRoot;
-    // The claim happens in the console, so the link this project was linked to IS the claim link —
-    // built here rather than in the HUD, which has no way to know where this project points.
-    this.#offer = opts.offer ?? harnessOfferSource(process.env, () => this.#dashboardUrl);
     this.#notices =
       opts.notices ??
       hudNoticesSource({
@@ -351,11 +335,34 @@ export class ImpactStore {
     this.#global = readScope(this.#paths.global, now);
   }
 
-  #syncStatus(): Record<string, unknown> {
+  #syncStatus(dashboardUrl: string | undefined): Record<string, unknown> | undefined {
     const now = this.#now();
     if (this.#sync !== undefined && now - this.#sync.at < SYNC_STATUS_EVERY_MS)
       return this.#sync.value;
+    // Not linked: one line when runs or flows sit here that nothing will send, and nothing otherwise.
+    // `pending` counts both, so the HUD's existing "N not sent" includes a flow saved with no run.
+    if (dashboardUrl === undefined) {
+      const runs = unsentRunCount(this.#root);
+      const flows = unsentFlowCount(this.#root, false);
+      const value =
+        0 === runs + flows
+          ? undefined
+          : {
+              status: SyncStatus.LOCAL_ONLY,
+              pending: runs + flows,
+              runs,
+              flows,
+              said: describeUnsynced(
+                { root: this.#root, runs, flows, linked: false },
+                dirname(this.#root),
+              ),
+            };
+      this.#sync = { at: now, value };
+      return value;
+    }
     const summary = readSyncSummary(this.#root, true);
+    const refusal = keyRefusalAtLastSync(this.#root);
+    const latest = summary.latestOnPlatform;
     const value = {
       status: overallStatus(summary),
       runs: summary.runs,
@@ -363,7 +370,11 @@ export class ImpactStore {
       pending: summary.pending,
       refused: summary.refused.length + summary.refusedMore,
       ...(summary.lastPushAt === undefined ? {} : { lastPushAt: summary.lastPushAt }),
+      // The run that just synced, on its own page — the HUD's "see it in your dashboard".
+      ...(latest === undefined ? {} : { runUrl: dashboardRunUrl(dashboardUrl, latest) }),
       said: describeSync(summary, now),
+      // The HUD's chip: a refused key is not "0 waiting".
+      ...(refusal === undefined ? {} : { keyRefused: refusal }),
     };
     this.#sync = { at: now, value };
     return value;
@@ -397,19 +408,9 @@ export class ImpactStore {
     this.#dashboardUrl = readDashboardUrl(this.#root);
     if (this.#dashboardUrl !== undefined) snap.dashboardUrl = this.#dashboardUrl;
     snap.account = this.#account();
-    const cfgForOffer = this.#config.read();
-    const offer = this.#offer.read();
-    // Joined here because this is the one place that holds BOTH the offer and the platform config.
-    // The card reads the offer, so readiness has to travel on it rather than being re-derived in a
-    // presenter that has no business knowing what a provider key is.
-    if (offer !== undefined && cfgForOffer !== undefined)
-      offer.drivable = cfgForOffer.providerReady;
-    // Absent means "we have not heard", which the HUD renders as nothing at all. Never defaulted to
-    // `{claimed:false}`: that would advertise the offer to everyone who is offline.
-    if (offer !== undefined) snap.harnessOffer = offer;
     // Absent stays absent: the HUD reads that as "we have not heard" and renders no control.
     const cfg = this.#config.read();
-    if (cfg !== undefined) snap.harnessConfig = cfg;
+    if (cfg !== undefined) snap.harnessConfig = configForHud(cfg, this.#now());
     // Chosen here, where the account and the entitlement are both known. Absent when nothing applies,
     // so the HUD falls back to the slides bundled with the SDK.
     const notices = selectNotices(this.#notices.read(), {
@@ -423,7 +424,8 @@ export class ImpactStore {
     if (coverage !== undefined) snap.coverage = coverage;
     // Only for a linked project: an unlinked one has nothing on the platform, and the HUD already
     // offers the way to link it.
-    if (this.#dashboardUrl !== undefined) snap.sync = this.#syncStatus();
+    const sync = this.#syncStatus(this.#dashboardUrl);
+    if (sync !== undefined) snap.sync = sync;
     return snap;
   }
 

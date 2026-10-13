@@ -12,6 +12,23 @@ import { relative, isAbsolute } from 'node:path';
 import { RETICLE_DEFAULT_PORT, ReticleEnv } from '@reticlehq/core';
 
 const MAX_PORT = 65_535;
+/** Ports a project moved off the default may get: above it, and below the 5000s dev servers use. */
+const PROJECT_PORT_FIRST = RETICLE_DEFAULT_PORT + 1;
+const PROJECT_PORT_SPAN = 599;
+const FNV_OFFSET = 0x811c9dc5;
+const FNV_PRIME = 0x01000193;
+
+/**
+ * The port a project asks for when the default is somebody else's: its own, from its id (or its
+ * directory, before it has one), the same on every run. Every project used to ask for the default
+ * plus one, so with the first one's daemon not yet running every later project was written the same
+ * port and shared it. Taken ports are still skipped by the caller's `pickPort`.
+ */
+export function projectPortFor(seed: string): number {
+  let hash = FNV_OFFSET;
+  for (let i = 0; i < seed.length; i++) hash = Math.imul(hash ^ seed.charCodeAt(i), FNV_PRIME);
+  return PROJECT_PORT_FIRST + ((hash >>> 0) % PROJECT_PORT_SPAN);
+}
 
 /**
  * `RETICLE_PORT`, when it names a port. The one reader of it for the CLI, `init` included.
@@ -40,6 +57,8 @@ export async function portForInit(
     /** The daemon on `port` was started from this project's directory or one above it. */
     daemonStartedHere?: (port: number) => boolean;
   },
+  /** The project's directory: the port's seed when the project has no id yet. */
+  dir?: string,
 ): Promise<number | undefined> {
   if (explicit !== undefined) return explicit;
   if (configured !== undefined) return configured;
@@ -54,7 +73,8 @@ export async function portForInit(
   // been through init has no id yet, so a single named holder is somebody else.
   const holders = await deps.daemonProjects(RETICLE_DEFAULT_PORT);
   if (1 !== holders.length || holders[0] === projectId) return undefined;
-  return deps.pickPort(RETICLE_DEFAULT_PORT + 1);
+  const seed = projectId ?? dir;
+  return deps.pickPort(seed === undefined ? PROJECT_PORT_FIRST : projectPortFor(seed));
 }
 
 /** Is `dir` the same directory as `cwd`, or an ancestor of it? */

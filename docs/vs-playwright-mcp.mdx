@@ -15,6 +15,8 @@ That single architectural choice explains every difference below. An outside-in 
 
 ## Measured, on the same app at the same moment
 
+These passes last ran on 2026-06-22, against `@playwright/mcp@0.0.76`. Both tools have shipped since, so treat the numbers as dated.
+
 |                         | Reticle   | Playwright MCP |
 | ----------------------- | --------- | -------------- |
 | Bugs caught (of 10)     | **10**    | 9              |
@@ -49,7 +51,7 @@ This is not a courtesy section. There are real cases where Playwright is the cor
 - **Assert on the app's own success signal.** When your app emits `auth:granted`, Reticle can require that exact signal. Playwright can check that a DOM element appeared, which a mock also does.
 - **Read application state.** `stateDiffs` shows `auth` moving from `null` to a real user. A POST that returns `200` without touching state is caught here and nowhere else.
 - **Map a DOM node to source.** `src/components/Login.tsx:81`, via the React fiber tree. Playwright can tell you the selector; it cannot tell you the file.
-- **Grade its own evidence.** Every verdict reports `honesty.grade`: `presence`, `state`, `net` or `signal`, weakest to strongest. Plus whether the capture was clean and complete.
+- **Grade its own evidence.** An `act_and_wait` verdict reports `honesty.grade`: `none`, `presence`, `state`, `net` or `signal`, weakest to strongest. Plus whether the capture was clean and complete.
 - **Say "unknown".** Reticle distinguishes "did not happen" from "I could not tell". That third state is the difference between a check and a coin flip.
 
 ## The false-green case

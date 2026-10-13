@@ -12,14 +12,20 @@ import { defaultRunId } from './default-run-id.js';
 export { defaultRunId } from './default-run-id.js';
 
 /** Wire a RunnerPort to the live session. Pass sessionId to disambiguate when several tabs are open. */
-export function createRunnerPort(deps: ToolDeps, sessionId?: string): RunnerPort {
+export function createRunnerPort(
+  deps: ToolDeps,
+  sessionId?: string,
+  /** `reticle verify --confirm-dangerous`: this run acknowledges the steps held as destructive. */
+  opts: { confirmDangerous?: boolean } = {},
+): RunnerPort {
   return {
     listFlows: () => deps.flows.list(),
     replayFlow: (name) =>
-      replayAndLearn(
-        deps,
-        sessionId !== undefined ? { flowName: name, sessionId } : { flowName: name },
-      ),
+      replayAndLearn(deps, {
+        flowName: name,
+        ...(sessionId === undefined ? {} : { sessionId }),
+        ...(true === opts.confirmDangerous ? { confirmDangerous: true } : {}),
+      }),
     now: () => deps.now(),
     newRunId: defaultRunId,
   };

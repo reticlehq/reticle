@@ -128,7 +128,7 @@ export async function flowIntentStatement(
 export async function dischargeFlowIntent(
   store: IntentStore,
   flow: FlowFile,
-  proof: { verdictId: string; grade: string; at: number },
+  proof: { verdictId: string; grade: string; at: number; runId?: string },
 ): Promise<boolean> {
   const id = intentIdOf(flow);
   if (id === undefined) return false;

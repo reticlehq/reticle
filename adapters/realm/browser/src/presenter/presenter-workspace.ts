@@ -5,6 +5,9 @@ import {
   ACCOUNT_SIGNIN_ATTR,
   ACCOUNT_TEXT,
   accountControlHtml,
+  paintAccountSlot,
+  teamLinkHtml,
+  TEAM_SLOT_ATTR,
   type AccountDetails,
 } from './presenter-account.js';
 
@@ -18,7 +21,7 @@ const WORKSPACE_COPY_ATTR = 'data-reticle-workspace-copy';
  * Where the account capsule lands: a slot, filled later, rather than markup built here.
  *
  * This row is built ONCE at mount, and whether the machine is signed in arrives later and can change
- * — a `reticle login` in another terminal while the page is open is an ordinary thing to do. So the
+ * — a `reticle connect` in another terminal while the page is open is an ordinary thing to do. So the
  * row reserves the space and `paintWorkspaceAccount` fills it whenever a snapshot lands, the same
  * way the folder and project rows are painted rather than interpolated.
  */
@@ -36,6 +39,10 @@ export const TOOLBAR_ACCOUNT_ATTR = 'data-reticle-toolbar-account';
 const COPIED_MS = 1_200;
 
 const WORKSPACE_LABEL = 'Workspace';
+/** What the chip is, said on the chip and on hover: a folder name alone read as a stray tag. */
+const CHIP_KEY = 'Project';
+const CHIP_TITLE =
+  'The project folder this page is served from, which Reticle reports to. Click for its path.';
 const PROJECT_LABEL = 'Project';
 const COPY_PATH_LABEL = 'Copy path';
 const COPIED_PATH_LABEL = 'Copied';
@@ -79,8 +86,9 @@ export function workspaceRowHtml(): string {
   const caret = hiIconHtml(PresenterIcon.CARET_DOWN, PRESENTER_ICON_SIZE.HELP);
   const copyIcon = hiIconHtml(PresenterIcon.COPY, PRESENTER_ICON_SIZE.HELP);
   return `<div class="reticle-workspace-wrap">
-    <button type="button" class="reticle-workspace" ${WORKSPACE_BTN_ATTR} aria-haspopup="true" aria-expanded="false" title="${WORKSPACE_LABEL}">
+    <button type="button" class="reticle-workspace" ${WORKSPACE_BTN_ATTR} aria-haspopup="true" aria-expanded="false" title="${CHIP_TITLE}">
       <span class="reticle-workspace-icon" aria-hidden="true">${folderIcon}</span>
+      <span class="reticle-workspace-k">${CHIP_KEY}</span>
       <span class="reticle-workspace-name" ${WORKSPACE_NAME_ATTR}>${WORKSPACE_FALLBACK}</span>
       <span class="reticle-workspace-caret" aria-hidden="true">${caret}</span>
     </button>
@@ -245,7 +253,11 @@ export function paintToolbarAccount(
   dashboardUrl: string | undefined,
   details: AccountDetails = {},
 ): void {
+  const team = root.querySelector(`[${TEAM_SLOT_ATTR}]`);
+  if (team instanceof HTMLElement) paintAccountSlot(team, teamLinkHtml(account, dashboardUrl));
   const slot = root.querySelector(`[${TOOLBAR_ACCOUNT_ATTR}]`);
   if (!(slot instanceof HTMLElement)) return;
-  slot.innerHTML = accountControlHtml(account, { ...details, dashboardUrl }, true);
+  // Signed out, the team link beside it is the Sign in door: one door, not two side by side.
+  const door = !(team instanceof HTMLElement);
+  paintAccountSlot(slot, accountControlHtml(account, { ...details, dashboardUrl }, door));
 }

@@ -6,6 +6,7 @@ import { LicenseWrite, writeLicenseKey } from '../license-key.js';
 import { SetupPhase } from '../run-setup.js';
 import { bridgeOccupied } from '../bringup/bridge-port.js';
 import { reportInitOutcome } from '@/telemetry/init-telemetry.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
 
 vi.mock('../setup-command.js', () => ({
@@ -16,8 +17,9 @@ vi.mock('@/command/daemon/binding/port-presence.js', async (importOriginal) => (
   ...(await importOriginal<typeof import('@/command/daemon/binding/port-presence.js')>()),
   probePresence: vi.fn(),
 }));
-vi.mock('../bringup/bridge-port.js', () => ({ bridgeOccupied: vi.fn() }));
+vi.mock('../bringup/bridge-port.js', () => ({ bridgeOccupied: vi.fn(), freePortAfter: vi.fn() }));
 vi.mock('@/telemetry/init-telemetry.js', () => ({ reportInitOutcome: vi.fn() }));
+vi.mock('@/command/daemon/binding/daemon-status-probe.js', () => ({ fetchStatus: vi.fn() }));
 vi.mock('../license-key.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../license-key.js')>()),
   writeLicenseKey: vi.fn(),
@@ -92,6 +94,24 @@ describe('init reports its deferred outcome once, after runtime setup', () => {
       'synthetic-experiment-license',
       expect.any(Object),
     );
+  });
+
+  it('tells an agent with no Reticle tools attached to restart, after the app connects', async () => {
+    vi.stubEnv('CLAUDECODE', '1');
+    vi.mocked(fetchStatus).mockResolvedValue({ running: true, version: '3.7.0', sessions: [] });
+    const print = vi.fn();
+    await continueAfterInit(ARGS, RESULT, { print }, '/app');
+    vi.unstubAllEnvs();
+    expect(print.mock.calls.flat().join('\n')).toContain('Restart your coding agent now');
+  });
+
+  it('does not tell an agent that has the tools to restart', async () => {
+    vi.stubEnv('CLAUDECODE', '1');
+    vi.mocked(fetchStatus).mockResolvedValue({ running: true, sessions: [], mcpPeers: ['3.7.0'] });
+    const print = vi.fn();
+    await continueAfterInit(ARGS, RESULT, { print }, '/app');
+    vi.unstubAllEnvs();
+    expect(print.mock.calls.flat().join('\n')).not.toContain('Restart your coding agent');
   });
 
   it('records a connected app after the default continuation', async () => {
@@ -235,5 +255,32 @@ describe('htmlCarriesSdk — when a page without the SDK means a stale dev serve
   it('keeps Vite and plain HTML as they were', () => {
     expect(htmlCarriesSdk('vite', () => false)).toBe(true);
     expect(htmlCarriesSdk('html', () => false)).toBe(true);
+  });
+});
+
+/**
+ * `reticle connect` runs init first on a fresh project, and init exiting on a ⚠ ended connect
+ * before it signed in: the person was never told to run it again, and a second identical run is what
+ * worked. Under connect, a setup that did not finish is reported and the run carries on.
+ */
+describe('init run as the first half of connect', () => {
+  it('reports the unfinished setup and returns instead of exiting', async () => {
+    vi.mocked(runSetupCommand).mockResolvedValue({
+      ...SUCCESS,
+      ok: false,
+      fallback: ['add the snippet'],
+    });
+    const before = process.exitCode;
+    // Resolving at all is the claim: the mocked exit throws.
+    await expect(
+      continueAfterInit({ ...ARGS, keepGoing: true }, RESULT, IO, '/app'),
+    ).resolves.toBeUndefined();
+    expect(process.exitCode).toBe(1);
+    process.exitCode = before;
+  });
+
+  it('still exits on its own, as before, when init is the whole command', async () => {
+    vi.mocked(runSetupCommand).mockResolvedValue({ ...SUCCESS, ok: false });
+    await expect(continueAfterInit(ARGS, RESULT, IO, '/app')).rejects.toThrow('exit');
   });
 });

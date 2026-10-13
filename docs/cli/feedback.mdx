@@ -8,7 +8,7 @@ icon: comment
 
 ```bash
 npx @reticlehq/server feedback [--rating 1-5] [--bug] "what worked, what didn't"
-npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"
+npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "what happened"
 ```
 
 The `--agent` form is for an agent that cannot reach the `reticle_session { action: "feedback" }` tool: during `init`, while instrumentation is half wired, or when the daemon will not start. Those are the reports that are hardest to hear and most needed, because every other path requires the tool surface to already work.
@@ -29,12 +29,12 @@ Everything that is not a flag or a flag's value becomes the message, joined with
 The payload is printed **before** it is sent, every time. A channel that carries free text and does not show you what it sends is asking for trust it has not earned.
 
 ```
-sending      {"source":"human","kind":"experience","stack":"vite","runtime":"web"}
+sending      {"stack":"vite","version":"3.7.0","os":"darwin","ci":false}
 redacted     email (removed before sending)
 thanks       your feedback is in. it genuinely changes what gets built next.
 ```
 
-`not sent` replaces the last line when the send failed or telemetry is off, and names the reason. Humans who have never identified also get an offer of a reply route, printed after the receipt rather than as a prompt.
+`not sent` replaces the last line when the send failed or telemetry is off, and names the reason. Nothing is lost either way: a failed send is kept on disk and retried, and with telemetry off the report is written to disk instead.
 
 Run with no message and no rating, it prints usage and exits `1`. Real capture:
 

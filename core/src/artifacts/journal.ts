@@ -56,6 +56,12 @@ export const JournalActionSchema = z.object({
   at: z.number().int().min(0),
   /** Set only when the Harness drove this action; absent means the connected agent did. */
   drivenBy: DrivenBySchema.optional(),
+  /**
+   * The MCP client that made this call, as its handshake named it (`claude-code`, `cursor`…). Read
+   * per call rather than at session end: by teardown the agent has often detached, and two agents on
+   * one daemon cannot be told apart from anything but the call itself.
+   */
+  agent: z.string().min(1).max(TRANSPORT_LIMITS.MAX_REF_LENGTH).optional(),
 });
 export type JournalAction = z.infer<typeof JournalActionSchema>;
 
@@ -117,6 +123,13 @@ export const JournalVerdictEffectSchema = z.object({
   /** `file:line` for the element driven, when the page told us one. */
   source: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH).optional(),
   /**
+   * What the check saw, in the engine's words ("present, visible, disabled"), when it said. Kept so
+   * a failed check can say what it found rather than only that the claim did not hold.
+   */
+  observed: z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH).optional(),
+  /** What the check required, in the engine's words ("an element … in state 'enabled'"). */
+  expected: z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH).optional(),
+  /**
    * Which source of truth answering the claim required -- the predicate's own kind.
    *
    * A run folded from this journal has to say what a check READ, and with no field here it had
@@ -138,6 +151,21 @@ export const JournalVerdictEffectSchema = z.object({
    * Absent is not `false`. `false` says the claim came afterwards; absent says nobody recorded which.
    */
   declaredBeforeActing: z.boolean().optional(),
+  /**
+   * The requests seen in a failed check's window: method, url, status and a short excerpt of the
+   * (already redacted) response, so a failure's page can show the call that explains it.
+   */
+  net: z
+    .array(
+      z.object({
+        method: z.string().max(TRANSPORT_LIMITS.MAX_COMMAND_NAME_LENGTH),
+        url: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH),
+        status: z.number().optional(),
+        body: z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH).optional(),
+      }),
+    )
+    .max(5)
+    .optional(),
   /**
    * What kind of evidence bought the answer -- the grade the verdict actually proved.
    *

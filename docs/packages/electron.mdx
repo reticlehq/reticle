@@ -49,12 +49,13 @@ It patches three methods, and each IPC call then surfaces to Reticle as a networ
 | `ipcRenderer.sendSync` | Two-way, with its outcome            |
 | `ipcRenderer.send`     | One-way, dispatched, with no outcome |
 
-It then exposes `window.__reticleIpc` through the context bridge, with three members used by the SDK rather than by you:
+It then exposes `window.__reticleIpc` through the context bridge, with four members used by the SDK rather than by you:
 
 | Member | Signature | Notes |
 | --- | --- | --- |
 | `subscribe` | `(callback) => number` | Returns a token, or `-1` if the argument is not a function |
 | `unsubscribe` | `(token) => void` | Real removal |
+| `windowLabel` | `() => Promise<string \| undefined>` | The label the main process registered for this window, or `undefined` |
 | `capture` | `(fullPage) => Promise<string \| null>` | Resolves to a capture file path, `null` when no main handler is installed, and propagates the explicit full-page refusal |
 
 ## The main process
@@ -66,7 +67,7 @@ const win = new BrowserWindow({/* ... */});
 installReticleCapture(win);
 ```
 
-`installReticleCapture(win): void` is a no-op on `null` or `undefined`, tracks the window until it closes, and registers the capture handler once for the whole app.
+`installReticleCapture(win, options?): void` is a no-op on `null` or `undefined`, tracks the window until it closes, and registers the capture handler once for the whole app. `{ label: 'settings' }` names the window in `reticle_session { action: "list" }`; without it the window is listed by url and title.
 
 The handler calls `webContents.capturePage()`, writes the PNG into a per-process `0700` captures directory as `reticle-capture-<n>.png`, and **returns the file path rather than the bytes**, because the transport has a 64KB cap. It refuses `fullPage: true` explicitly rather than silently returning a viewport shot, and it throws named reasons rather than one blanket silence: `full-page-unsupported` for that refusal, `window-not-composited` when the window had nothing painted yet, `no usable webContents to capture` when the window is gone. The preload re-throws the full-page refusal and turns everything else into `null`.
 

@@ -286,8 +286,8 @@ export const RECOVERY = {
    * who deliberately switched the harness off gets a bug report filed about their own decision.
    */
   HARNESS_OFF:
-    'A human turned autonomous driving off for this project, or has not claimed the free harness ' +
-    'months. This is a deliberate refusal and there is nothing to report: drive the app yourself ' +
+    'The Harness is off for this project (it is opt-in), or the workspace cannot drive it now. ' +
+    'This is a deliberate refusal and there is nothing to report: drive the app yourself ' +
     'through the MCP tools — reticle_navigate, then reticle_act_and_wait with an `until` — which is ' +
     'the same verification without a model driving it.',
   /**
@@ -295,6 +295,10 @@ export const RECOVERY = {
    * the refusal names reticle_act_and_wait as the alternative, which the catch-all below read as an
    * agent's malformed call: it was then told to fix arguments that were never wrong.
    */
+  HARNESS_LOCKED:
+    'The Harness unlocks once Reticle sees enough of this app; the refusal names what is missing ' +
+    'and how to close each gap. Nothing to report: close them, or drive the journey yourself with ' +
+    'reticle_act_and_wait and an `until` on its last step. Every other tool works at any coverage.',
   HARNESS_NOT_LINKED:
     'This project is not linked to the Reticle platform, where the Harness runs. The call itself was ' +
     'valid. Either the human runs `npx @reticlehq/server connect` once in the app directory, or you ' +
@@ -345,6 +349,8 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   HARNESS_OFF: RefusalReason.UNSUPPORTED,
   // Nothing about the call is wrong either; the project is not linked yet.
   HARNESS_NOT_LINKED: RefusalReason.UNSUPPORTED,
+  // The call is valid; the app is not instrumented enough for the Harness yet.
+  HARNESS_LOCKED: RefusalReason.UNSUPPORTED,
 };
 
 /** Hint text back to its reason. The hints are distinct strings, so this inverts cleanly. */
@@ -367,8 +373,16 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
   { match: /no (?:active|compiled) recording named/i, hint: RECOVERY.MISSING_RECORDING },
   { match: /pairing token is required/i, hint: RECOVERY.TOKEN_REQUIRED },
   {
-    match: /Autonomous driving is turned OFF|no harness entitlement/i,
+    // Credits spent, not entitled, or the platform not answering: deliberate refusals, each naming
+    // its own way out, never "may be a defect in Reticle".
+    match:
+      /The Reticle Harness is off for this project|no harness entitlement|credits are used\.|cannot drive the Harness right now|Could not confirm Harness access/i,
     hint: RECOVERY.HARNESS_OFF,
+  },
+  {
+    // The gate's own words, and the platform's "locked: connect your app first": expected states.
+    match: /(?:^Harness unlocks at \d+% instrumentation)|(?:Reticle Harness is locked\b)/,
+    hint: RECOVERY.HARNESS_LOCKED,
   },
   { match: /The Reticle Harness runs on the Reticle platform/, hint: RECOVERY.HARNESS_NOT_LINKED },
   // Three conditions the daemon understands perfectly and still asked for a bug report about. Each

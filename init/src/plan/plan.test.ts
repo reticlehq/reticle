@@ -34,6 +34,9 @@ function detection(
 function input(partial: Partial<PlanInput>): PlanInput {
   return {
     detection: partial.detection ?? detection(Framework.VITE),
+    ...(partial.nodeModulesLinked === undefined
+      ? {}
+      : { nodeModulesLinked: partial.nodeModulesLinked }),
     claudeCli: partial.claudeCli ?? true,
     mcpExists: partial.mcpExists ?? false,
     ...(partial.platform === undefined ? {} : { platform: partial.platform }),
@@ -411,9 +414,23 @@ describe('buildPlan — Vite', () => {
 });
 
 describe('buildPlan — install', () => {
-  it('makes install an exec step when enabled, manual otherwise', () => {
+  // From the persona drives: `connect` ran init, whose `npm i` replaced the app's `node_modules`
+  // symlink (a workspace's tree) with a fresh one. A linked tree is never installed into.
+  it('never installs into a node_modules that is a link to another tree', () => {
+    const linked = buildPlan(
+      input({ options: { port: undefined, mcp: true, install: true }, nodeModulesLinked: true }),
+    );
+    expect(step(linked, 'Install dependencies').status).toBe(StepStatus.SKIP);
+    expect(step(linked, 'Install dependencies').exec).toBeUndefined();
+    expect(step(linked, 'Install dependencies').detail).toMatch(/link/);
+  });
+
+  // `--no-install` is the person's choice, not a step left undone: it printed "[⚠] Install
+  // dependencies" on every scoped run. Skipped, still naming the command to run.
+  it('makes install an exec step when enabled, a skipped one under --no-install', () => {
     const off = buildPlan(input({ options: { port: undefined, mcp: true, install: false } }));
-    expect(step(off, 'Install dependencies').status).toBe(StepStatus.MANUAL);
+    expect(step(off, 'Install dependencies').status).toBe(StepStatus.SKIP);
+    expect(step(off, 'Install dependencies').detail).toMatch(/--no-install/);
     expect(step(off, 'Install dependencies').exec).toBeUndefined();
 
     const on = buildPlan(input({ options: { port: undefined, mcp: true, install: true } }));

@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`: `reticle verify <url> --session-id <id> --expect …` no longer reloads a tab that is already on that url.** The same-document check ran only when no session was named, so a pinned tab was always navigated, and navigating to the current url is a reload: client-only state such as page 2 of a list was thrown away, and a desktop window disconnected under the assert. The named session's url is now read from the same status as the unpinned path and the navigate is skipped when it is already on that document. A tab on a different url is navigated as before. Closes [#1409](https://github.com/reticlehq/reticle/issues/1409).

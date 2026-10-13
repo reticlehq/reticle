@@ -14,6 +14,7 @@ import {
   AppRuntime,
   ConsequenceKind,
   NetInitiator,
+  PredicateKind,
   ReticleTool,
   type DrivenBy,
 } from '@reticlehq/core';
@@ -22,6 +23,7 @@ import { runTool } from './invoke-tool.js';
 import { TOOL_SURFACE, filterTools } from './tool-surface.js';
 import { withTimeout } from '@/features/harness/with-timeout.js';
 import { runDrivenBy } from '@/hooks/driven-by.js';
+import { noteDriveStep } from '@/features/harness/drive-runs.js';
 import type { HarnessTool, HarnessToolset } from '@/features/harness/harness.js';
 
 /**
@@ -34,7 +36,7 @@ import type { HarnessTool, HarnessToolset } from '@/features/harness/harness.js'
  * sometimes skip, which silently turns the cheap path off.
  */
 /**
- * Beyond the default surface, the three tools a drive cannot do its job without.
+ * Beyond the default surface, the tools a drive cannot do its job without.
  *
  * RECORD and FLOW_SAVE are how a drive keeps what it drove. FLOW_REPLAY is how it avoids driving
  * the same thing twice — it was absent, so a driver handed a plan full of already-recorded journeys
@@ -44,6 +46,9 @@ const HARNESS_EXTRA_TOOLS: readonly string[] = [
   ReticleTool.RECORD,
   ReticleTool.FLOW_SAVE,
   ReticleTool.FLOW_REPLAY,
+  // A goal below the fold stayed `unknown` on a drive told to scroll to it: nothing it was offered
+  // could scroll. This one brings an element into view by the same query a find uses.
+  ReticleTool.SCROLL_TO,
 ];
 
 /**
@@ -139,6 +144,8 @@ export interface ReticleToolsetOptions {
   only?: readonly string[];
   /** Stamped on every action this drive journals, so its verdicts fold into a run of their own. */
   drivenBy?: DrivenBy;
+  /** The person's own request: the only text that lets the drive press an outward control. */
+  asked?: string;
   /** The pinned session wins over any a call names: a remote caller never reaches another tab. */
   locked?: boolean;
 }
@@ -183,20 +190,42 @@ export function reticleToolset(
         // list, and this is the same recovery the MCP surface gives an agent that does the same.
         return { error: `unknown tool ${target ?? name}`, available: [...byName.keys()] };
       }
-      const pinned = pinSession(targetArgs, options.sessionId, true === options.locked);
+      const pinned = pinSession(
+        options.drivenBy === undefined ? targetArgs : requestMustSucceed(targetArgs),
+        options.sessionId,
+        true === options.locked,
+      );
       const scoped = isDesktopSession(deps, pinned['sessionId'])
         ? desktopBackendClaims(pinned)
         : pinned;
       const drivenBy = options.drivenBy;
+      if (drivenBy !== undefined) noteDriveStep(drivenBy.harness, tool.name);
       return withTimeout(
         drivenBy === undefined
           ? runTool(tool, deps, scoped)
-          : runDrivenBy(drivenBy, () => runTool(tool, deps, scoped)),
+          : runDrivenBy(drivenBy, () => runTool(tool, deps, scoped), options.asked),
         TOOL_TIMEOUT_MS,
         `${tool.name} never returned`,
       );
     },
   };
+}
+
+/**
+ * A request the Harness declares must succeed (`ok: true`) unless its claim names a status. A net
+ * claim with no status is met by any answer, so a sign-in whose `POST /api/login` came back 401 was
+ * counted as a check that held. Applied to the top-level claim of a wait or an assert.
+ */
+export function requestMustSucceed(args: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...args };
+  for (const key of ['until', 'predicate']) {
+    const claim = args[key];
+    if ('object' !== typeof claim || null === claim) continue;
+    const p = claim as Record<string, unknown>;
+    if (PredicateKind.NET === p['kind'] && undefined === p['status'] && undefined === p['ok'])
+      out[key] = { ...p, ok: true };
+  }
+  return out;
 }
 
 /**

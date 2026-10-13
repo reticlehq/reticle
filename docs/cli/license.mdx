@@ -14,24 +14,28 @@ No flags.
 
 ## What it prints
 
-One `reticle_license` line. Real capture on a checkout with no issuer key configured:
+One `reticle_license` JSON line, on stderr. On a checkout with no issuer key configured:
 
 ```json
 {
   "t": "2026-08-15T18:42:26.758Z",
   "event": "reticle_license",
+  "gated": ["audit-log"],
+  "contact": "hey@reticle.sh",
   "status": "eval",
   "detail": "evaluation mode: enterprise features run free (no issuer key configured)"
 }
 ```
 
-| `status`  | Meaning                                       |
-| --------- | --------------------------------------------- |
-| `active`  | A valid license is present                    |
-| `eval`    | Evaluation mode. Enterprise features run free |
-| `missing` | No license, and the build expects one         |
+| `status`  | Meaning                                             |
+| --------- | --------------------------------------------------- |
+| `active`  | A valid license is present                          |
+| `eval`    | Evaluation mode. Enterprise features run free       |
+| `missing` | No license, and the build expects one               |
+| `expired` | The key verified, but its expiry has passed         |
+| `invalid` | The key was rejected, or the build is misconfigured |
 
-`detail` is a sentence explaining the status.
+`detail` is a sentence explaining the status. An active license also carries `licenseId`, `org`, `plan` and `expiresAt`.
 
 ## Exit codes
 
@@ -40,7 +44,7 @@ Always `0`.
 ## Worked example
 
 ```bash
-npx @reticlehq/server license | jq -r .status
+npx @reticlehq/server license 2>&1 | jq -r .status
 ```
 
 <Card title="What enterprise covers" icon="building" href="/enterprise">

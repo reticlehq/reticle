@@ -15,7 +15,7 @@ export const PRESENTER_DESIGN_TOKENS_CSS: string = `
   --reticle-hud-radius-md:10px;
   --reticle-hud-radius-lg:14px;
   --reticle-hud-radius-pill:9999px;
-  --reticle-hud-size-xs:10px;
+  --reticle-hud-size-xs:11px;
   --reticle-hud-size-sm:12px;
   --reticle-hud-size-base:13px;
   --reticle-hud-icon-size:18px;

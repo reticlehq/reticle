@@ -8,9 +8,9 @@
  * lighter per-flow RunRecord that feeds regression memory is synced separately in flow-replay-run.ts.
  * Both are best-effort + opt-in: no creds → the artifact still lands on disk, nothing leaves the machine.
  */
-import { mcpClientIdentity } from '@/surface/mcp/peer/client-identity.js';
+import { callerClientName } from '@/hooks/coding-agents.js';
+import { currentDrivenBy } from '@/hooks/driven-by.js';
 import {
-  type ProjectId,
   RunAgentKind,
   RunFramework,
   RunProfile,
@@ -18,6 +18,7 @@ import {
   type FlowFile,
   type FlowReplayResult,
   type ReticleVerificationRun,
+  asRunId,
 } from '@reticlehq/core';
 import { homedir } from 'node:os';
 import {
@@ -26,6 +27,7 @@ import {
 } from './artifact/build-verification-run.js';
 import { mapReplayToFlowResult } from './artifact/replay-mapping.js';
 import { defaultRunId } from './default-run-id.js';
+import { currentShotRun } from './default-run-id.js';
 import { RunStore } from './artifact/run-store.js';
 import { cloudFetch, syncRunToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
@@ -44,33 +46,50 @@ export interface TimedReplay {
   flow?: FlowFile;
 }
 
+/** The MCP client name `reticle verify` (the command line, CI's path) connects to a daemon as. */
+export const CLI_CLIENT_NAME = 'reticle-cli';
+
+/**
+ * Who ran a suite, and why. The command line is the pipeline, whichever daemon replays for it:
+ * through a running daemon its runs read as a coding agent, trigger manual, credited to whoever
+ * minted the key, while the path that boots its own daemon said pipeline.
+ */
+function agentAndTrigger(
+  client: string | undefined,
+): Pick<VerificationRunInput, 'agent' | 'trigger'> {
+  return CLI_CLIENT_NAME === client
+    ? { agent: { id: client, kind: RunAgentKind.OEM_PIPELINE }, trigger: { kind: RunTrigger.OEM } }
+    : {
+        agent: { id: client ?? RETICLE_MCP_AGENT_ID, kind: RunAgentKind.CODING_AGENT },
+        trigger: { kind: RunTrigger.MANUAL },
+      };
+}
+
 /** Assemble the ReticleVerificationRun artifact for a verify suite (pure — no IO). */
 function assembleRun(
   deps: ToolDeps,
   timed: TimedReplay[],
-  projectId: ProjectId | undefined,
+  /** The dashboard project this checkout is linked to, else the session's own id. */
+  projectName: string | undefined,
 ): ReticleVerificationRun {
   const flows = timed.map((t) => mapReplayToFlowResult(t.replay, t.durationMs, t.flow));
   const input: VerificationRunInput = {
-    runId: defaultRunId(),
+    // The run its replays' screenshots were filed under, when the verify minted one first.
+    runId: asRunId(currentShotRun() ?? defaultRunId()),
     durationMs: flows.reduce((sum, f) => sum + f.durationMs, 0),
     profile: RunProfile.DEV,
-    project: { name: projectId ?? 'reticle', framework: RunFramework.OTHER },
+    project: { name: projectName ?? 'reticle', framework: RunFramework.OTHER },
     /*
      * WHICH agent drove this, not merely THAT one did.
      *
      * This was hardcoded to 'reticle-mcp', so every run in every workspace claimed the same author.
      * A dashboard built on it could say "an agent verified this" and never "Claude Code verified
      * this, Cursor broke it" — which is the question a team actually has once more than one agent
-     * touches the repo. The name is the client's own claim from the MCP handshake; a plain CLI run
-     * with no MCP peer keeps the old id, because inventing a vendor there would be worse than
-     * admitting we do not know.
+     * touches the repo. The name is the client's own claim from the MCP handshake, for the call that
+     * ran this suite only; a plain CLI run, or a dashboard Re-verify no agent made, keeps the old id,
+     * because inventing a vendor there would be worse than admitting we do not know.
      */
-    agent: {
-      id: mcpClientIdentity().name ?? RETICLE_MCP_AGENT_ID,
-      kind: RunAgentKind.CODING_AGENT,
-    },
-    trigger: { kind: RunTrigger.MANUAL },
+    ...agentAndTrigger(callerClientName()),
     changedFiles: [],
     flows,
     checks: [],
@@ -92,6 +111,9 @@ export async function persistAndSyncVerificationRun(
 ): Promise<string | undefined> {
   const { projectId } = target;
   if (0 === timed.length) return undefined;
+  // A replay the Harness made inside its own drive is part of that drive's run: written on its own
+  // it was a second row ("Passed · Flow replay · Your agent") beside the plan run it belonged to.
+  if (currentDrivenBy() !== undefined) return undefined;
   let run: ReticleVerificationRun;
   // The project the suite ran for, not the directory the daemon was started in. Both halves below
   // take it: the artifact `reticle_run` reads back through `sessionRoot`, and the cloud link that
@@ -99,8 +121,10 @@ export async function persistAndSyncVerificationRun(
   // a misrouted read silently meant "not attached" — and where it DID have one, the run was pushed
   // to a dashboard belonging to whoever that checkout was linked to.
   const root = rootForTarget(deps, target);
+  const cloud = await resolveProjectCloud(deps.fs, root, homedir(), process.env);
   try {
-    run = assembleRun(deps, timed, projectId);
+    // Named after the dashboard project the checkout is linked to: a Re-verify run read "reticle".
+    run = assembleRun(deps, timed, cloud.projectId ?? projectId);
     await new RunStore(deps.fs, root).write(run);
   } catch (error) {
     log('verification-run-persist-failed', {
@@ -109,7 +133,6 @@ export async function persistAndSyncVerificationRun(
     return undefined;
   }
   // Per-project cloud: only push when THIS project has cloud attached AND its policy allows runs.
-  const cloud = await resolveProjectCloud(deps.fs, root, homedir(), process.env);
   if (null === cloud.config || !cloud.policy.runs) return run.runId; // not attached / runs disabled → local only
   const result = await syncRunToCloud(run, cloud.config, cloudFetch);
   if (result.outcome !== SyncOutcome.SYNCED) {

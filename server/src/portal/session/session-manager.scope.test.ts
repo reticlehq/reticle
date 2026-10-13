@@ -182,6 +182,28 @@ describe('a dead sessionId names the live ones instead of sending the agent away
     expect(message).toContain('alive-2');
   });
 
+  /** An expired lease's refusal listed every other agent's leased tab, with the page it was on. */
+  it("never names another agent's leased tab, and says an ended lease ended", async () => {
+    await connect({ sessionId: 'mine', url: 'http://localhost:3000/', projectId: 'p' });
+    await connect({
+      sessionId: 'lease-theirs',
+      url: 'http://localhost:3000/settings?__reticle_session=lease-theirs',
+      projectId: 'p',
+    });
+    await waitForSessions(2);
+
+    let message = '';
+    try {
+      bridge.sessions.resolve('lease-gone');
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toContain("Lease 'lease-gone' has ended");
+    expect(message).toContain('mine');
+    expect(message).not.toContain('lease-theirs');
+    expect(message).not.toContain('/settings');
+  });
+
   it('when nothing is connected at all, it says so rather than implying a retry would help', () => {
     let message = '';
     try {

@@ -130,3 +130,92 @@ export function isDangerousActionText(text: string, role?: string): boolean {
   if (role !== undefined && VALUE_PICKER_ROLES.has(role.trim().toLowerCase())) return false;
   return DANGEROUS_ACTION.test(text.replace(/[_-]+/g, ' '));
 }
+
+// ── What the Harness may press ────────────────────────────────────────────────────────────────
+/*
+ * An action that reaches outside the page or changes someone's workspace: it invites, sends,
+ * shares, deletes, pays, publishes, revokes, transfers, signs out, changes a role or creates a key.
+ * The Harness pressed Invite in a customer's workspace although its journey said "she does not send
+ * an invite", and a planner-invented journey typed a new address and pressed Invite. A Harness drive
+ * presses one only when its journey asks for that action; a saved flow's steps were asked for by
+ * whoever recorded them. The agent's own guard (`isDangerousActionText`) is narrower on purpose.
+ */
+export const OutwardAction = {
+  INVITE: 'invite',
+  SEND: 'send',
+  SHARE: 'share',
+  DELETE: 'delete',
+  PAY: 'pay',
+  PUBLISH: 'publish',
+  REVOKE: 'revoke',
+  TRANSFER: 'transfer',
+  SIGN_OUT: 'sign out',
+  CHANGE_ROLE: 'change role',
+  CREATE_KEY: 'create key',
+  /** Reassigning, reopening, archiving, approving: changing an item's state for everyone. */
+  CHANGE_STATE: 'change state',
+} as const;
+export type OutwardAction = (typeof OutwardAction)[keyof typeof OutwardAction];
+
+/** Each outward action as words on a control (or in the request it points at), and in a journey. */
+const OUTWARD_WORDS: readonly (readonly [OutwardAction, RegExp])[] = [
+  [OutwardAction.INVITE, /\binvit(?:e|es|ed|ing|ation|ations)\b|\/invit/i],
+  [OutwardAction.TRANSFER, /\b(?:transfer|send money|send funds|withdraw)\b/i],
+  [OutwardAction.SEND, /\b(?:send|sends|sending|resend|email (?:it|them|the))\b/i],
+  [OutwardAction.SHARE, /\b(?:share|shares|sharing)\b/i],
+  [
+    OutwardAction.DELETE,
+    /\b(?:delete|deletes|deleting|remove|removes|removing|destroy|erase|drop)\b/i,
+  ],
+  [
+    OutwardAction.PAY,
+    /\b(?:pay|pays|paying|payment|purchase|buy|checkout|check out|subscribe|upgrade|place order|confirm order|refund|add (?:a )?card|start (?:the |your |a )?(?:\d+-day |free )?trial)\b|\/(?:billing|checkout)\b/i,
+  ],
+  [OutwardAction.PUBLISH, /\b(?:publish|publishes|deploy|deploys|go live)\b/i],
+  [OutwardAction.REVOKE, /\b(?:revoke|revokes|deactivate|suspend)\b/i],
+  [OutwardAction.SIGN_OUT, /\b(?:sign ?out|log ?out|sign off)\b/i],
+  [
+    OutwardAction.CHANGE_ROLE,
+    /\b(?:change (?:the |their |his |her )?role|make (?:an? )?(?:admin|owner)|promote|demote|set role)\b/i,
+  ],
+  [OutwardAction.CREATE_KEY, /\b(?:create|generate|new|mint)(?: an?)?(?: api)? key\b|\/keys\b/i],
+  [
+    OutwardAction.CHANGE_STATE,
+    /\b(?:reassign|reassigns|reopen|reopens|re-open|archive|archives|unarchive|approve|approves|reject|rejects|mark as (?:fixed|resolved|done|closed))\b/i,
+  ],
+];
+
+/** The outward action a control would take, from its text and role; value pickers take none. */
+export function outwardActionOf(text: string, role?: string): OutwardAction | undefined {
+  if (role !== undefined && VALUE_PICKER_ROLES.has(role.trim().toLowerCase())) return undefined;
+  const words = text.replace(/[_-]+/g, ' ');
+  return OUTWARD_WORDS.find(([, pattern]) => pattern.test(words))?.[0];
+}
+
+/** A word that turns the action after it into one the journey forbids: "does not send". */
+const NEGATION = /\b(?:not|no|never|without|nor|avoid|avoids|don't|doesn't|won't|didn't)\b/i;
+/** How many words before an action a negation still governs it. */
+const NEGATION_REACH = 4;
+
+/**
+ * The outward actions a journey asks for in so many words. "Invite a teammate" asks for invite;
+ * "she does not send an invite" and "without sending" ask for nothing. Pure.
+ */
+export function outwardActionsAsked(journey: string): OutwardAction[] {
+  const asked: OutwardAction[] = [];
+  for (const [action, pattern] of OUTWARD_WORDS) {
+    const global = new RegExp(pattern.source, 'gi');
+    for (const match of journey.matchAll(global)) {
+      const before = journey.slice(0, match.index).split(/\s+/).slice(-NEGATION_REACH).join(' ');
+      if (!NEGATION.test(before)) {
+        asked.push(action);
+        break;
+      }
+    }
+  }
+  return asked;
+}
+
+/** What the Harness says, and the journey records, when it would not press one. */
+export const outwardRefusal = (action: OutwardAction): string =>
+  `would need to ${action} — not done (outward action): the journey does not ask for it`;

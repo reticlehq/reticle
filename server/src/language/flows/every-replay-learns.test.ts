@@ -41,10 +41,6 @@ import { persistLearning } from './flow-learning.js';
  * recur.
  */
 const DIRECT_CALLS_ALLOWED: Readonly<Record<string, { calls: number; why: string }>> = {
-  'language/flows/flow-tools.ts': {
-    calls: 1,
-    why: 'the PERTURBED branch of the seed path — the network is slowed on purpose',
-  },
   'language/flows/flow-mutate-tools.ts': {
     calls: 1,
     why: 'mutation testing breaks the app deliberately to check the flow notices',
@@ -53,7 +49,10 @@ const DIRECT_CALLS_ALLOWED: Readonly<Record<string, { calls: number; why: string
     calls: 1,
     why: "the implementation's own recursion into a nested flow",
   },
-  'language/flows/flow-learning.ts': { calls: 1, why: 'the wrapper that adds the learning' },
+  'language/flows/flow-learning.ts': {
+    calls: 2,
+    why: 'the wrapper that adds the learning, and the PERTURBED branch of the seed path (the network is slowed on purpose), moved here from flow-tools.ts',
+  },
 };
 
 /** Files that replay and must therefore go through the learning wrapper. */

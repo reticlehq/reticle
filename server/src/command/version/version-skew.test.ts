@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeSkew,
+  describeSdkBehind,
   sdkFix,
   daemonFix,
   isPlaywrightClosedError,
@@ -47,6 +48,15 @@ describe('describeSkew — the contract decides, not the version', () => {
     expect(msg).toMatch(/different wire contracts/i);
   });
 
+  // Persona drive: both sides reported one version and the fix said to install that version — the
+  // version already installed. Two builds of one version: rebuild/restart is the fix, not install.
+  it('at the same version, names the restart and the reload, never installing that version again', () => {
+    const msg = describeSkew(page({ contract: 'bbbb2222' }), SELF) ?? '';
+    expect(msg).not.toMatch(/@2\.4\.1/);
+    expect(msg).toMatch(/reticle restart/);
+    expect(msg).toMatch(/reload/);
+  });
+
   it('names both versions and a concrete fix when the contracts differ', () => {
     const msg = describeSkew(page({ version: '2.2.1', contract: 'bbbb2222' }), SELF) ?? '';
     expect(msg).toContain('2.2.1');
@@ -77,7 +87,7 @@ describe('the daemon pair', () => {
           what: 'the daemon on this port',
           version: '2.3.0',
           contract: 'cccc3333',
-          // The daemon (2.3.0) is behind this process (2.4.1), so restarting it converges.
+          // The daemon is behind this process, so restarting it converges.
           fix: daemonFix('2.3.0', SELF.version),
         },
         SELF,
@@ -158,5 +168,33 @@ describe('a skew sentence names BOTH versions, not just the peer', () => {
     );
     expect(message).toContain('run reticle update');
     expect(message, 'a version-skew warning must not itself be a wall of JSON').not.toContain('{');
+  });
+});
+
+describe('a page a minor release behind', () => {
+  const fix = (): string => 'FIX';
+
+  it('names both versions and the fix when the SDK is a minor or more behind', () => {
+    const said = describeSdkBehind('2.3.4', '2.4.0', fix);
+    expect(said).toContain('2.3.4');
+    expect(said).toContain('2.4.0');
+    expect(said).toContain('FIX');
+    expect(describeSdkBehind('1.9.0', '2.0.0', fix)).toBeDefined();
+  });
+
+  it('stays silent on a patch difference, a newer page, or an unknown version', () => {
+    expect(describeSdkBehind('2.4.0', '2.4.3', fix)).toBeUndefined();
+    expect(describeSdkBehind('2.5.0', '2.4.0', fix)).toBeUndefined();
+    expect(describeSdkBehind(undefined, '2.4.0', fix)).toBeUndefined();
+    expect(describeSdkBehind('workspace', '2.4.0', fix)).toBeUndefined();
+  });
+
+  it('does not read the project unless the page is behind', () => {
+    let read = 0;
+    describeSdkBehind('2.4.0', '2.4.0', () => {
+      read += 1;
+      return '';
+    });
+    expect(read).toBe(0);
   });
 });

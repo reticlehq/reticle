@@ -81,7 +81,13 @@ export class OwnedDevServer {
       {
         cwd,
         // Its own process group, so stopping it stops what it started rather than only the wrapper.
-        detached: !WINDOWS,
+        // Detached on Windows too: there libuv puts every non-detached child in a job object that
+        // kills it when this process exits. The supervisor died with `init`, the server it fed lost
+        // its pipe reader, and its next log line was an EPIPE: every Windows install cell whose
+        // server logs per request (Next, Astro) or on an edit (CRA, Angular) failed that way.
+        detached: true,
+        // Detached on Windows means no console; this keeps one from opening as a visible window.
+        windowsHide: true,
         // Nothing of ours: the supervisor holds the server's pipes, and init holds none of its.
         stdio: 'ignore',
         // Reticle already provides the detached supervisor. Astro's agent auto-backgrounding
@@ -191,8 +197,21 @@ export class OwnedDevServer {
   }
 }
 
-function run(file: string, args: string[]): string {
-  const r = spawnSync(file, args, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+/**
+ * How long one process-listing command may take. `init` calls these on every dev-server poll, and
+ * spawnSync blocks the event loop: with no bound, one stalled WMI query on a Windows install cell
+ * froze `init` silently for nine and a half minutes, until the gate killed it.
+ */
+const RUN_TIMEOUT_MS = 15_000;
+
+/** Run a command and return what it printed, or '' if it failed to finish within `timeoutMs`. */
+export function run(file: string, args: string[], timeoutMs = RUN_TIMEOUT_MS): string {
+  const r = spawnSync(file, args, {
+    encoding: 'utf8',
+    maxBuffer: 8 * 1024 * 1024,
+    timeout: timeoutMs,
+  });
+  if (undefined !== r.error) return '';
   return r.stdout ?? '';
 }
 
@@ -206,15 +225,26 @@ function run(file: string, args: string[]): string {
  * `init` then waits out the full quiet window and reports "the dev server stopped producing output
  * without ever serving a page" about a Vite server that was serving perfectly the whole time.
  *
- * The fallback prints the same two-integers-per-line shape, so `parseWmicProcesses` reads either
- * without knowing which produced it. Tried in this order because `wmic` is an order of magnitude
- * faster to start than PowerShell, and on a machine that still has it nothing needs to change.
+ * The fallback prints the same `CreationDate ParentProcessId ProcessId` shape (UTC, in WMI's
+ * datetime format), so `parseWmicProcesses` reads either without knowing which produced it. The
+ * creation time is not decoration: Windows keeps a dead parent's pid as ParentProcessId and reuses
+ * pids, and without it the tree walk adopted the runner's sshd and reported port 22 as the dev
+ * server. A process with no creation time (System) prints the old two-column row.
+ *
+ * Tried in this order because `wmic` is an order of magnitude faster to start than PowerShell, and
+ * on a machine that still has it nothing needs to change.
  */
 const POWERSHELL_PAIRS =
-  'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ParentProcessId) $($_.ProcessId)" }';
+  'Get-CimInstance Win32_Process | ForEach-Object { ' +
+  '$c = $_.CreationDate; ' +
+  "$t = if ($c) { $c.ToUniversalTime().ToString('yyyyMMddHHmmss.ffffff', " +
+  "[Globalization.CultureInfo]::InvariantCulture) + '+000' } else { '' }; " +
+  '"$t $($_.ParentProcessId) $($_.ProcessId)".Trim() }';
 
 function windowsProcessPairs(): ProcessPair[] {
-  const fromWmic = parseWmicProcesses(run('wmic', ['process', 'get', 'ParentProcessId,ProcessId']));
+  const fromWmic = parseWmicProcesses(
+    run('wmic', ['process', 'get', 'CreationDate,ParentProcessId,ProcessId']),
+  );
   if (0 < fromWmic.length) return fromWmic;
   return parseWmicProcesses(
     run('powershell', ['-NoProfile', '-NonInteractive', '-Command', POWERSHELL_PAIRS]),

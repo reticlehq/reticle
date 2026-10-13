@@ -274,6 +274,8 @@ export const VERDICT_TOOLS: ReadonlySet<string> = new Set([
   // here rather than six months from now in a metric that had quietly read low the whole time.
   ReticleTool.ACT_SEQUENCE,
   ReticleTool.ASSERT,
+  // `reticle_assert { action: "wait" }` lands here, and grades its answer as `assert` does.
+  ReticleTool.WAIT_FOR,
   // Merged: `flow_verify` and `verify_change` are actions on this tool now. Naming the merged tool
   // does NOT make every action a verification — `verificationOf` still requires the result to carry
   // a `verified` or a pass/fail `status`, so `coverage` and `crawl` contribute nothing and cannot

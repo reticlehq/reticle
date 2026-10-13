@@ -1,9 +1,10 @@
 import { appModalOpen } from '@/dom/dom-ignore.js';
-import type { HarnessConfig } from '@reticlehq/core';
+import type { AgentLink, HarnessConfig, HarnessDrive } from '@reticlehq/core';
+import type { HarnessGateView } from './presenter-harness-row.js';
 import { PresenterReport, reportPanelHtml } from './presenter-report.js';
 import type { AccountState } from '@reticlehq/core';
 import { paintToolbarAccount, TOOLBAR_ACCOUNT_ATTR } from './presenter-workspace.js';
-import { mountAccountControl, type AccountDetails } from './presenter-account.js';
+import { mountAccountControl, TEAM_SLOT_ATTR, type AccountDetails } from './presenter-account.js';
 import { paintSettingsAccount } from './presenter-settings.js';
 import {
   CHAT_MIN_ATTR,
@@ -20,7 +21,6 @@ import {
   SETTINGS_BTN_ATTR,
   MINIMISED_STORAGE_KEY,
 } from './presenter-config.js';
-import { offerDismissed, type OfferState } from './carousel/offer-card.js';
 import { paintCarousel } from './carousel/carousel.js';
 import { panelSlides } from './carousel/panel-slides.js';
 import { paintRail, RAIL_HTML, RAIL_PROMO_ATTR } from './presenter-frame.js';
@@ -40,6 +40,9 @@ import {
   CHAT_VIEWS_NAV_HTML,
   ANNOTATIONS_HTML,
   FLOWS_PAGE_HTML,
+  HARNESS_PAGE_HTML,
+  NAV_LABEL,
+  navLabelHtml,
   platformBase,
   type ChatView,
 } from './presenter-chat-views.js';
@@ -57,27 +60,16 @@ const CHAT_PILL_LABEL = 'Open agent chat';
 const SETTINGS_LABEL = 'Settings';
 const AGENT_LOG_TITLE = 'Reticle';
 const EXIT_LABEL = 'Exit';
-function paintPromo(
-  root: HTMLElement,
-  offer: OfferState | undefined,
-  notices: readonly unknown[] = [],
-  base?: string,
-): void {
+function paintPromo(root: HTMLElement, notices: readonly unknown[] = [], base?: string): void {
   const target = root.querySelector<HTMLElement>(`[${RAIL_PROMO_ATTR}]`);
   if (null === target) return;
-  let dismissed = false;
-  try {
-    dismissed = offerDismissed(window.localStorage);
-  } catch {
-    /* A blocked local store should not hide the value cards. */
-  }
   let storage: Storage | undefined;
   try {
     storage = window.sessionStorage;
   } catch {
     storage = undefined;
   }
-  paintCarousel(target, panelSlides(offer, dismissed, notices, base), storage);
+  paintCarousel(target, panelSlides(notices, base), storage);
 }
 
 interface HudShellCallbacks {
@@ -90,6 +82,12 @@ interface HudShellCallbacks {
   /** The report panel's sync button. The shell owns the socket; the panel only knows it was asked. */
   onSyncNow?: () => void;
   onHarness?: (enabled: boolean) => void;
+  /** Run Harness in the Agent Log, with the persona typed beside it, if any. */
+  onHarnessRun?: (persona?: string) => void;
+  /** Stop on the drive running in this tab. */
+  onHarnessStop?: () => void;
+  /** Link pressed on the Harness page: the daemon links this tab's project to the dashboard. */
+  onHarnessLink?: () => void;
   /** Any Sign in button. The daemon owns the credential, so it starts the browser sign-in. */
   onSignIn?: () => void;
   settings?: SettingsHost;
@@ -161,7 +159,6 @@ export class HudShell {
         details: AccountDetails;
       }
     | undefined;
-  #pushedOffer: OfferState | undefined;
   #pushedNotices: readonly unknown[] = [];
   #pushedHarness: HarnessConfig | undefined;
   /** The platform the rail's links point at; repainted only when it moves, so slides keep turning. */
@@ -176,10 +173,22 @@ export class HudShell {
    * Routed through the shell like every other painter rather than reaching into the panel: the
    * panel may not be mounted yet, and the shell is the layer that knows.
    */
-  paintHarness(config: HarnessConfig | undefined): void {
+  /** The project this page reports to, for the Harness block's dashboard links. */
+  setProjectId(projectId: string | undefined): void {
+    this.#chatViews.setProjectId(projectId);
+  }
+  /** The drive running in this tab's project, so the Agent Log shows its steps and Stop. */
+  paintHarnessDrive(drive: HarnessDrive | undefined): void {
+    this.#chatViews.paintDrive(drive);
+  }
+  /** Which coding agent is connected, and this tab's notes to it. */
+  paintAgent(link: AgentLink | undefined): void {
+    this.#chatViews.paintAgent(link);
+  }
+  paintHarness(config: HarnessConfig | undefined, gate?: HarnessGateView): void {
     this.#pushedHarness = config;
-    this.#settings.paintHarness(config);
-    this.#chatViews.paintHarness(config);
+    this.#settings.paintHarness(config, gate);
+    this.#chatViews.paintHarness(config, gate);
     this.#repaintPromoIfMoved();
   }
 
@@ -191,7 +200,7 @@ export class HudShell {
     const base = this.#promoLinks();
     if (this.#root === undefined || base === this.#promoBase) return;
     this.#promoBase = base;
-    paintPromo(this.#root, this.#pushedOffer, this.#pushedNotices, base);
+    paintPromo(this.#root, this.#pushedNotices, base);
   }
 
   paintImpact(verdicts: number): void {
@@ -228,21 +237,19 @@ export class HudShell {
     this.#repaintPromoIfMoved();
   }
   /**
-   * Keep the rail's offer and notices current. Replayed at mount, as the account is: the daemon
+   * Keep the rail's notices current. Replayed at mount, as the account is: the daemon
    * pushes the impact snapshot on connect, which races this shell's mount, and on an idle page the
    * next snapshot never comes.
    */
-  paintOffer(offer: OfferState | undefined, notices: readonly unknown[] = []): void {
-    this.#pushedOffer = offer;
+  paintNotices(notices: readonly unknown[] = []): void {
     this.#pushedNotices = notices;
     this.#promoBase = this.#promoLinks();
-    if (this.#root !== undefined) paintPromo(this.#root, offer, notices, this.#promoBase);
+    if (this.#root !== undefined) paintPromo(this.#root, notices, this.#promoBase);
   }
 
   constructor(callbacks: HudShellCallbacks = {}) {
     this.#callbacks = callbacks;
     this.#chatViews = new ChatViews(
-      (enabled) => callbacks.onHarness?.(enabled),
       () => {
         this.#chatViews.closePage();
         this.closeChat();
@@ -259,6 +266,12 @@ export class HudShell {
         this.closeChat();
         this.#settings.close();
         this.#report.close();
+      },
+      {
+        run: (persona) => callbacks.onHarnessRun?.(persona),
+        stop: () => callbacks.onHarnessStop?.(),
+        setHarness: (on) => callbacks.onHarness?.(on),
+        link: () => callbacks.onHarnessLink?.(),
       },
     );
     this.#settings = new PresenterSettingsPanel({
@@ -287,6 +300,7 @@ export class HudShell {
       <div ${CHAT_PANEL_ATTR} class="reticle-chat-panel ${HUD_SURFACE_CLASS}" role="region" aria-label="Agent Log" aria-hidden="true">
         <div class="reticle-chat-head">
           <span class="reticle-chat-brand">${MARK_SVG}<span class="reticle-chat-brandname">${AGENT_LOG_TITLE}</span></span>
+          <span ${TEAM_SLOT_ATTR} class="reticle-head-team"></span>
           <span ${TOOLBAR_ACCOUNT_ATTR} class="reticle-head-account"></span>
         </div>
         <button type="button" ${CHAT_MIN_ATTR} class="reticle-chat-min" title="${CHAT_MIN_LABEL}" aria-label="${CHAT_MIN_LABEL}">${hiIconHtml(PresenterIcon.CARET_DOWN, PRESENTER_ICON_SIZE.TOOLBAR)}</button>
@@ -300,6 +314,7 @@ export class HudShell {
         ${footHtml}
       </div>
       ${FLOWS_PAGE_HTML}
+      ${HARNESS_PAGE_HTML}
       ${ANNOTATIONS_HTML}
       <button type="button" ${CHAT_PILL_ATTR} class="reticle-chat-pill" title="${CHAT_PILL_LABEL}" aria-label="${CHAT_PILL_LABEL}">
         ${MARK_SVG}
@@ -317,11 +332,11 @@ export class HudShell {
           <div class="reticle-toolbar-chrome">
             ${CHAT_VIEWS_NAV_HTML}
             <div class="reticle-tb-wrap">
-              <button type="button" ${SETTINGS_BTN_ATTR} class="reticle-tb-btn reticle-tb-btn--toggle" title="${SETTINGS_LABEL}" aria-label="${SETTINGS_LABEL}" aria-pressed="false" data-active="0">${gear}</button>
+              <button type="button" ${SETTINGS_BTN_ATTR} class="reticle-tb-btn reticle-tb-btn--toggle" title="${SETTINGS_LABEL}" aria-label="${SETTINGS_LABEL}" aria-pressed="false" data-active="0">${gear}${navLabelHtml(NAV_LABEL.SETTINGS)}</button>
               <span class="reticle-tb-tip">${SETTINGS_LABEL}</span>
             </div>
             <div class="reticle-tb-wrap">
-              <button type="button" data-reticle-min-btn class="reticle-tb-btn" title="${EXIT_LABEL}" aria-label="${EXIT_LABEL}">${exit}</button>
+              <button type="button" data-reticle-min-btn class="reticle-tb-btn" title="${EXIT_LABEL}" aria-label="${EXIT_LABEL}">${exit}${navLabelHtml(NAV_LABEL.HIDE)}</button>
               <span class="reticle-tb-tip">${EXIT_LABEL}<span class="reticle-tb-kbd">Esc</span></span>
             </div>
           </div>
@@ -349,6 +364,7 @@ export class HudShell {
     if (impact !== null) {
       const on = '1' === root.getAttribute(REPORT_ATTR);
       impact.setAttribute('data-active', on ? '1' : '0');
+      this.#chatViews.setImpactOpen(on);
       if (on) impact.setAttribute('aria-current', 'page');
       else impact.removeAttribute('aria-current');
     }
@@ -423,7 +439,7 @@ export class HudShell {
     this.#report.mount(root);
     this.#chatViews.mount(root);
     this.#promoBase = this.#promoLinks();
-    paintPromo(root, this.#pushedOffer, this.#pushedNotices, this.#promoBase);
+    paintPromo(root, this.#pushedNotices, this.#promoBase);
     // The toolbar's lit state FOLLOWS the panels, rather than being set by whoever was clicked.
     // Set at click time, a button stayed lit after its panel was closed by the panel that replaced
     // it - two icons active, one panel open. The observer is the only place that can be right for

@@ -1,9 +1,11 @@
 import {
   DRIVE_FLOW_PREFIX,
+  DriveFlowSkipReason,
   driveFlowsFrom,
   type DriveProgram,
   type TapeStep,
 } from './drive-flow.js';
+import { basename, dirname } from 'node:path';
 import { log } from '@/log.js';
 
 /** What a session's teardown writes to the daemon log when a by-product fails to save. */
@@ -15,7 +17,7 @@ const SESSION_END_LOG = {
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 import { journalActionsPath, sessionDirPath } from '@/memory/project/dir/reticle-dir.js';
-import { asSessionId, type SessionId } from '@reticlehq/core';
+import { asRunId, asSessionId, type SessionId } from '@reticlehq/core';
 import {
   OnboardingPhase,
   OnboardingStepStatus,
@@ -27,7 +29,12 @@ import { type ProjectId, subjectOf, type JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { pruneWorkspace, type PruneWorkspaceOptions } from './on-disk/startup-maintenance.js';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
-import { driveRunId, driveRunsFrom } from '@/judgement/runs/drive-run.js';
+import {
+  agentEndClaims,
+  agentEndCounts,
+  driveRunId,
+  driveRunsFrom,
+} from '@/judgement/runs/drive-run.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
 
 /**
@@ -90,7 +97,10 @@ interface SessionEndDeps {
    * directories into `language/flows/recording/tape/` for a constant and two types was a dependency
    * nobody needed. `directory-reach.test.ts` refused it, and its advice was right.
    */
-  takeAmbientTape?: () => { steps: readonly TapeStep[]; startPath?: string } | undefined;
+  /** The tape of THIS tab's steps: another app's drive is never saved into this project. */
+  takeAmbientTape?: (
+    sessionId: string,
+  ) => { steps: readonly TapeStep[]; startPath?: string } | undefined;
   /**
    * Report one funnel step. Injected rather than imported, because this module is teardown and the
    * reach guard is right that it should not grow a dependency on the telemetry tree to say so.
@@ -300,6 +310,7 @@ export async function recordDriveRun(
   // real Session's reader closes over the journal it was constructed with.
   if (session.readJournalActions === undefined) return;
   const actions = await session.readJournalActions();
+  const root = session.artifactRoot ?? deps.reticleRoot;
   const inputs = driveRunsFrom(actions, {
     // Derived from the session, NOT random. Teardown fires on every socket close, and a reconnecting
     // tab keeps its session id and appends to the same ledger — so a drive across two page reloads
@@ -307,7 +318,11 @@ export async function recordDriveRun(
     // the first. A stable id makes the artifact idempotent: the same session rewrites its own run,
     // and the cloud diffs by runId, so a re-push supersedes rather than duplicates.
     runId: driveRunId(session.id),
+    // Each agent session in the tab, as `reticle_session {end}` cut them, is its own run.
+    agentEnds: agentEndCounts(session.id),
+    agentClaims: agentEndClaims(session.id),
     ...(session.projectId === undefined ? {} : { projectId: session.projectId }),
+    projectName: basename(dirname(root)),
   });
   if (0 === inputs.length) return;
   // The protocol reaching the artifact a person actually reads. Only when the session could say
@@ -325,17 +340,22 @@ export async function recordDriveRun(
         });
   const store = new RunStore(
     deps.fs,
-    session.artifactRoot ?? deps.reticleRoot,
+    root,
     // Tell the sync daemon a run landed, rather than letting it find out on its next tick. Teardown
     // used to write this artifact with no callback at all, so the evidence from a whole session sat
     // on disk until a timer noticed — which, for the last session of the day, could be never.
     deps.onRunPersisted === undefined ? undefined : { onWrote: deps.onRunPersisted },
   );
+  const clock = deps.now ?? ((): number => Date.now());
   for (const input of inputs) {
+    // A reload rewrites this session's run under the same id; the first stamp is when it ran, and
+    // restamping on every rewrite showed the tab's close as the drive's time.
+    const held = await store.read(asRunId(input.runId));
+    const firstAt = held.ok ? held.run.createdAt : undefined;
     await store.write(
       buildVerificationRun(
         { ...input, ...(subject === undefined ? {} : { subject }) },
-        deps.now ?? ((): number => Date.now()),
+        firstAt === undefined ? clock : () => firstAt,
       ),
     );
   }
@@ -347,7 +367,7 @@ async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): 
   const flows = deps.flowsAt?.(session.artifactRoot ?? deps.reticleRoot) ?? deps.flows;
   if (takeTape === undefined || flows === undefined) return;
   // One flow per journey the session contained, not one flow per session — see drive-flow.ts.
-  const { programs, outcome } = driveFlowsFrom(takeTape());
+  const { programs, outcome } = driveFlowsFrom(takeTape(session.id));
   const author = deps.author?.();
   for (const program of programs) {
     // Folded into any saved copy of the same journey, so each session does not add a near-copy.
@@ -367,7 +387,13 @@ async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): 
     phase: OnboardingPhase.FIRST_RUN,
     step: 'flow_recorded',
     status: 0 === programs.length ? OnboardingStepStatus.SKIPPED : OnboardingStepStatus.COMPLETED,
-    ...(outcome.unprovenSteps === undefined ? {} : { reason: 'no_declared_consequence' }),
+    ...(outcome.unprovenSteps === undefined
+      ? {}
+      : { reason: DriveFlowSkipReason.NO_DECLARED_CONSEQUENCE }),
+    // Not saved, with the reason: proved against mocked responses, which replay cannot see (#1459).
+    ...(0 < programs.length || outcome.mockedSteps === undefined
+      ? {}
+      : { reason: DriveFlowSkipReason.DRIVEN_UNDER_NETWORK_MOCKS }),
   });
 }
 
@@ -390,4 +416,22 @@ async function dropUndrivenJournal(
   } catch {
     // tidying is never the reason a teardown fails
   }
+}
+
+/**
+ * Tear down every session still open, and wait for it.
+ *
+ * Teardown is what saves a tab's driven flow and its last run, and it normally fires from the
+ * socket's close handler, unawaited. A daemon closing with tabs open terminated those sockets after
+ * its final sync, so the flow was written too late to be sent, or not at all once the process
+ * exited. Called before that final sync instead: each session leaves the registry first, so the
+ * socket closing later finds nothing to tear down a second time.
+ */
+export async function endLiveSessions<S>(
+  sessions: { all: () => S[]; remove: (session: S) => boolean },
+  teardown: (session: S) => Promise<void>,
+): Promise<void> {
+  const ending = sessions.all().filter((session) => sessions.remove(session));
+  // Teardown is best-effort everywhere it runs: one that fails must not stop the others.
+  await Promise.all(ending.map((session) => teardown(session).catch(() => undefined)));
 }

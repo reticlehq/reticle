@@ -47,6 +47,8 @@ import { driveAll } from './drive.mjs';
 import { writeWebHandoff } from './handoff.mjs';
 import { BENCH_APP_CHANNELS, BENCH_APP_SUBJECT, plantUrl } from './subjects/bench-app.mjs';
 import { Profile } from './scenarios/index.mjs';
+// Batteries are not watched, and a shown browser changes their timing: hide every browser Reticle opens.
+process.env.RETICLE_HEADLESS ??= '1';
 
 /*
  * Overridable, because this repository gets worked on from more than one place at a time.

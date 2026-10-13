@@ -12,21 +12,30 @@ import { InitConfirmation, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import { FEEDBACK_HINT, Framework, InitFailure, type InitResult } from '@reticlehq/init';
 import { confirmInstall, nodeConfirmDeps } from '@/command/setup/terminal/confirm.js';
 import { writeLicenseKey } from '@/command/setup/license-key.js';
-import { registerOtherAgents, runSetupCommand } from '@/command/setup/setup-command.js';
-import { bridgeOccupied } from '@/command/setup/bringup/bridge-port.js';
+import {
+  registerOtherAgents,
+  runSetupCommand,
+  type FirstFlowPort,
+} from '@/command/setup/setup-command.js';
+import { bridgeOccupied, freePortAfter } from '@/command/setup/bringup/bridge-port.js';
 import {
   defaultPairingTokenDir,
   readOrCreatePairingTokenSync,
 } from '@/portal/bridge/pairing-token.js';
 import { relaunchDecision } from '@/command/setup/bringup/relaunch.js';
+import { attachedAgents, restartNotice } from './agent-restart.js';
 import { claudeTranscriptExists, codexSessionFor } from '@/command/setup/terminal/transcripts.js';
-import { probePresence } from '@/command/daemon/binding/port-presence.js';
+import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
 import { probeDaemon } from '@/surface/mcp/proxy/proxy-daemon-probe.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { collectEnv, DEFAULT_PHASE_TIMEOUT_MS } from '@/command/setup/setup-options.js';
 import { staticPageDevCommand } from '@/command/setup/bringup/static-page-server.js';
 import { SetupPhase } from '@/command/setup/run-setup.js';
 import { reportInitOutcome } from '@/telemetry/init-telemetry.js';
+
+/** Claude Code marks every process it spawns with this variable set to this value. */
+const CLAUDE_CODE_ENV = 'CLAUDECODE';
+const CLAUDE_CODE_MARKER = '1';
 
 /** How often the runtime phases look again: fast enough not to be the wait, slow enough to be free. */
 const POLL_MS = 250;
@@ -63,7 +72,8 @@ interface InitRuntimeArgs {
   readonly dryRun: boolean;
   readonly filesOnly?: boolean | undefined;
   readonly json?: boolean | undefined;
-  readonly drive?: boolean | undefined;
+  /** `--no-first-run` sets it false: connect, and stop without the coverage summary. */
+  readonly firstRun?: boolean | undefined;
   readonly open?: boolean | undefined;
   readonly agents?: boolean | undefined;
   /**
@@ -82,6 +92,12 @@ interface InitRuntimeArgs {
   /** Restart the calling client so IT gets the tools — see relaunch.ts. */
   readonly relaunch?: boolean | undefined;
   readonly licenseKey?: string | undefined;
+  /**
+   * Init is the first half of a longer command (`reticle connect`): a setup that did not finish
+   * sets a failing exit code and returns, so the command can still sign in and link. Exiting here
+   * ended connect before it signed in, and nothing said to run it again.
+   */
+  readonly keepGoing?: boolean | undefined;
 }
 
 /** Registration is global MCP wiring, so both flags that disown it are read here. */
@@ -126,8 +142,14 @@ export async function continueAfterInit(
   result: InitResult,
   io: RuntimePrintIo,
   cwd: string,
+  /** init's ending once the connection is proved: coverage and the agent prompt. See `FirstFlowPort`. */
+  firstFlow?: FirstFlowPort,
 ): Promise<void> {
   const port = parsed.port ?? RETICLE_DEFAULT_PORT;
+  const stop = (): void => {
+    if (true === parsed.keepGoing) process.exitCode = 1;
+    else process.exit(1);
+  };
 
   // Real installs persist the key whichever way setup ends. A preview must leave .env and
   // .gitignore untouched, just as it leaves project wiring and agent configuration untouched.
@@ -156,7 +178,7 @@ export async function continueAfterInit(
     }
     return confirmInstall(result, io, nodeConfirmDeps(port)).then(() => {
       if (true === parsed.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-      if (!result.ok) process.exit(1);
+      if (!result.ok) stop();
     });
   }
 
@@ -170,7 +192,8 @@ export async function continueAfterInit(
     // Nothing was established, so there is nothing to run against. init has already said why.
     ask();
     if (true === parsed.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    process.exit(1);
+    stop();
+    return;
   }
   const reportFailure = (reason: InitFailure): void => {
     if (result.outcome !== undefined) {
@@ -193,14 +216,18 @@ export async function continueAfterInit(
   // Before the connect wait, never after: a bridge held by a stranger makes a session impossible,
   // so going ahead spends the entire budget and then reports what reads as an instrumentation
   // problem — the one place that is fine. See bridge-port.ts.
+  const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }).catch(
+    (error: unknown) => {
+      reportFailure(InitFailure.RUNTIME_ERROR);
+      throw error;
+    },
+  );
   const refusal = bridgeOccupied(
-    await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }).catch(
-      (error: unknown) => {
-        reportFailure(InitFailure.RUNTIME_ERROR);
-        throw error;
-      },
-    ),
+    presence,
     port,
+    PortPresence.FOREIGN === presence
+      ? await freePortAfter(port, (p) => probeDaemon(p))
+      : undefined,
   );
   if (refusal !== undefined) {
     reportFailure(InitFailure.BRIDGE_OCCUPIED);
@@ -211,7 +238,8 @@ export async function continueAfterInit(
         `${JSON.stringify({ ok: false, reason: InitFailure.BRIDGE_OCCUPIED }, null, 2)}\n`,
       );
     }
-    process.exit(1);
+    stop();
+    return;
   }
 
   return runSetupCommand(
@@ -224,6 +252,9 @@ export async function continueAfterInit(
       pairingToken: readOrCreatePairingTokenSync(defaultPairingTokenDir()),
       env: collectEnv(parsed.env ?? []),
       openBrowser: false !== parsed.open,
+      firstRun: false !== parsed.firstRun,
+      json: true === parsed.json,
+      firstFlow,
       registerAgents: wantsAgents(parsed),
       phaseTimeoutMs:
         undefined === parsed.timeoutSeconds
@@ -258,7 +289,7 @@ export async function continueAfterInit(
     },
     (line) => io.print(line),
   ).then(
-    (outcome) => {
+    async (outcome) => {
       if (result.outcome !== undefined) {
         const init = {
           ...result.outcome,
@@ -281,22 +312,22 @@ export async function continueAfterInit(
       // One object, so an agent reads a result instead of interpreting a report.
       if (true === parsed.json) {
         process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
-        if (!outcome.ok) process.exit(1);
+        if (!outcome.ok) stop();
         return;
       }
       io.print('');
       // The precondition for everything the closing asks for, printed on the path that could not say
-      // it. An agent client reads its MCP server list when it STARTS and never re-reads it, so on the
-      // run that first registers Reticle the `reticle_*` tools are not in the session that just asked
-      // for them -- and this path closes by telling that session to call `reticle_act_and_wait`.
-      // `restartHint` has said this for a long time and is printed only when init stops at the files.
-      if (true === result.mcpNewlyRegistered) {
-        io.print(
-          'Reticle was registered with your agent by this run, and an agent reads its tool list only ' +
-            'when it starts: the `reticle_*` tools are NOT in this session yet. Restart it first — ' +
-            '`npx @reticlehq/server init --relaunch` prints the exact resume command for Claude Code ' +
-            'and Codex. Once per machine.',
-        );
+      // it. An agent client reads its MCP server list when it STARTS and never re-reads it, so an
+      // agent that ran this without the `reticle_*` tools cannot do what the closing tells it to.
+      // See agent-restart.ts for the two ways that is known.
+      const restart = restartNotice({
+        insideAgent:
+          CLAUDE_CODE_MARKER === process.env[CLAUDE_CODE_ENV] || undefined !== codexSessionFor(cwd),
+        newlyRegistered: true === result.mcpNewlyRegistered,
+        attached: attachedAgents(await fetchStatus(port)),
+      });
+      if (undefined !== restart) {
+        io.print(restart);
         io.print('');
       }
       if (outcome.ok && !outcome.flowSaved) {
@@ -313,13 +344,8 @@ export async function continueAfterInit(
       }
       if (outcome.ok) {
         io.print(
-          `✓ setup complete — ${outcome.url ?? 'the app'} is instrumented and a flow was driven.`,
-        );
-        // A passing flow shows the mechanism working. What the run SAW is the part nobody can get for
-        // themselves, and it deserves a line of its own rather than a paragraph that gets skimmed.
-        io.print(
-          '  Read the FINDINGS above before moving on: a flow can pass with a failed request or a ' +
-            'console error behind it, and that is the app, not the check.',
+          `✓ setup complete — ${outcome.url ?? 'the app'} is instrumented and its first flow is ` +
+            'saved. The tab stays open; a linked project sends the flow and its run to your dashboard.',
         );
         ask();
         return;
@@ -329,7 +355,7 @@ export async function continueAfterInit(
       io.print('⚠ setup did not finish. To carry on from here:');
       for (const [i, step] of outcome.fallback.entries()) io.print(`   ${i + 1}. ${step}`);
       ask();
-      process.exit(1);
+      stop();
     },
     (error: unknown) => {
       reportFailure(InitFailure.RUNTIME_ERROR);

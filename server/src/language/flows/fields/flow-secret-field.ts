@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { AnchorKind, type FlowAnchor, type FlowFile } from '@reticlehq/core';
+import { CALL_SECRETS_ARG, callSecrets } from '@/surface/tools/tool-kit.js';
 
 /**
  * What the anchor CALLS the field it points at.
@@ -28,6 +30,12 @@ export function anchorFieldName(anchor: FlowAnchor): string | undefined {
  */
 export const REDACTED_FILL = '<redacted: supply at replay>';
 
+/** The arg a saved redacted fill names its variable in. Dropped before the step reaches the page. */
+export const SECRET_NAME_ARG = 'secret';
+
+/** The prefix every secret's variable carries. */
+const SECRET_ENV_PREFIX = 'RETICLE_SECRET_';
+
 /**
  * The environment variable that supplies one redacted field.
  *
@@ -41,7 +49,29 @@ export const REDACTED_FILL = '<redacted: supply at replay>';
  * saying it had to stay together.
  */
 export const secretEnvKey = (field: string): string =>
-  `RETICLE_SECRET_${field.replace(/[^a-zA-Z0-9]+/g, '_').toUpperCase()}`;
+  `${SECRET_ENV_PREFIX}${field.replace(/[^a-zA-Z0-9]+/g, '_').toUpperCase()}`;
+
+/** The schema of that argument, shared by every tool that replays a flow. */
+export { CALL_SECRETS_ARG };
+
+export const callSecretsArg = z
+  .record(z.string())
+  .optional()
+  .describe('Redacted fields\' values, this call only, never kept: { "auth-password": "…" }');
+
+/**
+ * One secret's value: supplied with this call (by field or by variable name), else from the
+ * daemon's environment.
+ */
+export function secretValue(
+  envKey: string,
+  env: Record<string, string | undefined>,
+): string | undefined {
+  for (const [key, value] of Object.entries(callSecrets() ?? {})) {
+    if (envKey === (key.startsWith(SECRET_ENV_PREFIX) ? key : secretEnvKey(key))) return value;
+  }
+  return env[envKey];
+}
 
 /** One field a flow needs supplied, and the variable that supplies it. */
 export interface UnsuppliedSecret {
@@ -72,7 +102,7 @@ export function unsuppliedSecrets(
     const field = anchorFieldName(step.anchor);
     if (field === undefined) continue;
     const envKey = secretEnvKey(field);
-    const supplied = env[envKey];
+    const supplied = secretValue(envKey, env);
     if (supplied !== undefined && supplied.length > 0) continue;
     if (seen.has(envKey)) continue;
     seen.add(envKey);

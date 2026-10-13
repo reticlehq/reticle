@@ -9,6 +9,7 @@
 import type { SessionInfo } from './portal/session/session-info.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
+import { instrumentationOf, type InstrumentedTab } from './portal/session/recorded-gaps.js';
 
 interface StatusPayload {
   running: true;
@@ -33,7 +34,14 @@ interface StatusPayload {
   whyLead?: string;
   /** Port of the verify HTTP endpoint this daemon serves — present only when started with `--http`. */
   verifyPort?: number;
+  /**
+   * Each connected tab's instrumentation coverage and, once a verdict recorded a gap, the prompt for
+   * a coding agent — what `reticle doctor` prints as its coverage line.
+   */
+  coverage?: TabCoverage[];
 }
+
+type TabCoverage = { sessionId: string; url?: string } & ReturnType<typeof instrumentationOf>;
 
 export function statusPayload(
   sessionCount: number,
@@ -43,6 +51,8 @@ export function statusPayload(
   verifyPort?: number,
   /** The short rendering of the same diagnosis. Absent on a daemon that has no provider wired. */
   whyLead?: string,
+  /** The live tabs, for their coverage. */
+  tabs: readonly InstrumentedTab[] = [],
 ): StatusPayload {
   return {
     running: true,
@@ -55,6 +65,15 @@ export function statusPayload(
     ...(0 === sessionCount && why !== undefined ? { why } : {}),
     ...(0 === sessionCount && whyLead !== undefined ? { whyLead } : {}),
     ...(verifyPort === undefined ? {} : { verifyPort }),
+    ...(0 === tabs.length
+      ? {}
+      : {
+          coverage: tabs.map((tab) => ({
+            sessionId: tab.id,
+            ...(tab.url === undefined ? {} : { url: tab.url }),
+            ...instrumentationOf(tab),
+          })),
+        }),
   };
 }
 

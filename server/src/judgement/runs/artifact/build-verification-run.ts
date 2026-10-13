@@ -47,6 +47,10 @@ export function computeVerdict(input: VerificationRunInput): RunVerdict {
     input.flows.filter((f) => f.status === RunFlowStatus.FAIL).length +
     input.checks.filter((c) => c.status === Verified.NO).length;
   const skippedFlows = input.flows.filter((f) => f.status === RunFlowStatus.SKIPPED).length;
+  // Ran and decided nothing, as the agent's own result block counts them: never part of a pass.
+  const undecidedChecks = input.checks.filter(
+    (c) => c.status !== Verified.YES && c.status !== Verified.NO,
+  ).length;
   const blockingRisks = input.risks.filter((r) => r.gated).length;
 
   const reasons: string[] = [];
@@ -72,8 +76,10 @@ export function computeVerdict(input: VerificationRunInput): RunVerdict {
   if (blockingRisks > 0) status = VerdictStatus.FAIL;
   else if (fails > 0 && passes > 0) status = VerdictStatus.PARTIAL;
   else if (fails > 0) status = VerdictStatus.FAIL;
-  else if (skippedFlows > 0 && passes > 0) status = VerdictStatus.PARTIAL;
-  else if (0 === passes) {
+  else if ((skippedFlows > 0 || undecidedChecks > 0) && passes > 0) {
+    status = VerdictStatus.PARTIAL;
+    if (0 < undecidedChecks) reasons.push(`${String(undecidedChecks)} check(s) undecided`);
+  } else if (0 === passes) {
     // Nothing passed and nothing failed, so nothing was proved -- an empty run, or one whose every
     // flow was skipped. Reporting that as PASS is the false green this whole file exists to prevent:
     // every consumer here reads `status` and none reads `confidence`, so a caveat parked in the

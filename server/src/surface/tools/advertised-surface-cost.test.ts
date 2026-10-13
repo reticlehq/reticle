@@ -89,8 +89,8 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * than the bytes it costs (one bad call is a whole extra turn), and CLAUDE.md's rule stands: a token
  * optimisation ships with a correctness measurement beside it.
  *
- * The budget is today's value plus ~1.4%: room to fix a typo, none to add a paragraph. Going over is
- * not forbidden, it is a DECISION — move the number and write the reason here. Coming in well under,
+ * The budget is the last measurement plus 1,000 B (the convention is stated at the constant). Going
+ * over is not forbidden, it is a DECISION — move the number and write the reason here. Coming in well under,
  * move it down.
  */
 /*
@@ -143,7 +143,32 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * hide or move a HUD sitting over the control it has to test, which was otherwise untestable. The
  * two parameters it started as were merged into one, and its description dropped, to get here.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 25_650;
+/*
+ * 25_700 for `driveId` on reticle_verify explore (25,676 B measured), with no description: the one
+ * free drive `reticle try` was granted has to reach the daemon that drives, and an argument on that
+ * call is the only channel to it.
+ */
+/*
+ * 25_850 for `wait`, `runId`, `stop` and `say` on reticle_verify explore (25,840 B measured), only
+ * `wait` described: a drive awaited inside one call outlived a 60s client timeout, so the agent got
+ * no run id and a retry paid for a second drive. Starting it and polling by id needs the id passed
+ * back, and stop/say are the only way to steer a drive short of the project-wide switch.
+ */
+/*
+ * THE CONVENTION FROM HERE ON, for both budgets in this file: the budget is the last measurement plus
+ * 1,000 B of headroom. When a change goes over, raise it BY the headroom (new measurement + 1,000),
+ * never TO the measurement. Budgets pinned a few bytes above the measurement made every PR that
+ * touched a schema bump the same constant, and two of them conflicted in the merge queue: #1487 and
+ * #1493 both raised the all-tools budget on 2026-10-09. The reason for a raise is still written here.
+ */
+// Measured 25,840 B on main at c02824992: 26_840.
+/*
+ * Set 2026-10-12 by the founder's decision, as a budget for about a year of work rather than the
+ * measurement plus a sliver: it was re-raised dozens of times in a month, which made the check churn
+ * instead of a signal. Measured the default surface (every agent session pays it, so ~19%) at 81e046201. Review it once a year, not per change; a
+ * sudden jump inside it is still worth a look in review.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 32_000;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -297,7 +322,42 @@ describe('advertised surface cost', () => {
 // 149_500 -> 149_700 for `window` and `documentStatus` on reticle_sessions and `disconnected` on
 // session end (149,593 B): two windows of one desktop app share a url, and a validating client strips
 // an undeclared field, so the label that tells them apart has to be in the schema.
-const ALL_SURFACE_BYTE_BUDGET = 149_700;
+// 149_700 -> 149_800 for `expect` on reticle_verify explore (149,734 B): a drive graded only on
+// quoted text passed without using the app, so the outcome it must end in has to be declarable.
+// Typed as a plain record, not the predicate schema, which would have cost ~700 tokens.
+// 149_800 -> 149_950 for the start-then-poll explore (149,926 B): `wait`/`runId`/`stop`/`say` in,
+// and `status`/`runId`/`lastLine`/`next` out, because a running drive answers only those and a
+// validating client strips an undeclared field.
+// 149_950 -> 150_300 for the `harness` envelope key on every output schema (150,251 B): a drive the
+// HUD or the platform's chat started reaches the agent only on its next tool result, and a
+// validating client strips an undeclared key. The default surface sends no output schemas.
+// 150_300 -> 150_400 for `repeatable` on a net clause (#1353), 150,379 B merged with the above: a
+// read over POST declared as one is kept out of duplicate-request, and the field rides every schema
+// that carries a predicate, so a validating client would strip it otherwise.
+// 150_400 -> 151_400 when #1487 met today's other merges in the queue (150,407 B, 7 B over): the
+// ceiling now carries ~1KB of headroom, so two small PRs no longer both have to move it.
+// From here on: measured plus the 1,000 B headroom described at DEFAULT_SURFACE_BYTE_BUDGET above.
+// 150,407 B on main after #1487 landed, so 151,407.
+// 151,466 B with the `screenshot` envelope key on every output schema: each action, assert and
+// replayed step names its screenshot's path, and a validating client strips an undeclared key.
+// The default surface sends no output schemas. Measured plus the headroom, so 152,466.
+// 152,555 B with `filesNotFound` on reticle_intent (a declared file that is not in the project is
+// named, not kept as the fact's source; a validating client would strip it). Plus the headroom.
+// 153,286 B with the compact envelope: `detail` on the five compacted tools and `changed`/`ref`/
+// `source` declared on their output schemas, so a validating client keeps the one-line summary that
+// replaced the state-diff bodies. Each verdict RESULT shrank by far more than this per call (see
+// compact-envelope.ts). Measured plus the headroom, so 154,286.
+// 154,657 B with `notices` (the once-per-session advisory list, on every session-bound output schema)
+// and `normalized` / `caseOnlyMiss` / `wouldHold` declared on the verdict tools, so a validating
+// client keeps the alias note and the case-only diagnosis. Measured plus the headroom, so 155,657.
+// Merged with `filesNotFound` above: both together still fit the 155,657 B budget (test passes).
+/*
+ * Set 2026-10-12 by the founder's decision, as a budget for about a year of work rather than the
+ * measurement plus a sliver: it was re-raised dozens of times in a month, which made the check churn
+ * instead of a signal. Measured the full surface at 81e046201. Review it once a year, not per change; a
+ * sudden jump inside it is still worth a look in review.
+ */
+const ALL_SURFACE_BYTE_BUDGET = 210_000;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

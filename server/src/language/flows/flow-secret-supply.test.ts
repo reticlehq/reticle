@@ -8,6 +8,7 @@ import {
   type FlowStep,
 } from '@reticlehq/core';
 import { REDACTED_FILL, anchorFieldName } from './flows.js';
+import { SECRET_NAME_ARG, secretEnvKey } from './fields/flow-secret-field.js';
 import { replayActionArgs } from './replay.js';
 import { runRoleStep, runSequenceStep } from './flow-step-runners.js';
 import type { FlowReplaySession } from './flow-replay.js';
@@ -45,6 +46,16 @@ describe('a redacted fill at replay time', () => {
   it('stays the placeholder when nothing supplies it', () => {
     const args = replayActionArgs({ value: REDACTED_FILL }, false, 'auth-password');
     expect(args['value']).toBe(REDACTED_FILL);
+  });
+
+  // The saved file names the variable beside the placeholder; the page is never handed it.
+  it('drops the variable name a saved step carries before the step reaches the page', () => {
+    const args = replayActionArgs(
+      { value: REDACTED_FILL, [SECRET_NAME_ARG]: secretEnvKey('auth-password') },
+      false,
+      'auth-password',
+    );
+    expect(args).not.toHaveProperty('secret');
   });
 
   /** An ordinary recorded value is never touched, whatever the environment holds. */

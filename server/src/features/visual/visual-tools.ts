@@ -4,12 +4,14 @@ import {
   ReticleCommand,
   RETICLE_CAPTURE_FILE_PREFIX,
   VISUAL_NO_PROVIDER_RECOMMENDATION,
+  RETICLE_TAURI_INERT_MARKER,
+  TAURI_INERT_RECOMMENDATION,
   VisualReason,
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import { ratioSchema } from '@/surface/tools/args/numeric-bounds.js';
-import { asNumber, asRecord, asString } from '@reticlehq/core';
+import { VISUAL_PIXEL_THRESHOLD, asNumber, asRecord, asString } from '@reticlehq/core';
 import { diffPng, type VisualRect } from './visual-diff.js';
 import { VisualStore } from './visual-store.js';
 
@@ -60,6 +62,15 @@ const noProvider = {
   recommendation: VISUAL_NO_PROVIDER_RECOMMENDATION,
 };
 
+/** The answer when no pixels came back: the shell's own recommendation over the web one. */
+function unavailable(
+  reason: string | undefined,
+  recommendation: string | undefined,
+): { ok: false; reason?: string | undefined; recommendation?: string } {
+  if (recommendation !== undefined) return { ok: false, reason, recommendation };
+  return reason === VisualReason.NO_PROVIDER ? noProvider : { ok: false, reason };
+}
+
 function asBox(value: unknown): ElementBox | undefined {
   const b = asRecord(asRecord(value)['box']);
   const x = asNumber(b['x']);
@@ -105,7 +116,7 @@ async function desktopCapture(
   deps: ToolDeps,
   sessionId: string | undefined,
   fullPage: boolean,
-): Promise<{ png?: Uint8Array; reason?: VisualReason }> {
+): Promise<{ png?: Uint8Array; reason?: VisualReason; recommendation?: string }> {
   const session = deps.sessions.resolve(sessionId);
   // A session that cannot take commands (no live browser behind it) simply has no pixels to give.
   if (typeof session.command !== 'function') return {};
@@ -115,8 +126,11 @@ async function desktopCapture(
   if (r['ok'] !== true) {
     // The shell refused a full-page capture it cannot do. That is a different answer from "capture
     // broke", and the caller has to hear it — otherwise they read `fullPage` as honoured.
-    return r['reason'] === VisualReason.FULL_PAGE_UNSUPPORTED
-      ? { reason: VisualReason.FULL_PAGE_UNSUPPORTED }
+    if (r['reason'] === VisualReason.FULL_PAGE_UNSUPPORTED)
+      return { reason: VisualReason.FULL_PAGE_UNSUPPORTED };
+    // A Tauri release build with the capture compiled out: say that, never the web answer.
+    return true === asString(r['reason'])?.includes(RETICLE_TAURI_INERT_MARKER)
+      ? { reason: VisualReason.NO_PROVIDER, recommendation: TAURI_INERT_RECOMMENDATION }
       : {};
   }
   const path = asString(r['path']);
@@ -229,7 +243,12 @@ async function capture(
   deps: ToolDeps,
   sessionId: string | undefined,
   args: Record<string, unknown>,
-): Promise<{ png?: Uint8Array; reason?: string; runtime?: string | undefined }> {
+): Promise<{
+  png?: Uint8Array;
+  reason?: string;
+  recommendation?: string;
+  runtime?: string | undefined;
+}> {
   /*
    * Only a provider driving THIS session's page. A launched provider photographs the one page it
    * owns whatever url it is handed, so asking it about another session saved the driven tab's pixels
@@ -255,7 +274,7 @@ async function capture(
   // really are the desktop app.
   const desktop = await desktopCapture(deps, sessionId, true === args['fullPage']);
   if (desktop.png !== undefined) return { png: desktop.png, runtime: runtimeOf(deps, sessionId) };
-  if (desktop.reason !== undefined) return { reason: desktop.reason };
+  if (desktop.reason !== undefined) return desktop;
 
   /*
    * A LEASED page is a real browser page, so the pixels were always there — the visual tools simply
@@ -329,10 +348,8 @@ export const VISUAL_TOOLS: ToolDef[] = [
     },
     handler: async (deps: ToolDeps, args) => {
       const sessionId = asString(args['sessionId']);
-      const { png, reason, runtime } = await capture(deps, sessionId, args);
-      if (png === undefined) {
-        return reason === VisualReason.NO_PROVIDER ? noProvider : { ok: false, reason };
-      }
+      const { png, reason, recommendation, runtime } = await capture(deps, sessionId, args);
+      if (png === undefined) return unavailable(reason, recommendation);
       const name = asString(args['name']) ?? 'default';
       // Beside the app that was captured. The tool RETURNS this path to the agent, so a wrong root
       // is not only a stray PNG — it is a path the agent is told to look at in a tree that has
@@ -369,7 +386,7 @@ export const VISUAL_TOOLS: ToolDef[] = [
       maxRatio: ratioSchema.optional(),
       threshold: ratioSchema
         .optional()
-        .describe('Pixel difference threshold (0–1). Default: 0.01.'),
+        .describe(`Pixel difference threshold (0–1). Default: ${String(VISUAL_PIXEL_THRESHOLD)}.`),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -393,10 +410,9 @@ export const VISUAL_TOOLS: ToolDef[] = [
       // not the desktop one. Comparing across renderers is a confident wrong diff in one direction
       // and a silently overwritten baseline in the other.
       const sessionId = asString(args['sessionId']);
-      const { png: current, reason, runtime } = await capture(deps, sessionId, args);
-      if (current === undefined) {
-        return reason === VisualReason.NO_PROVIDER ? noProvider : { ok: false, reason };
-      }
+      const captured = await capture(deps, sessionId, args);
+      const { png: current, runtime } = captured;
+      if (current === undefined) return unavailable(captured.reason, captured.recommendation);
 
       // A baseline from another runtime is not missing by accident — it is a different rendering, and
       // "no baseline for this one" is the honest answer.

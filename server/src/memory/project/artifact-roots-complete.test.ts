@@ -70,17 +70,21 @@ const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
     uses: 1,
     why: 'Fallback for a session whose project could not be resolved — `session.artifactRoot` wins when it exists.',
   },
+  'features/visual/step-shots.ts': {
+    uses: 1,
+    why: 'A step screenshot lands beside the run it belongs to, and session-end writes that run at `session.artifactRoot ?? deps.reticleRoot` — the same fallback, so the picture and its run never end up in two trees.',
+  },
   'memory/journal/session-end.ts': {
     uses: 5,
     why: 'The same fallback five times — ambient map, undriven-journal drop, workspace prune, run artifact, drive flows — each written as `session.artifactRoot ?? deps.reticleRoot`. The fifth is the store a drive is saved in: it went to the daemon root and replay reads the session root, so a daemon started elsewhere saved flows nothing could replay. The fourth is the drop of a journal for a session that served no tool call, and it has to resolve the same root for the same reason the prune beside it does: teardown acts on the workspace the SESSION wrote into, never the daemon cwd.',
   },
   'surface/tools/invoke-tool.ts': {
-    uses: 2,
-    why: 'Opens the impact record for the daemon (a per-root store keyed inside the recorder) and falls back when a call has no session.',
+    uses: 3,
+    why: 'Opens the impact record for the daemon (a per-root store keyed inside the recorder) and falls back when a call has no session; and compares a session root against it, so the agent is told only when its evidence lands outside every project, not when it lands in the daemon root.',
   },
   'memory/cloud/sync-daemon.ts': {
-    uses: 6,
-    why: 'Sync walks EVERY root it can find and treats the daemon root as one of them; the comparison at :183 exists to avoid pushing it twice.',
+    uses: 8,
+    why: "Sync walks EVERY root it can find and treats the daemon root as one of them; the comparison at :183 exists to avoid pushing it twice. The seventh records whether the daemon root is linked, so its unsent runs are counted with every other root's. The eighth watches the daemon root's link file, so a re-link is read at once.",
   },
   'features/visual/visual-tools.ts': {
     uses: 2,

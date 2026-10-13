@@ -55,7 +55,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: stamping.ts, which module ids get a source stamp and the per-file @reticle-ignore opt-out.
   // The grouping this directory still wants is a `stamping/` subdirectory beside svelte-source.ts.
   'adapters/build/vite/src': 14,
-  'adapters/realm/browser/src/dom': 12,
+  // 13 with `render-page.ts`, the in-page step screenshot. It has to be its own module: the command
+  // registry imports it lazily, so a page downloads the renderer only when a picture is first drawn.
+  'adapters/realm/browser/src/dom': 13,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 25,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
@@ -78,7 +80,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // own root attributes and every surface's controls, so it sits with the surfaces it watches.
   // 24 with `presenter-plan.ts`, the Harness plan board on the Agent Log: one surface, with its own
   // stylesheet, beside the others.
-  'adapters/realm/browser/src/presenter': 24,
+  'adapters/realm/browser/src/presenter': 27,
   // Newly over the line at 11, with `presenter-safe-html.ts`. It crossed because two SECURITY
   // helpers left `presenter-report.ts` when the account capsule became their second caller: HTML
   // escaping, and the dashboard-url scheme check that exists because `javascript:` once produced a
@@ -86,7 +88,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // fixed in one of them, so the duplicate was not an option.
   // 12 with `log-memory.ts`: the Agent Log's rows kept across the reloads a replay causes, beside
   // the log they belong to.
-  'adapters/realm/browser/src/presenter/chrome': 12,
+  // 13 with `presenter-morph.ts`: repainting a HUD region without destroying its controls, shared by
+  // the Harness rows and the account control, which each blinked on every push.
+  'adapters/realm/browser/src/presenter/chrome': 13,
   /*
    * 12 because `verdict-attribution.ts` earns its own module, and the reason is measured rather than
    * tidy: folded into `verified-constants.ts` it added 687 B to what EVERY page downloads just for
@@ -103,7 +107,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * a shallow walk over the contract's own type belongs beside the contract. Moving it here took a
    * cross-layer reach out of the server and left the file count as the only cost.
    */
-  'core/src/verdict': 16,
+  'core/src/verdict': 18,
   // 17 since `hold.ts`: `clampHoldMs` is the bound BOTH input paths clamp `holdMs` with, so it
   // belongs to the contract rather than to either caller. The reason it is a file of its own rather
   // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
@@ -136,11 +140,15 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * 17 with `drive-script.ts`, the Harness's plan language: an artifact the daemon and the platform
    * both read, so it lives with the other formats, behind the artifacts subpath the SDK never loads.
    */
-  'core/src/artifacts': 17,
+  // 19 with `screenshot-upload.ts`, the body of the platform's screenshot endpoint. Here rather than
+  // beside the run schema because only this subpath keeps it out of every page's first load.
+  // 20 with `harness-map.ts`, the exploratory Harness's map of the app: read by the daemon and the
+  // platform both, so it lives with the other formats behind the artifacts subpath.
+  'core/src/artifacts': 20,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   'core/src': 11,
-  'engine/src/evidence': 18,
+  'engine/src/evidence': 19,
   // 18 since the last two cycles in this package were removed: `predicate-eval-kit.ts` (the result
   // type and the four comparisons the oracles are written in) and `predicate-session.ts` (what the
   // engine needs from a session). Both were reached back out of the modules that call their readers.
@@ -182,7 +190,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 12 since `defaultRunId` moved out of `runner-port.ts` into its own leaf: `verification-sync`
   // wanted that one function and imported a module that pulls the whole flow-replay stack, closing a
   // cycle. Same trade as `language/flows` below — a cycle is paid for in files.
-  'server/src/judgement/runs': 12,
+  'server/src/judgement/runs': 13,
   // 33 since `act-merged.ts`: `reticle_act` absorbing `reticle_act_sequence`, routed on the shape of
   // the call rather than on an `action` name because `act` already owns that parameter. It is its
   // own file rather than a branch inside `merge-tools.ts` for exactly that reason — it is the one
@@ -220,7 +228,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // declared beside it rather than inside it, as `query-hint-schema.ts` is beside tools.ts.
   // 47 with `lease-readiness.ts`: the checks a lease runs before it may say `ready: true` (does
   // the tab answer, is it visible), moved out of lease-tools.ts for the same line-cap reason.
-  'server/src/surface/tools': 47,
+  // 52 with `reticle-result.ts`: the block an agent ends with, beside `platform-moment.ts` whose
+  // connect line it shares; `judgement/runs` was the other home and is at its own recorded count.
+  'server/src/surface/tools': 52,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
@@ -234,11 +244,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    */
   // +3: durable.ts, after-match.ts and proved-controls.ts, what act_and_wait does once its
   // predicate holds.
-  'server/src/surface/tools/act': 15,
+  'server/src/surface/tools/act': 16,
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.
-  'server/src/command/cli': 21, // + tutorial.ts: one sequence, two audiences, ending at a verdict; + report-command.ts, a command beside its siblings
+  'server/src/command/cli': 26, // + known-regression.ts: the gate's read of the platform, off the library path; + try-command.ts, verify-results.ts, cli-usage.ts: commands and their output beside their siblings; a subdirectory gave each a new reach the reach guard refuses; + tutorial.ts: one sequence, two audiences, ending at a verdict; + report-command.ts, a command beside its siblings
   // 17 since the installer's Node half: `setup-mcp.ts` (which agents are here, and merging into the
   // configs they already keep) and `setup-install.ts` (the three steps only the shell could time).
   // Both are pure — their telemetry reporter is INJECTED, because this directory does not own a
@@ -262,7 +272,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // to read daemon state and port holders -- every other home needed two new reaches for it.
   // 25 with `command-payload.ts`: the command's wire JSON, moved out of `session.ts` (at its cap)
   // when it gained the mark that says the Harness sent it.
-  'server/src/portal/session': 25,
+  'server/src/portal/session': 29,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others
@@ -308,25 +318,26 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `dir -> resolve` and `dir -> project`, turning a leaf directory into one that reaches for four
   // others. A flat file is cheaper than a new mutual pair. Group them when the address question
   // stops needing the caller's dependencies to answer it.
-  'server/src/memory/project': 12,
+  'server/src/memory/project': 14,
   // 11 when `memory-scope.ts` landed: which project a shared-memory READ is about, on the wire and
   // in the response. Recorded rather than grouped, for the sibling reason above it. Its natural
   // group would be `cloud/memory/`, and a directory named `memory` beside `server/src/memory` is a
   // name collision the reach guard refuses outright; `cloud/scope/` would be a category invented
   // for one member. The file is the sibling of `cloud-sync.ts`'s path constants and belongs flat.
-  'server/src/memory/cloud': 12,
+  // 14 with `sync-screenshots.ts`: a run's step screenshots, sent once the platform holds the run.
+  // Its own file because `sync-cycle.ts` is near the line cap and this is a separate conversation
+  // with a separate endpoint, which the cycle only calls.
+  // 13 since `harness-offer.ts` left: the free-months offer ended on the platform.
+  'server/src/memory/cloud': 13,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there
   // was a CLI). Three files rather than one: they answer at three different moments.
-  // 36 with `harness-drive.ts`: the span that says a verdict came from Reticle driving the app
-  // rather than from the user's own agent. It is a module and not a flag on a call because the two
-  // are indistinguishable at the emit site otherwise, and every activation number built on verdicts
-  // reads a drive we performed as adoption we did not earn. Raised rather than grouped: this
-  // directory is already the largest flat one here and grouping it is its own piece of work.
   // 37 since `hud-metrics.ts`, which rolls HUD use into the session summary beside the tool counts.
   // Its own file so the 700-line session aggregator did not grow a second concern.
-  'server/src/telemetry': 37,
+  // 36 again when the drive-attribution counter went: the async context in `hooks/driven-by.ts`
+  // already says which drive a call belongs to, per call, so a second module-wide copy was removed.
+  'server/src/telemetry': 35,
   'spec-runner/src': 11,
 };
 

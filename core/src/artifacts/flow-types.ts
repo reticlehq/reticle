@@ -233,7 +233,7 @@ const baseFlowStep = z.object({
   args: z.record(z.unknown()).optional(),
   expect: ExpectSchema.optional(),
   degraded: z.boolean().optional(),
-  timeoutMs: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().nonnegative().optional(),
   invoke: z.string().min(1).optional(),
   /** See FlowStep.page / FlowStep.endPage. */
   page: z.string().optional(),
@@ -311,6 +311,11 @@ export interface ReactionDigest {
 export interface FlowStepResult {
   /** 0-based index of this step in the flow. */
   step: number;
+  /**
+   * Where the screenshot of the page at this step's outcome is, and how it was taken — or why
+   * there is none. A path to open when the look of the page matters; never the image itself.
+   */
+  screenshot?: { path: string; source: string } | { error: string };
   /**
    * The tool the step runs — FlowStepTool.ACT | ACT_SEQUENCE | the synthetic success oracle.
    *
@@ -466,6 +471,8 @@ export interface SuiteVerdict {
   passed: number;
   failed: number;
   summary: string;
+  /** The ready-to-paste "Reticle result" block the agent ends with; built by the server. */
+  reticleResult?: string;
   /** Only the failing flows, with their decision (verdict, what changed, where, next action). */
   failures: SuiteFlowResult[];
   /**
@@ -541,6 +548,11 @@ export interface SuiteContradiction extends Contradiction {
 export interface FlowReplayResult {
   name: string;
   status: ReplayStatus;
+  /**
+   * The verification run this replay was written down as, so whoever started it (the platform's
+   * Re-verify) can tie its check to the run and a passing replay resolves the issue it was for.
+   */
+  runId?: string;
 
   /**
    * Contradictions that span steps — found by re-running the detectors over the WHOLE replay, minus

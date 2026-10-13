@@ -16,6 +16,10 @@ import {
 } from '@reticlehq/core';
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';
+import { DriveFlowSkipReason } from './drive-flow.js';
+import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
+import { NETWORK_MOCK_TOOLS } from '@/portal/input/network-mock-tools.js';
+import type { ToolDeps } from '@/surface/tools/tools.js';
 import { DEFAULT_DIFF_RETENTION, DEFAULT_SESSION_RETENTION } from './on-disk/retention.js';
 import { reticleDirPaths, sessionDirPath } from '@/memory/project/dir/reticle-dir.js';
 
@@ -251,6 +255,20 @@ describe('the run a drive leaves behind', () => {
     const file = (await fs.readdir(dir)).filter((f) => f.endsWith('.json'))[0] ?? '';
     return ReticleVerificationRunSchema.parse(JSON.parse(await fs.readFile(join(dir, file))));
   };
+
+  it('keeps the time the run was first written when a reload rewrites it', async () => {
+    // Every socket close rewrites the session's one run, and each rewrite stamped a new `createdAt`,
+    // so the dashboard showed the moment the tab closed as when the drive ran.
+    await makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 1_700_000 })(
+      driven([Verified.YES]),
+    );
+    await makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 9_900_000 })(
+      driven([Verified.YES, Verified.NO]),
+    );
+    const run = await runOnDisk();
+    expect(run.createdAt).toBe(1_700_000);
+    expect(run.checks).toHaveLength(2);
+  });
 
   it("names the subject in the protocol's terms, including a desktop shell", async () => {
     // The artifact recorded the project, the agent and the trigger, and never what KIND of thing
@@ -491,5 +509,121 @@ describe('teardown saves what a session drove as ONE flow per journey', () => {
     await end(fakeSession('tab-1', {}, undefined, projectRoot));
     expect(await new FlowStore(fs, projectRoot, { now: () => 1 }).list()).toHaveLength(1);
     expect(await new FlowStore(fs, root, { now: () => 1 }).list()).toEqual([]);
+  });
+  /*
+   * Group D persona drive: one recording for the whole daemon, so a drive in ANOTHER app (the
+   * console) was saved into this repo's committed flows/ and synced to this project.
+   */
+  it("saves only this tab's own drive, never another app's tab", async () => {
+    const recordings = new RecordingStore();
+    const step = (value: string, page: string) => ({
+      tool: ReticleTool.ACT,
+      args: { by: QueryBy.TESTID, value, action: 'click', args: {} },
+      stable: true,
+      page,
+      expect: { kind: PredicateKind.SIGNAL, name: `${value}:done` },
+    });
+    recordings.capture(step('open-runs', '/overview'), '/overview', 'console-tab');
+    recordings.capture(step('pay', '/checkout'), '/checkout', 'shop-tab');
+    const flows = new FlowStore(fs, root, { now: () => 1 });
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows,
+      takeAmbientTape: (id) => recordings.takeAmbient(id),
+    });
+    await end(fakeSession('shop-tab', {}));
+    const saved = await flows.list();
+    const onDisk = JSON.stringify(
+      await Promise.all(saved.map(async (name) => (await flows.load(name)).ok)),
+    );
+    expect(saved).toHaveLength(1);
+    expect(JSON.stringify(await flows.load(saved[0] ?? ''))).toContain('pay');
+    expect(JSON.stringify(await flows.load(saved[0] ?? ''))).not.toContain('open-runs');
+    expect(onDisk).toBe('[true]');
+  });
+
+  it('does not auto-save a journey proved under network mocks, and says why (#1459)', async () => {
+    const recordings = new RecordingStore();
+    const mock = NETWORK_MOCK_TOOLS.find((t) => t.name === ReticleTool.NETWORK_MOCK);
+    const deps = {
+      sessions: { resolve: () => ({ id: 'tab-1', url: 'http://localhost:5173/checkout' }) },
+      pool: { setMocksLease: () => Promise.resolve(true) },
+      recordings,
+    } as unknown as ToolDeps;
+    const proved = (value: string, page: string) => ({
+      tool: ReticleTool.ACT,
+      args: { by: QueryBy.TESTID, value, action: 'click', args: {} },
+      stable: true,
+      page,
+      expect: { kind: PredicateKind.SIGNAL, name: `${value}:done` },
+    });
+    await mock?.handler(deps, { mocks: [{ urlContains: '/api/pay', status: 500 }] });
+    recordings.capture(proved('pay', '/checkout'), '/checkout', 'tab-1');
+    // Settled where it ran, so the next page starts a journey of its own.
+    recordings.markEnded('/checkout', 'tab-1');
+    await mock?.handler(deps, { clear: true });
+    recordings.capture(proved('close', '/issues'), '/issues', 'tab-1');
+
+    const flows = new FlowStore(fs, root, { now: () => 1 });
+    const reported: { reason?: string | undefined }[] = [];
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows,
+      takeAmbientTape: (id) => recordings.takeAmbient(id),
+      reportStep: (step) => {
+        reported.push(step);
+        return Promise.resolve(true);
+      },
+    });
+    await end(fakeSession('tab-1', {}));
+
+    // The journey after the mocks were cleared is saved, and carries no recorder-internal mark.
+    const saved = await flows.list();
+    expect(saved).toHaveLength(1);
+    const flow = await flows.load(saved[0] ?? '');
+    const onDisk = JSON.stringify(flow.ok && flow.value);
+    expect(onDisk).toContain('close:done');
+    expect(onDisk).not.toContain('pay:done');
+    expect(onDisk).not.toContain('mocked');
+
+    // Mocked only: nothing saved, and the reason says so.
+    recordings.markMocked('tab-1', true);
+    recordings.capture(proved('pay', '/checkout'), '/checkout', 'tab-1');
+    await end(fakeSession('tab-1', {}));
+    expect(await flows.list()).toHaveLength(1);
+    expect(reported.at(-1)?.reason).toBe(DriveFlowSkipReason.DRIVEN_UNDER_NETWORK_MOCKS);
+  });
+
+  it('does not save an unmocked act whose proof was read after mocks went on (#1459)', async () => {
+    // Act, then mock the request the app is still waiting on, then prove the result: the proof
+    // joins the earlier step, and it rests on the mocked response.
+    const recordings = new RecordingStore();
+    recordings.capture(
+      {
+        tool: ReticleTool.ACT,
+        args: { by: QueryBy.TESTID, value: 'pay', action: 'click', args: {} },
+        stable: true,
+        page: '/checkout',
+      },
+      '/checkout',
+      'tab-1',
+    );
+    recordings.markMocked('tab-1', true);
+    recordings.attachExpect({ kind: PredicateKind.SIGNAL, name: 'pay:done' }, 'tab-1');
+
+    const flows = new FlowStore(fs, root, { now: () => 1 });
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows,
+      takeAmbientTape: (id) => recordings.takeAmbient(id),
+    });
+    await end(fakeSession('tab-1', {}));
+    expect(await flows.list()).toEqual([]);
   });
 });

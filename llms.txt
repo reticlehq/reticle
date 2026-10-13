@@ -139,7 +139,7 @@ Svelte stores, Pinia. Anything else works through the generic `pushStore`.
 
 ## How it's used (four ways)
 
-1. **Agent, on your own app (the default).** Four steps, in this order: install (once per machine), `reticle init` (once per project), then optionally `reticle connect` and `reticle push`.
+1. **Agent, on your own app (the default).** Four steps, in this order: install (once per machine), `reticle init` (once per project), then optionally `reticle connect` and `reticle sync`.
 
    First, ONCE PER MACHINE, in a terminal before any coding agent is open:
    `curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh`
@@ -160,7 +160,7 @@ Svelte stores, Pinia. Anything else works through the generic `pushStore`.
 
    Optional, for the dashboard: `reticle connect` wires the app if needed, signs you in in the
    browser (or creates a free account), links the folder to a project (creating it if missing) and
-   sends local history. `reticle push` sends what has not synced yet.
+   sends local history. `reticle sync` sends what has not synced yet.
 
    On Claude Code the plugin does the machine step and the skill together:
    `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq`.

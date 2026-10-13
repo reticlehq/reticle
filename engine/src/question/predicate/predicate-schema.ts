@@ -62,6 +62,9 @@ function usedQueryFields(query: ElementQuery): ReadonlySet<string> {
   if (query.scope !== undefined) used.add('scope');
   if (query.attrs !== undefined) used.add('attrs');
   if (query.self !== undefined) used.add('self');
+  // A modifier of the text rule, not a locator: the browser honours it wherever it reads `text`, and
+  // the residual text check below is already case-exact.
+  if (query.matchCase !== undefined) used.add('matchCase');
   // The browser's `self` branch checks subtree text when supplied, but skips every other locator.
   // Mark only text as consumed so role/name/etc. remain residual checks on the returned descriptor.
   if (true === query.self) return query.text === undefined ? used : used.add('text');

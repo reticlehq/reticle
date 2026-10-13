@@ -1,14 +1,25 @@
+import { takeCallSecrets, withCallSecrets } from './tool-kit.js';
 import { healthEnvelope } from '@/portal/session/session-health.js';
 import { logToolCall, toolLogPath } from '@/hooks/tool-log.js';
 import { nextStep } from './next-step.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
-import { sessionRoot } from '@/memory/project/session-root.js';
-import { takePlatformMoment } from './platform-moment.js';
+import { runAsAgent } from '@/hooks/coding-agents.js';
+import { takeHumanNotes } from './human-notes.js';
+import { takeDriveNotes } from '@/features/harness/drive-runs.js';
+import { harnessDriving, msgHarnessHasTheTab } from './harness-tab-guard.js';
+import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
+import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
+import { agentNudge, takePlatformMoment } from './platform-moment.js';
+import { RESULT_FIELD, trackVerdict } from './reticle-result.js';
+import { forTheAgent } from './agent/for-the-agent.js';
+import { type NoticeFold, feedbackAlreadyAsked, noteFeedbackAsked } from './agent/notices.js';
+import { SKEW_SHORT_WARNING, SKEW_VERDICT_WARNING } from '@/portal/session/session-health.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
   type BrowserBrand,
   TelemetryActor,
   TelemetryEventKind,
+  THROTTLED_WARNING,
   TRANSPORT_LIMITS,
   fingerprintFinding,
 } from '@reticlehq/core';
@@ -26,11 +37,10 @@ import { verificationOf } from '@/telemetry/verification-of.js';
 import { emitBugFoundHook, emitVerdictHook } from '@/hooks/hook-emit.js';
 import { reportOnboardingStep } from '@/telemetry/onboarding-funnel.js';
 import { noteActed, noteFirstVerdict, noteOnboardingFirst } from '@/telemetry/onboarding-firsts.js';
-import { withHarnessDrive } from '@/telemetry/harness-drive.js';
 import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
 import { DiscoveryInvite, asString } from '@reticlehq/core';
 import { SESSION_ID_ARG, sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
-import { EnvelopeKey } from './tool-kit.js';
+import { EnvelopeKey, STEP_SHOT_TOOLS } from './tool-kit.js';
 import { ReticleTool } from '@reticlehq/core';
 import { takeFeedbackPrompt } from './feedback-tools.js';
 import { takeFeedbackUndelivered } from '@/telemetry/feedback-delivery.js';
@@ -42,6 +52,7 @@ import {
   noteToolDispatched,
 } from '@/surface/tools/feature-capture.js';
 import { span } from '@/trace.js';
+import { takeStepShot } from '@/features/visual/step-shots.js';
 import {
   defectForToolResult,
   deltaForToolResult,
@@ -49,8 +60,8 @@ import {
   initImpact,
   recordImpact,
 } from '@/memory/impact/impact-recorder.js';
-import { type FrictionKind, frictionOf, inviteFor } from './feedback-invite.js';
-import type { ToolDef, ToolDeps } from './tool-kit.js';
+import { FrictionKind, frictionOf, inviteFor } from './feedback-invite.js';
+import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
 
 /**
  * The live-session tools whose result MUST carry the
@@ -182,18 +193,6 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.FEEDBACK,
 ]);
 
-/**
- * The merged action that hands the drive to a model inside the daemon.
- *
- * Derived from the member tool's own name rather than spelled again: the merge dispatches on
- * `action`, and `reticle_verify` plus `explore` IS `reticle_verify_explore`. A literal here would be
- * a third spelling of one name, and the one that silently stops matching when the action is renamed.
- */
-const HARNESS_DRIVE_ACTION = ReticleTool.VERIFY_EXPLORE.slice(`${ReticleTool.VERIFY}_`.length);
-function isHarnessDrive(toolName: string, args: Record<string, unknown>): boolean {
-  return ReticleTool.VERIFY === toolName && HARNESS_DRIVE_ACTION === args['action'];
-}
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return 'object' === typeof value && value !== null && !Array.isArray(value);
 }
@@ -215,7 +214,13 @@ function recordVerification(
   brand: BrowserBrand | undefined,
   sessionId: string | undefined,
 ): void {
-  const verification = verificationOf(toolName, result, durationMs, brand);
+  const verification = verificationOf(
+    toolName,
+    result,
+    durationMs,
+    brand,
+    currentDrivenBy() !== undefined,
+  );
   if (verification === undefined) return;
   getSessionMetrics().recordVerification();
   void getTelemetry().emit(TelemetryEventKind.VERIFICATION_COMPLETED, {
@@ -387,13 +392,64 @@ function pinnedArgs(
 export async function runTool<Ext>(
   tool: ToolDef<Ext>,
   deps: ToolDeps<Ext>,
+  given: Record<string, unknown>,
+  call?: ToolCall,
+): Promise<unknown> {
+  // A replay's secrets leave the arguments here, before the tool log, the journal or telemetry can
+  // see them, and are supplied to this call alone.
+  const { secrets, rest: args } = takeCallSecrets(given);
+  // A verdict still being decided is waited for by a session end (`trackVerdict`); the result is
+  // compacted for the agent last, after telemetry and the tool log have read the full result.
+  return trackVerdict(
+    tool.name,
+    withCallSecrets(secrets, async () => {
+      const result = await loggedTool(tool, deps, args, call);
+      const attach = currentDrivenBy() === undefined ? deps.attachId : undefined;
+      const root =
+        attach === undefined
+          ? undefined
+          : safeRoot(() => sessionRoot(deps, sessionIdFromArgs(args)));
+      return forTheAgent({ name: tool.name, args, result, attach, root, fold: NOTICE_FOLD });
+    }),
+  );
+}
+
+/** Advisories that become once-per-session notice lines. See agent/notices.ts. */
+export const NOTICE_FOLD: NoticeFold = {
+  advisories: [
+    EnvelopeKey.FEEDBACK_PROMPT,
+    EnvelopeKey.FEEDBACK_INVITE,
+    EnvelopeKey.TALK_TO_US,
+    EnvelopeKey.UPDATE_AVAILABLE,
+    // NOT `version_skew`: it is decisive — it explains every result after it and names the command to
+    // run — so it rides out as its own key, untouched (one-shot at its source already).
+    EnvelopeKey.PLATFORM,
+    EnvelopeKey.SESSION_LEASE,
+    EnvelopeKey.SESSION_AGE_WARNING,
+    EnvelopeKey.FEEDBACK_UNDELIVERED,
+    EnvelopeKey.ZERO_INSTALL,
+  ],
+  notices: EnvelopeKey.NOTICES,
+  next: EnvelopeKey.NEXT,
+  warning: EnvelopeKey.WARNING,
+  onceWarnings: new Map<string, string | undefined>([
+    // `session.throttled` still rides on every result: only the paragraph explaining it goes.
+    [THROTTLED_WARNING, undefined],
+    [SKEW_VERDICT_WARNING, SKEW_SHORT_WARNING],
+  ]),
+};
+
+async function loggedTool<Ext>(
+  tool: ToolDef<Ext>,
+  deps: ToolDeps<Ext>,
   args: Record<string, unknown>,
+  call?: ToolCall,
 ): Promise<unknown> {
   const logPath = toolLogPath();
-  if (logPath === undefined) return dispatchTool(tool, deps, args);
+  if (logPath === undefined) return dispatchTool(tool, deps, args, call);
   const at = deps.now();
   try {
-    const result = await dispatchTool(tool, deps, args);
+    const result = await dispatchTool(tool, deps, args, call);
     logToolCall(logPath, { tool: tool.name, args, at, ms: deps.now() - at, result });
     return result;
   } catch (error) {
@@ -407,6 +463,7 @@ async function dispatchTool<Ext>(
   tool: ToolDef<Ext>,
   deps: ToolDeps<Ext>,
   args: Record<string, unknown>,
+  call?: ToolCall,
 ): Promise<unknown> {
   // Both dispatch paths (MCP + programmatic) pass through here — the one place "which tool is mostly
   // used" can be counted. This used to EMIT an event per call; it now increments an in-process counter
@@ -447,6 +504,14 @@ async function dispatchTool<Ext>(
     reportRefusal(tool.name, error);
     return { error };
   }
+  // One driver per tab. The Harness clicking through a page while the agent clicks too is two hands
+  // on one mouse: neither result means anything. The agent's own action waits; its reads still run.
+  const busy = ACTION_TOOLS.has(tool.name) ? harnessDriving(deps, args) : undefined;
+  if (busy !== undefined) {
+    const error = msgHarnessHasTheTab(busy);
+    reportRefusal(tool.name, error);
+    return { error };
+  }
   // An ACTION is what gets abandoned. Counted here, against verifications, so "the agent drove the
   // page and then wandered off" becomes a number instead of an impression.
   if (ACTION_TOOLS.has(tool.name)) {
@@ -465,6 +530,24 @@ async function dispatchTool<Ext>(
   // to the handler to throw the canonical no-session error.
   let session: Session | undefined;
   if (bound || CDP_TOOLS.has(tool.name)) {
+    try {
+      session = deps.sessions.resolve(rawSessionId);
+    } catch {
+      session = undefined;
+    }
+  }
+  // Nothing connected, and the app was never wired: a call that needs a page opens it zero-install
+  // rather than answering with a diagnosis the agent stops at. See zero-install-first-call.ts.
+  const openUnwired = deps.openUnwiredApp;
+  const opened =
+    openUnwired !== undefined &&
+    session === undefined &&
+    bound &&
+    rawSessionId === undefined &&
+    0 === deps.sessions.list().length
+      ? await openUnwired()
+      : undefined;
+  if (opened !== undefined) {
     try {
       session = deps.sessions.resolve(rawSessionId);
     } catch {
@@ -547,19 +630,14 @@ async function dispatchTool<Ext>(
     // `dispatchArgs`, not `args`: an inferred session is pinned into the arguments before the
     // handler sees them, so a tool that resolves the session a second time cannot land on a
     // different one than the dispatcher chose.
-    const call = (): Promise<unknown> =>
+    const invokeHandler = (): Promise<unknown> =>
       span('tool.handler', { tool: tool.name, session: session?.id }, () =>
-        tool.handler(deps, dispatchArgs),
+        tool.handler(deps, dispatchArgs, call),
       );
-    // A drive we run on the user's behalf, marked for its whole span so the verdicts it produces
-    // underneath are distinguishable from the ones the user's own agent earned.
-    //
-    // The outer call emits no verdict of its own, and that is the honest answer rather than a gap:
-    // it drives and records, it adjudicates nothing, and its result carries no verified/pass field
-    // to read. Deriving one from how far the drive got would be inventing a verdict nobody reached.
-    // What was missing was never an event here — it was that a session driven BY US read exactly
-    // like one the agent earned, which is what the span fixes.
-    raw = await (isHarnessDrive(tool.name, args) ? withHarnessDrive(call) : call());
+    // The Harness's own inner calls carry their drive in an async context (`runDrivenBy`), which is
+    // what attributes their verdicts; the outer explore call adjudicates nothing of its own.
+    // As the agent on this connection, so a note it reads is marked seen by that agent.
+    raw = await runAsAgent(deps.attachId, invokeHandler);
   } catch (error) {
     // The commonest refusal shape by far, and the one nothing could see: the message is built, handed
     // to the agent by the MCP boundary, and discarded. Reported here rather than at that boundary
@@ -594,6 +672,7 @@ async function dispatchTool<Ext>(
     // concurrency slot and peakConcurrentTools would climb forever on an unhealthy session.
     settleTiming(Date.now() - startedAt);
   }
+  raw = await withStepShot(tool.name, deps, args, raw, session?.id ?? rawSessionId);
   // Milestones describe work that ran. Refusals and paused calls must not consume the firsts.
   // Record action before verdict: act_and_wait can complete both in this same call.
   if (isPlainObject(raw) && !resultIsError(raw) && raw['paused'] !== true && raw['ok'] !== false) {
@@ -649,7 +728,10 @@ async function dispatchTool<Ext>(
     // measured against the tab that actually produced it.
     if (session !== undefined && REF_MINTING_TOOLS.has(tool.name)) noteRefsMinted(session.id);
   }
-  const prompt = isPlainObject(raw) ? takeFeedbackPrompt(tool.name) : undefined;
+  // The feedback family is asked at most once per agent session (agent/notices.ts): gated here, at
+  // the take, so a suppressed ask is never counted as one that was made.
+  const asked = feedbackAlreadyAsked(currentDrivenBy() === undefined ? deps.attachId : undefined);
+  const prompt = isPlainObject(raw) && !asked ? takeFeedbackPrompt(tool.name) : undefined;
   // Same one-shot channel as the feedback ask: the agent is mid-task, so anything it would have to go
   // and ASK for is something it will never ask for. Spliced on ANY tool result, not just a
   // verification, because an out-of-date install is worth mentioning whatever the agent is doing.
@@ -674,11 +756,15 @@ async function dispatchTool<Ext>(
   // `refused` friction the line is written for. `errored` could only ever see the handlers that
   // RETURN an error. So the denominator was counting a small, unrepresentative slice of the
   // invitations and reading near-empty, which looks identical to a nudge that never fires.
-  const friction = frictionInviteFor(tool.name, raw);
-  // Once per project, on a proved verdict, when the runs live only on this machine.
-  const platform = isPlainObject(raw)
-    ? await takePlatformMoment(deps, raw, () => sessionRoot(deps, rawSessionId))
-    : undefined;
+  const friction = asked || prompt !== undefined ? undefined : frictionInviteFor(tool.name, raw);
+  if (prompt !== undefined || friction !== undefined)
+    noteFeedbackAsked(currentDrivenBy() === undefined ? deps.attachId : undefined);
+  // Once per project, on a proved verdict, when the runs live only on this machine. Not on a result
+  // whose `reticleResult` already ends with the platform line: once per result, never twice.
+  const platform =
+    isPlainObject(raw) && !(RESULT_FIELD in raw)
+      ? await takePlatformMoment(deps, raw, () => sessionRoot(deps, rawSessionId))
+      : undefined;
   // What the agent should do next, on every client that reads results. Not for the Harness, whose
   // runs the daemon syncs itself and which cannot relay the user's words, and not on `reticle_run`'s
   // outer result: the inner call already carried one.
@@ -686,19 +772,55 @@ async function dispatchTool<Ext>(
     isPlainObject(raw) && ReticleTool.RUN !== tool.name && currentDrivenBy() === undefined
       ? nextStep({
           tool: tool.name,
+          unmatched: unmatchedRootOf(deps, rawSessionId),
           verdict: 'verified' in raw,
           root: safeRoot(() => sessionRoot(deps, rawSessionId)),
           // A partial deps (tests, the demo) may carry no clock; the line is advice, never a reason to fail.
           now: 'function' === typeof deps.now ? deps.now() : Date.now(),
         })
       : undefined;
+  // Only an agent's own call (an MCP connection, not the Harness, not the HUD's or the chat's calls
+  // into the same tools) takes what is waiting for the agent: those calls answer nobody who reads.
+  const answer = isPlainObject(raw) ? raw : undefined;
+  const agentCall =
+    answer !== undefined && deps.attachId !== undefined && currentDrivenBy() === undefined;
+  // A Harness drive started or finished, from the HUD, the platform's chat or this agent: one line,
+  // once. Not about the run this very result already reports.
+  // One-time advisories toward the platform and the Harness (`platform-moment.ts`), only on the agent's
+  // own calls, riding the same platform line as the moments above.
+  const nudge =
+    agentCall && answer !== undefined
+      ? await agentNudge({
+          deps,
+          tool: tool.name,
+          raw: answer,
+          isError: resultIsError(answer),
+          tab: session,
+          root: safeRoot(() => sessionRoot(deps, rawSessionId)),
+          harnessOn: () => impactSnapshot(artifactRoot)?.harnessConfig?.harnessEnabled,
+        })
+      : undefined;
+  const platformLine =
+    platform === undefined ? nudge : nudge === undefined ? platform : `${platform}\n${nudge}`;
+  const drives = agentCall
+    ? takeDriveNotes('string' === typeof answer?.['runId'] ? answer['runId'] : undefined)
+    : [];
+  // The person's notes from the HUD, on ANY tool. Act tools splice their own `control` first.
+  const notes =
+    agentCall && answer !== undefined && !(EnvelopeKey.CONTROL in answer)
+      ? await runAsAgent(deps.attachId, () =>
+          Promise.resolve(takeHumanNotes(deps.sessions, rawSessionId, session)),
+        )
+      : undefined;
   const result =
+    0 === drives.length &&
+    notes === undefined &&
     prompt === undefined &&
     update === undefined &&
     skew === undefined &&
     undelivered === undefined &&
     friction === undefined &&
-    platform === undefined &&
+    platformLine === undefined &&
     next === undefined
       ? raw
       : {
@@ -708,14 +830,20 @@ async function dispatchTool<Ext>(
           ...(friction !== undefined
             ? {
                 [EnvelopeKey.FEEDBACK_INVITE]: inviteFor(friction),
-                // The moment Reticle got in somebody's way is the moment to offer them the founder.
-                [EnvelopeKey.TALK_TO_US]: DiscoveryInvite.AGENT,
+                // The founder's calendar only for an agent genuinely STUCK (the same call, again,
+                // with no progress). An ordinary refusal carried it too, and read as a sales pitch
+                // stapled to an error message.
+                ...(FrictionKind.REPEATING === friction
+                  ? { [EnvelopeKey.TALK_TO_US]: DiscoveryInvite.AGENT }
+                  : {}),
               }
             : {}),
           ...(prompt !== undefined ? { [EnvelopeKey.FEEDBACK_PROMPT]: prompt } : {}),
           ...(update !== undefined ? { [EnvelopeKey.UPDATE_AVAILABLE]: update } : {}),
           ...(skew !== undefined ? { [EnvelopeKey.VERSION_SKEW]: skew } : {}),
-          ...(platform !== undefined ? { [EnvelopeKey.PLATFORM]: platform } : {}),
+          ...(platformLine !== undefined ? { [EnvelopeKey.PLATFORM]: platformLine } : {}),
+          ...(0 === drives.length ? {} : { [EnvelopeKey.HARNESS]: drives.join('\n') }),
+          ...(notes === undefined ? {} : { [EnvelopeKey.CONTROL]: notes }),
           ...(undelivered !== undefined
             ? {
                 [EnvelopeKey.FEEDBACK_UNDELIVERED]: `your earlier report did NOT send: ${undelivered}. Tell the human what you found so it is not lost.`,
@@ -725,7 +853,14 @@ async function dispatchTool<Ext>(
   if (!bound || !isPlainObject(result)) return result;
   // Reuse the session resolved above so the health envelope describes the SAME session the handler
   // drove; only re-resolve if the up-front attempt failed but the handler somehow succeeded.
-  const driven = session ?? deps.sessions.resolve(rawSessionId);
+  // A handler that answered with no tab to resolve (a Harness drive polled by runId after a daemon
+  // restart reads its record from disk) keeps its answer: there is no session health to describe.
+  let driven = session;
+  try {
+    driven ??= deps.sessions.resolve(rawSessionId);
+  } catch {
+    return result;
+  }
   // ...unless the call replaced that document. A full navigation or reload registers a NEW Session
   // under the same id (or under the id the result reports it arrived at), and the object resolved
   // before the call is the page that unloaded: it reported itself hidden on the way out, so every
@@ -741,7 +876,12 @@ async function dispatchTool<Ext>(
   // does) — so a long-running backgrounded session, the case most likely to leak, never got the
   // one-time pool-lease reminder or the age cleanup nudge. Splice them regardless.
   const lease = resolved.takeSessionLease();
-  if (lease !== undefined) envelope[EnvelopeKey.SESSION_LEASE] = lease;
+  // In CI there is no panel and no human to hand it back to: the reminder was noise in every
+  // pipeline log. Still taken, so the once-per-session cadence is unchanged.
+  if (lease !== undefined && process.env['CI'] === undefined) {
+    envelope[EnvelopeKey.SESSION_LEASE] = lease;
+  }
+  if (opened !== undefined) envelope[EnvelopeKey.ZERO_INSTALL] = opened.notice;
   const warning = resolved.ageWarning();
   if (warning !== undefined) envelope[EnvelopeKey.SESSION_AGE_WARNING] = warning;
   // Ask for a verdict when the agent has driven the page and not asked for one: a session that never
@@ -776,10 +916,56 @@ async function dispatchTool<Ext>(
   return Object.keys(envelope).length > 0 ? { ...result, ...envelope } : result;
 }
 
+/**
+ * A picture of the page the moment this call's outcome was decided, named on the result. Only on
+ * an answer that touched the page: a refusal or a paused call drove nothing worth a picture. A
+ * navigation can land the page under a new id, so the id the result reports wins.
+ */
+async function withStepShot<Ext>(
+  name: string,
+  deps: ToolDeps<Ext>,
+  args: Record<string, unknown>,
+  raw: unknown,
+  sessionId: string | undefined,
+): Promise<unknown> {
+  if (!STEP_SHOT_TOOLS.has(name) || Array.isArray(args['steps'])) return raw;
+  if (!isPlainObject(raw) || resultIsError(raw) || true === raw['paused']) return raw;
+  const tab = 'string' === typeof raw['sessionId'] ? raw['sessionId'] : sessionId;
+  if (tab === undefined) return raw;
+  // Paired with its check when the run is written: the n-th verdict picture is the n-th check.
+  const verdict =
+    'verified' in raw && (ReticleTool.ACT_AND_WAIT === name || ReticleTool.ASSERT === name);
+  return { ...raw, [EnvelopeKey.SCREENSHOT]: await takeStepShot(deps, tab, name, { verdict }) };
+}
+
 /** A root, or undefined when none can be resolved: a missing root is never a reason to throw. */
 function safeRoot(get: () => string): string | undefined {
   try {
     return get();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Where this session's evidence goes when no project claims it (`~/.reticle/unmatched/<id>`), with
+ * the folders that compete for its id; undefined when it lands in a project. Never throws.
+ */
+function unmatchedRootOf(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): { root: string; contenders: readonly string[]; serving?: string } | undefined {
+  try {
+    const target = sessionTarget(deps, sessionId);
+    const resolved = deps.artifactRootFor?.(target.projectId, target.origin);
+    if (resolved === undefined || ArtifactRootReason.MATCHED_PROJECT === resolved.reason)
+      return undefined;
+    if (resolved.root === deps.reticleRoot) return undefined;
+    return {
+      root: resolved.root,
+      contenders: resolved.candidates ?? [],
+      ...(resolved.serving === undefined ? {} : { serving: resolved.serving }),
+    };
   } catch {
     return undefined;
   }

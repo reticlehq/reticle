@@ -18,7 +18,7 @@
  * what lets a test say "these are the projects on this machine" without one.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import { homedir } from 'node:os';
 import {
   PROJECT_REGISTRY_FILE,
@@ -85,7 +85,23 @@ function daemonOwnProjectId(
   candidates: readonly ProjectCandidate[],
 ): string | undefined {
   const directory = dirname(daemonRoot);
-  return candidates.find((candidate) => candidate.directory === directory)?.projectId;
+  const own = candidates.find((candidate) => candidate.directory === directory)?.projectId;
+  // A monorepo root carries the id of the app `init --app` wired, as a pointer for an agent started
+  // there. When an app inside the root declares the same id, the root is pointing at it, not being
+  // it: answering with the id handed a second checkout's flows to this root with no warning.
+  const pointer = candidates.some(
+    (candidate) =>
+      candidate.projectId === own &&
+      candidate.directory !== directory &&
+      isInside(directory, candidate.directory),
+  );
+  return pointer ? undefined : own;
+}
+
+/** Is `dir` strictly inside `root`? */
+function isInside(root: string, dir: string): boolean {
+  const rel = relative(root, dir);
+  return 0 < rel.length && !rel.startsWith('..') && !isAbsolute(rel);
 }
 
 /**
@@ -196,6 +212,15 @@ export function artifactRootResolver(
   const daemonProjectId = daemonIsProject
     ? daemonOwnProjectId(daemonRoot, candidates())
     : undefined;
+  /** Said once per project, reason and folder: one session's calls repeated it 16 times in 3s. */
+  const told = new Set<string>();
+  // ponytail: asked once per origin (it shells out); a dev server moved to another folder on the
+  // same port is named stale until the daemon restarts.
+  const servedFrom = new Map<string, string | undefined>();
+  const servingOf = (origin: string): string | undefined => {
+    if (!servedFrom.has(origin)) servedFrom.set(origin, servingDirectory(origin));
+    return servedFrom.get(origin);
+  };
   return (projectId, origin) => {
     const known = candidates();
     let resolved = resolveArtifactRoot({ projectId, candidates: known, daemonRoot });
@@ -207,7 +232,7 @@ export function artifactRootResolver(
         projectId,
         candidates: known,
         daemonRoot,
-        servingDirectory: servingDirectory(origin),
+        servingDirectory: servingOf(origin),
       });
     }
     if (resolved.reason === ArtifactRootReason.MATCHED_PROJECT) return resolved;
@@ -227,7 +252,9 @@ export function artifactRootResolver(
       // app's learned expectations become another's.
       ...(origin === undefined ? {} : { origin }),
     });
-    if (root !== daemonRoot) {
+    const key = `${projectId ?? ''}\u0000${resolved.reason}\u0000${root}`;
+    if (root !== daemonRoot && !told.has(key)) {
+      told.add(key);
       log('artifact_root_unmatched', {
         projectId: projectId ?? null,
         // The other half of the comparison, so a reader can tell "the daemon was a guest" from
@@ -235,8 +262,12 @@ export function artifactRootResolver(
         daemonProjectId: daemonProjectId ?? null,
         reason: resolved.reason,
         root,
+        ...(resolved.candidates === undefined ? {} : { candidates: resolved.candidates }),
       });
     }
-    return { ...resolved, root };
+    // Named so the agent is told WHICH checkout's work is stranded: a clone serving the app was
+    // never named, only the primary checkout's folders.
+    const serving = origin === undefined ? undefined : servingOf(origin);
+    return { ...resolved, root, ...(serving === undefined ? {} : { serving }) };
   };
 }

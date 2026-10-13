@@ -25,7 +25,7 @@ import {
   pickDaemonPort,
   type DaemonRegistryEntry,
 } from '@reticlehq/core/artifacts';
-import { ReticleEnv } from '@reticlehq/core';
+import { ReticleEnv, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 
 const RETICLE_PORT_ENV = ReticleEnv.PORT;
 
@@ -225,6 +225,36 @@ export function wrongDaemonNote(
 }
 
 /**
+ * Why the proxy serves `port` and not the `requested` one, in words a person can act on. It said
+ * "the requested port serves a different project" for every move, including the commonest one: this
+ * project's own daemon was already running elsewhere (a `connect` started it on the default).
+ */
+export function relocationReason(
+  requested: number,
+  port: number,
+  projectId: string | undefined,
+  home: string,
+  alive: (pid: number) => boolean,
+): string {
+  const at = `:${String(port)}`;
+  if (projectId !== undefined && resolveDaemonForProject(projectId, home, alive) === port)
+    return (
+      `this project's daemon is already running on ${at}, so the agent uses it instead of ` +
+      `:${String(requested)}. To use :${String(requested)}, run \`reticle stop --port ${String(port)}\` ` +
+      'and reconnect the agent.'
+    );
+  const holder = daemonProjectAt(requested, home);
+  if (holder !== undefined && holder !== projectId)
+    return (
+      `:${String(requested)} serves project "${holder}", so this one is served on ${at}. Give this ` +
+      'project its own port (RETICLE_PORT, or `port` in its .reticle.json) and restart the agent.'
+    );
+  if (projectId === undefined)
+    return `no project here, and the one live project daemon is on ${at}: the agent uses it.`;
+  return `nothing usable answered on :${String(requested)}, so the agent is served on ${at}.`;
+}
+
+/**
  * The port this agent's MCP proxy should serve, decided BEFORE the proxy starts.
  *
  * Resolved once rather than per reconnect because the proxy's transport is built around a fixed
@@ -250,6 +280,8 @@ export async function resolveMcpPort(
     daemonPresent: (port: number) => Promise<boolean>;
     pickPort: (preferred: number) => Promise<number>;
   },
+  /** The port this project's `.reticle.json` names: the one its app dials. */
+  own?: number,
 ): Promise<number> {
   const mine = resolveDaemonForProject(projectId, home, deps.alive);
   if (mine !== undefined) return mine;
@@ -257,11 +289,21 @@ export async function resolveMcpPort(
     // A caller outside any project (an editor's user-scope MCP, launched from $HOME) used to dial the
     // default and never see the one project that had moved off it (#1240). With exactly one project
     // daemon live, that is the one; with several, the no-session answer names them instead.
+    // Only on the DEFAULT port, which is the guess #1240 corrects. A port passed with --port or
+    // RETICLE_PORT is a choice: relocating it attached an unwired app to another project's daemon.
     const projects =
-      projectId === undefined ? projectDaemonsElsewhere(preferred, home, deps.alive) : [];
+      projectId === undefined && RETICLE_DEFAULT_PORT === preferred
+        ? projectDaemonsElsewhere(preferred, home, deps.alive)
+        : [];
     return 1 === projects.length ? (projects[0]?.port ?? preferred) : preferred;
   }
-  return adoptable(daemonProjectAt(preferred, home), projectId)
-    ? preferred
-    : deps.pickPort(preferred);
+  if (adoptable(daemonProjectAt(preferred, home), projectId)) return preferred;
+  // Moved off a port another project holds: to the one this project's app dials, when it is free or
+  // already ours. A random port served nobody — the app kept dialling its own, and the agent was
+  // told "wired, and a dev server is listening, but no session".
+  if (own !== undefined && own !== preferred) {
+    if (!(await deps.daemonPresent(own))) return own;
+    if (adoptable(daemonProjectAt(own, home), projectId)) return own;
+  }
+  return deps.pickPort(preferred);
 }

@@ -71,6 +71,12 @@ function fuzzyVisibleText(actual: string, expected: string): boolean {
     .includes(normaliseVisibleText(expected).toLowerCase());
 }
 
+/** The text rule a query asked for: case-exact when it is a check, forgiving when it is a search. */
+function textMatches(actual: string, query: ElementQuery, expected: string): boolean {
+  if (true !== query.matchCase) return fuzzyVisibleText(actual, expected);
+  return normaliseVisibleText(actual).includes(normaliseVisibleText(expected));
+}
+
 function exactVisibleText(actual: string, expected: string): boolean {
   return normaliseVisibleText(actual) === normaliseVisibleText(expected);
 }
@@ -114,12 +120,30 @@ function directText(el: Element): string {
 function visibleTextOf(el: Element, memo: Map<Element, boolean>): string {
   if (isNonRendered(el) || isIgnored(el)) return '';
   const visible = isVisible(el, memo);
+  const apart = laysOutApart(el);
   let text = '';
   for (const node of Array.from(el.childNodes)) {
     if (Node.TEXT_NODE === node.nodeType && visible) text += node.textContent ?? '';
-    else if (isElement(node)) text += visibleTextOf(node, memo);
+    else if (isElement(node)) {
+      // A child the layout sets apart reads as a separate word: "found by" and "CI" in two flex
+      // items with no space node between them read "found byCI", which no phrase check can match.
+      const own = visibleTextOf(node, memo);
+      text += apart || ownBox(node) ? ` ${own} ` : own;
+    }
   }
   return text;
+}
+
+/** A flex or grid container lays its children out as separate boxes, whatever they are. */
+function laysOutApart(el: Element): boolean {
+  const display = el.ownerDocument.defaultView?.getComputedStyle(el).display ?? '';
+  return display.includes('flex') || display.includes('grid');
+}
+
+/** An element that is its own box rather than a run of text inside its parent's line. */
+function ownBox(el: Element): boolean {
+  const display = el.ownerDocument.defaultView?.getComputedStyle(el).display ?? 'inline';
+  return !display.startsWith('inline') && 'contents' !== display;
 }
 
 /**
@@ -253,14 +277,23 @@ function queryByRoleAndName(
   );
 }
 
-function queryByText(container: HTMLElement, value: string): HTMLElement[] {
-  return elementsUnder(container).filter((el) => fuzzyVisibleText(directText(el), value));
+function queryByText(container: HTMLElement, value: string, query: ElementQuery): HTMLElement[] {
+  return elementsUnder(container).filter((el) => textMatches(directText(el), query, value));
 }
 
 function queryByLabel(container: HTMLElement, value: string): HTMLElement[] {
-  return elementsUnder(container).filter(
-    (el) => semanticNameTarget(el) && fuzzyVisibleText(getAccessibleName(el), value),
-  );
+  const expected = normaliseVisibleText(value).toLowerCase();
+  const exact: HTMLElement[] = [];
+  const fuzzy: HTMLElement[] = [];
+
+  for (const el of elementsUnder(container)) {
+    if (!semanticNameTarget(el)) continue;
+    const name = normaliseVisibleText(getAccessibleName(el)).toLowerCase();
+    if (!name.includes(expected)) continue;
+    (name === expected ? exact : fuzzy).push(el);
+  }
+
+  return exact.length > 0 ? exact : fuzzy;
 }
 
 function queryByPlaceholder(container: HTMLElement, value: string): HTMLElement[] {
@@ -292,7 +325,7 @@ function findIn(container: HTMLElement, query: ElementQuery): HTMLElement[] {
       case QueryBy.ROLE:
         return queryByRoleAndName(container, value, query.name);
       case QueryBy.TEXT:
-        return queryByText(container, value);
+        return queryByText(container, value, query);
       case QueryBy.LABEL:
         return queryByLabel(container, value);
       case QueryBy.PLACEHOLDER:
@@ -328,7 +361,7 @@ function findIn(container: HTMLElement, query: ElementQuery): HTMLElement[] {
   if (query.role !== undefined) {
     return queryByRoleAndName(container, query.role, query.name);
   }
-  if (query.text !== undefined) return queryByText(container, query.text);
+  if (query.text !== undefined) return queryByText(container, query.text, query);
   if (query.label !== undefined) return queryByLabel(container, query.label);
   if (query.placeholder !== undefined) return queryByPlaceholder(container, query.placeholder);
   if (query.testid !== undefined) return queryByTestId(container, query.testid);
@@ -437,7 +470,7 @@ function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scope
     // must be decided by the same evidence as the claim.
     if (
       query.text !== undefined &&
-      !fuzzyVisibleText(visibleTextOf(container, new Map()), query.text)
+      !textMatches(visibleTextOf(container, new Map()), query, query.text)
     ) {
       return { candidates: [], scopeMissing };
     }
@@ -517,6 +550,11 @@ export function matchQuery(
   query: ElementQuery,
   state?: ElementState,
   limit: number = MAX_DESCRIBED,
+  /**
+   * A predicate's question, "is this text on the page", answered as a reader would. A `find` keeps
+   * asking for elements whose own text holds it, and names the container in its hint instead.
+   */
+  wholePhrase = true,
 ): MatchResult {
   // NO blanket try/catch here. It would turn ANY exception during candidate-finding into
   // `elements = []`, which is the same lie as the `default` arm above: a query that could not run
@@ -524,8 +562,14 @@ export function matchQuery(
   // selector that matches nothing - is already handled explicitly and distinctly, as `scopeMissing`,
   // so all that is left is a net that converts real faults into false negatives.
   const found = findCandidates(query);
-  const elements: HTMLElement[] = found.candidates;
   const scopeMissing = found.scopeMissing;
+  // A phrase a reader sees whole matches whole: with no element whose own text holds it, the
+  // tightest element whose visible text does is the match — the same one the splitText hint names.
+  const wanted = wholePhrase && textOnly(query) ? wantedTextOf(query) : undefined;
+  const scope = 0 === found.candidates.length ? resolveContainer(query.scope).container : null;
+  const owner =
+    null === scope || wanted === undefined ? undefined : splitTextOwner(scope, wanted, query);
+  const elements: HTMLElement[] = owner === undefined ? found.candidates : [owner];
   // One visibility cache for the synchronous pass: styles and ancestor clipping metadata resolve
   // once per unique node. Unclipped chains short-circuit; clipped candidates still intersect their
   // own boxes, because a descendant can overflow back into view from a clipped container.
@@ -654,7 +698,11 @@ function buildPresentRegions(query: ElementQuery): PresentRegion[] {
  * contains the string and naming `<body>` is not a locator. The deepest one is the tightest scope
  * that still holds the whole string, which is the one worth pasting back.
  */
-function splitTextOwner(container: HTMLElement, wanted: string): HTMLElement | undefined {
+function splitTextOwner(
+  container: HTMLElement,
+  wanted: string,
+  query: ElementQuery,
+): HTMLElement | undefined {
   let best: HTMLElement | undefined;
   let bestDepth = -1;
   // One memo for the whole pass: the visibility walk is O(depth) per element and every sibling
@@ -663,7 +711,8 @@ function splitTextOwner(container: HTMLElement, wanted: string): HTMLElement | u
   const memo = new Map<Element, boolean>();
   for (const el of elementsUnder(container)) {
     if (isIgnored(el)) continue; // never point an agent at Reticle's own UI
-    if (!fuzzyVisibleText(visibleTextOf(el, memo), wanted)) continue;
+    // The query's own case rule: a case-exact check that missed only on case is not "split".
+    if (!textMatches(visibleTextOf(el, memo), query, wanted)) continue;
     let depth = 0;
     for (let parent = el.parentElement; parent !== null; parent = parent.parentElement) depth++;
     if (depth > bestDepth) {
@@ -672,6 +721,37 @@ function splitTextOwner(container: HTMLElement, wanted: string): HTMLElement | u
     }
   }
   return best;
+}
+
+/** The text as the page shows it, when it differs from `wanted` only by case. */
+function caseOnlyMatch(container: HTMLElement, wanted: string): string | undefined {
+  const target = normaliseVisibleText(wanted).toLowerCase();
+  if (0 === target.length) return undefined;
+  const memo = new Map<Element, boolean>();
+  for (const el of elementsUnder(container)) {
+    if (isIgnored(el)) continue;
+    const text = normaliseVisibleText(visibleTextOf(el, memo));
+    const at = text.toLowerCase().indexOf(target);
+    if (-1 !== at) return text.slice(at, at + target.length);
+  }
+  return undefined;
+}
+
+/** Fields that leave a query a pure text search; anything else names a kind of element too. */
+const TEXT_ONLY_FIELDS: ReadonlySet<string> = new Set([
+  'text',
+  'matchCase',
+  'scope',
+  'by',
+  'value',
+]);
+
+/** A query that asks only for text, which an element whose visible text holds it answers. */
+function textOnly(query: ElementQuery): boolean {
+  return (
+    (query.by === undefined || QueryBy.TEXT === query.by) &&
+    Object.keys(query).every((key) => TEXT_ONLY_FIELDS.has(key))
+  );
 }
 
 /** The text this query searched for, in either spelling, or undefined when it searched by something else. */
@@ -772,8 +852,12 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   // and the extra clause would lengthen every failure to say nothing.
   const wanted = wantedTextOf(query);
   if (wanted !== undefined) {
-    const owner = splitTextOwner(container, wanted);
+    const owner = splitTextOwner(container, wanted, query);
     if (owner !== undefined) hint.splitText = describe(owner);
+    else if (true === query.matchCase) {
+      const shown = caseOnlyMatch(container, wanted);
+      if (shown !== undefined) hint.caseMiss = shown;
+    }
   }
   const near = nameNearMisses(container, query);
   if (near.length > 0) hint.nameNearMiss = near;
@@ -795,7 +879,7 @@ export function elementsMatching(query: ElementQuery): HTMLElement[] {
  * to counting survivors and calling that the answer.
  */
 export function runQuery(query: ElementQuery, limit?: number): QueryResult {
-  const result = matchQuery(query, undefined, limit);
+  const result = matchQuery(query, undefined, limit, false);
   const scopeFields = true === result.scopeMissing ? { scopeMissing: true as const } : {};
   if (0 === result.elements.length) {
     return {

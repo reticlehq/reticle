@@ -35,5 +35,14 @@ export function flowsForSession(
   if (resolved === undefined || resolved.root === deps.reticleRoot) {
     return { flows: deps.flows, root: deps.reticleRoot };
   }
-  return { flows: new FlowStore(deps.fs, resolved.root, { now: deps.now }), root: resolved.root };
+  const onWrote = deps.onRunPersisted;
+  return {
+    flows: new FlowStore(
+      deps.fs,
+      resolved.root,
+      { now: deps.now },
+      onWrote === undefined ? {} : { onWrote },
+    ),
+    root: resolved.root,
+  };
 }

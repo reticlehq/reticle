@@ -10,6 +10,7 @@ import {
   RunProfile,
   RunTrigger,
   VerdictStatus,
+  driveFlowStatus,
 } from './verification-run.js';
 
 /**
@@ -179,5 +180,24 @@ describe('ReticleVerificationRunSchema', () => {
       signature: { alg: 'ed25519', value: 'sig', signedAt: 2 },
     };
     expect(ReticleVerificationRunSchema.safeParse(frozenV1).success).toBe(true);
+  });
+});
+
+describe('driveFlowStatus', () => {
+  it('fails a drive only when a check came back no', () => {
+    expect(driveFlowStatus({ held: 2, failed: 1 })).toBe(RunFlowStatus.FAIL);
+    expect(driveFlowStatus({ held: 0, failed: 1, goalMet: true })).toBe(RunFlowStatus.FAIL);
+  });
+
+  /** A drive with 0 failed and 2 undecided checks, its goal judged missed, read "1 broken". */
+  it('reads undecided checks and a missed goal as not proved, never failed', () => {
+    expect(driveFlowStatus({ held: 0, failed: 0, goalMet: false })).toBe(RunFlowStatus.SKIPPED);
+    expect(driveFlowStatus({ held: 0, failed: 0 })).toBe(RunFlowStatus.SKIPPED);
+    expect(driveFlowStatus({ held: 2, failed: 0, goalMet: false })).toBe(RunFlowStatus.SKIPPED);
+  });
+
+  it('passes a drive whose checks held and whose goal was not judged missed', () => {
+    expect(driveFlowStatus({ held: 1, failed: 0 })).toBe(RunFlowStatus.PASS);
+    expect(driveFlowStatus({ held: 1, failed: 0, goalMet: true })).toBe(RunFlowStatus.PASS);
   });
 });

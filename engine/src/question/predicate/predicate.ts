@@ -11,11 +11,11 @@ import type { Baseline } from './property.js';
 export type Baselines = ReadonlyMap<Predicate, Baseline>;
 
 import { predicateToExpectedLinks } from './predicate-to-links.js';
-import type { ElementQuery, ExpectedLink } from '@reticlehq/core';
+import type { ExpectedLink } from '@reticlehq/core';
 import { isAmbient, ambientKeyOf } from '@/window/ambient.js';
 import { evalRoute } from './predicate-route.js';
 import { describeSuperseded } from './observed-in-window.js';
-import { evalElement, withTextProperty } from './predicate-element.js';
+import { evalElement, textPredicateQuery, withTextProperty } from './predicate-element.js';
 import { evalState } from './predicate-state.js';
 import { evalCompare } from './predicate-compare.js';
 import {
@@ -111,6 +111,7 @@ function annotateThrottledMiss(
  *
  * - `splitText`: the browser found the requested string in the rendered page, split across
  *   children. Target-specific — the text IS the thing that was asked for.
+ * - `caseMiss`: the browser found it in another case, for a case-exact check.
  * - `nearMiss` from `element.state`: the target element exists but in the wrong state. The DOM
  *   painted the element itself, so starvation is not the explanation.
  *
@@ -123,7 +124,7 @@ function annotateThrottledMiss(
 function evidenceProvesPageRendered(result: EvalResult): boolean {
   const evidence = result.evidence;
   if ('object' !== typeof evidence || null === evidence) return false;
-  if ('splitText' in evidence) return true;
+  if ('splitText' in evidence || 'caseMiss' in evidence) return true;
   if ('nearMiss' in evidence && 'element.state' === result.assertion) return true;
   return false;
 }
@@ -300,15 +301,8 @@ async function evaluatePredicateRaw(
       );
     case PredicateKind.TEXT: {
       // `scope` passes straight through: the text predicate has always been an element query with
-      // only `text` filled in, so scoping it needs the field, not a second code path. `contains` is
-      // optional now that `satisfies` can carry the claim, and an undefined one must not reach the
-      // query as `text: undefined` — that is a locator asking for the empty string.
-      const query: ElementQuery = {
-        ...(undefined === predicate.contains ? {} : { text: predicate.contains }),
-        ...(undefined === predicate.scope
-          ? {}
-          : { scope: predicate.scope, ...(true === predicate.self ? { self: true } : {}) }),
-      };
+      // only `text` filled in, so scoping it needs the field, not a second code path.
+      const query = textPredicateQuery(predicate);
       const found = await evalElement(
         session,
         query,

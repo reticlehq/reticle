@@ -382,3 +382,63 @@ describe('a role+name anchor is a real anchor, not a degraded placeholder', () =
     expect(anchor.kind).toBe(AnchorKind.TESTID);
   });
 });
+
+/*
+ * Group D persona drive: every replay of a committed flow rewrote it — keys reordered, defaults
+ * written in, `source` added to steps — so `git status` showed it modified after replays that
+ * changed nothing.
+ */
+describe('a replay does not rewrite a committed flow it learned nothing new about', () => {
+  let root: string;
+  beforeEach(async () => {
+    root = join(await mkdtemp(join(tmpdir(), 'reticle-flow-')), '.reticle');
+  });
+  afterEach(async () => {
+    await removeTempDir(join(root, '..'));
+  });
+
+  const handWritten = `{
+  "version": 2,
+  "name": "sign-in",
+  "createdAt": 1,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": { "kind": "testid", "value": "email" },
+      "args": { "value": "a@b.c" },
+      "action": "fill"
+    }
+  ]
+}
+`;
+
+  it('leaves the bytes alone when the learned record is unchanged', async () => {
+    const dir = reticleDirPaths(root).flows;
+    await mkdir(dir, { recursive: true });
+    const path = join(dir, 'sign-in.json');
+    await writeFile(path, handWritten);
+    const store = new FlowStore(createNodeFileSystem(), root, clock);
+    // A clean replay whose anchors resolved to nothing new: nothing learned, nothing written.
+    await store.recordSources(
+      'sign-in',
+      new Map([[JSON.stringify(['testid', 'other', null]), { file: 'src/Other.tsx', line: 1 }]]),
+    );
+    expect(await readFile(path, 'utf8')).toBe(handWritten);
+  });
+
+  it('when it does learn something, changes only that, in the file as written', async () => {
+    const dir = reticleDirPaths(root).flows;
+    await mkdir(dir, { recursive: true });
+    const path = join(dir, 'sign-in.json');
+    await writeFile(path, handWritten);
+    const store = new FlowStore(createNodeFileSystem(), root, clock);
+    await store.recordSources(
+      'sign-in',
+      new Map([[JSON.stringify(['testid', 'email', null]), { file: 'src/Login.tsx', line: 48 }]]),
+    );
+    const after = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+    expect(Object.keys(after)).toEqual(['version', 'name', 'createdAt', 'steps']);
+    const step = (after['steps'] as Record<string, unknown>[])[0] ?? {};
+    expect(Object.keys(step)).toEqual(['tool', 'anchor', 'args', 'action', 'source']);
+  });
+});

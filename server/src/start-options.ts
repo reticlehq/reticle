@@ -14,7 +14,13 @@ export interface StartOptions {
    * answers the handler the bridge runs on each press. An embedder of the library leaves it out, and
    * its panel falls back to copying `reticle login`.
    */
-  hudSignIn?: (repaint: () => void) => () => void;
+  hudSignIn?: (
+    repaint: () => void,
+    /** Links the asking tab's project once the sign-in lands (`hudLink`). */
+    link?: (root: string) => Promise<number>,
+  ) => (from?: { artifactRoot?: string | undefined }) => void;
+  /** The Harness page's Link this project: link the project in this folder, as `reticle connect` does. */
+  hudLink?: (root: string) => Promise<number>;
   port?: number;
   /** Bind address. Non-loopback hosts require a token. Defaults to RETICLE_HOST or localhost. */
   host?: string;

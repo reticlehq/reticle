@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type * as http from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MCP_CLIENT_DIRECTORY_HEADER } from '@reticlehq/core';
 import {
   MCP_PROXY_HTTP_AGENT_OPTIONS,
   postToSession,
@@ -10,6 +11,12 @@ import { daemonPollDelayMs } from '@/surface/mcp/proxy/proxy-daemon-probe.js';
 import { getSessionMetrics, resetSessionMetrics } from '@/telemetry/session-metrics.js';
 
 const noBuffers = Object.assign(new Error('no buffer space'), { code: 'ENOBUFS' });
+
+function isHeaderRecord(
+  headers: http.RequestOptions['headers'],
+): headers is http.OutgoingHttpHeaders {
+  return headers !== undefined && !Array.isArray(headers);
+}
 
 beforeEach(() => {
   resetSessionMetrics();
@@ -51,6 +58,30 @@ describe('MCP POST transport', () => {
     expect(
       shouldRetryUnsentPost(Object.assign(new Error('reset'), { code: 'ECONNRESET' }), 0, 0),
     ).toBe(false);
+  });
+
+  it("names this proxy's directory so the daemon can tell projects apart", async () => {
+    let named: string | undefined;
+    const request = ((options, callback) => {
+      if (isHeaderRecord(options.headers)) {
+        const value = options.headers[MCP_CLIENT_DIRECTORY_HEADER];
+        if ('string' === typeof value) named = value;
+      }
+      const req = new EventEmitter() as http.ClientRequest;
+      req.end = (() => {
+        const response = new EventEmitter() as http.IncomingMessage;
+        response.statusCode = 202;
+        response.resume = vi.fn().mockReturnValue(response);
+        queueMicrotask(() => callback(response));
+        return req;
+      }) as http.ClientRequest['end'];
+      return req;
+    }) satisfies Parameters<typeof postToSession>[2];
+
+    await expect(postToSession('http://127.0.0.1:4400/session', '{}', request)).resolves.toBeNull();
+    const namedDirectory = encodeURIComponent(process.cwd());
+    expect(named).toBe(namedDirectory);
+    expect([...namedDirectory].every((char) => char.charCodeAt(0) < 128)).toBe(true);
   });
 
   it('retries one unsent ENOBUFS request and then succeeds', async () => {

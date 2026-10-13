@@ -114,9 +114,10 @@ export const TelemetryEventKind = {
    */
   FEEDBACK_SUBMITTED: 'feedback_submitted',
   /**
-   * Somebody chose to say who they are. Like `feedback_submitted`, this exists ONLY because a
+   * Somebody chose to say who they are. Like `feedback_submitted`, this existed ONLY because a
    * human ran a command — Reticle never infers an identity from a git remote, an email in git
-   * config, or anything else. See `identify.ts` for why that refusal is deliberate.
+   * config, or anything else. The command that sent it was removed; the kind stays in the
+   * vocabulary because older installs still send it.
    */
   IDENTIFIED: 'identified',
   /**

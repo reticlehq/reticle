@@ -88,6 +88,11 @@ export const ElementQuerySchema = z
      * verification was handed back to the human. Requires `scope`.
      */
     self: z.boolean().optional(),
+    /**
+     * Compare `text` with its case intact. A search is forgiving about case; a CHECK is not — the
+     * text predicate sends this, so "Saved Priya" can fail against a page reading "Saved priya".
+     */
+    matchCase: z.boolean().optional(),
   })
   .strict();
 export type ElementQuery = z.infer<typeof ElementQuerySchema>;
@@ -198,6 +203,12 @@ export interface QueryEmptyHint {
    * the recovery is `{ scope: <ref>, self: true }` rather than another guess at the text.
    */
   splitText?: ElementDescriptor;
+  /**
+   * Present only when a case-exact TEXT check missed and the page shows the text in another case:
+   * what it shows. Reported as "split across children" before, with the same failing check as the
+   * recovery; the recovery is `ignoreCase: true`.
+   */
+  caseMiss?: string;
   /**
    * Present only when a ROLE+NAME search missed and that role DOES carry a nearly-matching name.
    *

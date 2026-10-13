@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import {
   PredicateKind,
@@ -19,7 +20,7 @@ import {
   Verified,
 } from '@reticlehq/core';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
-import { runCloudCommand } from './cloud-cli.js';
+import { connectInstalls, runCloudCommand } from './cloud-cli.js';
 
 interface RecordedRequest {
   url: string;
@@ -223,6 +224,53 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(session['url']).toBe(TEST_URL);
   });
 
+  // `reticle connect --no-install` was refused as a usage error by the cloud half, after its init
+  // half had already run the install the flag asked it not to.
+  it('connect takes --no-install, which belongs to the init it runs first', async () => {
+    const said: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      said.push(String(chunk));
+      return true;
+    });
+    const code = await runCloudCommand(['connect', '--no-install', '--url', TEST_URL]);
+    spy.mockRestore();
+    // Not wired here, so it stops on that, not on the flag.
+    expect(code).toBe(2);
+    expect(said.join('')).not.toContain('usage:');
+    expect(connectInstalls(['connect', '--no-install'])).toBe(false);
+    expect(connectInstalls(['connect', '--url', TEST_URL])).toBe(true);
+  });
+
+  /*
+   * Two re-drive personas: an invited contributor's `connect --project <new>` was refused 403 because
+   * creating a project needs a maintainer, and the CLI said "your sign-in expired… run reticle
+   * login". It prints the platform's words and the step that works: link a project that exists.
+   */
+  it("connect as a contributor names the platform's refusal and the projects it can link", async () => {
+    await writeFile(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'local-1' }));
+    await writeHomeFile(
+      [SESSION_FILE],
+      JSON.stringify({ token: 'person-token', orgName: 'Acme', orgId: 'org_acme', url: TEST_URL }),
+    );
+    const said =
+      'Only a maintainer, an admin or the owner of this workspace can create a project. Ask one to create it on the dashboard (or run reticle connect), then connect to it.';
+    let projectCalls = 0;
+    responder = (url) => {
+      if (url.endsWith('/v1/projects')) {
+        projectCalls += 1;
+        return 1 === projectCalls
+          ? { body: { projects: [{ projectId: 'shop-1', name: 'shop' }] } }
+          : { status: 403, body: { error: { code: 'forbidden', message: said } } };
+      }
+      return { body: { orgs: [], workspaces: [] } };
+    };
+    const code = await runCloudCommand(['connect', '--url', TEST_URL, '--project', 'brand-new']);
+    expect(code).not.toBe(0);
+    expect(stderrBuf).toContain(said);
+    expect(stderrBuf).not.toContain('reticle login');
+    expect(stderrBuf).toContain('reticle connect --project shop');
+  });
+
   it('connect reuses a valid sign-in, links the named project, and syncs local history', async () => {
     await writeFile(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'local-1' }));
     await writeHomeFile(
@@ -254,6 +302,64 @@ describe('cloud-cli verb contracts (#555)', () => {
     ) as Record<string, unknown>;
     expect(link['projectId']).toBe('proj_1');
     expect(link['url']).toBe(TEST_URL);
+  });
+
+  /*
+   * Persona drive: Noah joined his team's workspace in the console, ran `reticle connect` as the
+   * dashboard said, and the CLI reused his personal workspace's sign-in, printed "Connected", and
+   * nothing moved. `connect --workspace <name>` switches; without it, a person in several hears it.
+   */
+  describe('connect when the person belongs to more than one workspace', () => {
+    const team = { orgId: 'org_team', name: 'Acme QA', role: 'contributor', connected: false };
+    const own = { orgId: 'org_noah', name: "Noah's workspace", role: 'owner', connected: true };
+    const stub = (activated: string[]) => (url: string) => {
+      if (url.endsWith('/v1/me/workspaces'))
+        return { body: { active: 'org_noah', memberships: [own, team], invites: [] } };
+      if (url.endsWith('/v1/me/workspaces/org_team/activate')) {
+        activated.push('org_team');
+        return { body: { token: 'team-token', org: { id: 'org_team', name: 'Acme QA' } } };
+      }
+      if (url.endsWith('/v1/projects'))
+        return { body: { projects: [], projectId: 'proj_1', name: 'noah-notes' } };
+      if (url.endsWith('/v1/keys'))
+        return { body: { projectId: 'proj_1', projectName: 'noah-notes', key: TEST_KEY } };
+      if (url.endsWith('/v1/cloud/whoami'))
+        return { body: { projectId: 'proj_1', projectName: 'noah-notes', orgId: 'org_team' } };
+      return { body: { knownRunIds: [], stateHashes: {}, triage: [], cursor: '0:' } };
+    };
+    const signedIn = async (): Promise<void> => {
+      await writeFile(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'noah-notes' }));
+      await writeHomeFile(
+        [SESSION_FILE],
+        JSON.stringify({
+          token: 'noah-token',
+          orgName: "Noah's workspace",
+          orgId: 'org_noah',
+          url: TEST_URL,
+        }),
+      );
+    };
+
+    it('switches to the workspace named, and links there', async () => {
+      await signedIn();
+      const activated: string[] = [];
+      responder = stub(activated);
+      const code = await runCloudCommand(['connect', '--url', TEST_URL, '--workspace', 'Acme QA']);
+      expect(code).toBe(0);
+      expect(activated).toEqual(['org_team']);
+      expect(requests.find((r) => r.url.endsWith('/v1/keys'))?.authorization).toBe(
+        'Bearer team-token',
+      );
+      expect(stderrBuf).toContain('in workspace "Acme QA"');
+    });
+
+    it('says which workspace it links in, and how to choose another', async () => {
+      await signedIn();
+      responder = stub([]);
+      await runCloudCommand(['connect', '--url', TEST_URL]);
+      expect(stderrBuf).toContain('Acme QA');
+      expect(stderrBuf).toContain('--workspace');
+    });
   });
 
   it('connect refuses to claim a cloud connection before init has marked the app', async () => {
@@ -438,7 +544,7 @@ describe('cloud-cli verb contracts (#555)', () => {
         url: 'http://cloud.test',
         // `capsules` defaults ON — this project's cloud.json is silent about it, and a policy names
         // what it changes rather than inheriting a neighbouring opt-out.
-        sync: { runs: false, memory: true, flows: true, capsules: true },
+        sync: { runs: false, memory: true, flows: true, capsules: true, screenshots: false },
         verify: 'server',
       },
     });
@@ -501,6 +607,55 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(created?.body).toEqual({ name: 'Storefront' });
     // ...and SAYS it created one, because silently creating is its own surprise.
     expect(stderrBuf).toContain('created');
+  });
+
+  // Group D persona drive: `connect --project X` while signed in to a personal workspace created X
+  // there without a word about which workspace. It says so, on creation and on the binding.
+  it('says which workspace it created the project in and bound the repo to', async () => {
+    await writeHomeFile([SESSION_FILE], `{"token":"tok","orgName":"Acme","url":"${TEST_URL}"}`);
+    let projectCalls = 0;
+    responder = (url) => {
+      if (url.endsWith('/v1/projects')) {
+        projectCalls += 1;
+        return 1 === projectCalls
+          ? { body: { projects: [] } }
+          : { body: { projectId: 'proj_new', name: 'Storefront' } };
+      }
+      return {
+        body: { projectId: 'proj_new', projectName: 'Storefront', key: 'rk_live_abcd1234ef' },
+      };
+    };
+    await runCloudCommand(['link', '--project', 'Storefront']);
+    expect(stderrBuf).toContain('in workspace "Acme"');
+    expect(stderrBuf).toContain('bound this repo to project "Storefront" in workspace "Acme"');
+  });
+
+  /*
+   * Two different apps whose package is `web` shared one dashboard project: link reused a project
+   * by name alone. The link now carries which repository (and folder in it) it is, and a project of
+   * the same name made for another repository is not reused.
+   */
+  it('does not reuse a same-named project made for another repository', async () => {
+    execFileSync('git', ['init', '-q'], { cwd });
+    execFileSync('git', ['remote', 'add', 'origin', 'git@github.com:acme/storefront.git'], { cwd });
+    await writeHomeFile([SESSION_FILE], `{"token":"tok","orgName":"Acme","url":"${TEST_URL}"}`);
+    let projectCalls = 0;
+    responder = (url) => {
+      if (url.endsWith('/v1/projects')) {
+        projectCalls += 1;
+        return 1 === projectCalls
+          ? { body: { projects: [{ projectId: 'proj_web', name: 'web', repo: 'another-repo' }] } }
+          : { body: { projectId: 'web-2', name: 'web' } };
+      }
+      return { body: { projectId: 'web-2', projectName: 'web', key: 'rk_live_abcd1234ef' } };
+    };
+    await runCloudCommand(['link', '--project', 'web']);
+    const created = requests.find((r) => 'POST' === r.method && r.url.endsWith('/v1/projects'));
+    expect(created?.body).toMatchObject({ name: 'web', repo: expect.any(String) as unknown });
+    const link = JSON.parse(await readFile(join(cwd, RETICLE_DIR, CLOUD_LINK_FILE), 'utf8')) as {
+      repo?: string;
+    };
+    expect(link.repo).toBe((created?.body as { repo?: string }).repo);
   });
 
   it('link --project does NOT create a duplicate when the project already exists', async () => {
@@ -871,6 +1026,19 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(requests[0]?.url).toBe(`${TEST_URL}/v1/runs`);
     expect(requests[0]?.authorization).toBe(`Bearer ${TEST_KEY}`);
     expect(lastJsonOutput()).toEqual({ runs: [{ runId: 'run_1' }] });
+  });
+
+  // A drive's local record can be gone (another machine, a cleaned checkout); the platform kept it.
+  it('runs <id> reads one run from the platform, and says when it is not there yet', async () => {
+    process.env['RETICLE_CLOUD_URL'] = TEST_URL;
+    process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
+    responder = () => ({ body: { runId: 'harness-1', status: 'done' } });
+    expect(await runCloudCommand(['runs', 'harness-1'])).toBe(0);
+    expect(requests[0]?.url).toBe(`${TEST_URL}/v1/runs/harness-1`);
+    expect(lastJsonOutput()).toEqual({ runId: 'harness-1', status: 'done' });
+
+    responder = () => ({ status: 404, body: {} });
+    expect(await runCloudCommand(['runs', 'harness-2'])).toBe(1);
   });
 
   it('regression fetches the CI report and exits clean on zero broken flows', async () => {

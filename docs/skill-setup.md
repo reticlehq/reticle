@@ -22,7 +22,7 @@ The command reads the repository. It cannot read the request, and three things l
 
 | flag | what only you know |
 | --- | --- |
-| `persona: "<what>"` | Not an `init` flag. It belongs to the FIRST RUN, `reticle_verify { action: "explore", persona: "<the journey worth proving>" }`. Which journey proves the thing the user asked for: code can list the buttons; it cannot know checkout matters and the theme toggle does not. Naming it took one real app from a ten-minute timeout to 138 seconds, because the turns go into FINDING a flow. |
+| `persona: "<what>"` | Not an `init` flag. It belongs to the FIRST RUN, `reticle_verify { action: "explore", persona: "<the journey worth proving>" }`. Which journey proves the thing the user asked for: code can list the buttons; it cannot know checkout matters and the theme toggle does not. Without one, the turns go into FINDING a flow. |
 | `--env KEY=VALUE` | what the app needs to reach a usable state: the key from `.env.example`, the mock backend in the README, the variable that skips an auth wall. Repeatable. Without it a real app sits on a login screen and there is no flow to drive at all. |
 | `--app <dir>` | which app in a monorepo. It can list the ones that are servable; only the request says which one is being worked on. |
 
@@ -42,11 +42,11 @@ The command reads the repository. It cannot read the request, and three things l
 
 ## If that command could not run it
 
-**Do not choose this path.** It is not the thorough version of the one above; it is what you fall back to when the command physically could not do the work, and taking it by preference is how an install costs 176 turns instead of one. That is a measured figure, not a way of speaking.
+**Do not choose this path.** It is not the thorough version of the one above; it is what you fall back to when the command physically could not do the work, and taking it by preference turns a one-command install into a long manual one.
 
 Use it only when ONE of these is true, and you can say which:
 
-- `init` exited without ever printing `starting:` or `▸ WATCH`, which means the CLI on this machine predates the runtime phases and stopped after writing files.
+- `init` exited without ever printing `starting:` or `watching for an app to connect`, which means the CLI on this machine predates the runtime phases and stopped after writing files.
 - `init` printed a to-do list, you did those things, re-ran it, and it stopped in the same place twice.
 - There is no Node 20.11 or newer on this machine, so nothing can run.
 
@@ -69,7 +69,7 @@ Do not reconstruct it from memory. Three things decide whether it works, and all
 
 ## The dev server, whoever starts it
 
-**A dev server already running when `init` ran does not have Reticle in its bundle.** It read `vite.config.ts` / `next.config.js` at boot; `init` edited that file afterwards. The process keeps serving the old bundle, the page loads without the SDK, no session appears, and every symptom points at the wiring you just correctly did. This is a 100% failure, not an intermittent one, and it is the single largest cause of an install that gets to step 4 and finds an empty list.
+**A dev server already running when `init` ran does not have Reticle in its bundle.** It read `vite.config.ts` / `next.config.js` at boot; `init` edited that file afterwards. The process keeps serving the old bundle, the page loads without the SDK, no session appears, and every symptom points at the wiring you just correctly did. This fails every time, not intermittently, and it is a common reason an install finds an empty session list.
 
 So, in this order:
 
@@ -97,7 +97,7 @@ Enterprise features are unlocked by a signed key, verified locally with Ed25519 
 npx @reticlehq/server@latest init --license <key>
 ```
 
-That writes `RETICLE_LICENSE_KEY` to the project's `.env` and adds `.env` to `.gitignore` if nothing there covers it. Do not do those two by hand: a key committed to git is a leaked credential, and it stays leaked after the file is removed. Confirm with `npx @reticlehq/server license`, which prints `active`, `eval`, `missing` or `expired`.
+That writes `RETICLE_LICENSE_KEY` to the project's `.env` and adds `.env` to `.gitignore` if nothing there covers it. Do not do those two by hand: a key committed to git is a leaked credential, and it stays leaked after the file is removed. Confirm with `npx @reticlehq/server license`, which prints `active`, `eval`, `missing`, `invalid` or `expired`.
 
 Never echo the key back in your reply, and never put it in a commit, a code comment, or a feedback report. The rest: `curl https://docs.reticle.sh/enterprise.md`.
 

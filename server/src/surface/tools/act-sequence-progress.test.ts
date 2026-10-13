@@ -106,6 +106,7 @@ interface SequenceResult {
   since: number;
   dispatched: boolean;
   completed: number;
+  recorded: number;
   stalled_at?: number;
   steps?: {
     ref?: string;
@@ -130,6 +131,7 @@ describe('act_sequence per-step progress', () => {
     })) as SequenceResult;
 
     expect(result.completed).toBe(3);
+    expect(result.recorded).toBe(3);
     expect(result.stalled_at).toBeUndefined();
     expect(result.dispatched).toBe(true);
     expect(result.steps).toHaveLength(3);
@@ -148,6 +150,7 @@ describe('act_sequence per-step progress', () => {
     })) as SequenceResult;
 
     expect(result.completed).toBe(1);
+    expect(result.recorded).toBe(1);
     expect(result.stalled_at).toBe(1);
     expect(result.dispatched).toBe(true);
     expect(result.steps).toHaveLength(2);
@@ -169,12 +172,32 @@ describe('act_sequence per-step progress', () => {
     })) as SequenceResult;
 
     expect(result.completed).toBe(2);
+    expect(result.recorded).toBe(2);
     expect(result.stalled_at).toBe(2);
     expect(result.steps).toHaveLength(3);
     const stalled = result.steps?.[2];
     expect(stalled?.dispatched).toBeNull();
     expect(stalled?.timedOut).toBe(true);
     expect(stalled?.error).toContain('timed out');
+  });
+
+  it('records the successful prefix when a later step stalls', async () => {
+    const session = fakeSession({ failAtStep: 2 });
+    const deps = fakeDeps(session);
+    const recordingName = 'partial-sequence';
+    deps.recordings.start(recordingName, 0, '/app', session.id);
+
+    await tool(ReticleTool.ACT_SEQUENCE).handler(deps, {
+      steps: [
+        { ref: 'e1', action: 'fill', args: { value: 'a@b.com' } },
+        { ref: 'e2', action: 'fill', args: { value: 'hunter2' } },
+        { ref: 'e3', action: 'click' },
+      ],
+    });
+
+    const recorded = deps.recordings.stop(recordingName);
+    expect(recorded?.steps).toHaveLength(1);
+    expect(recorded?.steps[0]?.args['steps']).toHaveLength(2);
   });
 
   it('marks the act cursor only when at least one step completed', async () => {
@@ -213,6 +236,29 @@ describe('act_sequence per-step progress', () => {
 
     expect(result.dispatched).toBe(false);
     expect(result.completed).toBe(0);
+    expect(result.recorded).toBe(0);
+  });
+
+  it('continues through later steps without returning them as an un-run tail', async () => {
+    const session = fakeSession({});
+    const result = (await tool(ReticleTool.ACT_SEQUENCE).handler(fakeDeps(session), {
+      onDeviation: 'continue',
+      steps: [
+        { ref: 'e1', action: 'fill', args: { value: 'a' } },
+        {
+          ref: 'e2',
+          action: 'fill',
+          args: { value: 'b' },
+          expect: { kind: 'signal', name: 'never:fires' },
+        },
+        { ref: 'e3', action: 'click' },
+      ],
+    })) as SequenceResult & { tail?: unknown[] };
+
+    expect(result.completed).toBe(3);
+    expect(result.recorded).toBe(3);
+    expect(result.steps).toHaveLength(3);
+    expect(result.tail).toBeUndefined();
   });
 
   it('distinguishes "refused" (retry safe) from "timed out" (retry unsafe)', async () => {

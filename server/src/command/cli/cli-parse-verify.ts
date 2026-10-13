@@ -46,6 +46,10 @@ const EXPLORE_FLAG = '--explore';
 const PERSONA_FLAG = '--persona';
 /** Narrow the suite to flows carrying this label. Repeatable — a set is the union of what you name. */
 const SELECT_FLAG = '--select';
+/** Write the per-journey verdicts to this file as JSON, for a CI step that posts them. */
+const RESULTS_JSON_FLAG = '--results-json';
+/** Acknowledge, for this run only, the steps the replay guard holds as destructive ("Place order"). */
+const CONFIRM_DANGEROUS_FLAG = '--confirm-dangerous';
 
 export type VerifySuffix =
   | {
@@ -62,6 +66,8 @@ export type VerifySuffix =
       explore?: boolean;
       persona?: string;
       select?: string[];
+      resultsJson?: string;
+      confirmDangerous?: boolean;
     }
   | { kind: 'error'; message: string };
 
@@ -128,6 +134,8 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
   let explore = false;
   let persona: string | undefined;
   const select: string[] = [];
+  let resultsJson: string | undefined;
+  let confirmDangerous = false;
   let port = defaultPort;
   let i = 0;
   while (i < args.length) {
@@ -166,8 +174,15 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
       // Repeatable rather than comma-split: a label is free-form, and a comma inside one would
       // silently become two selections that match nothing.
       select.push(v);
+    } else if (arg === RESULTS_JSON_FLAG) {
+      i++;
+      const v = args[i];
+      if (v === undefined) return missingValue(RESULTS_JSON_FLAG);
+      resultsJson = v;
     } else if (arg === EXPLORE_FLAG) {
       explore = true;
+    } else if (arg === CONFIRM_DANGEROUS_FLAG) {
+      confirmDangerous = true;
     } else if (arg === PERSONA_FLAG) {
       i++;
       const v = args[i];
@@ -225,5 +240,7 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
     ...(explore ? { explore } : {}),
     ...(persona !== undefined ? { persona } : {}),
     ...(select.length > 0 ? { select } : {}),
+    ...(resultsJson !== undefined ? { resultsJson } : {}),
+    ...(confirmDangerous ? { confirmDangerous } : {}),
   };
 }

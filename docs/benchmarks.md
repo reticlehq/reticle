@@ -8,7 +8,7 @@ Two different measurements, because there are two different questions.
 
 Against a **Playwright script** over an 88-bug registry, each tool running its own native check deterministically with no model in the loop, Reticle caught **85 of 88** and Playwright **59 of 88**, both with zero false alarms on the clean build. The gap is not spread evenly: it is 26 bugs Playwright **structurally cannot** see, and on everything observable from outside the app the two tie exactly. See Part 5a.
 
-Against **Playwright MCP and Chrome DevTools MCP**, the agent-driven tools where cost per look matters, Reticle caught 10 of 10 injected regressions to Playwright MCP's 9 and DevTools' 8, averaging 815 tokens per look against 1,292 and 758. See Part 5b.
+Against **Playwright MCP and Chrome DevTools MCP**, the agent-driven tools where cost per look matters, Reticle caught 10 of 10 injected regressions to Playwright MCP's 9 and DevTools' 8, averaging 815 tokens per look against 1,292 and 758. That pass last ran on 2026-06-22, against versions of both tools that have since moved on. See Part 5b.
 
 Where Reticle loses is stated plainly in Part 5, and it loses in more places than these two tables show.
 
@@ -28,7 +28,7 @@ There are roughly three ways teams do this:
 
 1. **Manual testing.** A human clicks through the app. Accurate, but slow and easy to skip.
 2. **Automated tests**: code that clicks through the app for you. Fast to re-run, but expensive to write and notoriously **flaky** (they break for reasons unrelated to real bugs).
-3. **Nothing.** Ship and hope. More common than anyone admits: surveys put ~44% of teams with no automated testing at all.
+3. **Nothing.** Ship and hope. More common than anyone admits.
 
 A **regression** is the specific bug this page cares about: something that _used to work_ and quietly _stopped working_ after a change. Regressions are insidious because the feature looked done, right up until a later edit broke it and nobody noticed.
 
@@ -151,7 +151,7 @@ Bug registry: `bench/pw-vs-reticle/bugs.mjs`. Runner: `bench/pw-vs-reticle/run.m
 
 ### 5b. The controlled toy app (the demo)
 
-Measured on the observation-cost pass (numbers regenerate from `bench/raw/`):
+Measured on the observation-cost pass (numbers regenerate from `bench/raw/`). The cross-tool passes last ran on 2026-06-22, against `@playwright/mcp@0.0.76` and `chrome-devtools-mcp@1.3.0`; re-run `pnpm bench:full` before quoting a competitive delta:
 
 | Tool | Bugs caught (of 10) | Detection accuracy | Avg tokens per look | Verification Efficiency |
 | --- | --- | --- | --- | --- |

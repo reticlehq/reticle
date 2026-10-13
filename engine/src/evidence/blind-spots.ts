@@ -12,6 +12,7 @@ import {
   BlindSpotKind,
   EventType,
   PredicateKind,
+  QueryBy,
   ReticleEnv,
   TRANSPORT_LIMITS,
   isDesktopBlindSpot,
@@ -75,7 +76,7 @@ const LABEL: Record<BlindSpotKind, (n: number) => string> = {
   // agent reading `stateDiffs: []` otherwise reads "the app changed no state", which is a claim
   // nothing here can support. Names the one-line fix, because the reader is the one who can apply it.
   [BlindSpotKind.UNWATCHED_STATE]: () =>
-    'no subscribable store is registered, so NO state change is observed — an empty stateDiffs here means unwatched, not unchanged (register the store itself in your reticle-dev module: registerStore(name, store), not a getter)',
+    "no subscribable store is registered, so NO state change is observed — an empty stateDiffs here means unwatched, not unchanged (import { registerStore } from '@reticlehq/browser' and call registerStore(name, store) with a subscribable store; for component-local React state, import { useReticleStore } from '@reticlehq/react/store' and call useReticleStore(name, value), or inspect it with reticle_look { action: 'state', ref: '...' })",
   [BlindSpotKind.WRAPPED_NETWORK]: () =>
     'fetch was already wrapped before Reticle, so recorded requests may differ from what was sent',
   // A fact about the app's wiring, not a tally. Says what a network view WITHOUT ipc:// records
@@ -108,8 +109,26 @@ export function impeachesCapture(kind: BlindSpotKind): boolean {
   return kind === BlindSpotKind.RATE_LIMITED;
 }
 
-/** Compose the coverage statement. `full` (no note) when nothing was unobserved. */
-export function buildCoverageStatement(spots: readonly BlindSpot[]): CoverageStatement {
+/**
+ * Bridge sampling that happened in the session but not in the window being judged (#1414). The
+ * window's own label says "this window is SAMPLED" and asks for a re-run, which is false here: the
+ * verdict's capture is whole, and repeating the drive would only repeat a clean check.
+ */
+const RATE_LIMITED_ELSEWHERE = (n: number): string =>
+  `${String(n)} event${1 === n ? '' : 's'} dropped by the bridge rate cap earlier in this session, none in this window, so this result's capture is complete`;
+
+/**
+ * Compose the coverage statement. `full` (no note) when nothing was unobserved.
+ *
+ * `windowSpots`, when given, are the same spots counted over the judged window only. An impeaching
+ * kind is then labelled by what the WINDOW saw: its window count when it dropped events there, and
+ * as an earlier-in-the-session fact when it did not. Bounding kinds are standing facts of the page
+ * and keep their session-wide label.
+ */
+export function buildCoverageStatement(
+  spots: readonly BlindSpot[],
+  windowSpots?: readonly BlindSpot[],
+): CoverageStatement {
   const present = spots.filter((s) => s.count > 0);
   if (0 === present.length) return { coverage: Coverage.FULL, spots: [] };
   // Each label carries its own ending. Appending a blanket " unobserved" here produced
@@ -120,8 +139,15 @@ export function buildCoverageStatement(spots: readonly BlindSpot[]): CoverageSta
   // daemon can report one, and `LABEL[kind](count)` threw a TypeError on the verdict path when it
   // did — turning "there is something I could not see" into a crashed assert, which is worse than
   // either the caveat or the silence. Unknown kinds degrade to their own name.
-  const label = (s: BlindSpot): string =>
+  const known = (s: BlindSpot): string =>
     'function' === typeof LABEL[s.kind] ? LABEL[s.kind](s.count) : `${s.kind} (${String(s.count)})`;
+  const label = (s: BlindSpot): string => {
+    if (windowSpots === undefined || !impeachesCapture(s.kind)) return known(s);
+    const inWindow = windowSpots.find((w) => w.kind === s.kind)?.count ?? 0;
+    return 0 < inWindow
+      ? known({ kind: s.kind, count: inWindow })
+      : RATE_LIMITED_ELSEWHERE(s.count);
+  };
   const note = `${Coverage.PARTIAL} — ${present.map(label).join(', ')}`;
   return { coverage: Coverage.PARTIAL, note, spots: present };
 }
@@ -223,9 +249,27 @@ function droppedByTransport(events: readonly ReticleEvent[]): number {
 interface AbsencePredicate {
   kind: string;
   absent?: boolean;
-  query?: { scope?: unknown };
+  query?: {
+    scope?: unknown;
+    role?: string | undefined;
+    by?: string | undefined;
+    value?: string | undefined;
+  };
   predicate?: AbsencePredicate;
 }
+
+/**
+ * Roles that are structurally page-level and can never be a virtualized list row. A dialog is
+ * always a top-level overlay; a landmark is a page-structural element. Absence of one of these
+ * is not threatened by rows a virtualizer unmounted off-screen (#1236).
+ */
+const NEVER_VIRTUALIZED_ROLES: ReadonlySet<string> = new Set([
+  'dialog',
+  'alertdialog',
+  'banner',
+  'contentinfo',
+  'main',
+]);
 
 /**
  * When an absence assertion targets a page with regions Reticle cannot observe, "the element is
@@ -234,7 +278,8 @@ interface AbsencePredicate {
  *
  * Fires on three blind-spot kinds:
  *   - CROSS_ORIGIN_IFRAME (only when the predicate is scoped to a frame region)
- *   - VIRTUALIZED_UNMOUNTED — a row that was never rendered could hold the element
+ *   - VIRTUALIZED_UNMOUNTED — a row that was never rendered could hold the element (scoped:
+ *     skipped when the queried role is structurally page-level, like dialog or a landmark)
  *   - CLOSED_SHADOW_ROOT — a subtree Reticle cannot see into
  */
 export function absenceBlindSpotNote(
@@ -254,13 +299,17 @@ export function absenceBlindSpotNote(
   }
   if (PredicateKind.ELEMENT !== predicate.kind || true !== predicate.absent) return undefined;
 
+  const role =
+    predicate.query?.role ??
+    (QueryBy.ROLE === predicate.query?.by ? predicate.query.value : undefined);
   const relevant = spots.filter(
     (spot) =>
       spot.count > 0 &&
       (spot.kind === BlindSpotKind.CROSS_ORIGIN_IFRAME
         ? undefined !== predicate.query?.scope
-        : spot.kind === BlindSpotKind.VIRTUALIZED_UNMOUNTED ||
-          spot.kind === BlindSpotKind.CLOSED_SHADOW_ROOT),
+        : spot.kind === BlindSpotKind.VIRTUALIZED_UNMOUNTED
+          ? undefined === role || !NEVER_VIRTUALIZED_ROLES.has(role)
+          : spot.kind === BlindSpotKind.CLOSED_SHADOW_ROOT),
   );
   if (0 === relevant.length) return undefined;
 

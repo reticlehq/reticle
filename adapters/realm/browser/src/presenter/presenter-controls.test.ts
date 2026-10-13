@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { HumanControlKind, PresenterTone, SessionState } from '@reticlehq/core';
 import { Presenter, type ControlIntent } from './presenter.js';
-import { CONTROLS_CSS } from './presenter-controls.js';
+import { CONTROLS_CSS, CONTROLS_FOOT_HTML } from './presenter-controls.js';
+import { CHAT_VIEWS_CSS } from './presenter-chat-views.js';
+import { FRAME_CSS } from './presenter-frame.js';
 import { buildSnapshot } from '@/dom/snapshot.js';
 import { LOG_KIND } from './chrome/presenter-log.js';
 import { isIgnored } from '@/dom/dom-ignore.js';
@@ -195,18 +197,14 @@ describe('presenter-controls / live-control panel', () => {
   const pushFlows = (presenter: Presenter, flows: { name: string; start?: string }[]): void =>
     presenter.handlePush({ name: 'flows', args: { flows } });
 
-  it('14e a FLOWS push renders ▶ chips; a click replays that flow (no agent)', () => {
-    const { presenter, onControl } = mount();
+  it('14e the Agent Log carries no replay strip: saved flows replay from their own page', () => {
+    const { presenter } = mount();
     pushFlows(presenter, [{ name: 'checkout' }, { name: 'login' }]);
-    const flows = q('[data-reticle-flows]');
-    expect(flows?.getAttribute('data-has')).toBe('1');
-    const chips = document.querySelectorAll<HTMLElement>(
-      '[data-reticle-flow-strip] [data-reticle-replay]',
-    );
-    expect(chips.length).toBe(2);
-    expect(chips[0]?.textContent).toBe('▶ checkout');
-    click(chips[0]);
-    expect(onControl).toHaveBeenCalledWith({ kind: HumanControlKind.REPLAY, text: 'checkout' });
+    expect(q('[data-reticle-flows]')).toBeNull();
+    expect(q('[data-reticle-chat-panel] [data-reticle-replay]')).toBeNull();
+    expect(
+      document.querySelectorAll('[data-reticle-all-flows] [data-reticle-replay]'),
+    ).toHaveLength(2);
   });
 
   it('14e2 the Saved flows page lists each flow as a readable row that still replays', () => {
@@ -236,28 +234,18 @@ describe('presenter-controls / live-control panel', () => {
     expect(onControl).toHaveBeenCalledWith({ kind: HumanControlKind.REPLAY, text: 'login' });
   });
 
-  it('14f a FLOWS push with no flows hides the row and rebuilds cleanly', () => {
+  it('14f a FLOWS push with no flows empties the page and rebuilds cleanly', () => {
     const { presenter } = mount();
     pushFlows(presenter, [{ name: 'a' }, { name: 'b' }]);
-    expect(
-      document.querySelectorAll('[data-reticle-flow-strip] [data-reticle-replay]').length,
-    ).toBe(2);
+    const rows = (): number =>
+      document.querySelectorAll('[data-reticle-all-flows] [data-reticle-replay]').length;
+    expect(rows()).toBe(2);
     pushFlows(presenter, []); // a re-push replaces, never appends
-    expect(
-      document.querySelectorAll('[data-reticle-flow-strip] [data-reticle-replay]').length,
-    ).toBe(0);
-    expect(q('[data-reticle-flows]')?.getAttribute('data-has')).toBe('0');
+    expect(rows()).toBe(0);
+    expect(q('[data-reticle-all-flows]')?.textContent).toContain('No saved flows yet');
   });
 
-  it('14g the flows preview is horizontally scrolling and cannot grow into the log', () => {
-    const start = CONTROLS_CSS.indexOf('.reticle-flows{');
-    const rule = CONTROLS_CSS.slice(start, CONTROLS_CSS.indexOf('}', start));
-    expect(rule).toContain('flex:none');
-    expect(CONTROLS_CSS).toContain('.reticle-flow-strip{display:flex;');
-    expect(CONTROLS_CSS).toContain('overflow-x:auto');
-  });
-
-  it('14h shows only flows whose start testid is present on the page; re-scopes on route change', () => {
+  it('14h a flow that starts on another page cannot be replayed from this one; re-scopes on route change', () => {
     const { presenter } = mount();
     const host = document.createElement('div');
     host.innerHTML = '<button data-testid="task-input"></button>'; // this page has only task-input
@@ -267,22 +255,27 @@ describe('presenter-controls / live-control panel', () => {
       name: 'flows',
       args: {
         flows: [
-          { name: 'add-task', start: 'task-input' }, // starts here → shown
-          { name: 'checkout', start: 'pay-button' }, // starts elsewhere → hidden
-          { name: 'global-search' }, // no start hint → always shown
+          { name: 'add-task', start: 'task-input' }, // starts here
+          { name: 'checkout', start: 'pay-button' }, // starts elsewhere
+          { name: 'global-search' }, // no start hint: always playable
         ],
       },
     });
-    const shown = (): string[] =>
-      Array.from(document.querySelectorAll('[data-reticle-flow-strip] [data-reticle-replay]'))
+    const playable = (): string[] =>
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>(
+          '[data-reticle-all-flows] [data-reticle-replay]',
+        ),
+      )
+        .filter((b) => !b.disabled)
         .map((b) => b.getAttribute('data-reticle-replay') ?? '')
         .sort();
-    expect(shown()).toEqual(['add-task', 'global-search']);
+    expect(playable()).toEqual(['add-task', 'global-search']);
 
-    // navigate to checkout: pay-button appears, task-input goes away → list re-scopes
+    // navigate to checkout: pay-button appears, task-input goes away → the page re-scopes
     host.innerHTML = '<button data-testid="pay-button"></button>';
     presenter.refilterFlows();
-    expect(shown()).toEqual(['checkout', 'global-search']);
+    expect(playable()).toEqual(['checkout', 'global-search']);
   });
 
   it('15 setState is idempotent', () => {
@@ -395,52 +388,46 @@ describe('presenter-controls / live-control panel', () => {
   });
 });
 
-describe('the replay row', () => {
-  it('has a See all that opens the Flows page', () => {
-    document.body.innerHTML = '';
-    const presenter = new Presenter({});
-    presenter.mount();
-    const flowsTab = document.querySelector<HTMLElement>('[data-reticle-chat-view-btn="flows"]');
-    let opened = false;
-    flowsTab?.addEventListener('click', () => {
-      opened = true;
-    });
-    document.querySelector<HTMLElement>('[data-reticle-flows-all]')?.click();
-    expect(opened).toBe(true);
-    presenter.destroy();
-  });
-});
-
-describe('a replay started from a chip', () => {
-  it('plays on the chip, step by step, and says how it ended', () => {
+describe('a replay started from the Saved flows page', () => {
+  it('plays on its row, step by step, and says how it ended', () => {
     document.body.innerHTML = '';
     const presenter = new Presenter({});
     presenter.mount();
     presenter.handlePush({ name: 'flows', args: { flows: [{ name: 'refund' }] } });
-    const chip = (): HTMLElement | null =>
-      document.querySelector('.reticle-flow[data-reticle-replay="refund"]');
+    const row = (): HTMLElement | null =>
+      document.querySelector('.reticle-flow-row[data-reticle-replay="refund"]');
     presenter.handlePush({
       name: 'flow.progress',
       args: { name: 'refund', done: 2, total: 4, status: 'playing' },
     });
-    expect(chip()?.getAttribute('data-state')).toBe('playing');
-    expect(chip()?.style.getPropertyValue('--reticle-flow-progress')).toBe('50%');
-    const seeLogs = document.querySelector<HTMLElement>('[data-reticle-see-logs]');
-    expect(seeLogs?.hidden).toBe(false);
-    let opened = false;
-    document
-      .querySelector('[data-reticle-chat-view-btn="activity"]')
-      ?.addEventListener('click', () => {
-        opened = true;
-      });
-    seeLogs?.click();
-    expect(opened).toBe(true);
+    expect(row()?.getAttribute('data-state')).toBe('playing');
+    expect(row()?.style.getPropertyValue('--reticle-flow-progress')).toBe('50%');
+    expect(row()?.querySelector('.reticle-flow-meta')?.textContent).toBe('Step 2 of 4');
     presenter.handlePush({
       name: 'flow.progress',
       args: { name: 'refund', done: 4, total: 4, status: 'passed' },
     });
-    expect(chip()?.getAttribute('data-state')).toBe('passed');
-    expect(chip()?.textContent).toBe('✓ refund');
+    expect(row()?.getAttribute('data-state')).toBe('passed');
+    expect(row()?.querySelector('.reticle-flow-play')?.textContent).toBe('✓');
     presenter.destroy();
+  });
+});
+
+// Driven before release: the Harness spot sat beside the workspace chip with flex:none, ran 50px
+// past the 320px panel, and the Run Harness button and the on/off switch were clipped off it.
+describe('the Harness spot in the footer', () => {
+  it('takes its own line instead of overflowing beside the workspace chip', () => {
+    expect(CONTROLS_CSS).toMatch(/\.reticle-foot-workspace-row\{[^}]*flex-wrap:wrap/);
+    // Its own block above the chip's row, never inside it: the stack is a column of full-width rows.
+    const foot = CONTROLS_FOOT_HTML;
+    expect(foot.indexOf('data-reticle-harness-spot')).toBeLessThan(
+      foot.indexOf('reticle-foot-workspace-row'),
+    );
+    expect(foot).not.toMatch(/reticle-foot-workspace-row">[^]*data-reticle-harness-spot/);
+    expect(FRAME_CSS).toMatch(/\.reticle-foot-stack\{[^}]*flex-direction:column/);
+    expect(CHAT_VIEWS_CSS).toMatch(/\.reticle-harness-spot\{[^}]*flex-direction:column/);
+    // Run Harness and Stop are buttons wearing a link's class: without a reset they draw as the
+    // browser's default white button.
+    expect(CHAT_VIEWS_CSS).toMatch(/\.reticle-harness-link\{[^}]*background:none/);
   });
 });

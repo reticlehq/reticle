@@ -15,13 +15,13 @@ import type { ProjectCloud } from './cloud-config.js';
 
 const LINKED: ProjectCloud = {
   config: { url: 'https://cloud.test', apiKey: 'rk_test' },
-  policy: { runs: true, memory: true, flows: true, capsules: true },
+  policy: { runs: true, memory: true, flows: true, capsules: true, screenshots: true },
   verify: 'local',
   projectId: 'demo',
 };
 const UNLINKED: ProjectCloud = {
   config: null,
-  policy: { runs: true, memory: true, flows: true, capsules: true },
+  policy: { runs: true, memory: true, flows: true, capsules: true, screenshots: true },
   verify: 'local',
   projectId: null,
 };
@@ -568,7 +568,9 @@ describe('the last push', () => {
 describe('a refusal is not silence', () => {
   let posts = 0;
   const refusing = (url: string): Promise<{ status: number; text: string }> => {
-    if (!url.includes('/pull') && !url.includes('/status')) posts += 1;
+    // The memory read each cycle makes (decisions coming down) is a read, not an offer of the run.
+    if (!url.includes('/pull') && !url.includes('/status') && !url.includes('/v1/memory'))
+      posts += 1;
     const body = url.includes('/pull')
       ? { triage: [], cursor: '0:' }
       : url.includes('/status')
@@ -603,5 +605,113 @@ describe('a refusal is not silence', () => {
     expect(posts, 'the refused run was offered once, not every cycle').toBe(1);
     d.stop();
     vi.restoreAllMocks();
+  });
+});
+
+/*
+ * An unlinked root was skipped with a bare `continue`: a repo held 31 unsent runs and nothing said
+ * so. Every root with unsent runs is now one log line and one entry in `unsyncedRoots()`.
+ */
+describe('a root nothing will send is said out loud', () => {
+  it('logs an unlinked root with runs once, and lists it with its count', async () => {
+    const sibling = join(mkdtempSync(join(tmpdir(), 'reticle-unsent-')), '.reticle');
+    mkdirSync(join(sibling, 'runs'), { recursive: true });
+    for (const id of ['r1', 'r2', 'r3'])
+      writeFileSync(join(sibling, 'runs', `${id}.json`), JSON.stringify({ runId: id }));
+    const lines: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown): boolean => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      otherRoots: () => Promise.resolve([sibling]),
+      cloudFor: () => Promise.resolve(UNLINKED),
+      request: counting().request,
+      intervalMs: 1000,
+    });
+    await vi.advanceTimersByTimeAsync(20_000);
+    d.stop();
+    spy.mockRestore();
+    const said = lines.filter((l) => l.includes('reticle_cloud_unsynced_root'));
+    expect(said).toHaveLength(1);
+    expect(JSON.parse(String(said[0]))).toMatchObject({ root: sibling, runs: 3, linked: false });
+    expect(d.unsyncedRoots()).toEqual([{ root: sibling, runs: 3, flows: 0, linked: false }]);
+  });
+});
+
+/**
+ * The daemon's own memory read, every cycle, was counted by the platform as an agent consulting the
+ * corpus: 127 "agent reads" by "an agent that did not name itself" in 35 minutes. The sync says it
+ * is the sync, and never claims to be an agent.
+ */
+describe("the sync's memory read", () => {
+  it('names itself as the sync, not as an agent', async () => {
+    const seen: Record<string, string>[] = [];
+    const request = (
+      url: string,
+      init?: { headers?: Record<string, string> },
+    ): Promise<{ status: number; text: string }> => {
+      if (url.includes('/v1/memory')) seen.push({ ...(init?.headers ?? {}) });
+      const body = url.includes('/pull') ? { triage: [], cursor: '0:' } : {};
+      return Promise.resolve({ status: 200, text: JSON.stringify(body) });
+    };
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      request,
+      intervalMs: 1_000,
+    });
+    await vi.advanceTimersByTimeAsync(3_000);
+    await d.flush();
+    expect(seen.length).toBeGreaterThan(0);
+    for (const headers of seen) {
+      expect(headers['x-reticle-read-purpose']).toBe('sync');
+      expect(headers['x-reticle-agent']).toBeUndefined();
+    }
+  });
+});
+
+/*
+ * Re-drive (persona 09): after `reticle login --project rao-console` the running daemon kept
+ * syncing to the OLD link for about a minute — it read the link once per idle tick — and never said
+ * it had moved. The link is re-read the moment it changes, and the move is announced.
+ */
+describe('a re-link', () => {
+  it('is read the moment the link file changes, and announced', async () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown): boolean => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const urls: string[] = [];
+    let project = 'lind-console';
+    let changed: (() => void) | undefined;
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve({ ...LINKED, projectId: project }),
+      request: (url) => {
+        urls.push(url);
+        return Promise.resolve({ status: 200, text: '{}' });
+      },
+      intervalMs: 60_000,
+      watchLink: (onChange) => {
+        changed = onChange;
+        return () => undefined;
+      },
+    });
+    await vi.advanceTimersByTimeAsync(6_000); // the first cycle, on the old link
+    project = 'rao-console';
+    urls.length = 0;
+    changed?.();
+    await vi.advanceTimersByTimeAsync(3_000); // well inside the 60 s idle tick
+    expect(urls.some((u) => u.includes('rao-console'))).toBe(true);
+    expect(urls.some((u) => u.includes('lind-console'))).toBe(false);
+    const linked = lines.filter((l) => l.includes('reticle_cloud_linked'));
+    expect(linked).toHaveLength(2);
+    expect(linked[1]).toContain('rao-console');
+    d.stop();
+    spy.mockRestore();
   });
 });

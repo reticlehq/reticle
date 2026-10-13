@@ -4,7 +4,7 @@ description: 'Premium access and activation, what is gated, the security and dat
 icon: building
 ---
 
-Enterprise features ship inside the open package and are unlocked by a signed license key you set as `RETICLE_LICENSE_KEY`. Activation is verified locally with Ed25519 and makes **no network call**, so nothing about your usage leaves your machine. Run `npx @reticlehq/server license` to see whether you are `active`, `eval`, `missing` or `expired`.
+Enterprise features ship inside the open package and are unlocked by a signed license key you set as `RETICLE_LICENSE_KEY`. Activation is verified locally with Ed25519 and makes **no network call**, so nothing about your usage leaves your machine. Run `npx @reticlehq/server license` to see whether you are `active`, `eval`, `missing`, `expired` or `invalid`.
 
 > Premium access (how you get + activate it), what's gated, the security/data-handling posture, and the licensing model. Integration mechanics live in [`platform-integration.md`](./platform-integration.md).
 
@@ -22,19 +22,20 @@ Enterprise (`ee/`) features ship **inside the open package**; they're source-ava
    export RETICLE_LICENSE_KEY="<your key>"
    # the release already bakes the issuer public key (RETICLE_LICENSE_PUBLIC_KEY)
    ```
-3. **Verify.** `reticle license` shows your status:
+3. **Verify.** `reticle license` prints one JSON line whose `status` and `detail` say where you stand:
 
    ```
-   active    licensed to Acme Corp (enterprise), expires 2027-06-20 · features: sso, audit
+   active    licensed to Acme Corp (enterprise), expires 2027-06-20T00:00:00.000Z
    eval      evaluation mode: enterprise features run free (no issuer key configured)
    missing   set RETICLE_LICENSE_KEY to activate enterprise features in production. Request a key from hey@reticle.sh
    expired   license expired. Renew with hey@reticle.sh to keep using enterprise features
+   invalid   license key rejected (<reason>). hey@reticle.sh can re-issue it
    ```
 
    Every status reports `contact`, so a reader who is stuck always has somebody to write to. An unlicensed status also reports `gated`, what a licence unlocks in the build you are running, so the command answers "what would this buy me, and how do I get one" without anybody having to find this page first. It is derived from the features the gate actually enforces, so it names what your build will really refuse rather than a roadmap. An `active` licence does not report it: that reader has already bought, and listing feature names at them answers nothing they asked.
 
-4. **Unlock.** Enterprise features now run in production; without a valid key they refuse to run there (a clear error, never a silent half-feature). In eval/dev they always run free.
-5. **Renew.** Keys carry an expiry; `reticle license` warns before it lapses.
+4. **Unlock.** Enterprise features now run; without a valid key they refuse to run (a clear error, never a silent half-feature). A published release has the issuer key baked in, so it enforces the key everywhere. Only a build without one (from source) runs in `eval` mode, where the features run free outside `NODE_ENV=production`.
+5. **Renew.** Keys carry an expiry, shown as `expiresAt`; once it passes, the status is `expired`.
 
 > Procuring a license: contact **[hey@reticle.sh](mailto:hey@reticle.sh)**. Keys are issued offline and signed with Ed25519; the activation you run (`reticle license`) verifies them locally with no network call.
 
@@ -42,26 +43,26 @@ Enterprise (`ee/`) features ship **inside the open package**; they're source-ava
 
 The licensing **mechanism** is open core (inspectable, FSL). Only the **features** under `ee/` are gated:
 
-- **Today:** the activation gate + an example gated feature (audit event recording).
+- **Today:** the activation gate + one gated feature (audit event recording, `audit-log`).
 - **Roadmap** (the reliably enterprise-only set): **SSO/SAML, SCIM, RBAC / team permissions, audit logs, multi-org management, verify-before-merge policy gates, and the hosted control-plane connectors.** These are the things a security/compliance org pays for; the core verification engine stays free forever.
 
 > What's premium vs free, and pricing, are business decisions for the owner; this doc describes the _mechanism_, not the price list.
 
 ## Security & data handling
 
-The honest one-pager a security review needs. Reticle is built so the answer to "where does our data go?" is **nowhere. It runs on your machine, in your infra.**
+The honest one-pager a security review needs. Reticle is built so the answer to "where does our data go?" is **nowhere, unless you link a project to the dashboard. It runs on your machine, in your infra.**
 
 | Question | Answer |
 | --- | --- |
 | Does the SDK ship to production? | **No.** Dev/preview-only, tree-shaken from production builds. |
 | Where does the server run? | **Localhost.** The bridge binds `127.0.0.1`; the verify endpoint is localhost-bound + token-guarded (constant-time), with request/body-size/timeout limits. |
-| Does anything phone home? | **No app data, ever.** License checks are offline (Ed25519). The CLI sends anonymous, opt-out usage metrics only (random id + event names, no code, no PII; see [telemetry](telemetry.md)); disable fleet-wide with `RETICLE_TELEMETRY=0` or per-machine with `reticle telemetry disable`. Feedback your team explicitly sends us (`reticle feedback`) is the only free text that ever leaves; it is never collected passively, is redacted client-side, and is disabled fleet-wide with `RETICLE_FEEDBACK=0`. |
+| Does anything phone home? | **No app data unless you opt in.** Linking a project to the dashboard (`reticle connect`) sends its runs there; see [what is recorded](what-is-recorded.md) and `reticle config` for what it sends. License checks are offline (Ed25519). The CLI sends anonymous, opt-out usage metrics only (random id + event names, no code, no PII; see [telemetry](telemetry.md)); disable fleet-wide with `RETICLE_TELEMETRY=0` or per-machine with `reticle telemetry disable`. Feedback your team explicitly sends us (`reticle feedback`) is the only free text that ever leaves; it is never collected passively, is redacted client-side, and is disabled fleet-wide with `RETICLE_FEEDBACK=0`. |
 | Where do artifacts live? | Your disk: `.reticle/runs/<id>.json` (atomic writes, bounded retention), `.reticle/flows/`, `.reticle/contract.json`. You own them. |
 | What can the server read? | The DOM/network/console/routing/state of the app under test, locally. |
 | Leak risk downstream? | The **`prod-preview` profile** redacts source `file:line`, raw bodies, and app-state values. |
 | Path safety | Run/flow ids are validated as single path segments on read **and** write (no traversal). |
 
-**Verify it yourself:** the SDK + server are source-available, so read the tree-shaking, the `127.0.0.1` bind, and the offline license verify. `SECURITY.md` has the disclosure process; an SBOM is available on request. SOC 2 is a GA-stage item (no Reticle-hosted data exists today to certify); the posture above is the honest current state.
+**Verify it yourself:** the SDK + server are source-available, so read the tree-shaking, the `127.0.0.1` bind, and the offline license verify. `SECURITY.md` has the disclosure process; an SBOM is available on request. SOC 2 is not in place; the posture above is the honest current state.
 
 ## Licensing model (per package)
 
@@ -69,7 +70,7 @@ The honest one-pager a security review needs. Reticle is built so the answer to 
 | --- | --- | --- |
 | The protocol and the rules (`open-verification`, `core`, `engine`) | **Apache-2.0** | the part that DECIDES a verdict, auditable and reimplementable by anyone |
 | Embeddable SDK (`browser`, `react`, `babel-plugin`, `next`, `vite-plugin`, `electron`, `eslint-plugin`) | **Apache-2.0** | safe to ship inside your customers' apps; explicit patent grant |
-| Server / CLI / MCP (`server`, `test`, umbrella) | **FSL-1.1-ALv2** | free for any use except reselling Reticle itself; converts to Apache after 2 years |
+| Server / CLI / MCP (`server`, `init`, `test`) | **FSL-1.1-ALv2** | free for any use except reselling Reticle itself; converts to Apache after 2 years |
 | Enterprise features (`server/src/features/ee/`) | **Reticle Enterprise License** | source-available; free for dev/eval, license key required in production |
 
 Embedding / OEM / enterprise: **[hey@reticle.sh](mailto:hey@reticle.sh)**.

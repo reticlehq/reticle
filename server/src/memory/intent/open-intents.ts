@@ -16,7 +16,17 @@ export async function openSessionIntents(
   deps: ToolDeps,
   sessionId: string | undefined,
 ): Promise<Intent[]> {
-  return new IntentStore(deps.fs, sessionRoot(deps, sessionId), { now: deps.now }).open();
+  return ledgerFor(deps, sessionId)();
+}
+
+/**
+ * A reader of the same ledger, its root resolved NOW. For a verdict drawn after its tab may have
+ * left: a checkout click that takes the page to another origin closes the session, and resolving the
+ * root then refused the whole call with "names no session" instead of grading what was seen.
+ */
+export function ledgerFor(deps: ToolDeps, sessionId: string | undefined): () => Promise<Intent[]> {
+  const root = sessionRoot(deps, sessionId);
+  return () => new IntentStore(deps.fs, root, { now: deps.now }).open();
 }
 
 /**

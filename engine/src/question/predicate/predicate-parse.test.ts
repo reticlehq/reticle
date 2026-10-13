@@ -182,4 +182,20 @@ describe('parsePredicate turns a zod rejection into a sentence', () => {
     expect(message.match(/put the locator inside/g) ?? []).toHaveLength(1);
     expect(message).toContain('more predicates need the same fix');
   });
+
+  it('names the nested predicate a rejection is about, not the allOf around it', () => {
+    // An `element` predicate carrying `satisfies` inside an `allOf` was refused as "allOf accepts:
+    // predicates … unknown field satisfies", which sends the agent to fix the wrong level.
+    const message = messageOf({
+      kind: 'allOf',
+      predicates: [
+        { kind: 'text', contains: 'Saved' },
+        { kind: 'element', query: { role: 'button' }, satisfies: { property: 'visible' } },
+      ],
+    });
+    expect(message).toContain('predicates.1');
+    expect(message).toContain('kind "element"');
+    expect(message).toContain('element accepts:');
+    expect(message).not.toContain('allOf accepts:');
+  });
 });

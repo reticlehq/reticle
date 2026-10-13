@@ -15,11 +15,12 @@ import { probeDevServerStates } from './dev-server/dev-server-probe.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { callingClientDirectory } from '@/hooks/client-directory.js';
 import { registeredElsewhere } from '@/memory/recall/registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
-import { detectDevCommandInProject } from './dev-server/dev-command.js';
+import { detectDevCommandInProject, initCommandIn } from './dev-server/dev-command.js';
 import { nextActionFor, portOfUrl, renderNextAction } from './no-session-next-action.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import {
@@ -155,6 +156,8 @@ interface NoSessionWatchOptions {
  */
 export function startNoSessionWatch(options: NoSessionWatchOptions): () => void {
   let listening: readonly number[] = [];
+  /** Ports the last scan was asked about. A port absent from this set was not observed, so it is not "down". */
+  let probed = new Set<number>();
   /**
    * Ports that accepted a connection and then answered nothing in time.
    *
@@ -253,8 +256,8 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
    * this one starts, which is precisely the window the agent then spends being told to start a dev
    * server that is already running.
    */
-  const splitBrain = (): string | undefined => {
-    const projectId = readProjectId(directory);
+  const splitBrain = (dir: string = directory): string | undefined => {
+    const projectId = readProjectId(dir);
     if (projectId === undefined) {
       return projectlessNote(
         options.port,
@@ -315,6 +318,12 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     const known = options.sessions.lastKnown?.();
     const knownPort = known === undefined ? undefined : portOfUrl(known.url);
     if (knownPort !== undefined) ports.add(knownPort);
+    // Every departed project, not only the newest. B can still be serving on :3005 after A leaves
+    // on :5173, and a scan that never asked :3005 would report B's app as stopped.
+    for (const url of options.sessions.tombstoneUrls?.() ?? []) {
+      const port = portOfUrl(url);
+      if (port !== undefined) ports.add(port);
+    }
     return [...ports];
   };
 
@@ -357,7 +366,9 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   };
 
   const refresh = (): void => {
-    // Nothing to diagnose while a session is live, and no reason to scan.
+    // Nothing to diagnose while a session is live, and no reason to scan. What the last scan saw
+    // predates this session, so it is no observation of where the session goes on to depart from.
+    if (options.sessions.count() > 0) probed = new Set();
     if (running || options.sessions.count() > 0) return;
     running = true;
     const candidates = scanPorts();
@@ -370,6 +381,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
         : options.probe(candidates)
     )
       .then(async (ports) => {
+        probed = new Set(candidates);
         listening = ports;
         siblingListeners =
           options.occupiedSiblings !== undefined
@@ -434,6 +446,155 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     return { reason: closure.reason, ...closure.page };
   };
 
+  /**
+   * The diagnosis for a client standing in a different project than this daemon.
+   *
+   * `everConnected` and the newest tombstone are facts about the process. Spent on a second
+   * project they say that project's wiring is done and name the first project's URL. A directory
+   * that has never had a session of its own has never connected, whatever else this daemon has seen.
+   * Ports count only when this project announced them or its own last session was on them, so the
+   * reopen command cannot fall through to somebody else's dev server.
+   */
+  const diagnosisFor = (dir: string): { facts: NoSessionFacts; next: NoSessionNextAction } => {
+    const projectId = readProjectId(dir);
+    const initialized = projectId !== undefined;
+    // A tab that reported no project cannot be another project's: it is the daemon's own last tab,
+    // never "this daemon has never seen one" beside a refusal that names where it last saw it. A
+    // tab that named another project stays that project's (a second app is not told to reopen it).
+    const newest = options.sessions.lastKnown?.();
+    const unclaimed = newest !== undefined && newest.projectId === undefined ? newest : undefined;
+    const known =
+      (projectId === undefined ? undefined : options.sessions.lastKnownFor?.(projectId)) ??
+      unclaimed;
+    const everConnected =
+      (projectId !== undefined && true === options.sessions.everConnectedTo?.(projectId)) ||
+      unclaimed !== undefined;
+    const ownPorts = new Set(
+      devServersForProject(readDevServers(stateDir), { projectId, root: dir }).map(
+        (entry) => entry.port,
+      ),
+    );
+    if (known !== undefined) {
+      const port = portOfUrl(known.url);
+      if (port !== undefined) ownPorts.add(port);
+    }
+    const heard = listening.filter((port) => ownPorts.has(port));
+    // Not in the last scan means we have not looked, not that the server stopped. Treating the
+    // gap as "down" is what tells a still-running app to start a second one.
+    for (const port of ownPorts) {
+      if (!probed.has(port) && !heard.includes(port)) heard.push(port);
+    }
+    const slow = slowListeners.filter((port) => ownPorts.has(port));
+    const closure = options.sessions.lastClosure?.();
+    const refusalIsThisProject =
+      closure !== undefined &&
+      true !== options.sessions.connectedSinceLastClosure?.() &&
+      projectId !== undefined &&
+      closure.page?.projectId === projectId;
+    const helloRefused =
+      refusalIsThisProject &&
+      closure !== undefined &&
+      closure.page !== undefined &&
+      !isAuthRefusalReason(closure.reason)
+        ? { reason: closure.reason, ...closure.page }
+        : undefined;
+    const discovery = initialized ? undefined : discoverProjectConfigs(dir);
+    const found =
+      discovery === undefined ? [] : discovery.found.filter((config) => config.directory !== dir);
+    const registered = 0 < found.length ? [] : registeredElsewhere(homedir(), dir);
+    const configsElsewhere =
+      0 < found.length
+        ? found.map((config) => ({
+            directory: config.directory,
+            ...(config.projectId === undefined ? {} : { projectId: config.projectId }),
+          }))
+        : 0 < registered.length
+          ? registered.map((project) => ({
+              directory: project.directory,
+              ...(project.projectId === undefined ? {} : { projectId: project.projectId }),
+            }))
+          : undefined;
+    const framework = readProjectFramework(dir);
+    const configured = readProjectPort(dir);
+    const previouslyConnected = hasProjectConnectedBefore(stateDir, options.port, projectId);
+    const authRefused =
+      refusalIsThisProject && closure !== undefined && isAuthRefusalReason(closure.reason);
+    const status =
+      known !== undefined && lastKnownStatus !== undefined && lastKnownStatus.url === known.url
+        ? { lastKnownStatus: lastKnownStatus.status }
+        : {};
+    const departedTo = known?.departedTo;
+    const departed = departedTo === undefined || '' === departedTo ? {} : { departedTo };
+    const upMs = stallUptime(Date.now());
+    const facts: NoSessionFacts = {
+      everConnected,
+      initialized,
+      ...(configsElsewhere === undefined ? {} : { configsElsewhere }),
+      ...(discovery !== undefined && configsElsewhere === undefined
+        ? { searchedDirectories: discovery.searched }
+        : {}),
+      listening: heard,
+      slowListeners: slow,
+      port: options.port,
+      directory: dir,
+      previouslyConnected,
+      authRefused,
+      ...(helloRefused === undefined ? {} : { helloRefused }),
+      ...(framework === undefined ? {} : { framework }),
+      ...(readProjectIsDesktop(dir) ? { desktop: true } : {}),
+      leaseExpired: known !== undefined && (options.wasReapedLease?.(known.id) ?? false),
+      ...(known === undefined ? {} : { lastKnownUrl: known.url, ...status, ...departed }),
+      ...(upMs === undefined ? {} : { daemonUpMs: upMs }),
+      ...(configured === undefined ? {} : { projectPort: configured }),
+      ...(0 === siblingListeners.length ? {} : { siblingListeners }),
+    };
+    const split = splitBrain(dir);
+    const next = nextActionFor({
+      everConnected,
+      initialized,
+      ...(configsElsewhere === undefined ? {} : { configsElsewhere }),
+      previouslyConnected,
+      exists: (file) => existsSync(join(dir, file)),
+      authRefused,
+      ...(helloRefused === undefined ? {} : { helloRefused: helloRefused.reason }),
+      ...(split === undefined ? {} : { splitBrain: split }),
+      listening: heard,
+      slowListeners: slow,
+      ...(known === undefined
+        ? {}
+        : {
+            lastKnownUrl: known.url,
+            ...(known.departedTo === undefined ? {} : { departedTo: known.departedTo }),
+          }),
+      dev: detectDevCommandInProject(dir),
+      init: initCommandIn(dir),
+    });
+    return { facts, next };
+  };
+
+  /**
+   * A call that named the client's project. Undefined means nobody named one (an embed, a test, a
+   * daemon answering itself), and the path below stays the one this watch was started with.
+   */
+  const callerAnswer = (): { facts: NoSessionFacts; next: NoSessionNextAction } | undefined => {
+    const caller = callingClientDirectory();
+    if (caller === undefined) return undefined;
+    return diagnosisFor(caller);
+  };
+
+  /**
+   * `listening`, plus the departed session's port when no scan has looked at it since: not looked
+   * at is not stopped. Without it `reticle status` called a running Vite stopped because the only
+   * scan ran before the app was started.
+   */
+  const observedListening = (): readonly number[] => {
+    const known = options.sessions.lastKnown?.();
+    const port = known === undefined ? undefined : portOfUrl(known.url);
+    return port === undefined || probed.has(port) || listening.includes(port)
+      ? listening
+      : [...listening, port];
+  };
+
   const nextAction = (scope: ProjectScopeFacts): NoSessionNextAction => {
     const split = splitBrain();
     return nextActionFor({
@@ -450,7 +611,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
         return refused === undefined ? {} : { helloRefused: refused.reason };
       })(),
       ...(split === undefined ? {} : { splitBrain: split }),
-      listening,
+      listening: observedListening(),
       slowListeners,
       // The url the departed tab was on — the same tombstone the prose diagnosis quotes, so the
       // command and the sentence beside it name the same page.
@@ -465,15 +626,22 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       // Read when asked, like everything else here: a `package.json` can gain a dev script, and a
       // daemon that cached "there is none" at boot would keep saying so for the rest of the day.
       dev: detectDevCommandInProject(directory),
+      // This project's own runner and app folder, so the agent can wire it itself.
+      init: initCommandIn(directory),
     });
   };
 
-  options.sessions.setNoSessionNextAction(() => nextAction(projectScopeFacts()));
+  options.sessions.setNoSessionNextAction(() => {
+    const caller = callerAnswer();
+    return caller === undefined ? nextAction(projectScopeFacts()) : caller.next;
+  });
 
   // ONE call for both registrations below. The prose and the branch code have to come from the
   // same evaluation or they can describe different branches - the facts are read when asked, so two
   // calls a moment apart can genuinely disagree (#615).
   const explain = (): { reason: NoSessionReason; message: string; detail?: string } => {
+    const caller = callerAnswer();
+    if (caller !== undefined) return explainNoSession(caller.facts);
     const scope = projectScopeFacts();
     return explainNoSession({
       everConnected: options.sessions.everConnected(),
@@ -484,7 +652,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       // framework and its projectId, and whose real problem was a dev server older than the plugin.
       // The boot value still counts: it is the one the daemon scoped its sessions with.
       ...scope,
-      listening,
+      listening: observedListening(),
       slowListeners,
       port: options.port,
       // The directory `initialized` was decided in. Named in the message because "there is no
@@ -559,6 +727,16 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   // scope facts so a discovered workspace config cannot become an `init` recommendation below it,
   // and both come from ONE `explain()` call so they cannot describe different branches.
   const rendered = (): { lead: string; full: string } => {
+    const caller = callerAnswer();
+    if (caller !== undefined) {
+      const { message, detail } = explainNoSession(caller.facts);
+      // The attach failure is about the daemon's own project. A call from that project still hears
+      // it. A call from another project must not be told that opening this one failed.
+      const callerDir = callingClientDirectory();
+      const ownProject = callerDir !== undefined && resolve(callerDir) === resolve(directory);
+      const lead = `${message} ${renderNextAction(caller.next)}${ownProject ? (attachFailure ?? '') : ''}`;
+      return { lead, full: undefined === detail ? lead : `${lead} ${detail}` };
+    }
     const scope = projectScopeFacts();
     const { message, detail } = explain();
     const lead = `${message} ${renderNextAction(nextAction(scope))}${attachFailure ?? ''}`;

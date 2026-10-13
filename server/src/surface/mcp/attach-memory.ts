@@ -186,9 +186,18 @@ export function describeAttachState(state: AttachState): string | undefined {
   return undefined;
 }
 
+/** Each state in words, for a person: the state names are the record's, never the reader's. */
+const ATTACH_STATE_SAID: Record<AttachState, string> = {
+  [AttachState.ENUMERATED]: "✓ your agent has read and used Reticle's tools",
+  [AttachState.NEVER_CALLED]: "your agent read Reticle's tools and has not called one yet",
+  [AttachState.NEVER_ENUMERATED]: '✗ your agent started Reticle and never read its tools',
+  [AttachState.NEVER_ATTACHED]: 'no agent has started Reticle on this port yet',
+};
+
 /** What `reticle status` reports about the client side of the install. */
 interface AttachStatusFields {
   mcpClient: AttachState;
+  mcpClientSaid: string;
   mcpClientAction?: string;
 }
 
@@ -204,5 +213,9 @@ export function attachStatusFields(stateDir: string, port: number): AttachStatus
   const action = describeAttachState(state);
   // OMITTED rather than undefined: `exactOptionalPropertyTypes` is on, and an absent key is also
   // what keeps the healthy line to one fact.
-  return { mcpClient: state, ...(action === undefined ? {} : { mcpClientAction: action }) };
+  return {
+    mcpClient: state,
+    mcpClientSaid: ATTACH_STATE_SAID[state],
+    ...(action === undefined ? {} : { mcpClientAction: action }),
+  };
 }

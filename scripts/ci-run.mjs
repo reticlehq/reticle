@@ -83,7 +83,10 @@ export function runnerLevelInOutput(output) {
   return null;
 }
 
-function runOnce(command, args) {
+/** How long, after the command exits, to keep reading output it already wrote. */
+const DRAIN_AFTER_EXIT_MS = 5_000;
+
+export function runOnce(command, args) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       // Piped rather than inherited, so the output can be SCANNED as well as shown. Both streams are
@@ -105,7 +108,27 @@ function runOnce(command, args) {
       process.stderr.write(`[ci-run] could not spawn ${command}: ${error.message}\n`);
       resolve({ code: 1, output: seen });
     });
-    child.on('close', (code) => resolve({ code, output: seen }));
+    // Settle on the command's EXIT, not on `close`. `close` waits for every holder of the pipes, and
+    // on Windows a process started during the build can outlive turbo while still holding stdout: a
+    // `pnpm build` that had printed "16 successful" then held its step until the 30-minute job
+    // timeout cancelled it. After exit, give the pipes a short drain for output already written,
+    // then stop listening and say why.
+    child.on('exit', (code) => {
+      const done = () => resolve({ code, output: seen });
+      const cut = setTimeout(() => {
+        process.stderr.write(
+          '[ci-run] the command exited, but a process it started still holds its output open; ' +
+            'not waiting for it.\n',
+        );
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        done();
+      }, DRAIN_AFTER_EXIT_MS);
+      child.once('close', () => {
+        clearTimeout(cut);
+        done();
+      });
+    });
   });
 }
 

@@ -4,7 +4,7 @@ description: Drive a URL once, replay every saved flow, and exit zero only on a 
 icon: circle-check
 ---
 
-`reticle verify` is the CI command: no model in the loop, no MCP. It boots the engine in drive mode, waits for the in-page SDK to dial back, replays every saved flow, renders the verdict, and exits.
+`reticle verify` is the CI command: no model in the loop, no MCP. On a free port it boots the engine in drive mode, waits for the in-page SDK to dial back, replays every saved flow, renders the verdict, and exits. When a Reticle daemon already owns the port, it asks that daemon to replay the flows instead.
 
 ```bash
 npx @reticlehq/server verify <url> [--headed] [--timeout N] [--storage-state <file>]
@@ -20,6 +20,13 @@ It uses the same runner and the same verdict as the MCP and HTTP paths, so a pla
 | `--headed` | boolean | `false` (headless) | Show the browser |
 | `--timeout N` | number, ms | `15000` | How long to wait for a browser session to dial back |
 | `--storage-state <file>` | string | unset | A Playwright storage state file. This is how you verify flows behind a login without scripting the login every time |
+| `--results-json <file>` | string | unset | Also write one verdict per journey to this file: `{ verdict, results: [{ journey, verdict, reason? }] }`, each verdict `yes`, `no` or `unknown`. A skipped journey is `unknown`, and the run is `yes` only when every journey is. Written when verify boots its own browser and a run finishes; a refusal before that writes nothing. The [GitHub Action](https://github.com/reticlehq/reticle/tree/main/action) posts this file |
+| `--port N` | number | `RETICLE_PORT`, else the project's port, else `4400` | The bridge port the app dials |
+| `--session-id <id>` | string | unset | Use a tab that is already connected |
+| `--select <label>` | string, repeatable | unset | Verify only flows carrying this label |
+| `--expect '<json predicate>'` / `--expect-file <path>` | string | unset | One verdict on one predicate, no saved flows needed. Asks the daemon that owns the port and never starts one; with no daemon it refuses. Exits `0` only on `verified: "yes"`. Cannot be combined with `--storage-state` |
+| `--explore` / `--persona "<who does what>"` | boolean / string | off | No saved flows yet? The Harness drives the app and records them. `--persona` implies `--explore` |
+| `--confirm-dangerous` | boolean | off | Let this run press the controls the replay guard holds as destructive, such as a "Place order" or "Delete" button in a saved flow. Without it such a step is refused, so a checkout flow cannot pass. It covers this run only and is never saved into a flow. |
 
 ## What it prints
 
@@ -34,6 +41,8 @@ No app connected: Reticle drove the URL but no @reticlehq/browser session dialed
 No saved flows to verify (.reticle/flows is empty), so refusing to report a pass for verifying nothing.
   Flows are recorded interactively by an agent (reticle_record{action:"start"} → act → reticle_flow_save via the
   MCP tools), then committed to .reticle/flows/. In CI, check those files in and re-run `reticle verify`.
+  Or let Reticle record them for you: `reticle verify <url> --explore` drives the app itself and saves what it
+  drove, so every run after the first one replays with no model in the loop.
 ```
 
 <Warning>
@@ -49,11 +58,13 @@ Call log:
 ```
 
 <Warning>
-  `verify` binds the bridge port itself and has **no `--port` flag**: passing one is rejected as
-  `unknown argument '--port'`. If a daemon is already on the port, `verify` does not start a second
-  one: it prints three ways out (ask the running daemon via `reticle_run`, stop it, or move with
-  `RETICLE_PORT`) rather than a raw listen error. This bites most often on a developer machine,
-  where an agent has usually left a daemon running; in CI the port is normally free.
+  `verify` never starts a second daemon on a port that already has one. With a daemon there, it
+  replays the saved flows (or answers `--expect`, or runs `--explore`) through that daemon. Only
+  `--headed` and `--storage-state` need a browser of its own, so with a daemon on the port those
+  refuse and print the ways out (drive through the running daemon, ask it via `reticle_run`, move
+  both to another port with `--port` or `RETICLE_PORT`, or stop it). This bites most often on a
+  developer machine, where an agent has usually left a daemon running; in CI the port is normally
+  free.
 </Warning>
 
 ## Exit codes

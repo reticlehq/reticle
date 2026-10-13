@@ -169,7 +169,7 @@ describe('Live-control inbox', () => {
     const { session, tick } = makeSession();
     tick(120);
     session.applyHumanControl({ kind: HumanControlKind.MESSAGE, text: 'hi' });
-    expect(session.drainInbox()).toEqual([{ text: 'hi', t: 120 }]);
+    expect(session.drainInbox()).toEqual([{ text: 'hi', t: 120, seen: true }]);
   });
 
   it('#15 message with empty text is ignored', () => {

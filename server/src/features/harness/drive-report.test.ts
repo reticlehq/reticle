@@ -1,5 +1,13 @@
+import { invokedFlowMissing } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
-import { checkTally, describeDrive, drivenSteps } from './drive-report.js';
+import {
+  checkTally,
+  describeDrive,
+  drivenSteps,
+  runProved,
+  typedValues,
+  verdictLine,
+} from './drive-report.js';
 import type { ToolOutcome } from './harness.js';
 
 /**
@@ -18,7 +26,7 @@ const call = (
 const acted = (target: string, verified: string, because = 'evidence') =>
   call(
     'reticle_act_and_wait',
-    { ref: 'e1', action: 'click' },
+    { ref: 'e1', action: 'click', until: { kind: 'signal', name: target } },
     { element: target, verified, because },
   );
 
@@ -58,16 +66,41 @@ describe('the account an agent reads', () => {
     expect(describeDrive([], [])).toContain('Nothing was driven');
   });
 
+  /*
+   * Persona 22: a read-only persona's run navigated between two pages and its summary said "Nothing
+   * was driven… no action against the app". A navigation is an action against the app, however the
+   * drive reached the tool.
+   */
+  it('counts a navigation made through reticle_run as driving', () => {
+    const summary = describeDrive(
+      [
+        call(
+          'reticle_run',
+          { tool: 'reticle_navigate', args: { url: '/share/abc' } },
+          { confirmed: true },
+        ),
+      ],
+      [],
+    );
+    expect(summary).not.toContain('Nothing was driven');
+    expect(summary).toContain('Drove 1 action(s)');
+    expect(summary).toContain('/share/abc');
+  });
+
   /**
    * The whole point. Twelve actions driven is not twelve things working, and an account that only
    * counted actions would be read as if it were.
    */
-  it('counts proved, failed and not-proved separately', () => {
+  // Counted once, in the checks line: a second breakdown on the action line ("3 of 3 check(s)
+  // held" beside "Drove 2 action(s): 2 proved") gave every Harness answer two counts to reconcile.
+  it('counts held, failed and undecided once, in the checks line', () => {
     const summary = describeDrive(
       [acted('a', 'yes'), acted('b', 'no'), acted('c', 'unknown'), acted('d', 'yes')],
       [],
     );
-    expect(summary).toContain('4 action(s): 2 proved, 1 failed, 1 not decided');
+    expect(summary).toContain('check(s) held, 1 failed, 1 undecided');
+    expect(summary).toContain('Drove 4 action(s).');
+    expect(summary).not.toContain('2 proved');
   });
 
   it('says which saved flows check nothing, instead of offering them as replays', () => {
@@ -104,7 +137,7 @@ describe('the account an agent reads', () => {
       [call('reticle_act', { ref: 'e1', action: 'click' }, { element: 'button "X"' })],
       [],
     );
-    expect(summary).toContain('0 proved');
+    expect(summary).toContain('Drove 1 action(s).');
     expect(summary).toContain('nothing declared');
   });
 
@@ -117,7 +150,7 @@ describe('the account an agent reads', () => {
   it('stops naming steps once there are too many to read, and says how many it left out', () => {
     const many = Array.from({ length: 20 }, (_, i) => acted(`button ${String(i)}`, 'yes'));
     const summary = describeDrive(many, []);
-    expect(summary).toContain('20 action(s): 20 proved');
+    expect(summary).toContain('Drove 20 action(s).');
     expect(summary).toContain('and 8 more');
   });
 
@@ -197,7 +230,7 @@ describe('a run that replayed rather than drove', () => {
   it('reports replays alongside actions when the run did both', () => {
     const summary = describeDrive([replay('sign-in', 'ok'), acted('button "X"', 'yes')], []);
     expect(summary).toContain('Replayed 1 recorded journey(s)');
-    expect(summary).toContain('1 proved');
+    expect(summary).toContain('Drove 1 action(s)');
   });
 
   it('still says plainly when a run did neither', () => {
@@ -437,8 +470,24 @@ describe('the pages a drive reached', () => {
 });
 
 /** A false green from a live drive: one "Sign in" pressed fifteen times read as fifteen proofs. */
+describe("the Harness's second press of a control whose claim already held", () => {
+  // Save held its POST, the app emptied the field, Save was pressed again: no failure of the app.
+  it('is undecided, never a failure', () => {
+    const press = (verified: string) => ({
+      id: 'x',
+      name: 'reticle_act_and_wait',
+      args: { ref: 'e138', action: 'click', until: { kind: 'net', method: 'POST' } },
+      result: { verified },
+      isError: false,
+    });
+    expect(checkTally([press('yes'), press('no')])).toEqual({ held: 1, failed: 0, undecided: 1 });
+  });
+});
+
 describe('the same check made again', () => {
-  it('counts once, at its worst', () => {
+  // Counted as the platform counts a run's checks: distinct (kind, claim, outcome). The answer
+  // said "2 of 2 held" beside a dashboard that counted the same run's checks differently.
+  it('counts once per claim and outcome, as the platform counts them', () => {
     const press = (verified: string) => ({
       id: 'x',
       name: 'reticle_act_and_wait',
@@ -451,10 +500,262 @@ describe('the same check made again', () => {
       failed: 0,
       undecided: 0,
     });
+    // The same control failing after it held is the Harness's own re-press: undecided.
     expect(checkTally([press('yes'), press('no'), press('yes')])).toEqual({
+      held: 1,
+      failed: 0,
+      undecided: 1,
+    });
+    // Another control with the same claim is the same check to the platform.
+    const other = { ...press('yes'), result: { verified: 'yes', effect: { testid: 'save' } } };
+    expect(checkTally([press('yes'), other]).held).toBe(1);
+  });
+});
+
+/*
+ * Three runs whose every goal was met read "NOT PROVED … The failures below are findings": each
+ * failure was the driver declaring that an in-page toggle would change the route.
+ */
+describe("the driver's wrong guess about the route", () => {
+  const guessed = call(
+    'reticle_act_and_wait',
+    {
+      ref: 'e127',
+      action: 'click',
+      until: { kind: 'not', predicate: { kind: 'route', contains: '/runs' } },
+    },
+    { element: 'button "Team"', verified: 'no', because: 'the declared consequence did not hold' },
+  );
+  const held = call(
+    'reticle_assert',
+    { predicate: { kind: 'text', contains: 'Done' } },
+    { verified: 'yes' },
+  );
+
+  it('is not a failed check, a failed action or a finding', () => {
+    expect(checkTally([guessed, held])).toEqual({ held: 1, failed: 0, undecided: 0 });
+    const account = describeDrive([guessed, held], []);
+    expect(account).toMatch(/^PROVED/);
+    expect(account).not.toContain('FAILED');
+    expect(account).not.toContain('findings');
+    expect(account).toContain("the driver's wrong guess, not an app defect");
+  });
+
+  // A re-drive: "1 of 1 check(s) held" beside "Drove 2 action(s): 1 proved, 1 not decided" — the
+  // guess was left out of one count and put in the other. One rule for both lines.
+  it('is counted the same way in the action line as in the checks', () => {
+    const account = describeDrive([guessed, held], []);
+    expect(account).toContain('Drove 1 action(s); 1 guess of its own, not a check.');
+    expect(account).toContain('1 guess of its own');
+  });
+
+  // Pressing the workspace switcher opens a menu; the route the drive named comes after a choice
+  // in it. That is progress, never "the driver's wrong guess".
+  it('is progress when the click opened a menu', () => {
+    const menu = call(
+      'reticle_snapshot',
+      {},
+      { status: { visibleDialogs: ['menu "Workspaces"'] } },
+    );
+    const account = describeDrive([guessed, menu, held], []);
+    expect(account).not.toContain("the driver's wrong guess");
+    expect(account).toContain('opened a menu');
+  });
+
+  it('still fails a click whose claim was more than a route', () => {
+    const net = call(
+      'reticle_act_and_wait',
+      { ref: 'e1', action: 'click', until: { kind: 'net', method: 'POST' } },
+      { verified: 'no' },
+    );
+    expect(checkTally([net]).failed).toBe(1);
+  });
+});
+
+/** A run called flows missing on this computer "regressions in journeys that used to pass". */
+describe('a replayed flow that is not on this computer', () => {
+  it('is missing, not a failed journey', () => {
+    const missing = call(
+      'reticle_flow_replay',
+      { flowName: 'checkout' },
+      { error: 'no such flow on disk — run reticle_flow{action:"list"} to see saved flows' },
+      true,
+    );
+    const account = describeDrive([missing], []);
+    expect(account).toContain('MISSING: checkout');
+    expect(account).not.toContain('regressions');
+  });
+
+  /*
+   * Persona 25: an auto-saved flow called a flow that was never saved. Its replay failed at that
+   * call, and the plan reported it among "regressions in journeys that used to pass": it never
+   * passed, because it never ran.
+   */
+  it('is missing when the flow it calls is not on this computer, not a regression', () => {
+    const calls = call(
+      'reticle_flow_replay',
+      { flowName: 'drive-order-confirmed' },
+      { status: 'error', error: { code: 'error', message: invokedFlowMissing('harness-reload') } },
+    );
+    const account = describeDrive([calls], []);
+    expect(account).toContain('MISSING: drive-order-confirmed');
+    expect(account).not.toContain('regressions');
+  });
+});
+
+/**
+ * A plan run has one verdict, and it is its journeys'. A live run ended "0 of 1 journeys passed …
+ * PROVED — 1 of 1 check(s) held" beside a dashboard that said Failed, and a passed replay ended
+ * "1 of 1 journeys passed … NOT PROVED: the drive ran no check" beside one that said Passed.
+ */
+describe('a plan run has one verdict: its journeys', () => {
+  const replay = (name: string, status: string): ToolOutcome =>
+    call('reticle_flow_replay', { flowName: name }, { status });
+
+  it('a failed journey is not proved, whatever its checks did', () => {
+    const tally = { held: 1, failed: 0, undecided: 0 };
+    const journeys = [{ status: 'failed' }];
+    expect(verdictLine(tally, undefined, journeys)).toMatch(/^NOT PROVED/);
+    expect(verdictLine(tally, undefined, journeys)).toContain('1 of 1 journey(s) failed');
+    expect(runProved(tally, undefined, journeys)).toBe(false);
+  });
+
+  // A re-drive answered proved:true and "PROVED — 1 of 1 journey(s) passed" beside goalMet:false.
+  it('passed journeys over a goal the run did not reach are not proved', () => {
+    const tally = { held: 4, failed: 0, undecided: 0 };
+    const journeys = [{ status: 'passed' }];
+    expect(verdictLine(tally, false, journeys)).toMatch(/^NOT PROVED/);
+    expect(verdictLine(tally, false, journeys)).toContain('the goal was not reached');
+    expect(runProved(tally, false, journeys)).toBe(false);
+  });
+
+  it('a passed replay is proved, and its replay is the check it ran', () => {
+    const tally = checkTally([replay('sign-in', 'ok')]);
+    expect(tally).toEqual({ held: 1, failed: 0, undecided: 0 });
+    const journeys = [{ status: 'passed' }];
+    expect(verdictLine(tally, undefined, journeys)).toMatch(/^PROVED/);
+    expect(runProved(tally, undefined, journeys)).toBe(true);
+  });
+
+  it('a replay that failed is a failed check, and one that drifted decided nothing', () => {
+    expect(checkTally([replay('a', 'error'), replay('b', 'drift')])).toEqual({
       held: 0,
       failed: 1,
-      undecided: 0,
+      undecided: 1,
     });
+  });
+
+  it('a plan whose journeys never ran proves nothing, like the dashboard', () => {
+    expect(
+      runProved({ held: 2, failed: 0, undecided: 0 }, undefined, [{ status: 'blocked' }]),
+    ).toBe(false);
+  });
+
+  it('the account the agent reads leads with the same verdict', () => {
+    const summary = describeDrive([replay('sign-in', 'ok')], [], [], undefined, [
+      { status: 'passed' },
+    ]);
+    expect(summary).not.toContain('NOT PROVED');
+  });
+});
+
+/**
+ * A plan run's summary on the plan page read "Nothing was driven and nothing was replayed: the run
+ * made no action against the app" while the HUD showed its replay. A plan run's summary leads with
+ * its journeys' verdict, replays counted, whether or not anything was driven by the model.
+ */
+describe("a plan run's summary leads with its journeys", () => {
+  const replay = (name: string, status: string): ToolOutcome =>
+    call('reticle_flow_replay', { flowName: name }, { status });
+
+  it('a replay-only run is summarised by its verdict and its replays', () => {
+    const summary = describeDrive([replay('saved', 'ok')], [], [], undefined, [
+      { status: 'passed' },
+    ]);
+    expect(summary.split('\n')[0]).toMatch(/^PROVED — 1 of 1 journey\(s\) passed/);
+    expect(summary).toContain('Replayed 1 recorded journey(s)');
+    expect(summary).not.toContain('Nothing was driven');
+  });
+
+  it('a plan whose journeys made no call still says how its journeys went, not "no action"', () => {
+    const summary = describeDrive([], [], [], undefined, [{ status: 'failed' }]);
+    expect(summary.split('\n')[0]).toMatch(/^NOT PROVED — 1 of 1 journey\(s\) failed/);
+    expect(summary).not.toContain('Nothing was driven');
+  });
+});
+
+describe('the values a drive typed', () => {
+  it('are the fill and type values of its acts, steps included', () => {
+    expect(
+      typedValues([
+        call('reticle_act', { ref: 'e1', action: 'fill', args: { value: 'Nina release 2' } }, {}),
+        call('reticle_act_and_wait', { ref: 'e2', action: 'type', args: { text: 'hello' } }, {}),
+        call(
+          'reticle_act',
+          { steps: [{ ref: 'e3', action: 'fill', args: { value: 'Fixed it' } }] },
+          {},
+        ),
+        call('reticle_act', { ref: 'e4', action: 'click' }, {}),
+      ]),
+    ).toEqual(['Nina release 2', 'hello', 'Fixed it']);
+  });
+});
+
+/*
+ * Re-check: one Harness answer carried counts that disagreed — "1 of 1 check(s) held, 0
+ * failed, 0 undecided" beside "6 action(s) were NOT PROVED", and "0 failed" beside "1 action(s)
+ * FAILED … These are findings". Every count and every step line now reads the same graded checks.
+ */
+describe('one answer, one count', () => {
+  const press = (verified: string) =>
+    call(
+      'reticle_act_and_wait',
+      { ref: 'e336', action: 'click', until: { kind: 'net', method: 'POST' } },
+      { verified, because: 'the declared consequence did not hold' },
+    );
+
+  it('never prints a re-press it graded undecided as a FAILED finding', () => {
+    const summary = describeDrive([press('yes'), press('no')], []);
+    expect(summary).toContain('1 of 2 check(s) held, 0 failed, 1 undecided');
+    expect(summary).not.toContain('FAILED');
+    expect(summary).not.toContain('findings');
+    expect(summary).not.toMatch(/click e\d+: no\b/);
+  });
+
+  it('counts a check declared through `predicate`, the alias of `until`, as a check', () => {
+    const aliased = call(
+      'reticle_act_and_wait',
+      { ref: 'e21', action: 'click', predicate: { kind: 'signal', name: 'nav' } },
+      { verified: 'unknown', because: 'only the signal moved' },
+    );
+    expect(checkTally([acted('a', 'yes'), aliased])).toEqual({
+      held: 1,
+      failed: 0,
+      undecided: 1,
+    });
+  });
+
+  it('counts a check made through reticle_run as a check', () => {
+    const wrapped = call(
+      'reticle_run',
+      {
+        tool: 'reticle_act_and_wait',
+        args: { ref: 'e2', action: 'click', until: { kind: 'signal', name: 'saved' } },
+      },
+      { verified: 'no', because: 'the declared consequence did not hold' },
+    );
+    expect(checkTally([wrapped])).toEqual({ held: 0, failed: 1, undecided: 0 });
+  });
+
+  it('states actions that declared nothing apart from the checks, never as undecided checks', () => {
+    const quiet = call(
+      'reticle_act_and_wait',
+      { ref: 'e29', action: 'click' },
+      { verified: 'no-fault', because: 'nothing was declared to prove' },
+    );
+    const summary = describeDrive([acted('a', 'yes'), quiet, quiet], []);
+    expect(summary).toContain('1 of 1 check(s) held, 0 failed, 0 undecided');
+    expect(summary).not.toMatch(/\d+ action\(s\) were NOT PROVED/);
+    expect(summary).toContain('2 action(s) declared no consequence');
   });
 });

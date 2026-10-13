@@ -4,9 +4,9 @@ description: 'Watch the agent’s live transcript, steer it mid-run, or end the 
 icon: hand
 ---
 
-With the presenter on (`reticle.connect({ present: true })`), the floating panel in your page lets you watch the agent's live transcript and steer it: **pause** it (its next action tool refuses and returns your guidance), **send** it a correction that rides back on its next tool result, or **end** the session. You can also point at a broken element with **Flag a bug** and hand the agent the element plus its source `file:line`.
+With the presenter on (`reticle.connect({ present: true })`), the floating panel in your page lets you watch the agent's live transcript and steer it: **pause** it (its next action tool refuses until you resume) or **end** the session. You can also point at a broken element with **Flag a bug** and hand the agent the element plus its source `file:line`.
 
-When you run with the presenter on (`reticle.connect({ present: true })`), the floating panel is a **two-way control surface**. You watch the agent's live transcript _and_ can steer it (pause it, send it a correction, or end the session) without leaving the page. There's also a clean, unmistakable "session ended" signal for both you and the agent.
+When you run with the presenter on (`reticle.connect({ present: true })`), the floating panel is a **two-way control surface**. You watch the agent's live transcript _and_ can steer it (pause it or end the session) without leaving the page. To tell the agent something, talk to it in its own window: the panel sends it no text. There's also a clean, unmistakable "session ended" signal for both you and the agent.
 
 ## Watch the testing score climb (the live verdict tally)
 
@@ -16,8 +16,7 @@ The panel header shows a running **✓N ✗M** tally: the verdict score, live. I
 
 MCP is **pull-based**: the agent only receives data when it calls a tool. Reticle can't freeze the model mid-thought, but it **intercepts the agent's next tool call**, which is exactly when the agent would touch the page. That makes steering reliable:
 
-- **Nudge** (a message, no pause). Your text is queued and rides back on the agent's **next** tool result as `guidance` (delivered once). The agent reads it and adjusts.
-- **Pause.** The agent's next `reticle_act` (single or `steps`) / `reticle_act_and_wait` **refuses to execute** and returns `{ paused: true, guidance: ["<your message>"], hint: "…" }`. The page is untouched until resume. _Read-only tools (snapshot/query/observe) still work_, so the agent can look while paused.
+- **Pause.** The agent's next `reticle_act` (single or `steps`) / `reticle_act_and_wait` **refuses to execute** and returns `{ paused: true, guidance: […], hint: "…" }`. The page is untouched until resume. _Read-only tools (`reticle_look`, `reticle_observe`) still work_, so the agent can look while paused.
 - **End.** The session is over; the panel shows "Session ended" and clears.
 
 ## From the panel (the human)
@@ -26,6 +25,8 @@ The floating panel (bottom-center, `present: true`) gives you:
 
 - **Pause / Resume**: one toggle. Paused turns the panel + page border **amber** with a `PAUSED` badge.
 - **End** ends the session: panel turns **emerald**, shows `Session ended · <summary>`, then fades away.
+- **Coding agent.** The Agent Log names the coding agent attached to Reticle (`Claude Code connected`, read from the MCP handshake). With no agent attached it says `No coding agent connected` and offers **Copy prompt**, a prompt to paste into one.
+- **Run Harness**, on the Harness page, drives the page as a person you pick: First-time visitor (the default), Returning power user, On a phone, slow connection, Keyboard only, Careless user (bad and unexpected input), Admin / settings, or Custom… in your own words. The pick is remembered per project. The agent hears about the drive on its next tool call (`harness`), with the `runId` to follow it.
 - **Minimise (▾)** collapses the panel to a bar that streams only the live line; click the bar to restore.
 - **Flag a bug**, the button in the corner. Toggle it on, click the element that looks wrong, type what's wrong (⌘/Ctrl+Enter to send, Esc to back out). Reticle pins a numbered marker, logs your flag in the panel, and hands the agent a structured mark. Notes are kept in `.reticle/notes.json` (pending and resolved), so a reload or a daemon restart does not lose them, and a linked project syncs them to the dashboard.
 
@@ -53,7 +54,7 @@ When paused, every action tool short-circuits with the human's guidance, so the 
 
 ## Piggybacked guidance
 
-Even without a pause, action/observe/assert results carry a `control` block when there's something to tell the agent:
+Even without a pause, any Reticle tool result carries a `control` block when there's something to tell the agent:
 
 ```jsonc
 { since, dispatched, settled, result, control: { state: "active", guidance: ["looks good, keep going"] } }
@@ -65,4 +66,4 @@ Even without a pause, action/observe/assert results carry a `control` block when
 
 Add this to your operating prompt / `CLAUDE.md` (see the [agent cheat-sheet](agent-cheatsheet.md)):
 
-> The human may pause you or send guidance from the Reticle panel. On any `reticle_act` result with `paused: true`, stop, read `guidance`, adjust, then call `reticle_session { action: "resume" }`. Treat a `control.guidance` field on any result as a live instruction from the human.
+> The human may pause you from the Reticle panel. On any `reticle_act` result with `paused: true`, stop, read `guidance`, adjust, then call `reticle_session { action: "resume" }`. Treat a `control.guidance` field on any result as a live instruction from the human.

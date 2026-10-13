@@ -21,6 +21,8 @@
  * Scoped per session id, because a new session is a new agent that has been told nothing.
  */
 
+import { recordGaps } from '@/portal/session/recorded-gaps.js';
+
 /** The fields worth repeating. Everything else on a gap is the remedy, said once. */
 const FACT_KEYS = ['kind', 'ref', 'source'] as const;
 
@@ -42,8 +44,13 @@ interface GapLike {
 export function withGapNovelty<T extends GapLike>(
   sessionId: string | undefined,
   gaps: readonly T[],
+  /** When the verdict was taken: stamps the gaps recorded for the app's coverage. */
+  now: number = Date.now(),
 ): T[] {
   if (0 === gaps.length) return [];
+  // Before the trim, while each gap still carries its remedy: the app's coverage and the platform
+  // report read the full gap, and this is the one place every verdict's gaps pass through.
+  if (sessionId !== undefined) recordGaps(sessionId, gaps, now);
   // No session id means no memory to check against, so nothing can be a repeat. Sending the full
   // text is the safe direction: a reader who has seen it skims, a reader who has not is stuck.
   if (sessionId === undefined) return [...gaps];

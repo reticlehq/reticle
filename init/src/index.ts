@@ -47,7 +47,12 @@ export {
   parseMajor,
   PackageManager,
 } from './detect/detect.js';
-export { findWorkspaceApps, isWebApp, workspacePackageDirs } from './detect/workspace-apps.js';
+export {
+  enclosingWorkspaceRoot,
+  findWorkspaceApps,
+  isWebApp,
+  workspacePackageDirs,
+} from './detect/workspace-apps.js';
 export { desktopLaunch, type DesktopLaunch } from './detect/dev-script.js';
 export { detectNonJsEcosystem, noPackageJsonMessage } from './detect/non-js-project.js';
 export { deriveProjectId, packageName } from './project/project-id.js';
@@ -87,5 +92,10 @@ export {
   // file-reading detector cannot see it, and the installer silently skipped the commonest client.
   claudeAvailableProbe,
   claudeHasReticle,
+  // Codex keeps its registration behind `codex mcp add`, like Claude. `reticle setup mcp` needs the
+  // command, the probe and the "is the entry already there, in any shape" check to do the same.
+  codexAddCommand,
+  codexAvailableProbe,
 } from './register/mcp.js';
+export { codexNamesOurServer } from './register/codex-toml.js';
 export { detectMcpClients, type DetectedClient } from './register/detect-clients.js';

@@ -41,6 +41,28 @@ describe('describeWaitTarget names what was being waited for', () => {
     expect(said).toContain('/api/login');
   });
 
+  /*
+   * From a persona drive: the same check read "text containing 'Saved'" when it failed and passed
+   * when the agent ignored case — the label dropped `ignoreCase`, so one check looked like two
+   * verdicts. And a Pay-button check that wanted `enabled` and saw `disabled` was titled "an element
+   * matching {"testid":"pay"}": the state that failed was the one thing left out.
+   */
+  it('keeps the parts of a claim that decide it: ignoring case, and the state wanted', () => {
+    expect(
+      describeWaitTarget({ kind: PredicateKind.TEXT, contains: 'Saved', ignoreCase: true }),
+    ).toBe("text containing 'Saved', ignoring case");
+    expect(describeWaitTarget({ kind: PredicateKind.TEXT, contains: 'Saved' })).toBe(
+      "text containing 'Saved'",
+    );
+    expect(
+      describeWaitTarget({
+        kind: PredicateKind.ELEMENT,
+        query: { testid: 'pay' },
+        state: 'enabled',
+      }),
+    ).toBe(`an element matching {"testid":"pay"} in state 'enabled'`);
+  });
+
   it('describes a composite without losing its parts', () => {
     const said = describeWaitTarget({
       kind: PredicateKind.ALL_OF,

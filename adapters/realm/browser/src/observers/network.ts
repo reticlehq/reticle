@@ -139,6 +139,64 @@ function jsonShape(text: string): string {
   }
 }
 
+/** The largest byte body read as text for its fingerprint. */
+const MAX_DECODED_BODY_BYTES = 1 << 20;
+
+/** Tab, newline and carriage return: the only control characters below space a text body may carry. */
+const TAB = 0x09;
+const LINE_FEED = 0x0a;
+const CARRIAGE_RETURN = 0x0d;
+const FIRST_PRINTABLE = 0x20;
+const DELETE = 0x7f;
+
+/** Whether `text` holds a control character below space other than tab, newline or return, or DEL. */
+function hasControlCharacter(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code === DELETE) return true;
+    if (code < FIRST_PRINTABLE && code !== TAB && code !== LINE_FEED && code !== CARRIAGE_RETURN) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * A byte body's text, when it is text: an `ArrayBuffer` or a view over one that decodes as strict
+ * UTF-8 with no control characters beyond whitespace. Anything else is undefined, so random binary
+ * (a protobuf, an image) keeps only its type marker and is never read as a string (#1347).
+ */
+function textOfBytes(body: unknown): string | undefined {
+  // Bounded before decoding: a large upload is not walked, scanned and parsed on the page's thread
+  // just to fingerprint it, and keeps the unknown-identity marker instead.
+  if (!(body instanceof ArrayBuffer || ArrayBuffer.isView(body))) return undefined;
+  if (body.byteLength > MAX_DECODED_BODY_BYTES) return undefined;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(body);
+    return hasControlCharacter(text) ? undefined : text;
+  } catch {
+    // Not UTF-8, or no TextDecoder in this realm: either way, not text.
+    return undefined;
+  }
+}
+
+/**
+ * A FormData body's fingerprint: its field names, each field's kind (text, or a file's type and
+ * size), and the total length of its text values, hashed. Same rule as a JSON body: no character of
+ * any value reaches the hash, and a text value contributes only to a sum. Order-insensitive, like a
+ * JSON body's keys. Undefined for an empty form, which says nothing about what was sent.
+ */
+function formShape(form: FormData): string | undefined {
+  const fields: string[] = [];
+  let length = 0;
+  form.forEach((value, name) => {
+    if ('string' === typeof value) length += value.length;
+    // A JSON tuple per field, so no name can imitate a separator: `a=&b` is one field, not two.
+    fields.push(JSON.stringify([name, 'string' === typeof value ? 0 : [value.type, value.size]]));
+  });
+  return 0 === fields.length ? undefined : fingerprintBody(fields.sort().join(), length);
+}
+
 /**
  * The request body for the transcript, and the SHAPE FINGERPRINT that stands in for it.
  *
@@ -147,17 +205,30 @@ function jsonShape(text: string): string {
  * secrets. See `REQUEST_SHAPE_FIELD` for what the fingerprint is and why it carries nothing back.
  *
  * The body itself is captured (redacted, capped) only when asked for. Plain strings and
- * URLSearchParams are text; FormData/Blob/ArrayBuffer/stream are not, so they carry no fingerprint
- * and, under capture, a `requestBodyType` marker (the agent still learns a body existed) rather
- * than being silently dropped. Shared by the fetch and XHR paths.
+ * URLSearchParams are text, and so are bytes that decode as UTF-8 text: a client that encodes its
+ * JSON before sending it (Flutter web, gRPC-web) is still sending JSON (#1347). FormData is
+ * fingerprinted from its field names and kinds but never captured. A Blob, a stream or bytes that
+ * are not text carry no fingerprint and, under capture, a `requestBodyType` marker (the agent still
+ * learns a body existed) rather than being silently dropped. Shared by the fetch and XHR paths.
  */
 function projectRequestBody(body: unknown, captureBodies: boolean): Record<string, unknown> {
   let text: string | undefined;
   let contentType = 'application/json';
   let shape: string = REQUEST_SHAPE_NONE;
-  if ('string' === typeof body) {
-    text = body;
+  const bytesText = textOfBytes(body);
+  const typeOf = (): string =>
+    (body as { constructor?: { name?: string } }).constructor?.name ?? typeof body;
+  if ('string' === typeof body || bytesText !== undefined) {
+    text = bytesText ?? (body as string);
     if (text.length > 0) shape = fingerprintBody(jsonShape(text), text.length);
+  } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
+    // Read synchronously and never kept: names and kinds only, so it separates distinct uploads to
+    // one endpoint without carrying any value (#1347).
+    const form = formShape(body);
+    return {
+      ...(form === undefined ? {} : { [REQUEST_SHAPE_FIELD]: form }),
+      ...(captureBodies ? { requestBodyType: typeOf() } : {}),
+    };
   } else if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
     text = body.toString();
     contentType = 'application/x-www-form-urlencoded';
@@ -167,8 +238,7 @@ function projectRequestBody(body: unknown, captureBodies: boolean): Record<strin
     }
   } else if (body !== undefined && body !== null) {
     // No fingerprint at all: the field's absence is what says the identity is unknown.
-    const kind = (body as { constructor?: { name?: string } }).constructor?.name ?? typeof body;
-    return captureBodies ? { requestBodyType: kind } : {};
+    return captureBodies ? { requestBodyType: typeOf() } : {};
   }
   const fields: Record<string, unknown> = { [REQUEST_SHAPE_FIELD]: shape };
   if (!captureBodies || text === undefined || 0 === text.length) return fields;
@@ -185,7 +255,8 @@ interface XhrMeta {
   start: number;
   rawUrl: string;
   initiatorStack?: string | undefined;
-  reqBody?: Document | XMLHttpRequestBodyInit | null;
+  /** The request body's fields, projected at send: what was sent, not what the body became. */
+  reqFields?: Record<string, unknown>;
 }
 
 /**
@@ -434,6 +505,8 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     // sent, and a mutated `Headers` after this point is somebody else's observation.
     const nextAction = nextActionOf(input, init);
     const nextActionFields = nextAction === undefined ? {} : { [NEXT_ACTION_FIELD]: nextAction };
+    // The body too: a buffer or form the app edits while the request is pending is not what it sent.
+    const bodyFields = observeValue(() => projectRequestBody(init?.body, captureBodies)) ?? {};
     const urlFields = netUrlFields(rawUrl);
     const url = urlFields.url;
     const initiatorStack = observeValue(() => initiatorFrame());
@@ -478,7 +551,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
             ...initiatorFields,
             ...resourceTiming(rawUrl),
             ...netResponseMeta(res.statusText, contentType, res.headers.get('content-length')),
-            ...projectRequestBody(init?.body, captureBodies),
+            ...bodyFields,
             ...nextActionFields,
             ...responseBodyFields,
             // Applied LAST so a reinterpreted verdict wins over the transport's own fields — a Tauri
@@ -614,7 +687,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
       const m = meta.get(this);
       if (m !== undefined) {
         m.start = performance.now();
-        m.reqBody = body ?? null;
+        m.reqFields = observeValue(() => projectRequestBody(body ?? null, captureBodies)) ?? {};
         m.initiatorStack = initiatorFrame(); // the app's xhr.send call site
         const initiatorFields =
           m.initiatorStack === undefined ? {} : { initiatorStack: m.initiatorStack };
@@ -670,7 +743,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
                   xhrContentType,
                   this.getResponseHeader('content-length'),
                 ),
-                ...projectRequestBody(cur.reqBody, captureBodies),
+                ...cur.reqFields,
                 ...responseBodyFields,
               });
             });

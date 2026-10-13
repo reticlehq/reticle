@@ -6,7 +6,7 @@ icon: vial
 
 `@reticlehq/test` is Reticle's spec runner for CI. It turns an interactive session into a suite that runs on every pull request, without an agent and without paying model tokens to re-derive the same checks. Install it when you want unattended verification; skip it if you only ever drive Reticle interactively through MCP.
 
-**Licensed under `SEE LICENSE IN LICENSE`. Depends on `@reticlehq/core` and `@reticlehq/server`. Optional peer dependency: `vitest ^3.2.6`.**
+**Licensed under `FSL-1.1-ALv2`. Depends on `@reticlehq/core` and `@reticlehq/server`. Optional peer dependency: `vitest ^3.2.6 || ^4.0.0`.**
 
 ```bash
 npm i -D @reticlehq/test
@@ -47,10 +47,9 @@ await run.close();
 ## Writing specs
 
 ```ts
-import { reticleTest, type TestContext } from '@reticlehq/test';
+import { reticleTest } from '@reticlehq/test';
 
-reticleTest('login grants a session', async (spec) => {
-  const t = spec as TestContext;
+reticleTest('login grants a session', async (t) => {
   await t.fill('email', 'user@example.com');
   await t.fill('password', 'hunter2');
   await t.actAndWait('login-submit', 'click', { kind: 'signal', name: 'auth:granted' });
@@ -61,12 +60,7 @@ reticleTest('login grants a session', async (spec) => {
 
 `reticleTest(name: string, fn: SpecFn): void` registers into a module-level registry. `register`, `getRegistered` and `clearRegistry` are exported for anyone driving it themselves.
 
-<Note>
-  `SpecFn` types its argument as `SpecContext`, which declares only `invoke`. The runner actually
-  hands the spec whatever `buildContext` returned, which is a `TestContext`. In plain JavaScript
-  this is invisible; in TypeScript you get `Property 'fill' does not exist on type 'SpecContext'`
-  unless you narrow it as above.
-</Note>
+`SpecFn` types its argument as `SpecContext`, which is `TestContext`, so the methods below are typed without a cast.
 
 ## The test context
 

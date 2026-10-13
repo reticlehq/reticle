@@ -21,12 +21,30 @@
  * laptop on a train would otherwise fill the log with the same line four hundred times and teach
  * everyone to ignore it.
  */
+import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { syncRequest } from './cloud-sync.js';
 import { log } from '@/log.js';
+import { homedir } from 'node:os';
 import { emitSyncHook } from '@/hooks/hook-emit.js';
+import {
+  MemoryReadHeader,
+  MemoryReadPurpose,
+  memoryReadUrl,
+  scopedMemoryEntries,
+} from './memory-scope.js';
+import { IntentShardStore } from '@/memory/intent/intent-shard-store.js';
+import {
+  applySettledWords,
+  keptWordsInRequest,
+  settledWordsIn,
+} from '@/memory/intent/settled-words.js';
+import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
+import { flushPendingWrites } from '@/hooks/hook-bus.js';
 import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
 import { diskSink, diskSource, readCloudState } from './sync-disk.js';
-import { resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
+import { CLOUD_LINK_FILE, resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
+import { watch } from 'node:fs';
+import { unmatchedRoots, unsyncedRoots, type UnsyncedRoot } from './unsynced-roots.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 
 /** How often the daemon cycles. See the note above on why this is a constant and not a curve. */
@@ -90,6 +108,11 @@ interface SyncDaemonDeps {
   cloudFor?: (root: string) => Promise<ProjectCloud>;
   now?: () => number;
   intervalMs?: number;
+  /**
+   * Call `onChange` when this root's link file changes; returns how to stop. A re-link was read only
+   * on the next idle tick, so a daemon kept syncing to the old link for up to a minute.
+   */
+  watchLink?: (onChange: () => void) => () => void;
   /** Injected for the test; the real one is `fetch`. */
   request?: (
     url: string,
@@ -125,6 +148,11 @@ export interface SyncDaemon {
    * time — the artifact is still on disk and the next daemon for this project sends it.
    */
   flush: () => Promise<void>;
+  /**
+   * Every root this daemon knows with runs the platform does not have, as of the last cycle — linked
+   * or not. An unlinked one is the case nothing will ever send, and it used to be skipped silently.
+   */
+  unsyncedRoots: () => readonly UnsyncedRoot[];
 }
 
 /** Whether a cycle landed or collected anything — what earns the fast interval and a log line. */
@@ -169,24 +197,92 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
    * so too. Once per transition, never per tick — a line every minute is a line people stop reading.
    */
   let wasLinked: boolean | undefined;
+  /** The project the last cycle synced to: a re-link to another one is announced too. */
+  let wasProject: string | null | undefined;
+  /** The last count logged per root: a root is announced when its count changes, never per tick. */
+  const announced = new Map<string, number>();
+  let unsynced: readonly UnsyncedRoot[] = [];
+  /** Which roots pushed this cycle, and whether each is linked by its own link file. */
+  let rootsLinked = new Map<string, boolean>();
+  /** The linked roots that send flows: a link with `sync.flows` off keeps every flow local. */
+  let rootsSendFlows = new Set<string>();
+
+  /**
+   * Count what every root still owes, and say once per change where runs sit that nothing sends.
+   * Linked roots are listed too (the platform report and `doctor` read them), but only an unlinked
+   * one earns a log line: a linked root's pending runs are the next cycle's job.
+   */
+  const refreshUnsynced = async (): Promise<void> => {
+    const linked = rootsLinked;
+    const sendsFlows = rootsSendFlows;
+    unsynced = await unsyncedRoots(
+      // With what no project claimed, which no cycle pushes: the dashboard's unsent list left it out.
+      [...linked.keys(), ...unmatchedRoots(homedir())],
+      (r) => Promise.resolve(true === linked.get(r)),
+      (r) => Promise.resolve(sendsFlows.has(r)),
+    );
+    for (const entry of unsynced) {
+      const held = entry.runs + entry.flows;
+      if (entry.linked || announced.get(entry.root) === held) continue;
+      announced.set(entry.root, held);
+      log('reticle_cloud_unsynced_root', {
+        root: entry.root,
+        runs: entry.runs,
+        flows: entry.flows,
+        linked: entry.linked,
+        fix: "run `reticle connect` in that folder's project: this work is on this machine only",
+      });
+    }
+  };
 
   /** One root's bundle. The state, source and sink are already per-root; only the caller was not. */
   const pushRoot = async (root: string, cloud: ProjectCloud): Promise<SyncReport | undefined> => {
     if (null === cloud.config) return undefined;
     const full = diskSource(root);
+    // The team's decisions come down too: an author's record kept the words a maintainer set aside,
+    // and re-sent them every cycle as a new disagreement.
+    if (cloud.policy.memory)
+      await pullSettledWords(root, cloud.config, cloud.projectId).catch(() => 0);
     return runSyncCycle({
       config: cloud.config,
+      ...(cloud.link === undefined ? {} : { link: cloud.link }),
+      // Flows deleted here are deleted there, for the project they were sent to.
+      ...(cloud.policy.flows && null !== cloud.projectId ? { projectId: cloud.projectId } : {}),
       source: {
         runs: () => (cloud.policy.runs ? full.runs() : []),
         flows: () => (cloud.policy.flows ? full.flows() : []),
         capsules: () => (cloud.policy.capsules ? full.capsules() : []),
         derived: (kind) => (cloud.policy.memory ? full.derived(kind) : undefined),
+        ...(cloud.policy.screenshots && full.screenshot !== undefined
+          ? { screenshot: full.screenshot }
+          : {}),
       },
       sink: diskSink(root),
       state: readCloudState(root),
       now,
       request,
     });
+  };
+
+  /** Bring the dashboard's memory decisions down to this root's records. Returns how many changed. */
+  const pullSettledWords = async (
+    root: string,
+    config: { url: string; apiKey: string },
+    projectId: string | null,
+  ): Promise<number> => {
+    const res = await request(memoryReadUrl(config.url, { projectId }), {
+      method: 'GET',
+      // The sync, not an agent: without this every cycle counted as an agent consulting memory.
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        [MemoryReadHeader.PURPOSE]: MemoryReadPurpose.SYNC,
+      },
+    });
+    if (200 !== res.status) return 0;
+    const entries = scopedMemoryEntries(JSON.parse(res.text) as unknown, projectId) ?? [];
+    const settled = settledWordsIn(entries);
+    await keptWordsInRequest(reticleDirPaths(root).request, settled);
+    return applySettledWords(new IntentShardStore(createNodeFileSystem(), root, { now }), settled);
   };
 
   /**
@@ -210,13 +306,17 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     }
     for (const root of list) {
       if (root === deps.reticleRoot) continue;
+      rootsLinked.set(root, false);
       try {
         const cloud = await cloudFor(root);
         // Linked HERE, by its own link file. An unlinked root resolves to the environment's key,
         // which is the right answer for the root this daemon stands in and somebody else's project
         // for every other one: a daemon started with RETICLE_API_KEY pushed every project this
         // machine had seen into that one, a status and a pull per root on every cycle.
+        // Never silently: `refreshUnsynced` names this root if it holds runs.
         if (null === cloud.config || null === cloud.projectId) continue;
+        rootsLinked.set(root, true);
+        if (cloud.policy.flows) rootsSendFlows.add(root);
         const report = await pushRoot(root, cloud);
         if (report === undefined) continue;
         if (report.error !== undefined) {
@@ -242,11 +342,17 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     // race and the cursor written by the loser silently rewinds the winner's progress.
     if (running) return undefined;
     running = true;
+    rootsLinked = new Map();
+    rootsSendFlows = new Set();
     try {
       const cloud = await deps.cloud();
       const linked = null !== cloud.config;
-      if (linked !== wasLinked) {
+      const own = deps.reticleRoot;
+      rootsLinked.set(own, linked);
+      if (linked && cloud.policy.flows) rootsSendFlows.add(own);
+      if (linked !== wasLinked || (linked && cloud.projectId !== wasProject)) {
         wasLinked = linked;
+        wasProject = cloud.projectId;
         if (linked)
           log('reticle_cloud_linked', {
             projectId: cloud.projectId,
@@ -257,7 +363,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
         else
           log('reticle_cloud_unlinked', {
             root: deps.reticleRoot,
-            fix: 'run `reticle link` in this directory, or start the daemon in the linked one — nothing is being synced from here',
+            fix: 'run `reticle connect` in this directory, or start the daemon in the linked one — nothing is being synced from here',
           });
       }
       // Every OTHER linked root, first. Their failures are logged and never abort this daemon's own
@@ -311,6 +417,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       }
       return undefined;
     } finally {
+      await refreshUnsynced().catch(() => undefined);
       running = false;
     }
   };
@@ -331,20 +438,30 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   };
 
   schedule(FIRST_CYCLE_DELAY_MS);
+  // A nudge, not an immediate cycle: the link file and its key are written one after the other.
+  const unwatch = deps.watchLink?.(() => schedule(NUDGE_DELAY_MS));
 
   return {
-    syncNow: cycle,
+    // A sync somebody asked for writes what is held on a timer first: a drive's run waits a few
+    // seconds after its last verdict, and a push straight after `session end` sent "0 of 0".
+    syncNow: async () => {
+      await flushPendingWrites();
+      return cycle();
+    },
+    unsyncedRoots: () => unsynced,
     nudge: (): void => {
       // A cycle already in flight will not pick this up, so the nudge is still scheduled behind it
       // rather than dropped — otherwise the run that arrived during a slow cycle waits a full tick.
       schedule(NUDGE_DELAY_MS);
     },
     stop: (): void => {
+      unwatch?.();
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
     },
     flush: async (): Promise<void> => {
+      unwatch?.();
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
@@ -385,5 +502,21 @@ export function attachCloudSync(deps: {
     // reporting nothing — indistinguishable, on the dashboard, from nobody having verified anything.
     otherRoots: () => Promise.resolve(deps.otherRoots()),
     cloudFor: (root) => resolveProjectCloud(deps.fs, root, deps.homeDir, deps.env),
+    // ponytail: this root only; a sibling root's re-link is still read on the next tick.
+    watchLink: (onChange) => watchLinkFile(deps.reticleRoot, onChange),
   });
+}
+
+/** Watch a root for its link file changing. A root with no `.reticle` yet is picked up per tick. */
+function watchLinkFile(reticleRoot: string, onChange: () => void): () => void {
+  try {
+    const watcher = watch(reticleRoot, (_event, name) => {
+      if (CLOUD_LINK_FILE === String(name)) onChange();
+    });
+    watcher.on('error', () => watcher.close());
+    watcher.unref();
+    return () => watcher.close();
+  } catch {
+    return () => undefined;
+  }
 }

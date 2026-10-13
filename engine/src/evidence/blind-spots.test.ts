@@ -65,6 +65,14 @@ describe('buildCoverageStatement', () => {
     expect(statement.note).not.toContain('ipcRenderer');
   });
 
+  it('gives a callable remedy for unwatched state', () => {
+    const statement = buildCoverageStatement([{ kind: BlindSpotKind.UNWATCHED_STATE, count: 1 }]);
+
+    expect(statement.note).toContain("import { registerStore } from '@reticlehq/browser'");
+    expect(statement.note).not.toContain('reticle.registerStore');
+    expect(statement.note).toContain('component-local React state');
+  });
+
   it('drops a one-way IPC send row on Tauri — that kind is Electron preload, not invoke', () => {
     const statement = buildCoverageStatement(
       spotsForRuntime([{ kind: BlindSpotKind.VERDICTLESS_SEND, count: 1 }], AppRuntime.TAURI),
@@ -94,6 +102,31 @@ describe('buildCoverageStatement', () => {
     ]);
     expect(statement.spots).toHaveLength(1);
     expect(statement.note).toContain('5 virtualized unmounted rows');
+  });
+});
+
+describe('buildCoverageStatement over a window (#1414)', () => {
+  const sampled = { kind: BlindSpotKind.RATE_LIMITED, count: 40 };
+  const frames = { kind: BlindSpotKind.CROSS_ORIGIN_IFRAME, count: 2 };
+
+  it('says sampling was earlier in the session when the window dropped nothing', () => {
+    const s = buildCoverageStatement([sampled, frames], [frames]);
+    expect(s.note).toContain('40 events dropped by the bridge rate cap earlier in this session');
+    expect(s.note).toContain('none in this window');
+    expect(s.note).not.toContain('SAMPLED');
+    // A bounding spot is a standing fact of the page and keeps its label.
+    expect(s.note).toContain('2 cross-origin frames unobserved');
+    // The structured spots still carry the session count.
+    expect(s.spots).toEqual([sampled, frames]);
+  });
+
+  it("names the window's own count when the window dropped events", () => {
+    const s = buildCoverageStatement([sampled], [{ kind: BlindSpotKind.RATE_LIMITED, count: 3 }]);
+    expect(s.note).toContain('3 events dropped by the bridge rate cap, so this window is SAMPLED');
+  });
+
+  it('keeps the session-wide label when no window is given', () => {
+    expect(buildCoverageStatement([sampled]).note).toContain('this window is SAMPLED');
   });
 });
 
@@ -163,6 +196,59 @@ describe('absenceBlindSpotNote', () => {
   it('not(not(element)) is itself a presence claim — silence is correct, not a gap', () => {
     const pred: AbsencePred = { kind: 'not', predicate: { kind: 'not' } };
     expect(absenceBlindSpotNote(pred, virtualizedSpot)).toBeUndefined();
+  });
+
+  it('a dialog absence is not threatened by a virtualized list elsewhere on the page (#1236)', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'dialog' } };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toBeUndefined();
+  });
+
+  it('an alertdialog absence is equally immune to unrelated virtualization (#1236)', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'alertdialog' } };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toBeUndefined();
+  });
+
+  it('a region absence IS threatened by virtualization — regions can be list rows (#1236)', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'region' } };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toContain('cannot prove absence');
+  });
+
+  it('a navigation absence IS threatened by virtualization (#1236)', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'navigation' } };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toContain('cannot prove absence');
+  });
+
+  it('by-role query form: dialog absence is immune to virtualization (#1236)', () => {
+    const pred: AbsencePred = {
+      kind: 'element',
+      absent: true,
+      query: { by: 'role', value: 'dialog' },
+    };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toBeUndefined();
+  });
+
+  it('an absence with no role is still threatened by virtualization', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: {} };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toContain('cannot prove absence');
+  });
+
+  it('a role that COULD be a list row still gets the blind-spot note', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'row' } };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toContain('cannot prove absence');
+  });
+
+  it('not(element { role: dialog }) unwraps and still skips the virtualized spot (#1236)', () => {
+    const pred: AbsencePred = {
+      kind: 'not',
+      predicate: { kind: 'element', query: { role: 'dialog' } },
+    };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toBeUndefined();
+  });
+
+  it('closed shadow root still applies to a dialog absence — the dialog could be inside it', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'dialog' } };
+    const shadowSpot = [{ kind: BlindSpotKind.CLOSED_SHADOW_ROOT, count: 1 }];
+    expect(absenceBlindSpotNote(pred, shadowSpot)).toContain('cannot prove absence');
   });
 
   it('both spellings produce the identical note, not merely a non-empty one', () => {

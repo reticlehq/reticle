@@ -9,6 +9,10 @@
 
 import { PredicateKind, ReticleCommand, capDepth, selectPath } from '@reticlehq/core';
 import { matchValue, type EvalResult, type Predicate } from './predicate-eval.js';
+import {
+  isStringifiedPrimitiveMismatch,
+  stringifiedPrimitiveResult,
+} from './predicate-eval-kit.js';
 import { satisfiesProperty, type Baseline } from './property.js';
 import type { PredicateSession } from './predicate-session.js';
 
@@ -174,6 +178,9 @@ async function evalStateNamed(
       evidence: { store: storeName, path: p.path, value: capDepth(selection.value, 1) },
     };
   }
+  if (isStringifiedPrimitiveMismatch(selection.value, want)) {
+    return stringifiedPrimitiveResult(storeName, p.path, selection.value, want, capDepth);
+  }
   return {
     pass: false,
     failureReason: `state '${p.path}' is ${JSON.stringify(capDepth(selection.value, 0))}, expected ${JSON.stringify(want)}`,
@@ -325,6 +332,9 @@ export async function evalState(
       pass: true,
       evidence: { store: storeName, path: p.path, value: capDepth(selection.value, 1) },
     };
+  }
+  if (isStringifiedPrimitiveMismatch(selection.value, want)) {
+    return stringifiedPrimitiveResult(storeName, p.path, selection.value, want, capDepth);
   }
   return {
     pass: false,

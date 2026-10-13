@@ -20,6 +20,7 @@ export const StatusLabel = {
   DAEMON: 'daemon',
   SESSIONS: 'sessions',
   AGENT_LINK: 'agent link',
+  ACCOUNT: 'account',
   NEXT: 'next',
   SPLIT_BRAIN: 'split brain',
   UPDATE: 'update',
@@ -129,8 +130,53 @@ export function statusLines(fields: Record<string, unknown>): string[] {
     if (why !== undefined) lines.push(continuation(why));
   }
 
+  // Who is signed in, and whether this repo is linked: what `whoami` used to answer. Only when the
+  // caller looked, which is what the key being present means.
+  if ('signedInAs' in fields) {
+    const who = str(fields, 'signedInAs');
+    const project = str(fields, 'linkedProject');
+    // Signed in to one workspace, a repo can still send to another: say which it sends to.
+    const workspace = str(fields, 'linkedWorkspace');
+    // A key the platform refused at the last sync is the answer, not "not signed in": a member
+    // removed from the workspace was told to connect while the key was set, and refused.
+    const refused = str(fields, 'keyRefused');
+    lines.push(
+      row(
+        StatusLabel.ACCOUNT,
+        refused !== undefined
+          ? `${NOT_OK} refused at the last sync: ${refused}`
+          : who === undefined
+            ? `${NOT_OK} not signed in`
+            : `${OK} signed in as ${who}`,
+      ),
+    );
+    const apps = appLinks(fields['workspaceApps']);
+    if (project === undefined && 0 < apps.length)
+      for (const { app, project: linked } of apps)
+        lines.push(
+          continuation(
+            null === linked
+              ? `${app} is not linked: run \`reticle connect\` in ${app}`
+              : `${app} is linked to ${linked}`,
+          ),
+        );
+    else
+      lines.push(
+        continuation(
+          project === undefined
+            ? 'this repo is not linked: run `reticle connect`'
+            : `this repo is linked to ${project}${workspace === undefined ? '' : ` in workspace "${workspace}"`}`,
+        ),
+      );
+  }
+
   const client = str(fields, 'mcpClient');
-  if (client !== undefined) lines.push(row(StatusLabel.AGENT_LINK, client));
+  if (client !== undefined) {
+    // The state in words (`mcpClientSaid`), never the record's own name for it.
+    lines.push(row(StatusLabel.AGENT_LINK, str(fields, 'mcpClientSaid') ?? client));
+    const action = str(fields, 'mcpClientAction');
+    if (action !== undefined) lines.push(continuation(action));
+  }
 
   for (const [label, key] of [
     [StatusLabel.NEXT, 'nextAction'],
@@ -142,4 +188,16 @@ export function statusLines(fields: Record<string, unknown>): string[] {
   }
 
   return lines;
+}
+
+/** A workspace root's apps and their links, read defensively off the status fields. */
+function appLinks(value: unknown): { app: string; project: string | null }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw: unknown) => {
+    if ('object' !== typeof raw || null === raw) return [];
+    const { app, project } = raw as Record<string, unknown>;
+    return 'string' === typeof app
+      ? [{ app, project: 'string' === typeof project ? project : null }]
+      : [];
+  });
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ArtifactRootReason } from './artifact-root.js';
 import { rootForTarget, sessionProjectId, sessionRoot } from './session-root.js';
+import { claimArtifactRoot, dropArtifactRootClaim } from './root-claims.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -107,6 +108,19 @@ describe('sessionRoot', () => {
 
   it('falls back when the session declares no project', () => {
     expect(sessionRoot(deps({}), undefined)).toBe(DAEMON_ROOT);
+  });
+
+  // A leased tab's verdicts and runs must land where the session itself was stamped: the lease
+  // claimed its caller's root, and resolving again from the page would send them to `unmatched/`.
+  it('answers with the root a lease claimed for the session, over the page’s own project', () => {
+    claimArtifactRoot('lease-root-1', '/caller/.reticle');
+    try {
+      expect(
+        sessionRoot(deps({ projectId: 'acme-9f3c', liveId: 'lease-root-1' }), 'lease-root-1'),
+      ).toBe('/caller/.reticle');
+    } finally {
+      dropArtifactRootClaim('lease-root-1');
+    }
   });
 
   /**

@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NoSessionAction } from '@reticlehq/core';
 import { startNoSessionWatch } from './no-session-watch.js';
+import { runWithClientDirectory } from '@/hooks/client-directory.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import type { SessionManager } from './session-manager.js';
 
@@ -344,5 +345,93 @@ describe('the watch detects non-JS projects when no dev script is found', () => 
     stop();
     expect(nextAction?.reason).toContain('no dev script');
     expect(nextAction?.reason).not.toContain('Flutter');
+  });
+});
+
+/**
+ * A scan older than the session it is asked about is no observation of that session's port.
+ *
+ * Reported from the persona drive: `reticle status` said "The dev server that served it has stopped
+ * — nothing answers on that port" while Vite answered on that very port. The scan that said so ran
+ * before the app was started (or while a session was live, when no scan runs at all), so the port
+ * was either never asked or asked before anything served it.
+ */
+describe('a departed port the scan has not looked at since', () => {
+  function stubWith(state: { live: number; url?: string }): ReturnType<typeof stubSessions> {
+    const stub = stubSessions();
+    const m = stub.manager as unknown as Record<string, unknown>;
+    m['count'] = () => state.live;
+    m['everConnected'] = () => state.url !== undefined;
+    m['lastKnown'] = () => (state.url === undefined ? undefined : { id: 's-gone', url: state.url });
+    return stub;
+  }
+
+  it('is not called stopped when the only scan ran before the session existed', async () => {
+    const dir = projectDir(JSON.stringify({ framework: 'vite', projectId: 'app-1' }));
+    const state: { live: number; url?: string } = { live: 0 };
+    const { manager, hint } = stubWith(state);
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: () => Promise.resolve([]),
+      occupiedSiblings: () => Promise.resolve([]),
+      routeStatus: () => Promise.resolve(undefined),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    state.url = 'http://localhost:4394/';
+    const message = hint();
+    stop();
+    expect(message).not.toMatch(/has stopped/);
+  });
+
+  it('is still called stopped once a scan after the departure found nothing there', async () => {
+    const dir = projectDir(JSON.stringify({ framework: 'vite', projectId: 'app-1' }));
+    const state: { live: number; url?: string } = { live: 0, url: 'http://localhost:4394/' };
+    const { manager, hint } = stubWith(state);
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: () => Promise.resolve([]),
+      occupiedSiblings: () => Promise.resolve([]),
+      routeStatus: () => Promise.resolve(undefined),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const message = hint();
+    stop();
+    expect(message).toMatch(/has stopped/);
+  });
+});
+
+/*
+ * A re-drive: after its lease was reaped, `reticle_session {list}` said "this daemon has never seen
+ * one" while a call on the old id answered "Last seen on http://localhost:17609/". A tab that
+ * reported no project cannot be another project's: it is the one this daemon last saw.
+ */
+describe('a tab the daemon last saw, that reported no project', () => {
+  it('is not "never seen one" to a caller in a project', async () => {
+    const dir = projectDir(JSON.stringify({ framework: 'vite', projectId: 'app-1' }));
+    const { manager, hint } = stubSessions();
+    Object.assign(manager, {
+      everConnected: () => true,
+      everConnectedTo: () => false,
+      lastKnown: () => ({ id: 'lease-1', url: 'http://localhost:17609/' }),
+      lastKnownFor: () => undefined,
+    });
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: () => Promise.resolve([17609]),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    const message = runWithClientDirectory(dir, () => hint());
+    stop();
+    expect(message).not.toMatch(/never seen one/);
   });
 });

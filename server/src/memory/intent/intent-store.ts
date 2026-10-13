@@ -99,7 +99,7 @@ export class IntentStore {
    */
   async discharge(
     id: string,
-    proof: { verdictId: string; grade: string; at: number },
+    proof: { verdictId: string; grade: string; at: number; runId?: string },
   ): Promise<boolean> {
     let proved = false;
     await this.#ledger.upsert(id, (existing) => {

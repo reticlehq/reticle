@@ -18,6 +18,8 @@ function fakePorts(
     parallel?: number;
     checks?: string;
     goalMet?: boolean;
+    /** Flows with a destructive step: refused unless the replay acknowledges it. */
+    guarded?: string[];
   } = {},
 ) {
   const calls: Call[] = [];
@@ -49,8 +51,16 @@ function fakePorts(
           calls.push({ lane: sessionId, name, args });
           await new Promise((r) => setTimeout(r, 2));
           if (ReticleTool.FLOW_REPLAY === name) {
+            if (
+              true === options.guarded?.includes(String(args['flowName'])) &&
+              true !== args['confirmDangerous']
+            )
+              throw new Error(
+                'potentially destructive action blocked; retry with args.confirmDangerous=true',
+              );
             const failed = true === options.failing?.includes(String(args['flowName']));
-            return { status: failed ? ReplayStatus.DRIFT : ReplayStatus.OK };
+            // A failing journey's replay ran and did not hold: a drift would be undecided.
+            return { status: failed ? ReplayStatus.ERROR : ReplayStatus.OK };
           }
           if (ReticleTool.ASSERT === name) {
             const value = String(
@@ -216,6 +226,41 @@ describe('a lane that breaks', () => {
   });
 });
 
+/** A drive the platform cut off (credits gone, 402) read as a journey that ran and was judged. */
+describe('a journey whose drive the platform cut off', () => {
+  it('is blocked, not passed or failed, and says the platform’s reason', async () => {
+    const fake = fakePorts();
+    const credits = 'Your 10 free credits are used.';
+    const ports: ScriptPorts = {
+      ...fake.ports,
+      drive: async (...args) => ({
+        ...(await fake.ports.drive(...args)),
+        stopReason: StopReason.BROKEN,
+        goalMet: false,
+        error: credits,
+      }),
+    };
+    const run = await runScript(
+      script({
+        version: 1,
+        source: 'platform',
+        journeys: [
+          { id: 'compose', title: 'Compose', steps: [{ kind: 'act', goal: 'compose one' }] },
+          { id: 'save', title: 'Save', steps: [{ kind: 'act', goal: 'save it' }] },
+        ],
+        lanes: [{ id: 'A', journeys: ['compose', 'save'] }],
+      }),
+      ports,
+    );
+    expect(run.view.lanes[0]?.journeys.map((j) => j.status)).toEqual([
+      ScriptStatus.BLOCKED,
+      ScriptStatus.BLOCKED,
+    ]);
+    expect(run.lines[0]).toContain(`blocked (${credits})`);
+    expect(run.drives.some((d) => StopReason.BROKEN === d.stopReason)).toBe(true);
+  });
+});
+
 /** From the recorded runs: a persona journey whose two checks both failed was marked passed. */
 describe('an open journey', () => {
   it('fails when its checks failed, though a check ran', async () => {
@@ -316,6 +361,7 @@ describe('an open goal that quotes where it ends', () => {
     toolset: (): HarnessToolset => ({
       tools: [],
       invoke(name, args) {
+        if (ReticleTool.SNAPSHOT === name) return Promise.resolve({ tree: page });
         if (ReticleTool.ASSERT !== name) return Promise.resolve({});
         const contains = String((args['predicate'] as { contains?: unknown }).contains);
         const shown = page.includes(contains);
@@ -343,7 +389,24 @@ describe('an open goal that quotes where it ends', () => {
   });
 
   it('passes on the text it ends on, and keeps that assert as the run’s check', async () => {
-    const run = await runScript(counter, onPage('button "count: 1"'));
+    // The page reads "count: 1" only once the drive has clicked.
+    let clicked = false;
+    const page = onPage('');
+    const ports: ScriptPorts = {
+      ...page,
+      toolset: () => ({
+        tools: [],
+        invoke: (name, args) =>
+          onPage(clicked ? 'button "count: 1"' : 'button "count: 0"')
+            .toolset(undefined, undefined)
+            .invoke(name, args),
+      }),
+      drive: (...args) => {
+        clicked = true;
+        return page.drive(...args);
+      },
+    };
+    const run = await runScript(counter, ports);
     expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
     const asserted = run.toolCalls.filter((c) => ReticleTool.ASSERT === c.name);
     expect(asserted.map((c) => (c.result as { verified?: unknown }).verified)).toEqual([
@@ -351,8 +414,298 @@ describe('an open goal that quotes where it ends', () => {
     ]);
   });
 
+  // The saved plan is named after the journey; listed back on a page, it is not the journey's end.
+  it('fails when the end shows only inside the journey the Harness wrote', async () => {
+    const run = await runScript(counter, {
+      ...onPage(`- link "${COUNTER}" (ref=e1)`),
+      own: [COUNTER],
+    });
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
+  });
+
   it('fails when the page still shows where it started', async () => {
     const run = await runScript(counter, onPage('button "count: 0"'));
     expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
+    // The journey missed; the app was not caught failing, so no failed check is kept.
+    expect(run.toolCalls.filter((c) => ReticleTool.ASSERT === c.name)).toEqual([]);
+  });
+});
+
+/*
+ * From a persona drive: the Harness joined the workspace, opened Runs and finished three actions
+ * into twenty steps, one click short of the "Team" step its own plan named, so "acme-checkout" was
+ * never on the page it was graded on.
+ */
+describe('a drive that finishes short of the end its goal names', () => {
+  const GOAL = 'Open Runs, select Team, and end when the page shows "acme-checkout".';
+  const journey = script({
+    version: 1,
+    source: 'platform',
+    journeys: [{ id: 'team', title: 'Team', steps: [{ kind: 'act', goal: GOAL }] }],
+    lanes: [{ id: 'A', journeys: ['team'] }],
+  });
+  const ports = (reachesOn: number) => {
+    let page = 'button "Team"';
+    const asked: [string, number][] = [];
+    const port: ScriptPorts = {
+      parallel: 1,
+      stopped: () => false,
+      lease: () => Promise.resolve({ release: () => Promise.resolve() }),
+      toolset: (): HarnessToolset => ({
+        tools: [],
+        invoke(name, args) {
+          if (ReticleTool.SNAPSHOT === name) return Promise.resolve({ tree: page });
+          if (ReticleTool.ASSERT !== name) return Promise.resolve({});
+          const contains = String((args['predicate'] as { contains?: unknown }).contains);
+          const shown = page.includes(contains);
+          return Promise.resolve({ pass: shown, verified: shown ? Verified.YES : Verified.NO });
+        },
+      }),
+      drive: (_tools, goal, maxSteps) => {
+        asked.push([goal, maxSteps]);
+        if (reachesOn === asked.length) page = 'cell "acme-checkout"';
+        return Promise.resolve({
+          stopReason: StopReason.FINISHED,
+          summary: '',
+          steps: 3,
+          toolCalls: [],
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          proved: false,
+          goalMet: reachesOn === asked.length,
+        });
+      },
+    };
+    return { port, asked };
+  };
+
+  it('is sent on once from where it stands, with the turns it has left, and passes there', async () => {
+    const p = ports(2);
+    const run = await runScript(journey, p.port);
+    expect(p.asked).toHaveLength(2);
+    expect(p.asked[1]?.[0]).toContain('does not show "acme-checkout" yet');
+    expect(p.asked[1]?.[1]).toBe(37);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
+  });
+
+  it('fails as a missed goal, with no failed check, when it still does not get there', async () => {
+    const p = ports(99);
+    const run = await runScript(journey, p.port);
+    expect(p.asked).toHaveLength(2);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
+    expect(run.toolCalls.filter((c) => ReticleTool.ASSERT === c.name)).toEqual([]);
+  });
+});
+
+describe('a journey that runs on how another ended', () => {
+  const branching = script({
+    version: 1,
+    source: 'platform',
+    journeys: [
+      { id: 'signin', title: 'Sign in', steps: [replay('signin')] },
+      {
+        id: 'error-shown',
+        title: 'The error says why',
+        when: { journey: 'signin', is: 'failed' },
+        steps: [replay('error-shown')],
+      },
+      {
+        id: 'dashboard',
+        title: 'Dashboard',
+        when: { journey: 'signin', is: 'passed' },
+        steps: [replay('dashboard')],
+      },
+      { id: 'audit', title: 'Audit', steps: [replay('audit')] },
+    ],
+    lanes: [
+      { id: 'A', journeys: ['signin', 'error-shown', 'dashboard'] },
+      { id: 'B', journeys: ['audit'] },
+    ],
+  });
+  const statuses = (run: Awaited<ReturnType<typeof runScript>>): Record<string, string> =>
+    Object.fromEntries(run.view.lanes.flatMap((l) => l.journeys.map((j) => [j.id, j.status])));
+
+  it('takes the passed road when it passed, and leaves the other not taken', async () => {
+    const fake = fakePorts();
+    expect(statuses(await runScript(branching, fake.ports))).toEqual({
+      signin: ScriptStatus.PASSED,
+      'error-shown': ScriptStatus.NOT_TAKEN,
+      dashboard: ScriptStatus.PASSED,
+      audit: ScriptStatus.PASSED,
+    });
+    expect(fake.calls.some((c) => 'error-shown' === c.args['flowName'])).toBe(false);
+  });
+
+  it('takes the failed road when it failed, though the lane is otherwise blocked by it', async () => {
+    const fake = fakePorts({ failing: ['signin'] });
+    expect(statuses(await runScript(branching, fake.ports))).toEqual({
+      signin: ScriptStatus.FAILED,
+      'error-shown': ScriptStatus.PASSED,
+      dashboard: ScriptStatus.NOT_TAKEN,
+      audit: ScriptStatus.PASSED,
+    });
+  });
+});
+
+/*
+ * A "Place order" flow run from the dashboard was badged "failed" on the plan page: the guard had
+ * skipped it. And a person's Run plan could never acknowledge it.
+ */
+describe('a replay the destructive-action guard stops', () => {
+  const order = script({
+    version: 1,
+    source: 'local',
+    journeys: [{ id: 'order', title: 'Place order', steps: [replay('place-order')] }],
+    lanes: [{ id: 'A', journeys: ['order'] }],
+  });
+
+  it('is not taken, with the reason, never failed', async () => {
+    const fake = fakePorts({ guarded: ['place-order'] });
+    const run = await runScript(order, fake.ports);
+    const card = run.view.lanes[0]?.journeys[0];
+    expect(card?.status).toBe(ScriptStatus.NOT_TAKEN);
+    expect(card?.steps[0]?.status).toBe(ScriptStatus.NOT_TAKEN);
+    expect(card?.why).toContain('destructive');
+    expect(run.lines[0]).toContain('not-taken');
+  });
+
+  it('runs when the person who started it acknowledged it', async () => {
+    const fake = fakePorts({ guarded: ['place-order'] });
+    const run = await runScript(order, { ...fake.ports, confirmDangerous: true });
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
+  });
+});
+
+/*
+ * Persona 25: a plan's second journey ("Reload the checkout and place the order … ending when the
+ * page shows "Order confirmed"") started on the page the first journey left, which already showed
+ * "Order confirmed". It never reloaded, drove nothing, and failed with no goals. A journey that does
+ * not build on the one before it starts from where the lane started, and an end already on screen
+ * before it acted is never credited to it.
+ */
+describe('a journey that does not build on the one before it in its lane', () => {
+  const END = 'Order confirmed';
+  const checkout = script({
+    version: 1,
+    source: 'platform',
+    journeys: [
+      {
+        id: 'coupon',
+        title: 'With a coupon',
+        steps: [{ kind: 'act', goal: `Apply the coupon and place the order, ending on "${END}".` }],
+      },
+      {
+        id: 'plain',
+        title: 'Order without a coupon',
+        when: { journey: 'coupon', is: 'passed' },
+        steps: [{ kind: 'act', goal: `Place the order without the coupon, ending on "${END}".` }],
+      },
+    ],
+    lanes: [{ id: 'A', journeys: ['coupon', 'plain'] }],
+  });
+  /** A checkout that confirms an order once driven; `sticky` keeps the confirmation over a reload. */
+  const app = (sticky: boolean) => {
+    let confirmed = false;
+    let drives = 0;
+    const navigated: unknown[] = [];
+    const tree = (): string =>
+      confirmed ? `- status "${END}"` : '- button "Place order" (ref=e1)';
+    const port: ScriptPorts = {
+      parallel: 1,
+      stopped: () => false,
+      lease: () => Promise.resolve({ release: () => Promise.resolve() }),
+      toolset: (): HarnessToolset => ({
+        tools: [],
+        invoke(name, args) {
+          if (ReticleTool.SNAPSHOT === name)
+            return Promise.resolve({ tree: tree(), status: { route: '/checkout' } });
+          if (ReticleTool.NAVIGATE === name) {
+            navigated.push(args['url']);
+            confirmed = sticky && confirmed;
+            return Promise.resolve({ ok: true });
+          }
+          if (ReticleTool.ASSERT !== name) return Promise.resolve({});
+          const shown = tree().includes(
+            String((args['predicate'] as { contains?: unknown }).contains),
+          );
+          return Promise.resolve({ pass: shown, verified: shown ? Verified.YES : Verified.NO });
+        },
+      }),
+      drive: () => {
+        drives += 1;
+        confirmed = true;
+        return Promise.resolve({
+          stopReason: StopReason.FINISHED,
+          summary: '',
+          steps: 2,
+          toolCalls: [
+            {
+              id: 'c',
+              name: ReticleTool.ACT_AND_WAIT,
+              args: { ref: 'e1', action: 'click' },
+              result: { verified: 'no-fault' },
+              isError: false,
+            },
+          ],
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          proved: false,
+          goalMet: true,
+        });
+      },
+    };
+    return { port, navigated, drives: () => drives };
+  };
+
+  it('starts from where the lane started, and passes on the end it reached itself', async () => {
+    const a = app(false);
+    const run = await runScript(checkout, a.port);
+    expect(a.navigated).toEqual(['/checkout']);
+    expect(a.drives()).toBe(2);
+    expect(run.view.lanes[0]?.journeys.map((j) => j.status)).toEqual([
+      ScriptStatus.PASSED,
+      ScriptStatus.PASSED,
+    ]);
+  });
+
+  // Persona drive: a read-only journey whose end text is on the page before anything acts could
+  // never be proved, and was graded "failed" — a finding against an app that did nothing wrong.
+  // Persona drive: goal graded yes, goalMet true, and the journey still "failed" because nothing it
+  // drove declared a check. Reached with nothing that could go red is undecided, never failed.
+  it('a journey that reached its goal with no check is undecided, not failed', async () => {
+    const a = app(false);
+    const open = script({
+      version: 1,
+      source: 'platform',
+      journeys: [
+        { id: 'read', title: 'Read the page', steps: [{ kind: 'act', goal: 'Open it.' }] },
+      ],
+      lanes: [{ id: 'A', journeys: ['read'] }],
+    });
+    const run = await runScript(open, a.port);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.UNDECIDED);
+  });
+
+  // A re-drive: started on a dead link, the drive reached the page and its end showed (graded yes),
+  // but the driver's own word was "not met" and the journey was "failed" beside a goal that held.
+  // The page is the evidence; the driver's word is not.
+  it('passes on an end the page shows, whatever the driver said', async () => {
+    const a = app(false);
+    const doubting: ScriptPorts = {
+      ...a.port,
+      drive: async (tools, goal, steps) => ({
+        ...(await a.port.drive(tools, goal, steps)),
+        goalMet: false,
+      }),
+    };
+    const run = await runScript(checkout, doubting);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
+  });
+
+  it('is never credited with an end that was on screen before it acted, nor failed for it', async () => {
+    const a = app(true);
+    const run = await runScript(checkout, a.port);
+    expect(run.view.lanes[0]?.journeys[1]?.status).toBe(ScriptStatus.UNDECIDED);
+    // Nothing it could do would prove it, so no model turn is spent on it.
+    expect(a.drives()).toBe(1);
+    expect(run.lines[1]).toContain('already on the page before this journey acted');
   });
 });

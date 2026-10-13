@@ -18,7 +18,7 @@
  */
 import { describe, expect, it, beforeEach } from 'vitest';
 import { executeAction } from './actions.js';
-import { submitControlFor } from './danger-context.js';
+import { setOutwardPolicy, submitControlFor } from './danger-context.js';
 import { refs } from '@/dom/addressing/refs.js';
 
 const refTo = (selector: string): string => {
@@ -186,6 +186,84 @@ describe('submitControlFor across realms', () => {
     const field = iframeField();
     await expect(executeAction(refs.refFor(field), 'press', { text: 'Enter' })).rejects.toThrow(
       /confirmDangerous/,
+    );
+  });
+});
+
+/** An issue link whose title read "Checkout pay fails" was blocked as a payment. */
+describe('a link is judged by where it goes, not by the text it shows', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('does not block a link whose text reads as destructive', async () => {
+    document.body.innerHTML =
+      '<a id="i" href="/issues/42">Checkout pay fails when the button is disabled</a>';
+    await expect(executeAction(refTo('#i'), 'click')).resolves.toBeDefined();
+  });
+
+  it('still blocks a link that goes somewhere destructive, or one that goes nowhere', async () => {
+    document.body.innerHTML =
+      '<a id="d" href="/account/delete">Account</a><a id="b" href="#">Delete account</a>';
+    await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
+    await expect(executeAction(refTo('#b'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+});
+
+/*
+ * From persona drives: the Harness pressed Invite in a customer's workspace though its journey
+ * said not to. A Harness command a model chose presses an outward control only when its journey
+ * asked for that action — `confirmDangerous` in the model's own args does not lift it.
+ */
+describe('what a Harness command may press', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    setOutwardPolicy(undefined);
+  });
+
+  it('refuses Invite, Send, Remove and Pay unless the journey asked', async () => {
+    document.body.innerHTML =
+      '<button id="i">Invite</button><button id="s">Send message</button>' +
+      '<button id="r">Remove member</button><button id="p">Add a card and start the trial</button>';
+    setOutwardPolicy([]);
+    for (const id of ['#i', '#s', '#r', '#p'])
+      await expect(executeAction(refTo(id), 'click', { confirmDangerous: true })).rejects.toThrow(
+        /not done \(outward action\)/,
+      );
+  });
+
+  it('presses the one the journey asked for, and an ordinary control always', async () => {
+    document.body.innerHTML = '<button id="i">Invite</button><button id="o">Open Runs</button>';
+    setOutwardPolicy(['invite']);
+    await expect(executeAction(refTo('#i'), 'click')).resolves.toBeDefined();
+    setOutwardPolicy([]);
+    await expect(executeAction(refTo('#o'), 'click')).resolves.toBeDefined();
+  });
+
+  it('gates nothing for an agent or a saved flow (no policy)', async () => {
+    document.body.innerHTML = '<button id="i">Invite</button>';
+    await expect(executeAction(refTo('#i'), 'click')).resolves.toBeDefined();
+  });
+});
+
+/*
+ * Persona drives: `select` with the option's visible label ('Only if "Sign in" passed') was refused
+ * with its own label in the list of choices. An option is named by its value, or by the one label
+ * a person reads on it.
+ */
+describe('select by what a person reads', () => {
+  it('chooses the one option carrying that label', async () => {
+    document.body.innerHTML =
+      '<label for="w">When</label><select id="w"><option value="always">Always</option>' +
+      '<option value="persona-1|passed">Only if “Sign in” passed</option></select>';
+    await executeAction(refTo('#w'), 'select', { value: 'Only if “Sign in” passed' });
+    expect((document.querySelector('#w') as HTMLSelectElement).value).toBe('persona-1|passed');
+  });
+
+  it('still refuses a name no option has', async () => {
+    document.body.innerHTML = '<select id="w"><option value="a">A</option></select>';
+    await expect(executeAction(refTo('#w'), 'select', { value: 'Nope' })).rejects.toThrow(
+      /no <option>/,
     );
   });
 });

@@ -97,6 +97,12 @@ export const ContradictionKind = {
    */
   DUPLICATE_REQUEST_UNRELATED: 'duplicate-request-unrelated',
   /**
+   * A request carried a value for a field whose control on screen shows a different chosen value
+   * (UI "Workspace default", request `projectId: "bench-app"`). ADVISORY and opt-in: a fact worth a
+   * look, never a verdict on its own.
+   */
+  SCREEN_REQUEST_MISMATCH: 'screen-request-mismatch',
+  /**
    * Two reads of the same endpoint were in flight together and settled OUT OF ORDER, so the one the
    * user asked for first is the one that landed last — and the screen is showing it.
    *
@@ -316,6 +322,7 @@ export function isAbsenceDerived(kind: string): boolean {
  */
 export const ADVISORY_CONTRADICTIONS: ReadonlySet<ContradictionKind> = new Set([
   ContradictionKind.DUPLICATE_REQUEST_UNRELATED,
+  ContradictionKind.SCREEN_REQUEST_MISMATCH,
 ]);
 
 /** True when this kind is reported alongside a verdict without changing it. */
@@ -401,6 +408,8 @@ export const CONTRADICTION_CHANNELS: Record<ContradictionKind, readonly [Channel
   [ContradictionKind.CONSEQUENCE_ELSEWHERE]: [ChannelId.NET, ChannelId.UI],
   [ContradictionKind.DUPLICATE_REQUEST]: [ChannelId.NET, ChannelId.NET],
   [ContradictionKind.DUPLICATE_REQUEST_UNRELATED]: [ChannelId.NET, ChannelId.NET],
+  // The value a control shows against the value the request carried for the same field.
+  [ContradictionKind.SCREEN_REQUEST_MISMATCH]: [ChannelId.UI, ChannelId.NET],
   // The evidence is the interleaving of two responses, read against what the screen ended up showing.
   [ContradictionKind.STALE_RESPONSE_APPLIED]: [ChannelId.NET, ChannelId.UI],
   // Both sides are the server's own answer: the status line and the payload under it.

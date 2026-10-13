@@ -20,6 +20,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { REPO_ROOT } from '@/machine/repo-root.js';
 
@@ -31,6 +33,7 @@ const load = async (): Promise<{
   explain: (code: number, detail: string, willRetry: boolean) => string;
   RUNNER_LEVEL_EXIT_CODES: Map<number, string>;
   runnerLevelInOutput: (output: string) => string | null;
+  runOnce: (command: string, args: string[]) => Promise<{ code: number | null; output: string }>;
 }> => (await import(SCRIPT)) as never;
 
 describe('only a failure to START the process is retried', () => {
@@ -123,4 +126,50 @@ describe('a runner-level failure swallowed by an inner wrapper is still recognis
     const { runnerLevelInOutput } = await load();
     expect(runnerLevelInOutput('exited (-1073741) and (-107374150)')).toBeNull();
   });
+});
+
+/**
+ * The wrapper waits for the command, not for everything the command left running.
+ *
+ * It used to resolve on the child's `close`, which fires only once every holder of the stdout and
+ * stderr pipes has let go. On Windows a process started during the build outlived turbo and kept the
+ * pipe open, so a `pnpm build` that printed "16 successful" at 12:00 held its step until the job's
+ * 30-minute timeout cancelled it, and the runner's cleanup then reported "Terminate orphan process
+ * (node)". Seen on reticlehq/reticle jobs 114602419311 and 114598711779 (both after `typecheck`
+ * had finished) and on a fork qualification run after `build`.
+ */
+describe('a process the command leaves behind does not hold the step open', () => {
+  // Starts a grandchild that inherits the pipes and outlives its parent, prints the grandchild's pid
+  // so the test can stop it, writes a line, and exits 0.
+  const LEAVES_ONE_BEHIND = [
+    "const { spawn } = require('node:child_process');",
+    "const g = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 120000)'], { stdio: 'inherit', detached: true });",
+    'g.unref();',
+    "process.stdout.write('grandchild ' + g.pid + '\\n');",
+    "process.stdout.write('build finished\\n');",
+  ].join('\n');
+
+  it('returns the exit code once the command exits, keeping the output it wrote', async () => {
+    const { runOnce } = await load();
+    // From a file, not `-e`: on Windows the wrapper runs through cmd.exe, which ends a multi-line
+    // argument at its first newline.
+    const dir = mkdtempSync(join(tmpdir(), 'ci-run-'));
+    const script = join(dir, 'leaves-one-behind.cjs');
+    writeFileSync(script, LEAVES_ONE_BEHIND);
+    const result = await runOnce(process.execPath, [script]);
+    const pid = Number(/grandchild (\d+)/.exec(result.output)?.[1]);
+    try {
+      expect(result.code).toBe(0);
+      expect(result.output).toContain('build finished');
+    } finally {
+      if (Number.isInteger(pid)) {
+        try {
+          process.kill(pid);
+        } catch {
+          // already gone
+        }
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000); // A bound on a hang, not a duration assertion: before the fix this waited the full 120 s.
 });

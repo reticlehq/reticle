@@ -200,16 +200,6 @@ async function installVersion(version: string, kind: ExecutionKind): Promise<voi
   await runNpm(plan.args, plan.cwd !== undefined ? { cwd: plan.cwd } : {});
 }
 
-async function installVersionRollback(version: string, kind: ExecutionKind): Promise<void> {
-  if (kind === ExecutionKind.NPX) {
-    log('reticle_rollback_npx_strategy', {
-      note: 'Running via npx — update your .mcp.json args to pin the version you want to restore',
-    });
-    return;
-  }
-  await installVersion(version, kind);
-}
-
 /**
  * Install targetVersion using the appropriate strategy for the detected execution kind,
  * then exit so Claude Code restarts with the new binary. Saves the current version
@@ -244,14 +234,20 @@ export async function rollback(): Promise<void> {
   }
   const prev = manifest.previousVersion;
   const kind = detectExecutionKind();
+  // Under npx there is nothing to reinstall: the next start re-resolves the package. Say how to pin
+  // the old version and stop, rather than logging and reporting a rollback that never landed.
+  if (kind === ExecutionKind.NPX) {
+    log('reticle_rollback_npx_strategy', {
+      version: prev,
+      note: 'Running via npx — update your .mcp.json args to pin the version you want to restore',
+    });
+    return;
+  }
   log('reticle_rollback_applying', { version: prev, executionKind: kind });
-  await installVersionRollback(prev, kind);
+  await installVersion(prev, kind);
   log('reticle_rollback_applied', { version: prev, executionKind: kind });
   // A rollback is a release-quality alarm — someone shipped something that broke a real user badly
   // enough for them to go backwards. Worth knowing about within the hour, not at the next retro.
   await reportVersionChange(SERVER_VERSION, prev, VersionChangeDirection.ROLLBACK);
-  // For npx, exiting would let the next restart re-resolve @latest — rolling FORWARD, the opposite
-  // of rollback. installVersionRollback already told the user to pin the version in.mcp.json, so
-  // stay running rather than trigger that. Other kinds installed the old version and must restart.
-  if (kind !== ExecutionKind.NPX) process.exit(0);
+  process.exit(0);
 }

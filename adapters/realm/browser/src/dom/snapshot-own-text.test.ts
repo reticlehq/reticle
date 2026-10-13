@@ -67,3 +67,27 @@ describe('an element keeps its own text alongside its children', () => {
     expect(treeOf()).not.toMatch(/- text "\s*"/);
   });
 });
+
+/*
+ * From the console: "On your own computer, `reticle connect` creates a key." read in the page tree
+ * as "On your own computer, creates a key." — the paragraph's text skipped its inline `<code>`, so
+ * the sentence an agent reads, and the phrase a goal quotes, were never on the page it was given.
+ */
+describe('a sentence with inline elements inside it', () => {
+  it('reads whole, in reading order, inline children included', () => {
+    mount('<p>On your own computer, <code>reticle connect</code> creates a key.</p>');
+    expect(treeOf()).toContain('On your own computer, reticle connect creates a key.');
+  });
+
+  it('says the inline text once, in the sentence, not again on a line of its own', () => {
+    mount('<p>Read <strong>this</strong> first.</p>');
+    expect(treeOf().split('this').length - 1).toBe(1);
+  });
+
+  it('keeps a link inside the sentence its own line, so it can still be driven', () => {
+    mount('<p>See the <a href="/docs">docs</a> for more.</p>');
+    const tree = treeOf();
+    expect(tree).toContain('See the docs for more.');
+    expect(tree).toContain('link "docs"');
+  });
+});

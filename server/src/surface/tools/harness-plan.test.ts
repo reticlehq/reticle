@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { aboutTheApp, buildHarnessPlan, planAsText, PlanStepKind } from './harness-plan.js';
+import {
+  aboutTheApp,
+  buildHarnessPlan,
+  drivingPlan,
+  planAsText,
+  PlanStepKind,
+  type HarnessPlan,
+} from './harness-plan.js';
 import type { DomainModel } from '@/judgement/domain/domain-model.js';
 
 /**
@@ -251,5 +258,26 @@ describe('what the planner is told the app holds beyond this page', () => {
     );
     expect(about).toContain('CONTROLS SEEN ACROSS THE WHOLE APP');
     expect(about).toContain('button "Refund"');
+  });
+});
+
+/** A run named for one persona was handed other sessions' intents, and named its flow after one. */
+describe('the plan a named journey drives from', () => {
+  const plan = {
+    summary: 's',
+    steps: [
+      { kind: PlanStepKind.REPLAY, target: 'harness-bea--home', why: 'recorded' },
+      { kind: PlanStepKind.DRIVE, target: 'intent', why: 'a removed member signs back in' },
+    ],
+  } as unknown as HarnessPlan;
+
+  it('is the journey alone', () => {
+    expect(drivingPlan(plan, 'Tess opens the run').steps).toEqual([]);
+  });
+
+  it('is the gaps when nobody named one', () => {
+    expect(drivingPlan(plan, undefined).steps.map((s) => s.why)).toEqual([
+      'a removed member signs back in',
+    ]);
   });
 });

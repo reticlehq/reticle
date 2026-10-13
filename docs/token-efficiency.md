@@ -16,13 +16,13 @@ Measured against the bench dashboard (`apps/bench-app`) **with a 1,000-item list
 | ----------------------------------------------------------------------------- | ---------: |
 | **Playwright MCP**, with-refs snapshot (the real payload it sends every step) | **~7,300** |
 | Playwright MCP, bare accessibility tree (what we measured directly)           |     ~6,856 |
-| Reticle `snapshot` `full` (whole page, incl. all 1,000 items)                 |     ~4,144 |
-| Reticle `snapshot` `interactive` (actionable elements only)                   |       ~110 |
-| Reticle `snapshot` `status` (route / dialogs / counters)                      |        ~31 |
-| Reticle `query`, one element                                                  |        ~28 |
+| Reticle `look` page, mode `full` (whole page, incl. all 1,000 items)          |     ~4,144 |
+| Reticle `look` page, mode `interactive` (actionable elements only)            |       ~110 |
+| Reticle `look` page, mode `status` (route / dialogs / counters)               |        ~31 |
+| Reticle `look` find, one element                                              |        ~28 |
 | Reticle `observe` (reaction after an action)                                  |        ~39 |
 | Reticle `assert` verdict                                                      |        ~33 |
-| **Reticle, a full verify loop** (`query` + `observe` + `assert`)              |   **~100** |
+| **Reticle, a full verify loop** (`look` find + `observe` + `assert`)          |   **~100** |
 
 **Result on this page:** the common Reticle loop is **~73× leaner** than Playwright MCP's per-step snapshot (100 vs ~7,300 tokens). The bare a11y tree we measured directly is 6,856; Playwright MCP's actual payload adds a `[ref=…]` to every node, pushing it to ~7,300. On the complex pages Playwright's ecosystem cites (50k+), the gap widens to **~100× to 500×**.
 
@@ -68,7 +68,7 @@ The typed result object still travels as `structuredContent` either way; the def
 ## The honest version
 
 - **Full-tree vs full-tree, the gap is modest (~1.8×):** Reticle `full` (4,144) vs Playwright's with-refs snapshot (~7,300). Reticle collapses generic wrapper nodes, but both include every list item. If you force Reticle to dump the whole page each step, you don't save much.
-- **The savings come from _not needing_ the full tree.** Playwright MCP's primary perception primitive is "return the accessibility tree"; Reticle's is "answer a specific question" (`query`/`assert`/`observe`/scoped or interactive `snapshot`). The win is architectural, not a cleverer serializer.
+- **The savings come from _not needing_ the full tree.** Playwright MCP's primary perception primitive is "return the accessibility tree"; Reticle's is "answer a specific question" (`reticle_look` find, `reticle_assert`, `reticle_observe`, or a scoped or interactive page read). The win is architectural, not a cleverer serializer.
 - **Cost scales with interactive elements + what you look at, not total DOM.** The 1,000 list items cost ~0 in `interactive` mode because they aren't interactive.
 - **This is tool-output tokens only.** The agent's own reasoning tokens dominate either way, which is the point: keep observation cheap so the budget goes to thinking.
 

@@ -5,9 +5,7 @@
 
 export const RETICLE_DEFAULT_PORT = 4400;
 export const RETICLE_WS_PATH = '/reticle';
-/** Agent↔server MCP wire paths — served by the daemon HTTP plane, forwarded by the stdio proxy. */
-export const MCP_SSE_PATH = '/mcp/sse';
-export const MCP_MESSAGE_PATH = '/mcp/message';
+export * from './mcp-wire.js';
 /**
  * The name this MCP server answers to — in its own `serverInfo` handshake, and in the registration
  * an installer writes into an agent's config. Those must be the same string or the agent registers
@@ -208,6 +206,8 @@ export const ReticleEnv = {
   HARNESS_BASE_URL: 'RETICLE_HARNESS_BASE_URL',
   /** Hard ceiling on harness model turns in one drive. Bounds cost, not value. */
   HARNESS_MAX_STEPS: 'RETICLE_HARNESS_MAX_STEPS',
+  /** The free drive `reticle try` was granted, sent on every Harness call it bills. */
+  DRIVE_ID: 'RETICLE_DRIVE_ID',
   /**
    * Which model backs the harness driver: `anthropic` (the default) or `jev`.
    *
@@ -455,8 +455,7 @@ export const ReticleDir = {
   JOURNAL_EVENTS_CLOSED_FILE: 'events.closed.json',
   /** learned expected-envelopes per route, accumulated across runs (the deviation-report baseline). */
   ENVELOPES_FILE: 'envelopes.json',
-  /** learned ambient (action-less churn) region map — excluded from settle/summaries/envelopes. */
-  AMBIENT_FILE: 'ambient.json',
+  AMBIENT_FILE: 'ambient.json', // learned action-less churn regions, excluded from settle/summaries
   /** per-flow flake ledger — replay outcomes that decide intermittent-failure quarantine. */
   FLAKE_FILE: 'flake.json',
   /** The app-wide coverage ledger — see server features/exhaust/ledger.ts. */
@@ -465,9 +464,10 @@ export const ReticleDir = {
   NOTES_FILE: 'notes.json',
   /** The user's latest request, as the agent relayed it. Local: it is the user's own words. */
   REQUEST_FILE: 'request.json',
+  APP_NOTES_FILE: 'app-notes.json', // confirmed targeting hints for the next session; never evidence
   PLATFORM_MOMENTS_FILE: 'platform-moments.json', // moments already said, so each is said once
   /**
-   * the project's cloud binding — .reticle/cloud.json, written by `reticle link`. Git-checked and
+   * the project's cloud binding — .reticle/cloud.json, written by `reticle connect`. Git-checked and
    * non-secret: the project id, the API origin, and where its dashboard lives. The KEY lives in
    * ~/.reticle/credentials.json instead, because that one must never reach a repository.
    */
@@ -924,10 +924,7 @@ export const ReticleCommand = {
   SCROLL: 'scroll',
   /** Session lifecycle: agent tunes the presenter session (e.g. idle-end timeout) for the app's needs. */
   SESSION_CONFIG: 'session_config',
-  /**
-   * Live-control: bridge → browser. Pushes the current session state to the panel so an
-   * AGENT-driven pause/end keeps the presenter in sync. `args: { state, text? }`.
-   */
+  /** Bridge → browser: the session state, so an agent's pause/end syncs the panel. `{ state, text? }`. */
   PRESENTER: 'presenter',
   /**
    * Bridge -> browser: the user's own impact record, so the HUD can show what Reticle has done for
@@ -944,6 +941,8 @@ export const ReticleCommand = {
    * screen-recording permission. Answered only when the app installed the capture helper.
    */
   CAPTURE: 'capture',
+  /** The page drawn in-page to a JPEG, `{ ok, width, height, chunks }` (base64 under the string cap). */
+  RENDER: 'render',
   /** Navigate the page to a new URL. `args: { url: string }`. */
   NAVIGATE: 'navigate',
   /** Reload the page. `args: { hard?: boolean }` — hard clears the cache via location replace trick. */
@@ -954,6 +953,8 @@ export const ReticleCommand = {
   FLOW_PROGRESS: 'flow.progress',
   /** Bridge → browser: the Harness's drive plan and each part's status, a `PlanView`. */
   PLAN: 'plan',
+  /** The coverage markers (`CoverageMarker`) the app's own page carries; silent, no HUD paint. */
+  MARKERS: 'markers',
 } as const;
 export type ReticleCommand = (typeof ReticleCommand)[keyof typeof ReticleCommand];
 

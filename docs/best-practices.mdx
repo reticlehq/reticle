@@ -5,7 +5,7 @@ description: The habits that make a verdict worth trusting, and the specific mis
 icon: star
 ---
 
-A green is worth trusting when you named the consequence **before** you acted, ended the run on `reticle_act_and_wait` or `reticle_assert` (nothing else produces a verdict), scoped the assertion with `since`, and read `verified` rather than `pass`. Everything below is one of those habits, or the specific mistake that breaks it.
+A green is worth trusting when you named the consequence **before** you acted, ended the run on a call that produces a verdict (`reticle_act_and_wait`, `reticle_assert`, a `reticle_act { steps }` whose last step declares `expect`, or `reticle_verify`), scoped the assertion with `since`, and read `verified` rather than `pass`. Everything below is one of those habits, or the specific mistake that breaks it.
 
 Everything here comes from driving Reticle against real apps and getting it wrong first. None of it is theoretical, and several entries exist because they bit us while writing these docs.
 
@@ -37,7 +37,7 @@ This is not pedantry. Here is a real `act_sequence` response:
 
 `ok: true`, and the login **failed**. `ok` means the actions were dispatched, which they were. If your run ends there, you have a green tick attached to a broken flow.
 
-**Batch the setup, prove the outcome.** Use `act_sequence` for the fills, then `act_and_wait` on the final click.
+**Batch the setup, prove the outcome.** Use `reticle_act { steps }` for the fills, then `act_and_wait` on the final click.
 
 ## Treat `unknown` as unknown
 
@@ -172,10 +172,10 @@ If you relax a predicate, you should be able to say why the _original_ expectati
 
 | Instead of | Use | Why |
 | --- | --- | --- |
-| `snapshot` on every turn | `snapshot { mode: "status" }` | 25 tokens to answer "where am I?" |
-| `snapshot` then reading it | `query { by: "testid" }` | Retrieval, not orientation |
-| `query` to count rows | `query { count_only: true }` | Around 30x smaller |
-| `observe` for one question | `network` or `console` | The summary block is usually enough |
+| `look { action: "page" }` on every turn | `look { action: "page", mode: "status" }` | 25 tokens to answer "where am I?" |
+| `look { action: "page" }` then reading it | `look { action: "find", by: "testid" }` | Retrieval, not orientation |
+| `look { action: "find" }` to count rows | `look { action: "find", count_only: true }` | Around 30x smaller |
+| `observe` for one question | `observe { action: "network" }` or `{ action: "console" }` | The summary block is usually enough |
 | Re-snapshotting after each act | Reuse the `ref` | Refs stay valid until the element leaves the DOM |
 
 Every response carries `cost: { bytes, tokens }`. If a loop is expensive, that field tells you which call to fix.
@@ -192,11 +192,29 @@ Sessions accumulate. Four stale ones pointing at dev servers you restarted an ho
 { "action": "yield", "mode": "waiting" }
 ```
 
-`yield` when you are pausing, `end` when you are done. Both revive on your next action, so neither is destructive. The difference is what the human watching the panel is told. The panel reads "live" until you say otherwise.
+`yield` when you are pausing, `end` when you are done. A yielded session revives on your next action; `end` is terminal, so use it only when the whole task is complete. The difference is also what the human watching the panel is told. The panel reads "live" until you say otherwise.
+
+## End with the Reticle result
+
+`reticle_verify` (`flows` and `change`) and `reticle_session { action: "end" }` return `reticleResult`: a short markdown block the server builds from the verdicts it holds. Paste it to the user verbatim as the last thing you say. It reads the same wherever it came from:
+
+```md
+**Reticle result: proved** · 3 of 3 checks held
+
+- Checks: 3 yes · 0 no · 0 undecided
+- Covered: checkout-pay, login
+- Metrics: 3 checks · 2 flows replayed · 4.2s
+- Evidence: .reticle/visual/runs/r1/0001-act.jpg, .reticle/visual/runs/r1/0002-act.jpg
+- Run on the dashboard: https://app.reticle.sh/runs/r1
+```
+
+- The verdict line has three words only: **proved**, **not proved**, **failed**. One undecided check makes the whole result not proved. Do not reword it into a pass.
+- A metric Reticle did not measure is left out, never printed as zero. Model tokens saved by replay are not measured per run, so the block never claims them.
+- The last line is about the platform, once per result. Linked, it links the run. Not linked, it says what the platform adds (run history, your team, Reticle Harness), the trial, and `npx @reticlehq/server connect`. Keep it; do not repeat it elsewhere.
 
 ## Confirm a navigation landed
 
-`reticle_navigate` returns `confirmed: false` by design. A navigation destroys the document the SDK lives in, so it can only report dispatch. Check [`reticle_session { action: "list" }`](/tools/sessions) for a session at the new URL before acting, and re-snapshot: refs do not survive a new document.
+`reticle_navigate`'s `ok` only means the navigation was dispatched: it destroys the document the SDK lives in. It then waits up to `timeout_ms` (default 5000) for the SDK to reconnect. `confirmed: true` with a `sessionId` means the page arrived; `confirmed: false` with `landedOn` means a redirect took it elsewhere; `confirmed: false` alone means it was not seen in time. Re-snapshot either way: refs do not survive a new document.
 
 ## Start with what the app says about itself
 

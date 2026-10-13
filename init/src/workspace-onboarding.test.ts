@@ -80,18 +80,22 @@ describe('a backend beside the app', () => {
 });
 
 describe('re-running at the root after `--app`', () => {
-  it('follows the root config to the app it names instead of refusing again', () => {
+  /*
+   * Re-drive (persona 11): the root config `--app` wrote named the first app, so an agent at the
+   * root read that app's identity whichever it meant. With several apps the root is pinned to none;
+   * a re-run there names the apps already wired and succeeds, instead of refusing again.
+   */
+  it('pins the root to no app, and a re-run there names what is wired instead of refusing', () => {
     const files = { 'package.json': WORKSPACE_ROOT, ...WEB, ...ADMIN };
     const first = memoryIo(files);
     expect(runInit({ ...OPTS, app: 'apps/web' }, first).ok).toBe(true);
-    const rootConfig = first.written[`${ROOT}/.reticle.json`];
-    expect(rootConfig).toBeDefined();
+    expect(first.written[`${ROOT}/.reticle.json`]).toBeUndefined();
 
-    // The same checkout, as the second run sees it: the root pointer is `.reticle.json` from here.
-    const second = memoryIo({ ...files, ...first.written, '.reticle.json': rootConfig ?? '' });
+    const second = memoryIo({ ...files, ...first.written });
     const result = runInit(OPTS, second);
-    expect(second.lines.join('\n')).not.toContain('Several apps found');
-    expect(second.lines.join('\n')).toContain('apps/web');
+    const said = second.lines.join('\n');
+    expect(said).toContain('Already wired here: apps/web');
+    expect(said).toContain('reticle init --app apps/admin');
     expect(result.ok).toBe(true);
   });
 });

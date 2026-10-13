@@ -170,6 +170,15 @@ describe('the subject a record arrives with', () => {
     expect(subjectOf('a')).toBe('checkout-pay');
   });
 
+  // The platform keeps a statement's reason (`reason`); the record calls it `why`.
+  it('sends a record’s why as the reason the platform keeps', () => {
+    intents({ a: { statement: 's', why: 'customers abandon carts over $75' } });
+    const payload = diskSource(root).derived('intent') as {
+      intents: Record<string, { reason?: unknown }>;
+    };
+    expect(payload.intents['a']?.reason).toBe('customers abandon carts over $75');
+  });
+
   it('leaves an explicit subject alone — an agent’s own choice outranks inference', () => {
     intents({ a: { statement: 's', subject: 'mine', surface: { route: '/billing' } } });
     expect(subjectOf('a')).toBe('mine');

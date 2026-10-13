@@ -39,6 +39,10 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'reason those tests cannot silently drift from the real interface.',
   'memory/project/memory-fs.ts':
     'an in-memory FileSystemPort, so a test can exercise project code without touching disk.',
+  'features/harness/explore/console-pages.ts':
+    'pages of the real console read by a live drive, which the exploratory Harness tests replay.',
+  'features/harness/explore/fake-app.ts':
+    'a pretend app the exploratory Harness tests replay recorded persona misses against.',
   'workspace-packages.ts': 'reads the workspace layout; used by the cross-package guards.',
   'import-graph.ts': 'builds the import graph the boundary guards assert over.',
 

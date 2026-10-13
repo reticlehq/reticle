@@ -11,9 +11,9 @@ icon: database
   `allowedTools` allowlist or an MCP permission rule naming it refuses before Reticle is asked.
 </Warning>
 
-`reticle_state` reads live framework state straight out of the running app, without the app broadcasting anything. Reach for it when the DOM looks right and you want to know whether the application actually accepted the change, which is where false greens live.
+`reticle_look { action: "state" }` reads live framework state straight out of the running app, without the app broadcasting anything. Reach for it when the DOM looks right and you want to know whether the application actually accepted the change, which is where false greens live.
 
-The DOM tells you what the app _drew_. `reticle_state` tells you what it _believes_. The gap between those two is where false greens live: a row appears in the table, the store never changed, and a reload makes the row vanish.
+The DOM tells you what the app _drew_. `reticle_look { action: "state" }` tells you what it _believes_. The gap between those two is where false greens live: a row appears in the table, the store never changed, and a reload makes the row vanish.
 
 ## Example
 
@@ -68,24 +68,24 @@ Drill in once you know what you want:
 A wrong `path` comes back `{ "found": false, "availableKeys": [...] }` rather than an empty value, so a typo is diagnosable instead of looking like an empty store.
 
 <Warning>
-  `reticle_state` asks the page and waits. On a backgrounded tab the page may never answer, and you
+  `reticle_look { action: "state" }` asks the page and waits. On a backgrounded tab the page may never answer, and you
   get `"command 'state_read' timed out after 8000ms"` with a recovery note pointing at
-  [`reticle_sessions`](/tools/sessions). That is a fact about the tab, not a Reticle failure. Bring
+  [`reticle_session { action: "list" }`](/tools/sessions). That is a fact about the tab, not a Reticle failure. Bring
   it to the front, or drive your own browser.
 </Warning>
 
 ## You have to register stores first
 
-`reticle_state` reads what your app registered in `src/reticle-dev.ts`. With nothing registered, `storeNames` comes back empty and this tool has nothing to say.
+`reticle_look { action: "state" }` reads the stores your app registered, usually in `src/reticle-dev.ts`. With nothing registered, `storeNames` comes back empty and this tool has nothing to say.
 
 ```ts
-registerCapabilities({
-  stores: [{ name: 'app', store: appStore }],
-});
+import { registerStore } from '@reticlehq/browser';
+
+registerStore('app', appStore);
 ```
 
 <Warning>
-Pass the **store**, not `() => store.getState()`. The store form wires `subscribe` too, so every
+Pass the **store**, not `() => appStore.getState()`. The store form wires `subscribe` too, so every
 mutation emits a state diff. The getter form is read-only and silently produces empty diffs, which
 looks like "nothing changed" and is really "I was never watching".
 </Warning>

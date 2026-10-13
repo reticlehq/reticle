@@ -12,16 +12,21 @@
  * question the fetch counters exist to answer and could not while nothing was reading.
  */
 import { cloudFetch } from '@/memory/cloud/cloud-sync.js';
+import { callingClientName } from '@/hooks/coding-agents.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import {
   isReadableMemoryScope,
+  MemoryReadHeader,
   memoryReadUrl,
   scopedMemoryEntries,
   scopeOfMemoryResponse,
 } from '@/memory/cloud/memory-scope.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 
-/** Named so a read from the tool surface is distinguishable from the CLI's and from replay's. */
+/**
+ * Named so a read from the tool surface is distinguishable from the CLI's and from replay's. The
+ * reader is the MCP client that made the call when one can be named; this only when none can.
+ */
 const MCP_AGENT_ID = 'reticle-mcp';
 
 /** Why a lookup returned nothing. Each one is a different thing for the agent to do next. */
@@ -89,10 +94,35 @@ const asKnown = (raw: unknown): KnownThing | null => {
  * twice returns the same order — an unstable list reads as the corpus churning when it has not.
  */
 const PROVED = 'proved';
-export const rankKnown = (things: readonly KnownThing[]): KnownThing[] => [
-  ...things.filter((t) => PROVED === t.status),
-  ...things.filter((t) => PROVED !== t.status),
+const AGREED = 'agreed';
+/** Set aside on the dashboard or by `reticle_memory {set-aside}`: nobody stands by it any more. */
+const SET_ASIDE = 'stale';
+/** Then agreed, then what a person wrote (no flow behind it), then flow intents. */
+const RANKS: readonly ((t: KnownThing) => boolean)[] = [
+  (t) => PROVED === t.status,
+  (t) => AGREED === t.status,
+  (t) => null === t.flowName,
+  () => true,
 ];
+export const rankKnown = (things: readonly KnownThing[]): KnownThing[] =>
+  things
+    .map((thing, at) => ({ thing, at, rank: RANKS.findIndex((fits) => fits(thing)) }))
+    .sort((a, b) => a.rank - b.rank || a.at - b.at)
+    .map((r) => r.thing);
+
+/**
+ * What a read can show: each statement once (a persona's intent saved on six pages pushed a
+ * person's own fact past the cap) and nothing set aside (it ranked second seconds after).
+ */
+const liveAndDistinct = (things: readonly KnownThing[]): KnownThing[] => {
+  const seen = new Set<string>();
+  return rankKnown(things.filter((t) => SET_ASIDE !== t.status)).filter((t) => {
+    const key = t.statement.trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 export async function readProjectMemory(
   fs: FileSystemPort,
@@ -119,7 +149,7 @@ export async function readProjectMemory(
         authorization: `Bearer ${cloud.config.apiKey}`,
         // What makes this read COUNT as an agent consulting the corpus rather than a human
         // browsing — the distinction the dashboard's "times an agent consulted it" rests on.
-        'x-reticle-agent': MCP_AGENT_ID,
+        [MemoryReadHeader.AGENT]: callingClientName() ?? MCP_AGENT_ID,
       },
     });
     if (200 !== res.status) return { ok: false, reason: MemoryUnavailable.UNREACHABLE };
@@ -144,14 +174,14 @@ export async function readProjectMemory(
     // The entry-level pass is redundant against the envelope check above and kept for a server that
     // labels entries instead. `total` is counted AFTER it, so a truncated list still tells the truth
     // about how many of THIS project's statements there were.
-    const known = entries.map(asKnown).filter((k): k is KnownThing => k !== null);
+    const known = liveAndDistinct(entries.map(asKnown).filter((k): k is KnownThing => k !== null));
     return {
       ok: true,
       subject: opts.subject ?? null,
       // Capped for the agent's context, but `total` always reports the truth so the cap is never
       // silent — a truncated list that looks complete is how an agent concludes a project knows
       // less than it does.
-      known: rankKnown(known).slice(0, opts.limit),
+      known: known.slice(0, opts.limit),
       total: known.length,
     };
   } catch {

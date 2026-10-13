@@ -6,6 +6,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { runDrivenBy } from '@/hooks/driven-by.js';
+import { forgetAgents, noteAgentAttached, runAsAgent } from '@/hooks/coding-agents.js';
 import { JournalRecorder, type JournalSink } from './journal-recorder.js';
 
 function evt(seq: number): ReticleEvent {
@@ -58,6 +59,55 @@ describe('JournalRecorder', () => {
     rec.recordAction('c3', 'reticle_assert', {});
     await rec.flush();
     expect(sink.actions.map((a) => a.drivenBy)).toEqual([by, by, undefined]);
+  });
+
+  it('stamps the MCP client that made each call, so a drive run can say which agent drove', async () => {
+    forgetAgents();
+    noteAgentAttached('a1', 'claude-code');
+    noteAgentAttached('a2', 'cursor-vscode');
+    const sink = fakeSink();
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    await runAsAgent('a1', () => {
+      rec.beginAction('c1', 'reticle_act_and_wait', {});
+      rec.finishAction();
+      return Promise.resolve();
+    });
+    await runAsAgent('a2', () => {
+      rec.recordAction('c2', 'reticle_assert', {});
+      return Promise.resolve();
+    });
+    await rec.flush();
+    forgetAgents();
+    expect(sink.actions.map((a) => a.agent)).toEqual(['claude-code', 'cursor-vscode']);
+  });
+
+  /*
+   * From a persona drive: `actions.jsonl` kept a fill's arguments, so a typed password sat in clear
+   * in the local session journal. Nothing reads a typed value back from it (the run fold reads the
+   * ref, the target and the action), so no typed value is written at all.
+   */
+  it('never writes a typed value: fill, type, or a sequence step', async () => {
+    const TYPED = 'hunter2-correct-horse';
+    const sink = fakeSink();
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    rec.beginAction('c1', 'reticle_act_and_wait', {
+      ref: 'e7',
+      action: 'fill',
+      args: { value: TYPED },
+    });
+    rec.finishAction();
+    rec.beginAction('c2', 'reticle_act', { ref: 'e7', action: 'type', args: { text: TYPED } });
+    rec.finishAction();
+    rec.beginAction('c3', 'reticle_act_sequence', {
+      steps: [
+        { ref: 'e7', action: 'fill', args: { value: TYPED } },
+        { ref: 'e8', action: 'click' },
+      ],
+    });
+    rec.finishAction();
+    await rec.flush();
+    expect(JSON.stringify(sink.actions)).not.toContain(TYPED);
+    expect(sink.actions[0]?.args).toMatchObject({ ref: 'e7', action: 'fill' });
   });
 
   it('journals ambient events with no attribution when no action is active', async () => {

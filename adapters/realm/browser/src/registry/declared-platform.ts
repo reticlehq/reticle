@@ -70,6 +70,7 @@ export const SERVED_COMMANDS: readonly string[] = [
   ReticleCommand.PRESENTER,
   ReticleCommand.IMPACT,
   ReticleCommand.CAPTURE,
+  ReticleCommand.RENDER,
   ReticleCommand.NAVIGATE,
   ReticleCommand.REFRESH,
   // Bridge -> page pushes. Served like any other command, so they belong in this list; the guard
@@ -77,6 +78,7 @@ export const SERVED_COMMANDS: readonly string[] = [
   ReticleCommand.FLOWS,
   ReticleCommand.FLOW_PROGRESS,
   ReticleCommand.PLAN,
+  ReticleCommand.MARKERS,
 ];
 
 /**

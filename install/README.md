@@ -30,7 +30,7 @@ The usual argument against a `.sh` and a `.ps1` is that they drift the first tim
 
 The argument for the second file is that a stock Windows box has no `sh` at all. Without `install.ps1`, the platform with the most users is told to install Git Bash or WSL before it can run the command every doc shows. The prototype this replaced shipped a `.sh` and a `.cmd` for exactly that reason.
 
-**If either launcher ever needs a fourth step, it belongs in `reticle setup install`, not in here twice.** That is the line that keeps the pair honest, and [`break-gates.yml`](../.github/workflows/break-gates.yml) checks both parse and stay ASCII on every OS.
+**If either launcher ever needs a fourth step, it belongs in `reticle setup install`, not in here twice.** That is the line that keeps the pair honest, and the `launchers` job in [`ci.yml`](../.github/workflows/ci.yml) checks both parse, stay ASCII and install on every OS.
 
 ## Rules both files follow
 

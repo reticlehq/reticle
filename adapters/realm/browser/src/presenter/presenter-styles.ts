@@ -6,7 +6,6 @@ import { SETTINGS_CSS } from './presenter-settings-styles.js';
 import { ACCOUNT_CSS } from './presenter-account-styles.js';
 import { HUD_CHROME_CSS, HUD_LOG_WELL_CSS } from './chrome/presenter-hud-chrome.js';
 import { REPORT_CSS } from './presenter-report-styles.js';
-import { OFFER_CSS } from './carousel/offer-card.js';
 import { TALK_CSS } from './carousel/talk-card.js';
 import { CAROUSEL_CSS } from './carousel/carousel.js';
 import { CHAT_VIEWS_CSS } from './presenter-chat-views.js';
@@ -77,7 +76,6 @@ ${SHELL_CSS}
 ${SETTINGS_CSS}
 ${REPORT_CSS}
 ${ACCOUNT_CSS}
-${OFFER_CSS}
 ${TALK_CSS}
 ${CAROUSEL_CSS}
 ${LOG_CSS}

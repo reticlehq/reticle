@@ -27,7 +27,9 @@ Every verdict carries an `honesty.grade`. How strong the evidence actually was.
   </Card>
 </CardGroup>
 
-Here is the same login, verified two ways. First with a network predicate and no instrumentation leaned on:
+The full ladder, strongest first, is `signal`, `net`, `state`, `presence`, `none`: a matched request grades `net`, between a signal and a store change.
+
+Here is the same login, verified two ways. First with an element predicate and no instrumentation leaned on:
 
 ```json
 "honesty": { "grade": "presence", "coverage": { "pct": 100 }, "integrity": { "clean": true } }
@@ -214,7 +216,7 @@ Signals rot the way every convention rots: someone adds a mutation, forgets the 
 npm i -D @reticlehq/eslint-plugin
 ```
 
-One rule. State changed, so a signal must fire, makes the signal layer self-enforcing. It is the only mechanism we have found that survives contact with a deadline.
+One rule, `require-signal-on-mutation` (state changed, so a signal must fire), makes the signal layer self-enforcing. It is the only mechanism we have found that survives contact with a deadline.
 
 ## Start with one flow
 

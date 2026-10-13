@@ -17,6 +17,8 @@
  */
 import {
   BrowserLaunchKind,
+  coverageBucketOf,
+  type AgentNudgeKind,
   type ConnectFailure,
   type ConnectionStats,
   type ErrorShape,
@@ -155,6 +157,10 @@ export class SessionMetrics {
   #clientLeft = false;
   /** Feedback invitations shown, session-lifetime — the denominator for feedback_submitted. */
   #feedbackPrompted = 0;
+  /** Platform and Harness advisories shown to an agent this window, by kind. */
+  readonly #nudges = new Map<string, number>();
+  /** Harness drives refused for coverage this window, by coverage bucket. */
+  readonly #harnessRefused = new Map<string, number>();
   /** Error buckets by whose defect. Session-lifetime: the mix is a fact about the session. */
   readonly #errorClasses = new Map<string, number>();
   /**
@@ -493,6 +499,16 @@ export class SessionMetrics {
     this.#feedbackPrompted += 1;
   }
 
+  /** An agent was shown a platform or Harness advisory. */
+  recordNudge(kind: AgentNudgeKind): void {
+    bump(this.#nudges, kind);
+  }
+
+  /** A Harness drive was refused because the app's coverage is below the gate. */
+  recordHarnessRefused(percent: number): void {
+    bump(this.#harnessRefused, coverageBucketOf(percent));
+  }
+
   /** Which tool surface was advertised to agents this session. */
   recordSurface(surface: string): void {
     this.#surface = surface.slice(0, 32);
@@ -578,6 +594,10 @@ export class SessionMetrics {
       // never asked whether it worked is the whole finding.
       ...(final ? { endedWithVerdict: this.#lifetimeVerifications > 0 } : {}),
       ...(this.#feedbackPrompted > 0 ? { feedbackPrompted: this.#feedbackPrompted } : {}),
+      ...(this.#nudges.size > 0 ? { nudgesShown: Object.fromEntries(this.#nudges) } : {}),
+      ...(this.#harnessRefused.size > 0
+        ? { harnessRefusedCoverage: Object.fromEntries(this.#harnessRefused) }
+        : {}),
       ...(this.#errorClasses.size > 0
         ? { errorClasses: Object.fromEntries(this.#errorClasses) }
         : {}),
@@ -648,6 +668,8 @@ export class SessionMetrics {
       0 === this.#sdkFailures &&
       0 === this.#postSocketFailures &&
       0 === this.#postRetriesSaved &&
+      0 === this.#nudges.size &&
+      0 === this.#harnessRefused.size &&
       this.#hud.empty
     );
   }
@@ -679,6 +701,8 @@ export class SessionMetrics {
     this.#bugsFound = 0;
     this.#bugKinds.clear();
     this.#hud.reset();
+    this.#nudges.clear();
+    this.#harnessRefused.clear();
     // #seenBugKinds is deliberately NOT cleared. It is not a window counter — it is the
     // session-lifetime memory behind `repeat` on bug_found, and zeroing it made the same defect,
     // found again after a flush, report as a newly distinct one. Sessions run to 11.5 hours in the

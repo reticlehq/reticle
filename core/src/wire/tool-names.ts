@@ -86,6 +86,8 @@ export const ReticleTool = {
   VERIFY: 'reticle_verify',
   /** read cross-run history (.reticle/project.json) + diff-vs-last for a name. */
   PROJECT: 'reticle_project',
+  /** Where the user stands: sign-in, project link, plan, credits, Harness. */
+  ACCOUNT: 'reticle_account',
   /** The team's shared memory, read on demand — see memory/memory-tools.ts. */
   MEMORY: 'reticle_memory',
   /** explicitly record a run outcome (the manual companion to auto-recording). */

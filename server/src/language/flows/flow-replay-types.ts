@@ -14,7 +14,7 @@ import type { EvalResult } from '@reticlehq/engine/question/predicate/predicate.
  * (via the injected waitForPredicate). Mirrors PredicateSession so the same fake drives both.
  */
 export interface FlowReplaySession {
-  command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
+  command(name: string, args?: Record<string, unknown>, timeoutMs?: number): Promise<CommandResult>;
   /**
    * Attribution window around each replayed step. Optional so a minimal test double still satisfies the
    * interface, but a real session MUST supply it: without a window the step's own effects carry no

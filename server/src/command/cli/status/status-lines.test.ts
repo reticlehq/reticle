@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { StatusLabel, statusLines } from './status-lines.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  AttachState,
+  attachStatusFields,
+  rememberEnumerated,
+  rememberProxyStarted,
+  rememberToolCalled,
+} from '@/surface/mcp/attach-memory.js';
 
 describe('statusLines', () => {
   it('renders a running daemon with a connected session', () => {
@@ -89,5 +99,62 @@ describe('statusLines', () => {
   it('narrows a payload it does not recognise instead of throwing', () => {
     expect(() => statusLines({})).not.toThrow();
     expect(statusLines({}).join('\n')).toContain(StatusLabel.DAEMON);
+  });
+});
+
+/*
+ * A member removed from the workspace ran `reticle status` with a key set that the platform now
+ * refused, and read "not signed in — run reticle connect": the key was there, and refused.
+ */
+describe('an account whose key the platform refused', () => {
+  it('says the key was refused, not that nobody is signed in', () => {
+    const out = statusLines({
+      port: 4400,
+      running: false,
+      signedInAs: null,
+      linkedProject: 'bench-checkout',
+      keyRefused: 'You were removed from Acme.',
+    }).join('\n');
+    expect(out).toContain('refused at the last sync: You were removed from Acme.');
+    expect(out).not.toContain('not signed in');
+  });
+});
+
+/* A re-drive: signed in to one workspace, `reticle status` did not say which one the repo sends to. */
+describe('the workspace a linked repo sends to', () => {
+  it('is named beside the project', () => {
+    const out = statusLines({
+      port: 4400,
+      running: false,
+      signedInAs: 'Omar\u2019s workspace',
+      linkedProject: 'omar-notes',
+      linkedWorkspace: 'Northwind Retail',
+    }).join('\n');
+    expect(out).toContain('this repo is linked to omar-notes in workspace "Northwind Retail"');
+  });
+});
+
+/* Persona drives: the agent-link row printed the raw state name ("enumerated", "never-enumerated"). */
+describe('the agent link row', () => {
+  /** The status fields for a port whose record is in `state`, as the daemon reads them. */
+  function attachFields(state: AttachState): Record<string, unknown> {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-attach-'));
+    if (AttachState.NEVER_ATTACHED !== state) rememberProxyStarted(dir, 4400);
+    if (AttachState.NEVER_ATTACHED !== state && AttachState.NEVER_ENUMERATED !== state)
+      rememberEnumerated(dir, 4400);
+    if (AttachState.ENUMERATED === state) rememberToolCalled(dir, 4400);
+    return { ...attachStatusFields(dir, 4400) };
+  }
+  const out = (state: AttachState): string =>
+    statusLines({ port: 4400, running: true, ...attachFields(state) }).join('\n');
+
+  it('says in words that the agent has used the tools', () => {
+    expect(out(AttachState.ENUMERATED)).toMatch(/✓ your agent has read and used Reticle's tools/);
+  });
+
+  it('never prints a state name, and gives the action when there is one', () => {
+    const said = out(AttachState.NEVER_ENUMERATED);
+    expect(said).not.toContain(AttachState.NEVER_ENUMERATED);
+    expect(said).toContain('restart your MCP client');
   });
 });

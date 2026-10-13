@@ -33,6 +33,8 @@ interface GateHookInput {
   coverageRegressed?: readonly string[];
   /** Changed files the browser loaded and never ran a function of. */
   unexecuted?: readonly string[];
+  /** Flows the platform says passed before and are broken now. */
+  regressed?: number;
 }
 
 /** A short list, then a count — a hook that prints forty names is a hook people turn off. */
@@ -50,8 +52,12 @@ function name(list: readonly string[]): string {
  * interrupted.
  */
 export function gateHookMessage(exit: number, input: GateHookInput): string | undefined {
-  if (GateExit.FAIL !== exit) return undefined;
+  if (GateExit.FAIL !== exit && GateExit.REGRESSION !== exit) return undefined;
   const lines: string[] = ['Reticle: this change is not verified.'];
+  if (input.regressed !== undefined && 0 < input.regressed)
+    lines.push(
+      `  ${String(input.regressed)} flow(s) that passed before are broken now — \`reticle runs regression\` names them`,
+    );
   if (input.uncovered.length > 0) lines.push(`  no passing run covers: ${name(input.uncovered)}`);
   if (input.downgraded.length > 0)
     lines.push(

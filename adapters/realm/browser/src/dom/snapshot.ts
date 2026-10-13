@@ -1,6 +1,6 @@
 import { ElementState, SnapshotMode } from '@reticlehq/core';
 import { capturedRootOf } from './shadow-registry.js';
-import { isFrame } from './realm.js';
+import { isElement, isFrame } from './realm.js';
 import { getAccessibleName, getRole, getStates, getValue, isVisible } from './a11y.js';
 import { refs } from './addressing/refs.js';
 import { isIgnored, isReticleOverlay } from './dom-ignore.js';
@@ -47,18 +47,55 @@ function announces(el: Element, role: string): boolean {
 const TEXT_MAX = 80;
 
 /**
- * Concatenated DIRECT text of an element (its own text nodes, not descendants' — those are
- * captured when their own element is walked, so no duplication). Collapsed + truncated.
- * This is what makes a silent removal of non-interactive content (e.g. a KPI card) visible:
- * the accessibility role tree alone omits generic containers' text.
+ * An element's text as a reader sees it: its own text nodes and, in reading order, the text of the
+ * inline elements inside it (`<code>`, `<strong>`, a link). Block children are walked as their own
+ * lines, so their text is not repeated here. Collapsed + truncated.
+ *
+ * Inline children used to be left out, so "On your own computer, `reticle connect` creates a key."
+ * read "On your own computer, creates a key." — a sentence the page never showed. A link's text is
+ * kept only beside text of the element's own: `<li><a>Home</a></li>` would otherwise say Home twice.
+ * This is what makes a silent removal of non-interactive content (e.g. a KPI card) visible: the
+ * accessibility role tree alone omits generic containers' text.
  */
 function directText(el: Element): string {
-  let out = '';
-  for (const node of el.childNodes) {
-    if (3 === node.nodeType /* Node.TEXT_NODE */) out += node.textContent ?? '';
-  }
-  const collapsed = out.replace(/\s+/g, ' ').trim();
+  const parts = readingParts(el);
+  const collapsed = (parts.own ? parts.text : '').replace(/\s+/g, ' ').trim();
   return collapsed.length > TEXT_MAX ? `${collapsed.slice(0, TEXT_MAX)}…` : collapsed;
+}
+
+function readingParts(el: Element): { text: string; own: boolean } {
+  let text = '';
+  let own = false;
+  for (const node of el.childNodes) {
+    if (3 === node.nodeType /* Node.TEXT_NODE */) {
+      text += node.textContent ?? '';
+      own ||= 0 < (node.textContent ?? '').trim().length;
+    } else if (isElement(node) && foldsIntoParent(node)) {
+      const inner = readingParts(node);
+      text += inner.text;
+      own ||= inner.own;
+    } else if (isElement(node) && isInlineIn(node) && INTERACTIVE.has(getRole(node))) {
+      text += getAccessibleName(node);
+    }
+  }
+  return { text, own };
+}
+
+/** Laid out inside its parent's line of text, rather than as a box of its own. */
+function isInlineIn(el: Element): boolean {
+  const view = el.ownerDocument.defaultView;
+  const parent = el.parentElement;
+  if (null === view || null === parent) return false;
+  const around = view.getComputedStyle(parent).display;
+  if (around.includes('flex') || around.includes('grid')) return false;
+  return 'inline' === view.getComputedStyle(el).display;
+}
+
+/** Inline text with nothing to drive or name: read as part of its parent's sentence, not a line. */
+function foldsIntoParent(el: Element): boolean {
+  if (skipEarly(el) || !isInlineIn(el)) return false;
+  const role = getRole(el);
+  return !INTERACTIVE.has(role) && !announces(el, role) && 0 === getAccessibleName(el).length;
 }
 
 interface SnapshotStatus {
@@ -262,7 +299,13 @@ interface WalkCtx {
   maxDepth: number;
   unread: string[];
   unreadOverflow: boolean;
+  /** Walk into subtrees an overlay library stamped aria-hidden (see `overlayStamped`). */
+  throughOverlay?: boolean;
 }
+
+/** `aria-hidden` an overlay library (Radix's `aria-hidden` package) stamped, beside `data-aria-hidden`. */
+const overlayStamped = (el: Element): boolean =>
+  el.hasAttribute('data-aria-hidden') && 'true' === el.getAttribute('aria-hidden');
 
 /** Record a cut branch on the frontier, declaring an overflow rather than shortening it silently. */
 function recordUnread(branches: readonly Element[], ctx: WalkCtx): void {
@@ -305,7 +348,12 @@ function pierceChildren(parent: Element): Element[] {
 /** Emit one element (if it earns a line) and descend into it. Split out of `walk` so the completion
  * re-read can start AT a branch root — the node the truncated walk stopped just before emitting. */
 function visit(child: Element, depth: number, ctx: WalkCtx, inLive: boolean): void {
-  if (skipEarly(child)) {
+  const stampedOnly =
+    true === ctx.throughOverlay &&
+    overlayStamped(child) &&
+    !isIgnored(child) &&
+    !(child instanceof HTMLElement && child.hidden);
+  if (!stampedOnly && skipEarly(child)) {
     // Only the hidden ones are counted. The others — <script>, <style>, Reticle's own HUD — are
     // noise the tree is SUPPOSED to omit, and counting them would put a number on every ordinary page and so
     // make the number mean nothing on the one page that needs it.
@@ -318,6 +366,11 @@ function visit(child: Element, depth: number, ctx: WalkCtx, inLive: boolean): vo
   const style = view !== null ? view.getComputedStyle(child) : null;
   if (style !== null && 'none' === style.display) {
     ctx.hiddenSkipped += 1;
+    return;
+  }
+  // Its text is already in its parent's sentence (see directText); what it holds is still walked.
+  if (style !== null && 'inline' === style.display && !inLive && foldsIntoParent(child)) {
+    walk(child, depth, ctx, inLive);
     return;
   }
   const role = getRole(child);
@@ -451,6 +504,9 @@ function collectDialogs(root: ParentNode): string[] {
  * effect because the overlay genuinely captures pointer events. Say so instead of returning a
  * near-empty tree with no explanation. (#397)
  */
+/** An open dialog, as overlay libraries and native dialogs mark one. */
+const MODAL_SELECTOR = '[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"]';
+
 function overlayHidingPage(root: ParentNode): string | undefined {
   // Only meaningful for a whole-page snapshot; a scoped snapshot is the subtree the caller chose.
   if (root !== document.body) return undefined;
@@ -540,6 +596,16 @@ export function buildSnapshot(options: SnapshotOptions = {}): SnapshotResult {
   };
   if (true === options.includeRoot) visit(root, 0, ctx, false);
   else walk(root, 0, ctx);
+  // Nothing at all, while an open dialog sits in a subtree an overlay stamped aria-hidden (a second
+  // overlay — a tooltip, a toast — hid the dialog's own portal): the dialog IS what is on screen.
+  // An agent got an empty tree over "Copy this now" and could neither read nor press its button.
+  if (0 === ctx.nodes && root === document.body) {
+    ctx.throughOverlay = true;
+    for (const child of Array.from(root.children))
+      if (overlayStamped(child) && null !== child.querySelector(MODAL_SELECTOR))
+        visit(child, 0, ctx, false);
+    ctx.throughOverlay = false;
+  }
   return {
     tree: ctx.lines.join('\n'),
     status,

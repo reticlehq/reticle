@@ -17,6 +17,7 @@ import {
   chromiumLaunchHint,
   gotoOptions,
   SCREENSHOT_DETERMINISM,
+  captureWithChromeHidden,
 } from '@/portal/pool/playwright-launcher.js';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
@@ -110,6 +111,8 @@ export interface ScreenshotOpts {
    * baseline tweaks (hiding the HUD, stopping animations) would make their window flicker each second.
    */
   jpegQuality?: number;
+  /** One image pixel per CSS pixel, so a high-density display does not double a step screenshot. */
+  cssScale?: boolean;
 }
 
 /** The capability surface reticle_act depends on. A FAKE implementing this is injected in tests. */
@@ -466,9 +469,23 @@ export async function performGesture(
  * screenshot path lives in one place (mirrors performGesture). Returns the raw PNG bytes.
  */
 export async function capturePage(page: Page, opts: ScreenshotOpts): Promise<Uint8Array> {
+  // A step capture injects nothing into the page, so Reticle's own hosts are hidden another way.
+  if (true === opts.cssScale) {
+    return captureWithChromeHidden({ evaluate: (script: string) => page.evaluate(script) }, () =>
+      shoot(page, opts),
+    );
+  }
+  return shoot(page, opts);
+}
+
+async function shoot(page: Page, opts: ScreenshotOpts): Promise<Uint8Array> {
   const buf = await page.screenshot(
     opts.jpegQuality !== undefined
-      ? { type: 'jpeg', quality: opts.jpegQuality }
+      ? {
+          type: 'jpeg',
+          quality: opts.jpegQuality,
+          ...(true === opts.cssScale ? { scale: 'css' as const } : {}),
+        }
       : opts.clip !== undefined
         ? { ...SCREENSHOT_DETERMINISM, clip: opts.clip }
         : true === opts.fullPage

@@ -14,6 +14,10 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { advanceMsSchema, depthSchema } from './args/numeric-bounds.js';
+import { aliasParam, aliasUsed } from './args/alias-args.js';
+
+/** `name` for `recordingName`: the spelling every other naming argument uses. */
+const RECORDING_NAME_ALIAS = z.string().optional().describe('Alias for `recordingName`.');
 import { proposeConsequences } from '@/judgement/oracles/propose-consequences.js';
 import type { CompiledProgram } from '@/language/flows/recording/tape/recordings.js';
 import {
@@ -21,6 +25,7 @@ import {
   routesFromRecording,
 } from '@/language/flows/recording/recording-backtrack.js';
 import { replayProgram } from '@/language/flows/replay.js';
+import { redactRecordedSteps } from '@/language/flows/flows.js';
 import { diffLines } from '@/memory/project/baselines.js';
 import { selectPath, capDepth, projectComponentState } from '@/portal/session/state-select.js';
 import { costHint } from '@/portal/session/output-budget.js';
@@ -29,11 +34,11 @@ import { asNumber, asString, parseInteractive } from '@reticlehq/core';
 
 import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './tool-kit.js';
 import { bufferEnvelope } from '@/portal/session/session-health.js';
-import { routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
+import { navigablePath, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 
 /** The route part of a session URL. A host belongs to the machine, not to the journey. */
 /**
- * The page a recording started on, as a NAVIGABLE path: pathname + hash.
+ * The page a recording started on, as a NAVIGABLE path: pathname + query + hash.
  *
  * The hash matters and the pathname alone is not enough. Under a hash router every page has the
  * document pathname `/`, so a recording made on `#/posts/12` stored `/`, the replay's start-path
@@ -43,8 +48,15 @@ import { routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route
 function pathnameOf(url: string | undefined): string | undefined {
   if (url === undefined) return undefined;
   const parts = routeOfUrl(url);
-  return parts === undefined ? undefined : `${parts.docPath}${parts.hash}`;
+  // The query too, minus Reticle's own params: `/products?scope=TOPWEAR` and `/products` are different
+  // pages, and replay compares the query when the flow recorded one (#1059), so dropping it here
+  // started the replay on the unfiltered page (#1411).
+  return parts === undefined ? undefined : navigablePath(parts);
 }
+
+/** What record-stop says when the span crossed a full-page load (#1411). */
+const RECORDING_CROSSED_RELOAD =
+  'The recording crossed a full-page load: the page it started on unloaded, so the reaction report and the proposed consequences cover only the page that loaded after it.';
 
 /**
  * What record-stop says about a step that compiled to no anchor at all.
@@ -172,24 +184,39 @@ export const READ_TOOLS: ToolDef[] = [
     inputSchema: {
       recordingName: z
         .string()
+        .optional()
         .describe(
           'Identifier for this recording. Pass the same name to reticle_record{action:"stop"} and reticle_replay.',
         ),
+      name: RECORDING_NAME_ALIAS,
       ...sessionIdShape,
     },
     outputSchema: {
       recordingName: z.string(),
       since: z.number(),
+      normalized: z.array(z.string()).optional(),
     },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
-      const name = asString(args['recordingName']) ?? 'default';
+      const normalized = aliasUsed(args, 'recordingName', ['name']);
+      const name =
+        asString(aliasParam(args, 'recordingName', ['name'])['recordingName']) ?? 'default';
       const cursor = session.elapsed();
       // Where the journey begins, so a saved flow can navigate here before step 1 instead of
       // replaying from wherever the page happens to be. Pathname only: a host or port belongs to
       // the machine that recorded it, not to the journey.
-      deps.recordings.start(name, cursor, pathnameOf(session.url), session.id);
-      return Promise.resolve({ recordingName: name, since: cursor });
+      deps.recordings.start(
+        name,
+        cursor,
+        pathnameOf(session.url),
+        session.id,
+        session.currentDocumentId,
+      );
+      return Promise.resolve({
+        recordingName: name,
+        since: cursor,
+        ...(0 === normalized.length ? {} : { normalized }),
+      });
     },
   },
   {
@@ -199,7 +226,9 @@ export const READ_TOOLS: ToolDef[] = [
     inputSchema: {
       recordingName: z
         .string()
+        .optional()
         .describe('Identifier of an active recording started with reticle_record{action:"start"}.'),
+      name: RECORDING_NAME_ALIAS,
       ...sessionIdShape,
     },
     outputSchema: {
@@ -218,7 +247,10 @@ export const READ_TOOLS: ToolDef[] = [
       // The recording actually RUNNING when there is exactly one, not the literal name `default` —
       // the same defaulting that made `annotate` report "no steps" against a recording full of them.
       // With several running, `default` stays the documented answer rather than a guess.
-      const name = resolveAnnotateTarget(asString(args['recordingName']), deps.recordings.active());
+      const name = resolveAnnotateTarget(
+        asString(aliasParam(args, 'recordingName', ['name'])['recordingName']),
+        deps.recordings.active(),
+      );
       const rec = deps.recordings.stop(name);
       if (rec === undefined) {
         const active = deps.recordings.active();
@@ -228,7 +260,19 @@ export const READ_TOOLS: ToolDef[] = [
             : `no active recording named '${name}'; in progress: ${active.map((r) => `'${r}'`).join(', ')}`,
         );
       }
-      const events = session.eventsSince(rec.cursor);
+      // A full-page load mid-recording reconnects the page as a NEW Session, whose clock restarts
+      // below the cursor stored at start: the window came out negative and the span empty (#1411).
+      // Detected by the session that answers now not being the one that started it, or by the tab
+      // being on another document. A reconnect can keep the id, and its clock comes from another
+      // connection, so comparing clocks alone misses a reload once the new page has run past the
+      // cursor. The clock check stays for an SDK that stamps no document. The new page is then read
+      // from its start, and the warning says the report covers only it.
+      const crossedReload =
+        (rec.session !== undefined && rec.session !== session.id) ||
+        (rec.document !== undefined && rec.document !== session.currentDocumentId) ||
+        session.elapsed() < rec.cursor;
+      const from = crossedReload ? 0 : rec.cursor;
+      const events = session.eventsSince(from);
       const routes = routesFromRecording(rec.startPath, events);
       const program: CompiledProgram = {
         name,
@@ -239,7 +283,7 @@ export const READ_TOOLS: ToolDef[] = [
       };
       deps.recordings.saveCompiled(program);
       const unstable = rec.steps.filter((s) => !s.stable).length;
-      const report = buildReactionReport(events, session.elapsed() - rec.cursor);
+      const report = buildReactionReport(events, session.elapsed() - from);
       // Self-generating oracles: propose ranked mustHold from what the recorded window actually did.
       const proposedConsequences = proposeConsequences(events);
       const digest = summarizeReaction(report);
@@ -252,7 +296,7 @@ export const READ_TOOLS: ToolDef[] = [
       const timeline =
         events.length > 0
           ? {
-              timeline_omitted: `${String(events.length)} event(s) were recorded and are not included here. Call reticle_observe { since: ${String(rec.cursor)} } for the raw timeline.`,
+              timeline_omitted: `${String(events.length)} event(s) were recorded and are not included here. Call reticle_observe { since: ${String(from)} } for the raw timeline.`,
             }
           : {};
       const unanchored = 0 < unstable ? unanchoredWarning(unstable) : undefined;
@@ -263,12 +307,14 @@ export const READ_TOOLS: ToolDef[] = [
           ? `${String(unkept)} step(s) proved a consequence this flow does not keep: ${UNKEPT_EXPECT}.`
           : undefined;
       const backtrack = recordingBacktrackWarning(routes);
-      const warning = [unanchored, backtrack, lostChecks].filter(
+      const reloaded = crossedReload ? RECORDING_CROSSED_RELOAD : undefined;
+      const warning = [reloaded, unanchored, backtrack, lostChecks].filter(
         (part): part is string => part !== undefined,
       );
       const body = {
         recordingName: name,
-        program,
+        // Redacted as the saved flow is; the store above keeps the real values for replay.
+        program: { ...program, steps: redactRecordedSteps(program.steps) },
         ...timeline,
         ...(0 === warning.length ? {} : { warning: warning.join(' ') }),
         ...(proposedConsequences.length > 0 ? { proposedConsequences } : {}),
@@ -287,9 +333,11 @@ export const READ_TOOLS: ToolDef[] = [
     inputSchema: {
       recordingName: z
         .string()
+        .optional()
         .describe(
           'Name of a compiled recording (from reticle_record{action:"stop"}) to re-execute.',
         ),
+      name: RECORDING_NAME_ALIAS,
       confirmDangerous: z
         .boolean()
         .optional()
@@ -309,7 +357,8 @@ export const READ_TOOLS: ToolDef[] = [
       ),
     },
     handler: async (deps, args) => {
-      const name = asString(args['recordingName']) ?? 'default';
+      const name =
+        asString(aliasParam(args, 'recordingName', ['name'])['recordingName']) ?? 'default';
       const program = deps.recordings.getCompiled(name);
       if (program === undefined) throw new Error(`no compiled recording named '${name}'`);
       const session = deps.sessions.resolve(asString(args['sessionId']));
@@ -545,7 +594,22 @@ export const READ_TOOLS: ToolDef[] = [
       // Back-compat: an older browser returned the whole store; scope it here (may already be
       // size-truncated in transit for a very large store — that is the limitation this fix removes
       // for current SDKs).
-      const base = store !== undefined ? (root.stores ?? {})[store] : result;
+      const stores = root.stores;
+      const hasStore =
+        store !== undefined &&
+        'object' === typeof stores &&
+        stores !== null &&
+        Object.prototype.hasOwnProperty.call(stores, store);
+      if (store !== undefined && path === undefined && !hasStore) {
+        return {
+          store,
+          found: false,
+          value: null,
+          availableKeys: names,
+          storeNames: names,
+        };
+      }
+      const base = store !== undefined ? (stores ?? {})[store] : result;
       const selection = path !== undefined ? selectPath(base, path) : { found: true, value: base };
       const value =
         selection.found && depth !== undefined ? capDepth(selection.value, depth) : selection.value;

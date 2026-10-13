@@ -136,9 +136,7 @@ const linkAfterLogin = async (
    * two verdicts had been recorded. Measured, on this very repo's bench app.
    */
   if (!(await fs.exists(join(process.cwd(), RETICLE_CONFIG_BASENAME)))) {
-    hint(
-      'next: `reticle init` here first, then `reticle link` — or log in from a project directory',
-    );
+    hint('next: `reticle init` here first, then `reticle connect`');
     return;
   }
   /*
@@ -150,13 +148,13 @@ const linkAfterLogin = async (
     project === undefined &&
     (await fs.exists(join(process.cwd(), RETICLE_DIR, CLOUD_LINK_FILE)))
   ) {
-    hint('this repo is already linked — `reticle push` to send what it has recorded');
+    hint('this repo is already linked — `reticle sync` to send what it has recorded');
     return;
   }
   try {
     await link(project === undefined ? ['--url', url] : ['--url', url, '--project', project]);
   } catch {
-    hint('signed in, but linking this repo failed — run `reticle link` to retry');
+    hint('signed in, but linking this repo failed — run `reticle connect` to retry');
   }
 };
 
@@ -200,7 +198,7 @@ const cmdLoginDevice = async (
     }
     if ('pending' === poll.status) {
       if (Date.now() > started.expiresAt) {
-        err('device login expired — run `reticle login` again');
+        err('device login expired — run `reticle connect` again');
         return 1;
       }
       continue;
@@ -208,7 +206,7 @@ const cmdLoginDevice = async (
     err(
       'denied' === poll.status
         ? 'device login was denied in the browser'
-        : 'device login expired — run `reticle login` again',
+        : 'device login expired — run `reticle connect` again',
     );
     return 1;
   }
@@ -298,21 +296,29 @@ export function hudSignIn(
   start: (open: (url: string) => void) => Promise<number> = (open) =>
     cmdLoginDevice(undefined, undefined, NO_LINK, false, open),
   opener: (url: string) => void = openBrowser,
-): () => void {
+  /**
+   * Link the asking tab's project once signed in: "Save for your team" signed in and linked
+   * nothing, so the panel asked for the click just made. The daemon passes `projectLinkOnly`.
+   */
+  link?: (root: string) => Promise<number>,
+): (from?: { artifactRoot?: string | undefined }) => void {
   let running = false;
   let pending: string | undefined;
-  return () => {
+  return (from) => {
     if (running) {
       if (pending !== undefined) opener(pending);
       return;
     }
     running = true;
+    const root = from?.artifactRoot;
     void start((url) => {
       pending = url;
       opener(url);
     })
-      .then((code) => {
-        if (0 === code) onSignedIn();
+      .then(async (code) => {
+        if (0 !== code) return;
+        if (link !== undefined && root !== undefined) await link(root).catch(() => 1);
+        onSignedIn();
       })
       .catch(() => undefined)
       .finally(() => {
@@ -321,3 +327,65 @@ export function hudSignIn(
       });
   };
 }
+
+const WorkspacesSchema = z.object({
+  active: z.string().optional(),
+  memberships: z.array(z.object({ orgId: z.string(), name: z.string() })).default([]),
+});
+const ActivatedSchema = z.object({
+  token: z.string(),
+  org: z.object({ id: z.string(), name: z.string() }),
+});
+
+/**
+ * The workspace `connect` links in. A person in several was linked in whichever the saved sign-in
+ * was for, told "Connected", and nothing moved on the dashboard they were looking at. `--workspace
+ * <name|id>` switches the sign-in (and saves it); without it, a person in more than one is told which
+ * one this is and how to choose. Returns non-zero when the named workspace is not theirs.
+ */
+export const chooseWorkspace = async (url: string, wanted: string | undefined): Promise<number> => {
+  const session = await readSession();
+  if (null === session) return 0;
+  let listed: z.infer<typeof WorkspacesSchema>;
+  try {
+    listed = WorkspacesSchema.parse(await api('GET', `${url}/v1/me/workspaces`, session.token));
+  } catch {
+    return 0; // an older platform: nothing to choose between
+  }
+  const names = listed.memberships.map((m) => `"${m.name}"`).join(', ');
+  if (wanted === undefined) {
+    if (1 < listed.memberships.length)
+      hint(
+        `you belong to ${String(listed.memberships.length)} workspaces (${names}); this links in ` +
+          `"${session.orgName}". Another: reticle connect --workspace <name>`,
+      );
+    return 0;
+  }
+  const lc = wanted.toLowerCase();
+  const target = listed.memberships.find((m) => m.orgId === wanted || m.name.toLowerCase() === lc);
+  if (target === undefined) {
+    err(`you are not a member of a workspace "${wanted}": yours are ${names}`);
+    return 2;
+  }
+  if (target.orgId === listed.active) return 0;
+  const activated = ActivatedSchema.parse(
+    await api(
+      'POST',
+      `${url}/v1/me/workspaces/${encodeURIComponent(target.orgId)}/activate`,
+      session.token,
+      {},
+    ),
+  );
+  await writeSession(
+    url,
+    activated.token,
+    activated.org.name,
+    activated.org.id,
+    undefined,
+    () => Promise.resolve(0),
+    session.email,
+    false,
+  );
+  hint(`signed in to workspace "${activated.org.name}"`);
+  return 0;
+};

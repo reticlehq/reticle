@@ -5,7 +5,7 @@ description: Which frameworks Reticle supports, which are wired but unverified, 
 icon: layer-group
 ---
 
-**React + Vite, Next.js, Remix and Astro are fully supported, each with an example app driven to a verdict in CI. Astro, SvelteKit, Nuxt, React Router framework mode, Create React App, Vue and Angular have their INSTALL gated: the install gate scaffolds each from scratch on every change and requires a real session, but no gate drives them to a verdict. TanStack Start, Preact and plain HTML are wired by `init` and documented but not gated at all, so treat them as plausible rather than proven.** The exact wiring for each is below.
+**React + Vite, Next.js, Remix and Astro are fully supported, each with an example app in CI: React + Vite and Next.js are driven to a verdict by the e2e battery, and the Remix and Astro examples are booted and must register a session. SvelteKit, Nuxt, React Router framework mode, Create React App, Vue and Angular have their INSTALL gated: the install gate scaffolds each from scratch whenever the install path changes and requires a real session, but no gate drives them to a verdict. TanStack Start, Preact and plain HTML are wired by `init` and documented but not gated at all, so treat them as plausible rather than proven.** The exact wiring for each is below.
 
 Reticle is a verification layer that embeds a dev-only SDK in your running web app so an AI coding agent can prove a change works. Its core is framework-neutral: DOM, network, console, routing, animations and source mapping work anywhere JavaScript runs.
 
@@ -17,7 +17,7 @@ What varies is two things: how `connect()` gets into your app, and whether you g
 
 We separate "we tested this" from "this should work". Four frameworks have an example app and a CI gate. The rest are wired and documented but nothing proves they still work.
 
-Two columns say different things and it is worth keeping them apart. **CI gate** `yes` means an example app is driven to a verdict on every change. **install only** means the install gate scaffolds that stack from scratch, runs `init`, boots it and waits for a session, so the setup is proven and the drive is not. Vue is there because a release once nearly shipped an installer that left a Vue app connecting 0% of the time, and the gate that exists for exactly that had only React scaffolds.
+Two columns say different things and it is worth keeping them apart. **CI gate** `yes` means an example app runs in CI: React + Vite and Next.js are driven to a verdict, Remix and Astro are booted and must register a session. **install only** means the install gate scaffolds that stack from scratch, runs `init`, boots it and waits for a session, so the setup is proven and the drive is not. Vue is there because a release once nearly shipped an installer that left a Vue app connecting 0% of the time, and the gate that exists for exactly that had only React scaffolds.
 
 **Source pointer** is the `file:line` on a verdict. It needs the build plugin to stamp the source, which it does for JSX and, separately, for Svelte components. Vue single-file components are neither, so a Vue app gets every other signal and no `source` field. Measured, not assumed: a Svelte counter returns `src/lib/Counter.svelte:5` and the same drive on Vue returns none.
 
@@ -29,7 +29,7 @@ Two columns say different things and it is worth keeping them apart. **CI gate**
 | **Astro** | yes | yes | yes | yes | Supported |
 | **SvelteKit** | yes | no | install only | unproven | Install gated, drive unverified |
 | **TanStack Start** | yes | no | no | unproven | Wired, unverified |
-| **Nuxt** | yes | no | install only | unproven | Install gated, drive unverified |
+| **Nuxt** | yes | no | install only | no | Install gated, drive unverified |
 | **React Router (framework mode)** | yes | no | install only | yes | Install gated, drive unverified |
 | **Create React App** | yes | no | install only | unproven | Install gated, drive unverified |
 | **Angular 17+** | yes | no | install only | no | Install gated, drive unverified |
@@ -128,10 +128,14 @@ The `<script>` tag must not sit inside a conditional. Astro hoists them statical
 SvelteKit renders through `app.html` and never triggers Vite's `index.html` injection, so the plugin cannot auto-connect. A client hook is the reliable path, and it is what `init` writes.
 
 ```ts
-// src/hooks.client.ts
-import { reticle } from '@reticlehq/browser';
-
-if (import.meta.env.DEV) reticle.connect();
+// src/hooks.client.ts (abridged)
+if (import.meta.env.DEV) {
+  void import('@reticlehq/browser').then(({ reticle }) => {
+    // Inlined by @reticlehq/vite-plugin. The bridge refuses a connect with no token, even on localhost.
+    const token = typeof __RETICLE_TOKEN__ !== 'undefined' ? __RETICLE_TOKEN__ : '';
+    reticle.connect({ ...(token.length > 0 ? { token } : {}) });
+  });
+}
 ```
 
 The Vite plugin still stamps `data-reticle-source` into `.svelte` components, so verdicts carry `file:line`.
@@ -163,11 +167,17 @@ useEffect(() => {
 Nuxt owns its own Vite instance and renders its own HTML. There is no `vite.config` to patch and no `index.html` to inject into, so `reticle init` writes a dev-only client plugin and adds a `vite.define` block to `nuxt.config`. That block is the only place a Nuxt app can inline the pairing token, which the bridge requires even on localhost. What it writes is this, and the notes below are why each line is the way it is.
 
 ```ts
-// app/plugins/reticle.client.ts (Nuxt 3: plugins/reticle.client.ts)
+// app/plugins/reticle.client.ts (Nuxt 3: plugins/reticle.client.ts), abridged
 export default defineNuxtPlugin(() => {
   if (!import.meta.dev) return;
   void import('@reticlehq/browser').then(({ reticle }) => {
-    reticle.connect();
+    // Both inlined by the vite.define block init adds to nuxt.config.
+    const token = typeof __RETICLE_TOKEN__ !== 'undefined' ? __RETICLE_TOKEN__ : '';
+    const root = typeof __RETICLE_ROOT__ !== 'undefined' ? __RETICLE_ROOT__ : '';
+    reticle.connect({
+      ...(token.length > 0 ? { token } : {}),
+      ...(root.length > 0 ? { root } : {}),
+    });
   });
 });
 ```
@@ -190,7 +200,7 @@ Three traps, all reported from the field rather than imagined:
   </Accordion>
 </AccordionGroup>
 
-Use `@reticlehq/browser`, the framework-neutral sensor. You get DOM, network, console, routing and source `file:line`. What you do not get is React component identity, which is the only thing the React adapter adds.
+Use `@reticlehq/browser`, the framework-neutral sensor. You get DOM, network, console and routing. You do not get React component identity (the React adapter adds that) or a `source` field: Vue single-file components are not stamped.
 
 <Tip>
   Developing on something other than `localhost`? Add `allowNonLocalhost: true` to the connect call.
@@ -199,16 +209,13 @@ Use `@reticlehq/browser`, the framework-neutral sensor. You get DOM, network, co
 
 ## Vue
 
-Vue apps outside Nuxt are Vite apps, so `init` finds them. Install the sensor rather than the React kit.
+Vue apps outside Nuxt are Vite apps, so `init` finds them. It installs the sensor rather than the React kit, plus the Vite plugin:
 
 ```bash
-npm i -D @reticlehq/browser
+npm i -D @reticlehq/browser @reticlehq/vite-plugin
 ```
 
-```ts
-import { reticle } from '@reticlehq/browser';
-if (import.meta.env.DEV) reticle.connect();
-```
+Add `reticle()` to the `plugins` of your Vite config, as in the React example above. The plugin injects `connect()` with the pairing token, so there is no connect line to write.
 
 Pinia is a first-class store. See [State management](/state-management).
 
@@ -229,10 +236,13 @@ No config file to patch, so `connect()` goes in your entry module.
 ```ts
 // src/index.tsx
 import { reticle } from '@reticlehq/browser';
-if (process.env.NODE_ENV !== 'production') reticle.connect();
+if (process.env.NODE_ENV !== 'production') {
+  // The bridge refuses a connect with no pairing token, even on localhost.
+  reticle.connect({ token: '<pairing token>' });
+}
 ```
 
-The same shape works for webpack, Parcel, and the Vue and Svelte CLIs.
+The token is the contents of `~/.reticle/pairing-token`; do not commit it. On Create React App, `init` writes this for you: a dev-only connect module that reads the token from `REACT_APP_RETICLE_TOKEN`, which it puts in the gitignored `.env.development.local`. The same shape works for webpack, Parcel, and the Vue and Svelte CLIs.
 
 ## Plain HTML
 
@@ -257,7 +267,7 @@ Angular 17 and later, on the Vite-based `@angular/build` dev server. `init` inst
 
 The token takes that route because the Angular CLI has no config file that runs code: a literal in `angular.json` commits a per-machine secret, and a gitignored module imported from `main.ts` is bundled into `ng build` whether or not anything can reach it. An existing `proxyConfig` is yours and is never replaced: the step goes manual and names the entry to add to it. A workspace with several served applications is also manual, because which one is the app is not `init`'s to guess.
 
-You get DOM, network, console, routing and state tools. You do not get component identity (that is the React adapter) or a `source` field (the stamper covers JSX and Svelte). The install gate scaffolds an Angular app (no SSR) on every change and requires a session; SSR was proven by hand, and nothing drives an Angular app to a verdict.
+You get DOM, network, console, routing and state tools. You do not get component identity (that is the React adapter) or a `source` field (the stamper covers JSX and Svelte). The install gate scaffolds an Angular app (no SSR) whenever the install path changes and requires a session; SSR was proven by hand, and nothing drives an Angular app to a verdict.
 
 ## Server-rendered apps (Django, Flask, FastAPI, Rails)
 
@@ -367,8 +377,9 @@ Solid appears in dependency detection but has no wiring, no adapter and no gate.
 
 <Accordion title="Which framework should I pick if I want the strongest verdicts?">
   React on Vite. It is the shortest install, and it is the only combination that gives you all three
-  of component identity, `file:line` source pointers and a CI-gated example app. If you are already
-  on Next.js, Remix or Astro, you get the same guarantees.
+  of component identity, `file:line` source pointers and an example app driven to a verdict in CI.
+  Next.js gives you the same. On Remix or Astro you get the same identity and source pointers, but
+  their example apps are only checked for a session in CI, not driven to a verdict.
 </Accordion>
 
 <Accordion title="My framework is not listed at all. Will it work?">

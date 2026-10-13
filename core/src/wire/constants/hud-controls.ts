@@ -35,7 +35,8 @@ const PLAIN_CONTROLS = [
   'carousel-next',
   'carousel-close',
   'page-close',
-  'offer-claim',
+  'team-open',
+  'team-save',
   'talk-book',
   'account-signin',
   'account-trigger',
@@ -61,11 +62,22 @@ const PLAIN_CONTROLS = [
   'mark-send',
   // The Agent Log's own Harness switch; the Settings one is `setting.harnessEnabled`.
   'harness-switch',
-  // "See all" beside the Agent Log's replay row, and below Impact's recent bugs.
-  'flows-all',
+  // Run Harness beside it, and Stop while the drive it started runs.
+  'harness-run',
+  'harness-stop',
+  // The Agent Log's foot row: opens the Harness page.
+  'harness-open',
+  // The Agent Log's foot row: the Harness on/off switch.
+  'harness-toggle',
+  // Link this project, on the Harness page.
+  'harness-link',
+  // Below the coverage gate: copy the prompt that closes it, for the coding agent.
+  'harness-copy-prompt',
+  // The coding-agent block on the Agent Log: copy a prompt when none is connected.
+  'agent-copy',
+  // "See all" below Impact's recent bugs.
   'defects-all',
   // "See the logs" beside a replay the person started from a chip.
-  'see-logs',
   // The Harness plan board on the Agent Log: hide it, or open one journey's steps.
   'plan-close',
   'plan-journey',
@@ -101,7 +113,7 @@ const KEYED_CONTROLS = {
   'tour-target': ['copy', 'back', 'done', 'next', 'skip'],
   link: ['docs', 'github', 'site', 'discord', 'defect', 'dashboard'],
   'annotation-tab': ['current', 'history'],
-  'chat-view-btn': ['activity', 'flows', 'annotations'],
+  'chat-view-btn': ['activity', 'flows', 'annotations', 'harness'],
 } as const satisfies Record<(typeof HUD_KEYED_ATTRS)[number], readonly string[]>;
 
 let controls: ReadonlySet<string> | undefined;

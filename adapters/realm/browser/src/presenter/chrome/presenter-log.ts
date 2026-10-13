@@ -51,7 +51,8 @@ const HANDOVER_TEXT: Record<LogActor, string> = {
   harness: 'Reticle Harness is driving',
 };
 /** On the log itself: who drove the last row, so the next one knows whether a handover happened. */
-const LAST_ACTOR_ATTR = 'data-reticle-log-actor';
+/** Who drove last in this log, so a change of driver draws a handover line. */
+export const LAST_ACTOR_ATTR = 'data-reticle-log-actor';
 const DATA_ACTOR = 'data-actor';
 const DATA_STATE = 'data-state';
 const HANDOVER_KIND = 'handover';
@@ -68,10 +69,23 @@ const DATA_RETICLE_LOG_ROW = 'data-reticle-log-row';
 export const LOG_TIME_ATTR = 'data-reticle-log-time';
 const DATA_KIND = 'data-kind';
 const LOG_TEXT_CLASS = 'reticle-log-text';
+/** How many times one read was polled in a row, on the one row that stands for them. */
+const REPEAT_ATTR = 'data-reticle-repeat';
+const LOG_REPEAT_CLASS = 'reticle-log-repeat';
 const LOG_RES_CLASS = 'reticle-res';
 const LOG_CHIP_CLASS = 'reticle-chip';
 
-const LOG_EMPTY_HINT = 'Agent activity will appear here';
+/**
+ * The log before anything has happened: what the HUD is, then the two ways to make something
+ * happen. Pure CSS content, so an empty log costs no markup and vanishes with the first row.
+ */
+export const LOG_EMPTY_TEXT = {
+  TITLE: 'Reticle checks your app from the inside.',
+  /** Before the page has ever reached Reticle: no agent and no Harness can reach it either. */
+  OFFLINE_TITLE: 'Not connected yet.',
+  OFFLINE_BODY: 'Once Reticle is running, this page connects by itself and the steps show here.',
+  BODY: 'Ask your coding agent to verify a change with Reticle: each step shows here, live.\\AOr open Harness below: Reticle clicks through the app as the person you pick and reports what breaks.',
+} as const;
 
 /** How long to keep re-pinning the feed after the panel opens, while rows render their real size. */
 const LOG_SETTLE_MS = 160;
@@ -82,9 +96,13 @@ export const LOG_CSS = `
   display:flex;flex-direction:column;
   gap:4px;padding:8px 10px 10px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent;
   background:transparent;}
-[data-reticle-log]:empty{align-items:center;justify-content:center;}
-[data-reticle-log]:empty::after{content:"${LOG_EMPTY_HINT}";display:block;padding:24px 16px;text-align:center;
-  color:var(--reticle-faint);font-size:11.5px;line-height:1.5;letter-spacing:.01em;}
+[data-reticle-log]:empty{align-items:center;justify-content:center;gap:6px;padding:16px 18px;}
+[data-reticle-log]:empty::before{content:"${LOG_EMPTY_TEXT.TITLE}";display:block;text-align:center;
+  color:var(--reticle-hud-text);font-size:var(--reticle-hud-size-base);font-weight:600;line-height:1.4;}
+[data-reticle-log]:empty::after{content:"${LOG_EMPTY_TEXT.BODY}";display:block;max-width:260px;text-align:center;white-space:pre-line;
+  color:var(--reticle-hud-text-muted);font-size:var(--reticle-hud-size-sm);line-height:1.5;}
+[data-reticle-state="unreachable"] [data-reticle-log]:empty::before{content:"${LOG_EMPTY_TEXT.OFFLINE_TITLE}";}
+[data-reticle-state="unreachable"] [data-reticle-log]:empty::after{content:"${LOG_EMPTY_TEXT.OFFLINE_BODY}";}
 [data-reticle-log]::-webkit-scrollbar{width:8px;}
 [data-reticle-log]::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:8px;border:2px solid transparent;background-clip:content-box;}
 [data-reticle-log]::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);background-clip:content-box;}
@@ -107,8 +125,9 @@ export const LOG_CSS = `
 [data-reticle-log] [data-reticle-log-row] .reticle-chip-label{
   position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
 [data-reticle-log] [data-reticle-log-row][data-kind="read"] .reticle-chip{opacity:.5;}
-[${LOG_TIME_ATTR}]{flex:none;color:var(--reticle-faint);font-size:9px;font-variant-numeric:tabular-nums;padding-top:2px;min-width:2em;opacity:.85;}
+[${LOG_TIME_ATTR}]{flex:none;color:var(--reticle-faint);font-size:11px;font-variant-numeric:tabular-nums;padding-top:2px;min-width:2em;opacity:.85;}
 [data-reticle-log] .reticle-log-text{flex:1;min-width:0;color:var(--reticle-muted);overflow-wrap:anywhere;word-break:break-word;}
+[data-reticle-log] .reticle-log-repeat{flex:none;color:var(--reticle-muted);font-variant-numeric:tabular-nums;opacity:.7;}
 [data-reticle-log] .reticle-res{flex:none;font-size:7.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--reticle-bad);opacity:.75;padding-top:2px;}
 [data-reticle-log] .reticle-res.reticle-pass{display:none;}
 [data-reticle-log-row][data-kind="human"]{align-self:flex-end;max-width:78%;margin:6px 0 2px;
@@ -123,21 +142,21 @@ export const LOG_CSS = `
 [data-reticle-log-row][data-state="running"] .reticle-res{display:inline-block;width:6px;height:6px;margin-top:5px;
   border-radius:50%;background:var(--reticle-c-active);opacity:1;animation:reticle-row-pulse 1s ease-in-out infinite;}
 @keyframes reticle-row-pulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
-[data-reticle-log] .reticle-res.reticle-pass{display:inline;color:#4ade80;font-size:10px;opacity:.9;}
+[data-reticle-log] .reticle-res.reticle-pass{display:inline;color:#4ade80;font-size:11px;opacity:.9;}
 [data-reticle-log] .reticle-res.reticle-fail{color:#fca5a5;background:rgba(239,68,68,.16);border-radius:999px;padding:1px 6px;font-size:8px;opacity:1;}
 /* The Harness's rows wear its own colour, so two drivers never read as one. */
 [data-reticle-log-row][data-actor="harness"]{--reticle-row-accent:#a78bfa;}
 [data-reticle-log-row][data-actor="harness"] .reticle-chip{color:#a78bfa;}
 [data-reticle-log-row][data-actor="harness"]:not([data-kind="handover"]){box-shadow:inset 2px 0 0 color-mix(in srgb,#a78bfa 55%,transparent);padding-left:8px;}
 [data-reticle-log-row][data-kind="handover"]{align-items:center;gap:8px;margin:8px 0 4px;padding:0;
-  font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--reticle-row-accent,var(--reticle-c-active));}
+  font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--reticle-row-accent,var(--reticle-c-active));}
 [data-reticle-log-row][data-kind="handover"]::before,[data-reticle-log-row][data-kind="handover"]::after{
   content:"";flex:1;height:1px;background:color-mix(in srgb,var(--reticle-row-accent,var(--reticle-c-active)) 40%,transparent);}
 [data-reticle-log-row][data-kind="handover"] .reticle-log-text{flex:none;color:inherit;}
 /* What the Harness or the daemon says about a drive reads as a notice, not an aside. */
 [data-reticle-log-row][data-kind="narration"]{font-style:normal;color:var(--reticle-fg);margin:4px 0;padding:7px 10px;
   border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);}
-` as string;
+`;
 
 /**
  * Pin the feed to its newest row.
@@ -239,6 +258,24 @@ export function appendLogRow(
   logMax: number,
   actor: LogActor = LOG_ACTOR.AGENT,
 ): LogHandle {
+  // A wait polls the page, and every poll was its own row: one "Finding" twenty times buried the
+  // log. The same read again, by the same driver, is one row that counts.
+  const repeated = kind === LOG_KIND.READ ? sameReadAsLast(container, text, actor) : undefined;
+  if (repeated !== undefined) {
+    const times = Number(repeated.getAttribute(REPEAT_ATTR) ?? '1') + 1;
+    repeated.setAttribute(REPEAT_ATTR, String(times));
+    let count = repeated.querySelector<HTMLElement>(`.${LOG_REPEAT_CLASS}`);
+    if (null === count) {
+      count = document.createElement('span');
+      count.className = LOG_REPEAT_CLASS;
+      repeated.querySelector(`.${LOG_TEXT_CLASS}`)?.after(count);
+    }
+    count.textContent = `×${String(times)}`;
+    const time = repeated.querySelector(`[${LOG_TIME_ATTR}]`);
+    if (null !== time) time.textContent = ts;
+    const res = repeated.querySelector<HTMLElement>(`.${LOG_RES_CLASS}`);
+    return null === res ? { result: () => undefined } : rowHandle(repeated, res);
+  }
   // A handover is shown where it happens, so a person watching sees the Harness take the wheel.
   const driven = kind === LOG_KIND.ACT || kind === LOG_KIND.READ;
   if (driven && (container.getAttribute(LAST_ACTOR_ATTR) ?? LOG_ACTOR.AGENT) !== actor) {
@@ -299,6 +336,24 @@ export function appendLogRow(
     scrollLogToLatest(container);
   });
 
+  return rowHandle(row, resEl);
+}
+
+/** The last row, when it is this same read by this same driver. */
+function sameReadAsLast(
+  container: HTMLElement,
+  text: string,
+  actor: LogActor,
+): HTMLElement | undefined {
+  const last = container.lastElementChild;
+  if (!(last instanceof HTMLElement) || !last.hasAttribute(DATA_RETICLE_LOG_ROW)) return undefined;
+  if (last.getAttribute(DATA_KIND) !== LOG_KIND.READ || last.getAttribute(DATA_ACTOR) !== actor)
+    return undefined;
+  return last.querySelector(`.${LOG_TEXT_CLASS}`)?.textContent === text ? last : undefined;
+}
+
+/** The outcome stamp for one row. */
+function rowHandle(row: HTMLElement, resEl: HTMLElement): LogHandle {
   return {
     result: (r: LogResult): void => {
       row.setAttribute(DATA_STATE, r);

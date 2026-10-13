@@ -68,6 +68,13 @@ export interface EvalResult {
   observed?: string;
   expected?: string;
   assertion?: string;
+  /**
+   * The text IS on the page, in another case. `pass` stays false — a capitalisation defect is a
+   * defect — and `wouldHold` names the check that would have held, so the retry is one decision
+   * (does case matter here?) rather than a hunt.
+   */
+  caseOnlyMiss?: boolean;
+  wouldHold?: string;
 }
 
 export function str(value: unknown): string | undefined {
@@ -130,6 +137,51 @@ export function matchValue(got: unknown, want: unknown): boolean {
     return true;
   }
   return structurallyEqual(got, want);
+}
+
+/**
+ * Detects the #1117 pattern: an MCP client stringified a primitive before sending it, so
+ * `false` arrived as `"false"`, `42` as `"42"`, `null` as `"null"`. The store holds the real
+ * type and the comparison is a type mismatch, not a value mismatch — inconclusive, not `no`.
+ */
+export function isStringifiedPrimitiveMismatch(got: unknown, want: unknown): boolean {
+  if ('string' !== typeof want) return false;
+  if ('boolean' === typeof got || 'number' === typeof got || null === got) {
+    return String(got) === want;
+  }
+  return false;
+}
+
+/**
+ * The inconclusive result for a stringified-primitive mismatch on a state `equals` check.
+ * Shared by both `evalStateNamed` and `evalState` so the reason and evidence shape stay in one
+ * place.
+ */
+export function stringifiedPrimitiveResult(
+  storeName: string,
+  path: string,
+  got: unknown,
+  want: unknown,
+  capDepth: (v: unknown, d: number) => unknown,
+): {
+  pass: false;
+  failureReason: string;
+  inconclusive: string;
+  assertion: string;
+  evidence: Record<string, unknown>;
+} {
+  const gotType = null === got ? 'null' : typeof got;
+  const reason =
+    `state '${path}' is ${JSON.stringify(got)} (${gotType}), ` +
+    `but the expected value ${JSON.stringify(want)} is a string that looks like its stringified form — ` +
+    `use the ${gotType} literal ${JSON.stringify(got)} instead`;
+  return {
+    pass: false,
+    failureReason: reason,
+    inconclusive: reason,
+    assertion: 'state.equals',
+    evidence: { store: storeName, path, value: capDepth(got, 1) },
+  };
 }
 
 /**

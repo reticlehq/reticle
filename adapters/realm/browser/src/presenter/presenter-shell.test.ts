@@ -35,7 +35,7 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     expect(dock?.getAttribute('aria-label')).toBe('Reticle');
   });
 
-  it('renders six top-level destinations/actions once with one aligned toolbar', () => {
+  it('renders seven top-level destinations/actions once with one aligned toolbar', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     p.mount();
@@ -54,13 +54,13 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     expect(chrome.querySelectorAll('[data-reticle-min-btn]')).toHaveLength(1);
     expect(toolbar.querySelectorAll('[data-reticle-chat-view-btn="annotations"]')).toHaveLength(1);
     expect(toolbar.querySelectorAll('[data-reticle-chat-view="annotations"]')).toHaveLength(0);
-    expect(chrome.querySelectorAll('button')).toHaveLength(6);
+    expect(chrome.querySelectorAll('button')).toHaveLength(7);
     expect(chrome.querySelectorAll('svg:not([width="18"][height="18"])')).toHaveLength(0);
     const toolbarGlyphs = Array.from(
       chrome.querySelectorAll('button'),
       (button) => button.querySelector('svg')?.innerHTML,
     );
-    expect(new Set(toolbarGlyphs).size).toBe(6);
+    expect(new Set(toolbarGlyphs).size).toBe(7);
     const agentPage = document.querySelector('[data-reticle-chat-panel]');
     const flowsPage = document.querySelector('[data-reticle-page-panel="flows"]');
     const notesPage = document.querySelector('[data-reticle-page-panel="annotations"]');

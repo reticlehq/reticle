@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
-import { desktopBackendClaims, pinSession, reticleToolset } from './harness-toolset.js';
+import {
+  desktopBackendClaims,
+  pinSession,
+  reticleToolset,
+  requestMustSucceed,
+} from './harness-toolset.js';
 
 /** The dependency bag is never reached: every assertion here is about the ADVERTISED surface. */
 const NO_DEPS = {} as unknown as ToolDeps;
@@ -20,6 +25,11 @@ describe('the surface the harness drives', () => {
   it('adds recording, because an unrecorded drive has to be paid for again every run', () => {
     expect(names()).toContain(ReticleTool.RECORD);
     expect(names()).toContain(ReticleTool.FLOW_SAVE);
+  });
+
+  /** A drive told to scroll to a counter below the fold had nothing to scroll with. */
+  it('can scroll, so content below the fold is reachable', () => {
+    expect(names()).toContain(ReticleTool.SCROLL_TO);
   });
 
   it('drops the human feedback channel, which a looping model would drown', () => {
@@ -124,5 +134,25 @@ describe('a backend claim on a desktop app', () => {
       },
     };
     expect(desktopBackendClaims(args)).toEqual(args);
+  });
+});
+
+/*
+ * A Harness sign-in whose `POST /api/login` answered 401 was counted as a check that held: the
+ * declared request "went out", and a net claim with no status is met by any answer. A request the
+ * Harness declares is one that must succeed, unless it names the status it expects.
+ */
+describe('a request the Harness declares', () => {
+  it('must succeed, unless the claim names a status', () => {
+    expect(
+      requestMustSucceed({ until: { kind: 'net', method: 'POST', urlContains: '/api/login' } }),
+    ).toEqual({ until: { kind: 'net', method: 'POST', urlContains: '/api/login', ok: true } });
+    const named = { until: { kind: 'net', method: 'POST', status: 401 } };
+    expect(requestMustSucceed(named)).toEqual(named);
+    const text = { predicate: { kind: 'text', contains: 'Saved' } };
+    expect(requestMustSucceed(text)).toEqual(text);
+    expect(requestMustSucceed({ predicate: { kind: 'net', method: 'GET' } })).toEqual({
+      predicate: { kind: 'net', method: 'GET', ok: true },
+    });
   });
 });

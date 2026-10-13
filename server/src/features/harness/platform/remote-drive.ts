@@ -16,7 +16,9 @@ import {
   LinkPath,
   PLATFORM_LINK_VERSION,
   PresenterTone,
+  RunFlowStatus,
   TOOL_SESSION_LIMITS,
+  driveFlowStatus,
   parseDriveSpec,
   parseToolSessionReply,
   sessionAskRetryable,
@@ -139,7 +141,11 @@ export interface RemoteDriveDeps {
   /** How a session ask waits before it is sent again. */
   sleep?: (ms: number) => Promise<void>;
   /** Drive the app toward `goal`, in `sessionId`. A throw is reported as a failed drive, in its own words. */
-  drive: (goal: string, sessionId: string | undefined) => Promise<RemoteDriveOutcome>;
+  drive: (
+    goal: string,
+    sessionId: string | undefined,
+    spec?: DriveSpec,
+  ) => Promise<RemoteDriveOutcome>;
   /**
    * What the driven tab shows now, as a JPEG, or undefined when it cannot be captured (a tab this
    * daemon did not launch). Absent: the drive runs with no picture, and the chat shows its steps.
@@ -289,7 +295,7 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
       let outcome: RemoteDriveOutcome;
       let framesSent = 0;
       try {
-        outcome = await deps.drive(drive.goal, sessionId);
+        outcome = await deps.drive(drive.goal, sessionId, parsed.spec);
       } catch (error) {
         outcome = { ok: false, summary: error instanceof Error ? error.message : String(error) };
       } finally {
@@ -445,13 +451,21 @@ export async function pickOwnDriveSession(
   goal: string,
   apiKey: string,
   keyOf: (sessionId: string) => Promise<string | undefined>,
+  /**
+   * Open the project's app when none of its tabs is connected, and the session it opened. A
+   * dashboard Re-verify with the dev server up and no tab open was answered "Open this project's
+   * app, then ask again" by a daemon that knew the app's address.
+   */
+  reopen?: () => Promise<string | undefined>,
 ): Promise<string | null> {
   const own: DriveCandidate[] = [];
   for (const tab of tabs) {
     const key = await keyOf(tab.sessionId).catch(() => undefined);
     if (key === apiKey) own.push(tab);
   }
-  return pickDriveSession(own, goal) ?? null;
+  const picked = pickDriveSession(own, goal);
+  if (picked !== undefined) return picked;
+  return (await reopen?.().catch(() => undefined)) ?? null;
 }
 
 export interface DriveCandidate {
@@ -512,9 +526,14 @@ export function driveVerdict(out: {
   checks?: { held: number; failed: number; undecided: number };
 }): DriveVerdict {
   if (out.error !== undefined) return 'unknown';
-  // A goal judged unmet, or a check that came back "no", is a failed drive whatever else held.
-  if (false === out.goalMet) return 'no';
-  if (0 < (out.checks?.failed ?? 0)) return 'no';
+  // A check that came back "no" is a failed drive whatever else held. A goal the model judged unmet
+  // is its opinion, not evidence: with no check against it the drive is not proved, never failed.
+  const graded = driveFlowStatus({
+    held: out.checks?.held ?? 0,
+    failed: out.checks?.failed ?? 0,
+    goalMet: out.goalMet,
+  });
+  if (RunFlowStatus.FAIL === graded) return 'no';
   // The quoted texts are looked for on the page the drive ENDED on. None there refutes the goal;
   // some missing does not, because a goal that quotes where it starts ("from "Count is 0" to
   // "Count is 1"") loses that text by working. Then the goal's own judgement decides, as below.
@@ -522,7 +541,7 @@ export function driveVerdict(out: {
   if (0 < goals.length && goals.every((g) => 'no' === g.verified)) return 'no';
   if (0 < goals.length && !goals.some((g) => 'yes' === g.verified)) return 'unknown';
   // A yes needs a check that held behind it: the model saying the goal was met is not evidence.
-  if (!out.proved || 0 === (out.checks?.held ?? 0)) return 'unknown';
+  if (!out.proved || RunFlowStatus.PASS !== graded) return 'unknown';
   if (true === out.goalMet) return 'yes';
   if (0 < goals.length && goals.every((g) => 'yes' === g.verified)) return 'yes';
   return 'unknown';

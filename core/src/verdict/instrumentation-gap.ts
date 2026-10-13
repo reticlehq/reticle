@@ -139,7 +139,7 @@ const GAP_FIX: Readonly<Record<InstrumentationGapKind, string>> = {
   [InstrumentationGapKind.NO_SOURCE_MAPPING]:
     'add the Reticle build plugin (@reticlehq/vite-plugin, @reticlehq/next, or the babel plugin) so elements carry data-reticle-source',
   [InstrumentationGapKind.NO_STORE_REGISTERED]:
-    'register the store itself with reticle.registerStore(name, store), or registerStore(name, getState, subscribe), so its changes are observed — a bare getter can be read but never reports a change',
+    "import { registerStore } from '@reticlehq/browser' and call registerStore(name, store) with a subscribable store so its changes are observed; a bare getter is readable but does not report changes. For component-local React state, import { useReticleStore } from '@reticlehq/react/store' and call useReticleStore(name, value), assert the DOM, or read it with reticle_look { action: 'state', ref: '...' }",
   [InstrumentationGapKind.NO_SIGNAL_ON_MUTATION]:
     'fire reticle.signal(name, data) where this state is committed — commitAndSignal binds the two so they cannot drift',
   [InstrumentationGapKind.UNDECLARED_CONTROL]:

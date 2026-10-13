@@ -30,13 +30,15 @@
  * Every dependency is injected — the clock, the fetch, the reads and writes — because this is the
  * one piece of Reticle that talks to a network AND to a disk, and it must be provable without either.
  */
-import { FlowErrorCode, ReticleDir, SYNC_BATCH_LIMITS } from '@reticlehq/core';
+import { FlowErrorCode, ReticleDir, SYNC_BATCH_LIMITS, flowJsonReplacer } from '@reticlehq/core';
 import { hashPayload } from './sync-hash.js';
+import { syncScreenshots, type ScreenshotSyncState } from './sync-screenshots.js';
 
 /** The server's own doors. Kept beside the code that calls them, like the other cloud paths. */
 const SYNC_PATH = '/v1/sync';
 const SYNC_STATUS_PATH = '/v1/sync/status';
 const SYNC_PULL_PATH = '/v1/sync/pull';
+const FLOWS_PATH = '/v1/flows';
 
 /**
  * The derived records that ride along with runs, and the file each one lives in.
@@ -64,18 +66,20 @@ type DerivedKind = (typeof DERIVED_RECORDS)[number]['kind'];
 export interface SyncSource {
   /** Every run artifact currently on disk. */
   runs: () => ReadonlyArray<{ runId: string; payload: unknown }>;
-  /** Every saved flow. Small, upserted by name, so they ride along whenever anything else does. */
+  /** Every saved flow. Upserted by name, so the set is sent only when it changed. */
   flows: () => readonly unknown[];
   /**
    * Every bug capsule on disk — the minimal failing flow that reproduces a defect, plus its evidence.
    *
-   * Rides along with flows, and for the same reason: small, upserted by id, and worth nothing on the
+   * Sent like flows, only when the set changed: upserted by id, and worth nothing on the
    * machine that found the bug. A verdict count tells a dashboard THAT something broke; the capsule
    * is the only artifact that lets somebody else make it break again.
    */
   capsules: () => readonly unknown[];
   /** One derived record, or undefined when the file is absent. */
   derived: (kind: DerivedKind) => unknown;
+  /** One step screenshot of a run. Absent when this project keeps its screenshots local. */
+  screenshot?: (runId: string, file: string) => Uint8Array | undefined;
 }
 
 /** What the machine writes back. Separated from reads so a dry run is a source with no sink. */
@@ -100,7 +104,7 @@ export interface PulledIssues {
 }
 
 /** `.reticle/cloud-state.json`. This machine's side of the conversation, never git-checked. */
-export interface CloudSyncState {
+export interface CloudSyncState extends ScreenshotSyncState {
   /** Opaque. Handed back to the server verbatim; the machine must never parse or invent one. */
   cursor?: string;
   lastPushAt?: number;
@@ -139,6 +143,21 @@ export interface CloudSyncState {
   sentFlowsHash?: string;
   sentCapsulesHash?: string;
   /**
+   * The hash of each derived record the platform last ACCEPTED from here. A platform that reports
+   * a hash of its own form of a record never matches ours, so the same record went every cycle.
+   */
+  sentDerivedHashes?: Record<string, string>;
+  /** The names of the flows the platform last took from here: one gone from disk is deleted there. */
+  sentFlowNames?: string[];
+  /**
+   * The link everything above was kept for: cloud, workspace and project (`credentialSlot`). A
+   * folder re-linked elsewhere starts a fresh record, so the new link gets the flows the old one
+   * already had, and none of the old link's runs.
+   */
+  link?: string;
+  /** When this folder was re-linked: runs made before it stay here unless the person moves them. */
+  linkedAt?: number;
+  /**
    * A flow or capsule set the platform refused, kept so the refusal stays visible on the cycles that
    * do not resend it, and so the set is offered again once it changes or the platform reads more.
    */
@@ -169,6 +188,8 @@ export interface SyncReport {
   ok: boolean;
   /** Runs the server accepted this cycle. */
   runsSent: number;
+  /** Step screenshots the server took this cycle, for runs it holds. */
+  screenshotsSent?: number;
   /** Runs it refused, with the reason, so a bad artifact is visible rather than silently stuck. */
   runsRejected: Array<{ index: number; reason: string }>;
   flowsSent: number;
@@ -216,6 +237,12 @@ export interface Refusal {
 
 interface SyncDeps {
   config: { url: string; apiKey: string };
+  /** The link this cycle sends for (`credentialSlot`); absent for an env-only key (CI). */
+  link?: string;
+  /** Send runs made under a previous link too: only ever because the person asked. */
+  moveHistory?: boolean;
+  /** The project flows are synced for. Absent when this cycle does not send flows: none is deleted. */
+  projectId?: string;
   source: SyncSource;
   sink: SyncSink;
   state: CloudSyncState;
@@ -336,7 +363,30 @@ function batchRuns<T extends { payload: unknown }>(runs: readonly T[]): T[][] {
  * Run one cycle. Never throws: the local record is already safe on disk, and a sync that can take
  * down the thing it is backing up is worse than no sync.
  */
-export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
+/** The command that moves a folder's earlier runs to the link it has now. */
+export const MOVE_HISTORY_COMMAND = 'reticle sync --move-history';
+
+/**
+ * The record this cycle keeps, for this link. Re-linked to another cloud, workspace or project, it
+ * starts afresh from now: what the old link was sent says nothing about the new one, and the runs
+ * made under the old link are that workspace's (a person's email can be in their steps), so they go
+ * only when the person moves them. A first link, or a record from before links were kept, is
+ * adopted as it is.
+ */
+function stateForLink(deps: SyncDeps): CloudSyncState {
+  const { state, link } = deps;
+  if (link === undefined) return state;
+  if (state.link === undefined || state.link === link) {
+    const { linkedAt, ...rest } = state;
+    return true === deps.moveHistory || linkedAt === undefined
+      ? { ...rest, link }
+      : { ...rest, link, linkedAt };
+  }
+  return { link, ...(true === deps.moveHistory ? {} : { linkedAt: deps.now() }) };
+}
+
+export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
+  const deps: SyncDeps = { ...given, state: stateForLink(given) };
   const empty: SyncReport = {
     ok: false,
     runsSent: 0,
@@ -451,7 +501,17 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       notRetried.push({ runId: run.runId, reason: prior.reason });
       return false;
     });
+    // Made before this folder was linked here: the previous link's, kept until the person moves it.
+    const linkedAt = deps.state.linkedAt;
+    const earlier = unsent.filter(
+      (run) => linkedAt !== undefined && !((numberAt(run.payload, 'createdAt') ?? 0) >= linkedAt),
+    );
+    if (0 < earlier.length)
+      heldBack.push(
+        `${String(earlier.length)} run${1 === earlier.length ? '' : 's'} made before this folder was linked to this workspace stay${1 === earlier.length ? 's' : ''} on this machine (recorded under its previous link): run \`${MOVE_HISTORY_COMMAND}\` to send ${1 === earlier.length ? 'it' : 'them'} here`,
+      );
     const sendable = unsent.filter((run) => {
+      if (earlier.includes(run)) return false;
       const version = numberAt(run.payload, 'schemaVersion');
       if (runVersions === undefined || version === undefined || runVersions.includes(version))
         return true;
@@ -464,23 +524,53 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
     const derivedOffered: DerivedKind[] = [];
     const unsupported: DerivedKind[] = [];
     const bundle: Record<string, unknown> = {};
+    // A folder re-linked elsewhere keeps what it derived under the old link (its counts, defects,
+    // notes) here with the runs: those records add up the whole history and cannot be split by time.
+    // ponytail: held until `--move-history`; a per-link reset of the counters would let new ones go.
+    const derivedHeld: DerivedKind[] = [];
     for (const { kind } of DERIVED_RECORDS) {
       const payload = deps.source.derived(kind);
       if (payload === undefined) continue;
+      if (linkedAt !== undefined) {
+        derivedHeld.push(kind);
+        continue;
+      }
       if (!acceptedKinds.has(kind)) {
         unsupported.push(kind);
         continue;
       }
-      // The one comparison the whole protocol rests on. Same hash, do not send it.
-      if (hashPayload(payload) === hashes[kind]) continue;
+      // The one comparison the whole protocol rests on. Same hash, do not send it: the platform's,
+      // or the one it accepted from here while it still holds the record (a null means it does not).
+      const hash = hashPayload(payload);
+      if (hash === hashes[kind]) continue;
+      if ('string' === typeof hashes[kind] && hash === deps.state.sentDerivedHashes?.[kind])
+        continue;
       bundle[kind] = payload;
       derivedOffered.push(kind);
     }
     if (unsupported.length > 0)
       heldBack.push(`this platform does not accept ${unsupported.join(', ')} yet`);
+    if (0 < derivedHeld.length)
+      heldBack.push(
+        `the ${derivedHeld.join(', ')} record${1 === derivedHeld.length ? '' : 's'} made under this folder's previous link stay${1 === derivedHeld.length ? 's' : ''} on this machine: run \`${MOVE_HISTORY_COMMAND}\` to send ${1 === derivedHeld.length ? 'it' : 'them'} here`,
+      );
     // Flows and capsules are upserted by name/id, so the whole set goes whenever it differs from the
-    // set the platform last answered for, and rides along with anything else being sent.
-    const flows = deps.source.flows().filter((flow, index) => {
+    // set the platform last answered for — and only then. Riding along with every run push re-sent
+    // ~1.3 MB per push on a real repo, and a POST that size timed out and failed the run with it.
+    // Made before this folder was linked here, like the runs: the previous link's, kept until moved.
+    // A flow carries the steps of whoever drove it, so it is that workspace's as much as a run is.
+    // One read for both halves: the disk source rebuilds every flow per read, so a second read's
+    // objects are never `includes` of the first's, and every held-back flow went out anyway.
+    const flowsAll = deps.source.flows();
+    const madeBefore = (flow: unknown): boolean =>
+      linkedAt !== undefined && !((numberAt(flow, 'createdAt') ?? 0) >= linkedAt);
+    const flowsBefore = flowsAll.filter(madeBefore);
+    if (0 < flowsBefore.length)
+      heldBack.push(
+        `${String(flowsBefore.length)} flow${1 === flowsBefore.length ? '' : 's'} made before this folder was linked to this workspace stay${1 === flowsBefore.length ? 's' : ''} on this machine: run \`${MOVE_HISTORY_COMMAND}\` to send ${1 === flowsBefore.length ? 'it' : 'them'} here`,
+      );
+    const flows = flowsAll.filter((flow, index) => {
+      if (madeBefore(flow)) return false;
       const version = numberAt(flow, 'version');
       if (flowVersions === undefined || version === undefined || flowVersions.includes(version))
         return true;
@@ -520,10 +610,8 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       capsulesAll.length,
       deps.state.sentCapsulesHash,
     );
-    const ridesAlong =
-      sendable.length > 0 || derivedOffered.length > 0 || flowsChanged || capsulesChanged;
-    if (ridesAlong && flows.length > 0) bundle['flows'] = flows;
-    const capsules = ridesAlong ? capsulesAll : [];
+    if (flowsChanged) bundle['flows'] = flows;
+    const capsules = capsulesChanged ? capsulesAll : [];
     if (capsules.length > 0) bundle['capsules'] = capsules;
 
     let runsSent = 0;
@@ -545,7 +633,11 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       const batch = batches[i] ?? [];
       const body: Record<string, unknown> = 0 === i ? { ...bundle } : {};
       if (batch.length > 0) body['runs'] = batch.map((r) => r.payload);
-      const pushed = await call(SYNC_PATH, { method: 'POST', body: JSON.stringify(body) });
+      // The flows ride here too: a default flag stays out of them, as on disk.
+      const pushed = await call(SYNC_PATH, {
+        method: 'POST',
+        body: JSON.stringify(body, flowJsonReplacer),
+      });
       if (200 !== pushed.status) {
         pushError = `sync ${String(pushed.status)}: ${pushed.text.slice(0, 200)}`;
         break;
@@ -614,16 +706,39 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       const state = isRecord(answer['state']) ? answer['state'] : {};
       for (const kind of derivedOffered) {
         const verdict = state[kind];
-        if ('accepted' === verdict) derivedSent.push(kind);
-        else if ('string' === typeof verdict)
+        if ('accepted' === verdict) {
+          derivedSent.push(kind);
+          nextState.sentDerivedHashes = {
+            ...nextState.sentDerivedHashes,
+            [kind]: hashPayload(bundle[kind]),
+          };
+        } else if ('string' === typeof verdict)
           refused.push({ part: kind, reason: `${kind}: ${verdict}` });
       }
     }
+    // A flow the platform took from here and that is gone from disk is deleted there by name: it
+    // does not infer a deletion from a missing name, since another clone may still hold the flow.
+    const onDisk = new Set(deps.source.flows().map(flowName));
+    const kept: string[] = [];
+    for (const name of deps.projectId === undefined ? [] : (deps.state.sentFlowNames ?? [])) {
+      if (onDisk.has(name)) {
+        kept.push(name);
+        continue;
+      }
+      const gone = await call(
+        `${FLOWS_PATH}/${encodeURIComponent(name)}?projectId=${encodeURIComponent(deps.projectId ?? '')}`,
+        { method: 'DELETE' },
+      );
+      if (2 !== Math.floor(gone.status / 100) && 404 !== gone.status) kept.push(name);
+    }
+    if (deps.projectId !== undefined) nextState.sentFlowNames = kept;
     if (requests > 0 && pushError === undefined) {
       nextState.lastPushAt = deps.now();
       // The platform answered for these sets, refusals included (reported above, and not re-offered
       // until the set changes — the same rule as a refused run).
-      if (ridesAlong && flows.length > 0) nextState.sentFlowsHash = flowsHash;
+      if (flowsChanged) nextState.sentFlowsHash = flowsHash;
+      if (flowsChanged && deps.projectId !== undefined)
+        nextState.sentFlowNames = [...new Set([...kept, ...flows.map(flowName)])];
       if (capsules.length > 0) nextState.sentCapsulesHash = capsulesHash;
     }
     nextState.refusedRuns = refusedRuns;
@@ -653,6 +768,22 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
      */
     nextState.sentRunIds = allRuns.map((r) => r.runId).filter((id) => known.has(id));
     nextState.sentRunHashes = heldHashes(allRuns, recorded);
+
+    // 2b. The step screenshots of every run the platform now holds, once each.
+    let screenshotsSent = 0;
+    const readImage = deps.source.screenshot;
+    if (readImage !== undefined) {
+      const shots = await syncScreenshots({
+        runs: allRuns,
+        accepted: (runId) => known.has(runId),
+        readImage,
+        state: deps.state,
+        post: (path, body) => call(path, { method: 'POST', body }),
+      });
+      screenshotsSent = shots.sent;
+      Object.assign(nextState, shots.state);
+      if (shots.error !== undefined) heldBack.push(shots.error);
+    }
 
     // 3. COLLECT — always, even when there was nothing to send.
     const query =
@@ -705,6 +836,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
         0 === setsNotRetried.length &&
         !heldArtifacts,
       runsSent,
+      ...(0 === screenshotsSent ? {} : { screenshotsSent }),
       runsRejected,
       flowsSent,
       capsulesSent,
@@ -774,6 +906,8 @@ export function describeSync(report: SyncReport): string {
   if (report.runsSent > 0) sent.push(`${String(report.runsSent)} run(s)`);
   if (report.flowsSent > 0) sent.push(`${String(report.flowsSent)} flow(s)`);
   if (report.capsulesSent > 0) sent.push(`${String(report.capsulesSent)} capsule(s)`);
+  if ((report.screenshotsSent ?? 0) > 0)
+    sent.push(`${String(report.screenshotsSent)} screenshot(s)`);
   if (report.derivedSent.length > 0) sent.push(report.derivedSent.join(', '));
   /*
    * "Nothing to send" is a statement about the QUEUE, and it is false the moment the queue was full

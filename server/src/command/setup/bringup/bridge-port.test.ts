@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PortPresence } from '@/command/daemon/binding/port-presence.js';
-import { bridgeOccupied } from './bridge-port.js';
+import { bridgeOccupied, freePortAfter } from './bridge-port.js';
 
 /**
  * The bridge is the channel between the daemon and the SDK in the page. While something else holds
@@ -28,10 +28,27 @@ describe('init refuses to start over an occupied bridge', () => {
     expect(bridgeOccupied(PortPresence.FREE, 4400)).toBeUndefined();
   });
 
-  // The refusal has to name both ways out, or it is a dead end.
-  it('names how to get out of it', () => {
-    const refusal = bridgeOccupied(PortPresence.FOREIGN, 4400);
-    expect(refusal).toContain('--port');
-    expect(refusal).toContain('.reticle.json');
+  // The refusal has to name the way out as a command to paste, or it is a dead end. `init --port`
+  // moves .reticle.json and the page itself, so "set the same port in .reticle.json" was a second,
+  // unneeded chore that read as a required one.
+  it('names a free port to re-run on', () => {
+    const refusal = bridgeOccupied(PortPresence.FOREIGN, 4400, 4401);
+    expect(refusal).toContain('reticle init --port 4401');
+    expect(refusal).not.toContain('.reticle.json');
+  });
+
+  it('still names --port when no free port was found', () => {
+    expect(bridgeOccupied(PortPresence.FOREIGN, 4400)).toContain('reticle init --port <n>');
+  });
+});
+
+describe('a free port near the held one', () => {
+  it('skips the ports that answer', async () => {
+    const open = new Set([4400, 4401]);
+    expect(await freePortAfter(4400, (p) => Promise.resolve(open.has(p)))).toBe(4402);
+  });
+
+  it('gives up rather than scanning forever', async () => {
+    expect(await freePortAfter(4400, () => Promise.resolve(true))).toBeUndefined();
   });
 });

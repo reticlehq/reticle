@@ -111,7 +111,7 @@ export async function resolveActTarget(
     });
     // One match, or an ambiguity: both are answered by the existing resolver, which already ranks
     // candidates inside its refusal so the next turn needs no snapshot.
-    if ('wait' !== decision.do) return resolveTargetRef(found);
+    if ('wait' !== decision.do) return resolveTargetRef(found, asRecord(out.result)['hint']);
     await new Promise((resolve) => setTimeout(resolve, decision.waitMs));
   }
 }

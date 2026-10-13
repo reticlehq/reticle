@@ -11,9 +11,12 @@
  */
 
 import { unwatchFile, watchFile } from 'node:fs';
+import type { ImpactSnapshot } from '@reticlehq/core';
 
 /** How often each watched file is stat'ed. A second reads as live to somebody switching windows. */
 export const ACCOUNT_WATCH_INTERVAL_MS = 1_000;
+/** How often `onTick` re-reads what has no file to watch; the platform config is polled as often. */
+export const HUD_REFRESH_MS = 30_000;
 
 export interface AccountFilesWatch {
   /** Start watching one file. Watching the same path twice is a no-op. */
@@ -24,8 +27,12 @@ export interface AccountFilesWatch {
 export function watchAccountFiles(
   onChange: () => void,
   intervalMs: number = ACCOUNT_WATCH_INTERVAL_MS,
+  /** The rest of the platform's side of the HUD, which has no file to watch: run every 30s. */
+  onTick?: () => void,
 ): AccountFilesWatch {
   const watched = new Set<string>();
+  const ticker = onTick === undefined ? undefined : setInterval(onTick, HUD_REFRESH_MS);
+  ticker?.unref();
   const listener = (): void => {
     onChange();
   };
@@ -37,8 +44,31 @@ export function watchAccountFiles(
       watchFile(path, { persistent: false, interval: intervalMs }, listener);
     },
     close(): void {
+      if (ticker !== undefined) clearInterval(ticker);
       for (const path of watched) unwatchFile(path, listener);
       watched.clear();
     },
   };
+}
+
+/** What each tab was last sent by `pushIfMoved`, so an unchanged snapshot is not sent again. */
+const sent = new WeakMap<object, string>();
+
+/**
+ * Push a tab its impact snapshot, or, with `ifChanged`, only when it moved since this last pushed it.
+ *
+ * The daemon re-reads every tab on a timer so the platform's side of the HUD (sync status, runs on
+ * the dashboard, days left) reaches an idle tab without a tool call; resending an unchanged snapshot
+ * on every tick would repaint every HUD for nothing.
+ */
+export function pushIfMoved(
+  tab: { pushImpact(read: () => ImpactSnapshot | undefined, immediate: boolean): void },
+  read: () => ImpactSnapshot | undefined,
+  ifChanged: boolean,
+): void {
+  const snapshot = read();
+  const json = JSON.stringify(snapshot);
+  if (ifChanged && sent.get(tab) === json) return;
+  sent.set(tab, json);
+  tab.pushImpact(() => snapshot, true);
 }

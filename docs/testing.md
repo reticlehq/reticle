@@ -11,7 +11,7 @@ That makes this page two things at once, and both are the same code:
 - **You decide what "verified" means for your app**, in a file you own, in code you can read and keep in version control.
 - **Those same checks run in CI**, so the thing you wrote by hand is the thing that guards the branch.
 
-You will need `@reticlehq/test` installed, and your app already running. Write checks with `reticleTest(name, async (t) => …)`, open a headless session with `bootSession({ driveUrl, headless: true })`, and run them with `runSpecs`. Exit non-zero when `summary.failed` is not `0`.
+You will need `@reticlehq/test` installed, and your app already running. Write checks with `reticleTest(name, async (t) => …)`, open a headless session with `bootSession({ driveUrl, headless: true })`, and run them with `runSpecs`. Exit non-zero unless `summary.ok` is `true`.
 
 Checks bind to **signals and testids, never DOM structure**, so they survive the refactors that break selector-based suites.
 
@@ -74,7 +74,7 @@ const { summary } = await runSpecs({
   print: (line) => process.stdout.write(line + '\n'),
 });
 await booted.close();
-process.exit(summary.failed === 0 ? 0 : 1);
+process.exit(summary.ok ? 0 : 1);
 ```
 
 Each spec reports `pass` | `fail` (with evidence) | `skip` (with reason). For CI, emit JUnit:
@@ -107,10 +107,10 @@ No. `runSpecs` is its own runner: it takes the specs registered by `reticleTest`
 `runSpecs` never throws on a failing spec, so you have to read the summary and exit yourself:
 
 ```ts
-process.exit(summary.failed === 0 ? 0 : 1);
+process.exit(summary.ok ? 0 : 1);
 ```
 
-`summary` carries `{ total, passed, failed, skipped, ok }`. Note that **skipped is not failed**: a spec that skipped with a reason (see `t.expectInputModeReal()`) leaves `failed` at `0`.
+`summary` carries `{ total, passed, failed, skipped, ok }`. Branch on `ok`, not on `failed === 0`. **Skipped is not failed**: a spec that skipped with a reason (see `t.expectInputModeReal()`) leaves `failed` at `0`, but a suite in which every spec skipped verified nothing, so `ok` is `false` for it.
 
 ### Why did my hover or drag spec skip instead of running?
 

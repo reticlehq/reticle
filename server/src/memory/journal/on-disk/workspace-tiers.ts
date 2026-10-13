@@ -70,6 +70,8 @@ export const WORKSPACE_TIERS: Readonly<Record<string, WorkspaceTier>> = {
   [ReticleDir.TIERS_FILE]: localFile,
   // The user's request in their own words: it leaves only with `shareRequests`, never by git push.
   [ReticleDir.REQUEST_FILE]: localFile,
+  // How to target this app, learned from corrected failures: a teammate's agent needs it too.
+  [ReticleDir.APP_NOTES_FILE]: sharedFile,
   [ReticleDir.PLATFORM_MOMENTS_FILE]: localFile,
   // Notes a human pinned in the HUD: free text about the page. The team reads them on the platform.
   [ReticleDir.NOTES_FILE]: localFile,

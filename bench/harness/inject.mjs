@@ -209,6 +209,73 @@ export function revert(id) {
     execFileSync('git', ['-C', ROOT, 'checkout', '--', f], { stdio: 'ignore' });
 }
 
+/**
+ * Wait until the dev server SERVES a changed module, not merely until the file on disk changed.
+ *
+ * A browser opened after an injection loads what Vite serves. The observation retry reverts with
+ * `git checkout` and re-injects within milliseconds, and on Linux the watcher kept the reverted copy:
+ * on a CI bench run the file on disk had `fault-timeout`, Vite served the module without it fifteen
+ * seconds later, and network-timeout/playwright was recorded NOT MEASURED, which failed the bench
+ * gate's coverage floor on most runs on main. The fixed 400ms sleep this replaces waited for an
+ * event that never came. When nothing changes for `nudgeMs`, `nudge` re-saves the file so the
+ * watcher sees it again. HMR timestamps (`?t=`) are not a change.
+ */
+export async function waitForServedChange(read, before, nudge, opts = {}) {
+  const timeoutMs = opts.timeoutMs ?? 10_000;
+  const nudgeMs = opts.nudgeMs ?? 1_000;
+  const now = opts.now ?? Date.now;
+  const sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const strip = (s) => s.replace(/[?&]t=\d+/g, '');
+  const start = now();
+  let nextNudge = start + nudgeMs;
+  for (;;) {
+    if (strip(await read()) !== strip(before)) return;
+    if (now() - start >= timeoutMs)
+      throw new Error(`inject: the dev server still serves the old module after ${timeoutMs}ms`);
+    if (now() >= nextNudge) {
+      nudge();
+      nextNudge = now() + nudgeMs;
+    }
+    await sleep(100);
+  }
+}
+
+/** The module Vite serves for a fixture file, as a browser opening `origin` would load it. */
+async function served(origin, file) {
+  const res = await fetch(new URL(file.slice(FIXTURE_APP.length + 1), origin));
+  return res.text();
+}
+
+async function settle(origin, files, mutate) {
+  const before = await Promise.all(files.map((f) => served(origin, f)));
+  mutate();
+  await Promise.all(
+    files.map((f, i) =>
+      waitForServedChange(
+        () => served(origin, f),
+        before[i],
+        () => writeFileSync(f, readFileSync(f)),
+      ),
+    ),
+  );
+}
+
+/** `inject`, then wait until the dev server at `origin` serves the injected modules. */
+export async function injectServed(id, origin) {
+  const r = REGRESSIONS[id];
+  if (!r) throw new Error(`unknown regression ${id}`);
+  await settle(origin, r.files, () => inject(id));
+}
+
+/** `revert`, then wait until the dev server serves the clean modules. A clean file is left alone. */
+export async function revertServed(id, origin) {
+  const r = REGRESSIONS[id];
+  if (!r) throw new Error(`unknown regression ${id}`);
+  const dirty = r.files.filter(isDirty);
+  if (0 === dirty.length) return;
+  await settle(origin, dirty, () => revert(id));
+}
+
 export function revertAll() {
   const files = [...new Set(Object.values(REGRESSIONS).flatMap((r) => r.files))];
   for (const f of files) {

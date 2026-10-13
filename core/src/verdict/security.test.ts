@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { isDangerousActionText, isLoopbackHostname } from './security.js';
+import {
+  OutwardAction,
+  isDangerousActionText,
+  isLoopbackHostname,
+  outwardActionOf,
+  outwardActionsAsked,
+} from './security.js';
 
 describe('isLoopbackHostname', () => {
   it('accepts literal IPv4, IPv6, and localhost loopback hosts', () => {
@@ -137,5 +143,46 @@ describe('consequential is not the same as destructive', () => {
     ]) {
       expect(isDangerousActionText(label)).toBe(true);
     }
+  });
+});
+
+/*
+ * From persona drives: the Harness pressed Invite in a customer's workspace although its journey
+ * said "she does not send an invite"; a planner-invented journey pressed Invite too.
+ */
+describe('what the Harness may press', () => {
+  it('names the outward action a control would take', () => {
+    expect(outwardActionOf('Invite')).toBe(OutwardAction.INVITE);
+    expect(outwardActionOf('Send invitation')).toBe(OutwardAction.INVITE);
+    expect(outwardActionOf('Send message')).toBe(OutwardAction.SEND);
+    expect(outwardActionOf('Remove member')).toBe(OutwardAction.DELETE);
+    expect(outwardActionOf('Add a card and start the 14-day trial')).toBe(OutwardAction.PAY);
+    expect(outwardActionOf('Create API key')).toBe(OutwardAction.CREATE_KEY);
+    expect(outwardActionOf('Sign out')).toBe(OutwardAction.SIGN_OUT);
+    expect(outwardActionOf('Open Runs')).toBeUndefined();
+    expect(outwardActionOf('Remove', 'option')).toBeUndefined();
+  });
+
+  // A re-drive: in a read-only journey ("opens the fixed issue…") the Harness pressed Reassign and
+  // Reopen, declaring a write for each. Changing an item's state is an outward action too.
+  it("names changing an item's state, and a journey that only looks asks for none", () => {
+    expect(outwardActionOf('Reassign')).toBe(OutwardAction.CHANGE_STATE);
+    expect(outwardActionOf('Reopen issue')).toBe(OutwardAction.CHANGE_STATE);
+    expect(outwardActionOf('Archive')).toBe(OutwardAction.CHANGE_STATE);
+    expect(outwardActionsAsked('Ben opens the fixed issue and reads who fixed it')).toEqual([]);
+    expect(outwardActionsAsked('Reopen the issue and check it is open again')).toEqual([
+      OutwardAction.CHANGE_STATE,
+    ]);
+  });
+
+  it('reads what a journey asks for, and what it forbids', () => {
+    expect(outwardActionsAsked('Invite a teammate by email and check the row appears')).toEqual([
+      OutwardAction.INVITE,
+    ]);
+    expect(
+      outwardActionsAsked('Tess limits a contractor to one project. She does not send an invite.'),
+    ).toEqual([]);
+    expect(outwardActionsAsked('Open the members page without sending the invitation')).toEqual([]);
+    expect(outwardActionsAsked('Open Runs and read the failed check')).toEqual([]);
   });
 });

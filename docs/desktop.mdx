@@ -218,7 +218,7 @@ Alternatively, since an Electron renderer _is_ Chromium, `--remote-debugging-por
 
 ```toml
 [dependencies]
-reticle-tauri = "3.6"
+reticle-tauri = "3.7"
 ```
 
 ```rust
@@ -226,6 +226,8 @@ tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![reticle_tauri::reticle_capture])
     .on_page_load(reticle_tauri::on_page_load)
 ```
+
+**Dev builds only.** In a release build the crate is inert: `reticle_capture` refuses and `on_page_load` does nothing, so the binary you sign and ship carries no Reticle capability. A release build you test with Reticle (a CI fixture) turns it on with `reticle-tauri = { version = "3.7", features = ["in-release"] }`.
 
 Nothing on the JavaScript side: the SDK invokes the command through Tauri's own internals, because Tauri has no preload stage where a shim could be installed.
 
@@ -247,7 +249,7 @@ All three capture the visible viewport by default, so a baseline taken on a deve
 
 **`{ fullPage: true }` works on Tauri/Linux only.** WebKitGTK can render the whole document offscreen; `takeSnapshot` (macOS) and `CapturePreview` (Windows) only give what is composited, and Electron's `capturePage()` is the same. Asked for a full page they cannot produce, all of them return `{ ok: false, reason: 'full-page-unsupported' }` rather than quietly handing back the viewport, which would be a baseline that omits everything below the fold while every later diff of it reports green about a region that was never captured. No baseline is written on a refusal.
 
-An app that already has its own capture can expose `window.__reticleIpc.capture()` returning a PNG path instead; the SDK prefers it over the built-in command.
+An app that already has its own capture can expose `window.__reticleIpc.capture()` returning a PNG path instead; the SDK prefers it over the built-in command. The daemon reads only a file in the OS temp directory whose name starts with `reticle-capture-`, so write the PNG there.
 
 <Warning>
   One honest caveat. A fully occluded or minimized window is only partially composited, so parts of
@@ -324,7 +326,7 @@ Without `@reticlehq/electron/preload`, every IPC call is invisible to Reticle. A
 
 ## How it compares to Playwright MCP
 
-Both attached to the same running Electron app, same task ("archive a todo, then verify it worked"):
+Both attached to the same running Electron app, same task ("archive a todo, then verify it worked"). Measured by hand, with Reticle's `lean` tool profile, which has since been retired:
 
 | tool                    | ~tokens | ms      | verdict                                   |
 | ----------------------- | ------- | ------- | ----------------------------------------- |

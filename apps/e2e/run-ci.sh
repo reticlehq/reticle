@@ -7,6 +7,9 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+# Batteries are not watched, and a shown browser changes their timing: hide every browser Reticle opens.
+export RETICLE_HEADLESS=1
+
 # The battery is not a user — keep its daemons/tool calls out of the adoption metrics.
 export RETICLE_TELEMETRY=0
 # And say so on every event that does get emitted. `CI` is the only signal an event has for

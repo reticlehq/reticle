@@ -17,6 +17,7 @@ import {
   type RunRecord,
   type VerifyProgressEvent,
   platformCredentialFrom,
+  flowJsonReplacer,
 } from '@reticlehq/core';
 
 /**
@@ -80,7 +81,7 @@ const UNSENDABLE_HEADER_CHAR = /[^ -ÿ]/;
 
 /** Which knob holds the credential behind a header, so the error can name the thing to go and edit. */
 const CREDENTIAL_SOURCE: Readonly<Record<string, string>> = {
-  authorization: `${CloudEnv.KEY} (or the session from \`reticle login\`)`,
+  authorization: `${CloudEnv.KEY} (or the session from \`reticle connect\`)`,
 };
 
 /**
@@ -183,7 +184,10 @@ export async function syncFlowToCloud(
         'content-type': 'application/json',
         authorization: `Bearer ${config.apiKey}`,
       },
-      body: JSON.stringify(projectId === undefined ? { flow } : { flow, projectId }),
+      body: JSON.stringify(
+        projectId === undefined ? { flow } : { flow, projectId },
+        flowJsonReplacer,
+      ),
     });
     return res.ok
       ? { outcome: SyncOutcome.SYNCED, status: res.status }

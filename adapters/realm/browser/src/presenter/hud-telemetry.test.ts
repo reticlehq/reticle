@@ -14,7 +14,7 @@ import { settingsPanelHtml } from './presenter-settings.js';
 import { reportBodyHtml, reportPanelHtml } from './presenter-report.js';
 import { accountControlHtml, syncButtonHtml } from './presenter-account.js';
 import { carouselHtml } from './carousel/carousel.js';
-import { offerHtml } from './carousel/offer-card.js';
+import { panelSlides } from './carousel/panel-slides.js';
 import { talkCardHtml } from './carousel/talk-card.js';
 import { slideHtml, tourSlides } from './tour/tour-view.js';
 import { flush } from './presenter.test-helpers.js';
@@ -49,7 +49,7 @@ function everySurface(): string {
     syncButtonHtml(DASHBOARD),
     carouselHtml(
       [
-        { id: 'offer', html: offerHtml({ claimed: false, claimUrl: DASHBOARD }, false) },
+        { id: 'value', html: panelSlides()[0]?.html ?? '' },
         { id: 'talk', html: talkCardHtml() },
       ],
       0,

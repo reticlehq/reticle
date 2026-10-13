@@ -1,4 +1,5 @@
 import { isAbsolute, join, relative, sep } from 'node:path';
+import { UNMATCHED_SUBDIR } from './dir/reticle-dir.js';
 import {
   SAFE_SEGMENT_PATTERN,
   ReticleDir,
@@ -73,6 +74,8 @@ export interface ArtifactRoot {
    * needs to name them; a caller that does not can ignore the field.
    */
   candidates?: string[];
+  /** The folder whose dev server served the page, when the evidence went unmatched and it is known. */
+  serving?: string;
 }
 
 /**
@@ -189,8 +192,7 @@ export function projectCandidatesFrom(
   return [...known, ...announced];
 }
 
-/** Where evidence goes when no project could be named and the daemon is a guest in this tree. */
-export const UNMATCHED_SUBDIR = 'unmatched';
+export { UNMATCHED_SUBDIR };
 
 /** What a project with NO identity at all is called on disk. Never blank, so the path is always real. */
 const UNNAMED_PROJECT = 'unnamed';

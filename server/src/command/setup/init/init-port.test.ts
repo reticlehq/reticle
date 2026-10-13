@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSameOrAbove, portForInit, portFromEnv } from './init-port.js';
+import { isSameOrAbove, portForInit, portFromEnv, projectPortFor } from './init-port.js';
 
 const OTHER_PROJECT = 'shop-1234abcd';
 const RELOCATED = 4401;
@@ -98,5 +98,38 @@ describe('isSameOrAbove', () => {
     expect(isSameOrAbove('/work', '/work/app')).toBe(true);
     expect(isSameOrAbove('/work/app', '/work')).toBe(false);
     expect(isSameOrAbove('/work/ap', '/work/app')).toBe(false); // a prefix is not a parent
+  });
+});
+
+/**
+ * Every project moved off the default asked for the same next port, 4401, so with the first one's
+ * daemon not yet running the second and third were all written 4401 and shared it. Each project now
+ * asks for a port of its own, the same one every time.
+ */
+describe('the port a project is moved to', () => {
+  it('differs between projects and stays the same for one', async () => {
+    const asked: number[] = [];
+    const recording = {
+      ...deps(OTHER_PROJECT),
+      pickPort: (preferred: number) => {
+        asked.push(preferred);
+        return Promise.resolve(preferred);
+      },
+    };
+    const billing = await portForInit(undefined, undefined, undefined, recording, '/code/billing');
+    const search = await portForInit(undefined, undefined, undefined, recording, '/code/search');
+    expect(billing).not.toBe(search);
+    expect(await portForInit(undefined, undefined, undefined, recording, '/code/billing')).toBe(
+      billing,
+    );
+    expect(asked).toEqual([billing, search, billing]);
+  });
+
+  it('stays in the range above the default and below the dev-server ports', () => {
+    for (const seed of ['a', 'billing-40280793', '/code/x', 'search-1']) {
+      const port = projectPortFor(seed);
+      expect(port).toBeGreaterThan(4400);
+      expect(port).toBeLessThan(5000);
+    }
   });
 });

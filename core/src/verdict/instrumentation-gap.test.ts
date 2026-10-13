@@ -50,6 +50,15 @@ describe('instrumentation gaps', () => {
     expect(fix).toContain('registerStore(name, store)');
   });
 
+  it('uses the published named export and explains component-local state', () => {
+    const fix = fixForGap(InstrumentationGapKind.NO_STORE_REGISTERED);
+    expect(fix).toContain("import { registerStore } from '@reticlehq/browser'");
+    expect(fix).not.toContain('reticle.registerStore');
+    expect(fix).toContain("reticle_look { action: 'state'");
+    expect(fix).toContain('component-local React state');
+    expect(fix).toContain("import { useReticleStore } from '@reticlehq/react/store'");
+  });
+
   /**
    * The remedy for an undeclared change has to name the tool AND what to put in it. "Declare your
    * intent" is an instruction an agent cannot follow; the tool name plus the shape of the statement

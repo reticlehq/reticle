@@ -30,7 +30,11 @@ vi.mock('playwright', () => ({
 }));
 
 import { HIDE_RETICLE_CHROME_CSS } from '@reticlehq/core';
-import { playwrightLauncher, screenshotOptions } from './playwright-launcher.js';
+import {
+  captureWithChromeHidden,
+  playwrightLauncher,
+  screenshotOptions,
+} from './playwright-launcher.js';
 
 describe('playwrightLauncher', () => {
   beforeEach(() => {
@@ -115,5 +119,53 @@ describe('a live picture of a leased tab', () => {
       style: HIDE_RETICLE_CHROME_CSS,
       animations: 'disabled',
     });
+  });
+
+  it('takes a step screenshot as the page is: CSS pixels, nothing fast-forwarded or injected', () => {
+    expect(screenshotOptions({ jpegQuality: 70, cssScale: true })).toEqual({
+      fullPage: false,
+      type: 'jpeg',
+      quality: 70,
+      scale: 'css',
+    });
+  });
+});
+
+/*
+ * A step screenshot of a leased tab showed Reticle's own HUD over about a third of the page: the
+ * step path injects nothing (no stylesheet, no animation fast-forward), so nothing hid it. Only our
+ * own hosts are hidden, by their own inline visibility, for the one capture, and put back.
+ */
+describe('a step screenshot of a leased tab', () => {
+  it('hides only Reticle’s own hosts for the capture, and puts them back after', async () => {
+    const calls: string[] = [];
+    const page = {
+      evaluate: (script: string): Promise<unknown> => {
+        const hide = script.includes("'hidden'");
+        calls.push(hide ? 'hide' : 'restore');
+        if (hide) expect(script).toContain('[data-reticle-hud]');
+        return Promise.resolve(undefined);
+      },
+    };
+    const shot = await captureWithChromeHidden(page, () => {
+      calls.push('shot');
+      return Promise.resolve(new Uint8Array([1]));
+    });
+    expect(calls).toEqual(['hide', 'shot', 'restore']);
+    expect(shot).toEqual(new Uint8Array([1]));
+  });
+
+  it('puts them back even when the capture fails', async () => {
+    const calls: string[] = [];
+    const page = {
+      evaluate: (script: string): Promise<unknown> => {
+        calls.push(script.includes("'hidden'") ? 'hide' : 'restore');
+        return Promise.resolve(undefined);
+      },
+    };
+    await expect(
+      captureWithChromeHidden(page, () => Promise.reject(new Error('gone'))),
+    ).rejects.toThrow('gone');
+    expect(calls).toEqual(['hide', 'restore']);
   });
 });

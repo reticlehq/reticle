@@ -28,6 +28,8 @@ import {
 import { Session } from '@/portal/session/session.js';
 import { SessionManager, type RefusedPage } from '@/portal/session/session-manager.js';
 import { tokensMatch } from './token-auth.js';
+import { noteWrongPathUpgrades, wrongPathReason } from './wrong-path.js';
+import { harnessRequest, type HarnessRequest } from './harness-request.js';
 import { pairingTokenSource } from './pairing-token.js';
 import { log } from '@/log.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
@@ -35,7 +37,13 @@ import {
   SESSION_PARKED_REASON,
   sessionReplacedReason,
 } from '@/portal/session/facts/session-replaced.js';
-import { describeSkew, sdkFix, SkewPair } from '@/command/version/version-skew.js';
+import {
+  describeSdkBehind,
+  describeSkew,
+  sdkFix,
+  SDK_BEHIND_NARRATION,
+  SkewPair,
+} from '@/command/version/version-skew.js';
 import { noteVersionSkew } from '@/command/version/version-nudge.js';
 import { protocolSkewReason } from './protocol-skew.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
@@ -164,24 +172,6 @@ function replayRequest(event: { type: string; data: Record<string, unknown> }): 
   if (event.data['kind'] !== HumanControlKind.REPLAY) return undefined;
   const name = event.data['text'];
   return 'string' === typeof name && name.length > 0 ? name : undefined;
-}
-
-/**
- * The desired harness state if this event is the panel's switch, else undefined.
- *
- * Carries `on`/`off` rather than meaning "toggle": a double-click on a flaky connection sends two,
- * and two toggles land back where they started while two `on`s are the same as one.
- */
-function harnessRequest(event: {
-  type: string;
-  data: Record<string, unknown>;
-}): boolean | undefined {
-  if (event.type !== EventType.HUMAN_CONTROL) return undefined;
-  if (event.data['kind'] !== HumanControlKind.HARNESS) return undefined;
-  const want = event.data['text'];
-  if ('on' === want) return true;
-  if ('off' === want) return false;
-  return undefined;
 }
 
 /** True when this event is the panel's Sign in. Pure boundary narrowing, like the above. */
@@ -339,8 +329,8 @@ export class Bridge {
   #onSessionEnd: ((session: Session) => Promise<void>) | undefined;
   /** Wired by the daemon: push to the dashboard now, because somebody asked in the panel. */
   #onSyncRequest: (() => void) | undefined;
-  #onHarnessRequest: ((enabled: boolean, session: Session) => void) | undefined;
-  #onSigninRequest: (() => void) | undefined;
+  #onHarnessRequest: ((request: HarnessRequest, session: Session) => void) | undefined;
+  #onSigninRequest: ((from: Session) => void) | undefined;
 
   constructor(options: BridgeOptions) {
     const host = options.host ?? LOOPBACK_HOST;
@@ -467,6 +457,15 @@ export class Bridge {
     // with it. Logging one is all it takes; the transport itself needs no other reaction.
     this.#wss.on('error', (err: Error) => {
       log('bridge_ws_error', { error: err.message });
+    });
+    // A dial on any other path got a bare 400 from `ws` and left no trace for a diagnosis (#1242).
+    // Only a dial the origin check would have let in is the app's: a socket with no Origin is any
+    // local process, and recording it would tell the agent the app is running when it may not be.
+    noteWrongPathUpgrades(this.#wss, (path, origin) => {
+      log('bridge_wrong_path', { path, origin: origin ?? 'missing' });
+      if (origin !== undefined && this.#originAllowed(origin)) {
+        this.sessions.noteClosure(wrongPathReason(path, origin), this.#clock());
+      }
     });
 
     this.#wss.on('connection', (socket) => {
@@ -752,6 +751,15 @@ export class Bridge {
             });
             session.versionSkew = skew;
             noteVersionSkew(SkewPair.SDK, skew);
+          } else {
+            // Wire-compatible but a minor or more behind: the agent hears it on its next tool call
+            // and the person on the overlay. Not `versionSkew`, which marks the pair as broken.
+            const behind = describeSdkBehind(parsed.sdkVersion, SERVER_VERSION, fixForThisProject);
+            if (behind !== undefined && parsed.sdkVersion !== undefined) {
+              log('sdk_behind', { sessionId: session.id, sdk: parsed.sdkVersion });
+              noteVersionSkew(SkewPair.SDK_BEHIND, behind);
+              session.pushNarration(SDK_BEHIND_NARRATION(parsed.sdkVersion, SERVER_VERSION), false);
+            }
           }
           log('session_connected', { sessionId: session.id, url: session.url });
           // The one fact that separates a broken install from an unused one. Best-effort and wrapped:
@@ -791,7 +799,7 @@ export class Bridge {
           // Session has no cloud credential and should not grow one.
           else if (harness !== undefined) this.#onHarnessRequest?.(harness, session);
           // Signing in writes `~/.reticle`, which only the daemon may do; the panel only asks.
-          else if (isSigninRequest(parsed.event)) this.#onSigninRequest?.();
+          else if (isSigninRequest(parsed.event)) this.#onSigninRequest?.(session);
           // Pass the raw frame's byte length so the buffer doesn't re-serialize every event for accounting.
           else session.pushEvent(parsed.event, Buffer.byteLength(text, 'utf8'));
         } else if (parsed.kind === MessageKind.COMMAND_RESULT) {
@@ -929,15 +937,18 @@ export class Bridge {
   }
 
   /**
-   * Register a handler for the panel's harness switch. Optional for the same reason as the above: a
-   * bridge built without one ignores the request rather than refusing it.
+   * Register a handler for the panel's Harness controls (switch, Run, Stop). Optional for the same
+   * reason as the above: a bridge built without one ignores the request rather than refusing it.
    */
-  attachHarnessRequest(handler: (enabled: boolean, session: Session) => void): void {
+  attachHarnessRequest(handler: (request: HarnessRequest, session: Session) => void): void {
     this.#onHarnessRequest = handler;
   }
 
-  /** Register a handler for the panel's Sign in. Optional, like the above: without one it is ignored. */
-  attachSigninRequest(handler: () => void): void {
+  /**
+   * Register a handler for the panel's Sign in, told which tab asked (its project is linked once the
+   * sign-in lands). Optional, like the above: without one it is ignored.
+   */
+  attachSigninRequest(handler: (from: Session) => void): void {
     this.#onSigninRequest = handler;
   }
 

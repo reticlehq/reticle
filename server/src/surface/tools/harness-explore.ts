@@ -8,10 +8,16 @@
  * deterministically with no model in the loop at all.
  */
 
+import { reportAppsNow } from '@/features/harness/platform/local-apps.js';
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { exploreScript } from './harness-script.js';
 import { randomUUID } from 'node:crypto';
-import { harnessRunId } from '@/judgement/runs/drive-run.js';
+import {
+  harnessRunId,
+  noteHarnessDisparity,
+  noteHarnessGoal,
+  noteHarnessSpan,
+} from '@/judgement/runs/drive-run.js';
 import {
   ReticleEnv,
   ReticleTool,
@@ -20,34 +26,75 @@ import {
   asRecord,
   type FlowFile,
 } from '@reticlehq/core';
+import { creditsSpent, creditsUsedLine } from '@reticlehq/core/hud';
+import { planUrl } from '@/features/harness/platform/platform-drives.js';
 import { flowsForSession } from '@/language/flows/flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
-import { checkTally, verdictLine } from '@/features/harness/drive-report.js';
+import {
+  actedOnApp,
+  checkTally,
+  pagesReached,
+  typedValues,
+  verdictLine,
+} from '@/features/harness/drive-report.js';
 import { CUSTOM_DRIVER_NAME, SERVER_DRIVER } from '@/features/harness/drivers.js';
 import { buildDomainModel } from '@/judgement/domain/domain-model.js';
-import { readContract } from '@/memory/project/dir/reticle-dir.js';
+import { isUnmatchedRoot, readContract } from '@/memory/project/dir/reticle-dir.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
-import { buildHarnessPlan, planAsText, withoutReplays, type HarnessPlan } from './harness-plan.js';
+import {
+  dashboardPlanUrl,
+  dashboardRunUrl,
+  readDashboardUrl,
+  readLinkedProjectId,
+} from '@/memory/project/sync-status.js';
+import { buildHarnessPlan, drivingPlan, planAsText, type HarnessPlan } from './harness-plan.js';
 import { allSessionIntents } from '@/memory/intent/open-intents.js';
 import { fetchPlatformConfig, type ConfigFetch } from '@/features/harness/platform-config.js';
+import {
+  reportPlanBlocked,
+  savedPlanDrivesNothing,
+  type JourneyResult,
+} from '@/features/harness/platform/script.js';
 import {
   DEFAULT_MAX_STEPS,
   runHarness,
   StopReason,
+  type HarnessOptions,
   type HarnessResult,
   type HarnessToolset,
   type ModelDriver,
   type ToolOutcome,
 } from '@/features/harness/harness.js';
 import { reticleToolset } from './harness-toolset.js';
-import { checkGoals, goalsIn, type GoalCheck } from '@/features/harness/goals.js';
+import { DriveRefusedError, noteDriveLine } from '@/features/harness/drive-runs.js';
+import { personaCredentials } from '@/features/harness/platform/persona-credentials.js';
+import {
+  goalOfDrive,
+  parseGoals,
+  readOpening,
+  unprovedGoals,
+  type GoalCheck,
+} from '@/features/harness/goals.js';
+import type { RunDisparity } from '@reticlehq/core';
+import type { HarnessMap } from '@reticlehq/core/artifacts';
+import { mapForPlatform } from '@/features/harness/explore/site-map.js';
+import { huntAndGrade, knownRoutes, refreshMap, siteMapFor } from './harness-hunt.js';
+import { instrumentationOf, probeMarkers } from '@/portal/session/recorded-gaps.js';
+import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 
 export interface ExploreOptions {
   /** Who to be, or what to accomplish. Appended to the standing instruction. */
   focus?: string;
+  /**
+   * A person started this run (Run plan from the dashboard) and acknowledged the saved flows' own
+   * destructive steps: a planned replay may take them. Never a step the model decides.
+   */
+  confirmDangerous?: boolean;
   /** Texts the drive must leave on the page. Default: whatever `focus` quoted. See goals.ts. */
   goals?: readonly string[];
+  /** The outcome the journey must end in, as a reticle_assert predicate. See `checkExpect`. */
+  expect?: Record<string, unknown>;
   /** Pinned tab, when the app has more than one connected. */
   sessionId?: string;
   /** Hard ceiling on model turns. Bounds cost, not value — the drive is usable however it ends. */
@@ -78,6 +125,14 @@ export interface ExploreOptions {
    * supposed to cover the OFF switch was asserting on a path where the platform is never asked.
    */
   configFetch?: ConfigFetch;
+  /** The drive's harness id, minted by the caller so its run id is known before the drive starts. */
+  harnessId?: string;
+  /** A plan the platform saved (`hp_…`): run it as it stands, instead of asking for a new one. */
+  planId?: string;
+  /** Asked between turns: whoever started the drive asked it to stop. */
+  stopped?: () => boolean;
+  /** Asked between turns: what whoever started the drive said to it since. */
+  inbox?: () => readonly string[];
 }
 
 export interface ExploreResult {
@@ -116,6 +171,16 @@ export interface ExploreResult {
   driverName: string;
   /** The run this drive syncs as (`harness-<id>`), so a caller can find it on the platform. */
   runIds?: readonly string[];
+  /** The run's page on the dashboard, when the project is linked. */
+  runUrl?: string;
+  /** How each journey of a platform plan ended, worst lane first. Absent for an unplanned drive. */
+  journeys?: readonly JourneyResult[];
+  /** The platform plan this run drove, which the dashboard keeps, edits and runs again. */
+  planId?: string;
+  /** That plan's page on the dashboard. */
+  planUrl?: string;
+  /** Each goal the session's coding agent also judged, and how the two verdicts compare. */
+  disparity?: readonly RunDisparity[];
 }
 
 /**
@@ -126,8 +191,8 @@ export interface ExploreResult {
  * print it, and two copies of this sentence would drift.
  */
 export const MSG_NO_HARNESS_KEY =
-  `The Reticle Harness runs on the Reticle platform, and every plan includes it (Free comes with ` +
-  `monthly Harness credits): run \`reticle connect\` to link this project and sign in. ` +
+  `The Reticle Harness runs on the Reticle platform, and a new account gets 10 free credits ` +
+  `to try it: run \`reticle connect\` to link this project and sign in. ` +
   `Without it, drive the journey yourself with reticle_act_and_wait and an \`until\` on its last step: ` +
   `what you drive is saved as a flow just the same.`;
 
@@ -158,9 +223,19 @@ const msgUnknownDriver = (asked: string): string =>
 export async function withLinkedCredential(
   deps: ToolDeps,
   env: Record<string, string | undefined>,
+  /**
+   * The tab a drive is for: its own project's link, not the daemon's. A plan saved with the
+   * daemon's key while its runs synced under the tab's project left every run link of the plan
+   * "Run unavailable". Absent: the daemon's own link.
+   */
+  tab?: { sessionId: string | undefined },
 ): Promise<Record<string, string | undefined>> {
   try {
-    const linked = await deps.linkedCloud?.();
+    const root = tab === undefined ? undefined : tabRoot(deps, tab);
+    // A tab whose page reported no project (its root is `unmatched/`) is nobody else's: it drives on
+    // the daemon's own link, never "run reticle connect" to a project that is linked.
+    const own = root !== undefined && isUnmatchedRoot(root) ? undefined : root;
+    const linked = await deps.linkedCloud?.(own);
     if (linked === undefined || null === linked) return env;
     return {
       ...env,
@@ -173,6 +248,103 @@ export async function withLinkedCredential(
     return env;
   }
 }
+
+/** A tab's `.reticle`, or undefined (the daemon's) when the tab cannot be resolved to one. */
+function tabRoot(deps: ToolDeps, tab: { sessionId: string | undefined }): string | undefined {
+  try {
+    return sessionRoot(deps, tab.sessionId);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Introduces the prompt under a coverage refusal, so the agent knows it is for itself. */
+export const MSG_GATE_PROMPT_LEAD = 'To unlock it, do this (or hand it to your coding agent):';
+
+/**
+ * Why the Harness must not drive this tab's app yet, or undefined when it may: below the coverage
+ * gate (core's `instrumentation-coverage.ts`), one reason sentence and the prompt that closes it. Every Harness
+ * start passes here (an agent's explore, Run Harness, `reticle try`, the platform's chat), so the
+ * gate holds wherever a drive starts; every other tool works at any coverage. A tab that cannot be
+ * resolved is not refused here: the drive itself answers for a missing tab. Counted once per refusal.
+ */
+export function coverageRefusal(deps: ToolDeps, sessionId: string | undefined): string | undefined {
+  const refused = localGateRefusal(deps, sessionId);
+  if (refused !== undefined) getSessionMetrics().recordHarnessRefused(refused.percent);
+  return refused?.text;
+}
+
+/** This tab and every other live tab of its app, or undefined when the tab cannot be resolved. */
+function appTabsOf(deps: ToolDeps, sessionId: string | undefined) {
+  let tab: ReturnType<ToolDeps['sessions']['resolve']>;
+  try {
+    tab = deps.sessions.resolve(sessionId);
+  } catch {
+    return undefined;
+  }
+  // Every tab of the app, the way the platform's merged report reads it, so the two name the same
+  // missing items.
+  const siblings = (deps.sessions.list?.() ?? [])
+    .filter((info) => info.sessionId !== tab.id && sameApp(info.projectId, tab.projectId))
+    .flatMap((info) => {
+      const live = deps.sessions.get?.(info.sessionId);
+      return live === undefined ? [] : [live];
+    });
+  return { tab, siblings };
+}
+
+/** The daemon's own reading of the gate for this tab's app, uncounted. */
+function localGateRefusal(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): { text: string; percent: number } | undefined {
+  const app = appTabsOf(deps, sessionId);
+  if (app === undefined) return undefined;
+  const { tab } = app;
+  const siblings = app.siblings.map((live) => ({
+    id: live.id,
+    url: live.url,
+    projectId: live.projectId,
+    channels: live.channels,
+    sourceMapping: live.sourceMapping,
+  }));
+  const coverage = instrumentationOf(tab, siblings);
+  const gate = coverage.harnessGate;
+  if (gate.unlocked || gate.reason === undefined) return undefined;
+  const text =
+    coverage.prompt === undefined
+      ? gate.reason
+      : `${gate.reason}\n\n${MSG_GATE_PROMPT_LEAD}\n${coverage.prompt}`;
+  return { text, percent: gate.percent };
+}
+
+/**
+ * The gate a Harness start obeys. When the project is linked, the platform's verdict is the one
+ * source of truth: it locks a run mid-drive on the same report, so a daemon that refused what the
+ * platform unlocked showed two scores for one project. The daemon's own reading only refuses when
+ * the platform said nothing (not linked, unreachable, an older API) or said locked too, in which
+ * case the daemon's sentence names what this tab can fix.
+ */
+export async function harnessLockRefusal(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+  env: Record<string, string | undefined>,
+  fetchConfig?: ConfigFetch,
+): Promise<string | undefined> {
+  // What the app's pages carry decides, not what an act happened to reach: ask them first.
+  const app = appTabsOf(deps, sessionId);
+  // Learned something: the platform hears it before it is asked, or it refuses on its old score.
+  if (app !== undefined && (await probeMarkers([app.tab, ...app.siblings])))
+    await reportAppsNow().catch(() => undefined);
+  if (undefined === localGateRefusal(deps, sessionId)) return undefined;
+  const platform = await fetchPlatformConfig(env, fetchConfig);
+  if (true === platform?.gate?.unlocked) return undefined;
+  return coverageRefusal(deps, sessionId);
+}
+
+/** Two tabs are one app when both name the same project. A tab that names none stands alone. */
+const sameApp = (a: string | undefined, b: string | undefined): boolean =>
+  a !== undefined && a === b;
 
 /**
  * Can this machine reach the Harness? Only through the platform: a linked project or a platform
@@ -206,11 +378,16 @@ export function maxStepsFromEnv(env: Record<string, string | undefined>): number
  */
 export async function exploreApp(
   deps: ToolDeps,
-  env: Record<string, string | undefined>,
-  options: ExploreOptions = {},
+  given: Record<string, string | undefined>,
+  asked: ExploreOptions = {},
 ): Promise<ExploreResult> {
-  const refusal = await refusedByPlatform(env, options);
-  if (refusal !== undefined) throw new Error(refusal);
+  // Every drive starts here. The credentials a persona names fill its sign-in fields on this
+  // machine, and only the redacted text travels on: to the platform, into flows and synced runs.
+  const named = asked.focus === undefined ? undefined : personaCredentials(asked.focus);
+  const env = named === undefined ? given : { ...given, ...named.secrets };
+  const options = named === undefined ? asked : { ...asked, focus: named.persona };
+  const refusal = await refusedForPlan(env, options);
+  if (refusal !== undefined) throw new DriveRefusedError(refusal);
   // The flows a drive reads and diffs are the PROJECT's, which is where its saves land.
   const reads = withProjectFlows(deps, options.sessionId);
   // No journey named: plan the drive first. The platform's Harness proposes the people worth being;
@@ -219,9 +396,19 @@ export async function exploreApp(
   const before = new Set(await reads.flows.list());
   // Without a named journey the drive is always planned; with one, it is planned by the platform
   // when there is one, and driven here as before when there is not.
-  if (options.focus === undefined || serverOptionsFromEnv(env) !== undefined) {
+  if (
+    options.focus === undefined ||
+    options.planId !== undefined ||
+    serverOptionsFromEnv(env) !== undefined
+  ) {
     const scripted = await exploreScript(deps, env, options, before);
-    if (scripted !== undefined) return scripted;
+    // Where the person opens it: the run, and the plan the dashboard keeps and runs again.
+    if (scripted !== undefined)
+      return {
+        ...scripted,
+        ...runUrlFor(deps, options.sessionId, scripted.runIds?.[0]),
+        ...planUrlFor(deps, options.sessionId, scripted.planId),
+      };
   }
 
   const maxSteps = options.maxSteps ?? maxStepsFromEnv(env);
@@ -229,28 +416,41 @@ export async function exploreApp(
   // every saved flow, the consequence that must hold for each, and the declared intent nobody has
   // tested — which is the whole of what a drive should be deciding against.
   const plan = await readPlan(reads, options.sessionId);
-  const driving = withoutReplays(plan);
-  const built =
-    options.driver === undefined
-      ? buildDriver(env, maxSteps, driving, options.driverName, options.focus)
-      : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
-  const driver = built.driver;
-
+  const driving = drivingPlan(plan, options.focus);
+  // Refused before anything touches the app: an unknown driver, or no platform to drive with.
+  if (options.driver === undefined)
+    buildDriver(env, maxSteps, driving, options.driverName, options.focus);
   // Every action this drive takes carries who took it, so the run it folds into is the Harness's own
   // and not mixed into the run of whichever agent shares the tab.
-  const harnessId = randomUUID();
+  const harnessId = options.harnessId ?? randomUUID();
+  const driverLabel = options.driver === undefined ? SERVER_DRIVER : CUSTOM_DRIVER_NAME;
   const toolset = reticleToolset(deps, {
     ...pinned(options),
     drivenBy: {
       harness: harnessId,
-      driver: built.name,
+      driver: driverLabel,
       ...(options.focus === undefined ? {} : { persona: options.focus }),
     },
+    ...(options.focus === undefined ? {} : { asked: options.focus }),
   });
   const narrate = narrator(deps, options);
-  narrate(`Harness is driving${options.focus === undefined ? '' : `: ${options.focus}`}`);
+  const invoke = (name: string, args: Record<string, unknown>): Promise<unknown> =>
+    toolset.invoke(name, args);
+  // Map first: survey the app (no model) unless this app's map is fresh, and leave the tab at start.
+  const map = await siteMapFor(deps, options.sessionId, invoke);
+  const built =
+    options.driver === undefined
+      ? buildDriver(env, maxSteps, driving, options.driverName, options.focus, undefined, map)
+      : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
+  const driver = built.driver;
+  // Read before anything is driven: a goal this page already shows proves nothing at the end.
+  const opening = await readOpening(invoke);
+  narrate(`Harness is driving${options.focus === undefined ? '' : `: ${options.focus}`}`, true);
+  const driveStarted = deps.now();
   const drive = await runHarness(driver, toolset, {
+    ...steering(options),
     maxSteps,
+    routes: knownRoutes(map),
     // The plan rides in as standing instruction, so it is in front of the model on every turn
     // rather than remembered from a first one. `focus` is the caller's own words and goes last:
     // somebody who named a journey meant that journey, whatever the project's backlog says.
@@ -260,23 +460,46 @@ export async function exploreApp(
     ].join('\n\n'),
   });
 
+  // Before the session ends and is graded: a drive whose goal was missed, or that was cut off part-way,
+  // must not sync as "Proved" on the checks that held before it stopped.
+  noteHarnessGoal(harnessId, drive.goalMet);
   narrate(
     StopReason.STOPPED === drive.stopReason
       ? `Autonomous driving switched off — the Harness stopped after ${String(drive.steps)} steps. What it drove is kept.`
-      : `Harness finished — ${verdictLine(checkTally(drive.toolCalls))}`,
+      : StopReason.BROKEN === drive.stopReason
+        ? msgDriveCutOff(drive.error)
+        : `Harness finished — ${verdictLine(checkTally(drive.toolCalls))}`,
+    true,
   );
   // MANDATORY, and deliberately outside the loop. A drive that runs out of budget mid-journey, or
   // breaks, or whose model simply stops asking for tools, leaves a recording open and everything it
   // drove unsaved — work paid for and thrown away. Saving is not a decision any model gets to make
   // and not something a step budget gets to cut off, so it happens here, after the loop, always.
-  await bankOpenRecording(toolset, drive, options.focus);
-  const goals = await checkGoals(
-    (name, args) => toolset.invoke(name, args),
-    options.goals ?? goalsIn(options.focus),
-  );
+  const banked = await bankOpenRecording(toolset, drive, options.focus);
+  await refreshMap(deps, options.sessionId, map, drive.toolCalls);
+  // Hunt for the journey's end before grading: never a `no` from where the drive happened to stop.
+  const graded = await huntAndGrade(deps, invoke, {
+    sessionId: options.sessionId,
+    goals: options.goals ?? parseGoals(options.focus),
+    expect: options.expect,
+    opening,
+    journey: options.focus,
+    map,
+    reached: pagesReached(drive.toolCalls),
+    typed: typedValues(drive.toolCalls),
+  });
+  const goals = graded.goals;
+  noteHarnessDisparity(harnessId, graded.disparity);
+  // The goals it was given decide whether the journey was done, not a click that held on the way,
+  // and never the driver's word over a drive that did nothing.
+  const goalMet = goalOfDrive(drive.goalMet, goals, actedOnApp(drive.toolCalls));
+  noteHarnessGoal(harnessId, goalMet);
+  noteHarnessSpan(harnessId, deps.now() - driveStarted);
+  const unproved = unprovedGoals(goals);
+  if (unproved !== undefined) narrate(unproved, true);
 
   const after = await reads.flows.list();
-  const reconciled = reconcileFlows(before, after, drive.toolCalls);
+  const reconciled = reconcileFlows(before, after, [...drive.toolCalls, ...banked]);
   if (options.focus !== undefined) {
     await recordPersona(
       reads,
@@ -290,28 +513,84 @@ export async function exploreApp(
   ]);
   const runId = harnessRunId(harnessId);
   return {
-    drive,
+    // The hunt's navigations after the drive's own calls: they are the Harness driving the app too.
+    // After the goal is decided, which counts only what the drive itself did.
+    drive: {
+      ...drive,
+      toolCalls: [...drive.toolCalls, ...graded.moved],
+      ...(goalMet === undefined ? {} : { goalMet }),
+    },
     plan,
     driverName: built.name,
     ...reconciled,
     unverifiedFlows,
     goals,
+    ...(0 === graded.disparity.length ? {} : { disparity: graded.disparity }),
     ...(runId === undefined ? {} : { runIds: [runId] }),
+    ...runUrlFor(deps, options.sessionId, runId),
+  };
+}
+
+/** The stop and the words of whoever started the drive, for `runHarness`. */
+export function steering(options: ExploreOptions): Pick<HarnessOptions, 'stopped' | 'inbox'> {
+  return {
+    ...(options.stopped === undefined ? {} : { stopped: options.stopped }),
+    ...(options.inbox === undefined ? {} : { inbox: options.inbox }),
   };
 }
 
 /** A line in the HUD's Agent Log for the person watching; nobody watching is not an error. */
-export function narrator(deps: ToolDeps, options: ExploreOptions): (text: string) => void {
-  return (text) => {
+export function narrator(
+  deps: ToolDeps,
+  options: ExploreOptions,
+): (text: string, summary?: boolean) => void {
+  return (text, summary = false) => {
+    // The drive's poll answers with its latest line, whether or not a tab is watching.
+    if (options.harnessId !== undefined) noteDriveLine(options.harnessId, text);
     try {
-      deps.sessions.resolve(options.sessionId).pushNarration(text);
+      // Filed in the HUD's Harness log; its start and end lines in the Agent Log too.
+      deps.sessions
+        .resolve(options.sessionId)
+        .pushNarration(text, true, { harness: true, summary });
     } catch {
       /* nobody is watching: the drive still runs */
     }
   };
 }
 
-/** What this project's memory says must hold, in its own words. Nothing recorded is none. */
+/** The plan's page on the dashboard, where it is edited and run again; nothing when unlinked. */
+function planUrlFor(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+  planId: string | undefined,
+): { planUrl?: string } {
+  if (planId === undefined) return {};
+  try {
+    const root = sessionRoot(deps, sessionId);
+    const dashboard = readDashboardUrl(root);
+    return dashboard === undefined
+      ? {}
+      : { planUrl: dashboardPlanUrl(dashboard, planId, readLinkedProjectId(root)) };
+  } catch {
+    return {};
+  }
+}
+
+/** The run's page on the dashboard, when the tab's project is linked; nothing when it is not. */
+function runUrlFor(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+  runId: string | undefined,
+): { runUrl?: string } {
+  if (runId === undefined) return {};
+  try {
+    const dashboard = readDashboardUrl(sessionRoot(deps, sessionId));
+    return dashboard === undefined ? {} : { runUrl: dashboardRunUrl(dashboard, runId) };
+  } catch {
+    return {}; // no tab, no project: the run is still reported, without a link
+  }
+}
+
 export async function productRules(deps: ToolDeps, sessionId?: string): Promise<string[]> {
   try {
     return (await allSessionIntents(deps, sessionId)).map((intent) => intent.statement);
@@ -424,8 +703,10 @@ export function reconcileFlows(
     })
     .filter((name): name is string => name !== undefined && present.has(name));
 
+  // Only what this drive's own saves wrote: a before/after diff of the project's flows claimed the
+  // flows other agents saved in the same project at the same time.
   return {
-    savedFlows: after.filter((name) => !before.has(name)),
+    savedFlows: [...new Set(claimed.filter((name) => !before.has(name)))],
     rewroteFlows: [...new Set(claimed.filter((name) => before.has(name)))],
   };
 }
@@ -438,22 +719,44 @@ export function reconcileFlows(
  * control anything is worse than no control: somebody turns it off, watches Reticle drive their app
  * anyway, and now correctly distrusts every other switch in the product.
  *
- * Absent means ON. The platform's own default is on, and a machine that cannot reach the platform —
- * offline, CI, no link — must not silently lose a feature it was never told to stop using.
+ * Absent means OFF. The Harness is opt-in: a new project starts with it off, and an answer that does
+ * not say it is on is not a yes to spend credits on.
  */
 export const MSG_HARNESS_DISABLED =
-  'Autonomous driving is turned OFF for this project. Turn it back on in the Reticle dashboard ' +
-  '(Settings → Verification model), or drive the app yourself through the MCP tools.';
+  "The Reticle Harness is off for this project. The user can switch it on in the HUD's Settings " +
+  'or the Reticle dashboard (Settings → Projects → Reticle Harness on <project>); until then, drive the app yourself ' +
+  'through the MCP tools.';
 
 /**
  * The other reason a drive can be refused, and it is NOT the same reason.
  *
- * A drive through the platform spends Reticle's model budget, bounded by the workspace's monthly
- * Harness credits. The platform answers this only when something other than the switch stops it.
+ * A drive through the platform spends Reticle's model budget, bounded by the workspace's Harness
+ * credits. The platform answers this only when something other than the switch stops it.
  */
 export const MSG_HARNESS_UNCLAIMED =
-  'The Reticle platform says this workspace cannot drive the Harness right now. Every workspace, ' +
-  'Free included, gets Harness credits each month: see Settings → Plan in the Reticle dashboard.';
+  'The Reticle platform says this workspace cannot drive the Harness right now, usually because its ' +
+  'credits are spent: see Settings → Plan in the Reticle dashboard.';
+
+/**
+ * Why a drive must not be replayed into a verdict, or undefined when it may. A drive the platform
+ * cut off (credits gone: 402 needs_card) had saved one partial flow, and replaying it printed PASS
+ * with no word about the credits. The one test both CLI explore paths answer through.
+ */
+export function cutOffReason(drive: { stopReason?: unknown; error?: unknown }): string | undefined {
+  if (StopReason.BROKEN !== drive.stopReason && StopReason.STOPPED !== drive.stopReason)
+    return undefined;
+  const why =
+    'string' === typeof drive.error && 0 < drive.error.length
+      ? drive.error
+      : StopReason.STOPPED === drive.stopReason
+        ? 'autonomous driving was switched off.'
+        : 'the drive broke.';
+  return `The drive stopped before it finished: ${why} Nothing was proved; what it saved stays, and the next run replays it.`;
+}
+
+/** The Agent Log's last line for a drive the platform cut off: its reason, and that it proved nothing. */
+export const msgDriveCutOff = (error: string | undefined): string =>
+  `Harness stopped before it finished, so nothing is proved: ${error ?? 'the drive broke.'}`;
 
 /** The platform could not be asked, and the drive would spend Reticle's budget without its yes. */
 export const MSG_HARNESS_UNCONFIRMED =
@@ -489,10 +792,45 @@ export async function refusedByPlatform(
   const config = await platformConfig(env, options);
   // It needs a confirmed yes, not the absence of a no. The platform also checks on every turn.
   if (config === undefined) return MSG_HARNESS_UNCONFIRMED;
+  // The project-wide lock before the switch: a fresh tab passes the per-tab gate with no gaps
+  // recorded, and "off" hid the one refusal that names its fix.
+  const gate = config.gate;
+  if (false === gate?.unlocked && gate.reason !== undefined)
+    return gate.prompt === undefined
+      ? gate.reason
+      : `${gate.reason}\n\n${MSG_GATE_PROMPT_LEAD}\n${gate.prompt}`;
   if (!config.harnessEnabled) return MSG_HARNESS_DISABLED;
+  // Before entitlement: no credits left is why most workspaces are not entitled, said as the HUD says it.
+  if (config.credits !== undefined && creditsSpent(config.credits))
+    return creditsUsedLine(
+      config.credits,
+      // The platform's own page; built from the API origin only for a platform that names none.
+      config.planUrl ?? planUrl(config.platformUrl ?? cloudUrlFrom(env) ?? ''),
+    );
   if (!config.harnessEntitled) return MSG_HARNESS_UNCLAIMED;
   return undefined;
 }
+
+/**
+ * `refusedByPlatform`, for a run that may be a saved plan. A plan that only replays saved flows
+ * spends no model turn, so a model drive's gates do not stop it; a refused plan is still reported to
+ * the plan, every journey blocked with the reason, so its history records the attempt.
+ */
+async function refusedForPlan(
+  env: Record<string, string | undefined>,
+  options: ExploreOptions,
+): Promise<string | undefined> {
+  const planId = options.planId;
+  const platform = serverOptionsFromEnv(env);
+  if (planId === undefined || platform === undefined) return refusedByPlatform(env, options);
+  if (await savedPlanDrivesNothing(platform, planId)) return undefined;
+  const refusal = await refusedByPlatform(env, options);
+  if (refusal !== undefined) await reportPlanBlocked(platform, planId, firstLine(refusal));
+  return refusal;
+}
+
+/** The sentence a refusal leads with, without the prompt that follows it. */
+export const firstLine = (text: string): string => text.split('\n')[0] ?? text;
 
 /**
  * Close and save whatever recording the drive left open.
@@ -512,28 +850,35 @@ export async function refusedByPlatform(
  * It used to be "Autonomous drive of X, banked after the run ended" whatever the caller asked for,
  * so a replay could never say which journey the flow was meant to prove.
  */
-export function bankedIntent(persona: string | undefined, open: string): string {
-  const named = persona?.trim();
+export function bankedIntent(
+  persona: string | undefined,
+  open: string,
+  /** The journey the drive was for, when no persona was named. */
+  journey?: string,
+): string {
+  const named = (persona ?? journey)?.trim();
   return named !== undefined && 0 < named.length
     ? named
-    : `Autonomous drive of ${open}, banked after the run ended.`;
+    : `Exploring the app, recorded as ${open} and saved after the run ended.`;
 }
 
 export async function bankOpenRecording(
   toolset: HarnessToolset,
   drive: HarnessResult,
   persona: string | undefined,
-): Promise<void> {
+  journey?: string,
+): Promise<ToolOutcome[]> {
   const open = openRecordingName(drive.toolCalls);
-  if (open === undefined) return;
+  if (open === undefined) return [];
+  const args = { flowName: open, intent: bankedIntent(persona, open, journey) };
   try {
     await toolset.invoke(ReticleTool.RECORD, { action: 'stop', recordingName: open });
-    await toolset.invoke(ReticleTool.FLOW_SAVE, {
-      flowName: open,
-      intent: bankedIntent(persona, open),
-    });
+    const result = await toolset.invoke(ReticleTool.FLOW_SAVE, args);
+    // Returned so the save is this drive's own, as a save the model made is.
+    return [{ id: 'bank', name: ReticleTool.FLOW_SAVE, args, result, isError: false }];
   } catch {
     /* last chance, not a checkpoint */
+    return [];
   }
 }
 
@@ -609,6 +954,8 @@ export function buildDriver(
   persona?: string,
   /** A goal driven with no persona: it names the drive's flows as a persona would. */
   journey?: string,
+  /** The survey of the app, which the platform's engine looks goals up in. */
+  siteMap?: HarnessMap,
 ): { driver: ModelDriver; name: string } {
   if (requested !== undefined && SERVER_DRIVER !== requested)
     throw new Error(msgUnknownDriver(requested));
@@ -623,6 +970,9 @@ export function buildDriver(
       planSteps: plan.steps,
       vocabulary: plan.vocabulary,
       maxSteps,
+      ...(siteMap === undefined ? {} : { siteMap: mapForPlatform(siteMap) }),
+      // Secret fields fill from the drive's own env: a persona's credentials ride in it.
+      env,
     }),
     name: SERVER_DRIVER,
   };

@@ -18,7 +18,8 @@
  *    it, which is what lets the whole thing be tested against a scripted model with no API key.
  */
 
-import { ReticleTool, asRecord } from '@reticlehq/core';
+import { ReticleTool, Verified, asRecord } from '@reticlehq/core';
+import { claimsOnlyRoute, knownPagesLine, routeHint } from './route-guess.js';
 import { withTimeout } from './with-timeout.js';
 
 /** One tool as the model sees it. JSON Schema, because that is what the wire wants. */
@@ -139,12 +140,18 @@ export interface HarnessResult {
    * held are not the goal reached: "open each section" passed on two presses of Sign in.
    */
   goalMet?: boolean;
+  /** The credits the platform says the drive spent; absent for a local model or an older platform. */
+  creditsSpent?: number;
 }
 
-/** The finish's judgement of the goal, when it carried one. */
-function goalMetOf(args: Record<string, unknown>): { goalMet?: boolean } {
+/** The finish's judgement of the goal, and what the drive cost, when it carried them. */
+function goalMetOf(args: Record<string, unknown>): { goalMet?: boolean; creditsSpent?: number } {
   const met = args['goalMet'];
-  return 'boolean' === typeof met ? { goalMet: met } : {};
+  const spent = args['creditsSpent'];
+  return {
+    ...('boolean' === typeof met ? { goalMet: met } : {}),
+    ...('number' === typeof spent ? { creditsSpent: spent } : {}),
+  };
 }
 
 /**
@@ -156,6 +163,65 @@ export const MSG_FINISH_UNPROVED =
   `Not finished: nothing has been proved yet. Before finishing, end the journey with ` +
   `${ReticleTool.ACT_AND_WAIT} and an \`until\` naming the end state it must reach, or ` +
   `${ReticleTool.ASSERT} on it. A drive that proves nothing replays as "verified nothing".`;
+
+/**
+ * The answer to a click repeated after it changed nothing. A persona drive clicked the logo four
+ * times on the page the logo leads to, each a wasted action and a wrong route guess.
+ */
+export const MSG_REPEAT_CHANGED_NOTHING =
+  'Not done again: the same action on the same control just changed nothing on the page — no ' +
+  'content, request, route or signal. Doing it again will not either. Look at the page and take ' +
+  'the next step the journey names.';
+
+/**
+ * Said on a click whose route guess missed while it opened something on the page. A persona drive
+ * clicked the account button expecting to leave /overview; it opened a menu, the miss read as a
+ * failure, and the drive abandoned the route its plan named instead of choosing "Settings" in it.
+ */
+export const MSG_OPENED_IN_PLACE =
+  'This click opened something on this page (a menu, a panel, a dialog) instead of going where you ' +
+  'guessed. That is progress, not a dead end: look at what it opened and act on the item the ' +
+  'journey names next.';
+
+/** A route-only guess that missed, on a click that added content: it opened something in place. */
+function openedInPlace(outcome: ToolOutcome): boolean {
+  if (outcome.isError || ReticleTool.ACT_AND_WAIT !== outcome.name) return false;
+  if (!claimsOnlyRoute(asRecord(outcome.args)['until'])) return false;
+  const result = asRecord(outcome.result);
+  if (Verified.YES === result['verified']) return false;
+  const summary = asRecord(asRecord(result['trace'])['summary']);
+  return 0 < (Number(summary['domAdded']) || 0);
+}
+
+/** A route-only guess that missed: the known page to go to instead, when the map knows any. */
+function missedRouteHint(outcome: ToolOutcome, routes: readonly string[]): string | undefined {
+  if (outcome.isError || ReticleTool.ACT_AND_WAIT !== outcome.name) return undefined;
+  const until = asRecord(outcome.args)['until'];
+  if (!claimsOnlyRoute(until) || Verified.YES === asRecord(outcome.result)['verified'])
+    return undefined;
+  return routeHint(until, routes);
+}
+
+/** The tools that act on one control, keyed by what they did to which control. */
+const ACTING_TOOLS: ReadonlySet<string> = new Set([ReticleTool.ACT, ReticleTool.ACT_AND_WAIT]);
+
+/** What an action did to which control, or undefined for a call that does not act on one. */
+function actKey(name: string, args: Record<string, unknown>): string | undefined {
+  if (!ACTING_TOOLS.has(name)) return undefined;
+  const target = args['ref'] ?? args['target'];
+  if (target === undefined) return undefined;
+  return JSON.stringify([target, args['action'] ?? null, args['value'] ?? null]);
+}
+
+/** Whether a result's reaction digest says the page did nothing at all; undefined when it has none. */
+function changedNothing(result: unknown): boolean | undefined {
+  const summary = asRecord(asRecord(asRecord(result)['trace'])['summary']);
+  if ('number' !== typeof summary['total']) return undefined;
+  const moved = ['network', 'domAdded', 'domRemoved', 'domChanged', 'routeChanges', 'signals'].some(
+    (k) => 0 < (Number(summary[k]) || 0),
+  );
+  return !moved;
+}
 
 /** A check that ran: the only thing that turns a drive into evidence. */
 function isProof(outcome: ToolOutcome): boolean {
@@ -196,6 +262,12 @@ export interface HarnessOptions {
   focus?: string;
   /** How long one model turn may take. Injected so a test can prove the bound without waiting for it. */
   turnTimeoutMs?: number;
+  /** Asked before every turn: true ends the drive as STOPPED. Whoever started it may stop it. */
+  stopped?: () => boolean;
+  /** Asked before every turn: what somebody said to the drive since, handed over as user turns. */
+  inbox?: () => readonly string[];
+  /** The pages the app's map knows: named up front, and offered after a route guess misses. */
+  routes?: readonly string[];
 }
 
 export const DEFAULT_MAX_STEPS = 40;
@@ -229,7 +301,7 @@ const OPENING = 'The app is loaded and connected. Begin by looking at the page, 
  * deterministically for a few hundred tokens, forever. That is the whole economics of this feature,
  * so it is an instruction and not a hope.
  */
-export function systemPrompt(focus?: string): string {
+export function systemPrompt(focus?: string, routes: readonly string[] = []): string {
   return [
     'You are driving a real web application through a verification tool, to find out whether it actually works.',
     '',
@@ -244,7 +316,9 @@ export function systemPrompt(focus?: string): string {
     'the app is broken underneath.',
     '',
     'Drive the app the way a user would: complete whole journeys, not single clicks. Submit the forms.',
-    'Follow the navigation. If something looks interactive, try it.',
+    'Follow the navigation. If something looks interactive, try it — unless the focus below says',
+    'not to: "without opening a run", "changes nothing" and the like bind the whole drive. Read the',
+    'list a journey says to read; do not open what it says to leave closed.',
     '',
     'RECORD WHAT YOU DRIVE. Before each journey call reticle_record { action: "start" }, drive it, then',
     'reticle_flow_save with a short descriptive name. A saved flow replays deterministically on every',
@@ -260,6 +334,12 @@ export function systemPrompt(focus?: string): string {
     'expectations as you go. Do not report bugs; drive the app.',
     '',
     'Call `finish` when you have covered the app or cannot get further.',
+    ...(0 === routes.length
+      ? []
+      : [
+          '',
+          `Pages this app has: ${knownPagesLine(routes)}. To reach one, press its link or reticle_navigate to it; do not guess which control leads there.`,
+        ]),
     ...(focus === undefined ? [] : ['', `Focus for this run: ${focus}`]),
   ].join('\n');
 }
@@ -277,14 +357,29 @@ export async function runHarness(
 ): Promise<HarnessResult> {
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const tools = [...toolset.tools, FINISH_TOOL];
-  const system = systemPrompt(options.focus);
+  const routes = options.routes ?? [];
+  const system = systemPrompt(options.focus, routes);
   const history: HistoryEntry[] = [{ role: 'user', text: OPENING }];
   const toolCalls: ToolOutcome[] = [];
   const usage: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const proved = (): boolean => toolCalls.some(isProof);
   let askedToProve = false;
+  // Actions that just changed nothing; forgotten as soon as any action moves the page.
+  const inert = new Set<string>();
 
   for (let step = 0; step < maxSteps; step += 1) {
+    if (true === options.stopped?.()) {
+      return {
+        stopReason: StopReason.STOPPED,
+        summary: '',
+        steps: step,
+        toolCalls,
+        usage,
+        proved: proved(),
+        goalMet: false,
+      };
+    }
+    for (const text of options.inbox?.() ?? []) history.push({ role: 'user', text });
     let turn: ModelTurn;
     try {
       turn = await withTimeout(
@@ -300,6 +395,9 @@ export async function runHarness(
         toolCalls,
         usage,
         proved: proved(),
+        // Cut off is not done: the checks that held before a refusal (credits gone, a 5xx) prove
+        // the steps before it, never the journey, and every verdict downstream reads this.
+        goalMet: false,
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -371,7 +469,32 @@ export async function runHarness(
     // Every call the model asked for is answered, including ones that fail. A dropped result leaves
     // the model waiting on an answer that never comes, and it will usually re-ask — burning the
     // budget on a call that already ran, against an app it already changed.
-    const outcomes = await Promise.all(turn.calls.map((call) => invokeOne(toolset, call)));
+    const outcomes = await Promise.all(
+      turn.calls.map((call) => {
+        const key = actKey(call.name, call.args);
+        return key !== undefined && inert.has(key)
+          ? Promise.resolve<ToolOutcome>({
+              id: call.id,
+              name: call.name,
+              args: call.args,
+              result: { error: MSG_REPEAT_CHANGED_NOTHING },
+              isError: true,
+            })
+          : invokeOne(toolset, call);
+      }),
+    );
+    for (const [i, outcome] of outcomes.entries()) {
+      const hint = openedInPlace(outcome) ? MSG_OPENED_IN_PLACE : missedRouteHint(outcome, routes);
+      if (hint !== undefined)
+        outcomes[i] = { ...outcome, result: { ...asRecord(outcome.result), next: hint } };
+    }
+    for (const outcome of outcomes) {
+      const key = actKey(outcome.name, outcome.args);
+      if (key === undefined || outcome.isError) continue;
+      const nothing = changedNothing(outcome.result);
+      if (true === nothing) inert.add(key);
+      else if (false === nothing) inert.clear();
+    }
     toolCalls.push(...outcomes);
     history.push({ role: 'tool', outcomes });
   }

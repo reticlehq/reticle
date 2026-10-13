@@ -1,7 +1,7 @@
 import { ScriptStatus, type PlanView } from '@reticlehq/core';
 
 /**
- * The Harness's drive plan, drawn at the top of the Agent Log while it runs.
+ * The Harness's drive plan, drawn on the Harness page above its log while it runs.
  *
  * Lanes are columns (they run side by side), journeys are cards in the order a lane drives them,
  * and the journey being driven opens to show its steps. Each push replaces the whole picture, so a
@@ -27,33 +27,34 @@ const GLYPH: Record<ScriptStatus, string> = {
   [ScriptStatus.FAILED]: '✗',
   [ScriptStatus.BLOCKED]: '⊘',
   [ScriptStatus.NOT_TAKEN]: '–',
+  [ScriptStatus.UNDECIDED]: '?',
 };
 
 export const PLAN_CSS: string = `
-[data-reticle-chat-panel] .reticle-plan{flex:none;margin:0 10px 8px;padding:8px 10px;border:1px solid var(--reticle-hud-border);border-radius:10px;background:rgba(255,255,255,.03);}
-[data-reticle-chat-panel] .reticle-plan[hidden]{display:none;}
-[data-reticle-chat-panel] .reticle-plan-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:var(--reticle-hud-size-xs);color:var(--reticle-hud-text-muted);}
-[data-reticle-chat-panel] .reticle-plan-head strong{color:var(--reticle-hud-text);font-size:var(--reticle-hud-size-sm);font-weight:600;}
-[data-reticle-chat-panel] .reticle-plan-head span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-[data-reticle-chat-panel] .reticle-plan-close{flex:none;border:0;background:none;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;}
-[data-reticle-chat-panel] .reticle-plan-lanes{display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto;scrollbar-width:none;}
-[data-reticle-chat-panel] .reticle-plan-lanes::-webkit-scrollbar{display:none;}
-[data-reticle-chat-panel] .reticle-plan-lane{display:flex;gap:6px;align-items:flex-start;min-width:0;}
-[data-reticle-chat-panel] .reticle-plan-lane-name{flex:none;width:16px;padding-top:6px;font-size:10px;font-weight:600;text-align:center;color:var(--reticle-hud-text-muted);}
-[data-reticle-chat-panel] .reticle-plan-lane-journeys{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px;}
-[data-reticle-chat-panel] .reticle-plan-journey{display:block;width:100%;text-align:left;border:1px solid transparent;border-radius:8px;padding:5px 7px;background:rgba(255,255,255,.04);color:var(--reticle-hud-text);font:inherit;font-size:var(--reticle-hud-size-xs);cursor:pointer;}
-[data-reticle-chat-panel] .reticle-plan-journey[data-status="running"]{border-color:var(--reticle-c-active);box-shadow:0 0 12px -4px var(--reticle-c-active);}
-[data-reticle-chat-panel] .reticle-plan-journey[data-status="blocked"],[data-reticle-chat-panel] .reticle-plan-journey[data-status="not-taken"]{opacity:.55;}
-[data-reticle-chat-panel] .reticle-plan-row{display:flex;gap:6px;align-items:baseline;min-width:0;}
-[data-reticle-chat-panel] .reticle-plan-row b{flex:1;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-[data-reticle-chat-panel] .reticle-plan-glyph{flex:none;width:12px;text-align:center;}
-[data-reticle-chat-panel] [data-status="running"]>.reticle-plan-row>.reticle-plan-glyph,[data-reticle-chat-panel] .reticle-plan-step[data-status="running"]>.reticle-plan-glyph{color:var(--reticle-c-active);animation:reticle-flow-pulse 1.2s ease-in-out infinite;}
-[data-reticle-chat-panel] [data-status="passed"]>.reticle-plan-row>.reticle-plan-glyph,[data-reticle-chat-panel] .reticle-plan-step[data-status="passed"]>.reticle-plan-glyph{color:#4ade80;}
-[data-reticle-chat-panel] [data-status="failed"]>.reticle-plan-row>.reticle-plan-glyph,[data-reticle-chat-panel] .reticle-plan-step[data-status="failed"]>.reticle-plan-glyph{color:#f87171;}
-[data-reticle-chat-panel] .reticle-plan-meta{display:block;margin:2px 0 0 18px;color:var(--reticle-hud-text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-[data-reticle-chat-panel] .reticle-plan-steps{margin:4px 0 0 18px;display:flex;flex-direction:column;gap:2px;}
-[data-reticle-chat-panel] .reticle-plan-step{display:flex;gap:6px;color:var(--reticle-hud-text-muted);font-size:10px;min-width:0;}
-[data-reticle-chat-panel] .reticle-plan-step span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+[data-reticle-page-panel="harness"] .reticle-plan{flex:none;margin:0 10px 8px;padding:8px 10px;border:1px solid var(--reticle-hud-border);border-radius:10px;background:rgba(255,255,255,.03);}
+[data-reticle-page-panel="harness"] .reticle-plan[hidden]{display:none;}
+[data-reticle-page-panel="harness"] .reticle-plan-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:var(--reticle-hud-size-xs);color:var(--reticle-hud-text-muted);}
+[data-reticle-page-panel="harness"] .reticle-plan-head strong{color:var(--reticle-hud-text);font-size:var(--reticle-hud-size-sm);font-weight:600;}
+[data-reticle-page-panel="harness"] .reticle-plan-head span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+[data-reticle-page-panel="harness"] .reticle-plan-close{flex:none;border:0;background:none;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;}
+[data-reticle-page-panel="harness"] .reticle-plan-lanes{display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto;scrollbar-width:none;}
+[data-reticle-page-panel="harness"] .reticle-plan-lanes::-webkit-scrollbar{display:none;}
+[data-reticle-page-panel="harness"] .reticle-plan-lane{display:flex;gap:6px;align-items:flex-start;min-width:0;}
+[data-reticle-page-panel="harness"] .reticle-plan-lane-name{flex:none;width:16px;padding-top:6px;font-size:11px;font-weight:600;text-align:center;color:var(--reticle-hud-text-muted);}
+[data-reticle-page-panel="harness"] .reticle-plan-lane-journeys{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px;}
+[data-reticle-page-panel="harness"] .reticle-plan-journey{display:block;width:100%;text-align:left;border:1px solid transparent;border-radius:8px;padding:5px 7px;background:rgba(255,255,255,.04);color:var(--reticle-hud-text);font:inherit;font-size:var(--reticle-hud-size-xs);cursor:pointer;}
+[data-reticle-page-panel="harness"] .reticle-plan-journey[data-status="running"]{border-color:var(--reticle-c-active);box-shadow:0 0 12px -4px var(--reticle-c-active);}
+[data-reticle-page-panel="harness"] .reticle-plan-journey[data-status="blocked"],[data-reticle-page-panel="harness"] .reticle-plan-journey[data-status="not-taken"]{opacity:.55;}
+[data-reticle-page-panel="harness"] .reticle-plan-row{display:flex;gap:6px;align-items:baseline;min-width:0;}
+[data-reticle-page-panel="harness"] .reticle-plan-row b{flex:1;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+[data-reticle-page-panel="harness"] .reticle-plan-glyph{flex:none;width:12px;text-align:center;}
+[data-reticle-page-panel="harness"] [data-status="running"]>.reticle-plan-row>.reticle-plan-glyph,[data-reticle-page-panel="harness"] .reticle-plan-step[data-status="running"]>.reticle-plan-glyph{color:var(--reticle-c-active);animation:reticle-flow-pulse 1.2s ease-in-out infinite;}
+[data-reticle-page-panel="harness"] [data-status="passed"]>.reticle-plan-row>.reticle-plan-glyph,[data-reticle-page-panel="harness"] .reticle-plan-step[data-status="passed"]>.reticle-plan-glyph{color:#4ade80;}
+[data-reticle-page-panel="harness"] [data-status="failed"]>.reticle-plan-row>.reticle-plan-glyph,[data-reticle-page-panel="harness"] .reticle-plan-step[data-status="failed"]>.reticle-plan-glyph{color:#f87171;}
+[data-reticle-page-panel="harness"] .reticle-plan-meta{display:block;margin:2px 0 0 18px;color:var(--reticle-hud-text-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+[data-reticle-page-panel="harness"] .reticle-plan-steps{margin:4px 0 0 18px;display:flex;flex-direction:column;gap:2px;}
+[data-reticle-page-panel="harness"] .reticle-plan-step{display:flex;gap:6px;color:var(--reticle-hud-text-muted);font-size:11px;min-width:0;}
+[data-reticle-page-panel="harness"] .reticle-plan-step span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 `;
 
 const STATUSES = new Set<string>(Object.values(ScriptStatus));

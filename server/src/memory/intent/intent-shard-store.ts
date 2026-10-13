@@ -32,7 +32,7 @@ import { IntentDir, ReticleDir } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { withFileLock } from '@/memory/project/file-lock.js';
-import { subjectFor } from './intent-subject.js';
+import { subjectFor, UNSORTED_SUBJECT } from './intent-subject.js';
 import type { Clock } from '@/machine/clock.js';
 import {
   emptyShard,
@@ -278,13 +278,27 @@ export class IntentShardStore {
       flow !== undefined
         ? subjectFor({ surface: { flow } })
         : (facts.subject ??
-          existing?.subject ??
+          // `unsorted` is the absence of a subject, so new evidence may still file the record.
+          (UNSORTED_SUBJECT === existing?.subject ? undefined : existing?.subject) ??
           subjectFor({ surface: next.surface, binding: next.binding }));
     const why = facts.why ?? existing?.why;
     const source = facts.source ?? existing?.source;
+    // New words keep no check bound to the old ones: a later green on it would "prove" words it
+    // never tested. A binding the change brings with it stands.
+    const kept =
+      existing !== undefined && existing.statement !== next.statement
+        ? { ...existing, binding: undefined }
+        : existing;
+    // Bound only while a check is bound: a record whose check was taken off (new words, a decision)
+    // said `bound` with none, and a check naming it then proved nothing and said nothing.
+    const merged = { ...kept, ...next };
+    const state =
+      IntentState.BOUND === merged.state && merged.binding === undefined
+        ? IntentState.DECLARED
+        : merged.state;
     return {
-      ...existing,
-      ...next,
+      ...merged,
+      state,
       subject,
       status: this.#statusOf(next, existing, facts.status),
       updatedAt: this.#clock.now(),

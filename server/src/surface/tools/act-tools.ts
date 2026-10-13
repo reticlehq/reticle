@@ -7,6 +7,7 @@
  * re-exported through this list, which made a cycle out of nothing: that file needs `actCommand` from
  * here, and a registry is the right place to collect a definition from.
  */
+import { checkWords, runIdOfCall } from '@/judgement/runs/drive-run.js';
 import type { Session } from '@/portal/session/session.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
@@ -40,7 +41,7 @@ import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.j
 import { withGapNovelty } from './gap-novelty.js';
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
-import { intentDebt, openSessionIntents } from '@/memory/intent/open-intents.js';
+import { intentDebt, ledgerFor } from '@/memory/intent/open-intents.js';
 import {
   dischargeInlineIntent,
   inlineVerdictId,
@@ -89,34 +90,22 @@ import {
 } from '@/portal/session/control-envelope.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
+import { confirmedByDeclaration } from './act/act-danger.js';
 import { dispatchAct, preflightAct } from './act/act-preflight.js';
-import { followLostObservation } from './act/act-observation.js';
+import { checkNet, disabledTargetNote, followLostObservation } from './act/act-observation.js';
 import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';
 import { verdictIntentGap } from '@reticlehq/engine/evidence/verdict-intent-gap.js';
 import { asActionType, gradeOf } from './act/act-helpers.js';
 import { resolveActTarget } from './act/act-target.js';
+import { screenRequestFindings, withAdvisories } from './act/screen-request.js';
 import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrue } from './act/already-true.js';
+import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
 
 /**
- * Narrow the wire's `action` to a real ActionType, or undefined.
- *
- * It used to be `asString(args['action']) ?? ''`, so an unknown or missing action became the empty
- * string and travelled on — reaching the browser as a command it could not perform, and reported back
- * as a generic failure rather than "that is not an action". Validate at the boundary, per the project's
- * unknown-plus-narrowing rule, so a typo is rejected where it can still be explained.
- */
-
-/**
- * The action vocabulary, derived from ActionType — never retyped.
- *
- * The description used to omit callable actions such as blur, upload and drag,
- * because a hand-copied list drifts the moment
- * someone adds an arm. Deriving both the schema and the prose from the enum makes that impossible.
- *
- * The handler already refused an unknown action with a good message; the schema now refuses it
- * one layer earlier, before any session is resolved or any work is done.
+ * The action vocabulary, derived from ActionType — never retyped: a hand-copied list once omitted
+ * blur, upload and drag. The schema refuses an unknown action before any session is resolved.
  */
 const ACTION_TYPE_VALUES = Object.values(ActionType);
 const actionTypeEnum = z.enum(ACTION_TYPE_VALUES as [string, ...string[]]);
@@ -159,9 +148,8 @@ export async function actCommand(
     };
   }
   const bridgeArgs: Record<string, unknown> = { ...actArgs, args: rewritten };
-  return timeoutMs !== undefined
-    ? session.command(ReticleCommand.ACT, bridgeArgs, timeoutMs)
-    : session.command(ReticleCommand.ACT, bridgeArgs);
+  // What the acted element shows (test id, source) is noted in `Session.command`, Harness acts too.
+  return session.command(ReticleCommand.ACT, bridgeArgs, timeoutMs);
 }
 
 export const ACT_TOOLS: ToolDef[] = [
@@ -400,6 +388,8 @@ export const ACT_TOOLS: ToolDef[] = [
         observed: z.string().optional(),
         expected: z.string().optional(),
         assertion: z.string().optional(),
+        caseOnlyMiss: z.boolean().optional(),
+        wouldHold: z.string().optional(),
       }),
       trace: z
         .unknown()
@@ -502,10 +492,11 @@ export const ACT_TOOLS: ToolDef[] = [
       // Omitting `until` waits for the page to settle (idle) — the deterministic default vs a sleep.
       // `predicate` is what reticle_assert / reticle_wait_for call this — see alias-args.ts.
       const withUntil = aliasParam(args, 'until', ['predicate']);
-      const until =
-        withUntil['until'] !== undefined
-          ? parsePredicate(withUntil['until'])
-          : ({ kind: PredicateKind.SETTLED } as const);
+      // Declared: the consequence is named, which also confirms a named dangerous control.
+      const untilNamed = withUntil['until'] !== undefined;
+      const until = untilNamed
+        ? parsePredicate(withUntil['until'])
+        : ({ kind: PredicateKind.SETTLED } as const);
       // BEFORE the action. A body clause this session cannot answer would fail whatever the app
       // did, and on a drive that mutates state the action is not always repeatable. See #801(C).
       const bodyRefusal = bodyClauseRefusal(until, session);
@@ -520,10 +511,10 @@ export const ACT_TOOLS: ToolDef[] = [
         asString(args['intent']),
         PredicateKind.SETTLED === until.kind ? undefined : until,
       );
-
+      // Bound while the session is live: the action may take the tab off the app's origin.
+      const readLedger = ledgerFor(deps, asString(args['sessionId']));
       // Everything refusable without touching the page — see act-preflight.ts.
       preflightAct(asRecord(args['args']), until);
-
       // Resolve `target` to a ref BEFORE the action window opens, so the lookup is not attributed to
       // the act and cannot be mistaken for something the action caused.
       const resolved = await resolveActTarget(session, args);
@@ -561,7 +552,7 @@ export const ACT_TOOLS: ToolDef[] = [
           actCommand(deps, session, {
             ref: resolved.ref,
             action: args['action'],
-            args: args['args'] ?? {},
+            args: confirmedByDeclaration(asRecord(args['args']), args['target'], untilNamed),
           }),
         );
         if (actResult !== null) {
@@ -610,14 +601,14 @@ export const ACT_TOOLS: ToolDef[] = [
 
         const r = asRecord(actResult?.result);
         if ('boolean' === typeof r['settled']) settledOutcome = r['settled'];
-        // Where the acted element is written. Captured at act time alongside the anchor, so it is
-        // available even when the action unmounted its own target.
+        // Where the acted element is written, captured at act time even if the action unmounted it.
         const actedSource = sourceOf(r['source']);
-        // Remembered on the session so a LATER assertion can name a file even when its failure has no
-        // element to point at — a signal that never fired, a request that was never made.
+        // Remembered so a LATER assertion can name a file with no element to point at, and so the
+        // app's coverage counts source mapping as seen.
         const actedSourceLabel =
           actedSource === undefined ? undefined : `${actedSource.file}:${String(actedSource.line)}`;
         session.lastAct.markSource(actedSourceLabel);
+        noteSourceSeen(session, actedSourceLabel);
         const windowEvents = session.eventsSince(since);
         const trace = summarizeReaction(
           buildReactionReport(windowEvents, session.elapsed() - since),
@@ -657,7 +648,9 @@ export const ACT_TOOLS: ToolDef[] = [
         // Coverage: cross-origin frames / other blind spots the SDK reported during this window mean the
         // verdict didn't see everything — say so, never imply full coverage.
         const spots = blindSpotsFromState(session.blindSpots(), session.runtime);
-        const coverage = buildCoverageStatement(spots);
+        // The window's own counts, so sampling before it is not described as this window's (#1414).
+        const windowSpots = blindSpotsFromState(session.blindSpots(since), session.runtime);
+        const coverage = buildCoverageStatement(spots, windowSpots);
         const absenceBlindSpot = absenceBlindSpotNote(until, spots);
         // A green resting on hidden matches says the node exists, not that it shows (#1408).
         const hiddenMatch = hiddenMatchNote(until, verdict.evidence);
@@ -667,7 +660,10 @@ export const ACT_TOOLS: ToolDef[] = [
         // Only a spot that IMPEACHES the capture belongs in integrity — see impeachesCapture. A
         // structural boundary (virtualized rows, a cross-origin frame) is reported as coverage and
         // must not downgrade a verdict about what WAS observed.
-        const impeaching = buildCoverageStatement(spots.filter((s) => impeachesCapture(s.kind)));
+        const impeaching = buildCoverageStatement(
+          // The WINDOW's blind spots: sampling before it is a coverage fact, not this verdict's gap (#1414).
+          windowSpots.filter((s) => impeachesCapture(s.kind)),
+        );
         // Same rule as reticle_assert: a browser-side transport gap means part of this window was
         // never seen, which is what `blindSpots` exists to say. `truncated` above covers the SERVER
         // ring buffer evicting; this covers the BROWSER queue overflowing, and they are not the same
@@ -750,6 +746,7 @@ export const ACT_TOOLS: ToolDef[] = [
           actionSince: since,
           expectedFailures: declared.netFailures,
           namedNetUrls: declared.netUrls,
+          repeatableNetUrls: declared.repeatableNetUrls,
           // A consequence that was already true before the action proves nothing about it, so it is
           // not evidence the destination rendered either — `alreadyTrue` decides that, once.
           renderProved: verdict.pass && !alreadyTrue && declared.rendersContent,
@@ -771,6 +768,9 @@ export const ACT_TOOLS: ToolDef[] = [
         });
         const outcomeUnread = unreadWriteLabels(windowEvents);
         const stillInFlight = inFlightRequestLabels(windowEvents, session.url, session.background);
+        // A click on a disabled control cannot cause anything: a miss there is not the app's.
+        const inconclusive =
+          verdict.inconclusive ?? disabledTargetNote(verdict.pass, actResult?.result);
         const { decision, durable } = await withDurability(
           args['durable'],
           until,
@@ -789,7 +789,7 @@ export const ACT_TOOLS: ToolDef[] = [
             ...(alreadyTrue ? { alreadyTrue } : {}),
             ...(alreadyTrueHiddenMatch ? { alreadyTrueHiddenMatch } : {}),
             // An assertion nobody could evaluate must not be reported as one the app failed.
-            ...(verdict.inconclusive === undefined ? {} : { inconclusive: verdict.inconclusive }),
+            ...(inconclusive === undefined ? {} : { inconclusive }),
             // Nor must one nobody could OBSERVE. This is the act path, so it is the one that produced
             // the measured false red: a reload mid-wait, graded assertion_failed at the clicked
             // component's own file and line.
@@ -831,7 +831,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // Read ONCE and used twice: `changeUndeclared` asks whether the ledger is empty, and the
         // undischarged-intent gap asks how much it still holds. Two reads would be two chances for
         // them to disagree about the same file.
-        const openIntents = await openSessionIntents(deps, asString(args['sessionId']));
+        const openIntents = await readLedger();
         const changeUndeclared = await isChangeUndeclared(session.currentEditEpoch, () =>
           Promise.resolve(openIntents),
         );
@@ -883,6 +883,7 @@ export const ACT_TOOLS: ToolDef[] = [
               verdictId: inlineVerdictId(ReticleTool.ACT_AND_WAIT, deps.now()),
               grade,
               at: deps.now(),
+              runId: runIdOfCall(session.id), // the run it lands in: linked by id, never by time
             },
             // Where the acted element is written, so the record can name a file somebody would open
             // to change the thing it describes.
@@ -893,14 +894,15 @@ export const ACT_TOOLS: ToolDef[] = [
           claim: describeWaitTarget(until),
           verified: decision.verified,
           ...(actedSourceLabel === undefined ? {} : { source: actedSourceLabel }),
+          ...checkWords(verdict),
           // TRUE here, and false on the `assert` path, and the difference is the point. This tool
           // takes `until` BEFORE it acts: the consequence is named in advance and can then only be
           // met or missed. A claim written after the fact can be shaped to fit whatever happened,
           // which is why the two are recorded apart rather than assumed alike.
           declaredBeforeActing: true,
+          ...checkNet(verdict, windowEvents), // the calls that explain a miss, or the one that held
           grade: gradeOfPredicate(until),
-          // What the declared consequence READ. The run fold has only the journal, so a kind absent
-          // here was being invented there as `element`. Same field, same reason, on the assert path.
+          // What the declared consequence READ: a kind absent here was invented by the run fold.
           kind: until.kind,
           // The deciding clause, kept — and it was NOT, on this path, the commonest one. `unknown`
           // alone cannot tell an outcome that has not arrived from a capture that could not be
@@ -960,7 +962,8 @@ export const ACT_TOOLS: ToolDef[] = [
           // whole point is catching what NOBODY suspected. It now travels with the action, so an
           // agent cannot miss it by not asking. Omitted entirely when clean, so a healthy action
           // pays nothing.
-          ...(contradictions.length > 0 ? { contradictions } : {}),
+          // + the opt-in, advisory screen/request check, appended AFTER the verdict (act/screen-request.ts).
+          ...withAdvisories(contradictions, await screenRequestFindings(session, windowEvents)),
           ...(durable === undefined ? {} : { durable }),
           honesty: honestyForVerdict(String(decision.verified), honesty),
           // Without its summary: it is byte-identical to `summary` two fields up. See wireCapsule.

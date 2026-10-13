@@ -25,7 +25,7 @@ import { readDaemonRegistry } from '@/command/daemon/daemon-resolve.js';
 import { LOOPBACK_HOST, STATUS_HOLD_MS } from '@reticlehq/core';
 import { probePresence, presenceIsUsable } from '@/command/daemon/binding/port-presence.js';
 import { probeDaemon, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
-import { daemonSpawnArgs } from '@/command/cli/daemon-start-options.js';
+import { daemonSpawnArgs, headlessByDefault } from '@/command/cli/daemon-start-options.js';
 import { fetchStatus, summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { runKill } from '@/command/cli/cli-kill.js';
 import type { DaemonRegistryEntry } from '@reticlehq/core/artifacts';
@@ -203,7 +203,13 @@ export function nodeEnsureDaemonDeps(skewed: (status: unknown) => boolean): Ensu
       const started = spawnDaemon(
         process.execPath,
         scriptPath,
-        daemonSpawnArgs({ port, headless: true, http: false }),
+        // The daemon init starts is the one the agent attaches to and drives through, so it follows
+        // the same rule as every other: shown on a desktop, hidden in CI or with no display.
+        daemonSpawnArgs({
+          port,
+          headless: headlessByDefault(process.env, process.platform),
+          http: false,
+        }),
         port,
       );
       // For a log or a pipe. On a terminal it was a JSON line in the middle of `init`'s output, read

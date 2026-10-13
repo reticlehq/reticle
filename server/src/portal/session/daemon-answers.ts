@@ -1,5 +1,6 @@
 import { log } from '@/log.js';
 import { bindSpanContext } from '@/trace.js';
+import { bindDrivenBy } from '@/hooks/driven-by.js';
 
 /**
  * What the daemon answers when the rules that decide a verdict ask it for something.
@@ -18,6 +19,9 @@ export const noteToDaemonLog = log;
 
 /**
  * Keep a callback belonging to the call that created it, so a re-check scheduled for later still
- * traces back to the wait that asked for it instead of looking like work starting from nowhere.
+ * traces back to the wait that asked for it instead of looking like work starting from nowhere, and
+ * is still the Harness's when the Harness made the call: the HUD files it by who drove it.
  */
-export const keepCallerContextInDaemon = bindSpanContext;
+export const keepCallerContextInDaemon = <A extends unknown[]>(
+  fn: (...args: A) => void,
+): ((...args: A) => void) => bindDrivenBy(bindSpanContext(fn));

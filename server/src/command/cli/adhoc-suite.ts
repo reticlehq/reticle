@@ -14,10 +14,14 @@
  * ask it, over the transport `start()` already attaches unconditionally. Nothing is bound, nothing
  * is stopped, the agent keeps its link.
  */
+import { CALL_SECRETS_ARG } from '@/surface/tools/tool-kit.js';
 import { ReticleTool } from '@reticlehq/core';
+import { cutOffReason } from '@/surface/tools/harness-explore.js';
+import { KEY_REFUSED_HEAD, RESULT_FIELD } from '@/surface/tools/reticle-result.js';
 import {
   connectOverSse,
   endpointFor,
+  exploreToEnd,
   leaseIfNoTab,
   releaseLease,
   refusalText,
@@ -32,16 +36,25 @@ export interface AdhocSuiteOptions {
   select?: string[];
   /** Which connected tab to drive. Omitted means "whatever is connected". */
   sessionId?: string;
+  /** Acknowledge the replay guard's destructive steps for this run only. */
+  confirmDangerous?: boolean;
   token?: string;
   /** Injected so a test does not need a live daemon. */
   connect?: (endpoint: URL) => Promise<ToolCaller>;
+  /**
+   * The url `reticle verify` was given, and the tabs the daemon has: with no tab on its origin, the
+   * suite runs in a Reticle browser opened at it. It answered "no browser session connected" instead.
+   */
+  url?: string;
+  sessions?: () => Promise<readonly { url: string }[]>;
+  /** The caller's project `.reticle`: a lease opened here writes its runs there. */
+  root?: string;
 }
 
 /** The only status that is a pass. `unverifiable` means nothing was checked, which is not one. */
 const PASSED = 'pass';
 
 /** The `reticle_verify` actions this file asks for. */
-const EXPLORE_ACTION = 'explore';
 
 /**
  * How long a SUITE may take, against the SDK's 60s default for one request.
@@ -78,8 +91,18 @@ export async function runAdhocSuite(options: AdhocSuiteOptions): Promise<AdhocVe
       ],
     };
   }
+  let leased: string | undefined;
   try {
-    return await replaySuite(caller, options);
+    const url = options.url !== undefined && 0 < options.url.length ? options.url : undefined;
+    if (url !== undefined && options.sessionId === undefined && options.sessions !== undefined) {
+      const opened = await leaseIfNoTab(caller, url, options.sessions, options.root);
+      if ('failed' in opened) return { code: 1, lines: ['status: unverifiable', ...opened.failed] };
+      leased = opened.leased;
+    }
+    return await replaySuite(caller, {
+      ...options,
+      ...(leased === undefined ? {} : { sessionId: leased }),
+    });
   } catch (error) {
     return {
       code: 1,
@@ -88,14 +111,31 @@ export async function runAdhocSuite(options: AdhocSuiteOptions): Promise<AdhocVe
       ],
     };
   } finally {
+    if (leased !== undefined) await releaseLease(caller, leased);
     await caller.close().catch(() => undefined);
   }
 }
 
+/** This command's `RETICLE_SECRET_*` values, as the per-call `secrets` argument; none, no field. */
+function secretsArg(env: NodeJS.ProcessEnv): { [CALL_SECRETS_ARG]?: Record<string, string> } {
+  const secrets = Object.fromEntries(
+    Object.entries(env).filter(
+      (entry): entry is [string, string] =>
+        entry[0].startsWith(SECRET_ENV_PREFIX) &&
+        'string' === typeof entry[1] &&
+        0 < entry[1].length,
+    ),
+  );
+  return 0 === Object.keys(secrets).length ? {} : { [CALL_SECRETS_ARG]: secrets };
+}
+
+/** The prefix of a variable holding one redacted field's value. */
+const SECRET_ENV_PREFIX = 'RETICLE_SECRET_';
+
 /** The saved suite through an open connection, as a verdict. Shared by the suite and explore paths. */
 async function replaySuite(
   caller: ToolCaller,
-  options: { select?: string[]; sessionId?: string },
+  options: { select?: string[]; sessionId?: string; confirmDangerous?: boolean },
 ): Promise<AdhocVerdict> {
   // Spread rather than set: an explicit `undefined` is a key the tools reject as an unknown
   // parameter, which would turn "no tab named" into a refusal. Same rule as the one-shot path.
@@ -105,6 +145,10 @@ async function replaySuite(
       action: 'flows',
       ...(options.select === undefined ? {} : { select: options.select }),
       ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+      ...(true === options.confirmDangerous ? { confirmDangerous: true } : {}),
+      // The running daemon's environment is not this command's: the secrets a CI step set for
+      // `reticle verify` go with the call, for this call only.
+      ...secretsArg(process.env),
     },
     SUITE_TIMEOUT_MS,
   );
@@ -113,11 +157,16 @@ async function replaySuite(
   const report = verdictOf(result, 'status');
   const status = 'string' === typeof report?.['status'] ? report['status'] : 'unverifiable';
   const summary = 'string' === typeof report?.['summary'] ? report['summary'] : undefined;
+  // Its last line says where the run lives (dashboard link, or kept on this machine only).
+  const block = 'string' === typeof report?.[RESULT_FIELD] ? report[RESULT_FIELD] : undefined;
+  // A pass the platform will never see is not a green CI step: its key was refused.
+  const refusedKey = true === block?.includes(`- ${KEY_REFUSED_HEAD}`);
   return {
-    code: PASSED === status ? 0 : 1,
+    code: PASSED === status && !refusedKey ? 0 : 1,
     lines: [
       `status: ${status}`,
       ...(summary === undefined ? [] : [summary]),
+      ...(block === undefined ? [] : [block]),
       JSON.stringify(report ?? result, null, 2),
     ],
   };
@@ -133,6 +182,8 @@ export interface AdhocExploreOptions {
   connect?: (endpoint: URL) => Promise<ToolCaller>;
   /** The tabs the daemon has connected. See runAdhocVerdict. */
   sessions: () => Promise<readonly { url: string }[]>;
+  /** The caller's project `.reticle`: a lease opened here writes its runs there. */
+  root?: string;
 }
 
 /**
@@ -160,14 +211,13 @@ export async function runAdhocExplore(options: AdhocExploreOptions): Promise<Adh
   }
   let leased: string | undefined;
   try {
-    const opened = await leaseIfNoTab(caller, options.url, options.sessions);
+    const opened = await leaseIfNoTab(caller, options.url, options.sessions, options.root);
     if ('failed' in opened) return { code: 1, lines: ['status: unverifiable', ...opened.failed] };
     leased = opened.leased;
     const pin = leased === undefined ? {} : { sessionId: leased };
-    const drove = await caller.call(
-      ReticleTool.VERIFY,
+    const drove = await exploreToEnd(
+      caller,
       {
-        action: EXPLORE_ACTION,
         ...(options.persona === undefined ? {} : { persona: options.persona }),
         ...pin,
       },
@@ -185,6 +235,8 @@ export async function runAdhocExplore(options: AdhocExploreOptions): Promise<Adh
       ...(summary === undefined ? [] : [summary]),
       ...(note === undefined ? [] : [note]),
     ];
+    const cut = cutOffReason(report ?? {});
+    if (cut !== undefined) return { code: 1, lines: ['status: unverifiable', ...drive, cut] };
     // A drive that left nothing to replay proved nothing, however long it ran.
     if (0 === recorded.length) return { code: 1, lines: ['status: unverifiable', ...drive] };
     const suite = await replaySuite(caller, pin);

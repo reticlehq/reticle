@@ -117,13 +117,32 @@ describe('a skewed page is reported on the next tool result', () => {
     expect(result.version_skew).toBeUndefined();
   });
 
-  it('stays silent for a page on a DIFFERENT version that speaks the same contract', async () => {
+  it('stays silent for a page on a different PATCH that speaks the same contract', async () => {
     // The reason the fingerprint exists: a patch bump that renamed nothing must not warn, or the
     // warning is noise by the third release and nobody reads the one that matters.
     const { CONTRACT_FINGERPRINT } = await import('@reticlehq/core');
-    await connect({ sessionId: 'patch-behind', version: '0.0.1', contract: CONTRACT_FINGERPRINT });
-    await waitForSession('patch-behind');
+    const { SERVER_VERSION } = await import('./identity/server-version.js');
+    const [major, minor] = SERVER_VERSION.split('.');
+    await connect({
+      sessionId: 'patch-apart',
+      version: `${major ?? '0'}.${minor ?? '0'}.99`,
+      contract: CONTRACT_FINGERPRINT,
+    });
+    await waitForSession('patch-apart');
     const result = (await call('reticle_sessions')) as { version_skew?: unknown };
     expect(result.version_skew).toBeUndefined();
+  });
+
+  it('names a page a minor release behind, even on the same contract', async () => {
+    // From the field: wire-compatible, so nothing warned, while the page ran an overlay without the
+    // controls the newer release added and nobody could tell which SDK it was.
+    const { CONTRACT_FINGERPRINT } = await import('@reticlehq/core');
+    await connect({ sessionId: 'minor-behind', version: '0.0.1', contract: CONTRACT_FINGERPRINT });
+    await waitForSession('minor-behind');
+    const result = (await call('reticle_sessions')) as {
+      version_skew?: { pair: string; action: string };
+    };
+    expect(result.version_skew?.pair).toBe('sdk_behind');
+    expect(result.version_skew?.action).toContain('0.0.1');
   });
 });

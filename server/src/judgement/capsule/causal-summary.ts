@@ -1,5 +1,6 @@
 import { EventType, PerfMetric, isDevToolingUrl, type ReticleEvent } from '@reticlehq/core';
 import { routeOfEvent } from '@reticlehq/engine/question/predicate/predicate-route.js';
+import { isCacheBookkeepingDiff } from '@reticlehq/engine/evidence/state-bookkeeping.js';
 
 /**
  * The causal summary (Tier 1) — the bounded ~50–100 token block on EVERY act, green included: what the
@@ -37,10 +38,24 @@ export interface CausalSummary {
    */
   net: { total: number; errors: number; ignoredDevTooling?: number; headline?: string };
   consoleErrors: number;
+  /** The first console error's text, capped — so a count is never the only thing an agent can read. */
+  firstConsoleError?: string;
+  /**
+   * The app's requests in this window as `METHOD /path STATUS` (`pending` when unanswered), capped.
+   * Origin and query string are left out: the line is for recognising the call, and the full record is
+   * one `reticle_observe { since }` away. Present only when there were any.
+   */
+  requests?: string[];
   statePathsChanged: string[];
   storageKeysChanged: string[];
   /** Before→after for each changed store path — the diffs, not just the names. Values capped. */
   stateDiffs: StateDiff[];
+  /**
+   * How many store diffs were left out of `stateDiffs` because they moved only a cache's own
+   * bookkeeping (fetchStatus, isStale, dataUpdatedAt — see engine's state-bookkeeping rule). Present
+   * only when there were any: a trim is never silent. Predicates still see every transition.
+   */
+  ignoredBookkeeping?: number;
   /**
    * How long the store took to stop moving: last state change − first, in ms. Present only when more
    * than one path changed, because with a single change there is no interval to describe.
@@ -127,6 +142,7 @@ export const MAX_SUMMARY_ENTRIES = 20;
 
 /** The lists that are capped, named so `elided` can say which one lost entries. */
 type CappedList =
+  | 'requests'
   | 'statePathsChanged'
   | 'storageKeysChanged'
   | 'stateDiffs'
@@ -176,6 +192,27 @@ function stateSettle(diffs: readonly StateDiff[]): { stateSettleMs?: number } {
   return spread > 0 ? { stateSettleMs: spread } : {};
 }
 
+/** `METHOD /path STATUS` — what an agent recognises a call by. */
+function requestLine(data: Record<string, unknown>): string {
+  const raw = 'string' === typeof data['url'] ? data['url'] : '';
+  let path: string;
+  try {
+    path = new URL(raw, 'http://local.invalid').pathname;
+  } catch {
+    path = raw.split('?')[0] ?? raw;
+  }
+  const method = 'string' === typeof data['method'] ? data['method'].toUpperCase() : 'GET';
+  const status = 'number' === typeof data['status'] ? String(data['status']) : 'pending';
+  return `${method} ${path} ${status}`;
+}
+
+/** The first line of a console error, capped. */
+function firstLine(data: Record<string, unknown>): string {
+  const text = ['message', 'text', 'error'].map((k) => data[k]).find((v) => 'string' === typeof v);
+  const line = ('string' === typeof text ? text : 'console error').split('\n')[0] ?? '';
+  return truncate(line);
+}
+
 export function causalSummary(
   events: readonly ReticleEvent[],
   context: SummaryContext = {},
@@ -185,6 +222,8 @@ export function causalSummary(
   let ignoredDevTooling = 0;
   let headline: string | undefined;
   let consoleErrors = 0;
+  let firstConsoleError: string | undefined;
+  const requests: string[] = [];
   const statePathsChanged: string[] = [];
   const storageKeysChanged: string[] = [];
   const stateDiffs: StateDiff[] = [];
@@ -194,6 +233,7 @@ export function causalSummary(
   const fieldsChanged: string[] = [];
   let layoutShift: number | undefined;
   let longTasks = 0;
+  let ignoredBookkeeping = 0;
 
   for (const event of events) {
     const data = event.data;
@@ -205,6 +245,7 @@ export function causalSummary(
         }
         netTotal += 1;
         const status = data['status'];
+        requests.push(requestLine(data));
         const failed = false === data['ok'] || ('number' === typeof status && status >= 400);
         if (failed) {
           netErrors += 1;
@@ -216,6 +257,7 @@ export function causalSummary(
       case EventType.CONSOLE_ERROR:
       case EventType.ERROR_UNCAUGHT:
         consoleErrors += 1;
+        firstConsoleError ??= firstLine(data);
         break;
       case EventType.STATE_CHANGE: {
         pushUnique(statePathsChanged, data['name']);
@@ -226,6 +268,10 @@ export function causalSummary(
         const hasAfter = 'value' in data || 'new' in data;
         if ('string' === typeof path && path.length > 0 && ('old' in data || hasAfter)) {
           const after = 'value' in data ? data['value'] : data['new'];
+          if (isCacheBookkeepingDiff(data['old'], after)) {
+            ignoredBookkeeping += 1;
+            break;
+          }
           stateDiffs.push({
             path,
             from: capValue(data['old']),
@@ -282,9 +328,12 @@ export function causalSummary(
       ...(headline === undefined ? {} : { headline }),
     },
     consoleErrors,
+    ...(firstConsoleError === undefined ? {} : { firstConsoleError }),
+    ...(0 === requests.length ? {} : { requests: cap(requests, 'requests', elided) }),
     statePathsChanged: cap(statePathsChanged, 'statePathsChanged', elided),
     storageKeysChanged: cap(storageKeysChanged, 'storageKeysChanged', elided),
     stateDiffs: cap(stateDiffs, 'stateDiffs', elided),
+    ...(0 === ignoredBookkeeping ? {} : { ignoredBookkeeping }),
     ...settle,
     storageDiffs: cap(storageDiffs, 'storageDiffs', elided),
     ...(route === undefined ? {} : { route }),

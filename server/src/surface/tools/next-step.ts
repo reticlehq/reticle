@@ -1,13 +1,16 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { keyRefusalAtLastSync } from '@/memory/project/sync-status.js';
 import { join } from 'node:path';
 import { ReticleDir, ReticleEnv } from '@reticlehq/core';
+import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
+import { callingAttachId } from '@/hooks/coding-agents.js';
 
 /**
  * The one thing the agent should do next, on the result of the call it just made.
  *
  * Every client reads tool results; few read a briefing twice, and none keep a skill in mind across a
  * long session. So what an agent must not forget (record what the user asked, hand the tab back,
- * notice when its runs are not reaching the platform, tell the user how to connect) is said where
+ * notice when its runs are not reaching the platform) is said where
  * the agent is already looking, one short line, on the moment it applies. It is placed first in the
  * result, because a model that truncates a long result keeps its beginning.
  *
@@ -19,8 +22,6 @@ import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 const REQUEST_FRESH_MS = 6 * 60 * 60 * 1000;
 /** A reminder that is not about a verdict is repeated at most this often, per project. */
 const QUIET_CALLS = 10;
-/** An unlinked project hears how to connect on every Nth verdict, the first included. */
-const CONNECT_EVERY = 5;
 /**
  * How often the agent is asked to record the request before the other lines get their turn. In
  * every recorded run the agent ignored it, and because it always won, no agent was ever told its
@@ -35,24 +36,51 @@ export const NextText = {
     'Record what the user asked, once per task, verbatim: reticle_run { tool: "reticle_intent", args: { action: "declare", request: "<their words>" } }. It travels with every run.',
   SYNC_PROBLEM: (why: string): string =>
     `Runs are not reaching the platform (${why}). reticle_run { tool: "reticle_project", args: { push: true } } retries and reports why.`,
-  CONNECT:
-    'These runs stay on this machine. To share them on the team dashboard, the user runs once: npx @reticlehq/server connect',
   FINISH_LINKED:
     'Done driving? reticle_session { action: "yield" } hands the tab back; this run syncs to the platform on its own.',
   FINISH: 'Done driving? reticle_session { action: "yield" } hands the tab back.',
+  /**
+   * The evidence of this app is landing outside any project, so nothing will send it. A second
+   * checkout's runs and flows went to `~/.reticle/unmatched/<id>` and the agent was told nothing.
+   */
+  UNMATCHED: (root: string, contenders: readonly string[], serving?: string): string => {
+    const app = serving === undefined ? "This app's" : `The app served from ${serving}: its`;
+    const lead = `${app} runs and flows are going to ${root}, not your project, so they will not reach the dashboard: `;
+    if (0 === contenders.length) {
+      return `${lead}no folder on this machine declares its project. Run \`reticle init\` in the app's folder.`;
+    }
+    return (
+      `${lead}${String(contenders.length)} folders claim its project id (${contenders.join(', ')}). ` +
+      'Serve the app from the checkout that owns the id, or give this one its own id with ' +
+      "`reticle init` in it — that rewrites its committed .reticle.json, so keep the change on this checkout's branch."
+    );
+  },
   REPLAY: (flows: number): string =>
     `This app has ${String(flows)} saved flow(s). Replay them before driving anything by hand: reticle_verify { action: "flows" } re-verifies them with no model.`,
 } as const;
 
 interface RootState {
   calls: number;
-  verdicts: number;
   lastQuietAt: number;
   declareAsks: number;
   /** Told about the saved flows already, which is said once per project. */
   replayTold: boolean;
+  /** The unmatched evidence folder already named. */
+  unmatchedTold?: string;
+  /** When this agent session first called here: what it wrote since is its own work. */
+  since: number;
+  /**
+   * The sync problem already said. One flow the platform refused was repeated on every answer for a
+   * whole session; a problem is said once, and again only when it changes.
+   */
+  problemTold?: string;
 }
 
+/**
+ * Keyed by the agent session AND the folder: what is "said once" is said once to each agent. The
+ * daemon outlives agent sessions, and keyed by folder alone a fresh session in a second checkout
+ * was diverted into ~/.reticle/unmatched with nothing said, because an earlier one had been told.
+ */
 const roots = new Map<string, RootState>();
 
 /** Tests only. */
@@ -80,17 +108,35 @@ function requestDeclared(root: string, now: number): boolean {
   return now - when < REQUEST_FRESH_MS;
 }
 
-/** Run files written after the last push and old enough that a sync cycle should have sent them. */
-function unsentRuns(root: string, lastPushAt: number, now: number): number {
+/**
+ * Run files THIS agent session wrote (at or after `since`) after the last push, and old enough that a
+ * sync cycle should have sent them. Another session's are not this one's to be told about.
+ */
+function unsentRuns(root: string, lastPushAt: number, now: number, since: number): number {
   try {
     const dir = join(root, ReticleDir.RUNS_SUBDIR);
     return readdirSync(dir).filter((name) => {
+      // A drive's own record is not a run and never syncs.
+      if (name.endsWith(DRIVE_RECORD_SUFFIX)) return false;
       const at = statSync(join(dir, name)).mtimeMs;
-      return at > lastPushAt + UNSENT_AFTER_MS && now - at > UNSENT_AFTER_MS;
+      return at >= since && at > lastPushAt + UNSENT_AFTER_MS && now - at > UNSENT_AFTER_MS;
     }).length;
   } catch {
     return 0;
   }
+}
+
+/** Whether this agent session wrote a run or a flow here since it began. */
+function wroteSince(root: string, since: number): boolean {
+  for (const sub of [ReticleDir.RUNS_SUBDIR, ReticleDir.FLOWS_SUBDIR]) {
+    try {
+      const dir = join(root, sub);
+      if (readdirSync(dir).some((name) => statSync(join(dir, name)).mtimeMs >= since)) return true;
+    } catch {
+      /* nothing written there */
+    }
+  }
+  return false;
 }
 
 /**
@@ -100,13 +146,21 @@ function unsentRuns(root: string, lastPushAt: number, now: number): number {
  * error and no refusal, which is how a whole day of runs stayed on one machine with every check
  * reporting fine.
  */
-function syncProblem(root: string, now: number): string | undefined {
+function syncProblem(root: string, now: number, since: number): string | undefined {
   const state = readJson(join(root, ReticleDir.CLOUD_STATE_FILE));
   const pushed = state?.['lastPushAt'];
-  const unsent = unsentRuns(root, 'number' === typeof pushed ? pushed : 0, now);
+  const unsent = unsentRuns(root, 'number' === typeof pushed ? pushed : 0, now, since);
   if (0 < unsent) return `${String(unsent)} run(s) written here were never sent`;
   if (state === undefined) return undefined;
   const error = state['lastError'];
+  // A refused key read as the platform's "valid API key required" to a member removed from the
+  // workspace, whose key was set: it was refused, which is what they have to act on — and it holds
+  // back this session's work too, so it is said whoever wrote what.
+  const refusal = keyRefusalAtLastSync(root);
+  if (refusal !== undefined) return refusal;
+  // Anything else the project's sync reports is said to a session whose own work it holds back: a
+  // flow another session saved was named on every result of one that had written nothing.
+  if (!wroteSince(root, since)) return undefined;
   if ('string' === typeof error && 0 < error.length) return error.slice(0, 120);
   const refused = state['refusedRuns'];
   const count = 'object' === typeof refused && null !== refused ? Object.keys(refused).length : 0;
@@ -115,6 +169,8 @@ function syncProblem(root: string, now: number): string | undefined {
 
 export interface NextStepInput {
   tool: string;
+  /** Where this app's evidence goes when no project claims it, and the folders that compete for it. */
+  unmatched?: { root: string; contenders: readonly string[]; serving?: string } | undefined;
   /** Whether this result carries a verdict. */
   verdict: boolean;
   root: string | undefined;
@@ -143,21 +199,28 @@ function savedFlows(dir: string): number {
 export function nextStep(input: NextStepInput): string | undefined {
   const { root } = input;
   if (root === undefined) return undefined;
-  const state = roots.get(root) ?? {
+  const key = `${callingAttachId() ?? ''}\u0000${root}`;
+  const state = roots.get(key) ?? {
     calls: 0,
-    verdicts: 0,
     lastQuietAt: Number.NEGATIVE_INFINITY,
     declareAsks: 0,
     replayTold: false,
+    since: input.now,
   };
-  roots.set(root, state);
+  roots.set(key, state);
   state.calls += 1;
-  if (input.verdict) state.verdicts += 1;
   const linked = existsSync(join(root, ReticleDir.CLOUD_LINK_FILE));
   // A key in the environment syncs too, so its runs not arriving is just as much a problem.
   const sends = linked || 0 < (process.env[ReticleEnv.API_KEY] ?? '').length;
   const quietDue = state.calls - state.lastQuietAt >= QUIET_CALLS;
 
+  // Before anything else, once per folder: everything else said here assumes the work is landing
+  // in the project.
+  const unmatched = input.unmatched;
+  if (unmatched !== undefined && unmatched.root !== state.unmatchedTold) {
+    state.unmatchedTold = unmatched.root;
+    return NextText.UNMATCHED(unmatched.root, unmatched.contenders, unmatched.serving);
+  }
   // Measured on a whole-app drive: an agent re-drove everything by hand while saved flows sat
   // unreplayed, though the skill says to replay first. Said on the first call, where it is in time.
   if (!state.replayTold && !input.tool.endsWith('verify')) {
@@ -165,9 +228,10 @@ export function nextStep(input: NextStepInput): string | undefined {
     const saved = savedFlows(join(root, ReticleDir.FLOWS_SUBDIR));
     if (0 < saved) return NextText.REPLAY(saved);
   }
-  const problem = sends ? syncProblem(root, input.now) : undefined;
-  if (problem !== undefined && (input.verdict || quietDue)) {
+  const problem = sends ? syncProblem(root, input.now, state.since) : undefined;
+  if (problem !== undefined && problem !== state.problemTold && (input.verdict || quietDue)) {
     state.lastQuietAt = state.calls;
+    state.problemTold = problem;
     return NextText.SYNC_PROBLEM(problem);
   }
   // Not on the declare call itself, which is the answer to this line.
@@ -182,6 +246,6 @@ export function nextStep(input: NextStepInput): string | undefined {
     return NextText.DECLARE;
   }
   if (!input.verdict) return undefined;
-  if (!sends && 1 === state.verdicts % CONNECT_EVERY) return NextText.CONNECT;
+  // How to connect is the agent nudge's to say, once per session (`platform-moment.ts`).
   return sends ? NextText.FINISH_LINKED : NextText.FINISH;
 }

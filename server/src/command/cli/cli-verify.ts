@@ -10,17 +10,23 @@
  * — is unit-tested without launching a real browser.
  */
 
+import { CLI_CLIENT_NAME } from '@/judgement/runs/verification-sync.js';
 import { join, basename } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { runAdhocVerdict } from './adhoc-verdict.js';
+import { callerArtifactRoot } from '@/memory/project/link-directory.js';
+import { verifyResults } from './verify-results.js';
+import { writeFile } from 'node:fs/promises';
 import { runAdhocExplore, runAdhocSuite } from './adhoc-suite.js';
 import {
+  cutOffReason,
   exploreApp,
   harnessAvailable,
   MSG_NO_HARNESS_KEY,
   withLinkedCredential,
 } from '@/surface/tools/harness-explore.js';
 import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
+import { CONNECT } from '@/surface/tools/platform-moment.js';
 import { resolveSuiteSelection } from '@/language/flows/suite-selection.js';
 import { projectOnly } from '@/memory/project/session-root.js';
 import {
@@ -63,7 +69,10 @@ import {
   SyncOutcome,
   type CloudConfig,
 } from '@/memory/cloud/cloud-sync.js';
-import { linkedRunsCloudPort } from '@/memory/cloud/cloud-config.js';
+import { readProjectId } from './ports/resolve/cli-port.js';
+import { linkedRunsCloudPort, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import { readDashboardUrl } from '@/memory/project/sync-status.js';
+import { seeRunLine } from '@/memory/project/sync-status.js';
 import { homedir } from 'node:os';
 import { ReticleRunner, type VerifyProgressListener } from '@/judgement/runs/reticle-runner.js';
 import { createRunnerPort } from '@/judgement/runs/runner-port.js';
@@ -83,7 +92,20 @@ const EXIT_FAIL = 1;
 const DEFAULT_SESSION_TIMEOUT_MS = 15_000;
 const SESSION_POLL_MS = 250;
 const DEFAULT_PROJECT_NAME = 'app';
-const VERIFY_AGENT_ID = 'reticle-cli';
+
+/**
+ * The project a verify run is named for: the dashboard project this checkout is linked to, else the
+ * id its `.reticle.json` carries, else the folder. A CI run read "ci-repo" on a dashboard whose
+ * project, and the repo's own committed config, said `web-ci`.
+ */
+export function verifyProjectName(
+  linked: string | null,
+  configured: string | undefined,
+  folder: string,
+): string {
+  return linked ?? configured ?? (folder || DEFAULT_PROJECT_NAME);
+}
+const VERIFY_AGENT_ID = CLI_CLIENT_NAME;
 
 const MSG_NO_SESSION =
   'No app connected: Reticle drove the URL but no @reticlehq/browser session dialed back.\n' +
@@ -100,6 +122,14 @@ const MSG_NO_FLOWS =
 const MSG_EXPLORED_NOTHING =
   'The drive saved no flows, so there is still nothing to verify. Nothing was proved.';
 const MSG_VERIFY_PREFIX = 'verify failed: ';
+
+/** What a drive left, and how it ended: `broken` and `stopped` are drives cut off part-way. */
+export interface ExploreOutcome {
+  savedFlows: readonly string[];
+  steps: number;
+  stopReason?: string;
+  error?: string;
+}
 
 /** The live capabilities runVerify needs — faked in tests so the logic runs without a browser. */
 export interface VerifyConnection {
@@ -118,7 +148,7 @@ export interface VerifyConnection {
    * Optional on the interface on purpose: the harness is unavailable on a machine with no key, and
    * every other path through this command has to keep working exactly as it did.
    */
-  explore?: (focus?: string) => Promise<{ savedFlows: readonly string[]; steps: number }>;
+  explore?: (focus?: string) => Promise<ExploreOutcome>;
   /**
    * `onProgress` is narration for a run in flight — see `verify-progress.ts` in core. Optional at
    * every layer: a connection that ignores it behaves exactly as it did before.
@@ -137,6 +167,10 @@ export interface VerifyPorts {
    * one. A port so the push is testable, and so this reads what every other caller reads.
    */
   cloud: () => Promise<CloudConfig | null>;
+  /** Write `--results-json`. A port so the test reads what would have been written. */
+  writeResults?: (path: string, text: string) => Promise<void>;
+  /** The dashboard `reticle link` recorded, so a synced run is printed as a link to its page. */
+  dashboardUrl?: () => string | undefined;
 }
 
 interface VerifyArgs {
@@ -148,6 +182,8 @@ interface VerifyArgs {
   persona?: string;
   /** Verify only flows carrying ANY of these labels. */
   select?: string[];
+  /** Also write the per-journey verdicts here, as JSON. See verify-results.ts. */
+  resultsJson?: string;
 }
 
 function errMessage(error: unknown): string {
@@ -251,6 +287,12 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
       cloud,
       cloudFetch,
     ).catch(() => undefined);
+    if (args.resultsJson !== undefined && ports.writeResults !== undefined) {
+      await ports.writeResults(
+        args.resultsJson,
+        `${JSON.stringify(verifyResults(run), null, 2)}\n`,
+      );
+    }
     ports.out(renderRunReport(run));
     ports.exit(run.verdict.status === VerdictStatus.PASS ? EXIT_PASS : EXIT_FAIL);
   } catch (error) {
@@ -280,6 +322,12 @@ async function explore(
   }
   ports.out('No saved flows yet — driving the app to record some.');
   const drive = await conn.explore(args.persona);
+  const cut = cutOffReason(drive);
+  if (cut !== undefined) {
+    ports.fail(cut);
+    ports.exit(EXIT_FAIL);
+    return false;
+  }
   if (0 === drive.savedFlows.length) {
     ports.fail(MSG_EXPLORED_NOTHING);
     ports.exit(EXIT_FAIL);
@@ -303,15 +351,42 @@ async function pushRunToCloud(
   config: CloudConfig | null,
   ports: VerifyPorts,
 ): Promise<void> {
-  if (null === config) return;
+  if (null === config) {
+    ports.out(
+      `run ${run.runId} was kept on this computer: this repo is not linked, so nothing was sent ` +
+        `to the dashboard. To save runs for your team: ${CONNECT}`,
+    );
+    return;
+  }
   const result = await syncRunToCloud(run, config, cloudFetch);
   if (result.outcome === SyncOutcome.SYNCED) {
-    ports.out(`↑ run ${run.runId} recorded on the Reticle dashboard`);
+    const dashboard = ports.dashboardUrl?.();
+    ports.out(
+      dashboard === undefined
+        ? `↑ run ${run.runId} recorded on the Reticle dashboard`
+        : seeRunLine(dashboard, run.runId),
+    );
   } else {
-    ports.fail(
-      `cloud run sync failed (${result.status ?? result.error ?? 'error'}); run kept locally`,
+    ports.fail(runSyncFailure(result.status, result.error));
+  }
+}
+
+/** The platform answered: the credential was not accepted. */
+const REFUSED_STATUSES: ReadonlySet<number> = new Set([401, 403]);
+
+/**
+ * Why the run did not reach the dashboard. A revoked key left CI green with "cloud run sync failed
+ * (401)" in the log as the only trace; a refused key is said as one, loudly.
+ */
+export function runSyncFailure(status: number | undefined, error: string | undefined): string {
+  if (status !== undefined && REFUSED_STATUSES.has(status)) {
+    return (
+      `⚠ The platform refused this project's API key (${String(status)}): this run did NOT reach ` +
+      'the dashboard, and nothing pushed with this key will. The key was revoked, or its owner no ' +
+      'longer has access to the workspace — mint a new one in Settings → API keys. Run kept locally.'
     );
   }
+  return `cloud run sync failed (${String(status ?? error ?? 'error')}); run kept locally`;
 }
 
 function delay(ms: number): Promise<void> {
@@ -374,6 +449,8 @@ interface LiveOpts {
   storageState?: string;
   /** Which connected tab to verify, when the app has more than one open on this port. */
   sessionId?: string;
+  /** `--confirm-dangerous`: acknowledge the replay guard's destructive steps for this run. */
+  confirmDangerous?: boolean;
 }
 
 /** Split a drive URL into its origin + whether it's loopback — decides token/injection pairing. */
@@ -422,7 +499,9 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
   });
   const deps = buildVerifyDeps(running, opts.reticleRoot, opts.now);
   const harnessEnv = await withLinkedCredential(deps, process.env);
-  const runner = new ReticleRunner(createRunnerPort(deps, opts.sessionId));
+  const runner = new ReticleRunner(
+    createRunnerPort(deps, opts.sessionId, { confirmDangerous: true === opts.confirmDangerous }),
+  );
   return {
     sessionReady: (timeoutMs) => waitForSession(deps.sessions, timeoutMs, opts.now),
     listFlows: async (select) =>
@@ -438,7 +517,12 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
               ...(focus === undefined ? {} : { focus }),
               ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
             });
-            return { savedFlows: result.savedFlows, steps: result.drive.steps };
+            return {
+              savedFlows: result.savedFlows,
+              steps: result.drive.steps,
+              stopReason: result.drive.stopReason,
+              ...(result.drive.error === undefined ? {} : { error: result.drive.error }),
+            };
           },
         }
       : {}),
@@ -600,6 +684,11 @@ export function routeVerify(args: {
    * it used to be, and `init` leaves exactly that daemon behind before recommending this command.
    */
   explore?: boolean;
+  /**
+   * Whether the project already has saved flows. `--explore` without a daemon drives only when there
+   * are none (a drive spends model credits, a replay does not), and this path keeps the same rule.
+   */
+  hasSavedFlows?: boolean;
   presence: PortPresence;
   port: number;
 }): VerifyPlan {
@@ -609,7 +698,7 @@ export function routeVerify(args: {
       : { route: VerifyRoute.REFUSE, message: expectNeedsDaemonMessage(args.port, args.presence) };
   }
   if (args.presence !== PortPresence.DAEMON) return { route: VerifyRoute.FLOWS };
-  if (true === args.explore && true !== args.wantsOwnBrowser) {
+  if (true === args.explore && true !== args.wantsOwnBrowser && true !== args.hasSavedFlows) {
     return { route: VerifyRoute.ADHOC_EXPLORE };
   }
   // No predicate, but there may be SAVED FLOWS, and a daemon already owns the port: replay them
@@ -637,6 +726,10 @@ export function handleVerify(parsed: {
   persona?: string;
   /** Bridge port — parseCliArgs already resolves --port / RETICLE_PORT / .reticle.json into this. */
   port: number;
+  /** Write the per-journey verdicts here as JSON, for a CI step to post. */
+  resultsJson?: string;
+  /** Acknowledge the replay guard's destructive steps ("Place order") for this run only. */
+  confirmDangerous?: boolean;
 }): void {
   const now = (): number => Date.now();
   /*
@@ -668,34 +761,53 @@ export function handleVerify(parsed: {
     }
   }
   const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
-  const projectName = basename(process.cwd()) || DEFAULT_PROJECT_NAME;
+  const linkedName = async (): Promise<string> =>
+    verifyProjectName(
+      (await resolveProjectCloud(createNodeFileSystem(), reticleRoot, homedir(), process.env))
+        .projectId,
+      readProjectId(process.cwd()),
+      basename(process.cwd()),
+    );
   const ports: VerifyPorts = {
-    connect: () =>
+    connect: async () =>
       openLiveConnection({
         url: parsed.url,
         headless: parsed.headless,
         reticleRoot,
-        projectName,
+        projectName: await linkedName(),
         now,
         port: parsed.port ?? RETICLE_DEFAULT_PORT,
         ...(parsed.storageState !== undefined ? { storageState: parsed.storageState } : {}),
         ...(parsed.sessionId !== undefined ? { sessionId: parsed.sessionId } : {}),
+        ...(true === parsed.confirmDangerous ? { confirmDangerous: true } : {}),
       }),
     out: (line) => process.stdout.write(`${line}\n`),
     fail: (line) => process.stderr.write(`${line}\n`),
     exit: (code) => process.exit(code),
     cloud: linkedRunsCloudPort(createNodeFileSystem(), reticleRoot, homedir(), process.env),
+    dashboardUrl: () => readDashboardUrl(reticleRoot),
+    writeResults: (path, text) => writeFile(path, text, 'utf8'),
   };
   // Asked BEFORE anything binds. The listen failure arrives asynchronously on the server object,
   // long after `start` has resolved, so no `.catch` on that promise can ever see it — which is why
   // this used to reach the user as a raw node stack rather than as an answer.
   void (async () => {
+    const keyNote = (
+      await resolveProjectCloud(createNodeFileSystem(), reticleRoot, homedir(), process.env)
+    ).note;
+    if (keyNote !== undefined) process.stderr.write(`${keyNote}\n`);
     const port = parsed.port ?? RETICLE_DEFAULT_PORT;
+    // A lease opened for this verdict writes its runs into this folder's project, not `unmatched/`.
+    const root = callerArtifactRoot(process.cwd());
+    const callerRoot = root === undefined ? {} : { root };
     const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
     const plan = routeVerify({
       hasPredicate: expectation !== undefined,
       wantsOwnBrowser: !parsed.headless || parsed.storageState !== undefined,
       explore: true === parsed.explore || parsed.persona !== undefined,
+      hasSavedFlows:
+        0 <
+        (await new FlowStore(createNodeFileSystem(), reticleRoot, { now: Date.now }).list()).length,
       presence,
       port,
     });
@@ -721,6 +833,7 @@ export function handleVerify(parsed: {
           // Read fresh, not from `presence`: that probe asks whether a daemon is on the port, and
           // this asks whether a TAB is — the difference between asserting and opening the url first.
           sessions: async () => summarizeStatus(await fetchStatus(port)).sessions,
+          ...callerRoot,
           ...(parsed.sessionId === undefined ? {} : { sessionId: parsed.sessionId }),
           ...((t: string | undefined) => (t === undefined || 0 === t.length ? {} : { token: t }))(
             readOrCreatePairingTokenSync(defaultPairingTokenDir()),
@@ -735,6 +848,10 @@ export function handleVerify(parsed: {
       case VerifyRoute.ADHOC_SUITE: {
         const suite = await runAdhocSuite({
           port,
+          ...(parsed.url !== undefined && '' !== parsed.url ? { url: parsed.url } : {}),
+          sessions: async () => summarizeStatus(await fetchStatus(port)).sessions,
+          ...callerRoot,
+          ...(true === parsed.confirmDangerous ? { confirmDangerous: true } : {}),
           ...(parsed.select === undefined ? {} : { select: parsed.select }),
           ...(parsed.sessionId === undefined ? {} : { sessionId: parsed.sessionId }),
           ...((t: string | undefined) => (t === undefined || 0 === t.length ? {} : { token: t }))(
@@ -753,6 +870,7 @@ export function handleVerify(parsed: {
           url: parsed.url,
           ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
           sessions: async () => summarizeStatus(await fetchStatus(port)).sessions,
+          ...callerRoot,
           ...((t: string | undefined) => (t === undefined || 0 === t.length ? {} : { token: t }))(
             readOrCreatePairingTokenSync(defaultPairingTokenDir()),
           ),
@@ -776,6 +894,7 @@ export function handleVerify(parsed: {
             ...(true === parsed.explore ? { explore: true } : {}),
             ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
             ...(parsed.select === undefined ? {} : { select: parsed.select }),
+            ...(parsed.resultsJson === undefined ? {} : { resultsJson: parsed.resultsJson }),
           },
           ports,
         );

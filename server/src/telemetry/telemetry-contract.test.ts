@@ -18,6 +18,8 @@ import {
   LicenseActivation,
 } from '@reticlehq/core';
 import { generateKeyPairSync } from 'node:crypto';
+import { AgentNudgeKind, CoverageBucket, SessionSummarySchema } from '@reticlehq/core/telemetry';
+import { SessionMetrics } from './session-metrics.js';
 import { TOOLS } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { VERDICT_TOOLS } from '@/surface/tools/feedback-tools.js';
@@ -334,6 +336,35 @@ describe('no vocabulary is hand-copied', () => {
   it('does not claim values its enum never defined', () => {
     // A stale entry is the same drift in the other direction: it reports a value core does not have.
     expect(describeParam('mode', 'lean')).toBe('mode:other');
+  });
+});
+
+/**
+ * The platform and Harness nudges, and the coverage a refused Harness drive was at, are counted by
+ * kind and bucket. Both keys are closed enums from core: a kind or bucket that is not listed never
+ * reaches the wire, and every one that is listed does.
+ */
+describe('nudges and Harness refusals are counted by closed names', () => {
+  const summary = (extra: Record<string, unknown>): boolean =>
+    SessionSummarySchema.safeParse({ ...new SessionMetrics(() => 0).summarize(false), ...extra })
+      .success;
+
+  it('accepts every nudge kind and coverage bucket core defines, and nothing else', () => {
+    const kinds = Object.fromEntries(Object.values(AgentNudgeKind).map((k) => [k, 1]));
+    const buckets = Object.fromEntries(Object.values(CoverageBucket).map((b) => [b, 1]));
+    expect(summary({ nudgesShown: kinds, harnessRefusedCoverage: buckets })).toBe(true);
+    expect(summary({ nudgesShown: { 'free text': 1 } })).toBe(false);
+    expect(summary({ harnessRefusedCoverage: { '62%': 1 } })).toBe(false);
+  });
+
+  it('counts what was shown and refused, in the summary', () => {
+    const metrics = new SessionMetrics(() => 0);
+    metrics.recordNudge(AgentNudgeKind.CONNECT);
+    metrics.recordHarnessRefused(62);
+    const out = metrics.summarize(false);
+    expect(out.nudgesShown).toEqual({ [AgentNudgeKind.CONNECT]: 1 });
+    expect(out.harnessRefusedCoverage).toEqual({ [CoverageBucket.B60]: 1 });
+    expect(SessionSummarySchema.safeParse(out).success).toBe(true);
   });
 });
 

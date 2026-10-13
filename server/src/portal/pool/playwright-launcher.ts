@@ -8,7 +8,7 @@
 
 import type { Browser } from 'playwright';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
-import { HIDE_RETICLE_CHROME_CSS } from '@reticlehq/core';
+import { HIDE_RETICLE_CHROME_CSS, RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
 import { launchChromium } from '@/launch-chromium.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
@@ -41,15 +41,50 @@ export const SCREENSHOT_DETERMINISM = {
  */
 export function screenshotOptions(opts: ScreenshotOptions): {
   fullPage: boolean;
-  style: string;
-  animations: 'disabled';
+  style?: string;
+  animations?: 'disabled';
   type?: 'jpeg';
   quality?: number;
+  scale?: 'css';
 } {
+  // A step screenshot is evidence about the page, so it must not change it: `animations: disabled`
+  // fast-forwards running animations to their end and fires their events in the app under test.
+  if (true === opts.cssScale && opts.jpegQuality !== undefined) {
+    return { fullPage: false, type: 'jpeg', quality: opts.jpegQuality, scale: 'css' };
+  }
   const base = { ...SCREENSHOT_DETERMINISM, fullPage: true === opts.fullPage };
   return opts.jpegQuality === undefined
     ? base
     : { ...base, type: 'jpeg', quality: opts.jpegQuality };
+}
+
+/** Where the hidden hosts' own visibility waits to be put back, on the page's window. */
+const SHOT_HIDDEN_KEY = '__reticleShotHidden';
+/** A string literal safe to splice into a script: JSON plus the characters that end one early. */
+const scriptLiteral = (value: string): string =>
+  JSON.stringify(value).replace(
+    /[<>/\u2028\u2029]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+const HIDE_CHROME_SCRIPT = `(() => { const held = []; for (const el of document.querySelectorAll(${scriptLiteral(RETICLE_OVERLAY_SELECTOR)})) { held.push([el, el.style.visibility]); el.style.visibility = 'hidden'; } window.${SHOT_HIDDEN_KEY} = held; })()`;
+const RESTORE_CHROME_SCRIPT = `(() => { for (const [el, was] of window.${SHOT_HIDDEN_KEY} ?? []) el.style.visibility = was; delete window.${SHOT_HIDDEN_KEY}; })()`;
+
+/**
+ * A step screenshot with Reticle's own UI out of it. The step path injects nothing into the page
+ * (no stylesheet, no fast-forwarded animation), so the HUD covered a third of every picture. Only
+ * our own hosts change, by their own inline `visibility`, for this one capture, and are put back
+ * whatever the capture did: the app's DOM, styles and events are not touched.
+ */
+export async function captureWithChromeHidden(
+  page: { evaluate: (script: string) => Promise<unknown> },
+  capture: () => Promise<Uint8Array>,
+): Promise<Uint8Array> {
+  await page.evaluate(HIDE_CHROME_SCRIPT);
+  try {
+    return await capture();
+  } finally {
+    await page.evaluate(RESTORE_CHROME_SCRIPT).catch(() => undefined);
+  }
 }
 
 /**
@@ -78,8 +113,10 @@ export function gotoOptions(timeoutMs: number | undefined): {
 function wrapBrowser(browser: Browser): PooledBrowser {
   return {
     isConnected: () => browser.isConnected(),
-    newContext: async (): Promise<PooledContext> => {
-      const context = await browser.newContext();
+    newContext: async (opts): Promise<PooledContext> => {
+      const context = await browser.newContext(
+        true === opts?.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : undefined,
+      );
       return {
         newPage: async (): Promise<PooledPage> => {
           const page = await context.newPage();
@@ -90,8 +127,14 @@ function wrapBrowser(browser: Browser): PooledBrowser {
             // Playwright returns a Buffer; Uint8Array is what the visual store and differ take.
             // Same determinism as the driven path's capturePage: without it a lease baseline caught
             // the HUD, its activity log and the toolbar, and a HUD change read as a regression (#1355).
-            screenshot: async (opts) =>
-              new Uint8Array(await page.screenshot(screenshotOptions(opts ?? {}))),
+            screenshot: async (opts) => {
+              const shoot = async (): Promise<Uint8Array> =>
+                new Uint8Array(await page.screenshot(screenshotOptions(opts ?? {})));
+              // A step capture injects no stylesheet, so our own hosts are hidden another way.
+              return true === opts?.cssScale
+                ? captureWithChromeHidden({ evaluate: (script) => page.evaluate(script) }, shoot)
+                : shoot();
+            },
             // Three moves, same as performGesture: a single move to the center can be a no-op if
             // the pointer was already there, and CSS :hover needs a native hit-test to apply.
             hover: async (x, y) => {

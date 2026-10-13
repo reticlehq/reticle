@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ActionType, DANGEROUS_ACTION_CONFIRM_ARG, QueryBy } from '@reticlehq/core';
+import { ActionType, DANGEROUS_ACTION_CONFIRM_ARG, FlowStepSchema, QueryBy } from '@reticlehq/core';
 import {
   RecordingStore,
   AMBIENT_RECORDING,
@@ -12,6 +12,7 @@ import {
   compileActStep,
   compileSequenceStep,
 } from '@/language/flows/replay.js';
+import { recordedStepToFlowStep } from '@/language/flows/flows.js';
 
 const step = (tool: string, stable = true): RecordedStep => ({ tool, stable, args: {} });
 
@@ -178,6 +179,34 @@ describe('RecordingStore', () => {
     const act = compileActStep({ ref: 'e9', action: ActionType.CLICK, args: {} }, { effect: {} });
     expect(act.stable).toBe(false);
     expect(act.args['ref']).toBe('e9');
+  });
+
+  it('preserves an explicit timeout through recording and flow compilation', () => {
+    const recorded = compileActStep(
+      { ref: 'e9', action: ActionType.CLICK, timeout_ms: 20_000, args: {} },
+      { testid: 'save' },
+    );
+
+    expect(recordedStepToFlowStep(recorded).timeoutMs).toBe(20_000);
+
+    const noWait = compileActStep(
+      { ref: 'e10', action: ActionType.CLICK, timeout_ms: 0, args: {} },
+      { testid: 'instant' },
+    );
+    expect(recordedStepToFlowStep(noWait).timeoutMs).toBe(0);
+    expect(() => FlowStepSchema.parse(recordedStepToFlowStep(noWait))).not.toThrow();
+  });
+
+  it('preserves a sequence timeout on the parent flow step', () => {
+    const recorded = compileSequenceStep(
+      {
+        timeout_ms: 20_000,
+        steps: [{ ref: 'e9', action: ActionType.CLICK, args: {} }],
+      },
+      { steps: [{ testid: 'save' }] },
+    );
+
+    expect(recordedStepToFlowStep(recorded).timeoutMs).toBe(20_000);
   });
 
   it('keeps a recorded until that locates by role and name', () => {

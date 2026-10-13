@@ -29,7 +29,7 @@ import {
   PredicateKind,
   ReplayStatus,
 } from '@reticlehq/core';
-import { asString, isConsequenceDrift } from '@reticlehq/core';
+import { asString, invokedFlowMissing, isConsequenceDrift } from '@reticlehq/core';
 import { anchorFieldName } from './fields/flow-secret-field.js';
 import {
   degradedStepResult,
@@ -406,6 +406,11 @@ export interface ReplayFromOptions {
    */
   onStep?: (done: number, total: number, held: boolean) => void;
   /**
+   * Told each reported step the moment its outcome is decided, before it is kept, so a caller can
+   * add to it (the step's screenshot). Never allowed to fail the replay.
+   */
+  onStepResult?: (result: FlowStepResult, flow: string) => Promise<void>;
+  /**
    * Resume at this step: an index, or a step's `id` (which survives edits that shift indices).
    *
    * There is no state to restore, so the steps before it are re-driven — quickly, as setup: their
@@ -468,12 +473,15 @@ export function resumeIndex(
   return steps.slice(0, at).some((step) => StepEffect.COMMITS === step.effect) ? 0 : at;
 }
 
-/** How far a replay drives: `to` stops before a step, `at` picks up at one. Positive indices only. */
+/**
+ * How far a replay drives: `to` stops before a step (positive), `at` picks up at one on the page as
+ * it is. `at: 0` is the whole flow continuing the page the flow before it left, with no reload.
+ */
 export function replayWindow(args: Record<string, unknown>): { to?: number; at?: number } {
-  const index = (raw: unknown): number | undefined =>
-    'number' === typeof raw && Number.isInteger(raw) && 0 < raw ? raw : undefined;
-  const to = index(args['to']);
-  const at = index(args['at']);
+  const index = (raw: unknown, least: number): number | undefined =>
+    'number' === typeof raw && Number.isInteger(raw) && least <= raw ? raw : undefined;
+  const to = index(args['to'], 1);
+  const at = index(args['at'], 0);
   return { ...(to === undefined ? {} : { to }), ...(at === undefined ? {} : { at }) };
 }
 
@@ -538,7 +546,7 @@ async function runInvokeStep(
     return {
       ...base,
       ok: false,
-      error: `cannot replay "${name}": it was not found, so this journey would report green having never run it`,
+      error: invokedFlowMissing(name),
     };
   }
   // `from` is an offset into the CALLER's steps. A sub-journey invoked from the setup prefix runs
@@ -765,6 +773,7 @@ export async function replayFlow(
         continue;
       }
       if (index < from) result.note = `setup step for resuming at step ${String(from)} failed`;
+      await options.onStepResult?.(result, flow.name).catch(() => undefined);
       results.push(result);
       tell(result);
       // Under `sweep`, a failure whose action still RAN does not stop the run — the page is where the

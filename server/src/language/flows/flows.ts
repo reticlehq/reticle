@@ -5,7 +5,7 @@ import {
   type Predicate,
   type ProjectId,
 } from '@reticlehq/core';
-import { REDACTED_FILL } from './fields/flow-secret-field.js';
+import { REDACTED_FILL, SECRET_NAME_ARG, secretEnvKey } from './fields/flow-secret-field.js';
 export { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
 import { changeInPlace } from './narrow-write.js';
@@ -29,12 +29,18 @@ import type {
   HealChange,
   InstrumentationGap,
 } from '@reticlehq/core';
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, flowJsonReplacer } from '@reticlehq/core';
 import { asRecord, asString } from '@reticlehq/core';
 import { applyHealChanges } from './heal.js';
 import { withLearnedSources } from './learned-sources.js';
 import { flowIntentGap, linkFlowIntent } from './flow-intent.js';
-import { journeyFingerprint, journeyName, mergeJourney, routeClaims } from './flow-journey.js';
+import {
+  journeyFingerprint,
+  journeyName,
+  mergeJourney,
+  routeClaims,
+  withinJourney,
+} from './flow-journey.js';
 import { IntentStore } from '@/memory/intent/intent-store.js';
 import type { CompiledProgram, RecordedStep } from './recording/tape/recordings.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
@@ -168,7 +174,33 @@ function redactSecretFill(
   if (typeof args['value'] !== 'string') return args;
   const field = anchorFieldName(anchor);
   if (field === undefined || !defaultIsSensitiveKey(field)) return args;
-  return { ...args, value: REDACTED_FILL };
+  // The variable that supplies it, beside the placeholder: the file alone says what to set.
+  return { ...args, value: REDACTED_FILL, [SECRET_NAME_ARG]: secretEnvKey(field) };
+}
+
+/**
+ * The recorded steps as they may be SHOWN: every credential fill carries the placeholder.
+ *
+ * The same rule the saved flow is written by, applied to what a tool hands back. `record stop`
+ * returned the compiled program verbatim, so the password a saved flow never contained went into
+ * the agent's transcript instead. The store keeps the real value — an in-session replay types it.
+ */
+export function redactRecordedSteps(steps: readonly RecordedStep[]): RecordedStep[] {
+  return steps.map((step) => {
+    if (step.tool === ReticleTool.ACT_SEQUENCE && Array.isArray(step.args['steps'])) {
+      const subs = step.args['steps'].map((raw) => redactNormalizedArgs(asRecord(raw)));
+      return { ...step, args: { ...step.args, steps: subs } };
+    }
+    return { ...step, args: redactNormalizedArgs(step.args) };
+  });
+}
+
+/** One normalized act's args with its inner fill `args` redacted by the anchor it would save as. */
+function redactNormalizedArgs(normalized: Record<string, unknown>): Record<string, unknown> {
+  const inner = normalized['args'];
+  if ('object' !== typeof inner || null === inner) return normalized;
+  const redacted = redactSecretFill(anchorForStep(normalized).anchor, asRecord(inner));
+  return redacted === inner ? normalized : { ...normalized, args: redacted };
 }
 
 /**
@@ -211,6 +243,7 @@ function buildStep(
  */
 export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
   const out = anchoredStep(step);
+  if (step.timeoutMs !== undefined) out.timeoutMs = step.timeoutMs;
   if (step.page !== undefined) out.page = step.page;
   if (step.endPage !== undefined && step.endPage !== step.page) out.endPage = step.endPage;
   return out;
@@ -303,11 +336,18 @@ export class FlowStore {
   readonly #fs: FileSystemPort;
   readonly #root: string;
   readonly #clock: Clock;
+  readonly #onWrote: (() => void) | undefined;
 
-  constructor(fs: FileSystemPort, root: string, clock: Clock) {
+  /**
+   * `onWrote` is told after a save lands, so cloud sync cycles on a new flow the way it does on a
+   * new run (`RunStore` takes the same callback). Without it a flow saved with no run behind it
+   * waited for the timer, and a daemon that exited first never sent it.
+   */
+  constructor(fs: FileSystemPort, root: string, clock: Clock, opts: { onWrote?: () => void } = {}) {
     this.#fs = fs;
     this.#root = root;
     this.#clock = clock;
+    this.#onWrote = opts.onWrote;
   }
 
   /**
@@ -317,7 +357,7 @@ export class FlowStore {
    */
   #serialize(flow: FlowFile): string {
     const stamped = { ...flow, version: flowFileVersionFor(flow) };
-    return `${JSON.stringify(stamped, null, JSON_INDENT)}\n`;
+    return `${JSON.stringify(stamped, flowJsonReplacer, JSON_INDENT)}\n`;
   }
 
   /**
@@ -403,6 +443,7 @@ export class FlowStore {
     const flow = await this.#linkIntent(base);
     await this.#fs.mkdir(flowParentDir(this.#root, program.name, pid));
     await this.#fs.writeFile(flowPath(this.#root, program.name, pid), this.#serialize(flow));
+    this.#onWrote?.();
     return { ok: true, value: this.#summary(flow) };
   }
 
@@ -423,18 +464,37 @@ export class FlowStore {
     const pid = safeProjectId(projectId);
     const fresh = this.#build(program, undefined, pid);
     const saved: FlowFile[] = [];
-    for (const name of (await this.list(pid)).filter((n) => n.startsWith(prefix))) {
+    const freshPrint = journeyFingerprint(fresh);
+    for (const name of await this.list(pid)) {
       const loaded = await this.load(name, pid);
-      if (loaded.ok) saved.push(loaded.value);
+      if (!loaded.ok) continue;
+      if (name.startsWith(prefix)) saved.push(loaded.value);
+      // The agent already saved this journey under its own name: one journey, one flow. A web drive
+      // saved its named flow and an automatic `drive-saved-<email>` beside it, every time.
+      else if (journeyFingerprint(loaded.value) === freshPrint) {
+        return { ok: true, value: this.#summary(loaded.value) };
+      }
     }
     const byPrint = new Map<string, FlowFile[]>();
     for (const flow of saved) {
       const print = journeyFingerprint(flow);
       byPrint.set(print, [...(byPrint.get(print) ?? []), flow]);
     }
-    const print = journeyFingerprint(fresh);
+    const print = freshPrint;
     const taken = new Map(saved.map((flow) => [flow.name, journeyFingerprint(flow)]));
-    const named = { ...fresh, name: journeyName(fresh.name, print, taken) };
+    // The same name holding this journey driven with a step more or less: one file, the fuller drive.
+    const same = saved.find((flow) => flow.name === fresh.name && taken.get(flow.name) !== print);
+    if (same !== undefined && withinJourney(same, fresh))
+      return { ok: true, value: this.#summary(same) };
+    const extended = same !== undefined && withinJourney(fresh, same);
+    if (extended) taken.delete(fresh.name);
+    const named = {
+      ...fresh,
+      ...(extended && fresh.intent === undefined && same.intent !== undefined
+        ? { intent: same.intent }
+        : {}),
+      name: journeyName(fresh.name, print, taken),
+    };
     byPrint.set(print, [...(byPrint.get(print) ?? []), named]);
     let result: FlowFile = named;
     for (const [groupPrint, group] of byPrint) {
@@ -448,6 +508,7 @@ export class FlowStore {
       }
       if (groupPrint === print) result = merged;
     }
+    this.#onWrote?.();
     return { ok: true, value: this.#summary(result) };
   }
 
@@ -486,6 +547,7 @@ export class FlowStore {
       flowPath(this.#root, asFlowName(valid.name), pid),
       this.#serialize(valid),
     );
+    this.#onWrote?.();
     return { ok: true, value: this.#summary(valid) };
   }
 
@@ -510,6 +572,7 @@ export class FlowStore {
         resolvePath: (n, p) => this.#resolveReadPath(asFlowName(n), p),
         write: (path, contents) => this.#fs.writeFile(path, contents),
         serialize: (flow) => this.#serialize(flow),
+        readRaw: (path) => this.#fs.readFile(path),
       },
       name,
       projectId,

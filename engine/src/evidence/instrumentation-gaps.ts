@@ -115,7 +115,9 @@ export function gapsForAction(facts: ActionInstrumentationFacts): Instrumentatio
         off ? InstrumentationGapKind.SOURCE_MAPPING_OFF : InstrumentationGapKind.NO_SOURCE_MAPPING,
         off
           ? 'source mapping is turned off for this build, so no element carries data-reticle-source'
-          : 'the control that was driven carries no source mapping',
+          : facts.ref === undefined
+            ? 'nothing this verdict located carries a source mapping'
+            : 'the control that was driven carries no source mapping',
         'this verdict can name the control but not the file and line that render it, so finding the code is a separate search',
         { ...(facts.ref === undefined ? {} : { ref: facts.ref }) },
       ),

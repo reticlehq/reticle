@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`: a failing `reticle_assert` no longer reports `no-source-mapping` when its own evidence is located.** The gap was decided from the last act's source alone, so an assertion made before any act, or after an act on an unstamped control, listed `no-source-mapping` and advised installing the build plugin even when every near miss in the same response carried `file:line`. The gap now reads the verdict's own source first, then any stamp in its evidence, near misses included, and only then the last act. An app with no stamps at all still gets it. Closes [#1422](https://github.com/reticlehq/reticle/issues/1422).

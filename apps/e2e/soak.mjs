@@ -41,6 +41,8 @@ import { fileURLToPath } from 'node:url';
 // place that genuinely needs a CLI, below.
 import { waitForSession } from './wait-for-session.mjs';
 import { sweepBatteryOrphans, transportAlive, Attribution, attributeOutcome } from './gate-harness.mjs';
+// Batteries are not watched, and a shown browser changes their timing: hide every browser Reticle opens.
+process.env.RETICLE_HEADLESS ??= '1';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = process.env.RETICLE_PORT ?? '4400';

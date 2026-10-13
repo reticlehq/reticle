@@ -13,6 +13,13 @@
 import { diskSource, readCloudState } from '@/memory/cloud/sync-disk.js';
 import { hashPayload } from '@/memory/cloud/sync-hash.js';
 import type { CloudSyncState } from '@/memory/cloud/sync-cycle.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ReticleDir } from '@reticlehq/core';
+import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import { unmatchedRoots, unsyncedRoots, type UnsyncedRoot } from '@/memory/cloud/unsynced-roots.js';
+import type { FileSystemPort } from './fs/fs-port.js';
+import { knownProjectCandidates } from './artifact-root-resolver.js';
 
 export const SyncStatus = {
   ON_PLATFORM: 'on-platform',
@@ -38,6 +45,8 @@ export interface SyncSummary {
   lastPushAt?: number;
   /** Why the last cycle failed, when it did. */
   lastError?: string;
+  /** The newest run the platform holds in its current form: what "see it in your dashboard" opens. */
+  latestOnPlatform?: string;
 }
 
 export function summarizeSync(input: {
@@ -49,10 +58,14 @@ export function summarizeSync(input: {
   let onPlatform = 0;
   let pending = 0;
   const refused: { runId: string; reason: string }[] = [];
+  let latest: { runId: string; at: number } | undefined;
   if (linked) {
     for (const run of runs) {
       const hash = hashPayload(run.payload);
       const refusal = state.refusedRuns?.[run.runId];
+      const at = createdAtOf(run.payload);
+      if (state.sentRunHashes?.[run.runId] === hash && (latest === undefined || at > latest.at))
+        latest = { runId: run.runId, at };
       if (state.sentRunHashes?.[run.runId] === hash) onPlatform += 1;
       else if (refusal !== undefined && refusal.payloadHash === hash)
         refused.push({ runId: run.runId, reason: refusal.reason });
@@ -70,7 +83,129 @@ export function summarizeSync(input: {
     ...(state.lastError === undefined || 0 === state.lastError.length
       ? {}
       : { lastError: state.lastError }),
+    ...(latest === undefined ? {} : { latestOnPlatform: latest.runId }),
   };
+}
+
+/** A run artifact's `createdAt`, or 0 when it has none. */
+function createdAtOf(payload: unknown): number {
+  const at =
+    'object' === typeof payload && null !== payload
+      ? (payload as Record<string, unknown>)['createdAt']
+      : undefined;
+  return 'number' === typeof at ? at : 0;
+}
+
+/**
+ * Where this project's dashboard lives, if `reticle link` recorded one.
+ *
+ * Read from the link file rather than derived from the API url, because the API origin and the
+ * console origin are different hosts in every deployment that is not a laptop. Synchronous and
+ * best-effort, like every other read in this file: a missing or malformed link file means no link
+ * in the HUD, never a failed tool call.
+ */
+export function readDashboardUrl(reticleRoot: string): string | undefined {
+  return linkField(reticleRoot, 'dashboardUrl');
+}
+
+/** The platform project this folder is linked to, from the same link file. */
+export function readLinkedProjectId(reticleRoot: string): string | undefined {
+  return linkField(reticleRoot, 'projectId');
+}
+
+function linkField(reticleRoot: string, field: string): string | undefined {
+  try {
+    const raw: unknown = JSON.parse(
+      readFileSync(join(reticleRoot, ReticleDir.CLOUD_LINK_FILE), 'utf8'),
+    );
+    if ('object' !== typeof raw || null === raw) return undefined;
+    const value = (raw as Record<string, unknown>)[field];
+    return 'string' === typeof value && value.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** How the sync loop records a refused credential in its state. */
+const REFUSED_SYNC = /^status 40[13]\b/;
+/** What precedes the answer's body in that record: `status 401: `. */
+const REFUSED_PREFIX = /^status \d+: /;
+
+/** The refused credential, in words: what a person has to act on. */
+export const KEY_REFUSED =
+  "the platform refused this project's API key: it was revoked, or its owner no longer has access to the workspace";
+
+/** The refusals the platform explains in its own words (its `error.code`). */
+const EXPLAINED_REFUSALS: ReadonlySet<string> = new Set([
+  'removed_from_workspace',
+  'key_lost_access',
+]);
+
+/**
+ * Why a credential was refused: the platform's own sentence when it names the reason ("You were
+ * removed from Acme.", a key whose owner lost the project), else ours. Reads an answer body.
+ */
+export function refusalSaid(body: string): string {
+  try {
+    const error = (JSON.parse(body) as { error?: { code?: unknown; message?: unknown } } | null)
+      ?.error;
+    if (
+      'string' === typeof error?.code &&
+      EXPLAINED_REFUSALS.has(error.code) &&
+      'string' === typeof error.message &&
+      0 < error.message.length
+    )
+      return error.message;
+  } catch {
+    // Not the platform's JSON: our own sentence stands.
+  }
+  return KEY_REFUSED;
+}
+
+/** Why the platform refused this project's key at the last sync, or undefined. Never throws. */
+export function keyRefusalAtLastSync(reticleRoot: string): string | undefined {
+  return keyRefusalIn(readCloudState(reticleRoot).lastError);
+}
+
+/** The refusal a recorded sync error carries, in words, or undefined when it is another failure. */
+function keyRefusalIn(error: unknown): string | undefined {
+  if ('string' !== typeof error || !REFUSED_SYNC.test(error)) return undefined;
+  return refusalSaid(error.replace(REFUSED_PREFIX, ''));
+}
+
+/** Whether the platform refused this project's key at the last sync. Never throws. */
+export function keyRefusedAtLastSync(reticleRoot: string): boolean {
+  return keyRefusalAtLastSync(reticleRoot) !== undefined;
+}
+
+/** The dashboard's page for one run: the console's `/runs/:runId` route, at the dashboard's origin. */
+export const DASHBOARD_RUN_PATH = '/runs/';
+export const DASHBOARD_PLAN_PATH = '/plans/';
+
+export function dashboardRunUrl(dashboardUrl: string, runId: string): string {
+  return `${dashboardOrigin(dashboardUrl)}${DASHBOARD_RUN_PATH}${encodeURIComponent(runId)}`;
+}
+
+function dashboardOrigin(dashboardUrl: string): string {
+  try {
+    return new URL(dashboardUrl).origin;
+  } catch {
+    return dashboardUrl.replace(/\/+$/, ''); // not a url: use it as given
+  }
+}
+
+/** The line a command prints once its run reached the platform. */
+export function seeRunLine(dashboardUrl: string, runId: string): string {
+  return `See it in your dashboard: ${dashboardRunUrl(dashboardUrl, runId)}`;
+}
+
+/**
+ * A saved Harness plan's page on the dashboard, beside its runs, under its project: opened under
+ * another project's sticky scope the page answered "We could not find that plan" to its owner.
+ */
+export function dashboardPlanUrl(dashboardUrl: string, planId: string, projectId?: string): string {
+  const page = `${dashboardOrigin(dashboardUrl)}${DASHBOARD_PLAN_PATH}${encodeURIComponent(planId)}`;
+  return projectId === undefined ? page : `${page}?project=${encodeURIComponent(projectId)}`;
 }
 
 /** This project's summary, read from its `.reticle`. Never throws: an unreadable record is empty. */
@@ -107,6 +242,34 @@ export function describeSync(summary: SyncSummary, now: number): string {
     parts.push(
       `refused by the platform: ${named.join('; ')}${0 < summary.refusedMore ? ` (+${String(summary.refusedMore)} more)` : ''}`,
     );
-  if (summary.lastError !== undefined) parts.push(`the last push failed: ${summary.lastError}`);
+  const refusal = keyRefusalIn(summary.lastError);
+  if (refusal !== undefined) parts.push(`the last push was refused: ${refusal}`);
+  else if (summary.lastError !== undefined)
+    parts.push(`the last push failed: ${summary.lastError}`);
   return `${parts.join('; ')} (${ago}).`;
+}
+
+/**
+ * Every project folder this machine knows with runs or flows the platform never got, linked by its OWN link
+ * file or not. `reticle sync` and `doctor` print these; a daemon tracks the same through its cycle.
+ */
+export async function machineUnsyncedRoots(
+  fs: FileSystemPort,
+  home: string,
+  env: NodeJS.ProcessEnv,
+): Promise<UnsyncedRoot[]> {
+  const roots = [
+    ...knownProjectCandidates().map((c) => join(c.directory, ReticleDir.ROOT)),
+    // And what no project claimed: nothing sends it, and nothing named it after the first warning.
+    ...unmatchedRoots(home),
+  ];
+  const cloudOf = (root: string) => resolveProjectCloud(fs, root, home, env);
+  return unsyncedRoots(
+    roots,
+    async (root) => {
+      const cloud = await cloudOf(root);
+      return null !== cloud.config && null !== cloud.projectId;
+    },
+    async (root) => (await cloudOf(root)).policy.flows,
+  );
 }

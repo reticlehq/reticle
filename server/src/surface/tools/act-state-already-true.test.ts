@@ -13,7 +13,7 @@ import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '@/memory/project/baselines.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
-import { AMBIENT_RECORDING, RecordingStore } from '@/language/flows/recording/tape/recordings.js';
+import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { FlowStore } from '@/language/flows/flows.js';
 import { ProjectStore } from '@/memory/project/project-store.js';
 import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
@@ -379,7 +379,7 @@ describe('what an already_true verdict tells the agent about the pre-action stat
  */
 describe('the recorded step keeps its consequence only when the verdict proved it', () => {
   const until = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
-  const recorded = (deps: ToolDeps) => deps.recordings.stop(AMBIENT_RECORDING)?.steps ?? [];
+  const recorded = (deps: ToolDeps) => deps.recordings.takeAmbient('demo-state')?.steps ?? [];
 
   it('a no-fault (already true) verdict records the action without the expectation', async () => {
     const { deps } = createStateSession({ initialStore: { app: { cart: { count: 3 } } } });
@@ -422,7 +422,7 @@ describe('act, then assert: the assertion is kept on the step it proved', () => 
       unknown
     >;
     expect(res['verified']).toBe(Verified.YES);
-    expect(deps.recordings.stop(AMBIENT_RECORDING)?.steps[0]?.expect).toEqual(check);
+    expect(deps.recordings.takeAmbient('demo-state')?.steps[0]?.expect).toEqual(check);
   });
 
   /*
@@ -449,7 +449,7 @@ describe('act, then assert: the assertion is kept on the step it proved', () => 
       unknown
     >;
     expect(res['verified']).toBe(Verified.YES);
-    const step = deps.recordings.stop(AMBIENT_RECORDING)?.steps[0];
+    const step = deps.recordings.takeAmbient('demo-state')?.steps[0];
     expect(step).toBeDefined();
     expect(step?.expect).toBeUndefined();
   });

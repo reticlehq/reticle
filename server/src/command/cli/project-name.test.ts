@@ -24,6 +24,27 @@ describe('a repo is named after itself', () => {
   });
 });
 
+/**
+ * `.reticle.json` named the project `nina-todo-f96721e8` while the dashboard named it `app`, after
+ * the folder: one project, two names. The dashboard takes the name `init` wrote.
+ */
+describe('a repo init already named', () => {
+  it('is linked under the name init wrote, not the folder', () => {
+    expect(defaultProjectFor('app', undefined, 'nina-todo-f96721e8')).toBe('nina-todo');
+  });
+
+  it('still prefers an existing binding', () => {
+    expect(defaultProjectFor('app', 'app', 'nina-todo-f96721e8')).toBe('app');
+  });
+
+  // Persona drives: `.reticle.json` said `persona-oss` (and `dashboard-drive`), the dashboard project
+  // was named after the folder, and local flows lived under one name while the dashboard showed another.
+  it('takes an id written by hand as the name, never the folder', () => {
+    expect(defaultProjectFor('app', undefined, 'persona-oss')).toBe('persona-oss');
+    expect(defaultProjectFor('console-root', undefined, 'Dashboard Drive')).toBe('dashboard-drive');
+  });
+});
+
 describe('an existing binding always wins', () => {
   it('keeps the project a linked repo already reports to', () => {
     // The safety property of the whole change. People re-run `link` to rotate a key or repoint an

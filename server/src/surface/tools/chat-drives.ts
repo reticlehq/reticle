@@ -6,16 +6,26 @@
  * app, and keeping them together is what stops a drive attached to one app landing in another that
  * happens to be on the same port. See `local-apps.ts` and `remote-drive.ts` for each half.
  */
-import { basename, join } from 'node:path';
+import { isUnmatchedRoot } from '@/memory/project/dir/reticle-dir.js';
+import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
+import { basename, dirname, join } from 'node:path';
 import { homedir, hostname } from 'node:os';
 import type { SessionInfo } from '../../portal/session/session-info.js';
-import { LinkCapability, ReticleTool, asRecord, type PresenterTone } from '@reticlehq/core';
+import {
+  LinkCapability,
+  ReticleDir,
+  ReticleTool,
+  asRecord,
+  type LinkDevServer,
+  type PresenterTone,
+} from '@reticlehq/core';
 import { prepareDrive } from '../../features/harness/platform/drive-target.js';
 import { reticleToolset } from './harness-toolset.js';
 import type { AttachedApp } from '../../features/harness/platform/remote-drive.js';
 import type { ToolDeps } from './tool-kit.js';
 import type { FileSystemPort } from '../../memory/project/fs/fs-port.js';
-import { projectDirFor } from '../../memory/project/session-root.js';
+import { projectDirFor, sessionRoot } from '../../memory/project/session-root.js';
+import { readDashboardUrl } from '../../memory/project/sync-status.js';
 import { driveFrame } from '../../features/visual/visual-tools.js';
 import { LEASE_ACQUIRE_TOOL } from './lease-tools.js';
 import {
@@ -27,17 +37,42 @@ import {
 import {
   appKeyOf,
   appsByPlatform,
+  homeRelative,
   machineOf,
   mayOpen,
   NOT_AN_APP_ADDRESS,
   nameFromProjectId,
   pickAppTab,
   startAppReports,
+  withoutMarks,
 } from '../../features/harness/platform/local-apps.js';
 import { serverOptionsFromEnv } from '../../features/harness/platform/server-driver.js';
-import { driveForChat } from './explore-tools.js';
-import { withLinkedCredential } from './harness-explore.js';
+import { EXPLORE_TOOLS, driveForChat } from './explore-tools.js';
+import { MSG_NO_HARNESS_KEY, harnessLockRefusal, withLinkedCredential } from './harness-explore.js';
 import { runTool } from './invoke-tool.js';
+import {
+  announcedChannels,
+  probeMarkers,
+  type ProbedTab,
+  notApplicableOf,
+  recordedGaps,
+} from '../../portal/session/recorded-gaps.js';
+import { probeDevServers } from '../../portal/session/dev-server/dev-server-probe.js';
+import {
+  DriveOrigin,
+  onDriveChange,
+  onDriveStep,
+  runningDrive,
+  stopDrive,
+} from '../../features/harness/drive-runs.js';
+import {
+  FreeDriveKind,
+  planUrl,
+  requestFreeDrive,
+  type FreeDrive,
+} from '../../features/harness/platform/platform-drives.js';
+import { HumanControlKind, type LinkUnsyncedRoot } from '@reticlehq/core';
+import { onAgentsChange } from '../../hooks/coding-agents.js';
 
 /** Why a platform drive with no tab of its own runs no tool. */
 const NO_DRIVEN_TAB = 'No tab was picked for this drive, so no tool runs.';
@@ -57,11 +92,19 @@ export const CHAT_CAPABILITIES: readonly LinkCapability[] = [
 export interface ChatDriveSessions {
   list(): SessionInfo[];
   count(): number;
-  get(
-    id: string,
-  ):
-    | { autoEnd(text: string, tone: PresenterTone): void; pushNarration(text: string): void }
+  get(id: string):
+    | {
+        autoEnd(text: string, tone: PresenterTone): void;
+        pushNarration(text: string): void;
+        readonly sdkVersion?: string | undefined;
+        readonly channels?: readonly string[] | undefined;
+        /** Asks the page what it carries (`probeMarkers`). Absent on a test double. */
+        command?: ProbedTab['command'];
+        readonly sourceMapping?: boolean | undefined;
+      }
     | undefined;
+  /** The last page handshake the bridge refused, when there was one. */
+  lastClosure?(): { at: number; reason: string } | undefined;
 }
 
 /** A project's own name: its package's, else its id's, else its folder's. */
@@ -86,7 +129,41 @@ export interface ChatDriveCloud {
   /** The platform and key a tab's own project is linked with, or undefined when it is not. */
   sessionCloud: (sessionId: string) => Promise<{ url: string; apiKey: string } | undefined>;
   version: string;
+  /** Folders holding runs the platform never got (the sync daemon's last count). Absolute roots. */
+  unsynced?: () => readonly { root: string; runs: number; linked: boolean }[];
 }
+
+/** How often the localhost dev-server scan may run: never more than this, however often we report. */
+const DEV_SERVER_SCAN_EVERY_MS = 30_000;
+
+/**
+ * Dev servers listening on localhost with no connected Reticle page — an app that is up and not
+ * instrumented, or not dialling. The same probe `doctor` and the no-session diagnosis use, cached.
+ */
+function devServerScan(
+  connectedUrls: () => readonly string[],
+  now: () => number,
+): () => Promise<LinkDevServer[]> {
+  let last: { at: number; ports: number[] } | undefined;
+  return async () => {
+    if (last === undefined || now() - last.at >= DEV_SERVER_SCAN_EVERY_MS)
+      last = { at: now(), ports: await probeDevServers() };
+    const connected = new Set(
+      connectedUrls().map((url) => {
+        try {
+          return Number(new URL(url).port);
+        } catch {
+          return 0;
+        }
+      }),
+    );
+    return last.ports
+      .filter((port) => !connected.has(port))
+      .map((port) => ({ url: `http://${LOCALHOST_HOST}:${String(port)}`, port }));
+  };
+}
+
+const LOCALHOST_HOST = 'localhost';
 
 export function startChatDrives(
   deps: ToolDeps,
@@ -120,9 +197,32 @@ export function startChatDrives(
     )
       throw new Error(NOT_AN_APP_ADDRESS);
   };
-  const open = async (url: string): Promise<void> => {
+  /**
+   * The `.reticle` each reported app writes into, learned from its tabs. A tab the chat opens for an
+   * app is leased into that root: resolved from the page alone, an app with no project id would land
+   * in `unmatched/`, which nothing syncs.
+   */
+  const rootByApp = new Map<string, { root: string; projectId?: string }>();
+  /**
+   * The root AND the project a tab the daemon opens for an app is stamped with. Stamped with the
+   * root alone, a page that reports no project of its own opened as nobody's: its run fell to
+   * `unmatched/` and the drive answered a linked project "run reticle connect".
+   */
+  const claimFor = (appKey: string | undefined): { root?: string; projectId?: string } =>
+    (appKey === undefined ? undefined : rootByApp.get(appKey)) ?? {};
+  /** Where each credential's project was last open on this machine, from the reports. */
+  const lastUrlByKey = new Map<string, { url: string; root: string; projectId?: string }>();
+  /** Lease the app a credential's project was last open at, for a drive no tab of it can take. */
+  const reopenFor = async (key: string): Promise<string | undefined> => {
+    const last = lastUrlByKey.get(key);
+    if (last === undefined) return undefined;
+    openable(last.url);
+    const id = asRecord(await runTool(LEASE_ACQUIRE_TOOL, deps, { ...last }))['sessionId'];
+    return 'string' === typeof id ? id : undefined;
+  };
+  const open = async (url: string, appKey?: string): Promise<void> => {
     openable(url);
-    await runTool(LEASE_ACQUIRE_TOOL, deps, { url });
+    await runTool(LEASE_ACQUIRE_TOOL, deps, { url, ...claimFor(appKey) });
   };
 
   const pick = (
@@ -131,8 +231,14 @@ export function startChatDrives(
     app: AttachedApp | undefined,
   ): Promise<string | null | undefined> =>
     undefined === app
-      ? pickOwnDriveSession(sessions.list(), goal, key, sessionKey)
-      : pickAppTab(app, goal, () => sessions.list(), appOf, open).then(async (id) =>
+      ? pickOwnDriveSession(sessions.list(), goal, key, sessionKey, () => reopenFor(key))
+      : pickAppTab(
+          app,
+          goal,
+          () => sessions.list(),
+          appOf,
+          (url) => open(url, app.key),
+        ).then(async (id) =>
           // The app the platform named must be one this credential's project owns.
           'string' === typeof id && (await sessionKey(id)) !== key ? null : id,
         );
@@ -151,6 +257,7 @@ export function startChatDrives(
               url,
               ...(headed ? { headed } : {}),
               ...(hud === undefined ? {} : { hud }),
+              ...claimFor(app?.key),
             }),
           );
           const id = lease['sessionId'];
@@ -170,9 +277,9 @@ export function startChatDrives(
       const tools = reticleToolset(deps, { sessionId, locked: true });
       return { tools: tools.tools, invoke: (tool, args) => tools.invoke(tool, args) };
     },
-    drive: async (goal, sessionId) => {
+    drive: async (goal, sessionId, spec) => {
       const url = sessions.list().find((tab) => tab.sessionId === sessionId)?.url;
-      const outcome = await driveForChat(deps, goal, sessionId);
+      const outcome = await driveForChat(deps, goal, sessionId, spec?.plan, spec?.confirmDangerous);
       return url === undefined ? outcome : { ...outcome, url };
     },
     // The leased tab, or a desktop window's own capture. A web tab only the SDK reaches has no camera.
@@ -184,18 +291,68 @@ export function startChatDrives(
     log,
   });
 
+  const scanDevServers = devServerScan(
+    () => sessions.list().map((tab) => tab.url),
+    () => Date.now(),
+  );
   const reports = startAppReports({
     machine,
     version: cloud.version,
     capabilities: CHAT_CAPABILITIES,
-    apps: async () =>
-      appsByPlatform(
-        sessions.list(),
+    apps: async () => {
+      // The setup score the dashboard shows is what the app's pages carry, asked of each page
+      // until its app has shown both markers: never only what an act happened to reach.
+      await probeMarkers(
+        sessions.list().flatMap((tab) => {
+          const live = sessions.get(tab.sessionId);
+          const command = live?.command?.bind(live);
+          return command === undefined
+            ? []
+            : [{ id: tab.sessionId, url: tab.url, projectId: tab.projectId, command }];
+        }),
+      );
+      return appsByPlatform(
+        sessions.list().map((tab) => {
+          const live = sessions.get(tab.sessionId);
+          const sdkVersion = live?.sdkVersion;
+          // What the page announced plus the gaps its verdicts paid for: what the dashboard's
+          // coverage line and coding-agent prompt are built from.
+          const channels = announcedChannels({
+            id: tab.sessionId,
+            url: tab.url,
+            projectId: tab.projectId,
+            channels: live?.channels,
+            sourceMapping: live?.sourceMapping,
+          });
+          const gaps = recordedGaps(tab.sessionId).map(({ kind, missing, fix, seenAt }) => ({
+            kind,
+            missing,
+            fix,
+            seenAt,
+          }));
+          return {
+            ...tab,
+            ...(sdkVersion === undefined ? {} : { sdkVersion }),
+            ...(0 === channels.length ? {} : { channels }),
+            gaps,
+            notApplicable: notApplicableOf({
+              id: tab.sessionId,
+              url: tab.url,
+              projectId: tab.projectId,
+            }),
+          };
+        }),
         serverOptionsFromEnv(await withLinkedCredential(deps, env)),
         machine.id,
         async (tab) => {
-          const dir = projectDirFor(deps, tab.sessionId);
+          const root = sessionRoot(deps, tab.sessionId);
+          const dir = dirname(root);
+          const projectId = tab.projectId ?? readProjectId(dir);
+          const stamp = { root, ...(projectId === undefined ? {} : { projectId }) };
+          rootByApp.set(appKeyOf(machine.id, dir, tab.projectId), stamp);
           const platform = await sessionCloud(tab.sessionId);
+          if (undefined !== platform)
+            lastUrlByKey.set(platform.apiKey, { url: withoutMarks(tab.url), ...stamp });
           return {
             dir,
             name: await nameOf(fs, dir, tab.projectId),
@@ -204,8 +361,20 @@ export function startChatDrives(
               : { platform: { url: platform.url.replace(/\/+$/, ''), apiKey: platform.apiKey } }),
           };
         },
-      ),
+      );
+    },
     open,
+    extras: async () => {
+      const closure = sessions.lastClosure?.();
+      const unsynced = cloud.unsynced?.();
+      return {
+        devServers: await scanDevServers(),
+        ...(closure === undefined
+          ? {}
+          : { helloFailure: { reason: closure.reason, at: closure.at } }),
+        ...unsyncedReport(unsynced, homedir()),
+      };
+    },
     drivePending: (platform) => void drives.tick(platform),
     // What the platform wants the person told: in the daemon's log, and on the HUD of each open tab
     // of that project, so somebody who never reads the log still sees "update Reticle".
@@ -229,5 +398,163 @@ export function startChatDrives(
       drives.stop();
       reports.stop();
     },
+  };
+}
+
+/** The dashboard the tab's project is linked to, when its link names one. */
+function dashboardOf(deps: ToolDeps, sessionId: string): string | undefined {
+  try {
+    return readDashboardUrl(sessionRoot(deps, sessionId));
+  } catch {
+    return undefined;
+  }
+}
+
+/** Said on the HUD when Link this project ends. */
+const MSG_LINKED = 'Linked. This project now reports to your dashboard.';
+const MSG_LINK_FAILED = 'Could not link this project. Run `reticle connect` in its folder.';
+/** A page with no projectId: linking it would bind a hash-named project nothing here reads. */
+const MSG_LINK_NEEDS_PROJECT =
+  'This page did not say which project it is, so there is nothing to link yet. Run `npx @reticlehq/server init` in your app (or pass `projectId` to `connect()`), then Link.';
+const MSG_LINK_UNAVAILABLE =
+  'This Reticle cannot link from the panel. Run `reticle connect` in the project folder.';
+/** Said on the HUD when Stop finds nothing to stop. */
+const MSG_NOTHING_DRIVING = 'No Harness drive is running in this tab.';
+const msgStartTrial = (url: string): string => `Start your trial: ${url}`;
+
+/**
+ * The panel's Harness controls. The switch is the platform's autonomous mode, unchanged. Run Harness
+ * and Stop drive. A run asks the platform for the drive's grant, then starts it
+ * through the same explore an agent calls (counted, recorded, polled the same way); its lines and
+ * steps reach the HUD log as the drive narrates them. A refused grant says why, and where to start
+ * a trial when it wants a card.
+ */
+export async function hudDrive(
+  deps: ToolDeps,
+  sessionId: string,
+  /** The panel's control, as the bridge narrowed it (`harness-request.ts`). */
+  request:
+    | { kind: typeof HumanControlKind.HARNESS; enabled: boolean }
+    | { kind: typeof HumanControlKind.HARNESS_RUN; persona?: string }
+    | { kind: typeof HumanControlKind.HARNESS_STOP },
+  /** The autonomous switch: written through to the platform, which the daemon owns. */
+  applySwitch: (enabled: boolean) => void,
+  grant: (platform: { url: string; apiKey: string }) => Promise<FreeDrive> = (platform) =>
+    requestFreeDrive(platform, FreeDriveKind.EXPLORE),
+): Promise<void> {
+  if (HumanControlKind.HARNESS === request.kind) return applySwitch(request.enabled);
+  // What the panel's Run and Stop answer belongs in the Harness log, and in the Agent Log as a summary.
+  const say = (text: string): void =>
+    deps.sessions.get?.(sessionId)?.pushNarration(text, true, { harness: true, summary: true });
+  if (HumanControlKind.HARNESS_STOP === request.kind) {
+    const running = runningDrive(sessionId);
+    if (running === undefined || !stopDrive(running.harnessRun)) say(MSG_NOTHING_DRIVING);
+    return;
+  }
+  // Before the grant: a drive the gate refuses must not take one. The panel shows the prompt.
+  const env = await withLinkedCredential(deps, process.env, { sessionId });
+  const locked = await harnessLockRefusal(deps, sessionId, env);
+  if (locked !== undefined) return say(locked.split('\n')[0] ?? locked);
+  const platform = serverOptionsFromEnv(env);
+  if (platform === undefined) return say(MSG_NO_HARNESS_KEY);
+  const granted = await grant(platform);
+  if (!granted.granted) {
+    say(granted.message);
+    // At the console's origin (the tab's link names it), never the API's, which 404s when split.
+    if (granted.needsCard)
+      say(msgStartTrial(planUrl(dashboardOf(deps, sessionId) ?? platform.url)));
+    return;
+  }
+  const explore = EXPLORE_TOOLS.find((tool) => ReticleTool.VERIFY_EXPLORE === tool.name);
+  if (explore === undefined) return;
+  try {
+    await runTool(explore, deps, {
+      sessionId,
+      driveId: granted.driveId,
+      origin: DriveOrigin.HUD,
+      wait: 0,
+      ...(request.persona === undefined ? {} : { persona: request.persona }),
+    });
+  } catch (error) {
+    say(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/**
+ * The link a panel sign-in makes once it lands: the tab's project, never a page that did not say
+ * which project it is (that would bind a hash-named project nothing here reads).
+ */
+export function projectLinkOnly(
+  link: ((root: string) => Promise<number>) | undefined,
+): ((root: string) => Promise<number>) | undefined {
+  return link === undefined
+    ? undefined
+    : (root) => (isUnmatchedRoot(root) ? Promise.resolve(0) : link(root));
+}
+
+/**
+ * The panel's Harness controls on a bridge: the switch writes through to the platform, so console
+ * and panel cannot disagree; Run and Stop drive, in the project of the tab that asked.
+ */
+export function attachHudHarness(
+  bridge: {
+    attachHarnessRequest(
+      handler: (
+        request: Parameters<typeof hudDrive>[2] | { kind: typeof HumanControlKind.HARNESS_LINK },
+        session: { id: string; artifactRoot?: string | undefined },
+      ) => void,
+    ): void;
+  },
+  daemon: {
+    /** Read when a control arrives: the daemon builds its deps after it wires the bridge. */
+    deps: () => ToolDeps;
+    /** Where a tab with no project of its own drives. */
+    root: string;
+    /** Repaint every panel, so a running drive shows its Stop button and a finished one hides it. */
+    repaint: () => void;
+  },
+  applySwitch: (root: string, on: boolean) => void,
+  /** Link this project: what `reticle connect` does from that folder. Absent: the button says so. */
+  link?: (root: string) => Promise<number>,
+): void {
+  bridge.attachHarnessRequest((request, s) => {
+    const root = s.artifactRoot ?? daemon.root;
+    if (HumanControlKind.HARNESS_LINK === request.kind) {
+      const say = (text: string): void => daemon.deps().sessions.get?.(s.id)?.pushNarration(text);
+      if (link === undefined) return say(MSG_LINK_UNAVAILABLE);
+      if (isUnmatchedRoot(root)) return say(MSG_LINK_NEEDS_PROJECT);
+      void link(root)
+        .then((code) => say(0 === code ? MSG_LINKED : MSG_LINK_FAILED))
+        .catch(() => say(MSG_LINK_FAILED))
+        .finally(daemon.repaint);
+      return;
+    }
+    void hudDrive(daemon.deps(), s.id, request, (on) => applySwitch(root, on));
+  });
+  onDriveChange(daemon.repaint);
+  // Each step too, so the panel's "N steps so far" counts up instead of sitting at zero.
+  onDriveStep(daemon.repaint);
+  // And "Connected: Claude Code" follows an agent attaching or leaving.
+  onAgentsChange(daemon.repaint);
+}
+
+/**
+ * The `unsynced` field of a report. Sent empty too, once this daemon has counted: the platform reads
+ * an absent list as "no news" and kept a "never sent" banner for runs that had long been sent.
+ */
+export function unsyncedReport(
+  unsynced: readonly LinkUnsyncedRoot[] | undefined,
+  home: string,
+): { unsynced?: LinkUnsyncedRoot[] } {
+  if (unsynced === undefined) return {};
+  return {
+    // A folder no project claimed cannot be connected, so no board should tell anyone to.
+    unsynced: unsynced
+      .filter((u) => !isUnmatchedRoot(u.root))
+      .map((u) => ({
+        ...u,
+        // The project, not its `.reticle`: the dashboard tells the person to run a command there.
+        root: homeRelative(ReticleDir.ROOT === basename(u.root) ? dirname(u.root) : u.root, home),
+      })),
   };
 }

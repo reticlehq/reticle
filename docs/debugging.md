@@ -12,7 +12,7 @@ Reticle produces four different signals and they answer four different questions
 
 | Question | Signal | Where |
 | --- | --- | --- |
-| What did the **agent** do to the app, and what did the app do back? | the journal | `reticle_observe` (the event window), `reticle_run_export` (a saved run), `~/.reticle/journal/` |
+| What did the **agent** do to the app, and what did the app do back? | the journal | `reticle_observe` (the event window), `reticle_run_export` (a saved run), `.reticle/sessions/<id>/` in the project |
 | What did **Reticle** do internally to answer that call? | the **trace** | daemon log, with `RETICLE_TRACE=1` |
 | What happened at a milestone (daemon start, skew, refusal)? | structured log lines | daemon log |
 | How much is this being used, and does it work? | telemetry | [telemetry.md](telemetry.md) |
@@ -36,7 +36,7 @@ tail -f ~/.reticle/daemon-4400.log | jq .
 Off by default, because a trace on every tool call is a cost on the hot path, and a verification loop is 50 to 200 calls. Measured, so the claim is checkable: a disabled span costs **126ns** per site (against ~9ns for a bare call), which is under a microsecond per tool call and not the literal zero it is tempting to write. Turn it on **for the daemon** (the flag is read per call, but the daemon is the process doing the work, so it has to be set where the daemon starts):
 
 ```bash
-RETICLE_TRACE=1 reticle serve --port 4400
+RETICLE_TRACE=1 npx @reticlehq/server serve --port 4400
 ```
 
 Every instrumented stage then emits one line **when it ends**, carrying its own duration:
@@ -95,7 +95,7 @@ init.write        1ms  target=.reticle.json
 init.apply      262ms  steps=5
 ```
 
-Two things that trace makes visible and nothing else did. Planning is ~2ms, so init's wall-clock is essentially all subprocess: the package manager, and `claude mcp add` when MCP registration is on. And when the pinned install is refused, the unpinned **retry is a second full package-manager run**, so init legitimately takes about twice as long on that path. Every `--local` fixture run takes it, because the version being installed is not published yet.
+Two things that trace makes visible and nothing else did. Planning is ~2ms, so init's wall-clock is essentially all subprocess: the package manager, and `claude mcp add` when MCP registration is on. And when the pinned install is refused, the unpinned **retry is a second full package-manager run**, so init legitimately takes about twice as long on that path. An install of a version that is not published yet always takes it.
 
 ### Adding a span
 

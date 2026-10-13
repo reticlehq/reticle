@@ -9,10 +9,11 @@ import { REPO_ROOT } from './machine/repo-root.js';
  * Every path the CI router names must still exist.
  *
  * CI decides which expensive jobs to run by matching the changed files against lists of paths
- * written into `ci.yml`. If a path in one of those lists stops existing -- a file renamed, a package
- * split, a directory moved -- the list still parses, still runs, and simply stops matching. The job
- * it guards is then skipped, and the `gate` aggregate counts a skip as success, so the pipeline goes
- * green having quietly stopped testing something.
+ * in `scripts/ci/changes.mjs` (sourced from `tier-patterns.json`). If a path in one of those
+ * lists stops existing -- a file renamed, a package split, a directory moved -- the list still
+ * parses, still runs, and simply stops matching. The job it guards is then skipped, and the
+ * `gate` aggregate counts a skip as success, so the pipeline goes green having quietly stopped
+ * testing something.
  *
  * This is not hypothetical. `ci.yml` says so about itself: the release that turned `init` into an
  * install could edit every onboarding file "without the install gate running once", because those
@@ -23,8 +24,6 @@ import { REPO_ROOT } from './machine/repo-root.js';
  * COMPLETE -- no test can, since that means knowing what a future job ought to care about. Catching
  * the stale half is cheap and worth having on its own.
  */
-const WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'ci.yml');
-
 /**
  * Every OTHER workflow, because this guard read one file and the rot went to a different one.
  *
@@ -76,20 +75,53 @@ function expandAlternations(pattern: string): string[] {
   return variants;
 }
 
+/** Split a regex on `|` that is not inside parentheses. */
+function topLevelAlternatives(pattern: string): string[] {
+  const alts: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of pattern) {
+    if ('(' === ch) depth += 1;
+    if (')' === ch) depth -= 1;
+    if ('|' === ch && 0 === depth) {
+      alts.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  alts.push(current);
+  return alts;
+}
+
 /** Every concrete path named by any of the router's match patterns. */
-function routedPaths(workflow: string): string[] {
+function routedPaths(source: string): string[] {
   const found = new Set<string>();
-  for (const line of workflow.split('\n')) {
-    const pattern = /grep -qE '\^\((.+)\)'/.exec(line)?.[1];
+  for (const line of source.split('\n')) {
+    const fromGrep = /grep -qE '\^\((.+)\)'/.exec(line)?.[1];
+    const fromDump = /^[a-z]+=(.+)$/.exec(line)?.[1];
+    const pattern = fromGrep ?? fromDump;
     if (pattern === undefined) continue;
-    for (const variant of expandAlternations(`(${pattern})`)) {
-      const cleaned = variant.replace(/\\\./g, '.').replace(/[$^]/g, '').trim();
-      // A bare word with no separator is not a path; a trailing slash is a directory prefix.
-      if (0 === cleaned.length || (!cleaned.includes('/') && !cleaned.includes('.'))) continue;
-      found.add(cleaned.replace(/\/$/, ''));
+    for (const alt of topLevelAlternatives(pattern)) {
+      const wrapped = alt.startsWith('^') || alt.startsWith('(') ? alt : `(${alt})`;
+      for (const variant of expandAlternations(wrapped)) {
+        const cleaned = variant.replace(/\\\./g, '.').replace(/[$^]/g, '').trim();
+        // A bare word with no separator is not a path; a trailing slash is a directory prefix.
+        if (0 === cleaned.length || (!cleaned.includes('/') && !cleaned.includes('.'))) continue;
+        found.add(cleaned.replace(/\/$/, ''));
+      }
     }
   }
   return [...found].sort();
+}
+
+const ROUTER = join(REPO_ROOT, 'scripts', 'ci', 'changes.mjs');
+
+function dumpedPatterns(): string {
+  return execFileSync(process.execPath, [ROUTER, '--dump-patterns'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  });
 }
 
 /** Include new files when checking a working tree, before they have been staged. */
@@ -103,8 +135,7 @@ function trackedFiles(): string[] {
 }
 
 describe('the CI router only names paths that exist', () => {
-  const workflow = readFileSync(WORKFLOW, 'utf8');
-  const paths = routedPaths(workflow);
+  const paths = routedPaths(dumpedPatterns());
   const tracked = trackedFiles();
 
   // A routed path names either a file, a directory, or a file-name PREFIX (ci.yml routes on
@@ -147,9 +178,9 @@ describe('the CI router only names paths that exist', () => {
     );
     expect(
       stale,
-      'These paths are named in .github/workflows/ci.yml but match nothing in the repo. The job ' +
+      'These paths are named in scripts/ci/tier-patterns.json but match nothing in the repo. The job ' +
         'each one routes to can no longer be triggered by a change to it, and a skipped job counts ' +
-        'as success. Update the pattern in ci.yml to the new location.',
+        'as success. Update the pattern to the new location.',
     ).toEqual([]);
   });
 
@@ -161,22 +192,18 @@ describe('the CI router only names paths that exist', () => {
   });
 });
 
-// Execute the actual Linux router, including pipefail. A large diff must not turn grep's early
-// success into a failed pipeline (SIGPIPE in echo), silently skipping the required product gates.
-describe.skipIf('win32' === process.platform)('CI routing decisions', () => {
-  const workflow = readFileSync(WORKFLOW, 'utf8');
-  const start = workflow.indexOf('          # What the e2e battery can see:');
-  const end = workflow.indexOf('      # WHICH install-gate cells', start);
-  const router = workflow.slice(start, end);
+// Execute the router script. Incident #1514: a path no rule matched turned the expensive tiers
+// OFF, so a new adapters/realm/* ran almost nothing before merge. A large diff must not drop a
+// matching file at the start either.
+describe('CI routing decisions', () => {
   const route = (paths: string[]): Record<string, string> => {
-    expect(start).toBeGreaterThan(0);
-    expect(end).toBeGreaterThan(start);
     const temporary = mkdtempSync(join(tmpdir(), 'reticle-ci-routing-'));
     const outputPath = join(temporary, 'output');
     try {
-      execFileSync('bash', ['-e', '-o', 'pipefail', '-c', `CHANGED="$(cat)"\n${router}`], {
-        input: paths.join('\n'),
+      execFileSync(process.execPath, [ROUTER], {
+        input: `${paths.join('\n')}\n`,
         encoding: 'utf8',
+        cwd: REPO_ROOT,
         env: { ...process.env, GITHUB_OUTPUT: outputPath },
       });
       const flags: Record<string, string> = {};
@@ -219,11 +246,76 @@ describe.skipIf('win32' === process.platform)('CI routing decisions', () => {
     expect(route(['adapters/realm/tauri/src/lib.rs']).rust).toBe('true');
   });
 
+  it('turns every tier on for an unrouted new directory', () => {
+    expect(route(['brand-new-package/src/index.ts'])).toMatchObject({
+      e2e: 'true',
+      install: 'true',
+      windows: 'true',
+      bench: 'true',
+      desktop: 'true',
+      rust: 'true',
+      break: 'true',
+      launchers: 'true',
+    });
+  });
+
+  it('runs break jobs when init changes', () => {
+    expect(route(['init/src/run.ts']).break).toBe('true');
+  });
+
+  it('runs the launchers for install/ and not for a server change', () => {
+    // The launchers install the PUBLISHED CLI from npm; a server edit cannot change their answer.
+    expect(route(['install/install.sh']).launchers).toBe('true');
+    expect(route(['server/src/command/cli/setup-mcp-cli.ts']).launchers).toBe('false');
+  });
+
+  it('leaves install, desktop and bench to the narrow patterns for a package change', () => {
+    // The tier map only adds e2e and windows. A browser SDK file outside the desktop-only list
+    // must not turn desktop on, or most PRs pay for the slowest job in ci.yml.
+    expect(route(['adapters/realm/browser/src/index.ts'])).toMatchObject({
+      e2e: 'true',
+      windows: 'true',
+      desktop: 'false',
+    });
+  });
+
   it('does not lose a matching file at the start of a large merge-group diff', () => {
     const paths = [
       'core/src/index.ts',
       ...Array.from({ length: 20000 }, (_, i) => `docs/changed-${String(i)}.md`),
     ];
     expect(route(paths)).toMatchObject({ e2e: 'true', install: 'true', bench: 'true' });
+  });
+
+  it('turns every tier on for a new adapters/realm that no tier names', () => {
+    // Assembled so the literal directory is not a tracked path this test invents on disk.
+    const probe = ['adapters/realm/', 'zz-probe', '/x.ts'].join('');
+    expect(route([probe])).toMatchObject({
+      e2e: 'true',
+      install: 'true',
+      windows: 'true',
+      bench: 'true',
+      desktop: 'true',
+      rust: 'true',
+      break: 'true',
+      conformance: 'true',
+      gateself: 'true',
+    });
+  });
+
+  it('ORs the tier-map for a known workspace package', () => {
+    expect(route(['adapters/realm/cli/src/index.ts'])).toMatchObject({
+      e2e: 'true',
+      windows: 'true',
+    });
+  });
+
+  it('turns every tier on when any workflow file changes', () => {
+    expect(route(['.github/workflows/dco.yml'])).toMatchObject({
+      e2e: 'true',
+      rust: 'true',
+      break: 'true',
+      windows: 'true',
+    });
   });
 });

@@ -4,7 +4,7 @@
 // fixed rule, revert. Any failed cell is recorded verdict="NOT MEASURED".
 import { writeFileSync } from 'node:fs';
 import { makeAdapter, NAV } from './adapters.mjs';
-import { inject, revert, revertAll } from './inject.mjs';
+import { injectServed, revertServed, revertAll } from './inject.mjs';
 import { isObservationRetryable, isRetryableMiss } from './observation-retry.mjs';
 import { RETICLE_URL_PARAM } from '@reticlehq/core';
 import { BENCH_URL } from './ports.mjs';
@@ -679,8 +679,8 @@ for (const sc of list) {
             await a0.stop();
             openAdapter = null;
           }
-          if (sc.regression) inject(sc.regression);
-          await sleep(400); // let vite HMR apply
+          // A fresh browser loads what the dev server serves, so wait for that, not for the disk.
+          if (sc.regression) await injectServed(sc.regression, URL);
           const a = makeAdapter(tool, scenarioUrl(sc, tool));
           openAdapter = a;
           await a.start();
@@ -688,7 +688,7 @@ for (const sc of list) {
           const regr = await runRecipe(a, eff.steps, eff.observe, eff.verdict);
           await a.stop();
           openAdapter = null;
-          if (sc.regression) revert(sc.regression);
+          if (sc.regression) await revertServed(sc.regression, URL);
 
           const g = grade(eff, regr, baseline);
           const detected = 'object' === typeof g ? g.detected : g;
@@ -730,7 +730,7 @@ for (const sc of list) {
           }
           if (sc.regression) {
             try {
-              revert(sc.regression);
+              await revertServed(sc.regression, URL);
             } catch {
               /* */
             }
@@ -750,7 +750,7 @@ for (const sc of list) {
         }
         if (sc.regression) {
           try {
-            revert(sc.regression);
+            await revertServed(sc.regression, URL);
           } catch {
             /* */
           }

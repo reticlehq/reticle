@@ -50,6 +50,8 @@ export const IntentProofSchema = z.object({
   verdictId: z.string(),
   grade: z.string(),
   at: z.number(),
+  /** The run the proving check landed in, so a reader links proof and run by id, not by time. */
+  runId: z.string().optional(),
 });
 
 export const IntentSchema = z.object({
@@ -110,10 +112,7 @@ export function bindIntent(intent: Intent, binding: unknown): Intent {
  * evidence — the shape this whole feature exists to stop. A throw would be the wrong shape too,
  * because discharge runs off the back of a verdict and must never be why one fails to return.
  */
-export function dischargeIntent(
-  intent: Intent,
-  proof: { verdictId: string; grade: string; at: number },
-): Intent {
+export function dischargeIntent(intent: Intent, proof: z.infer<typeof IntentProofSchema>): Intent {
   if (intent.binding === undefined) return intent;
   return { ...intent, state: IntentState.PROVED, provenBy: proof };
 }
@@ -129,7 +128,18 @@ export function dischargeIntent(
  */
 export function redeclareIntent(existing: Intent | undefined, fresh: Intent): Intent {
   if (existing === undefined) return fresh;
-  const surface = existing.surface ?? fresh.surface;
+  // What the record already says wins; a field it never had (a route, a flow, files) is filled in,
+  // so a fact first declared with nothing to file it under can be given somewhere to live.
+  const surface =
+    existing.surface === undefined
+      ? fresh.surface
+      : {
+          ...fresh.surface,
+          ...existing.surface,
+          ...(0 < (existing.surface.files?.length ?? 0) || fresh.surface?.files === undefined
+            ? {}
+            : { files: fresh.surface.files }),
+        };
   const withSurface = surface === undefined ? {} : { surface };
   if (existing.statement === fresh.statement) return { ...existing, ...withSurface };
   const { provenBy: _proof, ...unproved } = existing;

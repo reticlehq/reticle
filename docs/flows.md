@@ -61,19 +61,24 @@ reticle_run({ tool: "reticle_flow_save", args: { flowName: "create-task" } })   
 
 ```jsonc
 {
-  "version": 1,
+  "version": 2,
   "name": "create-task",
+  "createdAt": 1760000000000,
   "steps": [
-    { "tool": "reticle_act", "anchor": { "testid": "add-task" }, "action": "click" },
     {
       "tool": "reticle_act",
-      "anchor": { "testid": "add-task" },
+      "anchor": { "kind": "testid", "value": "task-input" },
       "action": "click",
-      "expect": { "signal": "task:added" },
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": { "kind": "testid", "value": "add-task" },
+      "action": "click",
+      "expect": { "kind": "signal", "name": "task:added" },
     },
   ],
   "dynamic": [], // anchors whose CONTENT must not be asserted (LLM output)
-  "success": { "signal": "saved" },
+  "success": { "kind": "signal", "name": "saved" },
 }
 ```
 
@@ -104,7 +109,7 @@ Every session's driving is saved as a flow at teardown when it declared a conseq
 - merge: another drive that starts on the same page and takes the same steps updates the existing file instead of adding a copy. The existing flow keeps its name and everything it already says; the new drive only fills gaps. Flows you named yourself are never merged;
 - record, on every step, the `page` it ran on and the `endPage` it led to;
 - declare `requires` (the start page) and `ensures` (the end page) as route claims, so `canFollow` can tell which flows chain. Replay treats a required start page as met by navigating there;
-- carry `author: { agent, person }`: the MCP client that drove it and the email of whoever ran `reticle login` on that machine. Either is left out when it is not known.
+- carry `author: { agent, person }`: the MCP client that drove it and the email of whoever signed in with `reticle connect` on that machine. Either is left out when it is not known.
 
 ## Delete a flow
 
@@ -123,6 +128,7 @@ A renamed or obsolete flow otherwise lingers in `reticle_run { tool: "reticle_fl
 - `ok`: every anchor resolved and every `expect` held.
 - `drift`: an anchor missed (a testid was renamed, or a signal never fired). The result is **legible**, never a blind failure: `{ step, anchor, drift: { reasonKind: "testid_not_found", nearest: "send-message" } }`. (This is the "whose fault is it" principle.)
 - `error`: the flow file is missing/invalid, or a resolved action failed. Runtime failures include the failed step and a top-level error envelope.
+- `unverifiable`: the flow could not be graded (missing secrets, an unmet precondition, a lost document). Neither a pass nor a fail: treat it as unknown.
 
 A testid-_preserving_ refactor (you moved markup but kept the testids) still replays green. A step whose element has **no testid** is anchored on its component + source location (`{ kind: "component", component, source: { file, line } }`), an auto-derived stable anchor, so a flow records cleanly with zero hand-added testids and replay re-resolves it via `reticle_look { action: "find" } by:'component'`.
 
@@ -185,7 +191,7 @@ With `apply: false` the flow file is **never modified**; you get the proposed di
 
 ## Tool reference
 
-Only `reticle_verify` is advertised by default. Call every other tool here as `reticle_run({ tool: "<name>", args: { … } })`, with the args shown.
+Of the tools on this page, only `reticle_verify` is advertised by default. Call every other tool here as `reticle_run({ tool: "<name>", args: { … } })`, with the args shown.
 
 | Tool | Args | Returns |
 | --- | --- | --- |
@@ -196,7 +202,7 @@ Only `reticle_verify` is advertised by default. Call every other tool here as `r
 | `reticle_run { tool: "reticle_flow", args: { action: "list" } }` | `{}` | flows on disk |
 | `reticle_run { tool: "reticle_flow", args: { action: "load" } }` | `{ flowName }` | the flow JSON |
 | `reticle_run { tool: "reticle_flow", args: { action: "delete" } }` | `{ flowName }` | `{ deleted: true }`, or `{ error, code }` (`not_found` when no such flow) |
-| `reticle_flow_replay` | `{ flowName, from?, sweep? }` | `{ status, steps, decision? }` (decision on drift/fail); `from` resumes at a step |
+| `reticle_flow_replay` | `{ flowName, from?, sweep? }` | `{ name, status, steps, decision? }` (decision on drift/fail); `from` resumes at a step |
 | `reticle_verify { action: "flows" }` | `{ names?, sessionId? }` | suite verdict `{ status, passed, failed, failures[] }` |
 | `reticle_verify { action: "heal" }` | `{ flowName, apply? }` | propose / apply nearest-match rebind |
 | `reticle_annotate` | `{ kind, … }` | compile a structured annotation into the flow |

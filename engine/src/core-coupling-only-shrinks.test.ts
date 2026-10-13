@@ -122,7 +122,16 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * comparison with. The source TYPE is derived from `Predicate` rather than imported, because that one
  * could be. Like the predicate contract above, these are the claim language, not Reticle's event nouns.
  */
-const MAX_DISTINCT_SYMBOLS = 62;
+/*
+ * 62 -> 64 for how a route change happened.
+ *
+ * A `replaceState` that keeps the pathname records UI state in the URL. The blank-destination rule
+ * has to tell that from a navigation, and the field plus its three values cross the wire, so they
+ * live in core. Inlining them in `isSamePathnameReplace` would keep this number flat by breaking
+ * the rule the number exists to protect. Both join the import `contradiction-evidence.ts` already
+ * has, so the file count is unmoved.
+ */
+const MAX_DISTINCT_SYMBOLS = 64;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

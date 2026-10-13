@@ -95,6 +95,52 @@ describe('process descendants', () => {
   });
 });
 
+// Windows never clears ParentProcessId when a parent exits, and it reuses pids. A long-lived service
+// started by a process that once held our dev server's pid still names that pid as its parent, so a
+// walk by ppid alone adopts it. On a CI runner that was sshd: `init` reported port 22 as the dev
+// server ("watching http://localhost:22") and waited for a page that could never come. A real child
+// is created after its parent, so an older "child" is a stale link, not a descendant.
+describe('stale parent links after pid reuse', () => {
+  const OURS = 1_000;
+  const pairs = [
+    { pid: 100, ppid: 4, startedAtMs: OURS },
+    { pid: 200, ppid: 100, startedAtMs: OURS + 50 },
+    { pid: 300, ppid: 200, startedAtMs: OURS + 90 },
+    { pid: 22, ppid: 100, startedAtMs: OURS - 3_600_000 },
+  ];
+
+  it('does not adopt a process that is older than the parent it names', () => {
+    expect(descendants(pairs, 100)).not.toContain(22);
+  });
+
+  it('still walks the real tree', () => {
+    expect(descendants(pairs, 100).sort((a, b) => a - b)).toEqual([100, 200, 300]);
+  });
+
+  it('keeps the ppid-only walk when creation times are unknown', () => {
+    const untimed = pairs.map(({ pid, ppid }) => ({ pid, ppid }));
+    expect(descendants(untimed, 100)).toContain(22);
+  });
+
+  it('reads wmic CreationDate, which it prints first (alphabetical columns)', () => {
+    expect(
+      parseWmicProcesses(
+        'CreationDate               ParentProcessId  ProcessId\r\n' +
+          '20261011095501.250000+000  100              200\r\n' +
+          '20261011102501.000000+330  200              300\r\n',
+      ),
+    ).toEqual([
+      { pid: 200, ppid: 100, startedAtMs: Date.UTC(2026, 9, 11, 9, 55, 1, 250) },
+      // +330 is minutes east of UTC: 10:25:01 local is 04:55:01 UTC.
+      { pid: 300, ppid: 200, startedAtMs: Date.UTC(2026, 9, 11, 4, 55, 1, 0) },
+    ]);
+  });
+
+  it('reads a row with no creation time as the old two-column shape', () => {
+    expect(parseWmicProcesses('0 4\r\n')).toEqual([{ pid: 4, ppid: 0 }]);
+  });
+});
+
 // The fallback source when `wmic` is absent, which Microsoft has been making the normal case.
 // node-effects asks PowerShell for the same pairs and hands the output to this same parser, so the
 // shape it prints is a contract. If this stops reading it, Windows silently loses port discovery

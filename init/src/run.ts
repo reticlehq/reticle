@@ -13,7 +13,7 @@ import { CONTAINER_MARKERS, runsDevServer } from './diagnose/containerised-dev-s
 import { explainInstallFailure } from './diagnose/install-retries.js';
 import { CSP_FILES } from './diagnose/csp-doctor.js';
 import { preflight } from './plan/preflight.js';
-import { devCommandFrom, devScriptBody } from './detect/dev-script.js';
+import { devCommandFrom, devScriptBody, discoverPlainViteConfig } from './detect/dev-script.js';
 import { restartHint, FEEDBACK_HINT } from './diagnose/closing-hint.js';
 import { projectIdOf, rememberProjectOnDisk } from './project/remember-project.js';
 import {
@@ -41,7 +41,7 @@ import {
   VITE_CONFIG_CANDIDATES,
 } from './detect/workspace-apps.js';
 import { redirectToWorkspaceApp } from './detect/workspace-redirect.js';
-import { enclosingWorkspaceRoot } from './detect/workspace-apps.js';
+import { appsAt, enclosingWorkspaceRoot } from './detect/workspace-apps.js';
 import { isConnectStep } from './plan/connect-steps.js';
 import { CURSOR_RULE_PATH, RETICLE_MD_PATH } from './project/agent-rules.js';
 import { CLAUDE_SETTINGS_PATH } from './plan/stop-hook-step.js';
@@ -73,10 +73,10 @@ import {
   type Plan,
   type PlanInput,
 } from './plan/plan.js';
-import { claudeAvailableProbe, claudeHasReticle } from './register/mcp.js';
+import { claudeAvailableProbe, claudeHasReticle, codexAvailableProbe } from './register/mcp.js';
 import { reticleDevLocation } from './patch/next-patch.js';
 import { scanTestids, storeHints, scanStores } from './detect/capabilities.js';
-import { CLAUDE_PROJECT_CONFIG, CURSOR_PROJECT_MARKER } from './register/mcp-clients.js';
+import { CLAUDE_PROJECT_CONFIG, CURSOR_PROJECT_MARKER, McpClient } from './register/mcp-clients.js';
 import { deriveProjectId, packageName } from './project/project-id.js';
 import {
   VITE_DEV_MODULE_PATH,
@@ -298,8 +298,13 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     nodeModulesMarkers,
   };
   const detection = detect(detectInput);
+  const nodeModulesLinked = true === io.isSymlink?.('node_modules');
   // Forge has no `vite.config.*`; its renderer config IS the Vite config the plugin belongs in, and
   // handing it over under that name is what lets the ordinary Vite patcher do the work.
+  const plainViteConfig =
+    Framework.VITE === detection.framework
+      ? discoverPlainViteConfig(io, pkg, rootFiles, VITE_CONFIG_CANDIDATES)
+      : undefined;
   const vitePath = firstPresent(
     rootFiles,
     Framework.ELECTRON_FORGE === detection.framework
@@ -308,7 +313,11 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
   );
   const viteSource = null === vitePath ? null : io.readFile(vitePath);
   const viteConfig =
-    vitePath !== null && viteSource !== null ? { path: vitePath, source: viteSource } : null;
+    plainViteConfig === undefined
+      ? vitePath !== null && viteSource !== null
+        ? { path: vitePath, source: viteSource }
+        : null
+      : plainViteConfig.config;
 
   const electronVitePath = firstPresent(rootFiles, ELECTRON_VITE_CONFIG_CANDIDATES);
   const electronViteSource = null === electronVitePath ? null : io.readFile(electronVitePath);
@@ -330,6 +339,12 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
   // into a config a client ALREADY has, and never create ~/.gemini or ~/.codeium for somebody who
   // does not use them.
   const detectedClients = options.mcp ? detectMcpClients(io) : [];
+  // Codex registers through its own CLI when there is one. Asked only after Codex was FOUND: the
+  // probe runs a binary, and a machine with no Codex has no business running one.
+  const codexProbe = codexAvailableProbe();
+  const codexCli = detectedClients.some((client) => McpClient.CODEX === client.id)
+    ? io.probe(codexProbe.command, codexProbe.args)
+    : false;
 
   const astroPath = firstPresent(rootFiles, ASTRO_CONFIG_CANDIDATES);
   const astroSource = null === astroPath ? null : io.readFile(astroPath);
@@ -378,6 +393,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
 
   return {
     detection,
+    ...(nodeModulesLinked ? { nodeModulesLinked } : {}),
     captureBodies: options.captureBodies,
     hooks: options.hooks,
     cspSources,
@@ -387,6 +403,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     claudeProjectConfig: options.mcp ? io.readFile(agentFile(CLAUDE_PROJECT_CONFIG)) : undefined,
     platform: process.platform,
     detectedClients,
+    codexCli,
     cursorProjectPresent: io.exists(CURSOR_PROJECT_MARKER),
     // Looked for beside the app AND one level up, because the app is routinely a subdirectory of the
     // repo that containerises it — `frontend/` under a root `docker-compose.yml` is the shape this
@@ -404,6 +421,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
       return marker === undefined ? {} : { containerMarker: marker };
     })(),
     viteConfig,
+    viteConfigCandidates: plainViteConfig?.candidates,
     electronViteConfig,
     electronPreload,
     electronMain,
@@ -487,14 +505,14 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     claudeCommandContent: io.readFile(agentFile(CLAUDE_COMMAND_PATH)),
     cursorCommandContent: io.readFile(agentFile(CURSOR_COMMAND_PATH)),
     // Read only to MERGE into: the settings file is the user's, and other tools write in it too.
-    claudeSettingsContent:
-      true === options.hooks ? io.readFile(agentFile(CLAUDE_SETTINGS_PATH)) : undefined,
+    claudeSettingsContent: io.readFile(agentFile(CLAUDE_SETTINGS_PATH)),
     ...(agentRoot === undefined
       ? {}
       : {
           agentFileRoot: agentRoot,
           // The config the AGENT's cwd already has, if any — see agentRootConfigStep.
           agentRootConfigSource: io.readFile(agentFile(RETICLE_CONFIG_FILE)),
+          agentRootSeveralApps: true === options.severalApps,
         }),
     options: {
       port: options.port,
@@ -777,7 +795,8 @@ function classifyInitFailure(failed: ReadonlySet<string>): string {
 function withWorkspaceRoot(options: InitOptions, io: InitIo): InitOptions {
   if (options.agentRoot !== undefined || true === options.redirected) return options;
   const root = enclosingWorkspaceRoot(options.cwd, io);
-  return root === undefined ? options : { ...options, agentRoot: root };
+  if (root === undefined) return options;
+  return { ...options, agentRoot: root, severalApps: 1 < appsAt(root, io).length };
 }
 
 export function runInit(options: InitOptions, io: InitIo): InitResult {
@@ -845,11 +864,11 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
   // `--app frontend`, the flag that exists for exactly this, was never read because the bail came
   // first. Reported twice by the same user, who tried the documented workaround and hit the same
   // wall. Discovery already handles the case (it scans top-level directories, not just declared
-  // workspaces); it was simply unreachable.
-  //
-  // `'{}'` because the redirect only needs the manifest to ask "is THIS directory the app", and a
-  // directory with no package.json is definitively not.
+  // workspaces); it was simply unreachable. `'{}'`: a directory with no manifest is not the app.
   const redirectedEarly = redirectToWorkspaceApp(options, io, pkgRaw ?? {}, runInit);
+  // Listing the apps below still counts as "no app here", in the same series as before.
+  if (true === redirectedEarly?.listedAppsBelow && !options.dryRun)
+    io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
   if (redirectedEarly !== null) return redirectedEarly;
   if (null === pkgRaw) return initWithoutPackageJson(options, io);
 

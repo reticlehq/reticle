@@ -415,3 +415,25 @@ function makeTouchEvent(type: string, touches: Touch[]): Event {
   }
   return new Event(type, { bubbles: true, cancelable: true });
 }
+
+/** Containers whose `data-state="closed"` means "on its way out": a menu or popup animating shut. */
+const POPUP_ROLES = new Set(['menu', 'menubar', 'listbox', 'dialog', 'alertdialog', 'tooltip']);
+const CLOSED_STATE = 'closed';
+
+/**
+ * Refuse an act aimed inside a popup that is closing. A Radix menu keeps its items mounted while it
+ * animates shut, marked `data-state="closed"`; a click meant for the next menu landed on an item of
+ * the closing one and reassigned an issue nobody had asked to change. The element itself is not
+ * checked, only what holds it: a trigger carries `data-state="closed"` while its menu is shut, and
+ * clicking it is how the menu opens.
+ */
+export function assertNotLeaving(el: Element): void {
+  for (let up = el.parentElement; up !== null; up = up.parentElement) {
+    if (CLOSED_STATE !== up.getAttribute('data-state')) continue;
+    if (!POPUP_ROLES.has(up.getAttribute('role') ?? '')) continue;
+    throw new Error(
+      `'${up.getAttribute('role') ?? 'popup'}' holding this element is closing (data-state="closed"), ` +
+        'so a person could not click it: look again once it has gone and act on what is open',
+    );
+  }
+}

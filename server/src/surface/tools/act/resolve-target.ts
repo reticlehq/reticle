@@ -78,6 +78,24 @@ function formatCandidate(c: TargetCandidate, anyInViewport: boolean): string {
 }
 
 /**
+ * The names that role really has, when an exact role + name query just missed (the browser's
+ * `nameNearMiss` hint). Names are matched exactly, so one that carries a changing part — "billing
+ * Last run 1 minute ago" — is unreachable by name; `testid` or a `text` match is the durable way.
+ */
+function nearNamesClause(hint: unknown): string {
+  const near = asRecord(hint)['nameNearMiss'];
+  const names = Array.isArray(near) ? near.filter((n): n is string => 'string' === typeof n) : [];
+  if (0 === names.length) {
+    return 'widen the query, or take a reticle_snapshot to see what is actually on the page.';
+  }
+  return (
+    `names are matched exactly, and that role is called ${names.map((n) => `"${n}"`).join(', ')}. ` +
+    'Use that name, or — when the name carries a part that changes, like a time — target it by ' +
+    '`testid` or by `text` (a contained match).'
+  );
+}
+
+/**
  * Turn a target QUERY into the single ref an action can be performed on.
  *
  * `act_and_wait` took only a `ref`, so every verification cost a `reticle_query` turn first just to
@@ -97,7 +115,7 @@ function formatCandidate(c: TargetCandidate, anyInViewport: boolean): string {
  * When several remain, they are ranked (in-viewport, then role) inside the refusal only — so the
  * agent can pass the top ref on the next turn without a snapshot. Ranking is never acted on here.
  */
-export function resolveTargetRef(candidates: readonly unknown[]): TargetResolution {
+export function resolveTargetRef(candidates: readonly unknown[], hint?: unknown): TargetResolution {
   const all = candidates.map((c) => asRecord(c) as TargetCandidate);
   const visible = all.filter((c) => c.visible !== false);
   const usable = visible.length > 0 ? visible : all;
@@ -106,8 +124,8 @@ export function resolveTargetRef(candidates: readonly unknown[]): TargetResoluti
     return {
       kind: 'error',
       message:
-        'target matched no element. Nothing was acted on and no verdict is possible — widen the ' +
-        'query, or take a reticle_snapshot to see what is actually on the page.',
+        'target matched no element. Nothing was acted on and no verdict is possible — ' +
+        nearNamesClause(hint),
     };
   }
   if (usable.length > 1) {

@@ -1,4 +1,4 @@
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { type ProjectId, realmOf, type FlowName, type SessionId } from '@reticlehq/core';
 import {
   CONTRACT_FILE_VERSION,
@@ -7,6 +7,7 @@ import {
   FLOW_NAME_PATTERN,
   SAFE_SEGMENT_PATTERN,
   ReticleDir,
+  STEP_SCREENSHOT,
   type CapabilitiesContract,
   type ManifestGovernance,
   type RunId,
@@ -75,6 +76,21 @@ export function reticleDirPaths(root: string): ReticleDirPaths {
     request: join(root, ReticleDir.REQUEST_FILE),
     plans: join(root, ReticleDir.PLANS_SUBDIR),
   };
+}
+
+/**
+ * A Harness drive's own record beside its run —.reticle/runs/<runId>.drive.json. Not a run: every
+ * reader that counts or syncs run files skips it.
+ */
+export const DRIVE_RECORD_SUFFIX = '.drive.json';
+
+/** Where evidence goes when no project could be named: `~/.reticle/unmatched/<id>`. */
+export const UNMATCHED_SUBDIR = 'unmatched';
+
+/** Whether a root is one of those buckets: evidence from a page that never said its project. */
+export function isUnmatchedRoot(root: string): boolean {
+  const parent = dirname(root);
+  return UNMATCHED_SUBDIR === basename(parent) && ReticleDir.ROOT === basename(dirname(parent));
 }
 
 /** The verification-run artifact path for `runId`.reticle/runs/<runId>.json). */
@@ -152,6 +168,15 @@ export function visualDir(root: string, runtime?: string): string {
   return realmOf(runtime).hasOwnBaselineDirectory && runtime !== undefined
     ? join(visual, runtime)
     : visual;
+}
+
+/**
+ * Where one run's step screenshots live: `.reticle/visual/runs/<runId>/`. Throws on an unsafe run id,
+ * like every other path built from one.
+ */
+export function stepShotDir(root: string, runId: string): string {
+  if (!isValidRunId(runId)) throw new Error(`invalid run id: ${JSON.stringify(runId)}`);
+  return join(root, ReticleDir.VISUAL_SUBDIR, STEP_SCREENSHOT.RUNS_DIR, runId);
 }
 
 /** The overlay-diff PNG path for `name`.reticle/visual/<name>.diff.png). */

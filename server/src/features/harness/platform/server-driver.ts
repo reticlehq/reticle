@@ -19,6 +19,9 @@ import {
   type ToolOutcome,
   type ToolRequest,
 } from '../harness.js';
+import { DRIVE_HEADER } from '../platform-config.js';
+
+export { DRIVE_HEADER };
 
 export const SERVER_DRIVER_NAME = 'server';
 const RUNS_PATH = '/v1/harness/runs';
@@ -44,9 +47,13 @@ export interface ServerDriverOptions {
   planSteps?: readonly { kind: string; target: string; why: string }[];
   /** The signal names the app declares, so the engine can claim one by name. */
   vocabulary?: readonly string[];
+  /** The survey of the app taken before the drive: where each text and control lives. */
+  siteMap?: unknown;
   /** Where secret field values live. Only their NAMES go to the platform. Defaults to `process.env`. */
   env?: Record<string, string | undefined>;
   maxSteps?: number;
+  /** The free drive this run is billed to, sent as `DRIVE_HEADER` on every turn. */
+  driveId?: string;
   fetch?: FetchLike;
 }
 
@@ -59,17 +66,43 @@ interface TurnReply {
   summary?: string;
   goalMet?: boolean;
   usage?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  /** On the last turn: the credits the whole run spent. Absent from an older platform. */
+  creditsSpent?: number;
+}
+
+/** Where to reach the platform, as which key, and for which free drive when there is one. */
+export interface PlatformCredential {
+  url: string;
+  apiKey: string;
+  driveId?: string;
 }
 
 /** The platform's url and this project's key, when the machine is linked. */
 export function serverOptionsFromEnv(
   env: Record<string, string | undefined>,
-): { url: string; apiKey: string } | undefined {
+): PlatformCredential | undefined {
   const url = cloudUrlFrom(env);
   const apiKey = env[ReticleEnv.API_KEY];
+  const driveId = env[ReticleEnv.DRIVE_ID];
   return url === undefined || apiKey === undefined || 0 === apiKey.length
     ? undefined
-    : { url: url.replace(/\/+$/, ''), apiKey };
+    : {
+        url: url.replace(/\/+$/, ''),
+        apiKey,
+        ...(driveId === undefined || 0 === driveId.length ? {} : { driveId }),
+      };
+}
+
+/** The headers every Harness call carries: JSON, the key, and the free drive it is billed to. */
+export function platformHeaders(platform: {
+  apiKey: string;
+  driveId?: string | undefined;
+}): Record<string, string> {
+  return {
+    'content-type': 'application/json',
+    authorization: `Bearer ${platform.apiKey}`,
+    ...(platform.driveId === undefined ? {} : { [DRIVE_HEADER]: platform.driveId }),
+  };
 }
 
 export class ServerHarnessError extends Error {
@@ -93,18 +126,16 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
       try {
         const res = await doFetch(`${options.url}${path}`, {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            authorization: `Bearer ${options.apiKey}`,
-          },
+          headers: platformHeaders(options),
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(TURN_TIMEOUT_MS),
         });
         const text = await res.text();
         if (!res.ok) {
-          const message = errorMessage(text) ?? `the platform answered ${String(res.status)}`;
+          const refusal = refusalOf(text);
+          const message = refusal.message ?? `the platform answered ${String(res.status)}`;
           // A person turned it off: the drive ends, and the result says that rather than "broken".
-          if (HARNESS_OFF === errorCode(text)) throw new DriveStoppedError(message);
+          if (HARNESS_OFF === refusal.code) throw new DriveStoppedError(message);
           // A refusal is an answer; only a network failure is worth asking again.
           throw new ServerHarnessError(message, res.status);
         }
@@ -128,6 +159,7 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
           ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
           ...(options.planSteps === undefined ? {} : { planSteps: options.planSteps }),
           ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }),
+          ...(options.siteMap === undefined ? {} : { siteMap: options.siteMap }),
           secrets: secretNames(options.env ?? process.env),
           tools: input.tools.filter((t) => FINISH !== t.name).map(toolSpec),
         })) as { runId?: unknown };
@@ -141,9 +173,15 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
       const outcomes = fresh.flatMap((entry) =>
         'tool' === entry.role ? entry.outcomes.map(outcomeOf) : [],
       );
+      // What somebody said to the drive since the last turn. The opening line is the loop's own and
+      // the platform writes its own, so only words that arrived after it travel.
+      const say = fresh.flatMap((entry, i) =>
+        'user' === entry.role && (0 < turn || 0 < i) ? [entry.text] : [],
+      );
       const reply = (await call(`${RUNS_PATH}/${encodeURIComponent(runId)}/turn`, {
         turn,
         outcomes,
+        ...(0 === say.length ? {} : { say }),
       })) as TurnReply;
       turn = reply.turn + 1;
       // The platform's spend, reported so the drive's cost is visible here as it is for a local one.
@@ -160,6 +198,9 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
               args: {
                 summary: reply.summary ?? reply.text,
                 ...('boolean' === typeof reply.goalMet ? { goalMet: reply.goalMet } : {}),
+                ...('number' === typeof reply.creditsSpent
+                  ? { creditsSpent: reply.creditsSpent }
+                  : {}),
               },
             },
           ],
@@ -193,21 +234,26 @@ function outcomeOf(o: ToolOutcome): {
   return { id: o.id, name: o.name, result: o.result, isError: o.isError };
 }
 
-function errorCode(text: string): string | undefined {
+/**
+ * The refusal's code and message. Two shapes reach here: `{ error: { code, message } }` from most
+ * routes, and the card wall's flat `{ error: 'needs_card', message }`. Reading only the first lost
+ * the credits sentence of every mid-drive card wall to "the platform answered 402".
+ */
+function refusalOf(text: string): { code?: string; message?: string } {
   try {
-    const body = JSON.parse(text) as { error?: { code?: unknown } };
-    return 'string' === typeof body.error?.code ? body.error.code : undefined;
+    const body = JSON.parse(text) as { error?: unknown; message?: unknown };
+    const nested =
+      'object' === typeof body.error && null !== body.error
+        ? (body.error as { code?: unknown; message?: unknown })
+        : {};
+    const code = 'string' === typeof body.error ? body.error : nested.code;
+    const message = 'string' === typeof nested.message ? nested.message : body.message;
+    return {
+      ...('string' === typeof code ? { code } : {}),
+      ...('string' === typeof message ? { message } : {}),
+    };
   } catch {
-    return undefined;
-  }
-}
-
-function errorMessage(text: string): string | undefined {
-  try {
-    const body = JSON.parse(text) as { error?: { message?: unknown } };
-    return 'string' === typeof body.error?.message ? body.error.message : undefined;
-  } catch {
-    return undefined;
+    return {};
   }
 }
 

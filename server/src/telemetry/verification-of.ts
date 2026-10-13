@@ -22,7 +22,6 @@ import {
 } from '@reticlehq/core';
 import { VERDICT_TOOLS } from '@/surface/tools/feedback-tools.js';
 import { getBrowserMode } from './browser-mode.js';
-import { harnessDriving } from './harness-drive.js';
 
 /**
  * The deciding clause, read off the result `decideVerified` wrote it onto.
@@ -136,6 +135,8 @@ export function verificationOf(
   result: Record<string, unknown>,
   durationMs: number,
   brand?: BrowserBrand,
+  /** The call ran inside a Harness drive's async context (`currentDrivenBy()`), read by the caller. */
+  drivenByHarness = false,
 ): Verification | undefined {
   if (!VERDICT_TOOLS.has(toolName)) return undefined;
   // A paused session REFUSES the call — nothing driven, nothing asserted. The refusal carries a
@@ -188,7 +189,9 @@ export function verificationOf(
     // WHAT was lost, when the reason was that something was. Three owners, three fixes, one bar
     // until now.
     ...(uncleanLoss === undefined ? {} : { uncleanLoss }),
-    // WHOSE drive this was. Absent is the ordinary case — the agent called the tool itself.
-    ...(harnessDriving() ? { driven: VerificationDriver.HARNESS } : {}),
+    // WHOSE drive this was, read per call by the caller: a drive runs in the background while the
+    // agent keeps calling tools, so a process-wide flag credited the agent's verdicts too. Absent is
+    // the ordinary case — the agent called the tool itself.
+    ...(drivenByHarness ? { driven: VerificationDriver.HARNESS } : {}),
   };
 }

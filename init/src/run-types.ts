@@ -43,6 +43,8 @@ export interface InitOptions {
    * at `src/admin` ended up with no `/reticle` at all (#318).
    */
   agentRoot?: string;
+  /** The agent root is a workspace with several apps: it is pinned to none of them. */
+  severalApps?: boolean;
   /**
    * Hand the telemetry outcome back rather than emitting it here.
    *
@@ -77,6 +79,8 @@ export interface InitIo {
   listDirs(relPath: string): readonly string[];
   /** File (non-directory) basenames inside a project-relative directory, including dotfiles. */
   listFiles(relPath: string): readonly string[];
+  /** Whether a project-relative path is a symbolic link. Optional: an IO without it reads none. */
+  isSymlink?(relPath: string): boolean;
   /** The same IO re-rooted at a project-relative subdirectory (used for the workspace redirect). */
   scoped(relPath: string): InitIo;
   /** Runs a subprocess to completion (inherits stdio); returns true on exit code 0. */
@@ -140,4 +144,6 @@ export interface InitResult {
    * `deferOutcome` is set. Absent on a dry run and on the exits that report for themselves.
    */
   outcome?: InitOutcome;
+  /** No app where init ran; it listed the apps below instead. Reported as `no_package_json`. */
+  listedAppsBelow?: true;
 }

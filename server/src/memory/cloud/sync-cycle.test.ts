@@ -7,6 +7,7 @@
  * that was ever authoritative.
  */
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { FlowErrorCode, SYNC_BATCH_LIMITS } from '@reticlehq/core';
 import {
   describeSync,
@@ -569,6 +570,31 @@ describe('it sends only the difference', () => {
     expect(report.derivedSent).toEqual(['impact']);
   });
 
+  /*
+   * A re-drive: an idle daemon logged "sent impact" every 5 s. The platform answered `accepted` and
+   * then reported a hash of its own form of the record, never ours, so every cycle offered it again,
+   * and a cycle that moved something comes round sooner. What it accepted is remembered here.
+   */
+  it('does not offer again a record the platform accepted, whatever hash it reports', async () => {
+    const first = await cycle(
+      {
+        status: { stateHashes: { impact: 'their-own-hash' } },
+        sync: { state: { impact: 'accepted' } },
+      },
+      source({ derived: (kind) => ('impact' === kind ? IMPACT : undefined) }),
+    );
+    expect(first.report.derivedSent).toEqual(['impact']);
+    const again = await cycle(
+      {
+        status: { stateHashes: { impact: 'their-own-hash' } },
+        sync: { state: { impact: 'accepted' } },
+      },
+      source({ derived: (kind) => ('impact' === kind ? IMPACT : undefined) }),
+      first.written.state ?? {},
+    );
+    expect(again.report.derivedSent).toEqual([]);
+  });
+
   it('sends a record the server has never seen', async () => {
     const { report } = await cycle(
       { status: { stateHashes: { impact: null } }, sync: { state: { impact: 'accepted' } } },
@@ -750,6 +776,29 @@ describe('it sends only the difference', () => {
     );
     const post = calls.find((c) => 'POST' === c.method);
     expect((post?.body as { flows: unknown[] }).flows).toEqual([{ name: 'sign-in' }]);
+  });
+
+  /*
+   * Every run push re-sent the whole flow and capsule set, measured at ~1.3 MB a push on a real
+   * repo: one POST hit the 30s timeout and took the run down with the flows. A set the platform
+   * already answered for has nothing to add to a run push.
+   */
+  it('does not drag an unchanged flow or capsule set along with a new run', async () => {
+    const flows = [{ name: 'sign-in' }];
+    const capsules = [{ id: 'c1' }];
+    const { calls } = await cycle(
+      { status: {}, sync: { runs: { accepted: 1 } } },
+      source({
+        runs: () => [{ runId: 'r', payload: { runId: 'r' } }],
+        flows: () => flows,
+        capsules: () => capsules,
+      }),
+      { sentFlowsHash: hashPayload(flows), sentCapsulesHash: hashPayload(capsules) },
+    );
+    const post = calls.find((c) => 'POST' === c.method)?.body as Record<string, unknown>;
+    expect(post['runs']).toEqual([{ runId: 'r' }]);
+    expect(post['flows']).toBeUndefined();
+    expect(post['capsules']).toBeUndefined();
   });
 });
 
@@ -1344,5 +1393,196 @@ describe('a refused run is not re-offered until something could change the answe
       first.written.state ?? {},
     );
     expect(again.calls.some((c) => 'POST' === c.method)).toBe(true);
+  });
+});
+
+describe("a run's step screenshots follow it", () => {
+  const image = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+  const shot = {
+    seq: 1,
+    file: '0001-act.jpg',
+    tool: 'reticle_act',
+    source: 'rendered',
+    width: 4,
+    height: 4,
+    sha256: createHash('sha256').update(image).digest('hex'),
+  };
+  const run = { runId: 'a', payload: { runId: 'a', screenshots: [shot] } };
+
+  it('uploads them once the platform has taken the run, never before', async () => {
+    const { report, calls } = await cycle(
+      {},
+      source({ runs: () => [run], screenshot: () => image }),
+    );
+    const paths = calls.map((c) => c.url.replace('https://cloud.test', ''));
+    expect(paths.indexOf('/v1/runs/a/screenshots')).toBeGreaterThan(paths.indexOf('/v1/sync'));
+    expect(report.screenshotsSent).toBe(1);
+  });
+
+  it('keeps them local when the project turned screenshots off', async () => {
+    const { calls } = await cycle({}, source({ runs: () => [run] }));
+    expect(calls.some((c) => c.url.includes('/screenshots'))).toBe(false);
+  });
+});
+
+/*
+ * Persona drive: `reticle connect --project bigco-console`, signed in to a different workspace,
+ * "sent 7 run(s)" recorded under the previous workspace (a person's email in their steps), without a
+ * word; and `sentFlowsHash`, kept for the old link, meant the new one never received the flows.
+ */
+describe('a folder re-linked to another workspace', () => {
+  const OLD = 'https://cloud.test::org::dana::app';
+  const NEW = 'https://cloud.test::org::bigco::bigco-console';
+  const FLOW = { name: 'sign-in', version: 1, steps: [], createdAt: NOW - 60_000 };
+  const NEW_FLOW = { name: 'checkout', version: 1, steps: [], createdAt: NOW + 1 };
+  const relink = async (state: CloudSyncState, link: string, moveHistory?: true) => {
+    const s = server({ status: {} });
+    const k = sink();
+    const report = await runSyncCycle({
+      config: { url: 'https://cloud.test', apiKey: 'rk_bigco' },
+      link,
+      ...(moveHistory === undefined ? {} : { moveHistory }),
+      source: source({
+        runs: () => [
+          { runId: 'before', payload: { runId: 'before', createdAt: NOW - 60_000 } },
+          { runId: 'after', payload: { runId: 'after', createdAt: NOW + 1 } },
+        ],
+        flows: () => [FLOW, NEW_FLOW],
+      }),
+      sink: k.sink,
+      state,
+      now: () => NOW,
+      request: s.request,
+    });
+    const sent = s.calls
+      .filter((c) => 'POST' === c.method)
+      .flatMap((c) => ((c.body as { runs?: { runId: string }[] }).runs ?? []).map((r) => r.runId));
+    return { report, sent, written: k.written, calls: s.calls };
+  };
+  const synced: CloudSyncState = {
+    link: OLD,
+    sentRunHashes: { before: 'x' },
+    sentFlowsHash: hashPayload([FLOW]),
+  };
+
+  it('sends only what was made under the new link, and says what it kept back', async () => {
+    const { report, sent, written } = await relink(synced, NEW);
+    expect(sent).toEqual(['after']);
+    expect(report.held.join(' ')).toMatch(/1 run made before this folder was linked to/);
+    expect(written.state?.link).toBe(NEW);
+  });
+
+  /*
+   * A re-drive: re-linked to another workspace, the old runs stayed but the old flows went, and they
+   * carried the previous workspace's people's emails. Flows follow the runs' rule.
+   */
+  it("sends the flows made under the new link, and keeps the old link's flows here", async () => {
+    const { calls, report } = await relink(synced, NEW);
+    const flows = calls.flatMap((c) => (c.body as { flows?: unknown[] } | undefined)?.flows ?? []);
+    expect(flows).toEqual([NEW_FLOW]);
+    expect(report.held.join(' ')).toMatch(/1 flow made before this folder was linked to/);
+  });
+
+  // Re-check: the disk source rebuilds every flow on each read, so a held-back list taken from one
+  // read never matched the next by identity, and the answer said "sent flows: 5" beside "5 flows …
+  // stay on this machine" while the new project listed the old one's flows.
+  it('keeps the old flows here when the source rebuilds them on every read', async () => {
+    const s = server({ status: {} });
+    await runSyncCycle({
+      config: { url: 'https://cloud.test', apiKey: 'rk_bigco' },
+      link: NEW,
+      source: source({ flows: () => [{ ...FLOW }, { ...NEW_FLOW }] }),
+      sink: sink().sink,
+      state: synced,
+      now: () => NOW,
+      request: s.request,
+    });
+    const flows = s.calls.flatMap(
+      (c) => (c.body as { flows?: unknown[] } | undefined)?.flows ?? [],
+    );
+    expect(flows).toEqual([NEW_FLOW]);
+  });
+
+  // A re-drive: the old runs stayed, but the impact record (the previous workspace's counts and
+  // defects) went into the company's new project. Derived records follow the runs' rule too.
+  it('keeps the records derived under the old link here, until the history is moved', async () => {
+    const send = async (moveHistory?: true) => {
+      const s = server({ status: { stateHashes: { impact: null } } });
+      const report = await runSyncCycle({
+        config: { url: 'https://cloud.test', apiKey: 'rk_bigco' },
+        link: NEW,
+        ...(moveHistory === undefined ? {} : { moveHistory }),
+        source: source({
+          derived: (kind) => ('impact' === kind ? { counts: { calls: 9 } } : undefined),
+        }),
+        sink: sink().sink,
+        state: synced,
+        now: () => NOW,
+        request: s.request,
+      });
+      return { report, calls: s.calls };
+    };
+    const held = await send();
+    expect(
+      held.calls.some((c) => (c.body as { impact?: unknown } | undefined)?.impact !== undefined),
+    ).toBe(false);
+    expect(held.report.held.join(' ')).toMatch(/impact/);
+    const moved = await send(true);
+    expect(
+      moved.calls.some((c) => (c.body as { impact?: unknown } | undefined)?.impact !== undefined),
+    ).toBe(true);
+  });
+
+  it('moves the old flows with the history, when asked', async () => {
+    const { calls } = await relink(synced, NEW, true);
+    const flows = calls.flatMap((c) => (c.body as { flows?: unknown[] } | undefined)?.flows ?? []);
+    expect(flows).toEqual([FLOW, NEW_FLOW]);
+  });
+
+  it('moves the history only when asked', async () => {
+    const { sent, written } = await relink(synced, NEW, true);
+    expect(sent.sort()).toEqual(['after', 'before']);
+    expect(written.state?.linkedAt).toBeUndefined();
+  });
+
+  it('a first link, or a record from before links were kept, sends the history as before', async () => {
+    expect((await relink({}, NEW)).sent.sort()).toEqual(['after', 'before']);
+  });
+});
+
+/*
+ * A flow deleted on this machine stayed counted on the platform: it will not infer a deletion from a
+ * name missing in the synced set (another clone may hold it), so the daemon tells it.
+ */
+describe('a flow deleted here', () => {
+  const run = async (state: CloudSyncState, flows: unknown[], projectId?: string) => {
+    const s = server({ status: {} });
+    const k = sink();
+    await runSyncCycle({
+      config: { url: 'https://cloud.test', apiKey: 'rk_test' },
+      ...(projectId === undefined ? {} : { projectId }),
+      source: source({ flows: () => flows }),
+      sink: k.sink,
+      state,
+      now: () => NOW,
+      request: s.request,
+    });
+    return { calls: s.calls, written: k.written };
+  };
+  const A = { name: 'sign-in', version: 1, steps: [] };
+  const B = { name: 'checkout', version: 1, steps: [] };
+
+  it('is deleted on the platform once, by name, for this project', async () => {
+    const first = await run({}, [A, B], 'shop');
+    expect(first.written.state?.sentFlowNames).toEqual(['sign-in', 'checkout']);
+    const after = await run(first.written.state ?? {}, [A], 'shop');
+    const deletes = after.calls.filter((c) => 'DELETE' === c.method).map((c) => c.url);
+    expect(deletes).toEqual(['https://cloud.test/v1/flows/checkout?projectId=shop']);
+    expect(after.written.state?.sentFlowNames).toEqual(['sign-in']);
+  });
+
+  it('deletes nothing when the cycle does not send flows for a project', async () => {
+    const after = await run({ sentFlowNames: ['sign-in', 'checkout'] }, [A]);
+    expect(after.calls.some((c) => 'DELETE' === c.method)).toBe(false);
   });
 });

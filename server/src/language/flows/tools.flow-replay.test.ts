@@ -176,6 +176,24 @@ describe('reticle_flow_replay handler — temp dir, never touches the repo', () 
     expect(res.steps.at(-1)?.drift?.reason).toBe('testid "chat-send" not found');
   });
 
+  it('ends with the Reticle result block: one flow replayed, decided as the run is', async () => {
+    await saveFlow('drifted', [actStep('chat-send')]);
+    const session = scriptedSession(() => ({ elements: [] }));
+    const res = asRecord(
+      await tool(ReticleTool.FLOW_REPLAY).handler(fakeDeps(fs, root, session), {
+        flowName: 'drifted',
+      }),
+    );
+    const block = asString(res['reticleResult']) ?? '';
+    expect(block).toMatch(/^\*\*Reticle result: failed\*\*/);
+    expect(block).toContain('- Did not hold: drifted');
+    expect(block).toContain('1 flow replayed');
+    // The block summarises; the verdict and its evidence stay on the answer itself.
+    expect(res['status']).toBe(ReplayStatus.DRIFT);
+    expect(Array.isArray(res['steps'])).toBe(true);
+    expect(block.split('\n').length).toBeLessThanOrEqual(5);
+  });
+
   it('C: a missing flow file returns a structured error envelope (no throw)', async () => {
     const session = scriptedSession(() => ({ elements: [] }));
     const deps = fakeDeps(fs, root, session);

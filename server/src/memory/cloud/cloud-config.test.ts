@@ -58,6 +58,15 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
       expect((await linkedCloudPort(fs, reticleRoot, homeDir, env)())?.apiKey).toBe('rk_live_web');
     });
 
+    it("resolves a tab's own .reticle when asked for it, not the daemon's", async () => {
+      await writeLink({ projectId: 'web', url: 'https://cloud.test' });
+      await writeCreds({ 'https://cloud.test::web': 'rk_live_web' });
+      const daemon = join(dir, 'daemon', '.reticle');
+      const port = linkedCloudPort(fs, daemon, homeDir, env);
+      expect(await port()).toBeNull();
+      expect((await port(reticleRoot))?.apiKey).toBe('rk_live_web');
+    });
+
     it('keeps pushing runs for a project that did not opt out', async () => {
       await writeLink({ projectId: 'web', url: 'https://cloud.test' });
       await writeCreds({ 'https://cloud.test::web': 'rk_live_web' });
@@ -105,7 +114,13 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
     const withEnv = { RETICLE_CLOUD_URL: 'https://cloud.test', RETICLE_CLOUD_KEY: 'rk_live_env' };
     const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, withEnv);
     expect(cloud.config).toEqual({ url: 'https://cloud.test', apiKey: 'rk_live_env' });
-    expect(cloud.policy).toEqual({ runs: true, memory: true, flows: true, capsules: true });
+    expect(cloud.policy).toEqual({
+      runs: true,
+      memory: true,
+      flows: true,
+      capsules: true,
+      screenshots: true,
+    });
     expect(cloud.projectId).toBeNull();
   });
 
@@ -135,9 +150,23 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
     const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, env);
     // `capsules` defaults ON because this project's cloud.json never mentions it: a policy names
     // what it changes, and a surface it is silent about keeps the default rather than inheriting a
-    // neighbour's opt-out.
-    expect(cloud.policy).toEqual({ runs: false, memory: false, flows: true, capsules: true });
+    // neighbour's opt-out. `screenshots` is the exception by design: they are pictures OF the runs,
+    // so a project keeping its runs local keeps them local too unless it says otherwise.
+    expect(cloud.policy).toEqual({
+      runs: false,
+      memory: false,
+      flows: true,
+      capsules: true,
+      screenshots: false,
+    });
     expect(cloud.config).not.toBeNull();
+  });
+
+  it('sends screenshots with runs unless the link turns them off on their own', async () => {
+    await writeLink({ projectId: 'shop', url: 'https://cloud.test', sync: { screenshots: false } });
+    await writeCreds({ shop: 'rk_live_shopkey' });
+    const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, env);
+    expect(cloud.policy).toMatchObject({ runs: true, screenshots: false });
   });
 
   it('parses verify:server and defaults verify to local otherwise', async () => {
@@ -265,18 +294,33 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
       expect(cloud.reason).toContain('RETICLE_CLOUD_URL=http://localhost:8890');
     });
 
+    // Persona drive: `RETICLE_API_KEY=<key> reticle sync` used the stored key and said nothing.
+    it('says so when an exported key is set and the stored key is used instead', async () => {
+      await writeLink({ projectId: 'shop', url: HOSTED });
+      await writeCreds({ [`${HOSTED}::shop`]: 'rk_stored' });
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_live_ci',
+      });
+      expect(cloud.config?.apiKey).toBe('rk_stored');
+      expect(cloud.note).toContain('RETICLE_API_KEY');
+      const same = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_stored',
+      });
+      expect(same.note).toBeUndefined();
+    });
+
     it('says a linked repo has no key on this machine when none is stored or exported', async () => {
       await writeLink({ projectId: 'shop', url: HOSTED });
       const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {});
       expect(cloud.config).toBeNull();
-      expect(cloud.reason).toContain('reticle login');
+      expect(cloud.reason).toContain('reticle connect');
       expect(cloud.reason).toContain('RETICLE_API_KEY');
     });
 
     it('says to link or set a key when there is neither', async () => {
       const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {});
       expect(cloud.config).toBeNull();
-      expect(cloud.reason).toContain('reticle link');
+      expect(cloud.reason).toContain('reticle connect');
       expect(cloud.reason).toContain('RETICLE_API_KEY');
     });
 
@@ -297,11 +341,11 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
 
     it('prefers the stored credential over the environment key', async () => {
       await writeLink({ projectId: 'shop', url: HOSTED });
-      await writeCreds({ shop: 'rk_live_stored' });
+      await writeCreds({ shop: 'rk_stored' });
       const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
         RETICLE_API_KEY: 'rk_live_env',
       });
-      expect(cloud.config?.apiKey).toBe('rk_live_stored');
+      expect(cloud.config?.apiKey).toBe('rk_stored');
     });
 
     it('never sends the environment key to a linked host it was not given for', async () => {
@@ -331,11 +375,11 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
   describe('the environment the platform readers are handed', () => {
     it("fills in the linked repo's stored credential", async () => {
       await writeLink({ projectId: 'shop', url: 'https://cloud.test' });
-      await writeCreds({ shop: 'rk_live_stored' });
+      await writeCreds({ shop: 'rk_stored' });
       const got = await platformEnvPort(fs, reticleRoot, homeDir, { OTHER: 'kept' })();
       expect(got).toMatchObject({
         OTHER: 'kept',
-        RETICLE_API_KEY: 'rk_live_stored',
+        RETICLE_API_KEY: 'rk_stored',
         RETICLE_CLOUD_URL: 'https://cloud.test',
       });
     });

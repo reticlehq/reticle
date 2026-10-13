@@ -70,3 +70,18 @@ describe('reticle_state component projection', () => {
     expect(r.component?.truncation?.note).toContain('effect');
   });
 });
+
+describe('reticle_state missing stores', () => {
+  it('reports an unregistered store as not found even without a path', async () => {
+    const r = (await stateTool().handler(
+      stateDeps({ stores: { app: { ready: true } }, storeNames: ['app'] }),
+      { store: 'filmStudio', depth: 2 },
+    )) as {
+      found?: boolean;
+      value?: unknown;
+      storeNames?: string[];
+    };
+
+    expect(r).toMatchObject({ found: false, value: null, storeNames: ['app'] });
+  });
+});

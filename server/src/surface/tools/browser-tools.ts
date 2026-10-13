@@ -17,7 +17,44 @@ import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import type { ToolDef } from './tool-kit.js';
+import type { ToolDef, ToolDeps } from './tool-kit.js';
+
+/** Said when a lease's page now has no Reticle SDK: only the browser can still act on it. */
+const MSG_LEASE_WITHOUT_SDK =
+  'This page has no Reticle SDK, so only browser-level actions apply here (navigate, screenshot). ' +
+  'The lease is kept: navigate back to the app and it reattaches.';
+
+/** Navigate a lease through its browser page, and wait for its SDK to come back. */
+async function navigateLease(
+  deps: ToolDeps,
+  sessionId: string,
+  url: string,
+  args: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const timeoutMs = asNumber(args['timeout_ms']) ?? ARRIVAL_TIMEOUT_MS;
+  const went = (await deps.pool?.gotoLease(sessionId, url, timeoutMs)) ?? false;
+  if (!went) return { ok: false, url, reason: 'the leased page did not navigate' };
+  const back = await waitForSession(deps, sessionId, timeoutMs);
+  return back
+    ? { ok: true, url, confirmed: true, sessionId }
+    : { ok: true, url, confirmed: false, waitedMs: timeoutMs, note: MSG_LEASE_WITHOUT_SDK };
+}
+
+/** Whether the session reconnects within the budget. */
+async function waitForSession(
+  deps: ToolDeps,
+  sessionId: string,
+  timeoutMs: number,
+): Promise<boolean> {
+  const start = deps.now();
+  for (;;) {
+    if (deps.sessions.get(sessionId) !== undefined) return true;
+    if (deps.now() - start >= timeoutMs) return false;
+    await new Promise((resolve) => setTimeout(resolve, LEASE_POLL_MS));
+  }
+}
+
+const LEASE_POLL_MS = 100;
 
 export const BROWSER_TOOLS: ToolDef[] = [
   {
@@ -100,6 +137,16 @@ export const BROWSER_TOOLS: ToolDef[] = [
       const requested = asString(args['url']);
       if (requested === undefined || 0 === requested.length)
         return { ok: false, reason: 'url required' };
+      const named = asString(args['sessionId']);
+      // A lease whose page has no SDK right now (it was navigated to an image, a PDF, another site):
+      // the page is still the lease's, so it is navigated through the browser and reattaches when it
+      // is back on the app, instead of answering "no connected session" for good.
+      if (named !== undefined && deps.sessions.get(named) === undefined) {
+        const leaseUrl = deps.pool?.leaseUrl(named);
+        if (leaseUrl !== undefined) {
+          return navigateLease(deps, named, carryReticleIdentity(leaseUrl, requested), args);
+        }
+      }
       // Record navigate as an action. Its window is usually empty (the page unloads and the SDK
       // reconnects), but the action record itself — "navigated to X" — is the causal fact worth keeping.
       const session = deps.sessions.resolve(asString(args['sessionId']));
@@ -151,7 +198,14 @@ export const BROWSER_TOOLS: ToolDef[] = [
                 timeoutMs,
               )
             : null;
-        return navigateResult(result, arrival, timeoutMs);
+        const answer = navigateResult(result, arrival, timeoutMs);
+        // A lease navigated off its app (an image, a PDF) is kept, and says what still works.
+        const offApp =
+          null === arrival &&
+          true === result.ok &&
+          deps.pool?.leaseUrl(session.id) !== undefined &&
+          deps.sessions.get(session.id) === undefined;
+        return offApp ? { ...answer, note: MSG_LEASE_WITHOUT_SDK } : answer;
       } finally {
         session.finishAction();
       }

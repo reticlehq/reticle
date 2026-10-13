@@ -14,19 +14,21 @@ npx @reticlehq/server doctor [--port N]
 
 | Flag | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Which bridge port to diagnose |
+| `--port N` | number | `RETICLE_PORT`, else the port in `.reticle.json`, else the daemon already serving this project, else `4400` | Which bridge port to diagnose |
 
 ## What it prints
 
-Human-readable lines on stdout, not the JSON log. Real capture:
+Human-readable lines on stdout, not the JSON log. A healthy setup (rows that print only on a condition are absent):
 
 ```
 reticle doctor
   node         v22.14.0
   chromium     ✓ installed (chromium-1234)
-  daemon       ✓ running on :4400 (pid 72698, v2.8.0)
+  daemon       ✓ running on :4400 (pid 72698, v3.7.0)
   sessions     ✓ 1 page connected
   bridge port  4400  (your app must dial THIS port, not your dev-server port)
+  agent link   ✓ an MCP client attached here and called tools before (a record, not a live check)
+  project      ✓ wired here (my-app)
   daemon log   /Users/you/.reticle/daemon-4400.log
   tracing      RETICLE_TRACE=1 on the daemon for per-stage timings in that log
 ```
@@ -56,9 +58,12 @@ When nothing has connected, the `sessions` line fails and the daemon's own diagn
 | `bridge port` | The port your app must dial, spelled out because mixing it up with the dev server port is the most common setup failure |
 | `port check` | Only when your project's configured port disagrees with the one the daemon is on. Prints the mismatch rather than leaving you to spot it across two lines |
 | `sibling` | Only when a well-known Reticle port other than this daemon's has a listener. An observation, not a diagnosis: that listener may or may not be related |
+| `project` | Whether the app in this folder is wired: a `.reticle.json` with a readable `projectId`, or an app that has connected here before. Everything above can be green in a project that never ran `init` |
 | `daemon log` | Where the structured daemon log lives |
 | `tracing` | How to turn that log into a per-stage trace |
 | `desktop` | Only on a desktop project. Every Electron and Tauri misconfiguration here fails silently, so it is diagnosed explicitly |
+| `coverage` | Only with a connected app. What Reticle sees in it, out of eight capabilities: what is missing, what is not seen yet, and, once a verdict recorded a gap, a prompt to paste into your coding agent |
+| `unsynced` | Only when a project folder holds runs the platform never got. Names the folder and the command that sends them, usually `reticle connect` run there |
 
 ## The chromium line
 

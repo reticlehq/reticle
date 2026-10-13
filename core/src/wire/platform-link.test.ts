@@ -24,6 +24,8 @@ describe('a drive spec, as an older or newer daemon reads it', () => {
         persona: 'a returning shopper',
         maxSteps: 40,
         record: false,
+        plan: 'hp_1',
+        confirmDangerous: true,
       }),
     ).toEqual({
       spec: {
@@ -34,6 +36,8 @@ describe('a drive spec, as an older or newer daemon reads it', () => {
         persona: 'a returning shopper',
         maxSteps: 40,
         record: false,
+        plan: 'hp_1',
+        confirmDangerous: true,
       },
       ignored: [],
     });

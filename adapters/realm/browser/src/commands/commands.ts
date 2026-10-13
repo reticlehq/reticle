@@ -213,6 +213,9 @@ function readState(
   // resolve — capping first would truncate the store before selection ever reached the row.
   if (path !== undefined || depth !== undefined) {
     const rawStores = readStoresRaw(store);
+    if (store !== undefined && !Object.hasOwn(rawStores, store)) {
+      return { store, path, found: false, value: null, storeNames: names };
+    }
     const base = store !== undefined ? rawStores[store] : { stores: rawStores, storeNames: names };
     const selection = path !== undefined ? selectPath(base, path) : { found: true, value: base };
     const selected =
@@ -347,6 +350,8 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   reg.set(ReticleCommand.STORAGE_READ, (args) => readStorage(str(args['area'])));
   reg.set(ReticleCommand.CAPABILITIES, () => getCapabilities());
   reg.set(ReticleCommand.CAPTURE, (args) => captureDesktopWindow(true === args['fullPage']));
+  // Lazy: the renderer is downloaded the first time a step screenshot is drawn in-page, never on load.
+  reg.set(ReticleCommand.RENDER, () => import('../dom/render-page.js').then((m) => m.renderPage()));
   reg.set(ReticleCommand.SCROLL, (args) => {
     const dy = args['dy'];
     const fraction = args['fraction'];

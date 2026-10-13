@@ -25,9 +25,10 @@ pnpm build       # required: the specs and the CLI run from dist/, not src/
 
 ## 1. Boot something to look at
 
-Two processes: a demo API and the bench app that talks to it.
+Three processes: the Reticle daemon, a demo API, and the bench app that talks to both.
 
 ```bash
+node server/dist/command/cli.js serve --port 4400   # returns once the daemon answers
 node apps/api/server.mjs &
 RETICLE_PORT=4400 VITE_RETICLE_TOKEN="$(cat ~/.reticle/pairing-token)" \
   pnpm --filter @reticlehq/bench-app exec vite --port 4310 --strictPort &
@@ -40,11 +41,11 @@ curl -s -o /dev/null -w "api=%{http_code} app=%{http_code}\n" \
   http://localhost:8787/api/saved-items http://localhost:4310/
 ```
 
-If `~/.reticle/pairing-token` does not exist yet, run any `reticle` command once and it will be minted.
+The daemon writes `~/.reticle/pairing-token` when it starts, so start it before the bench app reads the token.
 
 ## 2. Take a verdict from the command line
 
-This is the shortest path to seeing Reticle work, and it needs no MCP client at all.
+This is the shortest path to seeing Reticle work, and it needs no MCP client at all. `--expect` asks the daemon you started in step 1 for the verdict; with no daemon on the port it refuses and proves nothing.
 
 Ask for a verdict, naming the app's url. With no tab open on that origin, Reticle opens one in a browser it drives (Playwright's Chromium, or an installed Chrome or Edge when that is missing) and closes it afterwards; a tab you already have open is used instead:
 

@@ -18,9 +18,12 @@ import {
   urlParts,
   type VerifyConnection,
   type VerifyPorts,
+  runSyncFailure,
+  verifyProjectName,
 } from './cli-verify.js';
 import { PortPresence } from '../daemon/binding/port-presence.js';
-import { CLI_USAGE } from './cli-parse.js';
+import { renderHelp } from './cli-usage.js';
+import { verifyResults } from './verify-results.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -118,6 +121,15 @@ describe('runVerify', () => {
     expect(rec.exit).toEqual([0]);
     expect(rec.out.join('\n')).toContain('PASS');
     expect(rec.closed).toBe(1);
+  });
+
+  // Persona drive: an unlinked verify printed pass and a runId, and nothing said nothing was sent.
+  it('says an unlinked run was kept on this computer and how to send runs', async () => {
+    const { ports, rec } = harness({ verify: () => Promise.resolve(makeRun(RunFlowStatus.PASS)) });
+    await runVerify(ARGS, ports);
+    const said = rec.out.join('\n');
+    expect(said).toContain('run-test was kept on this computer');
+    expect(said).toContain('npx @reticlehq/server connect');
   });
 
   it('exits 1 when nothing ran, so CI cannot go green on an empty run', async () => {
@@ -285,6 +297,49 @@ describe('exploring an app that has no saved flows', () => {
     expect(rec.fail.join('\n')).toContain('Nothing was proved');
   });
 
+  it('never passes a drive the platform cut off, and says why', async () => {
+    // A drive refused mid-way (credits gone: 402 needs_card) had saved one partial flow; replaying
+    // that flow printed PASS with no word about the credits.
+    const credits = 'Your 10 free credits are used. Add a card to start your 14-day trial.';
+    let flows: readonly string[] = [];
+    const { ports, rec } = harness({
+      listFlows: () => Promise.resolve([...flows]),
+      explore: () => {
+        flows = ['half-a-journey'];
+        return Promise.resolve({
+          savedFlows: ['half-a-journey'],
+          steps: 7,
+          stopReason: 'broken',
+          error: credits,
+        });
+      },
+    });
+
+    await runVerify(EXPLORING, ports);
+
+    expect(rec.verifyCalls).toBe(0);
+    expect(rec.exit).toEqual([1]);
+    expect(rec.out.join('\n')).not.toContain('PASS');
+    expect(rec.fail.join('\n')).toContain(credits);
+    expect(rec.fail.join('\n')).toContain('Nothing was proved');
+  });
+
+  it('never passes a drive somebody switched off part-way', async () => {
+    let flows: readonly string[] = [];
+    const { ports, rec } = harness({
+      listFlows: () => Promise.resolve([...flows]),
+      explore: () => {
+        flows = ['half'];
+        return Promise.resolve({ savedFlows: ['half'], steps: 3, stopReason: 'stopped' });
+      },
+    });
+
+    await runVerify(EXPLORING, ports);
+
+    expect(rec.verifyCalls).toBe(0);
+    expect(rec.exit).toEqual([1]);
+  });
+
   it('says how to make exploring available when the project is not on the platform', async () => {
     const { ports, rec } = harness({ listFlows: () => Promise.resolve([]) });
 
@@ -368,8 +423,57 @@ describe('the run is pushed with the linked credential', () => {
 });
 
 describe('the HTTP transport is named wherever --expect refuses', () => {
-  it('CLI_USAGE and the daemon-needed refusal both point at http-transport', () => {
-    expect(CLI_USAGE).toContain('http-transport');
+  it('verify --help and the daemon-needed refusal both point at http-transport', () => {
+    expect(renderHelp('verify')).toContain('http-transport');
     expect(expectNeedsDaemonMessage(4400, PortPresence.FOREIGN)).toContain('http-transport');
+  });
+});
+
+describe('runVerify --results-json', () => {
+  it('writes one verdict per journey, the engine words unchanged, beside the report', async () => {
+    const { ports, rec } = harness({ verify: () => Promise.resolve(makeRun(RunFlowStatus.FAIL)) });
+    const written: { path: string; text: string }[] = [];
+    ports.writeResults = (path, text) => {
+      written.push({ path, text });
+      return Promise.resolve();
+    };
+    await runVerify({ ...ARGS, resultsJson: 'out.json' }, ports);
+    expect(rec.exit).toEqual([1]);
+    expect(written.map((w) => w.path)).toEqual(['out.json']);
+    expect(JSON.parse(written[0]?.text ?? '{}')).toEqual({
+      verdict: 'no',
+      results: [{ journey: 'checkout', verdict: 'no', reason: 'order never saved' }],
+    });
+  });
+
+  it('reads a skipped journey as unknown, and the run as unknown rather than yes', () => {
+    const run = makeRun(RunFlowStatus.SKIPPED);
+    expect(verifyResults(run)).toEqual({
+      verdict: 'unknown',
+      results: [{ journey: 'checkout', verdict: 'unknown' }],
+    });
+    expect(verifyResults(makeRun(RunFlowStatus.PASS)).verdict).toBe('yes');
+  });
+});
+
+/*
+ * A CI run was named after its folder ("ci-repo") while the dashboard project it reported to was
+ * `web-ci`, the id the repo's own committed `.reticle.json` carries. One pipeline, two names.
+ */
+describe('the project a verify run is named for', () => {
+  it('is the linked project, then the configured one, then the folder', () => {
+    expect(verifyProjectName('web-ci', 'web-ci-4b3c', 'ci-repo')).toBe('web-ci');
+    expect(verifyProjectName(null, 'web-ci', 'ci-repo')).toBe('web-ci');
+    expect(verifyProjectName(null, undefined, 'ci-repo')).toBe('ci-repo');
+    expect(verifyProjectName(null, undefined, '')).toBe('app');
+  });
+});
+
+/* A revoked key's only trace was "cloud run sync failed (401)" in a log nobody reads. */
+describe('a run the platform refused', () => {
+  it('says loudly that the key was refused and the run did not reach the dashboard', () => {
+    expect(runSyncFailure(401, undefined)).toContain('refused this project');
+    expect(runSyncFailure(401, undefined)).toContain('did NOT reach');
+    expect(runSyncFailure(500, undefined)).toBe('cloud run sync failed (500); run kept locally');
   });
 });

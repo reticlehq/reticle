@@ -42,6 +42,9 @@ import {
 import { nearestRoleName, type RoleCandidate } from './role-anchor-nearest.js';
 import { roleDriftReason } from '@/judgement/outcome/role-drift-reason.js';
 
+/** The live act_sequence tool gives each step this transport budget when none was supplied. */
+export const DEFAULT_SEQUENCE_STEP_TIMEOUT_MS = 8_000;
+
 /** Query args for a NAMED role anchor — the handle that identifies an instance, not a JSX site. */
 function roleQueryArgs(
   anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.ROLE }>,
@@ -185,11 +188,8 @@ function replayDestructiveActionHint(rawError: string): string {
     `${rawError} — this is a flow REPLAY: a step's own args.confirmDangerous is stripped before ` +
     'dispatch and never persists, so editing the flow file does nothing. Pass it at the call level ' +
     `instead: ${ReticleTool.FLOW_REPLAY} { confirmDangerous: true } acknowledges every flagged step ` +
-    // `reticle_verify{action:"flows"}` (the batch suite runner) has no such argument today — naming
-    // it here would repeat the exact defect this message exists to fix, so the honest statement is
-    // that a flow with a flagged step currently has to be replayed on its own to pass it.
-    'for this run. The batch reticle_verify{action:"flows"} has no equivalent option yet, so a flow ' +
-    'with a flagged step has to be replayed on its own to acknowledge it.'
+    'for this run, as do reticle_verify{action:"flows", confirmDangerous: true} for a suite and ' +
+    '`reticle verify <url> --confirm-dangerous` from the command line.'
   );
 }
 
@@ -581,7 +581,15 @@ export async function runSequenceStep(
   ): Promise<Awaited<ReturnType<typeof session.command>>> => {
     session.beginAction?.(ReticleTool.FLOW_REPLAY, { steps: steps.length });
     try {
-      return await session.command(ReticleCommand.ACT_SEQUENCE, { steps });
+      // A recorded zero means "do not wait for the element", not "abort the whole batch now".
+      // Keep the transport alive long enough for the sequence's default per-step budget, and give
+      // an omitted timeout the same aggregate budget as the live tool's independent step waits.
+      const perStepTimeout =
+        undefined === step.timeoutMs || 0 === step.timeoutMs
+          ? DEFAULT_SEQUENCE_STEP_TIMEOUT_MS
+          : step.timeoutMs;
+      const timeoutMs = perStepTimeout * steps.length;
+      return await session.command(ReticleCommand.ACT_SEQUENCE, { steps }, timeoutMs);
     } finally {
       session.finishAction?.();
     }
