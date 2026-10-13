@@ -534,7 +534,9 @@ describe('a departed tab seen navigating away', () => {
  */
 describe('nextActionFor: an app nobody has wired yet', () => {
   const INIT = 'cd web && pnpm dlx @reticlehq/server init';
-  const LEASE_5173 = 'reticle_lease {action:"acquire", url:"http://localhost:5173"}';
+  // Through reticle_run, which every surface advertises; reticle_lease alone is not on the default (#1547).
+  const LEASE_5173 =
+    'reticle_run { tool: "reticle_lease", args: { action: "acquire", url: "http://localhost:5173" } }';
 
   it('hands over THIS project’s init command, and the lease that gets a verdict now', () => {
     const next = nextActionFor({

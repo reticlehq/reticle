@@ -39,14 +39,26 @@ interface Coverage {
 export const NO_FLOWS = 'no_flows';
 
 /**
+ * How to get a first flow, in calls that work on every tool surface (#1547).
+ *
+ * `reticle_record` and `reticle_flow_save` are not on the default surface, so naming them bare sent
+ * an agent looking for tools it did not have, and it stopped. A journey driven with
+ * `reticle_act_and_wait` and an `until` is saved as a flow when the session ends, so that leads;
+ * recording by hand goes through `reticle_run`, which every surface advertises.
+ */
+export const RECORD_A_FLOW =
+  'Drive a journey with reticle_act_and_wait and an `until`: it is saved as a flow when the session ends. ' +
+  'Or record one by hand with reticle_run { tool: "reticle_record", args: { action: "start" } }, then ' +
+  'reticle_run { tool: "reticle_flow_save", args: { flowName } }.';
+
+/**
  * What to do about it, since the empty state is otherwise indistinguishable from success.
  *
  * Names the TOOLS, not a `reticle record` CLI verb: this CLI does not dispatch one, and a suggestion
  * that errors is a second dead end on top of the first (see suggested-commands-exist.test.ts). Same
  * wording as the empty-suite verdict, which is the same situation reached from `reticle verify`.
  */
-const NO_FLOWS_NOTE =
-  'no flows recorded — nothing was checked. Record one with reticle_record { action: "start" }, then reticle_flow_save.';
+const NO_FLOWS_NOTE = `no flows recorded — nothing was checked. ${RECORD_A_FLOW}`;
 
 /** The gate's flow-coverage line. `pct` and `outcome` are mutually exclusive by construction. */
 interface FlowCoverageReport {

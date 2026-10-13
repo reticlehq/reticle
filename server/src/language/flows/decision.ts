@@ -16,6 +16,7 @@ import {
 } from '@reticlehq/core';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
 import { SUCCESS_STEP_TOOL } from './flow-success.js';
+import { RECORD_A_FLOW } from './suite/coverage.js';
 
 /**
  * Turn a replay result into the autonomy DECISION envelope — the judgement a human reviewer used to
@@ -64,7 +65,7 @@ const INTENT_BROKEN_PREFIX = 'NO LONGER TRUE: ';
  * agent will act on it. The same rule as the source pointer — absence stays honest.
  */
 const NO_INTENT_ON_PASS =
-  'no intent declared, so this proves the steps ran, not what they were for — declare one with reticle_intent.';
+  'no intent declared, so this proves the steps ran, not what they were for — declare one with reticle_run { tool: "reticle_intent" }.';
 const NO_INTENT_ON_FAIL = 'no intent declared, so this names the mechanism, not the stakes.';
 
 /** `<intent> — <mechanical>`, or the mechanical sentence plus the honest absence. */
@@ -263,7 +264,7 @@ export function unverifiableReason(
 ): string | undefined {
   if (flow === undefined) return undefined;
   if (0 === flow.steps.length) {
-    return 'the flow has no steps — it replays green whatever the app does. Record it again, or add steps with reticle_annotate.';
+    return 'the flow has no steps — it replays green whatever the app does. Record it again, or add steps with reticle_run { tool: "reticle_annotate" }.';
   }
   const c = classifyFlowAssertions(flow, invoked);
   if (c.grade !== FlowAssertionGrade.ASSERTION_FREE) return undefined;
@@ -395,7 +396,7 @@ export function buildSuiteVerdict(
       : ` — ${String(unreached.length)} known route(s) never opened: ${unreached.join(', ')}`;
   const summary =
     0 === total
-      ? 'no flows to verify — nothing was checked. Record one with reticle_record { action: "start" }, then reticle_flow_save.'
+      ? `no flows to verify — nothing was checked. ${RECORD_A_FLOW}`
       : 0 === failed
         ? 0 === unverifiable.length
           ? `all ${total} flow${1 === total ? '' : 's'} pass`

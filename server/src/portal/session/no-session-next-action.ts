@@ -173,7 +173,8 @@ const ZERO_INSTALL_SEES =
 
 /** The zero-install call, with the URL only when it can be named without guessing. */
 function zeroInstallLease(url: string | undefined): string {
-  return `reticle_lease {action:"acquire", url:"${url ?? "<the app's URL>"}"}`;
+  // Through reticle_run: reticle_lease is not on the default surface, and reticle_run is on every one (#1547).
+  return `reticle_run { tool: "reticle_lease", args: { action: "acquire", url: "${url ?? "<the app's URL>"}" } }`;
 }
 
 /** Nothing here says this project was ever wired: no config, no recorded connection, no session. */
@@ -253,7 +254,8 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         (departedTo === undefined || '' === departedTo
           ? 'the tab was closed, reloaded, or the lease aged out. '
           : `the page navigated away to ${redactUrl(departedTo)}. `) +
-        'Reopen the app, or take one you own with reticle_lease {action:"acquire", url}.' +
+        'Reopen the app, or take one you own with ' +
+        'reticle_run { tool: "reticle_lease", args: { action: "acquire", url } }.' +
         bound,
     };
   }
@@ -273,8 +275,8 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     const leaseAlternative =
       0 === projectIds.length
         ? ''
-        : ' Alternatively, acquire the app URL explicitly with reticle_lease ' +
-          '{action:"acquire", url, projectId} using the matching projectId above.';
+        : ' Alternatively, acquire the app URL explicitly with reticle_run { tool: "reticle_lease", ' +
+          'args: { action: "acquire", url, projectId } } using the matching projectId above.';
     return {
       action: NoSessionAction.OPEN_APP,
       reason:
@@ -331,8 +333,8 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         'This daemon was started outside the project (an IDE that registers the MCP server ' +
         'globally starts it in `/` or your home directory), so it has no `.reticle.json` to match ' +
         'the page against. Do NOT run `reticle init`: the config it would write is already correct ' +
-        'somewhere else. Take a context you own instead with reticle_lease {action:"acquire", url, ' +
-        "projectId}, or restart the daemon from the app's own directory.",
+        'somewhere else. Take a context you own instead with reticle_run { tool: "reticle_lease", ' +
+        'args: { action: "acquire", url, projectId } }, or restart the daemon from the app\'s own directory.',
     };
   }
 
@@ -400,7 +402,7 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         (undefined === dev.script ? 'launcher' : `\`${dev.script}\` script`) +
         (dev.directory === undefined ? '' : `, in \`${dev.directory}\``) +
         ` — run it in the ` +
-        'background, tell the human it is running, then call reticle_sessions again.' +
+        'background, tell the human it is running, then call reticle_session { action: "list" } again.' +
         stoppedNote +
         (neverWired(facts)
           ? ` Once it is up, ${zeroInstallLease(dev.port === undefined ? undefined : `${LOCALHOST}:${String(dev.port)}`)} ` +

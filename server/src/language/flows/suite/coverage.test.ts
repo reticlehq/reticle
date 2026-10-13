@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { computeCoverage, flowCoverageReport, NO_FLOWS } from './coverage.js';
+import { defaultAdvertisedNames } from '@/surface/tools/tool-surface.js';
 
 describe('computeCoverage', () => {
   it('measures covered vs declared per dimension and names the gaps', () => {
@@ -66,5 +69,47 @@ describe('flowCoverageReport', () => {
     );
     const report = flowCoverageReport(cov.flows);
     expect(report).toEqual({ pct: 50, covered: 1, total: 2 });
+  });
+});
+
+/**
+ * Advice names only tools the reader can call (#1547).
+ *
+ * `reticle gate` with no flows, `verify affected` and the empty suite said "record one with
+ * reticle_record, then reticle_flow_save", and the no-session advice said "reticle_lease": none of
+ * them is on the default surface, so an agent looked for the tool, did not find it, and stopped.
+ * Every `reticle_*` name in these messages is either advertised by default or reached through
+ * `reticle_run { tool: "…" }`, which every surface advertises.
+ */
+describe('setup advice names only tools on the default surface', () => {
+  const ADVICE_FILES = [
+    'src/language/flows/suite/coverage.ts',
+    'src/language/flows/affected-tools.ts',
+    'src/language/flows/decision.ts',
+    'src/portal/session/no-session-next-action.ts',
+  ];
+  const TOOL = /\breticle_[a-z_]+\b/g;
+  const HATCHED = /tool:\s*"$/;
+
+  /** The text of every string and template literal in a source file, comment lines excluded. */
+  function literalsOf(path: string): string[] {
+    const code = readFileSync(join(process.cwd(), path), 'utf8')
+      .split('\n')
+      .filter((line) => !/^\s*(?:\/\/|\/\*|\*)/.test(line))
+      .join('\n');
+    const LITERAL = /'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|"(?:[^"\\\n]|\\.)*"/g;
+    return [...code.matchAll(LITERAL)].map((m) => m[0].slice(1, -1).replace(/\\"/g, '"'));
+  }
+
+  it.each(ADVICE_FILES)('%s', (path) => {
+    const callable = new Set(defaultAdvertisedNames());
+    const unreachable: string[] = [];
+    for (const text of literalsOf(path)) {
+      for (const match of text.matchAll(TOOL)) {
+        const before = text.slice(0, match.index);
+        if (!callable.has(match[0]) && !HATCHED.test(before)) unreachable.push(match[0]);
+      }
+    }
+    expect(unreachable, 'named bare, but not on the default surface').toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ import { loadNamedFlows, resolveChangedFiles } from '@/command/cli/cli-flow-comm
 import { projectDirFor } from '@/memory/project/session-root.js';
 import { sessionRoot, sessionProjectId } from '@/memory/project/session-root.js';
 import { affectedSavedFlows } from './change/flow-sources.js';
+import { RECORD_A_FLOW } from './suite/coverage.js';
 
 /**
  * `reticle_affected` — which saved flows must re-verify for a set of changed files.
@@ -74,7 +75,7 @@ export const AFFECTED_TOOLS: ToolDef[] = [
         changed.failed
           ? `could not read the diff for \`${String(since)}\`, so NOTHING was compared and this result proves nothing: ${changed.reason ?? 'git failed'}`
           : 0 === flows.length
-            ? 'no saved flows exist yet, so nothing COULD be affected — record one with reticle_record then reticle_flow_save'
+            ? `no saved flows exist yet, so nothing COULD be affected. ${RECORD_A_FLOW}`
             : 0 === changedFiles.length
               ? since === undefined && 0 === files.length
                 ? 'no files were given and no `since` ref was passed, so nothing was compared — pass the files you edited, or a git ref'
