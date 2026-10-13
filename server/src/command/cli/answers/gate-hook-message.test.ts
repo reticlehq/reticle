@@ -86,6 +86,21 @@ describe('a changed component nothing has driven', () => {
   });
 });
 
+describe('a changed component when no saved flow records sources', () => {
+  it('says the flows carry no sources instead of claiming nothing drove it', () => {
+    const out =
+      gateHookMessage(GateExit.FAIL, {
+        ...none,
+        unflowed: ['src/Badge.vue'],
+        flowsWithoutSources: true,
+      }) ?? '';
+    expect(out).toContain('src/Badge.vue');
+    expect(out).toContain('record no `sources`');
+    expect(out).toContain('add `sources` to the flow');
+    expect(out).not.toContain('no saved flow drives it');
+  });
+});
+
 describe('coverage the hook reports', () => {
   it('names a fallen level with the call that finds what is uncovered, and unexecuted files', () => {
     const out =

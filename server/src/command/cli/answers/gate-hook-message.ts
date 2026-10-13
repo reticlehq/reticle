@@ -29,6 +29,8 @@ interface GateHookInput {
   deleted: readonly string[];
   /** Changed interactive components no saved flow has ever driven. */
   unflowed?: readonly string[];
+  /** Saved flows exist but none records a `sources` entry, so no flow can be matched to a file. */
+  flowsWithoutSources?: boolean;
   /** Coverage levels below their best, already worded (`branched 100% -> 50%`). */
   coverageRegressed?: readonly string[];
   /** Changed files the browser loaded and never ran a function of. */
@@ -67,7 +69,9 @@ export function gateHookMessage(exit: number, input: GateHookInput): string | un
     lines.push(`  coverage deleted while its files changed: ${name(input.deleted)}`);
   if (input.unflowed !== undefined && input.unflowed.length > 0)
     lines.push(
-      `  changed, and no saved flow drives it: ${name(input.unflowed)} — drive it with reticle_act_and_wait and a declared \`until\``,
+      true === input.flowsWithoutSources
+        ? `  changed, but the saved flows record no \`sources\` (no source stamping), so none can be matched to them: ${name(input.unflowed)} — add \`sources\` to the flow that drives them`
+        : `  changed, and no saved flow drives it: ${name(input.unflowed)} — drive it with reticle_act_and_wait and a declared \`until\``,
     );
   if (input.coverageRegressed !== undefined && input.coverageRegressed.length > 0)
     lines.push(
