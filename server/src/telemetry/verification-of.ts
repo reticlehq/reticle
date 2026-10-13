@@ -143,6 +143,10 @@ export function verificationOf(
   // verdict field so the agent never reads undefined off it, and that field must not be mistaken
   // here for work that happened.
   if (true === result['paused']) return undefined;
+  // A wait that stopped at the per-call limit is "not yet", not a verdict: it answers `pass: false`
+  // with `resume_ms`, and read here that became `verified: "no"`, so every paused wait was recorded
+  // as a red and advanced the feedback-prompt counter (#1119).
+  if ('number' === typeof result['resume_ms']) return undefined;
   const replay = replayVerdict(toolName, result['status']);
   const verified =
     'string' === typeof result['verified'] ? result['verified'] : (replay?.verified ?? undefined);

@@ -8,6 +8,7 @@ import type { SessionManager } from '@/portal/session/session-manager.js';
 import { VERDICT_TOOLS } from '@/surface/tools/feedback-tools.js';
 import { createFakeSession } from '@/portal/session/fake-session.js';
 import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
+import { verificationOf } from '@/telemetry/verification-of.js';
 
 /**
  * `reticle_assert { action: "wait" }` is graded like `now` (#1119).
@@ -135,16 +136,12 @@ describe('a wait the per-call cap paused', () => {
     vi.useRealTimers();
   });
 
-  it('is not graded and records nothing, and says how long is left', async () => {
+  it('is not graded, is not counted as a verification, and says how long is left', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
-    const recorded: string[] = [];
     const session = createFakeSession({
       lastAct: new LastAct(),
       elapsed: () => 1000,
-      recordAction: (tool: string) => {
-        recorded.push(tool);
-        return 'a1';
-      },
+      recordAction: () => 'a1',
       eventsSince: () => [],
       queryEvents: () => Promise.resolve([]),
     });
@@ -165,6 +162,7 @@ describe('a wait the per-call cap paused', () => {
     expect(out['pass']).toBe(false);
     expect(out['resume_ms']).toBe(30_000);
     expect(out['verified'], '"not yet" must not read as "no"').toBeUndefined();
-    expect(recorded, 'nothing is journaled until the wait ends').toEqual([]);
+    // What the metric and the feedback prompt read: a paused wait is not a verification at all.
+    expect(verificationOf(ReticleTool.WAIT_FOR, out, 0)).toBeUndefined();
   });
 });

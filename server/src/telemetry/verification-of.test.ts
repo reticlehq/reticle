@@ -57,6 +57,19 @@ describe('verificationOf', () => {
   });
 
   /**
+   * A wait that stopped at the per-call limit is "not yet" (#1119). It answers `pass: false` with
+   * `resume_ms`, and read as a verdict that was a red, recorded once per paused call.
+   */
+  it('a paused wait is NOT a verification, and a finished one still is', () => {
+    expect(
+      verificationOf(ReticleTool.WAIT_FOR, { pass: false, resume_ms: 30_000 }, 55_000),
+    ).toBeUndefined();
+    expect(
+      verificationOf(ReticleTool.WAIT_FOR, { pass: false, verified: 'no' }, 4_000),
+    ).toMatchObject({ verified: 'no', passed: false });
+  });
+
+  /**
    * This test used to pin the defect as correct behaviour, which is why nobody found it from the
    * data. It asserted `falseGreenCaught: false` for act_and_wait's REAL shape (`verdict.pass`
    * nested), directly beneath a comment calling that case "the thesis", and asserted `true` only for
