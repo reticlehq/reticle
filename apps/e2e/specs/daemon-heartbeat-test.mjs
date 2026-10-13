@@ -20,7 +20,8 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { classifyDaemonLife, DaemonEnd } from '@reticlehq/server';
-import { freePortSafely, startOwnedDaemon, transportAlive } from '../gate-harness.mjs';
+import { freePortSafely, killTree, startOwnedDaemon, transportAlive } from '../gate-harness.mjs';
+import { pidOnPort } from '../port-pid.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const CLI = path.join(ROOT, 'server/dist/command/cli.js');
@@ -64,10 +65,10 @@ function linesSince(offset) {
 }
 
 const listener = () => {
+  // pidOnPort, not `sh -c lsof`: Windows has neither, and the old form failed as an EMPTY STRING —
+  // indistinguishable from "nothing is listening", which is the very thing this spec checks.
   try {
-    return execFileSync('sh', ['-c', `lsof -nP -iTCP:${String(PORT)} -sTCP:LISTEN -t`], {
-      encoding: 'utf8',
-    }).trim();
+    return String(pidOnPort(PORT) ?? '');
   } catch {
     return '';
   }
@@ -99,7 +100,8 @@ chk('  and the reader calls it alive', classifyDaemonLife(lines, Date.now()).end
 // ── 2. SIGKILL — the case that used to leave nothing at all ─────────────────────────────────────
 const pid = listener();
 chk('the daemon is listening, so there is something to kill', pid !== '', `pid ${pid}`);
-if (pid !== '') execFileSync('sh', ['-c', `kill -9 ${pid}`]);
+// `kill -9` is a POSIX binary; killTree is the cross-platform equivalent this repo already has.
+if (pid !== '') killTree(Number(pid));
 await sleep(BEAT_MS * 4);
 chk('  and the port really is dark', !(await transportAlive(PORT)));
 
@@ -131,9 +133,8 @@ for (let i = 0; i < 60; i++) {
   await sleep(250);
 }
 await sleep(BEAT_MS * 3);
-execFileSync('sh', ['-c', `${process.execPath} ${CLI} stop --port ${String(PORT)} --quiet`], {
-  cwd: ROOT,
-});
+// Straight to node — there is nothing here a shell was needed for.
+execFileSync(process.execPath, [CLI, 'stop', '--port', String(PORT), '--quiet'], { cwd: ROOT });
 await sleep(1_500);
 
 const stopped = classifyDaemonLife(linesSince(before2), Date.now());

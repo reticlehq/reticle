@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { start, TOOLS, BaselineStore, RecordingStore } from '@reticlehq/server';
 import { waitForSession } from '../wait-for-session.mjs';
-import { freePortSafely } from '../gate-harness.mjs';
+import { freePortSafely, killTree } from '../gate-harness.mjs';
 import { waitUntil } from '../wait-until.mjs';
 
 /** Atlas serves from here; the session is identified by it, since atlas self-assigns its id. */
@@ -55,22 +55,27 @@ await freePortSafely(ATLAS_PORT, { onNote: (note) => console.log(`   [atlas] ${n
 // chromium then loads the ORPHAN'S page, whose SDK is dialing a bridge that no longer exists. The
 // reported symptom is "an atlas session never connected", with a healthy-looking app serving on the
 // port it names. `run.mjs` already kills the group for this exact reason — see its `detached` note.
+// `shell` on Windows, `detached` only off it: `pnpm` is `pnpm.cmd` there, which a bare
+// `spawn()` cannot resolve (`Error: spawn pnpm ENOENT`), and Windows has no process group for
+// `detached` to create. The group is what POSIX needs so the whole vite tree dies with the spec;
+// Windows gets the same guarantee from killTree's `taskkill /T`, which walks the child tree.
+const WINDOWS = 'win32' === process.platform;
 const atlas = spawn(
   'pnpm',
   ['--filter', '@reticlehq/atlas', 'exec', 'vite', '--port', String(ATLAS_PORT), '--strictPort'],
   {
     env: { ...process.env, RETICLE_PORT: String(TEST_BRIDGE_PORT), VITE_RETICLE_TOKEN: token },
     stdio: 'ignore',
-    detached: true,
+    detached: !WINDOWS,
+    shell: WINDOWS,
   },
 );
 const stopAtlas = () => {
-  // Negative pid targets the whole group. ESRCH only means everything is already gone.
-  try {
-    process.kill(-atlas.pid, 'SIGKILL');
-  } catch {
-    /* group already gone */
-  }
+  // killTree, not `process.kill(-pid)`: a negative pid targets a process GROUP, which Windows
+  // does not have — it throws there, leaving the vite tree alive holding the port and failing the
+  // NEXT run with a healthy-looking app on the port it names. One call site already answers this
+  // on both platforms.
+  killTree(atlas.pid);
 };
 process.on('exit', stopAtlas);
 

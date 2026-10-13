@@ -14,7 +14,7 @@
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { execSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocket } from 'ws';
 import {
@@ -26,6 +26,7 @@ import {
 } from '@reticlehq/core';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const CLI_PATH = path.join(ROOT, 'server/dist/command/cli.js');
 const PORT = Number(process.env.BRIDGE_STRESS_PORT ?? '4741');
 const WS_URL = `ws://127.0.0.1:${String(PORT)}${RETICLE_WS_PATH}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -92,15 +93,21 @@ process.on('unhandledRejection', () => undefined);
 process.chdir(ROOT);
 
 // A daemon of our own, on a port nothing else in the battery uses.
-execSync(`node server/dist/command/cli.js stop --port ${String(PORT)} --quiet || true`, {
+//
+// Neither of these goes through a shell any more. `shell: '/bin/sh'` is not a path that exists on
+// Windows (`Error: spawnSync /bin/sh ENOENT`), and both only wanted the shell for syntax node
+// gives directly: `|| true` is a try/catch, and `& echo started` is a detached spawn.
+try {
+  execFileSync(process.execPath, [CLI_PATH, 'stop', '--port', String(PORT), '--quiet'], {
+    stdio: 'ignore',
+  });
+} catch {
+  /* nothing was listening — which is the state this wanted anyway */
+}
+spawn(process.execPath, [CLI_PATH, 'serve', '--port', String(PORT)], {
   stdio: 'ignore',
-  shell: '/bin/sh',
-});
-const daemon = execSync(
-  `node server/dist/command/cli.js serve --port ${String(PORT)} >/dev/null 2>&1 & echo started`,
-  { shell: '/bin/sh' },
-).toString();
-void daemon;
+  detached: 'win32' !== process.platform,
+}).unref();
 for (let i = 0; 40 > i; i += 1) {
   if (await daemonAlive()) break;
   await sleep(250);
@@ -248,10 +255,13 @@ try {
       /* already gone */
     }
   }
-  execSync(`node server/dist/command/cli.js stop --port ${String(PORT)} --quiet || true`, {
-    stdio: 'ignore',
-    shell: '/bin/sh',
-  });
+  try {
+    execFileSync(process.execPath, [CLI_PATH, 'stop', '--port', String(PORT), '--quiet'], {
+      stdio: 'ignore',
+    });
+  } catch {
+    /* already stopped */
+  }
 }
 
 console.log(`\n${0 === fail ? '✅' : '❌'} BRIDGE STRESS (${pass} passed, ${fail} failed)`);

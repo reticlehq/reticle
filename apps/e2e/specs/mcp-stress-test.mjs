@@ -17,7 +17,8 @@ import net from 'node:net';
 import http from 'node:http';
 import os from 'node:os';
 import fs from 'node:fs';
-import { execSync } from 'node:child_process';
+import { killTree } from '../gate-harness.mjs';
+import { pidOnPort } from '../port-pid.mjs';
 import { fileURLToPath } from 'node:url';
 import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 
@@ -36,16 +37,18 @@ const chk = (label, ok, detail = '') => {
   ok ? (pass += 1) : (fail += 1);
 };
 
+/**
+ * The pid listening on `port`, or null.
+ *
+ * This asked `lsof`, which does not exist on Windows, and answered null when it threw — the same
+ * value it uses for "nothing is listening". So `killDaemon` below became a no-op there: it found no
+ * pid, killed nothing, and returned false ten times out of ten, while the daemon went on holding
+ * the port and failed the squatter further down with EADDRINUSE. `pidOnPort` is the netstat-backed
+ * answer this repo already carries for exactly this.
+ */
 function daemonPid(port = PORT) {
   try {
-    return (
-      execSync(`lsof -nP -iTCP:${port} -sTCP:LISTEN -t`, {
-        stdio: ['ignore', 'pipe', 'ignore'],
-      })
-        .toString()
-        .trim()
-        .split('\n')[0] || null
-    );
+    return pidOnPort(Number(port));
   } catch {
     return null;
   }
@@ -104,7 +107,9 @@ function killDaemon(port = PORT) {
   const pid = daemonPid(port);
   if (pid === null) return false;
   try {
-    process.kill(Number(pid), 'SIGKILL');
+    // killTree, not `process.kill`: the daemon can own children, and Windows needs `taskkill /T`
+    // to reach them. Verified by the port actually going dark, not by the call not throwing.
+    killTree(Number(pid));
     return true;
   } catch {
     return false;
@@ -148,7 +153,11 @@ for (let i = 0; i < 10; i++) {
   if (r.answered) answered += 1;
   else console.log(`      (round ${i}: ${r.how})`);
 }
-chk('survives ten consecutive daemon kills', alive(client), `killed ${killed}/10`);
+// `killed > 0` is load-bearing. On Windows this spec reported PASS at "killed 0/10": the client
+// was alive because nothing had ever been killed, so the hardest check in the battery was green
+// for the one reason that should have made it red. Surviving a kill is only evidence if a kill
+// happened.
+chk('survives ten consecutive daemon kills', alive(client) && killed > 0, `killed ${killed}/10`);
 chk('  and answered every call in between', 10 === answered, `${answered}/10 answered`);
 
 // ── 2. Killed WITH a request in flight ────────────────────────────────────────────────────────
