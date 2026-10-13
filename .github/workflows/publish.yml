@@ -111,3 +111,36 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
           RETICLE_ISSUER_PUBLIC_KEY: ${{ secrets.RETICLE_ISSUER_PUBLIC_KEY }}
+      # npm is only half of a release's reach. The official MCP Registry is the index the
+      # DIRECTORIES read — Glama, github.com/mcp and mcp.directory all ingest from it, and PulseMCP
+      # accepts nothing else — so a server absent from the registry is invisible to every one of
+      # them no matter what npm reports for downloads. This step makes a release discoverable
+      # rather than merely installable.
+      #
+      # No secret: `github-oidc` trades this workflow's OIDC token for a registry JWT, and the
+      # registry grants the `io.github.reticlehq/*` namespace to a workflow running in this
+      # repository. That is what `id-token: write` on the job is already for (npm provenance asked
+      # for it first). Publishing by hand instead needs `mcp-publisher login github` + a device code.
+      #
+      # The registry re-reads the npm tarball and checks its `mcpName` against the `name` in
+      # server.json. Both say `io.github.reticlehq/reticle`; if either moves without the other this
+      # step fails rather than publishing a listing that resolves to the wrong package.
+      #
+      # It runs AFTER the npm publish because the registry resolves server.json's version on npm and
+      # refuses one that is not there yet. `set-version.mjs` keeps server.json's two version fields
+      # in lockstep with the release, so this ordering is the only requirement.
+      #
+      # Pinned by tag AND digest, like every action above. An unpinned `latest` download would put a
+      # third party's new binary into the job that holds this repository's publish identity.
+      - name: Publish to the MCP Registry
+        env:
+          PUBLISHER_VERSION: v1.8.1
+          PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          set -euo pipefail
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum --check --strict
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
