@@ -11,7 +11,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.12.1",
+    "@tauri-apps/api": "^2.12.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zustand": "^5.0.15"
@@ -23,7 +23,7 @@
     "@tauri-apps/cli": "^2.12.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
-    "vite": "^8.2.1"
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "^7.3.7"
   }
 }
