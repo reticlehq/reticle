@@ -132,7 +132,7 @@ const ORDER = [
   // refused. Everything above proves the pieces; this proves the product.
   'release-smoke-test',
 ];
-// The desktop battery — `pnpm e2e:desktop`. Each of these starts its OWN runtime (an Electron main
+// The desktop battery — `pnpm test:e2e:desktop`. Each of these starts its OWN runtime (an Electron main
 // process, including the electron-vite path, or a packaged Tauri binary) and waits for it to dial
 // the bridge, so they need no server from run-ci.sh and would only fail inside it for want of a display.
 const DESKTOP = ['electron-desktop-test', 'electron-vite-desktop-test', 'tauri-desktop-test'];

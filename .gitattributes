@@ -33,9 +33,7 @@
 *.pdf binary
 *.icns binary
 
-# Windows-only scripts that must keep CRLF to run at all.
-*.bat text eol=crlf
-*.cmd text eol=crlf
+# Windows-only scripts that must keep CRLF to run at all. `.cmd` and `.bat` are above.
 *.ps1 text eol=crlf
 
 # The changelog is append-at-the-top, so every open PR edits the same lines and each merge
