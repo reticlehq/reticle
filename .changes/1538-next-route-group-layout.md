@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/init` — `reticle init` on a Next.js app whose root layouts live in route groups said there was no root layout.** With `app/(site)/layout.tsx` and no `app/layout.tsx`, a standard App Router shape, init handed back a manual step even when `<ReticleDev />` was already mounted there. It now finds route-group root layouts in `app/` and `src/app/`: it reports one that already mounts ReticleDev as already wired, otherwise mounts into the group that renders `/` (or the only group layout), and names the layouts when it cannot tell which one to use. Closes [#1538](https://github.com/reticlehq/reticle/issues/1538).

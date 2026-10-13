@@ -46,6 +46,11 @@ const NON_BLOCKING = new Map<string, string>([
     'fires a cross-repo dispatch on main only and is inert without FIXTURES_DISPATCH_TOKEN. It ' +
       'notifies; it does not verify. Tier 2 runs in another repository and cannot gate this one.',
   ],
+  [
+    'nightly-watch',
+    'schedule only; opens or comments on the nightly-red issue. Skipped on every PR, so listing ' +
+      'it in gate.needs would teach people to ignore a skip. It cannot fail a merge.',
+  ],
 ]);
 
 /** Top-level job keys: exactly two spaces of indent, under `jobs:`. */

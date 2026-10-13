@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  findRouteGroupRootLayout,
   patchNextConfig,
   patchRootLayout,
   patchPagesApp,
@@ -237,5 +238,97 @@ describe('reticleDevLocation', () => {
       importSpecifier: './reticle-dev',
     });
     expect(reticleDevLocation('src/app/layout.jsx', false).path).toBe('src/app/reticle-dev.jsx');
+  });
+});
+
+/**
+ * An App Router app whose root layouts live in route groups has no `app/layout.*` at all, and init
+ * used to call that "no root layout" (#1538). These are the files a project holds, as paths.
+ */
+describe('findRouteGroupRootLayout', () => {
+  const LAYOUT =
+    'export default function L({ children }) { return <html><body>{children}</body></html>; }';
+  const WIRED = `import { ReticleDev } from './reticle-dev';\n${LAYOUT}`;
+
+  function project(files: Record<string, string>) {
+    const under = (dir: string): string[] =>
+      Object.keys(files)
+        .filter((p) => p.startsWith(`${dir}/`))
+        .map((p) => p.slice(dir.length + 1));
+    return {
+      readFile: (p: string) => files[p] ?? null,
+      listFiles: (dir: string) => under(dir).filter((p) => !p.includes('/')),
+      listDirs: (dir: string) => [
+        ...new Set(
+          under(dir)
+            .filter((p) => p.includes('/'))
+            .map((p) => p.split('/')[0] ?? ''),
+        ),
+      ],
+    };
+  }
+
+  it('takes the only route-group root layout there is', () => {
+    const io = project({
+      'app/(site)/layout.tsx': LAYOUT,
+      'app/(site)/page.tsx': '',
+      'app/(site)/about/page.tsx': '',
+    });
+    expect(findRouteGroupRootLayout(io)).toEqual({ path: 'app/(site)/layout.tsx' });
+  });
+
+  it('takes the group that renders / among several', () => {
+    const io = project({
+      'app/(dashboard)/layout.tsx': LAYOUT,
+      'app/(dashboard)/settings/page.tsx': '',
+      'app/(marketing)/layout.jsx': LAYOUT,
+      'app/(marketing)/page.jsx': '',
+    });
+    expect(findRouteGroupRootLayout(io)).toEqual({ path: 'app/(marketing)/layout.jsx' });
+  });
+
+  it('counts a / page inside a route group nested under the layout', () => {
+    const io = project({
+      'app/(app)/layout.tsx': LAYOUT,
+      'app/(app)/settings/page.tsx': '',
+      'app/(site)/layout.tsx': LAYOUT,
+      'app/(site)/(home)/page.tsx': '',
+    });
+    expect(findRouteGroupRootLayout(io)).toEqual({ path: 'app/(site)/layout.tsx' });
+  });
+
+  it('prefers a group layout that already mounts ReticleDev', () => {
+    const io = project({
+      'app/(app)/layout.tsx': WIRED,
+      'app/(app)/settings/page.tsx': '',
+      'app/(site)/layout.tsx': LAYOUT,
+      'app/(site)/page.tsx': '',
+    });
+    expect(findRouteGroupRootLayout(io)).toEqual({ path: 'app/(app)/layout.tsx' });
+  });
+
+  it('names the candidates when no single group renders /', () => {
+    const io = project({
+      'app/(b)/layout.tsx': LAYOUT,
+      'app/(b)/x/page.tsx': '',
+      'app/(a)/layout.tsx': LAYOUT,
+      'app/(a)/y/page.tsx': '',
+    });
+    expect(findRouteGroupRootLayout(io)).toEqual({
+      candidates: ['app/(a)/layout.tsx', 'app/(b)/layout.tsx'],
+    });
+  });
+
+  it('looks in src/app for a --src-dir app', () => {
+    const io = project({ 'src/app/(site)/layout.js': LAYOUT, 'src/app/(site)/page.js': '' });
+    expect(findRouteGroupRootLayout(io)).toEqual({ path: 'src/app/(site)/layout.js' });
+  });
+
+  it('answers null when there is no route-group layout, so pages/_app is still asked', () => {
+    expect(
+      findRouteGroupRootLayout(
+        project({ 'pages/_app.tsx': '', 'app/dashboard/layout.tsx': LAYOUT }),
+      ),
+    ).toBeNull();
   });
 });

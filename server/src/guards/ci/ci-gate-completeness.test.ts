@@ -44,6 +44,11 @@ const NOT_A_GATE = new Map<string, string>([
       "commit and the verdict lives in that repo's run — a fire-and-forget notification, not a check. " +
       'Adding it to `needs:` would gate merges on a job that is `skipped` on every PR forever.',
   ],
+  [
+    'nightly-watch',
+    'schedule only. It comments on the nightly-red issue. It is `skipped` on every pull request, so ' +
+      'listing it in `gate.needs` would teach people to ignore a skip, and it cannot fail a PR.',
+  ],
 ]);
 
 interface Workflow {

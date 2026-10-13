@@ -335,7 +335,22 @@ describe('splitBrainNote', () => {
     const note = splitBrainNote(51234, [4400]);
     expect(note).toContain(':4400');
     expect(note).toContain(':51234');
-    expect(note).toContain('reticle stop --port 4400');
+    expect(note).toContain('RETICLE_PORT=4400');
+  });
+
+  /**
+   * The daemon the app is on is a working session the agent did not start (#1546). The advice moves
+   * the agent first and leaves that daemon alone; stopping it comes last, with what it costs.
+   */
+  it('leads with moving the agent, and puts stopping the app daemon last with its cost', () => {
+    const note = splitBrainNote(51234, [4400]) ?? '';
+    const attach = note.indexOf('RETICLE_PORT=4400');
+    const stop = note.indexOf('reticle stop --port 4400');
+    expect(attach).toBeGreaterThan(-1);
+    expect(stop).toBeGreaterThan(attach);
+    expect(note).toContain('restart the agent session');
+    expect(note).toContain('Leave :4400 running');
+    expect(note.slice(stop)).toContain('disconnects every tab and agent');
   });
 
   /** The advice that would be wrong: this is not an install problem and must not read as one. */

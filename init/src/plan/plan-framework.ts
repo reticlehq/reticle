@@ -193,9 +193,16 @@ export function nextSteps(input: PlanInput): Step[] {
   // Pages Router mounts through pages/_app, App Router through the root layout — different edits,
   // and picking by path is what stops a Pages app being handed the layout patch that cannot apply.
   const isPagesRouter = layout !== null && /(^|\/)pages\/_app\.[jt]sx?$/.test(layout.path);
+  const candidates = input.nextLayoutCandidates ?? [];
   const layoutPatch: SourcePatch =
     null === layout
-      ? { kind: PatchKind.MANUAL, reason: 'no root layout (app/layout.tsx) or pages/_app found' }
+      ? {
+          kind: PatchKind.MANUAL,
+          reason:
+            0 === candidates.length
+              ? 'no root layout (app/layout.tsx) or pages/_app found'
+              : `no app/layout.tsx; route-group root layouts ${candidates.join(', ')}, and none of them alone renders /`,
+        }
       : isPagesRouter
         ? patchPagesApp(layout.source, input.nextReticleDevImport)
         : patchRootLayout(layout.source);

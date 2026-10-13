@@ -946,6 +946,62 @@ describe('runInit — a failed install must not leave the app half-wired', () =>
  * `__reticle_renders` — the state-truth read, which SKILL.md calls the highest-value line, was
  * unavailable on all six real apps out of the box because `init` wired neither call.
  */
+/**
+ * Route-group root layouts (#1538): with no `app/layout.*`, each group's `layout.*` is a root
+ * layout, a standard App Router shape. init used to report "no root layout" and hand back a manual
+ * step, even when ReticleDev was already mounted in one of them.
+ */
+describe('runInit — a Next app whose root layouts live in route groups', () => {
+  const LAYOUT =
+    'export default function L({ children }) {\n  return <html><body>{children}</body></html>;\n}\n';
+  const NEXT_BASE = {
+    'package.json': JSON.stringify({ dependencies: { next: '15', react: '^19' } }),
+    'next.config.mjs': 'const nextConfig = {};\nexport default nextConfig;\n',
+  };
+  const run = (files: Record<string, string>) => {
+    const io = memoryIo({ ...NEXT_BASE, ...files }, { execOk: true, mcpExists: true });
+    runInit({ ...OPTS, install: true }, io);
+    return io;
+  };
+
+  it('mounts ReticleDev in the group layout that renders / and puts the component beside it', () => {
+    const io = run({
+      'app/(site)/layout.tsx': LAYOUT,
+      'app/(site)/page.tsx': 'export default function P() { return null; }\n',
+    });
+    expect(io.written['app/(site)/layout.tsx']).toContain('<ReticleDev />');
+    expect(io.written['app/(site)/layout.tsx']).toContain("from './reticle-dev'");
+    expect(io.written['app/(site)/reticle-dev.jsx']).toBeDefined();
+    expect(io.lines.join('\n')).toContain('app/(site)/layout.tsx');
+    expect(io.lines.join('\n')).not.toContain('no root layout');
+  });
+
+  it('reports a group layout that already mounts ReticleDev as already wired', () => {
+    const wired = `import { ReticleDev } from './reticle-dev';\n${LAYOUT.replace('<body>', "<body>{process.env.NODE_ENV === 'development' ? <ReticleDev /> : null}")}`;
+    const io = run({
+      'app/(site)/layout.tsx': wired,
+      'app/(site)/page.tsx': '',
+      'app/(site)/reticle-dev.jsx': 'export function ReticleDev() { return null; }\n',
+    });
+    expect(io.written['app/(site)/layout.tsx']).toBeUndefined();
+    expect(io.lines.join('\n')).not.toContain('no root layout');
+  });
+
+  it('names the group layouts when it cannot tell which one renders /', () => {
+    const io = run({
+      'app/(admin)/layout.tsx': LAYOUT,
+      'app/(admin)/users/page.tsx': '',
+      'app/(shop)/layout.tsx': LAYOUT,
+      'app/(shop)/cart/page.tsx': '',
+    });
+    expect(io.written['app/(admin)/layout.tsx']).toBeUndefined();
+    expect(io.written['app/(shop)/layout.tsx']).toBeUndefined();
+    const out = io.lines.join('\n');
+    expect(out).toContain('app/(admin)/layout.tsx, app/(shop)/layout.tsx');
+    expect(out).not.toContain('no root layout (app/layout.tsx)');
+  });
+});
+
 describe('runInit — the capabilities module', () => {
   const APP = {
     'package.json': JSON.stringify({

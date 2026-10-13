@@ -33,7 +33,7 @@ import {
 import { CURSOR_RULE_PATH, RETICLE_MD_PATH } from './project/agent-rules.js';
 import { CLAUDE_SETTINGS_PATH } from './plan/stop-hook-step.js';
 import { CRA_ENV_PATH } from './patch/cra.js';
-import { NEXT_LAYOUT_CANDIDATES, NEXT_PAGES_APP_CANDIDATES } from './patch/next-patch.js';
+import { findNextMountFile } from './patch/next-patch.js';
 import { tanstackStartConnectPath } from './patch/tanstack-start.js';
 import { installedViteMajor } from './patch/vite-owning-config.js';
 import { RETICLE_CONFIG_FILE, type PlanInput } from './plan/plan.js';
@@ -306,11 +306,9 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
   const nuxtHasAppDir = io.listDirs('.').includes('app');
 
   const nextConfigFile = firstPresent(rootFiles, NEXT_CONFIG_CANDIDATES);
-  // App Router first; a Pages Router app has no layout, and its mount point is pages/_app.
-  const layoutPath =
-    NEXT_LAYOUT_CANDIDATES.find((p) => io.exists(p)) ??
-    NEXT_PAGES_APP_CANDIDATES.find((p) => io.exists(p)) ??
-    null;
+  // App Router first, route groups included (#1538); a Pages Router app mounts in pages/_app.
+  const nextMount = findNextMountFile(io);
+  const layoutPath = nextMount.path;
   const layoutSource = null === layoutPath ? null : io.readFile(layoutPath);
   // Where the component goes depends on WHICH router mounts it: `pages/` routes on presence, so a
   // component there becomes a broken route; `app/` routes on filename, so a sibling is inert.
@@ -376,6 +374,7 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
         ? { path: layoutPath, source: layoutSource }
         : null,
     // Capabilities: scanned, never asked for. Bounded — a hint for the agent, not a repo index.
+    nextLayoutCandidates: nextMount.candidates,
     testids: scanTestids(sourceFiles.map((f) => f.source)),
     storeHints: storeHints(dependencyNames(pkg), sourceFiles),
     foundStores: scanStores(sourceFiles, dependencyNames(pkg)),

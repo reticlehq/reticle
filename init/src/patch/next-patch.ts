@@ -6,6 +6,7 @@
  * is JSX.
  */
 
+import type { InitIo } from '../run-types.js';
 import { PatchKind, type SourcePatch } from './patch-kind.js';
 
 const RETICLE_NEXT_PACKAGE = '@reticlehq/next';
@@ -254,6 +255,62 @@ export const NEXT_LAYOUT_CANDIDATES = [
   'src/app/layout.jsx',
   'src/app/layout.js',
 ];
+
+/** The App Router roots, in the order `NEXT_LAYOUT_CANDIDATES` checks them. */
+const NEXT_APP_DIRS = ['app', 'src/app'];
+const LAYOUT_BASENAMES = ['layout.tsx', 'layout.jsx', 'layout.js'];
+const PAGE_FILE = /^page\.(tsx|ts|jsx|js|mdx)$/;
+/** `(marketing)`: a route group, which organises routes without adding a URL segment. */
+const ROUTE_GROUP = /^\(.+\)$/;
+
+/** What `findRouteGroupRootLayout` found: the layout to mount into, or the ones it could not choose between. */
+export type RouteGroupLayouts = { path: string } | { candidates: string[] };
+
+type ListingIo = Pick<InitIo, 'listDirs' | 'listFiles' | 'readFile'>;
+
+/** Whether `dir` renders `/`: a page of its own, or one in a route group nested under it. */
+function servesRoot(io: ListingIo, dir: string): boolean {
+  if (io.listFiles(dir).some((name) => PAGE_FILE.test(name))) return true;
+  return io
+    .listDirs(dir)
+    .filter((name) => ROUTE_GROUP.test(name))
+    .some((name) => servesRoot(io, `${dir}/${name}`));
+}
+
+/**
+ * The root layout of an App Router app with no top-level `app/layout.*`: its root layouts then live
+ * in route groups (`app/(site)/layout.tsx`), one per group, which Next documents as "multiple root
+ * layouts" (#1538). `null` when the app has none, so the Pages Router candidates are still asked.
+ *
+ * One layout is chosen, because a step patches one file: a group layout that already mounts
+ * `<ReticleDev />` (so the patch reports it already wired), else the one group that renders `/`,
+ * else the only group layout there is. Several and none of those is returned as candidates, so the
+ * manual step can name them rather than say there is no root layout.
+ */
+export function findRouteGroupRootLayout(io: ListingIo): RouteGroupLayouts | null {
+  for (const appDir of NEXT_APP_DIRS) {
+    const layouts = io
+      .listDirs(appDir)
+      .filter((name) => ROUTE_GROUP.test(name))
+      .sort()
+      .flatMap((group) => {
+        const dir = `${appDir}/${group}`;
+        const files = io.listFiles(dir);
+        const layout = LAYOUT_BASENAMES.find((name) => files.includes(name));
+        return layout === undefined ? [] : [{ dir, path: `${dir}/${layout}` }];
+      });
+    if (0 === layouts.length) continue;
+    const wired = layouts.find(
+      (l) => true === io.readFile(l.path)?.includes(RETICLE_DEV_COMPONENT),
+    );
+    if (wired !== undefined) return { path: wired.path };
+    const root = layouts.filter((l) => servesRoot(io, l.dir));
+    if (1 === root.length && root[0] !== undefined) return { path: root[0].path };
+    if (1 === layouts.length && layouts[0] !== undefined) return { path: layouts[0].path };
+    return { candidates: layouts.map((l) => l.path) };
+  }
+  return null;
+}
 /**
  * Pages Router mount points, checked only when there is no App Router layout. A Pages app has no
  * `app/` directory at all, so writing the component there produced a file nothing imported.
@@ -266,3 +323,20 @@ export const NEXT_PAGES_APP_CANDIDATES = [
   'src/pages/_app.jsx',
   'src/pages/_app.js',
 ];
+
+/**
+ * The file `<ReticleDev />` is mounted in: the App Router's root layout, then a route-group root
+ * layout (#1538), then the Pages Router's `_app`. `candidates` is set when route groups hold several
+ * root layouts and none could be chosen, so the manual step can name them.
+ */
+export function findNextMountFile(io: ListingIo & Pick<InitIo, 'exists'>): {
+  path: string | null;
+  candidates?: string[];
+} {
+  const top = NEXT_LAYOUT_CANDIDATES.find((p) => io.exists(p));
+  if (top !== undefined) return { path: top };
+  const groups = findRouteGroupRootLayout(io);
+  if (groups !== null && 'path' in groups) return { path: groups.path };
+  const pagesApp = NEXT_PAGES_APP_CANDIDATES.find((p) => io.exists(p)) ?? null;
+  return null === groups ? { path: pagesApp } : { path: pagesApp, candidates: groups.candidates };
+}

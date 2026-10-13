@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/browser`: a CLS event names the element that shifted.** The layout-shift observer reported the running CLS value and never read the entry's `sources`, so an agent could see that the page shifted and had no idea what moved. A `PERF` CLS event now carries `shifted: { ref, selector }` for the largest source of that shift, measured by the area it covered before or after. The selector is short: the test id, `tag#id`, or `tag.first-class`. A text node is named by its parent, Reticle's own overlay is never named, and the field is omitted when nothing can be named. Closes [#1266](https://github.com/reticlehq/reticle/issues/1266).

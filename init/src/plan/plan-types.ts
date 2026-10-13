@@ -183,6 +183,11 @@ export interface PlanInput {
   nextConfigSource?: string | null | undefined;
   /** Discovered Next root layout: its path + source, or null (App Router only). */
   nextLayout?: { path: string; source: string } | null | undefined;
+  /**
+   * Route-group root layouts `init` could not choose between (`app/(a)/layout.tsx`, ...), set only
+   * when there is no top-level layout and no single group renders `/` (#1538).
+   */
+  nextLayoutCandidates?: readonly string[] | undefined;
   /** Where the dev-only connect component goes — never inside `pages/`, which routes on presence. */
   nextReticleDevPath?: string | undefined;
   /** What the mount file should import — a sibling for App Router, `../components/…` for Pages. */

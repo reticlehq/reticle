@@ -218,3 +218,16 @@ Run it by hand too when you touch the protocol, the adjudicator, or anything a v
 ## Path routing
 
 CI path routing lives in [`scripts/ci/changes.mjs`](../scripts/ci/changes.mjs), and its output is written to the `changes` job's step summary. Each changed file is mapped to its nearest workspace package in [`scripts/ci/tier-map.json`](../scripts/ci/tier-map.json), which can add only `e2e` and `windows`; every other tier comes from the regexes in [`scripts/ci/tier-patterns.json`](../scripts/ci/tier-patterns.json). A path that matches no tier and is not docs-only, or a package missing from the map, turns every expensive job on. Any file under `.github/workflows/` or `scripts/ci/` does the same.
+
+## Flake quarantine
+
+[`.github/flaky.json`](../.github/flaky.json) is the only place a tolerated gap may be named. Each entry needs an issue and an `expires` date. The `flaky-quarantine` job checks the file with [`scripts/ci/flaky-expiry.mjs`](../scripts/ci/flaky-expiry.mjs). An entry with no issue or no expiry always fails it. An expired one fails it on the nightly, a manual run on `main`, and any pull request that edits `flaky.json`; anywhere else it is a warning, so a date alone never reddens an unrelated change. Nothing waits on that job, so an expired entry never stops the nightly from running the jobs it is about. `gate` still requires it.
+
+An entry means one of two things, depending on what it names:
+
+- **`e2e` or `integration`: a tolerated flake.** The job runs as usual. Without an entry, a failure fails on the first attempt. With one, a failure retries once and prints a warning, and every attempt's logs are uploaded, including a later green one. No entry of this kind exists today.
+- **`bench` or an install cell (`install-gate/<os>/<scaffold>`): a job that does not run in the merge queue yet.** It runs after merge, nightly and on a manual run, with no retry. The parity guard (`post-merge-parity.test.ts`) requires an entry for every job or install cell that runs after merge but not in the queue. Today that is `bench` and the thirteen Windows install cells. Each one joins the merge queue, and leaves this file, after three consecutive green nightlies on `main`.
+
+## A red nightly
+
+`nightly-watch` runs after `gate` on the scheduled run, and on a manual run on `main`. When anything failed it opens one `Nightly CI is red` issue labelled `nightly-red`, or comments on the open one. Forks skip the schedule; a dispatch still runs everything anywhere.
