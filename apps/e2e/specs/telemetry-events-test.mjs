@@ -19,11 +19,14 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { fileURLToPath } from 'node:url';
 import { waitUntil } from '../wait-until.mjs';
-const DIST = join(fileURLToPath(new URL('../../../server/dist', import.meta.url)));
+// A file:// URL, not a filesystem path. These are only ever the BASE of a dynamic `import()`, and
+// on Windows `import('C:\…')` throws ERR_UNSUPPORTED_ESM_URL_SCHEME — "absolute paths must be
+// valid file:// URLs". The core import below already does it this way; these two did not, so the
+// whole spec failed to load on Windows before a single check ran.
+const DIST = new URL('../../../server/dist', import.meta.url).href;
 // The rules that decide a verdict are their own package now, so they build to their own dist.
-const ENGINE_DIST = join(fileURLToPath(new URL('../../../engine/dist', import.meta.url)));
+const ENGINE_DIST = new URL('../../../engine/dist', import.meta.url).href;
 const PORT = 9960;
 
 // Events that happen inside a DAEMON RUN and therefore carry `sessionId`. IMPORTED from core, not
@@ -593,7 +596,7 @@ await settle();
   await settle();
   const fromPristineHome = find('reticle_installed').length - installedBefore;
   check('reticle_installed fires on a machine that has never run Reticle', fromPristineHome === 1, `got ${fromPristineHome} from the pristine HOME`);
-  rmSync(fakeHome, { recursive: true, force: true });
+  removeScratch(fakeHome);
 }
 
 // ── 9. Daemon shutdown → the rich session summary ─────────────────────────────
@@ -701,11 +704,32 @@ await waitUntil(() => find('project_profiled').length > 0);
   check('  and no one-shot event invents one', unscoped.every((e) => e.properties.sessionId === undefined), unscoped.map((e) => e.event).join(','));
 }
 
+
+/**
+ * Remove a scratch dir without letting the REMOVAL decide the verdict.
+ *
+ * `force: true` only swallows "it was not there"; it does nothing about EPERM, which is what
+ * Windows returns while a handle is still open somewhere in the tree — a just-exited child, or a
+ * virus scanner that has not let go yet. Node documents a remedy for exactly that (`maxRetries`,
+ * which retries on EPERM/EBUSY with a linear backoff), so ask for it.
+ *
+ * And if it STILL fails, say so and carry on. This spec exists to prove telemetry events reach the
+ * wire; whether the OS will then let us delete a temp directory is a different question, and a
+ * 149/149 run reported as FAILED because of a locked scratch file is a false red.
+ */
+function removeScratch(dir) {
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch (err) {
+    console.log(`  (left ${dir} behind: ${err.code ?? err.message})`);
+  }
+}
+
 // ── report ────────────────────────────────────────────────────────────────────
 console.log('');
 for (const r of results) console.log(`${r.ok ? ' PASS' : ' FAIL'}  ${r.name}${r.detail && !r.ok ? `  [${r.detail}]` : ''}`);
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 console.log(`events captured: ${JSON.stringify(Object.fromEntries(Object.entries(captured.reduce((a, e) => ({ ...a, [e.event]: (a[e.event] ?? 0) + 1 }), {}))))}`);
-rmSync(root, { recursive: true, force: true });
+removeScratch(root);
 process.exit(failed.length === 0 ? 0 : 1);
