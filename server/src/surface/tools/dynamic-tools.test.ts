@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { buildDynamicTools } from './dynamic-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { ADVERTISE_ALL_ENV, TOOL_PROFILE_ENV, TOOL_SURFACE } from './tool-surface.js';
-import type { ToolDef, ToolDeps } from './tools.js';
+import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
+import { MAX_BLOCKING_WAIT_MS } from './args/numeric-bounds.js';
 
 /**
  * The two meta-tools are the answer to the per-turn tool-definition tax — they advertise just two
@@ -244,5 +245,51 @@ describe('reticle_run reports a failure the way the rest of the surface does', (
     };
     expect(out.error).toContain('nope');
     expect(out.params).toBeDefined();
+  });
+});
+
+/**
+ * A parameter's numeric bounds are shown, so the limit is not learned from a refusal (#1537).
+ *
+ * `act_and_wait`'s `timeout_ms` named its default and not its ceiling, so `60000` was refused and
+ * the agent found the 55000 cap in the error. The bounds are read off the schema that enforces them.
+ */
+describe('reticle_tools shows numeric bounds', () => {
+  interface Param {
+    name: string;
+    min?: number;
+    max?: number;
+  }
+  const paramsOf = async (tools: ToolDef[], name: string): Promise<Param[]> => {
+    const discover = buildDynamicTools(tools).find((t) => t.name === ReticleTool.TOOLS);
+    const out = (await discover?.handler(NO_DEPS, { names: [name] })) as {
+      tools: { name: string; params?: Param[] }[];
+    };
+    return out.tools.find((t) => t.name === name)?.params ?? [];
+  };
+
+  it("shows act_and_wait's timeout_ms ceiling, the one the schema enforces", async () => {
+    const timeout = (await paramsOf(TOOLS, ReticleTool.ACT_AND_WAIT)).find(
+      (p) => 'timeout_ms' === p.name,
+    );
+    expect(timeout?.max).toBe(MAX_BLOCKING_WAIT_MS);
+    expect(timeout?.min).toBe(0);
+  });
+
+  it('reads through optional, default and describe, and adds nothing to a non-number', async () => {
+    const bounded: ToolDef = {
+      name: 'reticle_bounded',
+      description: 'd',
+      inputSchema: {
+        count: z.number().int().min(1).max(10).default(3).optional().describe('how many'),
+        label: z.string().max(40).optional(),
+      },
+      handler: () => Promise.resolve({}),
+    };
+    const params = await paramsOf([bounded], 'reticle_bounded');
+    expect(params.find((p) => 'count' === p.name)).toMatchObject({ min: 1, max: 10 });
+    const label = params.find((p) => 'label' === p.name);
+    expect(label?.min).toBeUndefined();
+    expect(label?.max).toBeUndefined();
   });
 });

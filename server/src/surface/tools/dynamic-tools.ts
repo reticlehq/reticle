@@ -35,15 +35,43 @@ interface ParamInfo {
   name: string;
   required: boolean;
   description: string;
+  /** The smallest value the schema accepts, when it bounds one. */
+  min?: number;
+  /** The largest value the schema accepts, when it bounds one. */
+  max?: number;
+}
+
+/**
+ * A numeric parameter's enforced bounds, read off the schema that enforces them (#1537).
+ *
+ * The descriptions name a default and rarely a ceiling, so `timeout_ms: 60000` on act_and_wait was
+ * refused and the agent learned the 55000 cap from the error. Read here rather than written into
+ * prose, so the number shown is the number checked and cannot drift from it.
+ */
+function boundsOf(schema: z.ZodTypeAny): { min?: number; max?: number } {
+  let inner: z.ZodTypeAny = schema;
+  for (;;) {
+    if (inner instanceof z.ZodOptional || inner instanceof z.ZodNullable) {
+      inner = inner.unwrap() as z.ZodTypeAny;
+    } else if (inner instanceof z.ZodDefault) {
+      inner = inner.removeDefault() as z.ZodTypeAny;
+    } else if (inner instanceof z.ZodEffects) {
+      inner = inner.innerType() as z.ZodTypeAny;
+    } else break;
+  }
+  if (!(inner instanceof z.ZodNumber)) return {};
+  const { minValue: min, maxValue: max } = inner;
+  return { ...(null === min ? {} : { min }), ...(null === max ? {} : { max }) };
 }
 
 /** Compact param list from a tool's zod shape — name/required/description (the description already
- * carries the type and any enum hints, so no JSON-Schema machinery is needed). */
+ * carries the type and any enum hints, so no JSON-Schema machinery is needed), plus numeric bounds. */
 function paramInfo(shape: z.ZodRawShape): ParamInfo[] {
   return Object.entries(shape).map(([name, schema]) => ({
     name,
     required: !schema.isOptional(),
     description: schema.description ?? '',
+    ...boundsOf(schema),
   }));
 }
 
