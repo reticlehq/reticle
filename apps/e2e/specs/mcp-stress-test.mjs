@@ -17,7 +17,6 @@ import net from 'node:net';
 import http from 'node:http';
 import os from 'node:os';
 import fs from 'node:fs';
-import { killTree } from '../gate-harness.mjs';
 import { pidOnPort } from '../port-pid.mjs';
 import { fileURLToPath } from 'node:url';
 import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
@@ -107,9 +106,11 @@ function killDaemon(port = PORT) {
   const pid = daemonPid(port);
   if (pid === null) return false;
   try {
-    // killTree, not `process.kill`: the daemon can own children, and Windows needs `taskkill /T`
-    // to reach them. Verified by the port actually going dark, not by the call not throwing.
-    killTree(Number(pid));
+    // SIGKILL, deliberately: this spec is about surviving a daemon killed OUTRIGHT, so a
+    // graceful SIGTERM would soften the very thing it tests. Node terminates unconditionally on
+    // both platforms for this signal, so no platform branch is needed — only the pid lookup above
+    // ever needed fixing.
+    process.kill(Number(pid), 'SIGKILL');
     return true;
   } catch {
     return false;

@@ -20,7 +20,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { classifyDaemonLife, DaemonEnd } from '@reticlehq/server';
-import { freePortSafely, killTree, startOwnedDaemon, transportAlive } from '../gate-harness.mjs';
+import { freePortSafely, startOwnedDaemon, transportAlive } from '../gate-harness.mjs';
 import { pidOnPort } from '../port-pid.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -100,8 +100,11 @@ chk('  and the reader calls it alive', classifyDaemonLife(lines, Date.now()).end
 // ── 2. SIGKILL — the case that used to leave nothing at all ─────────────────────────────────────
 const pid = listener();
 chk('the daemon is listening, so there is something to kill', pid !== '', `pid ${pid}`);
-// `kill -9` is a POSIX binary; killTree is the cross-platform equivalent this repo already has.
-if (pid !== '') killTree(Number(pid));
+// `process.kill(pid, 'SIGKILL')`, not `kill -9` and not killTree. The binary does not exist on
+// Windows; killTree would, but it sends SIGTERM on POSIX, and SIGTERM is the one signal this case
+// must NOT send — the daemon would shut down gracefully and report `signalled` where the spec is
+// pinning `died_silently`. Node's own SIGKILL terminates unconditionally on both platforms.
+if (pid !== '') process.kill(Number(pid), 'SIGKILL');
 await sleep(BEAT_MS * 4);
 chk('  and the port really is dark', !(await transportAlive(PORT)));
 
