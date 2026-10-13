@@ -140,6 +140,9 @@ export const READ_TOOLS: ToolDef[] = [
         .describe(
           'Baseline name to compare against. Call reticle_baseline{action:"list"} to get available names; names are created by reticle_baseline{action:"save"}.',
         ),
+      // Read below as an alias, so declared: a merged tool refuses a key its chosen action does not
+      // declare, and `name` is what the saving sibling calls the same thing (#1536).
+      name: z.string().optional().describe('Alias for `baseline`.'),
       ...sessionIdShape,
     },
     outputSchema: {

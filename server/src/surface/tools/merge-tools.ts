@@ -45,6 +45,42 @@ interface MergeSpec {
 /** The field the merged tool dispatches on. A member may not declare one of its own — see below. */
 const DISCRIMINATOR = 'action';
 
+/**
+ * Keys a member may receive without declaring them. `sessionId` is pinned onto the arguments by the
+ * dispatch routes (`reticle_run`, the harness toolset) whatever the member, so refusing it would
+ * refuse the routes themselves.
+ */
+const SHARED_KEYS: ReadonlySet<string> = new Set(['sessionId']);
+
+/**
+ * The refusal for keys another action of this tool takes (#1536).
+ *
+ * The SDK checks unknown keys against the UNION of every action's parameters, so a key that belongs
+ * to a sibling action passed, reached a handler that does not read it, and was dropped:
+ * `verify { action: "change", names }` replayed every affected flow, and `look { action: "page",
+ * limit }` returned the whole tree. Same words as the unknown-key refusal, plus the action that
+ * does take each key, which is the correction the caller needs.
+ */
+function strayKeysRefusal(
+  tool: string,
+  action: string,
+  stray: readonly string[],
+  actions: Record<string, ToolDef>,
+): string {
+  const owners = stray.map((key) => {
+    const takes = Object.entries(actions)
+      .filter(([, member]) => key in member.inputSchema)
+      .map(([name]) => `"${name}"`);
+    return `\`${key}\` is a parameter of action ${takes.join(' or ')}`;
+  });
+  const declared = Object.keys(actions[action]?.inputSchema ?? {}).join(', ');
+  return (
+    `${tool} { action: "${action}" } does not take ${stray.map((k) => `\`${k}\``).join(', ')}, ` +
+    'so it was NOT applied — a result computed without it would look like an answer. ' +
+    `${owners.join('; ')}. Action "${action}" takes: ${declared}.`
+  );
+}
+
 /** The union of member input shapes, every field optional so one schema serves every action. */
 function unionShape(actions: Record<string, ToolDef>): z.ZodRawShape {
   const shape: z.ZodRawShape = {};
@@ -178,6 +214,19 @@ export function mergeTools(spec: MergeSpec): ToolDef {
           error: `unknown action '${String(action)}' for ${spec.name}`,
           expected: actionNames,
         });
+      }
+      // A key no action declares is refused before this, against the union; one that another action
+      // declares is refused here, against the action that was chosen.
+      const stray = Object.keys(args).filter(
+        (key) =>
+          DISCRIMINATOR !== key &&
+          !SHARED_KEYS.has(key) &&
+          !(key in chosen.inputSchema) &&
+          args[key] !== undefined &&
+          Object.values(spec.actions).some((member) => key in member.inputSchema),
+      );
+      if (0 < stray.length && action !== undefined) {
+        return Promise.reject(new Error(strayKeysRefusal(spec.name, action, stray, spec.actions)));
       }
       return chosen.handler(deps, args, call);
     },

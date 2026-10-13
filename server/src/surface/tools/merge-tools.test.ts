@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { mergeTools, applyMerges } from './merge-tools.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
+import { ReticleTool } from '@reticlehq/core';
+import { MERGED_TOOLS, TOOLS } from './tools.js';
 
 const deps = {} as ToolDeps;
 
@@ -105,5 +107,62 @@ describe('applyMerges (assembly-point consolidation)', () => {
     expect(() =>
       applyMerges(raw, [{ name: 'x', description: 'd', members: { a: 'reticle_nope' } }]),
     ).toThrow(/unknown member tool/);
+  });
+});
+
+/**
+ * A parameter of a SIBLING action is refused, not dropped (#1536).
+ *
+ * The SDK checks unknown keys against the union of every action's parameters, so these passed and
+ * reached a handler that never reads them: `verify { action: "change", names }` replayed every
+ * affected flow, and `look { action: "page", limit }` returned the whole tree.
+ */
+describe('a key that belongs to another action of the same tool', () => {
+  const tool = (surface: readonly ToolDef[], name: string): ToolDef => {
+    const found = surface.find((t) => t.name === name);
+    if (found === undefined) throw new Error(`${name} is not on this surface`);
+    return found;
+  };
+  const refusal = (call: Promise<unknown>): Promise<string> =>
+    call.then(
+      () => '',
+      (e: unknown) => (e instanceof Error ? e.message : String(e)),
+    );
+
+  it('is refused on verify { action: "change" }, naming the action that takes it', async () => {
+    const said = await refusal(
+      tool(TOOLS, ReticleTool.VERIFY).handler(deps, {
+        action: 'change',
+        files: ['src/a.tsx'],
+        names: ['one-flow'],
+      }),
+    );
+    expect(said).toContain('`names`');
+    expect(said).toContain('NOT applied');
+    expect(said).toContain('`names` is a parameter of action "flows"');
+  });
+
+  it('is refused on look { action: "page" }', async () => {
+    const said = await refusal(
+      tool(MERGED_TOOLS, ReticleTool.LOOK).handler(deps, { action: 'page', limit: 8 }),
+    );
+    expect(said).toContain('`limit` is a parameter of action "find"');
+  });
+
+  it('leaves the action’s own keys and the shared sessionId alone', async () => {
+    const merged = mergeTools({
+      name: 'reticle_pair',
+      description: 'two',
+      actions: {
+        one: member('a', { only: z.string().optional(), sessionId: z.string().optional() }),
+        two: member('b', { other: z.string().optional() }),
+      },
+    });
+    await expect(
+      merged.handler(deps, { action: 'two', other: 'x', sessionId: 's1' }),
+    ).resolves.toMatchObject({ ran: 'b' });
+    await expect(merged.handler(deps, { action: 'two', only: 'x' })).rejects.toThrow(
+      '`only` is a parameter of action "one"',
+    );
   });
 });
