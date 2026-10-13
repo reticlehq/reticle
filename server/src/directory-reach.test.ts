@@ -582,6 +582,15 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'session',
     'tools',
     'update',
+    // Every event says where the machine stands with the platform (`account-envelope.ts`): the
+    // sign-in reader in `cloud` and the folder a link is written in, in `project`. Read, never
+    // reimplemented: a second reading of the session file is a second thing that can disagree.
+    'cloud',
+    'project',
+    // Which agent client an event came from: the connection the call came over, in `hooks`.
+    'hooks',
+    // The Harness funnel names a drive's origin and status from the registry that records them.
+    'harness',
   ],
   /**
    * The three flow stores that read and write .reticle/ on disk, moved out of a 35-file directory

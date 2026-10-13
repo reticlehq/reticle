@@ -37,6 +37,11 @@ NODE_MIN_MAJOR=20
 # major-only check and then fails at `npm i` with EBADENGINE, after the installer has said yes.
 NODE_MIN_MINOR=11
 STATE_DIR="${RETICLE_STATE_DIR:-$HOME/.reticle}"
+# Which route installed Reticle, declared rather than guessed: every `reticle` this script runs
+# carries it, and the CLI remembers the first one it sees. A channel that wraps this script and
+# declared itself already keeps its own value.
+RETICLE_INSTALL_SOURCE="${RETICLE_INSTALL_SOURCE:-install_script}"
+export RETICLE_INSTALL_SOURCE
 
 # Colour only for a person: a terminal, NO_COLOR unset, a terminal that can draw it. Everything an
 # agent or a log reads stays plain text.

@@ -1,6 +1,13 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { InstallSource } from '@reticlehq/core/telemetry';
-import { INSTALL_SOURCE_ENV, resolveInstallSource } from './install-source.js';
+import {
+  INSTALL_SOURCE_ENV,
+  rememberInstallSource,
+  resolveInstallSource,
+} from './install-source.js';
 
 /**
  * The whole value of this field is that it never guesses. A wrong attribution and a missing one look
@@ -32,5 +39,39 @@ describe('install source', () => {
     expect(resolveInstallSource({ [INSTALL_SOURCE_ENV]: 'https://example.com/promo' })).toBe(
       InstallSource.UNKNOWN,
     );
+  });
+
+  describe('the machine remembers the channel that installed the CLI', () => {
+    // The marker is an env var on ONE command. The installer's `setup install` carries it; the
+    // agent's `reticle mcp` a minute later does not, and used to report unknown for ever after.
+    const state = (): string => join(mkdtempSync(join(tmpdir(), 'reticle-src-')), '.reticle');
+
+    it('reads it back on a later command that declares nothing', () => {
+      const dir = state();
+      rememberInstallSource({ [INSTALL_SOURCE_ENV]: 'install_script' }, dir);
+      expect(resolveInstallSource({}, dir)).toBe(InstallSource.INSTALL_SCRIPT);
+    });
+
+    it('keeps the FIRST channel: a later declaration does not take the credit', () => {
+      const dir = state();
+      rememberInstallSource({ [INSTALL_SOURCE_ENV]: 'install_script' }, dir);
+      rememberInstallSource({ [INSTALL_SOURCE_ENV]: 'plugin' }, dir);
+      expect(resolveInstallSource({}, dir)).toBe(InstallSource.INSTALL_SCRIPT);
+    });
+
+    it('lets a command that declares one say so for itself', () => {
+      const dir = state();
+      rememberInstallSource({ [INSTALL_SOURCE_ENV]: 'install_script' }, dir);
+      expect(resolveInstallSource({ [INSTALL_SOURCE_ENV]: 'plugin' }, dir)).toBe(
+        InstallSource.PLUGIN,
+      );
+    });
+
+    it('remembers nothing undeclared or unrecognised', () => {
+      const dir = state();
+      rememberInstallSource({}, dir);
+      rememberInstallSource({ [INSTALL_SOURCE_ENV]: '/home/a/promo' }, dir);
+      expect(resolveInstallSource({}, dir)).toBe(InstallSource.UNKNOWN);
+    });
   });
 });

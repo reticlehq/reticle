@@ -23,6 +23,8 @@
  *  - `npm_config_user_agent`. Says which package manager ran us, which every route shares.
  *  - An absent `$DISPLAY`. Every Linux server, every ssh session, and a large share of genuine
  *    developer machines trip it; it separates nothing.
+ *  - No terminal on stdin/stdout. It was the third signal here, and every MCP stdio server has no
+ *    terminal, so it fired on nearly every daemon a person's agent started and separated nothing.
  */
 import { existsSync } from 'node:fs';
 import { AutomationHint } from '@reticlehq/core/telemetry';
@@ -38,47 +40,58 @@ const HOSTED_WORKSPACE_ENV = [
   'REMOTE_CONTAINERS',
 ] as const;
 
+/**
+ * CI vendors' own variables, for the runners and self-hosted agents that do not set `CI`. Each is
+ * set by the runner itself; a person's shell does not carry them.
+ */
+const CI_VENDOR_ENV = [
+  'GITHUB_ACTIONS',
+  'GITLAB_CI',
+  'BUILDKITE',
+  'CIRCLECI',
+  'JENKINS_URL',
+  'TF_BUILD',
+  'TEAMCITY_VERSION',
+  'BITBUCKET_BUILD_NUMBER',
+  'CODEBUILD_BUILD_ID',
+  'DRONE',
+  'TRAVIS',
+] as const;
+
+/**
+ * Hosted coding-agent sandboxes that declare themselves to what they spawn. Only markers the agent
+ * sets on purpose for a REMOTE session: a local agent's own marker (`CLAUDECODE`) is a person at a
+ * laptop and belongs to `client`, not here.
+ */
+const AGENT_SANDBOX_ENV = ['CLAUDE_CODE_REMOTE'] as const;
+
 interface AutomationInput {
   env: NodeJS.ProcessEnv;
   fileExists: (path: string) => boolean;
-  hasTty: boolean;
-  /**
-   * A daemon or an MCP server: it runs detached or on a client's pipes, so it NEVER has a terminal,
-   * and `no_tty` on it described the process model rather than whether anybody was there. Every
-   * daemon and stdio MCP process carried it, which made the weakest signal the loudest one.
-   */
-  serverProcess?: boolean;
 }
+
+const declared = (env: NodeJS.ProcessEnv, keys: readonly string[]): boolean =>
+  keys.some((k) => (env[k] ?? '') !== '' && 'false' !== env[k]);
 
 /**
  * The most specific signal that fires, or undefined.
  *
- * Ordered most specific first: a container inside a Codespace with no terminal is one fact about the
- * run, and sending the weakest of the three would waste the field. Omitted rather than sent as a
+ * Ordered most specific first: an agent sandbox runs in a container, and a container inside a
+ * Codespace is one fact about the run; sending the weaker signal would waste the field. Omitted rather than sent as a
  * "none" value, so its presence is itself the signal — the convention every other advisory field
  * here follows.
  */
 export function resolveAutomationHint(input: AutomationInput): AutomationHint | undefined {
+  if (declared(input.env, AGENT_SANDBOX_ENV)) return AutomationHint.AGENT_SANDBOX;
+  if (declared(input.env, CI_VENDOR_ENV)) return AutomationHint.CI_RUNNER;
   if (CONTAINER_MARKERS.some((m) => input.fileExists(m))) return AutomationHint.CONTAINER;
-  if (HOSTED_WORKSPACE_ENV.some((k) => (input.env[k] ?? '') !== ''))
-    return AutomationHint.HOSTED_WORKSPACE;
-  if (!input.hasTty && true !== input.serverProcess) return AutomationHint.NO_TTY;
+  if (declared(input.env, HOSTED_WORKSPACE_ENV)) return AutomationHint.HOSTED_WORKSPACE;
   return undefined;
 }
 
 /** The real reading, taken once per process. */
-/** The commands that run as a server. A bare `reticle`, or one opening on a flag, is `serve`. */
-const SERVER_COMMANDS: ReadonlySet<string> = new Set(['serve', 'mcp']);
-
-/** Is this CLI invocation (argv after the script) a daemon or an MCP server? */
-export function isServerProcess(argv: readonly string[]): boolean {
-  const command = argv[0];
-  return command === undefined || command.startsWith('-') || SERVER_COMMANDS.has(command);
-}
-
 export function currentAutomationHint(env: NodeJS.ProcessEnv): AutomationHint | undefined {
   return resolveAutomationHint({
-    serverProcess: isServerProcess(process.argv.slice(2)),
     env,
     fileExists: (p) => {
       try {
@@ -87,8 +100,5 @@ export function currentAutomationHint(env: NodeJS.ProcessEnv): AutomationHint | 
         return false; // an unreadable root is not evidence of anything
       }
     },
-    // Both ends, because a piped stdout alone is how `reticle status | jq` looks, and that is a
-    // person typing.
-    hasTty: true === process.stdout.isTTY || true === process.stdin.isTTY,
   });
 }

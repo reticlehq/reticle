@@ -30,7 +30,7 @@ import { errorSkeleton, fingerprintError } from './error-fingerprint.js';
 import { describeToolParams } from './argument-shape.js';
 import { machineSnapshot } from './machine-snapshot.js';
 import { classifyError } from './error-class.js';
-import { HudMetrics } from './hud-metrics.js';
+import { HudMetrics, type HudSignals } from './hud-metrics.js';
 
 /** Cap the distinct error shapes held in memory — a pathological loop must not grow unbounded. */
 const MAX_ERROR_KINDS = 40;
@@ -190,9 +190,20 @@ export class SessionMetrics {
     this.#hud = new HudMetrics(now);
   }
 
-  /** A person used the HUD. Names only; the wire schema has already narrowed it. */
-  recordHudUse(use: HudUseData): void {
-    this.#hud.record(use);
+  /** A person used the HUD on one tab. Names only; the wire schema has already narrowed it. */
+  recordHudUse(use: HudUseData, tab?: string): HudSignals {
+    return this.#hud.record(use, tab);
+  }
+
+  /** A tab went into the background (true) or came back (false): its HUD time pauses meanwhile. */
+  setHudTabHidden(tab: string, hidden: boolean): void {
+    if (hidden) this.#hud.hide(tab);
+    else this.#hud.show(tab);
+  }
+
+  /** A tab went away: its HUD stops accruing time. */
+  closeHudTab(tab: string): void {
+    this.#hud.close(tab);
   }
 
   /**
@@ -742,9 +753,8 @@ export const recordSdkFailure = (failure: { site: string; message: string }): vo
 };
 
 /** Narrow-and-record one HUD use. Keeps the session hot path to a single call. */
-export const recordHudUse = (use: HudUseData): void => {
-  getSessionMetrics().recordHudUse(use);
-};
+export const recordHudUse = (use: HudUseData, tab?: string): HudSignals =>
+  getSessionMetrics().recordHudUse(use, tab);
 
 /** Tests only — drop the singleton so each case starts from zero. */
 export const resetSessionMetrics = (): void => {

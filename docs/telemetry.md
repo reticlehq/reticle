@@ -21,7 +21,7 @@ This page is the complete description of what is collected. If something is not 
 
 ## What is sent
 
-Eighteen kinds of events, each a single small JSON object. This is the whole list, and it is the same list the code enumerates:
+Twenty-two kinds of events, each a single small JSON object. This is the whole list, and it is the same list the code enumerates:
 
 | Event | When | Extra data |
 | --- | --- | --- |
@@ -42,6 +42,10 @@ Eighteen kinds of events, each a single small JSON object. This is the whole lis
 | `bug_found` | Reticle finds a defect in the app under test | The **kind** of defect (`signal-contradicted`, `console-error`, …) and how it was found, never what it was found in |
 | `tool_refused` | A tool cannot do what an agent asked | Which tool, why (one of six buckets: no session, no match, unsupported, bad arguments, not ready, other), and whether the same call was retried. **Never the message**, because a refusal interpolates whatever you asked for, so only the tool name and the bucket are sent. Capped at 50 per daemon run |
 | `feedback_submitted` | **Only** when you or your agent explicitly send feedback | The report; see [Feedback](#feedback). The AGENT's call does not wait for the network: the receipt says `accepted` (validated, redacted, queued), never `sent`, and a delivery that then fails is reported back on the agent's next tool result. `reticle feedback` typed by a human still waits, because a person at a terminal is owed the real answer |
+| `hud_viewed` | You open a page of the in-page HUD (Agent Log, Flows, Notes, Harness, Impact, Settings) or its account menu | Which page, from a closed list, and how many tabs had a HUD (a bucket: `1`, `2-3`, and so on). The same page reopened in the same tab within 30 seconds counts once |
+| `hud_signin_prompted` | The HUD shows you a sign-in or "link this project" prompt | Which prompt (`rail`, `harness` or `header`), once per prompt per tab |
+| `platform_linked` | A project on this machine is linked to a Reticle workspace | How (`connect`, `hud` or `link`) and the workspace's id; see [The platform side](#the-platform-side) |
+| `harness_run` | A Reticle Harness run starts, and again when it ends | Who started it (`agent`, `hud`, `dashboard`, `cli_try`, `plan`), whether the platform drove it, and at the end how it went (`proved`, `not_proved`, `failed`, `blocked`, `stopped`) and how many journeys it answered and replayed, as buckets |
 | `identified` | **Never** from this version. Only an earlier version's `reticle identify`, which has been removed | What you chose to tell us then; see [Telling us who you are](#telling-us-who-you-are) |
 
 **There is no per-tool-call event.** Tool usage is counted in memory and leaves once, inside `daemon_stopped`, as a histogram like `{"reticle_act": 40, "reticle_assert": 12}`. That is counts of tool NAMES from a fixed list we define, never arguments, results, selectors, or URLs.
@@ -97,6 +101,10 @@ Every event carries the same few fields:
 | `projectId` | A one-way SHA-256 hash of the git origin URL, or of the directory path outside a repo | Not reversible: we can count _distinct_ projects, but not learn any project's name, URL, or location. Hashing the origin means one repo counts once instead of once per teammate and per clone |
 | `actor` | Whether a person or an agent caused this: a typed `reticle` command is a person, an MCP tool call is the agent | Not a claim about _why_. Whether you asked your agent to verify, or it decided to, lives in a prompt Reticle never sees, and we do not guess |
 | `sessionId` | A random id for this daemon run, held in memory and never written to disk | Not a device id and not persistent: a restarted daemon gets a new one. It only groups one run's own events together |
+| `accountState` / `linked` | Whether this machine is signed out, signed in, or signed in with this project linked to a workspace | Not who is signed in: read from whether a sign-in file exists, never from what is in it |
+| `workspaceId` | Only once this project is linked: the Reticle workspace's id, the `orgId` in `.reticle/cloud.json` | Not the workspace's name and not your email. It is the one key the Reticle platform can join this usage to the workspace you created there; see [The platform side](#the-platform-side) |
+| `client` | Which coding agent the event came from, from a closed list (`claude_code`, `cursor`, `codex`, and so on, or `other`) | Not the name your agent sent: a name we do not list arrives as `other` |
+| `launch` | How `reticle` was started: `npx`, `global`, `project` or `other` | Not the path it was started from; only the bucket leaves |
 | `projectIdSource` | Whether `projectId` came from a shared git origin or from the local directory path | Not the origin or the path. It exists so we can tell when "how many people share this project" is a real measurement. Outside a pushed repo there is nothing shared to hash, so those rows always show one user |
 | `version` | The Reticle version running | n/a |
 | `os` | The platform (`darwin` / `linux` / `win32`) | Not the OS version, hostname, or hardware |
@@ -104,9 +112,15 @@ Every event carries the same few fields:
 
 There are no IP-based profiles, no cookies, no fingerprinting, and no person profiles: events are processed in "personless" mode, so they are never joined into an identity.
 
+## The platform side
+
+When you sign in to Reticle and link a project, the platform (a separate service, with its own analytics) knows your email and your workspace, because you gave them to it. The open-source runtime never sends either. Once a project is linked, its events carry the workspace's id and nothing else about the account, so the two sides can be joined per workspace on that id. Emails stay on the platform side only. Unlinked, nothing in these events refers to an account at all.
+
+The sign-in page Reticle opens also says where the sign-in started (`from=terminal` or `from=hud`), so the platform can tell which one brought you in.
+
 ## What is never sent
 
-Your code. Your app's DOM, network requests or responses, console logs, application state, or screenshots. File paths, project names, or git remote URLs. Your name, email, employer, or any account identifier. Environment variables. Anything typed into the app under test. The names of your flows, baselines, or tests. Error messages, and any stack frame belonging to your application.
+Your code. Your app's DOM, network requests or responses, console logs, application state, or screenshots. File paths, project names, or git remote URLs. Your name, email or employer. Any account identifier, with one exception you opt into by linking a project: the workspace id, above. Environment variables. Anything typed into the app under test. The names of your flows, baselines, or tests. Error messages, and any stack frame belonging to your application.
 
 A few of these are worth being explicit about, because they are the ones a product team is most tempted by:
 

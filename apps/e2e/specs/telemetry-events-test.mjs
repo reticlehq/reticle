@@ -696,6 +696,55 @@ await waitUntil(() => find('project_profiled').length > 0);
   }
 }
 
+// ── 11. Product signals: HUD pages and prompts, the platform link, the Harness funnel ──
+// Each kind asserted by its FIELDS, not merely that it arrived: a block missing from one of the
+// emitter's lists still arrives, carrying only the envelope.
+{
+  const { reportHudUse } = await import(`${DIST}/telemetry/hud-events.js`);
+  const { reportPlatformLinked } = await import(`${DIST}/telemetry/platform-linked.js`);
+  const { reportHarnessRun } = await import(`${DIST}/telemetry/harness-run.js`);
+  // A linked project, with a workspace name on disk that must never travel.
+  writeFileSync(
+    join(root, '.reticle', 'cloud.json'),
+    JSON.stringify({ projectId: 'p1', url: 'https://x.test', orgId: 'org_e2e', workspace: 'Acme Secret Corp' }),
+  );
+  reportHudUse({ view: 'expanded', panel: 'harness' }, 'tab-e2e');
+  reportHudUse({ panel: 'chat' }, 'tab-e2e');
+  reportHudUse({ panel: 'harness' }, 'tab-e2e'); // within 30s: deduped
+  reportHudUse({ prompt: 'rail' }, 'tab-e2e');
+  reportHudUse({ prompt: 'rail' }, 'tab-e2e'); // once per surface per tab
+  reportPlatformLinked({ via: 'hud', priorProjectId: undefined, projectId: 'p1', workspaceId: 'org_e2e' });
+  await reportHarnessRun(
+    { source: 'hud', hosted: true },
+    () => Promise.resolve({ status: 'done', result: { proved: true, journeys: [{ by: 'replay' }] } }),
+    () => false,
+  );
+  await settle(() => find('harness_run').length >= 2 && find('platform_linked').length >= 1);
+  const views = find('hud_viewed');
+  check('hud_viewed fires for a HUD page', views.length >= 1);
+  check('  names the Harness page as harness, not chat', views.some((e) => e.properties.hud_view === 'harness'));
+  check('  dedupes the same page on the same tab within 30s', views.filter((e) => e.properties.hud_view === 'harness').length === 1, String(views.length));
+  check('  carries the tab-count bucket', views.every((e) => e.properties.hud_tabs === '1'));
+  const prompts = find('hud_signin_prompted');
+  check('hud_signin_prompted fires once per surface per tab', prompts.length === 1, String(prompts.length));
+  check('  carries the surface', prompts[0]?.properties.hud_surface === 'rail');
+  const linked = find('platform_linked')[0];
+  check('platform_linked fires', linked !== undefined);
+  check('  carries how it was linked', linked?.properties.link_via === 'hud');
+  check('  carries the workspace id the platform joins on', linked?.properties.workspaceId === 'org_e2e');
+  const runs = find('harness_run');
+  check('harness_run fires once started and once completed', runs.length === 2, String(runs.length));
+  const done = runs.find((e) => e.properties.harness_phase === 'completed');
+  check('  completed carries the outcome and the buckets', done?.properties.harness_outcome === 'proved' && done?.properties.harness_journeys === '1' && done?.properties.harness_replayed === '1');
+  check('  carries who started it and whether it was hosted', done?.properties.harness_source === 'hud' && done?.properties.harness_hosted === true);
+  // The envelope, on an event fired after the link: linked, with the workspace id.
+  check('every event carries accountState', views.every((e) => ['signed_out', 'signed_in', 'linked'].includes(e.properties.accountState)));
+  check('  a linked project reads linked, with its workspace id', views[0]?.properties.accountState === 'linked' && views[0]?.properties.workspaceId === 'org_e2e');
+  check('  carries how reticle was launched, as a bucket', ['npx', 'global', 'project', 'other'].includes(views[0]?.properties.launch));
+  const blob = JSON.stringify([...views, ...prompts, ...runs, linked]);
+  check('  leaks NO workspace name', !blob.includes('Acme Secret Corp'));
+}
+
 // ── the session key, checked once EVERY event has been emitted ────────────────
 // Placed last on purpose: run in section 1b it saw only CLI events, which deliberately carry no
 // sessionId, so it compared an empty set and passed for the wrong reason.

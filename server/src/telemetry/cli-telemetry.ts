@@ -14,7 +14,8 @@ import { join } from 'node:path';
 /** Where the installer left its breadcrumbs. Same directory the telemetry id and opt-out live in. */
 const RETICLE_STATE_DIR = process.env['RETICLE_STATE_DIR'] ?? join(homedir(), '.reticle');
 import { describeCliFlags } from './argument-shape.js';
-import { resolveInstallSource } from './install-source.js';
+import { rememberInstallSource, resolveInstallSource } from './install-source.js';
+import { installPlatformLinkTelemetry } from './platform-linked.js';
 
 /**
  * Report that a person ran a `reticle` subcommand.
@@ -57,7 +58,11 @@ export function reportCliRun(argv: readonly string[]): void {
    * second invocation finds nothing. A flag would have to live somewhere, and somewhere is another
    * file that can disagree with this one.
    */
+  // Every process that may link a project, the daemon included, reports it.
+  installPlatformLinkTelemetry();
   drainInstallTrace(RETICLE_STATE_DIR);
+  // Before anything reads it: a channel declared on THIS command outlives it.
+  rememberInstallSource(process.env, RETICLE_STATE_DIR);
   if (firstArg === DAEMON_INNER_COMMAND) return;
   const command = knownCommand(firstArg);
   const telemetry = getTelemetry();
@@ -70,7 +75,7 @@ export function reportCliRun(argv: readonly string[]): void {
       detach: true,
       // WHICH published route brought this machine in. Self-declared by the channel, never inferred
       // — see install-source.ts for which of the four routes can actually carry the marker.
-      installSource: resolveInstallSource(),
+      installSource: resolveInstallSource(process.env, RETICLE_STATE_DIR),
     });
   if (!isHumanCliCommand(command)) return;
   void telemetry.emit(TelemetryEventKind.CLI_COMMAND_RUN, {

@@ -22,6 +22,9 @@
  * than none: it is the number distribution decisions get steered on, and a guess and a measurement
  * are indistinguishable once they are in the same column.
  */
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { InstallSource } from '@reticlehq/core/telemetry';
 import { findProjectConfig } from '@/command/cli/ports/resolve/cli-port.js';
 
@@ -38,9 +41,53 @@ const KNOWN: ReadonlySet<string> = new Set(Object.values(InstallSource));
  * whole contract is built on. Trimmed and lowercased first, because the marker travels through
  * shell snippets and copy-paste, and `Skill_File` is the same channel as `skill_file`.
  */
-export function resolveInstallSource(env: NodeJS.ProcessEnv = process.env): InstallSource {
+export function resolveInstallSource(
+  env: NodeJS.ProcessEnv = process.env,
+  /** Where the machine's remembered channel lives. Omitted, only the environment is read. */
+  stateDir?: string,
+): InstallSource {
   const declared = (env[INSTALL_SOURCE_ENV] ?? '').trim().toLowerCase();
-  return KNOWN.has(declared) ? (declared as InstallSource) : InstallSource.UNKNOWN;
+  if (KNOWN.has(declared)) return declared as InstallSource;
+  return (
+    (stateDir === undefined ? undefined : machineInstallSource(stateDir)) ?? InstallSource.UNKNOWN
+  );
+}
+
+/** `~/.reticle/install-source`: the channel that installed the CLI on this machine, written once. */
+const MACHINE_FILE = 'install-source';
+export const INSTALL_STATE_DIR = join(homedir(), '.reticle');
+
+function machineInstallSource(stateDir: string): InstallSource | undefined {
+  try {
+    const recorded = readFileSync(join(stateDir, MACHINE_FILE), 'utf8').trim().toLowerCase();
+    return KNOWN.has(recorded) && InstallSource.UNKNOWN !== recorded
+      ? (recorded as InstallSource)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Remember a declared channel for the commands that follow, which declare nothing.
+ *
+ * The one-line installer declares itself on `reticle setup install`, and the next thing that runs
+ * is an agent spawning `reticle mcp` with no marker at all, so without this the declaration lived
+ * for one process. Write-once (exclusive create): the first channel is the one that brought this
+ * machine in, and a later command through a different route must not take that credit.
+ */
+export function rememberInstallSource(
+  env: NodeJS.ProcessEnv = process.env,
+  stateDir: string = INSTALL_STATE_DIR,
+): void {
+  const declared = declaredInstallSource(env);
+  if (declared === undefined) return;
+  try {
+    mkdirSync(stateDir, { recursive: true });
+    writeFileSync(join(stateDir, MACHINE_FILE), declared, { encoding: 'utf8', flag: 'wx' });
+  } catch {
+    /* already remembered, or an unwritable home: attribution is never worth a failure */
+  }
 }
 
 /**
@@ -79,7 +126,7 @@ export function projectInstallSource(
     const narrowed = recorded.trim().toLowerCase();
     if (KNOWN.has(narrowed)) return narrowed as InstallSource;
   }
-  return resolveInstallSource(env);
+  return resolveInstallSource(env, INSTALL_STATE_DIR);
 }
 
 /**

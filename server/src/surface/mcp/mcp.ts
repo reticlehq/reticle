@@ -46,7 +46,7 @@ import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { setMcpClientNameHook } from '@/telemetry/feedback-context.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { reportMcpConnected } from '@/telemetry/mcp-connection.js';
-import { noteAgentAttached, noteAgentDetached } from '@/hooks/coding-agents.js';
+import { noteAgentAttached, noteAgentDetached, runAsAgent } from '@/hooks/coding-agents.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 
 /**
@@ -686,7 +686,7 @@ export function createMcpServer(
     // the first moment it can carry WHO. It used to fire from the SSE `connect()` resolution, which
     // happens before the handshake — so every connect row was anonymous, and the field meant to say
     // which agent client converts best was empty on every event ever sent.
-    reportMcpConnected(info.name);
+    void runAsAgent(deps.attachId, () => Promise.resolve(reportMcpConnected(info.name)));
   };
   server.server.onclose = () => noteAgentDetached(deps.attachId);
   // Which agent is on the other end, for a feedback report. Registered as a lazy hook rather than
@@ -779,7 +779,12 @@ export function createMcpServer(
     const config = advertisedConfig(tool, advertised, profile);
     registerTool(tool.name, config, async (args: Record<string, unknown>, extra) => {
       try {
-        const result = await runTool(tool, deps, args, toolCallOf(extra));
+        // Inside the caller's connection, so the telemetry this call emits after its handler (the
+        // verdict, a defect, a refusal) is credited to the agent that made it, not to whichever
+        // agent is attached.
+        const result = await runAsAgent(deps.attachId, () =>
+          runTool(tool, deps, args, toolCallOf(extra)),
+        );
         // A tool this codebase did not write may not hand the agent a verdict.
         //
         // Only reached for a tool absent from the first-party table, so the shipped surface pays a

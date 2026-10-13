@@ -12,7 +12,7 @@
  */
 import { TelemetryEventKind, type InitOutcome } from '@reticlehq/core/telemetry';
 import { getTelemetry } from './telemetry.js';
-import { resolveInstallSource } from './install-source.js';
+import { INSTALL_STATE_DIR, resolveInstallSource } from './install-source.js';
 
 // The failure vocabulary lives in `@reticlehq/init`, which is what classifies a failed run.
 // Re-exported so every consumer here is unchanged.
@@ -27,7 +27,7 @@ export function reportInitOutcome(init: InitOutcome): void {
       // The other half of attribution: `reticle_installed` says a machine arrived, this says the
       // setup on it finished, and only together do they say which route converts. Same self-declared
       // marker, same refusal to infer — see install-source.ts.
-      installSource: resolveInstallSource(),
+      installSource: resolveInstallSource(process.env, INSTALL_STATE_DIR),
     });
   } catch {
     /* a metric must never break `reticle init` */

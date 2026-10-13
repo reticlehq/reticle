@@ -31,6 +31,10 @@ $NodeMinMajor = 20
 # refusal to npm, after this script has already told the user they were fine.
 $NodeMinMinor = 11
 $StateDir = if ($env:RETICLE_STATE_DIR) { $env:RETICLE_STATE_DIR } else { Join-Path $HOME '.reticle' }
+# Which route installed Reticle, declared rather than guessed: every `reticle` this script runs
+# carries it, and the CLI remembers the first one it sees. A channel that wraps this script and
+# declared itself already keeps its own value.
+if (-not $env:RETICLE_INSTALL_SOURCE) { $env:RETICLE_INSTALL_SOURCE = 'install_script' }
 
 function Say([string]$Message) { [Console]::Error.WriteLine($Message) }
 

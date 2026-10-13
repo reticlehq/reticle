@@ -8,6 +8,7 @@
  */
 import { inWorkspace, repoIdentity, resolveProjectId, defaultProjectFor } from './project-name.js';
 import { apiKeyFrom } from '@reticlehq/core';
+import { PlatformLinkVia } from '@reticlehq/core/telemetry';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
@@ -90,6 +91,35 @@ const WhoamiSchema = z.object({
   dashboardUrl: z.string().optional(),
 });
 
+/*
+ * A project was just linked: said here, heard by whoever listens. This directory does not reach
+ * telemetry (telemetry already reaches it, and two directories needing each other is a knot), so
+ * the link says what happened and telemetry, installed by the entry point, listens.
+ */
+export interface PlatformLinked {
+  via: PlatformLinkVia;
+  /** The project this folder was bound to before, if any: a re-run against it is not a new link. */
+  priorProjectId: unknown;
+  projectId: string;
+  /** The workspace's platform id, when the cloud said. */
+  workspaceId: string | undefined;
+}
+
+let listener: ((link: PlatformLinked) => void) | undefined;
+
+/** Hear every link this process makes. One listener: a second replaces the first. */
+export function onPlatformLinked(next: (link: PlatformLinked) => void): void {
+  listener = next;
+}
+
+export function notePlatformLinked(link: PlatformLinked): void {
+  try {
+    listener?.(link);
+  } catch {
+    /* a listener never fails a link */
+  }
+}
+
 /**
  * `reticle link [--project <id>]` — bind THIS repo to a cloud project. With a login token it MINTS a
  * project-scoped key (no pasting); with a pre-set RETICLE_API_KEY it resolves the key's project via
@@ -100,6 +130,8 @@ export const cmdLink = async (
   argv: readonly string[],
   /** The folder to link. The CLI's own; the daemon passes the folder of the tab that asked. */
   cwd: string = process.cwd(),
+  /** What started this link, for `platform_linked`. */
+  via: PlatformLinkVia = PlatformLinkVia.LINK,
 ): Promise<number> => {
   const f = flags(argv);
   const url = baseUrl(await readSession(), f['url']);
@@ -300,6 +332,7 @@ export const cmdLink = async (
   await writeFile(credPath, `${JSON.stringify(credObj, null, 2)}\n`);
 
   emit({ linked: projectName, projectId, cloudJson: linkPath, credentials: credPath });
+  notePlatformLinked({ via, priorProjectId, projectId, workspaceId: orgId });
   /*
    * Say what just happened, in the vocabulary of somebody who has used other tools.
    *

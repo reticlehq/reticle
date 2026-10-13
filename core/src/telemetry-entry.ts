@@ -13,3 +13,4 @@ export * from './telemetry-refusal.js';
 export * from './telemetry-session.js';
 export * from './telemetry-license.js';
 export * from './telemetry-feedback.js';
+export * from './telemetry-signals.js';

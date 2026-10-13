@@ -40,7 +40,12 @@ Source of truth for everything below:
 | `projectIdSource` | `ProjectIdSource` | no | `git_origin`, `git_root`, `package_root` or `cwd`. Only `git_origin` rows are comparable across machines |
 | `tzOffsetMin` | int, -900 to 900 | no | Minutes offset from UTC. Turns a time-of-day chart from "which continent" into "9am or 11pm" |
 | `actor` | `TelemetryActor` | no | `human` or `agent`. Absent on events that are neither |
-| `automation` | `AutomationHint` | no | `container`, `hosted_workspace` or `no_tty`: something looked automated. Absent means nothing did, not that a human was present |
+| `automation` | `AutomationHint` | no | `agent_sandbox`, `ci_runner`, `container` or `hosted_workspace`: something looked automated. Absent means nothing did, not that a human was present |
+| `accountState` | `TelemetryAccountState` | no | `signed_out`, `signed_in` or `linked` |
+| `linked` | boolean | no | This project reports to a workspace |
+| `workspaceId` | string, 1 to 128 | no | The linked workspace's platform id (`orgId`). Never its name, never an email |
+| `client` | `AgentClient` | no | Which coding agent, normalised; `other` for a name not on the list |
+| `launch` | `LaunchMethod` | no | `npx`, `global`, `project` or `other` |
 | `licenseId` | string, 1 to 64 | no | The signed license id, an opaque uuid. Present only when activation is `active` |
 | `licenseStatus` | `LicenseActivation` | no | How license activation resolved. Absent on a build with no issuer key baked |
 | `licenseKeyPresent` | boolean | no | A license key was set in the environment, whatever this build concluded about it. Never the key |
@@ -75,7 +80,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `installSource` | `InstallSource`, optional | Which published route brought this install in: `skill_file`, `npx_skill`, `plugin`, `docs_site`, `readme`, `cli_direct`, `unknown` |
+| `installSource` | `InstallSource`, optional | Which published route brought this install in: `skill_file`, `npx_skill`, `plugin`, `install_script`, `docs_site`, `readme`, `cli_direct`, `unknown` |
 
 `installSource` is **declared, never detected**. A channel sets `RETICLE_INSTALL_SOURCE` on the process that runs the install and anything unrecognised reports `unknown`, so `unknown` is expected to be the largest bucket while the marker spreads across four separately published artifacts. Read a small `unknown` as a marker that spread, never as success. Nothing infers it: `npm_config_user_agent` only says npx ran us and every route goes through npx; the presence of a plugin directory or a skill folder says a route exists rather than that it ran the install. `installSource` is **not** limited to this event. It is resolved once per process (`server/src/telemetry/telemetry.ts:455`) and stamped on every event that process sends (`:519`), so any chart can group by it. It is also sourced **config first, then environment**: `projectInstallSource()` prefers the value recorded in `.reticle.json`, because the environment variable exists for exactly one command and is gone by the next, which is why the field originally reached a handful of events and nothing else.
 
@@ -472,6 +477,58 @@ Four decisions in this shape are worth knowing before you add to it:
 - **`skipped` is neither a loss nor a win.** Already installed, already instrumented. Counting it as either makes a re-run look like a conversion or like a drop.
 
 A malformed step is **dropped**, not sent and not thrown. Sending it would put unvalidated text on the wire; throwing would let a metric change what a user's install does.
+
+---
+
+## hud_viewed
+
+**Wire name:** `hud_viewed`. **Emitted from:** `server/src/telemetry/hud-events.ts`, reached from `Session.pushEvent` on a `hud.used` event. **Session-scoped:** yes. **Payload block:** `hud`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `view` | `HudPanel` | The page: `chat` (Agent Log), `flows`, `notes`, `harness`, `report` (Impact), `settings`, or `account` (the account menu) |
+| `tabs` | `CountBucket` | Tabs with a HUD right now |
+
+Deduped per tab: the same page reopened within 30 seconds is one view.
+
+---
+
+## hud_signin_prompted
+
+**Wire name:** `hud_signin_prompted`. **Emitted from:** `server/src/telemetry/hud-events.ts`. **Session-scoped:** yes. **Payload block:** `hud`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `surface` | `HudPromptSurface` | `rail` (the card under every page), `harness` (the Harness page's sign-in or link), `header` ("Save runs for your team") |
+| `tabs` | `CountBucket` | Tabs with a HUD right now |
+
+Once per surface per tab. The page reports a prompt only while it is visible on an open HUD.
+
+---
+
+## platform_linked
+
+**Wire name:** `platform_linked`. **Emitted from:** `server/src/telemetry/platform-linked.ts`, reached from `cmdLink`. **Session-scoped:** no. **Payload block:** `link`, plus the envelope's `workspaceId`.
+
+| Field | Type              | Meaning                    |
+| ----- | ----------------- | -------------------------- |
+| `via` | `PlatformLinkVia` | `connect`, `hud` or `link` |
+
+Once per new binding, never for a re-run against the same project.
+
+---
+
+## harness_run
+
+**Wire name:** `harness_run`. **Emitted from:** `server/src/telemetry/harness-run.ts`, reached from `answerExplore` in `server/src/surface/tools/explore-tools.ts`. **Session-scoped:** yes. **Payload block:** `harness`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `phase` | `HarnessRunPhase` | `started` or `completed`; one of each per run |
+| `source` | `HarnessRunSource` | `agent`, `hud`, `dashboard`, `cli_try` or `plan` |
+| `hosted` | boolean | The platform drives the run |
+| `outcome` | `HarnessRunOutcome`, completed only | `proved`, `not_proved`, `failed`, `blocked` or `stopped` |
+| `journeys` / `replayed` | `CountBucket`, completed only | Journeys answered, and how many of those replayed with no model |
 
 ---
 

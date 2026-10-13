@@ -18,7 +18,19 @@ import {
   LicenseActivation,
 } from '@reticlehq/core';
 import { generateKeyPairSync } from 'node:crypto';
-import { AgentNudgeKind, CoverageBucket, SessionSummarySchema } from '@reticlehq/core/telemetry';
+import {
+  AgentClient,
+  AgentNudgeKind,
+  CountBucket,
+  CoverageBucket,
+  HarnessRunOutcome,
+  HarnessRunSource,
+  LaunchMethod,
+  PlatformLinkVia,
+  SessionSummarySchema,
+  TelemetryAccountState,
+} from '@reticlehq/core/telemetry';
+import { HudPanel, HudPromptSurface } from '@reticlehq/core';
 import { SessionMetrics } from './session-metrics.js';
 import { TOOLS } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
@@ -450,5 +462,52 @@ describe('enterprise activation rides every event, and carries no identity', () 
     });
     expect(facts.licenseId).toBe('lid-1');
     expect(JSON.stringify(facts)).not.toContain('Northwind');
+  });
+});
+
+/**
+ * The account, workspace, client, HUD, link and Harness-run signals are closed sets, booleans or
+ * buckets. Each one is a field somebody will be tempted to "just send the value" into — a client's
+ * own name, a page title, a workspace name — and the schema is what refuses it.
+ */
+describe('the product signals stay closed', () => {
+  const BASE = {
+    v: 3,
+    anonymousId: 'a',
+    event: TelemetryEventKind.HUD_VIEWED,
+    ts: 0,
+    version: '1.0.0',
+    ci: false,
+    os: 'darwin',
+  };
+  const ok = (extra: Record<string, unknown>): boolean =>
+    TelemetryEventSchema.safeParse({ ...BASE, ...extra }).success;
+
+  it('accepts every member of every vocabulary', () => {
+    for (const accountState of Object.values(TelemetryAccountState))
+      expect(ok({ accountState, linked: true })).toBe(true);
+    for (const client of Object.values(AgentClient)) expect(ok({ client })).toBe(true);
+    for (const launch of Object.values(LaunchMethod)) expect(ok({ launch })).toBe(true);
+    for (const view of Object.values(HudPanel))
+      expect(ok({ hud: { view, tabs: CountBucket.ONE } })).toBe(true);
+    for (const surface of Object.values(HudPromptSurface))
+      expect(ok({ hud: { surface } })).toBe(true);
+    for (const via of Object.values(PlatformLinkVia)) expect(ok({ link: { via } })).toBe(true);
+    for (const source of Object.values(HarnessRunSource))
+      for (const outcome of Object.values(HarnessRunOutcome))
+        expect(
+          ok({ harness: { phase: 'completed', source, outcome, hosted: true, journeys: '1' } }),
+        ).toBe(true);
+  });
+
+  it('refuses free text where a closed value belongs', () => {
+    expect(ok({ client: 'Claude Code 2.1 (ada@acme)' })).toBe(false);
+    expect(ok({ accountState: 'ada@acme.com' })).toBe(false);
+    expect(ok({ hud: { view: 'My Checkout Page' } })).toBe(false);
+    expect(ok({ hud: { tabs: 7 } })).toBe(false);
+    expect(ok({ link: { via: 'https://acme.dev' } })).toBe(false);
+    expect(ok({ harness: { phase: 'started', source: 'agent', hosted: true, journeys: 12 } })).toBe(
+      false,
+    );
   });
 });

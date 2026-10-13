@@ -35,6 +35,26 @@ export const DevicePollSchema = z.object({
 });
 
 /**
+ * Where a sign-in started, carried to the approval page as `from` so the platform can attribute the
+ * signup. The platform's `/device` reads the same closed set (plus `app`, its own).
+ */
+export const LoginOrigin = { TERMINAL: 'terminal', HUD: 'hud' } as const;
+export type LoginOrigin = (typeof LoginOrigin)[keyof typeof LoginOrigin];
+
+const FROM_PARAM = 'from';
+
+/** The approval URL with `from` set; a URL that does not parse is left as the cloud sent it. */
+export function withLoginOrigin(url: string, from: LoginOrigin): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set(FROM_PARAM, from);
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
  * Best-effort open the approval page in the default browser.
  *
  * Every failure is swallowed on purpose: the URL is printed either way, and a headless box, a

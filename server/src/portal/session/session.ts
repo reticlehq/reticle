@@ -54,11 +54,8 @@ import {
 import { type AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import { ObservedState, controlLabelsOf } from './facts/observed-state.js';
 import { DepartureNote } from './facts/departure-note.js';
-import {
-  recordBrowserLatency,
-  recordHudUse,
-  recordSdkFailure,
-} from '@/telemetry/session-metrics.js';
+import { recordBrowserLatency, recordSdkFailure } from '@/telemetry/session-metrics.js';
+import { noteHudTabClosed, noteHudTabHidden, reportHudUse } from '@/telemetry/hud-events.js';
 import { LiveControl, type InboxMessage } from './human/live-control.js';
 export type { InboxMessage } from './human/live-control.js'; // moved; still part of Session's surface
 import { ReviewStore, type ReviewMark } from './human/review-store.js';
@@ -350,7 +347,7 @@ export class Session implements HandshakeFacts {
     // verdict, settle window or agent read can ever see a person's clicks on Reticle's own panel.
     if (event.type === EventType.HUD_USED) {
       const use = HudUseDataSchema.safeParse(event.data);
-      if (use.success) recordHudUse(use.data);
+      if (use.success) reportHudUse(use.data, this.id);
       return;
     }
     if (event.documentId !== undefined) this.#documentId = event.documentId;
@@ -358,6 +355,8 @@ export class Session implements HandshakeFacts {
     if (event.type === EventType.PAGE_HEALTH) {
       const r = readHealthEvent(event.data);
       Object.assign(this.page, r.page);
+      // A hidden tab's HUD is not being looked at: its time stops until the tab is in front again.
+      if (r.hidden !== undefined) noteHudTabHidden(this.id, r.hidden);
       this.applyHealth(
         r.hidden ?? this.#hidden,
         r.focused ?? this.#focused,
@@ -728,6 +727,7 @@ export class Session implements HandshakeFacts {
   /** Reject everything still in flight — used on disconnect. */
   rejectAll(reason: string, replaced = false): void {
     this.#pending.rejectAll(reason, replaced);
+    noteHudTabClosed(this.id);
     for (const listener of this.#disconnectListeners) listener();
     this.#disconnectListeners.clear();
   }

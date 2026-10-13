@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { HudPanel, HudToggle, HudView } from './constants/hud-use.js';
+import { HudPanel, HudPromptSurface, HudToggle, HudView } from './constants/hud-use.js';
 import {
   EventAttribution,
   EventType,
@@ -47,6 +47,8 @@ export const HudUseDataSchema = z.object({
   panel: z.nativeEnum(HudPanel).optional(),
   /** A rail slide that became the visible one. Its shape is checked where it is counted. */
   slide: z.string().max(56).optional(),
+  /** A sign-in or link prompt became visible on this surface. */
+  prompt: z.nativeEnum(HudPromptSurface).optional(),
 });
 export type HudUseData = z.infer<typeof HudUseDataSchema>;
 

@@ -20,6 +20,7 @@ import { stepCountSchema } from './args/numeric-bounds.js';
 import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
 import {
   DriveOrigin,
+  DriveRefusedError,
   DriveStatus,
   POLL_WAIT_DEFAULT_S,
   awaitDrive,
@@ -43,6 +44,11 @@ import { DRIVE_RECORD_SUFFIX, reticleDirPaths } from '@/memory/project/dir/retic
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { RESULT_FIELD, exploreResult, resultField } from './reticle-result.js';
 import { runTool } from './invoke-tool.js';
+import {
+  harnessRunSource,
+  reportHarnessBlocked,
+  reportHarnessRun,
+} from '@/telemetry/harness-run.js';
 import { driveVerdict, type RemoteDriveOutcome } from '@/features/harness/platform/remote-drive.js';
 import {
   harnessLockRefusal,
@@ -266,17 +272,30 @@ export async function answerExplore(
     planId !== undefined &&
     platform !== undefined &&
     (await savedPlanDrivesNothing(platform, planId));
+  // In-process callers name their origin. Over MCP nothing can (the schema does not carry it), and
+  // a granted free drive with no origin is `reticle try`'s: the HUD's own grant says HUD.
+  const origin =
+    Object.values(DriveOrigin).find((o) => o === args['origin']) ??
+    ('string' === typeof driveId ? DriveOrigin.TRY : DriveOrigin.AGENT);
+  // Hosted: the platform drives (the only driver this build ships), as opposed to an injected one.
+  const runStart = {
+    source: harnessRunSource(origin, planId),
+    hosted: platform !== undefined,
+  };
   const locked = replayOnly ? undefined : await harnessLockRefusal(deps, sessionId, env);
+  if (locked !== undefined) reportHarnessBlocked(runStart);
   if (locked !== undefined) {
     if (planId !== undefined && platform !== undefined)
       await reportPlanBlocked(platform, planId, firstLine(locked));
     throw new Error(locked);
   }
-  if (!harnessAvailable(env)) throw new Error(MSG_NO_HARNESS_KEY);
+  if (!harnessAvailable(env)) {
+    reportHarnessBlocked(runStart);
+    throw new Error(MSG_NO_HARNESS_KEY);
+  }
   const harness = randomUUID();
   const runId = harnessRunId(harness);
   if (runId === undefined) throw new Error(`could not name a run for drive ${harness}`);
-  const origin = Object.values(DriveOrigin).find((o) => o === args['origin']) ?? DriveOrigin.AGENT;
   startDrive({
     harness,
     runId,
@@ -284,7 +303,12 @@ export async function answerExplore(
     ...(sessionId === undefined ? {} : { sessionId }),
     now: deps.now,
     persist: (record) => writeDriveFile(deps, sessionId, record),
-    run: (control) => drive(deps, env, args, harness, control),
+    run: (control) =>
+      reportHarnessRun(
+        runStart,
+        () => drive(deps, env, args, harness, control),
+        (error) => error instanceof DriveRefusedError,
+      ),
   });
   // A drive refused before it began (switched off, unentitled) is still a refusal to the caller.
   return answerDrive(deps, runId, waitMs, call, sessionId, true);

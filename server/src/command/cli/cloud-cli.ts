@@ -8,6 +8,7 @@
 import { CreatedProjectSchema } from './project-name.js';
 import { keyRefusalAtLastSync } from '@/memory/project/sync-status.js';
 import { apiKeyFrom } from '@reticlehq/core';
+import { PlatformLinkVia } from '@reticlehq/core/telemetry';
 import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -294,7 +295,7 @@ const cmdConnect = async (given: readonly string[]): Promise<number> => {
     url,
     ...(f['project'] === undefined ? [] : ['--project', f['project']]),
   ];
-  const linked = await cmdLink(linkArgs);
+  const linked = await cmdLink(linkArgs, process.cwd(), PlatformLinkVia.CONNECT);
   if (linked !== 0) return linked;
   const pushed = await cmdPush();
   if (pushed !== 0) return pushed;

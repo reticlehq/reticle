@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { PlatformLinkVia } from '@reticlehq/core/telemetry';
 import { hudSignIn } from './cli/cloud-login.js';
 import { handleSetupMcp, handleSetupInstall } from './cli/setup-mcp-cli.js';
 import { reportStepFromCli } from './cli-onboarding.js';
@@ -576,7 +577,7 @@ function handleDaemonInner(parsed: {
   const options: StartOptions = {
     ...daemonStartOptions(parsed),
     hudSignIn: (repaint, link) => hudSignIn(repaint, undefined, undefined, link),
-    hudLink: (root) => cmdLink([], root),
+    hudLink: (root) => cmdLink([], root, PlatformLinkVia.HUD),
   };
 
   startDaemon(options)

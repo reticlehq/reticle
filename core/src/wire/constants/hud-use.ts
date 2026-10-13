@@ -14,19 +14,35 @@ export const HudView = {
 export type HudView = (typeof HudView)[keyof typeof HudView];
 
 /**
- * Which page is showing, when the HUD is open: the Agent Log (`chat`), the Flows and Notes pages
- * inside it, Impact (`report`) or Settings. Timed per page, so how long somebody spends on each is a
- * number rather than a guess.
+ * Which page is showing, when the HUD is open: the Agent Log (`chat`), the Flows, Notes and Harness
+ * pages inside it, Impact (`report`), Settings, or the account menu open over any of them. Timed per
+ * page, so how long somebody spends on each is a number rather than a guess.
+ *
+ * `harness` and `account` were missing, so the Harness page was timed as `chat` (it opens over the
+ * Agent Log) and an open account menu was not seen at all.
  */
 export const HudPanel = {
   CHAT: 'chat',
   FLOWS: 'flows',
   NOTES: 'notes',
+  HARNESS: 'harness',
   SETTINGS: 'settings',
   REPORT: 'report',
+  ACCOUNT: 'account',
   NONE: 'none',
 } as const;
 export type HudPanel = (typeof HudPanel)[keyof typeof HudPanel];
+
+/**
+ * Where the HUD asked somebody to sign in or link this project: the rail card under every page, the
+ * Harness page's own sign-in / link control, or the header's "Save runs for your team".
+ */
+export const HudPromptSurface = {
+  RAIL: 'rail',
+  HARNESS: 'harness',
+  HEADER: 'header',
+} as const;
+export type HudPromptSurface = (typeof HudPromptSurface)[keyof typeof HudPromptSurface];
 
 /** What a toggle was switched to; absent for a plain press. */
 export const HudToggle = {

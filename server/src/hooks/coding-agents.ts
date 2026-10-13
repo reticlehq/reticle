@@ -6,24 +6,26 @@
  * as seen by the agent whose call actually took it. A pure sink, like the rest of `hooks/`.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { AgentClient } from '@reticlehq/core/telemetry';
 
 /**
  * Friendly names for the clients people know, matched as a lowercase substring of the name the
- * client sent. Ordered: `cursor-vscode` is Cursor, not VS Code. Anything else keeps its own name.
+ * client sent, and the closed telemetry value each one reports as. Ordered: `cursor-vscode` is
+ * Cursor, not VS Code. Anything else keeps its own name, and reports as `other`.
  */
-const AGENT_LABELS: readonly (readonly [string, string])[] = [
-  ['claude-code', 'Claude Code'],
-  ['claude-ai', 'Claude Desktop'],
-  ['codex', 'Codex'],
-  ['cursor', 'Cursor'],
-  ['gemini', 'Gemini CLI'],
-  ['antigravity', 'Antigravity'],
-  ['windsurf', 'Windsurf'],
-  ['cline', 'Cline'],
-  ['opencode', 'OpenCode'],
-  ['zed', 'Zed'],
-  ['visual studio code', 'VS Code'],
-  ['vscode', 'VS Code'],
+const AGENT_LABELS: readonly (readonly [string, string, AgentClient])[] = [
+  ['claude-code', 'Claude Code', AgentClient.CLAUDE_CODE],
+  ['claude-ai', 'Claude Desktop', AgentClient.CLAUDE_DESKTOP],
+  ['codex', 'Codex', AgentClient.CODEX],
+  ['cursor', 'Cursor', AgentClient.CURSOR],
+  ['gemini', 'Gemini CLI', AgentClient.GEMINI_CLI],
+  ['antigravity', 'Antigravity', AgentClient.ANTIGRAVITY],
+  ['windsurf', 'Windsurf', AgentClient.WINDSURF],
+  ['cline', 'Cline', AgentClient.CLINE],
+  ['opencode', 'OpenCode', AgentClient.OPENCODE],
+  ['zed', 'Zed', AgentClient.ZED],
+  ['visual studio code', 'VS Code', AgentClient.VSCODE],
+  ['vscode', 'VS Code', AgentClient.VSCODE],
 ];
 const MAX_LABEL = 64;
 
@@ -32,10 +34,19 @@ const byAttach = new Map<string, string>();
 const listeners = new Set<() => void>();
 const calling = new AsyncLocalStorage<string>();
 
-export function agentLabel(name: string): string {
+function knownAgent(name: string): (typeof AGENT_LABELS)[number] | undefined {
   const lower = name.toLowerCase();
-  const known = AGENT_LABELS.find(([needle]) => lower.includes(needle));
-  return (known?.[1] ?? name).slice(0, MAX_LABEL);
+  return AGENT_LABELS.find(([needle]) => lower.includes(needle));
+}
+
+export function agentLabel(name: string): string {
+  return (knownAgent(name)?.[1] ?? name).slice(0, MAX_LABEL);
+}
+
+/** The closed telemetry value for a client name: never the name itself, which is the client's text. */
+export function agentClientOf(name: string | undefined): AgentClient | undefined {
+  if (name === undefined || 0 === name.trim().length) return undefined;
+  return knownAgent(name)?.[2] ?? AgentClient.OTHER;
 }
 
 /** An MCP connection finished its handshake as `name`. */

@@ -26,6 +26,7 @@ import {
 import { homedir, platform, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
+  TelemetryAccountState,
   TelemetryEventKind,
   TELEMETRY_EVENT_VERSION,
   TelemetryEventSchema,
@@ -42,6 +43,9 @@ import {
   type McpOutage,
   type ToolRefusal,
   type AppInstrumentation,
+  type HarnessRun,
+  type HudEvent,
+  type PlatformLink,
   type ProjectProfile,
   type SessionSummary,
   type TelemetryActor,
@@ -154,6 +158,8 @@ import { projectInstallSource } from './install-source.js';
 import { licenseFacts } from './license-activation.js';
 import { gitFacts } from './git-facts.js';
 import { currentAutomationHint } from './automation-hint.js';
+import { accountEnvelope } from './account-envelope.js';
+import { currentAgentClient, launchMethodOf } from './agent-client.js';
 
 const Env = {
   DISABLE: ReticleEnv.TELEMETRY, // "0" / "false" / "off" → disabled
@@ -399,6 +405,17 @@ export interface TelemetryExtra {
   instrumentation?: AppInstrumentation;
   /** `reticle_installed` / `init_completed`: which published route brought this install in. */
   installSource?: InstallSource;
+  /** `hud_viewed` / `hud_signin_prompted`: which HUD page or prompt. */
+  hud?: HudEvent;
+  /** `platform_linked`: how this project got linked. */
+  link?: PlatformLink;
+  /** `harness_run`: one phase of one Harness run. */
+  harness?: HarnessRun;
+  /**
+   * `platform_linked`: the workspace just linked. Overrides the envelope's own reading, which looks
+   * at the daemon's working directory and not at the project the HUD linked.
+   */
+  workspaceId?: string;
 }
 
 export interface Telemetry {
@@ -439,6 +456,8 @@ export const createTelemetry = (opts: {
   spawnImpl?: (command: string, args: string[], input: string) => void;
   /** The state home (`~/.reticle`). Injected so a test never touches the real one. */
   reticleDir?: string;
+  /** Where `~/.reticle/session.json` is looked for. Injected by tests only. */
+  home?: string;
 }): Telemetry => {
   const reticleDir = opts.reticleDir ?? RETICLE_DIR;
   const env = opts.env ?? process.env;
@@ -485,6 +504,9 @@ export const createTelemetry = (opts: {
   // was unknown for every event that could show whether they got anywhere. Reading it here puts it
   // on all of them, which is the only shape in which the question can be asked.
   const installSource = projectInstallSource(opts.cwd ?? process.cwd());
+  // How this process was launched: a property of the process, so read once. Only the bucket leaves.
+  const launch = launchMethodOf(process.argv[1]);
+  const home = opts.home ?? homedir();
   if (!feedbackOnly) showNoticeOnce(reticleDir);
 
   const spawnDetached =
@@ -562,6 +584,22 @@ export const createTelemetry = (opts: {
       // the ambient one here would silently ignore it. Identical in production, wrong everywhere the
       // seam is actually used.
       ...licenseFacts(eventTs, env),
+      // Account, workspace and client: SCALARS on every event, so the event build and the wire
+      // schema and no `blocks` entry. Account and client are read per event: a HUD sign-in changes
+      // the first mid-session, and the second is whichever agent's call is in flight.
+      ...accountEnvelope(cwd, env, home),
+      ...(extra?.workspaceId !== undefined
+        ? {
+            workspaceId: extra.workspaceId,
+            linked: true,
+            accountState: TelemetryAccountState.LINKED,
+          }
+        : {}),
+      ...((client) => (client === undefined ? {} : { client }))(currentAgentClient(env)),
+      launch,
+      ...(extra?.hud !== undefined ? { hud: extra.hud } : {}),
+      ...(extra?.link !== undefined ? { link: extra.link } : {}),
+      ...(extra?.harness !== undefined ? { harness: extra.harness } : {}),
     };
     // The wire schema's caps are only real if something applies them. An event that fails is
     // DROPPED, never sent and never repaired: the payload is exactly what the caps exist to stop.
@@ -593,6 +631,9 @@ export const createTelemetry = (opts: {
       refusal,
       outage,
       instrumentation,
+      hud,
+      link,
+      harness,
       ...rest
     } = event;
     // `$session_id` is PostHog's OWN session property, so sending ours under that name lights up
@@ -626,6 +667,9 @@ export const createTelemetry = (opts: {
       refusal,
       outage,
       instrumentation,
+      hud,
+      link,
+      harness,
     };
     for (const [prefix, block] of Object.entries(blocks)) {
       for (const [key, value] of Object.entries(block ?? {})) {

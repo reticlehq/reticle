@@ -44,6 +44,9 @@ import { BrowserBrand, FeedbackSchema } from './telemetry-feedback.js';
 import { CaptureLoss, VerifiedReason } from './verdict/verified-constants.js';
 import { IdentitySchema } from './telemetry-feedback.js';
 import { LicenseActivation } from './telemetry-license.js';
+import { SIGNAL_FIELDS } from './telemetry-signals.js';
+import { BugFoundSchema } from './telemetry-bug.js';
+export * from './telemetry-bug.js';
 
 /** Bump when the event shape changes so the analytics side can segment old senders. */
 export const TELEMETRY_EVENT_VERSION = 3;
@@ -195,6 +198,14 @@ export const TelemetryEventKind = {
    * This carries the fact at the moment it happens. See issue #172.
    */
   TOOL_REFUSED: 'tool_refused',
+  /** A HUD page (or the account menu) opened; deduped per tab. See telemetry-signals.ts. */
+  HUD_VIEWED: 'hud_viewed',
+  /** The HUD showed a sign-in or link prompt, once per surface per tab. */
+  HUD_SIGNIN_PROMPTED: 'hud_signin_prompted',
+  /** A project on this machine was linked to a workspace. */
+  PLATFORM_LINKED: 'platform_linked',
+  /** A Harness run started, or ended: one of each per run. */
+  HARNESS_RUN: 'harness_run',
 } as const;
 export type TelemetryEventKind = (typeof TelemetryEventKind)[keyof typeof TelemetryEventKind];
 
@@ -221,6 +232,9 @@ const SESSION_SCOPED: ReadonlySet<string> = new Set([
   TelemetryEventKind.RUNTIME_CRASHED,
   TelemetryEventKind.FEEDBACK_SUBMITTED,
   TelemetryEventKind.TOOL_REFUSED,
+  TelemetryEventKind.HUD_VIEWED,
+  TelemetryEventKind.HUD_SIGNIN_PROMPTED,
+  TelemetryEventKind.HARNESS_RUN,
 ]);
 
 /** True when this event happened inside a daemon run, so a `sessionId` on it means something. */
@@ -486,129 +500,6 @@ export const CrashSchema = z.object({
 });
 export type Crash = z.infer<typeof CrashSchema>;
 
-/**
- * How Reticle came to find a defect. Four routes, in descending order of "a human would have missed
- * this": a contradiction is invisible to someone watching the screen, a crawl finding required no
- * script at all, a replay failure is a regression on something that used to work, and a failed
- * assertion is the agent's own check not holding.
- */
-export const BugSource = {
-  /** Channels disagreed — the false green. A passing screen sitting on a failed write. */
-  CONTRADICTION: 'contradiction',
-  /** `reticle_crawl` found it autonomously, with nobody writing a test. */
-  CRAWL: 'crawl',
-  /** A saved flow that used to pass stopped passing — a regression. */
-  REPLAY: 'replay',
-  /** An assertion the agent declared did not hold. */
-  ASSERTION: 'assertion',
-} as const;
-export type BugSource = (typeof BugSource)[keyof typeof BugSource];
-
-/**
- * WHOSE fault the defect was.
- *
- * `bugsFound` is not publishable without this, and a count confidently wrong about whose fault
- * something is, is worse than no count: it points at the customer. Two rules keep it honest:
- *
- * 1. **Always present.** `UNCLASSIFIED` is a value, not a gap. Absence would mean an old sender or a
- *    path that forgot; a value means the classifier ran and declined.
- * 2. **`APP` requires POSITIVE evidence** — something the app itself did: a request that came back
- *    failed, a signal the app fired carrying data that disagrees with its own screen, a written
- *    field echoed back changed. Never "nothing else explained it". Core already draws exactly this
- *    line for the verdict, in `ABSENCE_DERIVED_CONTRADICTIONS`, and that is the line reused rather
- *    than a second judgement invented beside it.
- */
-export const BugAttribution = {
-  /** A defect in the app under test — the only bucket that belongs in a published defect count. */
-  APP: 'app',
-  /** The agent's own call was wrong: a path, store or target that never existed. Teach the agent. */
-  REQUEST: 'request',
-  /** Reticle could not see or could not drive. Our bug, or our configuration. Ship a fix. */
-  RETICLE: 'reticle',
-  /**
-   * The classifier looked and the evidence could not say.
-   *
-   * The honest majority, and it must stay a value rather than becoming a gap: a failed
-   * `element.present` covers "the button is missing", "the API is down" and "the agent mistyped a
-   * testid" identically, and an owner invented for it would put a guess into a published number.
-   * Exclude it from a defect count; never fold it into `app`.
-   */
-  UNCLASSIFIED: 'unclassified',
-} as const;
-export type BugAttribution = (typeof BugAttribution)[keyof typeof BugAttribution];
-
-/**
- * One defect Reticle found in the app under test.
- *
- * `kind` is the taxonomy value from `findings.ts` — `signal-contradicted`, `console-error`,
- * `duplicate-request` and so on. Never a selector, a URL, an element, or any description of the
- * user's app — THAT a class of defect was found, never WHAT it was in.
- */
-export const BugFoundSchema = z.object({
-  source: z.nativeEnum(BugSource),
-  /** The classified kind from Reticle's own findings vocabulary. */
-  kind: z.string().min(1).max(64),
-  /**
-   * True when the defect PRESENTED AS SUCCESS — the screen advanced, the assertion passed, the click
-   * looked fine — while another channel showed it had not.
-   *
-   * Defined by the presentation rather than by "an assertion passed", because the same defect arrives
-   * both ways: through `reticle_assert` there IS a passing assertion to contradict, and through
-   * `reticle_crawl` there is no assertion at all and the UI simply moved on over a failed write. Both
-   * are the thing a human watching the screen cannot see, and that is what the flag has to mean if
-   * the number is going to be published.
-   *
-   * The subset worth naming separately, because it is the only category Reticle can claim as uniquely
-   * its own: every other kind of bug is findable by a careful human or an ordinary test.
-   */
-  falseGreen: z.boolean(),
-  /** Which tool surfaced it. */
-  tool: z.string().min(1).max(64).optional(),
-  /**
-   * TRUE when this KIND was already reported in this session — i.e. this is another INSTANCE of a
-   * defect already counted, not another defect.
-   *
-   * Both numbers are claims, and they are different ones. "Reticle found N defects" is the headline;
-   * "users hit them M times" is the frequency that says which ones actually cost anybody anything.
-   * Without this flag the event stream answers only the second while looking like it answers the
-   * first, so any distinct-defect count read off it is silently inflated — the exact way a published
-   * number goes wrong. Count `repeat: false` for distinct, count everything for instances.
-   *
-   * Scoped to the SESSION, because that is the only identity available: the payload deliberately
-   * carries no selector, URL or app detail, so the same defect in two sessions cannot be recognised
-   * as one — and must not be, since that would need data this event refuses to collect.
-   */
-  repeat: z.boolean(),
-  /**
-   * Whose fault it was, ALWAYS present — `unclassified` when the evidence cannot say, never absent.
-   *
-   * Absence and "the evidence could not say" are different facts, and only one of them is a
-   * measurement. Count `attribution: 'app'` for defects found in anybody's product; see
-   * `BugAttribution` for why `app` needs positive evidence.
-   */
-  attribution: z.nativeEnum(BugAttribution),
-  /**
-   * A stable hash identifying THIS defect across sessions — same kind at the same route = same
-   * fingerprint, regardless of when or where it was found.
-   *
-   * The inputs (route, selector) never travel raw — only the 8-char hex hash does, following the
-   * same privacy pattern as `projectId`. The analytics side groups on it to answer "was this bug
-   * fixed?" (the fingerprint stops appearing) and to deduplicate the same defect found by parallel
-   * agents in one run.
-   *
-   * OPTIONAL because old senders and the `reticle verify` CLI path do not yet compute it. Absent
-   * means "not fingerprinted", never "a different defect from one that has a fingerprint".
-   */
-  fingerprint: z.string().max(16).optional(),
-  /**
-   * Which hit of this `fingerprint` in the session, from 1. Two hits of one defect used to be
-   * byte-identical rows, so a duplicated delivery and a real second hit could not be told apart.
-   * `occurrence: 1` is the distinct defect within a session. Absent on older senders.
-   */
-  occurrence: z.number().int().positive().optional(),
-});
-export type BugFound = z.infer<typeof BugFoundSchema>;
-
 /** An MCP client attaching. Separates "installed and running" from "someone is actually using it". */
 export const McpConnectionSchema = z.object({
   /** False the first time a client attaches to this daemon; true for every attach after. */
@@ -768,6 +659,8 @@ export const InstallSource = {
   NPX_SKILL: 'npx_skill',
   /** The Claude Code plugin, which sets the marker in the `env` of the MCP server it registers. */
   PLUGIN: 'plugin',
+  /** The one-line installer (install.sh / install.ps1), which declares itself on `setup install`. */
+  INSTALL_SCRIPT: 'install_script',
   /** docs.reticle.sh, whose install snippets carry the marker. */
   DOCS_SITE: 'docs_site',
   /** The repository README's install snippet. */
@@ -790,8 +683,13 @@ export const AutomationHint = {
   CONTAINER: 'container',
   /** A hosted dev environment declared itself (Codespaces, Gitpod, Cloud Shell, dev container). */
   HOSTED_WORKSPACE: 'hosted_workspace',
-  /** Neither end of the process is attached to a terminal. The weakest of the three. */
-  NO_TTY: 'no_tty',
+  /**
+   * A CI vendor's own variable is set while `CI` is not (some runners and self-hosted agents omit it).
+   * `no_tty` used to sit here and read true for every MCP stdio process, so it separated nothing.
+   */
+  CI_RUNNER: 'ci_runner',
+  /** A hosted coding-agent sandbox declared itself (a remote agent session, not a laptop). */
+  AGENT_SANDBOX: 'agent_sandbox',
 } as const;
 export type AutomationHint = (typeof AutomationHint)[keyof typeof AutomationHint];
 
@@ -991,5 +889,7 @@ export const TelemetryEventSchema = z.object({
    * A boolean, never the key. The key is a credential and does not leave the machine.
    */
   licenseKeyPresent: z.boolean().optional(),
+  // Account, workspace, client, launch, and the HUD / link / Harness-run blocks: see that file.
+  ...SIGNAL_FIELDS,
 });
 export type TelemetryEvent = z.infer<typeof TelemetryEventSchema>;

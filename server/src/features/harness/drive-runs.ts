@@ -29,7 +29,7 @@ export type DriveStatus = (typeof DriveStatus)[keyof typeof DriveStatus];
 export class DriveRefusedError extends Error {}
 
 /** Who asked for the drive. */
-export const DriveOrigin = { AGENT: 'agent', HUD: 'hud', CHAT: 'chat' } as const;
+export const DriveOrigin = { AGENT: 'agent', HUD: 'hud', CHAT: 'chat', TRY: 'try' } as const;
 export type DriveOrigin = (typeof DriveOrigin)[keyof typeof DriveOrigin];
 
 /**
@@ -315,6 +315,7 @@ const FROM: Record<DriveOrigin, string> = {
   [DriveOrigin.AGENT]: '',
   [DriveOrigin.HUD]: ' (started from the HUD)',
   [DriveOrigin.CHAT]: ' (started from the Reticle dashboard)',
+  [DriveOrigin.TRY]: ' (started by `reticle try`)',
 };
 
 function noteFor(record: DriveRecord): string {

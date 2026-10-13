@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { AutomationHint } from '@reticlehq/core/telemetry';
-import { isServerProcess, resolveAutomationHint } from './automation-hint.js';
+import { resolveAutomationHint } from './automation-hint.js';
 
 const noFiles = (): boolean => false;
 
 describe('resolveAutomationHint', () => {
   it('says nothing about an ordinary interactive machine', () => {
-    expect(resolveAutomationHint({ env: {}, fileExists: noFiles, hasTty: true })).toBeUndefined();
+    expect(resolveAutomationHint({ env: {}, fileExists: noFiles })).toBeUndefined();
   });
 
   it('names a container when the runtime marker is on disk', () => {
-    expect(
-      resolveAutomationHint({ env: {}, fileExists: (p) => '/.dockerenv' === p, hasTty: true }),
-    ).toBe(AutomationHint.CONTAINER);
+    expect(resolveAutomationHint({ env: {}, fileExists: (p) => '/.dockerenv' === p })).toBe(
+      AutomationHint.CONTAINER,
+    );
   });
 
   it('names a hosted workspace from its own declared marker', () => {
@@ -20,15 +20,31 @@ describe('resolveAutomationHint', () => {
       resolveAutomationHint({
         env: { GITPOD_WORKSPACE_ID: 'w-1' },
         fileExists: noFiles,
-        hasTty: true,
       }),
     ).toBe(AutomationHint.HOSTED_WORKSPACE);
   });
 
-  it('falls back to no terminal — the weakest signal, and last', () => {
-    expect(resolveAutomationHint({ env: {}, fileExists: noFiles, hasTty: false })).toBe(
-      AutomationHint.NO_TTY,
+  it('never reads the terminal: an MCP stdio process has none and is still a person', () => {
+    // `no_tty` fired for every MCP stdio process, so it separated nothing from anything.
+    expect(resolveAutomationHint({ env: {}, fileExists: noFiles })).toBeUndefined();
+  });
+
+  it('names a CI runner from the vendor variable when CI itself is not set', () => {
+    expect(resolveAutomationHint({ env: { GITHUB_ACTIONS: 'true' }, fileExists: noFiles })).toBe(
+      AutomationHint.CI_RUNNER,
     );
+    expect(resolveAutomationHint({ env: { JENKINS_URL: 'x' }, fileExists: noFiles })).toBe(
+      AutomationHint.CI_RUNNER,
+    );
+  });
+
+  it('names a hosted agent sandbox from its own declared marker, ahead of the container it runs in', () => {
+    expect(
+      resolveAutomationHint({
+        env: { CLAUDE_CODE_REMOTE: 'true' },
+        fileExists: (p) => '/.dockerenv' === p,
+      }),
+    ).toBe(AutomationHint.AGENT_SANDBOX);
   });
 
   it('prefers the specific signal over the weak one when both are present', () => {
@@ -36,32 +52,11 @@ describe('resolveAutomationHint', () => {
       resolveAutomationHint({
         env: { CODESPACES: 'true' },
         fileExists: (p) => '/.dockerenv' === p,
-        hasTty: false,
       }),
     ).toBe(AutomationHint.CONTAINER);
   });
 
-  it('does not call a daemon or an MCP server headless: it never has a terminal, by design', () => {
-    expect(
-      resolveAutomationHint({ env: {}, fileExists: noFiles, hasTty: false, serverProcess: true }),
-    ).toBeUndefined();
-  });
-
-  it.each([
-    [[], true],
-    [['serve'], true],
-    [['serve', '--port', '4400'], true],
-    [['mcp'], true],
-    [['--port', '4400'], true],
-    [['init'], false],
-    [['status'], false],
-  ])('treats argv %j as a server process: %s', (argv, expected) => {
-    expect(isServerProcess(argv)).toBe(expected);
-  });
-
   it('ignores a marker that is present but empty', () => {
-    expect(
-      resolveAutomationHint({ env: { CODESPACES: '' }, fileExists: noFiles, hasTty: true }),
-    ).toBeUndefined();
+    expect(resolveAutomationHint({ env: { CODESPACES: '' }, fileExists: noFiles })).toBeUndefined();
   });
 });

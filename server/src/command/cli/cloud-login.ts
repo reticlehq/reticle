@@ -16,7 +16,13 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE } from '@/memory/cloud/cloud-config.js';
 import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
-import { DevicePollSchema, DeviceStartSchema, openBrowser } from './auth/device-flow.js';
+import {
+  DevicePollSchema,
+  DeviceStartSchema,
+  LoginOrigin,
+  openBrowser,
+  withLoginOrigin,
+} from './auth/device-flow.js';
 import { normalizeUrl, sessionPath, SESSIONS_DIR } from './auth/cloud-session.js';
 import {
   api,
@@ -168,6 +174,7 @@ const cmdLoginDevice = async (
   link: Linker,
   autoLink: boolean,
   open: (url: string) => void = openBrowser,
+  from: LoginOrigin = LoginOrigin.TERMINAL,
 ): Promise<number> => {
   const url = baseUrl(null, explicitUrl);
   const started = DeviceStartSchema.parse(
@@ -176,7 +183,7 @@ const cmdLoginDevice = async (
   hint(
     `Opening ${started.verificationUri} — confirm this code in the browser: ${started.userCode}`,
   );
-  open(started.verificationUriComplete);
+  open(withLoginOrigin(started.verificationUriComplete, from));
   const intervalMs = Math.max(1, started.interval) * 1000;
   for (;;) {
     await sleep(intervalMs);
@@ -294,7 +301,7 @@ const NO_LINK: Linker = () => Promise.resolve(0);
 export function hudSignIn(
   onSignedIn: () => void,
   start: (open: (url: string) => void) => Promise<number> = (open) =>
-    cmdLoginDevice(undefined, undefined, NO_LINK, false, open),
+    cmdLoginDevice(undefined, undefined, NO_LINK, false, open, LoginOrigin.HUD),
   opener: (url: string) => void = openBrowser,
   /**
    * Link the asking tab's project once signed in: "Save for your team" signed in and linked

@@ -155,7 +155,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'core/src/artifacts': 21,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
-  'core/src': 11,
+  // 12 with `telemetry-signals.ts`: the account, client, HUD, link and Harness-run vocabulary, beside
+  // the telemetry contract it extends, so `telemetry.ts` stays under the line cap.
+  // 13 with `telemetry-bug.ts`: the `bug_found` schema, split out when the accuracy and signal
+  // changes together pushed `telemetry.ts` over the cap. Grouping the seven `telemetry-*.ts` files
+  // into one directory is the next step if this grows again.
+  'core/src': 13,
   // 19 with `state-bookkeeping.ts`: telling a query cache's own bookkeeping from a state change.
   // 20 with `superseded-checks.ts`: the one rule every fold of a run's checks applies.
   'engine/src/evidence': 20,
@@ -356,7 +361,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // Its own file so the 700-line session aggregator did not grow a second concern.
   // 36 again when the drive-attribution counter went: the async context in `hooks/driven-by.ts`
   // already says which drive a call belongs to, per call, so a second module-wide copy was removed.
-  'server/src/telemetry': 35,
+  // 40 with the product signals: `account-envelope.ts`, `agent-client.ts`, `hud-events.ts`,
+  // `platform-linked.ts`, `harness-run.ts`. Flat on purpose: each reaches `getTelemetry`, and a
+  // subdirectory of them would be a new directory needing `telemetry` and needed by it.
+  'server/src/telemetry': 40,
   'spec-runner/src': 11,
   // 11 with `start-wiring.ts`: what `start` and `startDaemon` both assemble, split from `index.ts` at
   // its line cap. Beside the entry points it serves; anywhere else it would be a new reach.

@@ -1,0 +1,159 @@
+/**
+ * The product signals the event set could not answer: who is signed in, which workspace and which
+ * agent client an event belongs to, which HUD page was opened, which sign-in prompts were seen, when a
+ * project was linked, and how a Harness run started and ended.
+ *
+ * Its own file so the vocabulary has one home and `telemetry.ts` only wires it in. Every value here is
+ * a closed set, a boolean or a bucket: none of these fields can carry a URL, a path, a name or text.
+ */
+import { z } from 'zod';
+import { HudPanel, HudPromptSurface } from './wire/constants/hud-use.js';
+
+/**
+ * Where this machine stands with the platform, on every event. `linked` implies signed in OR an
+ * api key in the environment: a project with a working link reports to a workspace either way.
+ */
+export const TelemetryAccountState = {
+  SIGNED_OUT: 'signed_out',
+  SIGNED_IN: 'signed_in',
+  LINKED: 'linked',
+} as const;
+export type TelemetryAccountState =
+  (typeof TelemetryAccountState)[keyof typeof TelemetryAccountState];
+
+/**
+ * Which coding agent an event came from, normalised from the MCP handshake's `clientInfo.name`, else
+ * from a marker the agent sets in the environment of what it spawns. `other` is a client that named
+ * itself and is not on this list; absent means nothing said.
+ */
+export const AgentClient = {
+  CLAUDE_CODE: 'claude_code',
+  CLAUDE_DESKTOP: 'claude_desktop',
+  CODEX: 'codex',
+  CURSOR: 'cursor',
+  GEMINI_CLI: 'gemini_cli',
+  ANTIGRAVITY: 'antigravity',
+  WINDSURF: 'windsurf',
+  CLINE: 'cline',
+  OPENCODE: 'opencode',
+  ZED: 'zed',
+  VSCODE: 'vscode',
+  OTHER: 'other',
+} as const;
+export type AgentClient = (typeof AgentClient)[keyof typeof AgentClient];
+
+/**
+ * How the running `reticle` was launched, read from where its own entry script sits: an npx cache,
+ * a global install, or a project's `node_modules`. Only the bucket leaves the machine, never the path.
+ * It is not the install CHANNEL (`installSource`): every channel can end in any of these.
+ */
+export const LaunchMethod = {
+  NPX: 'npx',
+  GLOBAL: 'global',
+  PROJECT: 'project',
+  OTHER: 'other',
+} as const;
+export type LaunchMethod = (typeof LaunchMethod)[keyof typeof LaunchMethod];
+
+/** A count, bucketed: an exact number of tabs or journeys starts to describe one app. */
+export const CountBucket = {
+  ZERO: '0',
+  ONE: '1',
+  TWO_THREE: '2-3',
+  FOUR_NINE: '4-9',
+  TEN_PLUS: '10+',
+} as const;
+export type CountBucket = (typeof CountBucket)[keyof typeof CountBucket];
+
+export function countBucket(n: number): CountBucket {
+  if (n <= 0) return CountBucket.ZERO;
+  if (1 === n) return CountBucket.ONE;
+  if (n <= 3) return CountBucket.TWO_THREE;
+  if (n <= 9) return CountBucket.FOUR_NINE;
+  return CountBucket.TEN_PLUS;
+}
+
+/** `hud_viewed` / `hud_signin_prompted`: which page or prompt, and how many tabs had a HUD. */
+export const HudEventSchema = z.object({
+  view: z.nativeEnum(HudPanel).optional(),
+  surface: z.nativeEnum(HudPromptSurface).optional(),
+  tabs: z.nativeEnum(CountBucket).optional(),
+});
+export type HudEvent = z.infer<typeof HudEventSchema>;
+
+/** How a project got linked to a workspace on this machine. */
+export const PlatformLinkVia = {
+  /** `reticle connect`: sign in, link and sync in one command. */
+  CONNECT: 'connect',
+  /** The HUD's "Link this project" / "Save runs for your team". */
+  HUD: 'hud',
+  /** A bare `reticle link`. */
+  LINK: 'link',
+} as const;
+export type PlatformLinkVia = (typeof PlatformLinkVia)[keyof typeof PlatformLinkVia];
+
+export const PlatformLinkSchema = z.object({ via: z.nativeEnum(PlatformLinkVia) });
+export type PlatformLink = z.infer<typeof PlatformLinkSchema>;
+
+export const HarnessRunPhase = { STARTED: 'started', COMPLETED: 'completed' } as const;
+export type HarnessRunPhase = (typeof HarnessRunPhase)[keyof typeof HarnessRunPhase];
+
+/** How a Harness run ended. `blocked` is a refusal before it drove (gate, credits, switched off). */
+export const HarnessRunOutcome = {
+  PROVED: 'proved',
+  NOT_PROVED: 'not_proved',
+  FAILED: 'failed',
+  BLOCKED: 'blocked',
+  STOPPED: 'stopped',
+} as const;
+export type HarnessRunOutcome = (typeof HarnessRunOutcome)[keyof typeof HarnessRunOutcome];
+
+/** Who started a Harness run. `dashboard` is a run started from the platform's chat. */
+export const HarnessRunSource = {
+  AGENT: 'agent',
+  HUD: 'hud',
+  DASHBOARD: 'dashboard',
+  CLI_TRY: 'cli_try',
+  PLAN: 'plan',
+} as const;
+export type HarnessRunSource = (typeof HarnessRunSource)[keyof typeof HarnessRunSource];
+
+/** `harness_run`: one `started` and one `completed` per run. */
+export const HarnessRunSchema = z.object({
+  phase: z.nativeEnum(HarnessRunPhase),
+  source: z.nativeEnum(HarnessRunSource),
+  /** The run drives on the platform (always, today), as opposed to an injected local driver. */
+  hosted: z.boolean(),
+  /** Only on `completed`. */
+  outcome: z.nativeEnum(HarnessRunOutcome).optional(),
+  /** Only on `completed`: journeys the run answered, and how many of those replayed with no model. */
+  journeys: z.nativeEnum(CountBucket).optional(),
+  replayed: z.nativeEnum(CountBucket).optional(),
+});
+export type HarnessRun = z.infer<typeof HarnessRunSchema>;
+
+/**
+ * The envelope fields and blocks this file adds to `TelemetryEventSchema`, spread into it there.
+ * Every one optional: an older sender has none of them.
+ */
+export const SIGNAL_FIELDS = {
+  /** Signed out, signed in, or signed in AND this project linked to a workspace. */
+  accountState: z.nativeEnum(TelemetryAccountState).optional(),
+  /** This project reports to a workspace. */
+  linked: z.boolean().optional(),
+  /**
+   * The platform's id for the linked workspace (`orgId` in `.reticle/cloud.json`): a pseudonymous
+   * key the platform joins its own records on. Never the workspace NAME, never an email.
+   */
+  workspaceId: z.string().min(1).max(128).optional(),
+  /** Which coding agent this event came from, normalised. Absent when nothing said. */
+  client: z.nativeEnum(AgentClient).optional(),
+  /** How the running `reticle` was launched. */
+  launch: z.nativeEnum(LaunchMethod).optional(),
+  /** Only on `hud_viewed` / `hud_signin_prompted`. */
+  hud: HudEventSchema.optional(),
+  /** Only on `platform_linked`. */
+  link: PlatformLinkSchema.optional(),
+  /** Only on `harness_run`. */
+  harness: HarnessRunSchema.optional(),
+};
