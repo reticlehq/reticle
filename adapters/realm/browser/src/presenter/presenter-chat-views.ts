@@ -572,7 +572,7 @@ export class ChatViews {
   paintAccount(account: AccountState | undefined): void {
     this.#account = account;
     const nav = this.#root?.querySelector<HTMLElement>('[data-reticle-chat-view-btn="harness"]');
-    // The Harness page is for a signed-in person; signed out, the foot row offers Sign in.
+    // The Harness page is for a signed-in person; signed out, the rail under every page asks to sign in.
     if (nav !== null && nav !== undefined) nav.hidden = true !== account?.signedIn;
     this.#paintHarness();
   }

@@ -128,6 +128,25 @@ describe("a refused key, in the platform's words", () => {
     expect(refusalSaid('not json')).toBe(KEY_REFUSED);
   });
 
+  // A HUD audit for the release: this sentence is what the agent reads, and nothing pinned it — the
+  // reader below was tested, the words a refused key reaches the agent in were not.
+  it("tells the agent the last push was refused, in the platform's words", () => {
+    const a = run('a');
+    const said = describeSync(
+      summarizeSync({
+        linked: true,
+        runs: [a],
+        state: {
+          sentRunHashes: {},
+          lastError: `status 401: ${body('removed_from_workspace', 'You were removed from Acme.')}`,
+        },
+      }),
+      0,
+    );
+    expect(said).toContain('the last push was refused: You were removed from Acme.');
+    expect(said).not.toContain('the last push failed');
+  });
+
   it('reads it from what the last sync recorded', () => {
     const root = mkdtempSync(join(tmpdir(), 'reticle-refused-'));
     writeFileSync(

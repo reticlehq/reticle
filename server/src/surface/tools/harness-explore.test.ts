@@ -632,8 +632,8 @@ describe('turning the harness off', () => {
 /**
  * Entitlement is about WHOSE MONEY, and it is not the same question as the switch above.
  *
- * A drive through the platform proxy spends Reticle's model budget. Free for three months, included
- * on a paid plan, and otherwise nobody is paying for it. Told as "the harness is off" that becomes a
+ * A drive through the platform proxy spends Reticle's model budget, paid for in the workspace's
+ * credits (sign-up credits, a trial, or a plan), and otherwise nobody is paying for it. Told as "the harness is off" that becomes a
  * support ticket from somebody who never turned anything off, so it is refused in its own words —
  * and the Harness runs on nothing else: it is the platform's, on the workspace's credits.
  */
