@@ -27,6 +27,5 @@
   "@reticlehq/example-remix": ["e2e"],
   "@reticlehq/large-dom-bench": [],
   "@reticlehq/next-smoke": ["e2e"],
-  "@reticlehq/tauri-smoke": [],
-  "@reticlehq/vibe-builder-demo": []
+  "@reticlehq/tauri-smoke": []
 }

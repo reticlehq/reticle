@@ -47,7 +47,7 @@ const BENCH_DIR = join(REPO, 'bench');
  *
  * The note above ends "guarding one directory against a repo-wide failure mode is what let it happen
  * twice", and then the guard was extended to a second directory rather than to the failure. So
- * `apps/vibe-builder-demo/qa` kept calling `reticle_wait_ready` after it was retired from the
+ * a demo harness under `apps/` kept calling `reticle_wait_ready` after it was retired from the
  * surface, and every one of that demo's five steps died on `TOOLS.find(...).handler` — the identical
  * crash, in a demo whose whole point is showing Reticle catching what other gates miss.
  *
@@ -217,7 +217,7 @@ describe('demo harnesses under apps/ do not reference tools that no longer exist
 
   it('every reticle_* name an app harness calls is on the surface', () => {
     // Matched by quoted name rather than by `callTool(`, because these harnesses dispatch their own
-    // way — vibe-builder-demo does `TOOLS.find((t) => t.name === name).handler(...)`, which is the
+    // way — a demo once did `TOOLS.find((t) => t.name === name).handler(...)`, which is the
     // line that actually threw. Narrowed by DECLARED_TOOLS for the same reason as the spec guard: a
     // quoted `reticle_installed` is a telemetry code, not a dead tool, and demanding a fix for a
     // name that was never a tool is worse than silence.

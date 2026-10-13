@@ -18,7 +18,6 @@ coverage/
 GRAPH_REPORT.md
 
 apps/e2e/
-apps/vibe-builder-demo/
 
 # Marketing/benchmark design artifacts — generated cards, compact inline-style
 # HTML/CSS rendered to images/video; not held to the code formatter.

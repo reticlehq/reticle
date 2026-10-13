@@ -12,14 +12,10 @@
   // a file as ignored unless it is genuinely unreachable — that is the failure mode this config is
   // meant to prevent, not to enable.
   //
-  // TWO known false positives are left standing rather than silenced. A visible, explained false
+  // ONE known false positive is left standing rather than silenced. A visible, explained false
   // positive beats an ignore rule that would also hide the file the day it really does go dead.
   //
-  //  1. apps/vibe-builder-demo/src/builder-ui.ts. knip resolves <script src> out of index.html but
-  //     not out of the second page, builder.html, even when that page is named as an entry. The file
-  //     is genuinely reached — `vite build` emits dist/builder.html and its chunk.
-  //
-  //  2. apps/examples/astro/src/reticle-env.d.ts. An AMBIENT declaration: tsc picks it up from the
+  //  apps/examples/astro/src/reticle-env.d.ts. An AMBIENT declaration: tsc picks it up from the
   //     include patterns and nothing imports it, which is the shape knip cannot see. It declares
   //     `__RETICLE_TOKEN__`, which astro.config.mjs `define`s and src/pages/index.astro reads — so
   //     deleting it as "unused" breaks the app's types while every import in the repo still resolves.
@@ -37,10 +33,6 @@
     // run.mjs globs specs/ at runtime and run-*.sh invoke the harnesses — no static import reaches them.
     "apps/e2e": {
       "entry": ["run.mjs", "desktop-harness.mjs", "specs/*.mjs"],
-    },
-    // Multi-page app: knip does not evaluate the rollupOptions.input array, so name both pages.
-    "apps/vibe-builder-demo": {
-      "entry": ["index.html", "builder.html", "qa/*.mjs", "vite.config.ts"],
     },
     // Electron's main process names its preload by PATH STRING, so no import reaches preload.cjs.
     "apps/electron-smoke": {

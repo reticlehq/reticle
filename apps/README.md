@@ -16,7 +16,6 @@ Enforced by `server/src/guards/harness/integration-coverage.test.ts`, which fail
 | **Benchmark target** | A stable, measurable app for token/perf numbers | Whatever the measurement needs; keep it boring so numbers stay comparable | `bench-app`, `large-dom-bench` |
 | **Adversarial fixture** | Built to be hard, to find what Reticle cannot see | Big, realistic, emergent defects. **One is enough** | `atlas` |
 | **Support infrastructure** | Not apps under test: the backend the specs drive, and the runner itself | Whatever the battery needs | `api`, `e2e` |
-| **Product demo** | Shows Reticle rather than testing it — carries its own benchmark and repair loop | Whatever the story needs | `vibe-builder-demo` |
 
 **Every directory here states its job in the first line of its own README.** If you add one and it has no README, the next person cannot tell what it is for — which is exactly how this directory got confusing.
 

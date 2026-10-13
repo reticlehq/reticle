@@ -90,7 +90,7 @@ Copyable patterns: `apps/bench-app/src/reticle-dev.ts`, `apps/next-smoke/app/ret
 | UI-vs-store desync (the total lies) | reads the store, contradicts the display |
 | Blast-radius (an action corrupts unrelated state) | a `state { path, equals }` invariant on the unrelated value |
 
-Live, clickable demo of each: `apps/vibe-builder-demo/` (set `BUG_MODE=…`). Proven in CI: `server/src/judgement/runs/generated-app-bugs.test.ts`.
+Proven in CI: `server/src/judgement/runs/generated-app-bugs.test.ts`.
 
 ---
 

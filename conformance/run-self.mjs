@@ -71,7 +71,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * ── THE INCIDENT ────────────────────────────────────────────────────────────────────────────────
  * `bootApp` binds 4318 with `--strictPort`, so when another process already holds it the vite dies
  * and the run carries on — driving whatever IS on 4318. That happened: a parallel session had
- * `apps/vibe-builder-demo` on the port, the runner drove it, and the gate reported
+ * a demo app on the port, the runner drove it, and the gate reported
  *
  *   conformance: 2 plantable scenario(s) answered wrongly:
  *     claim-written-after-the-action, healthy-app-real-claim
@@ -184,7 +184,7 @@ async function waitFor(url, what) {
  *
  * `gate:install` has `gate:install:self-test`, which mis-wires every scaffold and demands a RED
  * run, and CI runs it FIRST: if the negative control ever passes, the real run's green means
- * nothing. `gate:multi` and the stale-issue check have the same. This gate did not, which is
+ * nothing. `gate:multi` has the same. This gate did not, which is
  * the one that matters most -- it is the whole evidence for "our web and desktop surfaces
  * implement the protocol", and it had never been shown able to fail.
  *

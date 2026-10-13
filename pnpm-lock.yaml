@@ -689,19 +689,6 @@ importers:
         specifier: ^8.2.1
         version: 8.2.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
 
-  apps/vibe-builder-demo:
-    dependencies:
-      '@reticlehq/browser':
-        specifier: workspace:*
-        version: link:../../adapters/realm/browser
-    devDependencies:
-      '@reticlehq/server':
-        specifier: workspace:*
-        version: link:../../server
-      vite:
-        specifier: ^8.2.1
-        version: 8.2.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
-
   conformance:
     dependencies:
       open-verification:

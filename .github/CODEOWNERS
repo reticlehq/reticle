@@ -32,7 +32,6 @@
 /apps/large-dom-bench/     @divshekhar
 /apps/next-smoke/          @divshekhar
 /apps/tauri-smoke/         @divshekhar
-/apps/vibe-builder-demo/   @divshekhar
 
 # Everything a change here can break without a test noticing.
 /.github/                  @divshekhar
