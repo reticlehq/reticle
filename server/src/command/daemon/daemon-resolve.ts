@@ -188,13 +188,18 @@ export function splitBrainNote(myPort: number, elsewhere: readonly number[]): st
   if (0 === elsewhere.length) return undefined;
   const listed = elsewhere.map((port) => `:${String(port)}`).join(', ');
   const first = elsewhere[0] ?? myPort;
+  // The agent moves, not the app (#1546). The daemon the app is on is a working session this agent
+  // did not start, and it may be a person's, another agent's or another project's. Stopping it was
+  // the first thing this used to say. It comes last now, with what it costs.
   return (
     `this project's app is connected to a DIFFERENT Reticle daemon (${listed}), while this one is ` +
     `on :${String(myPort)} — two daemons for one project, and the agent is attached to the empty ` +
-    'half. Nothing is wrong with the app or the wiring. Stop the other daemon with ' +
-    `\`reticle stop --port ${String(first)}\` and restart the dev server so the app rediscovers ` +
-    'this one, or start the agent and the dev server from the same project directory so both ' +
-    'resolve the same daemon.'
+    'half. Nothing is wrong with the app or the wiring. Move the agent to the app: set ' +
+    `${RETICLE_PORT_ENV}=${String(first)} in this MCP server's config, or launch the agent from the ` +
+    `project directory the dev server runs in, then restart the agent session. Leave :${String(first)} ` +
+    'running. Only if nothing else is using it, `reticle stop --port ' +
+    `${String(first)}\` and a dev server restart move the app here instead; that disconnects every ` +
+    'tab and agent on that daemon.'
   );
 }
 
