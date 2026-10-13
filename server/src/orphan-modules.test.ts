@@ -50,13 +50,6 @@ const DECLARED_UNWIRED: Record<string, string> = {
   'features/ee/audit-log.ts':
     'deliberately unwired, and says so in its own header: an example enterprise feature whose ' +
     'body is a stub, existing to prove the licence gate rather than to be called.',
-  'command/dev/stale-issue-guard.ts':
-    'the decision logic behind `pnpm check:stale-issues`, which loads it from `dist` in a plain ' +
-    '.mjs, so no import in `src` points at it and this scanner cannot see the caller. This ' +
-    'entry used to say nothing invoked it, "not a package script, not a workflow". A package ' +
-    'script did, and was crashing on the way: the module moved into `command/` and the ' +
-    "script's require kept the old path. Guarded now by the dist-require check in " +
-    'guards/harness/script-paths-exist.test.ts.',
 };
 
 describe('no undeclared orphan modules', () => {
