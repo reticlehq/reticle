@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: the verdict fields of `reticle_assert` are declared, and a wait that has not finished is not graded.** `reticle_assert` returned `verified` and `verifiedReason` without declaring them in its output schema, so a schema-strict MCP client dropped the one field an agent is told to gate on. `action: "wait"` now also returns and declares `verifiedReason` beside `verified`, as `action: "now"` does. A wait that stops at the per-call limit with `resume_ms` is "not yet": it is no longer graded `no`, which read as a failure of the app while the caller was being told to keep waiting. Closes [#1119](https://github.com/reticlehq/reticle/issues/1119).

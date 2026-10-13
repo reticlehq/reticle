@@ -302,6 +302,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .describe(
           'THE field to gate on, graded as reticle_assert grades it: "yes" | "no" | "unknown".',
         ),
+      verifiedReason: z.string().optional().describe('The deciding clause, as one code.'),
       because: z.string().optional().describe('One sentence naming the deciding evidence.'),
       pass: z.boolean(),
       evidence: z.unknown().optional(),
@@ -385,6 +386,18 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       });
       session = followed.session;
       const verdict = followed.verdict;
+      // Stopped at the per-call limit before the predicate was seen: "not yet", which is not a "no".
+      // Grading it read as a failure of the app while the caller is told to keep waiting (#1119).
+      const resume = resumeAfter(requestedMs, waitBudget, verdict);
+      if (resume !== undefined && !verdict.pass) {
+        return withControl(session, {
+          ...annotateStarvedFailure(session, verdict),
+          ...(followed.followed ? { sessionId: session.id } : {}),
+          resume_ms: resume,
+          ...healthEnvelope(session),
+          ...bufferEnvelope(session),
+        });
+      }
       // The verdict, graded as `reticle_assert` grades it. This is `reticle_assert { action: "wait" }`,
       // and it answered `pass` with no `verified` — the one field an agent is told to gate on — while
       // `action: "now"` carried it. Not journaled: a wait settles the page; the proof is the assert.
@@ -401,6 +414,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // and the buffer envelope, so a verdict reached over an evicted window says so.
       return withControl(session, {
         verified: decision['verified'],
+        verifiedReason: decision['verifiedReason'],
         because: decision['because'],
         // #537's starved-wait note wraps the verdict (it RETURNS the verdict), so it stands where
         // `...verdict` did. The source line is #533's `assertionSource`, which superseded
@@ -408,9 +422,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         ...annotateStarvedFailure(session, verdict),
         ...assertionSource(session, predicate, verdict),
         ...(followed.followed ? { sessionId: session.id } : {}),
-        ...((resume: number | undefined) => (resume === undefined ? {} : { resume_ms: resume }))(
-          resumeAfter(requestedMs, waitBudget, verdict),
-        ),
+        ...(resume === undefined ? {} : { resume_ms: resume }),
         ...healthEnvelope(session),
         ...bufferEnvelope(session),
       });
@@ -449,6 +461,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       ...sessionIdShape,
     },
     outputSchema: {
+      // Returned on every graded answer and undeclared, so a schema-strict client dropped the one
+      // field an agent is told to gate on (#1119).
+      verified: z.string().optional().describe('THE field to gate on: "yes" | "no" | "unknown".'),
+      verifiedReason: z.string().optional().describe('The deciding clause, as one code.'),
       pass: z.boolean(),
       evidence: z.unknown().optional(),
       failureReason: z.string().optional(),
