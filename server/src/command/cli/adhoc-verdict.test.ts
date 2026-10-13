@@ -13,14 +13,15 @@
  * editor.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { acquireLease, exploreToEnd, runAdhocVerdict, type ToolCaller } from './adhoc-verdict.js';
+import {
+  ASSERT_MAX_WAIT_MS,
+  acquireLease,
+  exploreToEnd,
+  runAdhocVerdict,
+  type ToolCaller,
+} from './adhoc-verdict.js';
+import { MAX_BLOCKING_WAIT_MS } from '@/surface/tools/args/numeric-bounds.js';
 import { ReticleTool } from '@reticlehq/core';
-
-/** The session a call names: on the call itself, or inside the args a `reticle_run` carries. */
-const sessionOf = (args: unknown): string | undefined => {
-  const a = args as { sessionId?: string; args?: { sessionId?: string } };
-  return a.sessionId ?? a.args?.sessionId;
-};
 
 /** A fake daemon: records what was asked, answers with the verdict it was given. */
 function caller(verdict: unknown): { tool: ToolCaller; calls: { name: string; args: unknown }[] } {
@@ -51,19 +52,19 @@ const run = (verdict: unknown, over = {}) => {
 describe('a one-shot verdict against the running daemon', () => {
   it('navigates first, then asserts', async () => {
     const { calls } = await run({ verified: 'yes' });
-    expect(calls.map((c) => c.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.RUN]);
+    expect(calls.map((c) => c.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
   });
 
   it('skips the navigation when no url is given, asserting where the session already is', async () => {
     const { calls } = await run({ verified: 'yes' }, { url: undefined });
-    expect(calls.map((c) => c.name)).toEqual([ReticleTool.RUN]);
+    expect(calls.map((c) => c.name)).toEqual([ReticleTool.ASSERT]);
   });
 
   it('passes the predicate through untouched', async () => {
     const { calls } = await run({ verified: 'yes' });
     expect(calls[1]?.args).toEqual({
-      tool: ReticleTool.WAIT_FOR,
-      args: { predicate: { kind: 'text', contains: 'Dashboard' }, timeout_ms: 4000 },
+      predicate: { kind: 'text', contains: 'Dashboard' },
+      timeout_ms: 4000,
     });
   });
 });
@@ -130,7 +131,7 @@ describe('the session a one-shot verdict targets', () => {
     const { calls } = await run({ verified: 'yes' }, { sessionId: 's-42' });
     expect(calls).toHaveLength(2);
     for (const call of calls) {
-      expect(sessionOf(call.args)).toBe('s-42');
+      expect((call.args as { sessionId?: string }).sessionId).toBe('s-42');
     }
   });
 
@@ -138,7 +139,7 @@ describe('the session a one-shot verdict targets', () => {
   it('sends no sessionId when none was asked for', async () => {
     const { calls } = await run({ verified: 'yes' });
     for (const call of calls) {
-      expect(sessionOf(call.args)).toBeUndefined();
+      expect((call.args as { sessionId?: string }).sessionId).toBeUndefined();
     }
   });
 });
@@ -230,10 +231,10 @@ describe('a url with no connected tab', () => {
     expect(result.code).toBe(0);
     expect(c.calls.map((x) => [x.name, actionOf(x.args)])).toEqual([
       [ReticleTool.RUN, 'acquire'],
-      [ReticleTool.RUN, undefined],
+      [ReticleTool.ASSERT, undefined],
       [ReticleTool.RUN, 'release'],
     ]);
-    expect(sessionOf(c.calls[1]?.args)).toBe('lease-1');
+    expect(c.calls[1]?.args['sessionId']).toBe('lease-1');
   });
 
   it('uses the tab already open on that origin instead of leasing, navigating it there', async () => {
@@ -245,7 +246,7 @@ describe('a url with no connected tab', () => {
       connect: () => Promise.resolve(c.tool),
       sessions: () => Promise.resolve([{ url: 'http://localhost:5190/' }]),
     });
-    expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.RUN]);
+    expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
   });
 
   // Navigating a tab to the url it already shows reloads it, and a reloaded Electron window is a
@@ -259,7 +260,7 @@ describe('a url with no connected tab', () => {
       connect: () => Promise.resolve(c.tool),
       sessions: () => Promise.resolve([{ url: 'http://localhost:5190/' }]),
     });
-    expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.RUN]);
+    expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.ASSERT]);
   });
 
   // `--session-id` skipped the same-document check entirely, so a pinned tab already on the url was
@@ -287,15 +288,15 @@ describe('a url with no connected tab', () => {
         { sessionId: 'tab-2', url: 'http://localhost:5190/list?page=2#top' },
       ]);
       await run('http://localhost:5190/list/?page=2');
-      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.RUN]);
-      expect(sessionOf(c.calls[0]?.args)).toBe('tab-2');
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.ASSERT]);
+      expect(c.calls[0]?.args['sessionId']).toBe('tab-2');
     });
 
     it('still navigates a pinned tab on a different url', async () => {
       const { c, run } = pinned([{ sessionId: 'tab-2', url: 'http://localhost:5190/list?page=1' }]);
       await run('http://localhost:5190/list?page=2');
-      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.RUN]);
-      expect(sessionOf(c.calls[0]?.args)).toBe('tab-2');
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+      expect(c.calls[0]?.args['sessionId']).toBe('tab-2');
     });
 
     it('does not borrow another tab that is on the url', async () => {
@@ -304,7 +305,7 @@ describe('a url with no connected tab', () => {
         { sessionId: 'tab-2', url: 'http://localhost:5190/' },
       ]);
       await run('http://localhost:5190/list?page=2');
-      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.RUN]);
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
     });
 
     it('navigates, as before, when the status read fails', async () => {
@@ -317,7 +318,7 @@ describe('a url with no connected tab', () => {
         connect: () => Promise.resolve(c.tool),
         sessions: () => Promise.reject(new Error('status unreachable')),
       });
-      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.RUN]);
+      expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
     });
   });
 
@@ -332,7 +333,7 @@ describe('a url with no connected tab', () => {
     });
     expect(result.code).toBe(1);
     expect(result.lines.join('\n')).toMatch(/Chromium is not installed/);
-    expect(c.calls.map((x) => x.args['tool'])).not.toContain(ReticleTool.WAIT_FOR);
+    expect(c.calls.map((x) => x.name)).not.toContain(ReticleTool.ASSERT);
   });
 });
 
@@ -401,41 +402,76 @@ describe('a Harness drive polled to its end', () => {
 });
 
 /**
- * `--expect` waits for the predicate (#1533). It judged once, about a second after navigating, and
- * the request the predicate named was usually still in flight.
+ * `--expect` waits for its expectation, and the grade is still `reticle_assert`'s (#1533).
+ *
+ * It judged once, about a second after navigating, while the request the predicate named was
+ * usually still in flight. The wait must not cost the verdict its journal, its captured assertion
+ * or its `verifiedReason`, which only `reticle_assert` produces.
  */
 describe('a one-shot verdict waits for its expectation', () => {
-  it('sends the wait form with the --timeout budget', async () => {
-    const { calls } = await run({ verified: 'yes' }, { timeoutMs: 30_000 });
-    expect(calls[1]?.name).toBe(ReticleTool.RUN);
-    expect(calls[1]?.args).toMatchObject({
-      tool: ReticleTool.WAIT_FOR,
-      args: { timeout_ms: 30_000 },
-    });
-  });
-
-  it('keeps waiting past one call when the daemon says how long is left', async () => {
+  /** A daemon that answers each call with the next scripted payload, recording what it was asked. */
+  function scripted(answers: unknown[]) {
     const calls: { name: string; args: Record<string, unknown> }[] = [];
-    const answers = [
-      { pass: false, resume_ms: 20_000 },
-      { verified: 'yes', pass: true },
-    ];
-    const result = await runAdhocVerdict({
+    const connect = (): Promise<ToolCaller> =>
+      Promise.resolve({
+        call: (name, args) => {
+          calls.push({ name, args });
+          return Promise.resolve(answers.shift() ?? { structuredContent: { verified: 'yes' } });
+        },
+        close: () => Promise.resolve(),
+      });
+    return { calls, connect };
+  }
+  const expectIt = (timeoutMs: number | undefined, connect: () => Promise<ToolCaller>) =>
+    runAdhocVerdict({
       port: 4400,
       predicate: { kind: 'net', urlContains: '/api/data' },
-      timeoutMs: 75_000,
-      connect: () =>
-        Promise.resolve({
-          call: (name, args) => {
-            calls.push({ name, args });
-            return Promise.resolve({ structuredContent: answers.shift() });
-          },
-          close: () => Promise.resolve(),
-        }),
+      connect,
+      ...(timeoutMs === undefined ? {} : { timeoutMs }),
     });
-    expect(calls.map((c) => (c.args['args'] as { timeout_ms?: number }).timeout_ms)).toEqual([
-      75_000, 20_000,
+
+  it('grades with one reticle_assert that waits the --timeout budget', async () => {
+    const d = scripted([]);
+    const result = await expectIt(30_000, d.connect);
+    expect(d.calls.map((c) => [c.name, c.args['timeout_ms']])).toEqual([
+      [ReticleTool.ASSERT, 30_000],
     ]);
     expect(result.code).toBe(0);
+  });
+
+  it('settles the part of a long budget one assert cannot hold, then asserts', async () => {
+    const d = scripted([
+      { structuredContent: { pass: false, resume_ms: 5_000 } },
+      { structuredContent: { pass: false } },
+    ]);
+    await expectIt(80_000, d.connect);
+    expect(d.calls.map((c) => c.name)).toEqual([
+      ReticleTool.RUN,
+      ReticleTool.RUN,
+      ReticleTool.ASSERT,
+    ]);
+    expect(
+      d.calls.map((c) => (c.args['args'] as { timeout_ms?: number } | undefined)?.timeout_ms),
+    ).toEqual([25_000, 5_000, undefined]);
+    expect(d.calls[0]?.args['tool']).toBe(ReticleTool.WAIT_FOR);
+    expect(d.calls[2]?.args['timeout_ms']).toBe(ASSERT_MAX_WAIT_MS);
+  });
+
+  it('says the refusal when reticle_run answers one as data', async () => {
+    const d = scripted([{ structuredContent: { error: 'timeout_ms must be at most 600000' } }]);
+    const result = await expectIt(700_000, d.connect);
+    expect(result.code).toBe(1);
+    expect(result.lines).toEqual(['verified: unknown', 'timeout_ms must be at most 600000']);
+    expect(d.calls.map((c) => c.name)).not.toContain(ReticleTool.ASSERT);
+  });
+
+  it('waits the wait form default when no --timeout is given', async () => {
+    const d = scripted([]);
+    await expectIt(undefined, d.connect);
+    expect(d.calls[0]?.args['timeout_ms']).toBe(4000);
+  });
+
+  it('names the assert cap the tool layer enforces', () => {
+    expect(ASSERT_MAX_WAIT_MS).toBe(MAX_BLOCKING_WAIT_MS);
   });
 });

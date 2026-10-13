@@ -203,30 +203,71 @@ const DEFAULT_EXPECT_WAIT_MS = DEFAULT_ASSERT_TIMEOUT_MS;
 const WAIT_CALL_SLACK_MS = 5_000;
 
 /**
- * `reticle_assert { action: "wait" }` for the CLI, the form the file's own doc promises ("ONE
- * `act_and_wait`", which waits). Reached through `reticle_run` because that route works on every
- * tool profile. One call blocks no longer than an MCP request may, and returns `resume_ms` for the
- * rest, so this calls again until the predicate is decided or the budget is spent.
+ * The longest one `reticle_assert` call waits: its `timeout_ms` cap, one MCP request less slack.
+ * Named here rather than imported, because this directory does not reach the tool layer; pinned
+ * equal to `MAX_BLOCKING_WAIT_MS` by adhoc-verdict.test.ts so the two cannot drift apart.
+ */
+export const ASSERT_MAX_WAIT_MS = 55_000;
+
+/**
+ * A refusal `reticle_run` hands back as an `{ error }` payload. The run route answers a tool's
+ * refusal as data, not as `isError`, so `refusalText` alone read it as a verdict and printed
+ * `verified: unknown` with the JSON instead of the sentence.
+ */
+function runRefusal(result: unknown): string | undefined {
+  const said = verdictOf(result, 'error')?.['error'];
+  return refusalText(result) ?? ('string' === typeof said ? said : undefined);
+}
+
+/**
+ * Wait for the expectation, then grade it with ONE `reticle_assert` (#1533).
+ *
+ * The grade is `reticle_assert`'s, never the wait's: it journals, captures the assertion, and
+ * carries `verifiedReason`, contradictions and coverage, which `reticle_wait_for` does not.
+ * `reticle_assert` already waits when `timeout_ms > 0`, up to one request. A longer budget spends
+ * the part one assert cannot hold in `reticle_wait_for` first, through `reticle_run` (the route
+ * every tool profile has), following `resume_ms`, and then asserts. No `since` is passed by
+ * either: both default to the same last-act cursor, and nothing here acts in between.
  */
 async function waitForExpectation(
   caller: ToolCaller,
   predicate: unknown,
   pin: { sessionId?: string },
   timeoutMs: number | undefined,
-): Promise<unknown> {
-  let remaining = Math.max(0, timeoutMs ?? DEFAULT_EXPECT_WAIT_MS);
-  for (;;) {
-    const result = await caller.call(
+): Promise<{ result: unknown } | { refused: string }> {
+  const budget = Math.max(0, timeoutMs ?? DEFAULT_EXPECT_WAIT_MS);
+  let settle = budget - ASSERT_MAX_WAIT_MS;
+  while (0 < settle) {
+    const waited = await caller.call(
       ReticleTool.RUN,
-      { tool: ReticleTool.WAIT_FOR, args: { predicate, timeout_ms: remaining, ...pin } },
+      { tool: ReticleTool.WAIT_FOR, args: { predicate, timeout_ms: settle, ...pin } },
       // The daemon blocks no longer than one request allows and answers resume_ms past that, so
       // the budget plus slack always outlasts the call.
-      remaining + WAIT_CALL_SLACK_MS,
+      settle + WAIT_CALL_SLACK_MS,
     );
-    const resume = refusalText(result) === undefined ? verdictOf(result)?.['resume_ms'] : undefined;
-    if ('number' !== typeof resume || resume <= 0 || resume >= remaining) return result;
-    remaining = resume;
+    const refused = runRefusal(waited);
+    if (refused !== undefined) return { refused };
+    // By `pass`, which every wait answers with: a "not yet" carries no `verified`.
+    const report = verdictOf(waited, 'pass');
+    const resume = report?.['resume_ms'];
+    if (
+      true === report?.['pass'] ||
+      'number' !== typeof resume ||
+      resume <= 0 ||
+      resume >= settle
+    ) {
+      break;
+    }
+    settle = resume;
   }
+  const assertMs = Math.min(budget, ASSERT_MAX_WAIT_MS);
+  return {
+    result: await caller.call(
+      ReticleTool.ASSERT,
+      { predicate, timeout_ms: assertMs, ...pin },
+      assertMs + WAIT_CALL_SLACK_MS,
+    ),
+  };
 }
 
 /** The narrow slice of an MCP client this needs — one call, then close. */
@@ -380,7 +421,9 @@ export async function runAdhocVerdict(options: AdhocVerdictOptions): Promise<Adh
     if (url !== undefined && leased === undefined && !alreadyAt) {
       await caller.call(ReticleTool.NAVIGATE, { url, ...pin });
     }
-    const result = await waitForExpectation(caller, options.predicate, pin, options.timeoutMs);
+    const waited = await waitForExpectation(caller, options.predicate, pin, options.timeoutMs);
+    if ('refused' in waited) return { code: 1, lines: ['verified: unknown', waited.refused] };
+    const result = waited.result;
     const refusal = refusalText(result);
     if (refusal !== undefined) {
       return { code: 1, lines: [`verified: unknown`, refusal] };
