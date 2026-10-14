@@ -166,8 +166,15 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * keep this number flat by breaking the rule the number exists to protect. One more symbol in the
  * two files that already import core, so the file count is unmoved. The bound it asks for,
  * `TRANSPORT_LIMITS.MAX_FULL_TEXT`, is a constant the engine already borrowed the container of.
+ *
+ * 69 -> 71 for evicted buffer evidence (#1231).
+ *
+ * `channelsReadBy` maps a failing clause to the event-history channels it reads, and `Predicate`
+ * is the type alias the blind-spot check imports to walk the predicate tree. Both cross the
+ * engine/core boundary. They join the import `blind-spots.ts` already has, so the file count is
+ * unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 69;
+const MAX_DISTINCT_SYMBOLS = 71;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

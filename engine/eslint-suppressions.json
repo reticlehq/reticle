@@ -102,9 +102,6 @@
     }
   },
   "src/evidence/blind-spots.ts": {
-    "curly": {
-      "count": 11
-    },
     "no-nested-ternary": {
       "count": 1
     }
@@ -172,11 +169,6 @@
   "src/evidence/verdict-intent-gap.ts": {
     "curly": {
       "count": 2
-    }
-  },
-  "src/evidence/verified.ts": {
-    "curly": {
-      "count": 1
     }
   },
   "src/question/declared.ts": {

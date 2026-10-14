@@ -68,6 +68,8 @@ import {
   absenceBlindSpotNote,
   buildCoverageStatement,
   blindSpotsFromState,
+  failingClauseReadsLostChannel,
+  restsOnCompleteWindow,
   transportGapNote,
   Coverage,
   impeachesCapture,
@@ -629,6 +631,10 @@ export const ACT_TOOLS: ToolDef[] = [
         // Read before the capsule, which needs it: a window the buffer trimmed cannot state an
         // absolute about what did NOT happen. See CausalSummary.truncated.
         const bufferLost = session.lostSince(since);
+        const impeachForLoss =
+          bufferLost &&
+          (restsOnCompleteWindow(until) ||
+            (false === verdict.pass && failingClauseReadsLostChannel(until, windowEvents)));
         const capsule = verdict.pass
           ? undefined
           : buildDivergenceCapsule(links, windowEvents, bufferLost);
@@ -692,13 +698,7 @@ export const ACT_TOOLS: ToolDef[] = [
         const honesty = buildHonestyBlock({
           grade,
           attribution: 'window',
-          // Did the buffer lose scarce evidence FROM THIS WINDOW — not "did it evict anything while
-          // the action ran", which was the previous rule and which is true on essentially every live
-          // page. Age eviction retires everything past 60s on every push, and the churn floor is
-          // sacrificed on purpose; neither costs this verdict a single event it needed. In the
-          // field this made `unclean_capture` the dominant cause of `unknown`, reported for
-          // evictions that happened outside the window they impeached.
-          truncated: bufferLost,
+          truncated: impeachForLoss,
           coveragePartial: Coverage.PARTIAL === coverage.coverage,
           ...(coverage.note === undefined ? {} : { coverageNote: coverage.note }),
           // Settlement no longer vetoes a declared consequence that held, so the fact is carried
@@ -815,10 +815,10 @@ export const ACT_TOOLS: ToolDef[] = [
             unsettled: {
               waitedFor: describeWaitTarget(until),
               stillInFlight,
-              // The retry loop that leaves nothing outstanding — see repeatedRequestLabels.
               repeated: repeatedRequestLabels(windowEvents),
             },
             ...(namedNetIsInFlight(until, stillInFlight) ? { namedRequestInFlight: true } : {}),
+            ...(impeachForLoss && false === verdict.pass ? { bufferLostEvidence: true } : {}),
           }),
           (part) => reloadAndRecheck(deps, session, part, timeout),
         );

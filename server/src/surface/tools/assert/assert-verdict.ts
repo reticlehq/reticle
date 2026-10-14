@@ -24,6 +24,7 @@ import {
   absenceBlindSpotNote,
   blindSpotsFromState,
   buildCoverageStatement,
+  failingClauseReadsLostChannel,
   restsOnCompleteWindow,
   Coverage,
   impeachesCapture,
@@ -235,13 +236,14 @@ export async function assertVerdict(
   /**
    * The buffer evicted scarce evidence from this window.
    *
-   * assert never consulted the buffer at all, on the reasoning that it "observes an already-open
-   * window" — but eviction happens on push regardless of who opened the window, so
-   * `{ console, absent: true }` returned `yes` over a window whose evidence was gone, which is
-   * absence of evidence read as evidence of absence. The act path needs no `restsOnComplete` guard:
-   * its cursor is the action's own.
+   * Two cases. (1) An ABSENCE claim needs a complete window; things dropped are the disproof it
+   * cannot see. (2) A FAILING positive `allOf` whose NET/SIGNAL/LOG child has no evidence left in
+   * the window — the child might have failed because the buffer dropped the request, not because
+   * the app never made it (#1231). Only the second reads the events; the first is structural.
    */
-  const bufferLost = session.lostSince(since) && restsOnComplete;
+  const bufferLost =
+    session.lostSince(since) &&
+    (restsOnComplete || (false === pass && failingClauseReadsLostChannel(predicate, windowEvents)));
   /** The durable ledger refused writes, on a query path that read from it. Same rule, other store. */
   const ledgerLost = ledgerClosed && restsOnComplete;
   const decision = decideVerified({
@@ -264,6 +266,7 @@ export async function assertVerdict(
     ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
     ...(hiddenMatch === undefined ? {} : { hiddenMatch }),
     ...(namedNetIsInFlight(predicate, stillInFlight) ? { namedRequestInFlight: true } : {}),
+    ...(bufferLost && false === pass ? { bufferLostEvidence: true } : {}),
     honesty: buildHonestyBlock({
       grade: gradeOfPredicate(predicate),
       attribution: 'window',

@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { AppRuntime, EventType, type ReticleEvent } from '@reticlehq/core';
+import {
+  AppRuntime,
+  EventType,
+  PredicateKind,
+  type Predicate,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import {
   BlindSpotKind,
   buildCoverageStatement,
   blindSpotsFromEvents,
+  failingClauseReadsLostChannel,
   spotsForRuntime,
   absenceBlindSpotNote,
 } from './blind-spots.js';
@@ -258,5 +265,78 @@ describe('absenceBlindSpotNote', () => {
     const wrappedNote = absenceBlindSpotNote(wrapped, virtualizedSpot);
     expect(directNote).toBeDefined();
     expect(wrappedNote).toBe(directNote);
+  });
+});
+
+describe('failingClauseReadsLostChannel', () => {
+  const netRequest = (url: string, t = 1): ReticleEvent =>
+    ev(EventType.NET_REQUEST, { url, method: 'GET', status: 200, ok: true }, t);
+  const signal = (name: string, t = 1): ReticleEvent => ev(EventType.SIGNAL, { name }, t);
+
+  it('returns true for a bare NET predicate with no matching event', () => {
+    const pred: Predicate = { kind: PredicateKind.NET, urlContains: '/api/save' };
+    expect(failingClauseReadsLostChannel(pred, [])).toBe(true);
+  });
+
+  it('returns false for a bare ELEMENT predicate', () => {
+    const pred: Predicate = { kind: PredicateKind.ELEMENT, query: { text: 'Submit' } };
+    expect(failingClauseReadsLostChannel(pred, [])).toBe(false);
+  });
+
+  it('returns true when an allOf net child has no evidence in the window (#1231)', () => {
+    const pred: Predicate = {
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.NET, urlContains: '/api/save' },
+        { kind: PredicateKind.ELEMENT, query: { text: 'Submit' } },
+      ],
+    };
+    expect(failingClauseReadsLostChannel(pred, [])).toBe(true);
+  });
+
+  it('returns false when the allOf net child has evidence present', () => {
+    const pred: Predicate = {
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.NET, urlContains: '/api/save' },
+        { kind: PredicateKind.ELEMENT, query: { text: 'Submit' } },
+      ],
+    };
+    const events = [netRequest('http://localhost:3000/api/save')];
+    expect(failingClauseReadsLostChannel(pred, events)).toBe(false);
+  });
+
+  it('returns true when an allOf signal child has no matching signal', () => {
+    const pred: Predicate = {
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.SIGNAL, name: 'auth:done' },
+        { kind: PredicateKind.ELEMENT, query: { text: 'Welcome' } },
+      ],
+    };
+    expect(failingClauseReadsLostChannel(pred, [])).toBe(true);
+  });
+
+  it('returns false when the allOf signal child has its signal present', () => {
+    const pred: Predicate = {
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.SIGNAL, name: 'auth:done' },
+        { kind: PredicateKind.ELEMENT, query: { text: 'Welcome' } },
+      ],
+    };
+    const events = [signal('auth:done')];
+    expect(failingClauseReadsLostChannel(pred, events)).toBe(false);
+  });
+
+  it('returns false for an allOf with only DOM children', () => {
+    const pred: Predicate = {
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.ELEMENT, query: { text: 'Submit' } },
+        { kind: PredicateKind.TEXT, contains: 'Saved' },
+      ],
+    };
+    expect(failingClauseReadsLostChannel(pred, [])).toBe(false);
   });
 });

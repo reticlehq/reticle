@@ -10,13 +10,17 @@
 export { BlindSpotKind } from '@reticlehq/core';
 import {
   BlindSpotKind,
+  ChannelId,
   EventType,
   PredicateKind,
   QueryBy,
   ReticleEnv,
   TRANSPORT_LIMITS,
+  asString,
+  channelsReadBy,
   isDesktopBlindSpot,
   realmOf,
+  type Predicate,
   type ReticleEvent,
 } from '@reticlehq/core';
 
@@ -130,7 +134,9 @@ export function buildCoverageStatement(
   windowSpots?: readonly BlindSpot[],
 ): CoverageStatement {
   const present = spots.filter((s) => s.count > 0);
-  if (0 === present.length) return { coverage: Coverage.FULL, spots: [] };
+  if (0 === present.length) {
+    return { coverage: Coverage.FULL, spots: [] };
+  }
   // Each label carries its own ending. Appending a blanket " unobserved" here produced
   // "...may differ from what was sent unobserved" for the wrapped-network caveat, which is a
   // sentence rather than a count — and the same dangle appeared the moment a second prose-shaped
@@ -142,7 +148,9 @@ export function buildCoverageStatement(
   const known = (s: BlindSpot): string =>
     'function' === typeof LABEL[s.kind] ? LABEL[s.kind](s.count) : `${s.kind} (${String(s.count)})`;
   const label = (s: BlindSpot): string => {
-    if (windowSpots === undefined || !impeachesCapture(s.kind)) return known(s);
+    if (windowSpots === undefined || !impeachesCapture(s.kind)) {
+      return known(s);
+    }
     const inWindow = windowSpots.find((w) => w.kind === s.kind)?.count ?? 0;
     return 0 < inWindow
       ? known({ kind: s.kind, count: inWindow })
@@ -160,7 +168,9 @@ export function buildCoverageStatement(
 export function blindSpotsFromEvents(events: readonly ReticleEvent[]): BlindSpot[] {
   const latest = new Map<BlindSpotKind, number>();
   for (const e of events) {
-    if (e.type !== EventType.BLIND_SPOT) continue;
+    if (e.type !== EventType.BLIND_SPOT) {
+      continue;
+    }
     const kind = e.data['kind'];
     const count = e.data['count'];
     if ('string' === typeof kind && 'number' === typeof count) {
@@ -185,8 +195,12 @@ export function spotsForRuntime(
   // Unknown runtime keeps the rows, deliberately and separately from the table below: an older SDK
   // sends none, and dropping a real missing-preload warning is worse than showing one that does not
   // apply. The table answers "does this realm raise these", not "should silence be treated as no".
-  if (runtime === undefined) return [...spots];
-  if (realmOf(runtime).ownsCoverageKinds) return [...spots];
+  if (runtime === undefined) {
+    return [...spots];
+  }
+  if (realmOf(runtime).ownsCoverageKinds) {
+    return [...spots];
+  }
   return spots.filter((spot) => !isDesktopBlindSpot(spot.kind));
 }
 
@@ -233,7 +247,9 @@ export function blindSpotsFromState(
 function droppedByTransport(events: readonly ReticleEvent[]): number {
   let dropped = 0;
   for (const e of events) {
-    if (e.type !== EventType.TRANSPORT_OVERFLOW) continue;
+    if (e.type !== EventType.TRANSPORT_OVERFLOW) {
+      continue;
+    }
     const n = e.data['dropped'];
     dropped += 'number' === typeof n ? n : 0;
   }
@@ -292,12 +308,16 @@ export function absenceBlindSpotNote(
   // not threatened by an unobservable region.
   if (PredicateKind.NOT === predicate.kind && predicate.predicate !== undefined) {
     if (PredicateKind.ELEMENT === predicate.predicate.kind) {
-      if (true === predicate.predicate.absent) return undefined;
+      if (true === predicate.predicate.absent) {
+        return undefined;
+      }
       return absenceBlindSpotNote({ ...predicate.predicate, absent: true }, spots);
     }
     return undefined;
   }
-  if (PredicateKind.ELEMENT !== predicate.kind || true !== predicate.absent) return undefined;
+  if (PredicateKind.ELEMENT !== predicate.kind || true !== predicate.absent) {
+    return undefined;
+  }
 
   const role =
     predicate.query?.role ??
@@ -311,7 +331,9 @@ export function absenceBlindSpotNote(
           ? undefined === role || !NEVER_VIRTUALIZED_ROLES.has(role)
           : spot.kind === BlindSpotKind.CLOSED_SHADOW_ROOT),
   );
-  if (0 === relevant.length) return undefined;
+  if (0 === relevant.length) {
+    return undefined;
+  }
 
   const statement = buildCoverageStatement(relevant);
   return `the absence assertion targeted a region Reticle could not observe (${statement.note ?? 'partial coverage'}), so a passing DOM check cannot prove absence`;
@@ -355,7 +377,12 @@ export function restsOnCompleteWindow(predicate: {
   count?: number;
   predicate?: unknown;
 }): boolean {
-  if (PredicateKind.NOT === predicate.kind) return true;
+  if (PredicateKind.NOT === predicate.kind) {
+    return true;
+  }
+  if (PredicateKind.SETTLED === predicate.kind) {
+    return true;
+  }
   // An exact cardinality of ZERO is the third spelling of an absence claim, and reading only
   // `absent` missed it: `{ kind: "net", urlContains: "/api/auth/sign-in", count: 0 }` says "this
   // request was never made", and the call the buffer evicted is precisely the disproof. It was
@@ -365,6 +392,68 @@ export function restsOnCompleteWindow(predicate: {
   // Only zero. `count: 2` asserts calls were MADE and found them; events aged out elsewhere in the
   // buffer do not unmake a positive finding, which is the same reason a plain presence assertion is
   // left alone here.
-  if (0 === predicate.count) return true;
+  if (0 === predicate.count) {
+    return true;
+  }
   return true === predicate.absent;
+}
+
+const EVENT_HISTORY_CHANNELS: ReadonlySet<ChannelId> = new Set([
+  ChannelId.NET,
+  ChannelId.SIGNAL,
+  ChannelId.LOG,
+]);
+
+/**
+ * For a failing assertion whose buffer lost events: does the failure rest on a clause that reads
+ * event history?
+ *
+ * An `allOf` that failed could have failed on ANY child. A child whose evidence IS present in
+ * the window passed; only a child whose evidence is ABSENT could have failed, and if that child
+ * reads event history the failure might be the buffer's fault. Checking the window events against
+ * each event-history child is what tells `allOf[{net /a}, {element Submit}]` apart from
+ * `allOf[{net /a}, {element Submit}]` where the request is present and only the button is missing.
+ */
+export function failingClauseReadsLostChannel(
+  predicate: Predicate,
+  windowEvents: readonly ReticleEvent[],
+): boolean {
+  if (PredicateKind.ALL_OF !== predicate.kind || 0 === predicate.predicates.length) {
+    return channelsReadBy(predicate).some((ch) => EVENT_HISTORY_CHANNELS.has(ch));
+  }
+  for (const child of predicate.predicates) {
+    if (!channelsReadBy(child).some((ch) => EVENT_HISTORY_CHANNELS.has(ch))) {
+      continue;
+    }
+    if (!childEvidencePresent(child, windowEvents)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function childEvidencePresent(child: Predicate, events: readonly ReticleEvent[]): boolean {
+  if (PredicateKind.NET === child.kind) {
+    const url = child.urlContains;
+    if (url === undefined || 0 === url.length) {
+      return false;
+    }
+    return events.some(
+      (e) =>
+        EventType.NET_REQUEST === e.type &&
+        'string' === typeof e.data['url'] &&
+        e.data['url'].includes(url),
+    );
+  }
+  if (PredicateKind.SIGNAL === child.kind) {
+    const name = child.name;
+    if (name === undefined) {
+      return false;
+    }
+    return events.some((e) => EventType.SIGNAL === e.type && asString(e.data['name']) === name);
+  }
+  if (PredicateKind.CONSOLE === child.kind) {
+    return events.some((e) => 'string' === typeof e.type && e.type.startsWith('console.'));
+  }
+  return false;
 }
