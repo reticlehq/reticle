@@ -225,6 +225,30 @@ describe('a platform refusal part-way through a drive', () => {
   });
 });
 
+describe('a run the platform ended as failed', () => {
+  it('breaks the drive with the platform summary as the reason', async () => {
+    const reason = 'could not drive the app: no connected session';
+    const { fetch } = platform({
+      '/v1/harness/runs': () => ({ runId: 'hr_gone' }),
+      '/v1/harness/runs/hr_gone/turn': () => ({
+        turn: 0,
+        calls: [],
+        text: '',
+        done: true,
+        status: 'failed',
+        summary: reason,
+      }),
+    });
+    const result = await runHarness(
+      serverDriver({ url: 'https://p.test', apiKey: 'k', fetch }),
+      toolset([]),
+    );
+    expect(result.stopReason).toBe('broken');
+    expect(result.error).toBe(reason);
+    expect(result.goalMet).toBe(false);
+  });
+});
+
 describe('autonomous driving switched off mid-run', () => {
   it('ends the drive as stopped, not broken', async () => {
     const answers = [

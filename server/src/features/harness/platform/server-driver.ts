@@ -30,6 +30,8 @@ const TURN_TIMEOUT_MS = 110_000;
 const RETRIES = 1;
 /** The platform's code for a run whose project had autonomous driving switched off. */
 const FINISH = 'finish';
+/** The platform's status for a run it ended without finishing: the app could not be driven. */
+const FAILED = 'failed';
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -187,6 +189,9 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
       turn = reply.turn + 1;
       // The platform's spend, reported so the drive's cost is visible here as it is for a local one.
       const usage = reply.usage === undefined ? {} : { usage: reply.usage };
+      // A run the platform ended as failed is a broken drive, and its summary says why.
+      if (reply.done && FAILED === reply.status)
+        throw new ServerHarnessError(reply.summary ?? reply.text, 502);
       if (reply.done) {
         // The platform has finished: `finish` ends the local loop the same way a local model would.
         return {
