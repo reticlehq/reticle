@@ -26,6 +26,16 @@ describe('the check the action posts', () => {
     });
   });
 
+  // The check's page offers a replay only for a journey whose result names the run it pushed.
+  it('forwards the run each journey came from, so the check can replay it', () => {
+    const results = readResults(
+      '{"verdict":"no","results":[{"journey":"a","verdict":"no","runId":"run-1"}]}',
+    );
+    expect(checkPayload({ env: {}, url: 'u', results, event: {} }).results).toEqual([
+      { journey: 'a', verdict: 'no', runId: 'run-1' },
+    ]);
+  });
+
   it('leaves the PR out on a push', () => {
     expect(prNumber({})).toBeUndefined();
     expect(checkPayload({ env: {}, url: 'u', results: [], event: {} })).not.toHaveProperty('pr');

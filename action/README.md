@@ -34,7 +34,7 @@ Pin a release tag or a commit SHA, never a branch: `@main` changes under you, so
 
 1. Installs `@reticlehq/server`, plus the Chromium that version drives.
 2. Uses the journeys in `.reticle/flows`. If the repository has none, it pulls the project's suite from the platform.
-3. Runs `reticle verify <url> --results-json <file>`. This writes one verdict per journey: `yes`, `no` or `unknown`.
+3. Runs `reticle verify <url> --results-json <file>`. This writes one verdict per journey: `yes`, `no` or `unknown`. A journey whose run reached the platform also names that run, so the check page can replay it.
 4. Posts those verdicts to the platform as one check for the commit, and prints the details URL. The URL is also the `details-url` output.
 
 ## When the job fails

@@ -16,7 +16,8 @@ type JourneyVerdict = typeof Verified.YES | typeof Verified.NO | typeof Verified
 
 export interface VerifyResults {
   verdict: JourneyVerdict;
-  results: { journey: string; verdict: JourneyVerdict; reason?: string }[];
+  /** `runId` is the run the journey came from, set only when that run reached the platform. */
+  results: { journey: string; verdict: JourneyVerdict; reason?: string; runId?: string }[];
 }
 
 function journeyVerdict(status: RunFlowStatus): JourneyVerdict {
@@ -26,11 +27,13 @@ function journeyVerdict(status: RunFlowStatus): JourneyVerdict {
   return Verified.UNKNOWN;
 }
 
-export function verifyResults(run: ReticleVerificationRun): VerifyResults {
+/** `pushed`: the run reached the platform, so its id resolves there and the results name it. */
+export function verifyResults(run: ReticleVerificationRun, pushed = false): VerifyResults {
   const results = run.flows.map((flow) => ({
     journey: flow.name,
     verdict: journeyVerdict(flow.status),
     ...(flow.failureReason === undefined ? {} : { reason: flow.failureReason }),
+    ...(pushed ? { runId: run.runId } : {}),
   }));
   const verdict = results.some((r) => Verified.NO === r.verdict)
     ? Verified.NO

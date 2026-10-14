@@ -275,7 +275,7 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
       progress.stop();
       await progress.flush().catch(() => undefined);
     }
-    await pushRunToCloud(run, cloud, ports); // best-effort; opt-in; never changes the verdict or exit code
+    const pushed = await pushRunToCloud(run, cloud, ports); // best-effort; opt-in; never changes the verdict or exit code
     /*
      * The last event anybody watching is waiting for, sent after the artifact has actually landed —
      * so "pushed" on a dashboard means the run is really there, not that we were about to try.
@@ -290,7 +290,7 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
     if (args.resultsJson !== undefined && ports.writeResults !== undefined) {
       await ports.writeResults(
         args.resultsJson,
-        `${JSON.stringify(verifyResults(run), null, 2)}\n`,
+        `${JSON.stringify(verifyResults(run, pushed), null, 2)}\n`,
       );
     }
     ports.out(renderRunReport(run));
@@ -350,13 +350,13 @@ async function pushRunToCloud(
   run: ReticleVerificationRun,
   config: CloudConfig | null,
   ports: VerifyPorts,
-): Promise<void> {
+): Promise<boolean> {
   if (null === config) {
     ports.out(
       `run ${run.runId} was kept on this computer: this repo is not linked, so nothing was sent ` +
         `to the dashboard. To save runs for your team: ${CONNECT}`,
     );
-    return;
+    return false;
   }
   const result = await syncRunToCloud(run, config, cloudFetch);
   if (result.outcome === SyncOutcome.SYNCED) {
@@ -366,9 +366,10 @@ async function pushRunToCloud(
         ? `↑ run ${run.runId} recorded on the Reticle dashboard`
         : seeRunLine(dashboard, run.runId),
     );
-  } else {
-    ports.fail(runSyncFailure(result.status, result.error));
+    return true;
   }
+  ports.fail(runSyncFailure(result.status, result.error));
+  return false;
 }
 
 /** The platform answered: the credential was not accepted. */

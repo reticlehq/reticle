@@ -23,7 +23,7 @@ import {
 } from './cli-verify.js';
 import { PortPresence } from '../daemon/binding/port-presence.js';
 import { renderHelp } from './cli-usage.js';
-import { verifyResults } from './verify-results.js';
+import { verifyResults, type VerifyResults } from './verify-results.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -444,6 +444,35 @@ describe('runVerify --results-json', () => {
       verdict: 'no',
       results: [{ journey: 'checkout', verdict: 'no', reason: 'order never saved' }],
     });
+  });
+
+  /*
+   * A CI check on the dashboard could never offer the replay of the run behind a journey: the
+   * results named no run. The id goes in only when the run reached the platform, so it resolves.
+   */
+  it('names the run each journey came from once the run reached the platform, and not before', async () => {
+    let status = 200;
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response('{}', { status })));
+    const written: string[] = [];
+    const run = makeRun(RunFlowStatus.FAIL);
+    const { ports } = harness({ verify: () => Promise.resolve(run) });
+    const linked = {
+      ...ports,
+      cloud: () => Promise.resolve({ url: 'https://cloud.test', apiKey: 'rk_test' }),
+      writeResults: (_path: string, text: string) => {
+        written.push(text);
+        return Promise.resolve();
+      },
+    };
+    await runVerify({ ...ARGS, resultsJson: 'out.json' }, linked);
+    status = 401;
+    await runVerify({ ...ARGS, resultsJson: 'out.json' }, linked);
+    vi.unstubAllGlobals();
+    const [pushed, refused] = written.map((t) => JSON.parse(t) as VerifyResults);
+    expect(pushed?.results).toEqual([
+      { journey: 'checkout', verdict: 'no', reason: 'order never saved', runId: run.runId },
+    ]);
+    expect(refused?.results[0]).not.toHaveProperty('runId');
   });
 
   it('reads a skipped journey as unknown, and the run as unknown rather than yes', () => {
