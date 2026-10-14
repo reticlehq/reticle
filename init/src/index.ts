@@ -37,6 +37,7 @@ export {
   DEV_SERVER_PORTS,
   isLikelyDevServerPort,
   devServerPortWarning,
+  frameworkDevPort,
 } from './detect/dev-server-ports.js';
 export { configWithInstallSource } from './project/install-source-config.js';
 export { projectIdOf, rememberProjectOnDisk, type RegistryIo } from './project/remember-project.js';

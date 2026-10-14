@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createServer, type Server } from 'node:net';
 import {
   runSetupPhases,
   ServerStartedBy,
@@ -10,6 +11,7 @@ import {
 import { AppShape } from './desktop-shape.js';
 import type { CandidateSession } from './session-pick.js';
 import type { PageProbe } from './probe/page-probe.js';
+import { loneLoopbackOnDevPort } from './probe/dev-port.js';
 
 const INPUT: SetupInput = {
   appDir: '/app',
@@ -946,5 +948,75 @@ describe('the connect wait says it is still waiting', () => {
     });
     await runSetupPhases({ ...INPUT, shape: AppShape.ELECTRON, connectBudgetMs: 40_000 }, fx);
     expect(printed.some((l) => l.includes('Still waiting for the Electron window'))).toBe(true);
+  });
+});
+
+describe('a dev port something else already serves (#1377)', () => {
+  it('stops before spawning when one loopback answers and the other does not', async () => {
+    let started = false;
+    const notes: string[] = [];
+    const fx = world({
+      startDevServer: () => {
+        started = true;
+        return Promise.resolve();
+      },
+      loneLoopbackOnDevPort: () => Promise.resolve('127.0.0.1'),
+      note: (line) => notes.push(line),
+    });
+
+    const result = await runSetupPhases({ ...INPUT, devPort: 5173 }, fx);
+
+    expect(started).toBe(false);
+    expect(result.ok).toBe(false);
+    expect(result.reachedPhase).toBe(SetupPhase.DEV_SERVER);
+    expect(notes.join('\n')).toContain('Port 5173 is half taken');
+  });
+
+  it('starts as before when the port is free, or busy on both loopbacks', async () => {
+    let started = false;
+    const fx = world({
+      startDevServer: () => {
+        started = true;
+        return Promise.resolve();
+      },
+      loneLoopbackOnDevPort: () => Promise.resolve(undefined),
+    });
+    await runSetupPhases({ ...INPUT, devPort: 5173 }, fx);
+    expect(started).toBe(true);
+  });
+});
+
+describe('a dev port served on both loopbacks (#1377)', () => {
+  const held: Server[] = [];
+  afterEach(async () => {
+    await Promise.all(
+      held.splice(0).map((s) => new Promise<void>((resolve) => s.close(() => resolve()))),
+    );
+  });
+  const hold = (host: string, port: number): Promise<number | undefined> =>
+    new Promise((resolve) => {
+      const server = createServer();
+      server.once('error', () => resolve(undefined));
+      server.listen({ port, host, ipv6Only: true }, () => {
+        held.push(server);
+        const address = server.address();
+        resolve(null !== address && 'object' === typeof address ? address.port : undefined);
+      });
+    });
+
+  it('starts as before: a second app on both is a busy port the dev server moves off', async () => {
+    const port = await hold('127.0.0.1', 0);
+    expect(port).toBeDefined();
+    if (undefined === (await hold('::1', port ?? 0))) return; // no IPv6 loopback on this machine
+    let started = false;
+    const fx = world({
+      startDevServer: () => {
+        started = true;
+        return Promise.resolve();
+      },
+      loneLoopbackOnDevPort,
+    });
+    await runSetupPhases({ ...INPUT, devPort: port }, fx);
+    expect(started).toBe(true);
   });
 });

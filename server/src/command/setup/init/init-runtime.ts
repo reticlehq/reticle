@@ -298,6 +298,8 @@ export async function continueAfterInit(
         return undefined === devCommand ? {} : { devCommand, devCommandIsStaticPage: true };
       })(),
       ...(undefined === parsed.url ? {} : { suppliedUrl: parsed.url }),
+      // So setup can tell which port the dev server will take, before it starts one (#1377).
+      framework: context.framework,
     },
     (line) => io.print(line),
   )

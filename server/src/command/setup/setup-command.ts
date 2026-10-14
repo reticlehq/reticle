@@ -11,6 +11,12 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { planAgentConfigs, type PlatformPaths } from './agent-configs.js';
 import { AppShape, describeShape, readShape } from './desktop-shape.js';
+import {
+  devConfigText,
+  expectedDevPort,
+  loneLoopbackOnDevPort,
+  pinnedDevPort,
+} from './probe/dev-port.js';
 import { SigningEnv, tauriSigningEnv } from './tauri-signing.js';
 import { stopOnInterrupt } from './terminal/interrupt.js';
 import { stopOnCrash, crashSentence } from './terminal/crash.js';
@@ -97,6 +103,8 @@ interface SetupCommandInput extends Omit<SetupInput, 'shape'> {
   readonly pairingToken?: string | undefined;
   /** False for `--no-first-run`: connect, and say nothing more. */
   readonly firstRun: boolean;
+  /** The framework init detected, for the dev server's default port. See probe/dev-port.ts. */
+  readonly framework?: string | undefined;
   /** `--json`: an agent is reading, so nothing is driven on its behalf. */
   readonly json: boolean;
   /**
@@ -365,6 +373,9 @@ export async function runSetupCommand(
       server.start(command, cwd, { ...input.env, ...signing });
       return Promise.resolve();
     },
+    // Asked before the dev script is spawned: a listener on one loopback only is not this
+    // project's, and the dev server could not see it (#1377).
+    loneLoopbackOnDevPort,
     // The server the plugin announced (Vite), or failing that the one a previous init handed over
     // and recorded — the only way to know a Next or Angular server on the port is this project's own.
     existingAppUrl: async () =>
@@ -429,8 +440,23 @@ export async function runSetupCommand(
   // activity, and on a slow desktop build the daemon init had just started idled out mid-wait.
   const releaseDaemon = holdDaemon(input.bridgePort);
   try {
+    // The port the project's own dev script will take, when it can be known (#1377). Not with
+    // --url, where nothing is started.
+    const devPort =
+      undefined === input.devCommand || undefined !== input.suppliedUrl
+        ? undefined
+        : expectedDevPort({
+            pinned: pinnedDevPort(input.appDir),
+            framework: input.framework,
+            devConfig: devConfigText(input.appDir),
+          });
     const outcome = await runSetupPhases(
-      { ...input, shape, projectId: readProjectId(input.appDir) },
+      {
+        ...input,
+        shape,
+        projectId: readProjectId(input.appDir),
+        ...(undefined === devPort ? {} : { devPort }),
+      },
       effects,
     );
     // The app stays up only when there is something worth watching.

@@ -1,3 +1,5 @@
+import { Framework } from './detect.js';
+
 /**
  * Ports that belong to a DEV SERVER, not to Reticle's bridge. Next defaults to 3000, Vite to 5173,
  * Astro to 4321, and so on.
@@ -44,6 +46,27 @@ export const DEV_SERVER_PORTS: ReadonlySet<number> = new Set([
   6006, // Storybook
   19006, // Expo web
 ]);
+
+/**
+ * The port each framework's dev server takes when nothing configures another. Every value is in
+ * {@link DEV_SERVER_PORTS} as well. `reticle setup` reads it to know which port a dev script will
+ * take before starting one, so a server already on half of that port is found first (#1377).
+ */
+const FRAMEWORK_DEV_PORTS: Readonly<Partial<Record<string, number>>> = {
+  [Framework.VITE]: 5173,
+  [Framework.SVELTEKIT]: 5173,
+  [Framework.REACT_ROUTER]: 5173,
+  [Framework.NEXT]: 3000,
+  [Framework.NUXT]: 3000,
+  [Framework.CRA]: 3000,
+  [Framework.ASTRO]: 4321,
+  [Framework.ANGULAR]: 4200,
+};
+
+/** The framework's default dev-server port, or undefined for one that has none of its own. */
+export function frameworkDevPort(framework: string): number | undefined {
+  return FRAMEWORK_DEV_PORTS[framework];
+}
 
 export function isLikelyDevServerPort(port: number): boolean {
   return DEV_SERVER_PORTS.has(port);

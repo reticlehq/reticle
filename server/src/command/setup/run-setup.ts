@@ -42,6 +42,7 @@ import {
   type PageProbe,
 } from './probe/page-probe.js';
 import { remainingSteps, type Progress } from './remaining-steps.js';
+import { splitDevPortNote } from './probe/dev-port.js';
 import { AppShape, isDesktop, policyFor } from './desktop-shape.js';
 
 /** Where a run got to, and why it stopped if it did. */
@@ -149,6 +150,12 @@ export interface SetupEffects {
    * starting a second one on the next port.
    */
   readonly existingAppUrl?: () => Promise<string | undefined>;
+  /**
+   * The one loopback address something answers on at a port, when the other is free. Undefined
+   * when both are free or both answer. Asked before the dev server is started, never after: see
+   * probe/dev-port.ts.
+   */
+  readonly loneLoopbackOnDevPort?: (port: number) => Promise<string | undefined>;
   /** Everything the dev server has printed so far. */
   readonly devServerOutput: () => string;
   readonly devServerExited: () => boolean;
@@ -213,6 +220,8 @@ export interface SetupInput {
   readonly devCommandIsStaticPage?: boolean | undefined;
   /** The app is already served here, so nothing is started. */
   readonly suppliedUrl?: string | undefined;
+  /** The port the dev command will take, when it is known. See probe/dev-port.ts. */
+  readonly devPort?: number | undefined;
   /**
    * The caller's own budget for the connect wait, when they named one.
    *
@@ -320,6 +329,18 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       );
       return stop(input, SetupPhase.DEV_SERVER, {}, notes);
     } else {
+      // Not this project's announced server (that branch is above). Something answering on one
+      // loopback and not the other is the split a new server cannot see: it binds the free one with
+      // no error, and the two addresses serve different apps (#1377). Something on both loopbacks
+      // is a busy port the dev server sees and moves off, so it starts as before.
+      const lone =
+        undefined === input.devPort || undefined === fx.loneLoopbackOnDevPort
+          ? undefined
+          : await fx.loneLoopbackOnDevPort(input.devPort);
+      if (undefined !== lone && undefined !== input.devPort) {
+        note(splitDevPortNote(input.devPort, lone));
+        return stop(input, SetupPhase.DEV_SERVER, {}, notes);
+      }
       if (true === input.devCommandIsStaticPage) note(STATIC_PAGE_URL_HINT);
       await fx.startDevServer(input.devCommand, input.appDir);
       const startedAt = fx.now();
