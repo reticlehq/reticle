@@ -268,7 +268,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.
-  'server/src/command/cli': 27, // + cloud-link.ts: `reticle link`, split from cloud-cli.ts at its line cap; + known-regression.ts: the gate's read of the platform, off the library path; + try-command.ts, verify-results.ts, cli-usage.ts: commands and their output beside their siblings; a subdirectory gave each a new reach the reach guard refuses; + tutorial.ts: one sequence, two audiences, ending at a verdict; + report-command.ts, a command beside its siblings
+  'server/src/command/cli': 28, // + open-navigate.ts: `open --navigate`, beside adhoc-verdict.ts as review asked; + cloud-link.ts: `reticle link`, split from cloud-cli.ts at its line cap; + known-regression.ts: the gate's read of the platform, off the library path; + try-command.ts, verify-results.ts, cli-usage.ts: commands and their output beside their siblings; a subdirectory gave each a new reach the reach guard refuses; + tutorial.ts: one sequence, two audiences, ending at a verdict; + report-command.ts, a command beside its siblings
   // 17 since the installer's Node half: `setup-mcp.ts` (which agents are here, and merging into the
   // configs they already keep) and `setup-install.ts` (the three steps only the shell could time).
   // Both are pure — their telemetry reporter is INJECTED, because this directory does not own a

@@ -60,7 +60,7 @@ export function daemonSkew(status: unknown): string | undefined {
 type OpenDecision =
   | { action: 'reuse'; url: string }
   /** A tab on that origin exists, but on another page — kept, and NOT reported as done. */
-  | { action: 'left-as-is'; url: string; requested: string }
+  | { action: 'left-as-is'; url: string; requested: string; sessionId?: string }
   | { action: 'open'; url: string }
   | { action: 'need-url' };
 
@@ -93,7 +93,13 @@ function sameOrigin(a: string, b: string): boolean {
  * is a bigger surprise than being told where the tab actually is.
  */
 export function decideOpen(
-  all: { url: string; unresponsive?: boolean; hidden?: boolean; lastSeenMs?: number }[],
+  all: {
+    url: string;
+    sessionId?: string;
+    unresponsive?: boolean;
+    hidden?: boolean;
+    lastSeenMs?: number;
+  }[],
   url: string | undefined,
 ): OpenDecision {
   // A tab that has stopped answering is not a tab you can be handed. `open` is the command a caller
@@ -132,7 +138,13 @@ export function decideOpen(
   if (exact !== undefined) return { action: 'reuse', url: exact.url };
   const onOrigin = sessions.find((s) => sameOrigin(s.url, url));
   return onOrigin !== undefined
-    ? { action: 'left-as-is', url: onOrigin.url, requested: url }
+    ? {
+        action: 'left-as-is',
+        url: onOrigin.url,
+        requested: url,
+        // Which tab, so `--navigate` can move THAT one rather than whichever the daemon picks.
+        ...(onOrigin.sessionId === undefined ? {} : { sessionId: onOrigin.sessionId }),
+      }
     : { action: 'open', url };
 }
 

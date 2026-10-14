@@ -129,9 +129,10 @@ const COMMANDS: readonly CommandDoc[] = [
   },
   {
     name: 'open',
-    synopsis: 'open [url] [--port N]',
+    synopsis: 'open [url] [--port N] [--navigate]',
     summary: 'Open the app in your browser, or reuse a tab that is already connected',
     group: HelpGroup.MACHINE,
+    detail: '--navigate moves a tab already on that origin to the url instead of leaving it.',
   },
   {
     name: 'stop',

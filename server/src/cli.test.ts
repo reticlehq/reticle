@@ -540,11 +540,16 @@ describe('parseCliArgs', () => {
   });
 
   it('open with no url → reuse-a-connected-tab intent (no url field)', () => {
-    expect(parseCliArgs(['open'], PORT)).toEqual({ kind: 'open', port: PORT });
+    expect(parseCliArgs(['open'], PORT)).toEqual({ kind: 'open', port: PORT, navigate: false });
   });
 
   it('open <url> carries the url', () => {
-    expect(parseCliArgs(['open', URL], PORT)).toEqual({ kind: 'open', port: PORT, url: URL });
+    expect(parseCliArgs(['open', URL], PORT)).toEqual({
+      kind: 'open',
+      port: PORT,
+      url: URL,
+      navigate: false,
+    });
   });
 
   it('open <url> --port overrides the port', () => {
@@ -552,6 +557,16 @@ describe('parseCliArgs', () => {
       kind: 'open',
       port: 5000,
       url: URL,
+      navigate: false,
+    });
+  });
+
+  it('open <url> --navigate opts in to moving the tab on that origin (#1140)', () => {
+    expect(parseCliArgs(['open', URL, '--navigate'], PORT)).toEqual({
+      kind: 'open',
+      port: PORT,
+      url: URL,
+      navigate: true,
     });
   });
 

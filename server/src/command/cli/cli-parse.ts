@@ -196,6 +196,8 @@ const HOOKS_FLAG = '--hooks';
 const JSON_FLAG = '--json';
 const NO_DRIVE_FLAG = '--no-drive';
 const NO_OPEN_FLAG = '--no-open';
+/** `reticle open <url> --navigate`: move a tab already on the origin to the url (#1140). */
+const NAVIGATE_FLAG = '--navigate';
 /** Connect and stop: no coverage summary and no prompt at the end. */
 const NO_FIRST_RUN_FLAG = '--no-first-run';
 const NO_AGENTS_FLAG = '--no-agents';
@@ -275,7 +277,7 @@ export type CliResult =
   | { kind: 'doctor'; port: number }
   | { kind: 'setup-mcp' }
   | { kind: 'setup-install'; runtimeSecs: number; installSecs: number; mcp: boolean }
-  | { kind: 'open'; port: number; url?: string }
+  | { kind: 'open'; port: number; url?: string; navigate: boolean }
   | {
       kind: '_daemon';
       port: number;
@@ -801,7 +803,10 @@ export function parseCliArgs(
       const port = parsePortFlag(rest, defaultPort);
       // The first non-flag arg is the url (optional — omitting reuses a connected tab).
       const url = rest.find((a) => !a.startsWith('--') && a !== String(port));
-      return url !== undefined ? { kind: 'open', port, url } : { kind: 'open', port };
+      const navigate = rest.includes(NAVIGATE_FLAG);
+      return url !== undefined
+        ? { kind: 'open', port, url, navigate }
+        : { kind: 'open', port, navigate };
     }
     case DRIVE_COMMAND: {
       const r = parseDriveSuffix(rest, defaultPort, defaultHeadless);

@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server`: `reticle open <url> --navigate` moves a tab already on that origin to the url.** By default `open` leaves a same-origin tab where it is, because the tab is often a person's. A caller with no MCP tools, such as a shell loop or an agent whose MCP link timed out, therefore could not get past the first page of a multi-page site without restarting the daemon. With `--navigate`, that tab is sent the same `reticle_navigate` an agent would send, and `open` waits for arrival and reports `navigated` (and `landedOn` for a redirect). Without the flag nothing changes. Closes [#1140](https://github.com/reticlehq/reticle/issues/1140).
