@@ -63,6 +63,37 @@ describe('describeWaitTarget names what was being waited for', () => {
     ).toBe(`an element matching {"testid":"pay"} in state 'enabled'`);
   });
 
+  /*
+   * Persona drive: "an order request fires" passed and closed the issue for "the order carries the
+   * promo code" while the defect was live. The label dropped the body condition, so both checks
+   * had one title and one issue. Every condition a claim checks stays in its words.
+   */
+  it('keeps every condition a request, text or state claim checks', () => {
+    const plain = describeWaitTarget({
+      kind: PredicateKind.NET,
+      method: 'POST',
+      urlContains: '/api/orders',
+    });
+    const strict = describeWaitTarget({
+      kind: PredicateKind.NET,
+      method: 'POST',
+      urlContains: '/api/orders',
+      status: 201,
+      requestBodyMatches: { promoCode: 'SAVE10' },
+      since: 42,
+    });
+    expect(strict).not.toBe(plain);
+    expect(strict).toContain('promoCode');
+    expect(strict).toContain('201');
+    expect(strict, 'a cursor is not a condition').not.toContain('42');
+    expect(
+      describeWaitTarget({ kind: PredicateKind.TEXT, contains: 'Error', absent: true }),
+    ).not.toBe(describeWaitTarget({ kind: PredicateKind.TEXT, contains: 'Error' }));
+    expect(
+      describeWaitTarget({ kind: PredicateKind.STATE, path: 'cart.count', equals: 2 }),
+    ).toContain('2');
+  });
+
   it('describes a composite without losing its parts', () => {
     const said = describeWaitTarget({
       kind: PredicateKind.ALL_OF,

@@ -45,6 +45,35 @@ export interface UnsettledWindow {
  * agent that never chose that wait cannot be expected to recognise it in a timeout about it.
  */
 export function describeWaitTarget(predicate: Predicate): string {
+  return `${waitPhrase(predicate)}${otherConditions(predicate)}`;
+}
+
+/** The fields a phrase already words, per kind; `since` is a cursor, never a condition. */
+const WORDED: Readonly<Record<string, readonly string[]>> = {
+  [PredicateKind.SIGNAL]: ['name'],
+  [PredicateKind.NET]: ['method', 'urlContains'],
+  [PredicateKind.ROUTE]: ['pathname', 'contains'],
+  [PredicateKind.STATE]: ['path'],
+  [PredicateKind.TEXT]: ['contains', 'ignoreCase'],
+  [PredicateKind.ELEMENT]: ['query', 'state'],
+  [PredicateKind.ANIMATION]: ['name'],
+};
+const NEVER_WORDED = new Set(['kind', 'since']);
+
+/**
+ * Every other condition the claim checks, as JSON. The label is the check's title and its issue
+ * key downstream, so a condition left out made a weaker check share a stricter one's issue.
+ */
+function otherConditions(predicate: Predicate): string {
+  const worded = WORDED[predicate.kind];
+  if (worded === undefined) return '';
+  const rest = Object.entries(predicate).filter(
+    ([key, value]) => value !== undefined && !NEVER_WORDED.has(key) && !worded.includes(key),
+  );
+  return 0 === rest.length ? '' : ` where ${JSON.stringify(Object.fromEntries(rest))}`;
+}
+
+function waitPhrase(predicate: Predicate): string {
   switch (predicate.kind) {
     case PredicateKind.SETTLED:
       return 'the page to go idle';
