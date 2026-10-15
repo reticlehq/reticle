@@ -153,6 +153,37 @@ function isAuditTimestampKey(key: string): boolean {
 }
 
 /**
+ * A word of a key that names a value computed FROM the record: a content hash, a digest, a checksum
+ * (#1522). A new record has a new one, so a different value is not a dropped write, the same way a
+ * create's assigned `id` is not. Matched on whole words of the key (`contentHash`, `content_sha256`),
+ * never as a substring, so `shape`, `shared` and `hashtag` are still compared.
+ */
+const CONTENT_DIGEST_WORD = /^(?:hash|sha\d*|md5|checksum|digest|crc\d*)$/;
+
+/** The lowercase words of a key: split at `_`, `-`, `.` and at a lower-to-upper camelCase step. */
+function keyWords(key: string): string[] {
+  return key
+    .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .split(/[^a-z\d]+/)
+    .filter((word) => 0 < word.length);
+}
+
+function isContentDigestKey(key: string): boolean {
+  return keyWords(key).some((word) => CONTENT_DIGEST_WORD.test(word));
+}
+
+/**
+ * How many compared keys must ALL disagree before the response is read as a different record.
+ *
+ * When two or more keys the response shares with the request all come back different, nothing was
+ * echoed: the server answered with another record of the same type, such as a derived artifact
+ * (#1522). One disagreeing key alone stays a finding, because that is the archetype this kind
+ * exists for (`{qty: 5}` answered with `{qty: 3}`).
+ */
+const NEW_RECORD_MIN_KEYS = 2;
+
+/**
  * Every scalar value the response carries for each key, at any depth.
  *
  * Depth matters because the echo is usually nested — `{ok:true, saved:{...}}`, `{data:{...}}`,
@@ -331,6 +362,7 @@ export function findEchoMismatches(
     // comparing it by name across the two documents compares two different fields.
     const addressed = isAddressedWrite(asked);
     const dropped: string[] = [];
+    let compared = 0;
     for (const [key, wanted] of asked) {
       if (addressed && CONTAINER_KEYS.has(key.toLowerCase())) continue;
       // More than one requested value for a key (a before/after pair, a list of items) makes "what
@@ -340,15 +372,20 @@ export function findEchoMismatches(
       if (isIdentityKey(key)) continue;
       if (isVersionKey(key)) continue;
       if (isAuditTimestampKey(key)) continue;
+      if (isContentDigestKey(key)) continue;
       const values = echoed.get(key);
       // Not echoed at all = no evidence either way. Only a key the server chose to report back can
       // contradict the request, and silence is not a contradiction.
       if (values === undefined || 0 === values.size) continue;
+      compared += 1;
       const [want] = [...wanted];
       if (want !== undefined && !values.has(want))
         dropped.push(`${key}: asked ${want}, got ${[...values].join('/')}`);
     }
     if (0 === dropped.length) continue;
+    // Nothing the response shares with the request came back as sent: a different record, not a
+    // half-applied write. See NEW_RECORD_MIN_KEYS.
+    if (compared >= NEW_RECORD_MIN_KEYS && dropped.length === compared) continue;
 
     const url = 'string' === typeof event.data['url'] ? event.data['url'] : '';
     const attribution =
