@@ -174,14 +174,40 @@ function isContentDigestKey(key: string): boolean {
 }
 
 /**
- * How many compared keys must ALL disagree before the response is read as a different record.
+ * How many compared keys must ALL disagree before the response can be read as a different record.
  *
- * When two or more keys the response shares with the request all come back different, nothing was
- * echoed: the server answered with another record of the same type, such as a derived artifact
- * (#1522). One disagreeing key alone stays a finding, because that is the archetype this kind
- * exists for (`{qty: 5}` answered with `{qty: 3}`).
+ * One disagreeing key alone stays a finding, because that is the archetype this kind exists for
+ * (`{qty: 5}` answered with `{qty: 3}`). See `isNewRecord` for the rest of the rule.
  */
 const NEW_RECORD_MIN_KEYS = 2;
+
+/** Methods that change THE record named in the URL. Their answer is never a different record. */
+const UPDATE_METHODS: ReadonlySet<string> = new Set(['PUT', 'PATCH']);
+
+/**
+ * Is this response a DIFFERENT record of the same type, rather than an ignored write (#1522)?
+ *
+ * "Every compared key differs" alone is also the worst case of this finding: a server that ignored
+ * the whole write (`PATCH {name, email}` answered with the old name and the old email). So the
+ * response has to be clearly a new record. It is never one for an update (PUT, PATCH) or an
+ * addressed write, and it is one only when it carries an identity, an id or a content hash, that
+ * differs from the one the request sent: a derive endpoint answers with a new artifact's own hash.
+ */
+function isNewRecord(
+  method: string,
+  addressed: boolean,
+  asked: Map<string, Set<string>>,
+  echoed: Map<string, Set<string>>,
+): boolean {
+  if (addressed || UPDATE_METHODS.has(method.toUpperCase())) return false;
+  for (const [key, wanted] of asked) {
+    if (1 !== wanted.size || !(isIdentityKey(key) || isContentDigestKey(key))) continue;
+    const values = echoed.get(key);
+    const [want] = [...wanted];
+    if (values !== undefined && want !== undefined && !values.has(want)) return true;
+  }
+  return false;
+}
 
 /**
  * Every scalar value the response carries for each key, at any depth.
@@ -383,9 +409,15 @@ export function findEchoMismatches(
         dropped.push(`${key}: asked ${want}, got ${[...values].join('/')}`);
     }
     if (0 === dropped.length) continue;
-    // Nothing the response shares with the request came back as sent: a different record, not a
-    // half-applied write. See NEW_RECORD_MIN_KEYS.
-    if (compared >= NEW_RECORD_MIN_KEYS && dropped.length === compared) continue;
+    // Nothing the response shares with the request came back as sent, AND it names a different
+    // identity: a different record, not a half-applied write. See isNewRecord.
+    if (
+      compared >= NEW_RECORD_MIN_KEYS &&
+      dropped.length === compared &&
+      isNewRecord(method, addressed, asked, echoed)
+    ) {
+      continue;
+    }
 
     const url = 'string' === typeof event.data['url'] ? event.data['url'] : '';
     const attribution =
