@@ -2,6 +2,7 @@ import {
   EventType,
   NetInitiator,
   PredicateKind,
+  ResponseBodyReason,
   StreamDirection,
   isDevToolingUrl,
   isForeignTraffic,
@@ -230,6 +231,31 @@ function wantedBody(p: Extract<Predicate, { kind: typeof PredicateKind.NET }>): 
   return JSON.stringify(p.bodyContains ?? p.bodyMatches);
 }
 
+/**
+ * Why a matched call's body could not answer a body clause, and what to do instead (#1520).
+ *
+ * The remedy follows the reason the SDK stamped. "Enable `captureNetworkBodies`" is right only when
+ * no reason was stamped: capture was off, or the SDK predates the field. A streamed or binary body
+ * is skipped with capture ON, and that advice sent agents to a setting that was already set.
+ */
+function unrecordedBodyReason(
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+  reason: unknown,
+): string {
+  const call = `a call matching ${describeNetFilter(p)}`;
+  const clause = `so ${wantedBody(p)} could not be checked, which is not the same as absent`;
+  if (ResponseBodyReason.STREAMING === reason) {
+    return `${call} was answered with a streamed body (text/event-stream or ndjson), which the SDK never reads because reading it would hang the app, ${clause}. Assert the result in the DOM or in state instead, or use a non-streaming endpoint`;
+  }
+  if (ResponseBodyReason.NOT_TEXT === reason) {
+    return `${call} was answered with a body that is not text (binary or an unrecorded content type), ${clause}. Assert the result in the DOM or in state instead`;
+  }
+  if (ResponseBodyReason.UNREADABLE === reason) {
+    return `${call} was answered with a body that could not be read before the read deadline, ${clause}. A response that is still streaming does this; assert the result in the DOM or in state instead`;
+  }
+  return `${call} was answered, but its body was not recorded, ${clause}. Enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`;
+}
+
 export function evalNet(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
@@ -249,6 +275,8 @@ export function evalNet(
    * because it is the same pass over the same events.
    */
   let matchedButUnrecorded = false;
+  /** Why the SDK skipped that body, when it said (#1520). Absent: capture off, or an older SDK. */
+  let unrecordedReason: unknown;
   /** A call matched url/method but carried NO readable status (document-initiated subresource). */
   let unobservableStatus = false;
   /**
@@ -309,6 +337,7 @@ export function evalNet(
       const response = str(d['responseBody']);
       if (response === undefined) {
         matchedButUnrecorded = true;
+        unrecordedReason ??= d['responseBodyReason'];
         return false;
       }
       // A needle missing from a body we only hold the FIRST N BYTES of is undecidable, not absent:
@@ -355,9 +384,13 @@ export function evalNet(
     };
   }
   if (matchedButUnrecorded && 0 === matches.length) {
+    // Inconclusive, never a plain failure: nothing says the body lacked the text, only that nobody
+    // read it (#1520). The same family as evicted evidence answering `no` (#1231).
+    const reason = unrecordedBodyReason(p, unrecordedReason);
     return {
       pass: false,
-      failureReason: `a call matched but its body was not recorded, so \`bodyContains\` could not be checked — enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`,
+      failureReason: reason,
+      inconclusive: reason,
       observed: 'a matching call with no recorded body',
       expected: `a body carrying ${wantedBody(p)}`,
       assertion: NetBodyAssertion.CONTAINS,

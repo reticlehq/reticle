@@ -3,7 +3,7 @@
  *
  * One question: given a body, what is safe and affordable to report?
  */
-import { REDACTED_VALUE } from '@reticlehq/core';
+import { REDACTED_VALUE, ResponseBodyReason } from '@reticlehq/core';
 import { isSensitiveKey, safeStringify, scrubKnownSecrets } from '@/security/serialization.js';
 import { nativeClearTimeout, nativeSetTimeout } from '@/timers/native/native-timers.js';
 
@@ -84,6 +84,18 @@ export async function withBodyDeadline(read: Promise<string>): Promise<string | 
   } finally {
     if (timer !== undefined) nativeClearTimeout(timer);
   }
+}
+
+/**
+ * Why a response with capture ON carries no body, for a type that is not captured (#1520).
+ *
+ * `undefined` when there is no content type at all: a 204 or a HEAD has no body to skip.
+ */
+export function skippedBodyReason(contentType: string | null): ResponseBodyReason | undefined {
+  if (null === contentType) return undefined;
+  return STREAMING_CONTENT.test(contentType)
+    ? ResponseBodyReason.STREAMING
+    : ResponseBodyReason.NOT_TEXT;
 }
 
 export function isCapturableType(contentType: string | null): boolean {

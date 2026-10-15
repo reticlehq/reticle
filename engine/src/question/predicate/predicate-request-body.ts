@@ -133,9 +133,12 @@ export function requestBodyVerdict(
     };
   }
   if (state.unrecorded) {
+    // Unknown, not different: nothing was read, so nothing says the body did not match (#1520).
+    const reason = `a call matched but its REQUEST body was not recorded, so the request-body clause could not be checked — enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`;
     return {
       pass: false,
-      failureReason: `a call matched but its REQUEST body was not recorded, so the request-body clause could not be checked — enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`,
+      failureReason: reason,
+      inconclusive: reason,
       observed: 'a matching call with no recorded request body',
       expected: `a request body matching ${wanted}`,
       assertion: 'net.requestBody',
