@@ -124,4 +124,37 @@ describe('a net predicate over a write that navigated away', () => {
     const noErrors: Predicate = { kind: 'console', level: 'error', absent: true };
     expect((await evaluatePredicate(session, noErrors, since)).pass).toBe(true);
   });
+
+  it('does not keep a replaced page’s answer to a read: a GET is page state', async () => {
+    // The old page polls after the action starts and gets 200; the page now on screen gets 500.
+    // Counting the old 200 would pass "did the reloaded page load its items" on a page that did not.
+    const since = seq + 1;
+    const session = windowSession(
+      [answered('GET', '/api/items', 200, 'doc-a'), answered('GET', '/api/items', 500, 'doc-b')],
+      'doc-b',
+    );
+    const loaded: Predicate = {
+      kind: 'net',
+      method: 'GET',
+      urlContains: '/api/items',
+      status: 200,
+    };
+    expect((await evaluatePredicate(session, loaded, since)).pass).toBe(false);
+  });
+
+  it('does not turn a read miss into unknown without a floor either', async () => {
+    const session = windowSession(
+      [answered('GET', '/api/items', 200, 'doc-a'), answered('GET', '/api/items', 500, 'doc-b')],
+      'doc-b',
+    );
+    const loaded: Predicate = {
+      kind: 'net',
+      method: 'GET',
+      urlContains: '/api/items',
+      status: 200,
+    };
+    const result = await evaluatePredicate(session, loaded);
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
+  });
 });

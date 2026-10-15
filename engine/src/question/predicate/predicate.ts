@@ -1,6 +1,7 @@
 import {
   ElementState,
   EventType,
+  MUTATING_METHODS,
   PredicateKind,
   THROTTLED_STARVED_NOTE,
   isSameDocument,
@@ -69,15 +70,20 @@ const WINDOW_ONLY_KINDS: ReadonlySet<Predicate['kind']> = new Set([
 const SUPERSEDED_ASSERTION = 'window.evidence-superseded';
 
 /**
- * A request the server answered: a NET_REQUEST carrying a status or an `ok`.
+ * A WRITE the server answered: a mutating NET_REQUEST carrying a status or an `ok`.
  *
- * A response is a server fact, not page state, so it stays true after the page that sent the
- * request is replaced (#1529). A request nobody answered, or a subresource whose answer could not be
- * read, carries neither field and is never kept past its document.
+ * The answer to a write is a fact about the server, not page state, so it stays true after the
+ * page that sent it is replaced (#1529). The answer to a read is not: a GET from the old page says
+ * nothing about whether the page now on screen loaded its data, and keeping it would let a stale
+ * 200 pass `net GET 200` while the current page's own request failed. A request nobody answered,
+ * or a subresource whose answer could not be read, carries neither field and is never kept.
  */
 function isServerAnswer(e: ReticleEvent): boolean {
+  const method = e.data['method'];
   return (
     EventType.NET_REQUEST === e.type &&
+    'string' === typeof method &&
+    MUTATING_METHODS.includes(method.toUpperCase()) &&
     ('number' === typeof e.data['status'] || 'boolean' === typeof e.data['ok'])
   );
 }
