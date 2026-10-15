@@ -67,10 +67,12 @@ describe('predicate shapes agents actually write', () => {
     });
   });
 
-  it('keeps an explicit query when both shapes are supplied', () => {
+  // Dropping the flat field checked less than was written: a flat `value` beside a query passed
+  // whatever the field held. Refused by name instead, so the caller moves it into `query`.
+  it('refuses a flat field beside an explicit query, rather than drop it', () => {
     expect(
-      parsePredicate({ kind: PredicateKind.ELEMENT, query: { testid: 'real' }, role: 'button' }),
-    ).toEqual({ kind: PredicateKind.ELEMENT, query: { testid: 'real' } });
+      messageOf({ kind: PredicateKind.ELEMENT, query: { testid: 'real' }, role: 'button' }),
+    ).toMatch(/unknown field role/);
   });
 
   it('still rejects a field that is nobody’s spelling', () => {

@@ -39,3 +39,18 @@ describe('forgiving parse, said out loud', () => {
     expect(PredicateSchema.safeParse(written).success).toBe(false);
   });
 });
+
+/*
+ * A flat field beside an explicit `query` was dropped without a word: `{ kind: "element",
+ * query: { testid: "total" }, value: "42" }` checked only that the element exists, and passed
+ * whatever it held. A field the parse does not use is refused, as `ref` is.
+ */
+describe('a flat query field beside an explicit query', () => {
+  it('is refused, never dropped', () => {
+    const written = { kind: 'element', query: { testid: 'total' }, value: '42' };
+    expect(PredicateSchema.safeParse(written).success).toBe(false);
+    expect(
+      PredicateSchema.safeParse({ kind: 'element', value: '42', testid: 'total' }).success,
+    ).toBe(true);
+  });
+});

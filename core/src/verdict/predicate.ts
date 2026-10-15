@@ -278,10 +278,12 @@ function applyPredicateAliases(input: unknown): unknown {
 }
 
 /**
- * Fold flat query fields into `query`. An explicit `query` wins outright — a caller that supplied
- * both told us which one it meant, and merging the two would invent a locator neither side wrote.
+ * Fold flat query fields into `query`. With an explicit `query` nothing is folded and nothing is
+ * dropped: merging would invent a locator neither side wrote, and dropping a flat `value` checked
+ * only that the element exists. The strict schema refuses the flat field instead, by name.
  */
 function liftElementQuery(obj: Record<string, unknown>): Record<string, unknown> {
+  if (obj['query'] !== undefined) return obj;
   const loose = ELEMENT_QUERY_FIELDS.filter((field) => obj[field] !== undefined);
   if (0 === loose.length) return obj;
   const out = { ...obj };
@@ -290,7 +292,7 @@ function liftElementQuery(obj: Record<string, unknown>): Record<string, unknown>
     query[field] = out[field];
     delete out[field];
   }
-  if (out['query'] === undefined) out['query'] = query;
+  out['query'] = query;
   return out;
 }
 
