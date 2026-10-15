@@ -179,8 +179,8 @@ const MUST_DO_SOMETHING = new Set(['click', 'dblclick', 'submit']);
  *  - a request (the action asked the server for something),
  *  - a navigation, or a dialog/live region appearing — the two ways a real reaction legitimately
  *    lands OUTSIDE the target, e.g. a modal portalled to the body,
- *  - a store change or an app signal the SDK attributed to an action (#1531): see
- *    `isAttributedAppReaction`.
+ *  - a store change or an app signal tied to the action (#1531): see
+ *    `tiedAppReaction`.
  *
  * The last two clauses are what keep this from manufacturing noise: a button that opens a modal
  * mutates nothing within itself, and a Pause button whose store updates on the media `pause` event
@@ -189,32 +189,63 @@ const MUST_DO_SOMETHING = new Set(['click', 'dblclick', 'submit']);
 function didNothing(
   events: readonly ReticleEvent[],
   requests: readonly NetCall[],
-  mutatedWithin: number | undefined,
+  options: ContradictionOptions,
 ): boolean {
+  const mutatedWithin = options.mutatedWithin;
   if (mutatedWithin === undefined) return 0 === events.length;
+  const tied = tiedAppReaction(options);
   if (mutatedWithin > 0 || requests.length > 0) return false;
   return !events.some(
-    (e) =>
-      e.type === EventType.ROUTE_CHANGE ||
-      e.type === EventType.VISIBLE_SHOWN ||
-      isAttributedAppReaction(e),
+    (e) => e.type === EventType.ROUTE_CHANGE || e.type === EventType.VISIBLE_SHOWN || tied(e),
   );
 }
 
+/** Which store path or signal an event moved, keyed the same way in the window and in `prior`. */
+function appReactionKey(e: ReticleEvent): string | undefined {
+  if (e.type === EventType.STATE_CHANGE) {
+    return `${STATE_KEY_PREFIX}${asString(e.data['name']) ?? ''}:${asString(e.data['path']) ?? ''}`;
+  }
+  if (e.type !== EventType.SIGNAL) return undefined;
+  const name = asString(e.data['name']) ?? '';
+  // Reticle's own instrumentation is not the app reacting.
+  return name.startsWith(RETICLE_SIGNAL_NAMESPACE) ? undefined : `${SIGNAL_KEY_PREFIX}${name}`;
+}
+
+const STATE_KEY_PREFIX = 'state:';
+const SIGNAL_KEY_PREFIX = 'signal:';
+
 /**
- * A store change or an app signal that the SDK attributed to an action (#1531).
+ * A store change or an app signal that can be TIED to the action (#1531).
  *
  * The app's own state moving is a reaction, the same as a request, even when the DOM update it
- * drives lands after the window was read. Attribution is required: a busy page's background store
- * updates carry no `actionId`, and a dead click among them must still be reported (the measured
- * case in "no-effect under ambient churn"). Reticle's own `reticle:` signals are instrumentation,
- * not the app reacting, so they never count.
+ * drives lands after the window was read: a Pause button whose store changes on the media `pause`
+ * event. But being in the window is not enough. The session stamps the active action's id on every
+ * event between dispatch and settle, so a busy page's background store updates look attributed
+ * too, and a dead click among them must still be reported ("no-effect under ambient churn").
+ *
+ * So a change counts only when it is tied to the action in one of two ways:
+ *  - the caller's predicate named it (a `state` path or a `signal` name), so it is the consequence
+ *    they expected; or
+ *  - it was quiet before the action: `prior` holds observations, and none of them moved this path
+ *    or fired this signal. Churn that was already moving is the background, not this click.
  */
-function isAttributedAppReaction(e: ReticleEvent): boolean {
-  if (e.actionId === undefined) return false;
-  if (e.type === EventType.STATE_CHANGE) return true;
-  if (e.type !== EventType.SIGNAL) return false;
-  return !(asString(e.data['name']) ?? '').startsWith(RETICLE_SIGNAL_NAMESPACE);
+function tiedAppReaction(options: ContradictionOptions): (e: ReticleEvent) => boolean {
+  const named = new Set(options.namedStatePaths ?? []);
+  const namedSignals = new Set(options.namedSignals ?? []);
+  const prior = options.prior ?? [];
+  const movedBefore = new Set<string>();
+  for (const e of prior) {
+    const key = appReactionKey(e);
+    if (key !== undefined) movedBefore.add(key);
+  }
+  return (e) => {
+    const key = appReactionKey(e);
+    if (key === undefined) return false;
+    if (e.type === EventType.STATE_CHANGE && named.has(asString(e.data['path']) ?? '')) return true;
+    if (e.type === EventType.SIGNAL && namedSignals.has(asString(e.data['name']) ?? ''))
+      return true;
+    return prior.length > 0 && !movedBefore.has(key);
+  };
 }
 
 /**
@@ -343,7 +374,7 @@ function findWindowContradictions(
   // Checked first and returned alone: nothing is attributable to the action, so every rule below is
   // reasoning about someone else's events.
   const action = (options.action ?? '').toLowerCase();
-  if (MUST_DO_SOMETHING.has(action) && didNothing(events, settled, options.mutatedWithin)) {
+  if (MUST_DO_SOMETHING.has(action) && didNothing(events, settled, options)) {
     const measured = options.mutatedWithin !== undefined;
     return [
       {

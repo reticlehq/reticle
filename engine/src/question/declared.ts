@@ -55,6 +55,15 @@ interface DeclaredExpectations {
    * `urlContains` is never here: the schema refuses it, and it would excuse every request.
    */
   repeatableNetUrls: readonly DeclaredRead[];
+  /**
+   * The `path` of every state clause, and the `name` of every signal clause (#1531).
+   *
+   * A store change or a signal the caller named is the consequence they expected, so it ties that
+   * change to the action. `action-had-no-effect` reads it to tell the click's own effect from
+   * background churn in the same window.
+   */
+  statePaths: readonly string[];
+  signalNames: readonly string[];
 }
 
 /** Below this, a status is a success or a redirect: not a declared failure. */
@@ -114,6 +123,8 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
   const netFailures: DeclaredNetFailure[] = [];
   const netUrls: string[] = [];
   const repeatableNetUrls: DeclaredRead[] = [];
+  const statePaths: string[] = [];
+  const signalNames: string[] = [];
   let rendersContent = false;
 
   const walk = (p: Predicate): void => {
@@ -148,6 +159,12 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
           if (isDenialQuery(p.query)) pushAuthDenialStatuses(netFailures);
         }
         return;
+      case PredicateKind.STATE:
+        statePaths.push(p.path);
+        return;
+      case PredicateKind.SIGNAL:
+        if (p.name !== undefined) signalNames.push(p.name);
+        return;
       case PredicateKind.TEXT:
         if (true !== p.absent) {
           rendersContent = true;
@@ -162,7 +179,7 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
   };
 
   if (predicate !== undefined) walk(predicate);
-  return { netFailures, rendersContent, netUrls, repeatableNetUrls };
+  return { netFailures, rendersContent, netUrls, repeatableNetUrls, statePaths, signalNames };
 }
 
 /**
