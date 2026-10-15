@@ -32,7 +32,7 @@ import type { Session } from '@/portal/session/session.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
 import { claimedArtifactRoot } from '@/memory/project/root-claims.js';
-import type { BrowserPool, Lease } from '@/portal/pool/browser-pool.js';
+import { PoolAtCapacityError, type BrowserPool, type Lease } from '@/portal/pool/browser-pool.js';
 
 function tool(name: string): (deps: ToolDeps, args: Record<string, unknown>) => Promise<unknown> {
   const def = LEASE_TOOLS.find((t) => t.name === name);
@@ -274,6 +274,27 @@ describe('reticle_lease_acquire failure surfaces a clean message', () => {
       /could not open http:\/\/localhost:3000\/ — the page did not finish loading within 30 s \(navigation timed out\)\. If the app is running, .*retry the acquire\. If it is not running, start it first\./,
     );
     await expect(acquire).rejects.not.toThrow(/is the app running there/);
+  });
+});
+
+describe('reticle_lease_acquire at the pool cap (#1535)', () => {
+  it('asks the pool to refuse rather than queue, and passes its refusal through unchanged', async () => {
+    const seen: unknown[] = [];
+    const pool = {
+      acquire: (_url: string, opts: unknown) => {
+        seen.push(opts);
+        return Promise.reject(new PoolAtCapacityError(3));
+      },
+      leaseIdOnOrigin: () => undefined,
+      activeCount: () => 3,
+      queuedCount: () => 0,
+    } as unknown as BrowserPool;
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, { url: 'http://localhost:3000/' }),
+    ).rejects.toThrow(
+      'all 3 lease slots are in use. Release one (reticle_lease{action:"release"}, or stop a `reticle drive`), or raise RETICLE_MAX_CONTEXTS.',
+    );
+    expect(seen).toEqual([expect.objectContaining({ whenFull: 'refuse' })]);
   });
 });
 

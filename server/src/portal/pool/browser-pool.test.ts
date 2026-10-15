@@ -7,6 +7,7 @@ import { getEventListeners } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import {
   BrowserPool,
+  PoolAtCapacityError,
   type Launcher,
   type PooledBrowser,
   type PooledContext,
@@ -288,6 +289,36 @@ describe('BrowserPool', () => {
 
     await l1.release();
     await l3.release();
+  });
+
+  it('a refusing acquire at the cap is told so at once, names the cap and the override, and claims nothing (#1535)', async () => {
+    const { launch } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 2, genSessionId: counterIds() });
+    const l1 = await pool.acquire('http://localhost:3000/1');
+    const l2 = await pool.acquire('http://localhost:3000/2', { whenFull: 'refuse' });
+
+    const refused = pool.acquire('http://localhost:3000/3', { whenFull: 'refuse' });
+    await expect(refused).rejects.toBeInstanceOf(PoolAtCapacityError);
+    await expect(refused).rejects.toThrow(
+      'all 2 lease slots are in use. Release one (reticle_lease{action:"release"}, or stop a `reticle drive`), or raise RETICLE_MAX_CONTEXTS.',
+    );
+    // Nothing was queued and no slot was taken: the two leases are still the whole pool.
+    expect(pool.queuedCount()).toBe(0);
+    expect(pool.activeCount()).toBe(2);
+
+    // A freed slot is there for the next refusing acquire.
+    await l2.release();
+    const l3 = await pool.acquire('http://localhost:3000/3', { whenFull: 'refuse' });
+    expect(pool.activeCount()).toBe(2);
+
+    // The default still queues behind the cap.
+    const queued = pool.acquire('http://localhost:3000/4');
+    await Promise.resolve();
+    expect(pool.queuedCount()).toBe(1);
+    await l1.release();
+    const l4 = await queued;
+    await l3.release();
+    await l4.release();
   });
 
   it('concurrent burst respects the cap — slots are claimed synchronously at the gate', async () => {

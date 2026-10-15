@@ -59,7 +59,7 @@ The headless shell has no notification support, so a notifications grant never r
 This is the design target, and it needs no special setup:
 
 - Each agent calls `reticle_run { tool: "reticle_lease", args: { action: "acquire" } }` for the same dashboard URL → its own isolated context (own cookies/storage) in the **one** shared Chromium.
-- The pool caps simultaneous contexts (`RETICLE_MAX_CONTEXTS`, default scales with CPU under a ceiling); extra acquires queue and proceed as slots free.
+- The pool caps simultaneous contexts (`RETICLE_MAX_CONTEXTS`, default scales with CPU under a ceiling). An acquire, or a `reticle drive`, that finds every slot taken is refused at once with `all N lease slots are in use`, naming the release and the override, so an agent knows to release a lease or wait rather than retry into the same full pool. The parallel flow runner queues instead, since it holds its own slots and frees them as each flow ends.
 - Flows can't bleed into each other: contexts are isolated and every session is scoped by `projectId`.
 - A single crashed page is reclaimed on its own, and if an agent crashes or hangs its lease stops being touched and the **lease reaper** reclaims the context after a TTL, freeing the slot. One dead agent never starves the others.
 

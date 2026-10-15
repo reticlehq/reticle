@@ -10,6 +10,7 @@ import {
   driveRaceLost,
   readAttachResponse,
   requestDriveSession,
+  DriveRequestTimeout,
 } from './drive-attach.js';
 
 /**
@@ -100,6 +101,30 @@ describe('requestDriveSession', () => {
     });
     expect(result.ok).toBe(true);
     expect(JSON.parse(seen[0]?.body ?? '{}')).toEqual({ url: 'http://localhost:5173' });
+  });
+
+  // #1535: the daemon took the request and was still busy (a full lease pool, a cold browser) when
+  // the client gave up. That is not a shutdown, and saying it was sent agents into a retry loop.
+  it('reports a timeout as a busy daemon, not one that is shutting down', async () => {
+    const result = await requestDriveSession(4400, 'http://localhost:5173', () =>
+      Promise.reject(new DriveRequestTimeout(60_000)),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe(
+      'the Reticle daemon on :4400 took the drive request but gave no answer within 60s. It is ' +
+        'running; a cold browser launch can take this long. Check `reticle status`, then retry.',
+    );
+    expect(result.reason).not.toContain('shutting down');
+  });
+
+  it('still reports a refused connection as a daemon that has gone', async () => {
+    const result = await requestDriveSession(4400, 'http://localhost:5173', () =>
+      Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:4400')),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain('shutting down or has just been stopped');
   });
 
   it('turns a dead socket into a sentence instead of a raw errno', async () => {

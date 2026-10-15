@@ -42,7 +42,7 @@ import {
 } from '@reticlehq/core';
 import { HudVisibility, ReticleTool, SESSION_HEALTH } from '@reticlehq/core';
 import { HOST_STUB_NOTE, type ToolDef, type ToolDeps } from './tool-kit.js';
-import type { BrowserPool } from '@/portal/pool/browser-pool.js';
+import { type BrowserPool, PoolAtCapacityError } from '@/portal/pool/browser-pool.js';
 import { asString } from '@reticlehq/core';
 import { chromiumPreflightRefusal } from '@/command/cli/doctor/browser/chromium-hint.js';
 import {
@@ -378,7 +378,7 @@ export function hasOriginLock(origin: string): boolean {
 export const LEASE_ACQUIRE_TOOL: ToolDef = {
   name: ReticleTool.LEASE_ACQUIRE,
   description:
-    'Lease a fresh isolated browser context from the shared pool (shown or hidden as the daemon was started; `headed: true` forces a window) and navigate it to the app URL (the app must already be running; one with no Reticle SDK gets one supplied, reported as zeroInstall). If this origin is already leased and still connected, this returns THAT session rather than minting a second tab — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done. PREFER AN ALREADY-OPEN TAB: if reticle_sessions lists a non-leased session for this app, drive THAT instead — a lease is invisible to the person watching the app, whose HUD lives in their own tab, and a tab flagged hidden/throttled is often still driveable. Lease for isolation you actually need (a second identity, a clean context, parallel flows) or when driving the open tab has failed — this call answers with `preferExisting` when a live tab was available.',
+    'Lease a fresh isolated browser context from the shared pool (shown or hidden as the daemon was started; `headed: true` forces a window) and navigate it to the app URL (the app must already be running; one with no Reticle SDK gets one supplied, reported as zeroInstall). If this origin is already leased and still connected, this returns THAT session rather than minting a second tab — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if every slot is taken this is refused at once, naming the cap, rather than queued. Release with reticle_lease{action:"release"} when the flow is done. PREFER AN ALREADY-OPEN TAB: if reticle_sessions lists a non-leased session for this app, drive THAT instead — a lease is invisible to the person watching the app, whose HUD lives in their own tab, and a tab flagged hidden/throttled is often still driveable. Lease for isolation you actually need (a second identity, a clean context, parallel flows) or when driving the open tab has failed — this call answers with `preferExisting` when a live tab was available.',
   inputSchema: {
     url: z
       .string()
@@ -627,6 +627,9 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       try {
         lease = await pool.acquire(navUrl, {
           sessionId,
+          // An agent, or `reticle drive` behind it, is waiting on this answer and cannot see a queue:
+          // a full pool is said at once, not discovered as a 60 s silence (#1535).
+          whenFull: 'refuse',
           ...(headed ? { headed } : {}),
           ...(deps.attachId === undefined ? {} : { owner: deps.attachId }),
           ...(validatedSeed !== undefined ? { seedStorage: validatedSeed } : {}),
@@ -635,6 +638,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           ...(true === args['ignoreHTTPSErrors'] ? { ignoreHTTPSErrors: true } : {}),
         });
       } catch (err) {
+        if (err instanceof PoolAtCapacityError) throw err;
         const refusal = permissionRefusal(err);
         if (refusal !== undefined) throw refusal;
         if (err instanceof Error && err.message.startsWith('Storage seeding failed')) {

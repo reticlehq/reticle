@@ -151,6 +151,14 @@ function parseJson(body: string): unknown {
   }
 }
 
+/** The drive request got no answer in time: the daemon is up and busy, which is not a shutdown. */
+export class DriveRequestTimeout extends Error {
+  constructor(readonly ms: number) {
+    super(`no answer within ${String(ms)}ms`);
+    this.name = 'DriveRequestTimeout';
+  }
+}
+
 /** Ask the daemon on `port` to open a driveable browser at `url`. */
 export async function requestDriveSession(
   port: number,
@@ -161,6 +169,18 @@ export async function requestDriveSession(
   try {
     res = await post(port, DRIVE_PATH, JSON.stringify({ url }));
   } catch (error: unknown) {
+    // A timeout is not a shutdown (#1535). The daemon took the request and said nothing for the
+    // whole window, so it is alive and busy: telling the user it stopped sends them to restart a
+    // healthy daemon, and an agent into a retry loop that hits the same wait.
+    if (error instanceof DriveRequestTimeout) {
+      return {
+        ok: false,
+        reason:
+          `the Reticle daemon on :${String(port)} took the drive request but gave no answer within ` +
+          `${String(error.ms / 1000)}s. It is running; a cold browser launch can take this long. ` +
+          'Check `reticle status`, then retry.',
+      };
+    }
     // The daemon answered /status a moment ago and is gone now — a shutdown, a crash, a `stop` from
     // another terminal. Retrying is the whole answer, and it is the one thing an errno never says.
     const message = error instanceof Error ? error.message : String(error);
@@ -381,7 +401,7 @@ function postJson(
     req.on('error', reject);
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error(`no answer within ${String(DRIVE_REQUEST_TIMEOUT_MS)}ms`));
+      reject(new DriveRequestTimeout(DRIVE_REQUEST_TIMEOUT_MS));
     });
     req.end(body);
   });

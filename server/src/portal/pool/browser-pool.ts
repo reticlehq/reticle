@@ -98,6 +98,21 @@ interface BrowserSlot {
 export const NO_HEADED_BROWSER = 'no headed browser can be opened here';
 
 /**
+ * An acquire that asked to be refused rather than queued found every slot taken (#1535). Queued,
+ * it waited behind the cap with no deadline and no status, and `reticle drive` reported the 60 s
+ * timeout as a daemon shutting down. The message names the cap and the one override for it.
+ */
+export class PoolAtCapacityError extends Error {
+  constructor(readonly max: number) {
+    super(
+      `all ${String(max)} lease slots are in use. Release one (reticle_lease{action:"release"}, or ` +
+        'stop a `reticle drive`), or raise RETICLE_MAX_CONTEXTS.',
+    );
+    this.name = 'PoolAtCapacityError';
+  }
+}
+
+/**
  * What an acquire that asked for an init script is refused with when the page cannot run one.
  *
  * A refusal rather than a lease: the caller asked for a stub of the bindings a desktop shell
@@ -530,12 +545,18 @@ export class BrowserPool {
 
   /**
    * Lease an isolated context, navigate it to `url`, and return a handle. If the pool is at capacity,
-   * waits FIFO until a slot frees (or until `signal` aborts, if provided).
+   * waits FIFO until a slot frees (or until `signal` aborts, if provided), unless `whenFull` is
+   * `'refuse'`: then it throws {@link PoolAtCapacityError} at once and claims nothing.
    */
   async acquire(
     url: string,
     opts: {
       signal?: AbortSignal;
+      /**
+       * `'wait'` (the default) queues behind the cap. `'refuse'` is for a caller that has a person
+       * or an agent waiting on the answer and no way to see a queue: it is told the pool is full.
+       */
+      whenFull?: 'wait' | 'refuse';
       sessionId?: string;
       seedStorage?: SeedStorage;
       owner?: string;
@@ -558,8 +579,13 @@ export class BrowserPool {
     // Refused before a slot is claimed, so a refusal never holds one.
     if (slot.launch === undefined) throw new Error(NO_HEADED_BROWSER);
     // #waitForSlot claims the slot synchronously (bumps #occupied) before returning, so the cap holds
-    // even when many acquires race through the gate in the same tick.
-    await this.#waitForSlot(opts.signal);
+    // even when many acquires race through the gate in the same tick. A refusing acquire claims the
+    // same way, or claims nothing and says so.
+    if ('refuse' === opts.whenFull) {
+      if (!this.#tryClaim()) throw new PoolAtCapacityError(this.#max);
+    } else {
+      await this.#waitForSlot(opts.signal);
+    }
     const sessionId = opts.sessionId ?? this.#genId();
     let context: PooledContext | undefined;
     let pending: string | undefined;
