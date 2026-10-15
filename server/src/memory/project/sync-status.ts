@@ -274,10 +274,8 @@ export async function machineUnsyncedRoots(
   const cloudOf = (root: string) => resolveProjectCloud(fs, root, home, env);
   return unsyncedRoots(
     roots,
-    async (root) => {
-      const cloud = await cloudOf(root);
-      return null !== cloud.config && null !== cloud.projectId;
-    },
+    // A credential is what sends: a folder with no link file sends with the environment's key.
+    async (root) => null !== (await cloudOf(root)).config,
     async (root) => (await cloudOf(root)).policy.flows,
   );
 }
