@@ -97,6 +97,36 @@ export const ElementQuerySchema = z
   .strict();
 export type ElementQuery = z.infer<typeof ElementQuerySchema>;
 
+/** A rectangle in CSS pixels, in viewport coordinates as `getBoundingClientRect` reports it. */
+export interface ElementBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Geometry measured in the page for a described element, present only when a predicate asked for
+ * it (#1539): layout reads are not free, and a box nobody asked about is bytes on every result.
+ */
+export interface ElementGeometry {
+  box: ElementBox;
+  viewport: { width: number; height: number };
+  /** The whole box is inside the viewport, and no clipping ancestor cuts any part of it. */
+  fullyInViewport: boolean;
+  /** Content overflows a clipping box, so part of the element's text is not readable in place. */
+  textClipped: boolean;
+  /** Pixels of content beyond the client box on each axis, when `textClipped`. */
+  clippedX: number;
+  clippedY: number;
+  /**
+   * Present when the match was also asked about another element: whether the two boxes
+   * intersect, and the other element's box. Absent when that query matched nothing, which is a
+   * different fact from the boxes not intersecting.
+   */
+  overlap?: { intersects: boolean; box: ElementBox };
+}
+
 /** Compact semantic descriptor of one element surfaced to the agent. */
 export interface ElementDescriptor {
   /** Branded: minted by the browser's ref registry, so it cannot be confused with another id kind. */
@@ -121,6 +151,8 @@ export interface ElementDescriptor {
    * one response and every consumer either opens an editor or prints it.
    */
   source?: string;
+  /** Geometry measured for a predicate that asked for it. See `ElementGeometry`. */
+  geometry?: ElementGeometry;
   /**
    * Chart geometry faults found inside this element — PRESENT ONLY WHEN SOMETHING IS WRONG.
    *

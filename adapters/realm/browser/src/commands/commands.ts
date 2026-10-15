@@ -326,6 +326,13 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
       undefined,
       undefined,
       true === args['diagnose'],
+      true === args['geometry'] || args['overlapsQuery'] !== undefined
+        ? {
+            ...(args['overlapsQuery'] === undefined
+              ? {}
+              : { overlaps: ElementQuerySchema.parse(record(args['overlapsQuery'])) }),
+          }
+        : undefined,
     ),
   );
   reg.set(ReticleCommand.ACT, (args) => {

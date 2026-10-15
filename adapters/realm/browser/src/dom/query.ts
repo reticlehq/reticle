@@ -25,6 +25,7 @@ import {
   isRenderedOutsideAriaHidden,
   isVisible,
 } from './a11y.js';
+import { attachGeometry } from './geometry.js';
 import { isIgnored, isReticleOverlay } from './dom-ignore.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { declaredTestids } from '@/registry/capabilities.js';
@@ -616,6 +617,8 @@ export function matchQuery(
    */
   wholePhrase = true,
   diagnose: boolean = true,
+  /** Measure geometry for the described elements (#1539), on when a predicate asserts on it. */
+  geometry?: { overlaps?: ElementQuery },
 ): MatchResult {
   // NO blanket try/catch here. It would turn ANY exception during candidate-finding into
   // `elements = []`, which is the same lie as the `default` arm above: a query that could not run
@@ -643,6 +646,8 @@ export function matchQuery(
   // caller explicitly filtered by that state (so the evidence proves the verdict, #1279). Omitted
   // from unfiltered single-match and snapshot-wide describes to avoid bloat (#398).
   const stampViewport = described.length > 1 || ElementState.IN_VIEWPORT === state;
+  const overlapTarget =
+    geometry?.overlaps === undefined ? undefined : findCandidates(geometry.overlaps).candidates[0];
   const descriptors: ElementDescriptor[] = described.map((el) => {
     let base = describe(el, visMemo);
     if (
@@ -652,9 +657,11 @@ export function matchQuery(
     ) {
       base = { ...base, states: [...base.states, ElementState.IN_VIEWPORT] };
     }
-    if (attrs === undefined || 0 === attrs.length) return base;
-    const projected = projectAttrs(el, attrs);
-    return projected === undefined ? base : { ...base, attrs: projected };
+    if (attrs !== undefined && 0 < attrs.length) {
+      const projected = projectAttrs(el, attrs);
+      if (projected !== undefined) base = { ...base, attrs: projected };
+    }
+    return geometry === undefined ? base : attachGeometry(base, el, visMemo, overlapTarget);
   });
   return {
     matched: filtered.length > 0,

@@ -4,6 +4,7 @@ import {
   ElementState,
   REDACTED_VALUE,
   type ElementDescriptor,
+  type ElementGeometry,
 } from '@reticlehq/core';
 import {
   isButton,
@@ -882,6 +883,61 @@ export function isInViewport(el: Element, memo?: Map<Element, boolean>): boolean
   if (null === r || undefined === r) return false;
   if (r.width <= 0 || r.height <= 0) return false;
   return r.bottom > 0 && r.right > 0 && r.top < view.innerHeight && r.left < view.innerWidth;
+}
+
+/**
+ * The geometry an element predicate can assert on (#1539), measured in the page.
+ *
+ * `fullyInViewport` reuses the clipping walk `visibleBounds` already does: the surviving region
+ * must be the whole box, and the box must sit inside the window. A partially clipped or
+ * partially off-screen element is the responsive-layout failure these checks exist to catch,
+ * and `inViewport` (any part showing) cannot tell it from fully on screen.
+ *
+ * `textClipped` reads the same fact a reader hits: content beyond the client box on an axis
+ * whose overflow clips (`hidden` or `clip`), or `text-overflow: ellipsis` in effect on the
+ * inline axis. The amounts are pixels of content with nowhere to go.
+ */
+export function measureGeometry(el: Element, memo?: Map<Element, boolean>): ElementGeometry {
+  const view = el.ownerDocument.defaultView;
+  const viewport = { width: view?.innerWidth ?? 0, height: view?.innerHeight ?? 0 };
+  const rect = el.getBoundingClientRect();
+  const box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  const clipped = visibleBounds(el, visibilityInfoMemo(memo), rect);
+  const withinViewport =
+    box.x >= 0 &&
+    box.y >= 0 &&
+    box.x + box.width <= viewport.width &&
+    box.y + box.height <= viewport.height;
+  // `visibleBounds` answers undefined when nothing clips the element, null when it is hidden
+  // outright, and the surviving region otherwise. Only the first and third shapes can be whole.
+  const uncut =
+    clipped === undefined
+      ? true
+      : null === clipped
+        ? false
+        : clipped.left <= box.x &&
+          clipped.top <= box.y &&
+          clipped.right >= box.x + box.width &&
+          clipped.bottom >= box.y + box.height;
+  const fullyInViewport = withinViewport && uncut && box.width > 0 && box.height > 0;
+
+  const style = null === view ? null : view.getComputedStyle(el);
+  const clipsX =
+    null !== style &&
+    ('hidden' === style.overflowX ||
+      'clip' === style.overflowX ||
+      'ellipsis' === style.textOverflow);
+  const clipsY = null !== style && ('hidden' === style.overflowY || 'clip' === style.overflowY);
+  const clippedX = clipsX ? Math.max(0, el.scrollWidth - el.clientWidth) : 0;
+  const clippedY = clipsY ? Math.max(0, el.scrollHeight - el.clientHeight) : 0;
+  return {
+    box,
+    viewport,
+    fullyInViewport,
+    textClipped: clippedX > 0 || clippedY > 0,
+    clippedX,
+    clippedY,
+  };
 }
 
 /** Visibility combines inherited CSS/ARIA hiding with this target's surviving clipping region. */

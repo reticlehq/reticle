@@ -288,3 +288,126 @@ it('does not blame aria-hidden when a visible element exists in the wrong state 
   expect(result.pass).toBe(false);
   expect(result.failureReason).not.toContain(ARIA_HIDDEN_NOTE);
 });
+
+/**
+ * Geometry asks (#1539): the page measures, this side grades.
+ *
+ * The descriptor carries the measured box, the viewport, and the overflow amounts; the verdict and
+ * its failure message are decided here. A page that reports no geometry measured nothing, so the
+ * result is inconclusive rather than a guess in either direction.
+ */
+function withGeometry(geometry: object | undefined): PredicateSession {
+  return {
+    ...session,
+    command: () =>
+      Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'stub',
+        result: {
+          matched: true,
+          count: 1,
+          elements: [
+            {
+              ref: 'e1',
+              role: 'button',
+              name: 'Save',
+              states: [],
+              visible: true,
+              ...(geometry === undefined ? {} : { geometry }),
+            },
+          ],
+        },
+      }),
+  };
+}
+
+const FULL_BOX = {
+  box: { x: 10, y: 10, width: 200, height: 50 },
+  viewport: { width: 800, height: 600 },
+  fullyInViewport: true,
+  textClipped: false,
+  clippedX: 0,
+  clippedY: 0,
+};
+
+it('passes fullyInViewport when the page reports the whole box inside', async () => {
+  const result = await evalElement(
+    withGeometry(FULL_BOX),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { fullyInViewport: true },
+  );
+  expect(result.pass).toBe(true);
+});
+
+it('fails fullyInViewport with the measured box and viewport when part is outside', async () => {
+  const result = await evalElement(
+    withGeometry({ ...FULL_BOX, fullyInViewport: false }),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { fullyInViewport: true },
+  );
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toContain('200');
+  expect(result.failureReason).toContain('800');
+});
+
+it('fails a textClipped: false ask with the overflow amounts', async () => {
+  const result = await evalElement(
+    withGeometry({ ...FULL_BOX, textClipped: true, clippedX: 24, clippedY: 0 }),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { textClipped: false },
+  );
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toContain('24');
+});
+
+it('grades overlaps from the reported boxes', async () => {
+  const apart = await evalElement(
+    withGeometry({
+      ...FULL_BOX,
+      overlap: { intersects: false, box: { x: 400, y: 300, width: 100, height: 40 } },
+    }),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { overlaps: { testid: 'other' } },
+  );
+  expect(apart.pass).toBe(false);
+  expect(apart.failureReason).toContain('400');
+
+  const touching = await evalElement(
+    withGeometry({
+      ...FULL_BOX,
+      overlap: { intersects: true, box: { x: 100, y: 20, width: 100, height: 40 } },
+    }),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { overlaps: { testid: 'other' } },
+  );
+  expect(touching.pass).toBe(true);
+});
+
+it('is inconclusive when the page reported no geometry', async () => {
+  const result = await evalElement(
+    withGeometry(undefined),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { fullyInViewport: true },
+  );
+  expect(result.pass).toBe(false);
+  expect(result.inconclusive).toBeDefined();
+});
