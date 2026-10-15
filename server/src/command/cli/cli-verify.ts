@@ -10,7 +10,7 @@
  * — is unit-tested without launching a real browser.
  */
 
-import { CLI_CLIENT_NAME } from '@/judgement/runs/verification-sync.js';
+import { cliRunAuthor } from '@/judgement/runs/verification-sync.js';
 import { join, basename } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { runAdhocVerdict } from './adhoc-verdict.js';
@@ -44,10 +44,8 @@ import {
   bridgeWsUrl,
   isLoopbackHostname,
   ReticleDir,
-  RunAgentKind,
   RunFramework,
   RunProfile,
-  RunTrigger,
   VerdictStatus,
   VerifyPhase,
   type ReticleVerificationRun,
@@ -105,7 +103,6 @@ export function verifyProjectName(
 ): string {
   return linked ?? configured ?? (folder || DEFAULT_PROJECT_NAME);
 }
-const VERIFY_AGENT_ID = CLI_CLIENT_NAME;
 
 const MSG_NO_SESSION =
   'No app connected: Reticle drove the URL but no @reticlehq/browser session dialed back.\n' +
@@ -530,8 +527,7 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     verify: async (onProgress) => {
       const run = await runner.verify({
         project: { name: opts.projectName, framework: RunFramework.OTHER, previewUrl: opts.url },
-        agent: { id: VERIFY_AGENT_ID, kind: RunAgentKind.OEM_PIPELINE },
-        trigger: { kind: RunTrigger.OEM },
+        ...cliRunAuthor(process.env),
         profile: RunProfile.PROD_PREVIEW,
         ...(onProgress === undefined ? {} : { onProgress }),
       });

@@ -89,6 +89,14 @@ export function resolveAutomationHint(input: AutomationInput): AutomationHint | 
   return undefined;
 }
 
+/**
+ * A CI runner: `CI` itself or a vendor's own variable. The one place a command line decides whether
+ * it is a pipeline or a person, so a run is credited to somebody whenever nothing says CI.
+ */
+export function isCiEnv(env: NodeJS.ProcessEnv): boolean {
+  return declared(env, ['CI', ...CI_VENDOR_ENV]);
+}
+
 /** The real reading, taken once per process. */
 export function currentAutomationHint(env: NodeJS.ProcessEnv): AutomationHint | undefined {
   return resolveAutomationHint({

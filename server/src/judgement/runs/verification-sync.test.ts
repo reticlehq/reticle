@@ -1,5 +1,5 @@
 import { removeTempDir } from '@/machine/temp-dir.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -63,6 +63,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     delete process.env[KEY_ENV];
   });
   afterEach(async () => {
+    vi.unstubAllEnvs();
     globalThis.fetch = origFetch;
     delete process.env[URL_ENV];
     delete process.env[KEY_ENV];
@@ -153,6 +154,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
    * exactly as the path that boots its own daemon records it.
    */
   it('records the Reticle command line as the pipeline, not as a coding agent', async () => {
+    vi.stubEnv('CI', 'true');
     forgetAgents();
     noteAgentAttached('ci', CLI_CLIENT_NAME);
     const id = await runAsAgent('ci', () =>
@@ -165,6 +167,25 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
       kind: RunAgentKind.OEM_PIPELINE,
     });
     expect(read.ok && read.run.trigger.kind).toBe(RunTrigger.OEM);
+  });
+
+  /*
+   * Persona drive: a person's own `reticle verify` at a laptop was recorded as `oem-pipeline`, no
+   * person, so their Mine view stayed empty and the run read "CI". Off a CI runner the command line
+   * is a person: human, manual, credited to the key's owner.
+   */
+  it('records the command line off CI as a person, trigger manual', async () => {
+    for (const k of ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE', 'CIRCLECI', 'JENKINS_URL'])
+      vi.stubEnv(k, '');
+    forgetAgents();
+    noteAgentAttached('laptop', CLI_CLIENT_NAME);
+    const id = await runAsAgent('laptop', () =>
+      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }),
+    );
+    forgetAgents();
+    const read = await new RunStore(fs, root).read(id as RunId);
+    expect(read.ok && read.run.agent).toEqual({ id: CLI_CLIENT_NAME, kind: RunAgentKind.HUMAN });
+    expect(read.ok && read.run.trigger.kind).toBe(RunTrigger.MANUAL);
   });
 
   /*

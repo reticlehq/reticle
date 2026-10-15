@@ -32,6 +32,7 @@ import { RunStore } from './artifact/run-store.js';
 import { cloudFetch, syncRunToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { log } from '@/log.js';
+import { isCiEnv } from '@/telemetry/automation-hint.js';
 import { rootForTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
@@ -50,15 +51,29 @@ export interface TimedReplay {
 export const CLI_CLIENT_NAME = 'reticle-cli';
 
 /**
- * Who ran a suite, and why. The command line is the pipeline, whichever daemon replays for it:
- * through a running daemon its runs read as a coding agent, trigger manual, credited to whoever
- * minted the key, while the path that boots its own daemon said pipeline.
+ * Who ran the command line, and why. On a CI runner it is the pipeline; anywhere else it is the
+ * person who holds the key, so the cloud credits them and the run does not read as CI.
  */
+export function cliRunAuthor(
+  env: NodeJS.ProcessEnv,
+): Pick<VerificationRunInput, 'agent' | 'trigger'> {
+  return isCiEnv(env)
+    ? {
+        agent: { id: CLI_CLIENT_NAME, kind: RunAgentKind.OEM_PIPELINE },
+        trigger: { kind: RunTrigger.OEM },
+      }
+    : {
+        agent: { id: CLI_CLIENT_NAME, kind: RunAgentKind.HUMAN },
+        trigger: { kind: RunTrigger.MANUAL },
+      };
+}
+
+/** Who ran a suite, and why: the command line by `cliRunAuthor`, any other client as a coding agent. */
 function agentAndTrigger(
   client: string | undefined,
 ): Pick<VerificationRunInput, 'agent' | 'trigger'> {
   return CLI_CLIENT_NAME === client
-    ? { agent: { id: client, kind: RunAgentKind.OEM_PIPELINE }, trigger: { kind: RunTrigger.OEM } }
+    ? cliRunAuthor(process.env)
     : {
         agent: { id: client ?? RETICLE_MCP_AGENT_ID, kind: RunAgentKind.CODING_AGENT },
         trigger: { kind: RunTrigger.MANUAL },
