@@ -637,7 +637,7 @@ const SCENARIOS = [
     run: (dir) => run(dir, ['--url', 'http://127.0.0.1:59979/']),
     // It got past init and never connected, so the remaining steps must start at the session gate
     // and must NOT tell it to re-run init, which already succeeded.
-    expect: 'reticle_sessions',
+    expect: 'reticle_session { action: "list" }',
   },
 ];
 
