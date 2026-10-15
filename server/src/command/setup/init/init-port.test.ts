@@ -57,12 +57,28 @@ describe('portForInit', () => {
     expect(await portForInit(undefined, undefined, undefined, deps(undefined))).toBeUndefined();
   });
 
-  it('keeps the default when the daemon there serves several projects, which it accepts', async () => {
+  /*
+   * Persona drive: the default port served two other projects, so a new app was wired to that
+   * daemon, rooted at another repository and linked to its cloud project. Several other projects
+   * make it somebody else's daemon just as one does.
+   */
+  it('moves a new project off the default when the daemon there serves several other projects', async () => {
     expect(
       await portForInit(
         undefined,
         undefined,
         undefined,
+        deps(OTHER_PROJECT, true, ['blog-9f00aa11']),
+      ),
+    ).toBe(RELOCATED);
+  });
+
+  it('keeps the default when one of the projects the daemon serves is this one', async () => {
+    expect(
+      await portForInit(
+        undefined,
+        undefined,
+        'blog-9f00aa11',
         deps(OTHER_PROJECT, true, ['blog-9f00aa11']),
       ),
     ).toBeUndefined();

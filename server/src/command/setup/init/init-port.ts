@@ -68,11 +68,13 @@ export async function portForInit(
   // Started here — by this project's own editor MCP, typically — so it is ours whatever project id
   // it recorded. Moving off it strands that agent: an MCP resolves its port once, at startup.
   if (true === deps.daemonStartedHere?.(RETICLE_DEFAULT_PORT)) return undefined;
-  // The bridge's own rule: it refuses a page only when it has served exactly ONE other project. A
-  // daemon serving nobody, several projects, or ours accepts this one. A project that has never
-  // been through init has no id yet, so a single named holder is somebody else.
+  // A daemon that serves other projects, one or several, is somebody else's: it is rooted in their
+  // directory and linked to their cloud project, even when its bridge would accept this page. A
+  // daemon serving nobody, or this project among others, is kept. A project that has never been
+  // through init has no id yet, so every named holder is somebody else.
   const holders = await deps.daemonProjects(RETICLE_DEFAULT_PORT);
-  if (1 !== holders.length || holders[0] === projectId) return undefined;
+  if (0 === holders.length || (projectId !== undefined && holders.includes(projectId)))
+    return undefined;
   const seed = projectId ?? dir;
   return deps.pickPort(seed === undefined ? PROJECT_PORT_FIRST : projectPortFor(seed));
 }
