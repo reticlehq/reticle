@@ -7,7 +7,7 @@
 import { readTestId } from '@/dom/addressing/testid-attr.js';
 import { QueryBy, type SettleReason } from '@reticlehq/core';
 import { elementsMatching } from '@/dom/query.js';
-import { getAccessibleName, getRole } from '@/dom/a11y.js';
+import { getAccessibleName, getRole, isSensitiveField } from '@/dom/a11y.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';
 
 /**
@@ -108,6 +108,11 @@ export interface ActionResult {
   nth?: number;
   of?: number;
   source?: { file: string; line: number; column?: number };
+  /**
+   * The target holds a secret (a password input, a credential autocomplete, a sensitive name). The
+   * server redacts a recorded fill by this, so a field labelled in any language is never saved in clear.
+   */
+  secret?: true;
   /** Best-effort caveat the agent should heed (e.g. synthetic hover may not fire enter/leave). */
   warning?: string;
 }
@@ -130,6 +135,8 @@ export interface CapturedAnchor {
   name?: string;
   nth?: number;
   of?: number;
+  /** See ActionResult.secret. */
+  secret?: true;
 }
 
 /**
@@ -163,6 +170,7 @@ export function anchorOf(el: Element): CapturedAnchor {
   const name = getAccessibleName(el);
   if (role.length > 0) out.role = role;
   if (name.length > 0) out.name = name;
+  if (isSensitiveField(el)) out.secret = true;
   if (role.length > 0 && name.length > 0) {
     // A sidebar link and a card link both named "Transactions": without the position, the recorded
     // step was ambiguous on every replay.
@@ -205,6 +213,7 @@ export const result = (
   if (anchor.name !== undefined) base.name = anchor.name;
   if (anchor.nth !== undefined) base.nth = anchor.nth;
   if (anchor.of !== undefined) base.of = anchor.of;
+  if (anchor.secret !== undefined) base.secret = anchor.secret;
   if (warning !== undefined) base.warning = warning;
   return base;
 };

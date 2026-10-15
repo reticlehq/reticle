@@ -141,4 +141,20 @@ describe('act result — which of several same-named controls', () => {
     if (!unique.ok) throw new Error('expected ok');
     expect([unique.nth, unique.of]).toEqual([undefined, undefined]);
   });
+
+  /*
+   * A password field labelled in French was saved in clear: the server knew the field only by its
+   * name. The act result says the target holds a secret, so the server redacts by what the field is.
+   */
+  it('marks an act on a password input secret, and leaves a plain field unmarked', async () => {
+    document.body.innerHTML =
+      '<label>Mot de passe <input type="password"></label><label>Nom <input type="text"></label>';
+    const [pw, plain] = Array.from(document.querySelectorAll('input'));
+    if (pw === undefined || plain === undefined) throw new Error('no inputs');
+    const secret = await executeAction(refs.refFor(pw), 'fill', { value: 'x' });
+    const open = await executeAction(refs.refFor(plain), 'fill', { value: 'x' });
+    if (!secret.ok || !open.ok) throw new Error('expected ok');
+    expect(secret.secret).toBe(true);
+    expect(open.secret).toBeUndefined();
+  });
 });

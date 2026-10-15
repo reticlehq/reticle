@@ -1,5 +1,6 @@
 import {
   REDACTED_FILL,
+  SECRET_FIELD_ARG,
   SECRET_NAME_ARG,
   secretEnvKey,
   secretValue,
@@ -240,6 +241,19 @@ function explicitTimeoutMs(args: Record<string, unknown>): number | undefined {
  * perfectly stable anchor.
  */
 function compileAnchorArgs(
+  r: Record<string, unknown>,
+  ref: string,
+  action: string,
+  actArgs: Record<string, unknown>,
+): { args: Record<string, unknown>; stable: boolean } {
+  const compiled = anchorArgs(r, ref, action, actArgs);
+  // The SDK says the target holds a secret (a password input, whatever its label). Carried beside
+  // the anchor so the saved flow redacts the fill by what the field IS, not by what it is called.
+  if (true === r['secret']) compiled.args[SECRET_FIELD_ARG] = true;
+  return compiled;
+}
+
+function anchorArgs(
   r: Record<string, unknown>,
   ref: string,
   action: string,

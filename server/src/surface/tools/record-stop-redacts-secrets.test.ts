@@ -13,7 +13,9 @@ import type { ToolDeps } from './tools.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
-import { REDACTED_FILL } from '@/language/flows/flows.js';
+import { REDACTED_FILL, recordedStepToFlowStep } from '@/language/flows/flows.js';
+import { SECRET_FIELD_ARG } from '@/language/flows/fields/flow-secret-field.js';
+import type { RecordedStep } from '@/language/flows/recording/tape/recordings.js';
 
 const TYPED = 'pw-typed-7';
 const EMAIL = 'sam@example.com';
@@ -52,5 +54,40 @@ describe('reticle_record stop redacts credentials it returns', () => {
     expect(text, 'a field that is not secret is left alone').toContain(EMAIL);
     // In-session replay still types the real value; only what is RETURNED is redacted.
     expect(JSON.stringify(recordings.getCompiled('sign-in'))).toContain(TYPED);
+  });
+
+  /*
+   * Persona drive: a password field labelled "Mot de passe" was saved IN CLEAR into the git-checked
+   * flow, because redaction read only the English words of the field's name. The SDK marks the act
+   * on a password input `secret`, and that mark redacts whatever the label says.
+   */
+  it('redacts a fill the SDK marked secret, whatever the field is called', async () => {
+    const recordings = new RecordingStore();
+    recordings.start('connexion', 0, '/login');
+    recordings.capture({
+      tool: ReticleTool.ACT,
+      stable: true,
+      args: {
+        by: QueryBy.ROLE,
+        value: 'textbox',
+        name: 'Mot de passe',
+        [SECRET_FIELD_ARG]: true,
+        action: 'fill',
+        args: { value: TYPED },
+      },
+    });
+    const session = { id: 's1', elapsed: () => 0, eventsSince: () => [] } as unknown as Session;
+    const deps = {
+      sessions: { resolve: () => session } as unknown as SessionManager,
+      recordings,
+    } as unknown as ToolDeps;
+
+    const res = await recordStopTool().handler(deps, { recordingName: 'connexion' });
+    expect(JSON.stringify(res)).not.toContain(TYPED);
+    const flow = recordedStepToFlowStep(
+      recordings.getCompiled('connexion')?.steps[0] as RecordedStep,
+    );
+    expect(JSON.stringify(flow)).not.toContain(TYPED);
+    expect(flow.args?.['value']).toBe(REDACTED_FILL);
   });
 });

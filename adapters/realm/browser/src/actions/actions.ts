@@ -771,6 +771,7 @@ interface SequenceStepResult {
   role?: string;
   name?: string;
   source?: { file: string; line: number; column?: number };
+  secret?: true;
   /** best-effort caveat for this step (e.g. synthetic hover may not fire enter/leave). */
   warning?: string;
 }
@@ -798,6 +799,7 @@ export async function executeSequence(steps: ActionStep[]): Promise<{
     if (res.role !== undefined) stepBase.role = res.role;
     if (res.name !== undefined) stepBase.name = res.name;
     if (res.source !== undefined) stepBase.source = res.source;
+    if (res.secret !== undefined) stepBase.secret = res.secret;
     if (res.warning !== undefined) stepBase.warning = res.warning;
     stepResults.push(stepBase);
   }

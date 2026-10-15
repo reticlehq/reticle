@@ -33,6 +33,12 @@ export const REDACTED_FILL = '<redacted: supply at replay>';
 /** The arg a saved redacted fill names its variable in. Dropped before the step reaches the page. */
 export const SECRET_NAME_ARG = 'secret';
 
+/**
+ * The arg a RECORDED step carries when the SDK said its target holds a secret. Recorder-internal:
+ * it decides redaction at save and never reaches the saved flow.
+ */
+export const SECRET_FIELD_ARG = 'secretField';
+
 /** The prefix every secret's variable carries. */
 const SECRET_ENV_PREFIX = 'RETICLE_SECRET_';
 

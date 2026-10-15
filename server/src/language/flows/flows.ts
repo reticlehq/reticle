@@ -5,7 +5,12 @@ import {
   type Predicate,
   type ProjectId,
 } from '@reticlehq/core';
-import { REDACTED_FILL, SECRET_NAME_ARG, secretEnvKey } from './fields/flow-secret-field.js';
+import {
+  REDACTED_FILL,
+  SECRET_FIELD_ARG,
+  SECRET_NAME_ARG,
+  secretEnvKey,
+} from './fields/flow-secret-field.js';
 export { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
 import { changeInPlace } from './narrow-write.js';
@@ -151,7 +156,7 @@ function subStepToFlowStep(raw: unknown): FlowStep {
   const action = asString(sub['action']) as ActionType | undefined;
   const args = asRecord(sub['args']);
   const { anchor, degraded } = anchorForStep(sub);
-  const step = buildStep(ReticleTool.ACT, anchor, action, args, degraded);
+  const step = buildStep(ReticleTool.ACT, anchor, action, args, degraded, markedSecret(sub));
   /*
    * The sub-step's own declared consequence, carried rather than folded into the parent.
    *
@@ -182,13 +187,21 @@ function subStepToFlowStep(raw: unknown): FlowStep {
 function redactSecretFill(
   anchor: FlowAnchor,
   args: Record<string, unknown>,
+  /** The SDK said the target holds a secret: redact whatever the field is called. */
+  secret = false,
 ): Record<string, unknown> {
   if (typeof args['value'] !== 'string') return args;
   const field = anchorFieldName(anchor);
-  if (field === undefined || !defaultIsSensitiveKey(field)) return args;
+  const sensitive = secret || (field !== undefined && defaultIsSensitiveKey(field));
+  if (!sensitive) return args;
+  // ponytail: a secret field with no name (a component anchor) gets no variable; replay then refuses it.
+  if (field === undefined) return { ...args, value: REDACTED_FILL };
   // The variable that supplies it, beside the placeholder: the file alone says what to set.
   return { ...args, value: REDACTED_FILL, [SECRET_NAME_ARG]: secretEnvKey(field) };
 }
+
+/** Whether a recorded step's args carry the SDK's secret mark. */
+const markedSecret = (args: Record<string, unknown>): boolean => true === args[SECRET_FIELD_ARG];
 
 /**
  * The recorded steps as they may be SHOWN: every credential fill carries the placeholder.
@@ -211,7 +224,11 @@ export function redactRecordedSteps(steps: readonly RecordedStep[]): RecordedSte
 function redactNormalizedArgs(normalized: Record<string, unknown>): Record<string, unknown> {
   const inner = normalized['args'];
   if ('object' !== typeof inner || null === inner) return normalized;
-  const redacted = redactSecretFill(anchorForStep(normalized).anchor, asRecord(inner));
+  const redacted = redactSecretFill(
+    anchorForStep(normalized).anchor,
+    asRecord(inner),
+    markedSecret(normalized),
+  );
   return redacted === inner ? normalized : { ...normalized, args: redacted };
 }
 
@@ -241,8 +258,9 @@ function buildStep(
   action: ActionType | undefined,
   args: Record<string, unknown>,
   degraded: boolean,
+  secret = false,
 ): FlowStep {
-  const step: FlowStep = { tool, anchor, args: redactSecretFill(anchor, args) };
+  const step: FlowStep = { tool, anchor, args: redactSecretFill(anchor, args, secret) };
   if (action !== undefined) step.action = action;
   if (degraded) step.degraded = true;
   return step;
@@ -293,7 +311,7 @@ function anchoredStep(step: RecordedStep): FlowStep {
   const action = asString(step.args['action']) as ActionType | undefined;
   const args = asRecord(step.args['args']);
   const { anchor, degraded } = anchorForStep(step.args);
-  const out = buildStep(step.tool, anchor, action, args, degraded);
+  const out = buildStep(step.tool, anchor, action, args, degraded, markedSecret(step.args));
   if (step.expect !== undefined) out.expect = step.expect;
   return out;
 }
