@@ -1,8 +1,10 @@
 import {
   ElementState,
+  EventType,
   PredicateKind,
   THROTTLED_STARVED_NOTE,
   isSameDocument,
+  type ReticleEvent,
 } from '@reticlehq/core';
 
 import type { Baseline } from './property.js';
@@ -65,6 +67,25 @@ const WINDOW_ONLY_KINDS: ReadonlySet<Predicate['kind']> = new Set([
 
 /** Names the oracle that answered, in the same shape every other `assertion` here uses. */
 const SUPERSEDED_ASSERTION = 'window.evidence-superseded';
+
+/**
+ * A request the server answered: a NET_REQUEST carrying a status or an `ok`.
+ *
+ * A response is a server fact, not page state, so it stays true after the page that sent the
+ * request is replaced (#1529). A request nobody answered, or a subresource whose answer could not be
+ * read, carries neither field and is never kept past its document.
+ */
+function isServerAnswer(e: ReticleEvent): boolean {
+  return (
+    EventType.NET_REQUEST === e.type &&
+    ('number' === typeof e.data['status'] || 'boolean' === typeof e.data['ok'])
+  );
+}
+
+/** Why a `net` miss is unknown when only a replaced page's answer would have matched (#1529). */
+const ANSWERED_BEFORE_NAVIGATION =
+  'a matching request was answered under the page before the navigation, and this window has no ' +
+  '`since` floor to count it in. Pass the cursor from before the action as `since`.';
 
 /** The predicate's own event-time floor, if its kind carries one. */
 function predicateSince(predicate: Predicate): number {
@@ -268,11 +289,20 @@ async function evaluatePredicateRaw(
   // `since` from the act it just performed is scoping the assertion to that action's aftermath. It is
   // applied here, once, rather than in each eval: the floor means the same thing for every kind that
   // reads the event stream, and net/console re-applying it is a no-op.
-  const raw = session.eventsSince(Math.max(since, predicateSince(predicate)));
+  const floor = Math.max(since, predicateSince(predicate));
+  const raw = session.eventsSince(floor);
+  const onScreen = (e: ReticleEvent): boolean =>
+    isSameDocument(e.documentId, session.currentDocumentId);
   // Scoped ONCE, here, for the same reason the contradiction pass scopes at its own choke point:
   // reasoning about a dead page's evidence is a defect in every oracle below rather than in whichever
   // one happened to read it, and this is the single place they all take their window from.
-  const events = raw.filter((e) => isSameDocument(e.documentId, session.currentDocumentId));
+  //
+  // One exception (#1529). A `net` predicate inside an explicit `since` window also keeps the server's
+  // answers to the page that was just replaced: a write that navigates (delete, then redirect home)
+  // is proven by its response, and dropping it read a 204 as "never happened". The floor is what
+  // ties the request to the action; without one it could come from any earlier page.
+  const keepsAnswers = PredicateKind.NET === predicate.kind && 0 < floor;
+  const events = raw.filter((e) => onScreen(e) || (keepsAnswers && isServerAnswer(e)));
   const superseded = raw.length - events.length;
   // An empty window was always allowed to mean "it did not happen"; that reading is only unsafe once
   // supersession is what emptied it. Without this, dropping stale evidence would trade a wrong pass
@@ -318,8 +348,21 @@ async function evaluatePredicateRaw(
         baselines?.get(predicate),
       );
     }
-    case PredicateKind.NET:
-      return evalNet(events, predicate);
+    case PredicateKind.NET: {
+      const result = evalNet(events, predicate);
+      if (result.pass || keepsAnswers || result.inconclusive !== undefined) return result;
+      // No floor, so a replaced page's answers were left out. If one would have satisfied the
+      // predicate, nothing here can say whether it was this action's: unknown, never a plain no.
+      const withAnswers = raw.filter((e) => onScreen(e) || isServerAnswer(e));
+      if (withAnswers.length === events.length || !evalNet(withAnswers, predicate).pass) {
+        return result;
+      }
+      return {
+        ...result,
+        failureReason: ANSWERED_BEFORE_NAVIGATION,
+        inconclusive: ANSWERED_BEFORE_NAVIGATION,
+      };
+    }
     case PredicateKind.ROUTE:
       // `since` so an unanswered request already in flight before this window is not counted
       // against the app — see unansweredIn.
