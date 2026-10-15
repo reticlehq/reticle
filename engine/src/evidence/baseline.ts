@@ -85,7 +85,7 @@ async function readText(
   session: PredicateSession,
   predicate: Extract<Predicate, { kind: typeof PredicateKind.TEXT }>,
 ): Promise<Baseline | undefined> {
-  const query = textPredicateQuery(predicate);
+  const query = textPredicateQuery(predicate, session.sdkVersion);
   const match = await session.command(ReticleCommand.MATCH, { query });
   if (!match.ok) return undefined;
   const elements = ((match.result ?? {}) as { elements?: unknown }).elements;

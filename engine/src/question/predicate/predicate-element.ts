@@ -144,6 +144,17 @@ function versionParts(version: string): [number, number, number] | undefined {
   return null === m ? undefined : [Number(m[1]), Number(m[2]), Number(m[3])];
 }
 
+/** Whether the page's SDK is older than `since`. An unknown or unreadable version is not. */
+function sdkPredates(sdk: string | undefined, since: string): boolean {
+  const have = sdk === undefined ? undefined : versionParts(sdk);
+  const need = versionParts(since);
+  if (have === undefined || need === undefined) return false;
+  for (let i = 0; i < 3; i += 1) {
+    if (have[i] !== need[i]) return (have[i] ?? 0) < (need[i] ?? 0);
+  }
+  return false;
+}
+
 /** The state, when the page's SDK is older than the first release that answers it. */
 function stateTheSdkPredates(
   sdk: string | undefined,
@@ -151,15 +162,11 @@ function stateTheSdkPredates(
 ): { sdk: string; state: ElementState; since: string } | undefined {
   const since = state === undefined ? undefined : ELEMENT_STATE_SINCE[state];
   if (sdk === undefined || state === undefined || since === undefined) return undefined;
-  const have = versionParts(sdk);
-  const need = versionParts(since);
-  if (have === undefined || need === undefined) return undefined;
-  for (let i = 0; i < 3; i += 1) {
-    if (have[i] !== need[i])
-      return (have[i] ?? 0) < (need[i] ?? 0) ? { sdk, state, since } : undefined;
-  }
-  return undefined;
+  return sdkPredates(sdk, since) ? { sdk, state, since } : undefined;
 }
+
+/** The first SDK release whose element query accepts `matchCase`; an older page refuses the query. */
+const MATCH_CASE_SINCE = '3.7.0';
 
 export async function evalElement(
   session: PredicateSession,
@@ -489,19 +496,22 @@ async function nearestByName(
  * priya" could never catch a capitalisation defect. An undefined `contains` must not reach the query
  * as `text: undefined` — that is a locator asking for the empty string.
  */
-export function textPredicateQuery(predicate: {
-  contains?: string | undefined;
-  ignoreCase?: boolean | undefined;
-  scope?: string | undefined;
-  self?: boolean | undefined;
-}): ElementQuery {
+export function textPredicateQuery(
+  predicate: {
+    contains?: string | undefined;
+    ignoreCase?: boolean | undefined;
+    scope?: string | undefined;
+    self?: boolean | undefined;
+  },
+  /** The page SDK's version. A page older than MATCH_CASE_SINCE rejects the field outright. */
+  sdkVersion?: string,
+): ElementQuery {
+  // ponytail: an older page compares case-blind, as the engine did before it sent the field; update the SDK for case-exact checks.
+  const matchCase = true !== predicate.ignoreCase && !sdkPredates(sdkVersion, MATCH_CASE_SINCE);
   return {
     ...(undefined === predicate.contains
       ? {}
-      : {
-          text: predicate.contains,
-          ...(true === predicate.ignoreCase ? {} : { matchCase: true }),
-        }),
+      : { text: predicate.contains, ...(matchCase ? { matchCase: true } : {}) }),
     ...(undefined === predicate.scope
       ? {}
       : { scope: predicate.scope, ...(true === predicate.self ? { self: true } : {}) }),

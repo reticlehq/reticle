@@ -26,4 +26,16 @@ describe('the element query a text predicate sends', () => {
       self: true,
     });
   });
+
+  /*
+   * Persona drive: the engine sent `matchCase` on every text check, and a page on an older SDK
+   * rejects a query field it does not know, so every text check there was a false "no".
+   */
+  it('leaves matchCase out for a page SDK older than the release that added it, and keeps it from that release', () => {
+    expect(textPredicateQuery({ contains: 'Signed in' }, '3.4.0')).toEqual({ text: 'Signed in' });
+    expect(textPredicateQuery({ contains: 'Signed in' }, '3.7.0')).toEqual({
+      text: 'Signed in',
+      matchCase: true,
+    });
+  });
 });

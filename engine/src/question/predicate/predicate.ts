@@ -302,7 +302,7 @@ async function evaluatePredicateRaw(
     case PredicateKind.TEXT: {
       // `scope` passes straight through: the text predicate has always been an element query with
       // only `text` filled in, so scoping it needs the field, not a second code path.
-      const query = textPredicateQuery(predicate);
+      const query = textPredicateQuery(predicate, session.sdkVersion);
       const found = await evalElement(
         session,
         query,
