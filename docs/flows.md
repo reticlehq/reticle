@@ -82,7 +82,7 @@ reticle_run({ tool: "reticle_flow_save", args: { flowName: "create-task" } })   
 }
 ```
 
-Each step binds to a **semantic anchor**, never a `eXX` ref: a `testid`/`signal` when available, else an auto-derived `component` anchor (component name + source `file:line`) for an element with no testid, so the flow stays stable with zero hand-added testids. Only when none of those resolve is a step kept `degraded: true` (a last-resort "add a testid here" marker) rather than silently dropped.
+Each step binds to a **semantic anchor**, never a `eXX` ref: a `testid`/`signal` when available, else an auto-derived `component` anchor (component name + source `file:line`) for an element with no testid, so the flow stays stable with zero hand-added testids. A press of a document key (Escape, Tab, a shortcut) with no target is aimed at no element, so it is saved with a `{ "kind": "role", "role": "document" }` anchor and replayed at the document, as it ran. Only when none of those resolve is a step kept `degraded: true` (a last-resort "add a testid here" marker) rather than silently dropped.
 
 ## Run a flow
 

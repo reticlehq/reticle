@@ -13,6 +13,7 @@ export type { FlowResult } from './flow-result.js';
 import {
   AnchorKind,
   DEGRADED_ANCHOR_ROLE,
+  DOCUMENT_ANCHOR_ROLE,
   FLOW_FILE_VERSION,
   flowFileVersionFor,
   FlowErrorCode,
@@ -20,6 +21,7 @@ import {
   FlowStepTool,
   QueryBy,
   defaultIsSensitiveKey,
+  isGlobalPressCall,
 } from '@reticlehq/core';
 import type {
   ActionType,
@@ -116,6 +118,16 @@ export function anchorForStep(args: Record<string, unknown>): {
   // that means "add a data-testid". So a step the recorder anchored by accessible name arrived here
   // and had that name thrown away, which is precisely the anchor that distinguishes one row's
   // control from another's when a shared JSX source location cannot.
+  // A document-key press compiled with no element (#1559): a real anchor, not a degraded one. It is
+  // nameless on purpose, because it names no element; the press is what replay dispatches.
+  if (
+    by === QueryBy.ROLE &&
+    value === DOCUMENT_ANCHOR_ROLE &&
+    args['name'] === undefined &&
+    isGlobalPressCall({ action: args['action'], args: args['args'] })
+  ) {
+    return { anchor: { kind: AnchorKind.ROLE, role: DOCUMENT_ANCHOR_ROLE }, degraded: false };
+  }
   if (by === QueryBy.ROLE && value !== undefined) {
     const name = asString(args['name']);
     if (name !== undefined && name.length > 0) {

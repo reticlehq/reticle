@@ -133,6 +133,16 @@ export type AnchorKind = (typeof AnchorKind)[keyof typeof AnchorKind];
 export const DEGRADED_ANCHOR_ROLE = 'unresolved';
 
 /**
+ * The role a document-key press (Escape, Tab, a modifier shortcut) is saved under (#1559).
+ *
+ * Such a press ran live against no element: `act` resolves it to the document and dispatches it with
+ * no ref. It has nothing to anchor to, and it needs nothing, so the saved step carries this nameless
+ * ROLE anchor, not the degraded placeholder, and replay dispatches it exactly as it ran. Only a press
+ * of a document key is read this way; on any other action the anchor addresses nothing.
+ */
+export const DOCUMENT_ANCHOR_ROLE = 'document';
+
+/**
  * The JSON replacer every flow is written and sent with: a predicate flag at its default is left
  * out. An older platform's schema rejects a key it does not know (`ignoreCase` on a text check was
  * refused on every sync), so a flow that never asked for the flag must not carry it; only a check

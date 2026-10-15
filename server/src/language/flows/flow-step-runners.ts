@@ -10,6 +10,7 @@ import { expectedElementTestid } from '@reticlehq/core';
 import {
   AnchorKind,
   DEGRADED_ANCHOR_ROLE,
+  DOCUMENT_ANCHOR_ROLE,
   DriftReason,
   PredicateKind,
   QueryBy,
@@ -21,7 +22,7 @@ import {
   type FlowStepResult,
   type Predicate,
 } from '@reticlehq/core';
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, isGlobalPressCall } from '@reticlehq/core';
 import { replayActionArgs } from './replay.js';
 import { isStaleRefError } from '@/surface/tools/act/act-sequence-retry.js';
 import { waitForReaction } from '@/surface/tools/act/react-grace.js';
@@ -361,6 +362,32 @@ export function isDegradedAnchor(anchor: FlowAnchor): boolean {
   );
 }
 
+/**
+ * A saved document-key press (#1559): the nameless `document` ROLE anchor on a press of a document
+ * key. It is dispatched with no ref, the way `act` ran it live, and never QUERIED: there is no
+ * element with that role to find, and the page's root would be the wrong target if there were.
+ *
+ * The press is checked as well as the anchor, so the same anchor on any other action stays an
+ * anchor that addresses nothing.
+ */
+export function isDocumentPressStep(step: Pick<FlowStep, 'anchor' | 'action' | 'args'>): boolean {
+  return (
+    step.anchor.kind === AnchorKind.ROLE &&
+    step.anchor.role === DOCUMENT_ANCHOR_ROLE &&
+    step.anchor.name === undefined &&
+    isGlobalPressCall({ action: step.action, args: step.args })
+  );
+}
+
+/** A `document` ROLE anchor names no element, whatever the step's action. */
+function isDocumentAnchor(anchor: FlowAnchor): boolean {
+  return (
+    anchor.kind === AnchorKind.ROLE &&
+    anchor.role === DOCUMENT_ANCHOR_ROLE &&
+    anchor.name === undefined
+  );
+}
+
 /** What a step with no resolvable anchor reports, instead of a missing-element story. */
 const DEGRADED_STEP_REASON =
   'recorded without a resolvable anchor (no data-testid, no accessible role+name), so it can never ' +
@@ -393,7 +420,9 @@ export function degradedStepResult(step: FlowStep, index: number, label: string)
 export function anchorQueryArgs(anchor: FlowAnchor): Record<string, unknown> | null {
   if (anchor.kind === AnchorKind.TESTID) return { by: QueryBy.TESTID, value: anchor.value };
   if (anchor.kind === AnchorKind.COMPONENT) return componentQueryArgs(anchor);
-  if (anchor.kind === AnchorKind.ROLE && !isDegradedAnchor(anchor)) return roleQueryArgs(anchor);
+  if (anchor.kind === AnchorKind.ROLE && !isDegradedAnchor(anchor) && !isDocumentAnchor(anchor)) {
+    return roleQueryArgs(anchor);
+  }
   return null;
 }
 
@@ -407,7 +436,7 @@ export function anchorPrecondition(anchor: FlowAnchor): Predicate | undefined {
   if (anchor.kind === AnchorKind.TESTID) {
     return { kind: PredicateKind.ELEMENT, query: { testid: anchor.value } };
   }
-  if (anchor.kind === AnchorKind.ROLE && !isDegradedAnchor(anchor)) {
+  if (anchor.kind === AnchorKind.ROLE && !isDegradedAnchor(anchor) && !isDocumentAnchor(anchor)) {
     return { kind: PredicateKind.ELEMENT, query: { role: anchor.role, name: anchor.name } };
   }
   return undefined;
@@ -522,6 +551,16 @@ export async function runSequenceStep(
     afterRerender = false,
   ): Promise<{ live: LiveSubStep } | { stop: FlowStepResult }> => {
     const label = `${anchorLabel(sub.anchor)} (sub-step ${String(subIndex)})`;
+    if (isDocumentPressStep(sub)) {
+      // Dispatched as it ran live, at the document with no ref (#1559).
+      return {
+        live: {
+          ref: '',
+          action: sub.action ?? '',
+          args: replayActionArgs(sub.args, confirmDangerous, undefined),
+        },
+      };
+    }
     const queryArgs = anchorQueryArgs(sub.anchor);
     if (null === queryArgs) return { stop: degradedStepResult(step, index, label) };
     const { refs, hint } = await resolveQuery(session, queryArgs, sleep);

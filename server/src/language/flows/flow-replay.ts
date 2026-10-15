@@ -33,6 +33,7 @@ import { asString, invokedFlowMissing, isConsequenceDrift } from '@reticlehq/cor
 import { anchorFieldName } from './fields/flow-secret-field.js';
 import {
   degradedStepResult,
+  isDocumentPressStep,
   isDegradedAnchor,
   runComponentStep,
   runRoleStep,
@@ -680,6 +681,10 @@ export async function replayFlow(
           if (isDegradedAnchor(step.anchor)) {
             // Never QUERY the sentinel — it marks "no anchor was determined", not an element to find.
             return degradedStepResult(step, index, label);
+          }
+          if (subSteps === undefined && isDocumentPressStep(step)) {
+            // A document-key press: dispatched with no ref, as it ran live (#1559).
+            return actOnResolvedRef(session, step, index, label, '', confirmDangerous);
           }
           if (subSteps !== undefined && subSteps.length > 0) {
             return runSequenceStep(
