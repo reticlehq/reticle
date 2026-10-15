@@ -58,9 +58,9 @@ interface ArtifactRootQuery {
   daemonRoot: string;
   /**
    * The directory the dev server that served this page runs in, when the caller could observe it.
-   * Only consulted to break an AMBIGUOUS tie: every git worktree carries the same committed
+   * Consulted to break an AMBIGUOUS tie: every git worktree carries the same committed
    * `.reticle.json`, so the projectId cannot tell them apart, but the serving process runs inside
-   * exactly one of them.
+   * exactly one of them. A lone match in a different tree from it is a second checkout, refused.
    */
   servingDirectory?: string | undefined;
 }
@@ -116,6 +116,22 @@ export function resolveArtifactRoot(query: ArtifactRootQuery): ArtifactRoot {
   if (0 === directory.length) {
     return { root: daemonRoot, reason: ArtifactRootReason.NO_MATCH };
   }
+  // The page was served from a tree apart from the one checkout we know: a second checkout of the
+  // same project that the registry no longer names. Writing into the known one moves this app's
+  // evidence into a tree nobody drove, so it is refused like any other pair.
+  const serving = query.servingDirectory;
+  if (
+    serving !== undefined &&
+    0 < serving.length &&
+    !isSameOrInside(directory, serving) &&
+    !isSameOrInside(serving, directory)
+  ) {
+    return {
+      root: daemonRoot,
+      reason: ArtifactRootReason.AMBIGUOUS,
+      candidates: [directory, serving],
+    };
+  }
 
   return { root: join(directory, ReticleDir.ROOT), reason: ArtifactRootReason.MATCHED_PROJECT };
 }
@@ -134,11 +150,14 @@ function checkoutContaining(
   if (servingDirectory === undefined || 0 === servingDirectory.length) return undefined;
   const inside = matches
     .map((candidate) => candidate.directory)
-    .filter((directory) => {
-      const rel = relative(directory, servingDirectory);
-      return '' === rel || ('..' !== rel && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
-    });
+    .filter((directory) => isSameOrInside(directory, servingDirectory));
   return inside.sort((a, b) => b.length - a.length)[0];
+}
+
+/** Is `path` the directory `dir` or somewhere inside it? */
+function isSameOrInside(dir: string, path: string): boolean {
+  const rel = relative(dir, path);
+  return '' === rel || ('..' !== rel && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
 /**

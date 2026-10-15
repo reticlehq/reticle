@@ -208,6 +208,46 @@ describe('resolveArtifactRoot', () => {
     });
   });
 
+  /*
+   * Persona drive: `init --app apps/shop-copy` re-pointed the project's one remembered directory,
+   * and the next drive of the app served from apps/shop wrote its session and flow into shop-copy
+   * without a word. One known checkout and a dev server in a different tree is two checkouts.
+   */
+  describe('one known checkout, and the serving dev server runs in another tree', () => {
+    const copyOnly = (): ReturnType<typeof candidatesOf> =>
+      candidatesOf([
+        {
+          path: '/apps/shop-copy/.reticle.json',
+          directory: '/apps/shop-copy',
+          projectId: 'shop-1',
+        },
+      ]);
+
+    it('refuses rather than write into the checkout that was not served', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('shop-1'),
+        candidates: copyOnly(),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/apps/shop',
+      });
+      expect(r.reason).toBe(ArtifactRootReason.AMBIGUOUS);
+      expect(r.root).toBe(DAEMON_ROOT);
+      expect(r.candidates).toEqual(['/apps/shop-copy', '/apps/shop']);
+    });
+
+    it('keeps the match when the dev server runs inside it or above it', () => {
+      for (const servingDirectory of ['/apps/shop-copy/web', '/apps']) {
+        const r = resolveArtifactRoot({
+          projectId: asProjectId('shop-1'),
+          candidates: copyOnly(),
+          daemonRoot: DAEMON_ROOT,
+          servingDirectory,
+        });
+        expect(r.reason).toBe(ArtifactRootReason.MATCHED_PROJECT);
+      }
+    });
+  });
+
   it('ignores a discovered config that declares no projectId at all', () => {
     const r = resolveArtifactRoot({
       projectId: asProjectId('acme-web-9f3c1d'),
