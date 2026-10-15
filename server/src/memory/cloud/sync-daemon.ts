@@ -29,7 +29,7 @@ import { emitSyncHook } from '@/hooks/hook-emit.js';
 import {
   MemoryReadHeader,
   MemoryReadPurpose,
-  memoryReadUrl,
+  readMemoryPages,
   scopedMemoryEntries,
 } from './memory-scope.js';
 import { IntentShardStore } from '@/memory/intent/intent-shard-store.js';
@@ -270,16 +270,19 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     config: { url: string; apiKey: string },
     projectId: string | null,
   ): Promise<number> => {
-    const res = await request(memoryReadUrl(config.url, { projectId }), {
-      method: 'GET',
-      // The sync, not an agent: without this every cycle counted as an agent consulting memory.
-      headers: {
-        authorization: `Bearer ${config.apiKey}`,
-        [MemoryReadHeader.PURPOSE]: MemoryReadPurpose.SYNC,
-      },
+    const body = await readMemoryPages(config.url, { projectId }, async (url) => {
+      const res = await request(url, {
+        method: 'GET',
+        // The sync, not an agent: without this every cycle counted as an agent consulting memory.
+        headers: {
+          authorization: `Bearer ${config.apiKey}`,
+          [MemoryReadHeader.PURPOSE]: MemoryReadPurpose.SYNC,
+        },
+      });
+      return 200 === res.status ? (JSON.parse(res.text) as unknown) : undefined;
     });
-    if (200 !== res.status) return 0;
-    const entries = scopedMemoryEntries(JSON.parse(res.text) as unknown, projectId) ?? [];
+    if (body === undefined) return 0;
+    const entries = scopedMemoryEntries(body, projectId) ?? [];
     const settled = settledWordsIn(entries);
     await keptWordsInRequest(reticleDirPaths(root).request, settled);
     return applySettledWords(new IntentShardStore(createNodeFileSystem(), root, { now }), settled);

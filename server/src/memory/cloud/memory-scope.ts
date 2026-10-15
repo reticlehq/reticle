@@ -60,7 +60,15 @@ const CLOUD_MEMORY_PATH = '/v1/memory';
 export const MemoryScopeField = {
   PROJECT_ID: 'projectId',
   SUBJECT: 'subject',
+  LIMIT: 'limit',
+  CURSOR: 'cursor',
+  NEXT_CURSOR: 'nextCursor',
 } as const;
+
+/** One page of a memory read: the platform's own maximum. */
+export const MEMORY_PAGE_LIMIT = 100;
+/** ponytail: 100 pages = 10,000 entries per read; a project past that needs a subject-scoped read. */
+const MAX_MEMORY_PAGES = 100;
 
 /**
  * What a read is asked about: the linked project, and optionally one subject within it.
@@ -73,6 +81,10 @@ export interface MemoryReadScope {
   /** The cloud project the link file names. Absent, `null` and empty all mean "no project to name". */
   projectId: string | null | undefined;
   subject?: string | undefined;
+  /** One page's size; absent asks for everything, which a server that does not page also answers. */
+  limit?: number | undefined;
+  /** The `nextCursor` of the page before this one. */
+  cursor?: string | undefined;
 }
 
 /**
@@ -129,6 +141,10 @@ export function memoryReadUrl(baseUrl: string, scope: MemoryReadScope): string {
   const projectId = projectToName(scope.projectId);
   if (projectId !== undefined) {
     parts.push(`${MemoryScopeField.PROJECT_ID}=${encodeURIComponent(projectId)}`);
+  }
+  if (scope.limit !== undefined) parts.push(`${MemoryScopeField.LIMIT}=${String(scope.limit)}`);
+  if (scope.cursor !== undefined) {
+    parts.push(`${MemoryScopeField.CURSOR}=${encodeURIComponent(scope.cursor)}`);
   }
   const url = `${baseUrl}${CLOUD_MEMORY_PATH}`;
   return 0 === parts.length ? url : `${url}?${parts.join('&')}`;
@@ -250,4 +266,43 @@ export function scopeMemoryResponse(body: unknown, projectId: string | null | un
   const entries = envelope['entries'];
   if (!Array.isArray(entries)) return body;
   return { ...envelope, entries: keepOwnProject(entries, projectId) };
+}
+
+/**
+ * Every page of a memory read, as one envelope: the first page's, with every page's entries.
+ *
+ * The platform pages `GET /v1/memory` when asked, so every reader asks a page at a time and follows
+ * `nextCursor`; a server that does not page answers once with everything and no cursor. A page whose
+ * envelope is not this project's is handed back as it arrived, so the reader's scope check refuses
+ * the whole read rather than mixing it in. `fetchBody` answers `undefined` for a failed request, and
+ * so does this.
+ */
+export async function readMemoryPages(
+  baseUrl: string,
+  scope: Omit<MemoryReadScope, 'limit' | 'cursor'>,
+  fetchBody: (url: string) => Promise<unknown>,
+): Promise<unknown> {
+  let first: Record<string, unknown> | undefined;
+  const entries: unknown[] = [];
+  let cursor: string | undefined;
+  let more = false;
+  for (let page = 0; page < MAX_MEMORY_PAGES; page += 1) {
+    const body = await fetchBody(
+      memoryReadUrl(baseUrl, { ...scope, limit: MEMORY_PAGE_LIMIT, cursor }),
+    );
+    if (null === body || 'object' !== typeof body) return body;
+    if (!isReadableMemoryScope(scopeOfMemoryResponse(body, scope.projectId))) return body;
+    const envelope = body as Record<string, unknown>;
+    first ??= envelope;
+    const pageEntries = envelope['entries'];
+    if (!Array.isArray(pageEntries)) return 0 === page ? body : { ...first, entries };
+    entries.push(...(pageEntries as unknown[]));
+    const next = envelope[MemoryScopeField.NEXT_CURSOR];
+    more = 'string' === typeof next && 0 < next.length;
+    if (!more) break;
+    cursor = next as string;
+  }
+  const { [MemoryScopeField.NEXT_CURSOR]: _paged, ...rest } = first ?? {};
+  // Said, never silent: a reader past the page ceiling holds less than the project knows.
+  return { ...rest, entries, ...(more ? { truncated: true } : {}) };
 }

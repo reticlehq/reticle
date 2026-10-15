@@ -64,7 +64,7 @@ import { cloudFetch, syncRunRecordToCloud, SyncOutcome } from '@/memory/cloud/cl
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import {
   memoryReadHeaders,
-  memoryReadUrl,
+  readMemoryPages,
   scopedMemoryEntries,
 } from '@/memory/cloud/memory-scope.js';
 import { consultSubjectFor, selectConsulted, type ConsultedMemory } from './flow-memory-consult.js';
@@ -206,22 +206,22 @@ async function consultProjectMemory(
     // Scoped to the linked project. The key covers a whole workspace, so a read that named no
     // project could be answered with ANOTHER repo's knowledge and this replay would carry it into a
     // verdict as if it were this app's — see `memory-scope.ts` for the whole shape.
-    const url = memoryReadUrl(cloud.config.url, { projectId: cloud.projectId, subject });
-    const res = await cloudFetch(url, {
-      method: 'GET',
-      headers: memoryReadHeaders(cloud.config.apiKey),
-    });
-    if (200 !== res.status) return undefined;
-    // `cloudFetch` hands back a real `Response`, so the body is a METHOD. Reading `res.json` as a
-    // property yields the function itself, `.entries` on it is undefined, and the whole feature
-    // fails silently to "the project knows nothing" — which is indistinguishable from the honest
-    // empty case and is why this took a live drive to notice at all.
-    const body: unknown = await res.json();
-    // The envelope is the check that works: the platform names the project on the RESPONSE and not
-    // on each entry, so the entry-level filter alone kept a whole sibling workspace while looking
-    // like it did something. `undefined` means the response could not be shown to be this project's
-    // — nothing is attached, because a verdict carrying another repo's "established knowledge" is
-    // worse than one carrying none. See `memory-scope.ts`.
+    const config = cloud.config;
+    const body = await readMemoryPages(
+      config.url,
+      { projectId: cloud.projectId, subject },
+      async (url) => {
+        const res = await cloudFetch(url, {
+          method: 'GET',
+          headers: memoryReadHeaders(config.apiKey),
+        });
+        // `res.json` is a METHOD: read as a property it silently made "the project knows nothing".
+        return 200 === res.status ? await res.json() : undefined;
+      },
+    );
+    if (body === undefined) return undefined;
+    // `undefined`: the response could not be shown to be this project's, so nothing is attached —
+    // a verdict carrying another repo's "established knowledge" is worse than none. See memory-scope.
     const entries = scopedMemoryEntries(body, cloud.projectId);
     if (entries === undefined) return undefined;
     const picked = selectConsulted(entries as { statement?: unknown; status?: unknown }[]);

@@ -147,7 +147,7 @@ describe('which project a shared-memory read is about', () => {
     await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { subject: 'checkout', limit: 10 });
 
     expect(urls).toHaveLength(1);
-    expect(urls[0]).toBe(`${CLOUD}/v1/memory?subject=checkout&projectId=${LINKED}`);
+    expect(urls[0]).toBe(`${CLOUD}/v1/memory?subject=checkout&projectId=${LINKED}&limit=100`);
   });
 
   /** A read across the whole project is still scoped — the subject was never what scoped it. */
@@ -156,7 +156,7 @@ describe('which project a shared-memory read is about', () => {
 
     await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
 
-    expect(urls[0]).toBe(`${CLOUD}/v1/memory?projectId=${LINKED}`);
+    expect(urls[0]).toBe(`${CLOUD}/v1/memory?projectId=${LINKED}&limit=100`);
   });
 
   /**

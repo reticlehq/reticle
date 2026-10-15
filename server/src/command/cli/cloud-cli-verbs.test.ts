@@ -1100,7 +1100,7 @@ describe('cloud-cli verb contracts (#555)', () => {
 
       expect(code).toBe(0);
       expect(requests).toHaveLength(1);
-      expect(requests[0]?.url).toBe(`${TEST_URL}/v1/memory?projectId=proj_1`);
+      expect(requests[0]?.url).toBe(`${TEST_URL}/v1/memory?projectId=proj_1&limit=100`);
       expect(lastJsonOutput()).toEqual({ projectId: 'proj_1', entries });
     });
 
@@ -1156,7 +1156,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       expect(code).toBe(0);
       // No `projectId=` in the query: there is no linked id to send, and inventing one would scope
       // the read to a project the server has never heard of.
-      expect(requests[0]?.url).toBe(`${TEST_URL}/v1/memory`);
+      expect(requests[0]?.url).toBe(`${TEST_URL}/v1/memory?limit=100`);
       expect(lastJsonOutput()).toEqual({ projectId: 'some-other-project', entries });
     });
   });

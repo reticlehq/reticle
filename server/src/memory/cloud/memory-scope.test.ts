@@ -8,6 +8,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  MEMORY_PAGE_LIMIT,
+  readMemoryPages,
   isReadableMemoryScope,
   keepOwnProject,
   memoryReadUrl,
@@ -255,5 +257,55 @@ describe('printing a response, when it can be shown to be this project', () => {
       projectId: 'repo-b',
       entries: 'x',
     });
+  });
+});
+
+/*
+ * The engine read all of GET /v1/memory in one response. The platform now pages it when asked, so
+ * a large project's memory came back as one unbounded body. Every reader asks a page at a time and
+ * follows `nextCursor`; a server that does not page answers once, with everything, as before.
+ */
+describe('reading memory a page at a time', () => {
+  const page = (entries: string[], nextCursor?: string) => ({
+    projectId: 'p1',
+    entries: entries.map((statement) => ({ statement })),
+    ...(nextCursor === undefined ? {} : { nextCursor }),
+  });
+
+  it('asks with a limit, follows nextCursor, and hands back one envelope with every entry', async () => {
+    const asked: string[] = [];
+    const pages: Record<string, unknown> = {
+      first: page(['a', 'b'], 'c1'),
+      c1: page(['c'], 'c2'),
+      c2: page(['d']),
+    };
+    const body = await readMemoryPages('https://cloud.test', { projectId: 'p1' }, (url) => {
+      asked.push(url);
+      const cursor = new URL(url).searchParams.get('cursor');
+      return Promise.resolve(pages[cursor ?? 'first']);
+    });
+    expect(asked).toHaveLength(3);
+    expect(asked[0]).toContain(`limit=${String(MEMORY_PAGE_LIMIT)}`);
+    expect(asked[2]).toContain('cursor=c2');
+    expect(scopedMemoryEntries(body, 'p1')).toHaveLength(4);
+  });
+
+  it('reads once from a server that does not page', async () => {
+    let calls = 0;
+    const body = await readMemoryPages('https://cloud.test', { projectId: 'p1' }, () => {
+      calls += 1;
+      return Promise.resolve(page(['a', 'b', 'c']));
+    });
+    expect(calls).toBe(1);
+    expect(scopedMemoryEntries(body, 'p1')).toHaveLength(3);
+  });
+
+  it('hands back a page that is not this project, so the reader refuses it', async () => {
+    const body = await readMemoryPages('https://cloud.test', { projectId: 'p1' }, (url) =>
+      Promise.resolve(
+        url.includes('cursor=') ? { projectId: 'other', entries: [] } : page(['a'], 'c1'),
+      ),
+    );
+    expect(scopedMemoryEntries(body, 'p1')).toBeUndefined();
   });
 });

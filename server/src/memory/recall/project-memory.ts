@@ -17,7 +17,7 @@ import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import {
   isReadableMemoryScope,
   MemoryReadHeader,
-  memoryReadUrl,
+  readMemoryPages,
   scopedMemoryEntries,
   scopeOfMemoryResponse,
 } from '@/memory/cloud/memory-scope.js';
@@ -134,30 +134,30 @@ export async function readProjectMemory(
   const cloud = await resolveProjectCloud(fs, root, home, env);
   if (null === cloud.config) return { ok: false, reason: MemoryUnavailable.NOT_LINKED };
   if (!cloud.policy.memory) return { ok: false, reason: MemoryUnavailable.DISABLED };
+  const config = cloud.config;
 
   // Scoped to the LINKED project, not to whatever the key happens to cover. A workspace can hold
   // more than one repo, and a read that named no project could be answered with another one's
   // established knowledge — indistinguishable from this project's, and acted on. See memory-scope.
-  const url = memoryReadUrl(cloud.config.url, {
-    projectId: cloud.projectId,
-    subject: opts.subject,
-  });
   try {
-    const res = await cloudFetch(url, {
-      method: 'GET',
-      headers: {
-        authorization: `Bearer ${cloud.config.apiKey}`,
-        // What makes this read COUNT as an agent consulting the corpus rather than a human
-        // browsing — the distinction the dashboard's "times an agent consulted it" rests on.
-        [MemoryReadHeader.AGENT]: callingClientName() ?? MCP_AGENT_ID,
+    const body = await readMemoryPages(
+      config.url,
+      { projectId: cloud.projectId, subject: opts.subject },
+      async (url) => {
+        const res = await cloudFetch(url, {
+          method: 'GET',
+          headers: {
+            authorization: `Bearer ${config.apiKey}`,
+            // What makes this read COUNT as an agent consulting the corpus rather than a human
+            // browsing — the distinction the dashboard's "times an agent consulted it" rests on.
+            [MemoryReadHeader.AGENT]: callingClientName() ?? MCP_AGENT_ID,
+          },
+        });
+        // `cloudFetch` returns a real Response, so the body is a METHOD (see the note in replay).
+        return 200 === res.status ? await res.json() : undefined;
       },
-    });
-    if (200 !== res.status) return { ok: false, reason: MemoryUnavailable.UNREACHABLE };
-    // `cloudFetch` returns a real Response, so the body is a METHOD. Reading `res.json` as a
-    // property yields the function, and every downstream field is undefined — a silent "the project
-    // knows nothing" that is indistinguishable from the honest empty case. It cost a live drive to
-    // find once already.
-    const body: unknown = await res.json();
+    );
+    if (body === undefined) return { ok: false, reason: MemoryUnavailable.UNREACHABLE };
     // The envelope first, and it decides everything. The platform names the project on the response
     // and NOT on each entry, so an entry-level filter alone keeps a whole sibling workspace while
     // looking like it did something — see `memory-scope.ts`. A response that names another project,

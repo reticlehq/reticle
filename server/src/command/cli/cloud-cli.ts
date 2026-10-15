@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import {
-  memoryReadUrl,
+  readMemoryPages,
   MemoryResponseScope,
   scopeMemoryResponse,
   scopeOfMemoryResponse,
@@ -576,8 +576,9 @@ const cmdMemory = async (argv: readonly string[]): Promise<number> => {
   // `undefined` for anything it cannot show to be this project's, so there is no ordering a future
   // edit can get wrong — the body it must not print is one it was never handed. The verdict is read
   // only to say WHICH refusal this is.
-  const scope = { projectId, subject };
-  const body = await api('GET', memoryReadUrl(url, scope), apiKey);
+  const body = await readMemoryPages(url, { projectId, subject }, (page) =>
+    api('GET', page, apiKey),
+  );
   const printable = scopeMemoryResponse(body, projectId);
   if (printable === undefined) {
     err(
