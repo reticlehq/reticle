@@ -1,4 +1,21 @@
 import { bodyCaptureRemedy } from './body-capture-remedy.js';
+import { skippedBodyRemedy } from '@/question/predicate/predicate-eval.js';
+
+/**
+ * Does any of these events prove body capture is ON (#1520)?
+ *
+ * The SDK stamps a skip reason on a response body (a stream, a binary type, a failed read), or a
+ * `requestBodyType` on a request body it cannot stringify, only when capture is on. The
+ * `error-status` reason is the exception: it marks a body recorded with capture OFF, and it has no
+ * skip remedy, so it does not count here.
+ */
+export function captureProvedOn(events: readonly { data: Record<string, unknown> }[]): boolean {
+  return events.some(
+    (e) =>
+      skippedBodyRemedy(e.data['responseBodyReason']) !== undefined ||
+      ('string' === typeof e.data['requestBodyType'] && 0 < e.data['requestBodyType'].length),
+  );
+}
 
 /** Methods that normally carry a payload — the ones where a missing body is worth explaining. */
 const BODY_BEARING_METHODS = new Set(['POST', 'PUT', 'PATCH']);
@@ -21,6 +38,12 @@ export function bodiesNotCaptured(
   calls: { method?: string; requestBody?: string; responseBody?: string }[],
   /** The page SDK's version, so the remedy can check whether it applies. See body-capture-remedy. */
   sdkVersion?: string,
+  /**
+   * A call in the window carries a body-skip reason or a request body type, which the SDK stamps
+   * only with capture ON (#1520). Then the bodies are absent for that reason, not because nothing
+   * is recorded, and the note would say the opposite of the truth.
+   */
+  captureProvedOn = false,
 ): {
   bodiesNotCaptured?: string;
 } {
@@ -31,6 +54,7 @@ export function bodiesNotCaptured(
   // that recording is off — and firing the note would contradict the body sitting in the same
   // result, exactly on the question the note exists to answer. (#394)
   if (calls.some((c) => c.responseBody !== undefined)) return {};
+  if (captureProvedOn) return {};
   if (bodyBearing.some((c) => c.requestBody !== undefined)) return {};
   return {
     // Framework-neutral on purpose. The first version named vite.config, and driving a Next.js app

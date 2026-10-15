@@ -232,28 +232,39 @@ function wantedBody(p: Extract<Predicate, { kind: typeof PredicateKind.NET }>): 
 }
 
 /**
- * Why a matched call's body could not answer a body clause, and what to do instead (#1520).
+ * The remedy for a body the SDK skipped ON PURPOSE with capture on, or `undefined` (#1520).
  *
- * The remedy follows the reason the SDK stamped. "Enable `captureNetworkBodies`" is right only when
- * no reason was stamped: capture was off, or the SDK predates the field. A streamed or binary body
- * is skipped with capture ON, and that advice sent agents to a setting that was already set.
+ * Shared by every message that would otherwise say "enable captureNetworkBodies": that advice is
+ * wrong when capture is already on and the body was a stream, a binary type, or a read that did
+ * not finish. `undefined` means no reason was stamped: capture was off, or the SDK predates it.
  */
+export function skippedBodyRemedy(reason: unknown): string | undefined {
+  if (ResponseBodyReason.STREAMING === reason) {
+    return 'The body was streamed (text/event-stream or ndjson): the SDK never reads a stream, because reading it would hang the app, and capture is already on. Assert the result in the DOM or in state instead, or use a non-streaming endpoint.';
+  }
+  if (ResponseBodyReason.NOT_TEXT === reason) {
+    return 'The body is not text (binary, or a content type that is not recorded), and capture is already on. Assert the result in the DOM or in state instead.';
+  }
+  if (ResponseBodyReason.UNREADABLE === reason) {
+    return 'The body could not be read before the read deadline, and capture is already on. A response that is still streaming does this. Assert the result in the DOM or in state instead.';
+  }
+  return undefined;
+}
+
+/** The skip reason every one of these calls carries, when they all carry the same one. */
+export function sharedSkipReason(reasons: readonly unknown[]): unknown {
+  const [first] = reasons;
+  if (first === undefined) return undefined;
+  return reasons.every((r) => r === first) ? first : undefined;
+}
+
+/** Why a matched call's body could not answer a body clause, and what to do instead (#1520). */
 function unrecordedBodyReason(
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
   reason: unknown,
 ): string {
-  const call = `a call matching ${describeNetFilter(p)}`;
-  const clause = `so ${wantedBody(p)} could not be checked, which is not the same as absent`;
-  if (ResponseBodyReason.STREAMING === reason) {
-    return `${call} was answered with a streamed body (text/event-stream or ndjson), which the SDK never reads because reading it would hang the app, ${clause}. Assert the result in the DOM or in state instead, or use a non-streaming endpoint`;
-  }
-  if (ResponseBodyReason.NOT_TEXT === reason) {
-    return `${call} was answered with a body that is not text (binary or an unrecorded content type), ${clause}. Assert the result in the DOM or in state instead`;
-  }
-  if (ResponseBodyReason.UNREADABLE === reason) {
-    return `${call} was answered with a body that could not be read before the read deadline, ${clause}. A response that is still streaming does this; assert the result in the DOM or in state instead`;
-  }
-  return `${call} was answered, but its body was not recorded, ${clause}. Enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`;
+  const head = `a call matching ${describeNetFilter(p)} was answered, but its body was not recorded, so ${wantedBody(p)} could not be checked, which is not the same as absent.`;
+  return `${head} ${skippedBodyRemedy(reason) ?? 'Enable it where the app calls connect(): reticle({ captureNetworkBodies: true })'}`;
 }
 
 export function evalNet(
