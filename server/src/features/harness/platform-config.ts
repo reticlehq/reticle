@@ -59,7 +59,7 @@ export interface PlatformModelConfig {
    */
   providerReady: boolean;
   /**
-   * Harness credits used and held this 30 days, and when the grant ends (`endsAt`, epoch ms) when
+   * Credits used and held this 30 days, and when the grant ends (`endsAt`, epoch ms) when
    * the platform says. Absent when the plan is unbounded or the API is older.
    */
   credits?: Credits & { endsAt?: number };

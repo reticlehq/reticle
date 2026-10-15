@@ -46,7 +46,7 @@ describe('chat views and harness access states', () => {
     views.paintAccount({ signedIn: false });
     expect(rows(root)).toBe(1);
     expect(root.textContent).toContain(
-      'Sign up: 10 free credits to try Reticle Harness · add a card for a 500-credit, 14-day trial',
+      'Sign up: 10 free credits to try Reticle · add a card for a 500-credit, 14-day trial',
     );
     expect(root.querySelector('[data-reticle-account-signin]')).not.toBeNull();
   });
@@ -227,7 +227,7 @@ describe('chat views and harness access states', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });
     views.paintHarness({ ...entitled, credits: { used: 500, limit: 500 } });
-    expect(root.textContent).toContain('No Harness credits left');
+    expect(root.textContent).toContain('No credits left');
     expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Get more');
     expect(root.querySelector('[data-reticle-harness-page-meta]')?.textContent).toBe('');
   });

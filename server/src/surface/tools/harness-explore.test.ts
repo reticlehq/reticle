@@ -647,7 +647,7 @@ describe('a workspace with no entitlement', () => {
   });
   const linked = { [ReticleEnv.API_KEY]: 'rk_live_x', [ReticleEnv.CLOUD_URL]: 'https://api.test' };
 
-  it('is pointed at its Harness credits, never at an offer that does not exist', async () => {
+  it('is pointed at its credits, never at an offer that does not exist', async () => {
     await expect(
       exploreApp(depsWithFlows([]), linked, {
         maxSteps: 1,

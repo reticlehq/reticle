@@ -35,7 +35,7 @@ export const HARNESS_ROW_TEXT = {
   LINK: 'Link this project',
   LINKING: 'Linking…',
   NOT_ENTITLED: 'Harness is not on your plan',
-  NO_CREDITS: 'No Harness credits left',
+  NO_CREDITS: 'No credits left',
   NO_PROVIDER: 'No model provider set',
   OFF: 'Harness is off',
   /** At the coverage gate with the Harness off: it can be switched on now. */

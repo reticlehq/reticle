@@ -145,12 +145,12 @@ describe('replay first', () => {
   });
 
   it('a fallback the Harness may not drive is blocked with the reason, and costs nothing', async () => {
-    const fake = ports({ pay: ReplayStatus.UNVERIFIABLE }, 'No Harness credits left.');
+    const fake = ports({ pay: ReplayStatus.UNVERIFIABLE }, 'No credits left.');
     const run = await runScript(served(['pay']), fake.ports);
     expect(fake.goals).toEqual([]);
     const card = run.view.lanes[0]?.journeys[0];
     expect(card?.status).toBe(ScriptStatus.BLOCKED);
-    expect(run.lines[0]).toContain('No Harness credits left.');
+    expect(run.lines[0]).toContain('No credits left.');
   });
 });
 

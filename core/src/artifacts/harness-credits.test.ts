@@ -85,7 +85,7 @@ describe('creditsUsageText', () => {
 
   it('signed out, pitches the free credits and the trial in one line', () => {
     expect(SIGN_UP_PITCH).toBe(
-      'Sign up: 10 free credits to try Reticle Harness · add a card for a 500-credit, 14-day trial',
+      'Sign up: 10 free credits to try Reticle · add a card for a 500-credit, 14-day trial',
     );
   });
 });

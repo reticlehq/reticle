@@ -39,7 +39,7 @@ const OVERLAY = 'data-reticle-overlay';
 export const RAIL_TEXT = {
   // Signing in is the whole step: a new workspace gets 10 free credits to try the Harness.
   TITLE: 'Sign in to try Reticle Harness',
-  DETAIL: 'Free Harness credits to start.',
+  DETAIL: 'Free credits to start.',
   CTA: 'Sign in',
 } as const;
 

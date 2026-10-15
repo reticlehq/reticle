@@ -332,7 +332,7 @@ describe('the header’s way to the platform', () => {
   it('offers to save runs for the team, with the real trial, before it is linked', () => {
     const unlinked = teamLinkHtml(SIGNED_IN, undefined);
     expect(unlinked).toContain(TEAM_TEXT.SAVE_LINK);
-    expect(unlinked).toContain('500 Harness credits');
+    expect(unlinked).toContain('500 credits');
     expect(unlinked).not.toContain(ACCOUNT_SIGNIN_ATTR_NAME);
     expect(unlinked).not.toMatch(/3 months|three months|UNICORN/i);
   });

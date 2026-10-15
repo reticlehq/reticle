@@ -79,7 +79,7 @@ The platform drives with Jev, a System One model that answers typed questions an
 A project linked to a Reticle workspace reads two things from it before a drive starts, and honours both:
 
 - **The switch.** Autonomous driving can be turned off per project, from the HUD's Reticle Harness switch or the dashboard (Settings → Projects → Reticle Harness on <project>). A drive then refuses and says where to turn it back on. Switched off while a platform drive is running, the drive stops at its next turn with `stopReason: "stopped"`, keeps what it drove, and says so in the Agent Log. Everything else is unaffected, including the tools your own agent drives with.
-- **Credits.** Harness drives and dashboard chat checks spend Harness credits. The platform sets the amount for your plan (see above). The HUD shows how many are left; once they are spent a drive is refused with that number and the way to get more.
+- **Credits.** Harness drives and dashboard chat checks spend credits, the same credits that pay for the rest of the platform. The platform sets the amount for your plan (see above). The HUD shows how many are left; once they are spent a drive is refused with that number and the way to get more.
 
 If only the settings endpoint is unreachable, the on/off switch and the credit check do not block a drive: an unreachable settings endpoint is not a reason to lose a feature you were never told to stop using. The drive itself still needs the platform, so with no connection at all it is refused with the reason.
 

@@ -161,7 +161,7 @@ export const AccountStateSchema = z.object({
 });
 export type AccountState = z.infer<typeof AccountStateSchema>;
 
-/** The grant Harness credits came from: sign-up, the card-started trial, or a paid plan. */
+/** The grant credits came from: sign-up, the card-started trial, or a paid plan. */
 export const CreditKind = { FREE: 'free', TRIAL: 'trial', PAID: 'paid' } as const;
 export type CreditKind = (typeof CreditKind)[keyof typeof CreditKind];
 
@@ -179,7 +179,7 @@ export const HarnessConfigSchema = z.object({
   harnessEntitled: z.boolean(),
   /** Whether the selected provider has a usable platform key. Older daemons may omit it. */
   providerReady: z.boolean().optional(),
-  /** Harness credits used and held this 30 days; one is one Harness decision. Absent: unbounded or unknown. */
+  /** Credits used and held this 30 days; a Harness decision is one. Absent: unbounded or unknown. */
   credits: z
     .object({
       used: z.number().int().min(0),

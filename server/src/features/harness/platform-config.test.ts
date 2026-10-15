@@ -102,7 +102,7 @@ describe('reading the driver preference from the platform', () => {
     });
   });
 
-  it("carries the workspace's Harness credits when the platform reports them", async () => {
+  it("carries the workspace's credits when the platform reports them", async () => {
     const got = await fetchPlatformConfig(
       LINKED,
       answering({ provider: 'jev', credits: { used: 12, limit: 500 } }),

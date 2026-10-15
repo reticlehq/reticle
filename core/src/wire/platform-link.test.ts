@@ -111,7 +111,7 @@ describe('what the platform tells a daemon', () => {
         },
         { level: 'shout', text: 'x' },
         { level: 'info', text: '' },
-        { level: 'warn', text: 'Harness credits are low.', url: 'javascript:alert(1)' },
+        { level: 'warn', text: 'Credits are low.', url: 'javascript:alert(1)' },
       ]),
     ).toEqual([
       {
@@ -119,7 +119,7 @@ describe('what the platform tells a daemon', () => {
         text: 'Run reticle update to drive with every option.',
         url: 'https://reticle.sh/update',
       },
-      { level: 'warn', text: 'Harness credits are low.' },
+      { level: 'warn', text: 'Credits are low.' },
     ]);
     expect(parseLinkNotices('nope')).toEqual([]);
   });
