@@ -19,7 +19,7 @@ export const PlatformRefusalCode = {
 export const RefusalLead = {
   [PlatformRefusalCode.HARNESS_LOCKED]: 'Reticle Harness is locked for this project.',
   [PlatformRefusalCode.HARNESS_OFF]: 'The Reticle Harness is off for this project.',
-  [PlatformRefusalCode.NEEDS_CARD]: 'Reticle Harness credits are used up for this workspace.',
+  [PlatformRefusalCode.NEEDS_CARD]: 'This workspace has used all of its Reticle credits.',
 } as const;
 
 /** A platform refusal, read from its response body. Two shapes: nested `{ error: { code, message } }` and flat `{ error, message }`. */
