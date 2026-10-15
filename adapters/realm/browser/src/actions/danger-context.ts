@@ -64,6 +64,46 @@ function navigatingHref(el: ActionTarget): string | undefined {
   return null === href || isInertHref(href) ? undefined : href;
 }
 
+/**
+ * Roles that SELECT an item instead of performing an act. Their visible content is usually user
+ * DATA, so judging the whole textContent blocks picking a material whose name happens to contain a
+ * destructive word. Mirror the link treatment: judge these by their own label surfaces, never by
+ * descendant content.
+ */
+const SELECTION_ROLES: ReadonlySet<string> = new Set([
+  'option',
+  'row',
+  'gridcell',
+  'tab',
+  'treeitem',
+  'listitem',
+]);
+
+/**
+ * Tokens that read as one filename, never as an action verb.
+ * A token counts as a filename only when it ends in a known file extension.
+ * `photo-remove-background.webm` is a filename, so the `remove` inside it is not an act.
+ * A hyphen or an underscore alone does not make a filename: `delete-account` and `delete_repo`
+ * are labels, so they keep their words and still trip the guard.
+ */
+const FILENAME_LIKE_TOKEN =
+  /\S+\.(?:webm|mp4|mov|mkv|avi|mp3|wav|ogg|flac|png|jpe?g|gif|webp|svg|avif|bmp|pdf|zip|tar|gz|txt|csv|json|xml|docx?|xlsx?|pptx?)\b/gi;
+
+function withoutFilenameTokens(text: string): string {
+  return text.replace(FILENAME_LIKE_TOKEN, ' ');
+}
+
+/** The control's own label surfaces: what the author called it, never the data inside it. */
+function ownLabelSurfaces(el: ActionTarget): string {
+  const form = el.closest('form');
+  return [
+    el.getAttribute('aria-label') ?? '',
+    el.getAttribute('title') ?? '',
+    el.getAttribute('href') ?? '',
+    form?.getAttribute('action') ?? '',
+  ].join(' ');
+}
+
 export function dangerousActionContext(el: ActionTarget): string {
   const href = navigatingHref(el);
   if (href !== undefined) return href;
