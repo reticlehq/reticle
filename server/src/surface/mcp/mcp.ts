@@ -142,7 +142,7 @@ const PREDICATE_KINDS =
  */
 const PREDICATE_FIELD_GRAMMAR_HINT =
   ' Bug-catching options: net.count (exact request count — catches double-submit), ' +
-  'net.bodyMatches (a JSON field match on what the SERVER answered — say the FIELD (a dotted path reaches nested ones) and its value, ' +
+  'net.bodyMatches (a JSON field match on what the SERVER answered, keyed by the field: { status: "completed" }, never { field, value }; a dotted key reaches a nested field; ' +
   'because a substring of the body matches key names too), net.requestBodyMatches (the same on what ' +
   'the UI SENT — the verdict for "applying this filter actually puts it in the payload"), ' +
   'compare (page text vs server answer, no expected value: { left:{from:"text",scope}, ' +
