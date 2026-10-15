@@ -346,6 +346,7 @@ export const cmdLink = async (
    * this can be read aloud, pasted into an issue, or left in a terminal without leaking anything.
    */
   hint(`bound this repo to project "${projectName}"${inWorkspace(workspace)}`);
+  if (dashboardUrl !== undefined) hint(`dashboard: ${dashboardUrl}`);
   if (projectDir !== resolve(cwd))
     hint(`linked ${relative(cwd, projectDir)}: that is where this app's runs are written`);
   hint(

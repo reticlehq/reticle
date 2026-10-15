@@ -551,6 +551,17 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(requests, 'whoami reads local files only').toHaveLength(0);
   });
 
+  // Persona drive: `reticle connect` wrote the dashboard's address to cloud.json and never said it.
+  it('prints the dashboard address it wrote', async () => {
+    process.env['RETICLE_CLOUD_URL'] = TEST_URL;
+    process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
+    responder = () => ({
+      body: { projectId: 'proj_1', projectName: 'Proj', dashboardUrl: 'https://app.test/p/proj_1' },
+    });
+    expect(await runCloudCommand(['link'])).toBe(0);
+    expect(stderrBuf).toContain('https://app.test/p/proj_1');
+  });
+
   it('link with an explicit key resolves whoami and writes the binding + credential', async () => {
     process.env['RETICLE_CLOUD_URL'] = TEST_URL;
     process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
