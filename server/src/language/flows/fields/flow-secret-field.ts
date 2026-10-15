@@ -103,7 +103,9 @@ export function unsuppliedSecrets(
 ): UnsuppliedSecret[] {
   const out: UnsuppliedSecret[] = [];
   const seen = new Set<string>();
-  for (const step of flow.steps ?? []) {
+  // A sequence's fills are its sub-steps: reading only the top level missed a sign-in recorded as one.
+  const steps = (flow.steps ?? []).flatMap((step) => [step, ...(step.steps ?? [])]);
+  for (const step of steps) {
     if (REDACTED_FILL !== step.args?.['value']) continue;
     const field = anchorFieldName(step.anchor);
     if (field === undefined) continue;

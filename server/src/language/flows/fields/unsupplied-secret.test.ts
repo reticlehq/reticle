@@ -58,4 +58,33 @@ describe('a flow whose credential nobody supplied', () => {
   it('says nothing about a flow that carries no redacted field', () => {
     expect(unsuppliedSecrets(flowWith('admin@reticle.dev'), {})).toEqual([]);
   });
+
+  /*
+   * Persona drive: replay without the secret typed the placeholder and reported DRIFT. The sign-in
+   * was one recorded sequence, and the check read only top-level steps, so a credential inside a
+   * sequence was never looked at and replay went ahead.
+   */
+  it('finds a credential inside a recorded sequence', () => {
+    const flow = {
+      version: 1,
+      name: 'sign-in',
+      steps: [
+        {
+          tool: 'reticle_act_sequence',
+          anchor: { kind: AnchorKind.TESTID, value: 'login-email' },
+          steps: [
+            {
+              tool: 'reticle_act',
+              anchor: { kind: AnchorKind.ROLE, role: 'textbox', name: 'Password' },
+              action: 'fill',
+              args: { value: REDACTED_FILL },
+            },
+          ],
+        },
+      ],
+    } as unknown as FlowFile;
+    expect(unsuppliedSecrets(flow, {})).toEqual([
+      { field: 'Password', envKey: secretEnvKey('Password') },
+    ]);
+  });
 });
