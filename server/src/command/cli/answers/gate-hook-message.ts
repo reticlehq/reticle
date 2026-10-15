@@ -18,6 +18,19 @@ export const GATE_SKIP_ENV = 'RETICLE_SKIP_GATE';
 
 const MAX_NAMED = 5;
 
+/** Files @reticlehq/vite-plugin stamps a `source` onto: JSX/TSX (Babel) and `.svelte` components. */
+const STAMPABLE_FILE = /\.([jt]sx|svelte)$/;
+
+/** Advice for files whose flows carry no source: name the plugin only where it can stamp them. */
+function stampAdvice(files: readonly string[]): string {
+  const stampable = files.some((file) => STAMPABLE_FILE.test(file));
+  const other = files.some((file) => !STAMPABLE_FILE.test(file));
+  const plugin = "@reticlehq/vite-plugin stamps each step's `source` for JSX and Svelte files";
+  const unavailable = 'source stamps are not available for this framework yet';
+  if (stampable && other) return `${plugin}; for the others, ${unavailable}`;
+  return stampable ? plugin : unavailable;
+}
+
 interface GateHookInput {
   /** Flows the changed files touch that have no passing artifact. */
   uncovered: readonly string[];
@@ -70,7 +83,7 @@ export function gateHookMessage(exit: number, input: GateHookInput): string | un
   if (input.unflowed !== undefined && input.unflowed.length > 0)
     lines.push(
       true === input.flowsWithoutSources
-        ? `  changed, but the saved flows carry no source locations, because this stack has no source stamping, so the gate cannot match a flow to them: ${name(input.unflowed)} — a build adapter such as @reticlehq/vite-plugin stamps each step's \`source\``
+        ? `  changed, but the saved flows carry no source locations, because this stack has no source stamping, so the gate cannot match a flow to them: ${name(input.unflowed)} — ${stampAdvice(input.unflowed)}`
         : `  changed, and no saved flow drives it: ${name(input.unflowed)} — drive it with reticle_act_and_wait and a declared \`until\``,
     );
   if (input.coverageRegressed !== undefined && input.coverageRegressed.length > 0)
