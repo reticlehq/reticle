@@ -18,13 +18,13 @@ import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core
 import { findEchoMismatches } from './echo-mismatch.js';
 
 let seq = 0;
-const write = (requestBody: unknown, responseBody: unknown): ReticleEvent =>
+const write = (requestBody: unknown, responseBody: unknown, method = 'POST'): ReticleEvent =>
   ({
     type: EventType.NET_REQUEST,
     t: ++seq,
     data: {
       id: `n${String(seq)}`,
-      method: 'POST',
+      method,
       url: '/api/derive',
       status: 200,
       ok: true,
@@ -47,10 +47,23 @@ describe('a response that is a different record is not an echo', () => {
     ).toEqual([]);
   });
 
-  it('stays silent when two or more compared keys all disagree', () => {
+  it('stays silent when every key differs and the response names a different id', () => {
+    expect(
+      kinds(
+        write(
+          { id: 'a1', title: 'Q3 report', kind: 'doc' },
+          { id: 'a2', title: 'Q3 summary', kind: 'summary' },
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('still fires when every key differs and nothing names a different identity', () => {
+    // No id and no hash came back different, so nothing says this is another record: it may be the
+    // same record with the whole write ignored.
     expect(
       kinds(write({ title: 'Q3 report', kind: 'doc' }, { title: 'Q3 summary', kind: 'summary' })),
-    ).toEqual([]);
+    ).toEqual([ContradictionKind.WRITE_FIELD_IGNORED]);
   });
 
   it('still fires on a partial echo: one key kept, one changed', () => {
@@ -99,4 +112,47 @@ describe('content-derived keys are exempt, like identity keys', () => {
       ).toEqual([ContradictionKind.WRITE_FIELD_IGNORED]);
     },
   );
+});
+
+describe('a server that ignored the whole write still fires (#1627 review)', () => {
+  it('a fully ignored PATCH, though its id comes back the same', () => {
+    expect(
+      kinds(
+        write(
+          { name: 'New', email: 'new@x.io' },
+          { id: 7, name: 'Old', email: 'old@x.io' },
+          'PATCH',
+        ),
+      ),
+    ).toEqual([ContradictionKind.WRITE_FIELD_IGNORED]);
+  });
+
+  it('a fully ignored PUT of settings', () => {
+    expect(
+      kinds(write({ theme: 'dark', locale: 'fr' }, { theme: 'light', locale: 'en' }, 'PUT')),
+    ).toEqual([ContradictionKind.WRITE_FIELD_IGNORED]);
+  });
+
+  it('a PATCH whose response names a different hash is still an update, and still fires', () => {
+    expect(
+      kinds(
+        write(
+          { title: 'New', kind: 'doc', sha256: '111' },
+          { title: 'Old', kind: 'memo', sha256: '222' },
+          'PATCH',
+        ),
+      ),
+    ).toEqual([ContradictionKind.WRITE_FIELD_IGNORED]);
+  });
+
+  it('an addressed write never reads as a new record', () => {
+    expect(
+      kinds(
+        write(
+          { field: 'locale', value: 'fr', mode: 'a', id: 'p1' },
+          { field: 'theme', value: 'en', mode: 'b', id: 'p2' },
+        ),
+      ),
+    ).toContain(ContradictionKind.WRITE_FIELD_IGNORED);
+  });
 });
