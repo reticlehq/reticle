@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/browser` — `upload` now resolves the file input a dropzone hides.** The standard dropzone pattern hides its file input (`sr-only`, `aria-hidden`) behind a Browse button, so the input never gets a ref and `upload` refused the only target the agent can name. An `upload` on a target that is not a file input now resolves the input the target labels, or the single file input in the nearest container scope (the target itself, its dropzone, its form). A scope that holds more than one file input is a refusal, so the upload cannot land on the wrong input. Addresses [#1249](https://github.com/reticlehq/reticle/issues/1249).
