@@ -178,10 +178,13 @@ const MUST_DO_SOMETHING = new Set(['click', 'dblclick', 'submit']);
  *  - a mutation inside the target's own subtree (what the target itself did),
  *  - a request (the action asked the server for something),
  *  - a navigation, or a dialog/live region appearing — the two ways a real reaction legitimately
- *    lands OUTSIDE the target, e.g. a modal portalled to the body.
+ *    lands OUTSIDE the target, e.g. a modal portalled to the body,
+ *  - a store change or an app signal the SDK attributed to an action (#1531): see
+ *    `isAttributedAppReaction`.
  *
- * The last clause is what keeps this from manufacturing noise: a button that opens a modal mutates
- * nothing within itself, and must not be called dead.
+ * The last two clauses are what keep this from manufacturing noise: a button that opens a modal
+ * mutates nothing within itself, and a Pause button whose store updates on the media `pause` event
+ * renders its new label only later. Neither must be called dead.
  */
 function didNothing(
   events: readonly ReticleEvent[],
@@ -191,8 +194,27 @@ function didNothing(
   if (mutatedWithin === undefined) return 0 === events.length;
   if (mutatedWithin > 0 || requests.length > 0) return false;
   return !events.some(
-    (e) => e.type === EventType.ROUTE_CHANGE || e.type === EventType.VISIBLE_SHOWN,
+    (e) =>
+      e.type === EventType.ROUTE_CHANGE ||
+      e.type === EventType.VISIBLE_SHOWN ||
+      isAttributedAppReaction(e),
   );
+}
+
+/**
+ * A store change or an app signal that the SDK attributed to an action (#1531).
+ *
+ * The app's own state moving is a reaction, the same as a request, even when the DOM update it
+ * drives lands after the window was read. Attribution is required: a busy page's background store
+ * updates carry no `actionId`, and a dead click among them must still be reported (the measured
+ * case in "no-effect under ambient churn"). Reticle's own `reticle:` signals are instrumentation,
+ * not the app reacting, so they never count.
+ */
+function isAttributedAppReaction(e: ReticleEvent): boolean {
+  if (e.actionId === undefined) return false;
+  if (e.type === EventType.STATE_CHANGE) return true;
+  if (e.type !== EventType.SIGNAL) return false;
+  return !(asString(e.data['name']) ?? '').startsWith(RETICLE_SIGNAL_NAMESPACE);
 }
 
 /**
