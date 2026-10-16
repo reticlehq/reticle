@@ -264,7 +264,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    */
   // +3: durable.ts, after-match.ts and proved-controls.ts, what act_and_wait does once its
   // predicate holds.
-  'server/src/surface/tools/act': 16,
+  // 17 with `unsettled-find.ts` (#1259): whether a zero-match find was read while the last act was
+  // still landing. It reads the act's window through `settle-in-flight.ts`, which lives here, and
+  // `read/` is a pure leaf the reach guard keeps from importing it.
+  'server/src/surface/tools/act': 17,
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.
