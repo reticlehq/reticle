@@ -15,6 +15,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { parseNetstatListeners } from '../../netstat/listeners.js';
 
 export interface PortHolder {
   pid: number;
@@ -129,6 +130,12 @@ export function describeForeignHolder(
   );
 }
 
+/** Find the first TCP listener for a port in `netstat -ano` output. */
+export function parseNetstatPortHolder(stdout: string, port: number): PortHolder | null {
+  const listener = parseNetstatListeners(stdout).find((row) => row.port === port);
+  return listener === undefined ? null : { pid: listener.pid, command: 'unknown' };
+}
+
 /** The lookup itself. `exec` is injected so the shelling out never runs in a unit test. */
 export function findPortHolder(
   port: number,
@@ -138,7 +145,12 @@ export function findPortHolder(
   // that matters: without it this also reports the agent's own MCP proxy, which is a client of the
   // port, not its owner.
   const out = exec('lsof', ['-nP', `-iTCP:${String(port)}`, '-sTCP:LISTEN', '-F', 'pc']);
-  return null === out ? null : parsePortHolder(out);
+  if (null !== out) return parsePortHolder(out);
+
+  // Windows does not normally have lsof. netstat is built into Windows and reports the owning PID
+  // for listening TCP sockets, giving kill a process identity tied to the actual port owner.
+  const netstat = exec('netstat', ['-ano']);
+  return null === netstat ? null : parseNetstatPortHolder(netstat, port);
 }
 
 /** `lsof -Fn` emits the file name on its own line, prefixed `n`. */
