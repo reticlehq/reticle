@@ -23,6 +23,8 @@ Everything lands in `.reticle/` in your project, and it is yours. Three kinds of
 
 **Credential-shaped fields are redacted when a flow is saved.** A value typed into a field whose name looks like a secret is replaced with `<redacted: supply at replay>`, and replay reads the real value from `RETICLE_SECRET_<FIELD>` at run time. It keys off the field's name across every anchor kind (a testid, an accessible name, a signal), so an app without test ids is covered too.
 
+New compiled recordings that fill the same secret field more than once give each fill its own variable: `RETICLE_SECRET_PASSWORD`, `RETICLE_SECRET_PASSWORD_2`, and so on. The variable name is stored in the fill's `secret` argument; the `value` stays `<redacted: supply at replay>`. Sequence children share this ordering, and suffixes skip other fields' keys. Supply those names in a replay call's `secrets` map or in the daemon environment; per-call values take precedence. Existing saved flows keep their original unsuffixed supply when loaded, including repeated legacy placeholders, without rewriting the file. Re-saving an already anchored flow, including an in-page recording, preserves its supplied secret names.
+
 **It is name-based, and that is the limit worth knowing.** It redacts a password. It does not redact a customer's name typed into a search box, because nothing about that field says "secret". A flow records the journey you actually drove.
 
 So: **drive staging.** Not because the risk is large, but because it is real and avoiding it is free.

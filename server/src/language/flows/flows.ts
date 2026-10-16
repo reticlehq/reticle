@@ -10,6 +10,7 @@ import {
   SECRET_FIELD_ARG,
   SECRET_NAME_ARG,
   secretEnvKey,
+  withDistinctSecretKeys,
 } from './fields/flow-secret-field.js';
 export { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
@@ -446,13 +447,13 @@ export class FlowStore {
     };
     const intent = program.steps.find((step) => step.intent !== undefined)?.intent;
     const annotated = withAnnotations(base, annotations);
-    return {
+    return withDistinctSecretKeys({
       ...annotated,
       // The action's own intent, when nobody annotated the flow — see RecordedStep.intent.
       ...(annotated.intent === undefined && intent !== undefined ? { intent } : {}),
       ...routeClaims(annotated.startPath, annotated.steps),
       ...(program.author === undefined ? {} : { author: program.author }),
-    };
+    });
   }
 
   /**

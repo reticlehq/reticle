@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AnchorKind, type FlowAnchor, type FlowFile } from '@reticlehq/core';
+import { AnchorKind, type FlowAnchor, type FlowFile, type FlowStep } from '@reticlehq/core';
 import { CALL_SECRETS_ARG, callSecrets } from '@/surface/tools/tool-kit.js';
 
 /**
@@ -79,6 +79,66 @@ export function secretValue(
   return env[envKey];
 }
 
+const SECRET_OCCURRENCE = /^(?:[2-9]|[1-9][0-9]+)$/;
+
+/** The field's own saved variable name, or its original key for legacy and invalid metadata. */
+export function secretKeyForFill(
+  args: Record<string, unknown> | undefined,
+  field: string,
+): string | undefined {
+  if (args?.['value'] !== REDACTED_FILL) return undefined;
+  const named = args[SECRET_NAME_ARG];
+  const base = secretEnvKey(field);
+  // A flow can supply this field's occurrence, never an unrelated environment variable.
+  return 'string' === typeof named &&
+    named.startsWith(`${base}_`) &&
+    SECRET_OCCURRENCE.test(named.slice(base.length + 1))
+    ? named
+    : base;
+}
+
+function* secretSteps(steps: readonly FlowStep[]): Generator<FlowStep> {
+  for (const step of steps) {
+    yield step;
+    if (step.steps !== undefined) yield* secretSteps(step.steps);
+  }
+}
+
+/** Allocate recorded fills' names while preserving legacy placeholders and existing suffixes. */
+export function withDistinctSecretKeys(flow: FlowFile): FlowFile {
+  const reserved = new Set<string>();
+  const used = new Set<string>();
+  for (const step of secretSteps(flow.steps)) {
+    const field = anchorFieldName(step.anchor);
+    if (field === undefined) continue;
+    const key = secretKeyForFill(step.args, field);
+    if (key === undefined) continue;
+    reserved.add(key);
+    if (key !== secretEnvKey(field) || step.args?.[SECRET_NAME_ARG] === undefined) used.add(key);
+  }
+  const assign = (step: FlowStep): FlowStep => {
+    let out = step;
+    const field = anchorFieldName(step.anchor);
+    if (
+      field !== undefined &&
+      step.args?.['value'] === REDACTED_FILL &&
+      step.args[SECRET_NAME_ARG] === secretEnvKey(field)
+    ) {
+      const base = secretEnvKey(field);
+      let key = base;
+      let occurrence = 2;
+      while (used.has(key) || (key !== base && reserved.has(key))) {
+        key = `${base}_${occurrence}`;
+        occurrence += 1;
+      }
+      used.add(key);
+      if (key !== base) out = { ...step, args: { ...step.args, [SECRET_NAME_ARG]: key } };
+    }
+    return step.steps === undefined ? out : { ...out, steps: step.steps.map(assign) };
+  };
+  return { ...flow, steps: flow.steps.map(assign) };
+}
+
 /** One field a flow needs supplied, and the variable that supplies it. */
 export interface UnsuppliedSecret {
   field: string;
@@ -103,13 +163,11 @@ export function unsuppliedSecrets(
 ): UnsuppliedSecret[] {
   const out: UnsuppliedSecret[] = [];
   const seen = new Set<string>();
-  // A sequence's fills are its sub-steps: reading only the top level missed a sign-in recorded as one.
-  const steps = (flow.steps ?? []).flatMap((step) => [step, ...(step.steps ?? [])]);
-  for (const step of steps) {
-    if (REDACTED_FILL !== step.args?.['value']) continue;
+  for (const step of secretSteps(flow.steps ?? [])) {
     const field = anchorFieldName(step.anchor);
     if (field === undefined) continue;
-    const envKey = secretEnvKey(field);
+    const envKey = secretKeyForFill(step.args, field);
+    if (envKey === undefined) continue;
     const supplied = secretValue(envKey, env);
     if (supplied !== undefined && supplied.length > 0) continue;
     if (seen.has(envKey)) continue;
