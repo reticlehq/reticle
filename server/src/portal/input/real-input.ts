@@ -16,6 +16,7 @@ import { launchChromium } from '@/launch-chromium.js';
 import {
   chromiumLaunchHint,
   gotoOptions,
+  resolvedChromiumPath,
   SCREENSHOT_DETERMINISM,
   captureWithChromeHidden,
 } from '@/portal/pool/playwright-launcher.js';
@@ -745,7 +746,10 @@ export const launchedChromium: LaunchFn = async (headless) => {
   } catch (e) {
     settle(classifyConnectFailure(e));
     const msg = e instanceof Error ? e.message : String(e);
-    throw new DriveError(DriveErrorCode.LAUNCH_FAILED, chromiumLaunchHint(msg) ?? msg);
+    throw new DriveError(
+      DriveErrorCode.LAUNCH_FAILED,
+      chromiumLaunchHint(msg, resolvedChromiumPath(mod.chromium)) ?? msg,
+    );
   }
 };
 

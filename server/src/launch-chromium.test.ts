@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
 import type { ChromiumLaunchOptions } from './chromium-launch-options.js';
 import { ChromiumPathProblem } from './command/cli/doctor/browser/chromium-hint.js';
-import { chromiumLaunchHint } from './portal/pool/playwright-launcher.js';
+import { chromiumLaunchHint, resolvedChromiumPath } from './portal/pool/playwright-launcher.js';
 import {
   announceOnce,
   ChromiumChannel,
@@ -288,5 +288,58 @@ describe(`a Chromium named by ${ReticleEnv.CHROMIUM_PATH}`, () => {
         problem: ChromiumPathProblem.NOT_A_FILE,
       });
     }
+  });
+});
+
+describe('the launch failure hint (#691)', () => {
+  const MISSING =
+    "browserType.launch: Executable doesn't exist at /daemon/home/.cache/ms-playwright/chromium-1223/chrome-linux/chrome";
+
+  /**
+   * The Oct 12 field report: the install the hint names succeeds in the reporter's shell, and
+   * acquire still refuses, because the daemon looks in a different browsers root (its HOME or
+   * PLAYWRIGHT_BROWSERS_PATH differs). The preflight and doctor messages name the probed path;
+   * the launch translation replaced the whole error with a bare command and threw the path away,
+   * so the divergence was invisible in the one message the reporter actually read.
+   */
+  it('names the resolved executable path when the caller can supply it', () => {
+    const hint = chromiumLaunchHint(
+      MISSING,
+      '/daemon/home/.cache/ms-playwright/chromium-1223/chrome-linux/chrome',
+    );
+    expect(hint).toContain('Chromium is not installed for Playwright');
+    expect(hint).toContain(
+      'looked for /daemon/home/.cache/ms-playwright/chromium-1223/chrome-linux/chrome',
+    );
+    expect(hint).toContain('install chromium');
+  });
+
+  it('keeps the bare command when no path can be resolved', () => {
+    const hint = chromiumLaunchHint(MISSING);
+    expect(hint).toMatch(/^Chromium is not installed for Playwright\. Run: /);
+    expect(hint).toContain('install chromium');
+  });
+
+  it('still sends a missing-shared-library failure to install-deps, path or not', () => {
+    const hint = chromiumLaunchHint(
+      'browserType.launch: Host system is missing dependencies to run browsers.',
+      '/daemon/home/.cache/ms-playwright/chromium-1223/chrome-linux/chrome',
+    );
+    expect(hint).toContain('install-deps chromium');
+    expect(hint).not.toContain('looked for');
+  });
+
+  it('reads the path off a chromium that can name it, and tolerates one that cannot', () => {
+    expect(resolvedChromiumPath({ executablePath: () => '/resolved/chrome' })).toBe(
+      '/resolved/chrome',
+    );
+    expect(resolvedChromiumPath({})).toBeUndefined();
+    expect(
+      resolvedChromiumPath({
+        executablePath: () => {
+          throw new Error('no registry');
+        },
+      }),
+    ).toBeUndefined();
   });
 });

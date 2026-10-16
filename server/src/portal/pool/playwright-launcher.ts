@@ -180,10 +180,40 @@ function wrapBrowser(browser: Browser): PooledBrowser {
  *
  * Pinned to the playwright this process bundles. Unpinned, `npx` fetches the latest playwright and
  * installs ITS browser revision — a build this launcher will never look at — so the user follows the
- * advice, it succeeds, and the next launch fails identically. Shares one builder with `doctor` so the
- * two cannot suggest different commands for the same missing browser.
+ * advice, it succeeds, and the next launch fails identically. Shares one builder with `doctor` so
+ * the two cannot suggest different commands for the same missing browser.
+ *
+ * With a path, the message names it, the way the preflight refusal and the doctor line already do.
+ * Without it the launch translation was the one surface that hid the evidence: a daemon whose HOME
+ * or PLAYWRIGHT_BROWSERS_PATH differs from the shell that ran the install keeps refusing after a
+ * successful install, and a bare command gives the reader no way to see that the lookup is aimed at
+ * a root nothing was installed into (#691).
  */
-const CHROMIUM_MISSING_HINT = `Chromium is not installed for Playwright. Run: ${chromiumInstallCommand(bundledPlaywrightVersion())}`;
+function chromiumMissingHint(executablePath?: string): string {
+  const command = chromiumInstallCommand(bundledPlaywrightVersion());
+  return executablePath === undefined
+    ? `Chromium is not installed for Playwright. Run: ${command}`
+    : `Chromium is not installed for Playwright — looked for ${executablePath}. Run: ${command}`;
+}
+
+/**
+ * The executable path this process's Playwright resolved, or undefined when it cannot say.
+ *
+ * Asking can itself fail: a playwright whose registry is broken throws here, and a test double may
+ * not implement it at all. Either way the launch error that brought the caller here is the real
+ * evidence, and a failed lookup must not replace it.
+ */
+export function resolvedChromiumPath(chromium: {
+  executablePath?: (() => string) | undefined;
+}): string | undefined {
+  if (chromium.executablePath === undefined) return undefined;
+  try {
+    const path = chromium.executablePath();
+    return 0 < path.length ? path : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * A DIFFERENT first-run failure from the one above: the browser binary is already there, but the
@@ -214,7 +244,7 @@ export function playwrightLauncher(opts: { headless?: boolean } = {}): Launcher 
     } catch (err) {
       settle(classifyConnectFailure(err));
       const msg = err instanceof Error ? err.message : String(err);
-      const hint = chromiumLaunchHint(msg);
+      const hint = chromiumLaunchHint(msg, resolvedChromiumPath(chromium));
       throw hint !== undefined ? new Error(hint) : err;
     }
   };
@@ -225,13 +255,13 @@ export function playwrightLauncher(opts: { headless?: boolean } = {}): Launcher 
  * not a missing-browser failure. Shared by the pooled and the drive launch, so `reticle verify` on
  * a fresh machine gets the same advice as a lease.
  */
-export function chromiumLaunchHint(msg: string): string | undefined {
+export function chromiumLaunchHint(msg: string, executablePath?: string): string | undefined {
   // Checked FIRST: Playwright's host-requirement validation error also contains
   // "browserType.launch", so the generic check below would otherwise misdiagnose it as a
   // missing binary and send the user through a fix that changes nothing.
   if (/host system is missing dependencies/i.test(msg)) return CHROMIUM_MISSING_DEPS_HINT;
   if (/executable doesn.?t exist|playwright install|browsertype\.launch/i.test(msg)) {
-    return CHROMIUM_MISSING_HINT;
+    return chromiumMissingHint(executablePath);
   }
   return undefined;
 }
