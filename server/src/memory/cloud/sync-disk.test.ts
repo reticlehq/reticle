@@ -8,7 +8,13 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
-import { diskSink, diskSource, readCloudIssues, readCloudState } from './sync-disk.js';
+import {
+  diskSink,
+  diskSource,
+  policyScreenshots,
+  readCloudIssues,
+  readCloudState,
+} from './sync-disk.js';
 
 let root: string;
 beforeEach(() => {
@@ -187,5 +193,30 @@ describe('the subject a record arrives with', () => {
   it('falls back to unsorted when the evidence names nothing', () => {
     intents({ a: { statement: 's' } });
     expect(subjectOf('a')).toBe('unsorted');
+  });
+});
+
+/**
+ * `sync.video: false` must keep the frames between steps on this machine and still send the step
+ * screenshots, and `sync.screenshots: false` must keep both.
+ */
+describe('which screenshots a policy sends', () => {
+  const image = new Uint8Array([1, 2, 3]);
+  const read = (): Uint8Array => image;
+
+  it('sends frames and step shots by default', () => {
+    const reader = policyScreenshots(read, { screenshots: true, video: true }).screenshot;
+    expect(reader?.('run-1', '0002-frame.jpg')).toEqual(image);
+    expect(reader?.('run-1', '0001-act.jpg')).toEqual(image);
+  });
+
+  it('keeps the frames local with video off', () => {
+    const reader = policyScreenshots(read, { screenshots: true, video: false }).screenshot;
+    expect(reader?.('run-1', '0002-frame.jpg')).toBeUndefined();
+    expect(reader?.('run-1', '0001-act.jpg')).toEqual(image);
+  });
+
+  it('sends nothing with screenshots off', () => {
+    expect(policyScreenshots(read, { screenshots: false, video: true })).toEqual({});
   });
 });

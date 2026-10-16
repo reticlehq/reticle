@@ -9,7 +9,7 @@ import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { withShotRun } from '@/judgement/runs/default-run-id.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { readStepShots, shotsLanded } from '@/judgement/runs/artifact/run-store.js';
-import { jpegSize, takeStepShot } from './step-shots.js';
+import { FRAME, filmNow, jpegSize, stopFilming, takeStepShot } from './step-shots.js';
 
 /**
  * Every action leaves a picture of the page the moment its outcome was decided. The agent is handed
@@ -65,6 +65,7 @@ async function setup(fakes: Fakes): Promise<{ deps: ToolDeps; root: string; sess
     id: sessionId,
     url: 'http://localhost:5173/',
     artifactRoot: root,
+    isEnded: () => false,
     command: (name: string) => {
       if (name !== ReticleCommand.RENDER) return Promise.resolve({ ok: false, error: 'no' });
       const result = fakes.render?.();
@@ -226,4 +227,58 @@ describe('jpegSize', () => {
     expect(jpegSize(fakeJpeg(1600, 900))).toEqual({ width: 1600, height: 900 });
     expect(jpegSize(new Uint8Array([1, 2, 3]))).toBeUndefined();
   });
+});
+
+/**
+ * A run had a picture per step and nothing between them, so the cloud replay jumped from one step
+ * to the next. A tab Reticle drives is now filmed about once a second into the same run, as `frame`
+ * shots, and a frame budget keeps a long run under the platform's per-run limit.
+ */
+/** Hundreds of real file writes: a generous ceiling for a slow runner, never a duration assertion. */
+const FRAME_BUDGET_TIMEOUT_MS = 60_000;
+
+describe('frames between steps', () => {
+  afterEach(() => {
+    for (let i = 0; i <= tabs; i += 1) stopFilming(`s${String(i)}`);
+  });
+
+  it('films a driven tab into the run of its last step, and skips a page that did not change', async () => {
+    let n = 0;
+    const { deps, root, sessionId } = await setup({
+      browser: () => fakeJpeg(8, 6, Math.floor(n++ / 2)),
+    });
+    await takeStepShot(deps, sessionId, 'reticle_act');
+    await filmNow(sessionId);
+    await filmNow(sessionId);
+    await filmNow(sessionId);
+    await shotsLanded(root, `drive-${sessionId}`);
+    const shots = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    expect(shots.map((s) => s.tool)).toEqual(['reticle_act', FRAME.TOOL, FRAME.TOOL]);
+    expect(shots.map((s) => s.file)).toEqual(['0001-act.jpg', '0002-frame.jpg', '0003-frame.jpg']);
+  });
+
+  it('films nothing on a tab Reticle does not drive', async () => {
+    const { deps, root, sessionId } = await setup({ render: rendered(fakeJpeg(8, 6)) });
+    await takeStepShot(deps, sessionId, 'reticle_act');
+    await filmNow(sessionId);
+    await shotsLanded(root, `drive-${sessionId}`);
+    const shots = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    expect(shots.map((s) => s.tool)).toEqual(['reticle_act']);
+  });
+
+  it(
+    'keeps at most the frame budget in one run, and the steps still get their pictures',
+    async () => {
+      let n = 0;
+      const { deps, root, sessionId } = await setup({ browser: () => fakeJpeg(8, 6, n++ % 250) });
+      await takeStepShot(deps, sessionId, 'reticle_act');
+      for (let i = 0; i < 2_000; i += 1) await filmNow(sessionId);
+      await takeStepShot(deps, sessionId, 'reticle_act');
+      await shotsLanded(root, `drive-${sessionId}`);
+      const shots = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+      expect(shots.filter((s) => FRAME.TOOL === s.tool)).toHaveLength(FRAME.MAX_PER_RUN);
+      expect(shots.filter((s) => 'reticle_act' === s.tool)).toHaveLength(2);
+    },
+    FRAME_BUDGET_TIMEOUT_MS,
+  );
 });

@@ -198,9 +198,21 @@ async function openConnection(ports: VerifyPorts): Promise<VerifyConnection | un
 }
 
 /** Orchestration: boot → wait for a session → replay flows → verdict → exit code. Browser-free. */
-export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<void> {
-  const conn = await openConnection(ports);
+export async function runVerify(args: VerifyArgs, outer: VerifyPorts): Promise<void> {
+  const conn = await openConnection(outer);
   if (conn === undefined) return;
+  /*
+   * The exit is held until the connection has closed. The live exit is process.exit, and close()
+   * runs the last cloud sync cycle that sends this run's flows and screenshots: exiting first skipped
+   * the `finally` below, so with no daemon running the run reached the dashboard without them.
+   */
+  let exitCode: number | undefined;
+  const ports: VerifyPorts = {
+    ...outer,
+    exit: (code) => {
+      exitCode = code;
+    },
+  };
   try {
     const ready = await conn.sessionReady(args.timeoutMs);
     if (!ready) {
@@ -297,6 +309,8 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
     ports.exit(EXIT_FAIL);
   } finally {
     await conn.close().catch(() => undefined);
+    // In the finally, so the early refusals that `return` from the try exit too.
+    if (exitCode !== undefined) outer.exit(exitCode);
   }
 }
 

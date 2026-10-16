@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { linkedCloudPort, sessionCloudPort } from './memory/cloud/cloud-config.js';
 import { sessionRoot } from './memory/project/session-root.js';
-import { attachCloudSync } from './memory/cloud/sync-daemon.js';
+import { attachCloudSync, flushWithin } from './memory/cloud/sync-daemon.js';
 import { wireHooks } from './hooks/hook-commands.js';
 import { currentDrivenBy } from './hooks/driven-by.js';
 import { artifactRootResolver } from './memory/project/artifact-root-resolver.js';
@@ -184,6 +184,9 @@ export interface RunningServer {
 
 export { resolveBridgeSecurity } from './portal/bridge/bridge-security.js';
 
+/** How long `start().close()` waits for its last sync cycle. Exit must not hang on the network. */
+const EXIT_SYNC_BUDGET_MS = 5_000;
+
 /** Start the Reticle bridge (browser WS endpoint) and, by default, the MCP stdio server. */
 export async function start(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? RETICLE_DEFAULT_PORT;
@@ -204,6 +207,18 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
     readProjectId(process.cwd()),
   );
+  /*
+   * The same sync the daemon runs. `reticle drive` without a daemon and a self-booting `verify` run
+   * here, and their work waited on disk for a later daemon. It does nothing for an unlinked root,
+   * and `close` sends one last bounded cycle.
+   */
+  const cloudSync = attachCloudSync({
+    fs: createNodeFileSystem(),
+    reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
+    homeDir: homedir(),
+    env: process.env,
+    otherRoots: knownProjectRoots,
+  });
   const security = await resolveBridgeSecurityWithAutoToken(options);
   const bridge = new Bridge({ port, sdkFix: sdkFixForProject, ...security });
   // Server-authoritative liveness: a Node-side reaper (immune to browser throttling) ends sessions
@@ -252,6 +267,8 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       reportStep: reportOnboardingStep,
       flows,
       author: flowAuthor,
+      // A run or flow written mid-drive goes out within seconds, as it does under the daemon.
+      onRunPersisted: () => cloudSync.nudge(),
     });
     const project = new ProjectStore(fs, reticleRoot, { now });
     attachRouteLearning(bridge, projectStoreResolver(fs, project, reticleRoot, now));
@@ -322,6 +339,8 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     // self-ends via SESSION_LIFECYCLE.BRIDGE_LOST_MS — see transport.ts.)
     server.server.onclose = () => {
       endAllSessions(bridge.sessions, MCP_DISCONNECT_SUMMARY);
+      // The client often kills this process without calling `close`: send what the teardown wrote.
+      cloudSync.nudge();
     };
     await server.connect(new StdioServerTransport());
     log('mcp_connected', { port });
@@ -337,6 +356,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       await cleanupCaptureDirectories();
       leaseReaper?.stop();
       chatDrives?.stop();
+      await flushWithin(cloudSync, EXIT_SYNC_BUDGET_MS);
       await pool?.shutdown();
       await owned?.dispose();
       await bridge.close();

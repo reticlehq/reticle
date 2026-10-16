@@ -206,6 +206,7 @@ async function shoot(
   const runId = runIdOfCall(session.id);
   if (!isValidRunId(runId)) return { error: `no screenshot: unusable run id ${runId}` };
   const dir = stepShotDir(root, runId);
+  void filmTab(deps, session, dir);
   const seq = await allocate(deps.fs, dir);
   if (seq > STEP_SCREENSHOT.MAX_PER_RUN) {
     return {
@@ -270,4 +271,152 @@ export function replayStepShooter(
       step: `${flow}#${String(result.step)}`,
     });
   };
+}
+
+/**
+ * Frames: the pictures between the steps.
+ *
+ * A run had one picture per step, so the cloud replay jumped from step to step and showed nothing of
+ * what happened between them. A tab that Reticle drives (a leased tab, or the page `reticle drive`
+ * opened) is filmed about once a second into the run of its last step. The frames go in the same
+ * directory and record as the step shots, with the tool `frame`, so the existing upload sends them
+ * and the replay plays them in `seq` order.
+ *
+ * Bounded twice. A page that did not change is not filmed again. A run keeps at most
+ * `FRAME.MAX_PER_RUN` frames, and the gap between frames doubles each quarter of that budget, so a
+ * long run is thinned, not cut off at its start. The step shots keep the rest of the per-run limit.
+ *
+ * ponytail: a desktop shell is not filmed (its capture is a PNG, see the header), and an undriven
+ * tab is not filmed (only the page could draw itself, once a second, in the user's own tab).
+ */
+export const FRAME = {
+  TOOL: STEP_SCREENSHOT.FRAME_TOOL,
+  EVERY_MS: 1_000,
+  MAX_PER_RUN: 100,
+  /** CDP quality for a frame: lower than a step shot, as for the chat's live view. */
+  JPEG_QUALITY: 50,
+} as const;
+
+/** The quarters the budget is split into: the gap between frames doubles at each. */
+const FRAME_STAGES = 4;
+
+interface Film {
+  deps: ToolDeps;
+  /** The run directory of the tab's last step: where the next frame goes. */
+  dir: string;
+  timer: ReturnType<typeof setInterval>;
+  busy: Promise<void> | undefined;
+  lastSha: string | undefined;
+  /** Ticks since the last frame was kept. */
+  idle: number;
+}
+
+const films = new Map<string, Film>();
+/** Frames kept per run directory. */
+const framesIn = new Map<string, number>();
+
+/** Is this a tab Reticle drives, with a real browser behind it? */
+async function driven(deps: ToolDeps, session: Session): Promise<boolean> {
+  if (true === deps.pool?.leasedSessionIds().includes(session.id)) return true;
+  return (
+    deps.realInput?.screenshot !== undefined &&
+    true === (await deps.realInput.isAvailableFor(session.url))
+  );
+}
+
+/** Start filming a driven tab, or point its film at the run its newest step went to. */
+async function filmTab(deps: ToolDeps, session: Session, dir: string): Promise<void> {
+  const film = films.get(session.id);
+  if (film !== undefined) {
+    film.dir = dir;
+    return;
+  }
+  if (!(await driven(deps, session).catch(() => false))) return;
+  if (films.has(session.id)) return;
+  const timer = setInterval(() => {
+    void filmNow(session.id);
+  }, FRAME.EVERY_MS);
+  // A film never holds a process open.
+  timer.unref?.();
+  films.set(session.id, { deps, dir, timer, busy: undefined, lastSha: undefined, idle: 0 });
+}
+
+/** Stop filming a tab. Safe to call for a tab that is not filmed. */
+export function stopFilming(sessionId: string): void {
+  const film = films.get(sessionId);
+  if (film === undefined) return;
+  clearInterval(film.timer);
+  films.delete(sessionId);
+}
+
+/** One tick of a tab's film: one frame, when the budget, the gap and the page allow. Never throws. */
+export async function filmNow(sessionId: string): Promise<void> {
+  const film = films.get(sessionId);
+  if (film === undefined || film.busy !== undefined) return;
+  film.busy = frame(sessionId, film).finally(() => {
+    film.busy = undefined;
+  });
+  await film.busy;
+}
+
+async function frame(sessionId: string, film: Film): Promise<void> {
+  let session: Session | undefined;
+  try {
+    session = film.deps.sessions.resolve(sessionId);
+    // An ended tab has nothing more to show.
+    if (session.isEnded()) session = undefined;
+  } catch {
+    session = undefined;
+  }
+  if (session === undefined) {
+    stopFilming(sessionId);
+    return;
+  }
+  const dir = film.dir;
+  const kept = framesIn.get(dir) ?? 0;
+  if (kept >= FRAME.MAX_PER_RUN) return;
+  film.idle += 1;
+  const gap = 2 ** Math.floor(kept / (FRAME.MAX_PER_RUN / FRAME_STAGES));
+  if (film.idle < gap) return;
+  try {
+    const bytes = await framePixels(film.deps, session);
+    const size = bytes === undefined ? undefined : jpegSize(bytes);
+    if (bytes === undefined || size === undefined) return;
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    if (sha256 === film.lastSha) return;
+    film.lastSha = sha256;
+    film.idle = 0;
+    const seq = await allocate(film.deps.fs, dir);
+    // The step shots' own limit is the platform's: a frame never takes the last of it.
+    if (seq > STEP_SCREENSHOT.MAX_PER_RUN) return;
+    framesIn.set(dir, kept + 1);
+    const file = `${String(seq).padStart(SEQ_WIDTH, '0')}-${FRAME.TOOL}${JPEG_EXT}`;
+    const record: RunScreenshot = {
+      seq,
+      file,
+      tool: FRAME.TOOL,
+      source: ScreenshotSource.BROWSER,
+      ...size,
+      sha256,
+    };
+    const fs = film.deps.fs;
+    const land = (async (): Promise<void> => {
+      await fs.mkdir(dir);
+      await fs.writeFileBytes(join(dir, file), bytes);
+      await fs.appendFile(join(dir, STEP_SCREENSHOT.MANIFEST_FILE), `${JSON.stringify(record)}\n`);
+    })().catch(() => undefined);
+    noteLanding(dir, land);
+    await land;
+  } catch {
+    // A frame is a courtesy: the next tick tries again.
+  }
+}
+
+/** The real pixels of a driven tab, as a frame. */
+async function framePixels(deps: ToolDeps, session: Session): Promise<Uint8Array | undefined> {
+  const opts = { jpegQuality: FRAME.JPEG_QUALITY, cssScale: true };
+  const leased = await deps.pool?.screenshotLease(session.id, opts);
+  if (leased !== undefined) return leased;
+  if (true !== (await deps.realInput?.isAvailableFor(session.url))) return undefined;
+  return deps.realInput?.screenshot?.(session.url, opts);
 }

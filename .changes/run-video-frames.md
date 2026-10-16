@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server` — a run records frames between its steps.** A run had one screenshot for each step, so the dashboard replay jumped from step to step. While Reticle drives a tab (a leased tab, or the page that `reticle drive` opened), it now takes a frame about once a second into the run's `visual/runs/<runId>/` folder. Each frame is a screenshot with the tool `frame`, so the existing upload sends it and the replay plays the run in order. A page that did not change gives no frame. A run keeps at most 100 frames, and the gap between frames gets longer as a run gets longer. The step screenshots keep the rest of the per-run limit. `sync.video: false` in `.reticle/cloud.json` keeps the frames on this machine; it follows `sync.screenshots` when unset.

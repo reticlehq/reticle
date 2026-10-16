@@ -51,7 +51,13 @@ import { brokenOf } from './known-regression.js';
 import { describeUnsyncedBriefly } from '@/memory/cloud/unsynced-roots.js';
 import { machineUnsyncedRoots } from '@/memory/project/sync-status.js';
 import { describeSync, runSyncCycle } from '@/memory/cloud/sync-cycle.js';
-import { diskSink, diskSource, readCloudIssues, readCloudState } from '@/memory/cloud/sync-disk.js';
+import {
+  diskSink,
+  diskSource,
+  policyScreenshots,
+  readCloudIssues,
+  readCloudState,
+} from '@/memory/cloud/sync-disk.js';
 import { fetchPlatformRun } from '@/features/harness/platform/platform-drives.js';
 
 /**
@@ -370,9 +376,7 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
     // `memory` is the project's cross-run history and the derived records that summarise it.
     derived: (kind: Parameters<typeof full.derived>[0]): unknown =>
       cloud.policy.memory ? full.derived(kind) : undefined,
-    ...(cloud.policy.screenshots && full.screenshot !== undefined
-      ? { screenshot: full.screenshot }
-      : {}),
+    ...policyScreenshots(full.screenshot, cloud.policy),
   };
 
   const once = async (): Promise<number> => {
