@@ -6,6 +6,7 @@ import {
   REQUEST_SHAPE_FIELD,
   REQUEST_SHAPE_NONE,
   RETICLE_WS_PATH,
+  ResponseBodyReason,
   StreamTransport,
   StreamDirection,
   fnv1a,
@@ -17,6 +18,7 @@ import {
   projectBody,
   projectErrorBody,
   shouldCaptureErrorBody,
+  skippedBodyReason,
   withBodyDeadline,
 } from './net-detail/network-body.js';
 import { redactUrl, netUrlFields } from './net-detail/network-redact.js';
@@ -586,7 +588,11 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
         // promise must never be able to surface an unhandledrejection into the host page even if a
         // future caller passes a throwing emit. A body we can't read is simply dropped.
         void (async () => {
-          let responseBodyFields: Record<string, unknown> = {};
+          // Capture was asked for and no body is recorded unless the read below succeeds: say why,
+          // so a body clause reads `unknown` rather than "capture is off" (#1520).
+          let responseBodyFields: Record<string, unknown> = captureBodies
+            ? { responseBodyReason: ResponseBodyReason.UNREADABLE }
+            : {};
           if (clone !== undefined) {
             try {
               const text = await withBodyDeadline(clone.text());
@@ -601,7 +607,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
                   ...(truncated ? { responseBodyTruncated: true } : {}),
                   // Says WHY a body is here when the app never asked for bodies, so a reader does
                   // not conclude that capture is on and trust an absent body on a 200.
-                  ...(captureBodies ? {} : { responseBodyReason: 'error-status' }),
+                  ...(captureBodies ? {} : { responseBodyReason: ResponseBodyReason.ERROR_STATUS }),
                 };
               }
             } catch {
@@ -615,7 +621,9 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
           }
         })().catch(() => undefined);
       } else {
-        emitRequest({});
+        // A type capture skips on purpose (a stream, a binary body) says so when capture is on.
+        const skipped = captureBodies ? skippedBodyReason(contentType) : undefined;
+        emitRequest(skipped === undefined ? {} : { responseBodyReason: skipped });
       }
       return res;
     } catch (error) {
@@ -710,6 +718,14 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
               // responseText throws unless responseType is '' or 'text' — guard before reading.
               const textReadable = '' === this.responseType || 'text' === this.responseType;
               const wantXhrErrorBody = shouldCaptureErrorBody(this.status, captureErrorBodies);
+              // As on the fetch path: with capture on, a body that is not recorded says why (#1520).
+              if (captureBodies) {
+                // A capturable type is unread only when the read fails or `responseType` is not text.
+                const skipped = isCapturableType(xhrContentType)
+                  ? ResponseBodyReason.UNREADABLE
+                  : skippedBodyReason(xhrContentType);
+                if (skipped !== undefined) responseBodyFields = { responseBodyReason: skipped };
+              }
               if (
                 (captureBodies || wantXhrErrorBody) &&
                 textReadable &&
@@ -722,7 +738,9 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
                   responseBodyFields = {
                     responseBody: rb,
                     ...(truncated ? { responseBodyTruncated: true } : {}),
-                    ...(captureBodies ? {} : { responseBodyReason: 'error-status' }),
+                    ...(captureBodies
+                      ? {}
+                      : { responseBodyReason: ResponseBodyReason.ERROR_STATUS }),
                   };
                 } catch {
                   /* unreadable body — skip */

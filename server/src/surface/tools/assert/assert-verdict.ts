@@ -34,7 +34,7 @@ import {
   acceptedWriteLabels,
   hasAcceptedWrite,
 } from '@reticlehq/engine/evidence/accepted-write.js';
-import { unreadWriteLabels } from '@reticlehq/engine/evidence/unread-outcome.js';
+import { unreadWriteLabels, unreadWriteReason } from '@reticlehq/engine/evidence/unread-outcome.js';
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 import {
@@ -253,7 +253,9 @@ export async function assertVerdict(
     }),
     contradictions,
     ...(0 === outcomePending.length ? {} : { outcomePending }),
-    ...(outcomeUnread.length > 0 ? { outcomeUnread } : {}),
+    ...(outcomeUnread.length > 0
+      ? { outcomeUnread, outcomeUnreadReason: unreadWriteReason(windowEvents) }
+      : {}),
     // Same detail the act path supplies: this route reaches UNSETTLED through an absence-derived
     // contradiction, and "the window closed before the app finished" is no more actionable here.
     unsettled: {

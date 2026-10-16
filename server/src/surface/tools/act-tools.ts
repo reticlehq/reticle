@@ -74,7 +74,7 @@ import {
   impeachesCapture,
 } from '@reticlehq/engine/evidence/blind-spots.js';
 import { acceptedWriteLabels } from '@reticlehq/engine/evidence/accepted-write.js';
-import { unreadWriteLabels } from '@reticlehq/engine/evidence/unread-outcome.js';
+import { unreadWriteLabels, unreadWriteReason } from '@reticlehq/engine/evidence/unread-outcome.js';
 import {
   evaluatePredicate,
   waitForPredicate,
@@ -802,7 +802,9 @@ export const ACT_TOOLS: ToolDef[] = [
             honesty,
             contradictions,
             ...(0 === outcomePending.length ? {} : { outcomePending }),
-            ...(outcomeUnread.length > 0 ? { outcomeUnread } : {}),
+            ...(outcomeUnread.length > 0
+              ? { outcomeUnread, outcomeUnreadReason: unreadWriteReason(windowEvents) }
+              : {}),
             // `settled` is genuinely optional: a wait that declared no predicate never measured it, and
             // passing `false` there would report "never settled" about something never asked to settle.
             ...(settledOutcome === undefined ? {} : { settled: settledOutcome }),

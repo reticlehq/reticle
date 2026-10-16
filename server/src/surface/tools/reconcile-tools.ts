@@ -1,4 +1,5 @@
 import { bodyCaptureRemedy } from '@reticlehq/engine/evidence/body-capture-remedy.js';
+import { sharedSkipReason } from '@reticlehq/engine/question/predicate/predicate-eval.js';
 import { z } from 'zod';
 import {
   witnessDisagreement,
@@ -37,7 +38,13 @@ async function capturedBodies(
   session: { queryEvents: (q: { since: number }) => Promise<readonly unknown[]> },
   since: number,
   urlContains: string | undefined,
-): Promise<{ bodies: unknown[]; withBody: number; total: number; truncated: number }> {
+): Promise<{
+  bodies: unknown[];
+  withBody: number;
+  total: number;
+  truncated: number;
+  skipReasons: unknown[];
+}> {
   const events = (await session.queryEvents({ since })) as {
     type: string;
     data: Record<string, unknown>;
@@ -46,13 +53,17 @@ async function capturedBodies(
   let withBody = 0;
   let total = 0;
   let truncated = 0;
+  const skipReasons: unknown[] = [];
   for (const event of events) {
     if (event.type !== EventType.NET_REQUEST) continue;
     const url = urlForMatch(event.data);
     if (urlContains !== undefined && !url.includes(urlContains)) continue;
     total += 1;
     const raw = event.data['responseBody'];
-    if (typeof raw !== 'string' || 0 === raw.length) continue;
+    if (typeof raw !== 'string' || 0 === raw.length) {
+      skipReasons.push(event.data['responseBodyReason']);
+      continue;
+    }
     // A capped body is not an absent one. Recover the records that closed before the cut rather than
     // reporting nothing about the page with the most data on it.
     const salvaged = salvageJson(raw);
@@ -61,7 +72,7 @@ async function capturedBodies(
     withBody += 1;
     if (salvaged.partial) truncated += 1;
   }
-  return { bodies, withBody, total, truncated };
+  return { bodies, withBody, total, truncated, skipReasons };
 }
 
 export const RECONCILE_TOOLS: ToolDef[] = [
@@ -108,7 +119,7 @@ export const RECONCILE_TOOLS: ToolDef[] = [
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const since = asNumber(args['since']) ?? 0;
-      const { bodies, withBody, total, truncated } = await capturedBodies(
+      const { bodies, withBody, total, truncated, skipReasons } = await capturedBodies(
         session,
         since,
         asString(args['urlContains']),
@@ -123,7 +134,7 @@ export const RECONCILE_TOOLS: ToolDef[] = [
           note:
             0 === total
               ? 'no responses in this window matched — nothing was compared'
-              : `${String(total)} response(s) matched but NONE carried a recorded body, so nothing was compared. ${bodyCaptureRemedy(session.sdkVersion)}`,
+              : `${String(total)} response(s) matched but NONE carried a recorded body, so nothing was compared. ${bodyCaptureRemedy(session.sdkVersion, sharedSkipReason(skipReasons))}`,
         });
       }
 

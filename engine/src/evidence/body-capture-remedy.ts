@@ -12,6 +12,7 @@
  * Same class as the version-skew remedy that named a React package on Vue projects: remedy text that
  * does not check whether it applies. A wrong remedy is worse than none, because it is followed.
  */
+import { skippedBodyRemedy } from '@/question/predicate/predicate-eval.js';
 
 /** The earliest SDK release whose observer can capture network bodies at all. */
 export const BODY_CAPTURE_MIN_VERSION = '2.4.0';
@@ -56,7 +57,10 @@ const ENABLE_IT =
  * old" there would hide a working fix from someone who could have used it; the opposite guess costs
  * one wasted read. The asymmetry decides it.
  */
-export function bodyCaptureRemedy(sdkVersion: string | undefined): string {
+export function bodyCaptureRemedy(sdkVersion: string | undefined, skipReason?: unknown): string {
+  // Capture is ON and the SDK skipped this body on purpose: switching it on changes nothing (#1520).
+  const skipped = skippedBodyRemedy(skipReason);
+  if (skipped !== undefined) return skipped;
   if (sdkVersion !== undefined && !isAtLeast(sdkVersion, BODY_CAPTURE_MIN_VERSION)) {
     return (
       `this page's SDK is ${sdkVersion}, and body capture needs ${BODY_CAPTURE_MIN_VERSION} or ` +
