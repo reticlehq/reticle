@@ -207,8 +207,9 @@ Verify a predicate; optionally wait for it.
 
 Compare what the API **returned** against what the page **renders**.
 
-- **args:** `since?`, `urlContains?`, `sessionId?`.
-- **returns:** `{ mismatches, compared, note? }`.
+- **args:** `since?`, `urlContains?`, `scope?`, `witness?`, `sessionId?`.
+- **returns:** `{ mismatches, compared, note?, witness? }`.
+- **`scope`** is a ref or CSS selector, for example `"#status"`. The tool then compares only against that subtree. Use it when the whole page is too large to read completely, for example a dashboard of large native selects, and the API feeds one region. Every cut branch under the scope is still read. A scope that matches no element is refused, never read as an empty page.
 - Catches the class no status code and no assertion can reach: a `USD 7997` amount rendered as `₹79.97`, or a record the API calls `on_hold` displayed as `"pending"`. Both sides agree on the digits; only the meaning differs, so every other channel reports success.
 - Needs response bodies: `connect({ captureNetworkBodies: true })`. When nothing could be compared it says so in `note` rather than returning an empty, clean-looking result over data it never read.
 

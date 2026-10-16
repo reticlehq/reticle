@@ -75,4 +75,38 @@ describe('a read that finishes what a truncated snapshot started', () => {
     const done = await readCompleteTree(read);
     expect(done.complete).toBe(false);
   });
+
+  /**
+   * reticle#1545: a dashboard of cards with 500-option selects cut past the read budget, and there
+   * was no way to read only the part the API feeds.
+   */
+  it('starts at a given root and never reads the page outside it', async () => {
+    const options = Array.from({ length: 500 }, (_, i) => `opt${String(i)}`);
+    const { read, scopes } = reader({
+      '': { tree: '- combobox "Region"', truncated: true, unread: options },
+      '#status': { tree: '- text "stl_1 on hold"', truncated: true, unread: ['e9'] },
+      e9: { tree: '- text "stl_2 paid"', truncated: false },
+    });
+    const done = await readCompleteTree(read, '#status');
+    expect(done.complete).toBe(true);
+    expect(done.tree).toContain('stl_2 paid');
+    expect(scopes).toEqual(['#status', 'e9']);
+  });
+
+  it('reports a root that matches no element as incomplete, never as an empty finished read', async () => {
+    const { read } = reader({ '#gone': { tree: '', truncated: false, scopeMissing: true } });
+    const done = await readCompleteTree(read, '#gone');
+    expect(done.complete).toBe(false);
+    expect(done.incompleteBecause).toContain('#gone');
+  });
+
+  it('reports a cut branch that is gone on re-read as incomplete', async () => {
+    const { read } = reader({
+      '': { tree: '- button "One"', truncated: true, unread: ['e2'] },
+      e2: { tree: '', truncated: false, scopeMissing: true },
+    });
+    const done = await readCompleteTree(read);
+    expect(done.complete).toBe(false);
+    expect(done.incompleteBecause).toContain('e2');
+  });
 });
