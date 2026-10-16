@@ -343,6 +343,14 @@ async function settleTick(session: FlowReplaySession, sleep: Sleep): Promise<voi
   }
 }
 
+/** One look, no settling: for an anchor that may legitimately not be on the page yet. */
+export async function queryOnce(
+  session: FlowReplaySession,
+  queryArgs: Record<string, unknown>,
+): Promise<{ refs: string[]; hint?: QueryEmptyHint }> {
+  return readQuery(await session.command(ReticleCommand.QUERY, queryArgs));
+}
+
 export async function resolveQuery(
   session: FlowReplaySession,
   queryArgs: Record<string, unknown>,
