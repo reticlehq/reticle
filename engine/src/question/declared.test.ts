@@ -8,7 +8,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { PredicateKind, QueryBy } from '@reticlehq/core';
-import { declaredExpectations, declaresBodyIndependentChannel } from './declared.js';
+import {
+  declaredExpectations,
+  declaresBodyIndependentChannel,
+  matchesNetClause,
+} from './declared.js';
 
 describe('a declared failing request is a declaration, not a contradiction', () => {
   it('reads a bare failing net predicate', () => {
@@ -55,7 +59,7 @@ describe('a declared failing request is a declaration, not a contradiction', () 
   // Negative control: under anyOf nothing is guaranteed to have held, so a declaration there is not
   // a declaration about this window. Honouring it would suppress a real contradiction on the
   // strength of a branch that never ran.
-  it('ignores an anyOf branch — nothing in it is guaranteed to have held', () => {
+  it('ignores an anyOf branch for consequences — nothing in it is guaranteed to have held', () => {
     const declared = declaredExpectations({
       kind: PredicateKind.ANY_OF,
       predicates: [
@@ -65,6 +69,18 @@ describe('a declared failing request is a declaration, not a contradiction', () 
     });
     expect(declared.netFailures).toEqual([]);
     expect(declared.rendersContent).toBe(false);
+  });
+
+  it('walks anyOf for netClauses but not for netUrls — the duplicate-request rule stays conservative (#1234)', () => {
+    const declared = declaredExpectations({
+      kind: PredicateKind.ANY_OF,
+      predicates: [
+        { kind: PredicateKind.NET, urlContains: '/api/login', method: 'POST' },
+        { kind: PredicateKind.TEXT, contains: 'Welcome' },
+      ],
+    });
+    expect(declared.netUrls).toEqual([]);
+    expect(declared.netClauses).toEqual([{ urlContains: '/api/login', method: 'POST' }]);
   });
 
   it('ignores a negated branch — `not` declares the opposite of a consequence', () => {
@@ -324,5 +340,87 @@ describe('a comparison is body-independent only through a side the body does not
         }),
       ).toBe(true);
     }
+  });
+});
+
+describe('matchesNetClause checks every constraint the clause carries', () => {
+  it('matches on URL and method', () => {
+    expect(
+      matchesNetClause(
+        { urlContains: '/api/queue', method: 'GET' },
+        { method: 'GET', url: 'http://127.0.0.1:8000/api/queue' },
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects when the method disagrees', () => {
+    expect(
+      matchesNetClause(
+        { urlContains: '/api/queue', method: 'GET' },
+        { method: 'POST', url: 'http://127.0.0.1:8000/api/queue' },
+      ),
+    ).toBe(false);
+  });
+
+  it('compares method case-insensitively', () => {
+    expect(
+      matchesNetClause(
+        { urlContains: '/api/queue', method: 'get' },
+        { method: 'GET', url: 'http://127.0.0.1:8000/api/queue' },
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects when the clause has no urlContains', () => {
+    expect(matchesNetClause({ method: 'POST' }, { method: 'POST', url: '/api/save' })).toBe(false);
+  });
+
+  it('rejects when status disagrees', () => {
+    expect(
+      matchesNetClause(
+        { urlContains: '/api/save', status: 200 },
+        { method: 'POST', url: '/api/save', status: 500 },
+      ),
+    ).toBe(false);
+  });
+
+  it('admits when status agrees', () => {
+    expect(
+      matchesNetClause(
+        { urlContains: '/api/save', status: 200 },
+        { method: 'POST', url: '/api/save', status: 200 },
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores status when the request has none (pending)', () => {
+    expect(
+      matchesNetClause(
+        { urlContains: '/api/save', status: 200 },
+        { method: 'POST', url: '/api/save' },
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects when ok disagrees', () => {
+    expect(
+      matchesNetClause(
+        { urlContains: '/api/save', ok: true },
+        { method: 'POST', url: '/api/save', ok: false },
+      ),
+    ).toBe(false);
+  });
+
+  it('collects status and ok from the predicate', () => {
+    const declared = declaredExpectations({
+      kind: PredicateKind.NET,
+      urlContains: '/api/save',
+      method: 'POST',
+      status: 200,
+      ok: true,
+    });
+    expect(declared.netClauses).toEqual([
+      { urlContains: '/api/save', method: 'POST', status: 200, ok: true },
+    ]);
   });
 });
