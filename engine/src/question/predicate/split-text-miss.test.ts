@@ -36,6 +36,29 @@ describe('describeSplitTextMiss', () => {
     });
   });
 
+  it('prefers a stable selector over the ref, so the retry can be written before a snapshot (#1147)', () => {
+    const message = describeSplitTextMiss(
+      { ref: 'e12', selector: '[data-testid="save-status"]', role: 'paragraph' },
+      'All changes saved',
+    );
+    const retry = retryPredicateFrom(message ?? '');
+    expect(parsePredicate(retry)).toEqual({
+      kind: PredicateKind.TEXT,
+      contains: 'All changes saved',
+      scope: '[data-testid="save-status"]',
+      self: true,
+    });
+  });
+
+  it('hands back the selector when the container has no ref at all', () => {
+    const message = describeSplitTextMiss(
+      { selector: '#save-status', role: 'paragraph' },
+      'All changes saved',
+    );
+    const retry = retryPredicateFrom(message ?? '');
+    expect(parsePredicate(retry)).toMatchObject({ scope: '#save-status', self: true });
+  });
+
   it('states that no text query can match, not merely that this one did not', () => {
     // The agent's next move after "no element matched" is another text guess. The message has to
     // close that door explicitly or it buys nothing.

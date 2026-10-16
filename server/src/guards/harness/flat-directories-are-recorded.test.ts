@@ -57,7 +57,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'adapters/build/vite/src': 14,
   // 13 with `render-page.ts`, the in-page step screenshot. It has to be its own module: the command
   // registry imports it lazily, so a page downloads the renderer only when a picture is first drawn.
-  'adapters/realm/browser/src/dom': 13,
+  // +1: stable-selector.ts, split out of query.ts when that file crossed the 1000-line cap (#1147).
+  'adapters/realm/browser/src/dom': 14,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 25,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag

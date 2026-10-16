@@ -110,6 +110,29 @@ describe('splitText hint only speaks for visible text', () => {
     const r = runQuery({ text: 'Move to Repro Folder' });
     expect(r.hint?.splitText?.ref).toBeDefined();
   });
+
+  it('adds a testid selector for the container, so the retry can be written before a snapshot (#1147)', () => {
+    document.body.innerHTML = '<p data-testid="save-status">All changes <b>saved</b></p>';
+    const hint = runQuery({ text: 'All changes saved' }).hint?.splitText;
+    expect(hint?.selector).toBe('[data-testid="save-status"]');
+    // The printed scope works as the scoped retry, written without any ref.
+    expect(runQuery({ scope: hint?.selector, self: true, text: 'All changes saved' }).count).toBe(
+      1,
+    );
+  });
+
+  it('adds an id selector when the container has an id and no testid', () => {
+    document.body.innerHTML = '<p id="save-status">All changes <b>saved</b></p>';
+    const hint = runQuery({ text: 'All changes saved' }).hint?.splitText;
+    expect(hint?.selector).toBe('#save-status');
+  });
+
+  it('adds no selector when the container has neither a testid nor an id', () => {
+    document.body.innerHTML = '<p>All changes <b>saved</b></p>';
+    const hint = runQuery({ text: 'All changes saved' }).hint?.splitText;
+    expect(hint).toBeDefined();
+    expect(hint?.selector).toBeUndefined();
+  });
 });
 
 /** A case-exact check missed on case alone and was told the text was "split across children". */

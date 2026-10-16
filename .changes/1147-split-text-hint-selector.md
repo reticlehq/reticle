@@ -1,0 +1,3 @@
+### Added
+
+- **Split-text hint now names a selector for the container when it has one.** When a text search misses but the string is on the page split across a container's children, the hint's `splitText` descriptor gains a `selector` when the container carries a testid or an id, and the recovery predicate the engine prints uses it as the scope. A selector can be written into an `act_and_wait` `until` before the action runs, which is when the recovery has to be written; a ref exists only after a snapshot. The ref stays as the fallback when the container has neither a testid nor an id. Addresses option 1 of [#1147](https://github.com/reticlehq/reticle/issues/1147).

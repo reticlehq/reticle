@@ -457,13 +457,14 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
           splitText: z
             .object({
               ref: z.string().optional(),
+              selector: z.string().optional(),
               role: z.string().optional(),
               name: z.string().optional(),
             })
             .passthrough()
             .optional()
             .describe(
-              "Present when a TEXT search missed but the string IS on the page, split across this container's children. Retry as { scope: <ref>, self: true } — no text query can match a string no single element owns.",
+              "Present when a TEXT search missed but the string IS on the page, split across this container's children. Retry as { scope: <selector or ref>, self: true } — no text query can match a string no single element owns. The selector is present when the container carries a testid or an id, and can be written before the action runs.",
             ),
           caseMiss: z
             .string()
