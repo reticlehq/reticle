@@ -165,6 +165,25 @@ export function redirectToWorkspaceApp(
   const pointed = appNamedByRootConfig(io);
   if (pointed !== undefined) return enterApp(options, io, pointed, ROOT_CONFIG_LEAD, runInit);
 
+  // A plain page with a manifest is the app too: it renders through its own index.html, and the
+  // dev script that serves it lives in its package.json. Discovery preferred a nested copy — a
+  // `backup/` folder holding another app — over the folder the person is standing in, and
+  // `init --dry-run` named the copy as the target. A root pointer stored by an earlier `--app` run
+  // is read first, above. Past that, the nested app is something to LIST, never to choose; the
+  // root is wired by the normal plan after this null.
+  if (io.exists(STATIC_PAGE) && io.exists(PACKAGE_JSON)) {
+    const nested = findWorkspaceApps(io);
+    if (0 < nested.length) {
+      io.print(WIRE_ANOTHER);
+      for (const a of nested) {
+        const displayed = displayedWorkspaceAppCommand(a, process.platform);
+        if (displayed.label !== undefined) io.print(`  ${displayed.label}`);
+        io.print(`  ${displayed.command}`);
+      }
+    }
+    return null;
+  }
+
   const apps = findWorkspaceApps(io);
   // An explicitly named app answers the ambiguity. Refusing to guess is right, but "re-run inside the
   // one you want" is not something a script, a CI step, or an agent that cannot change directory can

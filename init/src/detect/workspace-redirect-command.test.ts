@@ -112,3 +112,90 @@ describe('redirectToWorkspaceApp — ambiguous workspace', () => {
     expect(commands).toEqual(['  reticle init --app apps/web', '  reticle init --app apps/admin']);
   });
 });
+
+describe('redirectToWorkspaceApp — a page with a manifest at the root', () => {
+  // #1695: a folder holding index.html and a package.json IS the app. Discovery preferred a
+  // nested copy (a backup of the same app) and `--dry-run` named `backup/` as the target.
+  function pageAtRootIo(lines: string[], extra: Record<string, string> = {}): InitIo {
+    const files: Record<string, string> = {
+      'index.html': '<!doctype html><html><body></body></html>',
+      'package.json': JSON.stringify({ name: 'page', scripts: { dev: 'npx serve .' } }),
+      'backup/package.json': JSON.stringify({
+        name: 'old-copy',
+        scripts: { dev: 'vite' },
+        devDependencies: { vite: '^7' },
+      }),
+      'backup/vite.config.ts': 'export default {}',
+      'backup/index.html': '<div id="root"></div>',
+      ...extra,
+    };
+
+    const io: InitIo = {
+      readFile: (path) => files[path] ?? null,
+      writeFile: () => {},
+      exists: (path) => path in files,
+      homeDir: () => '/home/u',
+      cwd: () => '/project',
+      rootFiles: () => ['index.html', 'package.json'],
+      listDirs: (path) => {
+        if ('.' === path) return 'apps/web/package.json' in files ? ['backup', 'apps'] : ['backup'];
+        return 'apps' === path ? ['web'] : [];
+      },
+      listFiles: () => [],
+      scoped: () => io,
+      exec: () => true,
+      probe: () => true,
+      canWrite: () => true,
+      print: (line) => lines.push(line),
+      host: SILENT_HOST,
+    };
+
+    return io;
+  }
+
+  it('wires the root, listing rather than choosing a nested app', () => {
+    const lines: string[] = [];
+    const io = pageAtRootIo(lines);
+
+    const result = redirectToWorkspaceApp(
+      OPTIONS,
+      io,
+      JSON.parse(io.readFile('package.json') ?? '{}'),
+      () => {
+        throw new Error('a root that is itself the app must not be redirected');
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(lines.filter((line) => line.startsWith('  reticle init --app '))).toEqual([
+      '  reticle init --app backup',
+    ]);
+  });
+
+  it('keeps the app that a stored root pointer names', () => {
+    const lines: string[] = [];
+    const io = pageAtRootIo(lines, {
+      'package.json': JSON.stringify({
+        name: 'page',
+        workspaces: ['apps/*'],
+        scripts: { dev: 'npx serve .' },
+      }),
+      '.reticle.json': JSON.stringify({ projectId: 'p-1' }),
+      'apps/web/package.json': JSON.stringify({ dependencies: { vite: '^7' } }),
+      'apps/web/.reticle.json': JSON.stringify({ projectId: 'p-1' }),
+    });
+    const entered: string[] = [];
+
+    redirectToWorkspaceApp(
+      OPTIONS,
+      io,
+      JSON.parse(io.readFile('package.json') ?? '{}'),
+      (options) => {
+        entered.push(options.cwd);
+        return { ok: true, applied: 0, manual: 0 };
+      },
+    );
+
+    expect(entered).toEqual(['/project/apps/web']);
+  });
+});
