@@ -50,11 +50,13 @@ function sourceFiles(dir: string, acc: string[] = []): string[] {
 }
 
 /**
- * Files that reference the ACT command without dispatching it. Empty today — every referencing file is
- * a real dispatch path and every one opens a window. Kept as an explicit escape hatch so a future
+ * Files that reference the ACT command without dispatching it. Kept as an explicit escape hatch so a
  * non-dispatching reference must be justified here rather than silently weakening the scan.
+ *
+ * - `production-drive.ts` JUDGES an act on a production drive before `Session.command` sends it; the
+ *   act it lets through is sent by the caller that already opened the window.
  */
-const NOT_A_DISPATCH_SITE = new Set<string>();
+const NOT_A_DISPATCH_SITE = new Set<string>(['portal/production/production-drive.ts']);
 
 describe('every ACT dispatch path opens an attribution window', () => {
   it('no file sends an ACT without also calling beginAction', () => {

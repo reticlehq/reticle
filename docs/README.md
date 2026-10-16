@@ -69,6 +69,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [multi-agent-testing.md](multi-agent-testing.md) | more than one agent on one app |
 | [human-control.md](human-control.md) | taking the wheel back from the agent |
 | [deploy-checks.md](deploy-checks.md) | running Reticle against a deployed build |
+| [production-mode.md](production-mode.md) | driving a live site under a policy that refuses payments, deletions and invites |
 | [token-efficiency.md](token-efficiency.md) | why it costs less than a screenshot loop |
 | [benchmarks.md](benchmarks.md) | how the numbers were measured, including where Reticle loses |
 | [vs-playwright-mcp.mdx](vs-playwright-mcp.mdx) | outside-in vs inside-out, and when Playwright is right |

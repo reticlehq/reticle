@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SESSION_AUTO, TRANSPORT_LIMITS } from '@reticlehq/core';
 import {
   connectionPolicy,
+  helloMode,
   resolveSessionLabel,
   shouldBlockProduction,
   withBridgePath,
@@ -169,5 +170,18 @@ describe('withBridgePath', () => {
   it('passes through non-ws and unparseable values for connectionPolicy to reject', () => {
     expect(withBridgePath('javascript:alert(1)').adjusted).toBe(false);
     expect(withBridgePath('not a url')).toEqual({ url: 'not a url', adjusted: false });
+  });
+});
+
+describe('helloMode', () => {
+  it('says nothing when connect() named no env or scope, as every older page did', () => {
+    expect(helloMode({})).toEqual({});
+  });
+
+  it('carries a production env and its scope into the HELLO', () => {
+    expect(helloMode({ env: 'production', scope: 'observe' })).toEqual({
+      env: 'production',
+      scope: 'observe',
+    });
   });
 });

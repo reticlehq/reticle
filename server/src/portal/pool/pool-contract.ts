@@ -44,6 +44,12 @@ export interface PooledPage {
    */
   installMocks?(rules: readonly PooledMockRule[]): Promise<void>;
   /**
+   * Answer every request this page sends through `decide`: a string refuses it (403, the string as
+   * the error), undefined lets it go. OPTIONAL, like `installMocks`. A production drive uses it so a
+   * refused request never reaches the live service.
+   */
+  guardRequests?(decide: (method: string, url: string) => string | undefined): Promise<void>;
+  /**
    * Resize this page's viewport. OPTIONAL, like `installMocks`: a fake that does not implement it
    * makes `reticle_viewport` refuse rather than claim a resize the page never took.
    *

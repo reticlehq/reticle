@@ -154,6 +154,8 @@ interface ActiveLease {
    * navigation inside the lease keeps the stub.
    */
   hostStub?: InitScriptHandle;
+  /** The production guard on this page's requests, re-asserted after mocks so it is asked first. */
+  guard?: (method: string, url: string) => string | undefined;
   /**
    * The text of that init script, kept so a lease that asks for the SAME stub again is recognised and
    * reused instead of being torn down and remade — see `hostStubScript` and the lease tool's reuse.
@@ -450,10 +452,25 @@ export class BrowserPool {
     this.touch(sessionId);
     try {
       await lease.page.installMocks(rules);
+      // Mocks registered later are asked first, and one that lets a request through would skip
+      // the production guard. Re-asserting the guard puts it back in front.
+      if (lease.guard !== undefined) await lease.page.guardRequests?.(lease.guard);
       return true;
     } catch {
       return false;
     }
+  }
+
+  /** Guard a leased page's requests, or false when this is not a lease or its page cannot. */
+  async guardLease(
+    sessionId: string,
+    decide: (method: string, url: string) => string | undefined,
+  ): Promise<boolean> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    if (lease === undefined || lease.page.guardRequests === undefined) return false;
+    await lease.page.guardRequests(decide);
+    lease.guard = decide;
+    return true;
   }
 
   /** What a lease was granted when it opened, or undefined for a session that is not a lease. */

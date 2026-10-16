@@ -29,7 +29,9 @@ import {
   HudCorner,
   HudVisibility,
   type CommandMessage,
+  type HelloEnv,
   type HelloMessage,
+  type HelloScope,
   type RedactionConfig,
   type ReticleEvent,
 } from '@reticlehq/core';
@@ -96,6 +98,17 @@ export function shouldBlockProduction(
  * with no path (`ws://localhost:4400`) would be answered with a silent 400. Give a pathless ws(s)
  * URL the bridge path; anything with an explicit path (a reverse proxy mount) is left alone.
  */
+/** The env and scope connect() named, for the HELLO. Absent stays absent: an older daemon reads it. */
+export function helloMode(options: Pick<ReticleConnectOptions, 'env' | 'scope'>): {
+  env?: HelloEnv;
+  scope?: HelloScope;
+} {
+  return {
+    ...(options.env === undefined ? {} : { env: options.env }),
+    ...(options.scope === undefined ? {} : { scope: options.scope }),
+  };
+}
+
 export function withBridgePath(bridgeUrl: string): { url: string; adjusted: boolean } {
   let parsed: URL;
   try {
@@ -334,6 +347,7 @@ export class Reticle {
   #annotator: Annotator | undefined;
   #eventCount = 0;
   #token: string | undefined;
+  #mode: ReturnType<typeof helloMode> = {};
   #sdkVersion: string | undefined;
   /** Whether this page records network bodies — announced in HELLO so a body clause can be refused
    * before an action is spent on it. See messages.ts. */
@@ -418,6 +432,7 @@ export class Reticle {
     this.#token =
       options.token !== undefined && options.token.length > 0 ? options.token : undefined;
     this.#projectId = identity.projectId;
+    this.#mode = helloMode(options);
     // Install the redaction rule BEFORE anything can emit. Every observer, the serializer and the
     // snapshot path read it ambiently, so a policy set even one line after installAllObservers would
     // leave the first events of the session redacted by a different rule than the rest.
@@ -776,6 +791,7 @@ export class Reticle {
       title: document.title,
       adapters: adapterNames(),
       ...(this.#token === undefined ? {} : { token: this.#token }),
+      ...this.#mode,
       hasCapabilities: hasCapabilities(),
       // The protocol's first assertion. A claim reading a channel absent from this list is `unknown`
       // BEFORE an action is spent on it rather than after -- and "nothing was watching" stops reading

@@ -292,6 +292,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       artifactRootFor: artifactRootResolver(reticleRoot, { servingDirectory: servingDirectoryOf }),
       now,
       bridgePort: port,
+      nonces: bridge.nonces,
       browserProbe: probeLaunchableChromium,
       // The daemon's OWN project, so a tool can tell "this session is mine" from "this session
       // belongs to a sibling app under the same daemon". contract_save refuses on the second.
@@ -544,6 +545,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     artifactRootFor: artifactRootResolver(reticleRoot, { servingDirectory: servingDirectoryOf }),
     now,
     bridgePort: port,
+    nonces: bridge.nonces,
     browserProbe: probeLaunchableChromium,
     ...agentWiring(port, bridge.sessions, leaseUrl),
     // A finished verification should not sit behind a one-minute timer — see ToolDeps.onRunPersisted.

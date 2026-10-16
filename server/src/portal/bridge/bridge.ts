@@ -26,7 +26,9 @@ import {
   CONTRACT_PARTS,
 } from '@reticlehq/core';
 import { Session } from '@/portal/session/session.js';
-import { SessionManager, type RefusedPage } from '@/portal/session/session-manager.js';
+import { SessionManager } from '@/portal/session/session-manager.js';
+import { SessionNonces } from './session-nonces.js';
+import { admitHello } from '@/portal/production/production-hello.js';
 import { tokensMatch } from './token-auth.js';
 import { noteWrongPathUpgrades, wrongPathReason } from './wrong-path.js';
 import { harnessRequest, type HarnessRequest } from './harness-request.js';
@@ -45,7 +47,7 @@ import {
   SkewPair,
 } from '@/command/version/version-skew.js';
 import { noteVersionSkew } from '@/command/version/version-nudge.js';
-import { protocolSkewReason } from './protocol-skew.js';
+import { helloProtocolMismatch, peekHelloPage, protocolSkewReason } from './protocol-skew.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 
 /**
@@ -227,46 +229,6 @@ function normalizeOrigin(origin: string): string | null {
   }
 }
 
-/**
- * When a message fails the strict schema, detect the specific case of a HELLO whose protocolVersion
- * differs from ours — so we can tell the operator "upgrade @reticlehq/browser" instead of dropping the
- * connection into the generic NO_SESSION_CONNECTED path, which misdiagnoses it as a port mismatch.
- * Returns the mismatched version, or null when it isn't a version-mismatched HELLO.
- */
-function helloProtocolMismatch(text: string): number | null {
-  try {
-    const json = JSON.parse(text) as { kind?: unknown; protocolVersion?: unknown };
-    if (
-      json.kind === MessageKind.HELLO &&
-      'number' === typeof json.protocolVersion &&
-      json.protocolVersion !== RETICLE_PROTOCOL_VERSION
-    ) {
-      return json.protocolVersion;
-    }
-  } catch {
-    /* not JSON — fall through to the generic invalid-message path */
-  }
-  return null;
-}
-
-/**
- * What a HELLO says about the page it came from, read loosely enough to survive the schema failing.
- * Null when the message is not a hello at all — only an SDK sends one, so only then is a refusal
- * evidence about an app.
- */
-function peekHelloPage(text: string): RefusedPage | null {
-  try {
-    const json = JSON.parse(text) as { kind?: unknown; url?: unknown; projectId?: unknown };
-    if (json.kind !== MessageKind.HELLO) return null;
-    return {
-      ...('string' === typeof json.url ? { url: json.url } : {}),
-      ...('string' === typeof json.projectId ? { projectId: json.projectId } : {}),
-    };
-  } catch {
-    return null;
-  }
-}
-
 /** Normalize ws RawData (string | Buffer | Buffer[] | ArrayBuffer) into a UTF-8 string. */
 function rawToString(raw: RawData): string {
   if ('string' === typeof raw) return raw;
@@ -282,6 +244,8 @@ function rawToString(raw: RawData): string {
  */
 export class Bridge {
   readonly sessions = new SessionManager();
+  /** Single-use HELLO tokens for pages that cannot hold the pairing token. Minted by local callers only. */
+  readonly nonces: SessionNonces;
   /** Resolves with the actually-bound port once the server is listening. */
   readonly ready: Promise<number>;
   readonly #wss: WebSocketServer;
@@ -343,6 +307,7 @@ export class Bridge {
       throw new Error('a pairing token is required when the Reticle bridge binds beyond localhost');
     }
     this.#clock = options.clock ?? (() => Date.now());
+    this.nonces = new SessionNonces({ clock: this.#clock });
     this.#token =
       options.token !== undefined && options.token.length > 0 ? options.token : undefined;
     // Supplied by resolveBridgeSecurity, which is the only place that can tell an auto-provisioned
@@ -612,7 +577,12 @@ export class Bridge {
             refreshIdentity(session, parsed);
             return;
           }
-          if (this.#token !== undefined && !tokensMatch(this.#token, parsed.token)) {
+          const grant = this.nonces.redeem(parsed.token, parsed.sessionId);
+          if (
+            grant === undefined &&
+            this.#token !== undefined &&
+            !tokensMatch(this.#token, parsed.token)
+          ) {
             // A daemon left running by ANOTHER project answers this app and rejects it on token. The
             // token is not wrong, it is somebody else's — and "authentication failed" sends the user to
             // check the one thing that is fine. See auth-failure-reason.
@@ -635,6 +605,13 @@ export class Bridge {
             socket.close(WS_CLOSE.AUTH_FAILED[0], reason);
             return;
           }
+          // The nonce decides whether this is a production session, never the page's own claim.
+          const admission = admitHello(parsed, grant?.production);
+          if (!admission.ok) {
+            this.sessions.noteClosure(admission.reason, this.#clock(), { url: parsed.url });
+            socket.close(1008, admission.reason);
+            return;
+          }
           // A window the agent detached stays detached across its own reloads. See SessionManager.park.
           if (this.sessions.isParked(parsed.sessionId)) {
             socket.close(1008, SESSION_PARKED_REASON);
@@ -648,6 +625,9 @@ export class Bridge {
           clearTimeout(helloTimer);
           releasePending();
           session = new Session(parsed, socket, this.#clock);
+          session.production = admission.production;
+          const drive = admission.production;
+          if (drive !== undefined) session.onEvent((event) => drive.noteEvent(event));
           // Recorded on ACCEPTANCE, so it is evidence of what this daemon really serves.
           if (parsed.projectId !== undefined) this.#servedProjects.add(parsed.projectId);
           // Attach the durable journal (and anything else registered) before any events stream in.
@@ -865,7 +845,7 @@ export class Bridge {
     if (origin === undefined) return this.#token !== undefined;
     const normalized = normalizeOrigin(origin);
     if (null === normalized) return false;
-    if (this.#allowedOrigins.has(normalized)) return true;
+    if (this.#allowedOrigins.has(normalized) || this.nonces.admitsOrigin(normalized)) return true;
     // A desktop webview (Electron, Tauri) or a file:// document sends an opaque Origin: no host to
     // check, so it is exactly as attributable as a missing Origin — defer to the token, as above.
     // Without this branch `new URL` throws INSIDE the WS upgrade handler, crashing the process.

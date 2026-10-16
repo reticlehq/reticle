@@ -43,6 +43,8 @@ export * from './wire/constants/discovery.js'; // the call-the-founder invitatio
 export * from './identity/document-identity.js'; // which document an observation belongs to
 export * from './identity/edit-epoch.js'; // which round of source edits an observation belongs to
 export * from './wire/messages.js'; // ReticleEvent + the message schemas
+export * from './wire/constants/hello-mode.js'; // HelloEnv / HelloScope: a leaf the SDK sends
+export * from './wire/constants/production-policy.js'; // the production action policy: rules + refused requests
 export * from './wire/event-payloads.js'; // per-event payload schemas + wire vocab
 export * from './wire/event-priority.js'; // which events survive the bridge rate cap
 export * from './artifacts/flow-constants.js'; // moved off wire/constants/constants, which had no use for them

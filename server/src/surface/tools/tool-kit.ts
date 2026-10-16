@@ -22,6 +22,7 @@ import { normalizeLines } from '@/memory/project/baselines.js';
 import type { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import type { ArtifactRoot } from '@/memory/project/artifact-root.js';
+import type { NonceMinter } from '@/portal/production/production-activation.js';
 import type { FlowStore } from '@/language/flows/flows.js';
 import type { ProjectStore } from '@/memory/project/project-store.js';
 import type { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
@@ -142,6 +143,11 @@ export interface ToolDeps<Ext = unknown> {
    * ToolDeps keeps working; absent falls back to the default port.
    */
   bridgePort?: number;
+  /**
+   * The bridge's session-nonce registry. Local callers only: a production lease mints its nonce
+   * here. Absent where no bridge runs in this process, and a production lease then refuses.
+   */
+  nonces?: NonceMinter;
   /**
    * A consumer's OWN dependencies, carried through untouched.
    *

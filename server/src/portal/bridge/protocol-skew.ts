@@ -1,3 +1,6 @@
+import { MessageKind, RETICLE_PROTOCOL_VERSION } from '@reticlehq/core';
+import type { RefusedPage } from '@/portal/session/session-manager.js';
+
 /**
  * Which side of a protocol mismatch is the stale one, and therefore what to tell the user to do.
  *
@@ -46,3 +49,43 @@ export const protocolSkewReason = (got: number | null, expected: number): string
   if (got > expected) return DAEMON_IS_OLDER;
   return SKEW_UNKNOWN;
 };
+
+/**
+ * When a message fails the strict schema, detect the specific case of a HELLO whose protocolVersion
+ * differs from ours — so we can tell the operator "upgrade @reticlehq/browser" instead of dropping the
+ * connection into the generic NO_SESSION_CONNECTED path, which misdiagnoses it as a port mismatch.
+ * Returns the mismatched version, or null when it isn't a version-mismatched HELLO.
+ */
+export function helloProtocolMismatch(text: string): number | null {
+  try {
+    const json = JSON.parse(text) as { kind?: unknown; protocolVersion?: unknown };
+    if (
+      json.kind === MessageKind.HELLO &&
+      'number' === typeof json.protocolVersion &&
+      json.protocolVersion !== RETICLE_PROTOCOL_VERSION
+    ) {
+      return json.protocolVersion;
+    }
+  } catch {
+    /* not JSON — fall through to the generic invalid-message path */
+  }
+  return null;
+}
+
+/**
+ * What a HELLO says about the page it came from, read loosely enough to survive the schema failing.
+ * Null when the message is not a hello at all — only an SDK sends one, so only then is a refusal
+ * evidence about an app.
+ */
+export function peekHelloPage(text: string): RefusedPage | null {
+  try {
+    const json = JSON.parse(text) as { kind?: unknown; url?: unknown; projectId?: unknown };
+    if (json.kind !== MessageKind.HELLO) return null;
+    return {
+      ...('string' === typeof json.url ? { url: json.url } : {}),
+      ...('string' === typeof json.projectId ? { projectId: json.projectId } : {}),
+    };
+  } catch {
+    return null;
+  }
+}

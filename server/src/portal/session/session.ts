@@ -3,6 +3,7 @@ import { asProjectId, type ChannelId, type ImpactSnapshot, type ProjectId } from
 import { narrationArgs, type NarrationBy } from './narration-args.js';
 import type { HandshakeFacts } from './facts/handshake-facts.js';
 import { refusedResult } from './page-commands/undeclared-command.js';
+import type { ProductionDrive } from '@/portal/production/production-drive.js';
 import { impactSnapshot, recordImpact } from '@/memory/impact/impact-recorder.js';
 import { callingAgent } from '@/hooks/coding-agents.js';
 import { recordNotes } from './human/notes-ledger.js';
@@ -32,7 +33,6 @@ import {
   parseEventPayload,
   PresenterTone,
   SESSION_HEALTH,
-  SESSION_LEASE,
   SESSION_LIFECYCLE,
   SessionState,
   type BrowserBrand,
@@ -62,12 +62,14 @@ import { ReviewStore, type ReviewMark } from './human/review-store.js';
 import { buildSessionRecommendation } from './presence/session-recommendation.js';
 import { buildPresenterArgs } from './human/presenter-args.js';
 import { buildSessionLease, type SessionLease } from './presence/session-lease.js';
+import { sessionAgeWarning } from './presence/session-lease.js';
 export type { SessionInfo } from './session-info.js';
 import { buildSessionInfo, type SessionInfo } from './session-info.js';
 import { notedAct, probeMarkers, withInstrumentation } from './recorded-gaps.js';
 import { MAX_SUCCESSOR_HOPS, REBINDABLE_COMMANDS } from './rebind.js';
 
 type Clock = () => number;
+type Args = Record<string, unknown>;
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 8000;
 
@@ -178,6 +180,8 @@ export class Session implements HandshakeFacts {
    */
   #editEpoch: number | undefined;
   readonly #departureNote = new DepartureNote();
+  /** Set when a production nonce opened this session: every act then passes the production policy. */
+  production: ProductionDrive | undefined;
 
   constructor(hello: HelloMessage, socket: WebSocket, clock: Clock) {
     this.id = hello.sessionId;
@@ -653,6 +657,13 @@ export class Session implements HandshakeFacts {
     args: Record<string, unknown> = {},
     timeoutMs: number = DEFAULT_COMMAND_TIMEOUT_MS,
   ): Promise<CommandResult> {
+    // The production policy decides here, where every driven action passes, and never in the page.
+    const drive = this.production;
+    if (drive === undefined) return this.#dispatch(name, args, timeoutMs);
+    return drive.gate(name, args, (n, a) => this.#dispatch(n, a, timeoutMs));
+  }
+
+  #dispatch(name: string, args: Args, timeoutMs: number): Promise<CommandResult> {
     // Recorded HERE rather than at the tool call sites: this is the one place every driven action
     // passes through, so act_sequence and flow replay count too. Doing it per-tool missed both, and
     // an under-counted "exercised" reports worse coverage than reality — the safe direction, but
@@ -919,16 +930,9 @@ export class Session implements HandshakeFacts {
     return buildSessionLease(this.id, this.#startedAt);
   }
 
-  /**
-   * Returns a human-readable age warning after SESSION_LEASE.WARN_AFTER_MS (10 min), else undefined.
-   * Spliced onto every session-bound tool result so the agent is passively reminded to clean up
-   * without needing an explicit polling loop.
-   */
+  /** The age reminder spliced onto session-bound results, so the agent cleans up without polling. */
   ageWarning(): string | undefined {
-    const ageMs = this.#clock() - this.#startedAt;
-    if (ageMs < SESSION_LEASE.WARN_AFTER_MS) return undefined;
-    const minutes = Math.floor(ageMs / 60_000);
-    return `Session ${this.id} has been open for ${String(minutes)} minutes. If your task is complete, call reticle_session{action:"end"} now.`;
+    return sessionAgeWarning(this.id, this.#clock() - this.#startedAt);
   }
 
   /**

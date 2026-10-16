@@ -1,4 +1,4 @@
-import type { RedactionConfig } from '@reticlehq/core';
+import type { HelloEnv, HelloScope, RedactionConfig } from '@reticlehq/core';
 
 /**
  * What `reticle.connect()` accepts.
@@ -32,6 +32,13 @@ export interface ReticleConnectOptions {
    * tree-shaken out; this flag only exists for the rare intentional prod diagnostic.
    */
   allowInProduction?: boolean;
+  /**
+   * Where this page runs, sent in the HELLO. `production` is accepted only with a session nonce as
+   * `token`, and the daemon then applies its production action policy. Absent: development.
+   */
+  env?: HelloEnv;
+  /** What a drive may do here: `observe` or `act`. Required with `env: "production"`. */
+  scope?: HelloScope;
   /**
    * The attribute this app marks controls with, when it is not `data-testid` — `data-test-subj`
    * (Elastic UI), `data-cy` (Cypress), `data-test`. Read by the `testid` locator, by the testids the

@@ -35,6 +35,7 @@ import {
   unspellablePressReason,
 } from '@/portal/input/real-input.js';
 import { assertDragNotDestructive, assertNotDestructive } from './act/act-danger.js';
+import { assertNativeAllowed } from '@/portal/production/production-drive.js';
 import { NATIVE_INPUT_ARG } from '@reticlehq/core';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
@@ -486,6 +487,7 @@ export async function tryRealInput(
 
   const inspected = await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, { ref });
   assertNotDestructive(action, inner, inspected);
+  await assertNativeAllowed(session.production, action, inspected);
   const box = asBox(inspected);
   if (box === undefined) return synthetic(InputModeReason.ELEMENT_NOT_LOCATABLE);
 

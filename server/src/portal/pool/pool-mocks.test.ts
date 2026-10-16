@@ -95,3 +95,44 @@ describe('mocking the network on a lease', () => {
     await pool.shutdown();
   });
 });
+
+describe('guarding a lease against refused requests', () => {
+  it('hands the page the decision, so a refused request never leaves the browser', async () => {
+    const guardRequests = vi.fn(() => Promise.resolve());
+    const pool = poolWith({ guardRequests });
+    const lease = await pool.acquire('http://app.test/');
+    const decide = (method: string): string | undefined =>
+      'DELETE' === method ? 'refused' : undefined;
+    expect(await pool.guardLease(lease.sessionId, decide)).toBe(true);
+    expect(guardRequests).toHaveBeenCalledWith(decide);
+    await pool.shutdown();
+  });
+
+  it('answers false when the page cannot guard, never a guard that applied to nothing', async () => {
+    const pool = poolWith({ guardRequests: undefined });
+    const lease = await pool.acquire('http://app.test/');
+    expect(await pool.guardLease(lease.sessionId, () => undefined)).toBe(false);
+    await pool.shutdown();
+  });
+});
+
+describe('mocking a guarded lease', () => {
+  it('puts the guard back in front after the mocks, so a mock cannot wave a refused request past', async () => {
+    const order: string[] = [];
+    const pool = poolWith({
+      installMocks: () => {
+        order.push('mocks');
+        return Promise.resolve();
+      },
+      guardRequests: () => {
+        order.push('guard');
+        return Promise.resolve();
+      },
+    });
+    const lease = await pool.acquire('http://app.test/');
+    await pool.guardLease(lease.sessionId, () => undefined);
+    await pool.setMocksLease(lease.sessionId, [{ urlContains: '/x', status: 500 }]);
+    expect(order).toEqual(['guard', 'mocks', 'guard']);
+    await pool.shutdown();
+  });
+});

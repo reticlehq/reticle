@@ -21,6 +21,10 @@ import type { Launcher, PooledBrowser, PooledContext, PooledPage } from './brows
 import type { ScreenshotOptions } from './pool-contract.js';
 import { installNetworkMocks } from '@/portal/input/network-mock.js';
 
+// Every request, as a predicate: the mock installer clears the any-URL glob, and must not clear the
+// production guard with it.
+const ANY_URL = (): boolean => true;
+
 /**
  * Reticle paints its own UI (presenter HUD, glow, annotator marks, tour) into the page. It is
  * time-varying, since the activity log and border state change with every command, so capturing it
@@ -29,6 +33,7 @@ import { installNetworkMocks } from '@/portal/input/network-mock.js';
  * settles any remaining transitions. Shared by every capture path, driven and leased, so both hide
  * the same set: core's `RETICLE_OVERLAY_SELECTOR`.
  */
+
 export const SCREENSHOT_DETERMINISM = {
   style: HIDE_RETICLE_CHROME_CSS,
   animations: 'disabled',
@@ -143,6 +148,20 @@ function wrapBrowser(browser: Browser): PooledBrowser {
               await page.mouse.move(x, y);
             },
             installMocks: (rules) => installNetworkMocks(page, [...rules]),
+            // Registered after any mocks, so it is asked first; what it lets go falls back to them.
+            guardRequests: async (decide) => {
+              await page.route(ANY_URL, (route) => {
+                const request = route.request();
+                const refusal = decide(request.method(), request.url());
+                return refusal === undefined
+                  ? route.fallback()
+                  : route.fulfill({
+                      status: 403,
+                      contentType: 'application/json',
+                      body: JSON.stringify({ error: refusal }),
+                    });
+              });
+            },
             setViewport: (size) => page.setViewportSize(size),
             bringToFront: () => page.bringToFront(),
             onCrash: (handler) => page.on('crash', handler),

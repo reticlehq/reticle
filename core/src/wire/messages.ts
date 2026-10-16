@@ -14,6 +14,7 @@ import { DOCUMENT_ID_LENGTH } from '@/identity/document-identity.js';
 import { NO_EDITS_OBSERVED } from '@/identity/edit-epoch.js';
 import { PlatformProfile } from './platform.js';
 import { ChannelId } from './channel.js';
+import { HelloEnv, HelloScope } from './constants/hello-mode.js';
 import { OutwardAction } from '@/verdict/security.js';
 
 const sessionIdSchema = z.string().min(1).max(TRANSPORT_LIMITS.MAX_SESSION_ID_LENGTH);
@@ -154,6 +155,16 @@ export const HelloMessageSchema = z.object({
     .max(TRANSPORT_LIMITS.MAX_ADAPTERS),
   /** Optional browser/bridge pairing token. Required when the bridge configures one. */
   token: z.string().max(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH).optional(),
+  /**
+   * Where this page runs. ABSENT MEANS `development`: every SDK before this field was a dev build.
+   * The bridge accepts `production` only with a session nonce, never with the pairing token.
+   */
+  env: z.nativeEnum(HelloEnv).optional(),
+  /**
+   * What a drive may do here: `observe` or `act`. Absent means `act` in development. The bridge
+   * refuses a production HELLO without it, and a page can only narrow what its nonce granted.
+   */
+  scope: z.nativeEnum(HelloScope).optional(),
   /**
    * What kind of surface this is: a browser document, a web page in somebody else's window, a
    * native view tree, or no rendering surface at all. See platform.ts.
