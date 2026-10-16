@@ -79,6 +79,12 @@ export const RECONCILE_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe('Only compare responses from URLs containing this, e.g. "/api/v1/settlements".'),
+      scope: z
+        .string()
+        .optional()
+        .describe(
+          'A ref or CSS selector, e.g. "#status". Compare only against that subtree. Use it when the whole page is too large to read completely (a card of large native selects) and the API feeds one region. A scope that matches no element is refused, not read as an empty page.',
+        ),
       witness: z
         .object({
           url: z.string().url(),
@@ -130,11 +136,16 @@ export const RECONCILE_TOOLS: ToolDef[] = [
       // The whole page, INCLUDING whatever the snapshot's node cap cut off. A comparison against a
       // prefix of the page can miss the row that disagrees and can invent one that does not — the
       // value it was looking for may simply sit past the cut.
-      const page = await readCompleteTree((scope) =>
-        commandOrThrow(deps, session.id, ReticleCommand.SNAPSHOT, {
-          mode: SnapshotMode.FULL,
-          ...(scope === undefined ? {} : { scope, includeRoot: true }),
-        }),
+      // A caller-given `scope` narrows the read to one subtree (reticle#1545); every cut branch under
+      // it is still finished, so a clean result is a claim about that whole subtree.
+      const scopeArg = asString(args['scope']);
+      const page = await readCompleteTree(
+        (scope) =>
+          commandOrThrow(deps, session.id, ReticleCommand.SNAPSHOT, {
+            mode: SnapshotMode.FULL,
+            ...(scope === undefined ? {} : { scope, includeRoot: true }),
+          }),
+        scopeArg,
       );
       const mismatches: Mismatch[] = reconcile(bodies, page.tree);
       /*
@@ -211,8 +222,9 @@ export const RECONCILE_TOOLS: ToolDef[] = [
         throw new Error(
           `the page could not be read completely — ${page.incompleteBecause ?? 'the snapshot was cut'}. ` +
             'Nothing was found to disagree with the API, but that is not the same as nothing disagreeing: ' +
-            'the record that does could be in the part that was never read. Narrow the page (close overlays, ' +
-            'navigate to the view holding these records) and re-run.',
+            'the record that does could be in the part that was never read. Narrow the read: pass `scope` ' +
+            '(a ref or CSS selector for the region the API feeds), close overlays, or navigate to the view ' +
+            'holding these records, then re-run.',
         );
       }
       // A truncated body is declared whether or not anything was found in it: "no mismatches" over a
@@ -225,7 +237,9 @@ export const RECONCILE_TOOLS: ToolDef[] = [
             }
           : 0 === mismatches.length
             ? {
-                note: `compared ${String(withBody)} response(s); nothing on screen contradicts them`,
+                note:
+                  `compared ${String(withBody)} response(s); nothing on screen contradicts them` +
+                  (scopeArg === undefined ? '' : ` inside \`${scopeArg}\``),
               }
             : {};
       return withControl(session, {

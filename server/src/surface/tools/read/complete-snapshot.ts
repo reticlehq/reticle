@@ -44,6 +44,8 @@ const SnapshotShape = z.object({
   truncated: z.boolean().optional(),
   unread: z.array(z.string()).optional(),
   unreadOverflow: z.literal(true).optional(),
+  /** The scope named no element. The walk then read NOTHING, which is not an empty finished branch. */
+  scopeMissing: z.literal(true).optional(),
 });
 
 /** Reads one snapshot — whole page when `scope` is undefined, that branch when it is not. */
@@ -59,9 +61,18 @@ interface CompletedRead {
   incompleteBecause?: string;
 }
 
-export async function readCompleteTree(read: SnapshotReader): Promise<CompletedRead> {
+/**
+ * Read the whole tree under `root` (the whole page when it is undefined), finishing every cut branch.
+ *
+ * `root` is a ref or a CSS selector (reticle#1545). A page that cuts past the read budget elsewhere,
+ * such as a card of 500-option selects, can still be read completely in the part the caller needs.
+ */
+export async function readCompleteTree(
+  read: SnapshotReader,
+  root?: string,
+): Promise<CompletedRead> {
   const parts: string[] = [];
-  let frontier: (string | undefined)[] = [undefined];
+  let frontier: (string | undefined)[] = [root];
   let reads = 0;
   const stop = (because: string): CompletedRead => ({
     tree: parts.join('\n'),
@@ -81,6 +92,11 @@ export async function readCompleteTree(read: SnapshotReader): Promise<CompletedR
       const parsed = SnapshotShape.safeParse(await read(scope));
       reads += 1;
       if (!parsed.success) return stop('a snapshot came back in a shape this read cannot trust');
+      if (true === parsed.data.scopeMissing) {
+        return stop(
+          `\`${scope ?? ''}\` matched no element when it was read, so nothing under it was seen`,
+        );
+      }
       parts.push(parsed.data.tree ?? '');
       if (true === parsed.data.unreadOverflow) {
         return stop(

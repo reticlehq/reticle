@@ -107,3 +107,57 @@ describe('reconcile refuses to call a page clean it could not read', () => {
     expect(r.mismatches.length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * reticle#1545: on a dashboard whose cards hold native selects with hundreds of options, the whole
+ * page cut past the read budget and reconcile refused. The part the API feeds was small.
+ */
+describe('reconcile with a scope', () => {
+  /** The whole page names 500 unread option branches; the scoped strip reads complete. */
+  const DASHBOARD = {
+    '': {
+      tree: '- combobox "Region"',
+      truncated: true,
+      unread: Array.from({ length: 500 }, (_, i) => `opt${String(i)}`),
+    },
+    '#status': { tree: '- text "stl_1 on hold"\n- text "stl_2 paid"', truncated: false },
+  };
+
+  it('refuses the whole page that a 500-option select cuts past the read budget', async () => {
+    await expect(reconcileTool().handler(reconcileDeps(DASHBOARD), {})).rejects.toThrow(
+      /could not be read completely/i,
+    );
+  });
+
+  it('compares against the scoped subtree only, and completes there', async () => {
+    const r = (await reconcileTool().handler(reconcileDeps(DASHBOARD), {
+      scope: '#status',
+    })) as { mismatches: unknown[]; note?: string };
+    expect(r.mismatches).toEqual([]);
+    expect(r.note).toContain('nothing on screen contradicts');
+  });
+
+  it('still finds a misrendering inside the scope', async () => {
+    const r = (await reconcileTool().handler(
+      reconcileDeps({
+        ...DASHBOARD,
+        '#status': { tree: '- text "stl_1 paid"\n- text "stl_2 paid"', truncated: false },
+      }),
+      { scope: '#status' },
+    )) as { mismatches: unknown[] };
+    expect(r.mismatches.length).toBeGreaterThan(0);
+  });
+
+  it('refuses a scope that matches no element instead of calling it clean', async () => {
+    await expect(
+      reconcileTool().handler(
+        reconcileDeps({ '#nope': { tree: '', truncated: false, scopeMissing: true } }),
+        { scope: '#nope' },
+      ),
+    ).rejects.toThrow(/#nope/);
+  });
+
+  it('names the scope in the refusal when a whole-page read cannot finish', async () => {
+    await expect(reconcileTool().handler(reconcileDeps(DASHBOARD), {})).rejects.toThrow(/scope/);
+  });
+});
