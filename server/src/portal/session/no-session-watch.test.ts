@@ -287,6 +287,86 @@ describe('the ports the background scan covers', () => {
     expect(seen[0]).toContain(4173);
     expect(seen[0]).toContain(4311);
   });
+
+  /**
+   * Reported: a preview server on :3020, its port set in `.env` and in code, and no `dev` script
+   * naming it. The answer said no app was running (reticle#1543).
+   */
+  it('probes the PORT the project sets in its .env file', async () => {
+    const dir = projectDir(undefined);
+    writeFileSync(join(dir, '.env'), 'PORT=3020\n', 'utf8');
+    const { manager, hint } = stubSessions();
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: false,
+      directory: dir,
+      probe: (ports) => Promise.resolve(ports.includes(3020) ? [3020] : []),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const message = hint();
+    stop();
+    expect(message).not.toMatch(/nothing is listening/i);
+  });
+
+  it('probes the ports that processes inside the project listen on', async () => {
+    const dir = projectDir(undefined);
+    const seen: (readonly number[])[] = [];
+    const { manager } = stubSessions();
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: false,
+      directory: dir,
+      projectListeners: () => Promise.resolve([3020]),
+      probe: (ports) => {
+        seen.push(ports);
+        return Promise.resolve([]);
+      },
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    stop();
+    expect(seen[0]).toContain(3020);
+  });
+
+  it('still scans the other sources when the listener probe fails', async () => {
+    const dir = projectDir(undefined);
+    writeFileSync(join(dir, '.env'), 'PORT=3020\n', 'utf8');
+    const seen: (readonly number[])[] = [];
+    const { manager } = stubSessions();
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: false,
+      directory: dir,
+      projectListeners: () => Promise.reject(new Error('lsof: not found')),
+      probe: (ports) => {
+        seen.push(ports);
+        return Promise.resolve([]);
+      },
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    stop();
+    expect(seen[0]).toContain(3020);
+  });
+
+  it('says the empty scan was partial, what it checked, and how to open a known URL', async () => {
+    const dir = projectDir(JSON.stringify({ framework: 'vite', projectId: 'app-1' }));
+    const { manager, hint } = stubSessions();
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: () => Promise.resolve([]),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const message = hint();
+    stop();
+    expect(message).toMatch(/is not proof/);
+    expect(message).toContain('`.env` files');
+    expect(message).toContain('reticle_lease {action:"acquire", url}');
+  });
 });
 
 describe('the watch detects non-JS projects when no dev script is found', () => {
