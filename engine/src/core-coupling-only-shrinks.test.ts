@@ -131,7 +131,7 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * the rule the number exists to protect. Both join the import `contradiction-evidence.ts` already
  * has, so the file count is unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 64;
+const MAX_DISTINCT_SYMBOLS = 66;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

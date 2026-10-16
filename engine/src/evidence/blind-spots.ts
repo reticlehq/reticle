@@ -10,13 +10,17 @@
 export { BlindSpotKind } from '@reticlehq/core';
 import {
   BlindSpotKind,
+  ChannelId,
   EventType,
   PredicateKind,
   QueryBy,
   ReticleEnv,
   TRANSPORT_LIMITS,
+  asString,
+  channelsReadBy,
   isDesktopBlindSpot,
   realmOf,
+  type Predicate,
   type ReticleEvent,
 } from '@reticlehq/core';
 
@@ -367,4 +371,56 @@ export function restsOnCompleteWindow(predicate: {
   // left alone here.
   if (0 === predicate.count) return true;
   return true === predicate.absent;
+}
+
+const EVENT_HISTORY_CHANNELS: ReadonlySet<ChannelId> = new Set([
+  ChannelId.NET,
+  ChannelId.SIGNAL,
+  ChannelId.LOG,
+]);
+
+/**
+ * For a failing assertion whose buffer lost events: does the failure rest on a clause that reads
+ * event history?
+ *
+ * An `allOf` that failed could have failed on ANY child. A child whose evidence IS present in
+ * the window passed; only a child whose evidence is ABSENT could have failed, and if that child
+ * reads event history the failure might be the buffer's fault. Checking the window events against
+ * each event-history child is what tells `allOf[{net /a}, {element Submit}]` apart from
+ * `allOf[{net /a}, {element Submit}]` where the request is present and only the button is missing.
+ */
+export function failingClauseReadsLostChannel(
+  predicate: Predicate,
+  windowEvents: readonly ReticleEvent[],
+): boolean {
+  if (PredicateKind.ALL_OF !== predicate.kind || 0 === predicate.predicates.length) {
+    return channelsReadBy(predicate).some((ch) => EVENT_HISTORY_CHANNELS.has(ch));
+  }
+  for (const child of predicate.predicates) {
+    if (!channelsReadBy(child).some((ch) => EVENT_HISTORY_CHANNELS.has(ch))) continue;
+    if (!childEvidencePresent(child, windowEvents)) return true;
+  }
+  return false;
+}
+
+function childEvidencePresent(child: Predicate, events: readonly ReticleEvent[]): boolean {
+  if (PredicateKind.NET === child.kind) {
+    const url = child.urlContains;
+    if (url === undefined || 0 === url.length) return false;
+    return events.some(
+      (e) =>
+        EventType.NET_REQUEST === e.type &&
+        'string' === typeof e.data['url'] &&
+        (e.data['url'] as string).includes(url),
+    );
+  }
+  if (PredicateKind.SIGNAL === child.kind) {
+    const name = child.name;
+    if (name === undefined) return false;
+    return events.some((e) => EventType.SIGNAL === e.type && asString(e.data['name']) === name);
+  }
+  if (PredicateKind.CONSOLE === child.kind) {
+    return events.some((e) => 'string' === typeof e.type && e.type.startsWith('console.'));
+  }
+  return false;
 }
