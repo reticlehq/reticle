@@ -18,6 +18,19 @@ export const GATE_SKIP_ENV = 'RETICLE_SKIP_GATE';
 
 const MAX_NAMED = 5;
 
+/** Files @reticlehq/vite-plugin stamps a `source` onto: JSX/TSX (Babel) and `.svelte` components. */
+const STAMPABLE_FILE = /\.([jt]sx|svelte)$/;
+
+/** Advice for files whose flows carry no source: name the plugin only where it can stamp them. */
+function stampAdvice(files: readonly string[]): string {
+  const stampable = files.some((file) => STAMPABLE_FILE.test(file));
+  const other = files.some((file) => !STAMPABLE_FILE.test(file));
+  const plugin = "@reticlehq/vite-plugin stamps each step's `source` for JSX and Svelte files";
+  const unavailable = 'source stamps are not available for this framework yet';
+  if (stampable && other) return `${plugin}; for the others, ${unavailable}`;
+  return stampable ? plugin : unavailable;
+}
+
 interface GateHookInput {
   /** Flows the changed files touch that have no passing artifact. */
   uncovered: readonly string[];
@@ -29,6 +42,8 @@ interface GateHookInput {
   deleted: readonly string[];
   /** Changed interactive components no saved flow has ever driven. */
   unflowed?: readonly string[];
+  /** Saved flows exist but none records a `sources` entry, so no flow can be matched to a file. */
+  flowsWithoutSources?: boolean;
   /** Coverage levels below their best, already worded (`branched 100% -> 50%`). */
   coverageRegressed?: readonly string[];
   /** Changed files the browser loaded and never ran a function of. */
@@ -67,7 +82,9 @@ export function gateHookMessage(exit: number, input: GateHookInput): string | un
     lines.push(`  coverage deleted while its files changed: ${name(input.deleted)}`);
   if (input.unflowed !== undefined && input.unflowed.length > 0)
     lines.push(
-      `  changed, and no saved flow drives it: ${name(input.unflowed)} — drive it with reticle_act_and_wait and a declared \`until\``,
+      true === input.flowsWithoutSources
+        ? `  changed, but the saved flows carry no source locations, because this stack has no source stamping, so the gate cannot match a flow to them: ${name(input.unflowed)} — ${stampAdvice(input.unflowed)}`
+        : `  changed, and no saved flow drives it: ${name(input.unflowed)} — drive it with reticle_act_and_wait and a declared \`until\``,
     );
   if (input.coverageRegressed !== undefined && input.coverageRegressed.length > 0)
     lines.push(

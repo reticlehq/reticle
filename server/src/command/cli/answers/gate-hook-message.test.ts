@@ -86,6 +86,34 @@ describe('a changed component nothing has driven', () => {
   });
 });
 
+describe('a changed component when no saved flow records sources', () => {
+  it('says the flows carry no sources instead of claiming nothing drove it', () => {
+    const out =
+      gateHookMessage(GateExit.FAIL, {
+        ...none,
+        unflowed: ['src/Badge.vue'],
+        flowsWithoutSources: true,
+      }) ?? '';
+    expect(out).toContain('src/Badge.vue');
+    expect(out).toContain('carry no source locations');
+    expect(out).toContain('source stamps are not available for this framework yet');
+    expect(out).not.toContain('@reticlehq/vite-plugin');
+    expect(out).not.toContain('no saved flow drives it');
+  });
+
+  it('names the vite plugin only for files it can stamp', () => {
+    const advice = (unflowed: string[]): string =>
+      gateHookMessage(GateExit.FAIL, { ...none, unflowed, flowsWithoutSources: true }) ?? '';
+    for (const file of ['src/Badge.tsx', 'src/Badge.jsx', 'src/Badge.svelte']) {
+      expect(advice([file])).toContain("@reticlehq/vite-plugin stamps each step's `source`");
+      expect(advice([file])).not.toContain('not available');
+    }
+    expect(advice(['src/Badge.tsx', 'src/Badge.vue'])).toContain(
+      'for the others, source stamps are not available for this framework yet',
+    );
+  });
+});
+
 describe('coverage the hook reports', () => {
   it('names a fallen level with the call that finds what is uncovered, and unexecuted files', () => {
     const out =
