@@ -777,6 +777,14 @@ const LEASE_RELEASE_TOOL: ToolDef = {
     if (sessionId === undefined || 0 === sessionId.length) {
       throw new Error('reticle_lease{action:"release"} requires a sessionId');
     }
+    // An id that holds no lease (a typo, or one that expired) answered `released: true`.
+    if (pool.leaseUrl(sessionId) === undefined) {
+      const held = pool.leasedSessionIds();
+      throw new Error(
+        `reticle_lease{action:"release"}: no lease '${sessionId}' is held, so nothing was released. ` +
+          (0 === held.length ? 'No lease is held now.' : `Leases held now: ${held.join(', ')}.`),
+      );
+    }
     return { released: true, leased: await releaseLease(deps, pool, sessionId) };
   },
 };

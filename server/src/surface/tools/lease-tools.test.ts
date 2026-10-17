@@ -29,6 +29,7 @@ import {
   type PredicateSession,
 } from '@reticlehq/engine/question/predicate/predicate.js';
 import type { Session } from '@/portal/session/session.js';
+import { recoveryFor } from './error-recovery.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
 import { claimedArtifactRoot } from '@/memory/project/root-claims.js';
@@ -125,6 +126,10 @@ function fakePool(): {
     activeCount: () => active,
     queuedCount: () => 0,
     leasedSessionIds: () => [...byOrigin.values()],
+    leaseUrl: (id: string) => {
+      for (const [origin, leased] of byOrigin) if (leased === id) return origin;
+      return undefined;
+    },
     leaseTtlMs: () => 300_000,
     // The real pool's rule: only the caller that took a lease is handed it again.
     leaseIdOnOrigin: (origin: string, owner: string | undefined) => {
@@ -795,6 +800,22 @@ describe('reticle_lease_release', () => {
     expect(result.leased).toBe(1);
   });
 
+  it('refuses an id that holds no lease, instead of answering released: true', async () => {
+    const { pool, released } = fakePool();
+    await tool(ReticleTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, { url: 'http://localhost:3000/' });
+    await expect(
+      tool(ReticleTool.LEASE_RELEASE)({ ...baseDeps, pool }, { sessionId: 'lease-never' }),
+    ).rejects.toThrow(/no lease 'lease-never'.*nothing was released/i);
+    const refusal = await tool(ReticleTool.LEASE_RELEASE)(
+      { ...baseDeps, pool },
+      { sessionId: 'lease-never' },
+    ).catch((e: unknown) => (e instanceof Error ? e.message : ''));
+    // Our own refusal about the caller's argument, never "may be a defect in Reticle".
+    expect(recoveryFor(String(refusal))).toMatch(/did not match the tool's schema/);
+    expect(released).toEqual([]);
+    expect(pool.activeCount()).toBe(1);
+  });
+
   it('throws when no pool is available', async () => {
     await expect(
       tool(ReticleTool.LEASE_RELEASE)(baseDeps, { sessionId: 'lease-x' }),
@@ -828,7 +849,11 @@ describe('telling the human that the agent went somewhere invisible', () => {
         all: () => [watcher, leased],
         get: (id: string) => ('s-human' === id ? watcher : leased),
       },
-      pool: { ...pool, leasedSessionIds: () => leasedIds },
+      pool: {
+        ...pool,
+        leasedSessionIds: () => leasedIds,
+        leaseUrl: (id: string) => (leasedIds.includes(id) ? 'http://localhost:3000/' : undefined),
+      },
     } as unknown as ToolDeps;
     return { deps, narrations };
   }
