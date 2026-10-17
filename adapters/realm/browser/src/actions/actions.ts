@@ -30,6 +30,7 @@ import {
   isActionTarget,
   isForm,
   isInput,
+  isLabel,
   isSelect,
   isTextArea,
 } from '@/dom/realm.js';
@@ -569,9 +570,7 @@ async function dispatchOther(
       return false;
     }
     case ActionType.UPLOAD: {
-      if (!isInput(el) || el.type !== 'file') {
-        throw new Error('upload target must be a <input type="file">');
-      }
+      const input = isInput(el) && 'file' === el.type ? el : resolveUploadInput(el);
       assertUploadArgs(args);
       // When the daemon read a file from disk it base64-encoded the bytes so they survive JSON
       // serialisation across the bridge. Decode back to binary before handing to the File API.
@@ -593,9 +592,9 @@ async function dispatchOther(
       });
       const dt = new DataTransfer();
       dt.items.add(file);
-      el.files = dt.files;
-      const inputOk = el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+      input.files = dt.files;
+      const inputOk = input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
       return !inputOk;
     }
     case ActionType.DRAG: {
@@ -618,6 +617,44 @@ async function dispatchOther(
     default:
       throw new Error(`unknown action '${action}'`);
   }
+}
+
+/** Every file input inside a scope, in document order. */
+function fileInputsIn(scope: Element): HTMLInputElement[] {
+  return Array.from(scope.querySelectorAll('input[type="file"]')).filter(isInput);
+}
+
+/**
+ * The file input an `upload` on a non-input target means (#1249).
+ *
+ * The standard dropzone pattern hides the input (`sr-only`, `aria-hidden`) behind a Browse
+ * button. The snapshot skips `aria-hidden` subtrees, so the input never gets a ref and the
+ * button is the only target the agent can name. Resolve the input the target labels first (a
+ * label target, or the label that wraps the target), then walk outward from the target: the
+ * first container that holds any file input decides, which covers an input the target contains,
+ * a sibling in the same dropzone, and the inputs of the enclosing form. More than one input in
+ * the deciding scope is a refusal, never a guess: setting files on the wrong input reports a
+ * success the app never saw.
+ */
+function resolveUploadInput(el: ActionTarget): HTMLInputElement {
+  const label = isLabel(el) ? el : el.closest('label');
+  const labeled = label?.control;
+  if (isInput(labeled) && 'file' === labeled.type) return labeled;
+
+  let scope: Element | null = el;
+  while (null !== scope) {
+    const found = fileInputsIn(scope);
+    if (1 < found.length) {
+      throw new Error(
+        `upload target is not a file input and its scope holds ${found.length} file inputs — ` +
+          'target the file input itself so the upload cannot land on the wrong one',
+      );
+    }
+    const only = found[0];
+    if (only !== undefined) return only;
+    scope = scope.parentElement;
+  }
+  throw new Error('upload target must be a <input type="file">');
 }
 
 /**

@@ -542,6 +542,63 @@ describe('upload refuses to invent a file nobody asked for', () => {
 });
 
 /**
+ * #1249: the standard dropzone hides its file input, so the input never gets a ref.
+ *
+ * The snapshot skips `aria-hidden` subtrees, which is right for presence checks, and `upload`
+ * required the ref to BE the input, so a dropzone could not be driven at all. An `upload` on a
+ * target that is not a file input now resolves the one input the target contains, labels, or
+ * shares a form or container with, and refuses when that scope holds more than one.
+ *
+ * jsdom has no DataTransfer, so a resolved call fails at the dispatch here, not at resolution.
+ * What these pin is the resolution: a resolvable target must not die with the target refusal,
+ * and an ambiguous or empty scope must.
+ */
+describe('upload resolves the file input a dropzone hides', () => {
+  const errorOf = async (
+    selector: string,
+    args: Record<string, unknown> = { name: 'clip.mp4', content: 'hello', type: 'video/mp4' },
+  ): Promise<string> => {
+    const el = document.querySelector(selector);
+    if (!(el instanceof HTMLElement)) throw new Error(`no element for ${selector}`);
+    const err: unknown = await executeAction(refs.refFor(el), 'upload', args).catch(
+      (e: unknown) => e,
+    );
+    return String(err);
+  };
+
+  it('resolves the hidden input beside the Browse button from the report', async () => {
+    document.body.innerHTML =
+      '<div><button id="b" type="button">Browse</button>' +
+      '<input id="f" type="file" class="sr-only" aria-hidden="true" tabindex="-1"></div>';
+    expect(await errorOf('#b')).not.toMatch(/upload target must be/);
+  });
+
+  it('resolves the input a label target labels', async () => {
+    document.body.innerHTML =
+      '<label id="l" for="f">Upload a file</label><input id="f" type="file">';
+    expect(await errorOf('#l')).not.toMatch(/upload target must be/);
+  });
+
+  it('resolves an input the target contains', async () => {
+    document.body.innerHTML =
+      '<div id="d" role="button">Drop files<input id="f" type="file" aria-hidden="true"></div>';
+    expect(await errorOf('#d')).not.toMatch(/upload target must be/);
+  });
+
+  it('REFUSES when the scope holds more than one file input', async () => {
+    document.body.innerHTML =
+      '<form><button id="b" type="button">Browse</button>' +
+      '<input type="file"><input type="file"></form>';
+    expect(await errorOf('#b')).toMatch(/2 file inputs/);
+  });
+
+  it('still REFUSES a target with no file input in scope', async () => {
+    document.body.innerHTML = '<button id="b" type="button">Browse</button>';
+    expect(await errorOf('#b')).toMatch(/upload target must be/);
+  });
+});
+
+/**
  * The destructive-action guard classifies the ELEMENT, never the form around it.
  *
  * Including `el.closest('form')?.textContent` would let the whole form's rendered text decide the
