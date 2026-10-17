@@ -560,6 +560,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'resolve',
     'telemetry',
     'tools',
+    'version',
   ],
   // `mcp` dropped out when the proxy files left it: what setup actually wanted from that
   // directory was the proxy, and nothing else. The extraction made an existing dependency

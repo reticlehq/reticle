@@ -2,6 +2,7 @@ import {
   ActionType,
   HudCorner,
   HudVisibility,
+  HUD_RELOAD_TO_RESTORE,
   HumanControlKind,
   ReticleCommand,
   PresenterMode,
@@ -178,6 +179,7 @@ export class Presenter {
   #panel: ControlPanel;
   #shell: HudShell;
   #annotator: Annotator | undefined;
+  #removed = false;
   constructor(options: PresenterOptions = {}) {
     this.#paceMs = effectivePaceMs(options.paceMs);
     this.#now = options.now ?? nativeNow;
@@ -718,9 +720,13 @@ export class Presenter {
    */
   placeHud(visibility: HudVisibility | undefined, corner: HudCorner | undefined): string[] {
     const root = this.#root;
-    if (root === undefined) return [];
+    if (root === undefined) {
+      if (this.#removed) return [HUD_RELOAD_TO_RESTORE];
+      return [];
+    }
     const applied: string[] = [];
     if (HudVisibility.REMOVED === visibility) {
+      this.#removed = true;
       this.destroy();
       return [visibility];
     }

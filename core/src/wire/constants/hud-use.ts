@@ -62,6 +62,12 @@ export const HudVisibility = {
 } as const;
 export type HudVisibility = (typeof HudVisibility)[keyof typeof HudVisibility];
 
+/** Minimum Reticle SDK version supporting HUD placement/visibility controls via session tune. */
+export const HUD_MIN_SDK_VERSION = '3.6.0';
+
+/** Wire diagnostic returned when an agent attempts to position a HUD that was previously removed. */
+export const HUD_RELOAD_TO_RESTORE = 'reload to restore';
+
 /** The corner an agent can move the HUD to; `bottom-right` is where it docks by default. */
 export const HudCorner = {
   TOP_LEFT: 'top-left',

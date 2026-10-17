@@ -1,9 +1,22 @@
 import { z } from 'zod';
-import { HudCorner, HudVisibility, ReticleCommand } from '@reticlehq/core';
+import {
+  HudCorner,
+  HudVisibility,
+  HUD_MIN_SDK_VERSION,
+  HUD_RELOAD_TO_RESTORE,
+  ReticleCommand,
+} from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
+import { compareVersions } from '@/command/version/version-skew.js';
 import { idleMsSchema } from '@/surface/tools/args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
+
+function sdkPredatesHud(version: string | undefined): boolean {
+  if (version === undefined) return true;
+  const order = compareVersions(version, HUD_MIN_SDK_VERSION);
+  return order === undefined || order < 0;
+}
 
 /**
  * Session lifecycle controls. The presenter session begins on the agent's first action and ends
@@ -62,10 +75,25 @@ export const SESSION_TOOLS: ToolDef[] = [
       // no HUD mounted. Reported, never `applied: true`: an agent told the HUD moved would test a
       // control it is still covering.
       const applied = (res.result as { hud?: unknown } | undefined)?.hud;
-      if ((hud !== undefined || corner !== undefined) && !Array.isArray(applied))
-        throw new Error(
-          'the page did not apply `hud`: its Reticle SDK predates it, or no HUD is mounted. Update the SDK (npx @reticlehq/server update) or test with the HUD where it is.',
-        );
+      if (hud !== undefined || corner !== undefined) {
+        if (Array.isArray(applied) && applied.includes(HUD_RELOAD_TO_RESTORE)) {
+          throw new Error(
+            `the HUD on session ${session.id} was removed; reload the page to restore it.`,
+          );
+        }
+        if (!Array.isArray(applied)) {
+          if (sdkPredatesHud(session.sdkVersion)) {
+            const versionText =
+              session.sdkVersion !== undefined ? `page SDK ${session.sdkVersion}` : 'the page SDK';
+            throw new Error(
+              `${versionText} on session ${session.id} predates \`hud\` (needs ${HUD_MIN_SDK_VERSION}+). Update the SDK (npx @reticlehq/server update) or test with the HUD where it is.`,
+            );
+          }
+          throw new Error(
+            `the page did not apply \`hud\`: no HUD is mounted on session ${session.id}. Update the SDK (npx @reticlehq/server update) or test with the HUD where it is.`,
+          );
+        }
+      }
       return res.result ?? { applied: true };
     },
   },
