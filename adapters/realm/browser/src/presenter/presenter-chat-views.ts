@@ -326,8 +326,13 @@ export class ChatViews {
   #customPersona = '';
   #harnessHtml = '';
   #harnessPageHtml = '';
-  /** Link pressed and not answered yet: the page says Linking… until the daemon's push says linked. */
+  /**
+   * Link pressed and not answered yet: the page says Linking… until the daemon's push says linked.
+   * A link that never lands (the tab names no project, the platform refused) gives the button back
+   * after HARNESS_STARTING_MS; it stayed disabled until a reload.
+   */
   #linking = false;
+  #linkTimer: ReturnType<typeof setTimeout> | undefined;
   #agent = new AgentLinkView();
   /** The persona this panel started the running drive as, so its row can say so. */
   #startedAs: string | undefined;
@@ -385,6 +390,12 @@ export class ChatViews {
       if (null !== linkButton) {
         if (linkButton.disabled) return;
         this.#linking = true;
+        if (this.#linkTimer !== undefined) clearTimeout(this.#linkTimer);
+        this.#linkTimer = setTimeout(() => {
+          this.#linkTimer = undefined;
+          this.#linking = false;
+          this.#paintHarness();
+        }, HARNESS_STARTING_MS);
         this.#drive?.link();
         this.#paintHarness();
         return;
@@ -599,7 +610,11 @@ export class ChatViews {
   }
   paintHarness(config: HarnessConfig | undefined, gate?: HarnessGateView): void {
     // A config now means the project is linked: the link the person pressed has landed.
-    if (config !== undefined) this.#linking = false;
+    if (config !== undefined) {
+      this.#linking = false;
+      if (this.#linkTimer !== undefined) clearTimeout(this.#linkTimer);
+      this.#linkTimer = undefined;
+    }
     this.#harness = config;
     this.#gate = gate;
     this.#paintHarness();

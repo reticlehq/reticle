@@ -14,9 +14,17 @@ const control = (kind: string) => ({ type: EventType.HUMAN_CONTROL, data: { kind
 function wire(link?: (root: string) => Promise<number>) {
   let handler: ((request: never, s: { id: string; artifactRoot?: string }) => void) | undefined;
   const said: string[] = [];
+  const by: unknown[] = [];
   const repaint = vi.fn();
   const deps = {
-    sessions: { get: () => ({ pushNarration: (text: string) => said.push(text) }) },
+    sessions: {
+      get: () => ({
+        pushNarration: (text: string, _mirror?: boolean, who?: unknown) => {
+          said.push(text);
+          by.push(who);
+        },
+      }),
+    },
   } as unknown as ToolDeps;
   attachHudHarness(
     { attachHarnessRequest: (h) => (handler = h as typeof handler) },
@@ -29,7 +37,7 @@ function wire(link?: (root: string) => Promise<number>) {
       id: 's1',
       ...(artifactRoot === undefined ? {} : { artifactRoot }),
     });
-  return { press, said, repaint };
+  return { press, said, by, repaint };
 }
 
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -76,6 +84,22 @@ describe('Link this project, from the Harness page', () => {
     expect(link).not.toHaveBeenCalled();
     expect(said[0]).toMatch(/projectId/);
     expect(said[0]).toMatch(/init/);
+  });
+
+  /*
+   * Found live: the answer went to the Agent Log only, while the person was on the Harness page
+   * where they pressed Link, so they saw "Linking…" and nothing else. It is said on that page too.
+   */
+  it('says each answer on the Harness page, where Link was pressed, and repaints', async () => {
+    const { press, by, repaint } = wire(vi.fn(() => Promise.resolve(0)));
+    press('/home/u/.reticle/unmatched/origin-c97c5ca3');
+    press('/work/shop');
+    await settle();
+    expect(by).toEqual([
+      { harness: true, summary: true },
+      { harness: true, summary: true },
+    ]);
+    expect(repaint).toHaveBeenCalledTimes(2);
   });
 
   it('a sign-in from a page with no project links nothing', async () => {

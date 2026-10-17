@@ -131,6 +131,32 @@ describe('chat views and harness access states', () => {
     expect(button()).toBeNull();
   });
 
+  /*
+   * Found live: a tab that named no project pressed Link, the daemon refused, and the button said
+   * "Linking…", disabled, until the page was reloaded.
+   */
+  it('gives the Link button back when no link lands, so the person can try again', () => {
+    vi.useFakeTimers();
+    try {
+      const { root, views, drive } = mountViews();
+      views.paintAccount({ signedIn: true });
+      views.paintHarness(undefined);
+      const button = (): HTMLButtonElement | null =>
+        root.querySelector<HTMLButtonElement>('[data-reticle-harness-link]');
+      button()?.click();
+      expect(button()?.disabled).toBe(true);
+      // The daemon answered, and the project is still not linked.
+      views.paintHarness(undefined);
+      vi.advanceTimersByTime(20_000);
+      expect(button()?.textContent).toBe('Link this project');
+      expect(button()?.disabled).toBe(false);
+      button()?.click();
+      expect(drive.link).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows the Harness value and setup link to signed-in users without entitlement', () => {
     const { root, views } = mountViews();
     views.paintAccount({ signedIn: true });

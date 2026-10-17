@@ -520,9 +520,19 @@ export function attachHudHarness(
   bridge.attachHarnessRequest((request, s) => {
     const root = s.artifactRoot ?? daemon.root;
     if (HumanControlKind.HARNESS_LINK === request.kind) {
-      const say = (text: string): void => daemon.deps().sessions.get?.(s.id)?.pushNarration(text);
-      if (link === undefined) return say(MSG_LINK_UNAVAILABLE);
-      if (isUnmatchedRoot(root)) return say(MSG_LINK_NEEDS_PROJECT);
+      // On the Harness page, where Link was pressed, and in the Agent Log. Said only in the log, a
+      // refusal left the page saying "Linking…" and nothing else.
+      const say = (text: string): void =>
+        daemon
+          .deps()
+          .sessions.get?.(s.id)
+          ?.pushNarration(text, true, { harness: true, summary: true });
+      const refuse = (text: string): void => {
+        say(text);
+        daemon.repaint();
+      };
+      if (link === undefined) return refuse(MSG_LINK_UNAVAILABLE);
+      if (isUnmatchedRoot(root)) return refuse(MSG_LINK_NEEDS_PROJECT);
       void link(root)
         .then((code) => say(0 === code ? MSG_LINKED : MSG_LINK_FAILED))
         .catch(() => say(MSG_LINK_FAILED))
