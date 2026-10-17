@@ -19,6 +19,8 @@ import {
   RefusalLead,
 } from '@/features/harness/platform/refusal.js';
 import { BODY_CLAUSE_REFUSAL_OPENING } from '@reticlehq/engine/evidence/body-capture-remedy.js';
+import { EMPTY_FIND_OPENING } from './read/query-shape.js';
+import { UNKNOWN_FLOW_OPENING } from '@/language/flows/suite-selection.js';
 import {
   CHROMIUM_PATH_REFUSAL_PREFIX,
   chromiumInstallCommand,
@@ -78,6 +80,10 @@ const SELF_RECOVERING: readonly { readonly match: RegExp; readonly reason: Refus
   // was collecting the defect ask on top of its own remedy, so the envelope contradicted itself and
   // asked for a bug report about somebody's connect() options.
   { match: literally(BODY_CLAUSE_REFUSAL_OPENING), reason: RefusalReason.UNSUPPORTED },
+  // A find with nothing to find names the fields to pass; an unknown flow name lists the saved ones.
+  // Both are the caller's to fix, and the defect ask on top told an agent to file a bug about them.
+  { match: literally(EMPTY_FIND_OPENING), reason: RefusalReason.BAD_ARGS },
+  { match: literally(UNKNOWN_FLOW_OPENING), reason: RefusalReason.NO_MATCH },
 ];
 
 /**

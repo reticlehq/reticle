@@ -111,6 +111,9 @@ export async function resolveSuiteSelection(
   };
 }
 
+/** How the refusal of an unknown flow name opens: the error table recognizes it by these words. */
+export const UNKNOWN_FLOW_OPENING = 'No saved flow is named';
+
 /** How many saved flow names a refusal lists before it says how many more there are. */
 const KNOWN_SHOWN = 10;
 
@@ -130,5 +133,5 @@ export function unknownFlowRefusal(
     0 === known.length
       ? 'No flows are saved for this project yet: drive the journey once and it is saved.'
       : `Saved flows: ${known.slice(0, KNOWN_SHOWN).join(', ')}${more > 0 ? `, and ${String(more)} more (reticle_flow {action:"list"})` : ''}.`;
-  return new Error(`No saved flow is named ${asked}, so nothing ran. ${saved}`);
+  return new Error(`${UNKNOWN_FLOW_OPENING} ${asked}, so nothing ran. ${saved}`);
 }
