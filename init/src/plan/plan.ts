@@ -70,6 +70,12 @@ import {
   RETICLE_CONFIG_FILE,
 } from '@/detect/existing-config.js';
 import { CLAUDE_SETTINGS_PATH, claudeSettingsSteps } from './stop-hook-step.js';
+import {
+  PRETTIERIGNORE_PATH,
+  RETICLE_IGNORE_ENTRY,
+  ignoresReticle,
+  withReticleIgnored,
+} from '@/patch/prettier-ignore.js';
 
 // Re-exported: it moved to the module that reads it, and every existing importer says `plan.js`.
 export { RETICLE_CONFIG_FILE };
@@ -565,6 +571,43 @@ function agentRuleSteps(input: PlanInput): Step[] {
 }
 
 /**
+ * Keep `.reticle/` out of the project's `prettier --check`.
+ *
+ * When the project uses Prettier, `init` adds `.reticle/` to the project's `.prettierignore`.
+ * The nested `.reticle/.gitignore` does not help — Prettier only reads the ignore file of the
+ * directory it runs from — and matching Prettier's exact JSON output is a losing game, so
+ * excluding the directory is the root-cause fix (#1560).
+ *
+ * SKIP when the project does not use Prettier. ALREADY when `.reticle/` is already excluded.
+ * Otherwise APPLY: create the file, or append the entry to the existing one.
+ */
+function prettierIgnoreStep(input: PlanInput): Step | null {
+  if (true !== input.detection.usesPrettier) {
+    return null;
+  }
+  const existing = input.prettierIgnoreSource ?? null;
+  if (null !== existing && ignoresReticle(existing)) {
+    return {
+      title: 'Prettier ignore',
+      target: PRETTIERIGNORE_PATH,
+      status: StepStatus.ALREADY,
+      detail: '.reticle/ already excluded from Prettier',
+    };
+  }
+  const content = withReticleIgnored(existing);
+  return {
+    title: 'Prettier ignore',
+    target: PRETTIERIGNORE_PATH,
+    status: StepStatus.APPLY,
+    detail:
+      null === existing
+        ? 'create .prettierignore excluding .reticle/ so `prettier --check` passes'
+        : 'add .reticle/ to .prettierignore so `prettier --check` passes',
+    write: { path: PRETTIERIGNORE_PATH, content, expect: [RETICLE_IGNORE_ENTRY] },
+  };
+}
+
+/**
  * What to say when the install command fails.
  *
  * pnpm's `minimumReleaseAge` refuses any release younger than the configured window — a deliberate
@@ -861,6 +904,7 @@ function reticleConfigSteps(input: PlanInput): Step[] {
 
 export function buildPlan(input: PlanInput): Plan {
   const cspSteps = cspStep(input);
+  const prettierIgnore = prettierIgnoreStep(input);
   const steps: Step[] = [
     ...cspSteps,
     ...mcpSteps(input),
@@ -875,6 +919,7 @@ export function buildPlan(input: PlanInput): Plan {
     ...webGlCanvasStep(input),
     installStep(input),
     ...reticleConfigSteps(input),
+    ...(prettierIgnore !== null ? [prettierIgnore] : []),
   ];
   // Both steps can patch index.html: the connect write must keep the CSP edit that runs first.
   const patchedIndex = cspSteps.find((step) => step.write?.path === HTML_INDEX_PATH)?.write

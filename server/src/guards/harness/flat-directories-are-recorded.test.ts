@@ -191,11 +191,14 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * revisits engine's public subpaths, not in a feature commit.
    */
   'engine/src/window': 11,
+  // Crossed the line at 11 with `prettier-config.ts`: the Prettier-usage detection that `detect()`
+  // needs, kept out of `patch/` to avoid a detect<->patch import cycle (#1560).
+  'init/src/detect': 11,
   // vite-env-types.ts owns the type-only environment declaration emitted by the dev-module generator.
   // +1: nuxt-snippets.ts, split out of snippets.ts when it crossed the 1000-line cap.
   // +3: angular.ts, remix.ts and static-page.ts — one per stack `init` learned to wire, each beside
   // the patchers of its kind rather than folded into snippets.ts, which is near the cap already.
-  'init/src/patch': 19,
+  'init/src/patch': 20,
   // Crossed the line at 11 with `plan-angular.ts` and `plan-electron-vite.ts`, one per stack `init`
   // learned to wire, each beside the other per-framework builders. 12 with `plan-vite.ts`: the Vite
   // plugin and capabilities steps every Vite-based stack composes, split out of `plan-framework.ts`

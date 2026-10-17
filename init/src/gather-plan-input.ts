@@ -37,6 +37,7 @@ import { CRA_ENV_PATH } from './patch/cra.js';
 import { findNextMountFile } from './patch/next-patch.js';
 import { tanstackStartConnectPath } from './patch/tanstack-start.js';
 import { installedViteMajor } from './patch/vite-owning-config.js';
+import { PRETTIERIGNORE_PATH } from './patch/prettier-ignore.js';
 import { RETICLE_CONFIG_FILE, type PlanInput } from './plan/plan.js';
 import { claudeAvailableProbe, claudeHasReticle, codexAvailableProbe } from './register/mcp.js';
 import { nextUsesTypeScript, reticleDevLocation } from './patch/next-patch.js';
@@ -337,6 +338,7 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
     captureBodies: options.captureBodies,
     hooks: options.hooks,
     cspSources,
+    prettierIgnoreSource: io.readFile(PRETTIERIGNORE_PATH),
     claudeCli,
     mcpExists,
     insideClaudeCode: io.host.insideClaudeCode(),
