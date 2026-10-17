@@ -298,3 +298,77 @@ describe('select by what a person reads', () => {
     );
   });
 });
+
+/**
+ * Half B of #894: a selectable item is judged by its own label, not by its content.
+ *
+ * The guard read a non-link control's accessible name plus its whole textContent, so a media clip
+ * tile whose filename contained "remove" was blocked as destructive, and so was a "Create preview"
+ * button whose name carried that filename. Selection roles get the link treatment from 3.7.0: the
+ * control's own label surfaces count, descendant content does not. Filename-like tokens never count
+ * as action verbs.
+ */
+describe('a selectable item is judged by its own label, not by its content', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('does not block picking a material whose filename contains a destructive word', async () => {
+    // The maintainer's repro: <div role="option">photo-remove-background.webm</div> then click.
+    document.body.innerHTML =
+      '<div role="option" data-testid="clip">photo-remove-background.webm</div>';
+    await expect(executeAction(refTo('[data-testid="clip"]'), 'click')).resolves.toBeDefined();
+  });
+
+  it('does not block a treeitem whose descendant content mentions a destructive word', async () => {
+    document.body.innerHTML =
+      '<div role="treeitem" aria-label="Clip details">photo-remove-background.webm</div>';
+    await expect(executeAction(refTo('[role="treeitem"]'), 'click')).resolves.toBeDefined();
+  });
+
+  it('does not block a listbox row whose text is a destructive-looking filename', async () => {
+    document.body.innerHTML = '<div role="row">delete-me.txt</div>';
+    await expect(executeAction(refTo('[role="row"]'), 'click')).resolves.toBeDefined();
+  });
+
+  it('does not block a button whose name carries a filename with a destructive word', async () => {
+    // "Create preview" plus the clip filename: the verb is in the filename, not in the act.
+    document.body.innerHTML =
+      '<button id="p" aria-label="Create preview photo-remove-background.webm">Create preview</button>';
+    await expect(executeAction(refTo('#p'), 'click')).resolves.toBeDefined();
+  });
+
+  it('still blocks a selectable item the author labelled as destructive', async () => {
+    document.body.innerHTML =
+      '<div role="treeitem" aria-label="Remove clip">photo-remove-background.webm</div>';
+    await expect(executeAction(refTo('[role="treeitem"]'), 'click')).rejects.toThrow(
+      /confirmDangerous/,
+    );
+  });
+
+  it('still blocks a button whose own name is destructive', async () => {
+    document.body.innerHTML = '<button id="d">Remove clip</button>';
+    await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+
+  it('still blocks when the destructive word stands alone next to a filename', async () => {
+    document.body.innerHTML = '<button id="d">Remove photo-remove-background.webm</button>';
+    await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+
+  it('still blocks a button whose hyphenated label is a destructive slug', async () => {
+    // Review case on #1620: delete-account is a label, not a filename, so nothing is stripped.
+    document.body.innerHTML = '<button id="d">delete-account</button>';
+    await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+
+  it('still blocks a button whose hyphenated label starts with a destructive word', async () => {
+    document.body.innerHTML = '<button id="d">Force-delete</button>';
+    await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+
+  it('still blocks a button whose aria-label joins a destructive word with an underscore', async () => {
+    document.body.innerHTML = '<button id="d" aria-label="delete_repo">X</button>';
+    await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+});

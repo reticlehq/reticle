@@ -6,6 +6,12 @@
  * drop", and not blocking Enter in a form whose submit button says "Delete account". One defect,
  * classifying the wrong text.
  *
+ * Two more readings of the same defect, from half B of #894. A selectable item whose content is user
+ * data — a media clip tile showing a filename that contains "remove" — was blocked as destructive,
+ * and so was a "Create preview" button whose name carried that filename. Selection roles get the
+ * link treatment from 3.7.0: a link is judged by where it goes, a selectable item by its own label
+ * surfaces, never by descendant content. And a filename-like token never reads as an action verb.
+ *
  * The pattern itself lives in core (`isDangerousActionText`) and is deliberately narrow. This file
  * only chooses what to hand it.
  */
@@ -65,9 +71,51 @@ function navigatingHref(el: ActionTarget): string | undefined {
   return null === href || INERT_HREF.test(href) ? undefined : href;
 }
 
+/**
+ * Roles that SELECT an item instead of performing an act. Their visible content is usually user
+ * DATA, so judging the whole textContent blocks picking a material whose name happens to contain a
+ * destructive word. Mirror the link treatment: judge these by their own label surfaces, never by
+ * descendant content.
+ */
+const SELECTION_ROLES: ReadonlySet<string> = new Set([
+  'option',
+  'row',
+  'gridcell',
+  'tab',
+  'treeitem',
+  'listitem',
+]);
+
+/**
+ * Tokens that read as one filename, never as an action verb.
+ * A token counts as a filename only when it ends in a known file extension.
+ * `photo-remove-background.webm` is a filename, so the `remove` inside it is not an act.
+ * A hyphen or an underscore alone does not make a filename: `delete-account` and `delete_repo`
+ * are labels, so they keep their words and still trip the guard.
+ */
+const FILENAME_LIKE_TOKEN =
+  /\S+\.(?:webm|mp4|mov|mkv|avi|mp3|wav|ogg|flac|png|jpe?g|gif|webp|svg|avif|bmp|pdf|zip|tar|gz|txt|csv|json|xml|docx?|xlsx?|pptx?)\b/gi;
+
+function withoutFilenameTokens(text: string): string {
+  return text.replace(FILENAME_LIKE_TOKEN, ' ');
+}
+
+/** The control's own label surfaces: what the author called it, never the data inside it. */
+function ownLabelSurfaces(el: ActionTarget): string {
+  const form = el.closest('form');
+  return [
+    el.getAttribute('aria-label') ?? '',
+    el.getAttribute('title') ?? '',
+    el.getAttribute('href') ?? '',
+    form?.getAttribute('action') ?? '',
+  ].join(' ');
+}
+
 export function dangerousActionContext(el: ActionTarget): string {
   const href = navigatingHref(el);
   if (href !== undefined) return href;
+  if (SELECTION_ROLES.has(getRole(el).trim().toLowerCase()))
+    return withoutFilenameTokens(ownLabelSurfaces(el));
   const form = el.closest('form');
   // The label surfaces only, when the content is the user's own. The accessible NAME still counts:
   // that is the prompt beside the field, and "Type DELETE to remove this account" is exactly the
@@ -76,10 +124,10 @@ export function dangerousActionContext(el: ActionTarget): string {
     ? ['', '']
     : [el.textContent ?? '', el.getAttribute('value') ?? ''];
   return [
-    getAccessibleName(el),
-    ...ownText,
-    el.getAttribute('title') ?? '',
-    el.getAttribute('aria-label') ?? '',
+    withoutFilenameTokens(getAccessibleName(el)),
+    withoutFilenameTokens(ownText.join(' ')),
+    withoutFilenameTokens(el.getAttribute('title') ?? ''),
+    withoutFilenameTokens(el.getAttribute('aria-label') ?? ''),
     el.getAttribute('href') ?? '',
     form?.getAttribute('action') ?? '',
   ].join(' ');
