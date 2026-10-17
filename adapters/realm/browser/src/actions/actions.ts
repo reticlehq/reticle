@@ -33,7 +33,8 @@ import {
   isSelect,
   isTextArea,
 } from '@/dom/realm.js';
-import { nativeSetTimeout, settle } from '@/timers/native/native-timers.js';
+import { asSettleBudget, nativeSetTimeout, settle } from '@/timers/native/native-timers.js';
+import { publishSettledField, watchActedField } from '@/observers/field.js';
 import { AppearedText } from './appeared-text.js';
 import { alreadyAtCheckedState, assertAriaToggleLanded, isAriaToggle } from './check-state.js';
 import {
@@ -621,22 +622,6 @@ async function dispatchOther(
 }
 
 /**
- * The settle budget for one action, in ms.
- *
- * Absent means the default bounded frame. `0` is the burst case — drain microtasks and return so a
- * following action can land inside this one's window. Clamped: a caller cannot extend the budget
- * past the frame bound, because a long settle here would block the command channel, and anything
- * that needs to WAIT for a consequence should be declaring it on act_and_wait instead.
- */
-function asSettleBudget(raw: unknown): number | undefined {
-  if ('number' !== typeof raw || !Number.isFinite(raw)) return undefined;
-  return Math.max(0, Math.min(raw, FRAME_BUDGET_MS_CEILING));
-}
-
-/** Upper bound for a caller-supplied settle budget. Mirrors the browser's own frame budget. */
-const FRAME_BUDGET_MS_CEILING = 200;
-
-/**
  * Execute a single action against a ref and probe for best-effort evidence of effect.
  * Always async: the MutationObserver read needs a microtask + rAF after dispatch.
  */
@@ -660,6 +645,10 @@ export async function executeAction(
   const enabled = enabledOf(el);
   const prevFocus = activeRef(el);
   const valueBefore = valueOf(el);
+  // Before dispatch, so a click that toggles `checked` during the event cannot erase the pre-action
+  // reading, and so a script write during the action is seen. Published after settle, once React
+  // has restored or committed the controlled property.
+  const actedField = watchActedField(el);
   // Click-like: scroll an off-viewport target in + hit-test the click point BEFORE installing the
   // mutation observer (scroll/hit-test never mutate the DOM, but keep the probe window clean).
   const geometry = CLICK_LIKE.has(action) ? clickGeometry(el) : NO_GEOMETRY;
@@ -707,10 +696,12 @@ export async function executeAction(
     settled = outcome.settled;
     settleReason = outcome.settled ? null : SettleReason.TIMEOUT;
     obs.disconnect();
+    actedField?.stop();
   }
 
   assertAriaToggleLanded(el, action, alreadyAtValue);
   const valueAfter = valueOf(el);
+  publishSettledField(el, actedField);
   const nextFocus = activeRef(el);
   const effect: ActionEffect = {
     dispatched: true,

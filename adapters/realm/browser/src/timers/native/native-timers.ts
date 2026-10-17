@@ -90,3 +90,16 @@ export const settle = async (budgetMs = FRAME_BUDGET_MS): Promise<FrameOutcome> 
   await Promise.resolve(); // drain the current microtask queue (React scheduler tick)
   return boundedFrame(budgetMs); // one bounded frame so commit + MutationObserver records flush
 };
+
+/**
+ * The settle budget for one action, in ms.
+ *
+ * Absent means the default bounded frame. `0` is the burst case — drain microtasks and return so a
+ * following action can land inside this one's window. Clamped to the frame bound: a caller cannot
+ * extend the budget, because a long settle would block the command channel, and anything that needs
+ * to WAIT for a consequence should be declaring it on act_and_wait instead.
+ */
+export function asSettleBudget(raw: unknown): number | undefined {
+  if ('number' !== typeof raw || !Number.isFinite(raw)) return undefined;
+  return Math.max(0, Math.min(raw, FRAME_BUDGET_MS));
+}

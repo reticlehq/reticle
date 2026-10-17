@@ -20,6 +20,7 @@ import {
   pageNumber,
   pageRequest,
   recoveredByRetry,
+  screenMoved,
   splitForeignTraffic,
   type NetCall,
   type WriteIdentity,
@@ -573,7 +574,7 @@ function findWindowContradictions(
   // flight that the render could legitimately be waiting on.
   //
   // Route movement counts as the screen moving: a navigation IS a render, and a store change that
-  // drives one has been corroborated.
+  // drives one has been corroborated, and so has a field the app wrote (`screenMoved`).
   //
   // And only when the window carries NO NETWORK AT ALL. A request means the app reached for
   // something, and whether it failed, was ignored or never settled already belongs to three other
@@ -584,21 +585,14 @@ function findWindowContradictions(
     options.actionSince !== undefined &&
     events.some(isMeaningfulStateChange) &&
     !events.some((e) => e.type === EventType.NET_REQUEST || e.type === EventType.NET_PENDING) &&
-    !events.some(
-      (e) =>
-        e.type === EventType.DOM_ADDED ||
-        e.type === EventType.DOM_REMOVED ||
-        e.type === EventType.DOM_ATTR ||
-        e.type === EventType.DOM_TEXT ||
-        e.type === EventType.ROUTE_CHANGE,
-    )
+    !events.some(screenMoved)
   ) {
     found.push({
       kind: ContradictionKind.STATE_VS_RENDER,
       claim: 'the store committed a change',
       counter:
-        'nothing rendered in the same window — no DOM node added, removed or changed, and no ' +
-        'route movement, with no request still in flight the render could be waiting on',
+        'nothing rendered in the same window: no DOM or app-written field change and no route ' +
+        'movement, with no request still in flight the render could be waiting on',
       detail:
         'a component that does not re-render on a committed change shows the OLD value while the ' +
         'app is internally consistent, which is why nothing else reports it',

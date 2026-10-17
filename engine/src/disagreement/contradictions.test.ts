@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   ContradictionKind,
   EventType,
+  FieldChangeField,
+  FieldChangeKind,
   ROUTE_CHANGE_HOW_FIELD,
   RouteChangeHow,
   Verified,
@@ -993,6 +995,60 @@ describe('the store moved and the screen did not', () => {
     expect(findContradictions([stateChanged()]).map((c) => c.kind)).not.toContain(
       ContradictionKind.STATE_VS_RENDER,
     );
+  });
+
+  /**
+   * A controlled checkbox re-renders by setting the `checked` property. That is the screen moving,
+   * and it leaves no attribute mutation to count. The settled read is the one taken after handlers.
+   */
+  it('does NOT fire when a checkbox checked, read after handlers, differs from before', () => {
+    const settled = ev(EventType.FIELD_CHANGE, {
+      [FieldChangeField.FIELD]: 'on',
+      [FieldChangeField.KIND]: FieldChangeKind.SETTLED,
+      [FieldChangeField.LENGTH]: 2,
+      [FieldChangeField.VALUE]: 'on',
+      [FieldChangeField.CHECKED]: true,
+      [FieldChangeField.PREVIOUS_CHECKED]: false,
+    });
+    expect(causedKinds([stateChanged(), settled])).not.toContain(ContradictionKind.STATE_VS_RENDER);
+  });
+
+  it('does NOT fire when a settled text value differs from before the action', () => {
+    const settled = ev(EventType.FIELD_CHANGE, {
+      [FieldChangeField.FIELD]: 'title',
+      [FieldChangeField.KIND]: FieldChangeKind.SETTLED,
+      [FieldChangeField.LENGTH]: 2,
+      [FieldChangeField.VALUE]: 'hi',
+      [FieldChangeField.PREVIOUS]: '',
+    });
+    expect(causedKinds([stateChanged(), settled])).not.toContain(ContradictionKind.STATE_VS_RENDER);
+  });
+
+  /**
+   * The input event's own field change is the keystroke, already true of a component that never
+   * re-rendered. Counting it would be a false green on every fill, type, and check.
+   */
+  it('still fires when the only field event is the raw input', () => {
+    const raw = ev(EventType.FIELD_CHANGE, {
+      [FieldChangeField.FIELD]: 'on',
+      [FieldChangeField.KIND]: FieldChangeKind.CHANGE,
+      [FieldChangeField.LENGTH]: 2,
+      [FieldChangeField.VALUE]: 'on',
+      [FieldChangeField.CHECKED]: true,
+    });
+    expect(causedKinds([stateChanged(), raw])).toContain(ContradictionKind.STATE_VS_RENDER);
+  });
+
+  it('still fires when the settled read shows the field reverted', () => {
+    const reverted = ev(EventType.FIELD_CHANGE, {
+      [FieldChangeField.FIELD]: 'on',
+      [FieldChangeField.KIND]: FieldChangeKind.SETTLED,
+      [FieldChangeField.LENGTH]: 2,
+      [FieldChangeField.VALUE]: 'on',
+      [FieldChangeField.CHECKED]: false,
+      [FieldChangeField.PREVIOUS_CHECKED]: false,
+    });
+    expect(causedKinds([stateChanged(), reverted])).toContain(ContradictionKind.STATE_VS_RENDER);
   });
 });
 

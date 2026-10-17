@@ -5,8 +5,8 @@
  * there rather than invented for the occasion. Everything here answers a question ABOUT NETWORK
  * EVIDENCE: what did this event mean, was it a write, did a retry rescue it, is it the toolchain's
  * own traffic rather than the app's, is this cadence a poll, what did a write carry, which page did
- * a list request ask for, and which `net` clause would name this call. Nothing here knows what a
- * contradiction is.
+ * a list request ask for, and which `net` clause would name this call — and whether a settled field
+ * reading shows the app wrote the screen forward. Nothing here knows what a contradiction is.
  *
  * The rules next door read this vocabulary and decide what disagrees. Keeping the two apart means a
  * new rule cannot quietly redefine what "in flight" or "ours" means for itself, which is how two
@@ -15,6 +15,8 @@
 
 import {
   EventType,
+  FieldChangeField,
+  FieldChangeKind,
   MUTATING_METHODS,
   NEXT_ACTION_FIELD,
   PredicateKind,
@@ -166,6 +168,49 @@ export function isSamePathnameReplace(event: ReticleEvent): boolean {
   if (from.origin !== to.origin || from.pathname !== to.pathname) return false;
   if (from.hash !== to.hash && !isInPageFragment(to.hash)) return false;
   return true;
+}
+
+/**
+ * Did this event show a field whose post-handler reading differs from its pre-action one?
+ *
+ * React writes `checked` and `value` as properties, so a controlled checkbox that re-renders
+ * produces no attribute mutation. The field change from the input event itself cannot fill that
+ * gap: it is emitted from the user's own event, before a controlled component restores the
+ * property, and counting it would treat a box React immediately reverted as rendered.
+ *
+ * A settled read carries the value from before the action beside the value after the handlers
+ * ran. The browser only sends one when the app itself wrote the property during the action, so an
+ * uncontrolled field the browser toggled on its own never counts. The screen moved only when the
+ * two readings differ.
+ */
+export function settledFieldRendered(event: ReticleEvent): boolean {
+  if (event.type !== EventType.FIELD_CHANGE) return false;
+  if (event.data[FieldChangeField.KIND] !== FieldChangeKind.SETTLED) return false;
+  const checked = event.data[FieldChangeField.CHECKED];
+  const previousChecked = event.data[FieldChangeField.PREVIOUS_CHECKED];
+  if ('boolean' === typeof checked && 'boolean' === typeof previousChecked) {
+    return checked !== previousChecked;
+  }
+  const value = event.data[FieldChangeField.VALUE];
+  const previous = event.data[FieldChangeField.PREVIOUS];
+  return 'string' === typeof value && 'string' === typeof previous && value !== previous;
+}
+
+/**
+ * Did this event show the screen moving, for the state-vs-render rule? A DOM node added, removed or
+ * changed, route movement (a navigation IS a render), or a field the app itself wrote to a new
+ * value (`settledFieldRendered`). The input event's own field change does not count: that is the
+ * keystroke or the browser's own toggle, true of a component that never re-rendered.
+ */
+export function screenMoved(event: ReticleEvent): boolean {
+  return (
+    event.type === EventType.DOM_ADDED ||
+    event.type === EventType.DOM_REMOVED ||
+    event.type === EventType.DOM_ATTR ||
+    event.type === EventType.DOM_TEXT ||
+    event.type === EventType.ROUTE_CHANGE ||
+    settledFieldRendered(event)
+  );
 }
 
 /**

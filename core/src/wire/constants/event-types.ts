@@ -59,12 +59,15 @@ export const EventType = {
   /** element focus moved — `data: { to, from, toBody }`. Focus dropping to body after an act is a regression. */
   FOCUS_CHANGE: 'focus.change',
   /**
-   * a form field's value moved — `data: { field, kind, value?, redacted?, length }`.
+   * a form field's value moved — `data: { field, kind, value?, checked?, previous?, previousChecked?, redacted?, length }`.
    *
    * The DOM observer never saw this: `value` is in its attribute allowlist, but React and every
    * controlled input set the PROPERTY, so `MutationObserver` does not fire. `value` is omitted and
    * `redacted` set for a password, a sensitive name, or a payment autocomplete hint; `length` is
    * always present, because "it was wiped" is assertable without carrying anybody's data.
+   * `checked` is the checkbox/radio property (`value` there is the HTML value, usually `"on"`).
+   * `kind: "settled"` is a read after the action's handlers; `previous` / `previousChecked` are
+   * the pre-action reading, so a restore is distinguishable from a render.
    */
   FIELD_CHANGE: 'field.change',
   /** browser → bridge: a human recording compiled in-page. */

@@ -12,7 +12,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EventType } from '@reticlehq/core';
+import { EventType, FieldChangeField, FieldChangeKind } from '@reticlehq/core';
 import { installField } from './field.js';
 import { setTestIdAttr } from '@/dom/addressing/testid-attr.js';
 
@@ -49,6 +49,37 @@ describe('installField', () => {
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe(EventType.FIELD_CHANGE);
     expect(events[0]?.data).toMatchObject({ field: 'title', kind: 'change', value: 'v3.3.0' });
+    expect(events[0]?.data[FieldChangeField.CHECKED]).toBeUndefined();
+  });
+
+  it('carries checked for a checkbox, not the HTML value alone', () => {
+    const { events } = page('<input type="checkbox" data-testid="on" />');
+    const input = document.querySelector('input');
+    if (!(input instanceof HTMLInputElement)) throw new Error('no input');
+    input.checked = true;
+    fire(input, 'change');
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe(EventType.FIELD_CHANGE);
+    expect(events[0]?.data).toMatchObject({
+      field: 'on',
+      kind: FieldChangeKind.CHANGE,
+      value: 'on',
+      [FieldChangeField.CHECKED]: true,
+    });
+  });
+
+  it('carries checked for a radio', () => {
+    const { events } = page('<input type="radio" data-testid="choice" value="a" />');
+    const input = document.querySelector('input');
+    if (!(input instanceof HTMLInputElement)) throw new Error('no input');
+    input.checked = true;
+    fire(input, 'change');
+    expect(events[0]?.data).toMatchObject({
+      field: 'choice',
+      kind: FieldChangeKind.CHANGE,
+      value: 'a',
+      [FieldChangeField.CHECKED]: true,
+    });
   });
 
   /*
