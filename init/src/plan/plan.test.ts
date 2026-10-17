@@ -60,6 +60,7 @@ function input(partial: Partial<PlanInput>): PlanInput {
     storeHints: partial.storeHints,
     viteDevModuleExists: partial.viteDevModuleExists,
     nextReticleDevExists: partial.nextReticleDevExists ?? false,
+    nextReticleDevSource: partial.nextReticleDevSource,
     claudeMdContent: partial.claudeMdContent,
     agentsMdContent: partial.agentsMdContent,
     cursorRuleContent: partial.cursorRuleContent,
@@ -1313,3 +1314,32 @@ describe('init --hooks', () => {
     expect(buildPlan(input({})).steps.some((s) => s.title === HOOK_STEP)).toBe(false);
   });
 });
+
+describe('Next ReticleDev component planning in buildPlan', () => {
+  it('produces a NOTICE step and no connect MANUAL step when only SDK version read is missing (exit 0 candidate)', () => {
+    const plan = buildPlan(
+      input({
+        detection: detection(Framework.NEXT),
+        nextConfigFile: 'next.config.mjs',
+        nextConfigSource: 'export default {};',
+        nextReticleDevExists: true,
+        nextReticleDevSource:
+          'const url = process.env.NEXT_PUBLIC_RETICLE_URL; reticle.connect({ ...(url ? { url } : {}) });',
+      }),
+    );
+    const devStep = plan.steps.find((s) => s.title === 'ReticleDev component');
+    expect(devStep?.status).toBe(StepStatus.ALREADY);
+    const noticeStep = plan.steps.find(
+      (s) => s.title === 'ReticleDev component' && s.status === StepStatus.NOTICE,
+    );
+    expect(noticeStep).toBeDefined();
+    expect(noticeStep?.detail).toContain('NEXT_PUBLIC_RETICLE_SDK_VERSION');
+
+    // A connect-blocking manual step would fail the run / exit non-zero; ensure none exists
+    const manualConnectSteps = plan.steps.filter(
+      (s) => s.status === StepStatus.MANUAL && s.title === 'ReticleDev component',
+    );
+    expect(manualConnectSteps).toHaveLength(0);
+  });
+});
+
