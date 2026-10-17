@@ -600,3 +600,35 @@ export async function tryRealInput(
     };
   }
 }
+
+/**
+ * The session a flow replay runs on, with a press sent to the lease's real keyboard.
+ *
+ * Replay dispatches its steps itself, not through `reticle_act`, so a recorded Tab replayed as a
+ * synthetic keydown that moves no focus, and a keyboard flow that passed live drifted on replay.
+ * Every other command, and a press this lease cannot drive for real, goes to the page as before.
+ * A Proxy, not a copy: the session keeps private state its own methods read.
+ */
+export function withLeaseKeyboard(deps: ToolDeps, session: Session): Session {
+  if (deps.realInput !== undefined || deps.pool?.hasKeyboard(session.id) !== true) return session;
+  const command: Session['command'] = async (name, args = {}, timeoutMs) => {
+    if (ReticleCommand.ACT === name && ActionType.PRESS === args['action']) {
+      const ref = asString(args['ref']) ?? '';
+      const real = await tryRealInput(deps, session, ref, ActionType.PRESS, args);
+      if (real.result !== undefined) {
+        const result = { dispatched: true, settled: real.settled, ...asRecord(real.result) };
+        return { kind: 'command_result', id: ActionType.PRESS, ok: true, result };
+      }
+    }
+    return session.command(name, args, timeoutMs);
+  };
+  return new Proxy(session, {
+    get(target, key) {
+      if ('command' === key) return command;
+      const value: unknown = Reflect.get(target, key, target);
+      return 'function' === typeof value
+        ? (value as (...a: unknown[]) => unknown).bind(target)
+        : value;
+    },
+  });
+}

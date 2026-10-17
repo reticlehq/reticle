@@ -23,6 +23,7 @@ import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { BrowserPool } from '@/portal/pool/browser-pool.js';
 import { HOVER_NEEDS_POINTER_MSG } from '@/surface/tools/real-input-attempt.js';
 import { actCommand } from '@/surface/tools/act-tools.js';
+import { withLeaseKeyboard } from '@/surface/tools/real-input-attempt.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
 const SOURCE_BOX: ElementBox = { x: 0, y: 0, width: 200, height: 100 };
@@ -804,5 +805,29 @@ describe('keyboard on a lease', () => {
     expect(res.result).toMatchObject({ inputMode: InputMode.REAL });
     expect(pressed).toEqual([{ text: 'Tab' }]);
     expect(state.actCalls).toBe(0);
+  });
+});
+
+/** A replayed flow presses through the same real keyboard, or a recorded Tab replays as nothing. */
+describe('a replay on a lease presses with its real keyboard', () => {
+  it('sends a replayed press to the lease keyboard and every other command to the page', async () => {
+    const pressed: Record<string, unknown>[] = [];
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = {
+      hasKeyboard: () => true,
+      pressLease: (_id: string, args: Record<string, unknown>) => {
+        pressed.push({ ...args });
+        return Promise.resolve({ performed: true, inputMode: InputMode.REAL });
+      },
+    } as unknown as BrowserPool;
+    const session = withLeaseKeyboard(deps, deps.sessions.resolve(undefined));
+
+    const res = await session.command('act', { ref: '', action: 'press', args: { text: 'Tab' } });
+    expect(res.result).toMatchObject({ inputMode: InputMode.REAL });
+    expect(pressed).toEqual([{ text: 'Tab' }]);
+    await session.command('act', { ref: 'e1', action: 'click', args: {} });
+    expect(state.actCalls).toBe(1);
+    expect(session.elapsed()).toBe(0);
   });
 });

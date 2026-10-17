@@ -1,4 +1,5 @@
 import { resolveFlowUploads } from './fields/flow-upload-resolve.js';
+import { withLeaseKeyboard } from '@/surface/tools/real-input-attempt.js';
 import { learnFromRun } from '@reticlehq/engine/evidence/learned-guards.js';
 import {
   type ProjectId,
@@ -746,7 +747,7 @@ export async function replayNamedFlow(
   let steps: FlowStepResult[];
   try {
     steps = await replayFlow(
-      observe(session),
+      observe(withLeaseKeyboard(deps, session)),
       replayable,
       waitForPredicate,
       FLOW_SIGNAL_TIMEOUT_MS,
