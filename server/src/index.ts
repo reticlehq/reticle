@@ -212,12 +212,15 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
    * here, and their work waited on disk for a later daemon. It does nothing for an unlinked root,
    * and `close` sends one last bounded cycle.
    */
+  // The same client version the daemon's sync sends, so the server can tell the two apart.
+  const syncClient = { clientVersion: SERVER_VERSION };
   const cloudSync = attachCloudSync({
     fs: createNodeFileSystem(),
     reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
     homeDir: homedir(),
     env: process.env,
     otherRoots: knownProjectRoots,
+    ...syncClient,
   });
   const security = await resolveBridgeSecurityWithAutoToken(options);
   const bridge = new Bridge({ port, sdkFix: sdkFixForProject, ...security });
