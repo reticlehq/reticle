@@ -81,14 +81,13 @@ export async function resolveSuiteSelection(
     ...(0 === wantedLabels.length ? {} : { labels: wantedLabels }),
   });
   /*
-   * A name the caller asked for that no file matches is still ATTEMPTED.
-   *
-   * Replay already answers a missing flow with the real reason, and that is a better answer than
-   * quietly running one fewer flow than was asked for. `unmatched` therefore reports labels, where
-   * a typo has no other way of surfacing -- ask for `@smoek` and, without this, a suite of zero
-   * flows reports a clean pass.
+   * A name no saved flow carries is refused before anything runs. It used to be ATTEMPTED, so a
+   * typo became a failed check and a failed run on the dashboard, with "check the element state" as
+   * the advice. `unmatched` still reports labels, where a typo has no other way of surfacing -- ask
+   * for `@smoek` and, without it, a suite of zero flows reports a clean pass.
    */
-  const missingNames = wantedNames.filter((name) => !names.includes(name));
+  const unknown = unknownFlowRefusal(wantedNames, names);
+  if (unknown !== undefined) throw unknown;
   /*
    * Ordered AFTER selection, so a prerequisite filtered out by a label is reported rather than
    * silently pulled back in. A flow whose `login` was excluded does not run: failing it here would
@@ -97,7 +96,7 @@ export async function resolveSuiteSelection(
    */
   const ordered = orderFlows(chosen.run);
   return {
-    run: [...ordered.run.map((flow) => flow.name), ...missingNames],
+    run: ordered.run.map((flow) => flow.name),
     quarantined: chosen.quarantined,
     unmatched: chosen.unmatched.filter((entry) => !wantedNames.includes(entry)),
     ...(0 === ordered.cycles.length ? {} : { cycles: ordered.cycles }),
@@ -110,4 +109,26 @@ export async function resolveSuiteSelection(
       ),
     ],
   };
+}
+
+/** How many saved flow names a refusal lists before it says how many more there are. */
+const KNOWN_SHOWN = 10;
+
+/**
+ * The refusal for flow names no saved flow carries, or `undefined` when every name is known. Names
+ * the flows that do exist, so the typo can be fixed in the next call.
+ */
+export function unknownFlowRefusal(
+  wanted: readonly string[],
+  known: readonly string[],
+): Error | undefined {
+  const missing = wanted.filter((name) => !known.includes(name));
+  if (0 === missing.length) return undefined;
+  const asked = missing.map((name) => `"${name}"`).join(', ');
+  const more = known.length - KNOWN_SHOWN;
+  const saved =
+    0 === known.length
+      ? 'No flows are saved for this project yet: drive the journey once and it is saved.'
+      : `Saved flows: ${known.slice(0, KNOWN_SHOWN).join(', ')}${more > 0 ? `, and ${String(more)} more (reticle_flow {action:"list"})` : ''}.`;
+  return new Error(`No saved flow is named ${asked}, so nothing ran. ${saved}`);
 }
