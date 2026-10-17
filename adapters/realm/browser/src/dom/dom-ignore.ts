@@ -131,6 +131,16 @@ export function isIgnored(el: Element): boolean {
   return el.closest(sel) !== null;
 }
 
+/**
+ * Whether an element's words may never prove a text claim: everything `isIgnored` drops, and
+ * Reticle's own UI hatch open or not. With the HUD exposed, any line it wrote (a plan, a persona, a
+ * finding) proved a visible-text check the app never satisfied. The hatch keeps the HUD's controls
+ * reachable by role and test id; its words are never the app's.
+ */
+export function isWordsIgnored(el: Element): boolean {
+  return isIgnored(el) || isReticleOverlay(el);
+}
+
 /** What an app's modal looks like: a native `<dialog>` shown modally, or a library's `aria-modal`. */
 const APP_MODAL = 'dialog[open], [aria-modal="true"]';
 

@@ -25,7 +25,7 @@ import {
   isRenderedOutsideAriaHidden,
   isVisible,
 } from './a11y.js';
-import { isIgnored, isReticleOverlay } from './dom-ignore.js';
+import { isIgnored, isReticleOverlay, isWordsIgnored } from './dom-ignore.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { declaredTestids } from '@/registry/capabilities.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';
@@ -120,7 +120,7 @@ function directText(el: Element): string {
  * leaves ours out, which pointing an agent at "Pause" or "Export" did not.
  */
 function visibleTextOf(el: Element, memo: Map<Element, boolean>): string {
-  if (isNonRendered(el) || isIgnored(el)) return '';
+  if (isNonRendered(el) || isWordsIgnored(el)) return '';
   const visible = isVisible(el, memo);
   const apart = laysOutApart(el);
   let text = '';
@@ -538,6 +538,8 @@ function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scope
   }
   const seen = new Set<HTMLElement>();
   const out: HTMLElement[] = [];
+  // A text search reads the app's words only: the HUD's never prove a text claim, hatch open or not.
+  const ignored = wantedTextOf(query) === undefined ? isIgnored : isWordsIgnored;
   const collect = (els: HTMLElement[]): void => {
     for (const el of els) {
       if (seen.has(el)) continue; // reachable from both host and root - count once
@@ -548,7 +550,7 @@ function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scope
       // share a NAME with a real control on that page, so an agent resolving "Export" could drive the
       // observer instead of the app and then reason about the result. Filtered here, at the one
       // collection point, so every entry path (by role/text/testid, shadow roots, scoped) is covered.
-      if (isIgnored(el)) continue;
+      if (ignored(el)) continue;
       seen.add(el);
       out.push(el);
     }
