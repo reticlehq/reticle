@@ -94,7 +94,10 @@ export const INTENT_TOOLS: ToolDef[] = [
         .optional()
         .describe('declare only. Batchable — declare every intent for a feature in one call.'),
       request: z.string().optional().describe("declare: the user's words, verbatim."),
-      id: z.string().optional().describe('bind only: which intent the predicate proves.'),
+      id: z
+        .string()
+        .optional()
+        .describe('bind, get and record: which intent. For bind, the intent the predicate proves.'),
       /*
        * The predicate schema, not `unknown`.
        *
@@ -156,15 +159,24 @@ export const INTENT_TOOLS: ToolDef[] = [
       const shards = new IntentShardStore(deps.fs, root, { now: deps.now });
       const action = asString(args['action']);
 
+      // An empty argument answered "there is none" (`null`, `[]`, `bound: false`), or a raw zod
+      // path for `record`, instead of saying which argument the call left out.
+      const need = (name: string): string => {
+        const value = asString(args[name]);
+        if (value !== undefined && 0 < value.trim().length) return value;
+        throw new Error(
+          `${ReticleTool.INTENT} ${String(action)}: \`${name}\` is required, and none was given — nothing was read or stored`,
+        );
+      };
+
       if (INDEX === action) return { entries: (await shards.index()).entries, path: root };
-      if (SUBJECT === action)
-        return { records: await shards.subject(asString(args['subject']) ?? ''), path: root };
-      if (GET === action) return { record: await shards.get(asString(args['id']) ?? '') };
+      if (SUBJECT === action) return { records: await shards.subject(need('subject')), path: root };
+      if (GET === action) return { record: await shards.get(need('id')) };
       if (MIGRATE === action) return { ...(await shards.migrate()), path: root };
       if (RECORD === action) {
         const written = await shards.record({
-          id: asString(args['id']) ?? '',
-          statement: asString(args['statement']) ?? '',
+          id: need('id'),
+          statement: need('statement'),
           subject: asString(args['subject']),
           why: asString(args['why']),
           source: asString(args['source']),
@@ -175,7 +187,7 @@ export const INTENT_TOOLS: ToolDef[] = [
       }
 
       if (BIND === action) {
-        const id = asString(args['id']) ?? '';
+        const id = need('id');
         return { bound: await store.bind(id, args['binding']) };
       }
       if (LIST === action) {
