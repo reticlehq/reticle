@@ -6,7 +6,7 @@
  * while every run of that app landed in it.
  */
 import { existsSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import {
   discoverProjectConfigs,
@@ -24,7 +24,10 @@ const within = (inner: string, outer: string): boolean =>
  * kept rather than one picked silently.
  */
 export function linkDirectoryFor(cwd: string, discovery: ConfigDiscovery): string {
-  const here = resolve(cwd);
+  // A `.reticle` is a project's, never a project: the HUD's Link passes the tab's `.reticle`, and on
+  // an app with no `.reticle.json` the link landed in `.reticle/.reticle/cloud.json`.
+  const asked = resolve(cwd);
+  const here = ReticleDir.ROOT === basename(asked) ? dirname(asked) : asked;
   const enclosing = discovery.found
     .map((found) => found.directory)
     .filter((directory) => within(here, directory))

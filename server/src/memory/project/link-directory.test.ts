@@ -27,6 +27,14 @@ afterEach(() => {
 });
 
 describe('linkDirectoryFor', () => {
+  // Night 7b: the HUD's Link this project passes the tab's `.reticle`, and on an app with no
+  // `.reticle.json` the link was written to `app/.reticle/.reticle/cloud.json`. The page said
+  // "Linked" and stayed on "Linking…": the project it reads was never linked.
+  it('links the project a `.reticle` belongs to, never a `.reticle` inside it', () => {
+    mkdirSync(join(root, 'app', '.reticle'), { recursive: true });
+    expect(linkDir(join(root, 'app', '.reticle'))).toBe(join(root, 'app'));
+  });
+
   it('links the one app a monorepo root holds, where its runs are written', () => {
     config('apps/web', 'web-1');
     expect(linkDir(root)).toBe(join(root, 'apps/web'));
