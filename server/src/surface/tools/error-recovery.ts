@@ -9,7 +9,13 @@
  * baseline stores). No clock, no IO — unit-testable in isolation.
  */
 
-import { RefusalReason, ReticleEnv, TRANSPORT_LIMITS, UNISSUED_REF_REFUSAL } from '@reticlehq/core';
+import {
+  CONNECT_COMMAND,
+  RefusalReason,
+  ReticleEnv,
+  TRANSPORT_LIMITS,
+  UNISSUED_REF_REFUSAL,
+} from '@reticlehq/core';
 import { SELF_RECOVERING_MARKER } from '@/portal/session/no-session-diagnosis.js';
 import {
   MSG_HARNESS_DISABLED,
@@ -314,7 +320,7 @@ export const RECOVERY = {
     'reticle_act_and_wait and an `until` on its last step. Every other tool works at any coverage.',
   HARNESS_NOT_LINKED:
     'This project is not linked to the Reticle platform, where the Harness runs. The call itself was ' +
-    'valid. Either the human runs `npx @reticlehq/server connect` once in the app directory, or you ' +
+    `valid. Either the human runs \`${CONNECT_COMMAND}\` once in the app directory, or you ` +
     'drive the journey yourself: reticle_navigate, then reticle_act_and_wait with an `until` on its ' +
     'last step. There is nothing to report.',
 } as const;

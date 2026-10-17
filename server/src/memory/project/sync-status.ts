@@ -15,7 +15,7 @@ import { hashPayload } from '@/memory/cloud/sync-hash.js';
 import type { CloudSyncState } from '@/memory/cloud/sync-cycle.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ReticleDir } from '@reticlehq/core';
+import { CONNECT_COMMAND, ReticleDir } from '@reticlehq/core';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { unmatchedRoots, unsyncedRoots, type UnsyncedRoot } from '@/memory/cloud/unsynced-roots.js';
 import type { FileSystemPort } from './fs/fs-port.js';
@@ -238,7 +238,7 @@ export function overallStatus(summary: SyncSummary): SyncStatus {
 /** The summary in one sentence an agent can repeat to a person. */
 export function describeSync(summary: SyncSummary, now: number): string {
   if (!summary.linked)
-    return `${String(summary.runs)} run(s) exist only on this machine; nothing is synced until the project is linked (npx @reticlehq/server connect).`;
+    return `${String(summary.runs)} run(s) exist only on this machine; nothing is synced until the project is linked (${CONNECT_COMMAND}).`;
   const ago =
     summary.lastPushAt === undefined
       ? 'nothing pushed yet'

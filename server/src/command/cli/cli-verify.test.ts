@@ -129,7 +129,7 @@ describe('runVerify', () => {
     await runVerify(ARGS, ports);
     const said = rec.out.join('\n');
     expect(said).toContain('run-test was kept on this computer');
-    expect(said).toContain('npx @reticlehq/server connect');
+    expect(said).toContain('reticle connect');
   });
 
   it('exits 1 when nothing ran, so CI cannot go green on an empty run', async () => {

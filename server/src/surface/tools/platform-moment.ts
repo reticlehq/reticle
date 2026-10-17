@@ -18,6 +18,7 @@ import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   AgentNudgeKind,
+  CONNECT_COMMAND,
   HARNESS_UNLOCK_COVERAGE,
   ReticleDir,
   ReticleTool,
@@ -46,7 +47,7 @@ const STATUS_EVERY_MS = 10_000;
 /** How many verdicts between size checks: walking `.reticle` is not free either. */
 const SIZE_EVERY = 20;
 const MOMENTS_FILE = ReticleDir.PLATFORM_MOMENTS_FILE;
-export const CONNECT = '`npx @reticlehq/server connect`';
+export const CONNECT = `\`${CONNECT_COMMAND}\``;
 const RUN_FILE = /\.json$/;
 
 const Moment = {

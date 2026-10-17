@@ -7,7 +7,7 @@
  */
 import { reportAppsNow } from '@/features/harness/platform/local-apps.js';
 import { serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
-import { ReticleEnv, cloudUrlFrom } from '@reticlehq/core';
+import { CONNECT_COMMAND, ReticleEnv, cloudUrlFrom } from '@reticlehq/core';
 import { creditsSpent, creditsUsedLine } from '@reticlehq/core/hud';
 import { planUrl } from '@/features/harness/platform/platform-drives.js';
 import type { ToolDeps } from './tool-kit.js';
@@ -39,7 +39,7 @@ export interface HarnessAsk {
  */
 export const MSG_NO_HARNESS_KEY =
   `The Reticle Harness runs on the Reticle platform, and a new account gets 10 free credits ` +
-  `to try it: run \`reticle connect\` to link this project and sign in. ` +
+  `to try it: run \`${CONNECT_COMMAND}\` to link this project and sign in. ` +
   `Without it, drive the journey yourself with reticle_act_and_wait and an \`until\` on its last step: ` +
   `what you drive is saved as a flow just the same.`;
 
