@@ -201,3 +201,84 @@ describe('click: SVG targets', () => {
     expect(seen).toEqual(['enter']);
   });
 });
+
+describe('click: a target that is not a control (#1356)', () => {
+  it('warns when the click lands on a wrapper that is not a control and sits inside none', async () => {
+    // `{ text: "Sign in" }` matched the div's own text, not the icon button inside it. The click hit
+    // the div, the form never submitted, and the act used to report a clean click.
+    document.body.innerHTML =
+      '<div id="wrap">Sign in <button aria-label="Continue"><svg></svg></button></div>';
+
+    const r = await executeAction(refOf('#wrap'), 'click');
+
+    expect(r.warning).toBe(ActionWarning.CLICK_NOT_A_CONTROL);
+  });
+
+  it.each([
+    ['a real button', '<button id="t">Save</button>'],
+    ['text inside a button', '<button><span id="t">Save</span></button>'],
+    [
+      'text inside a label',
+      '<label><span id="t">Remember me</span><input type="checkbox"></label>',
+    ],
+    ['an element with an onclick attribute', '<div id="t" onclick="void 0">Open</div>'],
+    ['an element with a tabindex', '<div id="t" tabindex="0">Open</div>'],
+    [
+      'an element styled as clickable',
+      '<div style="cursor: pointer"><span id="t">Open</span></div>',
+    ],
+    ['an element with an interactive role', '<div id="t" role="menuitem">Open</div>'],
+  ])('does not warn on %s', async (_label, html) => {
+    document.body.innerHTML = html;
+
+    const r = await executeAction(refOf('#t'), 'click');
+
+    expect(r.warning).toBeUndefined();
+  });
+
+  it('does not warn on an element inside a shadow root whose host sits in a button', async () => {
+    // A ShadowRoot is a DocumentFragment, so a bare parentElement walk stops at the top of the shadow
+    // tree and never reaches the host or the button above it.
+    document.body.innerHTML = '<button><div id="host"></div></button>';
+    const root = (document.querySelector('#host') as HTMLElement).attachShadow({ mode: 'open' });
+    root.innerHTML = '<span>Go</span>';
+    const span = root.querySelector('span') as HTMLElement;
+
+    const r = await executeAction(refs.refFor(span), 'click');
+
+    expect(r.warning).toBeUndefined();
+  });
+
+  it('does not warn on a slotted element rendered inside a shadow button', async () => {
+    // Its composed parent is the slot, inside the host's shadow tree, not the light-DOM host.
+    document.body.innerHTML = '<div id="host"><span id="t">Go</span></div>';
+    const root = (document.querySelector('#host') as HTMLElement).attachShadow({ mode: 'open' });
+    root.innerHTML = '<button><slot></slot></button>';
+
+    const r = await executeAction(refOf('#t'), 'click');
+
+    expect(r.warning).toBeUndefined();
+  });
+
+  it('judges the target as it was before the click, not after the click removed it', async () => {
+    // A control that removes the element it was clicked on: read afterwards, the detached element has
+    // no ancestors and no inherited cursor, so a working click would be misjudged.
+    document.body.innerHTML =
+      '<div id="card" style="cursor: pointer"><span id="t">Dismiss</span></div>';
+    const card = document.querySelector('#card') as HTMLElement;
+    card.addEventListener('click', (e) => (e.target as Element).remove());
+
+    const r = await executeAction(refOf('#t'), 'click');
+
+    expect(r.warning).toBeUndefined();
+  });
+
+  it('does not warn on a non-click action aimed at a plain element', async () => {
+    // Hovering or scrolling a wrapper is a legitimate thing to do; only a click means "a control".
+    document.body.innerHTML = '<div id="t">Section</div>';
+
+    const r = await executeAction(refOf('#t'), 'hover');
+
+    expect(r.warning).toBeUndefined();
+  });
+});
