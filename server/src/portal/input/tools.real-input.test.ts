@@ -81,6 +81,18 @@ function fakeSession(state: FakeSessionState): Session {
       const focusable = state.focusableRef;
       if ('focus' === action && focusable !== undefined && args['ref'] === focusable) {
         state.focused = focusable;
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'c',
+          ok: true,
+          result: {
+            dispatched: true,
+            settled: true,
+            testid: 'login-submit',
+            role: 'button',
+            name: 'Sign in',
+          },
+        });
       }
       return Promise.resolve({
         kind: 'command_result',
@@ -715,6 +727,20 @@ describe('keyboard on a lease', () => {
     expect(res.inputMode).toBe(InputMode.REAL);
     expect(state.actActions).toEqual(['focus']);
     expect(pressed).toEqual([{ text: 'Enter' }]);
+  });
+
+  it('keeps the pressed element in the saved step, so the flow can find it again', async () => {
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      actActions: [],
+      focusableRef: 'e1',
+    };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = leasePool([]);
+    await runAct(deps, { ref: 'e1', action: 'press', args: { text: 'Enter' } });
+    const step = deps.recordings.takeAmbient('demo')?.steps[0];
+    expect(step?.args).toMatchObject({ by: 'testid', value: 'login-submit' });
   });
 
   it('answers native:true on a lease instead of refusing it as not configured', async () => {

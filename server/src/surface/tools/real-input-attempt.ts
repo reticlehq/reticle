@@ -318,6 +318,19 @@ function performArgsOf(inner: Record<string, unknown>): RealInputArgs {
   return performArgs;
 }
 
+/** The fields an act result names its element by, which the flow recorder anchors a step on. */
+const ANCHOR_FIELDS = [
+  'testid',
+  'testidOf',
+  'component',
+  'source',
+  'role',
+  'name',
+  'nth',
+  'of',
+  'secret',
+];
+
 /**
  * Press with a leased page's real keyboard, or undefined when this session is not such a lease.
  *
@@ -340,12 +353,18 @@ async function pressOnLease(
   if (pool === undefined || !pool.hasKeyboard(session.id)) return undefined;
   const unspellable = unspellablePressReason('', inner);
   if (unspellable !== undefined) return synthetic(unspellable);
+  // What the focused element is called, from the focus act's own report, so the saved step can
+  // find it again: the real keyboard reports no element of its own.
+  let anchor: Record<string, unknown> = {};
   if (0 < ref.length) {
-    await commandOrThrow(deps, session.id, ReticleCommand.ACT, {
-      ref,
-      action: ActionType.FOCUS,
-      args: {},
-    });
+    const focus = asRecord(
+      await commandOrThrow(deps, session.id, ReticleCommand.ACT, {
+        ref,
+        action: ActionType.FOCUS,
+        args: {},
+      }),
+    );
+    anchor = Object.fromEntries(ANCHOR_FIELDS.flatMap((k) => (k in focus ? [[k, focus[k]]] : [])));
     const inspected = asRecord(
       await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, { ref }),
     );
@@ -358,6 +377,7 @@ async function pressOnLease(
   if (performed?.performed !== true) return undefined;
   return {
     result: {
+      ...anchor,
       performed: true,
       action: ActionType.PRESS,
       inputMode: InputMode.REAL,
