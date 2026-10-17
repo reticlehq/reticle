@@ -67,7 +67,8 @@ export async function healFlow(
   deps: ToolDeps,
   args: Record<string, unknown>,
 ): Promise<FlowHealResult> {
-  const name = asString(args['flowName']) ?? '';
+  // `flow` is the alias the tool's schema offers; ignoring it healed a flow named "".
+  const name = asString(args['flowName']) ?? asString(args['flow']) ?? '';
   const apply = true === args['apply'];
   const target = sessionTarget(deps, asString(args['sessionId']));
   const { projectId } = target;

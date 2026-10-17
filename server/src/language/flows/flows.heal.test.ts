@@ -371,6 +371,14 @@ describe('FlowStore.heal + reticle_flow_heal', () => {
     expect(after).toEqual(before);
   });
 
+  it('takes `flow`, the alias its schema offers, as the flow name', async () => {
+    await store.saveFlow(flowFile('chat', [clickStep('chat-send')]));
+    const session = new FakeSession((testid) => ({ elements: [el(`e-${testid}`, testid)] }));
+
+    const res = await heal(store, session, { flow: 'chat', apply: false });
+    expect(res.status).toBe(HealStatus.NOTHING_TO_HEAL);
+  });
+
   it('heal on a green flow is a no-op "nothing to heal"', async () => {
     await store.saveFlow(flowFile('chat', [clickStep('chat-send')]));
     const before = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
