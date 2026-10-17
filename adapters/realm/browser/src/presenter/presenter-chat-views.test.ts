@@ -587,6 +587,30 @@ describe('running the Harness from the panel', () => {
     expect(run?.disabled).toBe(false);
   });
 
+  // Night 7b: with the cloud unreachable the daemon answered in 0.15 s, and the page sat on
+  // Starting… for the whole 20 s fallback before it showed the line.
+  it("shows why no drive started as soon as the daemon says it, not after Starting…'s fallback", () => {
+    const { root, views } = mountWithDrive();
+    // An earlier word on this tab: it is not the answer to this press.
+    views.paintDrive(undefined, {
+      said: 'The page reloaded, so this run stopped. Run again.',
+      seq: 1,
+    });
+    const run = root.querySelector<HTMLButtonElement>('[data-reticle-harness-run]');
+    run?.click();
+    views.paintDrive(undefined, {
+      said: 'The page reloaded, so this run stopped. Run again.',
+      seq: 1,
+    });
+    expect(run?.textContent).toBe('Starting…');
+    views.paintDrive(undefined, { said: 'Reticle Cloud at http://x did not answer.', seq: 2 });
+    expect(run?.textContent).toBe('Run Harness');
+    expect(run?.disabled).toBe(false);
+    expect(root.querySelector('[data-reticle-harness-page]')?.textContent).toContain(
+      'Reticle Cloud at http://x did not answer.',
+    );
+  });
+
   it('gives Run back if the drive never starts', () => {
     vi.useFakeTimers();
     try {

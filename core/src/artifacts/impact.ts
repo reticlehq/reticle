@@ -250,6 +250,8 @@ export type HarnessDrive = z.infer<typeof HarnessDriveSchema>;
 export const LastDriveSchema = z.object({
   runUrl: z.string().optional(),
   said: z.string().optional(),
+  /** Which word this is, rising: the page tells the answer to its press from an earlier word. */
+  seq: z.number().int().min(0).optional(),
 });
 export type LastDrive = z.infer<typeof LastDriveSchema>;
 

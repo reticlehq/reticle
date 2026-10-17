@@ -88,6 +88,8 @@ const LINE_MAX = 300;
 
 /** Per tab: how its last drive ended, or why none started. Cleared when a drive starts there. */
 const lastWords = new Map<string, LastDrive>();
+/** Numbers each last word, so the page can tell a new answer from one it already showed. */
+let wordSeq = 0;
 
 /** Finished drives kept for polling; older ones are read back from disk. */
 const MAX_FINISHED = 50;
@@ -236,7 +238,8 @@ export function stopDrive(runId: string, reason?: string): boolean {
 
 /** Why no drive started on this tab (a refusal, the cloud unreachable), for its Harness page. */
 export function noteHarnessWord(sessionId: string, said: string): void {
-  lastWords.set(sessionId, { said });
+  wordSeq += 1;
+  lastWords.set(sessionId, { said, seq: wordSeq });
 }
 
 /** How this drive ended, for its tab's Harness page: the run's result, and why when it fell short. */
@@ -249,7 +252,9 @@ function noteLastWord(entry: Entry): void {
       ? entry.record.error
       : undefined;
   const said = entry.stopReason ?? fell;
+  wordSeq += 1;
   lastWords.set(sessionId, {
+    seq: wordSeq,
     ...('string' === typeof runUrl ? { runUrl } : {}),
     ...(said === undefined ? {} : { said }),
   });

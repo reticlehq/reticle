@@ -351,6 +351,9 @@ export class ChatViews {
   #last: LastDrive | undefined;
   /** Run pressed, no drive reported yet. Cleared by the drive arriving, or by the timer. */
   #starting: ReturnType<typeof setTimeout> | undefined;
+  /** The daemon's last word as Run was pressed: a newer one is the answer to that press. */
+  #lastSeq: number | undefined;
+  #pressedAfter: number | undefined;
 
   constructor(onImpact: () => void, onOpenChat: (view: ChatView) => void, drive?: HudDriveHost) {
     this.#onImpact = onImpact;
@@ -417,6 +420,7 @@ export class ChatViews {
       if (null !== run) {
         if (run.disabled) return;
         this.#startedAs = this.#personaPick;
+        this.#pressedAfter = this.#lastSeq;
         this.#markStarting(true);
         this.#drive?.run(personaText(this.#personaPick, this.#customPersona));
         return;
@@ -615,8 +619,13 @@ export class ChatViews {
           };
     // The drive has landed: Starting… becomes Stop. No drive while still starting is the push that
     // raced the daemon registering it, and must not offer Run again for a beat.
-    if (drive !== undefined) this.#markStarting(false);
-    else if (this.#starting === undefined) this.#startedAs = undefined;
+    this.#lastSeq = last?.seq;
+    // A new word with no drive is the answer to the press (refused, the cloud unreachable): said
+    // now, not after the Starting… fallback ran out.
+    const answered =
+      last?.seq !== undefined && last.seq !== this.#pressedAfter && this.#starting !== undefined;
+    if (drive !== undefined || answered) this.#markStarting(false);
+    if (drive === undefined && this.#starting === undefined) this.#startedAs = undefined;
     this.#paintHarness();
   }
 

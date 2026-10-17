@@ -46,6 +46,31 @@ describe('Run Harness with the cloud unreachable', () => {
     );
   });
 
+  // Night 7b: a cloud that takes the connection and never answers held the grant with no bound.
+  it('says the cloud did not answer when the grant hangs, within its bound', async () => {
+    const hangs = (_url: string, init: { signal?: AbortSignal }) =>
+      new Promise<never>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    const answer = await requestFreeDrive(
+      { url: 'http://localhost:1', apiKey: 'rk_live_x' },
+      FreeDriveKind.EXPLORE,
+      hangs,
+      50,
+    );
+    expect(answer.granted ? '' : answer.message).toMatch(/did not answer/);
+  });
+
+  it('numbers each word, so the page can tell a new answer from the last one', async () => {
+    const said: string[] = [];
+    const refuse = () =>
+      Promise.resolve({ granted: false as const, needsCard: false, message: 'No.' });
+    await hudDrive(deps(said), 's1', { kind: HumanControlKind.HARNESS_RUN }, noSwitch, refuse);
+    const first = withRunningDrive(SNAPSHOT, 's1')?.lastDrive?.seq ?? -1;
+    await hudDrive(deps(said), 's1', { kind: HumanControlKind.HARNESS_RUN }, noSwitch, refuse);
+    expect(withRunningDrive(SNAPSHOT, 's1')?.lastDrive?.seq ?? -1).toBeGreaterThan(first);
+  });
+
   it('leaves that line on the Harness page, for this tab', async () => {
     const said: string[] = [];
     await hudDrive(deps(said), 's1', { kind: HumanControlKind.HARNESS_RUN }, noSwitch, () =>

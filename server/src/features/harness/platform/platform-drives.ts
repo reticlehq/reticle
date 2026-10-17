@@ -11,6 +11,11 @@ const RUNS_PATH = '/v1/runs';
 const NEEDS_CARD = 'needs_card';
 const HTTP_PAYMENT_REQUIRED = 402;
 const HTTP_NOT_FOUND = 404;
+/**
+ * How long the grant is waited for. A cloud that takes the connection and never answers held the
+ * HUD's Run on "Starting…" with no bound; past this, the person is told it did not answer.
+ */
+export const GRANT_TIMEOUT_MS = 5_000;
 /** Where a workspace starts its trial: the dashboard's billing settings, at its origin. */
 const PLAN_PATH = '/settings?group=billing';
 
@@ -21,7 +26,7 @@ export type FreeDriveKind = (typeof FreeDriveKind)[keyof typeof FreeDriveKind];
 /** One HTTP request, narrowed so a test answers it without a network. */
 export type PlatformFetch = (
   url: string,
-  init: { method: string; headers: Record<string, string>; body?: string },
+  init: { method: string; headers: Record<string, string>; body?: string; signal?: AbortSignal },
 ) => Promise<{ status: number; text(): Promise<string> }>;
 
 /** The drive the platform granted, or why it would not. */
@@ -66,12 +71,14 @@ export async function requestFreeDrive(
   platform: Platform,
   kind: FreeDriveKind,
   doFetch: PlatformFetch = defaultFetch,
+  timeoutMs: number = GRANT_TIMEOUT_MS,
 ): Promise<FreeDrive> {
   try {
     const res = await doFetch(`${base(platform)}${FREE_DRIVE_PATH}`, {
       method: 'POST',
       headers: headers(platform),
       body: JSON.stringify({ kind }),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const body = record(await res.text());
     const driveId = str(body['driveId']);
