@@ -884,12 +884,29 @@ export function isInViewport(el: Element, memo?: Map<Element, boolean>): boolean
   return r.bottom > 0 && r.right > 0 && r.top < view.innerHeight && r.left < view.innerWidth;
 }
 
+/**
+ * A box of no size that clips its own overflow shows nothing: a control collapsed to 0×0 read
+ * `visible` and a visible-state check on it held. Only an element that clips is judged, because an
+ * unclipped one can still show content overflowing it; one with no layout box (display: contents)
+ * is left alone.
+ */
+function collapsed(el: Element, memo: Map<Element, VisibilityInfo>): boolean {
+  const own = ownVisibilityInfo(el, memo);
+  if (!own.clipX && !own.clipY) return false;
+  const rects = Array.from(el.getClientRects());
+  return (
+    rects.length > 0 &&
+    rects.every((r) => (own.clipX && 0 === r.width) || (own.clipY && 0 === r.height))
+  );
+}
+
 /** Visibility combines inherited CSS/ARIA hiding with this target's surviving clipping region. */
 export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   if (!el.isConnected) return false;
   const cached = memo?.get(el);
   if (cached !== undefined) return cached;
-  const result = visibleBounds(el, visibilityInfoMemo(memo), undefined, true) !== null;
+  const info = visibilityInfoMemo(memo);
+  const result = visibleBounds(el, info, undefined, true) !== null && !collapsed(el, info);
   if (memo !== undefined) memo.set(el, result);
   return result;
 }
