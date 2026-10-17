@@ -112,6 +112,33 @@ describe('tanstackQueryStore', () => {
     const { client } = fakeQueryClient([]);
     expect(tanstackQueryStore(client).getState()).toEqual({});
   });
+
+  it('carries isInvalidated so a mutation that invalidates a query is visible', () => {
+    // A refetch and an invalidation look the same from the outside (both cause a re-fetch on
+    // the next mount). isInvalidated lets an agent assert the cause was the mutation, not
+    // staleTime expiry.
+    const invalidated = {
+      queryKey: ['items'],
+      state: {
+        status: 'success',
+        fetchStatus: 'idle',
+        dataUpdatedAt: 1800,
+        error: null,
+        data: [],
+        isInvalidated: true,
+      },
+      isStale: () => false,
+    };
+    const { client } = fakeQueryClient([invalidated]);
+    const state = tanstackQueryStore(client).getState() as Record<string, Record<string, unknown>>;
+    expect(state['items']?.['isInvalidated']).toBe(true);
+  });
+
+  it('carries isInvalidated as undefined when the query has not been invalidated', () => {
+    const { client } = fakeQueryClient([query]);
+    const state = tanstackQueryStore(client).getState() as Record<string, Record<string, unknown>>;
+    expect(state['deployments/42']?.['isInvalidated']).toBeUndefined();
+  });
 });
 
 describe('jotaiStore', () => {
