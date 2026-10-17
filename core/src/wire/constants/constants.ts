@@ -390,6 +390,7 @@ export const DANGEROUS_ACTION_CONFIRM_ARG = 'confirmDangerous';
  * through the SDK instead.
  */
 export const NATIVE_INPUT_ARG = 'native';
+export const INSPECT_REVEAL_ARG = 'reveal'; // INSPECT arg: scroll an off-viewport element in first
 
 /** Schema version stamped onto compiled replay programs. */
 export const REPLAY_PROGRAM_VERSION = 1;

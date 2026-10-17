@@ -6,9 +6,11 @@ import {
   DriveErrorCode,
   InputMode,
   InputModeReason,
+  INSPECT_REVEAL_ARG,
   SessionState,
 } from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
+import { asRecord } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '@/memory/project/baselines.js';
@@ -21,7 +23,10 @@ import { boxCenter, DriveError, type ElementBox, type RealInputProvider } from '
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { BrowserPool } from '@/portal/pool/browser-pool.js';
-import { HOVER_NEEDS_POINTER_MSG } from '@/surface/tools/real-input-attempt.js';
+import {
+  HOVER_NEEDS_POINTER_MSG,
+  HOVER_OFF_VIEWPORT_MSG,
+} from '@/surface/tools/real-input-attempt.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
 const SOURCE_BOX: ElementBox = { x: 0, y: 0, width: 200, height: 100 };
@@ -37,6 +42,12 @@ interface FakeSessionState {
   zeroAreaRef?: string;
   /** When set, the session is under version skew (the page and daemon disagree on protocol). */
   versionSkew?: string;
+  /** When set, this ref sits outside the viewport: its states carry no `inViewport`. */
+  offViewportRef?: string;
+  /** Whether an INSPECT with `reveal` scrolls `offViewportRef` into view. */
+  revealBrings?: boolean;
+  /** Every ref an INSPECT asked to reveal. */
+  revealRefs?: string[];
 }
 
 function fakeSession(state: FakeSessionState): Session {
@@ -56,6 +67,21 @@ function fakeSession(state: FakeSessionState): Session {
         });
       }
       const box = 'eTarget' === ref ? TARGET_BOX : SOURCE_BOX;
+      if (ref === state.offViewportRef) {
+        const reveal = true === args[INSPECT_REVEAL_ARG];
+        if (reveal) state.revealRefs?.push(ref);
+        const inView = reveal && true === state.revealBrings;
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'c',
+          ok: true,
+          result: {
+            box,
+            states: inView ? ['visible', 'inViewport'] : ['visible'],
+            ...(inView ? { scrolledIntoView: true } : {}),
+          },
+        });
+      }
       return Promise.resolve({
         kind: 'command_result',
         id: 'c',
@@ -650,5 +676,87 @@ describe('reticle_act routes a document press through real input', () => {
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
     expect(res.inputModeReason).toBe(InputModeReason.PROVIDER_DECLINED);
+  });
+});
+
+describe('a real gesture on a target outside the viewport (#1711)', () => {
+  it('asks the page to scroll the target into view, then performs on the new box', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      offViewportRef: 'e1',
+      revealBrings: true,
+      revealRefs: [],
+    };
+
+    const res = await runAct(fakeDeps(provider, state), { ref: 'e1', action: 'hover' });
+
+    expect(state.revealRefs).toEqual(['e1']);
+    expect(res.inputMode).toBe(InputMode.REAL);
+    expect(provider.calls).toHaveLength(1);
+    expect(asRecord(res.result)['scrolledIntoView']).toBe(true);
+  });
+
+  it('does not perform a native click on a box that is still outside the viewport', async () => {
+    // The pointer would go to coordinates off the page and report `performed: true` while nothing
+    // reached the control. The synthetic path scrolls and hit-tests on its own.
+    const provider = makeProvider(true);
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      offViewportRef: 'e1',
+      revealBrings: false,
+      revealRefs: [],
+    };
+
+    const res = await runAct(fakeDeps(provider, state), {
+      ref: 'e1',
+      action: 'click',
+      args: { native: true },
+    });
+
+    expect(provider.calls).toHaveLength(0);
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.ELEMENT_NOT_LOCATABLE);
+  });
+
+  it('refuses a hover on a box that is still outside the viewport', async () => {
+    // A synthetic hover never applies :hover, so falling back would be the false success.
+    const provider = makeProvider(true);
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      offViewportRef: 'e1',
+      revealBrings: false,
+      revealRefs: [],
+    };
+
+    await expect(runAct(fakeDeps(provider, state), { ref: 'e1', action: 'hover' })).rejects.toThrow(
+      HOVER_OFF_VIEWPORT_MSG,
+    );
+    expect(provider.calls).toHaveLength(0);
+    expect(state.actCalls).toBe(0);
+  });
+
+  it('checks the drop target of a drag the same way', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      offViewportRef: 'eTarget',
+      revealBrings: false,
+      revealRefs: [],
+    };
+
+    const res = await runAct(fakeDeps(provider, state), {
+      ref: 'e1',
+      action: 'drag',
+      args: { toRef: 'eTarget' },
+    });
+
+    expect(state.revealRefs).toEqual(['eTarget']);
+    expect(provider.calls).toHaveLength(0);
+    expect(res.inputModeReason).toBe(InputModeReason.DRAG_TARGET_UNRESOLVED);
   });
 });
