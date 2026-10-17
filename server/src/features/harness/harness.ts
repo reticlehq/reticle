@@ -102,6 +102,11 @@ export interface ModelDriver {
     tools: readonly HarnessTool[];
     history: readonly HistoryEntry[];
   }): Promise<ModelTurn>;
+  /**
+   * The credits the drive spent, asked once it ended without the driver's own `finish` saying so (a
+   * goal reached on the page, the step budget, a stop). Absent for a driver that cannot tell.
+   */
+  spent?(): Promise<number | undefined>;
 }
 
 /** Why a run stopped. Every one of these is a real outcome; none of them is an error. */
@@ -372,6 +377,19 @@ export async function runHarness(
   driver: ModelDriver,
   toolset: HarnessToolset,
   options: HarnessOptions = {},
+): Promise<HarnessResult> {
+  const result = await driveToEnd(driver, toolset, options);
+  // A drive ended here (its goal on the page, the budget, a stop) never heard the platform's last
+  // word on spend, and a plan summed it as 0 while the workspace paid 3.5 (night 7).
+  if (result.creditsSpent !== undefined || driver.spent === undefined) return result;
+  const spent = await driver.spent().catch(() => undefined);
+  return spent === undefined ? result : { ...result, creditsSpent: spent };
+}
+
+async function driveToEnd(
+  driver: ModelDriver,
+  toolset: HarnessToolset,
+  options: HarnessOptions,
 ): Promise<HarnessResult> {
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const tools = [...toolset.tools, FINISH_TOOL];

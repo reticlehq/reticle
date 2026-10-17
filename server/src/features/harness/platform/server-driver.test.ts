@@ -19,7 +19,10 @@ function platform(script: Record<string, (body: Record<string, unknown>) => unkn
   const asked: { path: string; body: Record<string, unknown> }[] = [];
   const fetch = (url: string, init: RequestInit): Promise<Response> => {
     const path = new URL(url).pathname;
-    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    const body = (init.body === undefined ? {} : JSON.parse(init.body as string)) as Record<
+      string,
+      unknown
+    >;
     asked.push({ path, body });
     const answer = (script[path] ?? (() => ({ status: 404 })))(body);
     const status = (answer as { status?: number }).status;
@@ -112,6 +115,33 @@ describe('the platform drives, this machine executes', () => {
       toolset([]),
     );
     expect(result.creditsSpent).toBe(3);
+  });
+
+  // Night 7: a drive the daemon ended itself (its goal was on the page) reported creditsSpent: 0
+  // while the workspace spent 3.5. The platform said the spend only on a turn it ended; the run's
+  // own record has it either way.
+  it('asks the platform what the run spent when the drive ended here, not there', async () => {
+    const { asked, fetch } = platform({
+      '/v1/harness/runs': () => ({ runId: 'hr_3' }),
+      '/v1/harness/runs/hr_3/turn': (body) => ({
+        turn: body['turn'],
+        calls: [
+          { id: `t${String(body['turn'])}`, name: 'reticle_act_and_wait', args: { ref: 'e1' } },
+        ],
+        text: '',
+        done: false,
+        status: 'running',
+      }),
+      '/v1/harness/runs/hr_3': () => ({ runId: 'hr_3', creditsSpent: 3.5 }),
+    });
+    const result = await runHarness(
+      serverDriver({ url: 'https://p.test', apiKey: 'rk_live_x', fetch }),
+      toolset([]),
+      { maxSteps: 2 },
+    );
+    expect(result.stopReason).toBe('budget');
+    expect(result.creditsSpent).toBe(3.5);
+    expect(asked.at(-1)?.path).toBe('/v1/harness/runs/hr_3');
   });
 
   /** The Harness decides on the platform; a password it types must never travel there. */
