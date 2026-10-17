@@ -11,6 +11,7 @@ import {
   AnchorKind,
   DriftReason,
   FLOW_FILE_VERSION,
+  ReplayStatus,
   ReticleCommand,
   ReticleTool,
   asRef,
@@ -21,6 +22,7 @@ import {
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { partialStatus, replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { replayVerdictEffect } from './flow-result.js';
+import { unreachableTargetResult } from './flow-step-runners.js';
 
 /** One testid resolves; the act on it reports `effect`. */
 function session(effect: Record<string, unknown>): FlowReplaySession {
@@ -87,5 +89,20 @@ describe('a replayed click a person could not have made', () => {
     const { steps, verified } = await replay({});
     expect(steps[0]?.drift).toBeUndefined();
     expect(verified).toBe('yes');
+  });
+});
+
+// Live (night 7b): the suite read that drift as a failed flow, "Reticle result: failed", a false no.
+describe('a replay stopped on a click no person could make', () => {
+  it('is undecided as a whole, giving the cause, never a failed flow', async () => {
+    const { steps } = await replay({ occluded: true, occluderName: 'div' });
+    const result = unreachableTargetResult(FLOW.name, steps);
+    expect(result?.status).toBe(ReplayStatus.UNVERIFIABLE);
+    expect(result?.unverifiable?.reason).toContain('covered by div');
+  });
+
+  it('leaves a replay a person could have made as it was', async () => {
+    const { steps } = await replay({});
+    expect(unreachableTargetResult(FLOW.name, steps)).toBeUndefined();
   });
 });
