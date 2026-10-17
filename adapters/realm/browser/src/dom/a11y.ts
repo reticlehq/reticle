@@ -529,7 +529,7 @@ function slotInCapturedClosedRoot(el: Element): HTMLSlotElement | null {
  * `embeddedRootsUnder`). Without the hop, nothing that hides the host — a closed `<details>`,
  * display:none, aria-hidden — is ever seen by the walk inside the host's shadow tree.
  */
-function parentAcrossShadowBoundary(el: Element): Element | null {
+export function parentAcrossShadowBoundary(el: Element): Element | null {
   // A SLOTTED element renders where its slot is, not as a child of the host: its composed parent
   // is `assignedSlot`, inside the host's shadow tree. Going straight to `parentElement` (the host)
   // skipped every ancestor of the slot, so light-DOM content slotted into a closed `<details>` in a

@@ -12,18 +12,22 @@
  * framework `<div onClick>` quiet: its handler is invisible here, but it is nearly always styled as
  * clickable.
  *
- * Known gap: the walk stops at a shadow root, so a light-DOM wrapper slotted inside a shadow host's
- * button reads as not a control.
+ * The walk follows the COMPOSED tree, through slots and shadow hosts, the same way visibility does.
+ * A bare `parentElement` walk stops at the top of a shadow tree and skips a slot's ancestors, which
+ * flagged working clicks on shadow and slotted content.
+ *
+ * Call it BEFORE dispatch. A click that removes its own target leaves a detached element with no
+ * ancestors and no inherited cursor, and judging that would misread a click that worked.
  */
 import { ActionType } from '@reticlehq/core';
-import { getRole } from '@/dom/a11y.js';
+import { getRole, parentAcrossShadowBoundary } from '@/dom/a11y.js';
 import { INTERACTIVE } from '@/dom/snapshot.js';
 
 const CLICK_FORWARDING = 'label, summary, [onclick], [tabindex]';
 
 export function clickHitsNoControl(el: Element, action: string): boolean {
   if (ActionType.CLICK !== action && ActionType.DBLCLICK !== action) return false;
-  for (let node: Element | null = el; node !== null; node = node.parentElement) {
+  for (let node: Element | null = el; node !== null; node = parentAcrossShadowBoundary(node)) {
     if (INTERACTIVE.has(getRole(node)) || node.matches(CLICK_FORWARDING)) return false;
   }
   return 'pointer' !== getComputedStyle(el).cursor;

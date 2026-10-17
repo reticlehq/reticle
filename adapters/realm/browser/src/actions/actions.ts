@@ -666,6 +666,7 @@ export async function executeAction(
   const geometry = CLICK_LIKE.has(action) ? clickGeometry(el) : NO_GEOMETRY;
   // Read BEFORE dispatch, from the same predicate the dispatch branch uses.
   const alreadyAtValue = alreadyAtCheckedState(el, action);
+  const hitsNoControl = clickHitsNoControl(el, action);
 
   let mutated = 0;
   const said = new AppearedText();
@@ -745,7 +746,7 @@ export async function executeAction(
       ? ActionWarning.CLICK_OCCLUDED
       : action === ActionType.HOVER && elementHasHoverHandlers(el)
         ? ActionWarning.HOVER_NATIVE_ENTER_LEAVE
-        : clickHitsNoControl(el, action)
+        : hitsNoControl
           ? ActionWarning.CLICK_NOT_A_CONTROL
           : undefined;
   return result(ref, action, effect, settled, settleReason, anchor, warning);
