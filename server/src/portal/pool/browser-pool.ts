@@ -27,6 +27,7 @@ import type {
   PooledPage,
   ScreenshotOptions,
 } from './pool-contract.js';
+import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
 export type {
   InitScriptHandle,
   Launcher,
@@ -413,6 +414,23 @@ export class BrowserPool {
     } catch {
       return false;
     }
+  }
+
+  /** Whether this session is a lease whose page has a real keyboard. */
+  hasKeyboard(sessionId: string): boolean {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.page.press !== undefined;
+  }
+
+  /**
+   * Press a key with the leased page's real keyboard, or undefined when this session is not a lease
+   * or its page has no keyboard. A throw is the caller's to read: a key that went down and did not
+   * come up must not be answered with a second, synthetic press.
+   */
+  async pressLease(sessionId: string, args: RealInputArgs): Promise<RealInputResult | undefined> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    if (lease?.page.press === undefined) return undefined;
+    this.touch(sessionId);
+    return lease.page.press(args);
   }
 
   /**

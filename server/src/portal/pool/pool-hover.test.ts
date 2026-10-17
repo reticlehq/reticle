@@ -94,3 +94,27 @@ describe('hovering a lease', () => {
     await pool.shutdown();
   });
 });
+
+/** A lease's real keyboard: the same optional-capability rule as hover. */
+describe('pressing a key on a lease', () => {
+  it('presses through the page and says the session has a keyboard', async () => {
+    const press = vi.fn(() => Promise.resolve({ performed: true, inputMode: 'real' as const }));
+    const pool = poolWith({ press });
+    const lease = await pool.acquire('http://app.test/');
+    expect(pool.hasKeyboard(lease.sessionId)).toBe(true);
+    expect(await pool.pressLease(lease.sessionId, { text: 'Tab' })).toMatchObject({
+      performed: true,
+    });
+    expect(press).toHaveBeenCalledWith({ text: 'Tab' });
+    await pool.shutdown();
+  });
+
+  it('has no keyboard for a session that is not a lease, or a page without one', async () => {
+    const pool = poolWith({ press: undefined });
+    const lease = await pool.acquire('http://app.test/');
+    expect(pool.hasKeyboard('s-somebody-elses-tab')).toBe(false);
+    expect(pool.hasKeyboard(lease.sessionId)).toBe(false);
+    expect(await pool.pressLease(lease.sessionId, { text: 'Tab' })).toBeUndefined();
+    await pool.shutdown();
+  });
+});

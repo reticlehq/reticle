@@ -729,6 +729,7 @@ export const InputModeReason = {
    * permanent for the session, not a transient downgrade, so it should stop asking.
    */
   NOT_CONFIGURED: 'real-input-not-configured-for-this-session',
+  TARGET_NOT_FOCUSABLE: 'target-cannot-hold-focus', // lease press: the named element took no focus
 } as const;
 export type InputModeReason = (typeof InputModeReason)[keyof typeof InputModeReason];
 

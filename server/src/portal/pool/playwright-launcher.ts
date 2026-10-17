@@ -8,7 +8,7 @@
 
 import type { Browser } from 'playwright';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
-import { HIDE_RETICLE_CHROME_CSS, RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
+import { ActionType, HIDE_RETICLE_CHROME_CSS, RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
 import { launchChromium } from '@/launch-chromium.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
@@ -20,6 +20,11 @@ import {
 import type { Launcher, PooledBrowser, PooledContext, PooledPage } from './browser-pool.js';
 import type { ScreenshotOptions } from './pool-contract.js';
 import { installNetworkMocks } from '@/portal/input/network-mock.js';
+import { performGesture, type ElementBox } from '@/portal/input/real-input.js';
+
+/** A key addresses focus, not a point; the gesture driver takes a box for every action. */
+const NO_BOX: ElementBox = { x: 0, y: 0, width: 0, height: 0 };
+const sleepFor = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Reticle paints its own UI (presenter HUD, glow, annotator marks, tour) into the page. It is
@@ -147,6 +152,8 @@ function wrapBrowser(browser: Browser): PooledBrowser {
               await page.mouse.move(x + 1, y);
               await page.mouse.move(x, y);
             },
+            // The same driver `reticle drive` presses with, so a held key and a chord read alike.
+            press: (args) => performGesture(page, ActionType.PRESS, NO_BOX, args, sleepFor),
             installMocks: (rules) => installNetworkMocks(page, [...rules]),
             setViewport: (size) => page.setViewportSize(size),
             bringToFront: () => page.bringToFront(),

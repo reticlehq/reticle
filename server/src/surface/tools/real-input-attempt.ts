@@ -22,6 +22,8 @@
 import {
   ActionType,
   DriveErrorCode,
+  ElementState,
+  InputMode,
   InputModeReason,
   ReticleCommand,
   TRANSPORT_LIMITS,
@@ -292,6 +294,79 @@ function synthetic(reason?: InputModeReason): RealActResult {
     : { result: undefined, settled: false, reason };
 }
 
+/** The act's args, as the real-input driver reads them. */
+function performArgsOf(inner: Record<string, unknown>): RealInputArgs {
+  const performArgs: RealInputArgs = {};
+  const value = asString(inner['value']);
+  if (value !== undefined) performArgs.value = value;
+  const text = asString(inner['text']);
+  if (text !== undefined) performArgs.text = text;
+  const key = asString(inner['key']);
+  if (key !== undefined) performArgs.key = key;
+  const modifiers = inner['modifiers'];
+  if (Array.isArray(modifiers)) {
+    performArgs.modifiers = modifiers.filter((m): m is string => 'string' === typeof m);
+  }
+  // A held key is the whole point of a hold-to-confirm control, and the synthetic path has honoured
+  // `holdMs` all along. Not forwarding it made the real keyboard the WEAKER of the two paths: it
+  // drove the key instantly and reported a hold that never held.
+  const holdMs = asNumber(inner['holdMs']);
+  if (holdMs !== undefined) performArgs.holdMs = holdMs;
+  // `keys` and `code` are read but not forwarded: both are routed away by the caller — a multi-key
+  // sequence and an explicit physical code have no driver spelling — so carrying them into the
+  // provider would only invite it to guess at a gesture the caller did not ask for.
+  return performArgs;
+}
+
+/**
+ * Press with a leased page's real keyboard, or undefined when this session is not such a lease.
+ *
+ * A lease is Reticle's own Playwright page, so it has a real keyboard with no `reticle drive`
+ * provider configured. Without this, Tab moved no focus and Enter or Space on a focused button did
+ * nothing, so a keyboard-only journey could be audited and never driven.
+ *
+ * A press that names an element focuses it first, inside the caller's `beginAction` window, the
+ * way a person tabs to a control and then presses the key. An element that does not take focus
+ * keeps the in-page press, with the reason: a person's keyboard could not reach it either.
+ * ponytail: lease only; the drive provider keeps its documented element-press rule.
+ */
+async function pressOnLease(
+  deps: ToolDeps,
+  session: Session,
+  ref: string,
+  inner: Record<string, unknown>,
+): Promise<RealActResult | undefined> {
+  const pool = deps.pool;
+  if (pool === undefined || !pool.hasKeyboard(session.id)) return undefined;
+  const unspellable = unspellablePressReason('', inner);
+  if (unspellable !== undefined) return synthetic(unspellable);
+  if (0 < ref.length) {
+    await commandOrThrow(deps, session.id, ReticleCommand.ACT, {
+      ref,
+      action: ActionType.FOCUS,
+      args: {},
+    });
+    const inspected = asRecord(
+      await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, { ref }),
+    );
+    const states = Array.isArray(inspected['states']) ? inspected['states'] : [];
+    if (!states.includes(ElementState.FOCUSED)) {
+      return synthetic(InputModeReason.TARGET_NOT_FOCUSABLE);
+    }
+  }
+  const performed = await pool.pressLease(session.id, performArgsOf(inner));
+  if (performed?.performed !== true) return undefined;
+  return {
+    result: {
+      performed: true,
+      action: ActionType.PRESS,
+      inputMode: InputMode.REAL,
+      ...(performed.heldMs !== undefined ? { heldMs: performed.heldMs } : {}),
+    },
+    settled: true,
+  };
+}
+
 /**
  * Filler for the provider signature, which demands a box on every action.
  *
@@ -381,6 +456,10 @@ export async function tryRealInput(
     return hoverForReal(deps, session, ref, inner, provider);
   }
   if (provider === undefined) {
+    if (action === ActionType.PRESS) {
+      const leased = await pressOnLease(deps, session, ref, inner);
+      if (leased !== undefined) return leased;
+    }
     // Silent by default: with no provider EVERY action is synthetic, and a reason on all of them is
     // noise on the most-used tool in the product. But an agent that passed native:true asked a
     // question and got the opposite answer — reported from the field as a silent downgrade that cost
@@ -421,25 +500,7 @@ export async function tryRealInput(
   if (!(await provider.isAvailableFor(session.url)))
     return synthetic(InputModeReason.PAGE_NOT_CORRELATED);
 
-  const performArgs: RealInputArgs = {};
-  const value = asString(inner['value']);
-  if (value !== undefined) performArgs.value = value;
-  const text = asString(inner['text']);
-  if (text !== undefined) performArgs.text = text;
-  const key = asString(inner['key']);
-  if (key !== undefined) performArgs.key = key;
-  const modifiers = inner['modifiers'];
-  if (Array.isArray(modifiers)) {
-    performArgs.modifiers = modifiers.filter((m): m is string => 'string' === typeof m);
-  }
-  // A held key is the whole point of a hold-to-confirm control, and the synthetic path has honoured
-  // `holdMs` all along. Not forwarding it made the real keyboard the WEAKER of the two paths: it
-  // drove the key instantly and reported a hold that never held.
-  const holdMs = asNumber(inner['holdMs']);
-  if (holdMs !== undefined) performArgs.holdMs = holdMs;
-  // `keys` and `code` are read but not forwarded: both are routed away above — a multi-key sequence
-  // and an explicit physical code have no driver spelling — so carrying them into the provider would
-  // only invite it to guess at a gesture the caller did not ask for.
+  const performArgs = performArgsOf(inner);
 
   // A document key has no element of its own: skip INSPECT and the box entirely.
   if (action === ActionType.PRESS) {

@@ -22,6 +22,7 @@ import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { BrowserPool } from '@/portal/pool/browser-pool.js';
 import { HOVER_NEEDS_POINTER_MSG } from '@/surface/tools/real-input-attempt.js';
+import { actCommand } from '@/surface/tools/act-tools.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
 const SOURCE_BOX: ElementBox = { x: 0, y: 0, width: 200, height: 100 };
@@ -37,6 +38,12 @@ interface FakeSessionState {
   zeroAreaRef?: string;
   /** When set, the session is under version skew (the page and daemon disagree on protocol). */
   versionSkew?: string;
+  /** Every ACT's action, in order, when a test needs to tell a focus from a press. */
+  actActions?: string[];
+  /** The ref INSPECT reports as holding focus once it has been focused. */
+  focusableRef?: string;
+  /** Set once an ACT focus landed on `focusableRef`. */
+  focused?: string;
 }
 
 function fakeSession(state: FakeSessionState): Session {
@@ -60,11 +67,21 @@ function fakeSession(state: FakeSessionState): Session {
         kind: 'command_result',
         id: 'c',
         ok: true,
-        result: { box, ...(state.inspectName === undefined ? {} : { name: state.inspectName }) },
+        result: {
+          box,
+          ...(state.inspectName === undefined ? {} : { name: state.inspectName }),
+          ...(ref === state.focused ? { states: ['focused'] } : {}),
+        },
       });
     }
     if ('act' === name) {
       state.actCalls += 1;
+      const action = 'string' === typeof args['action'] ? args['action'] : '';
+      state.actActions?.push(action);
+      const focusable = state.focusableRef;
+      if ('focus' === action && focusable !== undefined && args['ref'] === focusable) {
+        state.focused = focusable;
+      }
       return Promise.resolve({
         kind: 'command_result',
         id: 'c',
@@ -650,5 +667,116 @@ describe('reticle_act routes a document press through real input', () => {
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
     expect(res.inputModeReason).toBe(InputModeReason.PROVIDER_DECLINED);
+  });
+});
+
+/**
+ * A lease is Reticle's own Playwright page, so it has a real keyboard even when no `reticle drive`
+ * provider is configured. Synthetic Tab, Enter and Space neither move focus nor press a focused
+ * button, so a keyboard-only journey on a lease could be audited and never driven.
+ */
+describe('keyboard on a lease', () => {
+  const leasePool = (
+    pressed: Record<string, unknown>[],
+    opts: { keyboard?: boolean } = {},
+  ): BrowserPool =>
+    ({
+      hasKeyboard: () => false !== opts.keyboard,
+      pressLease: (_id: string, args: Record<string, unknown>) => {
+        pressed.push({ ...args });
+        return Promise.resolve({ performed: true, inputMode: InputMode.REAL });
+      },
+    }) as unknown as BrowserPool;
+
+  it('presses Tab with the real keyboard, not a synthetic keydown', async () => {
+    const pressed: Record<string, unknown>[] = [];
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = leasePool(pressed);
+    const res = await runAct(deps, { action: 'press', args: { text: 'Tab' } });
+
+    expect(res.inputMode).toBe(InputMode.REAL);
+    expect(pressed).toEqual([{ text: 'Tab' }]);
+    expect(state.actCalls).toBe(0);
+  });
+
+  it('focuses the named control first, then presses Enter on it with the real keyboard', async () => {
+    const pressed: Record<string, unknown>[] = [];
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      actActions: [],
+      focusableRef: 'e1',
+    };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = leasePool(pressed);
+    const res = await runAct(deps, { ref: 'e1', action: 'press', args: { text: 'Enter' } });
+
+    expect(res.inputMode).toBe(InputMode.REAL);
+    expect(state.actActions).toEqual(['focus']);
+    expect(pressed).toEqual([{ text: 'Enter' }]);
+  });
+
+  it('answers native:true on a lease instead of refusing it as not configured', async () => {
+    const pressed: Record<string, unknown>[] = [];
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = leasePool(pressed);
+    const res = await runAct(deps, { action: 'press', args: { text: 'Escape', native: true } });
+
+    expect(res.inputMode).toBe(InputMode.REAL);
+    expect(res.inputModeReason).toBeUndefined();
+    expect(pressed).toEqual([{ text: 'Escape' }]);
+  });
+
+  it('says why when the named control cannot hold focus, and presses in the page as before', async () => {
+    const pressed: Record<string, unknown>[] = [];
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [], actActions: [] };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = leasePool(pressed);
+    const res = await runAct(deps, { ref: 'e1', action: 'press', args: { text: 'Enter' } });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.TARGET_NOT_FOCUSABLE);
+    expect(pressed).toEqual([]);
+    expect(state.actActions).toContain('press');
+  });
+
+  it('keeps a held-together key chord on the in-page dispatcher', async () => {
+    const pressed: Record<string, unknown>[] = [];
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = leasePool(pressed);
+    const res = await runAct(deps, { action: 'press', args: { keys: ['Control', 'k'] } });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.SYNTHETIC_MULTI_KEY_PRESS_PREFERRED);
+    expect(pressed).toEqual([]);
+  });
+
+  it('leaves a tab that is not a lease on the in-page dispatcher', async () => {
+    const pressed: Record<string, unknown>[] = [];
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = leasePool(pressed, { keyboard: false });
+    const res = await runAct(deps, { action: 'press', args: { text: 'Tab' } });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(pressed).toEqual([]);
+    expect(state.actCalls).toBe(1);
+  });
+
+  it('presses with the real keyboard inside act_and_wait too', async () => {
+    const pressed: Record<string, unknown>[] = [];
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = leasePool(pressed);
+    const session = deps.sessions.resolve(undefined);
+    const res = await actCommand(deps, session, { action: 'press', args: { text: 'Tab' } });
+
+    expect(res.ok).toBe(true);
+    expect(res.result).toMatchObject({ inputMode: InputMode.REAL });
+    expect(pressed).toEqual([{ text: 'Tab' }]);
+    expect(state.actCalls).toBe(0);
   });
 });

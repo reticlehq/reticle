@@ -6,6 +6,8 @@
  * these structurally, which is how the pool stays testable without a real Chromium.
  */
 
+import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
+
 /** The minimal page surface the pool drives. Real Playwright `Page` satisfies this. */
 export interface PooledPage {
   goto(url: string, opts?: { timeoutMs?: number }): Promise<unknown>;
@@ -31,6 +33,11 @@ export interface PooledPage {
    * reports dispatched/settled while the styles never ran.
    */
   hover?(x: number, y: number): Promise<void>;
+  /**
+   * Press a key with the real keyboard; it goes to whatever holds focus. OPTIONAL, like `hover`: a
+   * page without it keeps the in-page dispatcher, whose synthetic Tab moves no focus.
+   */
+  press?(args: RealInputArgs): Promise<RealInputResult>;
   /** Evaluate a script in the page's current document. OPTIONAL: without it no reader is injected. */
   evaluate?(script: string): Promise<unknown>;
   /** Add an init script to run after document creation but before any page scripts run. */
