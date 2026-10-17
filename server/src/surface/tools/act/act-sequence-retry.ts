@@ -76,7 +76,8 @@ export function describeStepResult(
     settled: result['settled'] ?? null,
     settleReason: result['settleReason'] ?? null,
   };
-  for (const key of ['testid', 'component', 'role', 'name', 'source', 'warning']) {
+  // `reticleUi`: the step hit Reticle's own HUD, so the recorder leaves it out of the app's flow.
+  for (const key of ['testid', 'component', 'role', 'name', 'source', 'warning', 'reticleUi']) {
     if (result[key] !== undefined) out[key] = result[key];
   }
   return out;

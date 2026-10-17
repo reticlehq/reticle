@@ -328,7 +328,9 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
     ? (asRecord(res)['steps'] as unknown[])
     : [];
   let stable = inputSteps.length > 0;
-  const subSteps = inputSteps.map((raw, i) => {
+  const subSteps = inputSteps.flatMap((raw, i) => {
+    // A step on Reticle's own panel is not a step of the app's journey, as for a single act.
+    if (true === asRecord(resolved[i])['reticleUi']) return [];
     const step = asRecord(raw);
     const compiled = compileAnchorArgs(
       asRecord(resolved[i]),
@@ -341,7 +343,7 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
     // one batch, but what each step CLAIMED is per step -- folding them together would let one
     // signal answer for every click in the journey.
     const expect = enforceableExpect(step['expect']);
-    return expect === undefined ? compiled.args : { ...compiled.args, expect };
+    return [expect === undefined ? compiled.args : { ...compiled.args, expect }];
   });
   const timeoutMs = explicitTimeoutMs(args);
   return {

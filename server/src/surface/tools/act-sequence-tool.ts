@@ -503,11 +503,14 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           },
         );
         journey = recorded;
-        deps.recordings.capture(
-          pageBefore === undefined ? recorded : { ...recorded, page: pageBefore },
-          undefined,
-          session.id,
-        );
+        // Every step was on Reticle's own panel: nothing of the app's journey to record.
+        const onApp = asRecord(recorded.args)['steps'];
+        if (Array.isArray(onApp) && 0 < onApp.length)
+          deps.recordings.capture(
+            pageBefore === undefined ? recorded : { ...recorded, page: pageBefore },
+            undefined,
+            session.id,
+          );
         deps.recordings.markEnded(pathOf(session.url), session.id);
       }
       /*
