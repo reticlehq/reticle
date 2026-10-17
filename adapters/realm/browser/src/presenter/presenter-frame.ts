@@ -37,7 +37,7 @@ const PAGE_PANEL_ATTR = 'data-reticle-page-panel';
 const OVERLAY = 'data-reticle-overlay';
 
 export const RAIL_TEXT = {
-  // Signing in is the whole step: a new workspace gets 10 free credits to try the Harness.
+  // Signing in is the whole step: a new account gets free credits to try the Harness.
   TITLE: 'Sign in to try Reticle Harness',
   DETAIL: 'Free credits to start.',
   CTA: 'Sign in',

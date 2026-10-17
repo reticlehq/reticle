@@ -46,7 +46,7 @@ describe('chat views and harness access states', () => {
     views.paintAccount({ signedIn: false });
     expect(rows(root)).toBe(1);
     expect(root.textContent).toContain(
-      'Sign up: 10 free credits to try Reticle · add a card for a 500-credit, 14-day trial',
+      'Sign up: free credits to try Reticle · add a card for a 500-credit, 14-day trial',
     );
     expect(root.querySelector('[data-reticle-account-signin]')).not.toBeNull();
   });

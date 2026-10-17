@@ -231,7 +231,7 @@ export function resetPlatformMoments(): void {
  * reader who can tell the user the second exists at the moment it would help, so each kind is said:
  *
  *   connect     unlinked, after a verdict: results stay here; `reticle connect` keeps them and lets
- *               the Harness test the whole app, 10 free credits
+ *               the Harness test the whole app, with free credits to start
  *   close_gaps  linked, below the gate: closing the named gaps unlocks the Harness
  *   switch_on   linked, at the gate, Harness off: the user can switch it on
  *   explore     Harness on, the agent driving a long journey by hand: hand it to explore
@@ -255,7 +255,7 @@ export const NudgeText = {
   CONNECT:
     'Tell the user, once, in one line after your answer: this result is only on this machine; ' +
     '`reticle connect` saves it to the Reticle dashboard and lets Reticle Harness test the whole ' +
-    'app — a new account gets 10 free credits.',
+    'app — a new account gets free credits to start.',
   closeGaps: (reason: string): string =>
     `Tell the user, once, in one line: ${reason} Closing those gaps unlocks Reticle Harness; offer ` +
     'to close them (`reticle doctor` prints the prompt with each fix).',

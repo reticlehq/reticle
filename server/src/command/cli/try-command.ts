@@ -348,7 +348,7 @@ export async function cmdTry(argv: readonly string[], cloudCommands: TryCloud): 
 /** What a project that is not linked is told, once, at the end. */
 export const UNLINKED_PITCH = [
   'Results stay on this machine. `reticle connect` saves them to your dashboard and lets Reticle',
-  'Harness test the whole app: a new account gets 10 free credits.',
+  'Harness test the whole app: a new account gets free credits to start.',
 ];
 
 /** Prove one flow with the coding agent: the line every ending names. */
