@@ -26,6 +26,7 @@ import { ReticleTool, isGlobalPressCall } from '@reticlehq/core';
 import { replayActionArgs } from './replay.js';
 import { isStaleRefError } from '@/surface/tools/act/act-sequence-retry.js';
 import { waitForReaction } from '@/surface/tools/act/react-grace.js';
+import { unreachableTargetNote } from '@/surface/tools/act/act-observation.js';
 import { anchorFieldName } from './flows.js';
 import type { FlowReplaySession, Sleep } from './flow-replay-types.js';
 import {
@@ -223,7 +224,9 @@ export async function actOnResolvedRef(
    */
   reresolve?: () => Promise<Reresolved | undefined>,
 ): Promise<FlowStepResult> {
-  const dispatch = async (at: string): Promise<{ ok: boolean; error?: string | undefined }> => {
+  const dispatch = async (
+    at: string,
+  ): Promise<{ ok: boolean; error?: string | undefined; result?: unknown }> => {
     session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref: at, action: step.action ?? '' });
     try {
       const r = await session.command(ReticleCommand.ACT, {
@@ -231,7 +234,7 @@ export async function actOnResolvedRef(
         action: step.action ?? '',
         args: replayActionArgs(step.args, confirmDangerous, field),
       });
-      return { ok: r.ok, error: r.error };
+      return { ok: r.ok, error: r.error, result: r.result };
     } finally {
       session.finishAction?.();
     }
@@ -278,6 +281,19 @@ export async function actOnResolvedRef(
 
   const result: FlowStepResult = { step: index, tool: step.tool, anchor: label, ok: act.ok };
   if (!act.ok) result.error = replayDestructiveActionHint(act.error ?? 'command failed');
+  // A click no person could have made decides nothing, on replay as on a live act.
+  const unreachable = act.ok ? unreachableTargetNote(act.result) : undefined;
+  if (unreachable !== undefined)
+    return {
+      ...result,
+      ok: false,
+      drift: {
+        reasonKind: DriftReason.TARGET_UNREACHABLE,
+        reason: unreachable,
+        anchor: label,
+        nearest: null,
+      },
+    };
   return result;
 }
 

@@ -282,6 +282,12 @@ export const DriftReason = {
    * faster endpoint; the fix for SIGNAL_NOT_OBSERVED is the handler behind the action.
    */
   NET_STILL_IN_FLIGHT: 'net_still_in_flight',
+  /**
+   * The step's action reached a target no person could have clicked: covered, of no size, or off
+   * screen after scrolling. Synthetic dispatch reaches it all the same, so the consequence can hold.
+   * Undecided, as the live act answers it, never a pass and never the app's failure.
+   */
+  TARGET_UNREACHABLE: 'target_unreachable',
 } as const;
 export type DriftReason = (typeof DriftReason)[keyof typeof DriftReason];
 

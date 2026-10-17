@@ -159,7 +159,7 @@ Perform one action / several in order.
 | `noSize` | click-like only: the target is laid out with no size, so a person has nothing to click. Omitted otherwise |
 | `offViewport` | click-like only: the target is still outside the viewport after it was scrolled into view. Omitted otherwise |
 
-A verdict drawn over a click with `occluded`, `noSize` or `offViewport` is `unknown` (`verifiedReason: "inconclusive"`), never `yes`: synthetic dispatch reached the target, so the consequence can hold, but no person could have made that click. `because` names the cause and the fix.
+A verdict drawn over a click with `occluded`, `noSize` or `offViewport` is `unknown` (`verifiedReason: "inconclusive"`), never `yes`: synthetic dispatch reached the target, so the consequence can hold, but no person could have made that click. `because` names the cause and the fix. A replayed flow step reads the same rule: the step drifts with `target_unreachable`, so the replay is `unknown`, never green.
 
 Use it to distinguish failure modes: `visible:false`/`enabled:false`/`targetMatched:false` → your action missed; the tool throwing → it never dispatched; `occluded:true` → the control is covered by something (a real user is blocked even though the synthetic event landed); `defaultPrevented:true` or all of `valueChanged:false`/`focusMoved:null`/`domMutatedWithin:0` → the app didn't react.
 
