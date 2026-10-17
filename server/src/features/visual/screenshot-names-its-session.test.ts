@@ -148,3 +148,49 @@ describe('a screenshot is of the session it names', () => {
     expect(r.matched).toBeUndefined();
   });
 });
+
+/*
+ * Found by driving bench-app through a lease: `{ clip }` and `{ ref }` were dropped on the lease
+ * route, so every scoped screenshot saved the whole viewport and answered `saved: true`.
+ */
+describe('a lease screenshot is scoped the way it was asked', () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = join(await mkdtemp(join(tmpdir(), 'reticle-vs-clip-')), '.reticle');
+  });
+
+  afterEach(async () => {
+    await removeTempDir(join(root, '..'));
+  });
+
+  it('passes the clip to the lease', async () => {
+    const asked: unknown[] = [];
+    const pool = {
+      screenshotLease: (_id: string, opts: unknown) => {
+        asked.push(opts);
+        return Promise.resolve(OTHER_PIXELS);
+      },
+    } as unknown as BrowserPool;
+    const fs = createNodeFileSystem();
+    const sessions: Partial<SessionManager> = { resolve: () => OTHER };
+    const clip = { x: 10, y: 20, width: 300, height: 200 };
+    const r = (await tool(ReticleTool.SCREENSHOT).handler(
+      {
+        sessions: sessions as SessionManager,
+        baselines: new BaselineStore(),
+        recordings: new RecordingStore(),
+        flows: new FlowStore(fs, root, { now }),
+        project: new ProjectStore(fs, root, { now }),
+        annotations: new AnnotationStore(),
+        fs,
+        reticleRoot: root,
+        now,
+        pool,
+      },
+      { name: 'panel', sessionId: OTHER.id, clip },
+    )) as { saved?: boolean };
+    expect(r.saved).toBe(true);
+    expect(asked).toEqual([{ clip }]);
+  });
+});

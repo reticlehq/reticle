@@ -286,7 +286,9 @@ async function capture(
   const leased =
     sessionId === undefined
       ? undefined
-      : await deps.pool?.screenshotLease(sessionId, { fullPage: true === args['fullPage'] });
+      : // The same scope as the provider route: `clip` and `ref` were dropped here, so a scoped
+        // shot of a lease saved the whole viewport and answered `saved: true`.
+        await deps.pool?.screenshotLease(sessionId, await buildOpts(deps, sessionId, args));
   // A leased page is a real browser page, whatever the session is.
   if (leased !== undefined) return { png: leased, runtime: AppRuntime.WEB };
   return {

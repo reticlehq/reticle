@@ -141,4 +141,6 @@ export interface ScreenshotOptions {
   jpegQuality?: number;
   /** One image pixel per CSS pixel, so a high-density display does not double a step screenshot. */
   cssScale?: boolean;
+  /** One region of the page, in CSS pixels: what `reticle_screenshot { clip | ref }` asked for. */
+  clip?: { x: number; y: number; width: number; height: number };
 }

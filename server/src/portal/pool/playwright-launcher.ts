@@ -46,13 +46,18 @@ export function screenshotOptions(opts: ScreenshotOptions): {
   type?: 'jpeg';
   quality?: number;
   scale?: 'css';
+  clip?: { x: number; y: number; width: number; height: number };
 } {
   // A step screenshot is evidence about the page, so it must not change it: `animations: disabled`
   // fast-forwards running animations to their end and fires their events in the app under test.
   if (true === opts.cssScale && opts.jpegQuality !== undefined) {
     return { fullPage: false, type: 'jpeg', quality: opts.jpegQuality, scale: 'css' };
   }
-  const base = { ...SCREENSHOT_DETERMINISM, fullPage: true === opts.fullPage };
+  const base = {
+    ...SCREENSHOT_DETERMINISM,
+    fullPage: true === opts.fullPage,
+    ...(opts.clip === undefined ? {} : { clip: opts.clip }),
+  };
   return opts.jpegQuality === undefined
     ? base
     : { ...base, type: 'jpeg', quality: opts.jpegQuality };
