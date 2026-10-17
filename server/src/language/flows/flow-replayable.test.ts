@@ -16,7 +16,7 @@ import {
   type FlowStep,
 } from '@reticlehq/core';
 import { recordedStepToFlowStep } from './flows.js';
-import { wroteIn } from './replay.js';
+import { compileActStep, wroteIn } from './replay.js';
 import { buildSuiteVerdict } from './decision.js';
 import { writingFlows } from './suite-selection.js';
 import { readyForReplay, replayability, Replayable } from './flow-replayable.js';
@@ -182,5 +182,30 @@ describe('a step that sent a write request while it was recorded', () => {
 
   it("does not count the dev server's own requests as the app's writes", () => {
     expect(wroteIn([request('POST', 'http://localhost:5173/@vite/client')] as never)).toBe(false);
+  });
+});
+
+describe('a step recorded on a test id several elements share', () => {
+  const act = (res: Record<string, unknown>) =>
+    recordedStepToFlowStep(compileActStep({ ref: 'e5', action: 'click', args: {} }, res));
+
+  it('is anchored on its role and name instead, with its place among namesakes', () => {
+    const step = act({ testid: 'runs-result', testidOf: 6, role: 'button', name: 'Open run 12' });
+    expect(step.anchor).toEqual({ kind: 'role', role: 'button', name: 'Open run 12' });
+  });
+
+  it('keeps the test id and says how many share it when nothing else names it', () => {
+    const step = act({ testid: 'fact-more', testidOf: 22 });
+    expect(step.anchor).toEqual({ kind: 'testid', value: 'fact-more', of: 22 });
+    expect(replayability(flowOf([step])).why).toEqual([
+      "step 1 anchors on test id 'fact-more', which 22 elements share",
+    ]);
+  });
+
+  it('keeps a test id only one element carries', () => {
+    expect(act({ testid: 'save', role: 'button', name: 'Save' }).anchor).toEqual({
+      kind: 'testid',
+      value: 'save',
+    });
   });
 });

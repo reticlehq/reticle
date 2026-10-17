@@ -158,3 +158,28 @@ describe('act result — which of several same-named controls', () => {
     expect(open.secret).toBeUndefined();
   });
 });
+
+/**
+ * A test id several elements share is not an anchor: a replay takes the first. Measured on a
+ * dashboard where `runs-result` sat on six buttons and `fact-more` on twenty-two, so a saved step
+ * replayed onto another row. The act result says how many share it, so the save can choose.
+ */
+describe('act result — a shared test id is counted', () => {
+  it('says how many elements carry the acted test id when more than one does', async () => {
+    document.body.innerHTML =
+      '<button data-testid="runs-result">Run 1</button><button data-testid="runs-result">Run 2</button>';
+    const second = document.querySelectorAll('button')[1] as HTMLButtonElement;
+    const res = await executeAction(refs.refFor(second), 'click', {});
+    if (!res.ok) throw new Error('expected ok');
+    expect(res.testid).toBe('runs-result');
+    expect(res.testidOf).toBe(2);
+  });
+
+  it('says nothing for a test id only one element carries', async () => {
+    document.body.innerHTML = '<button data-testid="save">Save</button>';
+    const btn = document.querySelector('button') as HTMLButtonElement;
+    const res = await executeAction(refs.refFor(btn), 'click', {});
+    if (!res.ok) throw new Error('expected ok');
+    expect(res.testidOf).toBeUndefined();
+  });
+});

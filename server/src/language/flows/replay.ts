@@ -312,7 +312,12 @@ function anchorArgs(
   }
   const testid = asString(r['testid']);
   const source = sourceFromResult(r);
-  if (testid !== undefined) {
+  // Several elements carry this test id, so a replay would take the first: anchor on role and name
+  // when the element has them, else keep the test id and say how many share it.
+  const testidOf =
+    'number' === typeof r['testidOf'] && 1 < r['testidOf'] ? r['testidOf'] : undefined;
+  const named = asString(r['role']) !== undefined && asString(r['name']) !== undefined;
+  if (testid !== undefined && !(testidOf !== undefined && named)) {
     // The testid anchors the step; source rides along purely so a failure can name a file. Carrying
     // both was the point of separating anchor from provenance at capture time.
     const testidArgs: Record<string, unknown> = {
@@ -322,6 +327,7 @@ function anchorArgs(
       args: actArgs,
     };
     if (source !== undefined) testidArgs['source'] = source;
+    if (testidOf !== undefined) testidArgs['of'] = testidOf;
     return { args: testidArgs, stable: true };
   }
   // Role + NAME before component: a component/source anchor names the JSX site, so every row's copy

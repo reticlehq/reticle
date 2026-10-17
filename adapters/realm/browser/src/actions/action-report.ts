@@ -101,6 +101,8 @@ export interface ActionResult {
   effect: ActionEffect;
   /** data-testid of the resolved element, when present — lets the server compile a ref-stable replay step. */
   testid?: string;
+  /** How many elements carry that test id, when more than one does: then it is no anchor. */
+  testidOf?: number;
   /**
    * Auto-anchor fallback (attached ONLY when there is no testid): the element's nearest component
    * name + source location, so the server can compile a stable `component` anchor instead of a
@@ -128,6 +130,7 @@ export interface ActionResult {
 /** The element's stable anchor: testid (gold), else component/source (auto-anchor). */
 export interface CapturedAnchor {
   testid?: string;
+  testidOf?: number;
   component?: string;
   source?: { file: string; line: number; column?: number };
   /**
@@ -162,7 +165,12 @@ export function anchorOf(el: Element): CapturedAnchor {
   const testid = readTestId(el) ?? undefined;
   const info = identifyComponent(el);
   const out: CapturedAnchor = {};
-  if (testid !== undefined) out.testid = testid;
+  if (testid !== undefined) {
+    out.testid = testid;
+    // A replay takes the first match, so a shared test id would land on another element.
+    const shared = elementsMatching({ by: QueryBy.TESTID, value: testid }).length;
+    if (1 < shared) out.testidOf = shared;
+  }
   const component = info?.componentStack[0];
   if (component !== undefined) out.component = component;
   if (info?.source !== undefined) out.source = info.source;
@@ -215,6 +223,7 @@ export const result = (
   // by the testid when it has one (see the flow compiler) and that is unchanged — what changed is
   // that having a testid no longer erases the answer to "which file do I open?".
   if (anchor.testid !== undefined) base.testid = anchor.testid;
+  if (anchor.testidOf !== undefined) base.testidOf = anchor.testidOf;
   if (anchor.component !== undefined) base.component = anchor.component;
   if (anchor.source !== undefined) base.source = anchor.source;
   if (anchor.role !== undefined) base.role = anchor.role;

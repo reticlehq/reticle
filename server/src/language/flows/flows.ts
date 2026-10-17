@@ -120,6 +120,8 @@ export function anchorForStep(args: Record<string, unknown>): {
     };
     const source = sourceArg(args);
     if (source !== undefined) anchor.source = source;
+    const of = args['of'];
+    if ('number' === typeof of && 1 < of) anchor.of = of;
     return { anchor, degraded: false };
   }
   // Role + NAME is a real anchor, not a degraded placeholder.
