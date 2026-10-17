@@ -3,7 +3,9 @@
  * Harness could run: those facts lived only in the HUD and the dashboard.
  */
 import { describe, expect, it } from 'vitest';
-import { ACCOUNT_NEXT, accountFacts } from './account-tool.js';
+import { ReticleTool } from '@reticlehq/core';
+import { ACCOUNT_NEXT, ACCOUNT_TOOLS, accountFacts } from './account-tool.js';
+import type { ToolDeps } from './tool-kit.js';
 
 const ready = {
   provider: 'jev',
@@ -29,9 +31,39 @@ describe('where the user stands, for the coding agent', () => {
   });
 
   it('the platform did not answer: says so, and does not guess credits', () => {
-    const facts = accountFacts({ signedIn: true, platform: null });
-    expect(facts['next']).toBe(ACCOUNT_NEXT.UNREACHABLE);
+    const facts = accountFacts({
+      signedIn: true,
+      platform: null,
+      cloudUrl: 'http://localhost:8899',
+    });
+    expect(facts['next']).toBe(ACCOUNT_NEXT.unreachable('http://localhost:8899'));
     expect(facts['credits']).toBeUndefined();
+  });
+
+  // Night 7b: the cloud unreachable must not read as "not linked", and the answer names the fix.
+  it('unreachable names the cloud and what to do, never "link this project"', () => {
+    const said = ACCOUNT_NEXT.unreachable('http://localhost:8899');
+    expect(said).toContain('http://localhost:8899');
+    expect(said).toMatch(/connection/);
+    expect(said).not.toMatch(/Link this project|reticle connect/);
+  });
+
+  // Night 7: a tab of a linked project answered "press Link this project" when the daemon itself
+  // started outside that project. The account is the tab's project's, as the Harness reads it.
+  it("reads the link of the tab's own project, not the daemon's", async () => {
+    const asked: (string | undefined)[] = [];
+    const deps = {
+      reticleRoot: '/daemon/.reticle',
+      artifactRootFor: () => ({ root: '/app/.reticle' }),
+      sessions: { resolve: () => ({ id: 's1', projectId: 'app' }) },
+      linkedCloud: (root?: string) => {
+        asked.push(root);
+        return Promise.resolve(null);
+      },
+    } as unknown as ToolDeps;
+    const tool = ACCOUNT_TOOLS.find((t) => ReticleTool.ACCOUNT === t.name);
+    await tool?.handler(deps, { sessionId: 's1' });
+    expect(asked).toEqual(['/app/.reticle']);
   });
 
   it('ready: the plan, the credits in the platform words, the run cost, and how to start one', () => {

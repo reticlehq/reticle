@@ -25,8 +25,9 @@ const UNLOCK_PERCENT = 80;
 export const ACCOUNT_NEXT = {
   SIGN_IN: `The user is not signed in to Reticle. Ask them to run \`${CONNECT_COMMAND}\` in the app folder: it signs them in and links this project.`,
   LINK: `This project does not report to the dashboard yet. Ask the user to press "Link this project" on the Harness page of the HUD, or to run \`${CONNECT_COMMAND}\` in the app folder.`,
-  UNREACHABLE:
-    'The Reticle platform did not answer, so credits and the Harness are not known now. Local checks still work.',
+  unreachable: (url: string | undefined): string =>
+    `Reticle Cloud${url === undefined ? '' : ` at ${url}`} did not answer, so credits and the Harness are not known now. ` +
+    'The project is still linked: ask the user to check the connection, then read the account again. Local checks still work.',
   NO_CREDITS: (said: string): string =>
     `${said} Reticle Harness cannot run until the user gets more credits on the dashboard's Plan and usage page.`,
   locked: (percent: number, missing: string): string =>
@@ -48,6 +49,8 @@ export interface AccountInput {
   dashboardUrl?: string;
   /** The platform's `/v1/model/config` answer; undefined when unlinked, null when it did not answer. */
   platform: Record<string, unknown> | null | undefined;
+  /** Where the linked cloud is, said when it does not answer. */
+  cloudUrl?: string;
 }
 
 const num = (v: unknown): number | undefined => ('number' === typeof v ? v : undefined);
@@ -63,7 +66,7 @@ export function accountFacts(input: AccountInput): Record<string, unknown> {
   };
   if (!input.signedIn) return { ...base, next: ACCOUNT_NEXT.SIGN_IN };
   if (input.platform === undefined) return { ...base, next: ACCOUNT_NEXT.LINK };
-  if (null === input.platform) return { ...base, next: ACCOUNT_NEXT.UNREACHABLE };
+  if (null === input.platform) return { ...base, next: ACCOUNT_NEXT.unreachable(input.cloudUrl) };
   const p = input.platform;
   const rawCredits = asRecord(p['credits']);
   const used = num(rawCredits['used']);
@@ -126,9 +129,9 @@ export function accountFacts(input: AccountInput): Record<string, unknown> {
 }
 
 /** The platform's model config with this project's linked key; undefined unlinked, null on no answer. */
-async function platformConfig(deps: ToolDeps): Promise<Record<string, unknown> | null | undefined> {
-  // The project's own link, not the environment: an agent asks about the project it is in.
-  const platform = (await deps.linkedCloud?.()) ?? null;
+async function platformConfig(
+  platform: { url: string; apiKey: string } | null,
+): Promise<Record<string, unknown> | null | undefined> {
   if (null === platform) return undefined;
   try {
     const res = await fetch(`${platform.url.replace(/\/+$/, '')}${CONFIG_PATH}`, {
@@ -156,11 +159,15 @@ async function readAccount(
   const snapshot = impactSnapshot(root);
   const account = snapshot?.account;
   const dashboardUrl = root === undefined ? undefined : readDashboardUrl(root);
+  // The tab's own project's link, as the Harness reads it: the daemon's own folder may be unlinked
+  // (or another project) while the tab's is linked, and the answer was "press Link this project".
+  const platform = (await deps.linkedCloud?.(root).catch(() => null)) ?? null;
   return accountFacts({
     signedIn: true === account?.signedIn,
     ...(account?.org === undefined ? {} : { workspace: account.org }),
     ...(dashboardUrl === undefined ? {} : { dashboardUrl }),
-    platform: await platformConfig(deps),
+    platform: await platformConfig(platform),
+    ...(null === platform ? {} : { cloudUrl: platform.url }),
   });
 }
 
