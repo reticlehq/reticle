@@ -37,6 +37,36 @@ export const ARIA_HIDDEN_NOTE =
   'text is inside an aria-hidden subtree — drawn on screen but excluded from the accessible tree';
 
 /**
+ * HTML element names that are never used as ARIA roles by Reticle's own `getRole` implementation.
+ * These tags map to `generic` (or another implicit role) so a query like `{ role: "iframe" }` will
+ * always return zero results. The set is intentionally small: only the common cases where an
+ * element name looks like a role but is not one.
+ */
+export const HTML_TAG_NOT_AN_ARIA_ROLE = new Set([
+  'iframe',
+  'div',
+  'span',
+  'video',
+  'audio',
+  'canvas',
+  'embed',
+  'object',
+  'script',
+  'style',
+  'template',
+  'slot',
+]);
+
+/**
+ * When the query's role is a raw HTML tag name that `getRole` never returns as a role, suggest
+ * the correct ARIA role to use instead.
+ */
+function describeUnreachableRole(role: string | undefined): string | undefined {
+  if (role === undefined || !HTML_TAG_NOT_AN_ARIA_ROLE.has(role.toLowerCase())) return undefined;
+  return `'${role}' is not an ARIA role — <${role}> elements have role 'generic'; try { role: 'generic' } with a name or title, or use a testid`;
+}
+
+/**
  * The caveat for a present-testid list that was cut at its cap, or nothing when it was whole.
  *
  * Phrased as what the list IS — "the first N of M in document order" — rather than as an apology,
@@ -376,11 +406,13 @@ export async function evalElement(
   const nearMiss = describeNameNearMiss(match.hint?.nameNearMiss, query.name, nearMissRole);
   const caseMiss = describeCaseMiss(match.hint?.caseMiss);
   const ariaNote = true === match.hint?.ariaHiddenMatch ? ARIA_HIDDEN_NOTE : undefined;
+  const unreachableRole = describeUnreachableRole(nearMissRole);
   const clause =
     caseMiss ??
     splitText ??
     nearMiss ??
     ariaNote ??
+    unreachableRole ??
     (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
   const suffix = clause === undefined ? '' : ` — ${clause}`;
   // The evidence list is capped in document order, so a region low on the page is exactly what it

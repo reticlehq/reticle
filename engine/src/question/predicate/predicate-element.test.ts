@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { ElementState } from '@reticlehq/core';
 
-import { ARIA_HIDDEN_NOTE, evalElement } from './predicate-element.js';
+import { ARIA_HIDDEN_NOTE, evalElement, HTML_TAG_NOT_AN_ARIA_ROLE } from './predicate-element.js';
 import type { PredicateSession } from './predicate-session.js';
 
 const session: PredicateSession = {
@@ -287,4 +287,24 @@ it('does not blame aria-hidden when a visible element exists in the wrong state 
   );
   expect(result.pass).toBe(false);
   expect(result.failureReason).not.toContain(ARIA_HIDDEN_NOTE);
+});
+
+it('tells the agent that iframe is not an ARIA role and suggests generic (#1696)', async () => {
+  // <iframe> maps to role 'generic' in Reticle's getRole implementation. A query for
+  // { role: 'iframe' } will always return zero results with no hint about why.
+  const page = pageWith(() => undefined);
+  const result = await evalElement(page, { role: 'iframe' }, undefined, false, true);
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toContain("'iframe' is not an ARIA role");
+  expect(result.failureReason).toContain("'generic'");
+});
+
+it('covers every tag in HTML_TAG_NOT_AN_ARIA_ROLE with the unreachable-role hint', async () => {
+  // Guards against the set drifting without the message being updated.
+  for (const tag of HTML_TAG_NOT_AN_ARIA_ROLE) {
+    const page = pageWith(() => undefined);
+    const result = await evalElement(page, { role: tag }, undefined, false, true);
+    expect(result.pass).toBe(false);
+    expect(result.failureReason).toContain('is not an ARIA role');
+  }
 });
