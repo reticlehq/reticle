@@ -101,3 +101,54 @@ describe('the titles the plan emits', () => {
     }
   });
 });
+
+describe('Next.js ReticleDev component planning', () => {
+  const nextPlanFor = (source: string | null | undefined, port?: number): PlanInput => ({
+    ...planFor(Framework.NEXT),
+    nextConfigFile: 'next.config.mjs',
+    nextConfigSource: 'export default {};',
+    nextReticleDevExists: true,
+    nextReticleDevSource: source,
+    options: { port: port ?? 4400, mcp: false, install: true, projectId: 'demo' },
+  });
+
+  it('reports NOTICE for a component missing the SDK version read', () => {
+    const source =
+      'const url = process.env.NEXT_PUBLIC_RETICLE_URL; reticle.connect({ ...(url ? { url } : {}) });';
+    const steps = frameworkSteps(nextPlanFor(source));
+    const devStep = steps.find((s) => s.title === StepTitle.RETICLE_DEV_COMPONENT);
+    expect(devStep?.status).toBe(StepStatus.ALREADY);
+    const noticeStep = steps.find(
+      (s) => s.title === StepTitle.RETICLE_DEV_COMPONENT && s.status === StepStatus.NOTICE,
+    );
+    expect(noticeStep).toBeDefined();
+    expect(noticeStep?.detail).toContain('NEXT_PUBLIC_RETICLE_SDK_VERSION');
+  });
+
+  it('reports both missing reads when both URL and SDK version are absent without saying nothing else needs to change', () => {
+    const source = "reticle.connect({ projectId: 'x' });";
+    const steps = frameworkSteps(nextPlanFor(source));
+    const devStep = steps.find((s) => s.title === StepTitle.RETICLE_DEV_COMPONENT);
+    expect(devStep?.status).toBe(StepStatus.MANUAL);
+    expect(devStep?.detail).toContain('NEXT_PUBLIC_RETICLE_URL');
+    expect(devStep?.detail).toContain('NEXT_PUBLIC_RETICLE_SDK_VERSION');
+    expect(devStep?.detail).not.toContain('Nothing else needs to change');
+  });
+
+  it('preserves moved port rewrite when component has moved port and lacks SDK version', () => {
+    const source =
+      "const url = process.env.NEXT_PUBLIC_RETICLE_URL; reticle.connect({ url: 'ws://localhost:4400/reticle' });";
+    const steps = frameworkSteps(nextPlanFor(source, 4600));
+    const applyStep = steps.find(
+      (s) => s.title === StepTitle.RETICLE_DEV_COMPONENT && s.status === StepStatus.APPLY,
+    );
+    expect(applyStep).toBeDefined();
+    expect(applyStep?.detail).toContain('port 4400 → 4600');
+    expect(applyStep?.write?.content).toContain('ws://localhost:4600/reticle');
+    const noticeStep = steps.find(
+      (s) => s.title === StepTitle.RETICLE_DEV_COMPONENT && s.status === StepStatus.NOTICE,
+    );
+    expect(noticeStep).toBeDefined();
+    expect(noticeStep?.detail).toContain('NEXT_PUBLIC_RETICLE_SDK_VERSION');
+  });
+});

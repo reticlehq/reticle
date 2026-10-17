@@ -121,6 +121,7 @@ export function patchStep(
  */
 /** The env var withReticle sets from the discovered daemon, and the component must read. */
 const NEXT_DAEMON_URL_ENV = 'NEXT_PUBLIC_RETICLE_URL';
+const NEXT_SDK_VERSION_ENV = 'NEXT_PUBLIC_RETICLE_SDK_VERSION';
 
 /**
  * The two-line edit that unfreezes an existing install's port.
@@ -128,10 +129,19 @@ const NEXT_DAEMON_URL_ENV = 'NEXT_PUBLIC_RETICLE_URL';
  * Stated as the edit rather than as a problem, because the reader is an agent that can apply it in
  * one write and is otherwise going to ask what to do.
  */
-const NEXT_DEV_FILE_STALE_DETAIL =
+const NEXT_DEV_FILE_STALE_DETAIL_SOLO =
   'predates daemon discovery, so it dials the port init saw when it ran. In this file add ' +
   '`const url = process.env.NEXT_PUBLIC_RETICLE_URL;` and spread `...(url ? { url } : {})` into ' +
   'reticle.connect(), after any url already there. Nothing else needs to change.';
+
+const NEXT_DEV_FILE_STALE_DETAIL_DUAL =
+  'predates daemon discovery, so it dials the port init saw when it ran. In this file add ' +
+  '`const url = process.env.NEXT_PUBLIC_RETICLE_URL;` and spread `...(url ? { url } : {})` into ' +
+  'reticle.connect(), after any url already there.';
+
+const NEXT_SDK_VERSION_DETAIL =
+  'lacks the SDK version. In this file add `const sdkVersion = process.env.NEXT_PUBLIC_RETICLE_SDK_VERSION;` ' +
+  'and spread `...(sdkVersion ? { sdkVersion } : {})` into the reticle.connect() options.';
 
 export function nextSteps(input: PlanInput): Step[] {
   const configFile = input.nextConfigFile ?? 'next.config.mjs';
@@ -147,43 +157,66 @@ export function nextSteps(input: PlanInput): Step[] {
     true === input.nextReticleDevExists &&
     'string' === typeof input.nextReticleDevSource &&
     !input.nextReticleDevSource.includes(NEXT_DAEMON_URL_ENV);
-  const devFile: Step = input.nextReticleDevExists
-    ? devStale
-      ? {
+  const sdkVersionMissing =
+    true === input.nextReticleDevExists &&
+    'string' === typeof input.nextReticleDevSource &&
+    !input.nextReticleDevSource.includes(NEXT_SDK_VERSION_ENV);
+
+  const baseDevStep: Step = devStale
+    ? {
+        title: StepTitle.RETICLE_DEV_COMPONENT,
+        target: devPath,
+        status: StepStatus.MANUAL,
+        detail: sdkVersionMissing
+          ? `${NEXT_DEV_FILE_STALE_DETAIL_DUAL} Also ${NEXT_SDK_VERSION_DETAIL}`
+          : NEXT_DEV_FILE_STALE_DETAIL_SOLO,
+      }
+    : alreadyOrMovedPort(
+        {
           title: StepTitle.RETICLE_DEV_COMPONENT,
           target: devPath,
-          status: StepStatus.MANUAL,
-          detail: NEXT_DEV_FILE_STALE_DETAIL,
-        }
-      : alreadyOrMovedPort(
+          status: StepStatus.ALREADY,
+          detail: 'file exists',
+        },
+        input.nextReticleDevSource,
+        input.options.port,
+      );
+
+  const devNoticeSteps: Step[] =
+    !devStale && sdkVersionMissing
+      ? [
           {
             title: StepTitle.RETICLE_DEV_COMPONENT,
             target: devPath,
-            status: StepStatus.ALREADY,
-            detail: 'file exists',
+            status: StepStatus.NOTICE,
+            detail: NEXT_SDK_VERSION_DETAIL,
           },
-          input.nextReticleDevSource,
-          input.options.port,
-        )
-    : {
-        title: StepTitle.RETICLE_DEV_COMPONENT,
-        target: devPath,
-        status: StepStatus.APPLY,
-        detail: 'create dev-only connect component',
-        write: {
-          path: devPath,
-          content: nextReticleDevFile(
-            input.options.port,
-            input.options.projectId,
-            input.testids ?? [],
-            input.storeHints ?? [],
-            // Next's dev module is not a sibling of `src/` — its imports are resolved from wherever
-            // the component actually lands (`app/`, or `src/app/` in a --src-dir app).
-            input.nextFoundStores ?? [],
-          ),
+        ]
+      : [];
+
+  const devFileSteps: Step[] = input.nextReticleDevExists
+    ? [baseDevStep, ...devNoticeSteps]
+    : [
+        {
+          title: StepTitle.RETICLE_DEV_COMPONENT,
+          target: devPath,
+          status: StepStatus.APPLY,
+          detail: 'create dev-only connect component',
+          write: {
+            path: devPath,
+            content: nextReticleDevFile(
+              input.options.port,
+              input.options.projectId,
+              input.testids ?? [],
+              input.storeHints ?? [],
+              // Next's dev module is not a sibling of `src/` — its imports are resolved from wherever
+              // the component actually lands (`app/`, or `src/app/` in a --src-dir app).
+              input.nextFoundStores ?? [],
+            ),
+          },
+          dependsOnInstall: true,
         },
-        dependsOnInstall: true,
-      };
+      ];
 
   const configPatch: SourcePatch =
     null === input.nextConfigSource || input.nextConfigSource === undefined
@@ -239,7 +272,7 @@ export function nextSteps(input: PlanInput): Step[] {
       : [];
 
   return [
-    devFile,
+    ...devFileSteps,
     ...nextTodo,
     patchStep(
       StepTitle.NEXT_CONFIG,
