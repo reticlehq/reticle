@@ -53,6 +53,7 @@ function fakePool(): {
     seedStorage?: unknown;
     headed?: boolean;
     initScript?: unknown;
+    emulate?: unknown;
   }[];
   /** Every (registeredId, leaseId) pair the lease told the pool about. */
   aliased: [string, string][];
@@ -64,6 +65,7 @@ function fakePool(): {
     seedStorage?: unknown;
     headed?: boolean;
     initScript?: unknown;
+    emulate?: unknown;
   }[] = [];
   const headedIds = new Set<string>();
   const certSkipIds = new Set<string>();
@@ -94,7 +96,9 @@ function fakePool(): {
     ): Promise<Lease> {
       // The real pool takes `initScript`; this double only has to prove it arrived.
       const initScript = (opts as { initScript?: string }).initScript;
+      const emulate = (opts as { emulate?: unknown }).emulate;
       acquired.push({
+        ...(emulate === undefined ? {} : { emulate }),
         url,
         sessionId: opts.sessionId,
         seedStorage: opts.seedStorage,
@@ -1065,6 +1069,35 @@ describe('reticle_lease with an initScript stub', () => {
     expect(acquired).toHaveLength(1);
     expect(acquired[0]?.initScript).toBe(STUB);
     expect(String(out['hostStub'])).toMatch(/stub/i);
+  });
+
+  it('opens the lease with the media and the width it was asked for, before the first paint', async () => {
+    const { pool, acquired } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/',
+      emulate: { reducedMotion: 'reduce', colorScheme: 'dark', width: 390 },
+    });
+
+    expect(acquired[0]?.emulate).toEqual({
+      reducedMotion: 'reduce',
+      colorScheme: 'dark',
+      viewport: { width: 390, height: 720 },
+    });
+  });
+
+  it('refuses an emulation value it does not know, rather than opening a lease without it', async () => {
+    const { pool, acquired } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+        url: 'http://localhost:3000/',
+        emulate: { colorScheme: 'sepia' },
+      }),
+    ).rejects.toThrow(/colorScheme/);
+    expect(acquired).toHaveLength(0);
   });
 
   it('sends no initScript when none was asked for, so an untouched lease injects nothing', async () => {

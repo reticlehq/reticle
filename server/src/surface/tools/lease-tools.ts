@@ -54,6 +54,7 @@ import {
   permissionRefusal,
   refuseRegrant,
 } from './lease-permissions.js';
+import { LEASE_EMULATE_ARG, leaseEmulationOf } from '@/portal/input/viewport-tools.js';
 
 /**
  * Everything the daemon already knows about why a leased tab might not have dialled in.
@@ -427,6 +428,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .optional()
       .describe('How the HUD starts on the page: shown (default), hidden, or removed.'),
     permissions: LEASE_PERMISSIONS_ARG,
+    emulate: LEASE_EMULATE_ARG,
     root: z
       .string()
       .optional()
@@ -513,6 +515,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     const headed = true === args['headed'];
     const hud = Object.values(HudVisibility).find((v) => v === args['hud']);
     const permissions = parseLeasePermissions(args['permissions']);
+    const emulate = leaseEmulationOf(args['emulate']);
     // The stub of the shell bindings, when the caller supplied one. Installed by the pool before
     // the first navigation, so it is already defined when the app's first module runs.
     const initScript = asString(args['initScript']);
@@ -580,7 +583,11 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         existing !== undefined &&
         'boolean' === typeof certAsked &&
         pool.ignoresHTTPSErrors(existing) !== certAsked;
-      if ((validatedSeed !== undefined || certMismatch) && existing !== undefined) {
+      // Emulation is set before the first paint, so a held lease is replaced like a seeded one.
+      if (
+        (validatedSeed !== undefined || certMismatch || emulate !== undefined) &&
+        existing !== undefined
+      ) {
         // Seeding or a different certificate setting asked for: release its own context so the new
         // lease starts with what was asked.
         await pool.release(existing);
@@ -652,6 +659,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           ...(initScript !== undefined ? { initScript } : {}),
           ...(permissions !== undefined ? { permissions } : {}),
           ...(true === args['ignoreHTTPSErrors'] ? { ignoreHTTPSErrors: true } : {}),
+          ...(emulate === undefined ? {} : { emulate }),
         });
       } catch (err) {
         if (err instanceof PoolAtCapacityError) throw err;

@@ -158,3 +158,55 @@ describe('reticle_viewport tool', () => {
     expect(captured?.height).toBe(10000); // above MAX_DIM → clamped down
   });
 });
+
+/**
+ * prefers-reduced-motion and prefers-color-scheme on a lease, per call. Without them the CSS half
+ * of reduced motion and the dark theme could not be checked live on a leased tab at all.
+ */
+describe('reticle_viewport sets media on a lease', () => {
+  const leasePool = (calls: unknown[]): ToolDeps['pool'] =>
+    ({
+      setViewportLease: (_id: string, size: unknown) => {
+        calls.push({ size });
+        return Promise.resolve(true);
+      },
+      emulateLease: (_id: string, media: unknown) => {
+        calls.push({ media });
+        return Promise.resolve(true);
+      },
+    }) as unknown as ToolDeps['pool'];
+
+  it('sets reduced motion and a dark scheme without resizing when no size is given', async () => {
+    const calls: unknown[] = [];
+    const res = (await tool().handler(depsWith(undefined, leasePool(calls)), {
+      reducedMotion: 'reduce',
+      colorScheme: 'dark',
+    })) as Record<string, unknown>;
+
+    expect(res['applied']).toBe(true);
+    expect(res['reducedMotion']).toBe('reduce');
+    expect(res['colorScheme']).toBe('dark');
+    expect(calls).toEqual([{ media: { reducedMotion: 'reduce', colorScheme: 'dark' } }]);
+  });
+
+  it('resizes and sets media in one call', async () => {
+    const calls: unknown[] = [];
+    await tool().handler(depsWith(undefined, leasePool(calls)), {
+      width: 390,
+      height: 844,
+      colorScheme: 'light',
+    });
+    expect(calls).toEqual([
+      { size: { width: 390, height: 844 } },
+      { media: { colorScheme: 'light' } },
+    ]);
+  });
+
+  it('says it did not apply media on a page that is not a lease', async () => {
+    const res = (await tool().handler(depsWith(undefined), {
+      reducedMotion: 'reduce',
+    })) as Record<string, unknown>;
+    expect(res['applied']).toBe(false);
+    expect(res['ok']).toBe(false);
+  });
+});

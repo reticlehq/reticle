@@ -124,8 +124,14 @@ function wrapBrowser(browser: Browser): PooledBrowser {
   return {
     isConnected: () => browser.isConnected(),
     newContext: async (opts): Promise<PooledContext> => {
+      // Media and viewport ride on the context, so the first paint of the first page has them.
+      const { ignoreHTTPSErrors, ...emulate } = opts ?? {};
+      const contextOpts = {
+        ...(true === ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+        ...emulate,
+      };
       const context = await browser.newContext(
-        true === opts?.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : undefined,
+        0 < Object.keys(contextOpts).length ? contextOpts : undefined,
       );
       return {
         newPage: async (): Promise<PooledPage> => {
@@ -153,6 +159,7 @@ function wrapBrowser(browser: Browser): PooledBrowser {
               await page.mouse.move(x, y);
             },
             // The same driver `reticle drive` presses with, so a held key and a chord read alike.
+            emulateMedia: (media) => page.emulateMedia(media),
             press: (args) => performGesture(page, ActionType.PRESS, NO_BOX, args, sleepFor),
             installMocks: (rules) => installNetworkMocks(page, [...rules]),
             setViewport: (size) => page.setViewportSize(size),

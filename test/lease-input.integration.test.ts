@@ -97,3 +97,42 @@ describe('a lease presses keys with a real keyboard', () => {
     }
   });
 });
+
+/**
+ * Media and width on a lease, on a real Chromium: set before the first paint, and changed per call.
+ * The page reads them the way an app does, with matchMedia and innerWidth.
+ */
+describe('a lease emulates media and width', () => {
+  it('opens with reduced motion, dark and 390 px, then changes the media of the live page', async () => {
+    const pages: PooledPage[] = [];
+    const pool = new BrowserPool(recordingLauncher(pages), {
+      maxContexts: 1,
+      genSessionId: () => 'media',
+    });
+    try {
+      const lease = await pool.acquire(url, {
+        emulate: {
+          reducedMotion: 'reduce',
+          colorScheme: 'dark',
+          viewport: { width: 390, height: 844 },
+        },
+      });
+      const read = async (script: string): Promise<unknown> => pages[0]?.evaluate?.(script);
+
+      expect(await read('matchMedia("(prefers-reduced-motion: reduce)").matches')).toBe(true);
+      expect(await read('matchMedia("(prefers-color-scheme: dark)").matches')).toBe(true);
+      expect(await read('innerWidth')).toBe(390);
+
+      expect(
+        await pool.emulateLease(lease.sessionId, {
+          reducedMotion: 'no-preference',
+          colorScheme: 'light',
+        }),
+      ).toBe(true);
+      expect(await read('matchMedia("(prefers-reduced-motion: reduce)").matches')).toBe(false);
+      expect(await read('matchMedia("(prefers-color-scheme: light)").matches')).toBe(true);
+    } finally {
+      await pool.shutdown();
+    }
+  });
+});

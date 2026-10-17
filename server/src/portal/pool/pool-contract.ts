@@ -7,6 +7,7 @@
  */
 
 import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
+import type { LeaseEmulation, LeaseMedia } from './lease-emulation.js';
 
 /** The minimal page surface the pool drives. Real Playwright `Page` satisfies this. */
 export interface PooledPage {
@@ -38,6 +39,8 @@ export interface PooledPage {
    * page without it keeps the in-page dispatcher, whose synthetic Tab moves no focus.
    */
   press?(args: RealInputArgs): Promise<RealInputResult>;
+  /** Set prefers-color-scheme and prefers-reduced-motion. OPTIONAL: without it the media stay. */
+  emulateMedia?(media: LeaseMedia): Promise<void>;
   /** Evaluate a script in the page's current document. OPTIONAL: without it no reader is injected. */
   evaluate?(script: string): Promise<unknown>;
   /** Add an init script to run after document creation but before any page scripts run. */
@@ -133,7 +136,7 @@ export interface PooledContext {
 export interface PooledBrowser {
   isConnected(): boolean;
   /** `ignoreHTTPSErrors` accepts a self-signed or local-CA certificate for this context only. */
-  newContext(opts?: { ignoreHTTPSErrors?: boolean }): Promise<PooledContext>;
+  newContext(opts?: { ignoreHTTPSErrors?: boolean } & LeaseEmulation): Promise<PooledContext>;
   close(): Promise<void>;
   /** Fires when the browser process dies/crashes so the pool can relaunch on the next acquire. */
   onDisconnected(handler: () => void): void;
