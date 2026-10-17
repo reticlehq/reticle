@@ -1,6 +1,10 @@
 import {
   ElementState,
+  EventType,
+  ANIMATION_TARGET_ARG,
   PredicateKind,
+  ReticleCommand,
+  SESSION_REF,
   THROTTLED_STARVED_NOTE,
   isSameDocument,
 } from '@reticlehq/core';
@@ -11,7 +15,7 @@ import type { Baseline } from './property.js';
 export type Baselines = ReadonlyMap<Predicate, Baseline>;
 
 import { predicateToExpectedLinks } from './predicate-to-links.js';
-import type { ExpectedLink } from '@reticlehq/core';
+import type { ExpectedLink, ReticleEvent } from '@reticlehq/core';
 import { isAmbient, ambientKeyOf } from '@/window/ambient.js';
 import { evalRoute } from './predicate-route.js';
 import { describeSuperseded } from './observed-in-window.js';
@@ -22,12 +26,17 @@ import {
   PredicateSchema,
   evalNet,
   evalConsole,
-  evalAnimation,
   evalSignal,
   evalSettled,
   type Predicate,
   type EvalResult,
 } from './predicate-eval.js';
+import {
+  animationSnapshotFrom,
+  evalAnimation,
+  type AnimationEvent,
+  type AnimationSnapshot,
+} from './predicate-animation.js';
 
 export { PredicateSchema, PredicateKind };
 export type { Predicate, EvalResult };
@@ -58,7 +67,6 @@ function unreadableComposite(child: EvalResult, evidence: unknown): EvalResult {
 const WINDOW_ONLY_KINDS: ReadonlySet<Predicate['kind']> = new Set([
   PredicateKind.NET,
   PredicateKind.CONSOLE,
-  PredicateKind.ANIMATION,
   PredicateKind.SIGNAL,
   PredicateKind.SETTLED,
 ]);
@@ -231,6 +239,57 @@ function failureRestsOnSeeing(predicate: Predicate): boolean {
   return 'count' in predicate && 0 === predicate.count;
 }
 
+function animationEvents(events: readonly ReticleEvent[]): AnimationEvent[] {
+  return events.flatMap((event): AnimationEvent[] => {
+    if (EventType.ANIM_START === event.type) {
+      return [
+        {
+          completed: false,
+          data: event.data,
+          ...(event.ref === undefined ? {} : { ref: event.ref }),
+        },
+      ];
+    }
+    if (EventType.ANIM_END === event.type) {
+      return [
+        {
+          completed: true,
+          data: event.data,
+          ...(event.ref === undefined ? {} : { ref: event.ref }),
+        },
+      ];
+    }
+    return [];
+  });
+}
+
+async function readAnimationSnapshot(
+  session: PredicateSession,
+  predicate: Extract<Predicate, { kind: typeof PredicateKind.ANIMATION }>,
+): Promise<AnimationSnapshot | undefined> {
+  const result = await session.command(
+    ReticleCommand.ANIMATIONS,
+    predicate.target === undefined ? {} : { [ANIMATION_TARGET_ARG]: predicate.target },
+  );
+  return result.ok ? animationSnapshotFrom(result.result) : undefined;
+}
+
+async function evalAnimationPredicate(
+  session: PredicateSession,
+  events: ReticleEvent[],
+  predicate: Extract<Predicate, { kind: typeof PredicateKind.ANIMATION }>,
+): Promise<EvalResult> {
+  let snapshot =
+    predicate.target !== undefined && !SESSION_REF.test(predicate.target)
+      ? await readAnimationSnapshot(session, predicate)
+      : undefined;
+  const observed = animationEvents(events);
+  const eventResult = evalAnimation(observed, predicate, snapshot);
+  if (eventResult.pass || predicate.since !== undefined) return eventResult;
+  if (snapshot === undefined) snapshot = await readAnimationSnapshot(session, predicate);
+  return evalAnimation(observed, predicate, snapshot);
+}
+
 export async function evaluatePredicate(
   session: PredicateSession,
   predicate: Predicate,
@@ -327,7 +386,7 @@ async function evaluatePredicateRaw(
     case PredicateKind.CONSOLE:
       return evalConsole(events, predicate);
     case PredicateKind.ANIMATION:
-      return evalAnimation(events, predicate);
+      return evalAnimationPredicate(session, events, predicate);
     case PredicateKind.SIGNAL:
       return evalSignal(events, predicate);
     case PredicateKind.STATE:

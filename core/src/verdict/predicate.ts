@@ -98,6 +98,7 @@ export type Predicate =
   | {
       kind: typeof PredicateKind.ANIMATION;
       name?: string;
+      /** Target element as a Reticle ref (`e12`) or a CSS selector resolved against the live page. */
       target?: string;
       completed?: boolean;
       since?: number;
@@ -443,6 +444,7 @@ function predicateUnion() {
       .object({
         kind: z.literal(PredicateKind.ANIMATION),
         name: z.string().optional(),
+        /** Target element as a Reticle ref (`e12`) or a CSS selector resolved against the live page. */
         target: z.string().optional(),
         completed: z.boolean().optional(),
         since: z.number().optional(),

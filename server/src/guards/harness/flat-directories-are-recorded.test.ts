@@ -181,7 +181,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // explains, and a filename here is published API (see public-subpaths-are-pinned.test.ts).
   // 23 with `net-blind-spots.ts`: what the net channel cannot see, split from `predicate-eval.ts` at
   // its line cap, and free of the core contract so the coupling ceiling does not move.
-  'engine/src/question/predicate': 23,
+  // 24 with `predicate-animation.ts`, split from `predicate.ts` so the live-animation snapshot
+  // fallback can stay beside the other predicate evaluators without growing the dispatcher.
+  'engine/src/question/predicate': 24,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:

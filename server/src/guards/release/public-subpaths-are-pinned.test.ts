@@ -99,6 +99,9 @@ const PINNED: readonly PublicSurface[] = [
       'question/predicate/net-blind-spots.ts',
       'question/predicate/net-evidence.ts',
       'question/predicate/observed-in-window.ts',
+      // New public entry point: animation predicate evidence now has a live page snapshot fallback,
+      // split from predicate.ts so the rule can grow without pushing the dispatcher past its cap.
+      'question/predicate/predicate-animation.ts',
       'question/predicate/predicate-asks.ts',
       'question/predicate/predicate-compare.ts',
       'question/predicate/predicate-console.ts',

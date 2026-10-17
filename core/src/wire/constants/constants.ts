@@ -390,6 +390,7 @@ export const DANGEROUS_ACTION_CONFIRM_ARG = 'confirmDangerous';
  * through the SDK instead.
  */
 export const NATIVE_INPUT_ARG = 'native';
+export const ANIMATION_TARGET_ARG = 'target'; // reticle_animations element filter arg.
 
 /** Schema version stamped onto compiled replay programs. */
 export const REPLAY_PROGRAM_VERSION = 1;
