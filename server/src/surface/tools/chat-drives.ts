@@ -60,6 +60,7 @@ import {
 import { probeDevServers } from '../../portal/session/dev-server/dev-server-probe.js';
 import {
   DriveOrigin,
+  noteHarnessWord,
   onDriveChange,
   onDriveStep,
   runningDrive,
@@ -444,13 +445,35 @@ export async function hudDrive(
 ): Promise<void> {
   if (HumanControlKind.HARNESS === request.kind) return applySwitch(request.enabled);
   // What the panel's Run and Stop answer belongs in the Harness log, and in the Agent Log as a summary.
-  const say = (text: string): void =>
+  const said: string[] = [];
+  const say = (text: string): void => {
+    said.push(text);
     deps.sessions.get?.(sessionId)?.pushNarration(text, true, { harness: true, summary: true });
+  };
   if (HumanControlKind.HARNESS_STOP === request.kind) {
     const running = runningDrive(sessionId);
     if (running === undefined || !stopDrive(running.harnessRun)) say(MSG_NOTHING_DRIVING);
     return;
   }
+  // Whatever stops a run before it drives is said on the Run row too, not only in the log: with the
+  // cloud unreachable, Run went to Starting… and back with no word on the page.
+  try {
+    await startHudRun(deps, sessionId, request, say, grant);
+  } catch (error) {
+    say(error instanceof Error ? error.message : String(error));
+  } finally {
+    if (0 < said.length) noteHarnessWord(sessionId, said.join(' '));
+  }
+}
+
+/** Run Harness: the gate, the platform's grant, then the drive, saying why at each refusal. */
+async function startHudRun(
+  deps: ToolDeps,
+  sessionId: string,
+  request: { kind: typeof HumanControlKind.HARNESS_RUN; persona?: string },
+  say: (text: string) => void,
+  grant: (platform: { url: string; apiKey: string }) => Promise<FreeDrive>,
+): Promise<void> {
   // Before the grant: a drive the gate refuses must not take one. The panel shows the prompt.
   const env = await withLinkedCredential(deps, process.env, { sessionId });
   const locked = await harnessLockRefusal(deps, sessionId, env);
@@ -467,17 +490,13 @@ export async function hudDrive(
   }
   const explore = EXPLORE_TOOLS.find((tool) => ReticleTool.VERIFY_EXPLORE === tool.name);
   if (explore === undefined) return;
-  try {
-    await runTool(explore, deps, {
-      sessionId,
-      driveId: granted.driveId,
-      origin: DriveOrigin.HUD,
-      wait: 0,
-      ...(request.persona === undefined ? {} : { persona: request.persona }),
-    });
-  } catch (error) {
-    say(error instanceof Error ? error.message : String(error));
-  }
+  await runTool(explore, deps, {
+    sessionId,
+    driveId: granted.driveId,
+    origin: DriveOrigin.HUD,
+    wait: 0,
+    ...(request.persona === undefined ? {} : { persona: request.persona }),
+  });
 }
 
 /**
@@ -539,7 +558,10 @@ export function attachHudHarness(
         .finally(daemon.repaint);
       return;
     }
-    void hudDrive(daemon.deps(), s.id, request, (on) => applySwitch(root, on));
+    // Repainted after, so a refusal said on the Run row shows without waiting for another push.
+    void hudDrive(daemon.deps(), s.id, request, (on) => applySwitch(root, on)).finally(
+      daemon.repaint,
+    );
   });
   onDriveChange(daemon.repaint);
   // Each step too, so the panel's "N steps so far" counts up instead of sitting at zero.

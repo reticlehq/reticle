@@ -10,7 +10,17 @@
  * No I/O and no tool surface: what to run and where to write it arrive as functions, so this stays
  * a sink the surface hands things to.
  */
-import { ReticleTool, type HarnessDrive, type ImpactSnapshot } from '@reticlehq/core';
+import {
+  EventType,
+  HARNESS_LINES_MAX,
+  NetInitiator,
+  ReticleTool,
+  asRecord,
+  type HarnessDrive,
+  type ImpactSnapshot,
+  type LastDrive,
+  type ReticleEvent,
+} from '@reticlehq/core';
 
 export const DriveStatus = {
   RUNNING: 'running',
@@ -67,7 +77,17 @@ interface Entry {
   abort: AbortController;
   inbox: string[];
   waiters: Set<(record: DriveRecord) => void>;
+  /** The drive's latest lines, for the Harness page's log: the daemon's to keep, not the page's. */
+  lines: string[];
+  /** Why somebody other than the person stopped it, said on the Harness page once it ends. */
+  stopReason?: string;
 }
+
+/** The longest line the Harness page's log is sent. */
+const LINE_MAX = 300;
+
+/** Per tab: how its last drive ended, or why none started. Cleared when a drive starts there. */
+const lastWords = new Map<string, LastDrive>();
 
 /** Finished drives kept for polling; older ones are read back from disk. */
 const MAX_FINISHED = 50;
@@ -106,7 +126,9 @@ export function startDrive(start: StartDrive): DriveRecord {
     abort: new AbortController(),
     inbox: [],
     waiters: new Set(),
+    lines: [],
   };
+  if (start.sessionId !== undefined) lastWords.delete(start.sessionId);
   entries.set(start.runId, entry);
   byHarness.set(start.harness, entry);
   const save = (): void => {
@@ -135,6 +157,7 @@ export function startDrive(start: StartDrive): DriveRecord {
     )
     .then(() => {
       entry.record.endedAt = start.now();
+      noteLastWord(entry);
       save();
       changed(entry, true);
       prune();
@@ -199,12 +222,66 @@ export function awaitDrive(
   });
 }
 
-/** Ask a running drive to stop. False when there is no such drive running. */
-export function stopDrive(runId: string): boolean {
+/**
+ * Ask a running drive to stop. False when there is no such drive running. `reason` is said on the
+ * Harness page when something other than the person stopped it (the page reloaded).
+ */
+export function stopDrive(runId: string, reason?: string): boolean {
   const entry = entries.get(runId);
   if (entry === undefined || DriveStatus.RUNNING !== entry.record.status) return false;
+  if (reason !== undefined) entry.stopReason = reason;
   entry.abort.abort();
   return true;
+}
+
+/** Why no drive started on this tab (a refusal, the cloud unreachable), for its Harness page. */
+export function noteHarnessWord(sessionId: string, said: string): void {
+  lastWords.set(sessionId, { said });
+}
+
+/** How this drive ended, for its tab's Harness page: the run's result, and why when it fell short. */
+function noteLastWord(entry: Entry): void {
+  const sessionId = entry.record.sessionId;
+  if (sessionId === undefined) return;
+  const runUrl = entry.record.result?.['runUrl'];
+  const fell =
+    DriveStatus.BROKEN === entry.record.status || DriveStatus.REFUSED === entry.record.status
+      ? entry.record.error
+      : undefined;
+  const said = entry.stopReason ?? fell;
+  lastWords.set(sessionId, {
+    ...('string' === typeof runUrl ? { runUrl } : {}),
+    ...(said === undefined ? {} : { said }),
+  });
+}
+
+/** Said on the Harness page when a person reloads the page during a run. */
+export const MSG_RELOADED = 'The page reloaded, so this run stopped. Run again.';
+/** How long after the daemon asks a tab to reload the page's reload counts as the daemon's. */
+const OWN_RELOAD_WINDOW_MS = 60_000;
+const RELOAD = 'reload';
+/** Per tab: when the daemon last sent it a reload (a replay, a durable recheck, a navigate). */
+const ownReloads = new Map<string, number>();
+
+/** The daemon asked this tab to reload: the page coming back is not a person reloading it. */
+export function noteOwnReload(sessionId: string, at: number): void {
+  ownReloads.set(sessionId, at);
+}
+
+/**
+ * Read each event a tab sends. A document that arrives as a reload the daemon did not ask for is a
+ * person reloading the page, and a drive on that tab cannot go on as if the page had not started
+ * over: it is stopped, and its Harness page says why. Before, it drove on and ended "failed".
+ */
+export function notePageLoaded(sessionId: string, event: ReticleEvent, at: number): void {
+  if (EventType.NET_REQUEST !== event.type) return;
+  const data = asRecord(event.data);
+  if (NetInitiator.DOCUMENT !== data['initiator'] || RELOAD !== data['navigationType']) return;
+  const asked = ownReloads.get(sessionId);
+  ownReloads.delete(sessionId);
+  if (asked !== undefined && at - asked <= OWN_RELOAD_WINDOW_MS) return;
+  const running = runningDrive(sessionId);
+  if (running?.sessionId === sessionId) stopDrive(running.harnessRun, MSG_RELOADED);
 }
 
 /** Queue text for the driver's next turn. False when there is no such drive running. */
@@ -237,6 +314,8 @@ export function noteDriveLine(harness: string, line: string): void {
   const entry = entryFor(harness);
   if (entry === undefined) return;
   entry.record.lastLine = line;
+  entry.lines.push(line.length > LINE_MAX ? `${line.slice(0, LINE_MAX)}…` : line);
+  if (entry.lines.length > HARNESS_LINES_MAX) entry.lines.shift();
   changed(entry, false);
 }
 
@@ -268,6 +347,8 @@ export function forgetDrives(): void {
   entries.clear();
   byHarness.clear();
   notes.clear();
+  lastWords.clear();
+  ownReloads.clear();
 }
 
 function entryFor(harness: string): Entry | undefined {
@@ -354,13 +435,25 @@ function prune(): void {
   }
 }
 
-/** The impact snapshot, with the drive running on this tab when there is one. */
+/**
+ * The impact snapshot, with the drive running on this tab and its step log when there is one, else
+ * how the last one on this tab ended.
+ */
 export function withRunningDrive(
   snapshot: ImpactSnapshot | undefined,
   sessionId: string,
 ): ImpactSnapshot | undefined {
+  if (snapshot === undefined) return snapshot;
   const running = runningDrive(sessionId);
-  if (running === undefined || snapshot === undefined) return snapshot;
-  const drive: HarnessDrive = { runId: running.harnessRun, steps: running.steps };
+  if (running === undefined) {
+    const last = lastWords.get(sessionId);
+    return last === undefined ? snapshot : { ...snapshot, lastDrive: last };
+  }
+  const lines = entries.get(running.harnessRun)?.lines ?? [];
+  const drive: HarnessDrive = {
+    runId: running.harnessRun,
+    steps: running.steps,
+    ...(0 === lines.length ? {} : { lines: [...lines] }),
+  };
   return { ...snapshot, harnessDrive: drive };
 }

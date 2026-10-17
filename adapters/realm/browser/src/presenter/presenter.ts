@@ -291,7 +291,7 @@ export class Presenter {
           snapshot.harnessConfig,
           harnessGateIn(snapshot.instrumentation, snapshot.harnessConfig),
         );
-        this.#shell.paintHarnessDrive(snapshot.harnessDrive);
+        this.#shell.paintHarnessDrive(snapshot.harnessDrive, snapshot.lastDrive);
         this.#paintHarnessRun(snapshot.harnessDrive);
         this.#shell.paintAgent(snapshot.agent);
         this.#shell.paintImpact(snapshot.project.counts.verdicts);
@@ -615,10 +615,15 @@ export class Presenter {
    * header says so on every page, whatever page the person is reading.
    */
   #paintHarnessRun(drive: HarnessDrive | undefined): void {
+    const log = this.#harnessLog;
     if (drive !== undefined && drive.runId !== this.#harnessRunId) {
       this.#harnessRunId = drive.runId;
-      if (this.#harnessLog !== undefined) clearLogRows(this.#harnessLog);
+      if (log !== undefined) clearLogRows(log);
     }
+    // The daemon keeps the drive's lines: a page reopened or reloaded mid-run shows them again.
+    if (log !== undefined && 0 === log.childElementCount)
+      for (const line of drive?.lines ?? [])
+        appendLogRow(log, LOG_KIND.NARRATION, line, '', this.#logMax, LOG_ACTOR.HARNESS);
     const was = this.#harnessSteps;
     this.#harnessSteps = drive?.steps;
     if (drive !== undefined) this.#paintActStrip(this.#lastActionText, false);

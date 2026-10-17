@@ -4,6 +4,7 @@ import {
   type HarnessConfig,
   type AgentLink,
   type HarnessDrive,
+  type LastDrive,
 } from '@reticlehq/core';
 import { PLAN_HTML } from './presenter-plan.js';
 import type { AnnotationItem } from '@/review/annotator.js';
@@ -346,6 +347,8 @@ export class ChatViews {
   #agent = new AgentLinkView();
   /** The persona this panel started the running drive as, so its row can say so. */
   #startedAs: string | undefined;
+  /** How the last drive on this tab ended, or why none started, from the daemon. */
+  #last: LastDrive | undefined;
   /** Run pressed, no drive reported yet. Cleared by the drive arriving, or by the timer. */
   #starting: ReturnType<typeof setTimeout> | undefined;
 
@@ -598,8 +601,18 @@ export class ChatViews {
     this.#paintHarness();
   }
   /** The drive running in this tab's project, from the daemon's snapshot: Stop while one runs. */
-  paintDrive(drive: HarnessDrive | undefined): void {
+  paintDrive(drive: HarnessDrive | undefined, last?: LastDrive): void {
     this.#driving = drive;
+    // Only a safe http(s) link is offered; the sentence is escaped where it is drawn.
+    const runUrl =
+      last?.runUrl !== undefined && isSafeDashboardUrl(last.runUrl) ? esc(last.runUrl) : undefined;
+    this.#last =
+      last === undefined
+        ? undefined
+        : {
+            ...(runUrl === undefined ? {} : { runUrl }),
+            ...(last.said === undefined ? {} : { said: last.said }),
+          };
     // The drive has landed: Starting… becomes Stop. No drive while still starting is the push that
     // raced the daemon registering it, and must not offer Run again for a beat.
     if (drive !== undefined) this.#markStarting(false);
@@ -693,6 +706,7 @@ export class ChatViews {
           : `${base}${HARNESS_PLAN_PATH}`,
       linking: this.#linking,
       starting: this.#starting !== undefined && this.#driving === undefined,
+      ...(this.#last === undefined ? {} : { last: this.#last }),
     };
     // Unchanged markup is not redrawn, so a repaint mid-typing never drops focus or the cursor; changed
     // markup is morphed, so a control that only changed its words stays the same element.

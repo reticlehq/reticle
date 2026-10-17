@@ -12,6 +12,7 @@ import {
   type AccountState,
   type HarnessConfig,
   type HarnessDrive,
+  type LastDrive,
 } from '@reticlehq/core';
 import {
   SIGN_UP_PITCH,
@@ -64,6 +65,8 @@ export const HARNESS_ROW_TEXT = {
   LOG_LABEL: 'What the Harness did',
   LOG_EMPTY: 'Runs show here, step by step.',
   PAGE_SUBTITLE: 'Tests your app by itself',
+  /** The finished run's own page on the dashboard. */
+  RESULT: 'See the result ↗',
 } as const;
 
 /** Switches the Harness on, from its page: the same write-through the Settings switch makes. */
@@ -146,6 +149,8 @@ export interface HarnessRowState {
   linking?: boolean;
   /** Run pressed and no drive reported yet: Run stays where it is, disabled, saying Starting…. */
   starting?: boolean;
+  /** How the last drive ended (its result, and why when it fell short), or why none started. */
+  last?: LastDrive;
 }
 
 const row = (inner: string): string => `<div class="reticle-harness-row">${inner}</div>`;
@@ -284,7 +289,19 @@ export function harnessRowHtml(s: HarnessRowState): string {
     runRow(
       personaPickHtml(s.pick, starting),
       `<button type="button" data-reticle-harness-run class="reticle-harness-run"${starting ? ' disabled' : ''}>${starting ? HARNESS_ROW_TEXT.STARTING : HARNESS_ROW_TEXT.RUN}</button>`,
-    ) + personaCustomHtml(s.pick, starting)
+    ) +
+    personaCustomHtml(s.pick, starting) +
+    (starting ? '' : lastRowHtml(s.last))
+  );
+}
+
+/** Under Run: why the last run fell short or none started, and its result. `runUrl` is vetted. */
+function lastRowHtml(last: LastDrive | undefined): string {
+  if (last === undefined || (last.said === undefined && last.runUrl === undefined)) return '';
+  return wrapRow(
+    `${last.said === undefined ? '' : said(esc(last.said))}${
+      last.runUrl === undefined ? '' : link(last.runUrl, HARNESS_ROW_TEXT.RESULT)
+    }`,
   );
 }
 

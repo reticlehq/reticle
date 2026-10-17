@@ -1,5 +1,5 @@
 import { appModalOpen } from '@/dom/dom-ignore.js';
-import type { AgentLink, HarnessConfig, HarnessDrive } from '@reticlehq/core';
+import type { AgentLink, HarnessConfig, HarnessDrive, LastDrive } from '@reticlehq/core';
 import type { HarnessGateView } from './presenter-harness-row.js';
 import { PresenterReport, reportPanelHtml } from './presenter-report.js';
 import type { AccountState } from '@reticlehq/core';
@@ -178,8 +178,8 @@ export class HudShell {
     this.#chatViews.setProjectId(projectId);
   }
   /** The drive running in this tab's project, so the Agent Log shows its steps and Stop. */
-  paintHarnessDrive(drive: HarnessDrive | undefined): void {
-    this.#chatViews.paintDrive(drive);
+  paintHarnessDrive(drive: HarnessDrive | undefined, last?: LastDrive): void {
+    this.#chatViews.paintDrive(drive, last);
   }
   /** Which coding agent is connected, and this tab's notes to it. */
   paintAgent(link: AgentLink | undefined): void {

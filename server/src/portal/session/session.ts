@@ -1,4 +1,5 @@
 import type { WebSocket } from 'ws';
+import { noteOwnReload, notePageLoaded } from '@/features/harness/drive-runs.js';
 import { asProjectId, type ChannelId, type ImpactSnapshot, type ProjectId } from '@reticlehq/core';
 import { narrationArgs, type NarrationBy } from './narration-args.js';
 import type { HandshakeFacts } from './facts/handshake-facts.js';
@@ -358,6 +359,7 @@ export class Session implements HandshakeFacts {
       return;
     }
     if (event.documentId !== undefined) this.#documentId = event.documentId;
+    notePageLoaded(this.id, event, this.#clock());
     if (event.editEpoch !== undefined) this.#editEpoch = event.editEpoch;
     if (event.type === EventType.PAGE_HEALTH) {
       const r = readHealthEvent(event.data);
@@ -660,14 +662,12 @@ export class Session implements HandshakeFacts {
     args: Record<string, unknown> = {},
     timeoutMs: number = DEFAULT_COMMAND_TIMEOUT_MS,
   ): Promise<CommandResult> {
-    // Recorded HERE rather than at the tool call sites: this is the one place every driven action
-    // passes through, so act_sequence and flow replay count too. Doing it per-tool missed both, and
-    // an under-counted "exercised" reports worse coverage than reality — the safe direction, but
-    // still wrong, and it made the number depend on which tool the agent happened to use.
-    if (name === ReticleCommand.ACT) {
-      const ref = args['ref'];
-      if ('string' === typeof ref) this.recordActedRef(ref);
-    }
+    // Recorded HERE, the one place every driven action passes (act_sequence and flow replay too;
+    // per-tool counting missed both and under-counted "exercised"). A reload sent from here is ours,
+    // so the page coming back is not read as a person reloading mid-drive.
+    const ref = args['ref'];
+    if (name === ReticleCommand.ACT && 'string' === typeof ref) this.recordActedRef(ref);
+    if (name === ReticleCommand.REFRESH) noteOwnReload(this.id, this.#clock());
     // Refused before it is sent, when the page said it does not serve this. The rule, and why
     // an absent declaration is not an empty list, live in `undeclared-command.ts`.
     const refused = refusedResult(name, this.commands, `${COMMAND_ID_PREFIX}refused`);

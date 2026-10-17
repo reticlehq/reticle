@@ -227,9 +227,31 @@ export const HarnessConfigSchema = z.object({
 });
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 
-/** The Harness drive running in this tab's project, so the panel can show progress and Stop. */
-export const HarnessDriveSchema = z.object({ runId: z.string(), steps: z.number().int().min(0) });
+/** How many of a running drive's latest lines the snapshot carries for the Harness page's log. */
+export const HARNESS_LINES_MAX = 60;
+
+/**
+ * The Harness drive running in this tab's project, so the panel can show progress and Stop.
+ *
+ * `lines` is the drive's step log, held by the daemon: kept in the HUD's view alone, it was empty
+ * after the Harness page was closed and reopened, or the page reloaded, mid-run.
+ */
+export const HarnessDriveSchema = z.object({
+  runId: z.string(),
+  steps: z.number().int().min(0),
+  lines: z.array(z.string()).max(HARNESS_LINES_MAX).optional(),
+});
 export type HarnessDrive = z.infer<typeof HarnessDriveSchema>;
+
+/**
+ * This tab's last word from the Harness once nothing is driving: the finished run's result page,
+ * and, when it did not run to its end, why (stopped by a reload, refused, the cloud unreachable).
+ */
+export const LastDriveSchema = z.object({
+  runUrl: z.string().optional(),
+  said: z.string().optional(),
+});
+export type LastDrive = z.infer<typeof LastDriveSchema>;
 
 /** The longest note a person can send their coding agent from the HUD. */
 export const AGENT_NOTE_MAX = 500;
@@ -286,6 +308,8 @@ export const ImpactSnapshotSchema = z.object({
   harnessConfig: HarnessConfigSchema.optional(),
   /** The drive running now, when there is one. Absent: nothing is driving. */
   harnessDrive: HarnessDriveSchema.optional(),
+  /** How the last drive on this tab ended, or why none started. Absent while one drives. */
+  lastDrive: LastDriveSchema.optional(),
   /** Who is coding against this daemon, and what this tab said to them. Absent: an older daemon. */
   agent: AgentLinkSchema.optional(),
   /**

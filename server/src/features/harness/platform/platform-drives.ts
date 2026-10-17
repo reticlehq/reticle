@@ -86,14 +86,15 @@ export async function requestFreeDrive(
       message,
       ...(hint === undefined ? {} : { hint }),
     };
-  } catch (error) {
-    return {
-      granted: false,
-      needsCard: false,
-      message: `Could not reach the Reticle platform: ${error instanceof Error ? error.message : String(error)}`,
-    };
+  } catch {
+    // One line the Harness page can show as it is: the person can fix a connection, not a stack.
+    return { granted: false, needsCard: false, message: msgCloudSilent(base(platform)) };
   }
 }
+
+/** Said when the platform cannot be reached at all. */
+const msgCloudSilent = (url: string): string =>
+  `Reticle Cloud at ${url} did not answer, so the Harness cannot start. Check your connection, then Run again.`;
 
 const DRIVE_DONE = 'done';
 const msgFromDashboard = (verdict: string | undefined, checks: number): string =>
