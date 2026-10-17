@@ -737,3 +737,47 @@ describe('a duplicate on an endpoint the assertion never named does not decide i
     expect(r.verified).toBe(Verified.NO);
   });
 });
+
+describe('buffer loss impeaches only when the failing clause reads lost events (#1231)', () => {
+  it('a live-DOM failure without bufferLostEvidence is still NO', () => {
+    const r = decideVerified({
+      pass: false,
+      honesty: clean(),
+      declaredConsequence: true,
+    });
+    expect(r.verified).toBe(Verified.NO);
+    expect(r.verifiedReason).toBe(VerifiedReason.ASSERTION_FAILED);
+  });
+
+  it('a failure with bufferLostEvidence grades UNKNOWN', () => {
+    const r = decideVerified({
+      pass: false,
+      honesty: clean(),
+      declaredConsequence: true,
+      bufferLostEvidence: true,
+    });
+    expect(r.verified).toBe(Verified.UNKNOWN);
+    expect(r.verifiedReason).toBe(VerifiedReason.UNCLEAN_CAPTURE);
+  });
+
+  it('bufferLostEvidence does not affect a passing assertion', () => {
+    const r = decideVerified({
+      pass: true,
+      honesty: clean(),
+      declaredConsequence: true,
+      bufferLostEvidence: true,
+      settled: true,
+    });
+    expect(r.verified).toBe(Verified.YES);
+  });
+
+  it('a passing assertion with dirty capture from other issues is still UNKNOWN', () => {
+    const r = decideVerified({
+      pass: true,
+      honesty: dirty('blind spot: cross-origin iframe'),
+      declaredConsequence: true,
+    });
+    expect(r.verified).toBe(Verified.UNKNOWN);
+    expect(r.verifiedReason).toBe(VerifiedReason.UNCLEAN_CAPTURE);
+  });
+});

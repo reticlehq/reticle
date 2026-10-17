@@ -130,6 +130,12 @@ interface VerifiedInputs {
    */
   namedRequestInFlight?: boolean;
   /**
+   * The buffer evicted evidence a failing clause needed (#1231). Only set when a child that reads
+   * event history has no matching event left in the window, so the failure may be the buffer's
+   * fault rather than the app's.
+   */
+  bufferLostEvidence?: boolean;
+  /**
    * Writes in this window that answered `202 Accepted`, as "METHOD url" — the server took the
    * request and has NOT finished processing it.
    *
@@ -373,6 +379,19 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
       because:
         `a write returned 202 Accepted (${outcomePending.join('; ')}), so the server has not finished ` +
         'processing it — this window cannot contain the outcome; re-check that call once it reconciles',
+    };
+  }
+
+  // The buffer evicted evidence a failing clause needed. The failure may be the buffer's fault,
+  // not the app's, so the honest answer is unknown (#1231). Only fires when the caller proved
+  // that a specific event-history child has no evidence left in the window.
+  if (false === pass && true === inputs.bufferLostEvidence) {
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.UNCLEAN_CAPTURE,
+      because:
+        'the buffer evicted events this assertion needed, so the failure may be the ' +
+        "buffer's, not the app's — re-check once the window is complete",
     };
   }
 
