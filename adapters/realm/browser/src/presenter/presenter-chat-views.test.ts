@@ -354,6 +354,29 @@ describe('chat views and harness access states', () => {
   });
 
   /*
+   * Found live: the API and the console are two origins, so "Add a card…" built from the API's
+   * origin opened a 404. The platform sends the console's own page as `planUrl`; the HUD uses it,
+   * and Set up goes to the same origin.
+   */
+  it("links plans and set-up to the console the platform names, not the API's origin", () => {
+    const { root, views } = mountViews();
+    views.paintAccount({ signedIn: true, host: 'http://localhost:8890' });
+    const split = {
+      ...entitled,
+      platformUrl: 'http://localhost:8890',
+      planUrl: 'http://localhost:4320/settings?group=billing',
+    };
+    views.paintHarness({ ...split, credits: { used: 10, limit: 10, kind: 'free' } });
+    expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
+      'http://localhost:4320/settings?group=billing',
+    );
+    views.paintHarness({ ...split, providerReady: false });
+    expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
+      'http://localhost:4320/settings?group=project#model',
+    );
+  });
+
+  /*
    * A paid user pressed Set up and landed on dashboard Settings showing "All projects" and no switch:
    * the link named no project. The console reads `?project=`, before the hash.
    */

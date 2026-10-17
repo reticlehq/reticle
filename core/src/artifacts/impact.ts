@@ -195,6 +195,11 @@ export const HarnessConfigSchema = z.object({
   /** The platform this answer came from, so the HUD's links go there and not to the hosted one. */
   platformUrl: z.string().optional(),
   /**
+   * The console's page for credits and the trial. The API and the console are two origins, so a
+   * link built from `platformUrl` opened a 404. The HUD links here, and to this origin for set-up.
+   */
+  planUrl: z.string().optional(),
+  /**
    * The platform's own Harness coverage gate, which it enforces. The HUD prefers it to the daemon's
    * local score; absent from an older platform, which leaves the local score to decide.
    */

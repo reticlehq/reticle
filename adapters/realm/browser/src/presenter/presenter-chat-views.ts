@@ -68,10 +68,20 @@ const HARNESS_STARTING_MS = 20_000;
  * signed in to, else the hosted service. A self-hosted or local platform was sent to the hosted one.
  */
 export function platformBase(config: HarnessConfig | undefined, account: AccountState): string {
-  const base = [config?.platformUrl, account.host].find(
+  // The console's origin first, from the plan page it named: the API's origin 404s for a page.
+  const base = [consoleOrigin(config?.planUrl), config?.platformUrl, account.host].find(
     (url): url is string => url !== undefined && isSafeDashboardUrl(url),
   );
   return esc((base ?? DEFAULT_PLATFORM_URL).replace(/\/+$/, ''));
+}
+
+function consoleOrigin(planUrl: string | undefined): string | undefined {
+  if (planUrl === undefined || !isSafeDashboardUrl(planUrl)) return undefined;
+  try {
+    return new URL(planUrl).origin;
+  } catch {
+    return undefined;
+  }
 }
 
 interface HistoricalAnnotation extends AnnotationItem {
@@ -677,7 +687,10 @@ export class ChatViews {
       pick: this.#personaPick,
       startedAs: this.#startedAs,
       setupUrl: `${base}${HARNESS_SETUP_PATH}${project}${HARNESS_SETUP_HASH}`,
-      planUrl: `${base}${HARNESS_PLAN_PATH}`,
+      planUrl:
+        config?.planUrl !== undefined && isSafeDashboardUrl(config.planUrl)
+          ? esc(config.planUrl)
+          : `${base}${HARNESS_PLAN_PATH}`,
       linking: this.#linking,
       starting: this.#starting !== undefined && this.#driving === undefined,
     };
