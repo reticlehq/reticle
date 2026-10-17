@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { themeReport } from './theme.js';
+import { themeReport, tokenNames } from './theme.js';
 
 /** Declare a palette + render an element, then report its theme compliance from computed style. */
 function setup(paletteCss: string, html: string): CSSStyleDeclaration {
@@ -105,5 +105,39 @@ describe('themeReport — design-token compliance', () => {
     const r = themeReport(cs);
     expect(r.backgroundTokens).toEqual(['--surface']);
     expect(r.tokenCount).toBe(1);
+  });
+});
+
+describe('tokenNames — discovery inside grouping rules', () => {
+  beforeEach(() => {
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  });
+
+  /** Tailwind v4 keeps its theme tokens in `@layer theme { :root { … } }`. */
+  it('finds a token declared inside @layer', () => {
+    document.head.innerHTML = '<style>@layer theme { :root { --brand: #123456; } }</style>';
+    expect(tokenNames()).toContain('--brand');
+  });
+
+  it('finds a token declared inside @media', () => {
+    document.head.innerHTML =
+      '<style>@media (min-width: 1px) { :root { --mq-token: #111111; } }</style>';
+    expect(tokenNames()).toContain('--mq-token');
+  });
+
+  it('finds a token nested inside several grouping rules', () => {
+    document.head.innerHTML =
+      '<style>@layer theme { @media (min-width: 1px) { @supports (display: grid) { :root { --nested-token: #222222; } } } }</style>';
+    expect(tokenNames()).toContain('--nested-token');
+  });
+
+  it('does not recurse past the depth bound', () => {
+    const deep =
+      '@media (min-width: 1px) { '.repeat(12) +
+      ':root { --deep-token: #333333; }' +
+      ' }'.repeat(12);
+    document.head.innerHTML = `<style>${deep}</style>`;
+    expect(tokenNames()).not.toContain('--deep-token');
   });
 });

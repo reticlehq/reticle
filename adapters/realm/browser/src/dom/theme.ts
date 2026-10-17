@@ -26,8 +26,37 @@
 /** Attribute an app flips to switch themes, reported as part of the scope so results are comparable. */
 const THEME_ATTRIBUTE = 'data-theme';
 
-/** Collect every custom-property NAME the app declares, in any rule. */
-function tokenNames(): Set<string> {
+/**
+ * Deepest grouping-rule nesting token discovery descends into. A real theme nests a few levels;
+ * deeper is a pathological sheet, and the bound keeps a hostile stylesheet cheap.
+ */
+const MAX_TOKEN_RULE_DEPTH = 8;
+
+/** True when the rule holds nested rules (CSSLayerBlockRule, CSSMediaRule, CSSSupportsRule). */
+function isGroupingRule(rule: CSSRule): rule is CSSGroupingRule {
+  return 'cssRules' in rule && rule.cssRules instanceof CSSRuleList;
+}
+
+/** Add every custom-property name declared in the rule list, descending into grouping rules. */
+function collectTokenNames(rules: CSSRuleList, names: Set<string>, depth: number): void {
+  if (depth <= 0) return;
+  for (const rule of Array.from(rules)) {
+    if (rule instanceof CSSStyleRule) {
+      // Deliberately NOT filtered to `:root`/`html`: a theme block is usually `.dark` or
+      // `[data-theme="dark"]`, so such a filter leaves an app that declares its palette only there
+      // with no palette at all. Names are cheap; a name that is not in scope resolves to nothing
+      // below and is dropped, so the wider collection cannot invent a token.
+      for (const prop of Array.from(rule.style)) {
+        if (prop.startsWith('--')) names.add(prop);
+      }
+    } else if (isGroupingRule(rule)) {
+      collectTokenNames(rule.cssRules, names, depth - 1);
+    }
+  }
+}
+
+/** Collect every custom-property NAME the app declares, in any rule. Exported for testing. */
+export function tokenNames(): Set<string> {
   const names = new Set<string>();
   for (const sheet of Array.from(document.styleSheets)) {
     let rules: CSSRuleList | null = null;
@@ -37,16 +66,7 @@ function tokenNames(): Set<string> {
       continue;
     }
     if (null === rules) continue;
-    for (const rule of Array.from(rules)) {
-      if (!(rule instanceof CSSStyleRule)) continue;
-      // Deliberately NOT filtered to `:root`/`html`: a theme block is usually `.dark` or
-      // `[data-theme="dark"]`, so such a filter leaves an app that declares its palette only there
-      // with no palette at all. Names are cheap; a name that is not in scope resolves to nothing
-      // below and is dropped, so the wider collection cannot invent a token.
-      for (const prop of Array.from(rule.style)) {
-        if (prop.startsWith('--')) names.add(prop);
-      }
-    }
+    collectTokenNames(rules, names, MAX_TOKEN_RULE_DEPTH);
   }
   return names;
 }
