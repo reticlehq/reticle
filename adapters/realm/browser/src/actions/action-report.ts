@@ -56,6 +56,12 @@ export interface ActionEffect {
   occludedBy: string | null;
   /** Click-like only: the target was off-viewport, so it was scrolled into view before dispatch. */
   scrolledIntoView: boolean;
+  /** When `occluded`: what covers the target, in words (test id, else role and name, else tag). */
+  occluderName?: string;
+  /** Click-like only: the target is laid out with no size, so a person has nothing to click. */
+  noSize?: true;
+  /** Click-like only: still outside the viewport after it was scrolled into view. */
+  offViewport?: true;
   /**
    * How long the pointer was ACTUALLY held down, for a click with `args.holdMs`. Absent otherwise.
    *

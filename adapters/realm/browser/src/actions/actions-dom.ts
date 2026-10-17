@@ -1,4 +1,6 @@
 import { refs } from '@/dom/addressing/refs.js';
+import { readTestId } from '@/dom/addressing/testid-attr.js';
+import { getAccessibleName, getRole } from '@/dom/a11y.js';
 import { hitTestOccluder } from '@/dom/occlusion.js';
 import { nativeFrame } from '@/timers/native/native-timers.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
@@ -8,6 +10,12 @@ interface ClickGeometry {
   occluded: boolean;
   occludedBy: string | null;
   scrolledIntoView: boolean;
+  /** What covers the target, in words: its test id, else its role and name, else its tag. */
+  occluderName?: string;
+  /** The target is laid out with no size: there is nothing for a pointer to land on. */
+  noSize?: true;
+  /** Still outside the viewport after it was scrolled into view. */
+  offViewport?: true;
 }
 export const NO_GEOMETRY: ClickGeometry = {
   occluded: false,
@@ -150,11 +158,26 @@ function isOffViewport(el: ActionTarget, rect: DOMRect): boolean {
 function hitTest(
   el: ActionTarget,
   rect: DOMRect,
-): { occluded: boolean; occludedBy: string | null } {
+): { occluded: boolean; occludedBy: string | null; occluderName?: string } {
   const top = hitTestOccluder(el, rect);
   return null === top
     ? { occluded: false, occludedBy: null }
-    : { occluded: true, occludedBy: refs.refFor(top) };
+    : { occluded: true, occludedBy: refs.refFor(top), occluderName: nameOf(top) };
+}
+
+/** An element in words a person can find it by: its test id, else role and name, else its tag. */
+function nameOf(el: Element): string {
+  const testid = readTestId(el);
+  if (testid !== null && testid.length > 0) return `[data-testid="${testid}"]`;
+  const name = getAccessibleName(el).trim();
+  return name.length > 0 ? `${getRole(el)} "${name.slice(0, 40)}"` : el.tagName.toLowerCase();
+}
+
+/** Laid out (the page has layout) with a box of no area: a pointer has nowhere to land. */
+function hasNoSize(el: ActionTarget): boolean {
+  if (typeof el.getClientRects !== 'function') return false;
+  const rects = Array.from(el.getClientRects());
+  return rects.length > 0 && rects.every((r) => 0 === r.width || 0 === r.height);
 }
 
 /**
@@ -165,14 +188,15 @@ function hitTest(
 export function clickGeometry(el: ActionTarget): ClickGeometry {
   if (typeof el.getBoundingClientRect !== 'function') return NO_GEOMETRY;
   let rect = el.getBoundingClientRect();
-  if (!isMeasurable(rect)) return NO_GEOMETRY;
+  if (!isMeasurable(rect)) return hasNoSize(el) ? { ...NO_GEOMETRY, noSize: true } : NO_GEOMETRY;
   let scrolledIntoView = false;
   if (isOffViewport(el, rect) && 'function' === typeof el.scrollIntoView) {
     el.scrollIntoView({ block: 'center', inline: 'center' });
     scrolledIntoView = true;
     rect = el.getBoundingClientRect();
   }
-  return { ...hitTest(el, rect), scrolledIntoView };
+  const stillOff = scrolledIntoView && isOffViewport(el, rect);
+  return { ...hitTest(el, rect), scrolledIntoView, ...(stillOff ? { offViewport: true } : {}) };
 }
 
 export function firePointer(

@@ -58,6 +58,7 @@ import { gradeOfPredicate } from './assert/assert-grade.js';
 import { describeWaitTarget } from '@reticlehq/engine/evidence/unsettled.js';
 import { sourceOf } from './tools-helpers.js';
 import { confirmedByDeclaration } from './act/act-danger.js';
+import { unreachableTargetNote } from './act/act-observation.js';
 
 /**
  * The step's effect record, best-effort.
@@ -90,6 +91,8 @@ interface StepCheck {
   readonly held: boolean;
   /** The page went away (or the predicate could not be read) before the consequence was decided. */
   readonly undecided: boolean;
+  /** Undecided because no person could have made the click, not because the page went away. */
+  readonly unreachable?: boolean;
   /** Deciding contradiction kinds seen in the step's window. */
   readonly contradicted: readonly string[];
   readonly expected?: string | undefined;
@@ -107,7 +110,13 @@ function stepVerdictEffect(check: StepCheck): JournalVerdictEffect {
       ? { verified: Verified.NO, reason: VerifiedReason.CONTRADICTED }
       : { verified: Verified.YES, reason: undefined }
     : check.undecided
-      ? { verified: Verified.UNKNOWN, reason: VerifiedReason.OBSERVATION_LOST }
+      ? {
+          verified: Verified.UNKNOWN,
+          reason:
+            true === check.unreachable
+              ? VerifiedReason.INCONCLUSIVE
+              : VerifiedReason.OBSERVATION_LOST,
+        }
       : { verified: Verified.NO, reason: VerifiedReason.ASSERTION_FAILED };
   const source = sourceOf(check.source);
   return {
@@ -367,12 +376,15 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
            * satisfy step four's assertion, which is a false green built out of correct parts.
            */
           const parsed = PredicateSchema.safeParse(step['expect']);
+          // A click no person could have made decides nothing, whatever followed it.
+          const unreachable = unreachableTargetNote(outcome.result);
           if (!parsed.success) {
             const described = describe();
             const contradicted = deciding(described);
             expectations.push({
               declared: false,
               ...(0 === contradicted.length ? {} : { contradicted }),
+              ...(unreachable === undefined ? {} : { undecided: unreachable }),
             });
             await pushStep(described);
           } else {
@@ -383,11 +395,12 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             const described = describe();
             const contradicted = deciding(described);
             const disagreement = 0 === contradicted.length ? {} : { contradicted };
-            const held = true === verdict.pass;
+            const held = true === verdict.pass && unreachable === undefined;
             // A tab that went away (an external checkout page) or a predicate that could not be
             // read decided nothing: unknown, never a miss blamed on the app.
             const undecided =
-              !held && (true === verdict.observationLost || verdict.inconclusive !== undefined);
+              unreachable !== undefined ||
+              (!held && (true === verdict.observationLost || verdict.inconclusive !== undefined));
             // One check per declared step, journaled as act_and_wait journals its own, so the
             // session's result, its run file and the dashboard all count it. See sequence-journal.ts.
             journalStep(
@@ -397,6 +410,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
                 expect: parsed.data,
                 held,
                 undecided,
+                ...(unreachable === undefined ? {} : { unreachable: true }),
                 contradicted,
                 expected: verdict.expected,
                 observed: held ? undefined : (verdict.observed ?? verdict.failureReason),
@@ -410,9 +424,11 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
               ...(undecided
                 ? {
                     undecided:
-                      true === verdict.observationLost
-                        ? `${verdict.failureReason ?? 'the observation was lost'} (the page left)`
-                        : (verdict.failureReason ?? 'the predicate could not be read'),
+                      unreachable !== undefined
+                        ? unreachable
+                        : true === verdict.observationLost
+                          ? `${verdict.failureReason ?? 'the observation was lost'} (the page left)`
+                          : (verdict.failureReason ?? 'the predicate could not be read'),
                   }
                 : {}),
               ...disagreement,

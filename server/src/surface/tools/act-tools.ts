@@ -93,7 +93,7 @@ import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
 import { confirmedByDeclaration } from './act/act-danger.js';
 import { dispatchAct, preflightAct } from './act/act-preflight.js';
-import { checkNet, disabledTargetNote, followLostObservation } from './act/act-observation.js';
+import { actTargetNote, checkNet, followLostObservation } from './act/act-observation.js';
 import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';
 import { verdictIntentGap } from '@reticlehq/engine/evidence/verdict-intent-gap.js';
 import { asActionType, gradeOf } from './act/act-helpers.js';
@@ -769,9 +769,8 @@ export const ACT_TOOLS: ToolDef[] = [
         });
         const outcomeUnread = unreadWriteLabels(windowEvents);
         const stillInFlight = inFlightRequestLabels(windowEvents, session.url, session.background);
-        // A click on a disabled control cannot cause anything: a miss there is not the app's.
-        const inconclusive =
-          verdict.inconclusive ?? disabledTargetNote(verdict.pass, actResult?.result);
+        // A click on a disabled control cannot cause anything, nor one no person could make.
+        const inconclusive = verdict.inconclusive ?? actTargetNote(verdict.pass, actResult?.result);
         const { decision, durable } = await withDurability(
           args['durable'],
           until,

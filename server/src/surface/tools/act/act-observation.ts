@@ -77,6 +77,43 @@ export function disabledTargetNote(pass: boolean, actResult: unknown): string | 
   return false === asRecord(actResult)['enabled'] ? DISABLED_TARGET_NOTE : undefined;
 }
 
+/** The words a verdict carries for a click no person could have made. */
+const UNREACHABLE = {
+  covered: (by: string): string =>
+    `a person could not have clicked the target: it is covered by ${by}. Dismiss or move what ` +
+    'covers it, then act again',
+  NO_SIZE:
+    'a person could not have clicked the target: it has no size (0×0). Give it a size, or act on ' +
+    'the control a person actually clicks',
+  OFF_VIEWPORT:
+    'a person could not have clicked the target: it is outside the viewport even after scrolling ' +
+    'it into view. Bring it on screen, then act again',
+} as const;
+
+/**
+ * Why the click behind a verdict is not one a person could have made, or undefined when it is.
+ *
+ * Synthetic dispatch reaches a covered, sizeless or off-screen target all the same, so the declared
+ * consequence can hold. A "yes" on it says nothing about what the app's users can do: the act
+ * result already warned, and the verdict now agrees. Undecided, never a pass and never the app's
+ * failure, whichever way the consequence went.
+ */
+export function unreachableTargetNote(actResult: unknown): string | undefined {
+  const effect = asRecord(asRecord(actResult)['effect']);
+  if (true === effect['occluded']) {
+    const by = asString(effect['occluderName']) ?? asString(effect['occludedBy']);
+    return UNREACHABLE.covered(by ?? 'another element');
+  }
+  if (true === effect['noSize']) return UNREACHABLE.NO_SIZE;
+  if (true === effect['offViewport']) return UNREACHABLE.OFF_VIEWPORT;
+  return undefined;
+}
+
+/** Why the acted target leaves the verdict undecided: no person could reach it, or it was disabled. */
+export function actTargetNote(pass: boolean, actResult: unknown): string | undefined {
+  return unreachableTargetNote(actResult) ?? disabledTargetNote(pass, actResult);
+}
+
 /** Calls quoted on a failed check, and how much of each response body. */
 const MAX_NET_CALLS = 5;
 const MAX_BODY_CHARS = 300;

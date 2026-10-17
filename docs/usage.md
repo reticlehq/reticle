@@ -155,6 +155,11 @@ Perform one action / several in order.
 | `occluded` | `click`/`dblclick` only: the click point hit-tested to a _foreign_ element (an overlay is on top). Synthetic dispatch still delivered the event, but **a real user could not click it**, so treat the target as visually blocked. `false` when not click-like or not hit-testable |
 | `occludedBy` | the ref of the element actually on top at the click point when `occluded`, else `null` |
 | `scrolledIntoView` | `click`/`dblclick` only: the target was off-viewport, so Reticle scrolled it into view before dispatch |
+| `occluderName` | when `occluded`: what covers the target, in words (its test id, else its role and name, else its tag). Omitted otherwise |
+| `noSize` | click-like only: the target is laid out with no size, so a person has nothing to click. Omitted otherwise |
+| `offViewport` | click-like only: the target is still outside the viewport after it was scrolled into view. Omitted otherwise |
+
+A verdict drawn over a click with `occluded`, `noSize` or `offViewport` is `unknown` (`verifiedReason: "inconclusive"`), never `yes`: synthetic dispatch reached the target, so the consequence can hold, but no person could have made that click. `because` names the cause and the fix.
 
 Use it to distinguish failure modes: `visible:false`/`enabled:false`/`targetMatched:false` → your action missed; the tool throwing → it never dispatched; `occluded:true` → the control is covered by something (a real user is blocked even though the synthetic event landed); `defaultPrevented:true` or all of `valueChanged:false`/`focusMoved:null`/`domMutatedWithin:0` → the app didn't react.
 

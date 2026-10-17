@@ -728,6 +728,10 @@ export async function executeAction(
     occluded: geometry.occluded,
     occludedBy: geometry.occludedBy,
     scrolledIntoView: geometry.scrolledIntoView,
+    // Omitted unless they apply: each names a reason a person could not have made this click.
+    ...(geometry.occluderName === undefined ? {} : { occluderName: geometry.occluderName }),
+    ...(true === geometry.noSize ? { noSize: true as const } : {}),
+    ...(true === geometry.offViewport ? { offViewport: true as const } : {}),
     // Omitted when there was no hold: an absent key says "this action does not hold", where a 0
     // would read as "it held for no time", which is a different and misleading claim.
     ...(heldMs > 0 ? { heldMs } : {}),
