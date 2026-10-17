@@ -5,7 +5,16 @@ import {
   secretEnvKey,
   secretValue,
 } from './fields/flow-secret-field.js';
-import { FlowPredicateSchema, Verified, pathOf, type Predicate } from '@reticlehq/core';
+import {
+  EventType,
+  FlowPredicateSchema,
+  MUTATING_METHODS,
+  Verified,
+  isDevToolingUrl,
+  pathOf,
+  type Predicate,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import {
   DANGEROUS_ACTION_CONFIRM_ARG,
   DOCUMENT_ANCHOR_ROLE,
@@ -103,6 +112,30 @@ function sourceFromResult(res: Record<string, unknown>): Record<string, unknown>
  */
 export { pathOf };
 
+/**
+ * Did the app send a write request in this window? A step that did is saved `writes: true`, so a
+ * replay does not repeat it unasked. The dev server's own traffic is not the app's.
+ */
+export function wroteIn(events: readonly ReticleEvent[]): boolean {
+  return events.some((event) => {
+    if (EventType.NET_REQUEST !== event.type) return false;
+    const method = asString(event.data['method'])?.toUpperCase() ?? '';
+    return MUTATING_METHODS.includes(method) && !isDevToolingUrl(asString(event.data['url']));
+  });
+}
+
+/** `wroteIn` over a session's window, best-effort: the record must never fail the drive it records. */
+export function wroteSince(
+  session: { eventsSince(since: number): readonly ReticleEvent[] },
+  since: number,
+): boolean {
+  try {
+    return wroteIn(session.eventsSince(since));
+  } catch {
+    return false;
+  }
+}
+
 /** What a saved flow could not keep, and the fix. See RecordedStep.unkeptExpect. */
 export const UNKEPT_EXPECT =
   'its proved `until` names something a saved flow cannot replay (a session ref such as e12): ' +
@@ -126,6 +159,8 @@ export function captureAct(
   route?: string,
   /** The session that acted: only recordings it started take the step. */
   session?: string,
+  /** The act's window sent a write request; see `wroteIn`. */
+  wrote = false,
 ): void {
   // NO `active()` gate. `RecordingStore.capture` opens the AMBIENT tape on its first step, and that
   // branch was unreachable from here: this returned early whenever nothing was open, and the only
@@ -151,6 +186,7 @@ export function captureAct(
   if (route !== undefined) step.page = route;
   const intent = asString(args['intent'])?.trim();
   if (intent !== undefined && intent.length > 0) step.intent = intent;
+  if (wrote) step.writes = true;
   recordings.capture(step, route, session);
 }
 
@@ -167,9 +203,11 @@ export function captureVerdictedAct(
   route: string | undefined,
   verified: string | undefined,
   session?: string,
+  /** The act's window sent a write request; see `wroteIn`. */
+  wrote = false,
 ): void {
   const { until: _until, predicate: _predicate, ...unproved } = args;
-  captureAct(recordings, Verified.YES === verified ? args : unproved, res, route, session);
+  captureAct(recordings, Verified.YES === verified ? args : unproved, res, route, session, wrote);
 }
 
 /** Fold a PASSING standalone assertion into the step it proved. See RecordingStore.attachExpect. */

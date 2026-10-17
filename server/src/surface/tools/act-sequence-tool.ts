@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import { compileSequenceStep, pathOf } from '@/language/flows/replay.js';
+import { compileSequenceStep, pathOf, wroteSince } from '@/language/flows/replay.js';
 import { DEFAULT_SEQUENCE_STEP_TIMEOUT_MS } from '@/language/flows/flow-step-runners.js';
 import { sequenceStepArgs } from './act/act-preflight.js';
 import {
@@ -502,6 +502,8 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             steps: stepResults.slice(0, completed),
           },
         );
+        // The journey sent a write request: saved `writes`, so a replay does not repeat it unasked.
+        if (wroteSince(session, since)) recorded.writes = true;
         journey = recorded;
         // Every step was on Reticle's own panel: nothing of the app's journey to record.
         const onApp = asRecord(recorded.args)['steps'];

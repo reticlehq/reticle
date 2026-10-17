@@ -48,6 +48,8 @@ export interface RecordedStep {
    * never saved silently.
    */
   unkeptExpect?: string;
+  /** The step sent a write request (POST, PUT, PATCH, DELETE) while it was recorded. */
+  writes?: true;
 }
 
 interface ActiveRecording {

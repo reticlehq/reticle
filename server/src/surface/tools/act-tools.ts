@@ -14,7 +14,7 @@ import { aliasParam } from './args/alias-args.js';
 import { resolveSessionWithin } from '@/portal/session/timing/resolve-within.js';
 import { WALL_CLOCK } from '@/portal/session/timing/wall-clock.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import { captureAct, captureVerdictedAct, pathOf } from '@/language/flows/replay.js';
+import { captureAct, captureVerdictedAct, pathOf, wroteSince } from '@/language/flows/replay.js';
 import { durableArg, durableOutput, reloadAndRecheck, withDurability } from './act/durable.js';
 
 import {
@@ -984,6 +984,7 @@ export const ACT_TOOLS: ToolDef[] = [
             routeBeforeWait,
             recordedVerdict,
             session.id,
+            wroteSince(acted, actedSince),
           );
         deps.recordings.markEnded(pathOf(currentOf(deps.sessions, session).url), session.id);
         acted.finishAction(

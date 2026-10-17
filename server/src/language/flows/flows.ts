@@ -282,6 +282,7 @@ export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
   if (step.timeoutMs !== undefined) out.timeoutMs = step.timeoutMs;
   if (step.page !== undefined) out.page = step.page;
   if (step.endPage !== undefined && step.endPage !== step.page) out.endPage = step.endPage;
+  if (true === step.writes) out.writes = true;
   return out;
 }
 

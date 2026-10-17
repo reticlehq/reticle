@@ -8,7 +8,15 @@
  * by a replay that drifted.
  */
 import { describe, expect, it } from 'vitest';
-import { FLOW_FILE_VERSION, ReplayStatus, type FlowFile, type FlowStep } from '@reticlehq/core';
+import {
+  EventType,
+  FLOW_FILE_VERSION,
+  ReplayStatus,
+  type FlowFile,
+  type FlowStep,
+} from '@reticlehq/core';
+import { recordedStepToFlowStep } from './flows.js';
+import { wroteIn } from './replay.js';
 import { buildSuiteVerdict } from './decision.js';
 import { writingFlows } from './suite-selection.js';
 import { readyForReplay, replayability, Replayable } from './flow-replayable.js';
@@ -146,5 +154,33 @@ describe('a certify run that must not change data', () => {
         { ...reads, name: 'reads' },
       ]),
     ).toEqual(['marks']);
+  });
+});
+
+describe('a step that sent a write request while it was recorded', () => {
+  const request = (method: string, url: string) => ({
+    type: EventType.NET_REQUEST,
+    t: 1,
+    data: { method, url, status: 200 },
+  });
+
+  it('is marked writes, even when its expect named no request', () => {
+    const events = [request('GET', '/api/me'), request('POST', '/api/login')];
+    expect(wroteIn(events as never)).toBe(true);
+    expect(wroteIn([request('GET', '/api/me')] as never)).toBe(false);
+    const step = recordedStepToFlowStep({
+      tool: 'reticle_act',
+      stable: true,
+      args: { by: 'testid', value: 'login-submit', action: 'click', args: {} },
+      writes: true,
+    });
+    expect(step.writes).toBe(true);
+    expect(replayability(flowOf([step])).why).toEqual([
+      'step 1 sent a write request when it was recorded',
+    ]);
+  });
+
+  it("does not count the dev server's own requests as the app's writes", () => {
+    expect(wroteIn([request('POST', 'http://localhost:5173/@vite/client')] as never)).toBe(false);
   });
 });
