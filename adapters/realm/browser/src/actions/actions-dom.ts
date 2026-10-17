@@ -138,7 +138,7 @@ function isMeasurable(rect: DOMRect): boolean {
 }
 
 /** The center of `rect` falls outside the visible viewport. */
-function isOffViewport(el: ActionTarget, rect: DOMRect): boolean {
+export function isOffViewport(el: Element, rect: DOMRect): boolean {
   const win = el.ownerDocument.defaultView;
   if (null === win) return false;
   const cx = rect.left + rect.width / 2;

@@ -1,6 +1,7 @@
 import {
   ComponentStateReason,
   ElementQuerySchema,
+  INSPECT_REVEAL_ARG,
   ReticleCommand,
   SnapshotMode,
   TRANSPORT_LIMITS,
@@ -29,6 +30,7 @@ import { sanitizeWithReport } from '@/security/serialization.js';
 import { getCapabilities } from '@/registry/capabilities.js';
 import { freezeClock, advanceClock, resetClock, isClockFrozen } from '@/timers/clock.js';
 import { scrollContainer } from '@/actions/scroll.js';
+import { isOffViewport } from '@/actions/actions-dom.js';
 
 export type CommandHandler = (args: Record<string, unknown>) => unknown;
 
@@ -79,7 +81,7 @@ function queryFromArgs(args: Record<string, unknown>): ElementQuery {
   };
 }
 
-function inspect(ref: string): unknown {
+function inspect(ref: string, reveal = false): unknown {
   const el = refs.resolve(ref);
   // THROW, exactly as executeAction does. Returning an error payload made it a SUCCESSFUL command
   // result, which the server then handed to reticle_inspect's outputSchema (ref/role/name/states/
@@ -87,6 +89,14 @@ function inspect(ref: string): unknown {
   // ordinary thing that follows a click. The wording matches actions.ts because the server's
   // recovery table keys off /no longer resolves to an element/ to attach the stale-ref recovery.
   if (null === el) throw new Error(editEpoch.staleRefMessage(ref));
+  // `reveal` is the real-input path asking for a box it can aim at (#1711): a real pointer sent to
+  // an off-viewport box lands on nothing. Same scroll as the synthetic click. Never without the ask:
+  // an inspect is otherwise a read, and a read must not move the page.
+  const scrolledIntoView =
+    reveal &&
+    'function' === typeof el.scrollIntoView &&
+    isOffViewport(el, el.getBoundingClientRect());
+  if (scrolledIntoView) el.scrollIntoView({ block: 'center', inline: 'center' });
   const rect = el.getBoundingClientRect();
   const component = identifyComponent(el);
   const view = el.ownerDocument.defaultView;
@@ -162,6 +172,7 @@ function inspect(ref: string): unknown {
       isButton(el) || isInput(el) ? (el.form?.getAttribute('action') ?? undefined) : undefined,
     formText: isButton(el) || isInput(el) ? (el.form?.textContent ?? undefined) : undefined,
     box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    ...(scrolledIntoView ? { scrolledIntoView: true } : {}),
     // True when another element sits over this one's center point — the click would hit the overlay,
     // not this control (a z-index/overlay bug the DOM tree cannot show).
     occluded: isOccluded(el, rect),
@@ -335,7 +346,9 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   reg.set(ReticleCommand.ACT_SEQUENCE, (args) =>
     executeSequence((Array.isArray(args['steps']) ? args['steps'] : []) as ActionStep[]),
   );
-  reg.set(ReticleCommand.INSPECT, (args) => inspect(str(args['ref']) ?? ''));
+  reg.set(ReticleCommand.INSPECT, (args) =>
+    inspect(str(args['ref']) ?? '', true === args[INSPECT_REVEAL_ARG]),
+  );
   reg.set(ReticleCommand.ANIMATIONS, () => listAnimations());
   reg.set(ReticleCommand.CLOCK, (args) => {
     if (true === args['reset']) {

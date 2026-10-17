@@ -22,6 +22,8 @@
 import {
   ActionType,
   DriveErrorCode,
+  ElementState,
+  INSPECT_REVEAL_ARG,
   InputModeReason,
   ReticleCommand,
   TRANSPORT_LIMITS,
@@ -308,8 +310,52 @@ const PRESS_HAS_NO_BOX: ElementBox = { x: 0, y: 0, width: 0, height: 0 };
 export const HOVER_NEEDS_POINTER_MSG =
   'cannot hover without a real pointer — CSS :hover only applies to a native mouse move, never to a synthetic mouseover';
 
-function hoverSucceeded(center: { cx: number; cy: number }): RealActResult {
-  return { result: { performed: true, center, action: ActionType.HOVER }, settled: true };
+/** A hover target the page could not bring into the viewport. The pointer would miss it. */
+export const HOVER_OFF_VIEWPORT_MSG =
+  'cannot hover: the target is outside the viewport and could not be scrolled into view, so a real pointer would miss it';
+
+/** What a real gesture knows about its element after the page was asked to show it. */
+interface RevealedTarget {
+  inspected: unknown;
+  /** False only when the page reported states without `inViewport`. No states is unknown, not out. */
+  inView: boolean;
+  scrolled: boolean;
+}
+
+/**
+ * INSPECT a ref for a real gesture, asking the page to scroll it into view first (#1711).
+ *
+ * A real gesture aims at coordinates. An element above or below the viewport has a box off the page,
+ * so the pointer lands on nothing while the provider reports `performed: true`. The synthetic path
+ * scrolls the target in first; this gives the real path the same step in the same round trip.
+ */
+async function inspectRevealed(
+  deps: ToolDeps,
+  session: Session,
+  ref: string,
+  /** False only to re-measure without scrolling again. */
+  reveal = true,
+): Promise<RevealedTarget> {
+  const inspected = await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, {
+    ref,
+    ...(reveal ? { [INSPECT_REVEAL_ARG]: true } : {}),
+  });
+  const record = asRecord(inspected);
+  const states = record['states'];
+  const inView = !Array.isArray(states) || states.includes(ElementState.IN_VIEWPORT);
+  return { inspected, inView, scrolled: true === record['scrolledIntoView'] };
+}
+
+function hoverSucceeded(center: { cx: number; cy: number }, scrolled: boolean): RealActResult {
+  return {
+    result: {
+      performed: true,
+      center,
+      action: ActionType.HOVER,
+      ...(scrolled ? { scrolledIntoView: true } : {}),
+    },
+    settled: true,
+  };
 }
 
 /**
@@ -331,19 +377,20 @@ async function hoverForReal(
     throw new Error(HOVER_NEEDS_POINTER_MSG);
   }
 
-  const inspected = await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, { ref });
+  const { inspected, inView, scrolled } = await inspectRevealed(deps, session, ref);
   assertNotDestructive(ActionType.HOVER, inner, inspected);
   const box = asBox(inspected);
   if (box === undefined) {
     throw new Error(HOVER_NEEDS_POINTER_MSG);
   }
+  if (!inView) throw new Error(HOVER_OFF_VIEWPORT_MSG);
 
   if (providerReady && provider !== undefined) {
     try {
       const performed = await provider.perform(session.url, ActionType.HOVER, box, {});
       // Hover always has a resolved box, so there is always a center to report: the provider's own
       // reading, or the box's if it reported none. Both are the same point, not a fabricated one.
-      if (performed.performed) return hoverSucceeded(performed.center ?? boxCenter(box));
+      if (performed.performed) return hoverSucceeded(performed.center ?? boxCenter(box), scrolled);
     } catch {
       // A provider error used to fall back to synthetic dispatch. For hover that is a lie.
     }
@@ -351,7 +398,7 @@ async function hoverForReal(
 
   const { cx, cy } = boxCenter(box);
   if (true === (await deps.pool?.hoverLease(session.id, cx, cy))) {
-    return hoverSucceeded({ cx, cy });
+    return hoverSucceeded({ cx, cy }, scrolled);
   }
 
   throw new Error(HOVER_NEEDS_POINTER_MSG);
@@ -484,23 +531,37 @@ export async function tryRealInput(
     }
   }
 
-  const inspected = await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, { ref });
+  const source = await inspectRevealed(deps, session, ref);
+  const { inspected } = source;
+  let { scrolled } = source;
   assertNotDestructive(action, inner, inspected);
-  const box = asBox(inspected);
-  if (box === undefined) return synthetic(InputModeReason.ELEMENT_NOT_LOCATABLE);
+  let box = asBox(inspected);
+  // A box outside the viewport after the reveal is a gesture that would land on nothing. The
+  // synthetic path scrolls and hit-tests on its own, so it is the honest answer.
+  if (box === undefined || !source.inView) return synthetic(InputModeReason.ELEMENT_NOT_LOCATABLE);
 
   let toBox: ElementBox | undefined;
   if (action === ActionType.DRAG) {
     const toRef = asString(inner['toRef']);
     if (toRef === undefined) return synthetic(InputModeReason.DRAG_TARGET_UNRESOLVED);
-    const targetInspected = await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, {
-      ref: toRef,
-    });
+    const target = await inspectRevealed(deps, session, toRef);
+    const targetInspected = target.inspected;
     // A drag is judged on BOTH ends: dropping onto "Trash" is destructive however innocent the
     // thing being dragged looks.
     assertDragNotDestructive(inner, inspected, targetInspected);
     toBox = asBox(targetInspected);
-    if (toBox === undefined) return synthetic(InputModeReason.DRAG_TARGET_UNRESOLVED);
+    if (toBox === undefined || !target.inView) {
+      return synthetic(InputModeReason.DRAG_TARGET_UNRESOLVED);
+    }
+    // Scrolling the drop target in can carry the source out, so read the source again, without a
+    // second reveal that would undo this one. Only when the page actually moved.
+    if (target.scrolled) {
+      scrolled = true;
+      const again = await inspectRevealed(deps, session, ref, false);
+      box = asBox(again.inspected);
+      if (box === undefined || !again.inView)
+        return synthetic(InputModeReason.ELEMENT_NOT_LOCATABLE);
+    }
   }
 
   if (toBox !== undefined) performArgs.toBox = toBox;
@@ -508,7 +569,15 @@ export async function tryRealInput(
   try {
     const performed = await provider.perform(session.url, action, box, performArgs);
     if (!performed.performed) return synthetic(InputModeReason.PROVIDER_DECLINED);
-    return { result: { performed: true, center: performed.center, action }, settled: true };
+    return {
+      result: {
+        performed: true,
+        center: performed.center,
+        action,
+        ...(scrolled ? { scrolledIntoView: true } : {}),
+      },
+      settled: true,
+    };
   } catch {
     if (session.versionSkew !== undefined) throw new Error(session.versionSkew);
     return {
