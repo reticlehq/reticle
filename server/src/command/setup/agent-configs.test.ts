@@ -5,6 +5,7 @@ import {
   AgentConfidence,
   parentOf,
   planAgentConfigs,
+  platformKey,
   type AgentPlanStep,
 } from './agent-configs.js';
 
@@ -192,6 +193,25 @@ describe('a YAML config we already wrote is not somebody else to defer to', () =
   it('still defers to a config that is somebody else’s', () => {
     const theirs = '# my setup\nmcpServers:\n  - name: something-else\n    command: node\n';
     expect(by(plan({ [CONTINUE]: theirs }), 'continue')?.action).toBe(AgentAction.MANUAL);
+  });
+});
+
+// Both call sites used to cast `process.platform` to the three keys. On Termux that is `android`,
+// the row lookup came back `undefined` and `join` threw ERR_INVALID_ARG_TYPE, so init stopped
+// between writing the wiring and starting the dev server.
+describe('a host that is not macOS, Linux or Windows plans with the linux paths', () => {
+  it('keeps the three platforms that have their own rows', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(platformKey(platform)).toBe(platform);
+    }
+  });
+
+  it.each(['android', 'freebsd', 'openbsd'] as const)('plans for %s without a throw', (host) => {
+    const platform = platformKey(host);
+    expect(platform).toBe('linux');
+    const rows = planAgentConfigs({ home: HOME, platform, ...fs({}) });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows).toEqual(plan({}, 'linux'));
   });
 });
 

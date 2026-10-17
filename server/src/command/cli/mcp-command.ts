@@ -39,7 +39,7 @@ import { ReticleEnv } from '@reticlehq/core';
 import { agentIo } from '@/command/setup/agent-io.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { homedir } from 'node:os';
-import type { PlatformPaths } from '@/command/setup/agent-configs.js';
+import { platformKey } from '@/command/setup/agent-configs.js';
 
 /**
  * Whether the daemon this proxy starts hides its browser. A daemon on a port nobody chose — the
@@ -87,7 +87,7 @@ export async function handleMcp(opts: {
     migrateApprovals({
       io: agentIo,
       home: homedir(),
-      platform: process.platform as keyof PlatformPaths,
+      platform: platformKey(process.platform),
       stateHome: reticleStateHome(),
       version: SERVER_VERSION,
       log,
