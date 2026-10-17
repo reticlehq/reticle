@@ -136,6 +136,9 @@ export function captureAct(
   // That is the whole supply of regression tests this product could have had for free: few saved
   // flows are mutation-testable and few steps declare a consequence, and a drive that is never
   // recorded cannot contribute to either.
+  // A click on Reticle's own panel (the HUD exposed) is not a step of the app's journey: saved, the
+  // app's flow pressed Run Harness on replay, a paid drive, under an intent that never named it.
+  if (true === asRecord(res)['reticleUi']) return;
   const step = compileActStep(args, res);
   // Keep the assertion the agent actually made. `act_and_wait { until }` IS the agent saying what
   // success means — the large majority of calls carry one — and dropping it produced a flow graded

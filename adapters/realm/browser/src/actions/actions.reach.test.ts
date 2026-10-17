@@ -7,6 +7,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { executeAction } from './actions.js';
 import { refs } from '@/dom/addressing/refs.js';
+import { setPresenterVisible } from '@/dom/dom-ignore.js';
 
 const zero = new DOMRect(0, 0, 0, 0);
 
@@ -57,5 +58,24 @@ describe('a click a person could not make', () => {
     const r = await executeAction(refs.refFor(button), 'click');
     expect(r.effect.scrolledIntoView).toBe(true);
     expect(r.effect.offViewport).toBe(true);
+  });
+});
+
+/*
+ * With the HUD exposed, an agent's clicks on Reticle's own panel were recorded into the app's
+ * auto-saved flow. The act result says when its target is Reticle's own UI, so the recorder can
+ * leave it out.
+ */
+describe("an act on Reticle's own UI", () => {
+  it('says so in its result', async () => {
+    setPresenterVisible(true);
+    document.body.innerHTML =
+      '<div data-reticle-hud><button>Run Harness</button></div><button>Sign in</button>';
+    const [hud, app] = Array.from(document.querySelectorAll('button'));
+    expect((await executeAction(refs.refFor(hud as HTMLElement), 'click')).reticleUi).toBe(true);
+    expect(
+      (await executeAction(refs.refFor(app as HTMLElement), 'click')).reticleUi,
+    ).toBeUndefined();
+    setPresenterVisible(false);
   });
 });

@@ -121,6 +121,8 @@ export interface ActionResult {
   secret?: true;
   /** Best-effort caveat the agent should heed (e.g. synthetic hover may not fire enter/leave). */
   warning?: string;
+  /** The target is Reticle's own UI (reachable only with the HUD exposed): never an app step. */
+  reticleUi?: true;
 }
 
 /** The element's stable anchor: testid (gold), else component/source (auto-anchor). */
