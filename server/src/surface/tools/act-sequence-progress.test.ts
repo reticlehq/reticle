@@ -18,6 +18,8 @@ interface Options {
   failAtStep?: number;
   /** When set, the step at this index will time out (reject). */
   timeoutAtStep?: number;
+  /** When set, the step dispatches synthetically to a hidden target. */
+  hiddenAtStep?: number;
 }
 
 function fakeSession(options: Options): Session {
@@ -46,7 +48,10 @@ function fakeSession(options: Options): Session {
           dispatched: true,
           settled: true,
           settleReason: null,
-          effect: { domMutatedWithin: 1 },
+          effect:
+            i === options.hiddenAtStep
+              ? { visible: false, domMutatedWithin: 1 }
+              : { domMutatedWithin: 1 },
         },
       });
     }
@@ -108,6 +113,7 @@ interface SequenceResult {
   completed: number;
   recorded: number;
   stalled_at?: number;
+  verified: string;
   steps?: {
     ref?: string;
     action?: string;
@@ -118,6 +124,18 @@ interface SequenceResult {
 }
 
 describe('act_sequence per-step progress', () => {
+  it('does not verify a consequence after a hidden target is dispatched', async () => {
+    const result = (await tool(ReticleTool.ACT_SEQUENCE).handler(
+      fakeDeps(fakeSession({ hiddenAtStep: 0 })),
+      {
+        steps: [{ ref: 'e1', action: 'click', expect: { kind: 'signal', name: 'saved' } }],
+      },
+    )) as SequenceResult;
+
+    expect(result.verified).toBe('unknown');
+    expect(result.completed).toBe(1);
+  });
+
   it('reports all steps completed on success', async () => {
     const session = fakeSession({});
     const deps = fakeDeps(session);

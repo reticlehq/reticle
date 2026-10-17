@@ -5,11 +5,13 @@ import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import type { ActionTarget } from '@/dom/realm.js';
 
 interface ClickGeometry {
+  hitTested: boolean;
   occluded: boolean;
   occludedBy: string | null;
   scrolledIntoView: boolean;
 }
 export const NO_GEOMETRY: ClickGeometry = {
+  hitTested: false,
   occluded: false,
   occludedBy: null,
   scrolledIntoView: false,
@@ -172,7 +174,7 @@ export function clickGeometry(el: ActionTarget): ClickGeometry {
     scrolledIntoView = true;
     rect = el.getBoundingClientRect();
   }
-  return { ...hitTest(el, rect), scrolledIntoView };
+  return { hitTested: true, ...hitTest(el, rect), scrolledIntoView };
 }
 
 export function firePointer(

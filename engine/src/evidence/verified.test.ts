@@ -450,6 +450,12 @@ describe('every verdict names the clause that decided it', () => {
       settled: true,
       alreadyTrue: true,
     },
+    [VerifiedReason.UNREACHABLE_TARGET]: {
+      pass: true,
+      honesty: clean(),
+      settled: true,
+      unreachableTarget: 'the action target was hidden',
+    },
     [VerifiedReason.UNCLEAN_CAPTURE]: {
       pass: true,
       honesty: dirty('capture truncated'),

@@ -77,6 +77,18 @@ export function disabledTargetNote(pass: boolean, actResult: unknown): string | 
   return false === asRecord(actResult)['enabled'] ? DISABLED_TARGET_NOTE : undefined;
 }
 
+/** A hidden or covered target may receive synthetic events without being user-reachable. */
+export function unreachableTargetNote(actResult: unknown): string | undefined {
+  const effect = asRecord(asRecord(actResult)['effect']);
+  if (false === effect['visible'] && true !== effect['animating'] && true !== effect['hitTested']) {
+    return 'the action target was hidden when it was acted on, so synthetic dispatch cannot prove that a user caused the declared consequence';
+  }
+  if (true === effect['occluded']) {
+    return 'the action target was covered by another element when it was acted on, so synthetic dispatch cannot prove that a user caused the declared consequence';
+  }
+  return undefined;
+}
+
 /** Calls quoted on a failed check, and how much of each response body. */
 const MAX_NET_CALLS = 5;
 const MAX_BODY_CHARS = 300;

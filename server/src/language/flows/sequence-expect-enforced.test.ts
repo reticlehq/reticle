@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asRecord,
   asRef,
   ActionType,
   AnchorKind,
@@ -34,7 +35,10 @@ function el(ref: string, testid: string): ElementDescriptor {
 }
 
 class FakeSession implements FlowReplaySession {
-  constructor(private readonly present: Set<string>) {}
+  constructor(
+    private readonly present: Set<string>,
+    private readonly verification?: { verified: string; because: string },
+  ) {}
 
   command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
     if (name === ReticleCommand.QUERY) {
@@ -50,7 +54,12 @@ class FakeSession implements FlowReplaySession {
         },
       });
     }
-    return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
+    return Promise.resolve({
+      kind: 'command_result',
+      id: 'x',
+      ok: true,
+      result: this.verification === undefined ? {} : asRecord(this.verification),
+    });
   }
   eventsSince(): never[] {
     return [];
@@ -127,5 +136,22 @@ describe('a sequence sub-step`s declared consequence is enforced on replay', () 
     );
 
     expect(steps[0]?.ok).toBe(true);
+  });
+
+  it('keeps an unknown replay verdict out of the failure state', async () => {
+    const session = new FakeSession(new Set(['email', 'confirm', 'receipt']), {
+      verified: 'unknown',
+      because: 'the action target was hidden when it was acted on',
+    });
+    const steps = await replayFlow(
+      session,
+      sequenceFlow([sub('email'), sub('confirm', 'receipt')]),
+      waitForPredicate,
+      FAST,
+    );
+
+    expect(steps[0]?.ok).toBe(true);
+    expect(steps[0]?.error).toBeUndefined();
+    expect(steps[0]?.note).toContain('hidden');
   });
 });

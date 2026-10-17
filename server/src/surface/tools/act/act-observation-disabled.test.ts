@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { disabledTargetNote, windowNet } from './act-observation.js';
+import { disabledTargetNote, unreachableTargetNote, windowNet } from './act-observation.js';
+
+describe('a hit-tested opacity-zero target', () => {
+  it('is not treated as unreachable when the browser hit-test reaches it', () => {
+    expect(
+      unreachableTargetNote({ effect: { visible: false, hitTested: true, occluded: false } }),
+    ).toBeUndefined();
+  });
+
+  it('still treats a hidden target without hit-test evidence as unreachable', () => {
+    expect(unreachableTargetNote({ effect: { visible: false, occluded: false } })).toMatch(
+      /hidden/,
+    );
+  });
+});
 
 /*
  * From a persona drive: the Harness saved an item, the app cleared the field and disabled Save, and

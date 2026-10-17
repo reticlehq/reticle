@@ -41,7 +41,12 @@ interface Paragraph {
  * A page whose MATCH answers with `before` until the action runs and with `after` once it has, and
  * whose window holds `events` only after the action.
  */
-function page(before: Paragraph[], after: Paragraph[], events: ReticleEvent[] = []): ToolDeps {
+function page(
+  before: Paragraph[],
+  after: Paragraph[],
+  events: ReticleEvent[] = [],
+  effect: Record<string, unknown> = { domMutatedWithin: 1 },
+): ToolDeps {
   let acted = false;
   const described = (ps: Paragraph[]): unknown[] =>
     ps.map((p, i) => ({
@@ -66,7 +71,7 @@ function page(before: Paragraph[], after: Paragraph[], events: ReticleEvent[] = 
       kind: 'command_result',
       id: 'c',
       ok: true,
-      result: { dispatched: true, settled: true, effect: { domMutatedWithin: 1 } },
+      result: { dispatched: true, settled: true, effect },
     });
   };
   const stub: Partial<Session> = {
@@ -160,5 +165,45 @@ describe('a text check that matched only hidden nodes is not a clean yes', () =>
     const some = [{ visible: false }, { visible: true }, { visible: false }];
     const r = await actAndWait(page([], some), TEXT);
     expect(r['verifiedReason']).not.toBe(VerifiedReason.HIDDEN_MATCH);
+  });
+});
+
+describe('a consequence after an unreachable action is not a clean yes', () => {
+  it('does not verify a visible consequence after acting on a hidden target', async () => {
+    const r = await actAndWait(
+      page([{ visible: true }], [{ visible: true }], [], { visible: false, domMutatedWithin: 1 }),
+      TEXT,
+    );
+
+    expect(r['verified']).toBe(Verified.UNKNOWN);
+    expect(r['verifiedReason']).toBe(VerifiedReason.UNREACHABLE_TARGET);
+  });
+
+  it('does not verify a visible consequence after acting through an occluding overlay', async () => {
+    const r = await actAndWait(
+      page([{ visible: true }], [{ visible: true }], [], {
+        visible: true,
+        occluded: true,
+        domMutatedWithin: 1,
+      }),
+      TEXT,
+    );
+
+    expect(r['verified']).toBe(Verified.UNKNOWN);
+    expect(r['verifiedReason']).toBe(VerifiedReason.UNREACHABLE_TARGET);
+  });
+
+  it('does not reject a target whose hidden sample is explained by an active animation', async () => {
+    const r = await actAndWait(
+      page([{ visible: true }], [{ visible: true }], [posted, reenabled], {
+        visible: false,
+        animating: true,
+        domMutatedWithin: 1,
+      }),
+      SUBMITTED,
+    );
+
+    expect(r['verified']).toBe(Verified.YES);
+    expect(r['verifiedReason']).not.toBe(VerifiedReason.UNREACHABLE_TARGET);
   });
 });
