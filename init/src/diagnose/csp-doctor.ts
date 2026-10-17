@@ -126,8 +126,13 @@ export function diagnoseWebCsp(
   return findings;
 }
 
-function observedFinding(policy: string, file: string, port: number): CspDiagnosis | undefined {
-  const inline = cspInlineScriptProblem(policy, port);
+function observedFinding(
+  policy: string,
+  file: string,
+  port: number,
+  options: WebCspOptions,
+): CspDiagnosis | undefined {
+  const inline = false === options.inlineSnippet ? undefined : cspInlineScriptProblem(policy, port);
   if (inline !== undefined) {
     return {
       file,
@@ -191,14 +196,15 @@ function metaPolicies(html: string): string[] {
 export function diagnoseObservedWebCsp(
   document: ObservedWebDocument,
   port: number,
+  options: WebCspOptions = {},
 ): CspDiagnosis[] {
   const findings: CspDiagnosis[] = [];
   for (const policy of document.headers) {
-    const found = observedFinding(policy, `response header at ${document.url}`, port);
+    const found = observedFinding(policy, `response header at ${document.url}`, port, options);
     if (found !== undefined) findings.push(found);
   }
   for (const policy of metaPolicies(document.html)) {
-    const found = observedFinding(policy, `<meta> in ${document.url}`, port);
+    const found = observedFinding(policy, `<meta> in ${document.url}`, port, options);
     if (found !== undefined) findings.push(found);
   }
   return findings;

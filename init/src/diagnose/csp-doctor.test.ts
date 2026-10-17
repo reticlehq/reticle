@@ -91,6 +91,35 @@ describe('diagnoseWebCsp', () => {
 });
 
 describe('diagnoseObservedWebCsp', () => {
+  it('can inspect only the socket policy for an injected SDK page', () => {
+    const findings = diagnoseObservedWebCsp(
+      {
+        url: 'http://localhost:3000/',
+        headers: [
+          `script-src 'self' 'nonce-abc'; connect-src 'self' ws://localhost:4400 ws://127.0.0.1:4400`,
+        ],
+        html: '<main>app</main>',
+      },
+      PORT,
+      { inlineSnippet: false },
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('still finds a socket block in socket-only mode', () => {
+    const findings = diagnoseObservedWebCsp(
+      {
+        url: 'http://localhost:3000/',
+        headers: [`script-src 'self' 'nonce-abc'; connect-src 'self'`],
+        html: '<main>app</main>',
+      },
+      PORT,
+      { inlineSnippet: false },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.problem).toContain('connect-src');
+  });
+
   it('reads the policy actually delivered in the document response', () => {
     const findings = diagnoseObservedWebCsp(
       {

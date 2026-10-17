@@ -42,7 +42,7 @@ import {
   type SeedStorage,
 } from '@reticlehq/core';
 import { HudVisibility, ReticleTool, SESSION_HEALTH } from '@reticlehq/core';
-import { HOST_STUB_NOTE, type ToolDef, type ToolDeps } from './tool-kit.js';
+import { type ToolDef, type ToolDeps } from './tool-kit.js';
 import { type BrowserPool, PoolAtCapacityError } from '@/portal/pool/browser-pool.js';
 import { asString } from '@reticlehq/core';
 import { chromiumPreflightRefusal } from '@/command/cli/doctor/browser/chromium-hint.js';
@@ -82,10 +82,8 @@ async function observedCspBlock(
 ): Promise<{ problem: string; fix: string } | undefined> {
   const document = await observeWebDocument(url);
   if (document === undefined) return undefined;
-  const refusesSocket = diagnoseObservedWebCsp(document, port).some((finding) =>
-    `${finding.problem} ${finding.fix}`.includes(CONNECT_SRC),
-  );
-  if (!refusesSocket) return undefined;
+  const [finding] = diagnoseObservedWebCsp(document, port, { inlineSnippet: false });
+  if (finding === undefined) return undefined;
   const allow = `ws://localhost:${String(port)} ws://127.0.0.1:${String(port)}`;
   return {
     problem: `its ${CONNECT_SRC} does not allow ws://localhost:${String(port)}`,
@@ -96,10 +94,40 @@ async function observedCspBlock(
 /** The CSP directive that governs the socket the SDK dials. */
 const CONNECT_SRC = 'connect-src';
 
-async function leaseEvidence(deps: ToolDeps, port: number, url: string): Promise<LeaseEvidence> {
+interface LeaseClosure {
+  reason?: string;
+  page?: { projectId?: string; url?: string };
+}
+
+/** Keep a refusal only when this acquire observed a new closure from its own page. */
+export function relevantLeaseRefusal(
+  closure: LeaseClosure | undefined,
+  priorClosure: LeaseClosure | undefined,
+  projectId: string | undefined,
+  url: string,
+): string | undefined {
+  if (
+    closure === undefined ||
+    closure === priorClosure ||
+    closure.page === undefined ||
+    closure.reason === undefined
+  )
+    return undefined;
+  const sameProject = closure.page.projectId !== undefined && closure.page.projectId === projectId;
+  const sameOrigin = closure.page.url !== undefined && originOf(closure.page.url) === originOf(url);
+  return sameProject || sameOrigin ? closure.reason : undefined;
+}
+
+async function leaseEvidence(
+  deps: ToolDeps,
+  port: number,
+  url: string,
+  priorClosure: ReturnType<ToolDeps['sessions']['lastClosure']>,
+): Promise<LeaseEvidence> {
   const cwd = process.cwd();
   const projectId = readProjectId(cwd);
-  const refusal = deps.sessions.lastClosure()?.reason;
+  const closure = deps.sessions.lastClosure?.();
+  const refusal = relevantLeaseRefusal(closure, priorClosure, projectId, url);
   const framework = readProjectFramework(cwd);
   const sdkMarker = await probeSdkMarker(url);
   const cspBlock = await observedCspBlock(url, port);
@@ -406,12 +434,6 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     seedStorage: SeedStorageSchema.optional().describe(
       'Initial storage state (local, session and cookies) to seed before the first navigation (e.g. `seedStorage: { local: { token: "..." } }` to start already authenticated).',
     ),
-    initScript: z
-      .string()
-      .optional()
-      .describe(
-        "JavaScript installed in the tab BEFORE any of the page's own scripts run. Use it for TEST DOUBLES of the host bindings a desktop shell injects — Wails `window.go.*`, Tauri `window.runtime`/`__TAURI_INTERNALS__`, an Electron preload object — so a view that calls them on mount is driven against the stub instead of throwing. It stays on for this lease only, and it is disposed with the lease. Every verdict on this lease carries a note that a stub was installed, so a green is never read as one against the real shell.",
-      ),
     headed: z
       .boolean()
       .optional()
@@ -440,19 +462,13 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     ready: z
       .boolean()
       .describe(
-        'Whether the leased tab is connected AND answering. It is NOT a claim that the app has hydrated, so an act can miss: make the first act reticle_act_and_wait with an `until`, or reticle_assert { action: "wait" }. Empty reads may mean not hydrated. False ⇒ read notReadyReason.',
+        'Whether the leased tab is connected AND answering. On a reused lease this is probed, not assumed — a row in the session map is presence, not liveness. False ⇒ read notReadyReason.',
       ),
     zeroInstall: z
       .boolean()
       .optional()
       .describe(
         'Present when this app ships no Reticle SDK and the lease supplied one. Verdicts work on the DOM, network, console and routes; there is no framework adapter, so no component state and no source file:line. Install with `npx @reticlehq/server init` for those.',
-      ),
-    hostStub: z
-      .string()
-      .optional()
-      .describe(
-        'Present when this leased tab runs an init script stubbing the bindings a desktop shell injects. Verdicts on this lease are about the app with that stub, not about the real shell.',
       ),
     notReadyReason: z
       .enum([
@@ -513,9 +529,6 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     const headed = true === args['headed'];
     const hud = Object.values(HudVisibility).find((v) => v === args['hud']);
     const permissions = parseLeasePermissions(args['permissions']);
-    // The stub of the shell bindings, when the caller supplied one. Installed by the pool before
-    // the first navigation, so it is already defined when the app's first module runs.
-    const initScript = asString(args['initScript']);
     const seedStorageArg = args['seedStorage'];
     let validatedSeed: SeedStorage | undefined;
     if (seedStorageArg !== undefined) {
@@ -554,22 +567,6 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     try {
       // Only a lease THIS caller took: another agent's tab is never reused or released (#1226).
       // A window asked for is never answered with the headless tab on that origin, nor the reverse.
-      // A held lease that already runs the SAME stub is exactly what the caller asked for, so it is
-      // left alone and reused below — releasing it would throw away the tab, and everything loaded
-      // in it, for nothing. A lease with no stub, or with a different one, is released FIRST instead:
-      // an init script has to exist before the page's own scripts run, which a loaded page cannot
-      // do, and the resolve below then finds nothing and mints a fresh context with the stub. A
-      // lease of the other kind is left alone, exactly as it is when a window was asked for.
-      const heldForStub =
-        origin === undefined ? undefined : pool.leaseIdOnOrigin(origin, deps.attachId);
-      if (
-        initScript !== undefined &&
-        heldForStub !== undefined &&
-        pool.isHeaded(heldForStub) === headed &&
-        pool.hostStubScript?.(heldForStub) !== initScript
-      ) {
-        await pool.release(heldForStub);
-      }
       const held = origin === undefined ? undefined : pool.leaseIdOnOrigin(origin, deps.attachId);
       const existing = held !== undefined && pool.isHeaded(held) === headed ? held : undefined;
       // A context's certificate setting is fixed when it is made, so an explicit request for the
@@ -622,9 +619,6 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
             leased: pool.activeCount(),
             queued: pool.queuedCount(),
             hint: alreadyHeldHint(resolved, origin),
-            // Asked of the pool, not remembered here: the stub was installed when THIS lease was
-            // minted, and the caller reusing it now may be seeing it for the first time.
-            ...(true === pool.stubInstalled?.(existing) ? { hostStub: HOST_STUB_NOTE } : {}),
             ...(alreadyOpen === undefined
               ? {}
               : { preferExisting: { sessionId: alreadyOpen, note: PREFER_EXISTING_NOTE } }),
@@ -636,6 +630,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         await pool.release(existing);
       }
       const sessionId = newLeaseId();
+      const priorClosure = deps.sessions.lastClosure?.();
       // Before the page can dial in: the session is stamped with its root the moment it registers.
       if (root !== undefined) claimArtifactRoot(sessionId, root);
       const navUrl = appendReticleParams(url, sessionId, projectId, hud);
@@ -649,7 +644,6 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           ...(headed ? { headed } : {}),
           ...(deps.attachId === undefined ? {} : { owner: deps.attachId }),
           ...(validatedSeed !== undefined ? { seedStorage: validatedSeed } : {}),
-          ...(initScript !== undefined ? { initScript } : {}),
           ...(permissions !== undefined ? { permissions } : {}),
           ...(true === args['ignoreHTTPSErrors'] ? { ignoreHTTPSErrors: true } : {}),
         });
@@ -724,13 +718,17 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
               },
             }),
         ...(versionSkew === undefined ? {} : { versionSkew }),
-        ...(initScript === undefined ? {} : { hostStub: HOST_STUB_NOTE }),
         ...hintOf(
           ready
             ? undefined
             : true === stillLoading
               ? leaseStillLoadingHint(url, Date.now() - waitStartedAt)
-              : await notConnectedHint(deps, url, pool.dialFailureUrl?.(lease.sessionId)),
+              : await notConnectedHint(
+                  deps,
+                  url,
+                  pool.dialFailureUrl?.(lease.sessionId),
+                  priorClosure,
+                ),
           ready ? await notificationReadBack(pool, lease.sessionId, permissions) : undefined,
         ),
       };
@@ -748,9 +746,10 @@ async function notConnectedHint(
   deps: ToolDeps,
   url: string,
   dialledUrl: string | undefined,
+  priorClosure: ReturnType<ToolDeps['sessions']['lastClosure']>,
 ): Promise<string> {
   const bridgePort = deps.bridgePort ?? RETICLE_DEFAULT_PORT;
-  const evidence = await leaseEvidence(deps, bridgePort, url);
+  const evidence = await leaseEvidence(deps, bridgePort, url, priorClosure);
   return leaseNotConnectedHint(url, bridgePort, {
     ...evidence,
     ...(dialledUrl === undefined ? {} : { dialledUrl }),

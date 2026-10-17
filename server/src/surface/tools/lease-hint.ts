@@ -153,10 +153,13 @@ export function leaseNotConnectedHint(
     );
   }
 
-  // 0b. The page's own policy forbids the connection. Read off the document it served, so it is
-  //     proof about the page in hand, and it holds whether or not the app ships an SDK: neither
-  //     `init` nor the zero-install reader can dial out of a page that forbids it. Every cause
-  //     below presupposes a page that is allowed to connect, which is why this comes first.
+  // 1. A recorded refusal. The only cause with proof behind it, so nothing outranks it.
+  if (evidence.refusal !== undefined) {
+    return `${opening} A dial DID arrive and was refused: ${evidence.refusal}${marker} ${RELEASE}`;
+  }
+
+  // 2. The page's own policy forbids the connection. Read off the document it served, so it is
+  //     proof about the page in hand, and it holds whether or not the app ships an SDK.
   if (evidence.cspBlock !== undefined) {
     return (
       `${opening} This page's Content-Security-Policy blocks the connection: ` +
@@ -164,11 +167,6 @@ export function leaseNotConnectedHint(
       `so installing it will not help until the policy allows the bridge. For development, ` +
       `${evidence.cspBlock.fix}. ${RELEASE}`
     );
-  }
-
-  // 1. A recorded refusal. The only cause with proof behind it, so nothing outranks it.
-  if (evidence.refusal !== undefined) {
-    return `${opening} A dial DID arrive and was refused: ${evidence.refusal}${marker} ${RELEASE}`;
   }
 
   // 2. Nuxt, whose most likely cause differs from every other framework's and which `init` warns

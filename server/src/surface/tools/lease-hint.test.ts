@@ -125,6 +125,15 @@ describe('a page whose CSP blocks the bridge', () => {
     });
     expect(wrongPort).toContain('4999');
   });
+
+  it('reports a relevant refused dial before speculative CSP evidence', () => {
+    const hint = leaseNotConnectedHint('http://localhost:4455/', 4400, {
+      cspBlock,
+      refusal: 'the pairing token was missing',
+    });
+    expect(hint).toContain('the pairing token was missing');
+    expect(hint).not.toContain('Content-Security-Policy blocks the connection');
+  });
 });
 
 describe('a production build whose SDK was stubbed', () => {

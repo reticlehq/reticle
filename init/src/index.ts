@@ -66,6 +66,7 @@ export {
   resolveWebCspFindings,
   type CspDiagnosis,
   type ObservedWebDocument,
+  type WebCspOptions,
 } from './diagnose/csp-doctor.js';
 export { webCspOptionsFor } from './diagnose/csp-step.js';
 export { reticleConfigContent } from './patch/snippets.js';

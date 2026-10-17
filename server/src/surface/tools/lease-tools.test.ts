@@ -21,6 +21,7 @@ import {
   scrubSeedFromError,
   waitForLeasedSession,
   connectOrInject,
+  relevantLeaseRefusal,
 } from './lease-tools.js';
 import { assertVerdict } from './assert/assert-verdict.js';
 import {
@@ -51,7 +52,6 @@ function fakePool(): {
     sessionId: string | undefined;
     seedStorage?: unknown;
     headed?: boolean;
-    initScript?: unknown;
   }[];
   /** Every (registeredId, leaseId) pair the lease told the pool about. */
   aliased: [string, string][];
@@ -62,12 +62,9 @@ function fakePool(): {
     sessionId: string | undefined;
     seedStorage?: unknown;
     headed?: boolean;
-    initScript?: unknown;
   }[] = [];
   const headedIds = new Set<string>();
   const certSkipIds = new Set<string>();
-  /** What each live lease's page runs, mirroring the real pool's `hostStubScript`. */
-  const stubBySession = new Map<string, string>();
   let active = 0;
   const released: string[] = [];
   const aliased: [string, string][] = [];
@@ -91,14 +88,11 @@ function fakePool(): {
         ignoreHTTPSErrors?: boolean;
       } = {},
     ): Promise<Lease> {
-      // The real pool takes `initScript`; this double only has to prove it arrived.
-      const initScript = (opts as { initScript?: string }).initScript;
       acquired.push({
         url,
         sessionId: opts.sessionId,
         seedStorage: opts.seedStorage,
         ...(opts.headed === undefined ? {} : { headed: opts.headed }),
-        ...(initScript === undefined ? {} : { initScript }),
       });
       if (true === opts.headed && opts.sessionId !== undefined) headedIds.add(opts.sessionId);
       if (true === opts.ignoreHTTPSErrors && opts.sessionId !== undefined)
@@ -106,9 +100,6 @@ function fakePool(): {
       active += 1;
       const sessionId = opts.sessionId ?? 'gen';
       owners.set(sessionId, opts.owner);
-      if ('string' === typeof initScript && initScript.length > 0) {
-        stubBySession.set(sessionId, initScript);
-      }
       const origin = originOf(url);
       if (origin !== undefined) byOrigin.set(origin, sessionId);
       return Promise.resolve({ sessionId, url, release: () => Promise.resolve() });
@@ -116,7 +107,6 @@ function fakePool(): {
     release(sessionId: string): Promise<void> {
       released.push(sessionId);
       active = Math.max(0, active - 1);
-      stubBySession.delete(sessionId);
       for (const [origin, id] of byOrigin) {
         if (id === sessionId) byOrigin.delete(origin);
       }
@@ -134,8 +124,6 @@ function fakePool(): {
     touch: () => undefined,
     isHeaded: (id: string) => headedIds.has(id),
     ignoresHTTPSErrors: (id: string) => certSkipIds.has(id),
-    stubInstalled: (id: string) => stubBySession.has(id),
-    hostStubScript: (id: string) => stubBySession.get(id),
     alias: (registeredId: string, leaseId: string) => {
       aliased.push([registeredId, leaseId]);
     },
@@ -165,6 +153,48 @@ describe('appendReticleParams', () => {
     expect(u.searchParams.get('tab')).toBe('2');
     expect(u.searchParams.get(RETICLE_URL_PARAM.SESSION)).toBe('lease-9');
     expect(u.searchParams.has(RETICLE_URL_PARAM.PROJECT)).toBe(false);
+  });
+});
+
+describe('relevantLeaseRefusal', () => {
+  const url = 'http://localhost:3000/checkout';
+  const prior = { reason: 'old refusal', page: { projectId: 'acme', url } };
+
+  it('ignores a refusal that existed before acquire started', () => {
+    expect(relevantLeaseRefusal(prior, prior, 'acme', url)).toBeUndefined();
+  });
+
+  it('ignores a fresh refusal from another project and origin', () => {
+    expect(
+      relevantLeaseRefusal(
+        { reason: 'other refusal', page: { projectId: 'other', url: 'http://other.test/' } },
+        prior,
+        'acme',
+        url,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('keeps a fresh refusal from the leased project or origin', () => {
+    expect(
+      relevantLeaseRefusal(
+        {
+          reason: 'matching refusal',
+          page: { projectId: 'acme', url: 'http://other.test/' },
+        },
+        prior,
+        'acme',
+        url,
+      ),
+    ).toBe('matching refusal');
+    expect(
+      relevantLeaseRefusal(
+        { reason: 'same-origin refusal', page: { url: 'http://localhost:3000/login' } },
+        prior,
+        'other',
+        url,
+      ),
+    ).toBe('same-origin refusal');
   });
 });
 
@@ -1006,134 +1036,6 @@ describe('prioritising a tab that is already open', () => {
 
     expect(out['sessionId']).toBeDefined();
     expect(out['url']).toBe('http://localhost:3000/');
-  });
-});
-
-/**
- * A desktop shell injects bindings its views call on mount (`window.go`, `window.runtime`, an
- * Electron preload object). A leased tab has none of them, so such a view throws before it can be
- * verified. `initScript` is the stub: installed before any page script runs, for this lease only.
- */
-describe('reticle_lease with an initScript stub', () => {
-  const STUB = 'window.go = { main: { App: { ListBooks: async () => [] } } };';
-
-  it('describes initScript once, on the argument, not again on the tool description', () => {
-    // Two copies of the same paragraph cost tokens on EVERY tool listing, so the argument is the
-    // one place that says what the option is for — that is where a caller reads it.
-    const definition = LEASE_TOOLS.find((entry) => entry.name === ReticleTool.LEASE_ACQUIRE);
-
-    expect(definition?.inputSchema['initScript']?.description).toMatch(/test double/i);
-    expect(definition?.inputSchema['initScript']?.description).toMatch(/Wails/);
-    expect(definition?.description).not.toMatch(/test double/i);
-    expect(definition?.description).not.toMatch(/initScript/);
-  });
-
-  it('propagates initScript to pool.acquire and reports the stub on the result', async () => {
-    const { pool, acquired } = fakePool();
-    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
-
-    const out = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
-      url: 'http://localhost:3000/books',
-      initScript: STUB,
-    })) as Record<string, unknown>;
-
-    expect(acquired).toHaveLength(1);
-    expect(acquired[0]?.initScript).toBe(STUB);
-    expect(String(out['hostStub'])).toMatch(/stub/i);
-  });
-
-  it('sends no initScript when none was asked for, so an untouched lease injects nothing', async () => {
-    const { pool, acquired } = fakePool();
-    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
-
-    const out = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
-      url: 'http://localhost:3000/',
-    })) as Record<string, unknown>;
-
-    expect(acquired[0]?.initScript).toBeUndefined();
-    expect('hostStub' in out).toBe(false);
-  });
-
-  it('releases a held lease when a stub is asked for: a loaded page cannot take an init script', async () => {
-    const { pool, acquired, released } = fakePool();
-    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
-
-    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
-      url: 'http://localhost:3000/',
-    })) as { sessionId: string };
-    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
-      url: 'http://localhost:3000/books',
-      initScript: STUB,
-    })) as { sessionId: string; reused?: boolean };
-
-    expect(second.sessionId).not.toBe(first.sessionId);
-    expect(second.reused).toBeUndefined();
-    expect(released).toEqual([first.sessionId]);
-    expect(acquired).toHaveLength(2);
-    expect(acquired[1]?.initScript).toBe(STUB);
-  });
-
-  it('reuses the held lease when the same stub is asked for again, so the tab and its state survive', async () => {
-    const { pool, acquired, released } = fakePool();
-    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
-
-    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
-      url: 'http://localhost:3000/',
-      initScript: STUB,
-    })) as { sessionId: string };
-    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
-      url: 'http://localhost:3000/books',
-      initScript: STUB,
-    })) as { sessionId: string; reused?: boolean; hostStub?: string };
-
-    expect(second.sessionId).toBe(first.sessionId);
-    expect(second.reused).toBe(true);
-    expect(released).toEqual([]);
-    expect(acquired).toHaveLength(1);
-    expect(String(second.hostStub)).toMatch(/stub/i);
-  });
-
-  it('replaces the held lease when a DIFFERENT stub is asked for: a loaded page cannot take a new one', async () => {
-    const { pool, acquired, released } = fakePool();
-    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
-    const otherStub = 'window.runtime = { invoke: async () => [] };';
-
-    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
-      url: 'http://localhost:3000/',
-      initScript: STUB,
-    })) as { sessionId: string };
-    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
-      url: 'http://localhost:3000/books',
-      initScript: otherStub,
-    })) as { sessionId: string; reused?: boolean; hostStub?: string };
-
-    expect(second.sessionId).not.toBe(first.sessionId);
-    expect(second.reused).toBeUndefined();
-    expect(released).toEqual([first.sessionId]);
-    expect(acquired).toHaveLength(2);
-    expect(acquired[1]?.initScript).toBe(otherStub);
-    expect(String(second.hostStub)).toMatch(/stub/i);
-  });
-
-  it('reuses a held lease when no initScript is asked for, and still reports that it runs a stub', async () => {
-    // The stub belongs to the LEASE, not to the call that opened it. A later acquire that omits
-    // initScript must not mint a second tab, and must say the tab it hands back runs a stub.
-    const { pool, acquired, released } = fakePool();
-    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
-
-    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
-      url: 'http://localhost:3000/',
-      initScript: STUB,
-    })) as { sessionId: string };
-    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
-      url: 'http://localhost:3000/books',
-    })) as { sessionId: string; reused?: boolean; hostStub?: string };
-
-    expect(second.sessionId).toBe(first.sessionId);
-    expect(second.reused).toBe(true);
-    expect(released).toEqual([]);
-    expect(acquired).toHaveLength(1);
-    expect(String(second.hostStub)).toMatch(/stub/i);
   });
 });
 
