@@ -182,8 +182,10 @@ export const HarnessConfigSchema = z.object({
   /** Credits used and held this 30 days; a Harness decision is one. Absent: unbounded or unknown. */
   credits: z
     .object({
-      used: z.number().int().min(0),
-      limit: z.number().int().min(0),
+      // Not `.int()`: the platform charges part credits (a check can cost 0.25). One float here
+      // failed the whole impact snapshot, and the HUD then showed no account and no Harness at all.
+      used: z.number().min(0),
+      limit: z.number().min(0),
       /** The grant they came from. Optional on the wire: an older platform omits it. */
       kind: z.enum([CreditKind.FREE, CreditKind.TRIAL, CreditKind.PAID]).optional(),
       /** Whole days the grant has left, counted by the daemon from the platform's end date. */
