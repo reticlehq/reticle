@@ -74,3 +74,25 @@ describe('reticle_query forwards what it declares', () => {
     }
   });
 });
+
+/*
+ * Matrix drive: `reticle_look { action: "find" }` with no criteria answered `count: 0`, which reads
+ * as "nothing on the page matches" about a question nobody asked.
+ */
+describe('a find with nothing to find', () => {
+  it('is refused, naming the fields that say what to find', async () => {
+    let sent = false;
+    const call = queryTool?.handler(
+      capturingDeps(() => {
+        sent = true;
+      }),
+      {},
+    );
+    await expect(call).rejects.toThrow(/testid.*text.*role/);
+    expect(sent).toBe(false);
+  });
+
+  it('is not refused for a container asked for itself', async () => {
+    expect(await payloadFor({ scope: '#row', self: true })).toMatchObject({ self: true });
+  });
+});

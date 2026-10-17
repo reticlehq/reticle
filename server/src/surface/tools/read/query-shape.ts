@@ -38,3 +38,19 @@ export function normalizeQueryArgs(args: Record<string, unknown>): Record<string
   }
   return args;
 }
+
+/**
+ * The error for a query that names nothing to find, or `undefined` when it names something.
+ *
+ * Sent to the page, an empty query answered `count: 0`, which reads as "nothing here matches" about
+ * a question nobody asked. A container asked for itself (`self`) needs no other field.
+ */
+export function emptyQueryRefusal(args: Record<string, unknown>): Error | undefined {
+  if (true === args['self'] || 'string' === typeof args['by'] || 'string' === typeof args['value'])
+    return undefined;
+  return new Error(
+    'Nothing was searched: this find names nothing to find. Pass one of testid, text, role ' +
+      '(with name), label, placeholder or alt, e.g. { testid: "submit" } or { role: "button", ' +
+      'name: "Save" }, or `by` with `value`.',
+  );
+}
