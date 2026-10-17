@@ -117,8 +117,10 @@ export function isReticleUi(node: Element | null): boolean {
  * dashboard\"") satisfied the very text predicate the agent was proving, an `already_true` on words
  * the agent itself caused.
  */
+// The act strip's line (`data-reticle-act-line`) says the same words for each call; with the HUD
+// shown it made a visible-text `until` on words the app never rendered come back "yes".
 const HUD_NARRATION =
-  '[data-reticle-log],[data-reticle-harness-log],[data-reticle-chat-pill-text],[data-reticle-agent-said],[data-reticle-agent-note]';
+  '[data-reticle-log],[data-reticle-harness-log],[data-reticle-chat-pill-text],[data-reticle-agent-said],[data-reticle-agent-note],[data-reticle-act-line]';
 
 /** True if the element should be excluded from snapshots/queries (Reticle overlay or dev overlay). */
 export function isIgnored(el: Element): boolean {

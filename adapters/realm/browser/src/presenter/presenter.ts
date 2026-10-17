@@ -332,7 +332,7 @@ export class Presenter {
     // A sibling BELOW the strip, hidden except while reading or acting, would pop a block into the
     // panel and take it away again on every tool call — which reads as a second UI flashing in rather
     // than as the one status line changing what it says.
-    const actStrip = `<div class="reticle-act-strip" data-liveness="idle"><span class="reticle-act-dot" aria-hidden="true"></span><span class="reticle-act">${ACT_STRIP.READY}</span>${CONTROLS_BANNER_HTML}<span class="reticle-chip" data-reticle-chip></span><div class="reticle-act-actions">${CONTROLS_STATUS_HTML}</div></div>`;
+    const actStrip = `<div class="reticle-act-strip" data-liveness="idle"><span class="reticle-act-dot" aria-hidden="true"></span><span class="reticle-act" data-reticle-act-line>${ACT_STRIP.READY}</span>${CONTROLS_BANNER_HTML}<span class="reticle-chip" data-reticle-chip></span><div class="reticle-act-actions">${CONTROLS_STATUS_HTML}</div></div>`;
     root.innerHTML = `
       ${blockerHtml()}
       <div data-reticle-glow></div>

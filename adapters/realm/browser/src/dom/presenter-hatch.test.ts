@@ -19,6 +19,7 @@ import {
   setPresenterVisible,
 } from './dom-ignore.js';
 import { getCapabilities } from '@/registry/capabilities.js';
+import { Presenter } from '@/presenter/presenter.js';
 
 const el = (html: string): Element => {
   const host = document.createElement('div');
@@ -122,5 +123,22 @@ describe("the HUD's narration is never a match source", () => {
           el('<i></i>'),
       ),
     ).toBe(false);
+  });
+
+  /*
+   * The act strip's line ("Finding \"NEVER-SHOWN\"") was still a match source: with the HUD shown, a
+   * visible-text `until` on words the app never rendered came back verified "yes".
+   */
+  it('ignores the act strip line the HUD writes for each call, while its buttons are seen', () => {
+    document.body.replaceChildren();
+    new Presenter().mount();
+    setPresenterVisible(true);
+    const line = document.querySelector('.reticle-act');
+    const strip = document.querySelector('.reticle-act-strip');
+    expect(line).not.toBeNull();
+    expect(isIgnored(line ?? el('<i></i>'))).toBe(true);
+    const button = strip?.querySelector('button');
+    expect(button).not.toBeNull();
+    expect(isIgnored(button ?? el('<i></i>'))).toBe(false);
   });
 });
