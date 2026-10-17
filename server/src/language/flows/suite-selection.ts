@@ -15,6 +15,7 @@ import { FLOW_FILE_VERSION, orderFlows, selectFlows, type FlowFile } from '@reti
 import { flowsForSession } from './flow-store-for-session.js';
 import type { ProjectTarget } from '@/memory/project/session-root.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
+import { readyForReplay, replayability } from './flow-replayable.js';
 
 /**
  * Resolve what a suite run should replay, and what it is holding back.
@@ -34,6 +35,8 @@ export async function resolveSuiteSelection(
   run: string[];
   quarantined: string[];
   unmatched: string[];
+  /** Flows held back by `skipWrites`: replaying them would send their write requests again. */
+  writing?: string[];
   /** Flows in a dependency cycle — none of them ran. */
   cycles?: string[];
   /** A flow whose prerequisite is not in this run, so it did not run either. */
@@ -94,9 +97,15 @@ export async function resolveSuiteSelection(
    * produce a failure about the wrong thing, and quietly adding `login` back would run a flow the
    * caller did not ask for.
    */
-  const ordered = orderFlows(chosen.run);
+  /*
+   * A certify run must not change real data. A flow whose step sent a write request when it was
+   * recorded (or whose expect names one) is held back and named, never replayed, when asked.
+   */
+  const writing = true === args['skipWrites'] ? writingFlows(chosen.run) : [];
+  const ordered = orderFlows(chosen.run.filter((flow) => !writing.includes(flow.name)));
   return {
     run: ordered.run.map((flow) => flow.name),
+    ...(0 === writing.length ? {} : { writing }),
     quarantined: chosen.quarantined,
     unmatched: chosen.unmatched.filter((entry) => !wantedNames.includes(entry)),
     ...(0 === ordered.cycles.length ? {} : { cycles: ordered.cycles }),
@@ -109,6 +118,13 @@ export async function resolveSuiteSelection(
       ),
     ],
   };
+}
+
+/** The flows a replay would change real data with: a step sent, or expects, a write request. */
+export function writingFlows(flows: readonly FlowFile[]): string[] {
+  return flows
+    .filter((flow) => true === replayability(readyForReplay(flow)).writes)
+    .map((flow) => flow.name);
 }
 
 /** How the refusal of an unknown flow name opens: the error table recognizes it by these words. */

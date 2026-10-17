@@ -1,4 +1,5 @@
 import { CALL_SECRETS_ARG, callSecretsArg } from './fields/flow-secret-field.js';
+import { REPLAYABILITY_OUTPUT, SKIP_WRITES_ARG } from './flow-replayable.js';
 import { flowAuthor } from './flow-author.js';
 import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
 import { seedSchema, workerCountSchema } from '@/surface/tools/args/numeric-bounds.js';
@@ -603,6 +604,7 @@ export const FLOW_TOOLS: ToolDef[] = [
           'Run this many flows at once, each in its own isolated leased browser context (needs the browser pool). Clamped to the pool capacity and the flow count. Omit for the sequential single-tab run.',
         ),
       confirmDangerous: confirmDangerousArg('this run of the suite'),
+      skipWrites: SKIP_WRITES_ARG,
       sessionId: z
         .string()
         .optional()
@@ -673,6 +675,8 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Flows whose prerequisite is not in this run — filtered out by a label, quarantined, or never saved. They did NOT run, because failing them would report the wrong thing.',
         ),
+      replayability: REPLAYABILITY_OUTPUT,
+      skippedWrites: z.array(z.string()).optional().describe('Flows held back by skipWrites.'),
       // Session-EXEMPT, so it does not inherit `sessionEnvelopeShape` — declare the one-shot human
       // feedback ask here or a validating profile strips it off the suite verdict.
       feedback_prompt: z.unknown().optional(),
@@ -693,6 +697,7 @@ export const FLOW_TOOLS: ToolDef[] = [
           ...(0 === selected.unmatched.length ? {} : { unmatched: selected.unmatched }),
           ...(selected.cycles === undefined ? {} : { cycles: selected.cycles }),
           ...(selected.unsatisfied === undefined ? {} : { unsatisfied: selected.unsatisfied }),
+          ...(selected.writing === undefined ? {} : { skippedWrites: selected.writing }),
         };
         // verify:server — hand the whole suite to the hosted runner; it records the verification itself.
         const cloud = await resolveProjectCloud(
@@ -794,12 +799,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         const timed: TimedReplay[] = [];
         // Sequential default: every flow replays against the same live session, so they must not overlap.
         //
-        // They also START wherever the previous flow left the app, which makes a verdict depend on RUN
-        // ORDER — measured, and the cause of a contradiction that moved between flows run by run. A
-        // reset between flows was BUILT AND REVERTED: see the ledger's 9.2. Playwright's
-        // `storageState` carries cookies and localStorage and NOT sessionStorage, so a forced reload
-        // restores part of an app's auth and drops the rest, and the suite went from noisy to FAILING
-        // (1 of 2 flows). Restoring two thirds of a session is worse than restoring none.
+        // Each starts where the last left the app; a reset was built and reverted (see the ledger's 9.2).
         for (const flowName of requested) {
           const start = deps.now();
           const replay = await replayAndLearn(deps, { flowName, sessionId, ...confirmed });

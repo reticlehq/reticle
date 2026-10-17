@@ -1,0 +1,150 @@
+/**
+ * Whether a saved flow can replay at all, decided when it is saved.
+ *
+ * Shipped defect: of 34 flows saved over one night, 5 replayed green. The rest started with no
+ * page to open, anchored on a test id six buttons share, asserted a live count ("Open 336") that
+ * the next run cannot see again, or WROTE real data each time they replayed (a PATCH that marked
+ * an issue fixed again). None of that was said when the flow was saved, so each one was found
+ * by a replay that drifted.
+ */
+import { describe, expect, it } from 'vitest';
+import { FLOW_FILE_VERSION, ReplayStatus, type FlowFile, type FlowStep } from '@reticlehq/core';
+import { buildSuiteVerdict } from './decision.js';
+import { writingFlows } from './suite-selection.js';
+import { readyForReplay, replayability, Replayable } from './flow-replayable.js';
+
+const click = (value: string, expect?: FlowStep['expect']): FlowStep => ({
+  tool: 'reticle_act',
+  anchor: { kind: 'testid', value },
+  action: 'click',
+  args: {},
+  ...(expect === undefined ? {} : { expect }),
+});
+
+const flowOf = (steps: FlowStep[], extra: Partial<FlowFile> = {}): FlowFile => ({
+  version: FLOW_FILE_VERSION,
+  name: 'f',
+  createdAt: 0,
+  startPath: '/issues',
+  steps,
+  ...extra,
+});
+
+describe('a flow made ready to replay at save', () => {
+  it('keeps the words of a live count and lets the number change', () => {
+    const ready = readyForReplay(flowOf([click('tab', { kind: 'text', contains: 'Open 336' })]));
+    expect(ready.steps[0]?.expect).toEqual({
+      kind: 'text',
+      contains: 'Open',
+      satisfies: { property: 'matchesPattern', pattern: 'Open \\d[\\d,.]*' },
+    });
+    expect(replayability(ready).status).toBe(Replayable.YES);
+  });
+
+  it('keeps a money number exact and says the flow is bound to the data', () => {
+    const flow = flowOf([click('send', { kind: 'text', contains: '8 of 10 credits left' })], {
+      intent: 'a check takes its price off the credits',
+    });
+    const ready = readyForReplay(flow);
+    expect(ready.steps[0]?.expect).toEqual({ kind: 'text', contains: '8 of 10 credits left' });
+    const report = replayability(ready);
+    expect(report.status).toBe(Replayable.DATA_BOUND);
+    expect(report.why?.join(' ')).toMatch(/step 1 .*8 of 10 credits left/);
+  });
+
+  it('says a bare number or a count in an accessible name is bound to the data', () => {
+    const ready = readyForReplay(
+      flowOf([
+        click('total', { kind: 'text', contains: '365.75' }),
+        click('node', {
+          kind: 'element',
+          query: { role: 'button', name: '/runs, 59 flows' },
+        }),
+      ]),
+    );
+    const report = replayability(ready);
+    expect(report.status).toBe(Replayable.DATA_BOUND);
+    expect(report.why).toHaveLength(2);
+  });
+
+  it('marks a step whose expect saw a write request, inside a sequence too', () => {
+    const sequence: FlowStep = {
+      tool: 'reticle_act_sequence',
+      anchor: { kind: 'testid', value: 'issue-resolve' },
+      steps: [
+        click('issue-resolve', {
+          kind: 'allOf',
+          predicates: [
+            { kind: 'net', method: 'PATCH', urlContains: '/v1/issues/1af0', status: 200 },
+          ],
+        }),
+      ],
+    };
+    const ready = readyForReplay(flowOf([sequence]));
+    expect(ready.steps[0]?.writes).toBe(true);
+    expect(ready.steps[0]?.steps?.[0]?.writes).toBe(true);
+    const report = replayability(ready);
+    expect(report.writes).toBe(true);
+    expect(report.why?.join(' ')).toMatch(/step 1\.1 sends PATCH \/v1\/issues\/1af0/);
+  });
+
+  it('says why a flow cannot replay: no starting page, no anchor, a shared test id', () => {
+    const report = replayability(
+      flowOf(
+        [
+          { tool: 'reticle_act', anchor: { kind: 'role', role: 'unresolved' }, degraded: true },
+          { ...click('runs-result'), anchor: { kind: 'testid', value: 'runs-result', of: 6 } },
+        ],
+        { startPath: undefined },
+      ),
+    );
+    expect(report.status).toBe(Replayable.NO);
+    expect(report.why).toEqual([
+      'no starting page was recorded, so a replay starts wherever the tab is',
+      'step 1 has no anchor a replay can find',
+      "step 2 anchors on test id 'runs-result', which 6 elements share",
+    ]);
+  });
+
+  it('reports a clean flow as replayable and says nothing more', () => {
+    const report = replayability(
+      readyForReplay(flowOf([click('save', { kind: 'route', pathname: '/done' })])),
+    );
+    expect(report).toEqual({ status: Replayable.YES });
+  });
+});
+
+describe('the suite verdict reports each flow that cannot replay as saved', () => {
+  it('names the flow, its status and why, and says how many in the summary', () => {
+    const replay = (name: string) => ({
+      name,
+      status: ReplayStatus.DRIFT,
+      steps: [],
+    });
+    const verdict = buildSuiteVerdict([
+      { replay: replay('clean'), flow: flowOf([click('save', { kind: 'route', pathname: '/x' })]) },
+      { replay: replay('counted'), flow: flowOf([click('t', { kind: 'text', contains: '365' })]) },
+    ]);
+    expect(verdict.replayability).toEqual([
+      { flow: 'counted', status: Replayable.DATA_BOUND, why: ["step 1 expects '365', live data"] },
+    ]);
+    expect(verdict.summary).toMatch(/1 of 2 flows are not replayable as saved \(counted\)/);
+  });
+});
+
+describe('a certify run that must not change data', () => {
+  it('holds back a flow saved before steps were marked, from the write its expect names', () => {
+    const marks = flowOf([
+      click('resolve', { kind: 'net', method: 'patch', urlContains: '/v1/issues/1' }),
+    ]);
+    const reads = flowOf([
+      click('open', { kind: 'net', method: 'GET', urlContains: '/v1/issues' }),
+    ]);
+    expect(
+      writingFlows([
+        { ...marks, name: 'marks' },
+        { ...reads, name: 'reads' },
+      ]),
+    ).toEqual(['marks']);
+  });
+});

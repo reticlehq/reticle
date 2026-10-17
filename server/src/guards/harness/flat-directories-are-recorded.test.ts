@@ -320,7 +320,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // pair is the whole rule.
   // 36 with `replay-from-hud.ts`: the ▶ replay a person starts from the HUD, moved out of
   // `server/src/index.ts` (at its cap) when it gained a progress push per step.
-  'server/src/language/flows': 36,
+  // 37 with `flow-replayable.ts`: whether a saved flow can replay at all, read by the save, the
+  // suite verdict and the suite selection, which all live here.
+  'server/src/language/flows': 37,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the

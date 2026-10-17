@@ -59,6 +59,12 @@ import {
   isValidFlowName,
 } from '@/memory/project/dir/reticle-dir.js';
 import { describeFlowZodFailure, parseFlowFileText } from './flow-expect-grammar.js';
+import {
+  readyForReplay,
+  replayability,
+  Replayable,
+  type Replayability,
+} from './flow-replayable.js';
 import type { Clock } from '@/machine/clock.js';
 
 /**
@@ -326,6 +332,8 @@ interface SaveSummary {
    * and absent the moment the flow carries prose or an `intentId`. See `flowIntentGap`.
    */
   intentGap?: InstrumentationGap;
+  /** Absent when the flow replays as it is; else whether it can, and why not, by step. */
+  replayability?: Replayability;
 }
 
 /**
@@ -411,12 +419,16 @@ export class FlowStore {
    */
   #summary(flow: FlowFile): SaveSummary {
     const gap = flowIntentGap(flow);
+    const replay = replayability(flow);
     return {
       name: flow.name,
       stepCount: flow.steps.length,
       degraded: flow.steps.filter((s) => true === s.degraded).length,
       empty: 0 === flow.steps.length,
       ...(gap === undefined ? {} : { intentGap: gap }),
+      ...(Replayable.YES === replay.status && replay.writes === undefined
+        ? {}
+        : { replayability: replay }),
     };
   }
 
@@ -446,7 +458,7 @@ export class FlowStore {
     };
     const intent = program.steps.find((step) => step.intent !== undefined)?.intent;
     const annotated = withAnnotations(base, annotations);
-    return {
+    return readyForReplay({
       ...annotated,
       // The action's own intent, when nobody annotated the flow — see RecordedStep.intent.
       ...(annotated.intent === undefined && intent !== undefined ? { intent } : {}),
@@ -456,7 +468,7 @@ export class FlowStore {
         : {}),
       ...routeClaims(annotated.startPath, annotated.steps),
       ...(program.author === undefined ? {} : { author: program.author }),
-    };
+    });
   }
 
   /**
@@ -575,7 +587,7 @@ export class FlowStore {
         detail: describeFlowZodFailure(parsed.error),
       };
     }
-    const valid = await this.#linkIntent(parsed.data);
+    const valid = await this.#linkIntent(readyForReplay(parsed.data));
     await this.#fs.mkdir(flowParentDir(this.#root, asFlowName(valid.name), pid));
     await this.#fs.writeFile(
       flowPath(this.#root, asFlowName(valid.name), pid),

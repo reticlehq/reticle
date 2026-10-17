@@ -300,6 +300,12 @@ export interface SuiteVerdict {
    * Carrying them also means a green suite is not reported as `pass`: see `status`.
    */
   contradictions?: SuiteContradiction[];
+  /**
+   * Each flow that cannot replay as it was saved: no starting page, an anchor a replay cannot find
+   * or that several elements share, live data in an expect, or a step that writes real data. A
+   * drift on such a flow is the flow, not the app. Omitted when every flow replays as saved.
+   */
+  replayability?: { flow: string; status: string; why?: string[]; writes?: true }[];
 }
 
 /** A step-level contradiction, addressed back to the flow and step that produced it. */

@@ -14,6 +14,7 @@ import {
   unreachedRoutes,
   SuiteIsolation,
 } from '@reticlehq/core';
+import { replayability, Replayable } from './flow-replayable.js';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
 import { SUCCESS_STEP_TOOL } from './flow-success.js';
 import { RECORD_A_FLOW } from './suite/coverage.js';
@@ -414,18 +415,31 @@ export function buildSuiteVerdict(
     SuiteIsolation.SHARED_SESSION === isolation && total > 1
       ? ' — these flows shared one session and ran in order, so a pass here may rest on state an earlier flow left behind; replay with `parallel` to give each its own context'
       : '';
+  const notAsSaved = runs.flatMap(({ replay, flow }) => {
+    if (flow === undefined) return [];
+    const report = replayability(flow);
+    return Replayable.YES === report.status && report.writes === undefined
+      ? []
+      : [{ flow: replay.name, ...report }];
+  });
+  const notReplayable = notAsSaved.filter((row) => Replayable.YES !== row.status);
+  const asSaved =
+    0 === notReplayable.length
+      ? ''
+      : ` — ${String(notReplayable.length)} of ${String(total)} flows are not replayable as saved (${notReplayable.map((row) => row.flow).join(', ')}): a drift there is the flow, not the app`;
   return {
     status,
     total,
     passed,
     failed,
-    summary: summary + silentSteps + neverOpened + disagreed + sharedState,
+    summary: summary + silentSteps + neverOpened + disagreed + sharedState + asSaved,
     failures,
     ...(isolation === undefined ? {} : { isolation }),
     ...(unverifiable.length > 0 ? { unverifiable } : {}),
     ...(coverage === undefined ? {} : { coverage }),
     ...(0 === unreached.length ? {} : { unreached }),
     ...(0 === contradictions.length ? {} : { contradictions }),
+    ...(0 === notAsSaved.length ? {} : { replayability: notAsSaved }),
   };
 }
 

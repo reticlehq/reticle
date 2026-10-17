@@ -42,6 +42,9 @@ export const FlowAnchorSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal(AnchorKind.TESTID),
     value: z.string().min(1),
+    // How many elements carried this test id when the step was recorded, when more than one did.
+    // A replay takes the first, so a shared test id is named at save instead of found as a drift.
+    of: z.number().int().min(2).optional(),
     source: z
       .object({ file: z.string(), line: z.number(), column: z.number().optional() })
       .optional(),
@@ -143,6 +146,11 @@ export interface FlowStep {
   id?: string;
   /** What this step does to the subject; absent means unknown. See StepEffect. */
   effect?: StepEffect;
+  /**
+   * This step sent a write request (POST, PUT, PATCH, DELETE) when it was recorded, so a replay
+   * sends it again and changes real data. A certify run skips such a flow unless told otherwise.
+   */
+  writes?: boolean;
   action?: ActionType;
   args?: Record<string, unknown>;
   expect?: Predicate;
@@ -225,6 +233,8 @@ const baseFlowStep = z.object({
   effect: z.nativeEnum(StepEffect).optional(),
   /** Rebound by `heal` rather than recorded — see FlowStep.healed. */
   healed: z.object({ from: z.string(), at: z.number() }).optional(),
+  /** See FlowStep.writes. */
+  writes: z.boolean().optional(),
   action: z.nativeEnum(ActionType).optional(),
   args: z.record(z.unknown()).optional(),
   expect: ExpectSchema.optional(),
