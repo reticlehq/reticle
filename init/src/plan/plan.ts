@@ -386,9 +386,24 @@ const RETICLE_MD_TITLE = 'Full agent rules';
 const RETICLE_MD_DETAIL =
   'the reference the always-loaded rule points at (when NOT to verify, recovery, feedback)';
 
+/**
+ * A line that is only an import of AGENTS.md (`@AGENTS.md`, `@./AGENTS.md`). Claude Code reads the
+ * imported file as part of CLAUDE.md, so the rule `agentsMdStep` writes there already reaches it, and
+ * a second copy in CLAUDE.md would load the rule twice on every turn (#1680).
+ */
+const IMPORTS_AGENTS_MD = /^[ \t]*@(?:\.\/)?AGENTS\.md[ \t]*\r?$/m;
+
 function claudeRuleStep(input: PlanInput): Step | null {
   if (!input.claudeCli) return null;
   const path = agentFile(input, CLAUDE_MD_PATH);
+  if (IMPORTS_AGENTS_MD.test(input.claudeMdContent ?? '')) {
+    return {
+      title: AGENT_RULE_TITLE,
+      target: path,
+      status: StepStatus.ALREADY,
+      detail: `CLAUDE.md imports ${AGENTS_MD_PATH}, so the Reticle rule written there reaches Claude Code through the import; no second copy`,
+    };
+  }
   const r = mergeMarkedInstruction(input.claudeMdContent);
   if (r.status === AgentRuleStatus.ALREADY) {
     return {

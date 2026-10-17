@@ -124,6 +124,45 @@ describe('buildPlan — agent verification rule (makes the agent USE Reticle)', 
     expect(s.status).toBe(StepStatus.ALREADY);
   });
 
+  /**
+   * A CLAUDE.md that imports AGENTS.md (#1680). Claude Code reads AGENTS.md through the import, so
+   * the copy init writes there already reaches it; a second copy in CLAUDE.md loaded the rule twice.
+   */
+  describe('a CLAUDE.md that imports AGENTS.md', () => {
+    const fileStep = (plan: ReturnType<typeof buildPlan>, target: string) =>
+      plan.steps.find((s) => s.title === AGENT_RULE_STEP && s.target === target);
+
+    it.each([
+      ['only the import', '@AGENTS.md\n'],
+      ['the ./ form', '@./AGENTS.md\n'],
+      ['the import beside other content', '# House rules\n\n@AGENTS.md\n\nBe terse.\n'],
+      ['CRLF line endings and spaces', '# House rules\r\n  @AGENTS.md  \r\n'],
+    ])('with %s, CLAUDE.md is left alone and AGENTS.md still gets the rule', (_label, claudeMd) => {
+      const plan = buildPlan(
+        input({ claudeCli: true, claudeMdContent: claudeMd, agentsMdContent: null }),
+      );
+      const claude = fileStep(plan, 'CLAUDE.md');
+      expect(claude?.status).toBe(StepStatus.ALREADY);
+      expect(claude?.write).toBeUndefined();
+      expect(claude?.detail).toContain('imports AGENTS.md');
+      const agents = fileStep(plan, 'AGENTS.md');
+      expect(agents?.status).toBe(StepStatus.APPLY);
+      expect(agents?.write?.content).toContain('Verifying with Reticle');
+    });
+
+    it.each([
+      ['an import of another file', '@docs/AGENTS.md\n'],
+      ['AGENTS.md named inside a sentence', 'Read @AGENTS.md before you start.\n'],
+    ])('with %s, CLAUDE.md still gets the rule', (_label, claudeMd) => {
+      const claude = fileStep(
+        buildPlan(input({ claudeCli: true, claudeMdContent: claudeMd })),
+        'CLAUDE.md',
+      );
+      expect(claude?.status).toBe(StepStatus.APPLY);
+      expect(claude?.write?.content).toContain('Verifying with Reticle');
+    });
+  });
+
   it('writes a Cursor .mdc rule when Cursor is present', () => {
     const s = step(
       buildPlan(
