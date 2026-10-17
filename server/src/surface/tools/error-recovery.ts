@@ -10,11 +10,13 @@
  */
 
 import {
-  CONNECT_COMMAND,
+  CodedRefusalSchema,
+  RefusalCode,
   RefusalReason,
   ReticleEnv,
   TRANSPORT_LIMITS,
   UNISSUED_REF_REFUSAL,
+  type CodedRefusal,
 } from '@reticlehq/core';
 import { SELF_RECOVERING_MARKER } from '@/portal/session/no-session-diagnosis.js';
 import {
@@ -318,11 +320,6 @@ export const RECOVERY = {
     'The Harness unlocks once Reticle sees enough of this app; the refusal names what is missing ' +
     'and how to close each gap. Nothing to report: close them, or drive the journey yourself with ' +
     'reticle_act_and_wait and an `until` on its last step. Every other tool works at any coverage.',
-  HARNESS_NOT_LINKED:
-    'This project is not linked to the Reticle platform, where the Harness runs. The call itself was ' +
-    `valid. Either the human runs \`${CONNECT_COMMAND}\` once in the app directory, or you ` +
-    'drive the journey yourself: reticle_navigate, then reticle_act_and_wait with an `until` on its ' +
-    'last step. There is nothing to report.',
 } as const;
 
 /**
@@ -366,8 +363,6 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   INVALID_NAME: RefusalReason.BAD_ARGS,
   // Nothing about the app or the call is wrong; the feature is switched off or unpaid for.
   HARNESS_OFF: RefusalReason.UNSUPPORTED,
-  // Nothing about the call is wrong either; the project is not linked yet.
-  HARNESS_NOT_LINKED: RefusalReason.UNSUPPORTED,
   // The call is valid; the app is not instrumented enough for the Harness yet.
   HARNESS_LOCKED: RefusalReason.UNSUPPORTED,
 };
@@ -418,7 +413,6 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
     ),
     hint: RECOVERY.HARNESS_LOCKED,
   },
-  { match: /The Reticle Harness runs on the Reticle platform/, hint: RECOVERY.HARNESS_NOT_LINKED },
   // Three conditions the daemon understands perfectly and still asked for a bug report about. Each
   // needs its own rule: none of them contains "no browser session connected" (the scope miss is
   // "no browser session FOR project 'x'", which is the opposite claim — sessions exist).
@@ -538,7 +532,8 @@ export function recoveryFor(message: string): string | undefined {
  * is the bucket that says the classifier has a blind spot — and a growing `other` is a finding about
  * this table rather than about anybody's app.
  */
-export function refusalReasonFor(rawMessage: string): RefusalReason {
+export function refusalReasonFor(rawMessage: string, coded?: CodedRefusal): RefusalReason {
+  if (coded !== undefined) return REASON_OF_CODE[coded.code];
   const message = zodArrayAsSentence(rawMessage);
   if (isUnissuedRefRefusal(message)) return RefusalReason.BAD_ARGS;
   // The no-session diagnosis inspected the machine and named the cause itself, so it never reaches
@@ -672,6 +667,29 @@ interface ErrorPayload {
   error: string;
   recovery?: string;
   feedback?: string;
+  /** A coded refusal: what it is, and who does what next, as data. */
+  code?: CodedRefusal['code'];
+  next?: CodedRefusal['next'];
+}
+
+/** Which owner each coded refusal belongs to, for `tool_refused`. */
+const REASON_OF_CODE: Record<CodedRefusal['code'], RefusalReason> = {
+  // Nothing about the call is wrong; the project is not linked yet.
+  [RefusalCode.HARNESS_NOT_LINKED]: RefusalReason.UNSUPPORTED,
+};
+
+/**
+ * The code and next steps a thrown refusal carries (`HarnessNotLinkedError`), or undefined. Read from
+ * the error itself, so a refusal is recognized by its code and never by a regular expression over
+ * its sentence: the not-linked refusal was matched by its prose, and the prose was rewritten.
+ */
+export function codedRefusalOf(error: unknown): CodedRefusal | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const parsed = CodedRefusalSchema.safeParse({
+    code: 'code' in error ? error.code : undefined,
+    next: 'next' in error ? error.next : undefined,
+  });
+  return parsed.success ? parsed.data : undefined;
 }
 
 /**
@@ -679,10 +697,12 @@ interface ErrorPayload {
  * known; the feedback ask is added when it is NOT — the two are mutually exclusive by design, so the
  * agent always gets exactly one next move.
  */
-export function buildErrorPayload(rawMessage: string): ErrorPayload {
+export function buildErrorPayload(rawMessage: string, coded?: CodedRefusal): ErrorPayload {
   // Render the zod array BEFORE capping: the cap would otherwise truncate the JSON mid-issue and
   // leave an unparseable fragment as the agent's error text — the worst of both shapes.
   const message = capMessage(zodArrayAsSentence(rawMessage));
+  // A coded refusal says who does what next itself: no hint beside it, and no bug-report ask.
+  if (coded !== undefined) return { error: message, code: coded.code, next: coded.next };
   if (isUnissuedRefRefusal(message)) return { error: message, recovery: RECOVERY.UNISSUED_REF };
   // A self-diagnosing message gets NEITHER a generic recovery nor the feedback ask. It already
   // inspected the machine and named the cause; a second, contradictory hint is noise, and inviting a

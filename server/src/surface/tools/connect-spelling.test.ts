@@ -6,11 +6,11 @@
  * Two spellings of one command in one answer read as two commands.
  */
 import { describe, expect, it } from 'vitest';
-import { CONNECT_COMMAND } from '@reticlehq/core';
+import { CONNECT_COMMAND, HARNESS_NOT_LINKED_HUMAN } from '@reticlehq/core';
 import { describeSync } from '@/memory/project/sync-status.js';
 import { CONNECT } from './platform-moment.js';
-import { buildErrorPayload } from './error-recovery.js';
-import { MSG_NO_HARNESS_KEY } from './harness-gate.js';
+import { buildErrorPayload, codedRefusalOf } from './error-recovery.js';
+import { HarnessNotLinkedError, MSG_NO_HARNESS_KEY } from './harness-gate.js';
 
 const OTHER_SPELLING = '@reticlehq/server connect';
 
@@ -24,8 +24,18 @@ describe('the connect command', () => {
       { linked: false, runs: 2, onPlatform: 0, pending: 0, refused: [], refusedMore: 0 },
       0,
     );
-    const refusal = buildErrorPayload(MSG_NO_HARNESS_KEY);
-    for (const said of [CONNECT, unlinked, refusal.error, refusal.recovery ?? '']) {
+    const refusal = buildErrorPayload(
+      MSG_NO_HARNESS_KEY,
+      codedRefusalOf(new HarnessNotLinkedError()),
+    );
+    const human = refusal.next?.find((step) => 'run' in step);
+    for (const said of [
+      CONNECT,
+      unlinked,
+      refusal.error,
+      JSON.stringify(human),
+      HARNESS_NOT_LINKED_HUMAN,
+    ]) {
       expect(said).toContain(CONNECT_COMMAND);
       expect(said).not.toContain(OTHER_SPELLING);
     }

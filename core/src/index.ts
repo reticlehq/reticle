@@ -103,7 +103,7 @@ export * from './words/no-session-reason.js';
 export * from './telemetry-refusal.js';
 export * from './wire/narrow.js';
 export * from './wire/tool-names.js';
-export * from './wire/constants/next-step.js'; // who does what next after a refusal, and the connect command
+export * from './wire/next-step.js'; // who does what next after a refusal, and the connect command
 export * from './wire/snapshot-tree.js'; // parseInteractive — the browser writes this format, Node reads it
 export * from './wire/platform.js';
 export * from './wire/channel.js';

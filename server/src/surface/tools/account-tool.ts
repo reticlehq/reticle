@@ -9,7 +9,7 @@
  * plan, credits and gate), so the agent and the HUD cannot disagree.
  */
 import { z } from 'zod';
-import { ReticleTool, asRecord, asString } from '@reticlehq/core';
+import { CONNECT_COMMAND, ReticleTool, asRecord, asString } from '@reticlehq/core';
 import { creditsUsageText } from '@reticlehq/core/hud';
 import { impactSnapshot } from '@/memory/impact/impact-recorder.js';
 import { readDashboardUrl } from '@/memory/project/sync-status.js';
@@ -23,9 +23,8 @@ const UNLOCK_PERCENT = 80;
 
 /** What the agent is told to do next, in plain words: one step, the first one that applies. */
 export const ACCOUNT_NEXT = {
-  SIGN_IN:
-    'The user is not signed in to Reticle. Ask them to run `reticle connect` in the app folder: it signs them in and links this project. A new account gets 10 free credits.',
-  LINK: 'This project does not report to the dashboard yet. Ask the user to press "Link this project" on the Harness page of the HUD, or to run `reticle connect` in the app folder.',
+  SIGN_IN: `The user is not signed in to Reticle. Ask them to run \`${CONNECT_COMMAND}\` in the app folder: it signs them in and links this project.`,
+  LINK: `This project does not report to the dashboard yet. Ask the user to press "Link this project" on the Harness page of the HUD, or to run \`${CONNECT_COMMAND}\` in the app folder.`,
   UNREACHABLE:
     'The Reticle platform did not answer, so credits and the Harness are not known now. Local checks still work.',
   NO_CREDITS: (said: string): string =>

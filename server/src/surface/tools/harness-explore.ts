@@ -72,9 +72,10 @@ export {
   MSG_HARNESS_UNCLAIMED,
   MSG_HARNESS_UNCONFIRMED,
 } from '@/features/harness/platform/refusal.js';
-import { MSG_NO_HARNESS_KEY, refusedForPlan } from './harness-gate.js';
+import { HarnessNotLinkedError, MSG_NO_HARNESS_KEY, refusedForPlan } from './harness-gate.js';
 // The gate a drive passes before it starts moved to its own module; its names are still asked for here.
 export {
+  HarnessNotLinkedError,
   MSG_GATE_PROMPT_LEAD,
   MSG_NO_HARNESS_KEY,
   coverageRefusal,
@@ -222,7 +223,10 @@ export async function exploreApp(
   const env = named === undefined ? given : { ...given, ...named.secrets };
   const options = named === undefined ? asked : { ...asked, focus: named.persona };
   const refusal = await refusedForPlan(env, options);
-  if (refusal !== undefined) throw new DriveRefusedError(refusal);
+  if (refusal !== undefined)
+    throw MSG_NO_HARNESS_KEY === refusal
+      ? new HarnessNotLinkedError()
+      : new DriveRefusedError(refusal);
   // The flows a drive reads and diffs are the PROJECT's, which is where its saves land.
   const reads = withProjectFlows(deps, options.sessionId);
   // No journey named: plan the drive first. The platform's Harness proposes the people worth being;
@@ -706,7 +710,7 @@ export function buildDriver(
   if (requested !== undefined && SERVER_DRIVER !== requested)
     throw new Error(msgUnknownDriver(requested));
   const platform = serverOptionsFromEnv(env);
-  if (platform === undefined) throw new Error(MSG_NO_HARNESS_KEY);
+  if (platform === undefined) throw new HarnessNotLinkedError();
   return {
     driver: serverDriver({
       ...platform,

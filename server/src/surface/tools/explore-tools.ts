@@ -56,7 +56,7 @@ import {
   exploreApp,
   harnessAvailable,
   withLinkedCredential,
-  MSG_NO_HARNESS_KEY,
+  HarnessNotLinkedError,
 } from './harness-explore.js';
 import { EXPLORE_NEEDS } from '@/features/harness/drivers.js';
 import {
@@ -291,7 +291,7 @@ export async function answerExplore(
   }
   if (!harnessAvailable(env)) {
     reportHarnessBlocked(runStart);
-    throw new Error(MSG_NO_HARNESS_KEY);
+    throw new HarnessNotLinkedError();
   }
   const harness = randomUUID();
   const runId = harnessRunId(harness);

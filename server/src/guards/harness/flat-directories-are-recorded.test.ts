@@ -122,7 +122,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
   // published API, and a page that only presses a key should not pull in the reader for a list of
   // them. Recorded rather than grouped, by the same rule as the note underneath.
-  'core/src/wire': 18,
+  // 19 with `next-step.ts`: a coded refusal's `next` steps and the connect command, which the error
+  // envelope carries to the agent. It needs `ReticleTool`, and `wire/constants` may not reach up
+  // into `wire` (the directory-reach guard refused it there).
+  'core/src/wire': 19,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not

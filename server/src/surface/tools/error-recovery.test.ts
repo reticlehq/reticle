@@ -5,6 +5,7 @@ import {
   FEEDBACK_ASK,
   RECOVERY,
   buildErrorPayload,
+  codedRefusalOf,
   recoveryFor,
   refusalReasonFor,
 } from './error-recovery.js';
@@ -17,6 +18,7 @@ import { TOOLS } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { diagnoseNoSession } from '@/portal/session/no-session-diagnosis.js';
 import {
+  HarnessNotLinkedError,
   MSG_HARNESS_UNCLAIMED,
   MSG_HARNESS_UNCONFIRMED,
   MSG_NO_HARNESS_KEY,
@@ -118,9 +120,11 @@ describe('recoveryFor — every known error carries an actionable next move', ()
 
   it('answers an unlinked explore with "link it or drive it yourself", not "your call was invalid"', () => {
     // The refusal names reticle_act_and_wait as the alternative, which the catch-all used to read as
-    // a malformed call, so the agent was told to fix arguments that were never wrong.
-    expect(recoveryFor(MSG_NO_HARNESS_KEY)).toBe(RECOVERY.HARNESS_NOT_LINKED);
-    expect(refusalReasonFor(MSG_NO_HARNESS_KEY)).not.toBe(RefusalReason.BAD_ARGS);
+    // a malformed call, so the agent was told to fix arguments that were never wrong. It is
+    // recognized by its code now (harness-not-linked.test.ts).
+    const coded = codedRefusalOf(new HarnessNotLinkedError());
+    expect(buildErrorPayload(MSG_NO_HARNESS_KEY, coded).next).toBeDefined();
+    expect(refusalReasonFor(MSG_NO_HARNESS_KEY, coded)).not.toBe(RefusalReason.BAD_ARGS);
   });
 
   // Persona drive: the deliberate "no credits left" refusal was labelled "not one Reticle

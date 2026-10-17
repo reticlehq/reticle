@@ -20,6 +20,8 @@ describe('where the user stands, for the coding agent', () => {
   it('signed out: one step, sign in, and nothing it cannot know', () => {
     const facts = accountFacts({ signedIn: false, platform: undefined });
     expect(facts).toEqual({ signedIn: false, linked: false, next: ACCOUNT_NEXT.SIGN_IN });
+    // Free credit is granted once per person: the engine cannot promise a number (night 7b).
+    expect(ACCOUNT_NEXT.SIGN_IN).not.toMatch(/\d/);
   });
 
   it('signed in, project not linked: link it', () => {

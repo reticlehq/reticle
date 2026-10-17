@@ -17,7 +17,7 @@ import { SHARED_PARAM_SHORT } from './shared-params.js';
 import { buildDynamicTools } from '@/surface/tools/dynamic-tools.js';
 import { runTool } from '@/surface/tools/invoke-tool.js';
 import { sessionEnvelopeShape, newSnapshotCache, type ToolCall } from '@/surface/tools/tool-kit.js';
-import { buildErrorPayload } from '@/surface/tools/error-recovery.js';
+import { buildErrorPayload, codedRefusalOf } from '@/surface/tools/error-recovery.js';
 import { takeVersionSkewOnto } from '@/command/version/version-nudge.js';
 import { resultIsError } from './faults/mcp-is-error.js';
 import { consumerVerdictRefusal, reservedVerdictKeysIn } from './consumer-verdict-guard.js';
@@ -835,7 +835,10 @@ export function createMcpServer(
               type: 'text' as const,
               text: JSON.stringify(
                 liveCallValues(
-                  takeVersionSkewOnto(buildErrorPayload(message), deps.peerSkew),
+                  takeVersionSkewOnto(
+                    buildErrorPayload(message, codedRefusalOf(error)),
+                    deps.peerSkew,
+                  ),
                   advertisedNames,
                 ),
               ),

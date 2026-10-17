@@ -31,7 +31,7 @@ import { rewriteClosedAsSkew } from '@/command/version/version-skew.js';
 import { noteToolCall } from '@/command/daemon/lifetime/daemon-usefulness.js';
 import { bugsInResult, routeOf } from '@/telemetry/bug-found.js';
 import { noteToolServed, reportToolRefused } from '@/telemetry/tool-refused.js';
-import { buildErrorPayload, refusalReasonFor } from './error-recovery.js';
+import { buildErrorPayload, codedRefusalOf, refusalReasonFor } from './error-recovery.js';
 import { resultIsError } from '@/surface/mcp/faults/mcp-is-error.js';
 import { verificationOf } from '@/telemetry/verification-of.js';
 import { emitBugFoundHook, emitVerdictHook } from '@/hooks/hook-emit.js';
@@ -294,9 +294,9 @@ function reportBugsFound(
  * tool's name, and then hands the same failure back out to be reported a second time as
  * `reticle_run`. A count that doubles because of HOW a tool was reached is not a measurement.
  */
-function reportRefusal(toolName: string, message: string): void {
+function reportRefusal(toolName: string, message: string, error?: unknown): void {
   if (toolName === ReticleTool.RUN) return;
-  reportToolRefused(toolName, refusalReasonFor(message));
+  reportToolRefused(toolName, refusalReasonFor(message, codedRefusalOf(error)));
 }
 
 /**
@@ -621,12 +621,13 @@ async function dispatchTool<Ext>(
     const rewritten = rewriteClosedAsSkew(error, skewText);
     const toThrow = rewritten ?? error;
     const message = toThrow instanceof Error ? toThrow.message : String(toThrow);
-    reportRefusal(tool.name, message);
+    reportRefusal(tool.name, message, toThrow);
     // The invitation on THIS path is the one `buildErrorPayload` attaches when it does not recognise
     // the error, and it was never counted — so the denominator excluded the commonest friction there
     // is. Gated on the payload actually carrying the ask, because a recognised error gets a recovery
     // instead and counting an invitation nobody was shown breaks the ratio in the other direction.
-    if (tool.name !== ReticleTool.RUN && buildErrorPayload(message).feedback !== undefined) {
+    const payload = buildErrorPayload(message, codedRefusalOf(toThrow));
+    if (tool.name !== ReticleTool.RUN && payload.feedback !== undefined) {
       getSessionMetrics().recordFeedbackPrompt();
     }
     throw toThrow;

@@ -265,7 +265,7 @@ The refusal path computes a precise diagnosis, hands it to the agent as prose, a
 
 Two things about it are deliberate and easy to get wrong later.
 
-**The reason is derived from the recovery table, not from a second list of patterns.** `error-recovery.ts` is the one place a thrown message becomes a next action; `REASON_OF` is a `Record` over its keys, so a recovery added without a reason does not compile. A parallel regex list would have been correct the day it was written and silently wrong at the next addition. That is rule 4, on the exact kind of value that cannot be recovered afterwards.
+**The reason is derived from the recovery table, not from a second list of patterns.** `error-recovery.ts` is the one place a thrown message becomes a next action; `REASON_OF` is a `Record` over its keys, so a recovery added without a reason does not compile. A parallel regex list would have been correct the day it was written and silently wrong at the next addition. That is rule 4, on the exact kind of value that cannot be recovered afterwards. A coded refusal (one thrown with a `code`, such as `harness_not_linked`) takes its reason from `REASON_OF_CODE`, also a `Record`, keyed on the code and never on its sentence.
 
 **`retried` lands on the RETRY, not on the first refusal.** Reporting it the other way round means holding the first event back until the next call reveals whether one came, which loses it entirely for an agent that gives up, and that agent is the whole population this event exists to describe. So a refusal is sent the moment it happens, and the retry that follows carries the flag. Count `retried: true` for retries; the ratio against all refusals is whether our diagnosis gets anybody unstuck.
 

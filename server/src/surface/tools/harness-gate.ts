@@ -7,7 +7,15 @@
  */
 import { reportAppsNow } from '@/features/harness/platform/local-apps.js';
 import { serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
-import { CONNECT_COMMAND, ReticleEnv, cloudUrlFrom } from '@reticlehq/core';
+import {
+  CONNECT_COMMAND,
+  HARNESS_NOT_LINKED_NEXT,
+  RefusalCode,
+  ReticleEnv,
+  ReticleTool,
+  cloudUrlFrom,
+} from '@reticlehq/core';
+import { DriveRefusedError } from '@/features/harness/drive-runs.js';
 import { creditsSpent, creditsUsedLine } from '@reticlehq/core/hud';
 import { planUrl } from '@/features/harness/platform/platform-drives.js';
 import type { ToolDeps } from './tool-kit.js';
@@ -33,15 +41,27 @@ export interface HarnessAsk {
 /**
  * Why the harness is unavailable, phrased as the way to make it available.
  *
- * A missing key is a configuration fact, not a fault, and the sentence a user reads has to tell them
- * the one thing to do about it. Named here because both the CLI and the honest no-flows refusal
- * print it, and two copies of this sentence would drift.
+ * A missing key is a configuration fact, not a fault. This is the AGENT's sentence: who does what
+ * next, short, and no credit number (free credit is granted once per person, so the engine cannot
+ * know what is left). Named here because the CLI and the honest no-flows refusal print it too.
  */
 export const MSG_NO_HARNESS_KEY =
-  `The Reticle Harness runs on the Reticle platform, and a new account gets 10 free credits ` +
-  `to try it: run \`${CONNECT_COMMAND}\` to link this project and sign in. ` +
-  `Without it, drive the journey yourself with reticle_act_and_wait and an \`until\` on its last step: ` +
-  `what you drive is saved as a flow just the same.`;
+  `The Reticle Harness runs on the Reticle platform, and this project is not linked to it. ` +
+  `Ask the person to run \`${CONNECT_COMMAND}\`, or drive the journey yourself with ` +
+  `${ReticleTool.ACT_AND_WAIT} and an \`until\` on its last step.`;
+
+/**
+ * The not-linked refusal, thrown. Its code and next steps ride on the error envelope beside the
+ * sentence (`codedRefusalOf`), so the agent reads who does what as data and error-recovery keys on
+ * the code. The person reads `HARNESS_NOT_LINKED_HUMAN` on the HUD instead.
+ */
+export class HarnessNotLinkedError extends DriveRefusedError {
+  readonly code = RefusalCode.HARNESS_NOT_LINKED;
+  readonly next = HARNESS_NOT_LINKED_NEXT;
+  constructor() {
+    super(MSG_NO_HARNESS_KEY);
+  }
+}
 
 /**
  * The environment, plus the credential this machine already has.

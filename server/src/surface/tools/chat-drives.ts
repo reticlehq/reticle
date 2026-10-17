@@ -48,7 +48,7 @@ import {
 } from '../../features/harness/platform/local-apps.js';
 import { serverOptionsFromEnv } from '../../features/harness/platform/server-driver.js';
 import { EXPLORE_TOOLS, driveForChat } from './explore-tools.js';
-import { MSG_NO_HARNESS_KEY, harnessLockRefusal, withLinkedCredential } from './harness-explore.js';
+import { harnessLockRefusal, withLinkedCredential } from './harness-explore.js';
 import { runTool } from './invoke-tool.js';
 import {
   announcedChannels,
@@ -72,7 +72,12 @@ import {
   requestFreeDrive,
   type FreeDrive,
 } from '../../features/harness/platform/platform-drives.js';
-import { HumanControlKind, type LinkUnsyncedRoot } from '@reticlehq/core';
+import {
+  CONNECT_COMMAND,
+  HARNESS_NOT_LINKED_HUMAN,
+  HumanControlKind,
+  type LinkUnsyncedRoot,
+} from '@reticlehq/core';
 import { onAgentsChange } from '../../hooks/coding-agents.js';
 
 /** Why a platform drive with no tab of its own runs no tool. */
@@ -417,8 +422,7 @@ const MSG_LINK_FAILED = 'Could not link this project. Run `reticle connect` in i
 /** A page with no projectId: linking it would bind a hash-named project nothing here reads. */
 const MSG_LINK_NEEDS_PROJECT =
   'This page did not say which project it is, so there is nothing to link yet. Run `npx @reticlehq/server init` in your app (or pass `projectId` to `connect()`), then Link.';
-const MSG_LINK_UNAVAILABLE =
-  'This Reticle cannot link from the panel. Run `reticle connect` in the project folder.';
+const MSG_LINK_UNAVAILABLE = `This Reticle cannot link from the panel. Run \`${CONNECT_COMMAND}\` in the project folder.`;
 /** Said on the HUD when Stop finds nothing to stop. */
 const MSG_NOTHING_DRIVING = 'No Harness drive is running in this tab.';
 const msgStartTrial = (url: string): string => `Start your trial: ${url}`;
@@ -479,7 +483,8 @@ async function startHudRun(
   const locked = await harnessLockRefusal(deps, sessionId, env);
   if (locked !== undefined) return say(locked.split('\n')[0] ?? locked);
   const platform = serverOptionsFromEnv(env);
-  if (platform === undefined) return say(MSG_NO_HARNESS_KEY);
+  // The person's sentence: the agent's (`MSG_NO_HARNESS_KEY`) names tools they never call.
+  if (platform === undefined) return say(HARNESS_NOT_LINKED_HUMAN);
   const granted = await grant(platform);
   if (!granted.granted) {
     say(granted.message);
