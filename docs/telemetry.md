@@ -58,7 +58,7 @@ It also carries a snapshot of the **machine's** state (our own process's memory,
 
 ### Why a verdict came out that way
 
-`verification_completed` carries the **clause** that decided the verdict, from a fixed list we define: `proved`, `contradicted`, `assertion_failed`, `already_true`, `hidden_match`, `unclean_capture`, `vacuous_grade`, `nothing_declared`, `outcome_pending`, `outcome_unread`, `unsettled`, `evidence_incomplete`, `absence_blind_spot`, `observation_lost`, `window_closed_early`, `inconclusive`, `version_skew`, `capability-absent`.
+`verification_completed` carries the **clause** that decided the verdict, from a fixed list we define: `proved`, `contradicted`, `assertion_failed`, `already_true`, `unreachable_target`, `hidden_match`, `unclean_capture`, `vacuous_grade`, `nothing_declared`, `outcome_pending`, `outcome_unread`, `unsettled`, `evidence_incomplete`, `absence_blind_spot`, `observation_lost`, `window_closed_early`, `inconclusive`, `version_skew`, `capability-absent`.
 
 It exists because `verified: "unknown"` covered seven different situations belonging to three different owners (your app, your agent, and Reticle's own blind spots), and they arrived as one value. It is a **name from our own vocabulary**, never a description of your app: `contradicted` says two channels disagreed, not which ones, about what, or on which page.
 

@@ -76,6 +76,7 @@ const OWNER: Readonly<Record<VerifiedReason, VerdictAttribution>> = {
   [VerifiedReason.NOTHING_DECLARED]: VerdictAttribution.HARNESS,
   [VerifiedReason.VACUOUS_GRADE]: VerdictAttribution.HARNESS,
   [VerifiedReason.ALREADY_TRUE]: VerdictAttribution.HARNESS,
+  [VerifiedReason.UNREACHABLE_TARGET]: VerdictAttribution.HARNESS,
   [VerifiedReason.HIDDEN_MATCH]: VerdictAttribution.HARNESS,
 
   // The evidence was not there to read.

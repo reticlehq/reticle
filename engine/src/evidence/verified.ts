@@ -188,6 +188,8 @@ interface VerifiedInputs {
   absenceBlindSpot?: string;
   /** The green rested on matches that are all hidden; the sentence that says so. See `hiddenMatchNote`. */
   hiddenMatch?: string;
+  /** The action target was not reachable by a user, so a synthetic dispatch cannot prove the consequence. */
+  unreachableTarget?: string;
 }
 
 interface VerifiedVerdict {
@@ -282,6 +284,18 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
         'seen — this says nothing about the app. Call reticle_sessions for the current session ' +
         '(a reloaded tab keeps its id; a closed one is gone) and repeat the action if it is safe ' +
         'to repeat',
+    };
+  }
+
+  // A synthetic event can reach a hidden or covered element even though a user could not. The
+  // consequence may still appear, but it is not evidence that the requested user action caused it.
+  // This must precede assertion failure and every green clause: unreachable-target evidence is an
+  // instrumentation limitation, not an app failure and never a verified success.
+  if (inputs.unreachableTarget !== undefined) {
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.UNREACHABLE_TARGET,
+      because: inputs.unreachableTarget,
     };
   }
 

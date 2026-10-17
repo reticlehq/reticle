@@ -58,6 +58,7 @@ import { gradeOfPredicate } from './assert/assert-grade.js';
 import { describeWaitTarget } from '@reticlehq/engine/evidence/unsettled.js';
 import { sourceOf } from './tools-helpers.js';
 import { confirmedByDeclaration } from './act/act-danger.js';
+import { unreachableTargetNote } from './act/act-observation.js';
 
 /**
  * The step's effect record, best-effort.
@@ -90,6 +91,7 @@ interface StepCheck {
   readonly held: boolean;
   /** The page went away (or the predicate could not be read) before the consequence was decided. */
   readonly undecided: boolean;
+  readonly unreachableTarget?: string;
   /** Deciding contradiction kinds seen in the step's window. */
   readonly contradicted: readonly string[];
   readonly expected?: string | undefined;
@@ -103,11 +105,19 @@ interface StepCheck {
 /** The verdict effect for one step: the same rules act_and_wait applies to one action. */
 function stepVerdictEffect(check: StepCheck): JournalVerdictEffect {
   const { verified, reason } = check.held
-    ? 0 < check.contradicted.length
-      ? { verified: Verified.NO, reason: VerifiedReason.CONTRADICTED }
-      : { verified: Verified.YES, reason: undefined }
+    ? undefined !== check.unreachableTarget
+      ? { verified: Verified.UNKNOWN, reason: VerifiedReason.UNREACHABLE_TARGET }
+      : 0 < check.contradicted.length
+        ? { verified: Verified.NO, reason: VerifiedReason.CONTRADICTED }
+        : { verified: Verified.YES, reason: undefined }
     : check.undecided
-      ? { verified: Verified.UNKNOWN, reason: VerifiedReason.OBSERVATION_LOST }
+      ? {
+          verified: Verified.UNKNOWN,
+          reason:
+            check.unreachableTarget === undefined
+              ? VerifiedReason.OBSERVATION_LOST
+              : VerifiedReason.UNREACHABLE_TARGET,
+        }
       : { verified: Verified.NO, reason: VerifiedReason.ASSERTION_FAILED };
   const source = sourceOf(check.source);
   return {
@@ -382,12 +392,16 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             // beside `held: true`, a contradiction about a moment the verdict was not taken at.
             const described = describe();
             const contradicted = deciding(described);
+            const unreachableTarget = unreachableTargetNote(outcome.result);
             const disagreement = 0 === contradicted.length ? {} : { contradicted };
-            const held = true === verdict.pass;
+            const held = true === verdict.pass && unreachableTarget === undefined;
             // A tab that went away (an external checkout page) or a predicate that could not be
             // read decided nothing: unknown, never a miss blamed on the app.
             const undecided =
-              !held && (true === verdict.observationLost || verdict.inconclusive !== undefined);
+              !held &&
+              (unreachableTarget !== undefined ||
+                true === verdict.observationLost ||
+                verdict.inconclusive !== undefined);
             // One check per declared step, journaled as act_and_wait journals its own, so the
             // session's result, its run file and the dashboard all count it. See sequence-journal.ts.
             journalStep(
@@ -407,6 +421,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             expectations.push({
               declared: true,
               held,
+              ...(unreachableTarget === undefined ? {} : { unreachableTarget }),
               ...(undecided
                 ? {
                     undecided:

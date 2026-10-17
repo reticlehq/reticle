@@ -16,7 +16,6 @@ import { WALL_CLOCK } from '@/portal/session/timing/wall-clock.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
 import { captureAct, captureVerdictedAct, pathOf } from '@/language/flows/replay.js';
 import { durableArg, durableOutput, reloadAndRecheck, withDurability } from './act/durable.js';
-
 import {
   ActionType,
   ActionWarning,
@@ -93,7 +92,12 @@ import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
 import { confirmedByDeclaration } from './act/act-danger.js';
 import { dispatchAct, preflightAct } from './act/act-preflight.js';
-import { checkNet, disabledTargetNote, followLostObservation } from './act/act-observation.js';
+import {
+  checkNet,
+  disabledTargetNote,
+  followLostObservation,
+  unreachableTargetNote,
+} from './act/act-observation.js';
 import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';
 import { verdictIntentGap } from '@reticlehq/engine/evidence/verdict-intent-gap.js';
 import { asActionType, gradeOf } from './act/act-helpers.js';
@@ -103,7 +107,6 @@ import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrue } from './act/already-true.js';
 import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
-
 /**
  * The action vocabulary, derived from ActionType — never retyped: a hand-copied list once omitted
  * blur, upload and drag. The schema refuses an unknown action before any session is resolved.
@@ -772,6 +775,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // A click on a disabled control cannot cause anything: a miss there is not the app's.
         const inconclusive =
           verdict.inconclusive ?? disabledTargetNote(verdict.pass, actResult?.result);
+        const unreachableTarget = unreachableTargetNote(actResult?.result);
         const { decision, durable } = await withDurability(
           args['durable'],
           until,
@@ -791,6 +795,7 @@ export const ACT_TOOLS: ToolDef[] = [
             ...(alreadyTrueHiddenMatch ? { alreadyTrueHiddenMatch } : {}),
             // An assertion nobody could evaluate must not be reported as one the app failed.
             ...(inconclusive === undefined ? {} : { inconclusive }),
+            ...(unreachableTarget === undefined ? {} : { unreachableTarget }),
             // Nor must one nobody could OBSERVE. This is the act path, so it is the one that produced
             // the measured false red: a reload mid-wait, graded assertion_failed at the clicked
             // component's own file and line.
@@ -996,5 +1001,4 @@ export const ACT_TOOLS: ToolDef[] = [
       }
     },
   },
-  // Split into its own module for size; still shipped as one of the acting tools.
 ];

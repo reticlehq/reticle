@@ -58,6 +58,19 @@ describe('click: full pointer/mouse event sequence', () => {
 });
 
 describe('click: hit-test occlusion honesty', () => {
+  it('reports a hit-tested opacity-zero input as reachable', async () => {
+    document.body.innerHTML = '<label for="name">Name</label><input id="name" style="opacity:0">';
+    const input = document.querySelector('input') as HTMLInputElement;
+    input.getBoundingClientRect = rect({ left: 0, top: 0, width: 100, height: 24 });
+    document.elementFromPoint = () => input;
+
+    const r = await executeAction(refs.refFor(input), 'click');
+
+    expect(r.effect.visible).toBe(false);
+    expect(r.effect.hitTested).toBe(true);
+    expect(r.effect.occluded).toBe(false);
+  });
+
   it('occluded=true + CLICK_OCCLUDED warning when the center is covered by a foreign element', async () => {
     document.body.innerHTML = '<button>Save</button><div id="cover">x</div>';
     const btn = document.querySelector('button') as HTMLButtonElement;

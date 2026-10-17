@@ -107,6 +107,8 @@ export const VerifiedReason = {
   CONTRADICTED: 'contradicted',
   /** The consequence was already true beforehand, so it proves nothing about the action. */
   ALREADY_TRUE: 'already_true',
+  /** The action target was hidden or covered, so synthetic dispatch cannot prove a user action. */
+  UNREACHABLE_TARGET: 'unreachable_target',
   /**
    * The consequence held, but only on elements that are hidden: a `text` or stateless `element`
    * check matches DOM presence, so a success template still hidden in the DOM passed it.

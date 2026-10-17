@@ -61,6 +61,21 @@ describe('action effect: enabled / visible probes', () => {
     const r = await executeAction(refOf('button'), 'click');
     expect(r.effect.visible).toBe(false);
   });
+
+  it('reports an active animation separately from a hidden visibility sample', async () => {
+    document.body.innerHTML = '<button style="opacity:0">Save</button>';
+    const button = document.querySelector('button');
+    if (null === button) throw new Error('button was not created');
+    Object.defineProperty(button, 'getAnimations', {
+      configurable: true,
+      value: () => [{ pending: false, playState: 'running' }],
+    });
+
+    const r = await executeAction(refs.refFor(button), 'click');
+
+    expect(r.effect.visible).toBe(false);
+    expect(r.effect.animating).toBe(true);
+  });
 });
 
 describe('action effect: defaultPrevented', () => {
