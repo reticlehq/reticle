@@ -123,6 +123,17 @@ describe('runVerify', () => {
     expect(rec.closed).toBe(1);
   });
 
+  // The live exit is process.exit, and close() is where the last cloud sync cycle sends the run's
+  // flows and screenshots: exiting first meant a run with no daemon reached the dashboard bare.
+  it('closes the connection before it exits, on a pass and on an early refusal', async () => {
+    const pass = harness({ verify: () => Promise.resolve(makeRun(RunFlowStatus.PASS)) });
+    const closedAtExit: number[] = [];
+    await runVerify(ARGS, { ...pass.ports, exit: () => closedAtExit.push(pass.rec.closed) });
+    const refused = harness({ sessionReady: () => Promise.resolve(false) });
+    await runVerify(ARGS, { ...refused.ports, exit: () => closedAtExit.push(refused.rec.closed) });
+    expect(closedAtExit).toEqual([1, 1]);
+  });
+
   // Persona drive: an unlinked verify printed pass and a runId, and nothing said nothing was sent.
   it('says an unlinked run was kept on this computer and how to send runs', async () => {
     const { ports, rec } = harness({ verify: () => Promise.resolve(makeRun(RunFlowStatus.PASS)) });

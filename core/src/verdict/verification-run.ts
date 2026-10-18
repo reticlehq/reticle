@@ -275,6 +275,11 @@ export const STEP_SCREENSHOT = {
   MAX_PER_RUN: 300,
   /** The platform refuses an image larger than this, decoded. */
   MAX_BYTES: 1.5 * 1024 * 1024,
+  /**
+   * The `tool` of a frame: a picture taken between steps while Reticle drives a tab, about once a
+   * second. Frames share the run's `seq`, so the shots in `seq` order play the run as a film.
+   */
+  FRAME_TOOL: 'frame',
 } as const;
 
 /** One step's screenshot as a run artifact records it. `file` is relative to the run's directory. */

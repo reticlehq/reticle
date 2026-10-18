@@ -6,6 +6,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { asString } from '@reticlehq/core';
+import { sharedSkipReason } from '@/question/predicate/predicate-eval.js';
 
 const IPC_METHOD = NetInitiator.IPC.toUpperCase();
 
@@ -75,6 +76,27 @@ export function unreadWriteLabels(events: readonly ReticleEvent[]): string[] {
     if (!labels.includes(label)) labels.push(label);
   }
   return labels;
+}
+
+/**
+ * The reason the SDK stamped on every unread write in the window, when they all share one (#1520).
+ *
+ * Read beside `unreadWriteLabels`, with the same filter, so the remedy for an unread outcome can
+ * say "capture is on, this was a stream" instead of "enable capture".
+ */
+export function unreadWriteReason(events: readonly ReticleEvent[]): unknown {
+  const labels = new Set(unreadWriteLabels(events));
+  if (0 === labels.size) return undefined;
+  const reasons: unknown[] = [];
+  for (const event of events) {
+    if (event.type !== EventType.NET_REQUEST || event.data['responseBody'] !== undefined) continue;
+    const method = (
+      'string' === typeof event.data['method'] ? event.data['method'] : ''
+    ).toUpperCase();
+    if (!labels.has(`${method} ${asString(event.data['url']) ?? ''}`.trim())) continue;
+    reasons.push(event.data['responseBodyReason']);
+  }
+  return sharedSkipReason(reasons);
 }
 
 export function hasUnreadWriteOutcome(events: readonly ReticleEvent[]): boolean {

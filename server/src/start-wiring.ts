@@ -16,6 +16,7 @@ import {
   projectDirectoryFor,
 } from './memory/project/artifact-root-resolver.js';
 import { createNodeFileSystem } from './memory/project/fs/fs-port.js';
+import { claimedArtifactRoots } from './memory/project/root-claims.js';
 import { originOf } from './portal/session/session-manager.js';
 import { setBrowserMode, BrowserMode } from './telemetry/browser-mode.js';
 import type { NetworkDetail } from './portal/input/network-detail.js';
@@ -177,8 +178,8 @@ export function sdkFixForProject(projectId?: string): string {
  * from before the project the agent is now driving existed.
  */
 /**
- * Every `.reticle` root on this machine that sync should consider, from the same two sources the
- * artifact resolver uses.
+ * Every `.reticle` root on this machine that sync should consider: the sources the artifact resolver
+ * uses, plus every root a lease claimed in this process.
  *
  * Read on every call rather than snapshotted, for the same reason: `reticle link` can run in
  * another terminal while this daemon is up, and a startup snapshot would keep that repo silent
@@ -188,7 +189,13 @@ export function sdkFixForProject(projectId?: string): string {
  * not. Deciding that here would mean reading every cloud.json on every tick.
  */
 export function knownProjectRoots(): string[] {
-  return [...new Set(knownProjectCandidates().map((c) => join(c.directory, ReticleDir.ROOT)))];
+  return [
+    ...new Set([
+      ...knownProjectCandidates().map((c) => join(c.directory, ReticleDir.ROOT)),
+      // A lease opened with `root` writes there; without this, that work is never sent.
+      ...claimedArtifactRoots(),
+    ]),
+  ];
 }
 
 /** This project's platform credential (stored, else the env key), as the env the platform readers take. */

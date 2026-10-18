@@ -4,24 +4,25 @@
  * reason a process refuses to exit.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync, type FSWatcher } from 'node:fs';
+import { EventEmitter } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { emitSyncHook } from '@/hooks/hook-emit.js';
-import { startSyncDaemon } from './sync-daemon.js';
+import { flushWithin, startSyncDaemon, watchReticleRoot } from './sync-daemon.js';
 
 vi.mock('@/hooks/hook-emit.js', () => ({ emitSyncHook: vi.fn() }));
 import type { ProjectCloud } from './cloud-config.js';
 
 const LINKED: ProjectCloud = {
   config: { url: 'https://cloud.test', apiKey: 'rk_test' },
-  policy: { runs: true, memory: true, flows: true, capsules: true, screenshots: true },
+  policy: { runs: true, memory: true, flows: true, capsules: true, screenshots: true, video: true },
   verify: 'local',
   projectId: 'demo',
 };
 const UNLINKED: ProjectCloud = {
   config: null,
-  policy: { runs: true, memory: true, flows: true, capsules: true, screenshots: true },
+  policy: { runs: true, memory: true, flows: true, capsules: true, screenshots: true, video: true },
   verify: 'local',
   projectId: null,
 };
@@ -565,6 +566,29 @@ describe('the last push', () => {
  * A cycle whose only outcome was a refusal logged nothing and told the hook it was ok: the push
  * completed, so it counted as success, and the one fact worth reading was dropped.
  */
+/** A process on its way out sent its last cycle with no bound, so a dead network held the exit. */
+describe('flushWithin', () => {
+  it('returns at the budget when the cycle never finishes', async () => {
+    let finished = false;
+    const done = flushWithin({ flush: () => new Promise<void>(() => undefined) }, 2_000).then(
+      () => {
+        finished = true;
+      },
+    );
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(finished).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await done;
+    expect(finished).toBe(true);
+  });
+
+  it('never throws on the way out', async () => {
+    await expect(
+      flushWithin({ flush: () => Promise.reject(new Error('offline')) }, 2_000),
+    ).resolves.toBeUndefined();
+  });
+});
+
 describe('a refusal is not silence', () => {
   let posts = 0;
   const refusing = (url: string): Promise<{ status: number; text: string }> => {
@@ -687,7 +711,7 @@ describe('a re-link', () => {
     });
     const urls: string[] = [];
     let project = 'lind-console';
-    let changed: (() => void) | undefined;
+    let changed: ((path: string) => void) | undefined;
     const d = startSyncDaemon({
       reticleRoot: root,
       cloud: () => Promise.resolve({ ...LINKED, projectId: project }),
@@ -696,7 +720,7 @@ describe('a re-link', () => {
         return Promise.resolve({ status: 200, text: '{}' });
       },
       intervalMs: 60_000,
-      watchLink: (onChange) => {
+      watch: (onChange) => {
         changed = onChange;
         return () => undefined;
       },
@@ -704,8 +728,8 @@ describe('a re-link', () => {
     await vi.advanceTimersByTimeAsync(6_000); // the first cycle, on the old link
     project = 'rao-console';
     urls.length = 0;
-    changed?.();
-    await vi.advanceTimersByTimeAsync(3_000); // well inside the 60 s idle tick
+    changed?.('cloud.json');
+    await vi.advanceTimersByTimeAsync(3_000); // well inside the idle tick
     expect(urls.some((u) => u.includes('rao-console'))).toBe(true);
     expect(urls.some((u) => u.includes('lind-console'))).toBe(false);
     const linked = lines.filter((l) => l.includes('reticle_cloud_linked'));
@@ -714,4 +738,289 @@ describe('a re-link', () => {
     d.stop();
     spy.mockRestore();
   });
+});
+
+/**
+ * A change under `.reticle` is what wakes the sync, not a clock. The timer is only the backstop, so
+ * everything here drives the daemon through a fake watcher and counts CYCLES (one `cloud()` read per
+ * cycle), never wall-clock time.
+ */
+describe('a change under .reticle wakes the sync', () => {
+  /** A daemon whose watcher the test fires by hand, counting the cycles it runs. */
+  function watched(extra: { request?: Parameters<typeof startSyncDaemon>[0]['request'] } = {}) {
+    let fire: ((path: string) => void) | undefined;
+    let closed = 0;
+    let cycles = 0;
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => {
+        cycles += 1;
+        return Promise.resolve(LINKED);
+      },
+      request: extra.request ?? counting().request,
+      watch: (onChange) => {
+        fire = onChange;
+        return () => {
+          closed += 1;
+        };
+      },
+    });
+    return {
+      d,
+      change: (path: string): void => fire?.(path),
+      cycles: (): number => cycles,
+      closed: (): number => closed,
+    };
+  }
+
+  it('runs one cycle after the debounce, not before it', async () => {
+    const w = watched();
+    await vi.advanceTimersByTimeAsync(6_000); // the first cycle
+    expect(w.cycles()).toBe(1);
+    w.change('runs/run-1.json');
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(w.cycles(), 'still inside the debounce').toBe(1);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(w.cycles()).toBe(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(w.cycles(), 'and nothing more until something changes').toBe(2);
+    w.d.stop();
+  });
+
+  it('coalesces a burst of writes into one cycle', async () => {
+    const w = watched();
+    await vi.advanceTimersByTimeAsync(6_000);
+    for (let i = 0; i < 40; i += 1) w.change(`runs/run-${String(i)}.json`);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(w.cycles()).toBe(2);
+    w.d.stop();
+  });
+
+  it("is never re-triggered by the cycle's own writes", async () => {
+    const w = watched();
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(w.cycles()).toBe(1);
+    // Everything the real cycle just wrote into this root, reported as a watcher would.
+    const written = readdirSync(root, { recursive: true, encoding: 'utf8' });
+    expect(written.length, 'the cycle wrote its bookkeeping').toBeGreaterThan(0);
+    for (const path of written) w.change(path);
+    // And the tmp files its atomic writes rename into place, which the watcher also sees.
+    w.change(`cloud-state.json.${String(process.pid)}.tmp`);
+    w.change(`issues.json.${String(process.pid)}.tmp`);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(w.cycles()).toBe(1);
+    w.d.stop();
+  });
+
+  it('a change during a running cycle schedules exactly one follow-up', async () => {
+    let release: (() => void) | undefined;
+    let hold = false;
+    const server = counting();
+    const w = watched({
+      request: (url) =>
+        hold
+          ? new Promise((resolve) => {
+              release = (): void => {
+                hold = false;
+                void server.request(url).then(resolve);
+              };
+            })
+          : server.request(url),
+    });
+    await vi.advanceTimersByTimeAsync(6_000);
+    hold = true;
+    w.change('runs/a.json');
+    await vi.advanceTimersByTimeAsync(2_500); // the second cycle starts and stalls
+    expect(w.cycles()).toBe(2);
+    for (let i = 0; i < 10; i += 1) w.change(`runs/b-${String(i)}.json`);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(w.cycles(), 'never a cycle on top of a running one').toBe(2);
+    release?.();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(w.cycles(), 'one follow-up for the writes it may have missed').toBe(3);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(w.cycles()).toBe(3);
+    w.d.stop();
+  });
+
+  it('keeps a slow backstop timer that fires with no change at all', async () => {
+    const w = watched();
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(w.cycles()).toBe(1);
+    await vi.advanceTimersByTimeAsync(9 * 60_000);
+    expect(w.cycles(), 'idle is no longer a cycle a minute').toBe(1);
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(w.cycles()).toBe(2);
+    w.d.stop();
+  });
+
+  it('still syncs on the timer when the root cannot be watched', async () => {
+    let cycles = 0;
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => {
+        cycles += 1;
+        return Promise.resolve(LINKED);
+      },
+      request: counting().request,
+      intervalMs: 60_000,
+      watch: () => undefined,
+    });
+    await vi.advanceTimersByTimeAsync(6_000 + 3 * 60_000);
+    expect(cycles).toBe(4);
+    d.stop();
+  });
+
+  /** A server the test can take offline, and the times at which each cycle began. */
+  function flaky() {
+    const state = { down: true };
+    const ok = counting().request;
+    const request = (url: string): Promise<{ status: number; text: string }> =>
+      state.down ? Promise.reject(new Error('offline')) : ok(url);
+    return { state, request };
+  }
+  const gaps = (times: readonly number[]): number[] =>
+    times.slice(1).map((t, i) => t - (times[i] ?? t));
+
+  it('retries a failed sync within a minute, with no file change', async () => {
+    const server = flaky();
+    const w = watched({ request: server.request });
+    await vi.advanceTimersByTimeAsync(6_000); // the first cycle fails
+    expect(w.cycles()).toBe(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(w.cycles()).toBe(2);
+    w.d.stop();
+  });
+
+  it('backs off on repeated failures, never past the backstop', async () => {
+    const server = flaky();
+    const times: number[] = [];
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => {
+        times.push(Date.now());
+        return Promise.resolve(LINKED);
+      },
+      request: server.request,
+    });
+    await vi.advanceTimersByTimeAsync(90 * 60_000);
+    const between = gaps(times);
+    expect(between[0]).toBe(60_000);
+    expect(Math.max(...between)).toBe(600_000);
+    for (let i = 1; i < between.length; i += 1)
+      expect(between[i]).toBeGreaterThanOrEqual(between[i - 1] ?? 0);
+    d.stop();
+  });
+
+  it('a change still syncs at once while backing off', async () => {
+    const server = flaky();
+    const w = watched({ request: server.request });
+    await vi.advanceTimersByTimeAsync(6_000 + 60_000 + 120_000); // three failures, next in 4 min
+    const before = w.cycles();
+    w.change('runs/run-1.json');
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(w.cycles()).toBe(before + 1);
+    w.d.stop();
+  });
+
+  it('returns to the ten-minute rhythm after a success', async () => {
+    const server = flaky();
+    const times: number[] = [];
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => {
+        times.push(Date.now());
+        // Back online from the third cycle on.
+        if (times.length >= 3) server.state.down = false;
+        return Promise.resolve(LINKED);
+      },
+      request: server.request,
+    });
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(gaps(times)).toEqual([60_000, 120_000, 600_000, 600_000]);
+    d.stop();
+  });
+
+  it('closes the watcher on stop and on flush', async () => {
+    const a = watched();
+    a.d.stop();
+    expect(a.closed()).toBe(1);
+    const b = watched();
+    await b.d.flush();
+    expect(b.closed()).toBe(1);
+  });
+});
+
+describe('watchReticleRoot', () => {
+  /** A stand-in for `fs.watch` the test can make fail. */
+  function fakeWatcher() {
+    const emitter = new EventEmitter();
+    let closed = false;
+    const watcher = Object.assign(emitter, {
+      close: (): void => {
+        closed = true;
+      },
+      unref: () => watcher,
+    });
+    return { watcher: watcher as unknown as FSWatcher, emitter, closed: (): boolean => closed };
+  }
+
+  it('reports a root that does not exist yet as not watched, so the daemon tries again', () => {
+    expect(watchReticleRoot(join(root, 'missing'), () => undefined)).toBeUndefined();
+  });
+
+  it('falls back to the timer, saying so once, when recursive watching is unsupported', () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown): boolean => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const close = watchReticleRoot(
+      root,
+      () => undefined,
+      () => {
+        throw Object.assign(new Error('recursive unsupported'), {
+          code: 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM',
+        });
+      },
+    );
+    expect(close, 'not retried every cycle').toBeTypeOf('function');
+    expect(lines.filter((l) => l.includes('reticle_cloud_watch_unavailable'))).toHaveLength(1);
+    spy.mockRestore();
+  });
+
+  it('closes itself and says so when the watcher errors', () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown): boolean => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const fake = fakeWatcher();
+    watchReticleRoot(
+      root,
+      () => undefined,
+      () => fake.watcher,
+    );
+    fake.emitter.emit('error', new Error('EMFILE: too many open files'));
+    expect(fake.closed()).toBe(true);
+    expect(lines.filter((l) => l.includes('reticle_cloud_watch_unavailable'))).toHaveLength(1);
+    spy.mockRestore();
+  });
+
+  it('reports a nested write by its path under the root', async () => {
+    vi.useRealTimers();
+    mkdirSync(join(root, 'runs'), { recursive: true });
+    const seen = new Promise<string>((resolve) => {
+      const close = watchReticleRoot(root, (path) => {
+        if (path.endsWith('run-1.json')) {
+          close?.();
+          resolve(path);
+        }
+      });
+    });
+    // Give the watcher a beat to attach before writing: FSEvents can drop a write made at once.
+    await new Promise((r) => setTimeout(r, 100));
+    writeFileSync(join(root, 'runs', 'run-1.json'), '{}');
+    expect((await seen).replace(/\\/g, '/')).toBe('runs/run-1.json');
+  }, 10_000);
 });

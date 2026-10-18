@@ -27,6 +27,8 @@ import type { Predicate } from './predicate-schema.js';
 import type { PredicateSession } from './predicate-session.js';
 import { evalElement, joinedText } from './predicate-element.js';
 import { evalState } from './predicate-state.js';
+import { skippedBodyRemedy } from './predicate-eval.js';
+import { requestBodySkipRemedy } from './predicate-request-body.js';
 
 type ComparePredicate = Extract<Predicate, { kind: typeof PredicateKind.COMPARE }>;
 /** Derived from the predicate rather than imported: one fewer name borrowed from core. */
@@ -114,8 +116,12 @@ function readNet(
   const request = NetBodySide.REQUEST === source.body;
   const body = str(call.data[request ? 'requestBody' : 'responseBody']);
   if (body === undefined) {
+    // With capture on, the SDK says why it skipped this body; the capture remedy is for the rest.
+    const remedy = request
+      ? requestBodySkipRemedy(call.data['requestBodyType'])
+      : skippedBodyRemedy(call.data['responseBodyReason']);
     return unknown(
-      `the ${label} was not recorded, so it could not be read — ${REMEDY_BODY_CAPTURE}`,
+      `the ${label} was not recorded, so it could not be read — ${remedy ?? REMEDY_BODY_CAPTURE}`,
     );
   }
   const truncated = true === call.data[request ? 'requestBodyTruncated' : 'responseBodyTruncated'];

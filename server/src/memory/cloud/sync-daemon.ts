@@ -10,9 +10,13 @@
  * work is happening" costs nobody anything.
  *
  * ── THE THREE RULES THAT KEEP IT INVISIBLE ────────────────────────────────────────────────────
- * QUIET WHEN IDLE. A cycle on an unchanged session is one small GET and nothing else. That is what
- * makes a one-minute timer affordable; it is also why the timer is not adaptive — a scheme that
- * "backs off when idle" is complexity paid for a cost that is already near zero.
+ * QUIET WHEN IDLE. A cycle runs because something under `.reticle` CHANGED: the whole root is
+ * watched, and a change schedules one cycle after a short debounce, so a drive that writes forty
+ * files costs one cycle. Nothing changed, nothing sent. A slow timer (ten minutes) stays as the
+ * backstop — for a filesystem that cannot be watched and the team's decisions to pull down — and a
+ * cycle that moved something still earns the fast active rate. A FAILED cycle retries after a
+ * minute, doubling per failure up to the backstop, and a success returns it to the idle rhythm.
+ * The sync's own bookkeeping writes are ignored, or every cycle would schedule the next.
  *
  * NEVER IN THE WAY. Nothing here is awaited by a tool call. A sync that can slow down or fail a
  * verification would be a sync worth switching off, and the local record is authoritative anyway.
@@ -21,6 +25,7 @@
  * laptop on a train would otherwise fill the log with the same line four hundred times and teach
  * everyone to ignore it.
  */
+import { ReticleDir } from '@reticlehq/core';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { syncRequest } from './cloud-sync.js';
 import { log } from '@/log.js';
@@ -41,14 +46,39 @@ import {
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { flushPendingWrites } from '@/hooks/hook-bus.js';
 import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
-import { diskSink, diskSource, readCloudState } from './sync-disk.js';
-import { CLOUD_LINK_FILE, resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
-import { watch } from 'node:fs';
+import { diskSink, diskSource, policyScreenshots, readCloudState } from './sync-disk.js';
+import { resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
+import { watch, type FSWatcher } from 'node:fs';
 import { unmatchedRoots, unsyncedRoots, type UnsyncedRoot } from './unsynced-roots.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 
-/** How often the daemon cycles. See the note above on why this is a constant and not a curve. */
-const DAEMON_SYNC_INTERVAL_MS = 60_000;
+/**
+ * The backstop: how often the daemon cycles when nothing under `.reticle` has changed. Long, because
+ * a change wakes the sync on its own; this exists for what a watch cannot see (an unwatchable
+ * filesystem, decisions made on the dashboard). A failed cycle retries sooner: FAILURE_RETRY_MS.
+ */
+const DAEMON_SYNC_INTERVAL_MS = 600_000;
+
+/**
+ * How long a change under `.reticle` waits before cycling. Coalesces the burst a drive writes, and
+ * is never extended by a later write, so a stream of writes cannot postpone the sync forever.
+ */
+const CHANGE_DEBOUNCE_MS = 2_000;
+
+/**
+ * What the sync itself writes into a root, plus `sessions/` (the per-event journal, appended on
+ * every browser event and never sent). A change here must not wake the sync: the first would make
+ * every cycle schedule the next, the second would turn an open tab into a cycle every two seconds.
+ * The atomic writes' `<file>.<pid>.tmp` siblings are matched by prefix.
+ */
+const NOT_A_CHANGE = [ReticleDir.CLOUD_STATE_FILE, ReticleDir.ISSUES_FILE];
+const isOwnWrite = (path: string): boolean => {
+  const [head = ''] = path.split(/[\\/]/);
+  return (
+    head === ReticleDir.SESSIONS_SUBDIR ||
+    NOT_A_CHANGE.some((file) => head === file || head.startsWith(`${file}.`))
+  );
+};
 
 /**
  * The cadence while something is actually happening.
@@ -65,6 +95,12 @@ const DAEMON_SYNC_INTERVAL_MS = 60_000;
  * loop, and verification working with the network down is a promise this product makes.
  */
 const DAEMON_SYNC_ACTIVE_INTERVAL_MS = 5_000;
+
+/**
+ * The first retry after a failed cycle, doubling with each failure after it up to the backstop. A
+ * failed upload is owed work, so it does not wait ten minutes for the idle timer.
+ */
+const FAILURE_RETRY_MS = 60_000;
 
 /** Given to the first cycle so a freshly-started daemon does not race the session that woke it. */
 const FIRST_CYCLE_DELAY_MS = 5_000;
@@ -111,10 +147,11 @@ interface SyncDaemonDeps {
   clientVersion?: string;
   intervalMs?: number;
   /**
-   * Call `onChange` when this root's link file changes; returns how to stop. A re-link was read only
-   * on the next idle tick, so a daemon kept syncing to the old link for up to a minute.
+   * Call `onChange` with the path (relative to the root) of anything that changes under it; returns
+   * how to stop, or undefined when the root cannot be watched YET (it does not exist), in which case
+   * the daemon tries again after each cycle. A re-link is one of these changes.
    */
-  watchLink?: (onChange: () => void) => () => void;
+  watch?: (onChange: (path: string) => void) => (() => void) | undefined;
   /** Injected for the test; the real one is `fetch`. */
   request?: (
     url: string,
@@ -255,9 +292,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
         flows: () => (cloud.policy.flows ? full.flows() : []),
         capsules: () => (cloud.policy.capsules ? full.capsules() : []),
         derived: (kind) => (cloud.policy.memory ? full.derived(kind) : undefined),
-        ...(cloud.policy.screenshots && full.screenshot !== undefined
-          ? { screenshot: full.screenshot }
-          : {}),
+        ...policyScreenshots(full.screenshot, cloud.policy),
       },
       sink: diskSink(root),
       state: readCloudState(root),
@@ -398,7 +433,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
         reportedError = failure;
         log('reticle_cloud_sync_failed', { error: failure });
       }
-      if (report.error === undefined) {
+      if (report.error !== undefined) failedCycle();
+      else {
         if (failure === undefined) reportedError = undefined;
         // Only when something actually moved. A per-minute "nothing to send" is noise that trains
         // people to stop reading the log.
@@ -411,7 +447,11 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
          * follows the work without needing to be told about sessions, and an idle laptop settles at
          * the same cost it had before this existed.
          */
-        nextDelay = moved ? activeIntervalMs : intervalMs;
+        if (failure !== undefined && !moved) failedCycle();
+        else {
+          failures = 0;
+          nextDelay = moved ? activeIntervalMs : intervalMs;
+        }
       }
       return report;
     } catch (error: unknown) {
@@ -421,38 +461,86 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
         reportedError = message;
         log('reticle_cloud_sync_failed', { error: message });
       }
+      failedCycle();
       return undefined;
     } finally {
       await refreshUnsynced().catch(() => undefined);
       running = false;
+      startWatching();
     }
   };
 
   /** The delay for the NEXT cycle: fast while the last one moved something, slow once it stops. */
   let nextDelay = intervalMs;
+  /** Consecutive failed cycles: the retry waits a minute, then doubles, never past the backstop. */
+  let failures = 0;
+  function failedCycle(): void {
+    nextDelay = Math.min(FAILURE_RETRY_MS * 2 ** failures, intervalMs);
+    failures += 1;
+  }
+
+  /** When the armed timer fires; Infinity when none is armed. */
+  let dueAt = Number.POSITIVE_INFINITY;
+  /** A change landed while a cycle was running: that cycle may have read the disk before it. */
+  let dirty = false;
 
   const schedule = (delay: number): void => {
     if (stopped) return;
     // Replace, never stack. `nudge` and the interval both schedule, and leaving the old timer armed
     // would let every nudge add a permanent extra cycle per minute for the life of the process.
     if (timer !== undefined) clearTimeout(timer);
+    dueAt = now() + delay;
     timer = setTimeout(() => {
-      void cycle().finally(() => schedule(nextDelay));
+      dueAt = Number.POSITIVE_INFINITY;
+      void cycle().finally(() => {
+        schedule(nextDelay);
+        afterCycle();
+      });
     }, delay);
     // Unref'd: a pending sync must never be the reason a process refuses to exit.
     timer.unref?.();
   };
 
+  /** Cycle within `delay`, but never LATER than a cycle already armed. */
+  const soon = (delay: number): void => {
+    if (now() + delay < dueAt) schedule(delay);
+  };
+
+  /** One follow-up for the changes a cycle may have missed, however many there were. */
+  const afterCycle = (): void => {
+    if (!dirty) return;
+    dirty = false;
+    soon(CHANGE_DEBOUNCE_MS);
+  };
+
+  const onChange = (path: string): void => {
+    if (stopped || isOwnWrite(path)) return;
+    if (running) dirty = true;
+    else soon(CHANGE_DEBOUNCE_MS);
+  };
+
+  let unwatch: (() => void) | undefined;
+  /** Watch the root once it exists; a root created mid-session is picked up after the next cycle. */
+  const startWatching = (): void => {
+    if (stopped || unwatch !== undefined || deps.watch === undefined) return;
+    unwatch = deps.watch(onChange);
+  };
+  const stopWatching = (): void => {
+    unwatch?.();
+    unwatch = undefined;
+  };
+
   schedule(FIRST_CYCLE_DELAY_MS);
-  // A nudge, not an immediate cycle: the link file and its key are written one after the other.
-  const unwatch = deps.watchLink?.(() => schedule(NUDGE_DELAY_MS));
+  startWatching();
 
   return {
     // A sync somebody asked for writes what is held on a timer first: a drive's run waits a few
     // seconds after its last verdict, and a push straight after `session end` sent "0 of 0".
     syncNow: async () => {
       await flushPendingWrites();
-      return cycle();
+      const report = await cycle();
+      afterCycle();
+      return report;
     },
     unsyncedRoots: () => unsynced,
     nudge: (): void => {
@@ -461,13 +549,13 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       schedule(NUDGE_DELAY_MS);
     },
     stop: (): void => {
-      unwatch?.();
+      stopWatching();
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
     },
     flush: async (): Promise<void> => {
-      unwatch?.();
+      stopWatching();
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
@@ -479,6 +567,26 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       await cycle();
     },
   };
+}
+
+/**
+ * Flush, but return after `budgetMs` at the latest, and never throw.
+ *
+ * For a process on its way out. The cycle has per-call timeouts, but a stalled network still adds
+ * them up, and an exit must not wait on that. A cycle cut short loses nothing: the artifacts stay
+ * on disk, and the next daemon or `reticle sync` sends them.
+ */
+export async function flushWithin(
+  daemon: Pick<SyncDaemon, 'flush'>,
+  budgetMs: number,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, budgetMs);
+    timer.unref?.();
+  });
+  await Promise.race([daemon.flush().catch(() => undefined), deadline]);
+  clearTimeout(timer);
 }
 
 /**
@@ -510,21 +618,46 @@ export function attachCloudSync(deps: {
     // reporting nothing — indistinguishable, on the dashboard, from nobody having verified anything.
     otherRoots: () => Promise.resolve(deps.otherRoots()),
     cloudFor: (root) => resolveProjectCloud(deps.fs, root, deps.homeDir, deps.env),
-    // ponytail: this root only; a sibling root's re-link is still read on the next tick.
-    watchLink: (onChange) => watchLinkFile(deps.reticleRoot, onChange),
+    // ponytail: this root only; sibling roots sync on the backstop timer (or when this one changes).
+    // Watching them too means one recursive watcher per linked repo — add it if siblings lag.
+    watch: (onChange) => watchReticleRoot(deps.reticleRoot, onChange),
   });
 }
 
-/** Watch a root for its link file changing. A root with no `.reticle` yet is picked up per tick. */
-function watchLinkFile(reticleRoot: string, onChange: () => void): () => void {
-  try {
-    const watcher = watch(reticleRoot, (_event, name) => {
-      if (CLOUD_LINK_FILE === String(name)) onChange();
+/**
+ * Watch a whole `.reticle` root, reporting each change by its path under the root.
+ *
+ * Returns undefined only when the root does not exist yet, so the caller tries again later. Where a
+ * recursive watch is unsupported (an old Node on Linux, a network filesystem) or fails later (too
+ * many files), it says so ONCE and returns a no-op: the backstop timer is the whole sync from then on.
+ */
+export function watchReticleRoot(
+  reticleRoot: string,
+  onChange: (path: string) => void,
+  watchFn: (root: string, listener: (event: string, name: string | null) => void) => FSWatcher = (
+    root,
+    listener,
+  ) => watch(root, { recursive: true }, listener),
+): (() => void) | undefined {
+  const unavailable = (error: unknown): void =>
+    log('reticle_cloud_watch_unavailable', {
+      root: reticleRoot,
+      error: error instanceof Error ? error.message : String(error),
+      fallback: 'syncing on the timer only',
     });
-    watcher.on('error', () => watcher.close());
+  try {
+    const watcher = watchFn(reticleRoot, (_event, name) => {
+      if (name !== null) onChange(name);
+    });
+    watcher.on('error', (error: unknown) => {
+      unavailable(error);
+      watcher.close();
+    });
     watcher.unref();
     return () => watcher.close();
-  } catch {
+  } catch (error: unknown) {
+    if ('ENOENT' === (error as { code?: unknown }).code) return undefined;
+    unavailable(error);
     return () => undefined;
   }
 }

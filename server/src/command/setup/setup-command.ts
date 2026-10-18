@@ -9,7 +9,7 @@
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { planAgentConfigs, type PlatformPaths } from './agent-configs.js';
+import { planAgentConfigs, platformKey } from './agent-configs.js';
 import { AppShape, describeShape, readShape } from './desktop-shape.js';
 import {
   devConfigText,
@@ -157,7 +157,7 @@ const agentWord = (n: number): string => (1 === n ? 'agent' : 'agents');
 
 /** Returns how many agents it wrote a config for, so a caller does not then say "none found". */
 export function registerOtherAgents(print: (line: string) => void): number {
-  const platform = process.platform as keyof PlatformPaths;
+  const platform = platformKey(process.platform);
   const home = homedir();
   const results = applyAgentPlan(
     planAgentConfigs({ home, platform, exists: agentIo.exists, readFile: agentIo.readFile }),

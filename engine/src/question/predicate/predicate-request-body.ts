@@ -43,6 +43,8 @@ interface RequestBodyPredicate {
 interface RequestBodyState {
   /** A call matched everything else but carried no recorded request body. */
   unrecorded: boolean;
+  /** The body type the SDK named for an unrecorded request body, which it does only with capture on. */
+  unrecordedType?: unknown;
   /** The request body a clause was checked against and did not match. */
   mismatch?: string;
   /** The prefix of a TRUNCATED request body the clause did not hold over — undecidable, not absent. */
@@ -56,6 +58,17 @@ interface RequestBodyState {
    * payload.
    */
   redactedField?: string;
+}
+
+/**
+ * The remedy for a request body the SDK did not record although capture is on, or `undefined`.
+ *
+ * With capture on, the SDK names the type of a body it cannot stringify (`requestBodyType`: a
+ * `Blob`, a `FormData`, a stream). "Enable captureNetworkBodies" is then wrong advice (#1520).
+ */
+export function requestBodySkipRemedy(bodyType: unknown): string | undefined {
+  if ('string' !== typeof bodyType || 0 === bodyType.length) return undefined;
+  return `the request body was a ${bodyType}, which the SDK does not record as text, and capture is already on. Assert on the response or on the effect the request had instead`;
 }
 
 export function newRequestBodyState(): RequestBodyState {
@@ -78,6 +91,7 @@ export function checkRequestBody(
   const sent = str(data['requestBody']);
   if (sent === undefined) {
     state.unrecorded = true;
+    state.unrecordedType ??= data['requestBodyType'];
     return false;
   }
   const wasTruncated = true === data['requestBodyTruncated'];
@@ -133,9 +147,12 @@ export function requestBodyVerdict(
     };
   }
   if (state.unrecorded) {
+    // Unknown, not different: nothing was read, so nothing says the body did not match (#1520).
+    const reason = `a call matched but its REQUEST body was not recorded, so the request-body clause could not be checked — ${requestBodySkipRemedy(state.unrecordedType) ?? 'enable it where the app calls connect(): reticle({ captureNetworkBodies: true })'}`;
     return {
       pass: false,
-      failureReason: `a call matched but its REQUEST body was not recorded, so the request-body clause could not be checked — enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`,
+      failureReason: reason,
+      inconclusive: reason,
       observed: 'a matching call with no recorded request body',
       expected: `a request body matching ${wanted}`,
       assertion: 'net.requestBody',

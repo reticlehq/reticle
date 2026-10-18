@@ -110,6 +110,11 @@ export interface PlanInput {
    * handing it an io would let any later step reach the disk from inside `buildPlan`.
    */
   cspSources?: Readonly<Record<string, string | undefined>> | undefined;
+  /**
+   * The project's `.prettierignore` content, pre-read so the prettier-ignore step stays pure.
+   * Null when the file does not exist — `init` creates it only when the project uses Prettier.
+   */
+  prettierIgnoreSource?: string | null | undefined;
   /** Whether the `claude` CLI is installed (so we can register the MCP server globally). */
   claudeCli: boolean;
   /** Whether an `reticle` MCP server is already registered with Claude (any scope) — idempotency. */

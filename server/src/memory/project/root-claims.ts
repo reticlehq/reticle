@@ -13,12 +13,20 @@ import { basename, isAbsolute } from 'node:path';
 import { RETICLE_URL_PARAM, ReticleDir } from '@reticlehq/core';
 
 const claims = new Map<string, string>();
+/** Every root claimed in this process. Kept after release, so sync still sends what the lease wrote. */
+const everClaimed = new Set<string>();
 
 /** Claim `root` for the session a lease registers. Refuses anything but an absolute `.reticle`. */
 export function claimArtifactRoot(leaseId: string, root: string): void {
   if (!isAbsolute(root) || ReticleDir.ROOT !== basename(root))
     throw new Error(`root must be an absolute path to a ${ReticleDir.ROOT} folder, got ${root}`);
   claims.set(leaseId, root);
+  everClaimed.add(root);
+}
+
+/** Every root a lease claimed in this process, released or not. Sync reads it to find the work. */
+export function claimedArtifactRoots(): string[] {
+  return [...everClaimed];
 }
 
 /** The root claimed for this session, by its id or by the lease marker on its url. */

@@ -53,6 +53,17 @@ export interface PlatformPaths {
   readonly win32: string;
 }
 
+/**
+ * The `PlatformPaths` row to plan for on a host that reports `platform`.
+ *
+ * Casting `process.platform` to the three keys broke on every other platform Node reports: on
+ * `android` (Termux), `freebsd` or `openbsd` the row lookup returned `undefined`, `join` threw
+ * `ERR_INVALID_ARG_TYPE`, and `init` stopped after the wiring and before the dev server. Each of
+ * those keeps a Unix home layout, so they plan with the `linux` paths.
+ */
+export const platformKey = (platform: NodeJS.Platform): keyof PlatformPaths =>
+  'darwin' === platform || 'win32' === platform ? platform : 'linux';
+
 interface AgentClient {
   readonly id: string;
   readonly name: string;

@@ -70,7 +70,7 @@ reticle: no .reticle/cloud.json here ... run `reticle connect` first
 
 ### `reticle sync`
 
-Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy, and collects decisions made on the dashboard. Each switch removes only its own part: with `sync.runs` off no runs are sent, but flows and records still go unless they are off too. Prints `{ ok, project, sent, pulled }`, where `sent` carries the accepted counts and, when the server refused anything, a `rejected` array naming each run's index and reason and a `refused` array for flows, capsules and derived records. `sent.records` lists only the records the server accepted.
+Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy, and collects decisions made on the dashboard. Each switch removes only its own part: with `sync.runs` off no runs are sent, but flows and records still go unless they are off too. `sync.screenshots` sends the screenshot of each step, and follows `sync.runs` when unset. `sync.video` sends the frames that Reticle takes about once a second between steps while it drives a tab, and follows `sync.screenshots` when unset. Set `"video": false` under `sync` to keep the frames on this machine and still send the step screenshots. Prints `{ ok, project, sent, pulled }`, where `sent` carries the accepted counts and, when the server refused anything, a `rejected` array naming each run's index and reason and a `refused` array for flows, capsules and derived records. `sent.records` lists only the records the server accepted.
 
 Runs go up in batches, so a large backlog is never one oversized request.
 

@@ -70,6 +70,12 @@ import {
   RETICLE_CONFIG_FILE,
 } from '@/detect/existing-config.js';
 import { CLAUDE_SETTINGS_PATH, claudeSettingsSteps } from './stop-hook-step.js';
+import {
+  PRETTIERIGNORE_PATH,
+  RETICLE_IGNORE_ENTRY,
+  ignoresReticle,
+  withReticleIgnored,
+} from '@/patch/prettier-ignore.js';
 
 // Re-exported: it moved to the module that reads it, and every existing importer says `plan.js`.
 export { RETICLE_CONFIG_FILE };
@@ -386,9 +392,24 @@ const RETICLE_MD_TITLE = 'Full agent rules';
 const RETICLE_MD_DETAIL =
   'the reference the always-loaded rule points at (when NOT to verify, recovery, feedback)';
 
+/**
+ * A line that is only an import of AGENTS.md (`@AGENTS.md`, `@./AGENTS.md`). Claude Code reads the
+ * imported file as part of CLAUDE.md, so the rule `agentsMdStep` writes there already reaches it, and
+ * a second copy in CLAUDE.md would load the rule twice on every turn (#1680).
+ */
+const IMPORTS_AGENTS_MD = /^[ \t]*@(?:\.\/)?AGENTS\.md[ \t]*\r?$/m;
+
 function claudeRuleStep(input: PlanInput): Step | null {
   if (!input.claudeCli) return null;
   const path = agentFile(input, CLAUDE_MD_PATH);
+  if (IMPORTS_AGENTS_MD.test(input.claudeMdContent ?? '')) {
+    return {
+      title: AGENT_RULE_TITLE,
+      target: path,
+      status: StepStatus.ALREADY,
+      detail: `CLAUDE.md imports ${AGENTS_MD_PATH}, so the Reticle rule written there reaches Claude Code through the import; no second copy`,
+    };
+  }
   const r = mergeMarkedInstruction(input.claudeMdContent);
   if (r.status === AgentRuleStatus.ALREADY) {
     return {
@@ -562,6 +583,43 @@ function reticleMdStep(input: PlanInput): Step {
 function agentRuleSteps(input: PlanInput): Step[] {
   if (!input.options.mcp) return [];
   return [...stepsForAgents(input, (a) => a.ruleStep), agentsMdStep(input), reticleMdStep(input)];
+}
+
+/**
+ * Keep `.reticle/` out of the project's `prettier --check`.
+ *
+ * When the project uses Prettier, `init` adds `.reticle/` to the project's `.prettierignore`.
+ * The nested `.reticle/.gitignore` does not help — Prettier only reads the ignore file of the
+ * directory it runs from — and matching Prettier's exact JSON output is a losing game, so
+ * excluding the directory is the root-cause fix (#1560).
+ *
+ * SKIP when the project does not use Prettier. ALREADY when `.reticle/` is already excluded.
+ * Otherwise APPLY: create the file, or append the entry to the existing one.
+ */
+function prettierIgnoreStep(input: PlanInput): Step | null {
+  if (true !== input.detection.usesPrettier) {
+    return null;
+  }
+  const existing = input.prettierIgnoreSource ?? null;
+  if (null !== existing && ignoresReticle(existing)) {
+    return {
+      title: 'Prettier ignore',
+      target: PRETTIERIGNORE_PATH,
+      status: StepStatus.ALREADY,
+      detail: '.reticle/ already excluded from Prettier',
+    };
+  }
+  const content = withReticleIgnored(existing);
+  return {
+    title: 'Prettier ignore',
+    target: PRETTIERIGNORE_PATH,
+    status: StepStatus.APPLY,
+    detail:
+      null === existing
+        ? 'create .prettierignore excluding .reticle/ so `prettier --check` passes'
+        : 'add .reticle/ to .prettierignore so `prettier --check` passes',
+    write: { path: PRETTIERIGNORE_PATH, content, expect: [RETICLE_IGNORE_ENTRY] },
+  };
 }
 
 /**
@@ -886,6 +944,7 @@ function copiedIdSteps(input: PlanInput, from: string): Step[] {
 
 export function buildPlan(input: PlanInput): Plan {
   const cspSteps = cspStep(input);
+  const prettierIgnore = prettierIgnoreStep(input);
   const steps: Step[] = [
     ...cspSteps,
     ...mcpSteps(input),
@@ -900,6 +959,7 @@ export function buildPlan(input: PlanInput): Plan {
     ...webGlCanvasStep(input),
     installStep(input),
     ...reticleConfigSteps(input),
+    ...(prettierIgnore !== null ? [prettierIgnore] : []),
   ];
   // Both steps can patch index.html: the connect write must keep the CSP edit that runs first.
   const patchedIndex = cspSteps.find((step) => step.write?.path === HTML_INDEX_PATH)?.write

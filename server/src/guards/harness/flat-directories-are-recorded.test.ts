@@ -194,11 +194,14 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * revisits engine's public subpaths, not in a feature commit.
    */
   'engine/src/window': 11,
+  // Crossed the line at 11 with `prettier-config.ts`: the Prettier-usage detection that `detect()`
+  // needs, kept out of `patch/` to avoid a detect<->patch import cycle (#1560).
+  'init/src/detect': 11,
   // vite-env-types.ts owns the type-only environment declaration emitted by the dev-module generator.
   // +1: nuxt-snippets.ts, split out of snippets.ts when it crossed the 1000-line cap.
   // +3: angular.ts, remix.ts and static-page.ts — one per stack `init` learned to wire, each beside
   // the patchers of its kind rather than folded into snippets.ts, which is near the cap already.
-  'init/src/patch': 19,
+  'init/src/patch': 20,
   // Crossed the line at 11 with `plan-angular.ts` and `plan-electron-vite.ts`, one per stack `init`
   // learned to wire, each beside the other per-framework builders. 12 with `plan-vite.ts`: the Vite
   // plugin and capabilities steps every Vite-based stack composes, split out of `plan-framework.ts`
@@ -270,7 +273,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    */
   // +3: durable.ts, after-match.ts and proved-controls.ts, what act_and_wait does once its
   // predicate holds.
-  'server/src/surface/tools/act': 16,
+  // 17 with `unsettled-find.ts` (#1259): whether a zero-match find was read while the last act was
+  // still landing. It reads the act's window through `settle-in-flight.ts`, which lives here, and
+  // `read/` is a pure leaf the reach guard keeps from importing it.
+  'server/src/surface/tools/act': 17,
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.

@@ -152,6 +152,8 @@ interface VerifiedInputs {
    * Empty means nothing went unread.
    */
   outcomeUnread?: readonly string[];
+  /** The skip reason every unread write carries, if any (`unreadWriteReason`), so the remedy fits it. */
+  outcomeUnreadReason?: unknown;
   /**
    * The page SDK's version, so the unread-body remedy can check whether it applies.
    *
@@ -624,7 +626,7 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
       because:
         `a write returned 2xx with a response body that was never recorded (${outcomeUnread.join('; ')}), so its outcome is unread` +
         ' — a 200 describes the transport, not the result (a batch reports per-item failures in the body, and every GraphQL error is a 200). ' +
-        bodyCaptureRemedy(inputs.sdkVersion),
+        bodyCaptureRemedy(inputs.sdkVersion, inputs.outcomeUnreadReason),
     };
   }
 

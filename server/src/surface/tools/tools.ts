@@ -13,6 +13,7 @@ import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { countSchema } from './args/numeric-bounds.js';
 import { emptyQueryRefusal, normalizeQueryArgs } from './read/query-shape.js';
 import { shapeQueryResult } from './read/query-windowed.js';
+import { withUnsettledFind } from './act/unsettled-find.js';
 
 /**
  * The query strategies, derived from the enum in core — never retyped.
@@ -489,6 +490,16 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
         .object({ bytes: z.number(), tokens: z.number() })
         .optional()
         .describe('Estimated size of this result — narrow with `name`/`scope`/`limit` if large.'),
+      unsettled: z
+        .object({
+          reason: z.string(),
+          inFlight: z.array(z.string()).optional(),
+          lastDomChangeMsAgo: z.number().optional(),
+        })
+        .optional()
+        .describe(
+          'Present only on zero matches read while the last act was still landing (a request it started still in flight, or the DOM changed under 500 ms ago). The 0 may only mean not rendered yet: wait instead of concluding it is absent.',
+        ),
       scopeMissing: z
         .boolean()
         .optional()
@@ -501,6 +512,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
       const args = normalizeQueryArgs(rawArgs);
       const empty = emptyQueryRefusal(args);
       if (empty !== undefined) return Promise.reject(empty);
+      const session = deps.sessions.resolve(asString(args['sessionId']));
       return commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.QUERY, {
         by: args['by'],
         value: args['value'],
@@ -516,7 +528,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
         // now asserts the payload, because a comment is not a guard.
         attrs: args['attrs'],
         self: args['self'],
-      }).then((result) => withSizeCost(shapeQueryResult(result, args)));
+      }).then((result) => withSizeCost(withUnsettledFind(session, shapeQueryResult(result, args))));
     },
   },
   // reticle_inspect: one element in full detail. See inspect-tool.ts.

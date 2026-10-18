@@ -3,6 +3,8 @@
  * the parsed package.json and the set of config/lock filenames present in the project root.
  */
 
+import { hasPrettierConfig } from './prettier-config.js';
+
 export const Framework = {
   NEXT: 'next',
   /**
@@ -128,6 +130,13 @@ export interface Detection {
    * require-hook down with it and the dev server never starts.
    */
   typescript: boolean;
+  /**
+   * Whether the project uses Prettier (config file or package.json "prettier" key).
+   * Used by `init` to decide whether to add `.reticle/` to `.prettierignore` (#1560).
+   *
+   * Optional so existing test fixtures keep compiling without naming it; `detect` always sets it.
+   */
+  usesPrettier?: boolean | undefined;
   reactMajor: number | undefined;
   /**
    * `react-scripts`' major, when the project has it. `undefined` on every other stack.
@@ -504,6 +513,7 @@ export function detect(input: DetectInput): Detection {
     typescript:
       hasAnyConfig(input.configFiles, TS_CONFIGS) ||
       depVersion(input.pkg, 'typescript') !== undefined,
+    usesPrettier: hasPrettierConfig(input.configFiles, input.pkg),
     reactMajor,
     needsSourceMapping: reactMajor !== undefined && reactMajor >= 19,
     customReconciler: CUSTOM_RECONCILER_DEPS.some(

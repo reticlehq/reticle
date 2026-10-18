@@ -21,7 +21,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { stepShotDir } from '@/memory/project/dir/reticle-dir.js';
-import { IntentDir, ReticleDir } from '@reticlehq/core';
+import { IntentDir, ReticleDir, STEP_SCREENSHOT } from '@reticlehq/core';
 import {
   DERIVED_RECORDS,
   type CloudSyncState,
@@ -216,6 +216,24 @@ export function diskSource(reticleRoot: string): SyncSource {
         return undefined;
       }
     },
+  };
+}
+
+/** A frame's file name ends in its tool: `<seq>-frame.jpg`. */
+const FRAME_FILE_SUFFIX = `-${STEP_SCREENSHOT.FRAME_TOOL}.jpg`;
+
+/**
+ * The screenshot reader a sync policy allows: none with `screenshots` off, and none for a frame with
+ * `video` off. A frame held back this way is offered again each cycle, so turning video on sends it.
+ */
+export function policyScreenshots(
+  read: SyncSource['screenshot'],
+  policy: { screenshots: boolean; video: boolean },
+): Pick<SyncSource, 'screenshot'> {
+  if (!policy.screenshots || read === undefined) return {};
+  if (policy.video) return { screenshot: read };
+  return {
+    screenshot: (runId, file) => (file.endsWith(FRAME_FILE_SUFFIX) ? undefined : read(runId, file)),
   };
 }
 

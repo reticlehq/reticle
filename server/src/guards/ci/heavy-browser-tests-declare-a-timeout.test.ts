@@ -244,7 +244,8 @@ function loopBody(text: string, headOpen: number): string | null {
 // 19: the HUD notices cache, whose last-good copy is rewritten once per failure mode.
 // 20: feedback that cannot be sent, saved to a temp project instead of the checkout it ran in.
 // 21: a source edit on a real Vite dev server, polled until the plain URL serves it.
-const EXPECTED_IO_LOOP_FILES = 21;
+// 22: a run's frame budget, filmed tick by tick into a real run directory until it is full.
+const EXPECTED_IO_LOOP_FILES = 22;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];

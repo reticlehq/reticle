@@ -120,6 +120,7 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
       flows: true,
       capsules: true,
       screenshots: true,
+      video: true,
     });
     expect(cloud.projectId).toBeNull();
   });
@@ -158,6 +159,7 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
       flows: true,
       capsules: true,
       screenshots: false,
+      video: false,
     });
     expect(cloud.config).not.toBeNull();
   });
@@ -167,6 +169,16 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
     await writeCreds({ shop: 'rk_live_shopkey' });
     const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, env);
     expect(cloud.policy).toMatchObject({ runs: true, screenshots: false });
+  });
+
+  it('sends the frames between steps unless the link turns video off, and follows screenshots', async () => {
+    await writeLink({ projectId: 'shop', url: 'https://cloud.test', sync: { video: false } });
+    await writeCreds({ shop: 'rk_live_shopkey' });
+    const off = await resolveProjectCloud(fs, reticleRoot, homeDir, env);
+    expect(off.policy).toMatchObject({ screenshots: true, video: false });
+    await writeLink({ projectId: 'shop', url: 'https://cloud.test', sync: { screenshots: false } });
+    const quiet = await resolveProjectCloud(fs, reticleRoot, homeDir, env);
+    expect(quiet.policy).toMatchObject({ screenshots: false, video: false });
   });
 
   it('parses verify:server and defaults verify to local otherwise', async () => {

@@ -102,6 +102,7 @@
     "– MCP server (global) → global (claude user scope)",
     "✓ Install dependencies → package.json",
     "✓ Reticle config → .reticle.json",
+    "✓ Prettier ignore → .prettierignore",
     "ℹ Angular setup verified, drive unverified → angular.json",
     "✓ Connect snippet (Angular) → src/main.ts",
     "✓ Angular dev-server token route → reticle.proxy.mjs",

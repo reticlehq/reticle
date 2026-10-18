@@ -131,7 +131,17 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * the rule the number exists to protect. Both join the import `contradiction-evidence.ts` already
  * has, so the file count is unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 64;
+/*
+ * 64 -> 65 for why a response body is absent (#1520).
+ *
+ * The SDK stamps `responseBodyReason` on a body it skips with capture on (a stream, a binary type,
+ * a failed read), and `evalNet` picks the remedy by that value: "enable captureNetworkBodies" was
+ * printed for a stream that capture had skipped on purpose. The values cross the wire, so they live
+ * in core as `ResponseBodyReason`. Inlining the three strings in `unrecordedBodyReason` would keep
+ * this number flat by breaking the rule it protects. It joins the import `predicate-eval.ts`
+ * already has, so the file count is unmoved.
+ */
+const MAX_DISTINCT_SYMBOLS = 65;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.
