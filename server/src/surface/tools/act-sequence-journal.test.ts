@@ -21,7 +21,7 @@ import { LastAct } from '@/portal/session/last-act.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { BaselineStore } from '@/memory/project/baselines.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
-import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
+import { RecordingStore, ambientRecordingOf } from '@/language/flows/recording/tape/recordings.js';
 import { FlowStore } from '@/language/flows/flows.js';
 import { ProjectStore } from '@/memory/project/project-store.js';
 import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
@@ -179,6 +179,29 @@ describe('the keep offer can be taken', () => {
     expect(result.verified).toBe(Verified.YES);
     expect(result.keep).toContain(`flowName: "${JOURNEY_RECORDING}"`);
     expect(recordings.getCompiled(JOURNEY_RECORDING)?.steps).toHaveLength(1);
+  });
+
+  /*
+   * Found by a headless agent: it recorded an invite journey on purpose, declared "the request
+   * carries seats: 5", and the app sent 4. The saved flow lost that clause, so it replayed green on
+   * the bug. A recording somebody opened keeps what they declared, as act_and_wait already does;
+   * only the ambient tape drops a refuted claim.
+   */
+  it('keeps a refuted claim in a deliberate recording, and drops it from the ambient tape', async () => {
+    const recordings = new RecordingStore();
+    recordings.start('invite', 0);
+    const session = journalingSession('s-journal-5', []);
+    await tool(ReticleTool.ACT_SEQUENCE).handler(depsFor(session, recordings), {
+      steps: [HELD, MISSED],
+      timeout_ms: 0,
+    });
+    const expects = (name: string): unknown[] => {
+      const step = recordings.stop(name)?.steps[0];
+      const subs = (step?.args as { steps?: { expect?: unknown }[] } | undefined)?.steps ?? [];
+      return subs.map((s) => s.expect);
+    };
+    expect(expects('invite')).toEqual([HELD.expect, MISSED.expect]);
+    expect(expects(ambientRecordingOf('s-journal-5'))).toEqual([HELD.expect, undefined]);
   });
 
   it('does not hold a journey that failed', async () => {

@@ -230,7 +230,12 @@ export class RecordingStore {
     else this.#mocked.delete(session ?? '');
   }
 
-  capture(step: RecordedStep, route?: string, session?: string): void {
+  /**
+   * `forAmbient` is the step as the ambient tape keeps it, when that differs: a journey's refuted
+   * claims come off the ambient tape (see `unassertLast`), and a recording somebody opened keeps
+   * every claim they declared, held or not.
+   */
+  capture(step: RecordedStep, route?: string, session?: string, forAmbient?: RecordedStep): void {
     this.#navigatedSinceStep = false;
     const mocked = this.#mocked.has(session ?? '');
     const ambient = ambientRecordingOf(session);
@@ -264,14 +269,15 @@ export class RecordingStore {
       // The route rides on the AMBIENT tape only: a recording somebody opened deliberately is
       // already one journey by construction, and stamping a route on its steps would change what a
       // deliberate recording contains.
+      const taped = isAmbient(name) ? (forAmbient ?? step) : step;
       rec.steps.push(
         isAmbient(name) && (route !== undefined || mocked)
           ? {
-              ...step,
+              ...taped,
               ...(route === undefined ? {} : { route }),
               ...(mocked ? { mocked: true as const } : {}),
             }
-          : step,
+          : taped,
       );
     }
   }

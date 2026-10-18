@@ -491,31 +491,32 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
       // in the ambient tape. A stalled plan keeps only the prefix whose steps actually ran.
       let journey: RecordedStep | undefined;
       if (completed > 0) {
-        // A sub-step keeps its `expect` only if it held — same rule as act_and_wait, so a flow
-        // never replays an expectation that was never once observed to hold.
-        const proved = inputSteps.slice(0, completed).map((raw, i) => {
-          const step = asRecord(raw);
+        // On the ambient tape a sub-step keeps its `expect` only if it held — same rule as
+        // act_and_wait, so an auto-saved flow never replays a claim that was never once observed to
+        // hold. A recording somebody opened keeps every claim they declared: dropping a refuted one
+        // there saved a flow that replayed green on the very defect it had caught.
+        const ran = inputSteps.slice(0, completed).map(asRecord);
+        const proved = ran.map((step, i) => {
           const { expect: _expect, ...rest } = step;
           return true === expectations[i]?.held ? step : rest;
         });
-        const recorded = compileSequenceStep(
-          { ...args, steps: proved },
-          {
-            count: completed,
-            steps: stepResults.slice(0, completed),
-          },
-        );
-        // The journey sent a write request: saved `writes`, so a replay does not repeat it unasked.
-        if (wroteSince(session, since)) recorded.writes = true;
+        const compiled = (steps: Record<string, unknown>[]): RecordedStep => {
+          const step = compileSequenceStep(
+            { ...args, steps },
+            { count: completed, steps: stepResults.slice(0, completed) },
+          );
+          // The journey sent a write request: saved `writes`, so a replay does not repeat it unasked.
+          if (wroteSince(session, since)) step.writes = true;
+          return step;
+        };
+        const recorded = compiled(proved);
         journey = recorded;
+        const onPage = (step: RecordedStep): RecordedStep =>
+          pageBefore === undefined ? step : { ...step, page: pageBefore };
         // Every step was on Reticle's own panel: nothing of the app's journey to record.
         const onApp = asRecord(recorded.args)['steps'];
         if (Array.isArray(onApp) && 0 < onApp.length)
-          deps.recordings.capture(
-            pageBefore === undefined ? recorded : { ...recorded, page: pageBefore },
-            undefined,
-            session.id,
-          );
+          deps.recordings.capture(onPage(compiled(ran)), undefined, session.id, onPage(recorded));
         deps.recordings.markEnded(pathOf(session.url), session.id);
       }
       /*
