@@ -24,7 +24,8 @@
  * returned unchanged.
  */
 import { FlowStore } from './flows.js';
-import type { ProjectTarget } from '@/memory/project/session-root.js';
+import { sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
+import type { ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
 export function flowsForSession(
@@ -45,4 +46,13 @@ export function flowsForSession(
     ),
     root: resolved.root,
   };
+}
+
+/** `flowsForSession` for a session id, with the project id to scope the store by. Same refusals. */
+export function flowsForSessionId(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): { flows: FlowStore; root: string; projectId: ProjectId | undefined } {
+  const target = sessionTarget(deps, sessionId);
+  return { ...flowsForSession(deps, target), projectId: target.projectId };
 }

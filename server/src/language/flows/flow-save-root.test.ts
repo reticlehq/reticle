@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { asProjectId, type ProjectId, type CommandResult } from '@reticlehq/core';
-import { ActionType, QueryBy } from '@reticlehq/core';
+import { ActionType, FlowErrorCode, QueryBy } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '@/memory/project/baselines.js';
@@ -42,7 +42,14 @@ function depsFor(
 ): ToolDeps {
   const command = (): Promise<CommandResult> =>
     Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: {} });
-  const session: Partial<Session> = { id: 'demo', command, projectId: sessionProjectId };
+  const session: Partial<Session> = {
+    id: 'demo',
+    command,
+    projectId: sessionProjectId,
+    eventsSince: () => [],
+    onEvent: () => () => undefined,
+    elapsed: () => 0,
+  };
   const sessions: Partial<SessionManager> = { resolve: () => session as Session };
   return {
     sessions: sessions as SessionManager,
@@ -165,5 +172,82 @@ describe('reticle_flow_list reports paths in the session project', () => {
       expect(norm(flow.path).startsWith(PROJECT_ROOT)).toBe(true);
       expect(norm(flow.path).startsWith(DAEMON_ROOT)).toBe(false);
     }
+  });
+});
+
+/**
+ * `load` and `delete` read `deps.flows`, the daemon's own store, while `list` and replay resolve the
+ * session's project. With the two roots apart, `list` showed a flow that `load` called missing, and
+ * `load` found a daemon-root flow that `list`, replay and `verify` could not.
+ */
+describe('reticle_flow load and delete resolve the session project, as list and replay do', () => {
+  const flowTool = (name: string) => {
+    const t = FLOW_TOOLS.find((x) => x.name === name);
+    if (t === undefined) throw new Error(`no tool ${name}`);
+    return t;
+  };
+  const projectId = asProjectId('acme-web-9f3c1d');
+  const resolver: ToolDeps['artifactRootFor'] = () => ({
+    root: PROJECT_ROOT,
+    reason: ArtifactRootReason.MATCHED_PROJECT,
+  });
+
+  async function listed(deps: ToolDeps): Promise<string[]> {
+    const res = (await flowTool(ReticleTool.FLOW_LIST).handler(deps, {})) as {
+      flows: { name: string }[];
+    };
+    return res.flows.map((f) => f.name);
+  }
+
+  it('loads, replays and deletes a flow saved in the session project', async () => {
+    const { fs } = createMemoryFs();
+    const recordings = new RecordingStore();
+    recordings.saveCompiled(oneStep('login'));
+    const deps = depsFor(fs, recordings, projectId, resolver);
+    await tool(ReticleTool.FLOW_SAVE).handler(deps, { flowName: 'login' });
+    expect(await listed(deps)).toContain('login');
+
+    const loaded = (await flowTool(ReticleTool.FLOW_LOAD).handler(deps, {
+      flowName: 'login',
+    })) as { flowName?: string; code?: string };
+    expect(loaded.code).toBeUndefined();
+    expect(loaded.flowName).toBe('login');
+
+    const replayed = (await flowTool(ReticleTool.FLOW_REPLAY).handler(deps, {
+      flowName: 'login',
+    })) as { name?: string; error?: { code: string } };
+    expect(replayed.error).toBeUndefined();
+    expect(replayed.name).toBe('login');
+
+    const deleted = (await flowTool(ReticleTool.FLOW_DELETE).handler(deps, {
+      flowName: 'login',
+    })) as { deleted?: boolean; code?: string };
+    expect(deleted.code).toBeUndefined();
+    expect(deleted.deleted).toBe(true);
+    expect(await listed(deps)).not.toContain('login');
+  });
+
+  it('does not load or delete a flow that is only in the daemon root', async () => {
+    const { fs } = createMemoryFs();
+    const recordings = new RecordingStore();
+    recordings.saveCompiled(oneStep('daemon-only'));
+    await tool(ReticleTool.FLOW_SAVE).handler(depsFor(fs, recordings, projectId, undefined), {
+      flowName: 'daemon-only',
+    });
+
+    const deps = depsFor(fs, recordings, projectId, resolver);
+    expect(await listed(deps)).not.toContain('daemon-only');
+
+    const loaded = (await flowTool(ReticleTool.FLOW_LOAD).handler(deps, {
+      flowName: 'daemon-only',
+    })) as { code?: string };
+    expect(loaded.code).toBe(FlowErrorCode.NOT_FOUND);
+
+    const deleted = (await flowTool(ReticleTool.FLOW_DELETE).handler(deps, {
+      flowName: 'daemon-only',
+    })) as { deleted?: boolean; code?: string };
+    expect(deleted.deleted).toBeUndefined();
+    expect(deleted.code).toBe(FlowErrorCode.NOT_FOUND);
+    expect(await listed(depsFor(fs, recordings, projectId, undefined))).toContain('daemon-only');
   });
 });

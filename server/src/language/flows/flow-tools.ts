@@ -35,11 +35,11 @@ import { isValidFlowName, flowPath } from '@/memory/project/dir/reticle-dir.js';
 import type { SuiteVerdict } from '@reticlehq/core';
 import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
-import { flowsForSession } from './flow-store-for-session.js';
+import { flowsForSession, flowsForSessionId } from './flow-store-for-session.js';
 import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import { originOf } from '@/portal/session/session-manager.js';
 import { resolveSuiteSelection } from './suite-selection.js';
-import { flowErrorMessage, latestRecordedFlow, sessionProjectId } from './flow-replay-run.js';
+import { flowErrorMessage, latestRecordedFlow } from './flow-replay-run.js';
 import {
   persistAndSyncVerificationRun,
   type TimedReplay,
@@ -393,8 +393,8 @@ export const FLOW_TOOLS: ToolDef[] = [
       createdAt: z.number().optional(),
     },
     handler: (deps: ToolDeps, args) => {
-      const projectId = sessionProjectId(deps, asString(args['sessionId']));
-      return deps.flows
+      const { flows, projectId } = flowsForSessionId(deps, asString(args['sessionId']));
+      return flows
         .load(asString(aliasParam(args, 'flowName', ['flow'])['flowName']) ?? '', projectId)
         .then((res) => {
           if (!res.ok) return { error: flowErrorMessage(res.code, res.detail), code: res.code };
@@ -428,8 +428,8 @@ export const FLOW_TOOLS: ToolDef[] = [
       code: z.string().optional(),
     },
     handler: (deps: ToolDeps, args) => {
-      const projectId = sessionProjectId(deps, asString(args['sessionId']));
-      return deps.flows
+      const { flows, projectId } = flowsForSessionId(deps, asString(args['sessionId']));
+      return flows
         .remove(asString(aliasParam(args, 'flowName', ['flow'])['flowName']) ?? '', projectId)
         .then((res) => {
           if (!res.ok) return { error: flowErrorMessage(res.code, res.detail), code: res.code };
