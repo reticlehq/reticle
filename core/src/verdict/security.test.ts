@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   OutwardAction,
   isDangerousActionText,
+  isDangerousNavigation,
   isLocalPage,
   isLoopbackHostname,
   isPaymentField,
@@ -259,5 +260,23 @@ describe('what the Harness may press', () => {
     ).toEqual([]);
     expect(outwardActionsAsked('Open the members page without sending the invitation')).toEqual([]);
     expect(outwardActionsAsked('Open Runs and read the failed check')).toEqual([]);
+  });
+});
+
+/** A link to `/billing/payment` with the text "Orders & invoices" was refused as a payment (#1275). */
+describe('isDangerousNavigation', () => {
+  it('does not refuse a same-app page because its path has a money word', () => {
+    for (const href of ['/billing/payments', '/billing/payment', '/shop/buy', '/orders/refund'])
+      expect(isDangerousNavigation(href)).toBe(false);
+  });
+
+  it('refuses a path that destroys something', () => {
+    expect(isDangerousNavigation('/account/delete')).toBe(true);
+    expect(isDangerousNavigation('/settings/close-account')).toBe(true);
+    expect(isDangerousNavigation('/tokens/revoke_all')).toBe(true);
+  });
+
+  it('refuses a payment provider URL', () => {
+    expect(isDangerousNavigation('https://checkout.stripe.com/c/pay/xyz')).toBe(true);
   });
 });

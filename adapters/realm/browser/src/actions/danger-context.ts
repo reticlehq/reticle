@@ -13,6 +13,7 @@
 import {
   OutwardAction,
   isDangerousActionText,
+  isDangerousNavigation,
   isPaymentField,
   outwardActionOf,
   outwardRefusal,
@@ -104,8 +105,14 @@ export function submitControlFor(el: ActionTarget): HTMLElement | null {
   return isHtmlElement(found) ? found : null;
 }
 
-export function requiresDangerousConfirmation(text: string, role?: string): boolean {
-  return isDangerousActionText(text, role);
+/**
+ * Does acting on this control need `confirmDangerous`? A link that navigates is judged by where it
+ * goes (`isDangerousNavigation`). Every other control is judged by the text it shows.
+ */
+export function requiresDangerousConfirmation(el: ActionTarget): boolean {
+  const href = navigatingHref(el);
+  if (href !== undefined) return isDangerousNavigation(href);
+  return isDangerousActionText(dangerousActionContext(el), getRole(el));
 }
 
 /** The outward actions the Harness command being run may take; undefined: not gated. */
