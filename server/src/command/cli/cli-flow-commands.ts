@@ -217,7 +217,7 @@ export async function handleGate(
         : unflowedFiles(flowSourcesAll, changed, (file) =>
             isInteractiveSource(readChangedFile(process.cwd(), file)),
           );
-    // Flows exist but none carries a source stamp (a stack without source stamping): `unflowed`
+    // Flows exist but none carries a source stamp (a stack without source stamping, or flows saved before stamping was added): `unflowed`
     // then names every changed component, which would read as "nothing drove it" when a flow did.
     const flowsWithoutSources =
       allFlows.length > 0 && flowSourcesAll.every((f) => 0 === (f.sources ?? []).length);
