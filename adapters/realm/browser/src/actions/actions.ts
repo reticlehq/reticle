@@ -26,7 +26,7 @@ import {
   isAutofillSafeTarget,
   setNativeValue,
 } from './value-input.js';
-import { getRole, getStates } from '@/dom/a11y.js';
+import { getRole, getStates, parentAcrossShadowBoundary } from '@/dom/a11y.js';
 import { isVisible } from '@/dom/visibility.js';
 import { selectInCombobox } from './select-combobox.js';
 import { elementHasHoverHandlers } from '@/registry/stores/adapters.js';
@@ -707,7 +707,7 @@ async function dispatchOther(
 }
 
 /** Every file input inside a scope, in document order. */
-function fileInputsIn(scope: Element): HTMLInputElement[] {
+function fileInputsIn(scope: Element | ShadowRoot): HTMLInputElement[] {
   return Array.from(scope.querySelectorAll('input[type="file"]')).filter(isInput);
 }
 
@@ -717,11 +717,14 @@ function fileInputsIn(scope: Element): HTMLInputElement[] {
  * The standard dropzone pattern hides the input (`sr-only`, `aria-hidden`) behind a Browse
  * button. The snapshot skips `aria-hidden` subtrees, so the input never gets a ref and the
  * button is the only target the agent can name. Resolve the input the target labels first (a
- * label target, or the label that wraps the target), then walk outward from the target: the
- * first container that holds any file input decides, which covers an input the target contains,
- * a sibling in the same dropzone, and the inputs of the enclosing form. More than one input in
- * the deciding scope is a refusal, never a guess: setting files on the wrong input reports a
- * success the app never saw.
+ * label target, or the label that wraps the target), then walk outward from the target.
+ *
+ * The walk is bounded. The nearest enclosing form is the last scope it queries, and it never
+ * decides at `body` or `html`: an unbounded walk lets a Browse button whose own dropzone holds
+ * no input pick up any single file input elsewhere on the page, and the upload then reports a
+ * success the app never saw. More than one input in the deciding scope is a refusal, never a
+ * guess, for the same reason. At the top of a shadow tree the walk queries the shadow root
+ * itself before hopping to the host, so a dropzone inside a shadow root resolves.
  */
 function resolveUploadInput(el: ActionTarget): HTMLInputElement {
   const label = isLabel(el) ? el : el.closest('label');
@@ -730,16 +733,12 @@ function resolveUploadInput(el: ActionTarget): HTMLInputElement {
 
   let scope: Element | null = el;
   while (null !== scope) {
-    const found = fileInputsIn(scope);
-    if (1 < found.length) {
-      throw new Error(
-        `upload target is not a file input and its scope holds ${found.length} file inputs — ` +
-          'target the file input itself so the upload cannot land on the wrong one',
-      );
+    if ('BODY' !== scope.tagName && 'HTML' !== scope.tagName) {
+      const only = onlyFileInputIn(scope);
+      if (undefined !== only) return only;
     }
-    const only = found[0];
-    if (only !== undefined) return only;
-    scope = scope.parentElement;
+    if (isForm(scope)) break;
+    scope = parentAcrossShadowBoundary(scope);
   }
   throw new Error('upload target must be a <input type="file">');
 }
@@ -754,6 +753,51 @@ function isPageMutation(record: MutationRecord): boolean {
   const el = target instanceof Element ? target : target.parentElement;
   return null === el || !isUnobserved(el);
 }
+
+/**
+ * The single file input `scope` holds, or undefined when it holds none. Throws when it holds
+ * more than one: setting files on the wrong input reports a success the app never saw.
+ */
+function onlyFileInputIn(scope: Element): HTMLInputElement | undefined {
+  // At the top of a shadow tree, query the root itself: the composed parent is the host, but
+  // the host's `querySelectorAll` cannot see shadow children. The root contains the scope, so
+  // one query covers both.
+  const found = fileInputsIn(shadowRootAbove(scope) ?? scope);
+  if (1 < found.length) {
+    throw new Error(
+      `upload target is not a file input and its scope holds ${found.length} file inputs — ` +
+        'target the file input itself so the upload cannot land on the wrong one',
+    );
+  }
+  return found[0];
+}
+
+/**
+ * The shadow root `scope` sits directly under, or null. Duck-typed on `host` the way a11y.ts
+ * does: `instanceof ShadowRoot` fails across realms, and `host` exists on a ShadowRoot and not
+ * on a Document.
+ */
+function shadowRootAbove(scope: Element): ShadowRoot | null {
+  if (null !== scope.parentElement) return null;
+  const root = scope.getRootNode() as Partial<ShadowRoot>;
+  return undefined === root.host ? null : (root as ShadowRoot);
+}
+
+/**
+ * The settle budget for one action, in ms.
+ *
+ * Absent means the default bounded frame. `0` is the burst case — drain microtasks and return so a
+ * following action can land inside this one's window. Clamped: a caller cannot extend the budget
+ * past the frame bound, because a long settle here would block the command channel, and anything
+ * that needs to WAIT for a consequence should be declaring it on act_and_wait instead.
+ */
+function asSettleBudget(raw: unknown): number | undefined {
+  if ('number' !== typeof raw || !Number.isFinite(raw)) return undefined;
+  return Math.max(0, Math.min(raw, FRAME_BUDGET_MS_CEILING));
+}
+
+/** Upper bound for a caller-supplied settle budget. Mirrors the browser's own frame budget. */
+const FRAME_BUDGET_MS_CEILING = 200;
 
 /**
  * Execute a single action against a ref and probe for best-effort evidence of effect.
