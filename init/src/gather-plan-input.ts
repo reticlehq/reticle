@@ -52,6 +52,7 @@ import { NUXT_CONFIG_CANDIDATES } from './patch/nuxt-patch.js';
 import { CLAUDE_COMMAND_PATH, CURSOR_COMMAND_PATH } from './register/slash-command.js';
 import { RETICLE_VERSION } from './version.js';
 import { resolveLockfiles } from './detect/lockfiles.js';
+import { projectIdOf } from './detect/existing-config.js';
 
 /** CRA's bundled entry, in the order create-react-app itself generates them. */
 const CRA_ENTRY_CANDIDATES = ['src/index.tsx', 'src/index.jsx', 'src/index.ts', 'src/index.js'];
@@ -104,6 +105,15 @@ const MAX_SCAN_DEPTH = 5;
  * says the answer is not another name in a list. So: walk the app root, bounded by depth and by a
  * file count.
  */
+/** The files that quote `id` as a whole string literal (see `copiedIdSources`). */
+function quoting(
+  files: readonly { path: string; source: string }[],
+  id: string | undefined,
+): { path: string; source: string }[] {
+  if (id === undefined) return [];
+  return files.filter((f) => ['"', "'", '`'].some((q) => f.source.includes(`${q}${id}${q}`)));
+}
+
 function readSourceFiles(io: InitIo): { path: string; source: string }[] {
   const out: { path: string; source: string }[] = [];
   const read = (path: string): void => {
@@ -321,6 +331,7 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
   );
   // Read once: both the testid scan and the store scan want the same bounded set of files.
   const sourceFiles = readSourceFiles(io);
+  const copiedId = projectIdOf(io.readFile(RETICLE_CONFIG_FILE));
   const agentRoot = agentRootOf(options);
   const agentFile = (relPath: string): string =>
     agentRoot === undefined ? relPath : join(agentRoot, relPath);
@@ -438,6 +449,7 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
     // The CONTENT, so a config that exists can be checked rather than trusted — a `"port"` set to
     // the app's own dev-server port used to survive every re-run of `init`.
     reticleConfigSource: io.readFile(RETICLE_CONFIG_FILE),
+    ...(true === options.newId ? { copiedIdSources: quoting(sourceFiles, copiedId) } : {}),
     // Read the agent instruction files so the rule merge stays idempotent across re-runs — from the
     // agent's own root, or the merge would idempotently check a file it is not going to write.
     claudeMdContent: io.readFile(agentFile('CLAUDE.md')),

@@ -67,6 +67,7 @@ function input(partial: Partial<PlanInput>): PlanInput {
       ? {}
       : { reticleConfigExists: partial.reticleConfigExists }),
     reticleConfigSource: partial.reticleConfigSource,
+    copiedIdSources: partial.copiedIdSources,
     ...(partial.craEntry === undefined ? {} : { craEntry: partial.craEntry }),
     ...(partial.craEnv === undefined ? {} : { craEnv: partial.craEnv }),
     ...(partial.pairingToken === undefined ? {} : { pairingToken: partial.pairingToken }),
@@ -405,6 +406,31 @@ describe('init --new-id gives this checkout its own project id', () => {
       }),
     );
     expect(step(plan, CONFIG_STEP).status).toBe(StepStatus.ALREADY);
+  });
+
+  /*
+   * A copy whose app named its id by hand in `connect({ projectId })` kept sending its evidence to
+   * the ORIGINAL checkout after `--new-id`: the config moved, the literal did not.
+   */
+  it('rewrites the old id where the app names it by hand, and only the id', () => {
+    const MAIN =
+      "import { connect } from '@reticlehq/browser';\nconnect({ projectId: 'shop-aaaaaaaa' });\n" +
+      "const label = 'shop-aaaaaaaa-old';\n";
+    const plan = buildPlan(
+      input({
+        reticleConfigExists: true,
+        reticleConfigSource: COPIED,
+        copiedIdSources: [{ path: 'src/main.tsx', source: MAIN }],
+        options: { port: undefined, mcp: true, install: false, projectId: NEW_ID, newId: true },
+      }),
+    );
+    const site = plan.steps.find((s) => 'src/main.tsx' === s.target);
+    expect(site?.status).toBe(StepStatus.APPLY);
+    expect(site?.detail).toContain('shop-aaaaaaaa');
+    expect(site?.write?.content).toBe(
+      "import { connect } from '@reticlehq/browser';\nconnect({ projectId: 'shop-bbbbbbbb' });\n" +
+        "const label = 'shop-aaaaaaaa-old';\n",
+    );
   });
 });
 

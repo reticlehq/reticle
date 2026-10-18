@@ -856,7 +856,32 @@ function reticleConfigSteps(input: PlanInput): Step[] {
   return [
     reticleConfigStep(input, content, moved?.code ?? onDisk, moved?.from, renamed?.from),
     ...agentRootConfigStep(input, content, renamed?.from),
+    ...(null === renamed ? [] : copiedIdSteps(input, renamed.from)),
   ];
+}
+
+/**
+ * `--new-id`: the old id where the app quotes it by hand, as in `connect({ projectId: '…' })`. Left
+ * there, the copy's evidence goes on into the original checkout. Only the whole quoted literal moves:
+ * the id is a hash-suffixed name nothing else spells.
+ */
+function copiedIdSteps(input: PlanInput, from: string): Step[] {
+  const id = input.options.projectId;
+  if (id === undefined) return [];
+  return (input.copiedIdSources ?? []).map(({ path, source }) => ({
+    title: RETICLE_CONFIG_TITLE,
+    target: path,
+    status: StepStatus.APPLY,
+    detail: `the project id the app names by hand: ${id} (was ${from})`,
+    write: {
+      path,
+      content: ['"', "'", '`'].reduce(
+        (code, q) => code.replaceAll(`${q}${from}${q}`, `${q}${id}${q}`),
+        source,
+      ),
+      expect: [id],
+    },
+  }));
 }
 
 export function buildPlan(input: PlanInput): Plan {

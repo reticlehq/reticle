@@ -289,6 +289,11 @@ export interface PlanInput {
    * see reticleConfigStep for the port that survived every re-run because of it.
    */
   reticleConfigSource?: string | null | undefined;
+  /**
+   * `--new-id`: the app's source files that quote the id being replaced. A hand-written
+   * `connect({ projectId: '…' })` still naming it sends this checkout's evidence to the original.
+   */
+  copiedIdSources?: readonly { path: string; source: string }[] | undefined;
   /** Current project-root CLAUDE.md content (for the idempotent agent-rule merge), or null/undefined. */
   claudeMdContent?: string | null | undefined;
   /** Current project-root AGENTS.md content (the cross-agent rule), or null/undefined. */
