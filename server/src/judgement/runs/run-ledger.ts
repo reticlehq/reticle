@@ -52,7 +52,7 @@ export class RunLedger {
 
   /** An agent call ended. The first one that left a verdict sets the time to the first verdict. */
   after(now: number): void {
-    if (0 < this.#verdicts.length) this.#firstVerdictAt ??= now;
+    if (0 < this.#verdicts.length || 0 < this.#replayed.size) this.#firstVerdictAt ??= now;
   }
 
   /** A journal record from the agent's own call. A record with no verdict is not a claim. */

@@ -111,6 +111,16 @@ describe('the run ledger', () => {
     expect(report.flows.replayed).toEqual([{ name: 'invite', verified: Verified.NO }]);
   });
 
+  // The replay proof run's report had no time to its first verdict: its only verdicts were replays.
+  it('times the first verdict from a replay too', () => {
+    const ledger = new RunLedger();
+    ledger.begin(100);
+    ledger.after(300);
+    ledger.replayed('invite', Verified.NO);
+    ledger.after(900);
+    expect(ledger.take(1_000).firstVerdictMs).toBe(800);
+  });
+
   it('keeps nothing while no agent run is open', () => {
     const ledger = new RunLedger();
     ledger.replayed('invite', Verified.NO);

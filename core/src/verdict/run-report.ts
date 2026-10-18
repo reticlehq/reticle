@@ -56,7 +56,7 @@ export const RunReportSchema = z.object({
   }),
   /** From the run's first Reticle call to this report. */
   wallMs: z.number().int().min(0),
-  /** From the run's first Reticle call to its first decided claim. Absent when none was decided. */
+  /** From the run's first Reticle call to its first decided claim or replay. Absent when none. */
   firstVerdictMs: z.number().int().min(0).optional(),
   /** `CLOUD_VALUE_LINE`, only when the project is not linked. */
   cloud: z.string().optional(),
