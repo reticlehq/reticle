@@ -14,6 +14,7 @@ import {
   ReticleCommand,
   ReticleTool,
   SnapshotMode,
+  RUN_REPORT_FIELD,
 } from '@reticlehq/core';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { RealInputProvider } from '@/portal/input/real-input.js';
@@ -313,6 +314,8 @@ export const EnvelopeKey = {
   ZERO_INSTALL: 'zero_install',
   /** Once-per-session advisory lines an agent's own call carries. See agent/notices.ts. */
   NOTICES: 'notices',
+  /** The end-of-run report, on the call that ends an agent's run. See run-report.ts. */
+  RUN_REPORT: RUN_REPORT_FIELD,
 } as const;
 export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
 

@@ -12,6 +12,7 @@ import { isSelfObservation } from './self-observation.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
 import { callerClientName } from '@/hooks/coding-agents.js';
 import { log } from '@/log.js';
+import { runLedger } from '@/judgement/runs/run-ledger.js';
 
 /**
  * Logged the FIRST time a journal write is lost, and never again for that recorder.
@@ -242,6 +243,8 @@ export class JournalRecorder {
       ...(active.drivenBy === undefined ? {} : { drivenBy: active.drivenBy }),
       ...(active.agent === undefined ? {} : { agent: active.agent }),
     };
+    // The agent's own verdicts make its run's report; the ledger ignores the Harness's.
+    runLedger.verdict(action);
     this.#enqueueFlush();
     this.#chain = this.#chain
       .then(() => this.#sink.appendAction(action))
@@ -293,6 +296,8 @@ export class JournalRecorder {
         return agent === undefined ? {} : { agent };
       })(),
     };
+    // The agent's own verdicts make its run's report; the ledger ignores the Harness's.
+    runLedger.verdict(action);
     this.#enqueueFlush();
     this.#chain = this.#chain
       .then(() => this.#sink.appendAction(action))

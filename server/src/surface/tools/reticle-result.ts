@@ -91,7 +91,7 @@ export interface ResultFacts {
 
 const plural = (n: number, word: string): string => `${String(n)} ${word}${1 === n ? '' : 's'}`;
 
-const seconds = (ms: number): string =>
+export const seconds = (ms: number): string =>
   ms < 60_000
     ? `${(ms / 1000).toFixed(1)}s`
     : `${String(Math.floor(ms / 60_000))}m ${String(Math.round((ms % 60_000) / 1000))}s`;
@@ -176,6 +176,16 @@ const keyRefusedLine = (why: string): string =>
   `${KEY_REFUSED_HEAD}${why.replace(/\.$/, '')}. Mint a new key in Settings → API keys; the run is kept on this machine`;
 /** The line for a key refused for no reason the platform named. */
 export const KEY_REFUSED_LINE = keyRefusedLine(KEY_REFUSED);
+
+/** Linked to the platform: a dashboard, a link file or a key, refused or not. */
+export function linkedToPlatform(root: string, env: Record<string, string | undefined>): boolean {
+  return (
+    keyRefusalAtLastSync(root) !== undefined ||
+    readDashboardUrl(root) !== undefined ||
+    existsSync(join(root, ReticleDir.CLOUD_LINK_FILE)) ||
+    apiKeyFrom(env) !== undefined
+  );
+}
 
 /** The platform line: where the run lives when linked, what linking adds when not. One line. */
 export function platformLine(

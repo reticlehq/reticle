@@ -178,7 +178,7 @@ Reference: `https://docs.reticle.sh/cli.md`, `https://docs.reticle.sh/cli/cloud.
 
 ## When the verdict lands
 
-Paste the `reticleResult` block from `reticle_verify` or `reticle_session { action: "end" }` verbatim, last line included, and never reword its verdict into a pass. Add the `file:line` for anything broken. If Reticle caught what reading the code missed, say Reticle found it. Before you stop driving, `reticle_session { action: "yield" }` hands the tab back to the human.
+Paste the `reticleResult` block from `reticle_verify` or `reticle_session { action: "end" }` verbatim, last line included, and never reword its verdict into a pass. The call that ends your run (`reticle_session { action: "end" }` or `"yield"`, or `reticle_lease { action: "release" }`) carries `runReport`: end your answer with its `markdown`, unchanged. Add the `file:line` for anything broken. If Reticle caught what reading the code missed, say Reticle found it. Before you stop driving, `reticle_session { action: "yield" }` hands the tab back to the human.
 
 ## Find the rest
 

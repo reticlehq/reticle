@@ -15,6 +15,8 @@ import {
   RunFramework,
   RunProfile,
   RunTrigger,
+  RunFlowStatus,
+  Verified,
   type FlowFile,
   type FlowReplayResult,
   type ReticleVerificationRun,
@@ -26,6 +28,7 @@ import {
   type VerificationRunInput,
 } from './artifact/build-verification-run.js';
 import { mapReplayToFlowResult } from './artifact/replay-mapping.js';
+import { runLedger } from './run-ledger.js';
 import { defaultRunId } from './default-run-id.js';
 import { currentShotRun } from './default-run-id.js';
 import { RunStore } from './artifact/run-store.js';
@@ -119,6 +122,13 @@ function assembleRun(
  * tool — a disk or network failure is logged and swallowed so the verdict the agent asked for is
  * unaffected. Returns the runId (for logging/tests); undefined if nothing was produced (empty suite).
  */
+/** A replay's verdict, decided as its run decides it: a green that proved nothing is undecided. */
+function replayVerified(replay: FlowReplayResult, durationMs: number): Verified {
+  const status = mapReplayToFlowResult(replay, durationMs).status;
+  if (RunFlowStatus.PASS === status) return Verified.YES;
+  return RunFlowStatus.FAIL === status ? Verified.NO : Verified.UNKNOWN;
+}
+
 export async function persistAndSyncVerificationRun(
   deps: ToolDeps,
   timed: TimedReplay[],
@@ -129,6 +139,7 @@ export async function persistAndSyncVerificationRun(
   // A replay the Harness made inside its own drive is part of that drive's run: written on its own
   // it was a second row ("Passed · Flow replay · Your agent") beside the plan run it belonged to.
   if (currentDrivenBy() !== undefined) return undefined;
+  for (const t of timed) runLedger.replayed(t.replay.name, replayVerified(t.replay, t.durationMs));
   let run: ReticleVerificationRun;
   // The project the suite ran for, not the directory the daemon was started in. Both halves below
   // take it: the artifact `reticle_run` reads back through `sessionRoot`, and the cloud link that

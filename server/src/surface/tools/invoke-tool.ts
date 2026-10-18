@@ -11,6 +11,9 @@ import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { agentNudge, takePlatformMoment } from './platform-moment.js';
 import { RESULT_FIELD, trackVerdict } from './reticle-result.js';
+import { endsRun, noteToolResult, runReportField } from './run-report.js';
+import { runLedger } from '@/judgement/runs/run-ledger.js';
+import { readAppNotes } from './agent/app-notes.js';
 import { forTheAgent } from './agent/for-the-agent.js';
 import { type NoticeFold, feedbackAlreadyAsked, noteFeedbackAsked } from './agent/notices.js';
 import { SKEW_SHORT_WARNING, SKEW_VERDICT_WARNING } from '@/portal/session/session-health.js';
@@ -402,13 +405,40 @@ export async function runTool<Ext>(
   return trackVerdict(
     tool.name,
     withCallSecrets(secrets, async () => {
-      const result = await loggedTool(tool, deps, args, call);
+      // The agent's own calls make its run; `reticle_run` is counted once, as the tool it reached.
+      // A host that wires no clock (an embedding, a test double) gets no report, never an error.
+      const agentCall =
+        currentDrivenBy() === undefined &&
+        deps.attachId !== undefined &&
+        ReticleTool.RUN !== tool.name &&
+        'function' === typeof deps.now;
+      const ends = endsRun(tool.name, args);
+      // A call that only ends a run starts none: a second yield in a row carries no empty report.
+      if (agentCall && !ends) runLedger.begin(deps.now());
+      const raw = await loggedTool(tool, deps, args, call);
       const attach = currentDrivenBy() === undefined ? deps.attachId : undefined;
       const root =
         attach === undefined
           ? undefined
           : safeRoot(() => sessionRoot(deps, sessionIdFromArgs(args)));
-      return forTheAgent({ name: tool.name, args, result, attach, root, fold: NOTICE_FOLD });
+      // The app notes before this call, so a note it learns counts as memory written.
+      const notesBefore = agentCall && root !== undefined ? readAppNotes(root) : [];
+      const answer = forTheAgent({
+        name: tool.name,
+        args,
+        result: raw,
+        attach,
+        root,
+        fold: NOTICE_FOLD,
+      });
+      if (!agentCall) return answer;
+      runLedger.after(deps.now());
+      noteToolResult(runLedger, tool.name, args, raw);
+      const notesAfter = root === undefined ? [] : readAppNotes(root);
+      runLedger.memoryWritten(notesAfter.filter((note) => !notesBefore.includes(note)).length);
+      runLedger.memoryRead(notesBefore);
+      if (!ends || null === answer || 'object' !== typeof answer) return answer;
+      return { ...answer, ...runReportField(runLedger, root, process.env, deps.now()) };
     }),
   );
 }

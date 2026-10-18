@@ -33,6 +33,7 @@ export * from './wire/event-classification.js'; // CHURN_TYPES — shared evicti
 export * from './wire/global-press.js'; // which press is a document key (Escape / Tab / a shortcut)
 export * from './wire/hold.js'; // clampHoldMs — the bounded hold both input paths honour
 export * from './verdict/verified-constants.js'; // Verified — the one field an agent gates on
+export * from './verdict/run-report.js'; // the end-of-run report an agent shows the user
 // Its own module so a page that never needs it does not download it — see first-load-size.
 export * from './verdict/verdict-attribution.js';
 export * from './verdict/verify-progress.js'; // VerifyPhase — what a run is doing while it is still doing it

@@ -116,7 +116,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * 19 with `check-sentence.ts`: a recorded check as a person's sentence. It sits beside the
    * predicate it reads, and the platform can build the same sentence from the contract.
    */
-  'core/src/verdict': 19,
+  // 20 with `run-report.ts`: the schema of the end-of-run report, beside `Verified`, which it uses.
+  'core/src/verdict': 20,
   // 17 since `hold.ts`: `clampHoldMs` is the bound BOTH input paths clamp `holdMs` with, so it
   // belongs to the contract rather than to either caller. The reason it is a file of its own rather
   // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
@@ -217,7 +218,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // wanted that one function and imported a module that pulls the whole flow-replay stack, closing a
   // cycle. Same trade as `language/flows` below — a cycle is paid for in files.
   // 13 with `resume.ts`: the block an agent gets back after a compaction, folded from the run records.
-  'server/src/judgement/runs': 13,
+  // 14 with `run-ledger.ts`: what one agent run checked, saved and read, folded from the same records.
+  'server/src/judgement/runs': 14,
   // 33 since `act-merged.ts`: `reticle_act` absorbing `reticle_act_sequence`, routed on the shape of
   // the call rather than on an `action` name because `act` already owns that parameter. It is its
   // own file rather than a branch inside `merge-tools.ts` for exactly that reason — it is the one
@@ -259,7 +261,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // connect line it shares; `judgement/runs` was the other home and is at its own recorded count.
   // 51 with `harness-gate.ts`: whether a Harness drive may start, split from `harness-explore.ts` at
   // its line cap; every gate caller already sits in this directory.
-  'server/src/surface/tools': 51,
+  // 52 with `run-report.ts`: the end-of-run report, beside `reticle-result.ts` whose words it shares.
+  'server/src/surface/tools': 52,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
