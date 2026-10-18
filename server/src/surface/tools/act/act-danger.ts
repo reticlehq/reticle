@@ -4,6 +4,8 @@ import {
   NATIVE_INPUT_ARG,
   OutwardAction,
   isDangerousActionText,
+  isDangerousNavigation,
+  isInertHref,
   isPaymentProviderUrl,
   outwardActionOf,
   outwardRefusal,
@@ -40,6 +42,9 @@ function descriptorRole(value: unknown): string | undefined {
 }
 
 function isDestructiveDescriptor(value: unknown): boolean {
+  // A real link is a navigation, judged by where it goes: the same rule as the SDK path.
+  const href = asString(asRecord(value)['href']);
+  if (href !== undefined && !isInertHref(href)) return isDangerousNavigation(href);
   return isDangerousActionText(descriptorText(value), descriptorRole(value));
 }
 

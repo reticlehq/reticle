@@ -25,6 +25,25 @@ describe('assertNotDestructive', () => {
     ).not.toThrow();
   });
 
+  // The same rule as the SDK path: a real link is a navigation, judged by where it goes.
+  it('does not block a link whose text or same-app path has a money word', () => {
+    for (const link of [
+      { text: 'Checkout pay fails', role: 'link', href: '/issues/12' },
+      { text: 'Orders & invoices', role: 'link', href: '/billing/payment' },
+    ]) {
+      expect(() => assertNotDestructive(ActionType.CLICK, {}, link)).not.toThrow();
+    }
+  });
+
+  it('still blocks a link that destroys, and an inert link that says it does', () => {
+    for (const link of [
+      { text: 'Settings', role: 'link', href: '/account/delete' },
+      { text: 'Delete account', role: 'link', href: '#' },
+    ]) {
+      expect(() => assertNotDestructive(ActionType.CLICK, {}, link)).toThrow(/confirmDangerous/);
+    }
+  });
+
   it('still blocks a Payment button', () => {
     expect(() =>
       assertNotDestructive(ActionType.CLICK, {}, { text: 'Send payment', role: 'button' }),

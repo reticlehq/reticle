@@ -159,6 +159,12 @@ export function isDangerousActionText(text: string, role?: string): boolean {
  * Typing card details has its own guard. The href is dangerous when its path destroys something
  * (`/account/delete`), or when it goes to a payment provider.
  */
+/** An href that goes nowhere (`#…`, `javascript:`): the link is a button, judged by its words. */
+const INERT_HREF = /^\s*(#.*|javascript:.*)?$/i;
+export function isInertHref(href: string): boolean {
+  return INERT_HREF.test(href);
+}
+
 export function isDangerousNavigation(href: string): boolean {
   return isPaymentProviderUrl(href) || DESTROY_ACTION.test(href.replace(WORD_JOINERS, ' '));
 }
