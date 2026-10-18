@@ -17,6 +17,16 @@ const ALL_OF_LEAD = 'Not all of these happened: ';
 const ANY_OF_LEAD = 'None of these happened: ';
 const SHOULD_NOT = ', and it should not have';
 
+/**
+ * Verdict assertions that mean a call matching the method and url WAS made, and only a body clause
+ * missed: the request side (what the UI sent) and the response side (what the server answered).
+ */
+const REQUEST_BODY_MISS: ReadonlySet<string> = new Set([
+  'net.requestBody',
+  'net.requestBodyMatches',
+]);
+const RESPONSE_BODY_MISS: ReadonlySet<string> = new Set(['net.bodyContains', 'net.bodyMatches']);
+
 const capital = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** The element a query names, as a noun: 'the button "Pay"', 'the element marked "x"', 'a dialog'. */
@@ -53,11 +63,28 @@ function noun(predicate: Predicate): string {
   }
 }
 
+/** A net claim whose call was made: what it did not carry, else undefined. */
+function madeWithout(predicate: Predicate, assertion: string | undefined): string | undefined {
+  if (PredicateKind.NET !== predicate.kind || assertion === undefined) return undefined;
+  const made = `${capital(noun(predicate))} was made, but`;
+  if (REQUEST_BODY_MISS.has(assertion)) {
+    const wanted = predicate.requestBodyMatches ?? predicate.requestBodyContains;
+    if (wanted !== undefined) return `${made} it did not carry ${JSON.stringify(wanted)}`;
+  }
+  if (RESPONSE_BODY_MISS.has(assertion)) {
+    const wanted = predicate.bodyMatches ?? predicate.bodyContains;
+    if (wanted !== undefined) return `${made} its answer did not carry ${JSON.stringify(wanted)}`;
+  }
+  return undefined;
+}
+
 /** The sentence for a leaf claim that did not come true. */
-function missed(predicate: Predicate): string {
+function missed(predicate: Predicate, assertion?: string): string {
   switch (predicate.kind) {
     case PredicateKind.NET:
-      return `No ${noun(predicate).slice('a '.length)} was made`;
+      return (
+        madeWithout(predicate, assertion) ?? `No ${noun(predicate).slice('a '.length)} was made`
+      );
     case PredicateKind.TEXT:
       return true === predicate.absent
         ? `${capital(noun(predicate))} appeared${SHOULD_NOT}`
@@ -105,13 +132,19 @@ function missed(predicate: Predicate): string {
 
 /**
  * The check in the failure voice. With `failedPart`, an `allOf` is named by the one part that failed.
+ * `assertion` is the verdict's (of that part, for an `allOf`): a body clause that missed on a call
+ * that was made reads as that, not as "no request was made".
  */
-export function failureSentence(predicate: Predicate, failedPart?: number): string {
+export function failureSentence(
+  predicate: Predicate,
+  failedPart?: number,
+  assertion?: string,
+): string {
   if (PredicateKind.ALL_OF === predicate.kind && failedPart !== undefined) {
     const part = predicate.predicates[failedPart];
-    if (part !== undefined) return failureSentence(part);
+    if (part !== undefined) return failureSentence(part, undefined, assertion);
   }
-  return missed(predicate);
+  return missed(predicate, assertion);
 }
 
 /**
@@ -128,16 +161,34 @@ export function failedPartOf(predicate: Predicate, evidence: unknown): number | 
   return index < 0 ? undefined : index;
 }
 
-/** The intent fields a recorded check carries: the agent's words, else the sentence built here. */
+/** The `assertion` a failed `allOf` part kept in the per-part results, if it kept one. */
+function partAssertion(evidence: unknown, failedPart: number): string | undefined {
+  const part: unknown = Array.isArray(evidence) ? evidence[failedPart] : undefined;
+  if ('object' !== typeof part || null === part) return undefined;
+  const assertion: unknown = Reflect.get(part, 'assertion');
+  return 'string' === typeof assertion ? assertion : undefined;
+}
+
+/**
+ * The intent fields a recorded check carries: the agent's words, else the sentence built here. Read
+ * from the verdict: its evidence names an `allOf`'s failed part, and its assertion says whether a
+ * net claim's call was made at all.
+ */
 export function checkIntent(
   predicate: Predicate,
-  evidence: unknown,
+  verdict: { readonly evidence?: unknown; readonly assertion?: string | undefined },
   given?: string,
 ): { intent: string; intentDerived?: true; failedPart?: number } {
+  const { evidence, assertion } = verdict;
   const failedPart = failedPartOf(predicate, evidence);
   const part = failedPart === undefined ? {} : { failedPart };
   if (given !== undefined && 0 < given.trim().length) return { intent: given, ...part };
-  return { intent: failureSentence(predicate, failedPart), intentDerived: true, ...part };
+  const asserted = failedPart === undefined ? assertion : partAssertion(evidence, failedPart);
+  return {
+    intent: failureSentence(predicate, failedPart, asserted),
+    intentDerived: true,
+    ...part,
+  };
 }
 
 const lower = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);

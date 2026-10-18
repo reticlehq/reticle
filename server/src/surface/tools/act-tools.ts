@@ -894,7 +894,7 @@ export const ACT_TOOLS: ToolDef[] = [
         verdictEffect = {
           claim: describeWaitTarget(until),
           verified: decision.verified,
-          ...checkIntent(until, asRecord(verdict)['evidence'], asString(args['intent'])),
+          ...checkIntent(until, verdict, asString(args['intent'])),
           ...(actedSourceLabel === undefined ? {} : { source: actedSourceLabel }),
           ...checkWords(verdict),
           // TRUE here, and false on the `assert` path, and the difference is the point. This tool

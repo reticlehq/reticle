@@ -77,6 +77,49 @@ describe('a check in words, when the agent gave none', () => {
   });
 });
 
+/*
+ * A strict check (promoCode in the order body) on a checkout that DID post the order was titled "No
+ * POST request to /api/orders was made", sending the reader to the wiring, which was fine. The
+ * verdict's assertion says the matching call was made and only a body clause missed.
+ */
+describe('a request that was made, without what the check asked it to carry', () => {
+  const strict: Predicate = {
+    kind: PredicateKind.NET,
+    method: 'POST',
+    urlContains: '/api/orders',
+    requestBodyMatches: { promoCode: 'SAVE20' },
+  };
+
+  it('says the request was made and names what it did not carry', () => {
+    expect(failureSentence(strict, undefined, 'net.requestBody')).toBe(
+      'A POST request to /api/orders was made, but it did not carry {"promoCode":"SAVE20"}',
+    );
+    expect(
+      failureSentence(
+        { kind: PredicateKind.NET, urlContains: '/api/total', bodyContains: '1187.01' },
+        undefined,
+        'net.bodyContains',
+      ),
+    ).toBe('A request to /api/total was made, but its answer did not carry "1187.01"');
+  });
+
+  it('still says no request was made when none was', () => {
+    expect(failureSentence(strict)).toBe('No POST request to /api/orders was made');
+  });
+
+  it('reads the assertion of the part of a conjunction that failed', () => {
+    const both: Predicate = { kind: PredicateKind.ALL_OF, predicates: [text('Saved'), strict] };
+    expect(
+      checkIntent(both, {
+        evidence: [{ pass: true }, { pass: false, assertion: 'net.requestBody' }],
+      }).intent,
+    ).toBe('A POST request to /api/orders was made, but it did not carry {"promoCode":"SAVE20"}');
+    expect(checkIntent(strict, { assertion: 'net.requestBody' }).intent).toBe(
+      'A POST request to /api/orders was made, but it did not carry {"promoCode":"SAVE20"}',
+    );
+  });
+});
+
 describe('which part of a conjunction failed', () => {
   const both: Predicate = {
     kind: PredicateKind.ALL_OF,
@@ -102,13 +145,13 @@ describe('the intent a recorded check carries', () => {
   };
 
   it("keeps the agent's own words", () => {
-    expect(checkIntent(both, undefined, 'changing the assignee saves')).toEqual({
+    expect(checkIntent(both, {}, 'changing the assignee saves')).toEqual({
       intent: 'changing the assignee saves',
     });
   });
 
   it('builds the sentence otherwise, and says so, with the part that failed', () => {
-    expect(checkIntent(both, [{ pass: true }, { pass: false }])).toEqual({
+    expect(checkIntent(both, { evidence: [{ pass: true }, { pass: false }] })).toEqual({
       intent: 'No PATCH request to /assignee was made',
       intentDerived: true,
       failedPart: 1,
