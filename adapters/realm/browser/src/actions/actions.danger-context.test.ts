@@ -318,15 +318,14 @@ describe('select by what a person reads', () => {
 });
 
 /**
- * Half B of #894: a selectable item is judged by its own label, not by its content.
+ * Half B of #894: a filename-like token never reads as an action verb.
  *
- * The guard read a non-link control's accessible name plus its whole textContent, so a media clip
- * tile whose filename contained "remove" was blocked as destructive, and so was a "Create preview"
- * button whose name carried that filename. Selection roles get the link treatment from 3.7.0: the
- * control's own label surfaces count, descendant content does not. Filename-like tokens never count
- * as action verbs.
+ * The guard read a control's accessible name plus its whole textContent, so a media clip tile
+ * whose filename contained "remove" was blocked as destructive, and so was a "Create preview"
+ * button whose name carried that filename. Filename tokens are stripped before the text is
+ * classified; everything else still counts, including the content of list items and table rows.
  */
-describe('a selectable item is judged by its own label, not by its content', () => {
+describe('a filename-like token never reads as an action verb', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
   });
@@ -387,6 +386,28 @@ describe('a selectable item is judged by its own label, not by its content', () 
 
   it('still blocks a button whose aria-label joins a destructive word with an underscore', async () => {
     document.body.innerHTML = '<button id="d" aria-label="delete_repo">X</button>';
+    await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+
+  it('still blocks a list item whose content is destructive', async () => {
+    // Review case on #1620: getRole reports `listitem` with no role attribute, so a
+    // selection-role branch would judge this by aria-label/title/href alone and let it through.
+    document.body.innerHTML = '<ul><li data-testid="m">Delete project</li></ul>';
+    await expect(executeAction(refTo('[data-testid="m"]'), 'click')).rejects.toThrow(
+      /confirmDangerous/,
+    );
+  });
+
+  it('still blocks a table row whose content is destructive', async () => {
+    document.body.innerHTML = '<table><tr data-testid="r"><td>Delete</td></tr></table>';
+    await expect(executeAction(refTo('[data-testid="r"]'), 'click')).rejects.toThrow(
+      /confirmDangerous/,
+    );
+  });
+
+  it('still blocks a verb glued to a filename with a colon', async () => {
+    // Review case on #1620: `Delete:report.pdf` — only `report.pdf` is a filename token.
+    document.body.innerHTML = '<button id="d">Delete:report.pdf</button>';
     await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
   });
 });

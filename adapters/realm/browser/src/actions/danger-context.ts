@@ -6,6 +6,11 @@
  * drop", and not blocking Enter in a form whose submit button says "Delete account". One defect,
  * classifying the wrong text.
  *
+ * One more reading of the same defect, from half B of #894. A control whose content is user
+ * data — a media clip tile showing a filename that contains "remove", or a "Create preview"
+ * button whose name carries that filename — was blocked as destructive. A filename-like token
+ * never reads as an action verb, so filename tokens are stripped before the text is classified.
+ *
  * The pattern itself lives in core (`isDangerousActionText`) and is deliberately narrow. This file
  * only chooses what to hand it.
  */
@@ -65,43 +70,19 @@ function navigatingHref(el: ActionTarget): string | undefined {
 }
 
 /**
- * Roles that SELECT an item instead of performing an act. Their visible content is usually user
- * DATA, so judging the whole textContent blocks picking a material whose name happens to contain a
- * destructive word. Mirror the link treatment: judge these by their own label surfaces, never by
- * descendant content.
- */
-const SELECTION_ROLES: ReadonlySet<string> = new Set([
-  'option',
-  'row',
-  'gridcell',
-  'tab',
-  'treeitem',
-  'listitem',
-]);
-
-/**
  * Tokens that read as one filename, never as an action verb.
  * A token counts as a filename only when it ends in a known file extension.
  * `photo-remove-background.webm` is a filename, so the `remove` inside it is not an act.
  * A hyphen or an underscore alone does not make a filename: `delete-account` and `delete_repo`
- * are labels, so they keep their words and still trip the guard.
+ * are labels, so they keep their words and still trip the guard. The name part matches filename
+ * characters only, so a verb glued to a filename with other punctuation survives: in
+ * `Delete:report.pdf` only `report.pdf` is stripped and the `Delete` still trips the guard.
  */
 const FILENAME_LIKE_TOKEN =
-  /\S+\.(?:webm|mp4|mov|mkv|avi|mp3|wav|ogg|flac|png|jpe?g|gif|webp|svg|avif|bmp|pdf|zip|tar|gz|txt|csv|json|xml|docx?|xlsx?|pptx?)\b/gi;
+  /[\w.-]+\.(?:webm|mp4|mov|mkv|avi|mp3|wav|ogg|flac|png|jpe?g|gif|webp|svg|avif|bmp|pdf|zip|tar|gz|txt|csv|json|xml|docx?|xlsx?|pptx?)\b/gi;
 
 function withoutFilenameTokens(text: string): string {
   return text.replace(FILENAME_LIKE_TOKEN, ' ');
-}
-
-/** The control's own label surfaces: what the author called it, never the data inside it. */
-function ownLabelSurfaces(el: ActionTarget): string {
-  const form = el.closest('form');
-  return [
-    el.getAttribute('aria-label') ?? '',
-    el.getAttribute('title') ?? '',
-    el.getAttribute('href') ?? '',
-    form?.getAttribute('action') ?? '',
-  ].join(' ');
 }
 
 export function dangerousActionContext(el: ActionTarget): string {
