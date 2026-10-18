@@ -415,6 +415,10 @@ export async function runTool<Ext>(
       const ends = endsRun(tool.name, args);
       // A call that only ends a run starts none: a second yield in a row carries no empty report.
       if (agentCall && !ends) runLedger.begin(deps.now());
+      // The project of the session a call ends, read while the session still exists: releasing a
+      // tab removes it, and an unreadable project lost an unlinked user's cloud line.
+      const endedIn =
+        agentCall && ends ? safeRoot(() => sessionRoot(deps, sessionIdFromArgs(args))) : undefined;
       const raw = await loggedTool(tool, deps, args, call);
       const attach = currentDrivenBy() === undefined ? deps.attachId : undefined;
       const root =
@@ -438,7 +442,7 @@ export async function runTool<Ext>(
       runLedger.memoryWritten(notesAfter.filter((note) => !notesBefore.includes(note)).length);
       runLedger.memoryRead(notesBefore);
       if (!ends || null === answer || 'object' !== typeof answer) return answer;
-      return { ...answer, ...runReportField(runLedger, root, process.env, deps.now()) };
+      return { ...answer, ...runReportField(runLedger, endedIn ?? root, process.env, deps.now()) };
     }),
   );
 }

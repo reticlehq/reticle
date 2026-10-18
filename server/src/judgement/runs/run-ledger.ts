@@ -12,6 +12,7 @@
 import { supersededChecks } from '@reticlehq/engine/evidence/superseded-checks.js';
 import {
   JournalVerdictEffectSchema,
+  ReticleTool,
   Verified,
   type JournalAction,
   type JournalVerdictEffect,
@@ -57,6 +58,9 @@ export class RunLedger {
   /** A journal record from the agent's own call. A record with no verdict is not a claim. */
   verdict(action: JournalAction): void {
     if (this.#idle() || action.drivenBy !== undefined) return;
+    // A replay is counted once, as a flow, decided as its run decides it (`replayed`). Its journal
+    // record said `unknown` where the run said `no`, and one report gave both answers.
+    if (ReticleTool.FLOW_REPLAY === action.tool) return;
     const parsed = JournalVerdictEffectSchema.safeParse(action.effect);
     if (parsed.success) this.#verdicts.push(parsed.data);
   }

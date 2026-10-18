@@ -96,6 +96,21 @@ describe('the run ledger', () => {
     expect(report.caught).toEqual(['flow invite']);
   });
 
+  // The replay-session proof run: a replay that failed was journaled `unknown`, its run said `no`,
+  // and the report read "failed · 0 of 5 checks did not hold". A replay is counted once, as a flow.
+  it('counts a replay as a flow, never also as a journaled claim', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0);
+    ledger.verdict({
+      ...verdict('the flow "invite" replays', Verified.UNKNOWN),
+      tool: 'reticle_flow_replay',
+    });
+    ledger.replayed('invite', Verified.NO);
+    const report = ledger.take(10);
+    expect(report.claims).toEqual([]);
+    expect(report.flows.replayed).toEqual([{ name: 'invite', verified: Verified.NO }]);
+  });
+
   it('keeps nothing while no agent run is open', () => {
     const ledger = new RunLedger();
     ledger.replayed('invite', Verified.NO);

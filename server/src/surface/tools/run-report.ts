@@ -45,10 +45,7 @@ const WORD: Record<Verified, ResultWord> = {
 const plural = (n: number, word: string): string => `${String(n)} ${word}${1 === n ? '' : 's'}`;
 
 function headline(report: RunReport): string {
-  // A replay an agent ran is journaled as a claim too: count it once. A suite the CLI replayed
-  // journals none, so then the replays are the checks.
-  const checks = 0 < report.claims.length ? report.claims : report.flows.replayed;
-  const all = checks.map((c) => c.verified);
+  const all = [...report.claims, ...report.flows.replayed].map((c) => c.verified);
   const count = (v: Verified): number => all.filter((each) => v === each).length;
   const total = all.length;
   const word = `${HEAD}${WORD[report.verified]}**${SEP}`;

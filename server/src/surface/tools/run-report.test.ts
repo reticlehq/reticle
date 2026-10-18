@@ -61,7 +61,7 @@ function project(linked: boolean): string {
 describe('the end-of-run report', () => {
   it('renders every claim with its evidence, what it caught, flows, memory, time and the cloud line', () => {
     expect(renderRunReport(REPORT)).toMatchInlineSnapshot(`
-      "**Reticle run report: failed** · 1 of 3 checks did not hold
+      "**Reticle run report: failed** · 2 of 5 checks did not hold
       - no: POST /api/members carries seats: 5 (saw seats: 4)
       - yes: the badge reads 5 seats (src/workspace.ts:230)
       - unknown: the task list settles
@@ -169,6 +169,38 @@ describe('the call that ends an agent run carries the report', () => {
       mode: 'waiting',
     })) as Record<string, unknown>;
     expect(again[RUN_REPORT_FIELD]).toBeUndefined();
+  });
+
+  // The replay-session proof run released a tab that was already gone, so the session's project
+  // could not be read, and the cloud line was left out of an unlinked project's report.
+  it('reads the project of the session it ends before the end removes it', async () => {
+    const root = project(false);
+    let open = true;
+    const tab = {
+      ...deps(root, 'agent-2'),
+      sessions: {
+        resolve: () => {
+          if (!open) throw new Error('no such session');
+          return { id: 'lease-1', url: 'http://localhost:4336/' };
+        },
+      } as unknown as SessionManager,
+    } as ToolDeps;
+    const release: ToolDef = {
+      name: ReticleTool.LEASE,
+      description: '',
+      inputSchema: {},
+      handler: () => {
+        open = false;
+        return Promise.resolve({ released: true });
+      },
+    };
+    await runTool(fake(ReticleTool.FLOW_SAVE, { name: 'invite' }), tab, {});
+    const released = (await runTool(release, tab, {
+      action: 'release',
+      sessionId: 'lease-1',
+    })) as Record<string, unknown>;
+    const field = released[RUN_REPORT_FIELD] as { report: RunReport };
+    expect(field.report.cloud).toBe(CLOUD_VALUE_LINE);
   });
 
   it('a call with no agent attached (the CLI, the Harness) starts no run', async () => {
