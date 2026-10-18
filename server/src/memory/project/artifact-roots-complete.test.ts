@@ -83,8 +83,8 @@ const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
     why: 'Opens the impact record for the daemon (a per-root store keyed inside the recorder) and falls back when a call has no session; and compares a session root against it, so the agent is told only when its evidence lands outside every project, not when it lands in the daemon root.',
   },
   'memory/cloud/sync-daemon.ts': {
-    uses: 10,
-    why: "Sync walks EVERY root it can find and treats the daemon root as one of them; the comparison at :183 exists to avoid pushing it twice. The seventh records whether the daemon root is linked, so its unsent runs are counted with every other root's. The eighth watches the daemon root's link file, so a re-link is read at once. The ninth asks the background-sync gate about the daemon root, as every other root is asked, and the tenth reports that root's gate to `background()`.",
+    uses: 12,
+    why: "Sync walks EVERY root it can find and treats the daemon root as one of them; the comparison at :183 exists to avoid pushing it twice. The seventh records whether the daemon root is linked, so its unsent runs are counted with every other root's. The eighth watches the daemon root's link file, so a re-link is read at once. The ninth asks the background-sync gate about the daemon root, as every other root is asked, and the tenth reports that root's gate to `background()`. The eleventh and twelfth are the idle memory poll: it asks for the daemon root's own link only (the root the last cycle resolved), and keeps the conditional-read tag for that root alone.",
   },
   'features/visual/visual-tools.ts': {
     uses: 2,

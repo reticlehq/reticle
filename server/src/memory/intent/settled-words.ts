@@ -99,6 +99,11 @@ export async function applySettledWords(
     }
     const decision = settled.find((s) => s.setAside === record.statement);
     if (decision === undefined) continue;
+    // The status the team settled on the kept words comes with them, in this same read: the next
+    // read of an unchanged memory is a 304, which would leave the record proposed.
+    const keptStatus = settled.find(
+      (s) => s.status !== undefined && s.kept === decision.kept,
+    )?.status;
     const next = await store.upsert(
       record.id,
       (existing) =>
@@ -114,7 +119,12 @@ export async function applySettledWords(
                 files: decision.file === undefined ? [] : [decision.file],
               },
             },
-      { source: decidedBy(decision.by) },
+      {
+        source: decidedBy(decision.by),
+        ...(keptStatus !== undefined && RANK[keptStatus] > RANK[record.status]
+          ? { status: keptStatus }
+          : {}),
+      },
     );
     if (next?.statement === decision.kept) changed += 1;
   }

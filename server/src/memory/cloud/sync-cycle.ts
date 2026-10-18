@@ -34,6 +34,9 @@ import { FlowErrorCode, ReticleDir, SYNC_BATCH_LIMITS, flowJsonReplacer } from '
 import { hashPayload } from './sync-hash.js';
 import { syncScreenshots, type ScreenshotSyncState } from './sync-screenshots.js';
 import { describeTransportError, problemsOf } from './sync-describe.js';
+import { conflictOf, flowBases, versionsIn } from './sync-flow-versions.js';
+
+export { FLOW_CONFLICT_CODE } from './sync-flow-versions.js';
 
 /** The server's own doors. Kept beside the code that calls them, like the other cloud paths. */
 const SYNC_PATH = '/v1/sync';
@@ -89,6 +92,11 @@ export interface SyncSink {
   writeIssues: (issues: PulledIssues) => void;
   /** Persist the cursor and the bookkeeping. */
   writeState: (state: CloudSyncState) => void;
+  /**
+   * Keep this machine's edit of a flow as a named copy beside it and write the platform's version in
+   * its place; answers the copy's name. Absent (a dry run): the conflict is reported as a refusal.
+   */
+  resolveFlowConflict?: (name: string, theirs: unknown) => string | undefined;
 }
 
 /** A decision a human made on the dashboard, as the machine stores it. */
@@ -149,6 +157,10 @@ export interface CloudSyncState extends ScreenshotSyncState {
    * record from before this existed, so an upgrade does not re-send an unchanged set.
    */
   sentFlowHashes?: Record<string, string>;
+  /** The platform's version of each flow as last taken or adopted here: what a push is based on. */
+  flowVersions?: Record<string, string>;
+  /** Conflict copies still on disk: this machine's edits kept beside the platform's version. */
+  flowConflicts?: string[];
   sentCapsulesHash?: string;
   /**
    * The hash of each derived record the platform last ACCEPTED from here. A platform that reports
@@ -226,6 +238,8 @@ export interface SyncReport {
   /** Runs it refused, with the reason, so a bad artifact is visible rather than silently stuck. */
   runsRejected: Array<{ index: number; reason: string }>;
   flowsSent: number;
+  /** Open conflict copies: edits of a flow another machine saved over first, kept beside it. */
+  flowConflicts?: string[];
   /** Capsules the server accepted. Zero when it reported none, which includes not knowing the field. */
   capsulesSent: number;
   /** Derived records the server ACCEPTED this cycle. Empty on a quiet cycle, the normal case. */
@@ -353,6 +367,7 @@ function partResult(body: Record<string, unknown>, part: string) {
       reason: 'string' === typeof r['reason'] ? r['reason'] : 'no reason given',
       code: r['code'],
       version: r['version'],
+      current: r['current'],
     }));
   return { accepted, rejected };
 }
@@ -661,12 +676,21 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
       capsulesAll.length,
       deps.state.sentCapsulesHash,
     );
-    if (flowsChanged) bundle['flows'] = pendingFlows.map(({ flow }) => flow);
+    // Each flow names the version it was based on; a stale base is answered with a conflict.
+    const priorVersions = versionsIn(deps.state.flowVersions);
+    const taken: Record<string, string> = {};
+    if (flowsChanged) {
+      bundle['flows'] = pendingFlows.map(({ flow }) => flow);
+      bundle['flowBases'] = flowBases(pendingFlows, priorVersions, priorFlowHashes);
+    }
+    const conflictCopies: string[] = [];
     // What the platform holds from here once this cycle is answered: kept for the flows still here.
     const flowHashes: Record<string, string> = {};
     for (const { name } of named) {
       const hash = priorFlowHashes[name];
       if (hash !== undefined) flowHashes[name] = hash;
+      const v = priorVersions[name];
+      if (v !== undefined) taken[name] = v;
     }
     const capsules = capsulesChanged ? capsulesAll : [];
     if (capsules.length > 0) bundle['capsules'] = capsules;
@@ -731,10 +755,26 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
       flowsSent = flowsPart.accepted;
       capsulesSent = capsulesPart.accepted;
       const refusedFlows = new Set(flowsPart.rejected.map((r) => r.index));
+      const answered = isRecord(answer['flows']) ? answer['flows']['versions'] : undefined;
       if (flowsChanged)
         pendingFlows.forEach(({ flow, name }, index) => {
-          if (!refusedFlows.has(index)) flowHashes[name] = hashPayload(flow);
+          if (refusedFlows.has(index)) return;
+          flowHashes[name] = hashPayload(flow);
+          const v = isRecord(answered) ? answered[name] : undefined;
+          if ('string' === typeof v) taken[name] = v;
         });
+      // Another machine saved over the version this edit was based on: keep both, take theirs.
+      flowsPart.rejected = flowsPart.rejected.filter((r) => {
+        const name = pendingFlows[r.index]?.name;
+        const theirs = conflictOf(r);
+        if (name === undefined || theirs === undefined) return true;
+        const copy = deps.sink.resolveFlowConflict?.(name, theirs.flow);
+        if (copy === undefined) return true;
+        conflictCopies.push(copy);
+        flowHashes[name] = hashPayload(theirs.flow);
+        taken[name] = theirs.version;
+        return false;
+      });
       for (const r of flowsPart.rejected) {
         const name = pendingFlows[r.index]?.name ?? flowName(undefined, r.index);
         refused.push({
@@ -795,6 +835,13 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
     if (deps.projectId !== undefined) nextState.sentFlowNames = kept;
     // Every cycle, so a flow gone from here is forgotten too: saved again, it goes again.
     nextState.sentFlowHashes = flowHashes;
+    nextState.flowVersions = taken;
+    // Open until the person deletes the copy (or merges it back): counted on every cycle till then.
+    const flowConflicts = [...(deps.state.flowConflicts ?? []), ...conflictCopies].filter(
+      (copy, i, all) =>
+        all.indexOf(copy) === i && (onDisk.has(copy) || conflictCopies.includes(copy)),
+    );
+    nextState.flowConflicts = flowConflicts;
     delete nextState.sentFlowsHash;
     if (requests > 0 && pushError === undefined) {
       nextState.lastPushAt = deps.now();
@@ -902,6 +949,7 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
       ...(0 === screenshotsSent ? {} : { screenshotsSent }),
       runsRejected,
       flowsSent,
+      ...(0 === flowConflicts.length ? {} : { flowConflicts }),
       capsulesSent,
       derivedSent,
       refused,

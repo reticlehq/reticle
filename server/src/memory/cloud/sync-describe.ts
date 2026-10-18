@@ -92,5 +92,10 @@ export function problemsOf(report: SyncReport): string[] {
   for (const set of report.setsNotRetried)
     problems.push(`refused, not retried: ${String(set.count)} ${set.part}(s) (${set.reason})`);
   if (report.held.length > 0) problems.push(`not sent: ${report.held.join('; ')}`);
+  const copies = report.flowConflicts ?? [];
+  if (copies.length > 0)
+    problems.push(
+      `${String(copies.length)} flow conflict(s): another machine saved first, so this edit is kept as ${copies.join(', ')}; merge or delete it`,
+    );
   return problems;
 }

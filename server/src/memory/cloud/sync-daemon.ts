@@ -34,6 +34,9 @@ import { emitSyncHook } from '@/hooks/hook-emit.js';
 import {
   MemoryReadHeader,
   MemoryReadPurpose,
+  MemoryScopeField,
+  MEMORY_PAGE_LIMIT,
+  memoryReadUrl,
   readMemoryPages,
   scopedMemoryEntries,
 } from './memory-scope.js';
@@ -91,6 +94,20 @@ const SETTLED_WORDS_MAX_AGE_MS = 60_000;
  * repo wait behind all of them. The backstop timer and a requested sync always walk them.
  */
 const OTHER_ROOTS_EVERY_MS = 60_000;
+/**
+ * How often an idle machine asks whether the team's memory moved. Conditional (If-None-Match on the
+ * first page), so an unchanged minute is one bodiless 304, and a dashboard decision lands within it
+ * rather than on the ten-minute backstop.
+ */
+const MEMORY_POLL_MS = 50_000;
+/**
+ * How often the poll looks at the clock. A read is due once MEMORY_POLL_MS have passed since the last
+ * one (any read, a cycle's too), so a decision waits at most the two together: one minute. Measured
+ * with a plain one-minute timer: 74 s and 96 s, because a cycle's read just before it pushed the
+ * next ask a whole minute on.
+ */
+const MEMORY_POLL_TICK_MS = 10_000;
+const IF_NONE_MATCH = 'if-none-match';
 const isIntent = (path: string): boolean => {
   const [head = ''] = path.split(/[\\/]/);
   return head === ReticleDir.INTENT_SUBDIR || head.startsWith(ReticleDir.INTENT_FILE);
@@ -179,7 +196,7 @@ interface SyncDaemonDeps {
   request?: (
     url: string,
     init: { method: string; headers: Record<string, string>; body?: string },
-  ) => Promise<{ status: number; text: string }>;
+  ) => Promise<{ status: number; text: string; etag?: string }>;
   /**
    * May this root's work be sent now (opt-outs, link, sign-in)? Asked for every root on every tick.
    * Absent: every resolved link may send, which is how `startSyncDaemon` behaved before.
@@ -248,7 +265,7 @@ const movedAnything = (report: SyncReport): boolean =>
 const defaultRequest = (
   url: string,
   init: { method: string; headers: Record<string, string>; body?: string },
-): Promise<{ status: number; text: string }> => syncRequest(url, init);
+): Promise<{ status: number; text: string; etag?: string }> => syncRequest(url, init);
 
 /**
  * Start the loop. Safe to call for an UNLINKED project: it resolves the link on every tick and does
@@ -398,13 +415,20 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     });
   };
 
+  /** The tag of this root's first memory page as last read: what a conditional read names. */
+  let memoryTag: string | undefined;
+  let polling = false;
+  let lastCloud: ProjectCloud | undefined;
   /** Bring the dashboard's memory decisions down to this root's records. Returns how many changed. */
   const pullSettledWords = async (
     root: string,
     config: { url: string; apiKey: string },
     projectId: string | null,
+    /** A first page already in hand (the poll's 200), so it is not asked for twice. */
+    first?: { url: string; body: unknown },
   ): Promise<number> => {
     const body = await readMemoryPages(config.url, { projectId }, async (url) => {
+      if (first !== undefined && url === first.url) return first.body;
       const res = await request(url, {
         method: 'GET',
         // The sync, not an agent: without this every cycle counted as an agent consulting memory.
@@ -413,6 +437,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
           [MemoryReadHeader.PURPOSE]: MemoryReadPurpose.SYNC,
         },
       });
+      if (root === deps.reticleRoot && !url.includes(`${MemoryScopeField.CURSOR}=`))
+        memoryTag = res.etag;
       return 200 === res.status ? (JSON.parse(res.text) as unknown) : undefined;
     });
     if (body === undefined) return 0;
@@ -420,6 +446,46 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     const settled = settledWordsIn(entries);
     await keptWordsInRequest(reticleDirPaths(root).request, settled);
     return applySettledWords(new IntentShardStore(createNodeFileSystem(), root, { now }), settled);
+  };
+
+  /**
+   * Ask whether the team's memory moved and, when it did, bring its decisions down. Skipped while a
+   * cycle runs or one read it within the minute.
+   * ponytail: the tag covers the first page, which is ordered newest-updated first, so any decision
+   * moves it; a fact deleted past the first page waits for the backstop.
+   */
+  const pollMemory = async (): Promise<void> => {
+    if (stopped || running || polling || now() - memoryReadAt < MEMORY_POLL_MS) return;
+    polling = true;
+    try {
+      // The link the last cycle resolved: the poll costs no link read of its own.
+      const cloud = lastCloud;
+      if (cloud === undefined || null === cloud.config || !cloud.policy.memory) return;
+      const url = memoryReadUrl(cloud.config.url, {
+        projectId: cloud.projectId,
+        limit: MEMORY_PAGE_LIMIT,
+      });
+      const res = await request(url, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${cloud.config.apiKey}`,
+          [MemoryReadHeader.PURPOSE]: MemoryReadPurpose.SYNC,
+          ...(memoryTag === undefined ? {} : { [IF_NONE_MATCH]: memoryTag }),
+        },
+      });
+      // Answered either way, 304 included: the memory is known current as of now.
+      if (200 === res.status || 304 === res.status) memoryReadAt = now();
+      if (200 !== res.status) return;
+      memoryTag = res.etag;
+      await pullSettledWords(deps.reticleRoot, cloud.config, cloud.projectId, {
+        url,
+        body: JSON.parse(res.text) as unknown,
+      });
+    } catch {
+      // Offline is not news; the next minute asks again.
+    } finally {
+      polling = false;
+    }
   };
 
   /**
@@ -512,6 +578,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     rootsSendFlows.delete(own);
     try {
       const cloud = admit(deps.reticleRoot, await deps.cloud());
+      lastCloud = cloud;
       const linked = null !== cloud.config;
       rootsLinked.set(own, linked);
       if (linked && cloud.policy.flows) rootsSendFlows.add(own);
@@ -670,6 +737,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
 
   schedule(FIRST_CYCLE_DELAY_MS);
   startWatching();
+  const poll = setInterval(() => void pollMemory(), MEMORY_POLL_TICK_MS);
+  poll.unref?.();
 
   return {
     // A sync somebody asked for writes what is held on a timer first: a drive's run waits a few
@@ -698,12 +767,14 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     },
     stop: (): void => {
       stopWatching();
+      clearInterval(poll);
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
     },
     flush: async (): Promise<void> => {
       stopWatching();
+      clearInterval(poll);
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
