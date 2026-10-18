@@ -50,7 +50,8 @@ import { GateExit, gateExitWith } from './answers/gate-exit.js';
 import { brokenOf } from './known-regression.js';
 import { describeUnsyncedBriefly } from '@/memory/cloud/unsynced-roots.js';
 import { machineUnsyncedRoots } from '@/memory/project/sync-status.js';
-import { describeSync, runSyncCycle } from '@/memory/cloud/sync-cycle.js';
+import { runSyncCycle } from '@/memory/cloud/sync-cycle.js';
+import { describeSync } from '@/memory/cloud/sync-describe.js';
 import {
   diskSink,
   diskSource,

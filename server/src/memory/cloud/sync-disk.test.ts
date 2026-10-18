@@ -51,6 +51,23 @@ describe('reading what is on disk', () => {
     expect(diskSource(root).flows()).toHaveLength(2);
   });
 
+  // A namespaced name (`onboarding/signup`) is a folder under the project's: the read stopped one
+  // level down, so such a flow never left the machine while every cycle reported ok.
+  it('finds namespaced flows at any depth, per project and flat', () => {
+    write(join(ReticleDir.FLOWS_SUBDIR, 'app-1', 'onboarding', 'signup.json'), {
+      name: 'onboarding/signup',
+    });
+    write(join(ReticleDir.FLOWS_SUBDIR, 'onboarding', 'signup', 'email.json'), {
+      name: 'onboarding/signup/email',
+    });
+    expect(
+      diskSource(root)
+        .flows()
+        .map((f) => (f as { name: string }).name)
+        .sort(),
+    ).toEqual(['onboarding/signup', 'onboarding/signup/email']);
+  });
+
   // The flow store still saves and loads flows flat in `.reticle/flows/` (a flow saved with no
   // project id, or before flows were kept per project), and sync read only the subfolders: every
   // such flow was skipped while the cycle reported ok. Found syncing a real repo's `.reticle`.

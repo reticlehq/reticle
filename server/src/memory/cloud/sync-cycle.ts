@@ -33,6 +33,7 @@
 import { FlowErrorCode, ReticleDir, SYNC_BATCH_LIMITS, flowJsonReplacer } from '@reticlehq/core';
 import { hashPayload } from './sync-hash.js';
 import { syncScreenshots, type ScreenshotSyncState } from './sync-screenshots.js';
+import { describeTransportError, problemsOf } from './sync-describe.js';
 
 /** The server's own doors. Kept beside the code that calls them, like the other cloud paths. */
 const SYNC_PATH = '/v1/sync';
@@ -141,6 +142,13 @@ export interface CloudSyncState extends ScreenshotSyncState {
    * a changed set is sent on its own, and an unchanged one is not sent again.
    */
   sentFlowsHash?: string;
+  /**
+   * The hash of each flow, by name, as the platform last took it from here. A flow goes when IT
+   * changed: re-sending the whole set on every save sent each of a repo's flows once per save, and
+   * the platform stamped every one of them as updated. `sentFlowsHash` is read only to adopt a
+   * record from before this existed, so an upgrade does not re-send an unchanged set.
+   */
+  sentFlowHashes?: Record<string, string>;
   sentCapsulesHash?: string;
   /**
    * The hash of each derived record the platform last ACCEPTED from here. A platform that reports
@@ -613,7 +621,18 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
       return false;
     });
     const capsulesAll = deps.source.capsules();
-    const flowsHash = hashPayload(flows);
+    const named = flows.map((flow, index) => ({ flow, name: flowName(flow, index) }));
+    const priorFlowHashes: Record<string, string> = {};
+    if (isRecord(deps.state.sentFlowHashes)) {
+      for (const [name, hash] of Object.entries(deps.state.sentFlowHashes))
+        if ('string' === typeof hash) priorFlowHashes[name] = hash;
+    } else if (deps.state.sentFlowsHash === hashPayload(flows))
+      for (const { flow, name } of named) priorFlowHashes[name] = hashPayload(flow);
+    // Only the flows that changed since the platform last took them; the platform upserts by name.
+    const pendingFlows = named.filter(
+      ({ flow, name }) => priorFlowHashes[name] !== hashPayload(flow),
+    );
+    const flowsHash = hashPayload(pendingFlows.map(({ flow }) => flow));
     const capsulesHash = hashPayload(capsulesAll);
     const priorSets = isRecord(deps.state.refusedSets) ? deps.state.refusedSets : {};
     const setsNotRetried: Array<{ part: SetPart; count: number; reason: string }> = [];
@@ -635,14 +654,20 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
       }
       return hash !== sentHash;
     };
-    const flowsChanged = due('flow', flowsHash, flows.length, deps.state.sentFlowsHash);
+    const flowsChanged = due('flow', flowsHash, pendingFlows.length, undefined);
     const capsulesChanged = due(
       'capsule',
       capsulesHash,
       capsulesAll.length,
       deps.state.sentCapsulesHash,
     );
-    if (flowsChanged) bundle['flows'] = flows;
+    if (flowsChanged) bundle['flows'] = pendingFlows.map(({ flow }) => flow);
+    // What the platform holds from here once this cycle is answered: kept for the flows still here.
+    const flowHashes: Record<string, string> = {};
+    for (const { name } of named) {
+      const hash = priorFlowHashes[name];
+      if (hash !== undefined) flowHashes[name] = hash;
+    }
     const capsules = capsulesChanged ? capsulesAll : [];
     if (capsules.length > 0) bundle['capsules'] = capsules;
 
@@ -705,8 +730,13 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
       const capsulesPart = partResult(answer, 'capsules');
       flowsSent = flowsPart.accepted;
       capsulesSent = capsulesPart.accepted;
+      const refusedFlows = new Set(flowsPart.rejected.map((r) => r.index));
+      if (flowsChanged)
+        pendingFlows.forEach(({ flow, name }, index) => {
+          if (!refusedFlows.has(index)) flowHashes[name] = hashPayload(flow);
+        });
       for (const r of flowsPart.rejected) {
-        const name = flowName(flows[r.index], r.index);
+        const name = pendingFlows[r.index]?.name ?? flowName(undefined, r.index);
         refused.push({
           part: 'flow',
           reason:
@@ -763,11 +793,13 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
       if (2 !== Math.floor(gone.status / 100) && 404 !== gone.status) kept.push(name);
     }
     if (deps.projectId !== undefined) nextState.sentFlowNames = kept;
+    // Every cycle, so a flow gone from here is forgotten too: saved again, it goes again.
+    nextState.sentFlowHashes = flowHashes;
+    delete nextState.sentFlowsHash;
     if (requests > 0 && pushError === undefined) {
       nextState.lastPushAt = deps.now();
       // The platform answered for these sets, refusals included (reported above, and not re-offered
       // until the set changes — the same rule as a refused run).
-      if (flowsChanged) nextState.sentFlowsHash = flowsHash;
       if (flowsChanged && deps.projectId !== undefined)
         nextState.sentFlowNames = [...new Set([...kept, ...flows.map(flowName)])];
       if (capsules.length > 0) nextState.sentCapsulesHash = capsulesHash;
@@ -902,94 +934,4 @@ export async function runSyncCycle(given: SyncDeps): Promise<SyncReport> {
     deps.sink.writeState({ ...nextState, lastError: message });
     return { ...empty, error: message };
   }
-}
-
-/**
- * Say WHICH host failed and WHY.
- *
- * Node's fetch rejects with the bare string "fetch failed" and hides the real reason — a refused
- * connection, a bad hostname, an expired certificate — one level down in `cause`. A machine that
- * has quietly stopped syncing shows that string in `reticle whoami`, and on its own it is
- * indistinguishable from every other network problem, so the person reading it learns nothing and
- * checks nothing. Naming the origin and the underlying code turns it into one thing to look at.
- */
-function describeTransportError(error: unknown, url: string): string {
-  if (!(error instanceof Error)) return String(error);
-  const cause: unknown = (error as { cause?: unknown }).cause;
-  if (!(cause instanceof Error)) return `${error.message} (${url})`;
-  const code = (cause as { code?: unknown }).code;
-  // The code and the message are each sometimes empty — an aggregate DNS failure carries a code and
-  // no text, a TLS failure the reverse. Joined only when both are there, so the line never trails
-  // off into a dangling separator.
-  const parts = ['string' === typeof code && code.length > 0 ? code : '', cause.message].filter(
-    (part) => part.length > 0,
-  );
-  const detail = parts.join(': ');
-  return 0 === detail.length
-    ? `${error.message} (${url})`
-    : `${error.message} — ${detail} (${url})`;
-}
-
-/** One line a human can read, for the CLI and the daemon log. */
-export function describeSync(report: SyncReport): string {
-  if (report.error !== undefined) return `sync failed — ${report.error}`;
-  const sent: string[] = [];
-  if (report.runsSent > 0) sent.push(`${String(report.runsSent)} run(s)`);
-  if (report.flowsSent > 0) sent.push(`${String(report.flowsSent)} flow(s)`);
-  if (report.capsulesSent > 0) sent.push(`${String(report.capsulesSent)} capsule(s)`);
-  if ((report.screenshotsSent ?? 0) > 0)
-    sent.push(`${String(report.screenshotsSent)} screenshot(s)`);
-  if (report.derivedSent.length > 0) sent.push(report.derivedSent.join(', '));
-  /*
-   * "Nothing to send" is a statement about the QUEUE, and it is false the moment the queue was full
-   * and the server threw it away. Built from what was accepted, the sentence used to read "nothing
-   * to send, 3 rejected" — something was very much sent, and the reader is told both that it was
-   * not and nothing about why.
-   */
-  const rejectedCount = report.runsRejected.length + report.refused.length;
-  const push =
-    sent.length > 0
-      ? `sent ${sent.join(' + ')}`
-      : rejectedCount > 0
-        ? 'nothing accepted'
-        : true === report.localIsEmpty
-          ? // Not the same statement as "nothing to send", which describes a repo that is simply up
-            // to date. This one has never recorded anything, which for a LINKED repo usually means
-            // the app announces no projectId and its runs are landing under a different root.
-            'nothing recorded here yet — if this app has been driven, it is reporting somewhere else'
-          : 'nothing to send';
-  const pull =
-    0 === report.pulled
-      ? ''
-      : `, pulled ${String(report.pulled)} decision(s)${report.morePending ? ' (more waiting)' : ''}`;
-  return `${push}${pull}${problemsOf(report)
-    .map((problem) => `, ${problem}`)
-    .join('')}`;
-}
-
-/**
- * What went wrong, one phrase per kind of problem.
- *
- * One reason, not a count. A rejection count tells somebody they have a problem and nothing about
- * which problem — and these arrive from a BACKGROUND daemon, so the summary line is often the only
- * place anybody ever sees it. Rejections in one cycle almost always share a cause (a version skew
- * refuses every payload the same way), so the first reason plus the count is the whole story
- * without printing a line per item; `reticle sync` still lists them all.
- */
-function problemsOf(report: SyncReport): string[] {
-  const problems: string[] = [];
-  const count = report.runsRejected.length + report.refused.length;
-  if (count > 0) {
-    const first = report.runsRejected[0]?.reason ?? report.refused[0]?.reason ?? 'no reason given';
-    problems.push(`${String(count)} rejected — ${first}`);
-  }
-  const firstRefusal = report.notRetried[0];
-  if (firstRefusal !== undefined)
-    problems.push(
-      `refused, not retried: ${String(report.notRetried.length)} run(s) (${firstRefusal.reason})`,
-    );
-  for (const set of report.setsNotRetried)
-    problems.push(`refused, not retried: ${String(set.count)} ${set.part}(s) (${set.reason})`);
-  if (report.held.length > 0) problems.push(`not sent: ${report.held.join('; ')}`);
-  return problems;
 }

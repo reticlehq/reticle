@@ -1033,6 +1033,27 @@ describe('a change under .reticle wakes the sync', () => {
     w.d.stop();
   });
 
+  /*
+   * Measured: five flows and five facts saved during 30 s offline reached the platform 216 s after
+   * the network came back. Each save tried at once, failed, and doubled the wait; nothing changed
+   * after the reconnect, so the work sat out the longest wait. Work still owed retries every minute;
+   * only an idle machine backs off.
+   */
+  it('retries work saved while offline within a minute of the network returning', async () => {
+    const server = flaky();
+    const w = watched({ request: server.request });
+    await vi.advanceTimersByTimeAsync(6_000); // the first cycle fails
+    for (let i = 0; i < 4; i += 1) {
+      w.change(`flows/f-${String(i)}.json`);
+      await vi.advanceTimersByTimeAsync(3_000); // each save's cycle fails too
+    }
+    server.state.down = false;
+    const before = w.cycles();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(w.cycles()).toBe(before + 1);
+    w.d.stop();
+  });
+
   it('returns to the ten-minute rhythm after a success', async () => {
     const server = flaky();
     const times: number[] = [];

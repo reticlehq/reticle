@@ -45,7 +45,8 @@ import {
 } from '@/memory/intent/settled-words.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { flushPendingWrites } from '@/hooks/hook-bus.js';
-import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
+import { runSyncCycle, type SyncReport } from './sync-cycle.js';
+import { describeSync } from './sync-describe.js';
 import { diskSink, diskSource, policyScreenshots, readCloudState } from './sync-disk.js';
 import { resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
 import { watch, type FSWatcher } from 'node:fs';
@@ -478,6 +479,12 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   /** When the other linked repos were last walked. */
   let othersAt = Number.NEGATIVE_INFINITY;
   let intentMoved = true;
+  /**
+   * A change landed that no cycle has delivered yet. Work saved while offline used to wait out the
+   * longest backoff after the network returned (each save's failed cycle doubled it): owed work
+   * retries every minute, and only an idle machine backs off.
+   */
+  let owed = false;
   const memoryDue = (forced: boolean): boolean => {
     if (!forced && !intentMoved && now() - memoryReadAt < SETTLED_WORDS_MAX_AGE_MS) return false;
     intentMoved = false;
@@ -491,6 +498,9 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     // race and the cursor written by the loser silently rewinds the winner's progress.
     if (running) return undefined;
     running = true;
+    // Owed work this cycle carries; a failed exchange leaves it owed, and a change meanwhile adds to it.
+    const carried = owed;
+    owed = false;
     // The other repos' entries stand until their next pass, so what they owe is still reported.
     const othersDue = asked || now() - othersAt >= OTHER_ROOTS_EVERY_MS;
     if (othersDue) {
@@ -549,8 +559,10 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
         log('reticle_cloud_sync_failed', { error: failure });
       }
       if (report.error === undefined && report.ok) lastPushAt = now();
-      if (report.error !== undefined) failedCycle();
-      else {
+      if (report.error !== undefined) {
+        owed ||= carried;
+        failedCycle();
+      } else {
         if (failure === undefined) reportedError = undefined;
         // Only when something actually moved. A per-minute "nothing to send" is noise that trains
         // people to stop reading the log.
@@ -577,6 +589,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
         reportedError = message;
         log('reticle_cloud_sync_failed', { error: message });
       }
+      owed ||= carried;
       failedCycle();
       return undefined;
     } finally {
@@ -594,6 +607,10 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   /** Consecutive failed cycles: the retry waits a minute, then doubles, never past the backstop. */
   let failures = 0;
   function failedCycle(): void {
+    if (owed) {
+      nextDelay = FAILURE_RETRY_MS;
+      return;
+    }
     nextDelay = Math.min(FAILURE_RETRY_MS * 2 ** failures, intervalMs);
     failures += 1;
   }
@@ -635,6 +652,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   const onChange = (path: string): void => {
     if (stopped || isOwnWrite(path)) return;
     if (isIntent(path)) intentMoved = true;
+    owed = true;
     if (running) dirty = true;
     else soon(CHANGE_DEBOUNCE_MS);
   };
