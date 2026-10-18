@@ -123,6 +123,17 @@ describe('animation predicate', () => {
     expect(session.commands).toHaveLength(0);
   });
 
+  it('does not satisfy a caller-bounded predicate from current live animation state', async () => {
+    const session = new AnimationSession([], {
+      animations: [{ name: 'spin', playState: 'running', target: spinner }],
+    });
+
+    const result = await evaluatePredicate(session, { kind: 'animation', name: 'spin' }, 10);
+
+    expect(result.pass).toBe(false);
+    expect(session.commands).toHaveLength(0);
+  });
+
   it('names the animations seen on a miss instead of reporting an empty window', async () => {
     const session = new AnimationSession([], {
       animations: [{ name: 'pulse', playState: 'running', target: spinner }],

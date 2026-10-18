@@ -375,13 +375,16 @@ async function evalAnimationPredicate(
   predicate: Extract<Predicate, { kind: typeof PredicateKind.ANIMATION }>,
   floor: number,
 ): Promise<EvalResult> {
+  const useLiveAnimations = 0 === floor;
   let snapshot =
     predicate.target !== undefined && !SESSION_REF.test(predicate.target)
       ? await readAnimationSnapshot(session, predicate)
       : undefined;
   const observed = animationEvents(events);
-  const eventResult = evalAnimation(observed, predicate, snapshot);
-  if (eventResult.pass || floor > 0) return eventResult;
+  const eventSnapshot =
+    useLiveAnimations || snapshot === undefined ? snapshot : { ...snapshot, animations: [] };
+  const eventResult = evalAnimation(observed, predicate, eventSnapshot);
+  if (eventResult.pass || !useLiveAnimations) return eventResult;
   if (snapshot === undefined) snapshot = await readAnimationSnapshot(session, predicate);
   return evalAnimation(observed, predicate, snapshot);
 }

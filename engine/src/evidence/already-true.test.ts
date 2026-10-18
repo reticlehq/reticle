@@ -91,6 +91,7 @@ describe('which predicates need the before-check at all', () => {
 
   it('animation does, now that it can be answered from live getAnimations state', () => {
     expect(readsDomState({ kind: 'animation', name: 'spin' })).toBe(true);
+    expect(readsDomState({ kind: 'animation', name: 'spin' }, 10)).toBe(false);
     expect(readsDomState({ kind: 'animation', name: 'fade', completed: true, since: 5 })).toBe(
       false,
     );

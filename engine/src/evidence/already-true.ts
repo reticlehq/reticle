@@ -21,7 +21,11 @@ import { PredicateKind, compareSourceClauses, type ElementDescriptor } from '@re
 import type { Predicate } from '@/question/predicate/predicate.js';
 import { asksForComparison } from './baseline.js';
 
-export function readsDomState(predicate: Predicate): boolean {
+function predicateSince(predicate: Predicate): number {
+  return 'since' in predicate && 'number' === typeof predicate.since ? predicate.since : 0;
+}
+
+export function readsDomState(predicate: Predicate, since = 0): boolean {
   switch (predicate.kind) {
     // ROUTE is here, and it did not used to be. It was purely event-based — satisfiable only by a
     // navigation inside the act's window, and therefore unable to be answered by the past — so it
@@ -54,16 +58,16 @@ export function readsDomState(predicate: Predicate): boolean {
     case PredicateKind.ROUTE:
       return true;
     case PredicateKind.ANIMATION:
-      return predicate.since === undefined;
+      return 0 === Math.max(since, predicateSince(predicate));
     case PredicateKind.ALL_OF:
     case PredicateKind.ANY_OF:
-      return predicate.predicates.some(readsDomState);
+      return predicate.predicates.some((p) => readsDomState(p, since));
     case PredicateKind.NOT:
-      return readsDomState(predicate.predicate);
+      return readsDomState(predicate.predicate, since);
     // A comparison between two LIVE readings (text, a store) can already agree before the click, and
     // then it proves nothing about the click. A `net` or `signal` side is floored like any other.
     case PredicateKind.COMPARE:
-      return compareSourceClauses(predicate).some(readsDomState);
+      return compareSourceClauses(predicate).some((p) => readsDomState(p, since));
     default:
       return false;
   }
