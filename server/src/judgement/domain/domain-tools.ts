@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
+import { flowsForSessionId } from '@/language/flows/flow-store-for-session.js';
 import { asNumber, asString } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
@@ -86,10 +87,11 @@ export const DOMAIN_TOOLS: ToolDef[] = [
         ),
     },
     handler: async (deps: ToolDeps, args) => {
-      const names = await deps.flows.list();
+      const { flows: store, projectId } = flowsForSessionId(deps, asString(args['sessionId']));
+      const names = await store.list(projectId);
       const flows: FlowFile[] = [];
       for (const name of names) {
-        const loaded = await deps.flows.load(name);
+        const loaded = await store.load(name, projectId);
         if (loaded.ok) flows.push(loaded.value);
       }
       const root = sessionRoot(deps, asString(args['sessionId']));

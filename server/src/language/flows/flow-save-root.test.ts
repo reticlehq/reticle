@@ -7,6 +7,7 @@ import { BaselineStore } from '@/memory/project/baselines.js';
 import { RecordingStore, type CompiledProgram } from './recording/tape/recordings.js';
 import { FlowStore } from './flows.js';
 import { FLOW_TOOLS } from './flow-tools.js';
+import { createRunnerPort } from '@/judgement/runs/runner-port.js';
 import { ProjectStore } from '@/memory/project/project-store.js';
 import { AnnotationStore } from './stores/annotation-store.js';
 import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
@@ -249,5 +250,43 @@ describe('reticle_flow load and delete resolve the session project, as list and 
     expect(deleted.deleted).toBeUndefined();
     expect(deleted.code).toBe(FlowErrorCode.NOT_FOUND);
     expect(await listed(depsFor(fs, recordings, projectId, undefined))).toContain('daemon-only');
+  });
+});
+
+describe('reticle_domain and the runner port read the session project, as reticle_flow does', () => {
+  const projectId = asProjectId('acme-web-9f3c1d');
+  const resolver: ToolDeps['artifactRootFor'] = () => ({
+    root: PROJECT_ROOT,
+    reason: ArtifactRootReason.MATCHED_PROJECT,
+  });
+
+  /** `login` saved in the session project, `daemon-only` in the daemon root. */
+  async function savedInBothRoots(): Promise<ToolDeps> {
+    const { fs } = createMemoryFs();
+    // A disk has these once a flow is saved under them; the memory fs only knows dirs made explicitly.
+    await fs.mkdir(`${DAEMON_ROOT}/flows`);
+    await fs.mkdir(`${PROJECT_ROOT}/flows`);
+    const recordings = new RecordingStore();
+    recordings.saveCompiled(oneStep('daemon-only'));
+    await tool(ReticleTool.FLOW_SAVE).handler(depsFor(fs, recordings, projectId, undefined), {
+      flowName: 'daemon-only',
+    });
+    const deps = depsFor(fs, recordings, projectId, resolver);
+    recordings.saveCompiled(oneStep('login'));
+    await tool(ReticleTool.FLOW_SAVE).handler(deps, { flowName: 'login' });
+    return deps;
+  }
+
+  it('builds the domain model from the session project flows', async () => {
+    const deps = await savedInBothRoots();
+    const model = (await tool(ReticleTool.DOMAIN).handler(deps, {})) as {
+      flows: { name: string }[];
+    };
+    expect(model.flows.map((f) => f.name)).toEqual(['login']);
+  });
+
+  it('lists the session project flows for the runner, where replay looks for them', async () => {
+    const deps = await savedInBothRoots();
+    expect(await createRunnerPort(deps).listFlows()).toEqual(['login']);
   });
 });

@@ -1,11 +1,13 @@
 /**
  * The live adapter: build a RunnerPort from the real ToolDeps so ReticleRunner drives actual flow
- * replays against the connected app. Thin glue — it wires deps.flows.list, replayNamedFlow, deps.now,
+ * replays against the connected app. Thin glue — it wires the session's flow list, replayNamedFlow, deps.now,
  * and a uuid generator. The ReticleRunner core (tested with a fake port) holds all the orchestration and
  * verdict logic, so this layer carries no decisions.
  */
 
 import { replayAndLearn } from '@/language/flows/flow-learning.js';
+import { flowsForSession } from '@/language/flows/flow-store-for-session.js';
+import { safeSessionTarget } from '@/memory/project/session-root.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import type { RunnerPort } from './reticle-runner.js';
 import { defaultRunId } from './default-run-id.js';
@@ -19,7 +21,11 @@ export function createRunnerPort(
   opts: { confirmDangerous?: boolean } = {},
 ): RunnerPort {
   return {
-    listFlows: () => deps.flows.list(),
+    // Resolved as replay resolves it, so every listed name is one replay can load.
+    listFlows: () => {
+      const target = safeSessionTarget(deps, sessionId);
+      return flowsForSession(deps, target).flows.list(target.projectId);
+    },
     replayFlow: (name) =>
       replayAndLearn(deps, {
         flowName: name,
