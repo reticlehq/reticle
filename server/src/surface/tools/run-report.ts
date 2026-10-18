@@ -45,7 +45,10 @@ const WORD: Record<Verified, ResultWord> = {
 const plural = (n: number, word: string): string => `${String(n)} ${word}${1 === n ? '' : 's'}`;
 
 function headline(report: RunReport): string {
-  const all = [...report.claims, ...report.flows.replayed].map((c) => c.verified);
+  // A replay an agent ran is journaled as a claim too: count it once. A suite the CLI replayed
+  // journals none, so then the replays are the checks.
+  const checks = 0 < report.claims.length ? report.claims : report.flows.replayed;
+  const all = checks.map((c) => c.verified);
   const count = (v: Verified): number => all.filter((each) => v === each).length;
   const total = all.length;
   const word = `${HEAD}${WORD[report.verified]}**${SEP}`;
@@ -108,6 +111,10 @@ export function endsRun(tool: string, args: Record<string, unknown>): boolean {
   }
 }
 
+/** `reticle_intent` actions that write a statement, and the ones that read them back. */
+const IntentWrite = { RECORD: 'record', DECLARE: 'declare' } as const;
+const INTENT_READS: ReadonlySet<string> = new Set(['list', 'index', 'subject', 'get']);
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   null !== value && 'object' === typeof value && !Array.isArray(value);
 
@@ -124,8 +131,19 @@ export function noteToolResult(
     if ('string' === typeof name) ledger.flowSaved(name);
     return;
   }
+  const action = asString(args['action']);
+  if (ReticleTool.INTENT === tool) {
+    // The intent ledger in `.reticle/intent/` is the memory an unlinked project has.
+    if (IntentWrite.RECORD === action) ledger.memoryWritten();
+    const declared = args['intents'];
+    if (IntentWrite.DECLARE === action && Array.isArray(declared))
+      ledger.memoryWritten(declared.length);
+    if (action !== undefined && INTENT_READS.has(action))
+      ledger.memoryRead([JSON.stringify(result)]);
+    return;
+  }
   if (ReticleTool.MEMORY !== tool) return;
-  if ('add' === asString(args['action']) && result['added'] !== undefined) ledger.memoryWritten();
+  if ('add' === action && result['added'] !== undefined) ledger.memoryWritten();
   const known = result['known'];
   if (Array.isArray(known)) ledger.memoryRead(known.map((entry) => JSON.stringify(entry)));
 }

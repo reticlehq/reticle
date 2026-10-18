@@ -61,7 +61,7 @@ function project(linked: boolean): string {
 describe('the end-of-run report', () => {
   it('renders every claim with its evidence, what it caught, flows, memory, time and the cloud line', () => {
     expect(renderRunReport(REPORT)).toMatchInlineSnapshot(`
-      "**Reticle run report: failed** · 2 of 5 checks did not hold
+      "**Reticle run report: failed** · 1 of 3 checks did not hold
       - no: POST /api/members carries seats: 5 (saw seats: 4)
       - yes: the badge reads 5 seats (src/workspace.ts:230)
       - unknown: the task list settles
@@ -128,9 +128,13 @@ describe('the end-of-run report', () => {
     noteToolResult(ledger, ReticleTool.MEMORY, { action: 'add' }, { error: 'not linked' });
     noteToolResult(ledger, ReticleTool.MEMORY, { action: 'add' }, { added: { id: 's1' } });
     noteToolResult(ledger, ReticleTool.MEMORY, {}, { known: [{ id: 's1' }, { id: 's2' }] });
+    // The proof run wrote three notes to the intent ledger and its report said "0 notes written".
+    noteToolResult(ledger, ReticleTool.INTENT, { action: 'record', id: 'seats' }, { recorded: 1 });
+    noteToolResult(ledger, ReticleTool.INTENT, { action: 'record' }, { error: 'needs `id`' });
+    noteToolResult(ledger, ReticleTool.INTENT, { action: 'subject', subject: 'x' }, { known: [] });
     const report = ledger.take(1);
     expect(report.flows.saved).toEqual(['invite']);
-    expect(report.memory).toEqual({ written: 1, read: 2 });
+    expect(report.memory).toEqual({ written: 2, read: 3 });
   });
 });
 
