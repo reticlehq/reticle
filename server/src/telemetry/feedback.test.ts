@@ -59,6 +59,28 @@ describe('redactFeedbackText', () => {
     expect(out.removed).toContain('home-path');
   });
 
+  /**
+   * A home path keeps the account name in no spelling. An agent that pastes a JSON string doubles
+   * each backslash, and JSON can also escape a forward slash. Each row must lose the name.
+   */
+  it.each([
+    ['a Windows home', String.raw`open C:\Users\someone\app\x.ts`],
+    ['a JSON-escaped Windows home', String.raw`{"path":"C:\\Users\\someone\\app"}`],
+    ['a JSON-escaped Windows home in prose', String.raw`open C:\\Users\\someone\\app now`],
+    ['a forward-slash Windows home', 'open C:/Users/someone/app/x.ts'],
+    ['a lowercase-drive Windows home', String.raw`open c:\users\someone\app`],
+    ['a lowercase JSON-escaped Windows home', String.raw`open c:\\users\\someone`],
+    ['a JSON-escaped forward-slash Windows home', String.raw`open C:\/Users\/someone\/app`],
+    ['a macOS home', 'open /Users/someone/app/x.ts'],
+    ['a JSON-escaped macOS home', String.raw`{"path":"\/Users\/someone\/app"}`],
+    ['a Linux home', 'open /home/someone/app/x.ts'],
+    ['a JSON-escaped Linux home', String.raw`open \/home\/someone\/app`],
+  ])('removes the account name from %s', (_label, input) => {
+    const out = redactFeedbackText(input, FEEDBACK_TEXT_MAX);
+    expect(out.text, out.text).not.toContain('someone');
+    expect(out.removed).toContain('home-path');
+  });
+
   it('leaves an ordinary report untouched and reports nothing removed', () => {
     const clean = 'reticle_act clicked the button but no click event was observed';
     const out = redactFeedbackText(clean, FEEDBACK_TEXT_MAX);
