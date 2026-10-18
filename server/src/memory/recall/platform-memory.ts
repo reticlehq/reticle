@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 import { cloudFetch, syncFlowToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud, type ProjectCloud } from '@/memory/cloud/cloud-config.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
-import type { FlowFile } from '@reticlehq/core';
+import { CONNECT_COMMAND, DEFAULT_PLATFORM_URL, type FlowFile } from '@reticlehq/core';
 import { MemoryUnavailable } from './project-memory.js';
 
 /** What `reticle_memory` can be asked to do. `read` is the default and needs no `action`. */
@@ -43,6 +43,12 @@ export type PlatformAnswer = Record<string, unknown>;
 
 const unavailable = (reason: string, error: string): PlatformAnswer => ({ error, reason });
 
+/** What an unlinked project is told, on every memory action: the one command, and what it adds. */
+export const MEMORY_NOT_LINKED_ADVICE =
+  `Run \`${CONNECT_COMMAND}\` in the project folder to link it; add \`--url <origin>\` only for a ` +
+  `Reticle platform other than ${DEFAULT_PLATFORM_URL}. Once linked, memory keeps what each run ` +
+  'proved, and every agent and teammate on the project can read it.';
+
 const UNREACHABLE = unavailable(
   MemoryUnavailable.UNREACHABLE,
   'the platform could not be reached, or refused this project’s key',
@@ -61,10 +67,10 @@ async function linked(
   if (null === config)
     return {
       ok: false,
-      answer: unavailable(
-        MemoryUnavailable.NOT_LINKED,
-        'this project is not linked to the platform',
-      ),
+      answer: {
+        ...unavailable(MemoryUnavailable.NOT_LINKED, 'this project is not linked to the platform'),
+        advice: MEMORY_NOT_LINKED_ADVICE,
+      },
     };
   if (!allowed(cloud))
     return {

@@ -19,6 +19,7 @@ import { sessionRoot } from '@/memory/project/session-root.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { MemoryUnavailable, readProjectMemory } from './project-memory.js';
 import {
+  MEMORY_NOT_LINKED_ADVICE,
   MemoryAction,
   addMemoryStatement,
   fetchPlatformFlow,
@@ -42,8 +43,7 @@ const DEFAULT_LIMIT = 10;
 
 /** What to do next, per reason. A refusal that does not say how to fix it is a dead end. */
 const ADVICE: Record<MemoryUnavailable, string> = {
-  [MemoryUnavailable.NOT_LINKED]:
-    'this project is not linked to a Reticle workspace, so there is no shared memory to read. Run `npx @reticlehq/server login` in the project to link it.',
+  [MemoryUnavailable.NOT_LINKED]: MEMORY_NOT_LINKED_ADVICE,
   [MemoryUnavailable.DISABLED]:
     'this project is linked but memory sync is turned off in .reticle/cloud.json, so nothing is being shared. Enable `sync.memory` to use it.',
   [MemoryUnavailable.UNREACHABLE]:
