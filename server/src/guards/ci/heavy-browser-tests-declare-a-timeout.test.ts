@@ -245,7 +245,8 @@ function loopBody(text: string, headOpen: number): string | null {
 // 20: feedback that cannot be sent, saved to a temp project instead of the checkout it ran in.
 // 21: a source edit on a real Vite dev server, polled until the plain URL serves it.
 // 22: a run's frame budget, filmed tick by tick into a real run directory until it is full.
-const EXPECTED_IO_LOOP_FILES = 22;
+// 23: the sync daemon walking a stream of changes, each cycle reading and writing a real root.
+const EXPECTED_IO_LOOP_FILES = 23;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];
