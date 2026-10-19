@@ -431,6 +431,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       bridge.sessions.noSessionHint(),
       verifyHttp?.port,
       bridge.sessions.noSessionLead(),
+
       bridge.sessions.all(),
     );
   });

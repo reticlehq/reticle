@@ -62,16 +62,37 @@ export function planKill(input: {
   recordedPid: number | null;
   /** Whether the port answers `/status`, i.e. whatever holds it is a Reticle daemon. */
   answersStatus: boolean;
+  /** Whether the user has requested to force the kill. */
   force: boolean;
 }): KillPlan {
   const { listener, recordedPid, answersStatus, force } = input;
   if (null === listener) {
-    // No listener identified. On Windows and in slim containers that means the lookup could not run
-    // rather than that the port is free, so the recorded pid is the best target we have — and the
-    // report says which of the two it is rather than implying a lookup we never made.
-    if (null === recordedPid)
-      return { action: KillAction.NOTHING, forced: false, identifiedListener: false };
-    return { action: KillAction.KILL, pid: recordedPid, forced: false, identifiedListener: false };
+    // When the listener lookup is unavailable, /status can confirm that the port belongs to Reticle,
+    // but without a trusted process id there is no safe process to terminate.
+    if (null !== recordedPid) {
+      return {
+        action: KillAction.KILL,
+        pid: recordedPid,
+        forced: false,
+        identifiedListener: false,
+      };
+    }
+
+    // The port is known to be a Reticle daemon, but without a pid there is no safe process to kill.
+    if (answersStatus) {
+      return {
+        action: KillAction.REFUSE,
+        forced: false,
+        identifiedListener: false,
+        reason: PID_UNKNOWN_REFUSAL_REASON,
+      };
+    }
+
+    return {
+      action: KillAction.NOTHING,
+      forced: false,
+      identifiedListener: false,
+    };
   }
   const ours = answersStatus || listener.pid === recordedPid;
   if (ours || force) {
@@ -145,10 +166,27 @@ async function terminate(pid: number): Promise<{ gone: boolean; escalated: boole
 const PROXY_SPARED_NOTE =
   'only the listener was signalled. Any `reticle mcp` proxy on this port holds a client connection, ' +
   'not the port, and was left alone — it goes dormant and starts a fresh daemon on the next tool call.';
+const PID_UNKNOWN_REFUSAL_REASON =
+  'The port answers /status as a Reticle daemon, but Reticle could not determine its pid. ' +
+  'Refusing to report success because the daemon is still running.';
+
+const PID_SURVIVED_KILL_NOTE = (pid: number): string =>
+  `pid ${String(pid)} survived SIGKILL, so it is not yours to kill (permissions) or is an ` +
+  `unkillable zombie. The port is still held. ${PROXY_SPARED_NOTE}`;
+
+const PID_EXITED_PORT_HELD_NOTE = (pid: number): string =>
+  `pid ${String(pid)} exited, but the port is still held. ${PROXY_SPARED_NOTE}`;
 
 /** `reticle kill` — free the port. Resolves to whether the port is now free. */
-export async function runKill(port: number, force: boolean): Promise<boolean> {
-  const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
+export async function runKill(
+  port: number,
+  force: boolean,
+  terminateProcess: typeof terminate = terminate,
+): Promise<boolean> {
+  const presence = await probePresence(port, {
+    tcpOpen: probeDaemon,
+    status: fetchStatus,
+  });
   const recorded = readPid(port);
   const plan = planKill({
     listener: findPortHolder(port, captureLookup),
@@ -172,9 +210,44 @@ export async function runKill(port: number, force: boolean): Promise<boolean> {
     log('reticle_kill_nothing_to_do', { port, presence });
     return true;
   }
-  const { gone, escalated } = await terminate(pid);
-  if (gone) removePid(port);
-  log(gone ? 'reticle_killed' : 'reticle_kill_survived', {
+
+  const { gone, escalated } = await terminateProcess(pid);
+
+  if (!gone) {
+    log('reticle_kill_survived', {
+      port,
+      pid,
+      escalated,
+      ...(plan.forced ? { forced: true } : {}),
+      // A recorded PID is not necessarily the process observed listening on the port.
+      listenerIdentified: plan.identifiedListener,
+      note: PID_SURVIVED_KILL_NOTE(pid),
+    });
+    return false;
+  }
+
+  // A dead process does not by itself prove that the port is free. Another process may still
+  // hold the port, so verify the port state before reporting a successful kill.
+  const remainingPresence = await probePresence(port, {
+    tcpOpen: probeDaemon,
+    status: fetchStatus,
+  });
+
+  if (remainingPresence !== PortPresence.FREE) {
+    log('reticle_kill_survived', {
+      port,
+      pid,
+      escalated,
+      ...(plan.forced ? { forced: true } : {}),
+      listenerIdentified: plan.identifiedListener,
+      note: PID_EXITED_PORT_HELD_NOTE(pid),
+    });
+    return false;
+  }
+
+  removePid(port);
+
+  log('reticle_killed', {
     port,
     pid,
     escalated,
@@ -182,10 +255,8 @@ export async function runKill(port: number, force: boolean): Promise<boolean> {
     // Say where the pid came from. Without `lsof` this is the pid we recorded, not the pid we
     // observed listening, and those are different claims.
     listenerIdentified: plan.identifiedListener,
-    note: gone
-      ? PROXY_SPARED_NOTE
-      : `pid ${String(pid)} survived SIGKILL, so it is not yours to kill (permissions) or is an ` +
-        `unkillable zombie. The port is still held. ${PROXY_SPARED_NOTE}`,
+    note: PROXY_SPARED_NOTE,
   });
-  return gone;
+
+  return true;
 }

@@ -280,7 +280,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * parts of a program ask is a thing, and it was seven files in the middle of the CLI. It
    * reaches for nothing itself.
    */
-  ports: [],
+  ports: ['netstat'],
   /**
    * Talking to the person at the terminal: asking, interrupting, showing progress, recording what
    * was said. Named `terminal` and not `console`, which in a JavaScript codebase means the API.
@@ -288,7 +288,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * It reaches for four things and that is honest -- it prints daemon state, port state and
    * telemetry notices, because that is what a setup transcript is made of.
    */
-  terminal: ['binding', 'daemon', 'launch', 'resolve', 'telemetry'],
+  terminal: ['binding', 'daemon', 'launch', 'netstat', 'resolve', 'telemetry'],
+  /** Shared Windows netstat listener parsing. */
+  netstat: [],
   /** A recorded flow and what became of it: the tape, the rewind, the flake, the halt. */
   recording: [],
   /** What a human wrote on a step, and where they pointed when they wrote it. */

@@ -1,3 +1,5 @@
+export { parseNetstatListeners } from '../../netstat/listeners.js';
+
 /**
  * Which ports a process tree is listening on, parsed from the tools that can answer that.
  *
@@ -8,41 +10,11 @@
  * platform's most common React setup.
  */
 
-/** One LISTENING socket and the process that owns it. */
-interface Listener {
-  readonly port: number;
-  readonly pid: number;
-}
-
 /** `lsof -a -p <pids> -iTCP -sTCP:LISTEN -P -n`, NAME column only. */
 export function parseLsofPorts(out: string): number[] {
   const ports = new Set<number>();
   for (const m of String(out).matchAll(/:(\d+)\s*$/gm)) ports.add(Number(m[1]));
   return [...ports];
-}
-
-const NETSTAT_PROTO = 'TCP';
-const NETSTAT_STATE = 'LISTENING';
-const NETSTAT_MIN_COLUMNS = 5;
-
-/**
- * `netstat -ano` on Windows.
- *
- * The port is whatever follows the LAST colon: `[::]:3000` has three of them, so splitting on ':'
- * and taking index 1 reads every IPv6 row as port 0 and silently drops half the table.
- */
-export function parseNetstatListeners(out: string): Listener[] {
-  const rows: Listener[] = [];
-  for (const line of String(out).split(/\r?\n/)) {
-    const f = line.trim().split(/\s+/);
-    if (f.length < NETSTAT_MIN_COLUMNS) continue;
-    if (f[0]?.toUpperCase() !== NETSTAT_PROTO || f[3]?.toUpperCase() !== NETSTAT_STATE) continue;
-    const local = f[1] ?? '';
-    const port = Number(local.slice(local.lastIndexOf(':') + 1));
-    const pid = Number(f[4]);
-    if (Number.isInteger(port) && port > 0 && Number.isInteger(pid)) rows.push({ port, pid });
-  }
-  return rows;
 }
 
 /**
