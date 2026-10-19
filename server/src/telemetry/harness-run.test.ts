@@ -3,6 +3,7 @@ import {
   CountBucket,
   HarnessRunOutcome,
   HarnessRunPhase,
+  HarnessRunReason,
   HarnessRunSource,
   type HarnessRun,
 } from '@reticlehq/core/telemetry';
@@ -60,6 +61,7 @@ describe('harness_run', () => {
       outcome: HarnessRunOutcome.BLOCKED,
       journeys: CountBucket.ZERO,
       replayed: CountBucket.ZERO,
+      reason: HarnessRunReason.OTHER,
     });
   });
 
@@ -94,7 +96,7 @@ describe('harness_run', () => {
 
   it('counts a run the gate refused before it started', () => {
     const t = recorder();
-    reportHarnessBlocked(START, t);
+    reportHarnessBlocked(START, HarnessRunReason.COVERAGE_GATE, t);
     expect(t.runs).toEqual([
       { phase: HarnessRunPhase.STARTED, ...START },
       {
@@ -103,7 +105,52 @@ describe('harness_run', () => {
         outcome: HarnessRunOutcome.BLOCKED,
         journeys: CountBucket.ZERO,
         replayed: CountBucket.ZERO,
+        reason: HarnessRunReason.COVERAGE_GATE,
       },
     ]);
+  });
+});
+
+/*
+ * A blocked or failed run said nothing about WHY. Of the hosted runs that ended in the field, most
+ * were blocked or failed, and neither the refusal (switched off, no credits, not linked, a locked
+ * gate) nor the break was readable from telemetry, so the Harness funnel could not be fixed from data.
+ */
+describe('harness_run says why a run did not drive', () => {
+  it('carries the reason of a run refused before it started', () => {
+    const r = recorder();
+    reportHarnessBlocked(START, HarnessRunReason.HARNESS_OFF, r);
+    expect(r.runs.at(-1)).toMatchObject({
+      outcome: HarnessRunOutcome.BLOCKED,
+      reason: HarnessRunReason.HARNESS_OFF,
+    });
+  });
+
+  it('carries the reason a refusal error names', async () => {
+    const r = recorder();
+    await expect(
+      reportHarnessRun(
+        START,
+        () => Promise.reject(new DriveRefusedError('no credits', HarnessRunReason.NO_CREDITS)),
+        refused,
+        r,
+      ),
+    ).rejects.toThrow('no credits');
+    expect(r.runs.at(-1)).toMatchObject({
+      outcome: HarnessRunOutcome.BLOCKED,
+      reason: HarnessRunReason.NO_CREDITS,
+    });
+  });
+
+  it('names a thrown break as broken, and says nothing on a run that drove', async () => {
+    const r = recorder();
+    await expect(
+      reportHarnessRun(START, () => Promise.reject(new Error('page closed')), refused, r),
+    ).rejects.toThrow();
+    expect(r.runs.at(-1)).toMatchObject({
+      outcome: HarnessRunOutcome.FAILED,
+      reason: HarnessRunReason.BROKEN,
+    });
+    expect(harnessRunEnd(DriveStatus.DONE, { proved: true }).reason).toBeUndefined();
   });
 });

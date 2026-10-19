@@ -13,12 +13,13 @@ import { JourneyBy } from '@reticlehq/core/artifacts';
 import {
   HarnessRunOutcome,
   HarnessRunPhase,
+  HarnessRunReason,
   HarnessRunSource,
   TelemetryEventKind,
   countBucket,
   type HarnessRun,
 } from '@reticlehq/core/telemetry';
-import { DriveOrigin, DriveStatus } from '@/features/harness/drive-runs.js';
+import { DriveOrigin, DriveRefusedError, DriveStatus } from '@/features/harness/drive-runs.js';
 import { getTelemetry, type Telemetry } from './telemetry.js';
 
 export interface HarnessRunStart {
@@ -45,7 +46,8 @@ export function harnessRunSource(
 export function harnessRunEnd(
   status: DriveStatus,
   result: Record<string, unknown> | undefined,
-): Pick<HarnessRun, 'outcome' | 'journeys' | 'replayed'> {
+  reason?: HarnessRunReason,
+): Pick<HarnessRun, 'outcome' | 'journeys' | 'replayed' | 'reason'> {
   const journeys = Array.isArray(result?.['journeys']) ? result['journeys'] : undefined;
   const replayed = (journeys ?? []).filter((j) => JourneyBy.REPLAY === asRecord(j)['by']).length;
   const outcome =
@@ -60,7 +62,19 @@ export function harnessRunEnd(
             : HarnessRunOutcome.NOT_PROVED;
   // An unplanned drive is one journey; a refused one drove none.
   const count = journeys?.length ?? (HarnessRunOutcome.BLOCKED === outcome ? 0 : 1);
-  return { outcome, journeys: countBucket(count), replayed: countBucket(replayed) };
+  // Why it did not drive: only a blocked or failed run has a reason, and a break names itself.
+  const why =
+    HarnessRunOutcome.BLOCKED === outcome
+      ? (reason ?? HarnessRunReason.OTHER)
+      : HarnessRunOutcome.FAILED === outcome
+        ? (reason ?? HarnessRunReason.BROKEN)
+        : undefined;
+  return {
+    outcome,
+    journeys: countBucket(count),
+    replayed: countBucket(replayed),
+    ...(why === undefined ? {} : { reason: why }),
+  };
 }
 
 function emit(telemetry: Pick<Telemetry, 'emit'>, harness: HarnessRun): void {
@@ -93,7 +107,11 @@ export async function reportHarnessRun<
     emit(telemetry, {
       phase: HarnessRunPhase.COMPLETED,
       ...start,
-      ...harnessRunEnd(refused(error) ? DriveStatus.REFUSED : DriveStatus.BROKEN, undefined),
+      ...harnessRunEnd(
+        refused(error) ? DriveStatus.REFUSED : DriveStatus.BROKEN,
+        undefined,
+        error instanceof DriveRefusedError ? error.reason : undefined,
+      ),
     });
     throw error;
   }
@@ -102,12 +120,13 @@ export async function reportHarnessRun<
 /** A run the gate refused before it could start: still somebody who asked for one. */
 export function reportHarnessBlocked(
   start: HarnessRunStart,
+  reason: HarnessRunReason,
   telemetry: Pick<Telemetry, 'emit'> = getTelemetry(),
 ): void {
   emit(telemetry, { phase: HarnessRunPhase.STARTED, ...start });
   emit(telemetry, {
     phase: HarnessRunPhase.COMPLETED,
     ...start,
-    ...harnessRunEnd(DriveStatus.REFUSED, undefined),
+    ...harnessRunEnd(DriveStatus.REFUSED, undefined, reason),
   });
 }

@@ -481,7 +481,7 @@ async function startHudRun(
   // Before the grant: a drive the gate refuses must not take one. The panel shows the prompt.
   const env = await withLinkedCredential(deps, process.env, { sessionId });
   const locked = await harnessLockRefusal(deps, sessionId, env);
-  if (locked !== undefined) return say(locked.split('\n')[0] ?? locked);
+  if (locked !== undefined) return say(locked.text.split('\n')[0] ?? locked.text);
   const platform = serverOptionsFromEnv(env);
   // The person's sentence: the agent's (`MSG_NO_HARNESS_KEY`) names tools they never call.
   if (platform === undefined) return say(HARNESS_NOT_LINKED_HUMAN);

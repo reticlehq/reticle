@@ -108,6 +108,32 @@ export const HarnessRunOutcome = {
 } as const;
 export type HarnessRunOutcome = (typeof HarnessRunOutcome)[keyof typeof HarnessRunOutcome];
 
+/**
+ * Why a Harness run did not drive: only on a `blocked` or `failed` run. Closed, and read off the
+ * refusal that stopped it, never off its sentence, so a reworded message cannot change the count.
+ */
+export const HarnessRunReason = {
+  /** The project has no platform link, so there is nowhere to drive from. */
+  NOT_LINKED: 'not_linked',
+  /** The platform did not confirm the drive in time, or answered something unreadable. */
+  PLATFORM_UNREACHABLE: 'platform_unreachable',
+  /** The Harness is switched off for this project (the default until somebody turns it on). */
+  HARNESS_OFF: 'harness_off',
+  /** The workspace has no credits left. */
+  NO_CREDITS: 'no_credits',
+  /** The workspace has not claimed the Harness. */
+  NOT_ENTITLED: 'not_entitled',
+  /** The project's instrumentation is below the gate, locally or on the platform. */
+  COVERAGE_GATE: 'coverage_gate',
+  /** The page and the daemon come from different builds, so every step would answer unknown. */
+  VERSION_SKEW: 'version_skew',
+  /** The drive started and broke. */
+  BROKEN: 'broken',
+  /** A refusal this list does not name. A growing count here is a gap in this list. */
+  OTHER: 'other',
+} as const;
+export type HarnessRunReason = (typeof HarnessRunReason)[keyof typeof HarnessRunReason];
+
 /** Who started a Harness run. `dashboard` is a run started from the platform's chat. */
 export const HarnessRunSource = {
   AGENT: 'agent',
@@ -129,6 +155,8 @@ export const HarnessRunSchema = z.object({
   /** Only on `completed`: journeys the run answered, and how many of those replayed with no model. */
   journeys: z.nativeEnum(CountBucket).optional(),
   replayed: z.nativeEnum(CountBucket).optional(),
+  /** Only on a `blocked` or `failed` run: why it did not drive. */
+  reason: z.nativeEnum(HarnessRunReason).optional(),
 });
 export type HarnessRun = z.infer<typeof HarnessRunSchema>;
 

@@ -10,6 +10,7 @@
  * No I/O and no tool surface: what to run and where to write it arrive as functions, so this stays
  * a sink the surface hands things to.
  */
+import { HarnessRunReason } from '@reticlehq/core/telemetry';
 import {
   EventType,
   HARNESS_LINES_MAX,
@@ -36,7 +37,15 @@ export type DriveStatus = (typeof DriveStatus)[keyof typeof DriveStatus];
  * Thrown when the platform or the gate refuses a drive before it drives. Releasing a tab reported
  * such a run as "broken", which reads as a fault in the Harness; a refusal is a refusal.
  */
-export class DriveRefusedError extends Error {}
+export class DriveRefusedError extends Error {
+  constructor(
+    message: string,
+    /** Why, as `harness_run` reports it. */
+    readonly reason: HarnessRunReason = HarnessRunReason.OTHER,
+  ) {
+    super(message);
+  }
+}
 
 /** Who asked for the drive. */
 export const DriveOrigin = { AGENT: 'agent', HUD: 'hud', CHAT: 'chat', TRY: 'try' } as const;

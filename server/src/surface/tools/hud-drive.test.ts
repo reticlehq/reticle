@@ -109,7 +109,7 @@ describe('version skew refuses a drive before it spends anything', () => {
       linkedCloud: () => Promise.resolve({ apiKey: 'rk_live_x', url: 'https://app.reticle.test' }),
       sessions: { get: () => tab, resolve: () => tab },
     } as unknown as ToolDeps;
-    const refusal = (await harnessLockRefusal(skewed, 's1', {})) ?? '';
+    const refusal = (await harnessLockRefusal(skewed, 's1', {}))?.text ?? '';
     expect(refusal).toMatch(/^The page's Reticle SDK and this daemon are different builds/);
     expect(refusal).toContain('Install 3.7.0.');
   });
@@ -138,13 +138,15 @@ describe('the platform gate is the lock when the project is linked', () => {
   });
 
   it("keeps the daemon's sentence when the platform says locked too", async () => {
-    expect(await harnessLockRefusal(tabDeps(BELOW), 's1', LINKED, answering(false))).toMatch(
-      /^Harness unlocks at 80% instrumentation/,
-    );
+    expect(
+      (await harnessLockRefusal(tabDeps(BELOW), 's1', LINKED, answering(false)))?.text,
+    ).toMatch(/^Harness unlocks at 80% instrumentation/);
   });
 
   it('refuses on its own reading when no platform answers', async () => {
-    expect(await harnessLockRefusal(tabDeps(BELOW), 's1', {})).toMatch(/^Harness unlocks at 80%/);
+    expect((await harnessLockRefusal(tabDeps(BELOW), 's1', {}))?.text).toMatch(
+      /^Harness unlocks at 80%/,
+    );
   });
 
   it('asks nothing of the platform when this tab is already above the gate', async () => {
@@ -189,7 +191,7 @@ describe('the gate reads what the page carries', () => {
   });
 
   it('still refuses a page that carries neither', async () => {
-    expect(await harnessLockRefusal(pageDeps([]), 'bench', {})).toMatch(
+    expect((await harnessLockRefusal(pageDeps([]), 'bench', {}))?.text).toMatch(
       /This app is at 75%: missing file:line source mapping, stable test ids/,
     );
   });

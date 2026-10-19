@@ -11,6 +11,7 @@
  * them deterministically with no model in the loop at all.
  */
 
+import { HarnessRunReason } from '@reticlehq/core/telemetry';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -288,14 +289,14 @@ export async function answerExplore(
     hosted: platform !== undefined,
   };
   const locked = replayOnly ? undefined : await harnessLockRefusal(deps, sessionId, env);
-  if (locked !== undefined) reportHarnessBlocked(runStart);
   if (locked !== undefined) {
+    reportHarnessBlocked(runStart, locked.reason);
     if (planId !== undefined && platform !== undefined)
-      await reportPlanBlocked(platform, planId, firstLine(locked));
-    throw new Error(locked);
+      await reportPlanBlocked(platform, planId, firstLine(locked.text));
+    throw new Error(locked.text);
   }
   if (!harnessAvailable(env)) {
-    reportHarnessBlocked(runStart);
+    reportHarnessBlocked(runStart, HarnessRunReason.NOT_LINKED);
     throw new HarnessNotLinkedError();
   }
   const harness = randomUUID();

@@ -224,9 +224,9 @@ export async function exploreApp(
   const options = named === undefined ? asked : { ...asked, focus: named.persona };
   const refusal = await refusedForPlan(env, options);
   if (refusal !== undefined)
-    throw MSG_NO_HARNESS_KEY === refusal
+    throw MSG_NO_HARNESS_KEY === refusal.text
       ? new HarnessNotLinkedError()
-      : new DriveRefusedError(refusal);
+      : new DriveRefusedError(refusal.text, refusal.reason);
   // The flows a drive reads and diffs are the PROJECT's, which is where its saves land.
   const reads = withProjectFlows(deps, options.sessionId);
   // No journey named: plan the drive first. The platform's Harness proposes the people worth being;

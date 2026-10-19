@@ -302,7 +302,7 @@ async function runPlan(
   let off = false;
   const poll = setInterval(() => {
     void refusedByPlatform(env, options).then((refusal) => {
-      if (MSG_HARNESS_DISABLED === refusal) off = true;
+      if (MSG_HARNESS_DISABLED === refusal?.text) off = true;
     });
   }, STOP_POLL_MS);
   poll.unref();
@@ -321,7 +321,7 @@ async function runPlan(
     // A replay-only plan started without the model's gates; a fallback is the model, so it asks now.
     fallbackRefused: async () => {
       const refusal = await refusedByPlatform(env, options);
-      return refusal === undefined ? undefined : firstLine(refusal);
+      return refusal === undefined ? undefined : firstLine(refusal.text);
     },
     ...(true === options.confirmDangerous ? { confirmDangerous: true } : {}),
     lease: async () => {

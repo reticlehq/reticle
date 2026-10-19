@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { HarnessRunReason } from '@reticlehq/core/telemetry';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -599,9 +600,10 @@ describe('turning the harness off', () => {
         harnessLock: { reason: 'Harness unlocks at 80%.', prompt: 'Add test ids.' },
       }),
     });
-    await expect(refusal).resolves.toBe(
-      `Harness unlocks at 80%.\n\n${MSG_GATE_PROMPT_LEAD}\nAdd test ids.`,
-    );
+    await expect(refusal).resolves.toEqual({
+      text: `Harness unlocks at 80%.\n\n${MSG_GATE_PROMPT_LEAD}\nAdd test ids.`,
+      reason: HarnessRunReason.COVERAGE_GATE,
+    });
   });
 
   // Persona drive: the credits refusal linked to the API origin (`:17000/settings?group=billing`),
@@ -616,7 +618,8 @@ describe('turning the harness off', () => {
         planUrl: 'https://console.test/settings?group=billing',
       }),
     });
-    expect(refusal).toContain('https://console.test/settings?group=billing');
+    expect(refusal?.text).toContain('https://console.test/settings?group=billing');
+    expect(refusal?.reason).toBe(HarnessRunReason.NO_CREDITS);
   });
 
   it('drives when the platform says the harness is on', async () => {
