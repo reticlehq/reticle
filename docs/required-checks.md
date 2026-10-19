@@ -21,7 +21,7 @@ Set these as required status checks on the default branch:
 
 | check | what it is | what merges without it |
 | --- | --- | --- |
-| `gate` | every job in `ci.yml`: build, tests, e2e, desktop, install, Rust, Windows, macOS, bench, package quality, the break gates | a red build of any kind (bench and the Windows install cells run only after merge) |
+| `gate` | every job in `ci.yml`: build, tests, e2e, desktop, install, Rust, Windows, macOS, bench, package quality, the break gates | a red build of any kind |
 | `dco` | contributions are signed off | an unsigned contribution |
 
 package-quality and the break gates (`launchers`, `early-gates`, `break-matrix`) run as jobs inside `ci.yml` and are covered by `gate`. They used to be separate workflows with no `merge_group` trigger, so requiring them by name would have stalled the queue.

@@ -13,8 +13,8 @@ on:
   merge_group:
   # The full Windows install matrix, once a day, off the critical path.
   #
-  # A PR runs ONE Windows scaffold (`vite-react`); the merge queue runs none (see `install_matrix`
-  # in the `changes` job). Ten
+  # A PR runs ONE Windows scaffold (`vite-react`); the merge queue runs all thirteen (see
+  # `install_matrix` in the `changes` job). Ten
   # windows-latest runners requested at once is more than the pool hands out: measured on run
   # 35297084015, nine cells started immediately and the tenth waited 37 minutes for a machine, then
   # ran for 8 and ended the build. A third of that run's 56-minute wall clock was one cell queuing.
@@ -92,8 +92,7 @@ jobs:
 
   # Whether .github/flaky.json is current. Its own job, and nothing waits on it: as a step in
   # format-check, an expired entry failed every job that needs format-check, so the nightly would
-  # have stopped running bench and the Windows install cells, the jobs whose three green nightlies
-  # the expiry exists to force. `gate` still requires it. An expired entry is an error on the
+  # have stopped running the jobs whose three green nightlies the expiry exists to force. `gate` still requires it. An expired entry is an error on the
   # nightly, a manual run on main, or a PR that edits flaky.json; anywhere else it is a warning,
   # so a date alone never turns an unrelated change red.
   flaky-quarantine:
@@ -772,20 +771,21 @@ jobs:
           # Coverage is not reduced, it is rescheduled, exactly as it is for a pull request: the
           # nightly schedule runs every scaffold on Windows, `workflow_dispatch` runs the full matrix
           # on demand, and a queue entry is the same commit the PR run already graded.
-          # The QUEUE runs no Windows install cell. The pull request already graded the same diff
-          # on Windows, and one flaky cell (next-app-router, "SDK is in the page and never dialled
-          # the bridge") ejected 13 of 17 failed queue entries, rebuilding every entry behind it.
-          # Every scaffold still runs on Windows nightly and on workflow_dispatch.
+          # The QUEUE runs every Windows install cell again. They left it when one flaky cell
+          # (next-app-router, "SDK is in the page and never dialled the bridge") ejected 13 of 17
+          # failed queue entries. They came back after green nightlies on main from 2026-10-16 to
+          # 2026-10-19 (#1514). If queue entries wait for Windows runners, lower the ruleset's
+          # max_entries_to_build; do not drop cells again without a flaky.json entry.
           #
           # A PULL REQUEST runs three Linux scaffolds, one per distinct init path (Vite, Next app
           # router, the monorepo walk-up), and one Windows scaffold that is not the flaky one. The
           # full ten were the largest share of runner minutes and caught nothing the other jobs
           # did not in the measured window, while starving the 20-job pool the queue also needs.
-          # The QUEUE still runs all thirteen on Linux before anything lands; nightly runs all thirteen on both.
+          # The QUEUE runs all thirteen on Linux and Windows before anything lands, and so does nightly.
           PR_LINUX='vite-react next-app-router monorepo-subdir'
           case "${{ github.event_name }}" in
             pull_request) LINUX="$PR_LINUX"; WINDOWS='vite-react' ;;
-            merge_group) LINUX="$ALL"; WINDOWS="" ;;
+            merge_group) LINUX="$ALL"; WINDOWS="$ALL" ;;
             *) LINUX="$ALL"; WINDOWS="$ALL" ;;
           esac
           entries=''
@@ -884,9 +884,8 @@ jobs:
   install-gate:
     strategy:
       fail-fast: false
-      # The event-specific matrix lives in changes: PRs run four cells (3 Linux + 1 Windows),
-      # queue entries thirteen Linux cells, and nightly/manual runs all thirteen scaffolds on
-      # Linux and Windows.
+      # The event-specific matrix lives in changes: PRs run four cells (3 Linux + 1 Windows), and
+      # queue entries, nightly and manual runs all thirteen scaffolds on Linux and Windows.
       matrix: ${{ fromJSON(needs.changes.outputs.install_matrix) }}
     runs-on: ${{ matrix.os }}
     needs: [install-packages, changes]
@@ -1281,12 +1280,11 @@ jobs:
   bench:
     runs-on: ubuntu-latest
     needs: [format-check, changes]
-    # After merge: `bench:full` on push to main (path-routed), nightly and on demand.
-    # The merge queue does NOT run bench until it is green on three consecutive nightlies on
-    # main; until then it is quarantined in .github/flaky.json. A red bench in the queue would
-    # eject every entry that touches bench paths.
+    # `bench:full` in the merge queue and on push to main (both path-routed), nightly and on demand.
+    # It joined the queue after green nightlies on main from 2026-10-16 to 2026-10-19 (#1514), so a
+    # token regression stops in the queue instead of turning main red.
     if: >-
-      (github.event_name == 'push' && needs.changes.outputs.bench == 'true') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      ((github.event_name == 'push' || github.event_name == 'merge_group') && needs.changes.outputs.bench == 'true') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

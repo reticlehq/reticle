@@ -62,7 +62,7 @@ Every change runs `pnpm verify`. Some changes need one more gate: the table in `
 
 ## What must be green to merge
 
-`gate` plus `dco`. Bench and the full Windows install matrix still run only after merge, quarantined in [`.github/flaky.json`](.github/flaky.json); each one joins the merge queue, and leaves that file, after three consecutive green nightlies on `main`.
+`gate` plus `dco`. The merge queue runs bench and the full Windows install matrix before a change lands. A job that runs after merge but not in the queue needs an entry in [`.github/flaky.json`](.github/flaky.json), and it leaves that file after three consecutive green nightlies on `main`.
 
 ---
 
@@ -100,7 +100,7 @@ For a large change, open an issue first, so that we can agree on the approach be
 ### What you can expect from us
 
 - **A reply to a claim or a question within a day, and a first review within two days.** If a PR has waited longer, say so on it; that is on us, not you.
-- **CI on a pull request takes about ten minutes.** The slowest suites (the benchmark and the full Windows install matrix) run after merge and nightly instead, so a PR you can act on is not held up by a job you cannot. Each one is quarantined in `.github/flaky.json` until it is green enough to join the merge queue. Windows unit tests run on a PR when Windows-sensitive source changed.
+- **CI on a pull request takes about ten minutes.** The slowest suites (the benchmark and the full Windows install matrix) run in the merge queue, not on the PR, so a PR you can act on is not held up by a job you cannot. Windows unit tests run on a PR when Windows-sensitive source changed.
 - **Once it is approved, the merge queue lands it.** You do not need to keep rebasing while it waits.
 
 ### AI-assisted contributions
