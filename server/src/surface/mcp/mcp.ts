@@ -688,7 +688,11 @@ export function createMcpServer(
     // which agent client converts best was empty on every event ever sent.
     void runAsAgent(deps.attachId, () => Promise.resolve(reportMcpConnected(info.name)));
   };
-  server.server.onclose = () => noteAgentDetached(deps.attachId);
+  server.server.onclose = () => {
+    noteAgentDetached(deps.attachId);
+    // A reconnect is a new owner and never takes these leases back; start their short grace.
+    deps.pool?.detachOwner(deps.attachId);
+  };
   // Which agent is on the other end, for a feedback report. Registered as a lazy hook rather than
   // read here: the handshake has not happened yet at construction time, and a report filed twenty
   // tool calls later is exactly when we want the answer.

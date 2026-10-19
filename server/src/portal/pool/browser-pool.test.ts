@@ -7,6 +7,7 @@ import { getEventListeners } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import {
   BrowserPool,
+  ORPHANED_LEASE_GRACE_MS,
   PoolAtCapacityError,
   type Launcher,
   type PooledBrowser,
@@ -445,6 +446,47 @@ describe('BrowserPool', () => {
     const lease = await pool.acquire('http://x/c');
     expect(lease.sessionId).toBeDefined();
     expect(pool.activeCount()).toBe(1);
+  });
+
+  // An agent whose MCP connection closed never came back for its leases, and each one kept a
+  // headed window open for the full TTL. Five reconnects in five minutes was five windows.
+  it('reclaims the leases of a detached agent after a short grace, not the full TTL', async () => {
+    const { launch } = fakeLauncher();
+    let clock = 1000;
+    const pool = new BrowserPool(launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+      now: () => clock,
+      leaseTtlMs: 300_000,
+    });
+    const gone = await pool.acquire('http://localhost:3000/a', { owner: 'agent-1' });
+    const back = await pool.acquire('http://localhost:3000/b', { owner: 'agent-1' });
+    const other = await pool.acquire('http://localhost:3000/c', { owner: 'agent-2' });
+
+    pool.detachOwner('agent-1');
+    clock += ORPHANED_LEASE_GRACE_MS - 1;
+    pool.touch(back.sessionId); // the agent reconnected and used this one again
+    expect(await pool.sweepExpired()).toEqual([]);
+
+    clock += 2;
+    expect(await pool.sweepExpired()).toEqual([gone.sessionId]);
+    expect(pool.leasedSessionIds().sort()).toEqual([back.sessionId, other.sessionId].sort());
+  });
+
+  // An idle Chromium held about 90MB, plus its helpers, until the daemon itself went idle.
+  it('closes the browser when its last lease is released, and relaunches on the next acquire', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+    const a = await pool.acquire('http://localhost:3000/a');
+    const b = await pool.acquire('http://localhost:3000/b');
+    await pool.release(a.sessionId);
+    expect(browsers[0]?.isConnected()).toBe(true);
+    await pool.release(b.sessionId);
+    expect(browsers[0]?.isConnected()).toBe(false);
+
+    await pool.acquire('http://localhost:3000/c');
+    expect(browsers).toHaveLength(2);
+    expect(browsers[1]?.isConnected()).toBe(true);
   });
 
   it('sweepExpired reclaims a lease untouched past the TTL; touch keeps it alive', async () => {

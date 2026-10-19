@@ -59,6 +59,11 @@ export interface Lease {
 
 /** Default lease time-to-live: a lease untouched for this long is presumed orphaned and reclaimed. */
 export const DEFAULT_LEASE_TTL_MS = 5 * 60_000;
+/**
+ * How long a lease outlives the MCP connection that took it. Long enough for an agent whose
+ * connection only blipped to touch it again; short enough that a gone agent's window closes soon.
+ */
+export const ORPHANED_LEASE_GRACE_MS = 30_000;
 
 /** Default cap on how long a lease's initial navigation may take before it fails (frees the slot). */
 const DEFAULT_NAV_TIMEOUT_MS = 30_000;
@@ -137,6 +142,8 @@ interface ActiveLease {
   owner?: string;
   /** Last time an agent touched this lease (acquire or any tool call); drives orphan reclaim. */
   touchedAt: number;
+  /** When the connection that took it closed, until it is touched again. */
+  detachedAt?: number;
   /**
    * The websocket address the page's SDK reported it could not reach, if it said so.
    *
@@ -345,7 +352,19 @@ export class BrowserPool {
   /** Mark a lease as still in use (called on agent activity) so the reaper doesn't reclaim it. */
   touch(sessionId: string): void {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease !== undefined) lease.touchedAt = this.#now();
+    if (lease === undefined) return;
+    lease.touchedAt = this.#now();
+    delete lease.detachedAt;
+  }
+
+  /**
+   * The MCP connection `owner` closed. Its leases go after {@link ORPHANED_LEASE_GRACE_MS} unless it
+   * touches them again: a reconnect is a new owner, so nothing else would ever hand them back, and
+   * each one held a browser window open for the full TTL.
+   */
+  detachOwner(owner: string): void {
+    const now = this.#now();
+    for (const lease of this.#active.values()) if (lease.owner === owner) lease.detachedAt = now;
   }
 
   /**
@@ -540,7 +559,11 @@ export class BrowserPool {
   async sweepExpired(): Promise<string[]> {
     const now = this.#now();
     const expired = [...this.#active.entries()]
-      .filter(([, lease]) => now - lease.touchedAt > this.#ttl)
+      .filter(
+        ([, lease]) =>
+          now - lease.touchedAt > this.#ttl ||
+          (lease.detachedAt !== undefined && now - lease.detachedAt >= ORPHANED_LEASE_GRACE_MS),
+      )
       .map(([sessionId]) => sessionId);
     for (const sessionId of expired) await this.#release(sessionId);
     this.#reapedLeases += expired.length;
@@ -814,6 +837,22 @@ export class BrowserPool {
     await lease.hostStub?.dispose().catch(() => undefined);
     await lease.context.close().catch(() => undefined);
     this.#releaseSlot();
+    await this.#closeIfIdle();
+  }
+
+  /**
+   * Close the browsers once nothing holds or waits for a lease. An idle Chromium kept its memory
+   * until the daemon itself went idle. Every acquire claims a slot before it touches a browser, so
+   * nothing occupied means no acquire is between launching a browser and using it.
+   */
+  async #closeIfIdle(): Promise<void> {
+    if (this.#active.size > 0 || this.#occupied > 0 || this.#waiters.length > 0) return;
+    for (const slot of [this.#headless, this.#headed]) {
+      const browser = slot.browser;
+      if (browser === undefined || slot.launching !== undefined) continue;
+      slot.browser = undefined;
+      await browser.close().catch(() => undefined);
+    }
   }
 
   /** Synchronously claim a slot if under the cap. Returns true on success (caller proceeds). */
