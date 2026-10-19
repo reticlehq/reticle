@@ -15,6 +15,7 @@ import {
   type PooledDialog,
   type PooledPage,
 } from './browser-pool.js';
+import { NotHtmlDocumentError, READER_NOT_HTML } from './zero-install.js';
 
 class FakePage implements PooledPage {
   gotoUrls: string[] = [];
@@ -183,6 +184,20 @@ describe('BrowserPool', () => {
     const page = browsers[0]?.contexts[0]?.pages[0];
     expect(page?.evaluated).toEqual(['/* reader */']);
     expect(page?.initScripts.map((s) => s.script)).toEqual(['/* reader */']);
+  });
+
+  // #1701: the reader does nothing on an `.svg` or other non-HTML document, and the lease says why.
+  it('rejects with NotHtmlDocumentError when the page is not an HTML document', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+      zeroInstallScript: () => '/* reader */',
+    });
+    const lease = await pool.acquire('http://localhost:3000/icon.svg');
+    const page = browsers[0]?.contexts[0]?.pages[0];
+    if (page !== undefined) page.evaluateResult = READER_NOT_HTML;
+    await expect(lease.injectReader?.()).rejects.toBeInstanceOf(NotHtmlDocumentError);
   });
 
   it('injects nothing, and says so, when the daemon has no reader to give', async () => {

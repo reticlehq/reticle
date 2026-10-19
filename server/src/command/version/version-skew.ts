@@ -242,6 +242,34 @@ export function describeSdkBehind(
 }
 
 /**
+ * True when every connected page reported the daemon's SDK version.
+ *
+ * An empty list is not a match: `Array.every` is true for no pages, and no pages is the case that
+ * still restarts the daemon. A page that did not report a version does not match.
+ */
+function pagesMatchDaemon(
+  pageSdkVersions: readonly (string | undefined)[],
+  daemonVersion: string,
+): boolean {
+  if (0 === pageSdkVersions.length) return false;
+  return pageSdkVersions.every((version) => 0 === compareVersions(version, daemonVersion));
+}
+
+/**
+ * Pages sit on the older daemon. Restarting it now moves the daemon to the agent and skews every
+ * page (#1709). The SDK update is the step that puts all three on one version.
+ */
+function sdkUpdateConverges(daemonVersion: string, agentVersion: string): string {
+  return (
+    `The connected pages run SDK ${daemonVersion}, the same version as this daemon. ` +
+    `\`reticle stop\` starts a daemon at ${agentVersion} and skews every page. ` +
+    `${sdkFix(agentVersion)} ` +
+    `That SDK update puts the pages, the daemon and the agent on one version. ` +
+    'Restart the daemon only after the pages load the new SDK.'
+  );
+}
+
+/**
  * The fix line for another Reticle process that disagrees with the daemon it attached to.
  *
  * Branches on DIRECTION, which the old unconditional `reticle stop` did not (#618). Restarting the
@@ -251,6 +279,11 @@ export function describeSdkBehind(
  * contract hashes with the roles unchanged. Nothing the agent can do converges that, so say so and
  * ask for the one thing that does, exactly as the SDK branch already does when the page is stale.
  *
+ * It also branches on the connected pages' SDK versions (#1709). When the daemon is the older half
+ * and every connected page runs that same version, a restart replaces one mismatch with a wider
+ * one: the new daemon and every page. Name the SDK update instead. No pages, or pages already on
+ * the agent's version, still restart the daemon.
+ *
  * Both versions are named by ROLE, not by which side is calling: this is read from both ends — a
  * CLI judging the daemon it attached to, and the daemon judging an agent that announced itself —
  * and the advice depends on which piece is behind, not on who noticed.
@@ -258,6 +291,7 @@ export function describeSdkBehind(
 export function daemonFix(
   daemonVersion: string | undefined,
   agentVersion: string | undefined,
+  pageSdkVersions: readonly (string | undefined)[] = [],
 ): string {
   const order =
     agentVersion === undefined ? undefined : compareVersions(daemonVersion, agentVersion);
@@ -267,6 +301,15 @@ export function daemonFix(
       'replace it with another newer daemon and leave the same mismatch. Tell the human to restart ' +
       'the agent so it spawns a current MCP server (or update the package it spawns), then retry.'
     );
+  }
+  if (
+    order !== undefined &&
+    order < 0 &&
+    daemonVersion !== undefined &&
+    agentVersion !== undefined &&
+    pagesMatchDaemon(pageSdkVersions, daemonVersion)
+  ) {
+    return sdkUpdateConverges(daemonVersion, agentVersion);
   }
   return (
     'A daemon outlives the agents attached to it, so it keeps serving its OWN code until it restarts ' +

@@ -68,6 +68,7 @@ interface QueryLike {
     dataUpdatedAt?: number;
     error?: { message?: string } | null;
     data?: unknown;
+    isInvalidated?: boolean;
   };
   isStale?: () => boolean;
 }
@@ -84,6 +85,7 @@ export interface QuerySnapshot {
   status: string;
   fetchStatus: string | undefined;
   isStale: boolean | undefined;
+  isInvalidated: boolean | undefined;
   dataUpdatedAt: number | undefined;
   error: string | null;
   data: unknown;
@@ -115,6 +117,7 @@ export function tanstackQueryStore(client: QueryClientLike): StoreLike {
           status: query.state.status,
           fetchStatus: query.state.fetchStatus,
           isStale: query.isStale?.(),
+          isInvalidated: query.state.isInvalidated,
           dataUpdatedAt: query.state.dataUpdatedAt,
           error: query.state.error?.message ?? null,
           data: query.state.data,

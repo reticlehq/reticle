@@ -3,6 +3,8 @@ import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { DRIVE_PATH, MCP_SHUTDOWN_EVENT, MCP_SSE_PATH, STATUS_PATH } from '@reticlehq/core';
+import { PEER_CONTRACT_PARAM, PEER_VERSION_PARAM } from './command/version/peer-announce.js';
+import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { createSharedServer, type SharedServer } from './surface/http-server.js';
 
 let shared: SharedServer | undefined;
@@ -109,11 +111,9 @@ function fakeMcpServer(): McpServer {
  * Open an SSE MCP connection and resolve once the response headers arrive. `agent: false` gives each
  * connection its own socket — SSE responses are long-lived, so pooling would serialize them.
  */
-function openSse(port: number): Promise<http.ClientRequest> {
+function openSse(port: number, path = MCP_SSE_PATH): Promise<http.ClientRequest> {
   return new Promise((resolve) => {
-    const req = http.get({ host: '127.0.0.1', port, path: MCP_SSE_PATH, agent: false }, () =>
-      resolve(req),
-    );
+    const req = http.get({ host: '127.0.0.1', port, path, agent: false }, () => resolve(req));
     req.on('error', () => undefined); // destroy surfaces as ECONNRESET — expected, ignore
   });
 }
@@ -159,6 +159,59 @@ describe('attachAgentPresence — agent-independent MCP connection presence', ()
     await tick();
     await tick();
     expect(events).toEqual([true, false]); // last agent gone → human's turn
+  });
+});
+
+/** A newer agent announcing a contract this daemon does not speak. */
+function newerAgentPath(): string {
+  return `${MCP_SSE_PATH}?${PEER_VERSION_PARAM}=99.0.0&${PEER_CONTRACT_PARAM}=not-our-contract`;
+}
+
+/**
+ * The skew sentence is built when the agent connects, from the pages already up (#1709).
+ */
+describe('SSE skew advice reads the connected page SDK versions', () => {
+  it('pages on the daemon version: update the SDK, and do not restart', async () => {
+    shared = createSharedServer();
+    shared.attachPageSdkVersions(() => [SERVER_VERSION, SERVER_VERSION]);
+    let skew: string | undefined;
+    shared.attachMcp((peerSkew) => {
+      skew = peerSkew;
+      return fakeMcpServer();
+    });
+    const port = await listen(shared);
+    const req = await openSse(port, newerAgentPath());
+    expect(skew).toBeDefined();
+    expect(skew).not.toMatch(/Run `reticle stop`/);
+    expect(skew).toContain('@reticlehq/browser@99.0.0');
+    req.destroy();
+  });
+
+  it('pages on the agent version: keep the restart', async () => {
+    shared = createSharedServer();
+    shared.attachPageSdkVersions(() => ['99.0.0']);
+    let skew: string | undefined;
+    shared.attachMcp((peerSkew) => {
+      skew = peerSkew;
+      return fakeMcpServer();
+    });
+    const port = await listen(shared);
+    const req = await openSse(port, newerAgentPath());
+    expect(skew).toMatch(/Run `reticle stop`/);
+    req.destroy();
+  });
+
+  it('no pages: keep the restart', async () => {
+    shared = createSharedServer();
+    let skew: string | undefined;
+    shared.attachMcp((peerSkew) => {
+      skew = peerSkew;
+      return fakeMcpServer();
+    });
+    const port = await listen(shared);
+    const req = await openSse(port, newerAgentPath());
+    expect(skew).toMatch(/Run `reticle stop`/);
+    req.destroy();
   });
 });
 

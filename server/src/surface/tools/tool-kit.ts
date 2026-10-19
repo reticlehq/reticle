@@ -350,7 +350,7 @@ export function withScreenshotDoc(tool: ToolDef): ToolDef {
 
 /** The one sentence every tool that takes a step screenshot says about it. */
 export const SCREENSHOT_DOC =
-  ' `screenshot.path` is a picture of the page at the outcome: open it when the look of the page matters; reading it is your choice.';
+  ' `screenshot.path` is a picture of the page at the outcome: open it when the look of the page matters; reading it is your choice. When `pending: true`, the file may still be in write; wait before you read it.';
 
 /**
  * Fields that `runTool` / `withControl` splice onto EVERY session-bound tool result at runtime.

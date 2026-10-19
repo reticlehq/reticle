@@ -9,12 +9,16 @@ import {
   ActionType,
   AnchorKind,
   DANGEROUS_ACTION_CONFIRM_ARG,
+  DEGRADED_ANCHOR_ROLE,
+  DriftReason,
+  isConsequenceDrift,
   EventType,
   FLOW_FILE_VERSION,
   FLOW_SIGNAL_TIMEOUT_MS,
   FlowErrorCode,
   FlowFileSchema,
   HealStatus,
+  QueryBy,
   ReticleCommand,
   ReplayStatus,
   type CommandResult,
@@ -143,6 +147,60 @@ function renamedSession(old: string, presentTestids: string[]): FakeSession {
     true,
     [signalEvent(HEALABLE_SIGNAL)],
   );
+}
+
+/**
+ * A page with one textbox for each name in `pageNames`.
+ *
+ * A QUERY by role with a `name` matches only the textboxes with that exact name. A QUERY by role
+ * without a `name` lists every textbox, which is what the nearest-name lookup reads.
+ */
+class RoleNameSession extends FakeSession {
+  constructor(private readonly pageNames: string[]) {
+    super(() => ({ elements: [] }));
+  }
+  override command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
+    if (name !== ReticleCommand.QUERY || args['by'] !== QueryBy.ROLE) {
+      return super.command(name, args);
+    }
+    const fields: ElementDescriptor[] = this.pageNames.map((pageName, index) => ({
+      ref: asRef(`e-field-${String(index)}`),
+      role: 'textbox',
+      name: pageName,
+      states: [],
+      visible: true,
+    }));
+    return Promise.resolve({
+      kind: 'command_result',
+      id: 'q',
+      ok: true,
+      result: {
+        elements: fields.filter((f) => args['name'] === undefined || f.name === args['name']),
+      },
+    });
+  }
+}
+
+/** The drift reasons that a replay of the saved flow records. */
+async function driftKinds(
+  store: FlowStore,
+  session: FakeSession,
+  name: string,
+): Promise<DriftReason[]> {
+  const loaded = await store.load(name);
+  if (!loaded.ok) throw new Error('expected ok');
+  const steps = await replayFlow(session, loaded.value, waitForPredicate, FLOW_SIGNAL_TIMEOUT_MS);
+  return steps.flatMap((step) => (step.drift === undefined ? [] : [step.drift.reasonKind]));
+}
+
+/** A fixture flow with one click on a textbox found by role and name. */
+function roleClickStep(role: string, name: string): FlowFile['steps'][number] {
+  return {
+    tool: ReticleTool.ACT,
+    anchor: { kind: AnchorKind.ROLE, role, name },
+    action: ActionType.CLICK,
+    args: {},
+  };
 }
 
 function clickStep(testid: string): FlowFile['steps'][number] {
@@ -377,6 +435,101 @@ describe('FlowStore.heal + reticle_flow_heal', () => {
 
     const res = await heal(store, session, { flow: 'chat', apply: false });
     expect(res.status).toBe(HealStatus.NOTHING_TO_HEAL);
+  });
+
+  /**
+   * Defect: reticlehq/reticle#1689. A role anchor lost its name after the app renamed the field.
+   * Heal then said that the anchors resolved. They did not. The step never ran.
+   * Heal must say that the anchor did not resolve and ask for a hand edit.
+   */
+  it('a renamed role anchor says the anchor did not resolve', async () => {
+    await store.saveFlow(flowFile('chat', [roleClickStep('textbox', 'Search')]));
+    const before = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
+    const session = new RoleNameSession(['Search products']);
+    expect(await driftKinds(store, session, 'chat')).toEqual([DriftReason.COMPONENT_NOT_FOUND]);
+
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
+    expect(res.status).toBe(HealStatus.UNHEALABLE);
+    expect(res.proposals).toEqual([]);
+    expect(res.changed).toEqual([]);
+    expect(res.applied).toBe(false);
+    expect(res.message).not.toMatch(/anchors resolved/i);
+    expect(res.message).toMatch(/did not resolve/i);
+    expect(res.message).toMatch(/by hand/i);
+
+    const after = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
+    expect(after).toEqual(before);
+  });
+
+  /** Defect: reticlehq/reticle#1689. An ambiguous role anchor got the same false message. */
+  it('an ambiguous role anchor says the anchor did not resolve', async () => {
+    await store.saveFlow(flowFile('chat', [roleClickStep('textbox', 'Search')]));
+    const before = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
+    const session = new RoleNameSession(['Search', 'Search']);
+    expect(await driftKinds(store, session, 'chat')).toEqual([DriftReason.ANCHOR_AMBIGUOUS]);
+
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
+    expect(res.status).toBe(HealStatus.UNHEALABLE);
+    expect(res.proposals).toEqual([]);
+    expect(res.changed).toEqual([]);
+    expect(res.applied).toBe(false);
+    expect(res.message).not.toMatch(/anchors resolved/i);
+    expect(res.message).toMatch(/did not resolve/i);
+    expect(res.message).toMatch(/by hand/i);
+
+    const after = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
+    expect(after).toEqual(before);
+  });
+
+  /** Defect: reticlehq/reticle#1689. A degraded step has no anchor, and it got the same false message. */
+  it('a degraded step says the anchor did not resolve', async () => {
+    const degraded: FlowFile['steps'][number] = {
+      ...roleClickStep(DEGRADED_ANCHOR_ROLE, 'unused'),
+      anchor: { kind: AnchorKind.ROLE, role: DEGRADED_ANCHOR_ROLE },
+      degraded: true,
+    };
+    await store.saveFlow(flowFile('chat', [degraded]));
+    const before = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
+    const session = new RoleNameSession(['Search']);
+    expect(await driftKinds(store, session, 'chat')).toEqual([DriftReason.ANCHOR_DEGRADED]);
+
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
+    expect(res.status).toBe(HealStatus.UNHEALABLE);
+    expect(res.proposals).toEqual([]);
+    expect(res.changed).toEqual([]);
+    expect(res.applied).toBe(false);
+    expect(res.message).not.toMatch(/anchors resolved/i);
+    expect(res.message).toMatch(/did not resolve/i);
+    expect(res.message).toMatch(/by hand/i);
+
+    const after = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
+    expect(after).toEqual(before);
+  });
+
+  /** This guards the case heal keeps: the anchor resolved and only the assertion failed. */
+  it('an assertion-only drift still says the anchors resolved and nothing is a rebind', async () => {
+    const step = {
+      ...roleClickStep('textbox', 'Search'),
+      expect: { kind: 'signal', name: 'never-fires' },
+      timeoutMs: 50,
+    } as FlowFile['steps'][number];
+    await store.saveFlow(flowFile('chat', [step]));
+    const before = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
+    const session = new RoleNameSession(['Search']);
+    const kinds = await driftKinds(store, session, 'chat');
+    expect(kinds.length).toBeGreaterThan(0);
+    expect(kinds.every((kind) => isConsequenceDrift(kind))).toBe(true);
+
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
+    expect(res.status).toBe(HealStatus.UNHEALABLE);
+    expect(res.proposals).toEqual([]);
+    expect(res.changed).toEqual([]);
+    expect(res.applied).toBe(false);
+    expect(res.message).toMatch(/anchors resolved/i);
+    expect(res.message).toMatch(/nothing to rebind/i);
+
+    const after = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
+    expect(after).toEqual(before);
   });
 
   it('heal on a green flow is a no-op "nothing to heal"', async () => {

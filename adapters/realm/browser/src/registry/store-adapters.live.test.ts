@@ -147,6 +147,19 @@ describe('store adapters against the libraries they claim to support', () => {
     unsub();
   });
 
+  it('tanstack query: isInvalidated is false before invalidation and true after (#1699)', async () => {
+    const client = new QueryClient();
+    const adapter = tanstackQueryStore(client);
+
+    client.setQueryData(['items'], []);
+    const before = (adapter.getState() as Record<string, { isInvalidated: unknown }>)['items'];
+    expect(before?.isInvalidated).toBe(false);
+
+    await client.invalidateQueries({ queryKey: ['items'], refetchType: 'none' });
+    const after = (adapter.getState() as Record<string, { isInvalidated: unknown }>)['items'];
+    expect(after?.isInvalidated).toBe(true);
+  });
+
   it('recoil: reads a real Loadable, and a PENDING async selector does not take the read down', () => {
     const count = recoilAtom({ key: 'live-count', default: 1 });
     const slow = selector({

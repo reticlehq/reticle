@@ -13,6 +13,8 @@
 import {
   OutwardAction,
   isDangerousActionText,
+  isInertHref,
+  isDangerousNavigation,
   isPaymentField,
   outwardActionOf,
   outwardRefusal,
@@ -50,9 +52,6 @@ function holdsUserText(el: ActionTarget): boolean {
 
 const ANCHOR_TAG = 'A';
 
-/** An href that goes nowhere, so the link is a button in disguise and its text is its action. */
-const INERT_HREF = /^\s*(#.*|javascript:.*)?$/i;
-
 /**
  * Where a real link goes, when it goes somewhere. Its text is CONTENT the app shows (an issue titled
  * "Checkout pay fails" was blocked as a payment); following a link is a navigation, so its target is
@@ -62,7 +61,7 @@ function navigatingHref(el: ActionTarget): string | undefined {
   // By tag, not `instanceof`: a link inside a same-origin iframe has that frame's constructors.
   if (ANCHOR_TAG !== el.tagName) return undefined;
   const href = el.getAttribute('href');
-  return null === href || INERT_HREF.test(href) ? undefined : href;
+  return null === href || isInertHref(href) ? undefined : href;
 }
 
 export function dangerousActionContext(el: ActionTarget): string {
@@ -104,8 +103,14 @@ export function submitControlFor(el: ActionTarget): HTMLElement | null {
   return isHtmlElement(found) ? found : null;
 }
 
-export function requiresDangerousConfirmation(text: string, role?: string): boolean {
-  return isDangerousActionText(text, role);
+/**
+ * Does acting on this control need `confirmDangerous`? A link that navigates is judged by where it
+ * goes (`isDangerousNavigation`). Every other control is judged by the text it shows.
+ */
+export function requiresDangerousConfirmation(el: ActionTarget): boolean {
+  const href = navigatingHref(el);
+  if (href !== undefined) return isDangerousNavigation(href);
+  return isDangerousActionText(dangerousActionContext(el), getRole(el));
 }
 
 /** The outward actions the Harness command being run may take; undefined: not gated. */

@@ -14,7 +14,7 @@ import {
   type HealChange,
   type HealProposal,
 } from '@reticlehq/core';
-import { asString, DriftReason } from '@reticlehq/core';
+import { asString, DriftReason, isConsequenceDrift } from '@reticlehq/core';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { replayFlow } from './flow-replay.js';
 import { applyHealChanges, collectProposals } from './heal.js';
@@ -42,6 +42,9 @@ const HEAL_MESSAGES = {
    */
   NOT_A_REBIND:
     'drift found, but none of it is a renamed locator, so there is nothing to rebind — the anchors resolved and what failed was what the steps assert afterwards. The confidence floor was never consulted. Fix the app so the consequence fires again, or update the step expectations by hand',
+  ANCHOR_UNRESOLVED:
+    'drift found, but a step anchor did not resolve on the page, so the step did not run. Heal does not rebind this kind of anchor, and the confidence floor was not used. Update the step anchor by hand',
+  ANCHOR_NEAREST_PREFIX: 'The nearest candidate on the page is',
   HEALED_UNVERIFIED:
     "rewrote drifted testid anchors. This flow declares its consequences per STEP rather than as a flow `success`, so the rebind was not re-verified end to end — the steps will assert on the next replay, but nothing proved the healed flow still reaches its outcome. Set the flow's `success` (reticle_annotate) to have future heals re-verified before they are written.",
   CONSEQUENCE_BROKEN:
@@ -49,14 +52,29 @@ const HEAL_MESSAGES = {
 } as const;
 
 /**
- * Why heal produced no proposal: a floor it consulted, or a kind of drift it cannot rebind.
+ * Why heal produced no proposal. Three cases.
  *
- * Exported for its own test — the distinction is a sentence a reader ACTS on, and the wrong one
- * sends them to lower a threshold that had no part in the refusal.
+ * A testid anchor drifted, but no candidate cleared the confidence floor: UNHEALABLE.
+ * Every drift is a consequence (the anchors resolved, the assertion failed): NOT_A_REBIND.
+ * Any other drift means an anchor did not resolve, so the step did not run: ANCHOR_UNRESOLVED.
+ * That message names the nearest candidate when there is one.
+ *
+ * Exported for its own test. A reader acts on this sentence, and the wrong one sends them to
+ * lower a threshold that had no part in the refusal.
  */
-export function unhealableMessage(reasons: readonly string[]): string {
-  const rebindable = reasons.some((reason) => DriftReason.TESTID_NOT_FOUND === reason);
-  return rebindable ? HEAL_MESSAGES.UNHEALABLE : HEAL_MESSAGES.NOT_A_REBIND;
+export function unhealableMessage(
+  reasons: readonly DriftReason[],
+  nearest: string | null = null,
+): string {
+  if (reasons.some((reason) => DriftReason.TESTID_NOT_FOUND === reason)) {
+    return HEAL_MESSAGES.UNHEALABLE;
+  }
+  if (reasons.every((reason) => isConsequenceDrift(reason))) {
+    return HEAL_MESSAGES.NOT_A_REBIND;
+  }
+  return null === nearest
+    ? HEAL_MESSAGES.ANCHOR_UNRESOLVED
+    : `${HEAL_MESSAGES.ANCHOR_UNRESOLVED}. ${HEAL_MESSAGES.ANCHOR_NEAREST_PREFIX} "${nearest}".`;
 }
 
 function toChange(proposal: HealProposal): HealChange {
@@ -120,6 +138,7 @@ export async function healFlow(
 
   const proposals = collectProposals(steps);
   if (0 === proposals.length) {
+    const drifts = steps.flatMap((step) => (step.drift === undefined ? [] : [step.drift]));
     return {
       name,
       status: HealStatus.UNHEALABLE,
@@ -127,7 +146,9 @@ export async function healFlow(
       proposals: [],
       changed: [],
       message: unhealableMessage(
-        steps.flatMap((step) => (step.drift === undefined ? [] : [step.drift.reasonKind])),
+        drifts.map((drift) => drift.reasonKind),
+        drifts.find((drift) => !isConsequenceDrift(drift.reasonKind) && null !== drift.nearest)
+          ?.nearest ?? null,
       ),
     };
   }

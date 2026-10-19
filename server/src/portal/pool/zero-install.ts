@@ -32,6 +32,22 @@ export function injectedConnectArgs(opts: InjectedConnect): Record<string, unkno
   };
 }
 
+/** What the reader script returns when it did nothing, because the page is not an HTML document. */
+export const READER_NOT_HTML = 'reticle:not-html-document';
+
+/** The document types that the reader runs on. `document.contentType` is set before the root element. */
+const HTML_CONTENT_TYPES = ['text/html', 'application/xhtml+xml'];
+
+/*
+ * Stop on a page that is not an HTML document, for example an `.svg`. The bundle needs an HTML DOM;
+ * #1701 reports `Cannot read properties of null (reading 'appendChild')` on an SVG. The check
+ * reads `document.contentType`, because an init script runs before the parser makes the root
+ * element. The check binds no name, so it cannot collide with a name that the bundle declares.
+ */
+const NOT_HTML_GUARD =
+  `if (globalThis.document !== undefined && !${JSON.stringify(HTML_CONTENT_TYPES)}.includes(globalThis.document.contentType)) ` +
+  `return ${JSON.stringify(READER_NOT_HTML)};`;
+
 /**
  * The script for a page: install the SDK if the page has none, then connect it to this daemon.
  *
@@ -41,7 +57,15 @@ export function injectedConnectArgs(opts: InjectedConnect): Record<string, unkno
  */
 export function zeroInstallScript(bundle: string, opts: InjectedConnect): string {
   const args = JSON.stringify(injectedConnectArgs(opts));
-  return `(() => {\nif (!globalThis.__reticleInstance) {\n${bundle}\n}\nglobalThis.__reticleInstance.connect(${args});\n})();`;
+  return `(() => {\n${NOT_HTML_GUARD}\nif (!globalThis.__reticleInstance) {\n${bundle}\n}\nglobalThis.__reticleInstance.connect(${args});\n})();`;
+}
+
+/** The page is not an HTML document, so the lease did not give it the zero-install reader. */
+export class NotHtmlDocumentError extends Error {
+  constructor() {
+    super('The page is not an HTML document, so the zero-install reader did not run.');
+    this.name = 'NotHtmlDocumentError';
+  }
 }
 
 let cached: string | null | undefined;

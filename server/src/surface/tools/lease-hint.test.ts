@@ -20,7 +20,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { leaseNotConnectedHint } from './lease-hint.js';
+import { LeaseNotReadyReason } from '@reticlehq/core';
+import { leaseNotConnectedHint, leaseReaderFailedHint } from './lease-hint.js';
 
 describe('leaseNotConnectedHint', () => {
   const hint = leaseNotConnectedHint('http://localhost:5173/', 4400);
@@ -197,5 +198,26 @@ describe('a production build whose SDK was stubbed', () => {
     });
     expect(hint).toContain('4444');
     expect(hint).not.toMatch(/production build/i);
+  });
+});
+
+// #1701: a reader that did not run says why, and that the slot is already free.
+describe('leaseReaderFailedHint', () => {
+  it('sends a page that is not HTML to an HTML page of the app', () => {
+    const hint = leaseReaderFailedHint('http://localhost:3000/icon.svg', {
+      reason: LeaseNotReadyReason.NOT_HTML_DOCUMENT,
+      cause: 'not html',
+    });
+    expect(hint).toContain('http://localhost:3000/icon.svg is not an HTML page');
+    expect(hint).toContain('The lease is released.');
+  });
+
+  it('gives the cause of a reader that failed', () => {
+    const hint = leaseReaderFailedHint('http://localhost:3000/', {
+      reason: LeaseNotReadyReason.READER_FAILED,
+      cause: 'page.addInitScript: Target page, context or browser has been closed',
+    });
+    expect(hint).toContain('Target page, context or browser has been closed');
+    expect(hint).toContain('The lease is released.');
   });
 });

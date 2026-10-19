@@ -31,6 +31,7 @@ import { declaredTestids } from '@/registry/capabilities.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';
 import { refs } from './addressing/refs.js';
 import { getTestIdAttr, readTestId, testIdSelector } from './addressing/testid-attr.js';
+import { stableSelectorFor } from './stable-selector.js';
 
 const SOURCE_ATTR = DATA_RETICLE_SOURCE_ATTR;
 const MAX_PRESENT_TESTIDS = 12;
@@ -940,8 +941,11 @@ function buildEmptyHint(
   const wanted = wantedTextOf(query);
   if (wanted !== undefined) {
     const owner = splitTextOwner(container, wanted, query);
-    if (owner !== undefined) hint.splitText = describe(owner);
-    else if (true === query.matchCase) {
+    if (owner !== undefined) {
+      const described = describe(owner);
+      const selector = stableSelectorFor(owner);
+      hint.splitText = selector === undefined ? described : { ...described, selector };
+    } else if (true === query.matchCase) {
       const shown = caseOnlyMatch(container, wanted);
       if (shown !== undefined) hint.caseMiss = shown;
     }

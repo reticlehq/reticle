@@ -107,6 +107,12 @@ const COMMON_TLDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * One path separator in every spelling that a report can carry: `/` and `\`, and the JSON-escaped
+ * forms `\/`, `\\` and `\\/`. An agent that pastes a JSON string doubles each backslash.
+ */
+const PATH_SEP = String.raw`(?:\\{0,2}\/|\\{1,2})`;
+
+/**
  * The shapes that leak. Ordered most-specific first — a URL carrying inline credentials must be
  * caught as a URL before the bare-token rule chews the middle out of it.
  *
@@ -152,8 +158,10 @@ const REDACTIONS: readonly {
   // sent the surname. Then the rest of the path goes with it. Over-redacting a sentence that follows
   // a bare home directory is the price, and it is the right way round.
   {
-    pattern:
-      /(?:\\\\\?\\)?(?:\/Users\/|\/home\/|[A-Za-z]:[\\/]Users[\\/])[^\\/\r\n"'`]+(?:[\\/][^\s\\/"'`]*)*/g,
+    pattern: new RegExp(
+      String.raw`(?:\\\\\?\\)?(?:${PATH_SEP}(?:Users|home)${PATH_SEP}|[A-Za-z]:${PATH_SEP}Users${PATH_SEP})[^\\/\r\n"'${'`'}]+(?:[\\/][^\s\\/"'${'`'}]*)*`,
+      'gi',
+    ),
     label: 'home-path',
   },
   // Any other absolute path: a Windows one (segments may hold spaces when a separator follows)...

@@ -27,8 +27,16 @@
  * permission flag — and a guard that fires on a control it was never written to catch trains agents
  * to route around it, which generalises to the buttons that DO matter.
  */
-const DANGEROUS_ACTION =
-  /\b(delete|remove|destroy|erase|drop|terminate|revoke|reset|close account|cancel subscription|purchase|buy|pay|payment|place order|confirm order|send money|send funds|transfer|withdraw|refund)\b/i;
+const DESTROY_WORDS =
+  'delete|remove|destroy|erase|drop|terminate|revoke|reset|close account|cancel subscription';
+const MONEY_WORDS =
+  'purchase|buy|pay|payment|place order|confirm order|send money|send funds|transfer|withdraw|refund';
+const DANGEROUS_ACTION = new RegExp(`\\b(${DESTROY_WORDS}|${MONEY_WORDS})\\b`, 'i');
+/** Only the words that destroy something. A link target is judged by these, not by money words. */
+const DESTROY_ACTION = new RegExp(`\\b(${DESTROY_WORDS})\\b`, 'i');
+
+/** Underscores and hyphens join words in names and paths: `delete_account`, `close-account`. */
+const WORD_JOINERS = /[_-]+/g;
 
 /**
  * Roles that pick a VALUE, not perform an action. Selecting "Payment" as a document type is not a
@@ -142,7 +150,23 @@ export function isOpaqueOrigin(origin: string): boolean {
  */
 export function isDangerousActionText(text: string, role?: string): boolean {
   if (role !== undefined && VALUE_PICKER_ROLES.has(role.trim().toLowerCase())) return false;
-  return DANGEROUS_ACTION.test(text.replace(/[_-]+/g, ' '));
+  return DANGEROUS_ACTION.test(text.replace(WORD_JOINERS, ' '));
+}
+
+/**
+ * Is following a link to this href destructive? A link that navigates is a GET: opening a page moves
+ * no money, so a money word in a same-app path (`/billing/payment`) is not a reason to refuse it.
+ * Typing card details has its own guard. The href is dangerous when its path destroys something
+ * (`/account/delete`), or when it goes to a payment provider.
+ */
+/** An href that goes nowhere (`#…`, `javascript:`): the link is a button, judged by its words. */
+const INERT_HREF = /^\s*(#.*|javascript:.*)?$/i;
+export function isInertHref(href: string): boolean {
+  return INERT_HREF.test(href);
+}
+
+export function isDangerousNavigation(href: string): boolean {
+  return isPaymentProviderUrl(href) || DESTROY_ACTION.test(href.replace(WORD_JOINERS, ' '));
 }
 
 // ── What the Harness may press ────────────────────────────────────────────────────────────────

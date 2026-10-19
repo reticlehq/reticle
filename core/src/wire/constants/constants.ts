@@ -867,5 +867,9 @@ export const LeaseNotReadyReason = {
   SDK_STOPPED_ANSWERING: 'sdk_stopped_answering',
   /** The SDK answers, but its tab is hidden: timers and rAF are throttled, so nothing on it verifies. */
   TAB_HIDDEN: 'tab_hidden',
+  /** The page is not an HTML document (an `.svg`, for example), so the zero-install reader did not run. */
+  NOT_HTML_DOCUMENT: 'not_html_document',
+  /** The zero-install reader failed, for example because the tab closed during setup. */
+  READER_FAILED: 'reader_failed',
 } as const;
 export type LeaseNotReadyReason = (typeof LeaseNotReadyReason)[keyof typeof LeaseNotReadyReason];

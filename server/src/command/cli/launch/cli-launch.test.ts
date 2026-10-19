@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import {
+  daemonSkew,
   decideOpen,
   openCommand,
   openInBrowser,
@@ -231,5 +233,35 @@ describe('the browser launcher reports what actually happened', () => {
   // that times out must not invent a failure.
   it('treats an unknown outcome as opened rather than inventing a failure', () => {
     expect(launcherFailure(null, null)).toBeNull();
+  });
+});
+
+/**
+ * The CLI judges an older daemon from `/status`. The page SDK versions on that body decide whether
+ * a restart skews every page (#1709).
+ */
+describe('daemon skew advice reads page SDK versions from /status', () => {
+  const daemonVersion = '0.0.1';
+  const skewed = (pageSdkVersions?: readonly (string | null)[]): string =>
+    daemonSkew({
+      version: daemonVersion,
+      contract: 'old-contract',
+      ...(pageSdkVersions === undefined ? {} : { pageSdkVersions }),
+    }) ?? '';
+
+  it('pages on the daemon version: update the SDK, and do not restart', () => {
+    const message = skewed([daemonVersion, daemonVersion]);
+    expect(message).not.toMatch(/Run `reticle stop`/);
+    expect(message).toContain(`@reticlehq/browser@${SERVER_VERSION}`);
+    expect(message).toContain('skews every page');
+  });
+
+  it('pages on this process version: keep the restart', () => {
+    expect(skewed([SERVER_VERSION])).toMatch(/Run `reticle stop`/);
+  });
+
+  it('no pages: keep the restart', () => {
+    expect(skewed()).toMatch(/Run `reticle stop`/);
+    expect(skewed([])).toMatch(/Run `reticle stop`/);
   });
 });

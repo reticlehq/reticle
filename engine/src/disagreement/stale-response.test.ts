@@ -181,6 +181,29 @@ describe('parallel fan-out is not a race', () => {
     it('still reports a race on `last`, which names a window rather than a page', () => {
       expect(race('last=7d', 'last=30d')).toHaveLength(1);
     });
+
+    // The names alone used to decide it, so a filter that happened to use one of them was paging.
+    it.each([
+      ['first=John', 'first=Jane'],
+      ['size=S', 'size=XL'],
+      ['start=2026-01-01', 'start=2026-02-01'],
+      ['start=2026-01-01&end=2026-01-31', 'start=2026-02-01&end=2026-02-28'],
+      ['after=2026-01-01', 'after=2026-02-01'],
+      ['before=2026-01-01T00:00:00Z', 'before=2026-02-01T00:00:00Z'],
+    ])('still reports a race when %s becomes %s, a filter in a paging name', (one, two) => {
+      const found = race(one, two);
+      expect(found).toHaveLength(1);
+      expect(found[0]?.kind).toBe(ContradictionKind.STALE_RESPONSE_APPLIED);
+    });
+
+    it.each([
+      ['start=0&end=25', 'start=25&end=50'],
+      ['after=eyJpZCI6MTB9', 'after=eyJpZCI6MjB9'],
+      ['before=cur_9', 'before=cur_19'],
+      ['cursor=x', 'cursor=y'],
+    ])('stays silent for %s against %s, a position or a cursor', (one, two) => {
+      expect(race(one, two)).toEqual([]);
+    });
   });
 
   it('STILL reports a race when a selecting parameter changed alongside the page', () => {

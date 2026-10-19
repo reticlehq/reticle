@@ -39,6 +39,11 @@ interface StatusPayload {
    * a coding agent — what `reticle doctor` prints as its coverage line.
    */
   coverage?: TabCoverage[];
+  /**
+   * SDK version of each connected page, same order as the live tabs.
+   * `null` means the page did not report a version. Absent when nothing is connected.
+   */
+  pageSdkVersions?: readonly (string | null)[];
 }
 
 type TabCoverage = { sessionId: string; url?: string } & ReturnType<typeof instrumentationOf>;
@@ -53,6 +58,11 @@ export function statusPayload(
   whyLead?: string,
   /** The live tabs, for their coverage. */
   tabs: readonly InstrumentedTab[] = [],
+  /**
+   * SDK version of each connected page. `null` is a page that did not report one.
+   * Absent when nothing is connected. A newer CLI reads this to choose skew advice (#1709).
+   */
+  pageSdkVersions: readonly (string | null)[] = [],
 ): StatusPayload {
   return {
     running: true,
@@ -74,6 +84,7 @@ export function statusPayload(
             ...instrumentationOf(tab),
           })),
         }),
+    ...(0 === pageSdkVersions.length ? {} : { pageSdkVersions }),
   };
 }
 

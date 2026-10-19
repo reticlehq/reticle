@@ -23,7 +23,11 @@ export const PEER_CONTRACT_PARAM = 'peerContract';
  * undefined when they agree. Returned rather than queued daemon-wide, because it is true only for the
  * agent that announced it (#1136).
  */
-export function agentPeerSkew(version: string | null, contract: string | null): string | undefined {
+export function agentPeerSkew(
+  version: string | null,
+  contract: string | null,
+  pageSdkVersions: readonly (string | undefined)[] = [],
+): string | undefined {
   const skew = describeSkew(
     {
       what: "the agent's MCP server",
@@ -31,7 +35,7 @@ export function agentPeerSkew(version: string | null, contract: string | null): 
       contract: contract ?? undefined,
       // Inverted from cli-launch: here THIS process is the daemon and the peer is the agent's
       // MCP server, so the daemon is the newer half whenever the announcing agent is behind.
-      fix: daemonFix(SERVER_VERSION, version ?? undefined),
+      fix: daemonFix(SERVER_VERSION, version ?? undefined, pageSdkVersions),
     },
     { version: SERVER_VERSION, contract: CONTRACT_FINGERPRINT },
   );

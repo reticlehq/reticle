@@ -113,6 +113,34 @@ describe('paginateQueryResult', () => {
     });
   });
 
+  it('count_only omits count when scopeMissing — 0 is not a measurement when no subtree was searched', () => {
+    const r = paginateQueryResult(
+      { elements: [], count: 0, scopeMissing: true },
+      undefined,
+      true,
+    ) as { count?: number; scopeMissing?: boolean };
+    expect('count' in r).toBe(false);
+    expect(r.scopeMissing).toBe(true);
+  });
+
+  it('omits count when scopeMissing even without count_only — 0 misleads a plain find too', () => {
+    const r = paginateQueryResult(
+      { elements: [], count: 0, scopeMissing: true },
+      undefined,
+      false,
+    ) as { count?: number; elements?: unknown[]; scopeMissing?: boolean };
+    expect('count' in r).toBe(false);
+    expect(r.scopeMissing).toBe(true);
+    expect(Array.isArray(r.elements)).toBe(true);
+  });
+
+  it('count_only preserves count when scope resolved normally', () => {
+    const r = paginateQueryResult({ elements: [], count: 0 }, undefined, true) as {
+      count?: number;
+    };
+    expect(r.count).toBe(0);
+  });
+
   it('passes non-object / element-less results through untouched', () => {
     expect(paginateQueryResult(null, 5, false)).toBeNull();
     expect(paginateQueryResult('err', 5, true)).toBe('err');

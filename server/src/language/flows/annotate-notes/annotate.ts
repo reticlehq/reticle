@@ -121,7 +121,7 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
       if (a.console !== undefined) {
         return flowSuccess(a, {
           kind: PredicateKind.CONSOLE,
-          ...(a.console.level === undefined ? {} : { level: a.console.level }),
+          level: a.console.level ?? 'error',
           ...(a.console.absent === undefined ? {} : { absent: a.console.absent }),
         });
       }

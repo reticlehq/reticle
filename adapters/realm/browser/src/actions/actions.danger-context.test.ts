@@ -208,6 +208,24 @@ describe('a link is judged by where it goes, not by the text it shows', () => {
     await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
     await expect(executeAction(refTo('#b'), 'click')).rejects.toThrow(/confirmDangerous/);
   });
+
+  // #1275: "Orders & invoices" to a billing page was refused. Opening a page moves no money.
+  it('does not block a link to a same-app page whose path has a money word', async () => {
+    document.body.innerHTML =
+      '<a id="p" href="/billing/payments">Orders &amp; invoices</a>' +
+      '<a id="q" href="/billing/payment">Orders &amp; invoices</a>' +
+      '<a id="r" href="/shop/buy">Shop</a>';
+    for (const id of ['#p', '#q', '#r'])
+      await expect(executeAction(refTo(id), 'click')).resolves.toBeDefined();
+  });
+
+  it('still blocks a link to a payment provider, and a Pay button', async () => {
+    document.body.innerHTML =
+      '<a id="s" href="https://checkout.stripe.com/c/pay/xyz">Continue</a>' +
+      '<button id="b">Pay now</button>';
+    await expect(executeAction(refTo('#s'), 'click')).rejects.toThrow(/confirmDangerous/);
+    await expect(executeAction(refTo('#b'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
 });
 
 /*

@@ -25,6 +25,19 @@ function statusField(payload: unknown, key: string): string | undefined {
 }
 
 /**
+ * SDK version of each connected page, from `/status`.
+ *
+ * A missing field is an older daemon: treat it as no pages, which keeps the restart advice.
+ * A non-string entry is a page that did not report a version, and that page does not match.
+ */
+function pageSdkVersionsOf(payload: unknown): readonly (string | undefined)[] {
+  if (typeof payload !== 'object' || null === payload) return [];
+  const raw = (payload as Record<string, unknown>)['pageSdkVersions'];
+  if (!Array.isArray(raw)) return [];
+  return raw.map((value) => ('string' === typeof value && 0 < value.length ? value : undefined));
+}
+
+/**
  * Warn when the daemon already on this port is a different version than this CLI, and attach anyway.
  *
  * Attaching to whatever owns the port is the point of a daemon — but it means an upgrade does not
@@ -50,7 +63,7 @@ export function daemonSkew(status: unknown): string | undefined {
       version: daemonVersion,
       contract: statusField(status, 'contract'),
       // The daemon is the peer here and this process is the agent side.
-      fix: daemonFix(daemonVersion, SERVER_VERSION),
+      fix: daemonFix(daemonVersion, SERVER_VERSION, pageSdkVersionsOf(status)),
     },
     { version: SERVER_VERSION, contract: CONTRACT_FINGERPRINT },
   );

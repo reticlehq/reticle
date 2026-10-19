@@ -19,9 +19,8 @@ import {
   evaluateSeedPrecondition,
   hasOriginLock,
   scrubSeedFromError,
-  waitForLeasedSession,
-  connectOrInject,
 } from './lease-tools.js';
+import { connectOrInject, waitForLeasedSession } from './lease-readiness.js';
 import { assertVerdict } from './assert/assert-verdict.js';
 import {
   evaluatePredicate,
@@ -34,6 +33,7 @@ import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
 import { claimedArtifactRoot } from '@/memory/project/root-claims.js';
 import { PoolAtCapacityError, type BrowserPool, type Lease } from '@/portal/pool/browser-pool.js';
+import { NotHtmlDocumentError } from '@/portal/pool/zero-install.js';
 
 function tool(name: string): (deps: ToolDeps, args: Record<string, unknown>) => Promise<unknown> {
   const def = LEASE_TOOLS.find((t) => t.name === name);
@@ -1677,6 +1677,47 @@ describe('connectOrInject — the lease supplies an SDK only when the page never
       ready: false,
       zeroInstall: false,
     });
+  });
+
+  // #1701: an error from the reader reached the agent as a raw Playwright error. Now it is a named
+  // reason with a short cause, and the lease is released, because nothing can connect to that tab.
+  it('names a reader that failed on a closed tab, and releases the lease', async () => {
+    let released = false;
+    const lease = {
+      injectReader: () =>
+        Promise.reject(
+          new Error(
+            'page.addInitScript: Target page, context or browser has been closed\nCall log:\n  - waiting',
+          ),
+        ),
+      release: () => ((released = true), Promise.resolve()),
+    };
+    expect(await connectOrInject(lease, () => false, wait)).toEqual({
+      ready: false,
+      zeroInstall: false,
+      readerFailure: {
+        reason: LeaseNotReadyReason.READER_FAILED,
+        cause: 'page.addInitScript: Target page, context or browser has been closed',
+      },
+    });
+    expect(released).toBe(true);
+  });
+
+  it('names a page that is not an HTML document, and releases the lease', async () => {
+    let released = false;
+    const lease = {
+      injectReader: () => Promise.reject(new NotHtmlDocumentError()),
+      release: () => ((released = true), Promise.resolve()),
+    };
+    expect(await connectOrInject(lease, () => false, wait)).toEqual({
+      ready: false,
+      zeroInstall: false,
+      readerFailure: {
+        reason: LeaseNotReadyReason.NOT_HTML_DOCUMENT,
+        cause: new NotHtmlDocumentError().message,
+      },
+    });
+    expect(released).toBe(true);
   });
 
   // #1555: a slow first dev compile holds the document past the fixed window, and the app's SDK

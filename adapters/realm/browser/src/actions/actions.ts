@@ -12,7 +12,6 @@ import { isReticleUi } from '@/dom/dom-ignore.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { echoRef, refs } from '@/dom/addressing/refs.js';
 import {
-  dangerousActionContext,
   requiresDangerousConfirmation,
   assertOutwardAllowed,
   assertPaymentEntryAllowed,
@@ -24,7 +23,7 @@ import {
   isAutofillSafeTarget,
   setNativeValue,
 } from './value-input.js';
-import { getRole, isVisible, getStates } from '@/dom/a11y.js';
+import { isVisible, getStates } from '@/dom/a11y.js';
 import { elementHasHoverHandlers } from '@/registry/stores/adapters.js';
 import {
   type ActionTarget,
@@ -193,12 +192,9 @@ function assertActionAllowed(
     assertOutwardAllowed([el, submitter, isActionTarget(dragTarget) ? dragTarget : null]);
   if (action === ActionType.FILL || action === ActionType.TYPE) assertPaymentEntryAllowed(el);
   const sourceDangerous =
-    requiresDangerousConfirmation(dangerousActionContext(el), getRole(el)) ||
-    (submitter !== null &&
-      requiresDangerousConfirmation(dangerousActionContext(submitter), getRole(submitter)));
-  const targetDangerous =
-    isActionTarget(dragTarget) &&
-    requiresDangerousConfirmation(dangerousActionContext(dragTarget), getRole(dragTarget));
+    requiresDangerousConfirmation(el) ||
+    (submitter !== null && requiresDangerousConfirmation(submitter));
+  const targetDangerous = isActionTarget(dragTarget) && requiresDangerousConfirmation(dragTarget);
   if (
     canTrigger &&
     (sourceDangerous || targetDangerous) &&

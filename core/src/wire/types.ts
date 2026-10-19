@@ -200,9 +200,15 @@ export interface QueryEmptyHint {
    * ever match it.
    *
    * The descriptor is the tightest container that holds the whole string; its `ref` is a locator, so
-   * the recovery is `{ scope: <ref>, self: true }` rather than another guess at the text.
+   * the recovery is `{ scope: <ref>, self: true }` rather than another guess at the text. When the
+   * container carries a testid or an id, `selector` names it instead: a selector can be written
+   * into an `act_and_wait` `until` before the action runs, which is when the recovery has to be
+   * written, while a ref exists only after a snapshot (#1147).
    */
-  splitText?: ElementDescriptor;
+  splitText?: ElementDescriptor & {
+    /** A stable CSS selector for the container, present when it carries a testid or an id. */
+    selector?: string;
+  };
   /**
    * Present only when a case-exact TEXT check missed and the page shows the text in another case:
    * what it shows. Reported as "split across children" before, with the same failing check as the

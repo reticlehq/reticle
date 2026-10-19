@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   asRef,
   ActionType,
+  AnnotationKind,
   AnchorKind,
   EventType,
   FLOW_FILE_VERSION,
@@ -18,10 +19,13 @@ import {
   type CommandResult,
   type FlowFile,
   type FlowStep,
+  type Annotation,
+  type Predicate,
   type ReticleEvent,
 } from '@reticlehq/core';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { replayFlow } from './flow-replay.js';
+import { compileAnnotation } from './annotate-notes/annotate.js';
 import type { FlowReplaySession, WaitForSignal } from './flow-replay-types.js';
 
 const BUTTON = 'save';
@@ -74,13 +78,13 @@ class Page implements FlowReplaySession {
   }
 }
 
-function flow(): FlowFile {
+function flow(expect: Predicate = CONSOLE_ABSENT): FlowFile {
   const step: FlowStep = {
     tool: ReticleTool.ACT,
     anchor: { kind: AnchorKind.TESTID, value: BUTTON },
     action: ActionType.CLICK,
     args: {},
-    expect: CONSOLE_ABSENT,
+    expect,
   };
   return { version: FLOW_FILE_VERSION, name: 'f', createdAt: 0, steps: [step] };
 }
@@ -117,6 +121,37 @@ describe('a console-absent step replays the error its own action scheduled', () 
     expect(step?.consoleErrors).toEqual([
       expect.objectContaining({ level: EventType.CONSOLE_ERROR, message: BOOM }),
     ]);
+  });
+
+  it('an omitted console level ignores warnings but rejects errors (#1674)', async () => {
+    const annotation: Annotation = {
+      kind: AnnotationKind.SUCCESS_STATE,
+      console: { absent: true },
+    };
+    const compiled = compileAnnotation(annotation, 0).patch?.success;
+    if (compiled === undefined) throw new Error('expected a compiled console predicate');
+
+    const warningPage = new Page((page) => {
+      page.push(EventType.CONSOLE_WARN, { message: 'dev warning' });
+    });
+    const [warningStep] = await replayFlow(
+      warningPage,
+      flow(compiled),
+      waitForPredicate,
+      STEP_TIMEOUT_MS,
+    );
+    expect(warningStep?.ok).toBe(true);
+
+    const errorPage = new Page((page) => {
+      page.push(EventType.CONSOLE_ERROR, { message: BOOM });
+    });
+    const [errorStep] = await replayFlow(
+      errorPage,
+      flow(compiled),
+      waitForPredicate,
+      STEP_TIMEOUT_MS,
+    );
+    expect(errorStep?.ok).toBe(false);
   });
 
   it('a clean click still passes and carries no console errors', async () => {

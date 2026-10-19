@@ -40,6 +40,44 @@ describe('the daemon remedy branches on which half is behind', () => {
   });
 });
 
+/**
+ * The restart advice ignored the pages (#1709).
+ *
+ * An agent newer than the daemon was told to run `reticle stop`. When every connected page runs
+ * the daemon's SDK version, that restart replaces one mismatch with a wider one: the new daemon
+ * and every page. The SDK update is the step that puts all three on one version.
+ */
+describe('daemon advice looks at the connected pages before it says to restart (#1709)', () => {
+  it('pages on the daemon version: update the SDK, and do not restart', () => {
+    const fix = daemonFix('2.3.0', '2.4.1', ['2.3.0', '2.3.0']);
+    expect(fix).not.toMatch(/Run `reticle stop`/);
+    expect(fix).toContain('skews every page');
+    expect(fix).toContain('@reticlehq/browser@2.4.1');
+    expect(fix).toContain('pages, the daemon and the agent');
+  });
+
+  it('pages on the agent version: keep the restart', () => {
+    const fix = daemonFix('2.3.0', '2.4.1', ['2.4.1', '2.4.1']);
+    expect(fix).toMatch(/Run `reticle stop`/);
+    expect(fix).not.toContain('skews every page');
+  });
+
+  it('no pages: keep the restart', () => {
+    expect(daemonFix('2.3.0', '2.4.1', [])).toMatch(/Run `reticle stop`/);
+    expect(daemonFix('2.3.0', '2.4.1')).toMatch(/Run `reticle stop`/);
+  });
+
+  it('keeps the restart when a page did not report the daemon version', () => {
+    expect(daemonFix('2.3.0', '2.4.1', ['2.3.0', undefined])).toMatch(/Run `reticle stop`/);
+  });
+
+  it('does not let matching pages override a daemon that is already newer', () => {
+    const fix = daemonFix('2.5.0', '2.4.1', ['2.5.0']);
+    expect(fix).toContain('will not converge');
+    expect(fix).not.toMatch(/Run `reticle stop`/);
+  });
+});
+
 describe('the SDK remedy does not name a package the project must not have', () => {
   it('names the framework-neutral sensor, not the React kit', () => {
     // The remedy has no project context, so it must name the package that is never actively

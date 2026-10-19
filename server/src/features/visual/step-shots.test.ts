@@ -209,6 +209,20 @@ describe('takeStepShot', () => {
     expect(await readStepShots(deps.fs, root, `drive-${sessionId}`)).toEqual([]);
   });
 
+  it('sets pending: true on the fast path so callers know the file may not be on disk yet', async () => {
+    // The first capture is always waited for. On subsequent captures the path is returned while
+    // the write is still in flight — pending: true signals that the file may not exist yet.
+    const { deps, sessionId } = await setup({ render: rendered(fakeJpeg(8, 6)) });
+
+    // First capture: no prior source vouched for, so the file lands before the result returns.
+    const first = await takeStepShot(deps, sessionId, 'reticle_act');
+    expect('pending' in first ? first.pending : undefined).toBeUndefined();
+
+    // Second capture: prediction kicks in (fast path), so the result returns before the file lands.
+    const second = await takeStepShot(deps, sessionId, 'reticle_act');
+    expect('path' in second && second.pending).toBe(true);
+  });
+
   it('files a replay step under the run being verified, with the step it belongs to', async () => {
     const { deps, root, sessionId } = await setup({ render: rendered(fakeJpeg(8, 6)) });
 

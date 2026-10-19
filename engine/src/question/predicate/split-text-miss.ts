@@ -36,6 +36,7 @@ function truncate(value: string): string {
 /** The container descriptor the browser attaches to a missed text query. */
 interface SplitTextOwner {
   ref?: string;
+  selector?: string;
   role?: string;
   name?: string;
 }
@@ -52,7 +53,15 @@ export function describeSplitTextMiss(
 ): string | undefined {
   if (owner === undefined) return undefined;
   const where = nameOf(owner);
-  const scope = owner.ref !== undefined && owner.ref.length > 0 ? owner.ref : undefined;
+  // A selector wins over the ref: it can be written into an `until` before the action runs,
+  // which is when the recovery has to exist. A ref is minted by a snapshot the agent may not
+  // have taken yet (#1147).
+  const scope =
+    owner.selector !== undefined && owner.selector.length > 0
+      ? owner.selector
+      : owner.ref !== undefined && owner.ref.length > 0
+        ? owner.ref
+        : undefined;
   const recovery =
     scope === undefined || searchedText === undefined
       ? 'scope to that container and match it as a whole'

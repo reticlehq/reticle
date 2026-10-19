@@ -18,7 +18,8 @@
  * nothing. A cause we hold positive evidence against is not printed at all.
  */
 
-import { isLoopbackHostname } from '@reticlehq/core';
+import { isLoopbackHostname, LeaseNotReadyReason } from '@reticlehq/core';
+import type { LeaseReaderFailure } from './lease-readiness.js';
 
 /** What the daemon can say for certain at the moment a lease comes back unconnected. */
 export interface LeaseEvidence {
@@ -234,4 +235,13 @@ export function leaseStillLoadingHint(url: string, waitedMs: number): string {
     `${url} was still loading after ${seconds}s. Its SDK did not have time to connect. ` +
     'Check reticle_session { action: "list" } again soon, or release and acquire again after the dev server compiles.'
   );
+}
+
+/** The hint for a lease whose zero-install reader did not run (#1701). The lease is already released. */
+export function leaseReaderFailedHint(url: string, failure: LeaseReaderFailure): string {
+  return failure.reason === LeaseNotReadyReason.NOT_HTML_DOCUMENT
+    ? `${url} is not an HTML page, so no SDK can connect to it. The lease is released. ` +
+        'Acquire an HTML page of the app instead.'
+    : `The zero-install reader failed on ${url}: ${failure.cause}. The lease is released. ` +
+        'If the tab closed during setup, acquire again.';
 }

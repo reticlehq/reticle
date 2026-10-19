@@ -43,6 +43,15 @@ describe('the status payload', () => {
   it('omits verifyPort when no endpoint is up', () => {
     expect('verifyPort' in statusPayload(0, [], undefined)).toBe(false);
   });
+
+  it('reports each page SDK version, and null when a page did not say', () => {
+    const out = statusPayload(1, [session], undefined, undefined, undefined, [], ['2.3.0', null]);
+    expect(out.pageSdkVersions).toEqual(['2.3.0', null]);
+  });
+
+  it('omits page SDK versions when nothing is connected', () => {
+    expect('pageSdkVersions' in statusPayload(0, [])).toBe(false);
+  });
 });
 
 describe('serve --http against an already-running daemon', () => {

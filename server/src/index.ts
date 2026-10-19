@@ -425,15 +425,19 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   shared.attachStatus((held) => {
     // `init` holds the daemon it is waiting on, so the idle rule cannot shut it down mid-wait.
     if (held) noteSetupHold(Date.now());
+    const tabs = bridge.sessions.all();
     return statusPayload(
       bridge.sessions.count(),
       bridge.sessions.list(),
       bridge.sessions.noSessionHint(),
       verifyHttp?.port,
       bridge.sessions.noSessionLead(),
-      bridge.sessions.all(),
+      tabs,
+      tabs.map((session) => session.sdkVersion ?? null),
     );
   });
+  // Called when an agent connects. The pages already up are the ones a restart would skew (#1709).
+  shared.attachPageSdkVersions(() => bridge.sessions.all().map((session) => session.sdkVersion));
   // Agent-independent presence: the daemon outlives any single agent, so when the LAST agent's MCP
   // connection drops (it stopped, or is waiting on the human), end every session and push a clear
   // "go to your terminal" notice to the panel — the human is on the browser and must not lose a typed

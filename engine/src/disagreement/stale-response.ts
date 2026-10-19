@@ -57,13 +57,16 @@ function queryOf(url: string): string {
  * set once held `pageSize` and `per_page` verbatim, so `page_size` was a selecting parameter, and a
  * page query (`page_size=25`) racing its own count query (`page_size=1`) was reported as stale (#1677).
  * `last` stays out on purpose: `last=7d` is a window, and a window selects.
+ *
+ * The name alone does not decide it, because the same names carry filters: `first=John` against
+ * `first=Jane`, or a date range in `start` and `end`, read as paging while only names were compared.
+ * A count or a position pages with whole numbers, and a cursor pages with anything but a date.
  */
-const ENUMERATING_PARAMS = new Set([
+const POSITION_PARAMS = new Set([
   'page',
   'pagenumber',
   'offset',
   'skip',
-  'cursor',
   'limit',
   'size',
   'take',
@@ -71,14 +74,29 @@ const ENUMERATING_PARAMS = new Set([
   'first',
   'perpage',
   'pagesize',
-  'after',
-  'before',
   'start',
   'end',
 ]);
 
+/** Opaque tokens from the previous answer, so any value pages: except a date, which filters. */
+const CURSOR_PARAMS = new Set(['cursor', 'after', 'before']);
+
+const WHOLE_NUMBER = /^\d+$/;
+/** `2026-01-01`, `2026-01-01T09:00:00Z`. */
+const DATE = /^\d{4}-\d{2}-\d{2}/;
+
 /** `page_size`, `page-size`, `PageSize`, `page[size]` and `$skip` as `pagesize` … `skip`. */
 const normalisedParam = (key: string): string => key.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** Whether `key` going from one value to the other moves through the collection, not within it. */
+function enumerates(key: string, one: string | null, other: string | null): boolean {
+  const name = normalisedParam(key);
+  if (POSITION_PARAMS.has(name)) {
+    return WHOLE_NUMBER.test(one ?? '') && WHOLE_NUMBER.test(other ?? '');
+  }
+  if (CURSOR_PARAMS.has(name)) return !DATE.test(one ?? '') && !DATE.test(other ?? '');
+  return false;
+}
 
 /** Whether the two queries differ ONLY in how much of the same collection they ask for. */
 function differsOnlyByEnumeration(first: string, second: string): boolean {
@@ -88,7 +106,7 @@ function differsOnlyByEnumeration(first: string, second: string): boolean {
   let differed = false;
   for (const key of keys) {
     if (a.get(key) === b.get(key)) continue;
-    if (!ENUMERATING_PARAMS.has(normalisedParam(key))) return false;
+    if (!enumerates(key, a.get(key), b.get(key))) return false;
     differed = true;
   }
   return differed;
