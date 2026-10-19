@@ -3,9 +3,8 @@
  *
  * Incident: the `early-gates` job runs `reticle init` in temp directories (no package.json, a
  * malformed one, no dev script) on three operating systems, with no opt-out. Each run outside the
- * source checkout reported three failed installs as a real user's. With the `break-matrix` runs
- * before its own opt-out, these CI rows were most of the `init_completed` failures in the funnel,
- * and they hid the failures that real users had.
+ * source checkout reported three failed installs as a real user's. `break-matrix` did the same
+ * before its own opt-out. These CI rows mixed with real `init_completed` failures and hid them.
  *
  * Each spec opts out by itself, but a new job forgets. The workflow-level `env` covers every job,
  * now and later. A spec that measures telemetry sets `RETICLE_TELEMETRY=1` for its own children.
