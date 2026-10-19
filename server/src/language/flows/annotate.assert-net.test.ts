@@ -56,7 +56,7 @@ describe('assert-net', () => {
     expect(out.patch?.stepExpect).toEqual({
       kind: 'allOf',
       predicates: [
-        { kind: 'settled' },
+        { kind: 'settled', channel: 'network' },
         { kind: 'net', method: 'POST', urlContains: '/refund', count: 1 },
       ],
     });

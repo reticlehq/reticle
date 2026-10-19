@@ -149,8 +149,15 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * core. Same argument as the route-change names: spelling them in the engine would keep this
  * number flat by breaking the rule it protects. They join the import `contradiction-evidence.ts`
  * already has, so the file count is unmoved.
+ *
+ * 67 -> 68 for which channel a settle waits on: `SettledChannel`.
+ *
+ * A counted `net` check gates on a settle that reads the network only, so a running animation does
+ * not hold it open until it times out. The value is a predicate field, it crosses the wire in a saved
+ * flow, so it lives in core. Spelling `'network'` here would keep this number flat by breaking the
+ * rule it protects. It joins the import `predicate-eval.ts` already has, so the file count is unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 67;
+const MAX_DISTINCT_SYMBOLS = 68;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

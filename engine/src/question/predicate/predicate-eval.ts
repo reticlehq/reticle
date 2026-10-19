@@ -3,6 +3,7 @@ import {
   NetInitiator,
   PredicateKind,
   ResponseBodyReason,
+  SettledChannel,
   StreamDirection,
   isDevToolingUrl,
   isForeignTraffic,
@@ -678,6 +679,9 @@ const SETTLE_ACTIVITY: ReadonlySet<EventType> = new Set([
   EventType.DOM_ATTR,
 ]);
 
+/** The quiet window of a network-scoped settle: a completed request is the only activity. */
+const NETWORK_ACTIVITY: ReadonlySet<EventType> = new Set([EventType.NET_REQUEST]);
+
 /** The three net-shaped event types a URL can be read off — the only ones dev tooling can produce. */
 const NET_TYPES: ReadonlySet<EventType> = new Set([
   EventType.NET_PENDING,
@@ -855,10 +859,13 @@ export function evalSettled(
     };
   }
 
+  // A network-scoped settle reads only completed requests for the quiet window; the in-flight checks
+  // above already ran for every scope.
+  const activity = SettledChannel.NETWORK === p.channel ? NETWORK_ACTIVITY : SETTLE_ACTIVITY;
   let lastT = -1;
   let lastType: EventType | undefined;
   for (const e of events) {
-    if (SETTLE_ACTIVITY.has(e.type) && e.t > lastT) {
+    if (activity.has(e.type) && e.t > lastT) {
       lastT = e.t;
       lastType = e.type;
     }

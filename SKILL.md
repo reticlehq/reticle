@@ -76,7 +76,7 @@ Every `until`, `predicate` and `expect` is `{ kind, ...fields }`; unknown fields
 | `signal` | `name`, `dataMatches?`, `count?` |
 | `state` | `store`, `path`, `equals` or `satisfies` |
 | `console` | `level`, `contains?`, `absent?` |
-| `settled` / `animation` / `compare` | `quietMs` / `name`, `completed` / `left`, `right`, `as` |
+| `settled` / `animation` / `compare` | `quietMs`, `channel?` / `name`, `completed` / `left`, `right`, `as` |
 | `allOf` / `anyOf` / `not` | `predicates: [...]` / `predicates: [...]` / `predicate` |
 
 `satisfies` asserts a property when the exact value varies: `nonEmpty`, `oneOf`, `withinTolerance`, `matchesPattern`, `type`, `changed`, `unchanged`, `increased`, `decreased`. Composites hold only predicates: `absent` belongs inside a child, and an `element` takes a `query`, never a `ref`. A bare `route` or `state` is already true before the action and proves nothing; pair it with what the action causes. Grammar: `https://docs.reticle.sh/predicates.md`.

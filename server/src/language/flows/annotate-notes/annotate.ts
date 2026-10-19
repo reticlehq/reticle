@@ -9,6 +9,7 @@ import {
   type AnnotateOutcome,
   type AnnotateResult,
   PredicateKind,
+  SettledChannel,
   type Predicate,
 } from '@reticlehq/core';
 
@@ -53,7 +54,12 @@ function netPredicate(net: {
   if (net.status !== undefined) clause.status = net.status;
   if (net.count === undefined) return clause;
   clause.count = net.count;
-  return { kind: PredicateKind.ALL_OF, predicates: [{ kind: PredicateKind.SETTLED }, clause] };
+  // The gate waits on the NETWORK: DOM churn from an animation held a request check open until it
+  // timed out, a flaky red on a loaded machine.
+  return {
+    kind: PredicateKind.ALL_OF,
+    predicates: [{ kind: PredicateKind.SETTLED, channel: SettledChannel.NETWORK }, clause],
+  };
 }
 
 export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOutcome {

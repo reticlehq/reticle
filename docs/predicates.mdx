@@ -320,6 +320,8 @@ This is the predicate that catches a UI-versus-store desync. A deploy that only 
 
 Network and DOM idle. This is the deterministic replacement for a fixed sleep, not a proof of anything: combine it with a real consequence rather than asserting it alone. Omitting `until` on [`reticle_act_and_wait`](/tools/act-and-wait) waits for exactly this.
 
+Add `"channel": "network"` to wait for the network only: no request in flight, and no request completed in the last `quietMs`. DOM changes, such as a running animation, do not hold it open. A saved `net` check with a `count` uses this, so a late duplicate request is still counted.
+
 ### compare
 
 ```json

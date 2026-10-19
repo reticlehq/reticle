@@ -80,7 +80,7 @@ describe('compileAnnotation pure compiler', () => {
     expect(out.patch?.success).toEqual({
       kind: 'allOf',
       predicates: [
-        { kind: 'settled' },
+        { kind: 'settled', channel: 'network' },
         { kind: 'net', method: 'POST', urlContains: '/api/generate-script', count: 1 },
       ],
     });

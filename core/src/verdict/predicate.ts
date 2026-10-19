@@ -24,7 +24,7 @@ import {
   sameCompareSource,
   type CompareSource,
 } from './compare-source.js';
-import { PredicateKind } from '@/verdict/consequence.js';
+import { PredicateKind, SettledChannel } from '@/verdict/consequence.js';
 import { propertyAssertionSchema, type PropertyAssertion } from './property-assertion.js';
 
 export type Predicate =
@@ -120,7 +120,7 @@ export type Predicate =
       equals?: unknown;
       satisfies?: PropertyAssertion;
     }
-  | { kind: typeof PredicateKind.SETTLED; quietMs?: number }
+  | { kind: typeof PredicateKind.SETTLED; quietMs?: number; channel?: SettledChannel }
   | {
       kind: typeof PredicateKind.COMPARE;
       left: CompareSource;
@@ -486,6 +486,7 @@ function predicateUnion() {
       .object({
         kind: z.literal(PredicateKind.SETTLED),
         quietMs: z.number().positive().optional(),
+        channel: z.literal(SettledChannel.NETWORK).optional(),
       })
       .strict(),
     z
