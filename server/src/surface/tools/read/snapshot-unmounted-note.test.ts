@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { SnapshotMode } from '@reticlehq/core';
-import { TOOLS } from './tools.js';
+import { TOOLS } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
 
 const snapshot = TOOLS.find((t) => t.name === ReticleTool.SNAPSHOT);
@@ -19,6 +19,7 @@ const noteFor = async (
   raw: Record<string, unknown>,
   mode: SnapshotMode = SnapshotMode.FULL,
   events?: { type: string; data?: Record<string, unknown> }[],
+  scope?: string,
 ): Promise<string> => {
   const deps = {
     sessions: {
@@ -31,7 +32,8 @@ const noteFor = async (
       }),
     },
   } as never;
-  const out = (await snapshot?.handler(deps, { mode })) as Record<string, unknown> | undefined;
+  const args = scope === undefined ? { mode } : { mode, scope };
+  const out = (await snapshot?.handler(deps, args)) as Record<string, unknown> | undefined;
   return 'string' === typeof out?.['note'] ? out['note'] : '';
 };
 
@@ -134,5 +136,23 @@ describe('an unmounted root with uncaught errors beside it', () => {
       crash,
     );
     expect(note).toBe('the leanness explanation');
+  });
+});
+
+/**
+ * A scope narrows the walk to one element, so a near-empty DOM under it says nothing about the app.
+ * `scope: "h1"` over a text-only heading reported the whole app UNMOUNTED (#1688).
+ */
+describe('a scoped snapshot over a small element', () => {
+  const EMPTY = { tree: '', nodes: 0, domElements: 0 };
+
+  it('does not call the app unmounted', async () => {
+    expect(await noteFor(EMPTY, SnapshotMode.FULL, undefined, 'h1')).not.toMatch(/unmounted/i);
+  });
+
+  it('does not call the app crashed when errors are in the buffer', async () => {
+    const errors = [{ type: 'error.uncaught', data: { message: 'boom' } }];
+    const note = await noteFor(EMPTY, SnapshotMode.FULL, errors, 'h1');
+    expect(note).not.toMatch(/unmounted|CRASHED/i);
   });
 });
