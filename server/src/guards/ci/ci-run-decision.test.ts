@@ -33,7 +33,12 @@ const load = async (): Promise<{
   explain: (code: number, detail: string, willRetry: boolean) => string;
   RUNNER_LEVEL_EXIT_CODES: Map<number, string>;
   runnerLevelInOutput: (output: string) => string | null;
-  runOnce: (command: string, args: string[]) => Promise<{ code: number | null; output: string }>;
+  runOnce: (
+    command: string,
+    args: string[],
+    options?: { afterSummaryMs?: number },
+  ) => Promise<{ code: number | null; output: string }>;
+  finishedTurboRun: (output: string) => { passed: boolean } | null;
 }> => (await import(SCRIPT)) as never;
 
 describe('only a failure to START the process is retried', () => {
@@ -172,4 +177,61 @@ describe('a process the command leaves behind does not hold the step open', () =
       rmSync(dir, { recursive: true, force: true });
     }
   }, 60_000); // A bound on a hang, not a duration assertion: before the fix this waited the full 120 s.
+});
+
+/**
+ * A command that never exits after turbo has finished does not hold the step open either.
+ *
+ * The fix above covers a command that exits while a leftover process holds its output. A second
+ * shape remained: on Windows, `pnpm typecheck` printed turbo's summary ("Tasks: 28 successful, 28
+ * total") 18 s in, and then `pnpm` itself never exited. The `exit` handler never ran, so the job
+ * waited for its 30-minute timeout and the runner's cleanup reported "Terminate orphan process
+ * (node)". Seen on reticlehq/reticle jobs 116255798200 (`build`), 116296667111, 117500838493,
+ * 117753829367 and 118082678785 (`typecheck`), five times in six days.
+ */
+describe('a command that hangs after turbo printed its summary', () => {
+  const SUMMARY = (passed: number, total: number): string =>
+    ` Tasks:    ${String(passed)} successful, ${String(total)} total\n` +
+    `Cached:    0 cached, ${String(total)} total\n` +
+    '  Time:    17.972s \n';
+
+  it('reads a finished turbo run only when the summary is the last thing printed', async () => {
+    const { finishedTurboRun } = await load();
+    expect(finishedTurboRun(`build output\n${SUMMARY(28, 28)}\n`)).toEqual({ passed: true });
+    expect(finishedTurboRun(`${SUMMARY(27, 28)} Failed:    a#typecheck\n`)).toEqual({
+      passed: false,
+    });
+    // `test:unit` runs turbo and then `pnpm test:bench`: a summary with more output after it is a
+    // command still at work, not a finished one.
+    expect(finishedTurboRun(`${SUMMARY(28, 28)}\n> reticle@ test:bench\n`)).toBeNull();
+    expect(finishedTurboRun('Tasks: still running\n')).toBeNull();
+  });
+
+  const hangsAfter = (summary: string): string =>
+    [`process.stdout.write(${JSON.stringify(summary)});`, 'setTimeout(() => {}, 120000);'].join(
+      '\n',
+    );
+
+  const run = async (summary: string): Promise<{ code: number | null; output: string }> => {
+    const { runOnce } = await load();
+    const dir = mkdtempSync(join(tmpdir(), 'ci-run-'));
+    const script = join(dir, 'hangs-after-summary.cjs');
+    writeFileSync(script, hangsAfter(summary));
+    try {
+      return await runOnce(process.execPath, [script], { afterSummaryMs: 200 });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it('stops it and passes the step when every task passed', async () => {
+    const result = await run(SUMMARY(28, 28));
+    expect(result.code).toBe(0);
+    expect(result.output).toContain('28 successful');
+  }, 60_000); // A bound on a hang, not a duration assertion: before the fix this waited the full 120 s.
+
+  it('stops it and fails the step when a task failed', async () => {
+    const result = await run(`${SUMMARY(27, 28)} Failed:    a#typecheck\n`);
+    expect(result.code).toBe(1);
+  }, 60_000);
 });

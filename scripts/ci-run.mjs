@@ -25,7 +25,7 @@
  * Usage: node scripts/ci-run.mjs <command> [args...]
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 /**
  * Exit codes that mean the OS refused to start the process, never that the process failed.
@@ -86,7 +86,40 @@ export function runnerLevelInOutput(output) {
 /** How long, after the command exits, to keep reading output it already wrote. */
 const DRAIN_AFTER_EXIT_MS = 5_000;
 
-export function runOnce(command, args) {
+/** How long the command may stay silent after turbo printed its summary, before it is stopped. */
+const EXIT_AFTER_SUMMARY_MS = 60_000;
+
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+const TURBO_SUMMARY =
+  /Tasks:\s+(\d+) successful, (\d+) total[\s\S]*?Time:\s+\S+[^\n]*\n?([\s\S]*)$/;
+
+/**
+ * Did turbo finish, and did every task pass? `null` unless turbo's summary is the LAST thing the
+ * command printed: `test:unit` runs more after turbo, so a summary followed by output is not an end.
+ */
+export function finishedTurboRun(output) {
+  const text = output.replace(ANSI, '');
+  const match = TURBO_SUMMARY.exec(text);
+  if (match === null) return null;
+  const rest = match[3] ?? '';
+  const failed = /^\s*Failed:/m.test(rest);
+  if (!failed && rest.trim() !== '') return null;
+  return { passed: !failed && match[1] === match[2] };
+}
+
+/** Stop the command and everything it started. On Windows `child` is cmd.exe, so stop its tree. */
+function stopTree(child) {
+  if (process.platform === 'win32' && child.pid !== undefined) {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+      stdio: 'ignore',
+      timeout: 10_000,
+    });
+  } else {
+    child.kill('SIGKILL');
+  }
+}
+
+export function runOnce(command, args, { afterSummaryMs = EXIT_AFTER_SUMMARY_MS } = {}) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       // Piped rather than inherited, so the output can be SCANNED as well as shown. Both streams are
@@ -95,11 +128,35 @@ export function runOnce(command, args) {
       shell: process.platform === 'win32',
     });
     let seen = '';
+    // On Windows a `pnpm` that wraps turbo can print turbo's summary and then never exit, so `exit`
+    // below never fires and the step waits for the job timeout. When the summary is the last output
+    // and nothing follows it, stop the command and take the result from the summary.
+    let hang;
+    const watchForHang = () => {
+      clearTimeout(hang);
+      // The summary is a few lines; read only the end, not the whole log on every chunk.
+      const finished = finishedTurboRun(seen.slice(-4_000));
+      if (finished === null) return;
+      hang = setTimeout(() => {
+        process.stderr.write(
+          `[ci-run] turbo finished (${finished.passed ? 'every task passed' : 'a task failed'}), ` +
+            `but the command did not exit in ${String(afterSummaryMs / 1000)}s; stopping it.\n`,
+        );
+        process.stdout.write(
+          '::warning::ci-run stopped a command that hung after turbo finished\n',
+        );
+        stopTree(child);
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        resolve({ code: finished.passed ? 0 : 1, output: seen });
+      }, afterSummaryMs);
+    };
     const tee = (stream, sink) => {
       stream?.setEncoding('utf8');
       stream?.on('data', (chunk) => {
         seen += chunk;
         sink.write(chunk);
+        watchForHang();
       });
     };
     tee(child.stdout, process.stdout);
@@ -114,6 +171,7 @@ export function runOnce(command, args) {
     // timeout cancelled it. After exit, give the pipes a short drain for output already written,
     // then stop listening and say why.
     child.on('exit', (code) => {
+      clearTimeout(hang);
       const done = () => resolve({ code, output: seen });
       const cut = setTimeout(() => {
         process.stderr.write(
