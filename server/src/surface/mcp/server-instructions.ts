@@ -109,11 +109,22 @@ const driveOnce = (v: SurfaceVocabulary): string =>
 const firstMoveFor = (
   v: SurfaceVocabulary,
   appHere: boolean,
-): string => `FIRST: when this session started, no app had connected to Reticle in this project. Having these tools is not the same as being set up — the tools reach a daemon that has nothing to look at until the app is instrumented.
+): string => `FIRST: when this session started, no app had connected to Reticle in this project, so \`init\` has not wired it.${verifyNowFor(v)}
 
-Fix that first: call ${v.sessions}. Its first call wires the app (\`init\`, dev server, browser) and \`wired\` lists the files it changed; tell the user. If it answers \`run_init\`, run that command in the app's directory. A session on this project's app listed there is the proof; until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
+To wire it for good, call ${v.sessions}. Its first call wires the app (\`init\`, dev server, browser) and \`wired\` lists the files it changed; tell the user. If it answers \`run_init\`, run that command in the app's directory. A session on this project's app listed there is the proof that it is wired.${appHere ? TELL_THE_USER : ''}`;
 
-const UNWIRED_LEAD_END = 'can tell you anything about this app.';
+/**
+ * A verdict before any wiring. The lead used to say that until the app was wired "no other tool can
+ * tell you anything about this app", which is false: the lease reads any running page with
+ * Reticle's own reader. Measured with `claude -p` on a fresh Vite app with the MCP registered and no
+ * `init`: the agent made no Reticle call and wrote, ran and deleted a Playwright script instead.
+ */
+function verifyNowFor(v: SurfaceVocabulary): string {
+  if ('' === v.zeroInstall) return '';
+  return ` To check a change now, with no file changed: \`${v.zeroInstall}\` opens it in Reticle's own browser with Reticle's own reader (DOM, network, console, routes; no component state or source file:line). Use it instead of writing a browser script.`;
+}
+
+const UNWIRED_LEAD_END = 'is the proof that it is wired.';
 
 // An agent never asked to verify anything never reads "fix that first"; this makes it raise wiring.
 const TELL_THE_USER =

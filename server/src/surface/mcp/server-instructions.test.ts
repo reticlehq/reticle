@@ -57,6 +57,17 @@ describe('buildServerInstructions', () => {
 
     // The first run wires the app, not the install: the agent's first session call does it and
     // says which files changed. Restarting a dev server is no longer the agent's move at all.
+    // An agent read "until one appears no other tool can tell you anything about this app", so in an
+    // unwired project it wrote a throwaway Playwright script instead, though a zero-install lease
+    // gets a verdict with no file changed. Measured with `claude -p` on a fresh Vite app: no Reticle
+    // call at all, a browser script written and deleted.
+    it('offers a verdict now, with no file changed, before any wiring', () => {
+      expect(text.slice(0, 700)).toContain('reticle_lease');
+      expect(text).toMatch(/no file changed/);
+      expect(text).toMatch(/instead of writing a browser script/);
+      expect(text).not.toMatch(/no other tool can tell you anything/);
+    });
+
     it('has the first session call wire the app and name what changed', () => {
       expect(text).toContain('Its first call wires the app');
       expect(text).toContain('`wired` lists the files it changed');

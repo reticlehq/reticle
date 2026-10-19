@@ -45,6 +45,8 @@ export interface SurfaceVocabulary {
   heal: string;
   /** Start or poll a Harness drive, or empty when the surface cannot reach it. */
   explore: string;
+  /** Open the running app with Reticle's own reader and no file changed, or empty. */
+  zeroInstall: string;
 }
 
 /** `reticle_look { action: "find" }` when the family is merged, `reticle_query` when it is not. */
@@ -58,6 +60,17 @@ function callOf(
   if (advertised.has(parent)) return `${parent} {action:"${action}"}`;
   // Neither is advertised. Say nothing rather than name a tool the agent cannot call — an empty
   // slot costs a capability the agent has to discover; a wrong name costs the whole product.
+  return '';
+}
+
+const ZERO_INSTALL_ARGS = `{ action: "acquire", url: "<the running app's URL>" }`;
+
+/** The zero-install lease, direct where it is advertised, through `reticle_run` where that is. */
+function zeroInstallCall(advertised: ReadonlySet<string>): string {
+  if (advertised.has(ReticleTool.LEASE)) return `${ReticleTool.LEASE} ${ZERO_INSTALL_ARGS}`;
+  if (advertised.has(ReticleTool.RUN)) {
+    return `${ReticleTool.RUN}({ tool: "${ReticleTool.LEASE}", args: ${ZERO_INSTALL_ARGS} })`;
+  }
   return '';
 }
 
@@ -108,5 +121,6 @@ export function surfaceVocabulary(advertisedNames: readonly string[]): SurfaceVo
     replayAll: call(ReticleTool.FLOW_REPLAY, ReticleTool.VERIFY, 'flows'),
     heal: advertised.has(ReticleTool.FLOW_HEAL) ? ReticleTool.FLOW_HEAL : '',
     explore: call(ReticleTool.VERIFY_EXPLORE, ReticleTool.VERIFY, 'explore'),
+    zeroInstall: zeroInstallCall(advertised),
   };
 }
