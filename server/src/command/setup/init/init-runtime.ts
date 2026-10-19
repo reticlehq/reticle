@@ -321,6 +321,7 @@ export async function continueAfterInit(
               outcome.reachedPhase === SetupPhase.DEV_SERVER
                 ? InitFailure.DEV_SERVER
                 : InitFailure.APP_CONNECTION;
+            if (outcome.stop !== undefined) init.stop = outcome.stop;
           }
           reportOnce(init);
         }

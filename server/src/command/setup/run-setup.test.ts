@@ -12,6 +12,7 @@ import { AppShape } from './desktop-shape.js';
 import type { CandidateSession } from './session-pick.js';
 import type { PageProbe } from './probe/page-probe.js';
 import { loneLoopbackOnDevPort } from './probe/dev-port.js';
+import { InitStop } from '@reticlehq/core/telemetry';
 
 const INPUT: SetupInput = {
   appDir: '/app',
@@ -392,6 +393,61 @@ describe('when it cannot continue, it says what is left', () => {
   it('does not claim a flow was saved, because it drove nothing', async () => {
     expect((await runSetupPhases(INPUT, world())).flowSaved).toBe(false);
   });
+});
+
+/**
+ * `dev_server` and `app_connection` each cover several different stops with different fixes, and
+ * the failure event could not tell them apart. The outcome names the step, so the event can.
+ */
+describe('a failed setup names the step it stopped at', () => {
+  const dead = { served: false, sdkInPage: false };
+  const cases: [string, SetupInput, Partial<SetupEffects>, InitStop][] = [
+    ['no dev command', { ...INPUT, devCommand: undefined }, {}, InitStop.NO_DEV_COMMAND],
+    [
+      'the launcher exited',
+      INPUT,
+      { devServerExited: () => true, probePage: () => Promise.resolve(dead) },
+      InitStop.DEV_SERVER_EXITED,
+    ],
+    [
+      'the port was taken',
+      INPUT,
+      {
+        devServerExited: () => true,
+        probePage: () => Promise.resolve(dead),
+        devServerOutput: () => 'Something is already running on port 3000.',
+      },
+      InitStop.PORT_BUSY,
+    ],
+    [
+      'no url and no port',
+      { ...INPUT, startupBudgetMs: 50 },
+      { devServerOutput: () => 'building', probePage: () => Promise.resolve(dead) },
+      InitStop.NO_URL,
+    ],
+    [
+      'served without the SDK',
+      INPUT,
+      {
+        listSessions: () => Promise.resolve([]),
+        probePage: () => Promise.resolve({ served: true, sdkInPage: false }),
+      },
+      InitStop.SDK_MISSING,
+    ],
+    [
+      'served with the SDK, nothing dialled',
+      INPUT,
+      { listSessions: () => Promise.resolve([]) },
+      InitStop.NO_SESSION,
+    ],
+  ];
+  for (const [name, input, over, step] of cases) {
+    it(name, async () => {
+      const r = await runSetupPhases(input, world(over));
+      expect(r.ok).toBe(false);
+      expect(r.stop).toBe(step);
+    });
+  }
 });
 
 /**

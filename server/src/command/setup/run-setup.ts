@@ -44,6 +44,7 @@ import {
 import { remainingSteps, type Progress } from './remaining-steps.js';
 import { splitDevPortNote } from './probe/dev-port.js';
 import { AppShape, isDesktop, policyFor } from './desktop-shape.js';
+import { InitStop } from '@reticlehq/core/telemetry';
 
 /** Where a run got to, and why it stopped if it did. */
 /**
@@ -92,6 +93,8 @@ export interface SetupOutcome {
   /** True when the app is running, instrumented and connected. Writing files alone is not that. */
   readonly ok: boolean;
   readonly reachedPhase: SetupPhase;
+  /** On a failure: the step it stopped at, for the `init_completed` event. */
+  readonly stop?: InitStop | undefined;
   readonly url?: string | undefined;
   readonly sessionId?: string | undefined;
   /**
@@ -258,6 +261,14 @@ const asProgress = (input: SetupInput, o: Partial<SetupOutcome>): Progress => ({
   ...(undefined === input.devCommand ? {} : { devCommand: input.devCommand }),
 });
 
+/** The connect step a web page stopped at. A bundle-connect page's HTML never shows the SDK. */
+const connectStop = (finding: PageFinding, htmlCarriesSdk: boolean): InitStop => {
+  if (PageFinding.NOT_SERVED === finding) return InitStop.PAGE_NOT_SERVED;
+  if (PageFinding.TLS_REFUSED === finding) return InitStop.PAGE_TLS_REFUSED;
+  if (PageFinding.SDK_MISSING === finding && htmlCarriesSdk) return InitStop.SDK_MISSING;
+  return InitStop.NO_SESSION;
+};
+
 const stop = (
   input: SetupInput,
   phase: SetupPhase,
@@ -327,7 +338,7 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
           'Stopping here rather than invent one — start the app yourself and pass --url to say ' +
           'where it is serving, or add a dev/start/serve script to package.json and re-run.',
       );
-      return stop(input, SetupPhase.DEV_SERVER, {}, notes);
+      return stop(input, SetupPhase.DEV_SERVER, { stop: InitStop.NO_DEV_COMMAND }, notes);
     } else {
       // Not this project's announced server (that branch is above). Something answering on one
       // loopback and not the other is the split a new server cannot see: it binds the free one with
@@ -339,7 +350,7 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
           : await fx.loneLoopbackOnDevPort(input.devPort);
       if (undefined !== lone && undefined !== input.devPort) {
         note(splitDevPortNote(input.devPort, lone));
-        return stop(input, SetupPhase.DEV_SERVER, {}, notes);
+        return stop(input, SetupPhase.DEV_SERVER, { stop: InitStop.SPLIT_LOOPBACK }, notes);
       }
       if (true === input.devCommandIsStaticPage) note(STATIC_PAGE_URL_HINT);
       await fx.startDevServer(input.devCommand, input.appDir);
@@ -385,8 +396,10 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
           break;
         }
         if (WaitVerdict.DEAD === verdict) {
-          note(portBusyMessage(fx.devServerOutput()) ?? devServerDiedMessage(fx.devServerOutput()));
-          return stop(input, SetupPhase.DEV_SERVER, {}, notes);
+          const busy = portBusyMessage(fx.devServerOutput());
+          note(busy ?? devServerDiedMessage(fx.devServerOutput()));
+          const step = undefined === busy ? InitStop.DEV_SERVER_EXITED : InitStop.PORT_BUSY;
+          return stop(input, SetupPhase.DEV_SERVER, { stop: step }, notes);
         }
         if (WaitVerdict.HUNG === verdict) {
           // Says BOTH were checked. A server that prints nothing but IS listening is the CRA case and
@@ -404,7 +417,8 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
                 : `The dev server stopped making progress before ${watching} became ready. `) +
               'Check its log, increase --timeout for a slow build, or pass --url with the address it serves.',
           );
-          return stop(input, SetupPhase.DEV_SERVER, {}, notes);
+          const step = undefined === watching ? InitStop.NO_URL : InitStop.NOT_READY;
+          return stop(input, SetupPhase.DEV_SERVER, { stop: step }, notes);
         }
         await fx.sleep(input.pollMs);
       }
@@ -555,6 +569,7 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
     await fx.sleep(input.pollMs);
   }
   if (null === session) {
+    let step: InitStop = InitStop.DESKTOP_NO_SESSION;
     if (isDesktop(input.shape)) {
       // Nothing outside the app can fetch its webview, so there is no page to describe. What is
       // wrong here is desktop-shaped: the preload, the capture helper, or a CSP that blocks the
@@ -588,9 +603,10 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       if (PageFinding.SDK_MISSING !== finding || input.htmlCarriesSdk) {
         note(describePage(finding, url, undefined !== why));
       }
+      step = connectStop(finding, input.htmlCarriesSdk);
     }
     await releaseLease(lease);
-    return stop(input, SetupPhase.CONNECT, { url }, notes);
+    return stop(input, SetupPhase.CONNECT, { url, stop: step }, notes);
   }
 
   // ── connected, which is where ONBOARDING ends ────────────────────────────────────────────────

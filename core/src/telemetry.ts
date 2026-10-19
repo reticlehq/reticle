@@ -726,6 +726,39 @@ export const InitConfirmation = {
 } as const;
 export type InitConfirmation = (typeof InitConfirmation)[keyof typeof InitConfirmation];
 
+/**
+ * The step a failed runtime `init` stopped at. It refines `reason` and never replaces it.
+ *
+ * `dev_server` and `app_connection` each covered several stops with different fixes: no dev script,
+ * a busy port, a launcher that exited, a build that never served, a page without the SDK, a page
+ * that never dialled. The event could not tell them apart, so no fix could be aimed at the common one.
+ */
+export const InitStop = {
+  /** The project names no dev, start or serve script, and no `--url` was given. */
+  NO_DEV_COMMAND: 'no_dev_command',
+  /** Something answers on one loopback address and not the other, on the dev port. */
+  SPLIT_LOOPBACK: 'split_loopback',
+  /** The dev server said that its port is in use. */
+  PORT_BUSY: 'port_busy',
+  /** The dev server exited and nothing serves. */
+  DEV_SERVER_EXITED: 'dev_server_exited',
+  /** The dev server printed no URL and bound no port in the budget. */
+  NO_URL: 'no_url',
+  /** The dev server announced a URL that did not become ready in the budget. */
+  NOT_READY: 'not_ready',
+  /** Nothing answered the app URL when the connect wait ended. */
+  PAGE_NOT_SERVED: 'page_not_served',
+  /** The app URL refused the TLS handshake. */
+  PAGE_TLS_REFUSED: 'page_tls_refused',
+  /** The page answered, and its HTML does not load the SDK. */
+  SDK_MISSING: 'sdk_missing',
+  /** The page answered and no session dialled the daemon. */
+  NO_SESSION: 'no_session',
+  /** A desktop app never dialled the daemon. */
+  DESKTOP_NO_SESSION: 'desktop_no_session',
+} as const;
+export type InitStop = (typeof InitStop)[keyof typeof InitStop];
+
 /** How `reticle init` went. The onboarding funnel, which had no instrumentation whatsoever. */
 export const InitOutcomeSchema = z.object({
   ok: z.boolean(),
@@ -743,6 +776,8 @@ export const InitOutcomeSchema = z.object({
    * only in an interactive terminal. Absence alone is not evidence of a failed connection.
    */
   confirmation: z.nativeEnum(InitConfirmation).optional(),
+  /** Only with `reason` `dev_server` or `app_connection`: the step it stopped at. */
+  stop: z.nativeEnum(InitStop).optional(),
 });
 export type InitOutcome = z.infer<typeof InitOutcomeSchema>;
 

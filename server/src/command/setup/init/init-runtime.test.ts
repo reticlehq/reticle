@@ -135,6 +135,22 @@ describe('init reports its deferred outcome once, after runtime setup', () => {
     });
   });
 
+  it('carries the step setup stopped at, so the failure says which one', async () => {
+    vi.mocked(runSetupCommand).mockResolvedValue({
+      ...SUCCESS,
+      ok: false,
+      reachedPhase: SetupPhase.DEV_SERVER,
+      stop: 'port_busy',
+    });
+    await expect(continueAfterInit(ARGS, RESULT, IO, '/app')).rejects.toThrow('exit');
+    expect(reportInitOutcome).toHaveBeenCalledExactlyOnceWith({
+      ...RESULT.outcome,
+      ok: false,
+      reason: 'dev_server',
+      stop: 'port_busy',
+    });
+  });
+
   it('reports a bridge collision without starting the app', async () => {
     vi.mocked(bridgeOccupied).mockReturnValue('port occupied');
     await expect(continueAfterInit(ARGS, RESULT, IO, '/app')).rejects.toThrow('exit');
