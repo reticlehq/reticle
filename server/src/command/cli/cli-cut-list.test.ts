@@ -80,6 +80,12 @@ describe('reticle --help', () => {
     expect(renderHelp('all')).toBe(CLI_USAGE_ALL);
   });
 
+  it('says --http starts the verify endpoint, and MCP is already on the bridge port', () => {
+    const line = '--http starts the verify endpoint. MCP is already served on the bridge port.';
+    expect(renderHelp('serve')).toContain(line);
+    expect(renderHelp('mcp')).toContain(line);
+  });
+
   it('an old name answers with the new page and says so', () => {
     const page = renderHelp('link', RENAMED_COMMANDS);
     expect(page).toContain('usage:  reticle connect');
