@@ -21,13 +21,12 @@ export const CLOUD_DASHBOARD_URL = 'https://app.reticle.sh';
 
 /**
  * The one line about Reticle Cloud. It is shown only when the project is not linked, it is
- * labelled, and it states the price. `RETICLE_NO_UPSELL` turns it off.
- *
- * The price is the Team seat price in reticle-cloud's billing constants. Change both together.
+ * labelled, and `RETICLE_NO_UPSELL` turns it off. It names no price: the price lives in
+ * reticle-cloud's billing, changes with the plan and the currency, and a number here would drift.
  */
 export const CLOUD_VALUE_LINE =
   'Reticle Cloud (not linked): keeps this history across runs and agents, adds a team view and ' +
-  `the hosted Harness. $19 a seat a month: ${CLOUD_DASHBOARD_URL}`;
+  `the hosted Harness. Plans and prices: ${CLOUD_DASHBOARD_URL}`;
 
 export const RunReportClaimSchema = z.object({
   /** The claim, in the words the agent wrote. */

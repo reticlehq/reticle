@@ -70,7 +70,7 @@ describe('the end-of-run report', () => {
       - Flows replayed: member-invite-seats (no), task-create (yes)
       - Memory: 1 note written, 0 read
       - Time: 2m 32s, first verdict after 18.2s
-      - Reticle Cloud (not linked): keeps this history across runs and agents, adds a team view and the hosted Harness. $19 a seat a month: https://app.reticle.sh"
+      - Reticle Cloud (not linked): keeps this history across runs and agents, adds a team view and the hosted Harness. Plans and prices: https://app.reticle.sh"
     `);
   });
 
