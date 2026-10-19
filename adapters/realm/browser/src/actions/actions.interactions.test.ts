@@ -681,11 +681,34 @@ describe('upload resolves the file input a dropzone hides', () => {
     expect(changes).toEqual(['f']);
   });
 
-  it('REFUSES a Browse button whose dropzone holds no input, and touches no other input', async () => {
+  it('REFUSES a Browse button with an empty dropzone when the page sits in #root', async () => {
+    // The walk used to stop only at body or html. Most apps wrap the whole page in
+    // <div id="root">, so the walk decided there and a Browse button with no input in
+    // its dropzone picked up the header's avatar input. The walk now stops at the first
+    // ancestor that holds another interactive control: here the header's avatar menu
+    // button, so the upload refuses and no input gets change.
     document.body.innerHTML =
-      '<header><input id="avatar" type="file"></header>' +
-      '<main><div class="dropzone"><button id="b" type="button">Browse</button></div></main>';
+      '<div id="root">' +
+      '<header><button id="avatar-menu" type="button">Avatar</button>' +
+      '<input id="avatar" type="file"></header>' +
+      '<main><div class="dropzone"><button id="b" type="button">Browse</button></div></main>' +
+      '</div>';
     const changes = stubFiles(fileInputById('avatar'));
+    expect(String(await uploadOnSelector('#b'))).toMatch(/upload target must be/);
+    expect(changes).toEqual([]);
+  });
+
+  it('REFUSES a dropzone in #root next to a form that holds its own file input', async () => {
+    // The dropzone holds no input and a sibling form holds exactly one. The walk must
+    // not claim it: #root holds the form's Save button, an interactive control that is
+    // neither the target nor a file input, so the walk refuses before it can decide.
+    document.body.innerHTML =
+      '<div id="root">' +
+      '<div class="dropzone"><button id="b" type="button">Browse</button></div>' +
+      '<form><button id="save" type="submit">Save</button>' +
+      '<input id="profile" type="file"></form>' +
+      '</div>';
+    const changes = stubFiles(fileInputById('profile'));
     expect(String(await uploadOnSelector('#b'))).toMatch(/upload target must be/);
     expect(changes).toEqual([]);
   });
