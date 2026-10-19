@@ -196,7 +196,12 @@ async function resolveUploadPath(
     );
   });
 
-  const allowed = [projectRoot, ...uploadRoots];
+  // The roots go through realpath too, or one path compares under two spellings: a Windows 8.3
+  // short name (`RUNNER~1`) against the long name realpath returns, or macOS `/tmp` against
+  // `/private/tmp`. A root that cannot be resolved keeps the spelling it was given.
+  const allowed = await Promise.all(
+    [projectRoot, ...uploadRoots].map((root) => fs.realpath(root).catch(() => root)),
+  );
   if (!allowed.some((root) => isInsideRoot(real, root))) {
     const listed = allowed.map((r) => `'${r}'`).join(', ');
     throw new Error(

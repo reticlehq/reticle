@@ -6,7 +6,7 @@
  * was refused as "file not found" or as outside every allowed root.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ActionType, asRecord, type CommandResult } from '@reticlehq/core';
@@ -38,7 +38,11 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-function harness(): { deps: ToolDeps; session: Session; sent: () => Record<string, unknown> } {
+function harness(projectDir = worktreeDir): {
+  deps: ToolDeps;
+  session: Session;
+  sent: () => Record<string, unknown>;
+} {
   let sentArgs: Record<string, unknown> = {};
   const session: Partial<Session> = {
     id: 'wt-b',
@@ -54,7 +58,7 @@ function harness(): { deps: ToolDeps; session: Session; sent: () => Record<strin
     reticleRoot: join(daemonDir, '.reticle'),
     sessions: sessions as SessionManager,
     artifactRootFor: () => ({
-      root: join(worktreeDir, '.reticle'),
+      root: join(projectDir, '.reticle'),
       reason: ArtifactRootReason.MATCHED_PROJECT,
     }),
   } as unknown as ToolDeps;
@@ -79,5 +83,16 @@ describe('upload path resolves against the session project', () => {
         args: { path: join(daemonDir, FIXTURE) },
       }),
     ).rejects.toThrow(/outside every allowed upload root/);
+  });
+
+  // The project root can reach the daemon under a second spelling: a symlink here, a Windows 8.3
+  // short name (`RUNNER~1`) on a CI runner. realpath turned the fixture into the long spelling while
+  // the root kept the short one, so the upload was refused as outside every allowed root.
+  it('uploads when the project root is reached through a second spelling', async () => {
+    const link = join(base, 'link-to-b');
+    symlinkSync(worktreeDir, link, 'dir');
+    const { deps, session, sent } = harness(link);
+    await actCommand(deps, session, { action: ActionType.UPLOAD, args: { path: FIXTURE } });
+    expect(Buffer.from(String(sent()['content']), 'base64').toString()).toBe(FIXTURE_TEXT);
   });
 });
