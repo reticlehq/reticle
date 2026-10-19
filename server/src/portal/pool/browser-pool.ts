@@ -29,6 +29,7 @@ import type {
 } from './pool-contract.js';
 import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
 import type { LeaseEmulation, LeaseMedia } from './lease-emulation.js';
+import { NotHtmlDocumentError, READER_NOT_HTML } from './zero-install.js';
 export type {
   InitScriptHandle,
   Launcher,
@@ -49,6 +50,7 @@ export interface Lease {
   /**
    * Hand the page the zero-install reader: evaluated in the live document, and added ahead of every
    * document this lease loads next. False when there is no reader, or the page cannot run one.
+   * Rejects with `NotHtmlDocumentError` when the page is not an HTML document.
    */
   injectReader?(): Promise<boolean>;
   /** Whether the page's document has not reached `complete` yet. False when it cannot be read. */
@@ -739,7 +741,7 @@ export class BrowserPool {
           const script = this.#zeroInstall?.();
           if (script === undefined || page.evaluate === undefined) return false;
           await page.addInitScript?.(script);
-          await page.evaluate(script);
+          if (READER_NOT_HTML === (await page.evaluate(script))) throw new NotHtmlDocumentError();
           return true;
         },
         isLoading: async (): Promise<boolean> => {

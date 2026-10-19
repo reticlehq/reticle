@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { readReaderBundle, zeroInstallScript } from './zero-install.js';
+import { READER_NOT_HTML, readReaderBundle, zeroInstallScript } from './zero-install.js';
 
 /** A stand-in for the SDK bundle: evaluating it creates the singleton, exactly as the real one does. */
 const FAKE_BUNDLE =
@@ -42,6 +42,28 @@ describe('zeroInstallScript — the reader a page with no SDK is given', () => {
       token: 'tok',
       url: OPTS.url,
     });
+  });
+
+  // #1701 reports `Cannot read properties of null (reading 'appendChild')` on an `.svg` URL.
+  it('does nothing on a document that is not HTML, and returns the not-HTML answer', () => {
+    const page: Record<string, unknown> = {
+      document: { contentType: 'image/svg+xml' },
+    };
+    page['globalThis'] = page;
+    expect(runInNewContext(zeroInstallScript(FAKE_BUNDLE, OPTS), page)).toBe(READER_NOT_HTML);
+    expect(page['__reticleInstance']).toBeUndefined();
+    expect(page['__connectedWith']).toBeUndefined();
+  });
+
+  it('connects on an HTML or XHTML document', () => {
+    for (const contentType of ['text/html', 'application/xhtml+xml']) {
+      const page = run({ document: { contentType } });
+      expect(page['__connectedWith']).toEqual({
+        allowNonLocalhost: true,
+        token: 'tok',
+        url: OPTS.url,
+      });
+    }
   });
 });
 
