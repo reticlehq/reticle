@@ -414,7 +414,8 @@ export async function runTool<Ext>(
         'function' === typeof deps.now;
       const ends = endsRun(tool.name, args);
       // A call that only ends a run starts none: a second yield in a row carries no empty report.
-      if (agentCall && !ends) runLedger.begin(deps.now());
+      if (agentCall && !ends && deps.attachId !== undefined)
+        runLedger.begin(deps.now(), deps.attachId);
       // The project of the session a call ends, read while the session still exists: releasing a
       // tab removes it, and an unreadable project lost an unlinked user's cloud line.
       const endedIn =

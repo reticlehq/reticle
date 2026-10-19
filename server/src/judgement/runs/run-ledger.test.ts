@@ -23,11 +23,30 @@ const verdict = (
   at: 0,
 });
 
+const AGENT = 'attach-1';
+
 describe('the run ledger', () => {
+  it('starts a new run when another agent calls, so one run does not leak into the next report', () => {
+    const ledger = new RunLedger();
+    // The first agent checks something and stops without a call that ends its run.
+    ledger.begin(0, AGENT);
+    ledger.verdict(verdict('the old claim', Verified.NO));
+    ledger.after(10);
+    // The next agent on the same daemon.
+    ledger.begin(5_000, 'attach-2');
+    ledger.verdict(verdict('the new claim', Verified.YES));
+    ledger.after(5_200);
+    const report = ledger.take(6_000);
+    expect(report.claims.map((c) => c.claim)).toEqual(['the new claim']);
+    expect(report.verified).toBe(Verified.YES);
+    expect(report.wallMs).toBe(1_000);
+    expect(report.firstVerdictMs).toBe(200);
+  });
+
   it('is empty until an agent call, and takes a report only once', () => {
     const ledger = new RunLedger();
     expect(ledger.isEmpty()).toBe(true);
-    ledger.begin(1_000);
+    ledger.begin(1_000, AGENT);
     ledger.verdict(verdict('task shows', Verified.YES));
     ledger.after(1_500);
     expect(ledger.isEmpty()).toBe(false);
@@ -39,7 +58,7 @@ describe('the run ledger', () => {
 
   it('lists every claim with one piece of evidence, and the failed ones as caught', () => {
     const ledger = new RunLedger();
-    ledger.begin(0);
+    ledger.begin(0, AGENT);
     ledger.verdict(
       verdict('the request carries seats: 5', Verified.NO, {
         observed: 'POST /api/members sent seats: 4',
@@ -64,7 +83,7 @@ describe('the run ledger', () => {
 
   it('does not count a passive no that a later yes of the same claim superseded', () => {
     const ledger = new RunLedger();
-    ledger.begin(0);
+    ledger.begin(0, AGENT);
     ledger.verdict(verdict('saved', Verified.NO, { declaredBeforeActing: false }));
     ledger.verdict(verdict('saved', Verified.YES));
     const report = ledger.take(10);
@@ -74,7 +93,7 @@ describe('the run ledger', () => {
 
   it('keeps flows saved and replayed, and memory written and read', () => {
     const ledger = new RunLedger();
-    ledger.begin(0);
+    ledger.begin(0, AGENT);
     ledger.flowSaved('invite');
     ledger.flowSaved('invite');
     ledger.replayed('invite', Verified.NO);
@@ -100,7 +119,7 @@ describe('the run ledger', () => {
   // and the report read "failed · 0 of 5 checks did not hold". A replay is counted once, as a flow.
   it('counts a replay as a flow, never also as a journaled claim', () => {
     const ledger = new RunLedger();
-    ledger.begin(0);
+    ledger.begin(0, AGENT);
     ledger.verdict({
       ...verdict('the flow "invite" replays', Verified.UNKNOWN),
       tool: 'reticle_flow_replay',
@@ -114,7 +133,7 @@ describe('the run ledger', () => {
   // The replay proof run's report had no time to its first verdict: its only verdicts were replays.
   it('times the first verdict from a replay too', () => {
     const ledger = new RunLedger();
-    ledger.begin(100);
+    ledger.begin(100, AGENT);
     ledger.after(300);
     ledger.replayed('invite', Verified.NO);
     ledger.after(900);
@@ -125,7 +144,7 @@ describe('the run ledger', () => {
     const ledger = new RunLedger();
     ledger.replayed('invite', Verified.NO);
     ledger.verdict(verdict('saved', Verified.YES));
-    ledger.begin(0);
+    ledger.begin(0, AGENT);
     const report = ledger.take(10);
     expect(report.flows.replayed).toEqual([]);
     expect(report.claims).toEqual([]);
@@ -133,7 +152,7 @@ describe('the run ledger', () => {
 
   it('says nothing was proved when nothing was checked', () => {
     const ledger = new RunLedger();
-    ledger.begin(0);
+    ledger.begin(0, AGENT);
     ledger.flowSaved('invite');
     const report = ledger.take(10);
     expect(report.verified).toBe(Verified.UNKNOWN);

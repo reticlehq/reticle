@@ -6,8 +6,11 @@
  * the Harness's are never counted. Taking the report empties the ledger, so the next run starts at
  * zero.
  *
- * ponytail: one ledger for each daemon, not for each agent. Two agents on one daemon share a report.
- * Key it by the MCP attach id when that happens.
+ * A call from another agent (another MCP attach id) starts a new run. An agent that stops without a
+ * call that ends its run then does not leak its claims into the next agent's report.
+ *
+ * ponytail: one ledger for each daemon, not for each agent. Two agents that call at the same time
+ * restart each other's run. Key the ledger by attach id when that happens.
  */
 import { supersededChecks } from '@reticlehq/engine/evidence/superseded-checks.js';
 import {
@@ -37,6 +40,7 @@ function runVerified(all: readonly Verified[]): Verified {
 }
 
 export class RunLedger {
+  #owner: string | undefined;
   #startedAt: number | undefined;
   #firstVerdictAt: number | undefined;
   #verdicts: JournalVerdictEffect[] = [];
@@ -45,8 +49,10 @@ export class RunLedger {
   #written = 0;
   #read = new Set<string>();
 
-  /** An agent call starts. The first one starts the run. */
-  begin(now: number): void {
+  /** An agent call starts. The first one starts the run, and a call from another agent starts a new one. */
+  begin(now: number, owner: string): void {
+    if (this.#owner !== owner) this.#reset();
+    this.#owner = owner;
     this.#startedAt ??= now;
   }
 
@@ -135,6 +141,7 @@ export class RunLedger {
   }
 
   #reset(): void {
+    this.#owner = undefined;
     this.#startedAt = undefined;
     this.#firstVerdictAt = undefined;
     this.#verdicts = [];

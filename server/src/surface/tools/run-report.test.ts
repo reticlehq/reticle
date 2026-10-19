@@ -94,7 +94,7 @@ describe('the end-of-run report', () => {
   it('shows the cloud line only when the project is not linked, and never with the silence switch', () => {
     const take = (root: string, env: Record<string, string | undefined>): RunReport => {
       const ledger = new RunLedger();
-      ledger.begin(0);
+      ledger.begin(0, 'attach-1');
       const field = runReportField(ledger, root, env, 10)[RUN_REPORT_FIELD];
       expect(field?.instruction).toBe(RUN_REPORT_INSTRUCTION);
       return RunReportSchema.parse(field?.report);
@@ -122,7 +122,7 @@ describe('the end-of-run report', () => {
 
   it('counts a saved flow and memory from the tool answers, never an answer that refused', () => {
     const ledger = new RunLedger();
-    ledger.begin(0);
+    ledger.begin(0, 'attach-1');
     noteToolResult(ledger, ReticleTool.FLOW_SAVE, {}, { name: 'invite', stepCount: 1 });
     noteToolResult(ledger, ReticleTool.FLOW_SAVE, {}, { error: 'no recording named "x"' });
     noteToolResult(ledger, ReticleTool.MEMORY, { action: 'add' }, { error: 'not linked' });
