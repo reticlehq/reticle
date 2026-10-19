@@ -58,7 +58,8 @@ import {
   verdictOf,
 } from '@/command/cli/adhoc-verdict.js';
 
-export const MSG_SIGN_IN_FIRST = 'Sign in first: reticle connect (it is free, no card)';
+export const MSG_SIGN_IN_FIRST =
+  'Link this folder first: reticle connect. It signs you in if you are not, and it is free, no card.';
 
 const PERSONA_FLAG = '--persona';
 

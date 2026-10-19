@@ -12,12 +12,12 @@ npx @reticlehq/server try <url> [--persona <who>]
 
 The app needs nothing installed. A page with no Reticle SDK gets one supplied for the drive, so verdicts cover the DOM, network, console and routes. There is no component state and no source `file:line` until you run [`reticle init`](/cli/init).
 
-## Sign in first
+## Link the folder first
 
-The drive runs on the Reticle platform, so `try` needs a linked folder. On a machine that is not linked it drives nothing and says:
+The drive runs on the Reticle platform, so `try` needs a linked folder. Being signed in is not enough. In a folder that is not linked it drives nothing and says:
 
 ```
-Sign in first: reticle connect (it is free, no card)
+Link this folder first: reticle connect. It signs you in if you are not, and it is free, no card.
 ```
 
 Run [`reticle connect`](/cli/cloud) in the folder, then run `try` again. It exits `1` in this case.

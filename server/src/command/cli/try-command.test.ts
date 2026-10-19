@@ -50,7 +50,10 @@ describe('reticle try', () => {
     const { ports: p, seen } = ports({ linked: false });
     expect(await runTry({ url: URL_UNDER_TEST }, p)).toBe(1);
     expect(seen.fail).toEqual([MSG_SIGN_IN_FIRST]);
-    expect(MSG_SIGN_IN_FIRST).toBe('Sign in first: reticle connect (it is free, no card)');
+    // A signed-in person in an unlinked folder was told to sign in. What `try` needs is a LINKED folder.
+    expect(MSG_SIGN_IN_FIRST).toBe(
+      'Link this folder first: reticle connect. It signs you in if you are not, and it is free, no card.',
+    );
     expect(seen.drives).toEqual([]);
   });
 
