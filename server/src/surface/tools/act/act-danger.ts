@@ -9,6 +9,7 @@ import {
   isPaymentProviderUrl,
   outwardActionOf,
   outwardRefusal,
+  withoutFilenameTokens,
 } from '@reticlehq/core';
 import { currentDrivenBy, harnessOutwardAllowed } from '@/hooks/driven-by.js';
 import { asRecord, asString } from '@reticlehq/core';
@@ -26,10 +27,12 @@ import { asRecord, asString } from '@reticlehq/core';
  */
 function descriptorText(value: unknown): string {
   const descriptor = asRecord(value);
+  // Filename tokens are stripped from the name, the text and the value only: an href or a
+  // formAction is a target, not words on the control, and its destination must be read whole.
   return [
-    asString(descriptor['name']) ?? '',
-    asString(descriptor['text']) ?? '',
-    asString(descriptor['value']) ?? '',
+    withoutFilenameTokens(asString(descriptor['name']) ?? ''),
+    withoutFilenameTokens(asString(descriptor['text']) ?? ''),
+    withoutFilenameTokens(asString(descriptor['value']) ?? ''),
     asString(descriptor['href']) ?? '',
     asString(descriptor['formAction']) ?? '',
     asString(descriptor['formText']) ?? '',

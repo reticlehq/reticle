@@ -18,11 +18,12 @@
 import {
   OutwardAction,
   isDangerousActionText,
-  isInertHref,
   isDangerousNavigation,
+  isInertHref,
   isPaymentField,
   outwardActionOf,
   outwardRefusal,
+  withoutFilenameTokens,
 } from '@reticlehq/core';
 import { getAccessibleName, getRole } from '@/dom/a11y.js';
 import { type ActionTarget, isHtmlElement } from '@/dom/realm.js';
@@ -67,22 +68,6 @@ function navigatingHref(el: ActionTarget): string | undefined {
   if (ANCHOR_TAG !== el.tagName) return undefined;
   const href = el.getAttribute('href');
   return null === href || isInertHref(href) ? undefined : href;
-}
-
-/**
- * Tokens that read as one filename, never as an action verb.
- * A token counts as a filename only when it ends in a known file extension.
- * `photo-remove-background.webm` is a filename, so the `remove` inside it is not an act.
- * A hyphen or an underscore alone does not make a filename: `delete-account` and `delete_repo`
- * are labels, so they keep their words and still trip the guard. The name part matches filename
- * characters only, so a verb glued to a filename with other punctuation survives: in
- * `Delete:report.pdf` only `report.pdf` is stripped and the `Delete` still trips the guard.
- */
-const FILENAME_LIKE_TOKEN =
-  /[\w.-]+\.(?:webm|mp4|mov|mkv|avi|mp3|wav|ogg|flac|png|jpe?g|gif|webp|svg|avif|bmp|pdf|zip|tar|gz|txt|csv|json|xml|docx?|xlsx?|pptx?)\b/gi;
-
-function withoutFilenameTokens(text: string): string {
-  return text.replace(FILENAME_LIKE_TOKEN, ' ');
 }
 
 export function dangerousActionContext(el: ActionTarget): string {

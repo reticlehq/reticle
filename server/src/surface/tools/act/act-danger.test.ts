@@ -49,6 +49,32 @@ describe('assertNotDestructive', () => {
       assertNotDestructive(ActionType.CLICK, {}, { text: 'Send payment', role: 'button' }),
     ).toThrow(/confirmDangerous/);
   });
+
+  it('does not block a native click on a tile named by its filename', () => {
+    expect(() =>
+      assertNotDestructive(
+        ActionType.CLICK,
+        { native: true },
+        {
+          text: 'photo-remove-background.webm',
+          role: 'img',
+        },
+      ),
+    ).not.toThrow();
+  });
+
+  it('still blocks a hyphenated label that is not a filename', () => {
+    expect(() =>
+      assertNotDestructive(
+        ActionType.CLICK,
+        { native: true },
+        {
+          text: 'delete-account',
+          role: 'button',
+        },
+      ),
+    ).toThrow(/confirmDangerous/);
+  });
 });
 
 /**

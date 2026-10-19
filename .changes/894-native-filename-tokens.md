@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — the native-click destructive guard still blocked controls named by a filename.** The filename-token rule lived only in the SDK path: `reticle_act { args: { native: true } }` on a tile named "photo-remove-background.webm" was still refused for the `remove` in its name, and so was a drag touching it. The token matcher now lives in `@reticlehq/core` next to `isDangerousActionText`, and the native inspector path applies it to the name, the text and the value (never to the href or the form action). Closes the native-input half of [#894](https://github.com/reticlehq/reticle/issues/894).

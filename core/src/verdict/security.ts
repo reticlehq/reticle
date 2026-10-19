@@ -142,6 +142,27 @@ export function isOpaqueOrigin(origin: string): boolean {
 }
 
 /**
+ * Tokens that read as one filename, never as an action verb.
+ * A token counts as a filename only when it ends in a known file extension.
+ * `photo-remove-background.webm` is a filename, so the `remove` inside it is not an act.
+ * A hyphen or an underscore alone does not make a filename: `delete-account` and `delete_repo`
+ * are labels, so they keep their words and still trip the guard. The name part matches filename
+ * characters only, so a verb glued to a filename with other punctuation survives: in
+ * `Delete:report.pdf` only `report.pdf` is stripped and the `Delete` still trips the guard.
+ */
+export const FILENAME_LIKE_TOKEN =
+  /[\w.-]+\.(?:webm|mp4|mov|mkv|avi|mp3|wav|ogg|flac|png|jpe?g|gif|webp|svg|avif|bmp|pdf|zip|tar|gz|txt|csv|json|xml|docx?|xlsx?|pptx?)\b/gi;
+
+/**
+ * Strip filename-like tokens from text before the text is classified.
+ * Callers apply this to a control's name, text and value only: an href or a form action is a
+ * target, not words on the control, and its destination must be read whole.
+ */
+export function withoutFilenameTokens(text: string): string {
+  return text.replace(FILENAME_LIKE_TOKEN, ' ');
+}
+
+/**
  * Best-effort classifier for labels and tool names that can trigger irreversible effects.
  *
  * `role` is the resolved ARIA role of the control. An `option` is a value picker: its text names
