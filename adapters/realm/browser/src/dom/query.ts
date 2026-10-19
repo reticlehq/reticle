@@ -32,6 +32,13 @@ import { identifyComponent } from '@/registry/stores/adapters.js';
 import { refs } from './addressing/refs.js';
 import { getTestIdAttr, readTestId, testIdSelector } from './addressing/testid-attr.js';
 import { stableSelectorFor } from './stable-selector.js';
+import {
+  exactVisibleText,
+  fuzzyVisibleText,
+  normaliseVisibleText,
+  paintedCase,
+  textMatches,
+} from './text-match.js';
 
 const SOURCE_ATTR = DATA_RETICLE_SOURCE_ATTR;
 const MAX_PRESENT_TESTIDS = 12;
@@ -57,31 +64,6 @@ function elementsUnder(container: HTMLElement): HTMLElement[] {
   // tag to match on, so only a true Element root joins the candidates.
   const self = Node.ELEMENT_NODE === container.nodeType ? [container] : [];
   return [...self, ...Array.from(container.querySelectorAll<HTMLElement>('*'))];
-}
-
-/**
- * Match user-visible prose the way the public query API has always promised: trim and collapse
- * whitespace, compare canonically equivalent Unicode in NFC, and keep fuzzy text queries
- * case-insensitive. Attribute identifiers such as testid stay exact and do not pass through here.
- */
-function normaliseVisibleText(value: string): string {
-  return value.replace(/\s+/g, ' ').trim().normalize('NFC');
-}
-
-function fuzzyVisibleText(actual: string, expected: string): boolean {
-  return normaliseVisibleText(actual)
-    .toLowerCase()
-    .includes(normaliseVisibleText(expected).toLowerCase());
-}
-
-/** The text rule a query asked for: case-exact when it is a check, forgiving when it is a search. */
-function textMatches(actual: string, query: ElementQuery, expected: string): boolean {
-  if (true !== query.matchCase) return fuzzyVisibleText(actual, expected);
-  return normaliseVisibleText(actual).includes(normaliseVisibleText(expected));
-}
-
-function exactVisibleText(actual: string, expected: string): boolean {
-  return normaliseVisibleText(actual) === normaliseVisibleText(expected);
 }
 
 /** Tags whose text content is never rendered, however visible the element computes. */
@@ -338,8 +320,19 @@ function queryByRoleAndName(
   return preferVisibleActionableOption(role, matched);
 }
 
+/**
+ * A case-exact check holds on the DOM case or on the case CSS paints (#1782): with
+ * `text-transform: uppercase` the screen shows "SAVED" while the DOM holds "Saved". The style is
+ * read only after a case-blind hit, so a page with no near match pays nothing.
+ */
 function queryByText(container: HTMLElement, value: string, query: ElementQuery): HTMLElement[] {
-  return elementsUnder(container).filter((el) => textMatches(directText(el), query, value));
+  return elementsUnder(container).filter((el) => {
+    const own = directText(el);
+    if (textMatches(own, query, value)) return true;
+    if (true !== query.matchCase || !fuzzyVisibleText(own, value)) return false;
+    const painted = paintedCase(el, own);
+    return painted !== undefined && textMatches(painted, query, value);
+  });
 }
 
 function queryByLabel(container: HTMLElement, value: string): HTMLElement[] {
