@@ -9,7 +9,9 @@
  */
 import type { InitHost } from '@reticlehq/init';
 import type { InitOutcome, OnboardingStep } from '@reticlehq/core/telemetry';
+import { homedir } from 'node:os';
 import { spanSync } from '@/trace.js';
+import { hookBinFor } from '@/command/cli/hook/hook-fast.js';
 import { reportInitOutcome } from '@/telemetry/init-telemetry.js';
 import { reportOnboardingStep } from '@/telemetry/onboarding-funnel.js';
 import {
@@ -54,6 +56,10 @@ export function serverInitHost(): InitHost {
     },
     // Claude Code marks every process it spawns. If the marker ever changes, init falls back to the
     // notice it printed before, which is the safe direction.
+    /** This CLI's own bin, so the agent hooks run it with node instead of paying npx's start. */
+    hookBin(): string | undefined {
+      return hookBinFor(homedir(), process.platform);
+    },
     insideClaudeCode(): boolean {
       return CLAUDE_CODE_MARKER_VALUE === process.env[CLAUDE_CODE_MARKER_ENV];
     },

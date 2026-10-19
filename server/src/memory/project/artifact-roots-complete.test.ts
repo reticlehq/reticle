@@ -79,8 +79,8 @@ const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
     why: 'The same fallback five times — ambient map, undriven-journal drop, workspace prune, run artifact, drive flows — each written as `session.artifactRoot ?? deps.reticleRoot`. The fifth is the store a drive is saved in: it went to the daemon root and replay reads the session root, so a daemon started elsewhere saved flows nothing could replay. The fourth is the drop of a journal for a session that served no tool call, and it has to resolve the same root for the same reason the prune beside it does: teardown acts on the workspace the SESSION wrote into, never the daemon cwd.',
   },
   'surface/tools/invoke-tool.ts': {
-    uses: 3,
-    why: 'Opens the impact record for the daemon (a per-root store keyed inside the recorder) and falls back when a call has no session; and compares a session root against it, so the agent is told only when its evidence lands outside every project, not when it lands in the daemon root.',
+    uses: 4,
+    why: 'Opens the impact record for the daemon (a per-root store keyed inside the recorder) and falls back when a call has no session; and compares a session root against it, so the agent is told only when its evidence lands outside every project, not when it lands in the daemon root. The fourth is the episode log: a call goes into the project of the tab it drove, and a call with no tab into the daemon root, the same fallback as the impact record.',
   },
   'memory/cloud/sync-daemon.ts': {
     uses: 12,

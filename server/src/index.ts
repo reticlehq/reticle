@@ -1,3 +1,4 @@
+import { agentSessionInEnv } from '@/command/version/peer-announce.js';
 import { applyHarnessSwitch, harnessConfigsByRoot } from '@/memory/cloud/harness-config.js';
 import { coveragePercents } from './features/exhaust/ledger.js';
 import { agentWiring } from './portal/session/zero-install-first-call.js';
@@ -333,8 +334,10 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       },
       log,
     );
+    // Over stdio this process IS the agent's MCP server: the agent's session is in its environment.
+    const agentSession = agentSessionInEnv(process.env);
     const server = createMcpServer(
-      toolDeps,
+      agentSession === undefined ? toolDeps : { ...toolDeps, agentSession },
       profile,
       instructionStateAt(port, bridge.sessions.count()),
     );
@@ -586,11 +589,13 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const effectiveDeps = realInput !== undefined ? { ...deps, realInput } : deps;
   // Read per attach, not once: a project that gets wired while this daemon is alive should stop
   // being told to wire itself on the next agent that connects.
-  shared.attachMcp((peerSkew) =>
+  shared.attachMcp((peerSkew, agentSession) =>
     createMcpServer(
-      peerSkew === undefined
-        ? effectiveDeps
-        : { ...effectiveDeps, peerSkew: connectionSkew(peerSkew) },
+      {
+        ...effectiveDeps,
+        ...(peerSkew === undefined ? {} : { peerSkew: connectionSkew(peerSkew) }),
+        ...(agentSession === undefined ? {} : { agentSession }),
+      },
       profile,
       instructionStateAt(port, bridge.sessions.count()),
     ),

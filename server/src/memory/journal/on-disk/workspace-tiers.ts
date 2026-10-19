@@ -55,6 +55,8 @@ const sharedFile = { durability: Durability.MEMORY, sharing: Sharing.COMMIT, isD
  */
 export const WORKSPACE_TIERS: Readonly<Record<string, WorkspaceTier>> = {
   [ReticleDir.SESSIONS_SUBDIR]: localDir,
+  // Every tool call and its whole result: app data, so local, and evidence, so swept by age.
+  [ReticleDir.EPISODES_SUBDIR]: localDir,
   [ReticleDir.RUNS_SUBDIR]: localDir,
   [ReticleDir.VISUAL_SUBDIR]: localDir,
   // Write-only: a local copy of what was already sent. The outbox is the record.

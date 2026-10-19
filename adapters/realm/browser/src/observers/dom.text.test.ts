@@ -112,3 +112,31 @@ describe('a text change is observed however the app makes it', () => {
     expect(textEvents(events)).toHaveLength(0);
   });
 });
+
+/**
+ * A stale page: the store changed, the text that shows it did not. To see that, a text change has
+ * to say WHICH element (its testid), and the text an element arrived with has to be on record, or
+ * "never changed" and "never shown" look the same.
+ */
+describe('text is named, and its first value is kept', () => {
+  it('tags a change with the nearest testid', async () => {
+    document.body.innerHTML = '<div data-testid="total"><span>$80</span></div>';
+    const span = document.querySelector('span') as HTMLElement;
+    const events = await record(() => {
+      span.textContent = '$100';
+    });
+    expect(textEvents(events)[0]?.data).toMatchObject({ text: '$100', testid: 'total' });
+  });
+
+  it('reports the text a testid element arrives with', async () => {
+    document.body.innerHTML = '<main></main>';
+    const events = await record(() => {
+      const main = document.querySelector('main') as HTMLElement;
+      main.innerHTML = '<p data-testid="score">Score: 3</p>';
+    });
+    expect(textEvents(events)).toContainEqual({
+      type: EventType.DOM_TEXT,
+      data: { text: 'Score: 3', testid: 'score', initial: true },
+    });
+  });
+});

@@ -12,6 +12,8 @@ import {
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import {
   agentPeerSkew,
+  agentSessionOf,
+  AGENT_SESSION_PARAM,
   PEER_VERSION_PARAM,
   PEER_CONTRACT_PARAM,
 } from '@/command/version/peer-announce.js';
@@ -34,7 +36,7 @@ export interface SharedServer {
    * so each concurrent Claude Code client needs its own McpServer.
    * Must be called before listen.
    */
-  attachMcp(factory: (peerSkew?: string) => McpServer): void;
+  attachMcp(factory: (peerSkew?: string, agentSession?: string) => McpServer): void;
   /**
    * SDK version of each page connected when an agent attaches.
    * The daemon skew advice reads this so it does not tell the agent to restart over matching pages.
@@ -81,7 +83,7 @@ export interface SharedServer {
  * WS /reticle → browser SDK connections (via WebSocketServer)
  */
 export function createSharedServer(options: { token?: string } = {}): SharedServer {
-  type McpFactory = (peerSkew?: string) => McpServer;
+  type McpFactory = (peerSkew?: string, agentSession?: string) => McpServer;
   let mcpFactory: McpFactory | undefined;
   let pageSdkVersions: () => readonly (string | undefined)[] = () => [];
   let statusProvider: ((held: boolean) => unknown) | undefined;
@@ -237,7 +239,11 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
       // one active transport per Server instance, so concurrent clients each need
       // their own instance backed by the same shared ToolDeps.
       // Handed to THIS connection's server only: the skew is about this agent, not the daemon (#1136).
-      const mcpServer = mcpFactory(peerSkew);
+      // The agent's own session id, so this connection's episode joins the agent hooks' records.
+      const mcpServer = mcpFactory(
+        peerSkew,
+        agentSessionOf(url.searchParams.get(AGENT_SESSION_PARAM)),
+      );
       const transport = new SSEServerTransport(MCP_MESSAGE_PATH, res);
       const sid = transport.sessionId;
       transports.set(sid, transport);

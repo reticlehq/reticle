@@ -35,7 +35,7 @@ const TYPED_KEYS = ['value', 'text'] as const;
  * tell the daemon which field was secret before the call is written, and nothing reads a typed value
  * back from the journal — the run fold reads the ref, the target and the action — so none is kept.
  */
-function withoutTypedInput(args: unknown): unknown {
+export function withoutTypedInput(args: unknown): unknown {
   if (Array.isArray(args)) return args.map(withoutTypedInput);
   if ('object' !== typeof args || null === args) return args;
   const record = args as Record<string, unknown>;

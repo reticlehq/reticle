@@ -1,0 +1,3 @@
+### Changed
+
+- **`@reticlehq/server` — the post-tool hook answers at once and writes in the background.** Cursor and Gemini CLI wait for each hook to exit. Through the full CLI, the hook took about 300 ms a call: p95 325 ms for Cursor and 494 ms for Gemini CLI, over 100 calls each. `reticle hook tool` now answers before the CLI loads and hands the payload to a detached `hook tool-write`, which writes the record. Measured over 100 calls each, 400 ms apart: p50 24 ms, p95 28 ms (Cursor) and 35 ms (Gemini CLI). In a burst with no gap, the writers compete for the CPU and p95 rises to about 200 ms. Running through `npx` adds npx's own start time, about 350 ms on this machine, to each call.

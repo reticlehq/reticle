@@ -552,10 +552,15 @@ describe('a drive with a spec', () => {
         tools: [{ name: 'reticle_look', description: 'read the page', inputSchema: {} }],
       }),
       expect.objectContaining({
-        results: [{ seq: 1, ok: true, result: { tree: 'button "Pay"' }, ms: 0 }],
+        // When each call started and ended on this machine, not only how long it took.
+        results: [
+          { seq: 1, ok: true, result: { tree: 'button "Pay"' }, ms: 0, startedAt: 0, endedAt: 0 },
+        ],
       }),
       expect.objectContaining({
-        results: [{ seq: 2, ok: false, error: 'unknown reticle tool', ms: 0 }],
+        results: [
+          { seq: 2, ok: false, error: 'unknown reticle tool', ms: 0, startedAt: 0, endedAt: 0 },
+        ],
       }),
     ]);
     // The platform decided the drive, so it keeps the result; the daemon posts none of its own.

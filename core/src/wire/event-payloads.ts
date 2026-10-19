@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EventType, PerfMetric } from './constants/constants.js';
+import { CanvasTrigger, EventType, MediaEvent, PerfMetric } from './constants/constants.js';
 import { BlindSpotKind } from '@/verdict/verified-constants.js';
 import { BrowserBrand } from '@/telemetry-feedback.js';
 import { HudUseDataSchema, HumanControlDataSchema, HumanMarkDataSchema } from './messages.js';
@@ -170,7 +170,17 @@ export const EVENT_PAYLOAD_SCHEMAS = {
   [EventType.DOM_ATTR]: z
     .object({ attr: z.string(), value: z.string().optional(), old: z.string().optional() })
     .passthrough(),
-  [EventType.DOM_TEXT]: z.object({ text: z.string(), old: z.string().optional() }),
+  [EventType.DOM_TEXT]: z.object({
+    text: z.string(),
+    old: z.string().optional(),
+    /**
+     * The `data-testid` of the element or its nearest ancestor, so a text change can be named and a
+     * stale one (a store field changed, the text that shows it did not) can be found.
+     */
+    testid: z.string().optional(),
+    /** The text an element ARRIVED with, not a change: the baseline a later change is read against. */
+    initial: z.boolean().optional(),
+  }),
   [EventType.NET_REQUEST]: netRequestSchema,
   [EventType.NET_PENDING]: z.object({
     id: z.string(),
@@ -320,6 +330,30 @@ export const EVENT_PAYLOAD_SCHEMAS = {
   [EventType.HUMAN_CONTROL]: HumanControlDataSchema,
   [EventType.HUMAN_MARK]: HumanMarkDataSchema,
   [EventType.HUD_USED]: HudUseDataSchema,
+  [EventType.MEDIA_STATE]: z.object({
+    event: z.nativeEnum(MediaEvent),
+    tag: z.enum(['video', 'audio']),
+    /** Seconds into the media, as the element reports it. */
+    currentTime: z.number(),
+    /** Absent while unknown (NaN) or endless (a live stream). */
+    duration: z.number().optional(),
+    /** HTMLMediaElement.readyState, 0–4. */
+    readyState: z.number().int().min(0).max(4),
+    paused: z.boolean(),
+  }),
+  [EventType.CANVAS_DIGEST]: z.object({
+    /** A hash of a 16x16 sample of the canvas pixels: changes when what it shows changes. */
+    digest: z.string(),
+    width: z.number().int().nonnegative(),
+    height: z.number().int().nonnegative(),
+    /** The sample's mean colour, `[r, g, b]` 0–255: a coarse "what colour is it" a reader can check. */
+    mean: z.tuple([z.number(), z.number(), z.number()]),
+    /**
+     * `act` when an act's end took it, inside the act's window and sent even if nothing changed;
+     * `poll` when the timer did. Absent from an SDK older than the field.
+     */
+    trigger: z.nativeEnum(CanvasTrigger).optional(),
+  }),
 } satisfies Record<EventType, z.ZodTypeAny>;
 
 /** Narrow an event's `data` against its type's payload schema. Unknown in, typed-or-error out. */

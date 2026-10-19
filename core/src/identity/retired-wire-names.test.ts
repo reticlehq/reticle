@@ -79,6 +79,8 @@ const SHIPPED: readonly string[] = [
   'human.mark',
   'download',
   'hud.used',
+  'media.state',
+  'canvas.digest',
   // actions
   'click',
   'dblclick',

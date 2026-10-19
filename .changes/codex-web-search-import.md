@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server`, `@reticlehq/init` — Codex's web searches reach the episode log.** Codex's `web_search` is a hosted tool that never reaches a hook. Any Codex hook (a tool call, the turn's Stop) now reads Codex's own session transcript (the payload's `transcript_path`, else `$CODEX_HOME/sessions/**/rollout-*-<session>.jsonl`, read only) and appends each search it has not kept yet to the same `.reticle/episodes/agent-<session>.jsonl`, as an `agent_tool` record with `tool: "web_search"`, `source: "codex-transcript"`, the redacted query or URL, the redacted head and size of the results, and the start and end time where Codex records them. It is idempotent: a search already kept is skipped.

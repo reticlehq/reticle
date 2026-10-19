@@ -12,7 +12,9 @@ import {
   COMPACT_HOOK_COMMAND,
   claudeSettingsSteps,
   compactHookStep,
+  promptHookStep,
 } from './stop-hook-step.js';
+import { PROMPT_HOOK_AGENTS, PromptHookAgent } from '@/register/prompt-hooks.js';
 
 const PATH = '/repo/.claude/settings.json';
 const written = (content: string | null): unknown => {
@@ -84,5 +86,28 @@ describe('the resume-after-compaction hook', () => {
     const last = steps.at(-1)?.write?.content ?? '';
     expect(last).toContain(STOP_HOOK_COMMAND);
     expect(last).toContain(COMPACT_HOOK_COMMAND);
+  });
+});
+
+/**
+ * Codex skips a project hook until the user trusts it in `/hooks`, and says nothing: a headless
+ * `codex exec` ran a whole task on 2026-10-19 with every Reticle hook installed and none fired.
+ */
+describe('a hook the agent runs only after the user trusts it', () => {
+  const codex = PROMPT_HOOK_AGENTS.find((agent) => PromptHookAgent.CODEX === agent.id);
+  const cursor = PROMPT_HOOK_AGENTS.find((agent) => PromptHookAgent.CURSOR === agent.id);
+
+  it('says how to trust it when it is installed, and again when it is already there', () => {
+    if (codex === undefined) throw new Error('no Codex spec');
+    const applied = promptHookStep({ spec: codex, path: 'p', existing: null });
+    expect(applied.detail).toContain('/hooks');
+    const again = promptHookStep({ spec: codex, path: 'p', existing: applied.write?.content ?? null });
+    expect(again.status).toBe(StepStatus.ALREADY);
+    expect(again.detail).toContain('/hooks');
+  });
+
+  it('adds nothing for an agent that runs its hooks as soon as they are written', () => {
+    if (cursor === undefined) throw new Error('no Cursor spec');
+    expect(promptHookStep({ spec: cursor, path: 'p', existing: null }).detail).not.toContain('/hooks');
   });
 });

@@ -166,6 +166,13 @@ export interface ToolSessionResult {
   result?: unknown;
   error?: string;
   ms: number;
+  /**
+   * When the call started and ended on the daemon's clock (epoch ms). The platform saw only its own
+   * send and the reply, which folds the network and the queue into the tool's time. Optional: an
+   * older daemon does not send them.
+   */
+  startedAt?: number;
+  endedAt?: number;
 }
 
 /** The platform's answer to a session ask: the next calls, or that the drive is over. */

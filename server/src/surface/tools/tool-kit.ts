@@ -81,6 +81,11 @@ export interface ToolDeps<Ext = unknown> {
    * it, so two agents on one origin never share a tab (#1226). Absent ⇒ every acquire gets its own.
    */
   attachId?: string;
+  /**
+   * The coding agent's own session id, as its MCP server announced it on connect. Joins this
+   * connection's episode to the agent hooks' records. Absent: the agent announced none.
+   */
+  agentSession?: string;
   /** Run one sync cycle with the platform now, for `reticle_project { push }`. Absent: not linked here. */
   syncNow?: () => Promise<unknown>;
   /** Wires the app on the agent's first use, instead of at installation. Absent: tell, do not wire. */

@@ -357,6 +357,7 @@ export async function recordDriveRun(
         { ...input, ...(subject === undefined ? {} : { subject }) },
         firstAt === undefined ? clock : () => firstAt,
       ),
+      { sessionId: session.id },
     );
   }
 }

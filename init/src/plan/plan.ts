@@ -955,8 +955,9 @@ export function buildPlan(input: PlanInput): Plan {
       // Beside the CLAUDE.md rule: the same agent, the same consent to write its instruction files.
       compact: input.options.mcp && input.claudeCli,
       prompt: true === input.claudePromptHook,
+      bin: input.hookBin,
     }),
-    ...promptHookSteps(input.promptHooks ?? [], true === input.claudePromptHook),
+    ...promptHookSteps(input.promptHooks ?? [], true === input.claudePromptHook, input.hookBin),
     ...uiLibraryStep(input),
     ...webGlCanvasStep(input),
     installStep(input),

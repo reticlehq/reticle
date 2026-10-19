@@ -113,6 +113,7 @@ export {
   installPromptHook,
   promptHookCommand,
   promptHookInstalled,
+  promptHookNpxOnly,
   promptHookTargets,
   uninstallPromptHook,
   type PromptHookSpec,

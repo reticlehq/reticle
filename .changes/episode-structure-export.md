@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server` — `reticle hook export --structure` writes the page's structure at each step, with no text in it.** The episode log keeps each `reticle_snapshot` result whole, on your machine. The export reads every snapshot step in `.reticle/episodes/` and writes one JSON line for each step to stdout. A line holds the episode, the step, the tab and the time, and a list of nodes. Each node has a depth, a role, a ref, a grid layout and its states (disabled, checked, expanded, pressed, focused). The names, values and text on the page are never copied: a node says only whether it had one. A snapshot that the episode cut short is counted and skipped.

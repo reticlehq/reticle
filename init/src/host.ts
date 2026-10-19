@@ -50,6 +50,12 @@ export interface InitHost {
    * which the scaffolder does not read for itself.
    */
   insideClaudeCode(): boolean;
+  /**
+   * The installed CLI's bin, for hook commands that run it with node and skip npx's start. Under
+   * the home folder it is written `$HOME/...`, so no user name lands in a committed file. Undefined
+   * where a direct command is not wanted (Windows shells), and the hooks use npx alone.
+   */
+  hookBin?(): string | undefined;
 }
 
 /**

@@ -55,6 +55,28 @@ export function noteAgentAttached(attachId: string, name: string): void {
   changed();
 }
 
+/**
+ * The agent's own session id per connection, as its MCP server announced it. Kept after the
+ * connection closes: a run written at a session's end still needs it.
+ * ponytail: never pruned; one short string per MCP connect for the daemon's lifetime.
+ */
+const sessionByAttach = new Map<string, string>();
+
+/** Connection `attachId` announced the agent session `session`. */
+export function noteAgentSession(attachId: string, session: string): void {
+  sessionByAttach.set(attachId, session);
+}
+
+/** The agent session connection `attachId` announced, if any. */
+export function agentSessionOf(attachId: string | undefined): string | undefined {
+  return attachId === undefined ? undefined : sessionByAttach.get(attachId);
+}
+
+/** The name connection `attachId` gave in its handshake, while it is attached. */
+export function agentNameOf(attachId: string | undefined): string | undefined {
+  return attachId === undefined ? undefined : byAttach.get(attachId);
+}
+
 /** That connection closed. */
 export function noteAgentDetached(attachId: string): void {
   if (byAttach.delete(attachId)) changed();

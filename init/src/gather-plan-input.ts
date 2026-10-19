@@ -468,6 +468,10 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
     // Read only to MERGE into: the settings file is the user's, and other tools write in it too.
     claudeSettingsContent: io.readFile(agentFile(CLAUDE_SETTINGS_PATH)),
     ...promptHookInput(io, options, claudeCli, agentFile),
+    ...((): { hookBin?: string } => {
+      const bin = io.host.hookBin?.();
+      return bin === undefined ? {} : { hookBin: bin };
+    })(),
     ...(agentRoot === undefined
       ? {}
       : {

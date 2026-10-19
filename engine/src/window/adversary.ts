@@ -55,6 +55,9 @@ function barestValue(schema: z.ZodTypeAny): unknown {
       return false;
     case 'ZodArray':
       return [];
+    // A tuple has a fixed length, so the barest one still has every item.
+    case 'ZodTuple':
+      return ((def as { items?: z.ZodTypeAny[] }).items ?? []).map((item) => barestValue(item));
     case 'ZodLiteral':
       return def.value;
     case 'ZodEnum':

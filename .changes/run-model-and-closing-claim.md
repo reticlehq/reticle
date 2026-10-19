@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/core`, `@reticlehq/server` — a synced run carries the agent's model and what the agent said when it finished.** When a run is sent, Reticle fills `agent.model` from the agent hook's model record. It also fills `context.closingClaim` (and `closingClaimAt`): the first closing message from the same agent at or after the run's last Reticle call. A later message belongs to a later turn. Neither overwrites a value the run already has. The claim is the agent's counterpart of the user's request, so it is sent only when the project shares requests; `"shareRequests": false` keeps it on your machine. `PromptContextSchema` accepts both fields, so rewriting a run keeps them.

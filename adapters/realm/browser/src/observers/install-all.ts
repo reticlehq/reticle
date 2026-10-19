@@ -25,6 +25,8 @@ import { installDialogs } from './dialogs.js';
 import { installAnimation } from './animation.js';
 import { installScroll } from './scroll.js';
 import { installHealth } from './health.js';
+import { installMedia } from './media.js';
+import { installCanvas } from './canvas.js';
 import { reportSdkFailure, SdkSite } from './sdk-failure.js';
 import type { Emit, Teardown } from './types.js';
 
@@ -112,5 +114,8 @@ export function installAllObservers(emit: Emit, options: InstallOptions): Teardo
     guard(emit, SdkSite.DOM_OBSERVER, () => installBlindSpots(emit)), // cross-origin iframes the SDK can't see → BLIND_SPOT (coverage: partial)
     guard(emit, SdkSite.HEALTH_OBSERVER, () => installHealth(emit)), // page visibility/focus health + heartbeat
     guard(emit, SdkSite.DOM_OBSERVER, () => installContextOpen(emit)), // window.open → CONTEXT_OPENED (the consequence may live in another context)
+    // Media playback and canvas output: neither reaches the DOM. See media.ts and canvas.ts.
+    guard(emit, SdkSite.DOM_OBSERVER, () => installMedia(emit)),
+    guard(emit, SdkSite.DOM_OBSERVER, () => installCanvas(emit)),
   ];
 }

@@ -1,0 +1,3 @@
+### Changed
+
+- **`@reticlehq/init`, `@reticlehq/server` — an npx-only hook install is rewritten to the direct form.** An install written before hooks ran the CLI directly still counted as installed, so it kept paying npx's start (~426 ms per call) until the version changed. `reticle init` and `reticle hook install` now rewrite such an entry in place to `node "<bin>" hook … || npx -y …` wherever the bin can run directly (not on Windows). An entry that already runs any machine's bin directly is left alone. `reticle hook status` and `reticle doctor` name an npx-only install and the command that fixes it.

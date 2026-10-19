@@ -51,6 +51,12 @@ interface SyncPolicy {
    * dashboard plays as the run's video. Follows `screenshots` when the link does not say.
    */
   video: boolean;
+  /**
+   * Upload the episode log (every tool call and its whole result). Never a default and never
+   * inherited from another switch: only `"episodes": true` here, and even then only to a workspace
+   * that consented to share its data. See `episodesMaySync`.
+   */
+  episodes?: boolean;
 }
 const DEFAULT_SYNC_POLICY: SyncPolicy = {
   runs: true,
@@ -123,6 +129,7 @@ function parseLink(raw: unknown): CloudLink | null {
         sync.video,
         asBool(sync.screenshots, asBool(sync.runs, DEFAULT_SYNC_POLICY.video)),
       ),
+      ...(true === sync.episodes ? { episodes: true } : {}),
     },
     verify: o.verify === VerifyMode.SERVER ? VerifyMode.SERVER : VerifyMode.LOCAL,
   };
@@ -241,6 +248,7 @@ export async function resolveProjectCloud(
     capsules: link.sync.capsules ?? DEFAULT_SYNC_POLICY.capsules,
     screenshots: link.sync.screenshots ?? DEFAULT_SYNC_POLICY.screenshots,
     video: link.sync.video ?? DEFAULT_SYNC_POLICY.video,
+    ...(true === link.sync.episodes ? { episodes: true } : {}),
   };
   const stored = credentialFor(
     await readJson(fs, join(homeDir, ReticleDir.ROOT, CREDENTIALS_FILE)),

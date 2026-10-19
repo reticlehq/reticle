@@ -22,6 +22,7 @@ import { editEpoch } from '@/edit-epoch.js';
 import { isButton, isInput } from '@/dom/realm.js';
 import { hitTestOccluder } from '@/dom/occlusion.js';
 import { readStorage } from '@/observers/storage.js';
+import { canvasAfterAct } from '@/observers/canvas.js';
 import { captureDesktopWindow } from '@/dom/desktop-capture.js';
 import { identifyComponent, readComponentState } from '@/registry/stores/adapters.js';
 import { readStoresWithTruncation, readStoresRaw, storeNames } from '@/registry/stores.js';
@@ -328,13 +329,20 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
       true === args['diagnose'],
     ),
   );
-  reg.set(ReticleCommand.ACT, (args) => {
+  // Each act ends with a canvas sample, before it answers, so the frame it drew is tied to it.
+  reg.set(ReticleCommand.ACT, async (args) => {
     const action = str(args['action']) ?? '';
-    return executeAction(str(args['ref']) ?? '', action, record(args['args']));
+    const result = await executeAction(str(args['ref']) ?? '', action, record(args['args']));
+    canvasAfterAct();
+    return result;
   });
-  reg.set(ReticleCommand.ACT_SEQUENCE, (args) =>
-    executeSequence((Array.isArray(args['steps']) ? args['steps'] : []) as ActionStep[]),
-  );
+  reg.set(ReticleCommand.ACT_SEQUENCE, async (args) => {
+    const result = await executeSequence(
+      (Array.isArray(args['steps']) ? args['steps'] : []) as ActionStep[],
+    );
+    canvasAfterAct();
+    return result;
+  });
   reg.set(ReticleCommand.INSPECT, (args) => inspect(str(args['ref']) ?? ''));
   reg.set(ReticleCommand.ANIMATIONS, () => listAnimations());
   reg.set(ReticleCommand.CLOCK, (args) => {

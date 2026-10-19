@@ -17,21 +17,30 @@ import {
   claudeAvailableProbe,
   installPromptHook,
   promptHookInstalled,
+  promptHookNpxOnly,
   promptHookTargets,
   uninstallPromptHook,
 } from '@reticlehq/init';
-import { ReticleEnv } from '@reticlehq/core';
+import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { discoverProjectConfigs } from '@/command/cli/config/config-discovery.js';
 import { projectSetting } from '@/memory/intent/record-request.js';
 import { capturePrompt, hookAck } from './prompt-hook.js';
+import { captureToolCall, toolHookAck } from './tool-hook.js';
+import { AT_FLAG, PROMPT_WRITE_ACTION, TOOL_WRITE_ACTION, hookBinFor } from './hook-fast.js';
+import { exportStructure } from './episode-structure.js';
 
 const HookAction = {
   PROMPT: 'prompt',
+  /** What the agent's post-tool hook runs: one of the agent's own tool calls. */
+  TOOL: 'tool',
+  /** The episodes, for a dataset: `--structure` is the text-free page structure per step. */
+  EXPORT: 'export',
   INSTALL: 'install',
   UNINSTALL: 'uninstall',
   STATUS: 'status',
 } as const;
 const AGENT_FLAG = '--agent';
+const STRUCTURE_FLAG = '--structure';
 /** An agent hook that names none is Claude Code's: the stand-in this command replaces was. */
 const DEFAULT_AGENT = 'claude-code';
 /** The payload is a few kilobytes. More than this is not a prompt payload, and is not read. */
@@ -99,11 +108,17 @@ export function promptCaptureRows(
     return ['off in this project ("promptCapture": false in .reticle.json)'];
   }
   const targets = promptHookTargets(fileIo, projectDir, home, claudeCli, join);
-  const rows = targets.map((t) =>
-    promptHookInstalled(t.spec, t.existing)
-      ? `✓ ${t.spec.label}: hook installed (${t.path})`
-      : `✗ ${t.spec.label}: no hook; run \`reticle hook install\``,
-  );
+  // Where the bin can run directly (not Windows), an npx-only install is slower than it needs to be.
+  const direct = hookBinFor(home, process.platform) !== undefined;
+  const rows = targets.map((t) => {
+    if (!promptHookInstalled(t.spec, t.existing))
+      return `✗ ${t.spec.label}: no hook; run \`reticle hook install\``;
+    const slow =
+      direct && promptHookNpxOnly(t.spec, t.existing)
+        ? `, through npx (~400 ms slower per call); run \`reticle hook install\` to run it directly`
+        : '';
+    return `✓ ${t.spec.label}: hook installed (${t.path})${slow}${t.spec.activation === undefined ? '' : `. ${t.spec.activation}`}`;
+  });
   rows.push(`MCP instructions only: ${MCP_FALLBACK_AGENTS.join(', ')}`);
   return rows;
 }
@@ -117,7 +132,11 @@ function install(cwd: string, print: (line: string) => void): number {
   }
   let failed = 0;
   for (const target of targets) {
-    const merged = installPromptHook(target.spec, target.existing);
+    const merged = installPromptHook(
+      target.spec,
+      target.existing,
+      hookBinFor(homedir(), process.platform),
+    );
     if (PromptHookStatus.ALREADY === merged.status) {
       print(`✓ ${target.spec.label}: already installed (${target.path})`);
     } else if (PromptHookStatus.MANUAL === merged.status) {
@@ -128,6 +147,7 @@ function install(cwd: string, print: (line: string) => void): number {
       writeFileSync(target.path, merged.content);
       print(`✓ ${target.spec.label}: installed (${target.path})`);
     }
+    if (target.spec.activation !== undefined) print(`  ${target.spec.activation}`);
   }
   print(PROMPT_CAPTURE_NOTICE);
   return 0 === failed ? 0 : 1;
@@ -158,11 +178,39 @@ export async function handleHook(
 ): Promise<number> {
   const action = argv[0] ?? HookAction.STATUS;
   const cwd = process.cwd();
-  if (HookAction.PROMPT === action) {
+  // `prompt` normally never reaches here either: the fast path answers it and runs `prompt-write`.
+  if (HookAction.PROMPT === action || PROMPT_WRITE_ACTION === action) {
     const at = argv.indexOf(AGENT_FLAG);
     const agent = (-1 === at ? undefined : argv[at + 1]) ?? DEFAULT_AGENT;
-    capturePrompt(agent, await readStdin(), { cwd, env: process.env, now: () => Date.now() });
-    process.stdout.write(hookAck(agent));
+    // The fast path's writer is told when the prompt arrived; run directly, it is now.
+    const given = Number(argv[argv.indexOf(AT_FLAG) + 1]);
+    const arrived = -1 !== argv.indexOf(AT_FLAG) && Number.isFinite(given) ? given : Date.now();
+    capturePrompt(agent, await readStdin(), { cwd, env: process.env, now: () => arrived });
+    if (HookAction.PROMPT === action) process.stdout.write(hookAck(agent));
+    return 0;
+  }
+  // `tool` normally never reaches here: `bin/reticle.js` answers it on the fast path and runs
+  // `tool-write`, the capture itself, in a detached child. Both write the same record.
+  if (HookAction.TOOL === action || TOOL_WRITE_ACTION === action) {
+    const at = argv.indexOf(AGENT_FLAG);
+    const agent = (-1 === at ? undefined : argv[at + 1]) ?? DEFAULT_AGENT;
+    const payload = await readStdin();
+    captureToolCall(agent, payload, { cwd, env: process.env, now: () => Date.now() });
+    if (HookAction.TOOL === action) process.stdout.write(toolHookAck(agent, payload));
+    return 0;
+  }
+  if (HookAction.EXPORT === action) {
+    if (!argv.includes(STRUCTURE_FLAG)) {
+      print(
+        `hook export needs ${STRUCTURE_FLAG}: the text-free page structure is the only export.`,
+      );
+      return 1;
+    }
+    const root = join(projectDirOf(cwd), ReticleDir.ROOT);
+    const summary = exportStructure(root, (line) => process.stdout.write(`${line}\n`));
+    process.stderr.write(
+      `${String(summary.steps)} snapshot steps exported; ${String(summary.skippedCut)} cut short and skipped\n`,
+    );
     return 0;
   }
   if (HookAction.INSTALL === action) return install(cwd, print);
@@ -172,6 +220,8 @@ export async function handleHook(
     for (const row of rows) print(row);
     return 0;
   }
-  print(`unknown hook action: ${action}. Use install, uninstall, status or prompt --agent <id>.`);
+  print(
+    `unknown hook action: ${action}. Use install, uninstall, status, prompt --agent <id>, tool --agent <id> or export --structure.`,
+  );
   return 1;
 }

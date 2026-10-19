@@ -374,7 +374,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // `dir` for DRIVE_RECORD_SUFFIX, as `telemetry` below: the unsent-run count read a refused
   // drive's `.drive.json` as a run, so `reticle sync` and the dashboard asked for a sync that had
   // nothing to send, forever.
-  cloud: ['cli', 'dir', 'fs', 'hooks', 'intent'],
+  // `journal` for the agent hooks' records a synced run takes its model and closing claim from.
+  // `journal` imports nothing from `cloud`, so this adds no mutual pair.
+  cloud: ['cli', 'dir', 'fs', 'hooks', 'intent', 'journal'],
   command: [
     'answers',
     // `reticle hook`, dispatched first in `cli.ts` so that telemetry never sees a prompt.
@@ -480,13 +482,16 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * prompt was sent in (`config`), and keeps the prompt with the one recorder `reticle_intent`
    * uses (`intent`), so the two writers cannot keep the request in two shapes.
    */
-  hook: ['config', 'intent'],
+  // `journal` for the episode log's record version: the post-tool hook writes into the same files.
+  // `journal` imports nothing from `hook`, so this adds no mutual pair.
+  hook: ['config', 'intent', 'journal'],
   // What a run artifact is FOR once it exists -- stored, compared, and read back as established
   // fact -- as against the rest of `runs`, which produces one. Named `artifact`, singular, and it
   // must stay singular: `core/src/artifacts` is a different package and a different node, and
   // "correcting" the spelling would give two directories one basename, which is how the reach
   // graph silently collapsed `cli/cloud` into `features/cloud` with every test still passing.
-  artifact: ['dir', 'flows', 'fs'],
+  // `hooks` for the episode a run belongs to (`episode-stamp.ts`, a leaf that imports nothing).
+  artifact: ['dir', 'flows', 'fs', 'hooks'],
   // `reticle login` and what it leaves on the machine: the credential store, the signed-in
   // session, and the browser device flow. Named `auth` and deliberately NOT `cloud`, though every
   // file in it is about the cloud -- `features/cloud` already owns that basename, and the reach
@@ -627,7 +632,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * is why setup no longer reaches bridge, proxy or telemetry at all — those three reaches were
    * these two files and nothing else.
    */
-  init: ['binding', 'bridge', 'bringup', 'proxy', 'setup', 'telemetry', 'terminal'],
+  // `hook` for `hookBinFor`: the bin init writes into each agent hook, the same one the hook's fast
+  // path runs from. `hook` imports nothing from `init`, so this adds no mutual pair.
+  init: ['binding', 'bridge', 'bringup', 'hook', 'proxy', 'setup', 'telemetry', 'terminal'],
   /**
    * A file changed: which flows must re-verify, what the gate does about it, and how a
    * save-heavy editor's burst becomes one flush. Four files that import nothing whatsoever,
@@ -754,6 +761,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // the goal check next door and is handed its tools, so like `script` it reaches nothing else.
   explore: ['harness'],
   tools: [
+    // The episode log: every call, its result and its effect, written at the one dispatch point.
+    // `journal` imports nothing from `tools`, so this adds no mutual pair.
+    'journal',
     // What an agent's own call is shaped into on the way out (compact envelope, notices). A leaf:
     // `agent` imports nothing back, so this adds no mutual pair.
     'agent',

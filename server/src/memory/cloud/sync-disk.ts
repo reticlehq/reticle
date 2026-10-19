@@ -11,6 +11,8 @@
  * error — the file will be rewritten on the next tool call anyway.
  */
 import { shareableRun } from '@reticlehq/core/artifacts';
+import { agentContextFor } from '@/memory/journal/episode-log.js';
+import { sharesRequests } from '@/memory/intent/record-request.js';
 import {
   existsSync,
   mkdirSync,
@@ -213,6 +215,41 @@ function safeReaddir(dir: string): string[] {
 }
 
 /** What the cycle reads, backed by a real `.reticle` directory. */
+/**
+ * A run with the agent's model and the claim that closed its turn, from the agent hooks' records
+ * (see `agentContextFor`). Filled only where the run says nothing. The claim goes into the prompt
+ * context, so it leaves the machine under the same share decision as the request: a context the
+ * run did not have takes the project's setting.
+ */
+function withAgentContext(payload: unknown, reticleRoot: string): unknown {
+  if ('object' !== typeof payload || null === payload) return payload;
+  const run = payload as {
+    agent?: { model?: unknown };
+    context?: { closingClaim?: unknown; shared?: unknown };
+  };
+  const found = agentContextFor(reticleRoot, run);
+  let out: Record<string, unknown> = { ...run };
+  if (found.model !== undefined && run.agent !== undefined && run.agent.model === undefined)
+    out = { ...out, agent: { ...run.agent, model: found.model } };
+  if (found.claim !== undefined && run.context?.closingClaim === undefined) {
+    const shared =
+      'boolean' === typeof run.context?.shared
+        ? run.context.shared
+        : sharesRequests(dirname(reticleRoot), reticleRoot);
+    out = {
+      ...out,
+      context: {
+        statements: [],
+        ...run.context,
+        closingClaim: found.claim.text,
+        closingClaimAt: found.claim.at,
+        shared,
+      },
+    };
+  }
+  return out;
+}
+
 export function diskSource(reticleRoot: string): SyncSource {
   return {
     runs: () =>
@@ -220,7 +257,9 @@ export function diskSource(reticleRoot: string): SyncSource {
         .map((payload) => {
           const id = (payload as { runId?: unknown } | null)?.runId;
           // The prompt context leaves the machine only when the project opted in.
-          return 'string' === typeof id ? { runId: id, payload: shareableRun(payload) } : undefined;
+          return 'string' === typeof id
+            ? { runId: id, payload: shareableRun(withAgentContext(payload, reticleRoot)) }
+            : undefined;
         })
         // A run artifact with no id cannot be diffed against the server's list, so sending it would
         // mean re-sending it every cycle forever. Dropped rather than uploaded repeatedly.

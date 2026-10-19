@@ -90,12 +90,8 @@ export function promptFromPayload(
   return { prompt, cwd };
 }
 
-/** What the hook prints. Cursor and Gemini read stdout as JSON; the rest need nothing. */
-export function hookAck(agent: string): string {
-  if (Agent.CURSOR === agent) return `${JSON.stringify({ continue: true })}\n`;
-  if (Agent.GEMINI === agent) return '{}\n';
-  return '';
-}
+/** What the prompt hook prints; one table with the fast path's. */
+export { promptHookAck as hookAck } from './hook-fast.js';
 
 /**
  * The `.reticle` folders a prompt sent from `cwd` belongs in.
@@ -158,9 +154,13 @@ function keepIn(root: string, agent: string, prompt: string, at: number): boolea
   if (repeats(requestPath, request, at)) return false;
   const context = promptContextFor(prompt, [], at, sharesRequests(projectDir, root));
   mkdirSync(root, { recursive: true });
-  const tmp = `${requestPath}.${String(process.pid)}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(context, null, JSON_INDENT)}\n`);
-  renameSync(tmp, requestPath);
+  // Writers run detached and can finish out of order: the request is the NEWEST prompt, so an
+  // older one that lands late goes to the history only.
+  if (!newerHeld(requestPath, at)) {
+    const tmp = `${requestPath}.${String(process.pid)}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify(context, null, JSON_INDENT)}\n`);
+    renameSync(tmp, requestPath);
+  }
   const historyPath = join(root, ReticleDir.REQUESTS_LOG_FILE);
   // ponytail: one rotated file; older history is dropped once a second one fills.
   // The size comes from the open file, not a second look at the path, which can change between.
@@ -174,6 +174,16 @@ function keepIn(root: string, agent: string, prompt: string, at: number): boolea
   if (full) renameSync(historyPath, join(root, HISTORY_ROTATED));
   appendFileSync(historyPath, `${JSON.stringify({ at, agent, request: context.request })}\n`);
   return true;
+}
+
+/** The request file already holds a prompt that arrived after `at`. */
+function newerHeld(requestPath: string, at: number): boolean {
+  try {
+    const held = PromptContextSchema.safeParse(JSON.parse(readFileSync(requestPath, 'utf8')));
+    return held.success && held.data.at !== undefined && held.data.at > at;
+  } catch {
+    return false;
+  }
 }
 
 /** The same prompt was kept a moment ago: a second hook for the same submit. */

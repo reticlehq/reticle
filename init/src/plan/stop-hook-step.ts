@@ -130,7 +130,7 @@ export function compactHookStep(path: string, existing: string | null | undefine
 export function claudeSettingsSteps(
   path: string,
   existing: string | null | undefined,
-  options: { stop: boolean; compact: boolean; prompt?: boolean },
+  options: { stop: boolean; compact: boolean; prompt?: boolean; bin?: string | undefined },
 ): Step[] {
   const steps: Step[] = [];
   let current = existing;
@@ -146,7 +146,14 @@ export function claudeSettingsSteps(
   }
   const claude = PROMPT_HOOK_AGENTS.find((agent) => PromptHookAgent.CLAUDE_CODE === agent.id);
   if (true === options.prompt && claude !== undefined)
-    steps.push(promptHookStep({ spec: claude, path, existing: current ?? null }));
+    steps.push(
+      promptHookStep({
+        spec: claude,
+        path,
+        existing: current ?? null,
+        ...(options.bin === undefined ? {} : { bin: options.bin }),
+      }),
+    );
   return steps;
 }
 
@@ -167,11 +174,17 @@ export const PROMPT_CAPTURE_NOTICE =
   'Stop background sync: "backgroundSync": false in .reticle.json, or RETICLE_BACKGROUND_SYNC=0.';
 
 export function promptHookStep(target: PromptHookTarget): Step {
-  const { spec, path, existing } = target;
+  const { spec, path, existing, bin } = target;
   const title = `${PROMPT_TITLE}: ${spec.label}`;
-  const merged = installPromptHook(spec, existing);
+  const merged = installPromptHook(spec, existing, bin);
+  const then = spec.activation === undefined ? '' : `. ${spec.activation}`;
   if (PromptHookStatus.ALREADY === merged.status) {
-    return { title, target: path, status: StepStatus.ALREADY, detail: 'hook already installed' };
+    return {
+      title,
+      target: path,
+      status: StepStatus.ALREADY,
+      detail: `hook already installed${then}`,
+    };
   }
   if (PromptHookStatus.MANUAL === merged.status) {
     return {
@@ -185,17 +198,28 @@ export function promptHookStep(target: PromptHookTarget): Step {
     title,
     target: path,
     status: StepStatus.APPLY,
-    detail: 'save each prompt to .reticle/ before the agent reads it; never blocks the prompt',
+    detail: `save each prompt to .reticle/ before the agent reads it; never blocks the prompt${then}`,
     write: { path, content: merged.content, expect: [promptHookCommand(spec.id)] },
   };
 }
 
 /** The steps for every detected agent, then the one consent line when any hook is in place. */
-export function promptHookSteps(targets: readonly PromptHookTarget[], claude: boolean): Step[] {
-  const steps = targets.map(promptHookStep);
+export function promptHookSteps(
+  targets: readonly PromptHookTarget[],
+  claude: boolean,
+  bin?: string,
+): Step[] {
+  const steps = targets.map((target) =>
+    promptHookStep(bin === undefined ? target : { ...target, bin }),
+  );
   if (0 === steps.length && !claude) return steps;
   return [
     ...steps,
-    { title: PROMPT_TITLE, target: NOTICE_TARGET, status: StepStatus.NOTICE, detail: PROMPT_CAPTURE_NOTICE },
+    {
+      title: PROMPT_TITLE,
+      target: NOTICE_TARGET,
+      status: StepStatus.NOTICE,
+      detail: PROMPT_CAPTURE_NOTICE,
+    },
   ];
 }

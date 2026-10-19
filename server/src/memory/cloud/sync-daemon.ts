@@ -76,8 +76,9 @@ const CHANGE_DEBOUNCE_MS = 2_000;
 
 /**
  * What the sync itself writes into a root, plus `sessions/` (the per-event journal, appended on
- * every browser event and never sent). A change here must not wake the sync: the first would make
- * every cycle schedule the next, the second would turn an open tab into a cycle every two seconds.
+ * every browser event and never sent) and `episodes/` (every tool call, likewise never sent). A
+ * change here must not wake the sync: the first would make every cycle schedule the next, the others
+ * would turn an open tab or a working agent into a cycle every two seconds.
  * The atomic writes' `<file>.<pid>.tmp` siblings are matched by prefix.
  */
 const NOT_A_CHANGE = [ReticleDir.CLOUD_STATE_FILE, ReticleDir.ISSUES_FILE];
@@ -116,6 +117,7 @@ const isOwnWrite = (path: string): boolean => {
   const [head = ''] = path.split(/[\\/]/);
   return (
     head === ReticleDir.SESSIONS_SUBDIR ||
+    head === ReticleDir.EPISODES_SUBDIR ||
     NOT_A_CHANGE.some((file) => head === file || head.startsWith(`${file}.`))
   );
 };

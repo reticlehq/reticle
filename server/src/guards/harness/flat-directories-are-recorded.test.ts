@@ -60,7 +60,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: stable-selector.ts, split out of query.ts when that file crossed the 1000-line cap (#1147).
   'adapters/realm/browser/src/dom': 14,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
-  'adapters/realm/browser/src/observers': 25,
+  'adapters/realm/browser/src/observers': 27,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
   // gesture re-syncs the dock layout, and the dock layout reads the HUD's position, so the two files
   // needed each other over primitives that belong to neither.
@@ -348,7 +348,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // envelope and the report that reads it must key on the identical value — a private copy on one
   // side is how the two would silently disagree, and a lookup that misses every envelope is exactly
   // the defect it was written to fix.
-  'server/src/memory/journal': 15,
+  'server/src/memory/journal': 16,
   // 11 when the artifact-address files landed: `project-for-root.ts`, `artifact-root-resolver.ts`
   // and the roster that pins them. Recorded rather than grouped, and the reason is the sibling
   // guard: the natural home for "which directory does this write to" is `project/dir`, whose whole

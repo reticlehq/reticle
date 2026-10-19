@@ -46,7 +46,12 @@ import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { setMcpClientNameHook } from '@/telemetry/feedback-context.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { reportMcpConnected } from '@/telemetry/mcp-connection.js';
-import { noteAgentAttached, noteAgentDetached, runAsAgent } from '@/hooks/coding-agents.js';
+import {
+  noteAgentAttached,
+  noteAgentDetached,
+  noteAgentSession,
+  runAsAgent,
+} from '@/hooks/coding-agents.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 
 /**
@@ -650,6 +655,7 @@ export function createMcpServer(
    * store keeps it.
    */
   const deps = { snapshots: newSnapshotCache(), attachId: randomUUID(), ...rawDeps };
+  if (deps.agentSession !== undefined) noteAgentSession(deps.attachId, deps.agentSession);
   const encoding = (process.env[ENCODING_ENV] ?? '').toLowerCase();
   // Which surface this daemon advertises. The 18-tool default and the 48-tool full surface are
   // different products from inside an agent's context, so outcomes are only comparable when the

@@ -112,6 +112,14 @@ export const PromptContextSchema = z.object({
   /** When the request was given, epoch ms. A run long after it is not about it. */
   at: z.number().optional(),
   shared: z.boolean().optional(),
+  /**
+   * What the agent said when it finished the turn this run belongs to: the first `agent_stop`
+   * message at or after the run's last Reticle call, redacted and bounded where it was recorded.
+   * The user's words' counterpart, so it leaves the machine under the same `shared` decision.
+   */
+  closingClaim: z.string().max(20_000).optional(),
+  /** When that turn ended, epoch ms. */
+  closingClaimAt: z.number().optional(),
 });
 export type PromptContext = z.infer<typeof PromptContextSchema>;
 

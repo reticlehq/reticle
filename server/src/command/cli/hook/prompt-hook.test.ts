@@ -163,3 +163,25 @@ describe('capturing a prompt', () => {
     expect(kept.request?.length).toBeLessThanOrEqual(20_000);
   });
 });
+
+/*
+ * Writers run detached and can finish out of order. The newest prompt must stay the request, and
+ * every prompt must reach the history.
+ */
+describe('prompts kept out of order', () => {
+  it('keeps the newest as the request and every one in the history', () => {
+    const dir = project();
+    capturePrompt('claude-code', JSON.stringify({ prompt: 'second', cwd: dir }), {
+      cwd: dir,
+      env: {},
+      now: () => 2_000,
+    });
+    capturePrompt('claude-code', JSON.stringify({ prompt: 'first', cwd: dir }), {
+      cwd: dir,
+      env: {},
+      now: () => 1_000,
+    });
+    expect(request(dir)).toMatchObject({ request: 'second', at: 2_000 });
+    expect(history(dir)).toHaveLength(2);
+  });
+});

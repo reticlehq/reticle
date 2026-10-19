@@ -130,6 +130,28 @@ function secretAttr(el: Element, attr: string): boolean {
   return !SAFE_ON_SECRET.has(attr) && !attr.startsWith('aria-') && isSensitiveField(el);
 }
 
+/** How far up a text change looks for the testid that names it. */
+const TESTID_DEPTH = 3;
+/** Testid elements whose arrival text one batch reports; past this they are counted as dropped. */
+const MAX_INITIAL_TEXTS = 50;
+
+/** The `data-testid` of `el` or its nearest ancestor within TESTID_DEPTH, so a change has a name. */
+function testidNear(el: Element): string | undefined {
+  let at: Element | null = el;
+  for (let depth = 0; at !== null && depth <= TESTID_DEPTH; depth += 1) {
+    const id = readTestId(at);
+    if (id !== null && id.length > 0) return id;
+    at = at.parentElement;
+  }
+  return undefined;
+}
+
+/** `{ testid }` when there is one, else nothing: the field is absent, never empty. */
+const named = (el: Element): { testid?: string } => {
+  const testid = testidNear(el);
+  return testid === undefined ? {} : { testid };
+};
+
 export function installDom(emit: Emit): Teardown {
   // Installed here rather than in the bootstrap list because this observer is the registry's reason
   // for existing, and the ordering matters: a root attached between the two would be missed by both.
@@ -139,6 +161,7 @@ export function installDom(emit: Emit): Teardown {
     let added = 0;
     let removed = 0;
     let changed = 0;
+    let initials = 0;
     // Count element nodes dropped purely because a per-batch cap was already reached. The cap is on
     // MEANINGFUL events, so it is only hit after a real flood — the count is a raw over-estimate
     // (it can include not-yet-inspected noise) but `dropped > 0` honestly means "this batch was capped".
@@ -187,7 +210,7 @@ export function installDom(emit: Emit): Teardown {
           const old = hide ? undefined : capValue(record.oldValue?.trim() ?? null);
           emit(
             EventType.DOM_TEXT,
-            { text, ...(old === undefined ? {} : { old }) },
+            { text, ...(old === undefined ? {} : { old }), ...named(parent) },
             refs.refFor(parent),
           );
         }
@@ -214,7 +237,7 @@ export function installDom(emit: Emit): Teardown {
             const old = hide ? undefined : capValue(textOf(record.removedNodes) ?? null);
             emit(
               EventType.DOM_TEXT,
-              { text, ...(old === undefined ? {} : { old }) },
+              { text, ...(old === undefined ? {} : { old }), ...named(parent) },
               refs.refFor(parent),
             );
           }
@@ -227,6 +250,26 @@ export function installDom(emit: Emit): Teardown {
           continue;
         }
         if (isUnobserved(node)) continue;
+        // The text each named element ARRIVED with: the baseline a later change, or the lack of
+        // one, is read against. Without it "never changed" and "never shown" look the same.
+        const testids = [node, ...Array.from(node.querySelectorAll(testIdSelector()))].filter(
+          (el) => readTestId(el) !== null,
+        );
+        for (const el of testids) {
+          const text = (el.textContent ?? '').trim();
+          if (0 === text.length) continue;
+          if (initials >= MAX_INITIAL_TEXTS) {
+            dropped += 1;
+            continue;
+          }
+          initials += 1;
+          const shown = isSensitiveField(el) ? REDACTED_VALUE : text.slice(0, 80);
+          emit(
+            EventType.DOM_TEXT,
+            { text: shown, testid: readTestId(el) ?? '', initial: true },
+            refs.refFor(el),
+          );
+        }
         const mounted = describeMount(node);
         if (mounted === undefined) continue;
         const { role, name } = mounted;

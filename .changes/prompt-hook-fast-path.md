@@ -1,0 +1,3 @@
+### Changed
+
+- **`@reticlehq/server` — the prompt hook lets your prompt through at once.** It loaded the whole CLI before your prompt reached the agent: p50 396 ms and p95 451 ms over 100 prompts. It now uses the same fast path as the post-tool hook. It answers before the CLI loads and keeps the prompt in a detached writer: p50 29 ms and p95 34 ms over 100 prompts, 400 ms apart, plus npx's own start where npx runs it. The writer is told when the prompt arrived, so a writer that finishes late never puts an older prompt over a newer one. With 50 prompts sent back to back, all 50 reached `requests.jsonl` and `request.json` held the newest.

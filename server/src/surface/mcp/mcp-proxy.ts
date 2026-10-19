@@ -26,7 +26,11 @@ import { buildServerInstructions, localizeInstructions } from './server-instruct
 import { hasAnyProjectConnectedBefore } from '@/memory/recall/prior/connection-memory.js';
 import { reticleStateHome } from '@/command/daemon/daemon.js';
 import { projectIdsAt } from '@/command/cli/ports/resolve/cli-port.js';
-import { PEER_VERSION_PARAM, PEER_CONTRACT_PARAM } from '@/command/version/peer-announce.js';
+import {
+  PEER_VERSION_PARAM,
+  PEER_CONTRACT_PARAM,
+  agentSessionQuery,
+} from '@/command/version/peer-announce.js';
 import {
   onStreamDrop,
   onClientRequest,
@@ -712,7 +716,7 @@ export function startMcpProxy(
     function connect(first: boolean): void {
       // Announce this process to the daemon on the connect we already make — it is the single judge
       // of version skew, and this is the only moment it learns the agent's MCP server exists.
-      const announce = `${MCP_SSE_PATH}?${PEER_VERSION_PARAM}=${encodeURIComponent(SERVER_VERSION)}&${PEER_CONTRACT_PARAM}=${encodeURIComponent(CONTRACT_FINGERPRINT)}`;
+      const announce = `${MCP_SSE_PATH}?${PEER_VERSION_PARAM}=${encodeURIComponent(SERVER_VERSION)}&${PEER_CONTRACT_PARAM}=${encodeURIComponent(CONTRACT_FINGERPRINT)}${agentSessionQuery(process.env)}`;
       /**
        * ONE reconnect per connect attempt, whoever notices the failure first.
        *

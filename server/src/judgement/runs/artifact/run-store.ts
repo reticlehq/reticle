@@ -6,6 +6,8 @@
  * needs no clock.
  */
 
+import { callingAttachId } from '@/hooks/coding-agents.js';
+import { episodeStampFor } from '@/hooks/episode-stamp.js';
 import {
   asRunId,
   checkoutOf,
@@ -99,7 +101,11 @@ export class RunStore {
     return checkoutOf(project, readTextOrUndefined)?.branch;
   }
 
-  async write(given: ReticleVerificationRun): Promise<void> {
+  async write(
+    given: ReticleVerificationRun,
+    /** The tab the run came from, so a run written outside any call still finds its episode. */
+    hint: { sessionId?: string } = {},
+  ): Promise<void> {
     let run = given;
     if (!isValidRunId(run.runId)) {
       throw new Error(`refusing to write run with unsafe runId: ${JSON.stringify(run.runId)}`);
@@ -110,6 +116,18 @@ export class RunStore {
       (await this.#recentRequest(run.createdAt, run.runId)) ??
       (await this.#heldContext(run.runId));
     if (context !== undefined) run = { ...run, context };
+    // The episode this run came from, the agent session behind it, and the commit it ran against,
+    // so it joins exactly.
+    const episode = episodeStampFor(this.#root, callingAttachId(), hint.sessionId);
+    if (episode !== undefined) {
+      const commit = run.project.commit ?? episode.head;
+      run = {
+        ...run,
+        episodeId: episode.episodeId,
+        ...(episode.agentSession === undefined ? {} : { agentSession: episode.agentSession }),
+        project: { ...run.project, ...(commit === undefined ? {} : { commit }) },
+      };
+    }
     // The step screenshots taken for this run, the last of which may still be landing.
     await shotsLanded(this.#root, run.runId);
     run = withScreenshots(run, await readStepShots(this.#fs, this.#root, run.runId));

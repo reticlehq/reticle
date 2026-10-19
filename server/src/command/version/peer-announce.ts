@@ -17,6 +17,34 @@ import { daemonFix, describeSkew } from './version-skew.js';
 
 export const PEER_VERSION_PARAM = 'peerVersion';
 export const PEER_CONTRACT_PARAM = 'peerContract';
+/** The coding agent's own session id, on the same connect. */
+export const AGENT_SESSION_PARAM = 'agentSession';
+/**
+ * Where an agent puts its session id in its MCP server's environment. Claude Code sets
+ * `CLAUDE_CODE_SESSION_ID`, the same id its hooks receive as `session_id` (checked 2026-10-19).
+ * Other agents set none that is documented, so their connections announce nothing.
+ */
+const AGENT_SESSION_ENVS = ['CLAUDE_CODE_SESSION_ID'] as const;
+/** A session id is a plain token: anything else is not used as a file name. */
+const PLAIN_ID = /^[\w-]{1,128}$/;
+
+/** The agent's session id in this process's environment, when it is a plain id. */
+export function agentSessionInEnv(env: NodeJS.ProcessEnv): string | undefined {
+  return agentSessionOf(
+    AGENT_SESSION_ENVS.map((name) => env[name]).find((v) => v !== undefined) ?? null,
+  );
+}
+
+/** The query suffix that announces the agent's session, or '' when the agent named none. */
+export function agentSessionQuery(env: NodeJS.ProcessEnv): string {
+  const id = agentSessionInEnv(env);
+  return id === undefined ? '' : `&${AGENT_SESSION_PARAM}=${encodeURIComponent(id)}`;
+}
+
+/** The announced session id, when it is a plain id. */
+export function agentSessionOf(value: string | null): string | undefined {
+  return null !== value && PLAIN_ID.test(value) ? value : undefined;
+}
 
 /**
  * Compare an attaching agent process against this daemon: the skew to tell THAT connection, or

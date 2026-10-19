@@ -365,10 +365,26 @@ async function runToolSession(
       const at = now();
       try {
         const result = await tools.invoke(call.tool, call.args);
-        results.push({ seq: call.seq, ok: true, result, ms: now() - at });
+        const end = now();
+        results.push({
+          seq: call.seq,
+          ok: true,
+          result,
+          ms: end - at,
+          startedAt: at,
+          endedAt: end,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        results.push({ seq: call.seq, ok: false, error: message, ms: now() - at });
+        const end = now();
+        results.push({
+          seq: call.seq,
+          ok: false,
+          error: message,
+          ms: end - at,
+          startedAt: at,
+          endedAt: end,
+        });
       }
     }
   }

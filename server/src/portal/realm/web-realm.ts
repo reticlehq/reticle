@@ -253,6 +253,11 @@ export const NOT_EVIDENCE: Readonly<Record<string, string>> = {
  */
 export const NO_PROTOCOL_CHANNEL: Readonly<Record<string, string>> = {
   download: 'a file the application produced; the protocol has no channel for an emitted artifact',
+  // Recorded for the episode, not yet read by a verdict. Both are screen facts and belong on `ui`,
+  // but putting them there changes what an assertion sees (a canvas animating every frame is a
+  // screen that never settles), and that ships only after the fixture bench measures it.
+  media: 'media playback state; kept as evidence, not yet adjudicated on `ui`',
+  canvas: 'a digest of canvas pixels; kept as evidence, not yet adjudicated on `ui`',
 };
 
 /**

@@ -3,7 +3,8 @@ import { healthEnvelope } from '@/portal/session/session-health.js';
 import { logToolCall, toolLogPath } from '@/hooks/tool-log.js';
 import { nextStep } from './next-step.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
-import { runAsAgent } from '@/hooks/coding-agents.js';
+import { agentNameOf, agentSessionOf, runAsAgent } from '@/hooks/coding-agents.js';
+import { recordEpisodeCall } from '@/memory/journal/episode-log.js';
 import { takeHumanNotes } from './human-notes.js';
 import { takeDriveNotes } from '@/features/harness/drive-runs.js';
 import { harnessDriving, msgHarnessHasTheTab } from './harness-tab-guard.js';
@@ -445,17 +446,53 @@ async function loggedTool<Ext>(
   call?: ToolCall,
 ): Promise<unknown> {
   const logPath = toolLogPath();
-  if (logPath === undefined) return dispatchTool(tool, deps, args, call);
-  const at = deps.now();
+  const at = Date.now();
+  // The tab this call drove, and where its events start: the call's effect on the page.
+  const seen: DispatchSeen = {};
+  const episode = (outcome: { result: unknown } | { error: string }): void => {
+    // A record that cannot be built never fails the call it describes.
+    safeRoot(() => {
+      const from = seen.from;
+      const effect =
+        seen.session === undefined || from === undefined
+          ? undefined
+          : seen.session.eventsSince(from);
+      const drivenBy = currentDrivenBy();
+      const agent = agentNameOf(deps.attachId);
+      const agentSession = agentSessionOf(deps.attachId);
+      recordEpisodeCall(seen.session?.artifactRoot ?? deps.reticleRoot, deps.attachId, Date.now, {
+        tool: tool.name,
+        args,
+        startedAt: at,
+        endedAt: Date.now(),
+        ...outcome,
+        ...(seen.session === undefined ? {} : { sessionId: seen.session.id }),
+        ...(agent === undefined ? {} : { agent }),
+        ...(agentSession === undefined ? {} : { agentSession }),
+        ...(drivenBy === undefined ? {} : { drivenBy }),
+        ...(effect === undefined ? {} : { effect }),
+      });
+    });
+  };
   try {
-    const result = await dispatchTool(tool, deps, args, call);
-    logToolCall(logPath, { tool: tool.name, args, at, ms: deps.now() - at, result });
+    const result = await dispatchTool(tool, deps, args, call, seen);
+    if (logPath !== undefined)
+      logToolCall(logPath, { tool: tool.name, args, at, ms: Date.now() - at, result });
+    episode({ result });
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logToolCall(logPath, { tool: tool.name, args, at, ms: deps.now() - at, error: message });
+    if (logPath !== undefined)
+      logToolCall(logPath, { tool: tool.name, args, at, ms: Date.now() - at, error: message });
+    episode({ error: message });
     throw error;
   }
+}
+
+/** What dispatch learned that the episode log needs: the tab it drove, and its clock at the start. */
+interface DispatchSeen {
+  session?: Session;
+  from?: number | undefined;
 }
 
 async function dispatchTool<Ext>(
@@ -463,6 +500,7 @@ async function dispatchTool<Ext>(
   deps: ToolDeps<Ext>,
   args: Record<string, unknown>,
   call?: ToolCall,
+  seen: DispatchSeen = {},
 ): Promise<unknown> {
   // Both dispatch paths (MCP + programmatic) pass through here — the one place "which tool is mostly
   // used" can be counted. This used to EMIT an event per call; it now increments an in-process counter
@@ -584,6 +622,10 @@ async function dispatchTool<Ext>(
   // One identity for the whole call: the handler drives the session everything above is attributed
   // to, rather than resolving again against a registry that can have changed underneath it.
   const dispatchArgs = pinnedArgs(args, rawSessionId, session);
+  if (session !== undefined) {
+    seen.session = session;
+    seen.from = safeRoot(() => session?.elapsed());
+  }
 
   let raw: unknown;
   try {
@@ -911,7 +953,7 @@ async function withStepShot<Ext>(
 }
 
 /** A root, or undefined when none can be resolved: a missing root is never a reason to throw. */
-function safeRoot(get: () => string): string | undefined {
+function safeRoot<T>(get: () => T): T | undefined {
   try {
     return get();
   } catch {

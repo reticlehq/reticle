@@ -326,6 +326,8 @@ export interface PlanInput {
   claudePromptHook?: boolean | undefined;
   /** Every OTHER agent found here with a prompt hook, and its config as it is now. */
   promptHooks?: readonly PromptHookTarget[] | undefined;
+  /** See `InitHost.hookBin`. */
+  hookBin?: string | undefined;
   /**
    * Absolute directory the AGENT runs in, when that is not the app's directory.
    *
