@@ -205,6 +205,6 @@ describe('the proxy answering initialize itself', () => {
       () => expect(replies.some((reply) => 2 === reply.id && reply.error !== undefined)).toBe(true),
       { timeout: 8_000, interval: 100 },
     );
-    expect(JSON.stringify(replies.find((reply) => 2 === reply.id)?.error)).toContain(stateDir);
+    expect(replies.find((reply) => 2 === reply.id)?.error?.message).toContain(stateDir);
   }, 30_000);
 });
