@@ -271,6 +271,32 @@ describe('frames between steps', () => {
     expect(shots.map((s) => s.file)).toEqual(['0001-act.jpg', '0002-frame.jpg', '0003-frame.jpg']);
   });
 
+  // A blinking caret made every tick a "new" frame: 16 frames held 2 distinct images.
+  it('keeps a page that flips between two looks once per look, not once per tick', async () => {
+    let n = 0;
+    const { deps, root, sessionId } = await setup({ browser: () => fakeJpeg(8, 6, n++ % 2) });
+    await takeStepShot(deps, sessionId, 'reticle_act');
+    for (let i = 0; i < 20; i += 1) await filmNow(sessionId);
+    await shotsLanded(root, `drive-${sessionId}`);
+    const shots = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    expect(shots.filter((s) => FRAME.TOOL === s.tool).length).toBeLessThanOrEqual(2);
+  });
+
+  // An unchanged page was captured every second for the life of the session, then thrown away.
+  it('captures an unchanged page less and less often', async () => {
+    let captures = 0;
+    const { deps, sessionId } = await setup({
+      browser: () => {
+        captures += 1;
+        return fakeJpeg(8, 6, 1);
+      },
+    });
+    await takeStepShot(deps, sessionId, 'reticle_act');
+    const afterStep = captures;
+    for (let i = 0; i < 64; i += 1) await filmNow(sessionId);
+    expect(captures - afterStep).toBeLessThanOrEqual(8);
+  });
+
   it('films nothing on a tab Reticle does not drive', async () => {
     const { deps, root, sessionId } = await setup({ render: rendered(fakeJpeg(8, 6)) });
     await takeStepShot(deps, sessionId, 'reticle_act');

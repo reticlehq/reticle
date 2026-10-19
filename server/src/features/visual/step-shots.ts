@@ -304,6 +304,13 @@ export const FRAME = {
 
 /** The quarters the budget is split into: the gap between frames doubles at each. */
 const FRAME_STAGES = 4;
+/**
+ * The frames a new one is compared with. A page that flips between a few looks (a blinking caret,
+ * a spinner) is unchanged, not a new frame every tick.
+ */
+const RECENT_FRAMES = 4;
+/** The longest wait, in ticks, between captures of a page that keeps looking the same. */
+const MAX_STILL_TICKS = 32;
 
 interface Film {
   deps: ToolDeps;
@@ -311,9 +318,12 @@ interface Film {
   dir: string;
   timer: ReturnType<typeof setInterval>;
   busy: Promise<void> | undefined;
-  lastSha: string | undefined;
-  /** Ticks since the last frame was kept. */
+  /** The newest frames' hashes, newest last. */
+  recent: string[];
+  /** Ticks since the last capture. */
   idle: number;
+  /** Ticks to wait between captures: doubles while the page looks the same, back to 1 on a change. */
+  still: number;
 }
 
 const films = new Map<string, Film>();
@@ -334,6 +344,8 @@ async function filmTab(deps: ToolDeps, session: Session, dir: string): Promise<v
   const film = films.get(session.id);
   if (film !== undefined) {
     film.dir = dir;
+    // A step usually changes the page: look again at the next tick.
+    film.still = 1;
     return;
   }
   if (!(await driven(deps, session).catch(() => false))) return;
@@ -343,7 +355,7 @@ async function filmTab(deps: ToolDeps, session: Session, dir: string): Promise<v
   }, FRAME.EVERY_MS);
   // A film never holds a process open.
   timer.unref?.();
-  films.set(session.id, { deps, dir, timer, busy: undefined, lastSha: undefined, idle: 0 });
+  films.set(session.id, { deps, dir, timer, busy: undefined, recent: [], idle: 0, still: 1 });
 }
 
 /** Stop filming a tab. Safe to call for a tab that is not filmed. */
@@ -382,15 +394,19 @@ async function frame(sessionId: string, film: Film): Promise<void> {
   if (kept >= FRAME.MAX_PER_RUN) return;
   film.idle += 1;
   const gap = 2 ** Math.floor(kept / (FRAME.MAX_PER_RUN / FRAME_STAGES));
-  if (film.idle < gap) return;
+  if (film.idle < Math.max(gap, film.still)) return;
+  film.idle = 0;
   try {
     const bytes = await framePixels(film.deps, session);
     const size = bytes === undefined ? undefined : jpegSize(bytes);
     if (bytes === undefined || size === undefined) return;
     const sha256 = createHash('sha256').update(bytes).digest('hex');
-    if (sha256 === film.lastSha) return;
-    film.lastSha = sha256;
-    film.idle = 0;
+    if (film.recent.includes(sha256)) {
+      film.still = Math.min(film.still * 2, MAX_STILL_TICKS);
+      return;
+    }
+    film.recent = [...film.recent, sha256].slice(-RECENT_FRAMES);
+    film.still = 1;
     const seq = await allocate(film.deps.fs, dir);
     // The step shots' own limit is the platform's: a frame never takes the last of it.
     if (seq > STEP_SCREENSHOT.MAX_PER_RUN) return;
