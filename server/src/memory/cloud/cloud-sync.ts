@@ -136,9 +136,11 @@ export async function syncRequest(
   url: string,
   init: { method: string; headers: Record<string, string>; body?: string },
   timeoutMs: number = CLOUD_FETCH_TIMEOUT_MS,
-): Promise<{ status: number; text: string }> {
+): Promise<{ status: number; text: string; etag?: string }> {
   const res = await cloudFetch(url, init, timeoutMs);
-  return { status: res.status, text: await res.text() };
+  // The tag a conditional read names next time (the idle memory poll); absent when none was sent.
+  const etag = res.headers.get('etag');
+  return { status: res.status, text: await res.text(), ...(null === etag ? {} : { etag }) };
 }
 
 export const SyncOutcome = {

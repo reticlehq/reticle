@@ -10,12 +10,12 @@ import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { FlowErrorCode, SYNC_BATCH_LIMITS } from '@reticlehq/core';
 import {
-  describeSync,
   runSyncCycle,
   type CloudSyncState,
   type PulledIssues,
   type SyncSource,
 } from './sync-cycle.js';
+import { describeSync } from './sync-describe.js';
 import { hashPayload } from './sync-hash.js';
 
 const NOW = 1_700_000_000_000;
@@ -726,6 +726,57 @@ describe('it sends only the difference', () => {
       first.written.state,
     );
     expect(edited.calls.some((c) => 'POST' === c.method)).toBe(true);
+  });
+
+  /*
+   * Measured: five flows saved a few seconds apart went up 5, 4, 3, 2 and 1 times, because each
+   * save re-sent the whole set; a real repo's 814 flows rode every save, and the platform stamped
+   * every one of them as updated. Each flow goes when IT changed, and only then.
+   */
+  it('sends only the flows that changed, each once', async () => {
+    const signIn = { name: 'sign-in', steps: [] };
+    const first = await cycle(
+      { status: { knownRunIds: [] }, sync: { flows: { accepted: 1 } } },
+      source({ flows: () => [signIn] }),
+    );
+    const checkout = { name: 'checkout', steps: [] };
+    const second = await cycle(
+      { status: { knownRunIds: [] }, sync: { flows: { accepted: 1 } } },
+      source({ flows: () => [signIn, checkout] }),
+      first.written.state,
+    );
+    const post = second.calls.find((c) => 'POST' === c.method)?.body as { flows?: unknown[] };
+    expect(post.flows).toEqual([checkout]);
+    expect(second.report.ok).toBe(true);
+    const third = await cycle(
+      { status: { knownRunIds: [] } },
+      source({ flows: () => [signIn, checkout] }),
+      second.written.state,
+    );
+    expect(third.calls.some((c) => 'POST' === c.method)).toBe(false);
+  });
+
+  // A refused flow is offered again once it changes; an accepted one beside it is not re-sent.
+  it('keeps an accepted flow sent when a flow beside it is refused', async () => {
+    const good = { name: 'sign-in', steps: [] };
+    const bad = { name: 'checkout', steps: [] };
+    const first = await cycle(
+      {
+        status: { knownRunIds: [] },
+        sync: { flows: { accepted: 1, rejected: [{ index: 1, reason: 'too strict' }] } },
+      },
+      source({ flows: () => [good, bad] }),
+    );
+    expect(first.report.ok).toBe(false);
+    const fixed = { name: 'checkout', steps: [{ action: 'click' }] };
+    const second = await cycle(
+      { status: { knownRunIds: [] }, sync: { flows: { accepted: 1 } } },
+      source({ flows: () => [good, fixed] }),
+      first.written.state,
+    );
+    const post = second.calls.find((c) => 'POST' === c.method)?.body as { flows?: unknown[] };
+    expect(post.flows).toEqual([fixed]);
+    expect(second.report.ok).toBe(true);
   });
 
   /*
@@ -1633,6 +1684,15 @@ describe('a flow deleted here', () => {
     const deletes = after.calls.filter((c) => 'DELETE' === c.method).map((c) => c.url);
     expect(deletes).toEqual(['https://cloud.test/v1/flows/checkout?projectId=shop']);
     expect(after.written.state?.sentFlowNames).toEqual(['sign-in']);
+  });
+
+  // Deleted there because it was deleted here: saved again unchanged, it must go again.
+  it('goes up again when it is saved again, unchanged', async () => {
+    const first = await run({}, [A, B], 'shop');
+    const deleted = await run(first.written.state ?? {}, [A], 'shop');
+    const again = await run(deleted.written.state ?? {}, [A, B], 'shop');
+    const post = again.calls.find((c) => 'POST' === c.method)?.body as { flows?: unknown[] };
+    expect(post.flows).toEqual([B]);
   });
 
   it('deletes nothing when the cycle does not send flows for a project', async () => {

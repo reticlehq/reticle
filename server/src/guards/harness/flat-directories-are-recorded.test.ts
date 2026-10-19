@@ -371,7 +371,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // with a separate endpoint, which the cycle only calls.
   // 13 since `harness-offer.ts` left: the free-months offer ended on the platform.
   // 14: `background-sync.ts`, the daemon's gate on sending (sign-in, link, opt-outs).
-  'server/src/memory/cloud': 14,
+  // 15 with `sync-describe.ts`: how a cycle reports itself, split out when per-flow sending took
+  // `sync-cycle.ts` past the 1000-line cap. Flat for the same reason as `sync-screenshots.ts`.
+  // 16: compare-and-set for flows is its own small rule (sync-flow-versions.ts), kept off the
+  // sync cycle, which sits at the line cap.
+  'server/src/memory/cloud': 16,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there

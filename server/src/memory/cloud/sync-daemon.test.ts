@@ -843,6 +843,116 @@ describe('a change under .reticle wakes the sync', () => {
     w.d.stop();
   });
 
+  it("a run landing goes straight up: the team's memory is re-read only when it could matter", async () => {
+    /*
+     * Measured on a real project's `.reticle` (2 093 files, ~850 memory entries): every cycle paged
+     * the whole memory down — nine sequential requests — before it sent anything, so at a 250 ms
+     * round trip a run took 6.1 s (p95) to appear. The settled words have to come down before
+     * changed INTENT goes up, and nothing else waits on them.
+     */
+    const urls: string[] = [];
+    const server = counting();
+    const w = watched({
+      request: (url) => {
+        urls.push(url);
+        return server.request(url);
+      },
+    });
+    const memoryReads = (): number => urls.filter((u) => u.includes('/v1/memory')).length;
+    const statusCalls = (): number => urls.filter((u) => u.includes('/v1/sync/status')).length;
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(memoryReads(), 'the first cycle reads it').toBe(1);
+
+    w.change('runs/run-1.json');
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(statusCalls()).toBe(2);
+    expect(memoryReads(), 'a run alone does not re-read it').toBe(1);
+
+    w.change('intent/a.json');
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(memoryReads(), 'changed intent reads it before sending').toBe(2);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    w.change('runs/run-2.json');
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(memoryReads(), 'and never older than a minute').toBe(3);
+
+    await w.d.syncNow();
+    expect(memoryReads(), 'a sync somebody asked for reads it').toBe(4);
+    w.d.stop();
+  });
+
+  it("sends its own root before every other linked repo's", async () => {
+    // The root that changed is the one somebody is waiting on; each other repo is a full cycle of
+    // round trips, and with two of them a run took 8.1 s (p95) to appear instead of 4.7 s.
+    const sibling = mkdtempSync(join(tmpdir(), 'reticle-sibling-'));
+    const order: string[] = [];
+    const request = (url: string): Promise<{ status: number; text: string }> => {
+      if (url.includes('/v1/sync/status')) order.push(new URL(url).host);
+      const body = url.includes('/pull') ? { triage: [], cursor: '0:' } : {};
+      return Promise.resolve({ status: 200, text: JSON.stringify(body) });
+    };
+    const other: ProjectCloud = {
+      ...LINKED,
+      config: { url: 'https://other.test', apiKey: 'rk_other' },
+      projectId: 'other',
+    };
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      otherRoots: () => Promise.resolve([sibling]),
+      cloudFor: () => Promise.resolve(other),
+      request,
+    });
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(order).toEqual(['cloud.test', 'other.test']);
+    d.stop();
+  });
+
+  it('does not walk every other linked repo on each change here: once a minute at most', async () => {
+    // Own root first was not enough: a drive changes this root every few seconds, so the other
+    // repos' pass was nearly always running when a run landed, and the run waited it out (7.3 s).
+    const sibling = mkdtempSync(join(tmpdir(), 'reticle-sibling-'));
+    const hosts: string[] = [];
+    const request = (url: string): Promise<{ status: number; text: string }> => {
+      if (url.includes('/v1/sync/status')) hosts.push(new URL(url).host);
+      const body = url.includes('/pull') ? { triage: [], cursor: '0:' } : {};
+      return Promise.resolve({ status: 200, text: JSON.stringify(body) });
+    };
+    let fire: ((path: string) => void) | undefined;
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      otherRoots: () => Promise.resolve([sibling]),
+      cloudFor: () =>
+        Promise.resolve({
+          ...LINKED,
+          config: { url: 'https://other.test', apiKey: 'rk_other' },
+          projectId: 'other',
+        }),
+      request,
+      watch: (onChange) => {
+        fire = onChange;
+        return () => undefined;
+      },
+    });
+    await vi.advanceTimersByTimeAsync(6_000);
+    for (let i = 0; i < 10; i += 1) {
+      fire?.(`runs/run-${String(i)}.json`);
+      await vi.advanceTimersByTimeAsync(3_000);
+    }
+    const others = (): number => hosts.filter((h) => 'other.test' === h).length;
+    expect(hosts.filter((h) => 'cloud.test' === h).length, 'this root on every change').toBe(11);
+    expect(others(), 'the others once, in the first cycle').toBe(1);
+    await vi.advanceTimersByTimeAsync(30_000);
+    fire?.('runs/late.json');
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(others(), 'and again once a minute has passed').toBe(2);
+    d.stop();
+    // Fake timers, but the cycles it drives read and write a real temp root: the heavy-test guard's
+    // explicit budget, not the default.
+  }, 10_000);
+
   it('keeps a slow backstop timer that fires with no change at all', async () => {
     const w = watched();
     await vi.advanceTimersByTimeAsync(6_000);
@@ -919,6 +1029,27 @@ describe('a change under .reticle wakes the sync', () => {
     const before = w.cycles();
     w.change('runs/run-1.json');
     await vi.advanceTimersByTimeAsync(2_500);
+    expect(w.cycles()).toBe(before + 1);
+    w.d.stop();
+  });
+
+  /*
+   * Measured: five flows and five facts saved during 30 s offline reached the platform 216 s after
+   * the network came back. Each save tried at once, failed, and doubled the wait; nothing changed
+   * after the reconnect, so the work sat out the longest wait. Work still owed retries every minute;
+   * only an idle machine backs off.
+   */
+  it('retries work saved while offline within a minute of the network returning', async () => {
+    const server = flaky();
+    const w = watched({ request: server.request });
+    await vi.advanceTimersByTimeAsync(6_000); // the first cycle fails
+    for (let i = 0; i < 4; i += 1) {
+      w.change(`flows/f-${String(i)}.json`);
+      await vi.advanceTimersByTimeAsync(3_000); // each save's cycle fails too
+    }
+    server.state.down = false;
+    const before = w.cycles();
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(w.cycles()).toBe(before + 1);
     w.d.stop();
   });

@@ -127,6 +127,18 @@ describe('a decision made on the dashboard', () => {
     expect((await store.get('p'))?.status).toBe(IntentStatus.PROVED);
   });
 
+  // Measured: a dispute resolved on the dashboard reached the losing laptop as the kept words, still
+  // proposed, and an unchanged memory then answers 304, so the status waited for the backstop.
+  it('takes the kept words and the status settled on them in one read', async () => {
+    await store.record({ id: 'ship', statement: 'Orders of $50 or more ship free' });
+    expect(await applySettledWords(store, settledWordsIn([{ ...entry, status: 'agreed' }]))).toBe(
+      1,
+    );
+    const record = await store.get('ship');
+    expect(record?.statement).toBe('Orders over $75 ship free');
+    expect(record?.status).toBe(IntentStatus.AGREED);
+  });
+
   /*
    * Persona drive: the run that proved the ACCEPTED words listed the words that were set aside as
    * its goal ("What was asked"), because the agent's declared request still held them.

@@ -76,21 +76,47 @@ function readJsonDir(dir: string): unknown[] {
  * Flows: one directory deeper under the app's own project id, and also flat in `.reticle/flows/`,
  * which the flow store still saves and loads (a flow saved with no project id, or from before flows
  * were kept per project). Reading only the subfolders skipped every flat flow while the cycle
- * reported ok.
+ * reported ok. At any depth: a namespaced name (`onboarding/signup`) is a folder of its own, and
+ * reading one level down left every such flow on the machine.
  */
-function readFlows(root: string): unknown[] {
-  const dir = join(root, ReticleDir.FLOWS_SUBDIR);
-  try {
-    if (!existsSync(dir)) return [];
-    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      if (entry.isDirectory()) return readJsonDir(join(dir, entry.name));
-      if (!entry.name.endsWith(JSON_SUFFIX)) return [];
-      const flow = readJson(join(dir, entry.name));
-      return flow === undefined ? [] : [flow];
-    });
-  } catch {
-    return [];
-  }
+function readFlowFiles(root: string): Array<{ path: string; flow: unknown }> {
+  const walk = (dir: string): Array<{ path: string; flow: unknown }> => {
+    try {
+      return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) return walk(path);
+        if (!entry.name.endsWith(JSON_SUFFIX)) return [];
+        const flow = readJson(path);
+        return flow === undefined ? [] : [{ path, flow }];
+      });
+    } catch {
+      return [];
+    }
+  };
+  return walk(join(root, ReticleDir.FLOWS_SUBDIR));
+}
+const readFlows = (root: string): unknown[] => readFlowFiles(root).map(({ flow }) => flow);
+
+/**
+ * Keep this machine's edit of `name` as `<name>-conflict-<n>` in a file beside it, and write the
+ * platform's version in its place. Answers the copy's name, or undefined when the flow is not here.
+ */
+function keepConflictCopy(root: string, name: string, theirs: unknown): string | undefined {
+  const held = readFlowFiles(root).find(
+    ({ flow }) =>
+      'object' === typeof flow && null !== flow && (flow as { name?: unknown }).name === name,
+  );
+  if (held === undefined || 'object' !== typeof theirs || null === theirs) return undefined;
+  const stem = held.path.slice(0, -JSON_SUFFIX.length);
+  let n = 1;
+  while (existsSync(`${stem}-conflict-${String(n)}${JSON_SUFFIX}`)) n += 1;
+  const copy = `${name}-conflict-${String(n)}`;
+  writeJson(`${stem}-conflict-${String(n)}${JSON_SUFFIX}`, {
+    ...(held.flow as object),
+    name: copy,
+  });
+  writeJson(held.path, theirs);
+  return copy;
 }
 
 const DERIVED_FILE = Object.fromEntries(
@@ -251,6 +277,7 @@ export function diskSink(reticleRoot: string): SyncSink {
     writeState: (state: CloudSyncState): void => {
       writeJson(join(reticleRoot, ReticleDir.CLOUD_STATE_FILE), state);
     },
+    resolveFlowConflict: (name, theirs) => keepConflictCopy(reticleRoot, name, theirs),
   };
 }
 

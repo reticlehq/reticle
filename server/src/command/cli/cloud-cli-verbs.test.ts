@@ -126,6 +126,8 @@ describe('cloud-cli verb contracts (#555)', () => {
         ok: status >= 200 && status <= 299,
         status,
         statusText: '',
+        // A real response always has headers; the sync reads its ETag.
+        headers: new Headers(),
         text: () => Promise.resolve(JSON.stringify(res.body ?? {})),
       });
     }) as unknown as typeof fetch;

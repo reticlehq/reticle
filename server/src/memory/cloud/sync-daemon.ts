@@ -34,6 +34,9 @@ import { emitSyncHook } from '@/hooks/hook-emit.js';
 import {
   MemoryReadHeader,
   MemoryReadPurpose,
+  MemoryScopeField,
+  MEMORY_PAGE_LIMIT,
+  memoryReadUrl,
   readMemoryPages,
   scopedMemoryEntries,
 } from './memory-scope.js';
@@ -45,7 +48,8 @@ import {
 } from '@/memory/intent/settled-words.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { flushPendingWrites } from '@/hooks/hook-bus.js';
-import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
+import { runSyncCycle, type SyncReport } from './sync-cycle.js';
+import { describeSync } from './sync-describe.js';
 import { diskSink, diskSource, policyScreenshots, readCloudState } from './sync-disk.js';
 import { resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
 import { watch, type FSWatcher } from 'node:fs';
@@ -77,6 +81,37 @@ const CHANGE_DEBOUNCE_MS = 2_000;
  * The atomic writes' `<file>.<pid>.tmp` siblings are matched by prefix.
  */
 const NOT_A_CHANGE = [ReticleDir.CLOUD_STATE_FILE, ReticleDir.ISSUES_FILE];
+/**
+ * The longest the team's memory decisions go unread while a drive keeps the sync busy. They must come
+ * down before changed INTENT goes up (or a word a maintainer set aside is sent back as a new
+ * disagreement), and nothing else waits on them: paging the whole memory before every run cost a
+ * real project nine round trips per cycle, the larger part of a run's time to the dashboard.
+ */
+const SETTLED_WORDS_MAX_AGE_MS = 60_000;
+/**
+ * How often the OTHER linked repos are walked while this one keeps changing. They are not watched, and
+ * each is a full cycle of round trips: walking them on every change here made a run landing in this
+ * repo wait behind all of them. The backstop timer and a requested sync always walk them.
+ */
+const OTHER_ROOTS_EVERY_MS = 60_000;
+/**
+ * How often an idle machine asks whether the team's memory moved. Conditional (If-None-Match on the
+ * first page), so an unchanged minute is one bodiless 304, and a dashboard decision lands within it
+ * rather than on the ten-minute backstop.
+ */
+const MEMORY_POLL_MS = 50_000;
+/**
+ * How often the poll looks at the clock. A read is due once MEMORY_POLL_MS have passed since the last
+ * one (any read, a cycle's too), so a decision waits at most the two together: one minute. Measured
+ * with a plain one-minute timer: 74 s and 96 s, because a cycle's read just before it pushed the
+ * next ask a whole minute on.
+ */
+const MEMORY_POLL_TICK_MS = 10_000;
+const IF_NONE_MATCH = 'if-none-match';
+const isIntent = (path: string): boolean => {
+  const [head = ''] = path.split(/[\\/]/);
+  return head === ReticleDir.INTENT_SUBDIR || head.startsWith(ReticleDir.INTENT_FILE);
+};
 const isOwnWrite = (path: string): boolean => {
   const [head = ''] = path.split(/[\\/]/);
   return (
@@ -161,7 +196,7 @@ interface SyncDaemonDeps {
   request?: (
     url: string,
     init: { method: string; headers: Record<string, string>; body?: string },
-  ) => Promise<{ status: number; text: string }>;
+  ) => Promise<{ status: number; text: string; etag?: string }>;
   /**
    * May this root's work be sent now (opt-outs, link, sign-in)? Asked for every root on every tick.
    * Absent: every resolved link may send, which is how `startSyncDaemon` behaved before.
@@ -230,7 +265,7 @@ const movedAnything = (report: SyncReport): boolean =>
 const defaultRequest = (
   url: string,
   init: { method: string; headers: Record<string, string>; body?: string },
-): Promise<{ status: number; text: string }> => syncRequest(url, init);
+): Promise<{ status: number; text: string; etag?: string }> => syncRequest(url, init);
 
 /**
  * Start the loop. Safe to call for an UNLINKED project: it resolves the link on every tick and does
@@ -338,19 +373,27 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   };
 
   /** One root's bundle. The state, source and sink are already per-root; only the caller was not. */
-  const pushRoot = async (root: string, cloud: ProjectCloud): Promise<SyncReport | undefined> => {
+  const pushRoot = async (
+    root: string,
+    cloud: ProjectCloud,
+    readMemory = true,
+  ): Promise<SyncReport | undefined> => {
     if (null === cloud.config) return undefined;
-    const report = await sendRoot(root, cloud);
+    const report = await sendRoot(root, cloud, readMemory);
     if (report.error !== undefined && AUTH_REFUSED.test(report.error)) refuse(root);
     return report;
   };
 
-  const sendRoot = async (root: string, cloud: ProjectCloud): Promise<SyncReport> => {
+  const sendRoot = async (
+    root: string,
+    cloud: ProjectCloud,
+    readMemory: boolean,
+  ): Promise<SyncReport> => {
     if (null === cloud.config) throw new Error('sendRoot needs a linked cloud');
     const full = diskSource(root);
     // The team's decisions come down too: an author's record kept the words a maintainer set aside,
     // and re-sent them every cycle as a new disagreement.
-    if (cloud.policy.memory)
+    if (cloud.policy.memory && readMemory)
       await pullSettledWords(root, cloud.config, cloud.projectId).catch(() => 0);
     return runSyncCycle({
       config: cloud.config,
@@ -372,13 +415,20 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     });
   };
 
+  /** The tag of this root's first memory page as last read: what a conditional read names. */
+  let memoryTag: string | undefined;
+  let polling = false;
+  let lastCloud: ProjectCloud | undefined;
   /** Bring the dashboard's memory decisions down to this root's records. Returns how many changed. */
   const pullSettledWords = async (
     root: string,
     config: { url: string; apiKey: string },
     projectId: string | null,
+    /** A first page already in hand (the poll's 200), so it is not asked for twice. */
+    first?: { url: string; body: unknown },
   ): Promise<number> => {
     const body = await readMemoryPages(config.url, { projectId }, async (url) => {
+      if (first !== undefined && url === first.url) return first.body;
       const res = await request(url, {
         method: 'GET',
         // The sync, not an agent: without this every cycle counted as an agent consulting memory.
@@ -387,6 +437,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
           [MemoryReadHeader.PURPOSE]: MemoryReadPurpose.SYNC,
         },
       });
+      if (root === deps.reticleRoot && !url.includes(`${MemoryScopeField.CURSOR}=`))
+        memoryTag = res.etag;
       return 200 === res.status ? (JSON.parse(res.text) as unknown) : undefined;
     });
     if (body === undefined) return 0;
@@ -394,6 +446,46 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     const settled = settledWordsIn(entries);
     await keptWordsInRequest(reticleDirPaths(root).request, settled);
     return applySettledWords(new IntentShardStore(createNodeFileSystem(), root, { now }), settled);
+  };
+
+  /**
+   * Ask whether the team's memory moved and, when it did, bring its decisions down. Skipped while a
+   * cycle runs or one read it within the minute.
+   * ponytail: the tag covers the first page, which is ordered newest-updated first, so any decision
+   * moves it; a fact deleted past the first page waits for the backstop.
+   */
+  const pollMemory = async (): Promise<void> => {
+    if (stopped || running || polling || now() - memoryReadAt < MEMORY_POLL_MS) return;
+    polling = true;
+    try {
+      // The link the last cycle resolved: the poll costs no link read of its own.
+      const cloud = lastCloud;
+      if (cloud === undefined || null === cloud.config || !cloud.policy.memory) return;
+      const url = memoryReadUrl(cloud.config.url, {
+        projectId: cloud.projectId,
+        limit: MEMORY_PAGE_LIMIT,
+      });
+      const res = await request(url, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${cloud.config.apiKey}`,
+          [MemoryReadHeader.PURPOSE]: MemoryReadPurpose.SYNC,
+          ...(memoryTag === undefined ? {} : { [IF_NONE_MATCH]: memoryTag }),
+        },
+      });
+      // Answered either way, 304 included: the memory is known current as of now.
+      if (200 === res.status || 304 === res.status) memoryReadAt = now();
+      if (200 !== res.status) return;
+      memoryTag = res.etag;
+      await pullSettledWords(deps.reticleRoot, cloud.config, cloud.projectId, {
+        url,
+        body: JSON.parse(res.text) as unknown,
+      });
+    } catch {
+      // Offline is not news; the next minute asks again.
+    } finally {
+      polling = false;
+    }
   };
 
   /**
@@ -448,27 +540,56 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     }
   };
 
-  const cycle = async (): Promise<SyncReport | undefined> => {
+  /** When this root last read the team's memory, and whether its intent moved since. */
+  let memoryReadAt = Number.NEGATIVE_INFINITY;
+  /** When the other linked repos were last walked. */
+  let othersAt = Number.NEGATIVE_INFINITY;
+  let intentMoved = true;
+  /**
+   * A change landed that no cycle has delivered yet. Work saved while offline used to wait out the
+   * longest backoff after the network returned (each save's failed cycle doubled it): owed work
+   * retries every minute, and only an idle machine backs off.
+   */
+  let owed = false;
+  const memoryDue = (forced: boolean): boolean => {
+    if (!forced && !intentMoved && now() - memoryReadAt < SETTLED_WORDS_MAX_AGE_MS) return false;
+    intentMoved = false;
+    memoryReadAt = now();
+    return true;
+  };
+
+  /** `asked`: a sync somebody requested: read the memory and walk every repo, whatever is due. */
+  const cycle = async (asked = false): Promise<SyncReport | undefined> => {
     // Overlap guard: a slow cycle must not have a second one started on top of it, or two bundles
     // race and the cursor written by the loser silently rewinds the winner's progress.
     if (running) return undefined;
     running = true;
-    rootsLinked = new Map();
-    rootsSendFlows = new Set();
+    // Owed work this cycle carries; a failed exchange leaves it owed, and a change meanwhile adds to it.
+    const carried = owed;
+    owed = false;
+    // The other repos' entries stand until their next pass, so what they owe is still reported.
+    const othersDue = asked || now() - othersAt >= OTHER_ROOTS_EVERY_MS;
+    if (othersDue) {
+      othersAt = now();
+      rootsLinked = new Map();
+      rootsSendFlows = new Set();
+    }
+    const own = deps.reticleRoot;
+    rootsSendFlows.delete(own);
     try {
       const cloud = admit(deps.reticleRoot, await deps.cloud());
+      lastCloud = cloud;
       const linked = null !== cloud.config;
-      const own = deps.reticleRoot;
       rootsLinked.set(own, linked);
       if (linked && cloud.policy.flows) rootsSendFlows.add(own);
+      // Another project's memory is another project's decisions: a re-link reads it at once.
+      const relinked = cloud.projectId !== wasProject;
+      const linkChanged = linked !== wasLinked || (linked && relinked);
+      wasLinked = linked;
+      wasProject = cloud.projectId;
       // With a gate, `admit` already said why once per change; this would say "run connect" to
       // somebody who only signed out or switched sync off.
-      if (
-        deps.gate === undefined &&
-        (linked !== wasLinked || (linked && cloud.projectId !== wasProject))
-      ) {
-        wasLinked = linked;
-        wasProject = cloud.projectId;
+      if (deps.gate === undefined && linkChanged) {
         if (linked)
           log('reticle_cloud_linked', {
             projectId: cloud.projectId,
@@ -482,12 +603,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
             fix: 'run `reticle connect` in this directory, or start the daemon in the linked one — nothing is being synced from here',
           });
       }
-      // Every OTHER linked root, first. Their failures are logged and never abort this daemon's own
-      // push: one repo whose credential was revoked must not silence the rest of the machine.
-      await syncOtherRoots();
-
       if (null === cloud.config) return undefined;
-      const report = await pushRoot(deps.reticleRoot, cloud);
+      const report = await pushRoot(deps.reticleRoot, cloud, memoryDue(asked || relinked));
       // `pushRoot` returns undefined only for an unlinked root, which the guard above has ruled out.
       if (report === undefined) return undefined;
       // Said out loud on EVERY cycle, including the ones that moved nothing and the ones that
@@ -509,8 +626,10 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
         log('reticle_cloud_sync_failed', { error: failure });
       }
       if (report.error === undefined && report.ok) lastPushAt = now();
-      if (report.error !== undefined) failedCycle();
-      else {
+      if (report.error !== undefined) {
+        owed ||= carried;
+        failedCycle();
+      } else {
         if (failure === undefined) reportedError = undefined;
         // Only when something actually moved. A per-minute "nothing to send" is noise that trains
         // people to stop reading the log.
@@ -537,9 +656,13 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
         reportedError = message;
         log('reticle_cloud_sync_failed', { error: message });
       }
+      owed ||= carried;
       failedCycle();
       return undefined;
     } finally {
+      // Every OTHER linked root, after this one: the root that changed is the one somebody is waiting
+      // on. Their failures are logged and never touch this root's push, whichever ran first.
+      if (othersDue) await syncOtherRoots().catch(() => undefined);
       await refreshUnsynced().catch(() => undefined);
       running = false;
       startWatching();
@@ -551,6 +674,10 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   /** Consecutive failed cycles: the retry waits a minute, then doubles, never past the backstop. */
   let failures = 0;
   function failedCycle(): void {
+    if (owed) {
+      nextDelay = FAILURE_RETRY_MS;
+      return;
+    }
     nextDelay = Math.min(FAILURE_RETRY_MS * 2 ** failures, intervalMs);
     failures += 1;
   }
@@ -591,6 +718,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
 
   const onChange = (path: string): void => {
     if (stopped || isOwnWrite(path)) return;
+    if (isIntent(path)) intentMoved = true;
+    owed = true;
     if (running) dirty = true;
     else soon(CHANGE_DEBOUNCE_MS);
   };
@@ -608,13 +737,15 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
 
   schedule(FIRST_CYCLE_DELAY_MS);
   startWatching();
+  const poll = setInterval(() => void pollMemory(), MEMORY_POLL_TICK_MS);
+  poll.unref?.();
 
   return {
     // A sync somebody asked for writes what is held on a timer first: a drive's run waits a few
     // seconds after its last verdict, and a push straight after `session end` sent "0 of 0".
     syncNow: async () => {
       await flushPendingWrites();
-      const report = await cycle();
+      const report = await cycle(true);
       afterCycle();
       return report;
     },
@@ -636,12 +767,14 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
     },
     stop: (): void => {
       stopWatching();
+      clearInterval(poll);
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
     },
     flush: async (): Promise<void> => {
       stopWatching();
+      clearInterval(poll);
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
@@ -650,6 +783,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       const deadline = Date.now() + FLUSH_WAIT_MS;
       while (running && Date.now() < deadline)
         await new Promise((resolve) => setTimeout(resolve, FLUSH_POLL_MS));
+      // Not `asked`: on the way out, the run goes first; the memory and the other repos only if due.
       await cycle();
     },
   };
@@ -713,7 +847,8 @@ export function attachCloudSync(deps: {
     // reporting nothing — indistinguishable, on the dashboard, from nobody having verified anything.
     otherRoots: () => Promise.resolve(deps.otherRoots()),
     cloudFor: (root) => resolveProjectCloud(deps.fs, root, deps.homeDir, deps.env),
-    // ponytail: this root only; sibling roots sync on the backstop timer (or when this one changes).
+    // ponytail: this root only; sibling roots sync at most once a minute, when this one changes,
+    // and on the backstop timer.
     // Watching them too means one recursive watcher per linked repo — add it if siblings lag.
     watch: (onChange) => watchReticleRoot(deps.reticleRoot, onChange),
     // Sent only while somebody is signed in, to a linked project that did not switch it off.
