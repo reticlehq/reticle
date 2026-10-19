@@ -3,6 +3,7 @@ import { capturedRootOf } from './shadow-registry.js';
 import { isElement, isFrame } from './realm.js';
 import { getAccessibleName, getRole, getStates, getValue, isVisible } from './a11y.js';
 import { refs } from './addressing/refs.js';
+import { pageRoute } from '@/security/page-location.js';
 import { isIgnored, isReticleOverlay } from './dom-ignore.js';
 
 export const INTERACTIVE = new Set([
@@ -556,7 +557,7 @@ function buildStatus(root: ParentNode): SnapshotStatus {
   const visibleDialogs = collectDialogs(root);
   const overlay = overlayHidingPage(root);
   return {
-    route: `${location.pathname}${location.search}${location.hash}`,
+    route: pageRoute(),
     title: document.title,
     ...(visibleDialogs.length > 0 ? { visibleDialogs } : {}),
     ...(overlay !== undefined ? { overlayHidingPage: overlay } : {}),

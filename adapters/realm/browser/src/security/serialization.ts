@@ -52,8 +52,9 @@ function sanitize(value: unknown, state: SanitizeState, depth: number, key?: str
 
   if (null === value || 'boolean' === typeof value) return value;
   if ('string' === typeof value) {
+    // Page text, console output and state alike: a secret shape is redacted whatever key holds it.
     return boundedString(
-      value,
+      scrubKnownSecrets(value),
       state,
       'error' === key?.toLowerCase()
         ? TRANSPORT_LIMITS.MAX_ERROR_LENGTH

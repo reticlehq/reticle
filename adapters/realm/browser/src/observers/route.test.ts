@@ -37,6 +37,21 @@ describe('installRoute', () => {
     expect(events[0]?.data[ROUTE_CHANGE_HOW_FIELD]).toBe(RouteChangeHow.PUSH);
   });
 
+  it('removes a token in the fragment or query from every URL field it sends', () => {
+    const { emit, events } = collect();
+    teardown = installRoute(emit);
+    history.pushState(
+      null,
+      '',
+      '/cb?code=1&access_token=qtok#access_token=ftok&refresh_token=rtok',
+    );
+    history.pushState(null, '', '/next#section');
+    const sent = JSON.stringify(events.map((e) => e.data));
+    for (const secret of ['qtok', 'ftok', 'rtok']) expect(sent).not.toContain(secret);
+    // A plain anchor is not a secret and stays readable.
+    expect(events.at(-1)?.data['hash']).toBe('#section');
+  });
+
   it('records replaceState as replace', () => {
     history.replaceState({}, '', '/editor');
     const { emit, events } = collect();

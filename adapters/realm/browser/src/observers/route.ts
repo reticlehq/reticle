@@ -1,6 +1,7 @@
 import { EventType, ROUTE_CHANGE_HOW_FIELD, RouteChangeHow } from '@reticlehq/core';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { captureMethod } from '@/patching/capture-method.js';
+import { redactUrl } from '@reticlehq/core';
 
 function snapshotLocation(): { pathname: string; search: string; hash: string; href: string } {
   return {
@@ -33,12 +34,13 @@ export function installRoute(emit: Emit): Teardown {
       const to = snapshotLocation();
       if (to.href === from) return;
       lastHref = to.href;
+      // Compared raw above, sent redacted: a sign-in leaves its token in the query or fragment.
       emit(EventType.ROUTE_CHANGE, {
-        from,
-        to: to.href,
+        from: redactUrl(from),
+        to: redactUrl(to.href),
         pathname: to.pathname,
-        search: to.search,
-        hash: to.hash,
+        search: redactUrl(to.search),
+        hash: redactUrl(to.hash),
         [ROUTE_CHANGE_HOW_FIELD]: how,
       });
     });

@@ -1,4 +1,5 @@
 import { SessionState } from '@reticlehq/core';
+import { pageHref } from '@/security/page-location.js';
 import { LOG_KIND, LOG_RESULT, type LogKind, type LogResult } from './chrome/presenter-log.js';
 import { getCapabilities, type Capabilities } from '@/registry/capabilities.js';
 
@@ -48,7 +49,7 @@ export function buildRunState(input: RunStateInput): PresenterRunState {
   }
   return {
     session: input.sessionId,
-    url: 'undefined' === typeof location ? '' : location.href,
+    url: 'undefined' === typeof location ? '' : pageHref(),
     state: input.state,
     startedMs: start,
     durationMs: Math.max(0, (input.endMs ?? input.now) - start),

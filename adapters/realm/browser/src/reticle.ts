@@ -56,6 +56,8 @@ import {
 import { installAllObservers, runTeardowns } from './observers/install-all.js';
 import { setTestIdAttr } from './dom/addressing/testid-attr.js';
 import { setNetworkBodyMaxChars } from './observers/net-detail/network-body.js';
+import { pageHref } from './security/page-location.js';
+import { scrubKnownSecrets } from './security/serialization.js';
 import { installOverlay, type OverlayHandle } from './presenter/chrome/overlay.js';
 // TYPES only. Naming the panel's class here would put the whole panel in the first thing a page
 // downloads, and the panel is wanted only once an agent connects. It is fetched below instead, at
@@ -805,8 +807,8 @@ export class Reticle {
       protocolVersion: RETICLE_PROTOCOL_VERSION,
       sessionId: this.#session,
       ...(this.#projectId === undefined ? {} : { projectId: this.#projectId }),
-      url: location.href,
-      title: document.title,
+      url: pageHref(),
+      title: scrubKnownSecrets(document.title),
       adapters: adapterNames(),
       ...(this.#token === undefined ? {} : { token: this.#token }),
       ...this.#mode,

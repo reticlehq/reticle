@@ -404,3 +404,17 @@ describe('Map and Set are readable, not silently empty', () => {
     expect(truncation?.droppedItems).toBeGreaterThan(0);
   });
 });
+
+/**
+ * Page text left the page unscrubbed. A key shown on a settings page reached the agent's transcript
+ * verbatim in a snapshot, while the same key in a network body was redacted.
+ */
+describe('a secret in any text the page sends', () => {
+  it('is redacted in a string value, whatever its key', () => {
+    const shown = 'Your key: sk_live_abcdefghijklmnop1234 (keep it safe)';
+    const sent = safeStringify({ nodes: [{ text: shown }], title: shown });
+    expect(sent).not.toContain('sk_live_abcdefghijklmnop1234');
+    expect(sent).toContain('Your key:');
+    expect(sent).toContain(REDACTED_VALUE);
+  });
+});

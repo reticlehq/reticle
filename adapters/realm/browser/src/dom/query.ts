@@ -39,6 +39,7 @@ import {
   paintedCase,
   textMatches,
 } from './text-match.js';
+import { pageRoute } from '@/security/page-location.js';
 
 const SOURCE_ATTR = DATA_RETICLE_SOURCE_ATTR;
 const MAX_PRESENT_TESTIDS = 12;
@@ -921,7 +922,7 @@ function buildEmptyHint(
   // the merged list would make this flag true for any page that has a testid at all.
   const registered = declaredTestids();
   const knownEmptyState = present.some((id) => registered.includes(id));
-  const route = `${location.pathname}${location.search}`;
+  const route = pageRoute(false);
   const hint: QueryEmptyHint = {
     route,
     presentTestids: present,
