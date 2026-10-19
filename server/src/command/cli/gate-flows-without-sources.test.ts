@@ -1,8 +1,8 @@
 /**
- * On a stack without source stamping (Vue, for one) no saved flow records `sources`, so no flow can
+ * On a stack without source stamping (Vue, for one) no saved flow records a source location, so no flow can
  * be matched to a changed file and every changed component lands in `unflowed`. The gate then told
  * the human "no saved flow drives it" about a component a flow had just driven and passed. The fix
- * is in what the gate says, not in what it decides: it names the missing `sources` instead.
+ * is in what the gate says, not in what it decides: it names the missing source locations instead.
  */
 
 import { removeTempDir } from '@/machine/temp-dir.js';

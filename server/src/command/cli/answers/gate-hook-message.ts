@@ -33,7 +33,7 @@ interface GateHookInput {
   deleted: readonly string[];
   /** Changed interactive components no saved flow has ever driven. */
   unflowed?: readonly string[];
-  /** Saved flows exist but none records a `sources` entry, so no flow can be matched to a file. */
+  /** Saved flows exist but none records a source location, so no flow can be matched to a file. */
   flowsWithoutSources?: boolean;
   /** Coverage levels below their best, already worded (`branched 100% -> 50%`). */
   coverageRegressed?: readonly string[];
