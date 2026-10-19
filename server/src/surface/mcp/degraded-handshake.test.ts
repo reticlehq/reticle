@@ -20,7 +20,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -85,6 +85,7 @@ function startSquatter(): Promise<{ port: number; close: () => Promise<void> }> 
 interface InitReply {
   id?: unknown;
   result?: { instructions?: string };
+  error?: { code?: number; message?: string; data?: unknown };
 }
 
 describe('the proxy answering initialize itself', () => {
@@ -97,11 +98,17 @@ describe('the proxy answering initialize itself', () => {
     resetOutageReporting();
   });
 
-  it('delivers the degraded notice to the client', async () => {
+  it('delivers the degraded notice and state-directory diagnostic to the client', async () => {
     const squatter = await startSquatter();
     cleanups.push(() => squatter.close());
 
-    vi.stubEnv('HOME', mkdtempSync(join(tmpdir(), 'reticle-degraded-')));
+    const home = mkdtempSync(join(tmpdir(), 'reticle-degraded-'));
+    vi.stubEnv('HOME', home);
+    const stateDir = join(home, '.reticle');
+    // A regular file at this path makes the writability probe fail reliably without chmod behavior
+    // differing across operating systems or when tests run with elevated permissions.
+    writeFileSync(stateDir, 'not a directory');
+
     const stdin = new PassThrough({ encoding: 'utf8' });
     const realStdin = process.stdin;
     Object.defineProperty(process, 'stdin', { value: stdin, configurable: true });
@@ -139,5 +146,63 @@ describe('the proxy answering initialize itself', () => {
       'the client was told the server started normally; nothing said the surface is unbacked',
     ).toContain('DEGRADED');
     expect(instructions).toContain(String(squatter.port));
+    expect(instructions).toContain(stateDir);
+  }, 30_000);
+
+  it('includes the state-directory diagnostic in a failed tool-call error', async () => {
+    const squatter = await startSquatter();
+    cleanups.push(() => squatter.close());
+
+    const home = mkdtempSync(join(tmpdir(), 'reticle-degraded-tool-error-'));
+    vi.stubEnv('HOME', home);
+    const stateDir = join(home, '.reticle');
+    writeFileSync(stateDir, 'not a directory');
+
+    const stdin = new PassThrough({ encoding: 'utf8' });
+    const realStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', { value: stdin, configurable: true });
+    const replies: InitReply[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown): boolean => {
+      for (const line of String(chunk).split('\n')) {
+        if ('' === line.trim()) continue;
+        try {
+          replies.push(JSON.parse(line) as InitReply);
+        } catch {
+          // Ignore non-JSON-RPC output.
+        }
+      }
+      return true;
+    });
+    void startMcpProxy(squatter.port, () =>
+      Promise.reject(new Error('simulated daemon startup failure')),
+    ).catch(() => undefined);
+    cleanups.push(() => {
+      Object.defineProperty(process, 'stdin', { value: realStdin, configurable: true });
+      stdin.destroy();
+    });
+
+    stdin.write(
+      `${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05' } })}\n`,
+    );
+    await vi.waitFor(
+      () =>
+        expect(replies.some((reply) => 1 === reply.id && reply.result !== undefined)).toBe(true),
+      { timeout: 8_000, interval: 100 },
+    );
+
+    stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'reticle_status', arguments: {} },
+      })}\n`,
+    );
+
+    await vi.waitFor(
+      () => expect(replies.some((reply) => 2 === reply.id && reply.error !== undefined)).toBe(true),
+      { timeout: 8_000, interval: 100 },
+    );
+    expect(JSON.stringify(replies.find((reply) => 2 === reply.id)?.error)).toContain(stateDir);
   }, 30_000);
 });

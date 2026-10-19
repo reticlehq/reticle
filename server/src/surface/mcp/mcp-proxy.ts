@@ -1,4 +1,6 @@
 import * as http from 'node:http';
+import { stateDirProblem } from '@/command/daemon/state-dir.js';
+import { reticleStateHome } from '@/command/daemon/daemon.js';
 import {
   localInitializeResponse,
   degradedInstructions,
@@ -24,7 +26,6 @@ import { probeDaemon } from './proxy/proxy-daemon-probe.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { buildServerInstructions, localizeInstructions } from './server-instructions.js';
 import { hasAnyProjectConnectedBefore } from '@/memory/recall/prior/connection-memory.js';
-import { reticleStateHome } from '@/command/daemon/daemon.js';
 import { projectIdsAt } from '@/command/cli/ports/resolve/cli-port.js';
 import { PEER_VERSION_PARAM, PEER_CONTRACT_PARAM } from '@/command/version/peer-announce.js';
 import {
@@ -389,6 +390,10 @@ function withLocalBriefing(line: string, appHere: boolean): string {
   } catch {
     return line;
   }
+}
+function withStateDirDiagnostic(reason: string): string {
+  const problem = stateDirProblem(reticleStateHome());
+  return problem === undefined ? reason : `${reason}\n${problem}`;
 }
 
 export function startMcpProxy(
@@ -838,7 +843,7 @@ export function startMcpProxy(
         // See degradedInstructions for the field report this closes.
         const response = localInitializeResponse(
           line,
-          degradedInstructions(proxyInstructions(port), port, reason),
+          degradedInstructions(proxyInstructions(port), port, withStateDirDiagnostic(reason)),
         );
         if (null === response) return;
         handshakeAnswered = true;
@@ -929,7 +934,9 @@ export function startMcpProxy(
             .then(() => connect(false))
             .catch((err: unknown) => {
               dormant = true;
-              const reason = err instanceof Error ? err.message : String(err);
+              const reason = withStateDirDiagnostic(
+                err instanceof Error ? err.message : String(err),
+              );
               proxyLog('reticle_mcp_proxy_wake_failed', { port, error: reason });
               // The wake is the only thing that can start a daemon, so its failure IS the answer to
               // everything it was woken for. It used to be logged and nothing else: the request sat
