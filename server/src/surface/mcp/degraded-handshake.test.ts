@@ -104,6 +104,7 @@ describe('the proxy answering initialize itself', () => {
 
     const home = mkdtempSync(join(tmpdir(), 'reticle-degraded-'));
     vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     const stateDir = join(home, '.reticle');
     // A regular file at this path makes the writability probe fail reliably without chmod behavior
     // differing across operating systems or when tests run with elevated permissions.
@@ -155,6 +156,7 @@ describe('the proxy answering initialize itself', () => {
 
     const home = mkdtempSync(join(tmpdir(), 'reticle-degraded-tool-error-'));
     vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     const stateDir = join(home, '.reticle');
     writeFileSync(stateDir, 'not a directory');
 
