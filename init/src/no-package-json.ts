@@ -7,7 +7,9 @@
  * Django, several pages) and stops.
  */
 
+import { dirname, join } from 'node:path';
 import { PackageManager, Framework } from './detect/detect.js';
+import { PACKAGE_JSON } from './detect/workspace-apps.js';
 import {
   detectDjangoProject,
   detectStreamlitProject,
@@ -44,6 +46,34 @@ const SNIPPET_WRITTEN =
   'for their own.';
 const SNIPPET_ALREADY = `${HTML_INDEX_PATH} already loads the Reticle SDK — nothing to change.`;
 const DRY_RUN_PAIRING_TOKEN = 'DRY_RUN_TOKEN_NOT_FOR_USE';
+/** How far up `init` looks for the app it was run inside. The same bound as the workspace walk. */
+const MAX_ANCESTOR_DEPTH = 8;
+const HOME_FOLDER =
+  'This is your home folder, not a project. Go to the folder of your app (the one with its ' +
+  'package.json) and run `reticle init` there.';
+const insideApp = (dir: string): string =>
+  `No package.json here, but this folder is inside the app at ${dir}. Run init from the app's ` +
+  `folder:\n  cd "${dir}" && reticle init`;
+
+/**
+ * The wrong-directory answer when the right directory can be named.
+ *
+ * Discovery looks DOWN for the app. Run from `src/` of that app, it found nothing and said "run
+ * `reticle init` from your app's directory" with no path, to a person one folder inside it. The
+ * walk up stops at the home folder: a package.json in the home folder is an accident, not an app.
+ */
+function namedDirectory(io: InitIo): string | undefined {
+  const home = io.homeDir();
+  let dir = io.cwd();
+  if (dir === home) return HOME_FOLDER;
+  for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
+    const parent = dirname(dir);
+    if (parent === dir || parent === home) return undefined;
+    if (null !== io.readFile(join(parent, PACKAGE_JSON))) return insideApp(parent);
+    dir = parent;
+  }
+  return undefined;
+}
 
 /**
  * Write the snippet into `index.html`, and hand over to setup as a success.
@@ -98,7 +128,7 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
   // wrong, then printed a script-tag snippet under a message that asks for none (#1366).
   const answer = noPackageJsonAnswer(existsHere, io.rootFiles());
   if (!streamlit && !django && answer.kind === NoPackageJsonCase.WRONG_DIRECTORY) {
-    io.print(answer.message);
+    io.print(namedDirectory(io) ?? answer.message);
     if (!options.dryRun) io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
     return { ok: false, applied: 0, manual: 0 };
   }

@@ -107,4 +107,28 @@ describe('init finds the app below where it was run', () => {
     expect(out).not.toContain('.cache');
     expect(out).toContain('No package.json found here');
   });
+
+  it('names the app ABOVE when it is run from a folder inside the app', () => {
+    // `src/` of a Vite app: the redirect only looks down, so this said "run it from your app's
+    // directory" while standing one folder inside that directory, and never said which one.
+    const io = memoryIo({ '/project/package.json': VITE_APP, 'src/main.ts': 'export {}' }, 'src');
+    const outcomes: unknown[] = [];
+    const result = runInit(
+      { ...OPTS, cwd: '/project/src' },
+      { ...io, host: { ...io.host, reportOutcome: (o) => outcomes.push(o) } },
+    );
+    const out = io.lines.join('\n');
+    expect(out).toContain('cd "/project" && reticle init');
+    expect(result.ok).toBe(false);
+    expect(outcomes).toEqual([{ ok: false, reason: 'no_package_json' }]);
+    expect(Object.keys(io.written)).toEqual([]);
+  });
+
+  it('says the home folder is not a project instead of naming a package.json above it', () => {
+    const io = memoryIo({ '/home/package.json': '{}' });
+    runInit({ ...OPTS, cwd: '/home/u' }, { ...io, cwd: () => '/home/u' });
+    const out = io.lines.join('\n');
+    expect(out).toContain('home folder');
+    expect(out).not.toContain('cd "/home"');
+  });
 });
