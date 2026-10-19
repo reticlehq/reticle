@@ -323,3 +323,28 @@ it('HTML_TAG_TO_ARIA_ROLE covers the common mistakes and no non-rendered tags', 
   expect(HTML_TAG_TO_ARIA_ROLE.get('input')).toBe('textbox');
   expect(HTML_TAG_TO_ARIA_ROLE.get('nav')).toBe('navigation');
 });
+
+/**
+ * A framework error dialog over the page (#1768). The text under it is in the DOM, but a user sees
+ * only the dialog, so a presence check is unknown, never a plain `yes`, and the reason names it.
+ */
+it('is inconclusive, never a pass, when a framework error dialog covers the match', async () => {
+  const covered: PredicateSession = {
+    ...session,
+    command: () =>
+      Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'stub',
+        result: {
+          matched: true,
+          count: 1,
+          elements: [{ ref: 'e0', role: 'paragraph', name: '', states: [], visible: true }],
+          coveredBy: 'Next.js error dialog',
+        },
+      }),
+  };
+  const result = await evalElement(covered, { text: 'Welcome back' }, undefined, false, true);
+  expect(result.pass).toBe(false);
+  expect(result.inconclusive).toContain('Next.js error dialog');
+});

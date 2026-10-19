@@ -25,7 +25,7 @@ import {
   isRenderedOutsideAriaHidden,
   isVisible,
 } from './a11y.js';
-import { isIgnored, isReticleOverlay, isWordsIgnored } from './dom-ignore.js';
+import { dialogCovering, isIgnored, isReticleOverlay, isWordsIgnored } from './dom-ignore.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { declaredTestids } from '@/registry/capabilities.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';
@@ -659,11 +659,13 @@ export function matchQuery(
     const projected = projectAttrs(el, attrs);
     return projected === undefined ? base : { ...base, attrs: projected };
   });
+  const covered = dialogCovering(filtered);
   return {
     matched: filtered.length > 0,
     count: filtered.length,
     elements: descriptors,
     ...(scopeMissing ? { scopeMissing: true } : {}),
+    ...(covered === undefined ? {} : { coveredBy: covered }),
     // On a MISS, carry the same diagnosis `runQuery` has always returned. MATCH is the command every
     // PREDICATE uses, so without this a failed assertion was a dead end ("no element matched") while
     // the identical failure through reticle_query listed the testids that ARE present. Computed only

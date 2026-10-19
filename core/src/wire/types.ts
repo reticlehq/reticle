@@ -154,6 +154,12 @@ export interface MatchResult {
    */
   scopeMissing?: boolean;
   /**
+   * Present only when a framework error dialog (Next.js, Vite) is open over the page and a match is
+   * under it: the name of that dialog. The match is in the DOM, but a user sees only the dialog, so a
+   * presence check is not a plain pass (#1768).
+   */
+  coveredBy?: string;
+  /**
    * Zero-match diagnosis, present only on a miss: what IS on the page. `reticle_query` has always
    * returned this; MATCH (the command every PREDICATE uses) did not, so a failed assertion was a
    * dead end while the same failure through query was one step from fixed.
