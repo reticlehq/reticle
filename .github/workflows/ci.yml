@@ -46,6 +46,10 @@ permissions:
 # Pinned here so the cache key and the install agree on one value.
 env:
   CARGO_AUDIT_VERSION: 0.22.2
+  # CI is not a user. Every job runs `reticle init` or a daemon outside the source checkout, so
+  # without this each run reports as a real install. A spec that measures telemetry sets
+  # RETICLE_TELEMETRY=1 for its own children. See ci-sends-no-telemetry.test.ts.
+  RETICLE_TELEMETRY: '0'
 
 jobs:
   # The one check the expensive gates wait on, split out so they stop waiting on all four.
