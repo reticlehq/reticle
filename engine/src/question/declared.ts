@@ -12,10 +12,12 @@
  *  - A destination whose content was asserted and FOUND was still reported as
  *    `route-rendered-nothing`, a clause the element evidence beside it disproves.
  *
- * Deliberately conservative about what counts as declared. Only what the caller REQUIRED is read:
- * the top level and `allOf` chains. An `anyOf` branch may never have held, and a `not` declares the
- * opposite of a consequence — honouring either would suppress a real finding on the strength of
- * something that never happened. Pure: a predicate in, a description out.
+ * Deliberately conservative about what counts as declared. For CONSEQUENCES (`netFailures`,
+ * `rendersContent`) and for NAMED TRAFFIC (`netUrls`), only the top level and `allOf` chains are
+ * walked: an `anyOf` branch may never have held, and a `not` declares the opposite. `netClauses`
+ * is the one exception — it walks `anyOf` too, because the foreign-traffic exemption (#1234) must
+ * admit a request ANY declared clause matched, and the duplicate-request rule (`netUrls`) is a
+ * separate question with its own conservatism. Pure: a predicate in, a description out.
  */
 
 import { PredicateKind, QueryBy, compareSourceClauses, type ElementQuery } from '@reticlehq/core';
@@ -33,6 +35,9 @@ export interface DeclaredRead {
   urlContains: string;
   method?: string;
 }
+
+/** A net predicate from the caller's declaration, usable directly by `evalNet`. */
+export type DeclaredNetPredicate = Extract<Predicate, { kind: typeof PredicateKind.NET }>;
 
 interface DeclaredExpectations {
   /** Requests the caller declared would FAIL, so failing is the expected outcome, not a disagreement. */
@@ -55,6 +60,17 @@ interface DeclaredExpectations {
    * `urlContains` is never here: the schema refuses it, and it would excuse every request.
    */
   repeatableNetUrls: readonly DeclaredRead[];
+  /**
+   * Every net predicate the caller's declaration carries — the actual predicates, not a copy of
+   * their fields.
+   *
+   * Broader than `netUrls`: includes `anyOf` branches, because a request that matches ANY declared
+   * clause is traffic the caller mentioned. Used by the foreign-traffic exemption (#1234), where
+   * admitting a request the caller never named is a false-green route, but filtering one it DID
+   * name is the bug this field exists to fix. Consumers use `evalNet` on these predicates so the
+   * match can never drift from the predicate evaluator.
+   */
+  netClauses: readonly DeclaredNetPredicate[];
 }
 
 /** Below this, a status is a success or a redirect: not a declared failure. */
@@ -114,8 +130,11 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
   const netFailures: DeclaredNetFailure[] = [];
   const netUrls: string[] = [];
   const repeatableNetUrls: DeclaredRead[] = [];
+  const netClauses: DeclaredNetPredicate[] = [];
   let rendersContent = false;
 
+  // Conservative walk: allOf chains only. netFailures and rendersContent are REQUIRED expectations;
+  // an anyOf branch may never have held, so honouring it would suppress a real contradiction.
   const walk = (p: Predicate): void => {
     switch (p.kind) {
       case PredicateKind.ALL_OF:
@@ -161,8 +180,30 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
     }
   };
 
-  if (predicate !== undefined) walk(predicate);
-  return { netFailures, rendersContent, netUrls, repeatableNetUrls };
+  // Broad walk: includes anyOf branches. Collects every net clause the predicate MENTIONS,
+  // because a request matching any declared clause is traffic the caller named (#1234).
+  const walkNet = (p: Predicate): void => {
+    switch (p.kind) {
+      case PredicateKind.ALL_OF:
+      case PredicateKind.ANY_OF:
+        for (const child of p.predicates) walkNet(child);
+        return;
+      case PredicateKind.COMPARE:
+        for (const child of compareSourceClauses(p)) walkNet(child);
+        return;
+      case PredicateKind.NET:
+        netClauses.push(p);
+        return;
+      default:
+        return;
+    }
+  };
+
+  if (predicate !== undefined) {
+    walk(predicate);
+    walkNet(predicate);
+  }
+  return { netFailures, rendersContent, netUrls, repeatableNetUrls, netClauses };
 }
 
 /**
@@ -238,19 +279,19 @@ export function matchesDeclaredFailure(
 }
 
 /**
- * Was this call declared a read? Same matching as `matchesDeclaredFailure`: the URL must contain
- * the clause's `urlContains`, and a method the clause named must agree, so a repeatable GET never
- * excuses a POST to the same endpoint (#1353).
+ * Was this call declared a read? The URL must contain the clause's `urlContains`, and a method
+ * the clause named must agree, so a repeatable GET never excuses a POST to the same endpoint
+ * (#1353).
  */
 export function isDeclaredRead(
   call: { method: string; url: string; matchUrl?: string },
   reads: readonly DeclaredRead[] | undefined,
 ): boolean {
   if (reads === undefined) return false;
-  const haystack = call.matchUrl ?? call.url;
+  const url = call.matchUrl ?? call.url;
   return reads.some(
     (r) =>
-      haystack.includes(r.urlContains) &&
+      url.includes(r.urlContains) &&
       (r.method === undefined || r.method.toUpperCase() === call.method.toUpperCase()),
   );
 }

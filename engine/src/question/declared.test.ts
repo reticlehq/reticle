@@ -55,7 +55,7 @@ describe('a declared failing request is a declaration, not a contradiction', () 
   // Negative control: under anyOf nothing is guaranteed to have held, so a declaration there is not
   // a declaration about this window. Honouring it would suppress a real contradiction on the
   // strength of a branch that never ran.
-  it('ignores an anyOf branch — nothing in it is guaranteed to have held', () => {
+  it('ignores an anyOf branch for consequences — nothing in it is guaranteed to have held', () => {
     const declared = declaredExpectations({
       kind: PredicateKind.ANY_OF,
       predicates: [
@@ -65,6 +65,20 @@ describe('a declared failing request is a declaration, not a contradiction', () 
     });
     expect(declared.netFailures).toEqual([]);
     expect(declared.rendersContent).toBe(false);
+  });
+
+  it('walks anyOf for netClauses but not for netUrls — the duplicate-request rule stays conservative (#1234)', () => {
+    const declared = declaredExpectations({
+      kind: PredicateKind.ANY_OF,
+      predicates: [
+        { kind: PredicateKind.NET, urlContains: '/api/login', method: 'POST' },
+        { kind: PredicateKind.TEXT, contains: 'Welcome' },
+      ],
+    });
+    expect(declared.netUrls).toEqual([]);
+    expect(declared.netClauses).toEqual([
+      { kind: PredicateKind.NET, urlContains: '/api/login', method: 'POST' },
+    ]);
   });
 
   it('ignores a negated branch — `not` declares the opposite of a consequence', () => {
@@ -324,5 +338,23 @@ describe('a comparison is body-independent only through a side the body does not
         }),
       ).toBe(true);
     }
+  });
+});
+
+describe('netClauses stores the actual predicate for evalNet', () => {
+  it('collects status and ok from the predicate', () => {
+    const pred = {
+      kind: PredicateKind.NET,
+      urlContains: '/api/save',
+      method: 'POST',
+      status: 200,
+      ok: true,
+    };
+    const declared = declaredExpectations(pred);
+    expect(declared.netClauses).toHaveLength(1);
+    expect(declared.netClauses[0]).toHaveProperty('kind', PredicateKind.NET);
+    expect(declared.netClauses[0]).toHaveProperty('urlContains', '/api/save');
+    expect(declared.netClauses[0]).toHaveProperty('status', 200);
+    expect(declared.netClauses[0]).toHaveProperty('ok', true);
   });
 });
