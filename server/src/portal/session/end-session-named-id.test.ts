@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ReticleTool, SessionState } from '@reticlehq/core';
+import { PresenterTone, ReticleTool, SessionState } from '@reticlehq/core';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
 
 const REQUESTED = 'sac14d46c';
@@ -103,5 +103,70 @@ describe('a named session is matched exactly, never substituted', () => {
       /no connected session/i,
     );
     expect(ended).toEqual([]);
+  });
+});
+
+/**
+ * `reticle_session { action: "yield" }` with a named session must match it exactly, as `end` does.
+ *
+ * A yield on a departed id marked the live successor as waiting and answered with the successor's
+ * id. The panel of a tab the agent never named then showed "waiting" (#1774).
+ */
+function yieldTool() {
+  const tool = LIVE_CONTROL_TOOLS.find((t) => t.name === ReticleTool.YIELD);
+  if (tool === undefined) throw new Error('reticle_session yield is not defined');
+  return tool;
+}
+
+/** The registry of `depsWithSuccessor`, where the successor records each yield it receives. */
+function yieldDepsWithSuccessor(): { deps: unknown; yielded: string[] } {
+  const yielded: string[] = [];
+  const successor = {
+    id: SUCCESSOR,
+    url: 'http://localhost:5173/app',
+    autoEnd: () => {
+      yielded.push(SUCCESSOR);
+    },
+  };
+  return {
+    yielded,
+    deps: {
+      sessions: {
+        count: () => 1,
+        get: (id: string) => (SUCCESSOR === id ? successor : undefined),
+        departed: (id: string) => (REQUESTED === id ? { id, url: successor.url } : undefined),
+        resolve: () => successor,
+      },
+    },
+  };
+}
+
+describe('a named yield is matched exactly, never substituted', () => {
+  it('does not yield a different session when the named one has departed', async () => {
+    const { deps, yielded } = yieldDepsWithSuccessor();
+
+    const result = (await yieldTool().handler(deps as never, {
+      mode: PresenterTone.WAITING,
+      sessionId: REQUESTED,
+    })) as Record<string, unknown>;
+
+    expect(yielded).toEqual([]);
+    expect(result['yielded']).toBe(true);
+    expect(result['sessionId']).toBe(REQUESTED);
+    expect(String(result['note'])).toMatch(/already disconnected/i);
+    expect(String(result['note'])).not.toContain(SUCCESSOR);
+  });
+
+  it('still yields a named session that is live', async () => {
+    const { deps, yielded } = yieldDepsWithSuccessor();
+
+    const result = (await yieldTool().handler(deps as never, {
+      mode: PresenterTone.WAITING,
+      sessionId: SUCCESSOR,
+    })) as Record<string, unknown>;
+
+    expect(yielded).toEqual([SUCCESSOR]);
+    expect(result['sessionId']).toBe(SUCCESSOR);
+    expect(result['note']).toBeUndefined();
   });
 });

@@ -34,6 +34,23 @@ async function settledJournal(session: Session) {
 }
 
 /**
+ * Did the caller name a session that has DEPARTED?
+ *
+ * `resolve` answers a departed id with its live SUCCESSOR. That is right for everything that
+ * observes -- a tab reloads, its id survives in sessionStorage, and an `assert` should keep
+ * working -- and wrong for a call that changes a session's state: it acts on a tab the caller never
+ * named (#983, #1774). An id the daemon has never seen is not departed; it falls through to
+ * `resolve`, which refuses it with the live ids named.
+ */
+function namedSessionDeparted(sessions: SessionManager, requested: string | undefined): boolean {
+  return (
+    requested !== undefined &&
+    sessions.get(requested) === undefined &&
+    sessions.departed(requested) !== undefined
+  );
+}
+
+/**
  * The session an id-less yield hands back.
  *
  * Yield is non-destructive: it only gives the tab back to the human. With several projects connected,
@@ -162,25 +179,14 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
         return Promise.resolve({ ended: true, note: YIELD_WITHOUT_SESSION_NOTE });
       }
       // A NAMED session that has DEPARTED is already ended, and nothing else may be ended in its
-      // place.
-      //
-      // `resolve` answers a departed id with its live SUCCESSOR. That is right for everything
-      // that observes -- a tab reloads, its id survives in sessionStorage, and an `assert` should
-      // keep working -- and wrong here, because ending a session is destructive and cannot be
-      // taken back. Reported from the field: `sessionId: "sac14d46c…"` returned `ended: true` for
-      // `"s08e37e5c…"`, once where the requested session's browser had just closed, so the
-      // behaviour was "target missing => end something else" rather than "target missing => say
-      // so" (#983).
+      // place. Ending a session is destructive and cannot be taken back. Reported from the field:
+      // `sessionId: "sac14d46c…"` returned `ended: true` for `"s08e37e5c…"`, once where the
+      // requested session's browser had just closed, so the behaviour was "target missing => end
+      // something else" rather than "target missing => say so" (#983).
       //
       // Not an error, either: this tool is documented as idempotent, and "the session you named is
-      // already gone" is precisely the idempotent answer. An id the daemon has never seen IS a
-      // mistake about which tab, and falls through to `resolve`, which refuses it with the live
-      // ids named.
-      if (
-        requested !== undefined &&
-        deps.sessions.get(requested) === undefined &&
-        deps.sessions.departed(requested) !== undefined
-      ) {
+      // already gone" is precisely the idempotent answer.
+      if (namedSessionDeparted(deps.sessions, requested)) {
         return Promise.resolve({
           ended: true,
           sessionId: requested,
@@ -260,6 +266,18 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
           yielded: true,
           mode: ask ? PresenterTone.ASK : PresenterTone.WAITING,
           note: YIELD_WITHOUT_SESSION_NOTE,
+        });
+      }
+      // A NAMED session that has DEPARTED has nothing to hand back, and no other tab may be marked
+      // as waiting in its place (#1774). The same idempotent answer `end` gives.
+      if (namedSessionDeparted(deps.sessions, requested)) {
+        return Promise.resolve({
+          yielded: true,
+          mode: ask ? PresenterTone.ASK : PresenterTone.WAITING,
+          sessionId: requested,
+          note:
+            `session '${String(requested)}' had already disconnected, so there was nothing to yield. ` +
+            'Nothing else was yielded: a named session is matched exactly, never substituted.',
         });
       }
       const session = resolveYieldTarget(deps.sessions, requested);
