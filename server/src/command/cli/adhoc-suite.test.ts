@@ -107,9 +107,11 @@ describe('a saved-flow suite against the running daemon', () => {
     expect(result.lines.join('\n')).toContain('unverifiable');
   });
 
-  it('narrows the suite when labels were named', async () => {
+  // `reticle_verify` declares `labels`, not `select`. This test pinned `select`, so `reticle verify
+  // <url> --select <label>` was refused as an unknown parameter on every run and graded nothing.
+  it('narrows the suite when labels were named, under the name the tool declares', async () => {
     const { calls } = await run({ status: 'pass', total: 1 }, { select: ['smoke'] });
-    expect(calls[0]?.args).toEqual({ action: 'flows', select: ['smoke'] });
+    expect(calls[0]?.args).toEqual({ action: 'flows', labels: ['smoke'] });
   });
 
   it('pins a tab when one was named, so a second open page is not graded instead', async () => {

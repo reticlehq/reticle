@@ -143,7 +143,7 @@ async function replaySuite(
     ReticleTool.VERIFY,
     {
       action: 'flows',
-      ...(options.select === undefined ? {} : { select: options.select }),
+      ...(options.select === undefined ? {} : { labels: options.select }),
       ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
       ...(true === options.confirmDangerous ? { confirmDangerous: true } : {}),
       // The running daemon's environment is not this command's: the secrets a CI step set for
