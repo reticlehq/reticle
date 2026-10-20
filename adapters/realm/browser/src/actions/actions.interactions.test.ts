@@ -713,6 +713,43 @@ describe('upload resolves the file input a dropzone hides', () => {
     expect(changes).toEqual([]);
   });
 
+  it('REFUSES a Browse button when the only other control is a label wrapping a file input', async () => {
+    // Review case on #1633: the header holds only a label that wraps its file input, and
+    // the control selector did not include label, so the walk found no other control at
+    // #root and decided on the avatar input. The upload reported a success the app never
+    // saw. A label is a control, and a file input with its own wrapping label counts as
+    // one, so the walk refuses and no input gets change.
+    document.body.innerHTML =
+      '<div id="root">' +
+      '<header><label>Change photo<input id="avatar" type="file" hidden></label></header>' +
+      '<main><div class="dropzone"><button id="b" type="button">Browse</button></div></main>' +
+      '</div>';
+    const changes = stubFiles(fileInputById('avatar'));
+    expect(String(await uploadOnSelector('#b'))).toMatch(/upload target must be/);
+    expect(changes).toEqual([]);
+  });
+
+  it('REFUSES a target directly under a shadow root that holds another control', async () => {
+    // Review case on #1633: on the first pass the target sits directly under the shadow
+    // root, aboveTarget is still false, and onlyFileInputIn read the whole root with no
+    // control check. A root that holds another control besides the target must refuse on
+    // that pass, and no input may get change.
+    document.body.innerHTML = '<div id="host"></div>';
+    const host = document.getElementById('host');
+    if (!(host instanceof HTMLElement)) throw new Error('no host');
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML =
+      '<button id="other" type="button">Other</button>' +
+      '<button id="b" type="button">Browse</button><input id="f" type="file">';
+    const input = root.getElementById('f');
+    if (!(input instanceof HTMLInputElement)) throw new Error('no shadow input');
+    const changes = stubFiles(input);
+    const button = root.getElementById('b');
+    if (null === button) throw new Error('no shadow button');
+    expect(String(await uploadOn(button))).toMatch(/upload target must be/);
+    expect(changes).toEqual([]);
+  });
+
   it('REFUSES when the scope holds more than one file input', async () => {
     document.body.innerHTML =
       '<form><button id="b" type="button">Browse</button>' +
