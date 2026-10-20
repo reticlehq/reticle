@@ -834,22 +834,6 @@ function shadowRootAbove(scope: Element): ShadowRoot | null {
 }
 
 /**
- * The settle budget for one action, in ms.
- *
- * Absent means the default bounded frame. `0` is the burst case — drain microtasks and return so a
- * following action can land inside this one's window. Clamped: a caller cannot extend the budget
- * past the frame bound, because a long settle here would block the command channel, and anything
- * that needs to WAIT for a consequence should be declaring it on act_and_wait instead.
- */
-function asSettleBudget(raw: unknown): number | undefined {
-  if ('number' !== typeof raw || !Number.isFinite(raw)) return undefined;
-  return Math.max(0, Math.min(raw, FRAME_BUDGET_MS_CEILING));
-}
-
-/** Upper bound for a caller-supplied settle budget. Mirrors the browser's own frame budget. */
-const FRAME_BUDGET_MS_CEILING = 200;
-
-/**
  * Execute a single action against a ref and probe for best-effort evidence of effect.
  * Always async: the MutationObserver read needs a microtask + rAF after dispatch.
  */
