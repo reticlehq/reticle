@@ -453,6 +453,13 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
       undefined,
       true === args['diagnose'],
       true === args[MatchArg.FULL_TEXT],
+      true === args[MatchArg.GEOMETRY] || args[MatchArg.OVERLAPS_QUERY] !== undefined
+        ? {
+            ...(args[MatchArg.OVERLAPS_QUERY] === undefined
+              ? {}
+              : { overlaps: ElementQuerySchema.parse(record(args[MatchArg.OVERLAPS_QUERY])) }),
+          }
+        : undefined,
     ),
   );
   // Each act ends with a canvas sample, before it answers, so the frame it drew is tied to it.

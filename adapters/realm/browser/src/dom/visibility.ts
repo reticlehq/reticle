@@ -362,7 +362,7 @@ const REPLACED_INLINE_TAGS = new Set([
 // can be clipped while a descendant overflowing back into the clipping region remains visible.
 const visibilityInfoMemos = new WeakMap<Map<Element, boolean>, Map<Element, VisibilityInfo>>();
 
-function visibilityInfoMemo(memo?: Map<Element, boolean>): Map<Element, VisibilityInfo> {
+export function visibilityInfoMemo(memo?: Map<Element, boolean>): Map<Element, VisibilityInfo> {
   if (memo === undefined) {
     return new Map();
   }
@@ -509,7 +509,7 @@ function positionedContainingBlock(
 }
 
 /** Undefined means no box was needed; null means hidden. Only real clipping reads layout. */
-function visibleBounds(
+export function visibleBounds(
   el: Element,
   memo: Map<Element, VisibilityInfo>,
   initial?: VisibleBounds,

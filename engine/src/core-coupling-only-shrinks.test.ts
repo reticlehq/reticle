@@ -173,7 +173,21 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * engine/core boundary. They join the import `blind-spots.ts` already has, so the file count is
  * unmoved.
  */
+<<<<<<< HEAD
 const MAX_DISTINCT_SYMBOLS = 71;
+=======
+/*
+ * One more than main's 68 for the MATCH wire-arg names (#1539).
+ *
+ * The geometry asks need two MATCH arguments, `geometry` and `overlapsQuery`, and both cross the
+ * wire, so both live in core as one borrowed symbol, `MatchArg`. Inlining the two strings in
+ * `matchOnce` would keep this number flat by breaking the rule the number exists to protect
+ * (rule 3: never write a wire string inline outside core). It joins the import
+ * `predicate-element.ts` already has, so the file count is unmoved. A realm-shaped engine takes
+ * its MATCH vocabulary from the realm, and this goes with the rest.
+ */
+const MAX_DISTINCT_SYMBOLS = 69;
+>>>>>>> 2b080ef7 (feat(core): add geometry fields to element predicates)
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

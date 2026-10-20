@@ -183,6 +183,7 @@ function describeCovered(dialog: string): string {
   );
 }
 
+<<<<<<< HEAD
 /**
  * Why a match that a person cannot read proves nothing. The text is in the DOM, but its colour is
  * almost the colour behind it, or it is almost transparent. A `yes` here was a false green (#1797).
@@ -211,11 +212,25 @@ function matchNotServedMessage(
 }
 
 export async function matchOnce(
+=======
+/** The geometry an element predicate asserts on (#1539): measured in the page, graded here. */
+export interface ElementGeometryAsks {
+  fullyInViewport?: boolean;
+  textClipped?: boolean;
+  overlaps?: ElementQuery;
+}
+
+async function matchOnce(
+>>>>>>> 2b080ef7 (feat(core): add geometry fields to element predicates)
   session: PredicateSession,
   query: ElementQuery,
   state: ElementState | undefined,
   diagnose?: boolean,
+<<<<<<< HEAD
   fullText = false,
+=======
+  geometry?: ElementGeometryAsks,
+>>>>>>> 2b080ef7 (feat(core): add geometry fields to element predicates)
 ): Promise<MatchResult> {
   // A page that declared its commands and left match out can never answer (#1990): the session
   // refuses the send, and that refusal used to be read as "zero matches". Refuse before the trip.
@@ -226,7 +241,18 @@ export async function matchOnce(
     query,
     state,
     ...(true === diagnose ? { diagnose: true } : {}),
+<<<<<<< HEAD
     ...(fullText ? { [MatchArg.FULL_TEXT]: true } : {}),
+=======
+    ...(geometry === undefined
+      ? {}
+      : {
+          [MatchArg.GEOMETRY]: true,
+          ...(geometry.overlaps === undefined
+            ? {}
+            : { [MatchArg.OVERLAPS_QUERY]: geometry.overlaps }),
+        }),
+>>>>>>> 2b080ef7 (feat(core): add geometry fields to element predicates)
   });
   // A reply with an error never looked at the page. Read as zero matches, a query the page's schema
   // refused or a matcher that threw became a false `no`. Thrown, the verdict reads it as unknown.
@@ -357,17 +383,142 @@ function stateTheSdkPredates(
 /** The first SDK release whose element query accepts `matchCase`; an older page refuses the query. */
 const MATCH_CASE_SINCE = '3.7.0';
 
+/** A measured box, the way a failure message prints it. */
+function formatBox(box: { x: number; y: number; width: number; height: number }): string {
+  return `{ x: ${String(box.x)}, y: ${String(box.y)}, width: ${String(box.width)}, height: ${String(box.height)} }`;
+}
+
+/**
+ * Grade the geometry asks against the described matches, or return undefined when one element
+ * satisfies all of them (#1539).
+ *
+ * The failure names the measured box and, for clipping, the overflow amounts: "not fully in
+ * viewport" with no numbers sends the caller to measure by hand, which is the fallback this
+ * feature replaces. A match whose descriptors carry no geometry was measured by a page that
+ * cannot answer — inconclusive, not a verdict in either direction.
+ */
+function checkGeometry(
+  elements: readonly ElementDescriptor[],
+  asks: ElementGeometryAsks,
+  subject: string,
+): EvalResult | undefined {
+  const measured = elements.filter((element) => element.geometry !== undefined);
+  if (0 === measured.length) {
+    const reason =
+      0 === elements.length
+        ? `elements matching ${subject} were found but none were described, so their geometry could not be checked`
+        : `the page reported no geometry for the element matching ${subject} — a page whose SDK predates the geometry fields cannot measure it, so the check cannot be graded`;
+    return {
+      pass: false,
+      failureReason: reason,
+      inconclusive: reason,
+      assertion: 'element.geometry',
+    };
+  }
+  const satisfies = (element: ElementDescriptor): boolean => {
+    const geometry = element.geometry;
+    if (geometry === undefined) return false;
+    if (asks.fullyInViewport !== undefined && geometry.fullyInViewport !== asks.fullyInViewport)
+      return false;
+    if (asks.textClipped !== undefined && geometry.textClipped !== asks.textClipped) return false;
+    if (asks.overlaps !== undefined && true !== geometry.overlap?.intersects) return false;
+    return true;
+  };
+  if (measured.some(satisfies)) return undefined;
+
+  const first = measured[0];
+  const geometry = first?.geometry;
+  if (first === undefined || geometry === undefined) {
+    return {
+      pass: false,
+      failureReason: `geometry for ${subject} could not be graded`,
+      inconclusive: `geometry for ${subject} could not be graded`,
+      assertion: 'element.geometry',
+    };
+  }
+  const box = formatBox(geometry.box);
+  if (asks.fullyInViewport !== undefined && geometry.fullyInViewport !== asks.fullyInViewport) {
+    const reason =
+      true === asks.fullyInViewport
+        ? `element matching ${subject} is not fully in the viewport: its box is ${box} in a ${String(geometry.viewport.width)}x${String(geometry.viewport.height)} viewport`
+        : `element matching ${subject} is fully in the viewport (box ${box}), but the predicate asked for fullyInViewport: false`;
+    return {
+      pass: false,
+      failureReason: reason,
+      observed: `box ${box} in a ${String(geometry.viewport.width)}x${String(geometry.viewport.height)} viewport`,
+      expected: `an element matching ${subject} with fullyInViewport: ${String(asks.fullyInViewport)}`,
+      assertion: 'element.fullyInViewport',
+      evidence: measured,
+    };
+  }
+  if (asks.textClipped !== undefined && geometry.textClipped !== asks.textClipped) {
+    const reason =
+      true === geometry.textClipped
+        ? `text of the element matching ${subject} is clipped by ${String(geometry.clippedX)}px horizontally and ${String(geometry.clippedY)}px vertically (box ${box})`
+        : `text of the element matching ${subject} is not clipped (box ${box}), but the predicate asked for textClipped: true`;
+    return {
+      pass: false,
+      failureReason: reason,
+      observed: `clipped by ${String(geometry.clippedX)}px horizontally, ${String(geometry.clippedY)}px vertically`,
+      expected: `an element matching ${subject} with textClipped: ${String(asks.textClipped)}`,
+      assertion: 'element.textClipped',
+      evidence: measured,
+    };
+  }
+  // The overlaps ask is the only one left, and no measured element satisfied it.
+  const overlap = geometry.overlap;
+  if (overlap === undefined) {
+    // The query matched no visible element: a different fact from the boxes not intersecting,
+    // and under `not` a plain failure here would become a pass. Inconclusive instead (#1539).
+    const reason = `the overlaps query ${JSON.stringify(asks.overlaps)} matched no visible element, so overlap with ${subject} could not be confirmed`;
+    return {
+      pass: false,
+      failureReason: reason,
+      inconclusive: reason,
+      assertion: 'element.overlaps',
+      evidence: measured,
+    };
+  }
+  const reason = `the element matching ${subject} (box ${box}) does not overlap the element matching ${JSON.stringify(asks.overlaps)} (box ${formatBox(overlap.box)})`;
+  return {
+    pass: false,
+    failureReason: reason,
+    observed: `box ${box}`,
+    expected: `an element matching ${subject} overlapping ${JSON.stringify(asks.overlaps)}`,
+    assertion: 'element.overlaps',
+    evidence: measured,
+  };
+}
+
 export async function evalElement(
   session: PredicateSession,
   query: ElementQuery,
   state: ElementState | undefined,
   absent: boolean,
   diagnose: boolean,
+<<<<<<< HEAD
   /** Describe the matches with their full text, for a caller that will JUDGE it (see `withTextProperty`). */
   fullText = false,
   /** For an absence: only an element whose text satisfies this fails it. See `absentUnlessSatisfied`. */
   unlessText?: PropertyAssertion,
+=======
+  geometry?: ElementGeometryAsks,
+>>>>>>> 2b080ef7 (feat(core): add geometry fields to element predicates)
 ): Promise<EvalResult> {
+  // Geometry asks grade a match the locator found; with `absent: true` there is no match to
+  // grade and the absent branch returns before `checkGeometry`, so the asks would be silently
+  // ignored. Refuse the combination instead of answering a question nobody asked (#1539).
+  if (absent && geometry !== undefined) {
+    const reason =
+      'geometry asks (fullyInViewport, textClipped, overlaps) cannot be graded with absent: true: ' +
+      'there is no element to measure. Drop the geometry fields or assert on a present element';
+    return {
+      pass: false,
+      failureReason: reason,
+      inconclusive: reason,
+      assertion: 'element.geometry',
+    };
+  }
   const tooOld = stateTheSdkPredates(session.sdkVersion, state);
   if (tooOld !== undefined) {
     const reason =
@@ -396,7 +547,11 @@ export async function evalElement(
     withAltProjected(query, residual.checks),
     state,
     diagnose,
+<<<<<<< HEAD
     fullText,
+=======
+    geometry,
+>>>>>>> 2b080ef7 (feat(core): add geometry fields to element predicates)
   );
   const subject = JSON.stringify(query);
   // Full text was asked for to JUDGE it, so a reading that is not the full text is not graded.
@@ -485,6 +640,36 @@ export async function evalElement(
       assertion: 'element.present',
       evidence: { scopeMissing: true },
     };
+  }
+  // Geometry asks with no match are inconclusive, not a plain miss. The asks name a measurement
+  // of an element, and a locator that matched nothing measured nothing. A plain miss under
+  // `not` becomes a pass, so `not { element: { testid: "typo" }, overlaps: ... }` would pass
+  // on an element that was never there (#1539).
+  if (geometry !== undefined && !match.matched) {
+    const reason =
+      `no element matched ${subject}, so the geometry asks could not be checked: ` +
+      'a missing element has no box to measure. Fix the locator, or drop the geometry ' +
+      'fields (fullyInViewport, textClipped, overlaps) to assert a plain miss';
+    return {
+      pass: false,
+      failureReason: reason,
+      inconclusive: reason,
+      assertion: 'element.geometry',
+    };
+  }
+  // Geometry asks grade the match the locator found: one element must satisfy all of them, the
+  // way one element carries a state. Splitting the asks across two elements would pass a page
+  // where no single element is both fully on screen and unclipped.
+  if (geometry !== undefined && match.matched) {
+    // `count` is every match while `elements` is only the described prefix: grading the
+    // prefix under `not` could pass while an undescribed element satisfies the ask. Refuse
+    // like the residual checks do above instead of grading a truncated set (#1539).
+    if (match.count > match.elements.length) {
+      const reason = `${String(match.count)} elements matched ${subject} and only ${String(match.elements.length)} were described, so the geometry asks could not be checked against all of them. Narrow the locator`;
+      return { pass: false, failureReason: reason, inconclusive: reason };
+    }
+    const verdict = checkGeometry(match.elements, geometry, subject);
+    if (verdict !== undefined) return verdict;
   }
   const announced = substantiveMatches(query, match.elements);
   if (match.matched && (announced.length > 0 || 0 === match.elements.length)) {
