@@ -105,9 +105,12 @@ export function installBlindSpots(emit: Emit): Teardown {
   const report = (): void => {
     for (const sensor of sensors) {
       const count = sensor.count();
-      if (count === last.get(sensor.kind)) continue;
+      const previous = last.get(sensor.kind);
+      if (count === previous) continue;
       last.set(sensor.kind, count);
-      if (count > 0) emit(EventType.BLIND_SPOT, { kind: sensor.kind, count });
+      // Initial zero is silent; a later zero withdraws the daemon's remembered blind spot.
+      if (count > 0 || previous !== undefined)
+        emit(EventType.BLIND_SPOT, { kind: sensor.kind, count });
     }
   };
   report();

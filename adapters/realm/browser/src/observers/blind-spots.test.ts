@@ -1,7 +1,14 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { EventType, BlindSpotKind } from '@reticlehq/core';
-import { isCrossOriginFrame, countCrossOriginFrames } from './blind-spots.js';
+import { isCrossOriginFrame, countCrossOriginFrames, installBlindSpots } from './blind-spots.js';
 import type { Emit, Teardown } from './types.js';
+
+// The SDK captures timers before an app can freeze them. Resolve the test clock at call time so
+// debounce bounds can be asserted without waiting on the machine's real clock.
+vi.mock('@/timers/native/native-timers.js', () => ({
+  nativeSetTimeout: (cb: () => void, ms: number) => globalThis.setTimeout(cb, ms),
+  nativeClearTimeout: (id: number) => globalThis.clearTimeout(id),
+}));
 
 /** A minimal iframe stand-in — enough surface for the pure predicate. */
 function frame(
@@ -34,6 +41,146 @@ describe('isCrossOriginFrame', () => {
   it('does NOT flag a srcless / about:blank frame (same-origin, just not navigated)', () => {
     expect(isCrossOriginFrame(frame(null, null))).toBe(false);
     expect(isCrossOriginFrame(frame('', null))).toBe(false);
+  });
+});
+
+describe('blind-spot count changes', () => {
+  let teardown: Teardown | undefined;
+  let events: { type: EventType; data: Record<string, unknown> }[];
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    events = [];
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    teardown?.();
+    teardown = undefined;
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  const install = (): void => {
+    teardown = installBlindSpots((type, data) => events.push({ type, data }));
+  };
+  const counts = (kind: string = BlindSpotKind.VIRTUALIZED_UNMOUNTED): unknown[] =>
+    events
+      .filter((e) => EventType.BLIND_SPOT === e.type && kind === e.data['kind'])
+      .map((e) => e.data['count']);
+  const flushMutation = async (): Promise<void> => {
+    await Promise.resolve(); // let MutationObserver schedule the coalesced scan
+    vi.advanceTimersByTime(250);
+  };
+
+  function virtualList(): HTMLElement {
+    const view = document.createElement('div');
+    Object.defineProperties(view, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 200 },
+    });
+    for (let i = 0; i < 5; i += 1) {
+      const row = document.createElement('div');
+      Object.defineProperties(row, {
+        offsetTop: { value: i * 40 },
+        offsetHeight: { value: 40 },
+      });
+      vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, i * 40, 100, 40));
+      view.append(row);
+    }
+    document.body.append(view);
+    return view;
+  }
+
+  it('keeps initial zero counts silent through unrelated DOM churn', async () => {
+    install();
+    expect(events).toEqual([]);
+    document.body.append(document.createElement('div'));
+    await flushMutation();
+    expect(events).toEqual([]);
+  });
+
+  it.each([
+    BlindSpotKind.CROSS_ORIGIN_IFRAME,
+    BlindSpotKind.UNINSTRUMENTED_FRAME,
+    BlindSpotKind.CLOSED_SHADOW_ROOT,
+    BlindSpotKind.VIRTUALIZED_UNMOUNTED,
+  ])('reports zero when the last %s is removed', async (kind) => {
+    let element: HTMLElement;
+    if (BlindSpotKind.VIRTUALIZED_UNMOUNTED === kind) {
+      element = virtualList();
+    } else if (BlindSpotKind.CLOSED_SHADOW_ROOT === kind) {
+      element = document.createElement('closed-widget');
+      Object.defineProperty(element, 'offsetHeight', { value: 20 });
+      document.body.append(element);
+    } else {
+      const iframe = document.createElement('iframe');
+      document.body.append(iframe);
+      if (BlindSpotKind.CROSS_ORIGIN_IFRAME === kind) {
+        iframe.setAttribute('src', 'https://other.example');
+        Object.defineProperty(iframe, 'contentDocument', { value: null });
+      }
+      element = iframe;
+    }
+    install();
+    expect(counts(kind)).toHaveLength(1);
+    expect(counts(kind)[0]).toBeGreaterThan(0);
+    element.remove();
+    await flushMutation();
+    expect(counts(kind)).toEqual([BlindSpotKind.VIRTUALIZED_UNMOUNTED === kind ? 20 : 1, 0]);
+    document.body.append(document.createElement('span'));
+    await flushMutation();
+    expect(counts(kind)).toHaveLength(2); // a steady zero is deduplicated too
+  });
+
+  it('reports positive count changes and resets when the reserved area shrinks', async () => {
+    const view = virtualList();
+    install();
+    expect(counts()).toEqual([20]);
+    Object.defineProperty(view, 'scrollHeight', { value: 600 });
+    view.append(document.createTextNode('changed'));
+    await flushMutation();
+    expect(counts()).toEqual([20, 10]);
+    Object.defineProperty(view, 'scrollHeight', { value: 200 });
+    view.append(document.createTextNode('shrunk'));
+    await flushMutation();
+    expect(counts()).toEqual([20, 10, 0]);
+  });
+
+  it('coalesces mounts for 250ms without postponing the first pending scan', async () => {
+    install();
+    virtualList();
+    await Promise.resolve();
+    vi.advanceTimersByTime(249);
+    expect(events).toEqual([]);
+    document.body.append(document.createElement('span'));
+    await Promise.resolve();
+    vi.advanceTimersByTime(1);
+    expect(counts()).toEqual([20]);
+    document.body.append(document.createElement('span'));
+    await flushMutation();
+    expect(counts()).toEqual([20]);
+  });
+
+  it('does not report a list mounted and removed within the debounce window', async () => {
+    install();
+    const view = virtualList();
+    await Promise.resolve();
+    vi.advanceTimersByTime(100);
+    view.remove();
+    await Promise.resolve();
+    vi.advanceTimersByTime(150);
+    expect(events).toEqual([]);
+  });
+
+  it('cancels a pending scan on teardown', async () => {
+    install();
+    virtualList();
+    await Promise.resolve();
+    teardown?.();
+    vi.advanceTimersByTime(250);
+    expect(events).toEqual([]);
   });
 });
 

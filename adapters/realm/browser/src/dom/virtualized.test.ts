@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { unmountedRowsIn } from './virtualized.js';
 
 /** jsdom reports 0 for every layout box, so the geometry has to be stubbed explicitly. */
 function box(el: HTMLElement, top: number, height: number): void {
   Object.defineProperty(el, 'offsetTop', { configurable: true, value: top });
   Object.defineProperty(el, 'offsetHeight', { configurable: true, value: height });
+  vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, top, 100, height));
 }
 function scroller(el: HTMLElement, scrollHeight: number, clientHeight: number): void {
   Object.defineProperty(el, 'scrollHeight', { configurable: true, value: scrollHeight });
@@ -14,6 +15,7 @@ function scroller(el: HTMLElement, scrollHeight: number, clientHeight: number): 
 beforeEach(() => {
   document.body.innerHTML = '';
 });
+afterEach(() => vi.restoreAllMocks());
 
 /**
  * A virtualizer reserves scroll space for the whole list and renders a window of it. Everything
@@ -60,6 +62,78 @@ describe('rows a container reserved space for but never rendered', () => {
     if (null === view) throw new Error('fixture');
     scroller(view, 300, 300);
     expect(unmountedRowsIn(view)).toBe(0);
+  });
+
+  it("does not count a normal panel's page offset as unmounted space after deletion", () => {
+    const view = document.createElement('div');
+    document.body.append(view);
+    scroller(view, 1000, 400);
+    box(view, 600, 400); // unpositioned rows have an offsetParent outside this scroller
+    for (let i = 0; i < 20; i += 1) {
+      const row = document.createElement('div');
+      view.append(row);
+      box(row, 600 + i * 50, 50);
+    }
+    const deleted = document.createElement('section');
+    document.body.append(deleted);
+    deleted.remove();
+    expect(unmountedRowsIn(view)).toBe(0);
+  });
+
+  it('normalizes the scroller border and scroll position when measuring reserved rows', () => {
+    const view = document.createElement('div');
+    document.body.append(view);
+    scroller(view, 1000, 400);
+    box(view, 600, 410);
+    Object.defineProperty(view, 'clientTop', { value: 5 });
+    view.scrollTop = 200;
+    for (let i = 0; i < 5; i += 1) {
+      const row = document.createElement('div');
+      view.append(row);
+      // Rendered window occupies scroll coordinates 200..400, and viewport coordinates 605..805.
+      box(row, i * 40, 40); // offsetTop is relative to a different positioning context
+      vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 605 + i * 40, 100, 40));
+    }
+    expect(unmountedRowsIn(view)).toBe(20);
+  });
+
+  it.each([
+    { scale: 1.5, rendered: 15, unmounted: 10 },
+    { scale: 0.5, rendered: 25, unmounted: 0 },
+  ])('keeps layout counts under scale $scale', ({ scale, rendered, unmounted }) => {
+    const view = document.createElement('div');
+    document.body.append(view);
+    scroller(view, 1000, 200);
+    box(view, 400, 200);
+    vi.spyOn(view, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 400, 320, 200 * scale));
+    for (let i = 0; i < rendered; i += 1) {
+      const row = document.createElement('div');
+      view.append(row);
+      box(row, i * 40, 40);
+      vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, 400 + i * 40 * scale, 320, 40 * scale),
+      );
+    }
+    expect(unmountedRowsIn(view)).toBe(unmounted);
+  });
+
+  it('normalizes scaled borders and scroll offsets in a virtualized window', () => {
+    const view = document.createElement('div');
+    document.body.append(view);
+    scroller(view, 1000, 200);
+    box(view, 600, 210);
+    Object.defineProperty(view, 'clientTop', { value: 5 });
+    view.scrollTop = 200;
+    vi.spyOn(view, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 600, 480, 315));
+    for (let i = 0; i < 15; i += 1) {
+      const row = document.createElement('div');
+      view.append(row);
+      box(row, 200 + i * 40, 40);
+      vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, 600 + (5 + i * 40) * 1.5, 480, 60),
+      );
+    }
+    expect(unmountedRowsIn(view)).toBe(10);
   });
 
   it('counts space reserved ABOVE the window too, after scrolling down', () => {

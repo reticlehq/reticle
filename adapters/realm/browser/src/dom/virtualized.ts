@@ -53,8 +53,16 @@ export function unmountedRowsIn(container: HTMLElement): number {
   let top = Infinity;
   let bottom = 0;
   let totalHeight = 0;
+  // offsetTop belongs to the row's offsetParent, which may be outside an ordinary scroller.
+  // Convert viewport rectangles back to layout units before adding the border and scroll offset.
+  const bounds = container.getBoundingClientRect();
+  const scaleY =
+    container.offsetHeight > 0 && bounds.height > 0 ? bounds.height / container.offsetHeight : 1;
   for (const row of rows) {
-    const rowTop = row.offsetTop;
+    const rowTop =
+      (row.getBoundingClientRect().top - bounds.top) / scaleY -
+      container.clientTop +
+      container.scrollTop;
     const rowBottom = rowTop + row.offsetHeight;
     if (rowTop < top) top = rowTop;
     if (rowBottom > bottom) bottom = rowBottom;
