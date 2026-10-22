@@ -73,6 +73,11 @@ const VERIFY_DETAIL = `Drives the URL and verifies the saved flows. Exit 0 means
 const BROWSER_NOTE = `The browser Reticle opens for your agent is shown so you can watch the run. --headless hides
 it; CI, RETICLE_HEADLESS=1, or a Linux machine with no display hides it too.`;
 
+/** What `--http` starts. MCP is already on the bridge port; this flag is the verify endpoint. */
+const HTTP_HELP = '--http starts the verify endpoint. MCP is already served on the bridge port.';
+
+const DAEMON_DETAIL = `${BROWSER_NOTE}\n\n${HTTP_HELP}`;
+
 const COMMANDS: readonly CommandDoc[] = [
   {
     name: 'init',
@@ -246,7 +251,7 @@ const COMMANDS: readonly CommandDoc[] = [
       'mcp [--port N] [--drive <url>] [--headless] [--headed] [--http] [--http-port N] [--http-token T]',
     summary: 'The MCP stdio server your agent runs; starts the daemon if needed',
     group: HelpGroup.MORE,
-    detail: BROWSER_NOTE,
+    detail: DAEMON_DETAIL,
   },
   {
     name: 'serve',
@@ -254,7 +259,7 @@ const COMMANDS: readonly CommandDoc[] = [
       'serve [--port N] [--drive <url>] [--headless] [--headed] [--http] [--http-port N] [--http-token T]',
     summary: 'Start the daemon in the background; returns once it answers',
     group: HelpGroup.MORE,
-    detail: BROWSER_NOTE,
+    detail: DAEMON_DETAIL,
   },
   {
     name: 'drive',
