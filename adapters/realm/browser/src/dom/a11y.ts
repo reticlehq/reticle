@@ -293,6 +293,24 @@ export function getAccessibleName(el: Element): string {
     }
   }
 
+  if ('table' === el.tagName.toLowerCase()) {
+    const caption = [...el.children].find((child) => 'caption' === child.tagName.toLowerCase());
+    if (caption !== undefined) {
+      const text = collapse(textWithoutHidden(caption));
+      if (text.length > 0) return text;
+    }
+  }
+
+  if ('figure' === el.tagName.toLowerCase()) {
+    const figcaption = [...el.children].find(
+      (child) => 'figcaption' === child.tagName.toLowerCase(),
+    );
+    if (figcaption !== undefined) {
+      const text = collapse(textWithoutHidden(figcaption));
+      if (text.length > 0) return text;
+    }
+  }
+
   if (isInput(el) || isTextArea(el) || isSelect(el)) {
     // Submit-like inputs carry their name on `value`, exactly where the visible caption comes
     // from: `<input type="submit" value="Send">` renders a button reading Send. Without this the

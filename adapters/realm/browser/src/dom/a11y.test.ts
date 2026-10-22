@@ -503,6 +503,59 @@ describe('fieldset named by its legend', () => {
   });
 });
 
+describe('table named by its caption (#1685)', () => {
+  it('names a table from its direct-child caption', () => {
+    const table = document.createElement('table');
+    const caption = document.createElement('caption');
+    caption.textContent = 'Open orders';
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.textContent = '1';
+    tr.append(td);
+    table.append(caption, tr);
+    expect(getAccessibleName(table)).toBe('Open orders');
+  });
+
+  it('does not pick up a caption nested in a child element', () => {
+    const table = document.createElement('table');
+    const wrapper = document.createElement('thead');
+    const caption = document.createElement('caption');
+    caption.textContent = 'Nested';
+    wrapper.append(caption);
+    table.append(wrapper);
+    expect(getAccessibleName(table)).toBe('');
+  });
+
+  it('still prefers aria-label over the caption', () => {
+    const table = document.createElement('table');
+    table.setAttribute('aria-label', 'Override');
+    const caption = document.createElement('caption');
+    caption.textContent = 'Open orders';
+    table.append(caption);
+    expect(getAccessibleName(table)).toBe('Override');
+  });
+});
+
+describe('figure named by its figcaption (#1685)', () => {
+  it('names a figure from its direct-child figcaption', () => {
+    const figure = document.createElement('figure');
+    const figcaption = document.createElement('figcaption');
+    figcaption.textContent = 'Architecture overview';
+    const img = document.createElement('img');
+    figure.append(img, figcaption);
+    expect(getAccessibleName(figure)).toBe('Architecture overview');
+  });
+
+  it('still prefers aria-label over the figcaption', () => {
+    const figure = document.createElement('figure');
+    figure.setAttribute('aria-label', 'Override');
+    const figcaption = document.createElement('figcaption');
+    figcaption.textContent = 'Architecture overview';
+    figure.append(figcaption);
+    expect(getAccessibleName(figure)).toBe('Override');
+  });
+});
+
 /**
  * #793: on a hidden tab the browser stalls animations, so a fade-in sits at opacity 0 and every
  * surface that asked "visible?" disagreed about a node that was rendered. Opacity 0 mid-animation on
