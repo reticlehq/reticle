@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — the destructive-action guard blocked harmless controls whose text carried a filename.** A media tile showing "photo-remove-background.webm" was blocked as destructive because of the `remove` inside the filename. Tokens that end in a known file extension are now stripped before the text is classified, so a filename never reads as an action verb. Plain hyphen and underscore compounds (`delete-account`, `delete_repo`) are labels, not filenames, and still trip the guard, as does a verb glued to a filename with other punctuation (`Delete:report.pdf`). Addresses half B of [#894](https://github.com/reticlehq/reticle/issues/894).

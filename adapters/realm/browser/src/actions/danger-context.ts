@@ -6,6 +6,11 @@
  * drop", and not blocking Enter in a form whose submit button says "Delete account". One defect,
  * classifying the wrong text.
  *
+ * One more reading of the same defect, from half B of #894. A control whose content is user
+ * data — a media clip tile showing a filename that contains "remove", or a "Create preview"
+ * button whose name carries that filename — was blocked as destructive. A filename-like token
+ * never reads as an action verb, so filename tokens are stripped before the text is classified.
+ *
  * The pattern itself lives in core (`isDangerousActionText`) and is deliberately narrow. This file
  * only chooses what to hand it.
  */
@@ -13,11 +18,12 @@
 import {
   OutwardAction,
   isDangerousActionText,
-  isInertHref,
   isDangerousNavigation,
+  isInertHref,
   isPaymentField,
   outwardActionOf,
   outwardRefusal,
+  withoutFilenameTokens,
 } from '@reticlehq/core';
 import { getAccessibleName, getRole } from '@/dom/a11y.js';
 import { type ActionTarget, isHtmlElement } from '@/dom/realm.js';
@@ -75,10 +81,10 @@ export function dangerousActionContext(el: ActionTarget): string {
     ? ['', '']
     : [el.textContent ?? '', el.getAttribute('value') ?? ''];
   return [
-    getAccessibleName(el),
-    ...ownText,
-    el.getAttribute('title') ?? '',
-    el.getAttribute('aria-label') ?? '',
+    withoutFilenameTokens(getAccessibleName(el)),
+    withoutFilenameTokens(ownText.join(' ')),
+    withoutFilenameTokens(el.getAttribute('title') ?? ''),
+    withoutFilenameTokens(el.getAttribute('aria-label') ?? ''),
     el.getAttribute('href') ?? '',
     form?.getAttribute('action') ?? '',
   ].join(' ');
