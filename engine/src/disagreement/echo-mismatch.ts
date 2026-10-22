@@ -153,6 +153,63 @@ function isAuditTimestampKey(key: string): boolean {
 }
 
 /**
+ * A word of a key that names a value computed FROM the record: a content hash, a digest, a checksum
+ * (#1522). A new record has a new one, so a different value is not a dropped write, the same way a
+ * create's assigned `id` is not. Matched on whole words of the key (`contentHash`, `content_sha256`),
+ * never as a substring, so `shape`, `shared` and `hashtag` are still compared.
+ */
+const CONTENT_DIGEST_WORD = /^(?:hash|sha\d*|md5|checksum|digest|crc\d*)$/;
+
+/** The lowercase words of a key: split at `_`, `-`, `.` and at a lower-to-upper camelCase step. */
+function keyWords(key: string): string[] {
+  return key
+    .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .split(/[^a-z\d]+/)
+    .filter((word) => 0 < word.length);
+}
+
+function isContentDigestKey(key: string): boolean {
+  return keyWords(key).some((word) => CONTENT_DIGEST_WORD.test(word));
+}
+
+/**
+ * How many compared keys must ALL disagree before the response can be read as a different record.
+ *
+ * One disagreeing key alone stays a finding, because that is the archetype this kind exists for
+ * (`{qty: 5}` answered with `{qty: 3}`). See `isNewRecord` for the rest of the rule.
+ */
+const NEW_RECORD_MIN_KEYS = 2;
+
+/** Methods that change THE record named in the URL. Their answer is never a different record. */
+const UPDATE_METHODS: ReadonlySet<string> = new Set(['PUT', 'PATCH']);
+
+/**
+ * Is this response a DIFFERENT record of the same type, rather than an ignored write (#1522)?
+ *
+ * "Every compared key differs" alone is also the worst case of this finding: a server that ignored
+ * the whole write (`PATCH {name, email}` answered with the old name and the old email). So the
+ * response has to be clearly a new record. It is never one for an update (PUT, PATCH) or an
+ * addressed write, and it is one only when it carries an identity, an id or a content hash, that
+ * differs from the one the request sent: a derive endpoint answers with a new artifact's own hash.
+ */
+function isNewRecord(
+  method: string,
+  addressed: boolean,
+  asked: Map<string, Set<string>>,
+  echoed: Map<string, Set<string>>,
+): boolean {
+  if (addressed || UPDATE_METHODS.has(method.toUpperCase())) return false;
+  for (const [key, wanted] of asked) {
+    if (1 !== wanted.size || !(isIdentityKey(key) || isContentDigestKey(key))) continue;
+    const values = echoed.get(key);
+    const [want] = [...wanted];
+    if (values !== undefined && want !== undefined && !values.has(want)) return true;
+  }
+  return false;
+}
+
+/**
  * Every scalar value the response carries for each key, at any depth.
  *
  * Depth matters because the echo is usually nested — `{ok:true, saved:{...}}`, `{data:{...}}`,
@@ -331,6 +388,7 @@ export function findEchoMismatches(
     // comparing it by name across the two documents compares two different fields.
     const addressed = isAddressedWrite(asked);
     const dropped: string[] = [];
+    let compared = 0;
     for (const [key, wanted] of asked) {
       if (addressed && CONTAINER_KEYS.has(key.toLowerCase())) continue;
       // More than one requested value for a key (a before/after pair, a list of items) makes "what
@@ -340,15 +398,26 @@ export function findEchoMismatches(
       if (isIdentityKey(key)) continue;
       if (isVersionKey(key)) continue;
       if (isAuditTimestampKey(key)) continue;
+      if (isContentDigestKey(key)) continue;
       const values = echoed.get(key);
       // Not echoed at all = no evidence either way. Only a key the server chose to report back can
       // contradict the request, and silence is not a contradiction.
       if (values === undefined || 0 === values.size) continue;
+      compared += 1;
       const [want] = [...wanted];
       if (want !== undefined && !values.has(want))
         dropped.push(`${key}: asked ${want}, got ${[...values].join('/')}`);
     }
     if (0 === dropped.length) continue;
+    // Nothing the response shares with the request came back as sent, AND it names a different
+    // identity: a different record, not a half-applied write. See isNewRecord.
+    if (
+      compared >= NEW_RECORD_MIN_KEYS &&
+      dropped.length === compared &&
+      isNewRecord(method, addressed, asked, echoed)
+    ) {
+      continue;
+    }
 
     const url = 'string' === typeof event.data['url'] ? event.data['url'] : '';
     const attribution =
