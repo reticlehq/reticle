@@ -542,6 +542,202 @@ describe('upload refuses to invent a file nobody asked for', () => {
 });
 
 /**
+ * #1249: the standard dropzone hides its file input, so the input never gets a ref.
+ *
+ * The snapshot skips `aria-hidden` subtrees, which is right for presence checks, and `upload`
+ * required the ref to BE the input, so a dropzone could not be driven at all. An `upload` on a
+ * target that is not a file input now resolves the one input the target contains, labels, or
+ * shares a dropzone with, and refuses when that scope holds more than one.
+ *
+ * "Did not refuse" is not enough to pin: a resolver that picks the WRONG input also passes it.
+ * jsdom has no DataTransfer and no constructible FileList, so these stub both and assert on the
+ * `change` event instead — it must fire on the expected input, and on no other.
+ */
+describe('upload resolves the file input a dropzone hides', () => {
+  const ARGS = { name: 'clip.mp4', content: 'hello', type: 'video/mp4' };
+
+  /**
+   * jsdom's FileList setter would throw on the fake (`input.files = ...`): let the assignment
+   * land on the instance instead, and record every `change` the dispatch fires here.
+   */
+  const stubFiles = (input: HTMLInputElement): string[] => {
+    Object.defineProperty(input, 'files', { value: null, writable: true, configurable: true });
+    const changes: string[] = [];
+    input.addEventListener('change', () => {
+      changes.push(input.id);
+    });
+    return changes;
+  };
+
+  const fileInputById = (id: string): HTMLInputElement => {
+    const input = document.getElementById(id);
+    if (!(input instanceof HTMLInputElement)) throw new Error(`no file input #${id}`);
+    return input;
+  };
+
+  const uploadOn = async (target: Element): Promise<unknown> => {
+    const originalDT = (global as Record<string, unknown>)['DataTransfer'];
+    class FakeDataTransfer {
+      files = { length: 1 };
+      items = {
+        add(): void {},
+      };
+    }
+    (global as Record<string, unknown>)['DataTransfer'] = FakeDataTransfer;
+    try {
+      if (!(target instanceof HTMLElement)) throw new Error('upload target is not an element');
+      return await executeAction(refs.refFor(target), 'upload', ARGS).catch((e: unknown) => e);
+    } finally {
+      (global as Record<string, unknown>)['DataTransfer'] = originalDT;
+    }
+  };
+
+  const uploadOnSelector = async (selector: string): Promise<unknown> => {
+    const el = document.querySelector(selector);
+    if (null === el) throw new Error(`no element for ${selector}`);
+    return uploadOn(el);
+  };
+
+  it('resolves the hidden input beside the Browse button from the report', async () => {
+    document.body.innerHTML =
+      '<div><button id="b" type="button">Browse</button>' +
+      '<input id="f" type="file" class="sr-only" aria-hidden="true" tabindex="-1"></div>';
+    const changes = stubFiles(fileInputById('f'));
+    const done: unknown = await uploadOnSelector('#b');
+    expect(done).not.toBeInstanceOf(Error);
+    expect(changes).toEqual(['f']);
+  });
+
+  it('resolves the input a label target labels', async () => {
+    document.body.innerHTML =
+      '<label id="l" for="f">Upload a file</label><input id="f" type="file">';
+    const changes = stubFiles(fileInputById('f'));
+    const done: unknown = await uploadOnSelector('#l');
+    expect(done).not.toBeInstanceOf(Error);
+    expect(changes).toEqual(['f']);
+  });
+
+  it('resolves an input the target contains', async () => {
+    document.body.innerHTML =
+      '<div id="d" role="button">Drop files<input id="f" type="file" aria-hidden="true"></div>';
+    const changes = stubFiles(fileInputById('f'));
+    const done: unknown = await uploadOnSelector('#d');
+    expect(done).not.toBeInstanceOf(Error);
+    expect(changes).toEqual(['f']);
+  });
+
+  it('resolves a button inside a label that wraps a file input', async () => {
+    document.body.innerHTML =
+      '<label>Upload<input id="f" type="file"><button id="b" type="button">Browse</button></label>';
+    const changes = stubFiles(fileInputById('f'));
+    const done: unknown = await uploadOnSelector('#b');
+    expect(done).not.toBeInstanceOf(Error);
+    expect(changes).toEqual(['f']);
+  });
+
+  it('resolves a button and its input together in one shadow root', async () => {
+    document.body.innerHTML = '<div id="host"></div>';
+    const host = document.getElementById('host');
+    if (!(host instanceof HTMLElement)) throw new Error('no host');
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<button id="b" type="button">Browse</button><input id="f" type="file">';
+    const input = root.getElementById('f');
+    if (!(input instanceof HTMLInputElement)) throw new Error('no shadow input');
+    const changes = stubFiles(input);
+    const button = root.getElementById('b');
+    if (null === button) throw new Error('no shadow button');
+    const done: unknown = await uploadOn(button);
+    expect(done).not.toBeInstanceOf(Error);
+    expect(changes).toEqual(['f']);
+  });
+
+  it('REFUSES a Browse button with an empty dropzone when the page sits in #root', async () => {
+    // The walk used to stop only at body or html. Most apps wrap the whole page in
+    // <div id="root">, so the walk decided there and a Browse button with no input in
+    // its dropzone picked up the header's avatar input. The walk now stops at the first
+    // ancestor that holds another interactive control: here the header's avatar menu
+    // button, so the upload refuses and no input gets change.
+    document.body.innerHTML =
+      '<div id="root">' +
+      '<header><button id="avatar-menu" type="button">Avatar</button>' +
+      '<input id="avatar" type="file"></header>' +
+      '<main><div class="dropzone"><button id="b" type="button">Browse</button></div></main>' +
+      '</div>';
+    const changes = stubFiles(fileInputById('avatar'));
+    expect(String(await uploadOnSelector('#b'))).toMatch(/upload target must be/);
+    expect(changes).toEqual([]);
+  });
+
+  it('REFUSES a dropzone in #root next to a form that holds its own file input', async () => {
+    // The dropzone holds no input and a sibling form holds exactly one. The walk must
+    // not claim it: #root holds the form's Save button, an interactive control that is
+    // neither the target nor a file input, so the walk refuses before it can decide.
+    document.body.innerHTML =
+      '<div id="root">' +
+      '<div class="dropzone"><button id="b" type="button">Browse</button></div>' +
+      '<form><button id="save" type="submit">Save</button>' +
+      '<input id="profile" type="file"></form>' +
+      '</div>';
+    const changes = stubFiles(fileInputById('profile'));
+    expect(String(await uploadOnSelector('#b'))).toMatch(/upload target must be/);
+    expect(changes).toEqual([]);
+  });
+
+  it('REFUSES a Browse button when the only other control is a label wrapping a file input', async () => {
+    // Review case on #1633: the header holds only a label that wraps its file input, and
+    // the control selector did not include label, so the walk found no other control at
+    // #root and decided on the avatar input. The upload reported a success the app never
+    // saw. A label is a control, and a file input with its own wrapping label counts as
+    // one, so the walk refuses and no input gets change.
+    document.body.innerHTML =
+      '<div id="root">' +
+      '<header><label>Change photo<input id="avatar" type="file" hidden></label></header>' +
+      '<main><div class="dropzone"><button id="b" type="button">Browse</button></div></main>' +
+      '</div>';
+    const changes = stubFiles(fileInputById('avatar'));
+    expect(String(await uploadOnSelector('#b'))).toMatch(/upload target must be/);
+    expect(changes).toEqual([]);
+  });
+
+  it('REFUSES a target directly under a shadow root that holds another control', async () => {
+    // Review case on #1633: on the first pass the target sits directly under the shadow
+    // root, aboveTarget is still false, and onlyFileInputIn read the whole root with no
+    // control check. A root that holds another control besides the target must refuse on
+    // that pass, and no input may get change.
+    document.body.innerHTML = '<div id="host"></div>';
+    const host = document.getElementById('host');
+    if (!(host instanceof HTMLElement)) throw new Error('no host');
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML =
+      '<button id="other" type="button">Other</button>' +
+      '<button id="b" type="button">Browse</button><input id="f" type="file">';
+    const input = root.getElementById('f');
+    if (!(input instanceof HTMLInputElement)) throw new Error('no shadow input');
+    const changes = stubFiles(input);
+    const button = root.getElementById('b');
+    if (null === button) throw new Error('no shadow button');
+    expect(String(await uploadOn(button))).toMatch(/upload target must be/);
+    expect(changes).toEqual([]);
+  });
+
+  it('REFUSES when the scope holds more than one file input', async () => {
+    document.body.innerHTML =
+      '<form><button id="b" type="button">Browse</button>' +
+      '<input id="f1" type="file"><input id="f2" type="file"></form>';
+    const changes1 = stubFiles(fileInputById('f1'));
+    const changes2 = stubFiles(fileInputById('f2'));
+    expect(String(await uploadOnSelector('#b'))).toMatch(/2 file inputs/);
+    expect(changes1).toEqual([]);
+    expect(changes2).toEqual([]);
+  });
+
+  it('still REFUSES a target with no file input in scope', async () => {
+    document.body.innerHTML = '<button id="b" type="button">Browse</button>';
+    expect(String(await uploadOnSelector('#b'))).toMatch(/upload target must be/);
+  });
+});
+
+/**
  * The destructive-action guard classifies the ELEMENT, never the form around it.
  *
  * Including `el.closest('form')?.textContent` would let the whole form's rendered text decide the
