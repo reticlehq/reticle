@@ -1,4 +1,4 @@
-import { isReticleUi } from './dom-ignore.js';
+import { isIgnored, isReticleUi } from './dom-ignore.js';
 
 /**
  * Where to look. The centre, plus four points inset from the corners.
@@ -33,7 +33,7 @@ const BLOCKED_MAJORITY = 3;
  * two can't drift. Returns the NON-Reticle element covering most of `el`, or null when nothing
  * foreign is on top — i.e. `el` itself, an ancestor wrapping it, or a descendant is on top (all "not
  * occluded"). A zero-area or unlayouted box (jsdom / detached node) returns null: we cannot tell, so
- * we never false-positive an occlusion. Reticle's own HUD is never treated as an occluder.
+ * we never false-positive an occlusion. Reticle's own HUD and ignored overlays are never occluders.
  */
 export function hitTestOccluder(el: Element, rect: DOMRect): Element | null {
   if (0 === rect.width || 0 === rect.height) return null;
@@ -52,19 +52,19 @@ export function hitTestOccluder(el: Element, rect: DOMRect): Element | null {
     elementsFromPoint?: (this: Document, x: number, y: number) => Element[];
   };
   /*
-   * Our own nodes are skipped so our chrome cannot be reported as covering an APP control (#783) —
+   * Our own nodes and ignored dev overlays are skipped so they cannot cover an APP control (#783) —
    * except the target itself. Skipping that takes the target out of its own hit test, and the first
    * APP element underneath is blamed for covering it. Kept, it lands on the `top === el` branch
    * below: "not occluded", like any target that is on top of itself.
    */
-  const isOursButNotTheTarget = (candidate: Element): boolean =>
-    isReticleUi(candidate) &&
+  const isIgnoredButNotTheTarget = (candidate: Element): boolean =>
+    (isReticleUi(candidate) || isIgnored(candidate)) &&
     candidate !== el &&
     !el.contains(candidate) &&
     !candidate.contains(el);
   const topAt = (x: number, y: number): Element | null => {
     const found = withStack.elementsFromPoint?.(x, y) ?? [doc.elementFromPoint(x, y)];
-    return found.find((c): c is Element => null !== c && !isOursButNotTheTarget(c)) ?? null;
+    return found.find((c): c is Element => null !== c && !isIgnoredButNotTheTarget(c)) ?? null;
   };
 
   // Counted by element, so the answer names the thing actually covering the control rather than

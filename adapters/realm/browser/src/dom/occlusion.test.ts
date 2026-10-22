@@ -206,3 +206,30 @@ describe('our chrome over an APP control stays invisible to the hit test', () =>
     expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(overlay);
   });
 });
+
+describe('dev overlays stay invisible to the hit test', () => {
+  afterEach(clearStubs);
+
+  it('does not report a zero-area Next dev-tools shadow host as an occluder', () => {
+    const app = document.createElement('button');
+    const portal = document.createElement('nextjs-portal');
+    portal.style.cssText = 'position: fixed; width: 0; height: 0;';
+    const indicator = document.createElement('button');
+    indicator.style.cssText = 'position: fixed; bottom: 0; left: 0;';
+    portal.attachShadow({ mode: 'open' }).append(indicator);
+    document.body.append(app, portal);
+    stubStack(() => [portal, app, document.body]);
+
+    expect(hitTestOccluder(app, new DOMRect(100, 100, 100, 100))).toBeNull();
+  });
+
+  it('still reports an app overlay underneath a dev-tools host', () => {
+    const app = document.createElement('button');
+    const overlay = document.createElement('div');
+    const portal = document.createElement('nextjs-portal');
+    document.body.append(app, overlay, portal);
+    stubStack(() => [portal, overlay, app, document.body]);
+
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(overlay);
+  });
+});
