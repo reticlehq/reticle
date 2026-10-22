@@ -35,20 +35,16 @@ interface ParamInfo {
   name: string;
   required: boolean;
   description: string;
+  /** Every value the schema accepts, when it is a closed set. */
+  values?: string[];
   /** The smallest value the schema accepts, when it bounds one. */
   min?: number;
   /** The largest value the schema accepts, when it bounds one. */
   max?: number;
 }
 
-/**
- * A numeric parameter's enforced bounds, read off the schema that enforces them (#1537).
- *
- * The descriptions name a default and rarely a ceiling, so `timeout_ms: 60000` on act_and_wait was
- * refused and the agent learned the 55000 cap from the error. Read here rather than written into
- * prose, so the number shown is the number checked and cannot drift from it.
- */
-function boundsOf(schema: z.ZodTypeAny): { min?: number; max?: number } {
+/** The schema without the wrappers that do not change the value it accepts. */
+function unwrappedOf(schema: z.ZodTypeAny): z.ZodTypeAny {
   let inner: z.ZodTypeAny = schema;
   for (;;) {
     if (inner instanceof z.ZodOptional || inner instanceof z.ZodNullable) {
@@ -59,20 +55,51 @@ function boundsOf(schema: z.ZodTypeAny): { min?: number; max?: number } {
       inner = inner.innerType() as z.ZodTypeAny;
     } else break;
   }
+  return inner;
+}
+
+/**
+ * A numeric parameter's enforced bounds, read off the schema that enforces them (#1537).
+ *
+ * The descriptions name a default and rarely a ceiling, so `timeout_ms: 60000` on act_and_wait was
+ * refused and the agent learned the 55000 cap from the error. Read here rather than written into
+ * prose, so the number shown is the number checked and cannot drift from it.
+ */
+function boundsOf(schema: z.ZodTypeAny): { min?: number; max?: number } {
+  const inner = unwrappedOf(schema);
   if (!(inner instanceof z.ZodNumber)) return {};
   const { minValue: min, maxValue: max } = inner;
   return { ...(null === min ? {} : { min }), ...(null === max ? {} : { max }) };
 }
 
+/**
+ * An enum parameter's accepted values, read off the enum that enforces them (#1775).
+ *
+ * `claim` on reticle_session takes `pass | fail | partial`, but its description said only what the
+ * value means, so an agent sent a sentence and the call was refused. Read here rather than written
+ * into prose, so the values shown are the values checked and cannot drift from them.
+ */
+function valuesOf(schema: z.ZodTypeAny): string[] | undefined {
+  const inner = unwrappedOf(schema);
+  if (!(inner instanceof z.ZodEnum)) return undefined;
+  const options: unknown = inner.options;
+  if (!Array.isArray(options)) return undefined;
+  return options.filter((option: unknown): option is string => 'string' === typeof option);
+}
+
 /** Compact param list from a tool's zod shape — name/required/description (the description already
- * carries the type and any enum hints, so no JSON-Schema machinery is needed), plus numeric bounds. */
+ * carries the type, so no JSON-Schema machinery is needed), plus closed values and numeric bounds. */
 function paramInfo(shape: z.ZodRawShape): ParamInfo[] {
-  return Object.entries(shape).map(([name, schema]) => ({
-    name,
-    required: !schema.isOptional(),
-    description: schema.description ?? '',
-    ...boundsOf(schema),
-  }));
+  return Object.entries(shape).map(([name, schema]) => {
+    const values = valuesOf(schema);
+    return {
+      name,
+      required: !schema.isOptional(),
+      description: schema.description ?? '',
+      ...(values === undefined ? {} : { values }),
+      ...boundsOf(schema),
+    };
+  });
 }
 
 /**

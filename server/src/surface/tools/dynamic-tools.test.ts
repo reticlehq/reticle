@@ -293,3 +293,46 @@ describe('reticle_tools shows numeric bounds', () => {
     expect(label?.max).toBeUndefined();
   });
 });
+
+/**
+ * The accepted values of an enum parameter are shown, so the refusal is not the first news (#1775).
+ *
+ * `reticle_session { action: "end", claim }` (a merged name for `reticle_end_session`) takes
+ * `pass | fail | partial`, but the catalogue showed only "What YOU claim this session showed", so an
+ * agent sent a sentence and the call was refused. The values are read off the enum that enforces
+ * them, as numeric bounds are read off the number that enforces them, so no description has to
+ * repeat them and the shown values cannot drift from the checked ones.
+ */
+describe('reticle_tools shows the values an enum parameter accepts', () => {
+  interface Param {
+    name: string;
+    values?: string[];
+  }
+  const paramsOf = async (tools: ToolDef[], name: string): Promise<Param[]> => {
+    const discover = buildDynamicTools(tools).find((t) => t.name === ReticleTool.TOOLS);
+    const out = (await discover?.handler(NO_DEPS, { names: [name] })) as {
+      tools: { name: string; params?: Param[] }[];
+    };
+    return out.tools.find((t) => t.name === name)?.params ?? [];
+  };
+
+  it("shows claim's three values, the ones the call enforces", async () => {
+    const claim = (await paramsOf(TOOLS, ReticleTool.SESSION)).find((p) => 'claim' === p.name);
+    expect(claim?.values).toEqual(['pass', 'fail', 'partial']);
+  });
+
+  it('reads through optional and default, and adds nothing to a non-enum', async () => {
+    const closed: ToolDef = {
+      name: 'reticle_closed',
+      description: 'd',
+      inputSchema: {
+        mode: z.enum(['halt', 'continue']).default('halt').optional().describe('what to do'),
+        label: z.string().optional(),
+      },
+      handler: () => Promise.resolve({}),
+    };
+    const params = await paramsOf([closed], 'reticle_closed');
+    expect(params.find((p) => 'mode' === p.name)?.values).toEqual(['halt', 'continue']);
+    expect(params.find((p) => 'label' === p.name)?.values).toBeUndefined();
+  });
+});
