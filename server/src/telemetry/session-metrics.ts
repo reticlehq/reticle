@@ -17,7 +17,6 @@
  */
 import {
   BrowserLaunchKind,
-  coverageBucketOf,
   type AgentNudgeKind,
   type ConnectFailure,
   type ConnectionStats,
@@ -157,7 +156,6 @@ export class SessionMetrics {
   /** Platform and Harness advisories shown to an agent this window, by kind. */
   readonly #nudges = new Map<string, number>();
   /** Harness drives refused for coverage this window, by coverage bucket. */
-  readonly #harnessRefused = new Map<string, number>();
   /** Error buckets by whose defect, this window. */
   readonly #errorClasses = new Map<string, number>();
   /**
@@ -517,11 +515,6 @@ export class SessionMetrics {
     bump(this.#nudges, kind);
   }
 
-  /** A Harness drive was refused because the app's coverage is below the gate. */
-  recordHarnessRefused(percent: number): void {
-    bump(this.#harnessRefused, coverageBucketOf(percent));
-  }
-
   /** Which tool surface was advertised to agents this session. */
   recordSurface(surface: string): void {
     this.#surface = surface.slice(0, 32);
@@ -605,9 +598,6 @@ export class SessionMetrics {
         : {}),
       ...(this.#feedbackPrompted > 0 ? { feedbackPrompted: this.#feedbackPrompted } : {}),
       ...(this.#nudges.size > 0 ? { nudgesShown: Object.fromEntries(this.#nudges) } : {}),
-      ...(this.#harnessRefused.size > 0
-        ? { harnessRefusedCoverage: Object.fromEntries(this.#harnessRefused) }
-        : {}),
       ...(this.#errorClasses.size > 0
         ? { errorClasses: Object.fromEntries(this.#errorClasses) }
         : {}),
@@ -679,7 +669,6 @@ export class SessionMetrics {
       0 === this.#postSocketFailures &&
       0 === this.#postRetriesSaved &&
       0 === this.#nudges.size &&
-      0 === this.#harnessRefused.size &&
       this.#hud.empty
     );
   }
@@ -712,7 +701,6 @@ export class SessionMetrics {
     this.#bugKinds.clear();
     this.#hud.reset();
     this.#nudges.clear();
-    this.#harnessRefused.clear();
     // These five were never cleared, so every flush restated them and a sum over a session's
     // windows came out larger than its tool calls. Counts are windowed, all of them; only the
     // facts below (an app ever connected, which clients, which bug kinds seen) outlive a window.

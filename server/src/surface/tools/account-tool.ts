@@ -1,12 +1,12 @@
 /**
  * Where the user stands with Reticle, for the coding agent: signed in or not, whether this project
- * reports to the dashboard, the plan and credits left, whether Reticle Harness is on and unlocked,
+ * reports to the dashboard, the plan and credits left, whether Reticle Harness is on,
  * what a Harness run costs, and the one thing to do next.
  *
  * In 16 real Claude Code and Codex runs, no agent could answer "how many credits do I have" or "can
  * the Harness run" from a tool: those facts lived only in the HUD and the dashboard. This reads the
  * same sources they do (the HUD's snapshot for the account, the platform's model config for the
- * plan, credits and gate), so the agent and the HUD cannot disagree.
+ * plan and credits), so the agent and the HUD cannot disagree. No setup score gates the Harness.
  */
 import { z } from 'zod';
 import { CONNECT_COMMAND, ReticleTool, asRecord, asString } from '@reticlehq/core';
@@ -19,7 +19,6 @@ import type { ToolDef, ToolDeps } from './tool-kit.js';
 
 const CONFIG_PATH = '/v1/model/config';
 const CONFIG_TIMEOUT_MS = 3_000;
-const UNLOCK_PERCENT = 80;
 
 /** What the agent is told to do next, in plain words: one step, the first one that applies. */
 export const ACCOUNT_NEXT = {
@@ -30,9 +29,6 @@ export const ACCOUNT_NEXT = {
     'The project is still linked: ask the user to check the connection, then read the account again. Local checks still work.',
   NO_CREDITS: (said: string): string =>
     `${said} Reticle Harness cannot run until the user gets more credits on the dashboard's Plan and usage page.`,
-  locked: (percent: number, missing: string): string =>
-    // The platform's own sentence already names the score and the gaps: said once, not twice.
-    `${0 < missing.length ? missing : `Setup score ${String(percent)}%: Reticle Harness needs ${String(UNLOCK_PERCENT)}%.`} Offer to close these gaps, then drive one flow to raise the score.`,
   OFF: 'Reticle Harness is off for this project. The user can switch it on in the HUD (the Harness row at the foot of the Agent Log) or on the dashboard.',
   NO_PROVIDER:
     'The platform has no model provider set, so Reticle Harness cannot run now. Tell the user; it is not on their side.',
@@ -92,19 +88,11 @@ export function accountFacts(input: AccountInput): Record<string, unknown> {
   const runCost = asRecord(p['harnessRunCredits']);
   const typical = num(runCost['typical']);
   const max = num(runCost['max']);
-  const lock = asRecord(p['harnessLock']);
-  const score = num(p['coverageScore']);
-  const percent = score === undefined ? undefined : Math.floor(score * 100 + 1e-9);
-  const unlocked = true === p['harnessUnlocked'];
   const provider = str(p['provider']);
   const providerReady =
     provider === undefined ? true : asRecord(p['available'])[provider] !== false;
   const harness = {
     on: true === p['harnessEnabled'],
-    unlocked,
-    ...(percent === undefined ? {} : { setupScore: percent }),
-    ...(str(lock['reason']) === undefined ? {} : { missing: str(lock['reason']) }),
-    ...(str(lock['prompt']) === undefined ? {} : { setupPrompt: str(lock['prompt']) }),
     ...(typical === undefined
       ? {}
       : { runCredits: { typical, ...(max === undefined ? {} : { max }) } }),
@@ -118,13 +106,11 @@ export function accountFacts(input: AccountInput): Record<string, unknown> {
   const next =
     credits !== undefined && 0 === credits.left
       ? ACCOUNT_NEXT.NO_CREDITS(credits.said)
-      : !unlocked
-        ? ACCOUNT_NEXT.locked(percent ?? 0, str(lock['reason']) ?? '')
-        : !providerReady
-          ? ACCOUNT_NEXT.NO_PROVIDER
-          : !harness.on
-            ? ACCOUNT_NEXT.OFF
-            : ACCOUNT_NEXT.ready(typical, max);
+      : !providerReady
+        ? ACCOUNT_NEXT.NO_PROVIDER
+        : !harness.on
+          ? ACCOUNT_NEXT.OFF
+          : ACCOUNT_NEXT.ready(typical, max);
   return { ...facts, next };
 }
 
@@ -175,7 +161,7 @@ export const ACCOUNT_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.ACCOUNT,
     description:
-      'Where the user stands with Reticle: signed in or not, whether this project reports to the dashboard, the plan and credits left, whether Reticle Harness is on and unlocked, the setup score and what is missing, what a Harness run costs, and the one thing to do next. Read it before you tell the user anything about credits, the plan or the Harness.',
+      'Where the user stands with Reticle: signed in or not, whether this project reports to the dashboard, the plan and credits left, whether Reticle Harness is on, what a Harness run costs, and the one thing to do next. Read it before you tell the user anything about credits, the plan or the Harness.',
     inputSchema: {
       sessionId: z.string().optional().describe('Target a specific tab. Omit unless you mean one.'),
     },

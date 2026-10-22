@@ -3,7 +3,8 @@
  *
  * Split from `harness-explore.ts`, which runs the drive. This is the gate every Harness start passes
  * through (an agent's explore, Run Harness, `reticle try`, the platform's chat): the linked
- * credential, the instrumentation-coverage lock, and the platform's own yes or no.
+ * credential, a page and daemon from different builds, and the platform's own yes or no. No setup
+ * score gates it: the Harness runs at any instrumentation.
  */
 import { HarnessRunReason } from '@reticlehq/core/telemetry';
 import { reportAppsNow } from '@/features/harness/platform/local-apps.js';
@@ -24,8 +25,7 @@ import { isUnmatchedRoot } from '@/memory/project/dir/reticle-dir.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { fetchPlatformConfig, type ConfigFetch } from '@/features/harness/platform-config.js';
 import { reportPlanBlocked, savedPlanDrivesNothing } from '@/features/harness/platform/script.js';
-import { instrumentationOf, probeMarkers } from '@/portal/session/recorded-gaps.js';
-import { getSessionMetrics } from '@/telemetry/session-metrics.js';
+import { probeMarkers } from '@/portal/session/recorded-gaps.js';
 import {
   MSG_HARNESS_DISABLED,
   MSG_HARNESS_UNCLAIMED,
@@ -126,22 +126,6 @@ export const MSG_SKEW_LEAD =
   "The page's Reticle SDK and this daemon are different builds, so a Harness drive could only " +
   'answer "unknown" on every step. It did not start. Fix the versions first:';
 
-/** Introduces the prompt under a coverage refusal, so the agent knows it is for itself. */
-export const MSG_GATE_PROMPT_LEAD = 'To unlock it, do this (or hand it to your coding agent):';
-
-/**
- * Why the Harness must not drive this tab's app yet, or undefined when it may: below the coverage
- * gate (core's `instrumentation-coverage.ts`), one reason sentence and the prompt that closes it. Every Harness
- * start passes here (an agent's explore, Run Harness, `reticle try`, the platform's chat), so the
- * gate holds wherever a drive starts; every other tool works at any coverage. A tab that cannot be
- * resolved is not refused here: the drive itself answers for a missing tab. Counted once per refusal.
- */
-export function coverageRefusal(deps: ToolDeps, sessionId: string | undefined): string | undefined {
-  const refused = localGateRefusal(deps, sessionId);
-  if (refused !== undefined) getSessionMetrics().recordHarnessRefused(refused.percent);
-  return refused?.text;
-}
-
 /** This tab and every other live tab of its app, or undefined when the tab cannot be resolved. */
 function appTabsOf(deps: ToolDeps, sessionId: string | undefined) {
   let tab: ReturnType<ToolDeps['sessions']['resolve']>;
@@ -150,8 +134,7 @@ function appTabsOf(deps: ToolDeps, sessionId: string | undefined) {
   } catch {
     return undefined;
   }
-  // Every tab of the app, the way the platform's merged report reads it, so the two name the same
-  // missing items.
+  // Every tab of the app, the way the platform's merged report reads it.
   const siblings = (deps.sessions.list?.() ?? [])
     .filter((info) => info.sessionId !== tab.id && sameApp(info.projectId, tab.projectId))
     .flatMap((info) => {
@@ -161,59 +144,26 @@ function appTabsOf(deps: ToolDeps, sessionId: string | undefined) {
   return { tab, siblings };
 }
 
-/** The daemon's own reading of the gate for this tab's app, uncounted. */
-function localGateRefusal(
-  deps: ToolDeps,
-  sessionId: string | undefined,
-): { text: string; percent: number } | undefined {
-  const app = appTabsOf(deps, sessionId);
-  if (app === undefined) return undefined;
-  const { tab } = app;
-  const siblings = app.siblings.map((live) => ({
-    id: live.id,
-    url: live.url,
-    projectId: live.projectId,
-    channels: live.channels,
-    sourceMapping: live.sourceMapping,
-  }));
-  const coverage = instrumentationOf(tab, siblings);
-  const gate = coverage.harnessGate;
-  if (gate.unlocked || gate.reason === undefined) return undefined;
-  const text =
-    coverage.prompt === undefined
-      ? gate.reason
-      : `${gate.reason}\n\n${MSG_GATE_PROMPT_LEAD}\n${coverage.prompt}`;
-  return { text, percent: gate.percent };
-}
-
 /**
- * The gate a Harness start obeys. When the project is linked, the platform's verdict is the one
- * source of truth: it locks a run mid-drive on the same report, so a daemon that refused what the
- * platform unlocked showed two scores for one project. The daemon's own reading only refuses when
- * the platform said nothing (not linked, unreachable, an older API) or said locked too, in which
- * case the daemon's sentence names what this tab can fix.
+ * Why a Harness drive must not start on this tab, or undefined when it may. Only a page and daemon
+ * from different builds refuse here. The setup score never does: the Harness runs at any
+ * instrumentation, so an app works out of the box. A tab that cannot be resolved is not refused
+ * here: the drive itself answers for a missing tab.
  */
-export async function harnessLockRefusal(
+export async function harnessStartRefusal(
   deps: ToolDeps,
   sessionId: string | undefined,
-  env: Record<string, string | undefined>,
-  fetchConfig?: ConfigFetch,
 ): Promise<HarnessRefusal | undefined> {
-  // What the app's pages carry decides, not what an act happened to reach: ask them first.
   const app = appTabsOf(deps, sessionId);
   // A page and daemon from different builds answer every step `unknown`: a drive spends its credits
   // and proves nothing. The handshake already knows, so say it before anything is spent.
   const skew = app?.tab.versionSkew;
   if (skew !== undefined && 0 < skew.length)
     return refusal(`${MSG_SKEW_LEAD} ${skew}`, HarnessRunReason.VERSION_SKEW);
-  // Learned something: the platform hears it before it is asked, or it refuses on its old score.
+  // Learned something: the platform hears it before the drive, so its coverage reading is current.
   if (app !== undefined && (await probeMarkers([app.tab, ...app.siblings])))
     await reportAppsNow().catch(() => undefined);
-  if (undefined === localGateRefusal(deps, sessionId)) return undefined;
-  const platform = await fetchPlatformConfig(env, fetchConfig);
-  if (true === platform?.gate?.unlocked) return undefined;
-  const text = coverageRefusal(deps, sessionId);
-  return text === undefined ? undefined : refusal(text, HarnessRunReason.COVERAGE_GATE);
+  return undefined;
 }
 
 /** Two tabs are one app when both name the same project. A tab that names none stands alone. */
@@ -259,16 +209,8 @@ export async function refusedByPlatform(
   // It needs a confirmed yes, not the absence of a no. The platform also checks on every turn.
   if (config === undefined)
     return refusal(MSG_HARNESS_UNCONFIRMED, HarnessRunReason.PLATFORM_UNREACHABLE);
-  // The project-wide lock before the switch: a fresh tab passes the per-tab gate with no gaps
-  // recorded, and "off" hid the one refusal that names its fix.
-  const gate = config.gate;
-  if (false === gate?.unlocked && gate.reason !== undefined)
-    return refusal(
-      gate.prompt === undefined
-        ? gate.reason
-        : `${gate.reason}\n\n${MSG_GATE_PROMPT_LEAD}\n${gate.prompt}`,
-      HarnessRunReason.COVERAGE_GATE,
-    );
+  // An older platform may still send `harnessUnlocked: false`. It is not read: no setup score
+  // refuses a drive.
   if (!config.harnessEnabled) return refusal(MSG_HARNESS_DISABLED, HarnessRunReason.HARNESS_OFF);
   // Before entitlement: no credits left is why most workspaces are not entitled, said as the HUD says it.
   if (config.credits !== undefined && creditsSpent(config.credits))

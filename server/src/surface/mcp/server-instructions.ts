@@ -90,7 +90,7 @@ const replayFirst = (v: SurfaceVocabulary): string => {
 const driveOnce = (v: SurfaceVocabulary): string =>
   0 === v.explore.length
     ? ''
-    : ` Drivers: you, or the Harness (${v.explore}; opt-in at 80% instrumentation): poll its runId; never start two.`;
+    : ` Drivers: you, or the Harness (${v.explore}; opt-in, no setup score needed): poll its runId; never start two.`;
 
 /**
  * The first move, for a project no app has ever connected to.

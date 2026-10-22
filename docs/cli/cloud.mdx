@@ -32,6 +32,19 @@ CI needs `RETICLE_API_KEY` and nothing else: no `connect`. Commit `.reticle/clou
 
 The environment key is only sent to the host it belongs to: `RETICLE_CLOUD_URL` when set, otherwise the hosted service. A repo linked to a self-hosted install therefore also needs `RETICLE_CLOUD_URL` set to that install in CI. A repo with no `cloud.json` and a key in the environment syncs to the hosted service, or to `RETICLE_CLOUD_URL`.
 
+### Send your own test results
+
+The platform also lists the results of your own test suite (Playwright, Cypress, Jest, Vitest, pytest, JUnit: any runner that writes JUnit XML). Reticle does not run these tests, and the dashboard never counts them as Reticle's proof. Upload the report with the same key, in a step that runs when the tests fail too (in GitHub Actions, `if: always()`):
+
+```bash
+curl -fsS -X POST "https://app.reticle.sh/v1/test-results?environment=Staging" \
+  -H "Authorization: Bearer $RETICLE_API_KEY" \
+  -H "Content-Type: application/xml" \
+  --data-binary @results.xml
+```
+
+`environment` is optional. It names an environment of the key's project, by name or id.
+
 ## The commands
 
 ### `reticle connect`
@@ -42,7 +55,7 @@ npx @reticlehq/server connect [--project <name|id>] [--workspace <name|id>] [--u
 
 Signs in if needed (a browser device flow like `gh auth login`: approve in the browser, the CLI polls until confirmed), then binds this repository to a cloud project and sends local history. It **mints** a project-scoped key, so there is nothing to paste; with `RETICLE_API_KEY` already set, it resolves that key's project instead. `--project` accepts a slug id or a display name, and creates the project when no project has that name. Omitted, the project is named after the `projectId` in `.reticle.json`, else after this folder. `--workspace` picks the workspace to link in when you belong to more than one. `--no-install` is passed to the `init` it runs for an unwired app. Writes `cloud.json` and the key.
 
-`reticle login`, `reticle link` and `reticle project` are the old spellings. They still work for one release and print one line naming `connect`. To sign in without a browser (an agent, a server), `login` keeps a two-step email path: `reticle login --email <e> [--org <name>]` mails a 6-digit code, then `reticle login --email <e> --code <123456>` signs in and links this repo. For CI, use `RETICLE_API_KEY` rather than any sign-in.
+`reticle login`, `reticle link` and `reticle project` are the old spellings. They still work for one release and print one line naming `connect`. Sign-in is with Google or GitHub, in the browser. Email sign-in is gone: `reticle login --email` stops and says so. Without a browser (CI, an agent, a server), set `RETICLE_API_KEY` to a key from Settings > API keys.
 
 ### `reticle logout`
 

@@ -135,7 +135,7 @@ A journey in one call: `reticle_act { steps: [{ target, action, args?, expect? }
 
 ## The Harness: let Reticle drive
 
-The Harness drives the app for you through the same tools, decides on the Reticle platform, records what it drove as flows, and answers in a few lines instead of a context full of snapshots. It spends credits (`reticle connect` signs in and grants free ones) and unlocks at 80% instrumentation:
+The Harness drives the app for you through the same tools, decides on the Reticle platform, records what it drove as flows, and answers in a few lines instead of a context full of snapshots. It spends credits (`reticle connect` signs in and grants free ones) and needs no setup score:
 
 ```
 reticle_verify { action: "explore", persona: "a returning customer checking out" }

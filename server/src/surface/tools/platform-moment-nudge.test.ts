@@ -11,9 +11,6 @@ import {
 
 afterEach(() => resetNudges());
 
-const REASON =
-  'Harness unlocks at 80% instrumentation. This app is at 62%: missing stable test ids.';
-
 function input(over: Partial<NudgeInput> = {}): NudgeInput {
   return {
     session: 'agent-1',
@@ -22,7 +19,6 @@ function input(over: Partial<NudgeInput> = {}): NudgeInput {
     verdict: true,
     failed: false,
     linked: () => Promise.resolve(false),
-    gate: { percent: 62, unlocked: false, reason: REASON },
     harnessOn: () => undefined,
     acted: true,
     ...over,
@@ -45,24 +41,19 @@ describe('agent nudges', () => {
     expect((await takeNudge(input()))?.kind).toBe(AgentNudgeKind.CONNECT);
   });
 
-  it('never suggests connect once linked; below the gate, names the gaps instead', async () => {
+  it('never suggests connect once linked, and never asks to close gaps: no score gates the Harness', async () => {
     const linked = { linked: () => Promise.resolve(true) };
-    expect(await takeNudge(input(linked))).toEqual({
-      kind: AgentNudgeKind.CLOSE_GAPS,
-      text: NudgeText.closeGaps(REASON),
-    });
     expect(await takeNudge(input(linked))).toBeUndefined();
   });
 
-  it('at the gate with the Harness off, suggests the user switch it on', async () => {
-    const nudge = await takeNudge(
-      input({
-        linked: () => Promise.resolve(true),
-        gate: { percent: 87, unlocked: true },
-        harnessOn: () => false,
-      }),
-    );
-    expect(nudge).toEqual({ kind: AgentNudgeKind.SWITCH_ON, text: NudgeText.switchOn(87) });
+  it('linked with the Harness off, suggests the user switch it on, with no setup score', async () => {
+    const off = input({ linked: () => Promise.resolve(true), harnessOn: () => false });
+    expect(await takeNudge(off)).toEqual({
+      kind: AgentNudgeKind.SWITCH_ON,
+      text: NudgeText.SWITCH_ON,
+    });
+    expect(NudgeText.SWITCH_ON).not.toMatch(/\d+%/);
+    expect(await takeNudge(off)).toBeUndefined();
   });
 
   // "you have driven 1 step by hand" was said after twenty: the count was per agent connection.

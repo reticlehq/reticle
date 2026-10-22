@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   HelloScope,
+  LOOPBACK_HOST,
   PRODUCTION_ACTIVATE_PARAM,
   PRODUCTION_REFUSAL_PREFIX,
   PRODUCTION_TICKET_PATH,
   ProductionRule,
+  RETICLE_WS_PATH,
 } from '@reticlehq/core';
 import { SessionNonces } from '@/portal/bridge/session-nonces.js';
 import {
@@ -69,6 +71,10 @@ describe('activating a production drive', () => {
       nonce: 'nonce-1',
       bridgePort: 4400,
       scope: 'act',
+      // The service binds the ticket to the origin it is told and the bridge it is told; it never
+      // guesses either from the port (a hosted verifier runs a bridge per site).
+      origin: 'https://app.example.com',
+      bridge: `ws://${LOOPBACK_HOST}:4400${RETICLE_WS_PATH}`,
     });
     expect(new URL(activated.url).searchParams.get(PRODUCTION_ACTIVATE_PARAM)).toBe(
       'signed-ticket',

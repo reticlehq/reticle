@@ -98,6 +98,10 @@ export { replayVerdictLine } from './language/flows/replay-from-hud.js';
 export { ReticleTool } from '@reticlehq/core';
 export { RingBuffer } from '@reticlehq/engine/window/ring-buffer.js';
 export { Bridge } from './portal/bridge/bridge.js';
+export type {
+  FollowNavigation,
+  OriginFollowRequest,
+} from './portal/bridge/origin/origin-follow.js';
 export { Session } from './portal/session/session.js';
 export { SessionManager } from './portal/session/session-manager.js';
 export type { SessionInfo, SessionHealth } from './portal/session/session.js';

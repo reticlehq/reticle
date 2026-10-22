@@ -334,7 +334,7 @@ describe('a plan that never got to run', () => {
     await reportPlanBlocked(
       { url: 'https://p', apiKey: 'k' },
       'hp_1',
-      'Harness unlocks at 80%.',
+      'The Reticle Harness is off for this project.',
       (url, init) => {
         if ('POST' === init.method)
           posted.push({ url, body: 'string' === typeof init.body ? init.body : '' });
@@ -345,8 +345,18 @@ describe('a plan that never got to run', () => {
     expect(posted[0]?.url).toBe('https://p/v1/harness/scripts/hp_1/results');
     expect(JSON.parse(posted[0]?.body ?? '{}')).toEqual({
       results: [
-        { id: 'signin', title: 'Sign in', status: 'blocked', line: 'Harness unlocks at 80%.' },
-        { id: 'refund', title: 'Refund', status: 'blocked', line: 'Harness unlocks at 80%.' },
+        {
+          id: 'signin',
+          title: 'Sign in',
+          status: 'blocked',
+          line: 'The Reticle Harness is off for this project.',
+        },
+        {
+          id: 'refund',
+          title: 'Refund',
+          status: 'blocked',
+          line: 'The Reticle Harness is off for this project.',
+        },
       ],
     });
   });

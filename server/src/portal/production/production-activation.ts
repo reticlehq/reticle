@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
+  bridgeWsUrl,
   HelloScope,
+  LOOPBACK_HOST,
   PRODUCTION_ACTIVATE_PARAM,
   PRODUCTION_TICKET_PATH,
   ProductionTicketResponseSchema,
@@ -14,7 +16,7 @@ import type { ProductionDrive, ProductionGrant } from './production-drive.js';
  *
  * 1. Mint a single-use session nonce for the site's origin, bound to a production drive.
  * 2. Ask the service for an activation ticket with the linked API key:
- *    `POST /v1/production-mode/tickets { workspaceId, nonce, bridgePort, scope }`.
+ *    `POST /v1/production-mode/tickets { workspaceId, nonce, bridgePort, scope, origin, bridge }`.
  * 3. Hand back `<url>?reticle_activate=<ticket>` for the lease to open.
  *
  * The service decides who may activate (an owner or admin of a workspace with production mode on)
@@ -113,6 +115,10 @@ export async function activateProduction(input: ActivationInput): Promise<Activa
       nonce: minted.nonce,
       bridgePort: input.bridgePort,
       scope: ask.scope,
+      // Told, never guessed: the ticket is bound to this origin and names this bridge. The bridge
+      // listens on loopback, which the loader accepts over ws://.
+      origin,
+      bridge: bridgeWsUrl(input.bridgePort, LOOPBACK_HOST),
     },
     input.fetch,
   );

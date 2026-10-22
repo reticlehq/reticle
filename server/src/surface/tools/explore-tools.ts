@@ -52,7 +52,7 @@ import {
 } from '@/telemetry/harness-run.js';
 import { driveVerdict, type RemoteDriveOutcome } from '@/features/harness/platform/remote-drive.js';
 import {
-  harnessLockRefusal,
+  harnessStartRefusal,
   firstLine,
   exploreApp,
   harnessAvailable,
@@ -269,7 +269,7 @@ export async function answerExplore(
     // Billed to the one free drive the platform granted, never to another.
     ...('string' === typeof driveId ? { [ReticleEnv.DRIVE_ID]: driveId } : {}),
   };
-  // The coverage gate first: it is local, and the one thing to fix before anything else matters.
+  // The build check first: it is local, and the one thing to fix before anything else matters.
   // Not for a saved plan that only replays flows (no model turn to guard), and a plan it refuses
   // is told so, so the plan's history records the attempt.
   const planId = str(args['planId']);
@@ -288,7 +288,7 @@ export async function answerExplore(
     source: harnessRunSource(origin, planId),
     hosted: platform !== undefined,
   };
-  const locked = replayOnly ? undefined : await harnessLockRefusal(deps, sessionId, env);
+  const locked = replayOnly ? undefined : await harnessStartRefusal(deps, sessionId);
   if (locked !== undefined) {
     reportHarnessBlocked(runStart, locked.reason);
     if (planId !== undefined && platform !== undefined)

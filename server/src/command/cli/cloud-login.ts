@@ -40,25 +40,18 @@ import {
 /** Run `reticle link` with these arguments. Injected; see the note at the top of this file. */
 type Linker = (argv: readonly string[]) => Promise<number>;
 
-const LoginSchema = z.object({
-  token: z.string(),
-  org: z.object({ id: z.string().optional(), name: z.string() }),
-});
-
 /**
- * `reticle login --email <e> [--org <name>] [--code <123456>]` — sign in, cache the token under
- * ~/.reticle.
- *
- * TWO STEPS, because the cloud proves you own the inbox before it hands out a session: ask for a code,
- * then exchange it. (It used to take an email alone — which meant anyone who knew your address owned your
- * org.) `--org` is only consulted when the account is brand new; a returning user never needs it.
- *
- * Without `--code` we request one and stop, telling the user to re-run with it. The one exception is a
- * LOCAL cloud, whose dev mailer cannot actually deliver mail and so echoes the code back in its response
- * (`devCode`) — there we complete the login in a single command rather than asking a developer to read a
- * code out of a server log they may not even be tailing.
+ * Email sign-in is gone: the platform answers its routes with 410 `email_sign_in_removed`. The sentence
+ * starts with the platform's own, so the terminal and the sign-in page agree. `--email`, `--code`
+ * and a positional address now stop with it, because the person who typed them wants no browser, and
+ * a device flow that waits for an approval nobody can give is worse than a clear refusal.
  */
-const RequestCodeSchema = z.object({ devCode: z.string().optional() });
+export const EMAIL_SIGN_IN_REMOVED =
+  'Email sign-in is gone. Sign in with Google or GitHub: run `reticle connect`, which opens the browser. ' +
+  'Without a browser (CI, an agent), set RETICLE_API_KEY to a key from Settings > API keys.';
+
+/** The flags the removed email sign-in took. Any one of them gets the sentence above. */
+const EMAIL_FLAGS = ['email', 'code', 'org'] as const;
 
 const MeSchema = z.object({ email: z.string().min(1).nullable().optional() });
 
@@ -219,10 +212,7 @@ const cmdLoginDevice = async (
   }
 };
 
-/**
- * `reticle login` — browser device flow by default; `--email <e>` (or a positional email) keeps the
- * headless two-step code path for CI/servers where opening a browser makes no sense.
- */
+/** `reticle login` — the browser device flow. Email sign-in is gone (see EMAIL_SIGN_IN_REMOVED). */
 export const cmdLogin = async (
   argv: readonly string[],
   link: Linker,
@@ -230,42 +220,11 @@ export const cmdLogin = async (
 ): Promise<number> => {
   const f = flags(argv);
   const positional = argv[0] !== undefined && !argv[0].startsWith('--') ? argv[0] : undefined;
-  const email = f['email'] ?? positional;
-  if (email === undefined) return cmdLoginDevice(f['url'], f['project'], link, autoLink);
-  const org = f['org'];
-  const url = baseUrl(null, f['url']);
-
-  let code = f['code'];
-  if (code === undefined) {
-    const requested = RequestCodeSchema.parse(
-      await api('POST', `${url}/v1/auth/request-code`, null, {
-        email,
-        ...(org !== undefined ? { orgName: org } : {}),
-      }),
-    );
-    // A real cloud mails the code and never echoes it; a local one cannot mail, so it hands it back.
-    if (requested.devCode === undefined) {
-      emit({ codeSent: true, to: email });
-      hint(`check your inbox, then: \`reticle login --email ${email} --code <the 6-digit code>\``);
-      return 0;
-    }
-    code = requested.devCode;
+  if (positional !== undefined || EMAIL_FLAGS.some((name) => f[name] !== undefined)) {
+    err(EMAIL_SIGN_IN_REMOVED);
+    return 2;
   }
-
-  const parsed = LoginSchema.parse(
-    await api('POST', `${url}/v1/auth/login`, null, { email, code }),
-  );
-  await writeSession(
-    url,
-    parsed.token,
-    parsed.org.name,
-    parsed.org.id,
-    f['project'],
-    link,
-    email,
-    autoLink,
-  );
-  return 0;
+  return cmdLoginDevice(f['url'], f['project'], link, autoLink);
 };
 
 /** `reticle logout` — forget the cached session token (per-project keys under credentials.json stay). */

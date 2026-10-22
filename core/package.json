@@ -39,6 +39,10 @@
     "./hud": {
       "types": "./dist/hud-entry.d.ts",
       "default": "./dist/hud-entry.js"
+    },
+    "./activation": {
+      "types": "./dist/activation-entry.d.ts",
+      "default": "./dist/activation-entry.js"
     }
   },
   "scripts": {

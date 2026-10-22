@@ -1,4 +1,9 @@
-import type { HelloEnv, HelloScope, RedactionConfig } from '@reticlehq/core';
+import {
+  HelloInstrumentation,
+  type HelloEnv,
+  type HelloScope,
+  type RedactionConfig,
+} from '@reticlehq/core';
 
 /**
  * What `reticle.connect()` accepts.
@@ -39,6 +44,12 @@ export interface ReticleConnectOptions {
   env?: HelloEnv;
   /** What a drive may do here: `observe` or `act`. Required with `env: "production"`. */
   scope?: HelloScope;
+  /**
+   * Set by a hosted verifier that put this SDK into a page from outside (an init script), never by
+   * an app. The HELLO then says `instrumentation: "injected"`, so nothing reads this session as an
+   * app that has the SDK installed.
+   */
+  injected?: boolean;
   /**
    * The attribute this app marks controls with, when it is not `data-testid` — `data-test-subj`
    * (Elastic UI), `data-cy` (Cypress), `data-test`. Read by the `testid` locator, by the testids the
@@ -166,4 +177,20 @@ export interface ReticleConnectOptions {
    * RegExp entries and `allow` do NOT cross - see docs/usage.md ("Extending the redaction rules") for why, and what that means.
    */
   redact?: RedactionConfig;
+}
+
+/**
+ * The env, scope and instrumentation connect() named, for the HELLO. Absent stays absent: an older
+ * daemon reads it, and an absent `instrumentation` means installed.
+ */
+export function helloMode(options: Pick<ReticleConnectOptions, 'env' | 'scope' | 'injected'>): {
+  env?: HelloEnv;
+  scope?: HelloScope;
+  instrumentation?: HelloInstrumentation;
+} {
+  return {
+    ...(options.env === undefined ? {} : { env: options.env }),
+    ...(options.scope === undefined ? {} : { scope: options.scope }),
+    ...(true === options.injected ? { instrumentation: HelloInstrumentation.INJECTED } : {}),
+  };
 }

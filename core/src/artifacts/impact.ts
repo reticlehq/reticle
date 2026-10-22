@@ -199,19 +199,6 @@ export const HarnessConfigSchema = z.object({
    * link built from `platformUrl` opened a 404. The HUD links here, and to this origin for set-up.
    */
   planUrl: z.string().optional(),
-  /**
-   * The platform's own Harness coverage gate, which it enforces. The HUD prefers it to the daemon's
-   * local score; absent from an older platform, which leaves the local score to decide.
-   */
-  gate: z
-    .object({
-      unlocked: z.boolean(),
-      /** floor(score × 100); absent before any app reported. */
-      percent: z.number().int().min(0).max(100).optional(),
-      reason: z.string().max(400).optional(),
-      prompt: z.string().max(4000).optional(),
-    })
-    .optional(),
   /** The plan in force: which grant, trial days left, seats. Absent from a platform that sent none. */
   plan: z
     .object({

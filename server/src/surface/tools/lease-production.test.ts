@@ -7,8 +7,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   HelloScope,
+  LOOPBACK_HOST,
   PRODUCTION_ACTIVATE_PARAM,
   PRODUCTION_REFUSAL_PREFIX,
+  PRODUCTION_TICKET_PATH,
+  RETICLE_WS_PATH,
   ReticleTool,
 } from '@reticlehq/core';
 import { LEASE_TOOLS } from './lease-tools.js';
@@ -114,6 +117,30 @@ describe('reticle_lease acquire with production', () => {
     );
     expect(recorded.guard?.('GET', 'https://app.example.com/v1/runs')).toBeUndefined();
     expect(result.production?.scope).toBe(HelloScope.ACT);
+  });
+
+  // A host embedding the engine (a hosted verifier with its own bridge) supplies its cloud link
+  // through ToolDeps.linkedCloud and its bridge through bridgePort: no cloud.json is read.
+  it("asks the host's cloud for a ticket bound to the site origin and the host's bridge", async () => {
+    serveTicket(200, { ticket: 'signed-ticket' });
+    const recorded = fakePool();
+    const deps = {
+      ...depsWith(recorded.pool, nonces()),
+      bridgePort: 51234,
+      linkedCloud: () => Promise.resolve({ url: 'https://api.host.example', apiKey: 'rk_host' }),
+    } as unknown as ToolDeps;
+    await acquire(deps, { url: SITE, production });
+    const call = vi.mocked(fetch).mock.calls[0] as unknown as [
+      string,
+      { headers: Record<string, string>; body: string },
+    ];
+    expect(call[0]).toBe(`https://api.host.example${PRODUCTION_TICKET_PATH}`);
+    expect(call[1].headers['authorization']).toBe('Bearer rk_host');
+    expect(JSON.parse(call[1].body)).toMatchObject({
+      origin: 'https://app.example.com',
+      bridge: `ws://${LOOPBACK_HOST}:51234${RETICLE_WS_PATH}`,
+      bridgePort: 51234,
+    });
   });
 
   // A public page reaching ws://127.0.0.1 needs Local Network Access, and a leased browser has no

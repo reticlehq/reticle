@@ -123,7 +123,7 @@ export const HarnessRunReason = {
   NO_CREDITS: 'no_credits',
   /** The workspace has not claimed the Harness. */
   NOT_ENTITLED: 'not_entitled',
-  /** The project's instrumentation is below the gate, locally or on the platform. */
+  /** An older build refused for low instrumentation. No longer sent: the Harness has no coverage gate. */
   COVERAGE_GATE: 'coverage_gate',
   /** The page and the daemon come from different builds, so every step would answer unknown. */
   VERSION_SKEW: 'version_skew',

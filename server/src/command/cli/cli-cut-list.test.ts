@@ -143,11 +143,4 @@ describe('the renamed-command note', () => {
   it('says nothing to a request for help', () => {
     expect(renamedCommandFor(['link', '--help'])).toBeUndefined();
   });
-
-  // `connect --help` documents `login --email` as THE sign-in without a browser (CI, agents), so
-  // telling that reader "login was renamed to connect" sent them to the browser flow they cannot use.
-  it('says nothing to `login --email`, the documented sign-in without a browser', () => {
-    expect(renamedCommandFor(['login', '--email', 'a@b.c'])).toBeUndefined();
-    expect(renamedCommandFor(['login'])).toBe('connect');
-  });
 });

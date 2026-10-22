@@ -32,8 +32,6 @@ export interface HarnessConfigView {
   /** Whether the platform holds a key for `provider`. Entitlement is not readiness — see the offer. */
   providerReady: boolean;
   credits?: { used: number; limit: number; kind?: CreditKind | undefined; endsAt?: number };
-  /** The platform's coverage gate, when it sent one: the HUD prefers it to the local score. */
-  gate?: { unlocked: boolean; percent?: number; reason?: string; prompt?: string };
   plan?: { kind: CreditKind; daysLeft?: number; seats?: number };
   harnessRuns?: number;
   memoryEntries?: number;

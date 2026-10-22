@@ -93,12 +93,8 @@ describe('recoveryFor — every known error carries an actionable next move', ()
         'The Reticle Harness is off for this project. The user can switch it on in the HUD.',
       ),
     ).toBe(RECOVERY.HARNESS_OFF);
-    expect(
-      recoveryFor(
-        'Harness unlocks at 80% instrumentation. This app is at 62%: missing stable test ids.',
-      ),
-    ).toBe(RECOVERY.HARNESS_LOCKED);
-    // The platform's lock arrives with its code, and the code — never the wording — is the contract.
+    // An older platform's lock arrives with its code, and the code — never the wording — is the
+    // contract. The engine itself no longer locks on a setup score.
     // Driven over MCP: the platform reworded it ("Harness is locked. Setup score: …") and a regex on
     // its old words answered every locked Harness with "may be a defect in Reticle".
     for (const words of [

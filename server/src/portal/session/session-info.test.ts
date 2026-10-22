@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { buildSessionInfo } from './session-info.js';
-import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/core';
+import { HelloInstrumentation, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/core';
 
 const view = (title: string) => ({
   id: 's1',
@@ -84,5 +84,20 @@ describe('the listing says which runtime answered', () => {
     const info = buildSessionInfo(withRuntime(undefined));
     expect(info.runtime).toBeUndefined();
     expect('runtime' in info).toBe(false);
+  });
+});
+
+// A URL-only hosted check injects the SDK. The listing must not let it pass for an installed one.
+describe('buildSessionInfo — who put the SDK in the page', () => {
+  it('says injected when the page said so', () => {
+    const info = buildSessionInfo({
+      ...view('App'),
+      instrumentation: HelloInstrumentation.INJECTED,
+    });
+    expect(info.instrumentation).toBe(HelloInstrumentation.INJECTED);
+  });
+
+  it('says nothing for an SDK the app installed, as every older page did', () => {
+    expect(buildSessionInfo(view('App'))).not.toHaveProperty('instrumentation');
   });
 });

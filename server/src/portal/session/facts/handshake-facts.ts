@@ -1,4 +1,4 @@
-import type { ChannelId } from '@reticlehq/core';
+import type { ChannelId, HelloInstrumentation } from '@reticlehq/core';
 
 /**
  * What the page told us about itself when it connected.
@@ -47,6 +47,13 @@ export interface HandshakeFacts {
    * `false` separates "the project turned it off" from "nothing provides one".
    */
   sourceMapping?: boolean | undefined;
+  /**
+   * Who put the SDK in this page, when it said: `injected` by a hosted verifier, or `installed` by
+   * the app. Undefined means installed, as every SDK before the field was.
+   *
+   * Read by the session listing, so a URL-only check never looks like an app with the SDK installed.
+   */
+  instrumentation?: HelloInstrumentation | undefined;
   /**
    * Extra key names this app declared sensitive via `connect({ redact: { keys } })`.
    *

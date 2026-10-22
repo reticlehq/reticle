@@ -16,11 +16,15 @@ import {
   ReticleCommand,
   agentPromptFor,
   coverageOf,
-  harnessGateOf,
-  harnessUnlockPrompt,
+  coveragePercent,
   type Coverage,
   CoverageCapability,
   type ImpactSnapshot,
+  ENGINE_BLIND_SPOTS_FIELD,
+  computesComparison,
+  engineBlindSpots,
+  type EngineBlindSpot,
+  type Predicate,
 } from '@reticlehq/core';
 
 export interface RecordedGap {
@@ -123,6 +127,13 @@ export function noteActedElement(tab: NotedTab, result: unknown): void {
   if ('object' !== typeof result || null === result) return;
   const acted = result as Record<string, unknown>;
   noteTestidSeen(tab, text(acted['testid']));
+  // An action that ran with a canvas on screen: its pixels go unobserved for this run.
+  const effect = acted['effect'];
+  const canvases =
+    'object' === typeof effect && null !== effect
+      ? (effect as Record<string, unknown>)['canvases']
+      : undefined;
+  if ('number' === typeof canvases && 0 < canvases) canvasSeen.add(tab.id);
   const source = acted['source'];
   if ('object' === typeof source && null !== source) {
     const file = text((source as Record<string, unknown>)['file']);
@@ -192,6 +203,35 @@ export async function probeMarkers(tabs: readonly ProbedTab[]): Promise<boolean>
   return before < sourceSeen.size + testidSeen.size;
 }
 
+/**
+ * Sessions where an action ran with a canvas on screen, and sessions where a verdict ran a computed
+ * comparison. Facts about a RUN, so a reload (a new HELLO under the same id) does not clear them.
+ */
+const canvasSeen = new Set<string>();
+const comparedSeen = new Set<string>();
+
+/**
+ * The `engineBlindSpots` field for a verdict result: what this engine could not observe in the
+ * session so far. Notes this verdict's own comparison first, so a `compare` clears the arithmetic
+ * spot on the result that ran it. `claims`: the inline intent, then the run's declared intents.
+ */
+export function engineBlindSpotsField(
+  sessionId: string,
+  predicate: Predicate | undefined,
+  intent: unknown,
+  declared: readonly { statement: string }[],
+): { [ENGINE_BLIND_SPOTS_FIELD]: EngineBlindSpot[] } {
+  if (computesComparison(predicate)) comparedSeen.add(sessionId);
+  const claims = [text(intent), ...declared.map((each) => each.statement)];
+  return {
+    [ENGINE_BLIND_SPOTS_FIELD]: engineBlindSpots({
+      canvasSeen: canvasSeen.has(sessionId),
+      compared: comparedSeen.has(sessionId),
+      claims,
+    }),
+  };
+}
+
 /** What this session's verdicts recorded, newest first. */
 export function recordedGaps(sessionId: string): readonly RecordedGap[] {
   return bySession.get(sessionId) ?? [];
@@ -210,6 +250,8 @@ export function forgetAllRecordedGaps(): void {
   sourceSeen.clear();
   testidSeen.clear();
   sourceNotApplicable.clear();
+  canvasSeen.clear();
+  comparedSeen.clear();
 }
 
 /** What instrumentation coverage reads off a connected tab. */
@@ -261,23 +303,16 @@ export function notApplicableOf(tab: NotedTab): CoverageCapability[] {
     : [];
 }
 
-/** Whether the Harness may drive this tab's app (see core's `instrumentation-coverage.ts`), as pushed. */
-export interface TabHarnessGate {
-  percent: number;
-  unlocked: boolean;
-  reason?: string;
-}
-
 /**
- * This tab's coverage and its Harness gate, with the coding-agent prompt when its verdicts recorded
- * any gap or the gate is shut: below the gate the prompt names every unseen capability, so there is
- * always something to hand the agent.
+ * This tab's coverage and its setup score (see core's `instrumentation-coverage.ts`), with the
+ * coding-agent prompt when its verdicts recorded any gap. The score is information: it never gates
+ * the Harness.
  */
 export function instrumentationOf(
   tab: InstrumentedTab,
   /** The app's other tabs: what any of them has seen or recorded counts, as on the platform. */
   siblings: readonly InstrumentedTab[] = [],
-): Coverage & { prompt?: string; harnessGate: TabHarnessGate } {
+): Coverage & { prompt?: string; setupScore: number } {
   const tabs = [tab, ...siblings];
   const gaps = [
     ...new Map(
@@ -289,21 +324,10 @@ export function instrumentationOf(
   const url = tab.url ?? '';
   const appName = appNameOf(url);
   const notApplicable = notApplicableOf(tab);
-  const gate = harnessGateOf(coverage, notApplicable);
-  const harnessGate = {
-    percent: gate.percent,
-    unlocked: gate.unlocked,
-    ...(gate.reason === undefined ? {} : { reason: gate.reason }),
-  };
-  if (!gate.unlocked)
-    return {
-      ...coverage,
-      harnessGate,
-      prompt: harnessUnlockPrompt({ coverage, gaps, appName, url, notApplicable }),
-    };
+  const setupScore = coveragePercent(coverage, notApplicable);
   return 0 === gaps.length
-    ? { ...coverage, harnessGate }
-    : { ...coverage, harnessGate, prompt: agentPromptFor({ gaps, appName, url }) };
+    ? { ...coverage, setupScore }
+    : { ...coverage, setupScore, prompt: agentPromptFor({ gaps, appName, url }) };
 }
 
 /**

@@ -197,4 +197,10 @@ describe('helloMode', () => {
       scope: 'observe',
     });
   });
+
+  // A URL-only hosted check injects this SDK. Its session must not read as an app that installed it.
+  it('says the SDK was injected only when a verifier said so', () => {
+    expect(helloMode({ injected: true })).toEqual({ instrumentation: 'injected' });
+    expect(helloMode({ injected: false })).toEqual({});
+  });
 });

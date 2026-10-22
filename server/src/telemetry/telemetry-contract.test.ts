@@ -352,8 +352,8 @@ describe('no vocabulary is hand-copied', () => {
 });
 
 /**
- * The platform and Harness nudges, and the coverage a refused Harness drive was at, are counted by
- * kind and bucket. Both keys are closed enums from core: a kind or bucket that is not listed never
+ * The platform and Harness nudges are counted by kind. An older daemon's coverage refusals still
+ * parse by bucket. Both keys are closed enums from core: a kind or bucket that is not listed never
  * reaches the wire, and every one that is listed does.
  */
 describe('nudges and Harness refusals are counted by closed names', () => {
@@ -369,13 +369,12 @@ describe('nudges and Harness refusals are counted by closed names', () => {
     expect(summary({ harnessRefusedCoverage: { '62%': 1 } })).toBe(false);
   });
 
-  it('counts what was shown and refused, in the summary', () => {
+  it('counts what was shown, and sends no coverage refusals: no score gates the Harness', () => {
     const metrics = new SessionMetrics(() => 0);
     metrics.recordNudge(AgentNudgeKind.CONNECT);
-    metrics.recordHarnessRefused(62);
     const out = metrics.summarize(false);
     expect(out.nudgesShown).toEqual({ [AgentNudgeKind.CONNECT]: 1 });
-    expect(out.harnessRefusedCoverage).toEqual({ [CoverageBucket.B60]: 1 });
+    expect(out.harnessRefusedCoverage).toBeUndefined();
     expect(SessionSummarySchema.safeParse(out).success).toBe(true);
   });
 });

@@ -144,6 +144,14 @@ The shape is identical (in-app SDK in the template → verify in the sandbox →
 
 **Why trust it:** the verdict is mechanical, derived only from observed outcomes, so it can't report green for something it never ran (a severed backend reads as _fail_, never a confident pass). Proof: `server/src/judgement/runs/false-green.test.ts`.
 
+## Building a hosted verifier on the engine
+
+A service that drives apps it did not build uses these seams.
+
+- **Follow a drive to another origin.** `new Bridge({ ..., followNavigation })` lets a session continue on an origin the bridge was not built with. A page on a new origin can only continue a session the bridge already admitted, after the token or nonce check, and only when `followNavigation({ sessionId, from, to, url })` returns `true`. Return `true` only when your own browser's top frame is now on `to`. Without the option, nothing changes.
+- **Refuse `clean` over what the engine could not see.** Every `reticle_act_and_wait` and `reticle_assert` result carries `engineBlindSpots`: what this engine could not observe in the session so far. It is cumulative, so the last verdict result of a run is the run's list, and `[]` means none. `pixels-unobserved`: an action ran while a `<canvas>` was visible, and no canvas digest is recorded. `claim-arithmetic-unchecked`: a claim under test (the call's `intent`, or an intent declared in the run) states an amount, and no verdict ran a `compare`. Do not call a run clean while its list has an entry. The kinds and the schema are `EngineBlindSpotKind` and `EngineBlindSpotSchema` in `@reticlehq/core`.
+- **Say that you injected the SDK.** When your init script connects the SDK into a page that does not import it, call `reticle.connect({ ..., injected: true })`. The HELLO then carries `instrumentation: "injected"`, `Session.instrumentation` holds it, and the session listing shows it. Do not count such a session as an app with the SDK installed: signals, module-scope stores and file:line still need the app. To read React component state and provider-passed stores (Redux, TanStack Query) on such a page, bundle `install()` from `@reticlehq/react` into the same init script and call it before `connect`. That entry imports only `@reticlehq/browser` and `@reticlehq/core` at runtime, so the bundle holds no copy of React.
+
 ## Licensing for embedding
 
 The embeddable SDK is **Apache-2.0** (ship it in your customers' apps). The server/CLI is **FSL** (free, no competing resale). Enterprise features + the premium-access flow: [`enterprise.md`](./enterprise.md). OEM terms: **[hey@reticle.sh](mailto:hey@reticle.sh)**.

@@ -47,6 +47,7 @@ export * from './identity/edit-epoch.js'; // which round of source edits an obse
 export * from './wire/messages.js'; // ReticleEvent + the message schemas
 export * from './wire/production/hello-mode.js'; // HelloEnv / HelloScope: a leaf the SDK sends
 export * from './wire/production/production-policy.js'; // the production action policy: rules + refused requests
+export * from './wire/production/activation-ticket.js'; // the signed ticket a live page checks before it loads the SDK
 export * from './wire/event-payloads.js'; // per-event payload schemas + wire vocab
 export * from './wire/event-priority.js'; // which events survive the bridge rate cap
 export * from './artifacts/flow-constants.js'; // moved off wire/constants/constants, which had no use for them

@@ -311,6 +311,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'impact',
     // A production nonce decides whether a HELLO opens a production session, and with what scope.
     'production',
+    // Whether a session may follow its own navigation to an origin the bridge was not built with.
+    'origin',
     'session',
     'telemetry',
     'version',

@@ -24,7 +24,6 @@ import {
 import { HUD_GLASS_PAINT } from './chrome/presenter-hud-chrome.js';
 import { LAST_ACTOR_ATTR, LOG_ACTOR } from './chrome/presenter-log.js';
 import {
-  HARNESS_COPY_PROMPT_ATTR,
   HARNESS_LINK_ATTR,
   HARNESS_LOG_ATTR,
   HARNESS_OPEN_ATTR,
@@ -35,7 +34,6 @@ import {
   harnessFootHtml,
   harnessRowHtml,
   HARNESS_ROW_CSS,
-  type HarnessGateView,
 } from './presenter-harness-row.js';
 import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';
 import { morphHtml } from './chrome/presenter-morph.js';
@@ -324,7 +322,6 @@ export class ChatViews {
   #history: HistoricalAnnotation[] = readHistory();
   #account: AccountState | undefined;
   #harness: HarnessConfig | undefined;
-  #gate: HarnessGateView | undefined;
   #verdicts = 0;
   #impactOpen = false;
   #onImpact: () => void;
@@ -428,15 +425,6 @@ export class ChatViews {
       if (null !== target.closest('[data-reticle-harness-stop]')) {
         this.#drive?.stop();
         return;
-      }
-      const copy = target.closest<HTMLButtonElement>(`[${HARNESS_COPY_PROMPT_ATTR}]`);
-      if (null !== copy) {
-        const prompt = this.#gate?.prompt;
-        if (prompt !== undefined)
-          void navigator.clipboard
-            ?.writeText(prompt)
-            .then(() => (copy.textContent = HARNESS_ROW_TEXT.COPIED))
-            .catch(() => undefined);
       }
     };
     root
@@ -640,7 +628,7 @@ export class ChatViews {
       : undefined;
     if (on) this.#paintHarness();
   }
-  paintHarness(config: HarnessConfig | undefined, gate?: HarnessGateView): void {
+  paintHarness(config: HarnessConfig | undefined): void {
     // A config now means the project is linked: the link the person pressed has landed.
     if (config !== undefined) {
       this.#linking = false;
@@ -648,7 +636,6 @@ export class ChatViews {
       this.#linkTimer = undefined;
     }
     this.#harness = config;
-    this.#gate = gate;
     this.#paintHarness();
   }
   paintImpact(verdicts: number): void {
@@ -703,7 +690,6 @@ export class ChatViews {
     const state = {
       account,
       config,
-      gate: this.#gate,
       drive: this.#driving,
       canDrive: this.#drive !== undefined,
       pick: this.#personaPick,

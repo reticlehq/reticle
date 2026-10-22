@@ -18,7 +18,6 @@ import {
   isLocalPage,
   isLoopbackHostname,
   isOpaqueOrigin,
-  OPAQUE_ORIGIN,
   isHighValueEvent,
   RATE_CAP_HIGH_VALUE_RESERVE_RATIO,
   type HelloMessage,
@@ -28,6 +27,8 @@ import {
 import { Session } from '@/portal/session/session.js';
 import { SessionManager } from '@/portal/session/session-manager.js';
 import { SessionNonces } from './session-nonces.js';
+import { FollowRefusal, OriginFollower, normalizeOrigin } from './origin/origin-follow.js';
+import type { FollowNavigation } from './origin/origin-follow.js';
 import { admitHello } from '@/portal/production/production-hello.js';
 import { forgetRecordedGaps } from '@/portal/session/recorded-gaps.js';
 import { tokensMatch } from './token-auth.js';
@@ -218,23 +219,8 @@ interface BridgeOptions {
    * it get the no-project fallback.
    */
   sdkFix?: (projectId?: string) => string;
-}
-
-/**
- * Canonical comparable form of a WS `Origin`. Web origins collapse to scheme://host[:port]. An
- * OPAQUE origin — a desktop webview (`tauri://localhost`, `app://.`) or `file://`, whose `URL.origin`
- * is the string "null" — is kept VERBATIM instead, so it survives into the allow-list and can be
- * compared. Collapsing those to "null" would both merge every desktop scheme into one bucket and
- * feed an unparseable string to `new URL`. Returns null only for a header that is not an origin.
- */
-function normalizeOrigin(origin: string): string | null {
-  if (origin === OPAQUE_ORIGIN) return OPAQUE_ORIGIN;
-  try {
-    const web = new URL(origin).origin;
-    return web === OPAQUE_ORIGIN ? origin : web;
-  } catch {
-    return null;
-  }
+  /** Lets a session follow its own navigation to an origin not allow-listed. See origin-follow.ts. */
+  followNavigation?: FollowNavigation;
 }
 
 /** Normalize ws RawData (string | Buffer | Buffer[] | ArrayBuffer) into a UTF-8 string. */
@@ -275,6 +261,7 @@ export class Bridge {
   readonly #maxPendingConnections: number;
   readonly #helloTimeoutMs: number;
   readonly #sdkFix: (projectId?: string) => string;
+  readonly #follower: OriginFollower | undefined;
   #pendingConnections = 0;
   #onReplay: ReplayRequestHandler | undefined;
   /**
@@ -369,6 +356,10 @@ export class Bridge {
       options.maxPendingConnections ?? TRANSPORT_LIMITS.MAX_PENDING_CONNECTIONS;
     this.#helloTimeoutMs = options.helloTimeoutMs ?? TRANSPORT_LIMITS.HELLO_TIMEOUT_MS;
     this.#sdkFix = options.sdkFix ?? (() => sdkFix(SERVER_VERSION));
+    this.#follower =
+      options.followNavigation === undefined
+        ? undefined
+        : new OriginFollower(options.followNavigation);
 
     if (options.server !== undefined) {
       const srv = options.server;
@@ -377,7 +368,7 @@ export class Bridge {
         path: RETICLE_WS_PATH,
         maxPayload: TRANSPORT_LIMITS.MAX_MESSAGE_BYTES,
         verifyClient: ({ origin }, done) => {
-          const allowed = this.#originAllowed(origin);
+          const allowed = this.#originAllowed(origin) || this.#mayFollow(origin);
           if (!allowed) this.#noteOriginRejected(origin);
           done(allowed, 403, 'Forbidden');
         },
@@ -405,7 +396,7 @@ export class Bridge {
         path: RETICLE_WS_PATH,
         maxPayload: TRANSPORT_LIMITS.MAX_MESSAGE_BYTES,
         verifyClient: ({ origin }, done) => {
-          const allowed = this.#originAllowed(origin);
+          const allowed = this.#originAllowed(origin) || this.#mayFollow(origin);
           if (!allowed) this.#noteOriginRejected(origin);
           done(allowed, 403, 'Forbidden');
         },
@@ -442,12 +433,15 @@ export class Bridge {
       }
     });
 
-    this.#wss.on('connection', (socket) => {
-      this.#onConnection(socket);
+    this.#wss.on('connection', (socket, request) => {
+      this.#onConnection(socket, request.headers.origin);
     });
   }
 
-  #onConnection(socket: WebSocket): void {
+  #onConnection(socket: WebSocket, origin?: string): void {
+    // The socket's origin, and whether it is in only on the follow path (decided at its HELLO).
+    const dialled = origin === undefined ? null : normalizeOrigin(origin);
+    const following = dialled !== null && !this.#originAllowed(origin) ? dialled : undefined;
     if (this.#pendingConnections >= this.#maxPendingConnections) {
       // On the channel the no-session diagnosis reads, not only into the log. This refusal happens
       // before any HELLO, so without it the dial leaves no trace at all — the same hole the origin
@@ -618,6 +612,18 @@ export class Bridge {
             socket.close(WS_CLOSE.AUTH_FAILED[0], reason);
             return;
           }
+          const notFollowed =
+            following === undefined
+              ? undefined
+              : this.#follower === undefined
+                ? FollowRefusal.POLICY_REFUSED
+                : this.#follower.refusal(parsed, following);
+          if (notFollowed !== undefined) {
+            log('origin_follow_refused', { sessionId: parsed.sessionId, origin: following });
+            this.sessions.noteClosure(notFollowed, this.#clock());
+            socket.close(1008, notFollowed);
+            return;
+          }
           // The nonce decides whether this is a production session, never the page's own claim.
           const admission = admitHello(parsed, grant?.production);
           if (!admission.ok) {
@@ -666,6 +672,9 @@ export class Bridge {
           const attached = session;
           attached.pushImpact(() => impactSnapshot(attached.artifactRoot), true);
           const replaced = this.sessions.add(session);
+          this.#follower?.remember(session.id, dialled);
+          if (following !== undefined)
+            log('origin_followed', { sessionId: session.id, to: following });
           // Said out loud once the session is actually in the registry, never before: a hook that
           // fires on a session a consumer cannot then look up describes a moment that did not happen.
           emitSessionHook(HookEvent.SESSION_STARTED, {
@@ -840,6 +849,11 @@ export class Bridge {
   #noteOriginRejected(origin: string | undefined): void {
     log('origin_rejected', { origin: origin ?? 'missing' });
     this.sessions.noteClosure(originRejectedReason(origin), this.#clock());
+  }
+
+  /** Admit the handshake so the HELLO can be judged. Only with a host policy and a web origin. */
+  #mayFollow(origin: string | undefined): boolean {
+    return this.#follower?.mayDial(origin === undefined ? null : normalizeOrigin(origin)) ?? false;
   }
 
   #originAllowed(origin: string | undefined): boolean {

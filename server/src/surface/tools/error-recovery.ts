@@ -324,9 +324,9 @@ export const RECOVERY = {
    * agent's malformed call: it was then told to fix arguments that were never wrong.
    */
   HARNESS_LOCKED:
-    'The Harness unlocks once Reticle sees enough of this app; the refusal names what is missing ' +
-    'and how to close each gap. Nothing to report: close them, or drive the journey yourself with ' +
-    'reticle_act_and_wait and an `until` on its last step. Every other tool works at any coverage.',
+    'An older Reticle platform locked the Harness on its setup score. Nothing to report: drive the ' +
+    'journey yourself with reticle_act_and_wait and an `until` on its last step. Every tool works ' +
+    'at any coverage.',
 } as const;
 
 /**
@@ -416,10 +416,8 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
   // platform's: matching it is matching ourselves.
   { match: /credits are used\./, hint: RECOVERY.HARNESS_OFF },
   {
-    // The gate's own words, and the platform's "locked: connect your app first": expected states.
-    match: new RegExp(
-      `(?:^Harness unlocks at \\d+% instrumentation)|(?:^${escapeRegExp(RefusalLead[PlatformRefusalCode.HARNESS_LOCKED])})`,
-    ),
+    // An older platform's "locked": an expected state, not a defect.
+    match: new RegExp(`^${escapeRegExp(RefusalLead[PlatformRefusalCode.HARNESS_LOCKED])}`),
     hint: RECOVERY.HARNESS_LOCKED,
   },
   // Three conditions the daemon understands perfectly and still asked for a bug report about. Each

@@ -71,8 +71,6 @@ const PLAIN_CONTROLS = [
   'harness-toggle',
   // Link this project, on the Harness page.
   'harness-link',
-  // Below the coverage gate: copy the prompt that closes it, for the coding agent.
-  'harness-copy-prompt',
   // The coding-agent block on the Agent Log: copy a prompt when none is connected.
   'agent-copy',
   // "See all" below Impact's recent bugs.

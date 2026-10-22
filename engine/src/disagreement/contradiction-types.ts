@@ -33,6 +33,14 @@ export interface ContradictionOptions {
   /** The action that opened this window, when one did. Enables the no-effect check. */
   action?: string | undefined;
   /**
+   * The ref of the control the action was dispatched on.
+   *
+   * Lets `ui-advanced-request-failed` read what became of that control after its request failed:
+   * rolled back, still pending, or moved on. Undefined keeps the window-wide reading. See
+   * `targetFate`.
+   */
+  ref?: string | undefined;
+  /**
    * Was the page HIDDEN while this window was recorded? Stated by the caller, which knows.
    *
    * A backgrounded tab has its rAF clamped, and the DOM observer flushes on rAF, so real mutations

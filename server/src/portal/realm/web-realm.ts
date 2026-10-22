@@ -293,6 +293,7 @@ const REPORTED_AS_COVERAGE: ReadonlySet<string> = new Set<string>([
  */
 const PROTOCOL_ANOMALY: Readonly<Record<string, string>> = {
   [ContradictionKind.UI_ADVANCED_REQUEST_FAILED]: AnomalyKind.ADVANCED_OVER_FAILURE,
+  [ContradictionKind.UI_ADVANCED_UNSIGNALLED]: AnomalyKind.ADVANCED_OVER_FAILURE,
   [ContradictionKind.SIGNAL_CONTRADICTED]: AnomalyKind.CLAIMED_OVER_FAILURE,
   [ContradictionKind.RESPONSE_IGNORED]: AnomalyKind.EFFECT_DISCARDED,
   [ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE]: AnomalyKind.CLAIM_UNCORROBORATED,

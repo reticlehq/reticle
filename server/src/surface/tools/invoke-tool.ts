@@ -803,7 +803,6 @@ async function dispatchTool<Ext>(
           tool: tool.name,
           raw: answer,
           isError: resultIsError(answer),
-          tab: session,
           root: safeRoot(() => sessionRoot(deps, rawSessionId)),
           harnessOn: () => impactSnapshot(artifactRoot)?.harnessConfig?.harnessEnabled,
         })

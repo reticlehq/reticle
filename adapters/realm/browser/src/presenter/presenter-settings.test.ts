@@ -343,27 +343,16 @@ describe('the Harness switch help, in credits', () => {
   });
 });
 
-describe('the Harness switch and the coverage gate', () => {
+describe('the Harness switch and the setup score', () => {
   const config = { provider: 'jev', harnessEnabled: false, harnessEntitled: true };
   const toggle = (): Element | null =>
     document.querySelector('[data-reticle-setting="harnessEnabled"]');
 
-  it('is locked below 80%, and its help says why', () => {
+  it('can be switched on at any instrumentation: no score disables it', () => {
     document.body.innerHTML = settingsPanelHtml();
-    const reason = 'Harness unlocks at 80% instrumentation. This app is at 62%: missing x.';
-    paintHarnessRow(document.body, config, { percent: 62, unlocked: false, reason });
-    expect(toggle()?.getAttribute('aria-disabled')).toBe('true');
-    expect(
-      document
-        .querySelector('[data-reticle-settings-harness-row] [data-reticle-settings-help]')
-        ?.getAttribute('title'),
-    ).toBe(reason);
-  });
-
-  it('can be switched on at 80% or more', () => {
-    document.body.innerHTML = settingsPanelHtml();
-    paintHarnessRow(document.body, config, { percent: 87, unlocked: true });
+    paintHarnessRow(document.body, config);
     expect(toggle()?.getAttribute('aria-disabled')).toBe('false');
     expect(toggle()?.getAttribute('aria-checked')).toBe('false');
+    expect(document.body.textContent).not.toMatch(/80%|Unlocks/);
   });
 });

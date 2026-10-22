@@ -116,23 +116,20 @@ export class Session implements HandshakeFacts {
    * Undefined when nothing could name a project: callers fall back to the daemon's own root.
    */
   artifactRoot: string | undefined;
-  /**
-   * Same-origin endpoints this session's project declared as background (`.reticle.json`
-   * `background`). Stamped with `artifactRoot`, from the same project. Empty excludes nothing.
-   */
+  /** Same-origin `background` endpoints of this session's project, stamped with `artifactRoot`. */
   background: readonly string[] = [];
   url: string;
   title: string;
   adapters: string[];
   hasCapabilities: boolean;
-  // What the page said about itself at HELLO. `HandshakeFacts` holds the reasoning, including
-  // the rule that `undefined` means "too old to say" and never "no".
+  // What the page said at HELLO. `HandshakeFacts` holds the reasoning (`undefined` is never "no").
   versionSkew?: string;
   sdkVersion?: string | undefined;
   captureBodies?: boolean | undefined;
   channels?: readonly ChannelId[] | undefined;
   commands?: readonly string[] | undefined;
   sourceMapping?: boolean | undefined;
+  instrumentation?: HandshakeFacts['instrumentation'];
   readonly redactKeys: readonly string[];
 
   readonly #socket: WebSocket;
@@ -198,6 +195,7 @@ export class Session implements HandshakeFacts {
     this.adapters = hello.adapters;
     this.hasCapabilities = hello.hasCapabilities ?? false;
     this.sourceMapping = hello.sourceMapping;
+    this.instrumentation = hello.instrumentation;
     this.redactKeys = hello.redactKeys ?? [];
     this.#socket = socket;
     this.#clock = clock;

@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Changed
+
+- **`@reticlehq/core` + `@reticlehq/server` + `@reticlehq/browser`: the Harness no longer needs any setup score.** A Harness run was refused below 80% instrumentation, so most new apps could not use it. Now it runs at any score. The HUD switch is never disabled for coverage, `reticle_session { action: "account" }` no longer reports `harness.unlocked` or `harness.setupScore`, and a platform that still sends `harnessUnlocked: false` does not stop a drive. The setup score stays as information in `reticle doctor` and the HUD. `HARNESS_UNLOCK_COVERAGE`, `harnessGateOf` and `harnessLockedReason` are removed from `@reticlehq/core`; use `coveragePercent` to read the score.
+
 ## [3.7.0] — 2026-10-13
 
 ### Breaking

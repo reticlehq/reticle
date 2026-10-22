@@ -39,7 +39,7 @@ import { causalSummary } from '@/judgement/capsule/causal-summary.js';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import { crashedRuleNotes } from '@reticlehq/engine/disagreement/contradiction-folds.js';
 import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
-import { withGapNovelty } from './gap-novelty.js';
+import { engineBlindSpotsOutput, withGapNovelty } from './gap-novelty.js';
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
 import { intentDebt, ledgerFor } from '@/memory/intent/open-intents.js';
@@ -102,7 +102,7 @@ import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrue } from './act/already-true.js';
-import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
+import { engineBlindSpotsField, noteSourceSeen } from '@/portal/session/recorded-gaps.js';
 
 /**
  * The action vocabulary, derived from ActionType — never retyped: a hand-copied list once omitted
@@ -284,7 +284,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // Keep what only this call measured, so the observe that judges this window can ask whether
         // anything happened INSIDE the target — the one fact that separates a dead control from a
         // page that was merely busy with something else.
-        session.lastAct.markActed(since, action, mutatedWithin(r), asString(args['ref']));
+        session.lastAct.markActed(since, action, mutatedWithin(r), targetRef.ref);
         return withControl(session, {
           since,
           inputMode: InputMode.SYNTHETIC,
@@ -445,6 +445,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .describe(
           'What the APP did not tell Reticle, and the one change that would fix it — each entry is { kind, missing, cost, fix, source?, ref? }. Reported ONLY where an absence made THIS verdict weaker (a red that cannot name a file:line, a state assertion with no registered store, a DOM change no signal announced, a route change nothing signalled); never a survey of the page, so an entry is always work worth doing now. OMITTED when the app told Reticle everything it needed. Applying `fix` makes every later verdict on this app stronger, not just this one.',
         ),
+      engineBlindSpots: engineBlindSpotsOutput,
       honesty: z
         .unknown()
         .describe(
@@ -566,7 +567,7 @@ export const ACT_TOOLS: ToolDef[] = [
             since,
             asString(args['action']),
             mutatedWithin(asRecord(actResult.result)),
-            asString(args['ref']),
+            resolved.ref,
           );
         }
 
@@ -940,14 +941,12 @@ export const ACT_TOOLS: ToolDef[] = [
           // where an absence made this very verdict weaker — never as a survey of the page.
           /*
            * …and, on a pass, whether anybody said what this verdict was FOR.
-           *
            * Intent capture was reachable and unasked-for: the argument sits on this very tool, and
            * the only nudge lived on `flow_save` — which a build-mode agent may never reach. An
            * optional capability nobody is told about is one nobody uses, measured on `bodies` this
            * same week.
            */
-          // Remedy once per session, facts every time — see gap-novelty.ts. `no-source-mapping`
-          // shipped 11 identical copies of its fix text in one measured drive.
+          // Remedy once per session, facts every time: see gap-novelty.ts for the measurement.
           ...(gaps.length > 0 || intentGap !== undefined
             ? {
                 instrumentationGaps: withGapNovelty(
@@ -956,6 +955,7 @@ export const ACT_TOOLS: ToolDef[] = [
                 ),
               }
             : {}),
+          ...engineBlindSpotsField(session.id, until, args['intent'], openIntents),
           // Cross-channel disagreement, reported WITH the action that caused it.
           //
           // This is the one finding here a human structurally cannot make — they watch one channel,

@@ -16,7 +16,10 @@ import {
   isSameDocumentHashAnchor,
   isSamePathnameReplace,
   isSteadyCadence,
+  appIsSilent,
   netCall,
+  TargetFate,
+  targetFate,
   pageNumber,
   pageRequest,
   recoveredByRetry,
@@ -522,12 +525,21 @@ function findWindowContradictions(
     !misattributed &&
     !failureAcknowledged(events)
   ) {
-    found.push({
-      kind: ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
-      claim: 'the UI moved forward (DOM/store/route changed)',
-      counter: `${String(unexpectedWrites.length)} request(s) in the same window failed`,
-      detail: `${unexpectedWrites.map(describe).join('; ')}${declareFailureHint(unexpectedWrites)}`,
-    });
+    // The acted control's own fate after the failure decides when it can be read. See `targetFate`.
+    const failedAt = Math.max(...unexpectedWrites.map((c) => c.t));
+    const fate = targetFate(events, options.ref, failedAt);
+    if (fate === undefined || fate === TargetFate.PERSISTED) {
+      found.push({
+        // Undecided by the control, and the app says nothing about its own state: weak, not proof.
+        kind:
+          fate === undefined && appIsSilent(events, options.prior)
+            ? ContradictionKind.UI_ADVANCED_UNSIGNALLED
+            : ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
+        claim: 'the UI moved forward (DOM/store/route changed)',
+        counter: `${String(unexpectedWrites.length)} request(s) in the same window failed`,
+        detail: `${unexpectedWrites.map(describe).join('; ')}${declareFailureHint(unexpectedWrites)}`,
+      });
+    }
   }
 
   // ── A write succeeded and nothing on the client moved ───────────────────────────────────────

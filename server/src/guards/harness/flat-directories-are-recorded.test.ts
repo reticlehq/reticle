@@ -169,7 +169,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 13 with `telemetry-bug.ts`: the `bug_found` schema, split out when the accuracy and signal
   // changes together pushed `telemetry.ts` over the cap. Grouping the seven `telemetry-*.ts` files
   // into one directory is the next step if this grows again.
-  'core/src': 13,
+  // 14 with `activation-entry.ts`: the `./activation` subpath. A subpath entry sits at the root
+  // beside `hud-entry.ts` and `tour-entry.ts`, so the page loader does not load the core barrel.
+  'core/src': 14,
   // 19 with `state-bookkeeping.ts`: telling a query cache's own bookkeeping from a state change.
   // 20 with `superseded-checks.ts`: the one rule every fold of a run's checks applies.
   'engine/src/evidence': 20,

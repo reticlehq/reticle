@@ -34,7 +34,7 @@ import {
 } from './chrome/presenter-log.js';
 import { PRESENTER_CSS } from './presenter-styles.js';
 import { HudShell } from './presenter-shell.js';
-import { HARNESS_LOG_ATTR, harnessGateIn } from './presenter-harness-row.js';
+import { HARNESS_LOG_ATTR } from './presenter-harness-row.js';
 import { platformDetails } from './presenter-account.js';
 import { parseImpactSnapshot } from './chrome/presenter-report-copy.js';
 import { scheduleSyncDockLayout } from './presenter-dock-layout.js';
@@ -289,10 +289,7 @@ export class Presenter {
         // is "what has happened HERE".
         this.#shell.paintNotices(snapshot.notices);
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
-        this.#shell.paintHarness(
-          snapshot.harnessConfig,
-          harnessGateIn(snapshot.instrumentation, snapshot.harnessConfig),
-        );
+        this.#shell.paintHarness(snapshot.harnessConfig);
         this.#shell.paintHarnessDrive(snapshot.harnessDrive, snapshot.lastDrive);
         this.#paintHarnessRun(snapshot.harnessDrive);
         this.#shell.paintAgent(snapshot.agent);

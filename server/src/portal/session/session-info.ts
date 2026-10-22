@@ -36,6 +36,11 @@ export interface SessionInfo {
    * not render like it.
    */
   runtime?: string;
+  /**
+   * `injected` when a hosted verifier put the SDK in this page from outside. Absent means the app
+   * installed it. A reader must not count an injected session as the app having the SDK.
+   */
+  instrumentation?: string;
   /** The desktop window's own name (Tauri's label: `main`, `setup`) — absent on a web page. */
   window?: string;
   /** Present only when the document was served as an error (4xx/5xx): a 404 page is not the app. */
@@ -91,6 +96,7 @@ interface SessionView {
   adapters: string[];
   hasCapabilities: boolean;
   runtime: string | undefined;
+  instrumentation?: string | undefined;
   versionSkew: string | undefined;
   hidden: boolean;
   page?: PageIdentity;
@@ -121,6 +127,8 @@ export function buildSessionInfo(session: SessionView): SessionInfo {
     hasCapabilities: session.hasCapabilities,
     // Omitted when the page never said, so absence stays readable as "unknown" rather than "web".
     ...(session.runtime === undefined ? {} : { runtime: session.runtime }),
+    // Said only when injected: an installed SDK is the default every older page meant.
+    ...(session.instrumentation === undefined ? {} : { instrumentation: session.instrumentation }),
     ...(session.page?.windowLabel === undefined ? {} : { window: session.page.windowLabel }),
     ...(isErrorDocument(session.page) ? { documentStatus: session.page?.documentStatus ?? 0 } : {}),
     // On every listing, not buried in a log — skew explains failures that read as app bugs.

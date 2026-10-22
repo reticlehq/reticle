@@ -9,7 +9,6 @@ import {
   ChatViews,
 } from './presenter-chat-views.js';
 import { PERSONAS } from './presenter-personas.js';
-import { harnessGateIn } from './presenter-harness-row.js';
 
 const driveHost = () => ({ run: vi.fn(), stop: vi.fn(), setHarness: vi.fn(), link: vi.fn() });
 
@@ -202,50 +201,23 @@ describe('chat views and harness access states', () => {
     expect(root.querySelector('[data-reticle-foot-meta]')).toBeNull();
   });
 
-  describe('the coverage gate', () => {
-    const locked = {
-      percent: 62,
-      unlocked: false,
-      reason:
-        'Harness unlocks at 80% instrumentation. This app is at 62%: missing stable test ids.',
-      prompt: 'Read https://reticle.sh/SKILL.md, then improve',
-    };
-
-    it('below 80%, says why in one row with the copy-prompt button, and no Run', () => {
-      const { root, views } = mountViews();
-      views.paintAccount({ signedIn: true });
-      views.paintHarness(entitled, locked);
-      expect(rows(root)).toBe(1);
-      expect(root.textContent).toContain(locked.reason);
-      expect(root.querySelector('[data-reticle-harness-copy-prompt]')?.textContent).toBe(
-        'Copy setup prompt',
-      );
-      expect(root.querySelector('[data-reticle-harness-run]')).toBeNull();
-    });
-
-    it('copies the prompt, never renders it', async () => {
-      const written: string[] = [];
-      Object.defineProperty(navigator, 'clipboard', {
-        configurable: true,
-        value: { writeText: (t: string) => (written.push(t), Promise.resolve()) },
-      });
-      const { root, views } = mountViews();
-      views.paintAccount({ signedIn: true });
-      views.paintHarness(entitled, locked);
-      expect(root.textContent).not.toContain(locked.prompt);
-      root.querySelector<HTMLElement>('[data-reticle-harness-copy-prompt]')?.click();
-      await Promise.resolve();
-      expect(written).toEqual([locked.prompt]);
-      Reflect.deleteProperty(navigator, 'clipboard');
-    });
-
-    it('at 80% or more with Harness off, says the score and switches it on from the page', () => {
+  describe('no setup score gates the Harness', () => {
+    it('with Harness off, says it is off and switches it on from the page, with no score', () => {
       const { root, views, drive } = mountViews();
       views.paintAccount({ signedIn: true });
-      views.paintHarness({ ...entitled, harnessEnabled: false }, { percent: 87, unlocked: true });
-      expect(root.textContent).toContain('Setup score 87%. Harness is off.');
+      views.paintHarness({ ...entitled, harnessEnabled: false });
+      expect(root.textContent).toContain('Harness is off');
+      expect(root.textContent).not.toMatch(/Setup score|needs 80%|unlocks/);
       root.querySelector<HTMLElement>('[data-reticle-harness-switch]')?.click();
       expect(drive.setHarness).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers Run, and no copy-prompt lock, whatever the instrumentation', () => {
+      const { root, views } = mountViews();
+      views.paintAccount({ signedIn: true });
+      views.paintHarness(entitled);
+      expect(root.querySelector('[data-reticle-harness-run]')).not.toBeNull();
+      expect(root.querySelector('[data-reticle-harness-copy-prompt]')).toBeNull();
     });
   });
 
@@ -693,39 +665,6 @@ describe('running the Harness from the panel', () => {
     expect(drive.stop).toHaveBeenCalled();
     views.paintDrive(undefined);
     expect(root.querySelector('[data-reticle-harness-run]')).not.toBeNull();
-  });
-});
-
-describe('whose coverage gate the HUD shows', () => {
-  const local = {
-    harnessGate: { percent: 87, unlocked: true },
-    prompt: 'local prompt',
-  };
-  const config: HarnessConfig = { provider: 'jev', harnessEnabled: false, harnessEntitled: true };
-
-  it("prefers the platform's verdict, which it enforces, keeping the local prompt when it sent none", () => {
-    const gate = harnessGateIn(local, {
-      ...config,
-      gate: {
-        unlocked: false,
-        percent: 75,
-        reason: 'Harness unlocks at 80% instrumentation. This app is at 75%: missing x.',
-      },
-    });
-    expect(gate).toEqual({
-      percent: 75,
-      unlocked: false,
-      reason: 'Harness unlocks at 80% instrumentation. This app is at 75%: missing x.',
-      prompt: 'local prompt',
-    });
-  });
-
-  it('falls back to the local score from an older platform', () => {
-    expect(harnessGateIn(local, config)).toEqual({
-      percent: 87,
-      unlocked: true,
-      prompt: 'local prompt',
-    });
   });
 });
 
