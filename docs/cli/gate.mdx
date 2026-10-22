@@ -49,7 +49,7 @@ One `reticle_gate` line. Real capture from this repository, with the flow lists 
 }
 ```
 
-`downgraded`, `deletedCoverage`, `unflowed`, `coverageRegressed`, `unexecuted`, `coverageStale` and `coverageAccepted` appear only when they are non-empty, and none was present in that run. The coverage categories need a coverage ledger, which a project gets from `reticle_verify { action: "crawl", exhaustive: true }` or `reticle_verify { action: "coverage", app: true }`; without one they never fire. The CLI prints this as a single line of JSON; it is pretty-printed here to be readable.
+`downgraded`, `deletedCoverage`, `unflowed`, `coverageRegressed`, `unexecuted`, `coverageStale` and `coverageAccepted` appear only when they are non-empty, `flowsWithoutSources` only when it is `true`, and none was present in that run. The coverage categories need a coverage ledger, which a project gets from `reticle_verify { action: "crawl", exhaustive: true }` or `reticle_verify { action: "coverage", app: true }`; without one they never fire. The CLI prints this as a single line of JSON; it is pretty-printed here to be readable.
 
 ## Exit codes
 

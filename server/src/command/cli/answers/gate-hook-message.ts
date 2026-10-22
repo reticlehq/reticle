@@ -18,6 +18,10 @@ export const GATE_SKIP_ENV = 'RETICLE_SKIP_GATE';
 
 const MAX_NAMED = 5;
 
+/** Where source stamps come from; the file extension alone does not say which plugin applies. */
+const STAMP_ADVICE =
+  'source stamps come from @reticlehq/vite-plugin (JSX and Svelte), @reticlehq/next or @reticlehq/babel-plugin. Vue and Angular templates have no source stamps yet';
+
 interface GateHookInput {
   /** Flows the changed files touch that have no passing artifact. */
   uncovered: readonly string[];
@@ -29,6 +33,8 @@ interface GateHookInput {
   deleted: readonly string[];
   /** Changed interactive components no saved flow has ever driven. */
   unflowed?: readonly string[];
+  /** Saved flows exist but none records a source location, so no flow can be matched to a file. */
+  flowsWithoutSources?: boolean;
   /** Coverage levels below their best, already worded (`branched 100% -> 50%`). */
   coverageRegressed?: readonly string[];
   /** Changed files the browser loaded and never ran a function of. */
@@ -67,7 +73,9 @@ export function gateHookMessage(exit: number, input: GateHookInput): string | un
     lines.push(`  coverage deleted while its files changed: ${name(input.deleted)}`);
   if (input.unflowed !== undefined && input.unflowed.length > 0)
     lines.push(
-      `  changed, and no saved flow drives it: ${name(input.unflowed)} — drive it with reticle_act_and_wait and a declared \`until\``,
+      true === input.flowsWithoutSources
+        ? `  changed, but the saved flows carry no source locations, so the gate cannot match a flow to them: ${name(input.unflowed)} — ${STAMP_ADVICE}`
+        : `  changed, and no saved flow drives it: ${name(input.unflowed)} — drive it with reticle_act_and_wait and a declared \`until\``,
     );
   if (input.coverageRegressed !== undefined && input.coverageRegressed.length > 0)
     lines.push(

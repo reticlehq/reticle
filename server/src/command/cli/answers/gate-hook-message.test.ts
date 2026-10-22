@@ -86,6 +86,32 @@ describe('a changed component nothing has driven', () => {
   });
 });
 
+describe('a changed component when no saved flow records sources', () => {
+  it('says the flows carry no sources instead of claiming nothing drove it', () => {
+    const out =
+      gateHookMessage(GateExit.FAIL, {
+        ...none,
+        unflowed: ['src/Badge.vue'],
+        flowsWithoutSources: true,
+      }) ?? '';
+    expect(out).toContain('src/Badge.vue');
+    expect(out).toContain('carry no source locations');
+    expect(out).toContain('@reticlehq/vite-plugin (JSX and Svelte)');
+    expect(out).toContain('@reticlehq/next');
+    expect(out).toContain('@reticlehq/babel-plugin');
+    expect(out).toContain('Vue and Angular templates have no source stamps yet');
+    expect(out).not.toContain('no saved flow drives it');
+  });
+
+  it('gives the same advice whatever the file extension', () => {
+    const advice = (unflowed: string[]): string =>
+      (gateHookMessage(GateExit.FAIL, { ...none, unflowed, flowsWithoutSources: true }) ?? '')
+        .split(' — ')
+        .at(-1) ?? '';
+    expect(advice(['src/Badge.tsx'])).toBe(advice(['src/Badge.vue']));
+  });
+});
+
 describe('coverage the hook reports', () => {
   it('names a fallen level with the call that finds what is uncovered, and unexecuted files', () => {
     const out =

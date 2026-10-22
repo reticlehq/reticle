@@ -210,12 +210,17 @@ export async function handleGate(
       .map(([name]) => name);
     // Only against a suite that exists: a project with no flows yet is NOTHING_TO_CHECK, and
     // demanding a flow per edited component on its first day would block every stop.
+    const flowSourcesAll = toFlowSources(allFlows);
     const unflowed =
       0 === allFlows.length
         ? []
-        : unflowedFiles(toFlowSources(allFlows), changed, (file) =>
+        : unflowedFiles(flowSourcesAll, changed, (file) =>
             isInteractiveSource(readChangedFile(process.cwd(), file)),
           );
+    // Flows exist but none carries a source stamp (a stack without source stamping, or flows saved before stamping was added): `unflowed`
+    // then names every changed component, which would read as "nothing drove it" when a flow did.
+    const flowsWithoutSources =
+      allFlows.length > 0 && flowSourcesAll.every((f) => 0 === (f.sources ?? []).length);
     // The coverage ledger, when one exists: a level that fell below its best, and changed code the
     // browser loaded and never ran. A project that never folded coverage has an empty ledger and
     // neither can fire.
@@ -266,6 +271,7 @@ export async function handleGate(
       ...(result.downgraded.length > 0 ? { downgraded: result.downgraded } : {}),
       ...(result.deleted.length > 0 ? { deletedCoverage: result.deleted } : {}),
       ...(result.unflowed.length > 0 ? { unflowed: result.unflowed } : {}),
+      ...(result.unflowed.length > 0 && flowsWithoutSources ? { flowsWithoutSources } : {}),
       ...(result.coverageRegressed.length > 0
         ? { coverageRegressed: result.coverageRegressed }
         : {}),
@@ -306,6 +312,7 @@ export async function handleGate(
           downgraded: result.downgraded.map((d) => d.flow),
           deleted: result.deleted,
           unflowed: result.unflowed,
+          flowsWithoutSources,
           coverageRegressed: result.coverageRegressed.map(
             (r) => `${r.level} ${String(r.was)}% -> ${String(r.now)}%`,
           ),

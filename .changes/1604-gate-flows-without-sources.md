@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle gate` blamed a missing flow when the saved flows carry no source locations.** On a stack without source stamping (Vue, for one) every changed component was listed under "no saved flow drives it", even when a flow had driven it and passed. When flows exist but none carries a source location, the Stop-hook message now says the gate cannot match those flows to a changed file and gives one fixed sentence on where source stamps come from (`@reticlehq/vite-plugin` for JSX and Svelte, `@reticlehq/next` or `@reticlehq/babel-plugin`; Vue and Angular templates have no source stamps yet), and the gate's JSON output carries `flowsWithoutSources: true`. Closes [#1604](https://github.com/reticlehq/reticle/issues/1604).
