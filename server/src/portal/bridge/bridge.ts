@@ -121,15 +121,23 @@ export const WS_CLOSE_REASON = {
     'opening sockets to this port.',
   /**
    * A page's HELLO failed the wire schema for a reason other than its protocol number — the SDK and
-   * this daemon are different releases whose contracts no longer agree. The socket is still closed
-   * with the short `invalid message` the SDK already prints; this is the sentence the no-session
-   * diagnosis records, because "never dialled the bridge" was what `init` said about a page this
-   * daemon had just turned away. Same `cause — fix` shape as the protocol-skew reasons.
+   * this daemon are different releases whose contracts no longer agree. The socket is closed with
+   * INVALID_HELLO_CLOSE, the short form of this that fits the 123-byte close-reason limit; this is
+   * the sentence the no-session diagnosis records, because "never dialled the bridge" was what `init`
+   * said about a page this daemon had just turned away. Same `cause — fix` shape as the
+   * protocol-skew reasons.
    */
   INVALID_HELLO:
     "invalid message: the page's hello does not match this daemon's wire contract — put " +
     '@reticlehq/browser, the build plugin and @reticlehq/server on one release, run `reticle stop`, ' +
     'then restart the dev server',
+  /**
+   * The close-frame form of INVALID_HELLO. The full sentence is far over the 123-byte close-reason
+   * limit, so this is the same `cause - fix` in one line. ASCII only: a multi-byte dash would
+   * spend the budget faster than the character count suggests.
+   */
+  INVALID_HELLO_CLOSE:
+    'invalid hello: version skew. Put SDK, build plugin and server on one release.',
 } as const;
 
 /**
@@ -159,6 +167,7 @@ const WS_CLOSE = {
   TOO_MANY_HANDSHAKES: [1013, 'too many pending handshakes'],
   HELLO_TIMEOUT: [1008, 'hello timeout'],
   INVALID_MESSAGE: [1008, 'invalid message'],
+  INVALID_HELLO: [1008, WS_CLOSE_REASON.INVALID_HELLO_CLOSE],
   HELLO_DUPLICATE: [1008, 'hello already received'],
   // AUTH_FAILED's code is 1008; the reason string is chosen at close time by authFailureReason
   // (no token vs wrong token vs different project). A reload cannot mint a credential into a CDN
@@ -543,7 +552,9 @@ export class Bridge {
             });
             return;
           }
-          socket.close(...WS_CLOSE.INVALID_MESSAGE);
+          const [code, closeReason] =
+            null !== refused ? WS_CLOSE.INVALID_HELLO : WS_CLOSE.INVALID_MESSAGE;
+          socket.close(code, closeReason);
           return;
         }
 

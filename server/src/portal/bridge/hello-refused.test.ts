@@ -26,7 +26,10 @@ const PAGE_URL = 'http://localhost:5173/';
 const PROJECT = 'acme-web-9f3c1d';
 
 /** Send one frame and resolve once the bridge closes the socket. */
-function sendAndAwaitClose(port: number, frame: unknown): Promise<void> {
+function sendAndAwaitClose(
+  port: number,
+  frame: unknown,
+): Promise<{ code: number; reason: string }> {
   return new Promise((resolve) => {
     const socket = new WebSocket(`ws://127.0.0.1:${String(port)}${RETICLE_WS_PATH}`, {
       origin: 'http://localhost',
@@ -34,11 +37,11 @@ function sendAndAwaitClose(port: number, frame: unknown): Promise<void> {
     socket.once('open', () => {
       socket.send(JSON.stringify(frame));
     });
-    socket.once('close', () => {
-      resolve();
+    socket.once('close', (code: number, reason: Buffer) => {
+      resolve({ code, reason: reason.toString('utf8') });
     });
     socket.once('error', () => {
-      resolve();
+      resolve({ code: 0, reason: '' });
     });
   });
 }
@@ -62,6 +65,25 @@ describe('a hello that fails the wire contract is remembered', () => {
     expect(closure?.page).toEqual({ url: PAGE_URL, projectId: PROJECT });
   });
 
+  it('closes with a short reason that names version skew and the fix', async () => {
+    const bridge = new Bridge({ port: 0 });
+    bridges.push(bridge);
+    const port = await bridge.ready;
+
+    const { code, reason } = await sendAndAwaitClose(port, {
+      kind: 'hello',
+      protocolVersion: RETICLE_PROTOCOL_VERSION,
+      url: PAGE_URL,
+      projectId: PROJECT,
+    });
+
+    expect(code).toBe(1008);
+    // WS close-reason limit is 123 UTF-8 BYTES, not characters.
+    expect(Buffer.byteLength(reason, 'utf8')).toBeLessThanOrEqual(123);
+    expect(reason).toMatch(/version skew/);
+    expect(reason).toMatch(/one release/);
+  });
+
   it('records the page on a protocol-number refusal too', async () => {
     const bridge = new Bridge({ port: 0 });
     bridges.push(bridge);
@@ -81,9 +103,11 @@ describe('a hello that fails the wire contract is remembered', () => {
     bridges.push(bridge);
     const port = await bridge.ready;
 
-    await sendAndAwaitClose(port, { kind: 'not-a-kind' });
+    const { reason } = await sendAndAwaitClose(port, { kind: 'not-a-kind' });
 
     expect(bridge.sessions.lastClosure()).toBeUndefined();
+    // Junk is not evidence of skew. It must NOT get the version-skew reason.
+    expect(reason).toBe('invalid message');
   });
 });
 
