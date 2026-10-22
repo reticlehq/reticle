@@ -43,6 +43,64 @@ describe('a11y', () => {
     expect(getStates(document.querySelector('input') as Element)).toContain(ElementState.CHECKED);
   });
 
+  it('reads a control inside a disabled fieldset as disabled, except in its first legend', () => {
+    render(`
+      <fieldset disabled>
+        <legend><button id="in-legend">Help</button></legend>
+        <button id="save">Save</button>
+        <input id="name" />
+      </fieldset>
+    `);
+    expect(getStates(document.getElementById('save') as Element)).toContain(ElementState.DISABLED);
+    expect(getStates(document.getElementById('name') as Element)).toContain(ElementState.DISABLED);
+    expect(getStates(document.getElementById('in-legend') as Element)).toContain(
+      ElementState.ENABLED,
+    );
+  });
+
+  it('reads a disabled option, and an option in a disabled optgroup, as disabled', () => {
+    render(`
+      <select>
+        <option id="open">Open</option>
+        <option id="off" disabled>Off</option>
+        <optgroup label="Legacy" disabled><option id="grouped">Grouped</option></optgroup>
+      </select>
+    `);
+    expect(getStates(document.getElementById('open') as Element)).toContain(ElementState.ENABLED);
+    expect(getStates(document.getElementById('off') as Element)).toContain(ElementState.DISABLED);
+    expect(getStates(document.getElementById('grouped') as Element)).toContain(
+      ElementState.DISABLED,
+    );
+  });
+
+  it('still reads aria-disabled as disabled', () => {
+    render('<div role="button" aria-disabled="true">Go</div>');
+    expect(getStates(document.querySelector('[role="button"]') as Element)).toContain(
+      ElementState.DISABLED,
+    );
+  });
+
+  it('reads the first summary of an open details as expanded, and of a closed one as not', () => {
+    render(`
+      <details id="faq" open><summary>FAQ</summary><summary id="second">More</summary>Answer</details>
+      <details><summary id="closed">Shipping</summary>Answer</details>
+    `);
+    expect(getStates(document.querySelector('#faq > summary') as Element)).toContain(
+      ElementState.EXPANDED,
+    );
+    expect(getStates(document.getElementById('second') as Element)).not.toContain(
+      ElementState.EXPANDED,
+    );
+    expect(getStates(document.getElementById('closed') as Element)).not.toContain(
+      ElementState.EXPANDED,
+    );
+  });
+
+  it('still reads aria-expanded as expanded', () => {
+    render('<button aria-expanded="true">Menu</button>');
+    expect(getStates(document.querySelector('button') as Element)).toContain(ElementState.EXPANDED);
+  });
+
   it('reports pressed state from aria-pressed', () => {
     render('<button aria-pressed="true">Bold</button><button aria-pressed="false">Italic</button>');
     const bold = document.querySelector('[aria-pressed="true"]') as Element;
