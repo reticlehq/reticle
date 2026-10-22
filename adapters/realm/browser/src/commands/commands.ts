@@ -1,10 +1,12 @@
 import {
+  ANIMATION_TARGET_ARG,
   ComponentStateReason,
   ElementQuerySchema,
   INSPECT_IN_VIEWPORT_FIELD,
   INSPECT_REVEAL_ARG,
   ReticleCommand,
   SnapshotMode,
+  SESSION_REF,
   TRANSPORT_LIMITS,
   selectPath,
   capDepth,
@@ -14,7 +16,7 @@ import {
 } from '@reticlehq/core';
 import { buildSnapshot } from '@/dom/snapshot.js';
 import { paintContextOf } from '@/dom/paint-context.js';
-import { matchQuery, runQuery } from '@/dom/query.js';
+import { embeddedRootsUnder, matchQuery, runQuery } from '@/dom/query.js';
 import { executeAction, executeSequence, type ActionStep } from '@/actions/actions.js';
 import { describe } from '@/dom/a11y.js';
 import { documentHasSourceStamps, sourceFor, formatSource } from '@/dom/addressing/source.js';
@@ -287,9 +289,87 @@ function readState(
  * `describe()` is reused rather than inventing a target shape: it is what `reticle_query` returns, so
  * the descriptor carries a `ref` the agent can pass straight to `reticle_act`.
  */
-function listAnimations(): unknown {
+function animationName(animation: Animation): string | undefined {
+  const fields = animation as { animationName?: unknown; transitionProperty?: unknown };
+  const name = str(fields.animationName);
+  if (name !== undefined && name.length > 0) return name;
+  const transition = str(fields.transitionProperty);
+  return transition !== undefined && transition.length > 0 ? transition : undefined;
+}
+
+interface AnimationTargetFilter {
+  report: {
+    target: string;
+    matched: boolean;
+    refs: string[];
+    count: number;
+    invalid?: boolean;
+    truncated?: boolean;
+  };
+  matches(target: Element | null): boolean;
+}
+
+function resolveAnimationTarget(target: string | undefined): AnimationTargetFilter | undefined {
+  if (target === undefined) return undefined;
+  const byRef = refs.resolve(target);
+  if (byRef !== null) {
+    const ref = refs.refFor(byRef);
+    return {
+      report: { target, matched: true, refs: [ref], count: 1 },
+      matches: (animationTarget: Element | null): boolean =>
+        animationTarget !== null && refs.refFor(animationTarget) === ref,
+    };
+  }
+  if (SESSION_REF.test(target)) {
+    return {
+      report: { target, matched: false, refs: [], count: 0 },
+      matches: (): boolean => false,
+    };
+  }
+  let elements: Element[];
+  try {
+    const roots: ParentNode[] = [document];
+    const container = document.body ?? document.documentElement;
+    if (container !== null) roots.push(...embeddedRootsUnder(container));
+    const seen = new Set<Element>();
+    elements = [];
+    for (const root of roots) {
+      for (const el of root.querySelectorAll<Element>(target)) {
+        if (seen.has(el)) continue;
+        seen.add(el);
+        elements.push(el);
+      }
+    }
+  } catch {
+    return {
+      report: { target, matched: false, refs: [], count: 0, invalid: true },
+      matches: (): boolean => false,
+    };
+  }
+  const allRefs = new Set(elements.map((el) => refs.refFor(el)));
+  const refsInReport = Array.from(allRefs).slice(0, TRANSPORT_LIMITS.MAX_COLLECTION_ITEMS);
+  return {
+    report: {
+      target,
+      matched: elements.length > 0,
+      refs: refsInReport,
+      count: elements.length,
+      ...(allRefs.size > refsInReport.length ? { truncated: true } : {}),
+    },
+    matches: (animationTarget: Element | null): boolean =>
+      animationTarget !== null && allRefs.has(refs.refFor(animationTarget)),
+  };
+}
+
+function listAnimations(args: Record<string, unknown> = {}): unknown {
   const doc = document as Document & { getAnimations?: () => Animation[] };
-  if (typeof doc.getAnimations !== 'function') return { animations: [] };
+  const targetFilter = resolveAnimationTarget(str(args[ANIMATION_TARGET_ARG]));
+  if (typeof doc.getAnimations !== 'function') {
+    return {
+      animations: [],
+      ...(targetFilter === undefined ? {} : { target: targetFilter.report }),
+    };
+  }
   const animations = doc.getAnimations().map((a) => {
     const effect = a.effect;
     const timing = effect?.getTiming();
@@ -297,14 +377,20 @@ function listAnimations(): unknown {
     // `null` is reported explicitly: omitting the key would make "this animation has no element"
     // indistinguishable from "this animation was not inspected".
     const target = (effect as KeyframeEffect | null)?.target ?? null;
+    const name = animationName(a);
     return {
+      ...(name === undefined ? {} : { name }),
       playState: a.playState,
       currentTime: a.currentTime,
       duration: timing?.duration,
       target: null === target ? null : describe(target),
+      ...(targetFilter === undefined ? {} : { targetMatches: targetFilter.matches(target) }),
     };
   });
-  return { animations };
+  return {
+    animations,
+    ...(targetFilter === undefined ? {} : { target: targetFilter.report }),
+  };
 }
 
 export function resolveNavigationUrl(rawUrl: string, baseUrl: string): string | null {
@@ -352,7 +438,7 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   reg.set(ReticleCommand.INSPECT, (args) =>
     inspect(str(args['ref']) ?? '', true === args[INSPECT_REVEAL_ARG]),
   );
-  reg.set(ReticleCommand.ANIMATIONS, () => listAnimations());
+  reg.set(ReticleCommand.ANIMATIONS, (args) => listAnimations(args));
   reg.set(ReticleCommand.CLOCK, (args) => {
     if (true === args['reset']) {
       resetClock();
