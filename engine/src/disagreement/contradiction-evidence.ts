@@ -418,19 +418,22 @@ function narrowPathOf(call: { url: string; matchUrl?: string }): string | undefi
 const PAGE_PARAMS = ['page', 'offset', 'cursor', 'after', 'start', 'skip', 'from'] as const;
 
 /** "Page 2", "page 2 of 6", "2 / 6", "2 of 6". */
-const PAGE_LABEL = /\bpage\s+(\d+)\b|\b(\d+)\s*(?:of|\/)\s*\d+\b/i;
+const PAGE_LABEL = /\bpage\s+(\d+)\b|\b(\d+)\s*(?:of|\/)\s*\d+(?:,\d{3})*\b/i;
+const RECORD_RANGE_LABEL =
+  /\b\d[\d,]*\s*(?:[-–—]|\bto\b)\s*\d[\d,]*\s+of\s+\d[\d,]*\b|\b\d[\d,]*\s+of\s+\d[\d,]*\s+(?:records|items|results)\b/i;
 
 export function pageNumber(text: unknown): number | undefined {
   if ('string' !== typeof text) return undefined;
+  if (RECORD_RANGE_LABEL.test(text)) return undefined;
   const match = PAGE_LABEL.exec(text);
   const raw = match?.[1] ?? match?.[2];
   return raw === undefined ? undefined : Number(raw);
 }
 
-/** The endpoint and its page parameter, for a GET that carries one. */
+/** The endpoint, page parameter and remaining query, for a GET that carries a page parameter. */
 export function pageRequest(
   event: ReticleEvent,
-): { path: string; param: string; value: string } | undefined {
+): { path: string; param: string; value: string; query: string } | undefined {
   if (event.type !== EventType.NET_REQUEST) return undefined;
   const method = event.data['method'];
   if ('string' !== typeof method || 'GET' !== method.toUpperCase()) return undefined;
@@ -444,7 +447,13 @@ export function pageRequest(
   }
   for (const param of PAGE_PARAMS) {
     const value = url.searchParams.get(param);
-    if (value !== null) return { path: url.pathname, param, value };
+    if (value !== null) {
+      url.searchParams.delete(param);
+      // jQuery `cache: false` changes `_` on every otherwise identical GET.
+      url.searchParams.delete('_');
+      url.searchParams.sort();
+      return { path: url.pathname, param, value, query: url.searchParams.toString() };
+    }
   }
   return undefined;
 }

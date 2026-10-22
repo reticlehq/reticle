@@ -824,7 +824,7 @@ export function findStalledPagination(
   const label = moved[0];
   if (label === undefined) return [];
 
-  const last = new Map<string, { param: string; value: string }>();
+  const last = new Map<string, { param: string; value: string; query: string }>();
   for (const event of prior) {
     const request = pageRequest(event);
     if (request !== undefined) last.set(request.path, request);
@@ -836,7 +836,8 @@ export function findStalledPagination(
     if (
       previous !== undefined &&
       previous.param === request.param &&
-      previous.value === request.value
+      previous.value === request.value &&
+      previous.query === request.query
     )
       return [
         {
