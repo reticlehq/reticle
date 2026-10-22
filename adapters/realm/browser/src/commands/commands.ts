@@ -3,6 +3,7 @@ import {
   ElementQuerySchema,
   INSPECT_IN_VIEWPORT_FIELD,
   INSPECT_REVEAL_ARG,
+  MatchArg,
   ReticleCommand,
   SnapshotMode,
   TRANSPORT_LIMITS,
@@ -340,6 +341,13 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
       undefined,
       undefined,
       true === args['diagnose'],
+      true === args[MatchArg.GEOMETRY] || args[MatchArg.OVERLAPS_QUERY] !== undefined
+        ? {
+            ...(args[MatchArg.OVERLAPS_QUERY] === undefined
+              ? {}
+              : { overlaps: ElementQuerySchema.parse(record(args[MatchArg.OVERLAPS_QUERY])) }),
+          }
+        : undefined,
     ),
   );
   reg.set(ReticleCommand.ACT, (args) => {

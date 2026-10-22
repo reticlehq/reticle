@@ -348,3 +348,197 @@ it('is inconclusive, never a pass, when a framework error dialog covers the matc
   expect(result.pass).toBe(false);
   expect(result.inconclusive).toContain('Next.js error dialog');
 });
+
+/**
+ * Geometry asks (#1539): the page measures, this side grades.
+ *
+ * The descriptor carries the measured box, the viewport, and the overflow amounts; the verdict and
+ * its failure message are decided here. A page that reports no geometry measured nothing, so the
+ * result is inconclusive rather than a guess in either direction.
+ */
+function withGeometry(geometry: object | undefined, count = 1): PredicateSession {
+  return {
+    ...session,
+    command: () =>
+      Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'stub',
+        result: {
+          matched: true,
+          count,
+          elements: [
+            {
+              ref: 'e1',
+              role: 'button',
+              name: 'Save',
+              states: [],
+              visible: true,
+              ...(geometry === undefined ? {} : { geometry }),
+            },
+          ],
+        },
+      }),
+  };
+}
+
+const FULL_BOX = {
+  box: { x: 10, y: 10, width: 200, height: 50 },
+  viewport: { width: 800, height: 600 },
+  fullyInViewport: true,
+  textClipped: false,
+  clippedX: 0,
+  clippedY: 0,
+};
+
+it('passes fullyInViewport when the page reports the whole box inside', async () => {
+  const result = await evalElement(
+    withGeometry(FULL_BOX),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { fullyInViewport: true },
+  );
+  expect(result.pass).toBe(true);
+});
+
+it('fails fullyInViewport with the measured box and viewport when part is outside', async () => {
+  const result = await evalElement(
+    withGeometry({ ...FULL_BOX, fullyInViewport: false }),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { fullyInViewport: true },
+  );
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toContain('200');
+  expect(result.failureReason).toContain('800');
+});
+
+it('fails a textClipped: false ask with the overflow amounts', async () => {
+  const result = await evalElement(
+    withGeometry({ ...FULL_BOX, textClipped: true, clippedX: 24, clippedY: 0 }),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { textClipped: false },
+  );
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toContain('24');
+});
+
+it('grades overlaps from the reported boxes', async () => {
+  const apart = await evalElement(
+    withGeometry({
+      ...FULL_BOX,
+      overlap: { intersects: false, box: { x: 400, y: 300, width: 100, height: 40 } },
+    }),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { overlaps: { testid: 'other' } },
+  );
+  expect(apart.pass).toBe(false);
+  expect(apart.failureReason).toContain('400');
+
+  const touching = await evalElement(
+    withGeometry({
+      ...FULL_BOX,
+      overlap: { intersects: true, box: { x: 100, y: 20, width: 100, height: 40 } },
+    }),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { overlaps: { testid: 'other' } },
+  );
+  expect(touching.pass).toBe(true);
+});
+
+it('is inconclusive when the page reported no geometry', async () => {
+  const result = await evalElement(
+    withGeometry(undefined),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { fullyInViewport: true },
+  );
+  expect(result.pass).toBe(false);
+  expect(result.inconclusive).toBeDefined();
+});
+
+it('is inconclusive when more elements matched than were described', async () => {
+  // Review case on #1635: `elements` is the described prefix of `count`. Grading the prefix
+  // under `not` could pass while an undescribed element satisfies the ask, so the locator
+  // must be narrowed first, the same as for the other post-match checks.
+  const result = await evalElement(
+    withGeometry(FULL_BOX, 2),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { fullyInViewport: true },
+  );
+  expect(result.pass).toBe(false);
+  expect(result.inconclusive).toBeDefined();
+  expect(result.inconclusive).toContain('Narrow the locator');
+});
+
+it('is inconclusive when the overlaps query matched no visible element', async () => {
+  // Review case on #1635: `not { element: card, overlaps: { testid: "typo" } }` must not pass.
+  // A missing target is a different fact from boxes not intersecting, and `not` propagates
+  // inconclusive instead of negating it — a plain failure here would become a wrong pass.
+  const result = await evalElement(
+    withGeometry(FULL_BOX),
+    { testid: 'card' },
+    undefined,
+    false,
+    true,
+    { overlaps: { testid: 'typo' } },
+  );
+  expect(result.pass).toBe(false);
+  expect(result.inconclusive).toBeDefined();
+  expect(result.inconclusive).toContain('typo');
+});
+
+it('is inconclusive when geometry asks are present and the locator matched nothing', async () => {
+  // Review case on #1635: the geometry check ran only on a match, so a locator that matched
+  // nothing stayed a plain miss, and `not` turned that miss into a pass. A missing element
+  // has no box to measure, so the answer is inconclusive, never a plain failure.
+  const noMatch: PredicateSession = {
+    ...session,
+    command: () =>
+      Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'stub',
+        result: { matched: false, count: 0, elements: [] },
+      }),
+  };
+  const result = await evalElement(noMatch, { testid: 'typo' }, undefined, false, true, {
+    overlaps: { testid: 'other' },
+  });
+  expect(result.pass).toBe(false);
+  expect(result.inconclusive).toBeDefined();
+  expect(result.inconclusive).toContain('typo');
+});
+
+it('refuses geometry asks combined with absent: true', async () => {
+  // Review case on #1635: the absent branch returns before checkGeometry, so the asks would be
+  // silently ignored. Refuse the combination instead of answering a question nobody asked.
+  const result = await evalElement(
+    withGeometry(FULL_BOX),
+    { testid: 'card' },
+    undefined,
+    true,
+    true,
+    { fullyInViewport: true },
+  );
+  expect(result.pass).toBe(false);
+  expect(result.inconclusive).toBeDefined();
+});

@@ -334,6 +334,19 @@ async function evaluatePredicateRaw(
         predicate.state,
         predicate.absent ?? false,
         diagnose,
+        predicate.fullyInViewport === undefined &&
+          predicate.textClipped === undefined &&
+          predicate.overlaps === undefined
+          ? undefined
+          : {
+              ...(predicate.fullyInViewport === undefined
+                ? {}
+                : { fullyInViewport: predicate.fullyInViewport }),
+              ...(predicate.textClipped === undefined
+                ? {}
+                : { textClipped: predicate.textClipped }),
+              ...(predicate.overlaps === undefined ? {} : { overlaps: predicate.overlaps }),
+            },
       );
     case PredicateKind.TEXT: {
       // `scope` passes straight through: the text predicate has always been an element query with
