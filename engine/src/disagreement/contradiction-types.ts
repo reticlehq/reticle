@@ -171,6 +171,13 @@ export interface ContradictionOptions {
    */
   namedNetUrls?: readonly string[] | undefined;
   /**
+   * The store paths and signal names the caller's predicate named (#1531). A change to one of them
+   * is the consequence the caller expected, so `action-had-no-effect` counts it as the action
+   * doing something. Undefined means nothing was declared.
+   */
+  namedStatePaths?: readonly string[] | undefined;
+  namedSignals?: readonly string[] | undefined;
+  /**
    * Endpoints the assertion declared as reads (`net { repeatable: true }`). Repeats on them are not
    * a double submit, so `duplicate-request` skips them (#1353). A call matches when its URL contains
    * `urlContains` and, if the clause named a method, its method is that one: a repeatable GET never
