@@ -1,5 +1,5 @@
 import { agentRunId } from '@/judgement/runs/drive-run.js';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WebSocket } from 'ws';
 import {
   EventType,
@@ -22,6 +22,7 @@ import { Session } from '@/portal/session/session.js';
 import { type SessionManager } from '@/portal/session/session-manager.js';
 import { TOOLS, type ToolDef, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
+import { MAX_BLOCKING_WAIT_MS } from '@/surface/tools/args/numeric-bounds.js';
 
 /**
  * Intent declared INLINE, on the two tools that draw a verdict.
@@ -39,6 +40,10 @@ const ROOT = '/repo/app/.reticle';
 const SIGNAL_NAME = 'todo:added';
 const STATEMENT = 'adding a todo announces it to the list';
 const EDIT_EPOCH = 7;
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const noopSocket = { send: () => undefined, close: () => undefined } as unknown as WebSocket;
 
@@ -156,6 +161,51 @@ describe('an inline intent lands in the same ledger reticle_intent writes', () =
     });
     const [intent] = await ledger.read();
     expect(intent?.statement).toBe(STATEMENT);
+  });
+
+  it('records and proves the prose on a graded wait', async () => {
+    const { session, deps, ledger } = harness();
+    session.pushEvent(signalEvent());
+    const result = (await tool(ReticleTool.WAIT_FOR).handler(deps, {
+      ...assertSignal,
+      intent: STATEMENT,
+    })) as VerdictResult;
+
+    expect(result.verified).toBe(Verified.YES);
+    const [intent] = await ledger.read();
+    expect(intent?.statement).toBe(STATEMENT);
+    expect(intent?.state).toBe(IntentState.PROVED);
+    expect(intent?.provenBy?.verdictId).toContain(ReticleTool.WAIT_FOR);
+  });
+
+  it('tells a resumed wait to repeat its intent, then proves that intent', async () => {
+    const wait = tool(ReticleTool.WAIT_FOR);
+    expect(wait.inputSchema['timeout_ms']?.description).toContain('same intent');
+    expect(wait.outputSchema?.['resume_ms']?.description).toContain('same intent');
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    const { session, deps, ledger } = harness();
+    const requested = MAX_BLOCKING_WAIT_MS + 30_000;
+    const pending = wait.handler(deps, {
+      predicate: assertSignal.predicate,
+      timeout_ms: requested,
+      intent: STATEMENT,
+    });
+    await vi.advanceTimersByTimeAsync(MAX_BLOCKING_WAIT_MS + 1_000);
+    const paused = (await pending) as { resume_ms?: number };
+
+    expect(paused.resume_ms).toBe(30_000);
+    expect((await ledger.read())[0]?.state).toBe(IntentState.BOUND);
+
+    session.pushEvent(signalEvent());
+    const resumed = (await wait.handler(deps, {
+      predicate: assertSignal.predicate,
+      timeout_ms: 0,
+      intent: STATEMENT,
+    })) as VerdictResult;
+
+    expect(resumed.verified).toBe(Verified.YES);
+    expect((await ledger.read())[0]?.state).toBe(IntentState.PROVED);
   });
 });
 

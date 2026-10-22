@@ -14,7 +14,7 @@ import { JournalRecorder, type JournalSink } from '@/memory/journal/journal-reco
 import { provenFromJournal } from '@/judgement/runs/artifact/run-context.js';
 import { Session } from '@/portal/session/session.js';
 import { type SessionManager } from '@/portal/session/session-manager.js';
-import { TOOLS, type ToolDef, type ToolDeps } from '@/surface/tools/tools.js';
+import { MERGED_TOOLS, TOOLS, type ToolDef, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 
 /**
@@ -59,6 +59,12 @@ const tool = (name: string): ToolDef => {
   return found;
 };
 
+const mergedTool = (name: string): ToolDef => {
+  const found = MERGED_TOOLS.find((t) => t.name === name);
+  if (found === undefined) throw new Error(`${name} is not on the merged surface`);
+  return found;
+};
+
 /** A live session with a journal attached, plus the deps the assert handler resolves it through. */
 function journalledSession(): {
   session: Session;
@@ -80,6 +86,7 @@ function journalledSession(): {
 }
 
 const SIGNAL_NAME = 'todo:added';
+const WAIT_INTENT = 'the list shows the new row';
 const assertSignal = { predicate: { kind: 'signal', name: SIGNAL_NAME }, timeout_ms: 0 };
 
 function signalEvent(): ReticleEvent {
@@ -132,5 +139,22 @@ describe('reticle_assert journals its verdict', () => {
     expect(proven).toHaveLength(1);
     expect(proven[0]?.claim).toContain(SIGNAL_NAME);
     expect(proven[0]?.verified).toBe(Verified.YES);
+  });
+
+  it('a merged wait records its supplied intent as one held claim', async () => {
+    const { session, deps, sink } = journalledSession();
+    session.pushEvent(signalEvent());
+    await mergedTool(ReticleTool.ASSERT).handler(deps, {
+      action: 'wait',
+      ...assertSignal,
+      intent: WAIT_INTENT,
+    });
+    await session.flushJournal();
+
+    const proven = provenFromJournal(sink.actions, sink.events);
+    expect(proven).toHaveLength(1);
+    expect(proven[0]?.verified).toBe(Verified.YES);
+    expect(sink.actions[0]?.effect).toEqual(expect.objectContaining({ intent: WAIT_INTENT }));
+    expect(sink.actions[0]?.seqRange, 'a wait observes but drives nothing').toBeUndefined();
   });
 });

@@ -286,11 +286,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       timeout_ms: waitForTimeoutMsSchema
         .optional()
         .describe(
-          `Maximum wait in milliseconds. Default: 4000, up to 600000. One call waits at most ${String(MAX_BLOCKING_WAIT_MS)} ms, because your MCP client aborts a longer request; past that it returns resume_ms, and you call again with timeout_ms: resume_ms and the same since to keep waiting.`,
+          `Maximum wait in milliseconds. Default: 4000, up to 600000. One call waits at most ${String(MAX_BLOCKING_WAIT_MS)} ms, because your MCP client aborts a longer request; past that it returns resume_ms, and you call again with timeout_ms: resume_ms, the same predicate, the same since, and the same intent to keep waiting.`,
         ),
       since: cursorSchema
         .optional()
         .describe('Cursor from a prior reticle_act — scopes the wait to events after that act.'),
+      intent: intentArg,
       ...sessionIdShape,
     },
     outputSchema: {
@@ -298,7 +299,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .number()
         .optional()
         .describe(
-          'Present when this call stopped at the per-call limit before the predicate was seen. Call again with timeout_ms set to this, the same predicate and the same since, to keep waiting.',
+          'Present when this call stopped at the per-call limit before the predicate was seen. Call again with timeout_ms set to this, the same predicate, the same since, and the same intent to keep waiting.',
         ),
       verified: z
         .string()
@@ -377,6 +378,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
+      const intentId = await linkInlineIntent(
+        deps,
+        asString(args['sessionId']),
+        asString(args['intent']),
+        PredicateKind.SETTLED === predicate.kind ? undefined : predicate,
+      );
       // See the note on the assert handler below: a wait cut off by a full-document navigation is
       // followed to the document that took over, rather than graded as a lost observation there.
       const predicateStarted = session.elapsed();
@@ -404,8 +411,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       }
       // The verdict, graded as `reticle_assert` grades it. This is `reticle_assert { action: "wait" }`,
       // and it answered `pass` with no `verified` — the one field an agent is told to gate on — while
-      // `action: "now"` carried it. Not journaled: a wait settles the page; the proof is the assert.
-      const { decision } = await assertVerdict(
+      // `action: "now"` carried it.
+      const { decision, verdictEffect } = await assertVerdict(
         session,
         predicate,
         verdict.pass,
@@ -414,6 +421,26 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         verdict.inconclusive,
         verdict.observationLost,
       );
+      if (intentId !== undefined && Verified.YES === decision['verified']) {
+        await dischargeInlineIntent(
+          deps,
+          asString(args['sessionId']),
+          intentId,
+          {
+            verdictId: inlineVerdictId(ReticleTool.WAIT_FOR, deps.now()),
+            grade: gradeOfPredicate(predicate),
+            at: deps.now(),
+            runId: runIdOfCall(session.id),
+          },
+          session.lastAct.source(),
+        );
+      }
+      // A graded wait is proof, but it observes rather than drives, so it has no attribution window.
+      session.recordAction(ReticleTool.WAIT_FOR, asRecord(args), {
+        ...verdictEffect,
+        ...checkWords(verdict),
+        ...checkIntent(predicate, verdict, asString(args['intent'])),
+      });
       // match reticle_assert — wrap with control + session health (throttle matters most while blocking)
       // and the buffer envelope, so a verdict reached over an evicted window says so.
       return withControl(session, {

@@ -138,10 +138,11 @@ describe('a wait the per-call cap paused', () => {
 
   it('is not graded, is not counted as a verification, and says how long is left', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    const recordAction = vi.fn(() => 'a1');
     const session = createFakeSession({
       lastAct: new LastAct(),
       elapsed: () => 1000,
-      recordAction: () => 'a1',
+      recordAction,
       eventsSince: () => [],
       queryEvents: () => Promise.resolve([]),
     });
@@ -164,5 +165,9 @@ describe('a wait the per-call cap paused', () => {
     expect(out['verified'], '"not yet" must not read as "no"').toBeUndefined();
     // What the metric and the feedback prompt read: a paused wait is not a verification at all.
     expect(verificationOf(ReticleTool.WAIT_FOR, out, 0)).toBeUndefined();
+    expect(
+      recordAction,
+      'a verdict that is not final must not enter the journal',
+    ).not.toHaveBeenCalled();
   });
 });
