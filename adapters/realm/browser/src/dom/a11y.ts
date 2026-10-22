@@ -336,18 +336,40 @@ export function getStates(el: Element, visible: boolean = isVisible(el)): Elemen
   const states: ElementState[] = [ElementState.PRESENT];
   states.push(visible ? ElementState.VISIBLE : ElementState.HIDDEN);
 
-  const disabledProp =
-    (isButton(el) || isInput(el) || isSelect(el) || isTextArea(el)) && el.disabled;
-  const disabled = disabledProp || true === ariaBool(el, 'aria-disabled');
+  // `:disabled` is the browser's own answer. It also covers a control in `<fieldset disabled>`
+  // (but not in its first `<legend>`), a disabled `<option>`, and an option in a disabled
+  // `<optgroup>`. The element's own `disabled` property is false in all three cases.
+  const disabled = el.matches(':disabled') || true === ariaBool(el, 'aria-disabled');
   states.push(disabled ? ElementState.DISABLED : ElementState.ENABLED);
 
   const checkedProp = isInput(el) && ('checkbox' === el.type || 'radio' === el.type) && el.checked;
   if (checkedProp || true === ariaBool(el, 'aria-checked')) states.push(ElementState.CHECKED);
-  if (true === ariaBool(el, 'aria-expanded')) states.push(ElementState.EXPANDED);
+  if (true === ariaBool(el, 'aria-expanded') || isOpenDetailsSummary(el)) {
+    states.push(ElementState.EXPANDED);
+  }
   if (true === ariaBool(el, 'aria-pressed')) states.push(ElementState.PRESSED);
   if (el.ownerDocument.activeElement === el) states.push(ElementState.FOCUSED);
 
   return states;
+}
+
+/**
+ * Whether this is the first `<summary>` child of an open `<details>`: the native disclosure button,
+ * which carries no `aria-expanded`. A later summary child is plain content.
+ */
+function isOpenDetailsSummary(el: Element): boolean {
+  const details = el.parentElement;
+  if (
+    HTML_SUMMARY_TAG !== el.localName ||
+    null === details ||
+    HTML_DETAILS_TAG !== details.localName
+  ) {
+    return false;
+  }
+  const summary = Array.from(details.children).find(
+    (child) => HTML_SUMMARY_TAG === child.localName,
+  );
+  return summary === el && details.hasAttribute(HTML_DETAILS_OPEN_ATTRIBUTE);
 }
 
 /** Every payment field (`cc-*`), both password hints, and a one-time code. */
