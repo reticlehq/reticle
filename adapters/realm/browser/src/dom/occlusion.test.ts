@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { hitTestOccluder } from './occlusion.js';
+import { setIgnoreSelectors } from './dom-ignore.js';
+import { installShadowRegistry } from './shadow-registry.js';
 
 /** jsdom has no layout, so elementFromPoint doesn't exist — install a controllable stub. */
 function stubTopElement(ret: Element | null): void {
@@ -207,29 +209,117 @@ describe('our chrome over an APP control stays invisible to the hit test', () =>
   });
 });
 
-describe('dev overlays stay invisible to the hit test', () => {
-  afterEach(clearStubs);
+describe('dev overlays report what actually takes the pointer (#1698)', () => {
+  afterEach(() => {
+    clearStubs();
+    setIgnoreSelectors([]);
+  });
 
-  it('does not report a zero-area Next dev-tools shadow host as an occluder', () => {
+  function shadowHit(root: ShadowRoot, hit: Element | null): void {
+    Object.defineProperty(root, 'elementFromPoint', { value: () => hit, configurable: true });
+  }
+
+  function nextOverlay(mode: ShadowRootMode = 'open'): {
+    app: HTMLButtonElement;
+    portal: Element;
+    root: ShadowRoot;
+    indicator: HTMLButtonElement;
+  } {
     const app = document.createElement('button');
     const portal = document.createElement('nextjs-portal');
     portal.style.cssText = 'position: fixed; width: 0; height: 0;';
     const indicator = document.createElement('button');
-    indicator.style.cssText = 'position: fixed; bottom: 0; left: 0;';
-    portal.attachShadow({ mode: 'open' }).append(indicator);
+    indicator.style.cssText = 'position: fixed; left: 0; top: 0; width: 100px; height: 100px;';
+    const root = portal.attachShadow({ mode });
+    root.append(indicator);
     document.body.append(app, portal);
-    stubStack(() => [portal, app, document.body]);
+    shadowHit(root, indicator);
+    // Chrome retargets to the host only where shadow content takes the pointer.
+    stubStack((x, y) => (x < 100 && y < 100 ? [portal, app, document.body] : [app, document.body]));
+    return { app, portal, root, indicator };
+  }
 
-    expect(hitTestOccluder(app, new DOMRect(100, 100, 100, 100))).toBeNull();
+  it('leaves a target away from the shadow content unobstructed', () => {
+    const { app } = nextOverlay();
+    expect(hitTestOccluder(app, new DOMRect(200, 200, 100, 100))).toBeNull();
   });
 
-  it('still reports an app overlay underneath a dev-tools host', () => {
+  it('reports the covering shadow descendant instead of its zero-area host', () => {
+    const { app, indicator } = nextOverlay();
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(indicator);
+  });
+
+  it('reports the indicator inside a full-viewport pointer-events:none host', () => {
+    const { app, portal, indicator } = nextOverlay();
+    portal.setAttribute('style', 'position: fixed; inset: 0; pointer-events: none;');
+    indicator.style.pointerEvents = 'auto';
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(indicator);
+  });
+
+  it('retains a host that itself takes the pointer', () => {
+    const { app, portal, root, indicator } = nextOverlay();
+    portal.setAttribute('style', 'position: fixed; inset: 0;');
+    indicator.style.pointerEvents = 'none';
+    shadowHit(root, portal);
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(portal);
+  });
+
+  it('resolves a captured closed root', () => {
+    const uninstall = installShadowRegistry();
+    try {
+      const { app, portal, indicator } = nextOverlay('closed');
+      expect(portal.shadowRoot).toBeNull();
+      expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(indicator);
+    } finally {
+      uninstall();
+    }
+  });
+
+  it('resolves nested shadow hosts to the element under the sampled point', () => {
+    const { app, root } = nextOverlay();
+    const nested = document.createElement('div');
+    const inner = document.createElement('button');
+    const nestedRoot = nested.attachShadow({ mode: 'open' });
+    nestedRoot.append(inner);
+    root.replaceChildren(nested);
+    shadowHit(root, nested);
+    shadowHit(nestedRoot, inner);
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(inner);
+  });
+
+  it('does not blame an ignored host for covering a target inside its shadow root', () => {
+    const { app, portal, root } = nextOverlay();
+    root.replaceChildren(app);
+    shadowHit(root, app);
+    stubStack(() => [portal, document.body]);
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
+  it('keeps the host when its shadow hit-test API is unavailable', () => {
+    const { app, portal, root } = nextOverlay();
+    Object.defineProperty(root, 'elementFromPoint', { value: undefined, configurable: true });
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(portal);
+  });
+
+  it.each(['data-agentation', 'data-nextjs-toast', 'data-nextjs-dialog', 'data-custom-widget'])(
+    'does not hide a light-DOM blocker excluded from snapshots by %s',
+    (attribute) => {
+      const app = document.createElement('button');
+      const overlay = document.createElement('div');
+      overlay.setAttribute(attribute, '');
+      setIgnoreSelectors(['[data-custom-widget]']);
+      document.body.append(app, overlay);
+      stubStack(() => [overlay, app, document.body]);
+      expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(overlay);
+    },
+  );
+
+  it('still reports an app overlay above the dev-tools host', () => {
     const app = document.createElement('button');
     const overlay = document.createElement('div');
     const portal = document.createElement('nextjs-portal');
     document.body.append(app, overlay, portal);
-    stubStack(() => [portal, overlay, app, document.body]);
-
+    stubStack(() => [overlay, portal, app, document.body]);
     expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(overlay);
   });
 });

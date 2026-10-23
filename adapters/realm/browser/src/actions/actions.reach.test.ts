@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { executeAction } from './actions.js';
 import { refs } from '@/dom/addressing/refs.js';
 import { setPresenterVisible } from '@/dom/dom-ignore.js';
+import { clickGeometry } from './actions-dom.js';
 
 const zero = new DOMRect(0, 0, 0, 0);
 
@@ -17,6 +18,34 @@ afterEach(() => {
 });
 
 describe('a click a person could not make', () => {
+  it.each([false, true])(
+    'names a Next dev overlay and resolves its real box (dialog=%s)',
+    (dialog) => {
+      const app = document.createElement('button');
+      app.getBoundingClientRect = () => new DOMRect(20, 20, 60, 60);
+      const portal = document.createElement('nextjs-portal');
+      const root = portal.attachShadow({ mode: 'open' });
+      const indicator = document.createElement('button');
+      if (dialog) indicator.setAttribute('data-nextjs-dialog', '');
+      indicator.textContent = 'N';
+      indicator.getBoundingClientRect = () => new DOMRect(20, 20, 60, 60);
+      root.append(indicator);
+      document.body.append(app, portal);
+      Object.defineProperty(document, 'elementFromPoint', {
+        value: () => portal,
+        configurable: true,
+      });
+      Object.defineProperty(root, 'elementFromPoint', { value: () => indicator });
+
+      const geometry = clickGeometry(app);
+      expect(geometry.occluded).toBe(true);
+      expect(geometry.occluderName).toBe(dialog ? 'Next.js error dialog' : 'Next.js dev overlay');
+      const blocker = refs.resolve(String(geometry.occludedBy));
+      expect(blocker).toBe(indicator);
+      expect(blocker?.getBoundingClientRect().toJSON()).toMatchObject({ width: 60, height: 60 });
+    },
+  );
+
   it('names what covers the target, not only its ref', async () => {
     document.body.innerHTML =
       '<a href="#d" data-testid="nav-deployments">Deployments</a><div data-testid="sheet"></div>';
