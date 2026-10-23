@@ -969,3 +969,97 @@ describe('a page an open overlay hid from assistive tech', () => {
     expect(isVisible(button)).toBe(false);
   });
 });
+
+describe('visually hidden (sr-only) text', () => {
+  // Screen-reader-only text is on the page for assistive tech and paints nothing, so a `visible`
+  // check must not pass on it, while a presence check and the accessible name still find it.
+  // jsdom computes `clip` only in its comma form, which is also how browsers serialize it.
+  function srOnly(apply: (el: HTMLElement) => void): HTMLElement {
+    const el = document.createElement('p');
+    el.textContent = 'Saved';
+    el.style.position = 'absolute';
+    apply(el);
+    document.body.append(el);
+    return el;
+  }
+  function clipOwnOverflow(el: HTMLElement): void {
+    el.style.overflow = 'hidden';
+    el.style.overflowX = 'hidden';
+    el.style.overflowY = 'hidden';
+  }
+  function boxed(el: HTMLElement, width: number, height: number): void {
+    el.getBoundingClientRect = () => new DOMRect(0, 0, width, height);
+    el.getClientRects = () => [new DOMRect(0, 0, width, height)] as unknown as DOMRectList;
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it.each([
+    [
+      'clip: rect(0px, 0px, 0px, 0px)',
+      (el: HTMLElement) => (el.style.clip = 'rect(0px, 0px, 0px, 0px)'),
+    ],
+    [
+      'clip: rect(1px, 1px, 1px, 1px)',
+      (el: HTMLElement) => (el.style.clip = 'rect(1px, 1px, 1px, 1px)'),
+    ],
+    ['clip-path: inset(50%)', (el: HTMLElement) => (el.style.clipPath = 'inset(50%)')],
+    ['clip-path: inset(0 50%)', (el: HTMLElement) => (el.style.clipPath = 'inset(0 50%)')],
+    [
+      'a 1x1 box clipping its overflow',
+      (el: HTMLElement) => {
+        clipOwnOverflow(el);
+        boxed(el, 1, 1);
+      },
+    ],
+  ])('reads %s as not visible but present', (_name, apply) => {
+    const el = srOnly(apply);
+    expect(isVisible(el)).toBe(false);
+    expect(matchQuery({ text: 'Saved' }, 'visible').count).toBe(0);
+    expect(matchQuery({ text: 'Saved' }).count).toBe(1);
+  });
+
+  it('keeps an sr-only label as the accessible name of its control', () => {
+    const button = document.createElement('button');
+    const label = document.createElement('span');
+    label.textContent = 'Close';
+    label.style.position = 'absolute';
+    label.style.clip = 'rect(0px, 0px, 0px, 0px)';
+    button.append(label);
+    document.body.append(button);
+    expect(isVisible(label)).toBe(false);
+    expect(getAccessibleName(button)).toBe('Close');
+  });
+
+  it.each([
+    [
+      'clip on a box that is not positioned',
+      (el: HTMLElement) => {
+        el.style.position = 'static';
+        el.style.clip = 'rect(0px, 0px, 0px, 0px)';
+      },
+    ],
+    [
+      'clip that leaves an area',
+      (el: HTMLElement) => (el.style.clip = 'rect(0px, 40px, 20px, 0px)'),
+    ],
+    ['clip with auto edges', (el: HTMLElement) => (el.style.clip = 'rect(auto, auto, auto, auto)')],
+    ['clip-path: inset(10%)', (el: HTMLElement) => (el.style.clipPath = 'inset(10%)')],
+    ['clip-path inset in pixels', (el: HTMLElement) => (el.style.clipPath = 'inset(50px)')],
+    ['a 1x1 box that does not clip', (el: HTMLElement) => boxed(el, 1, 1)],
+    [
+      'a 2x2 box clipping its overflow',
+      (el: HTMLElement) => {
+        clipOwnOverflow(el);
+        boxed(el, 2, 2);
+      },
+    ],
+  ])('keeps %s visible', (_name, apply) => {
+    expect(isVisible(srOnly(apply))).toBe(true);
+  });
+});

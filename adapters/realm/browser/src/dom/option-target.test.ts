@@ -36,8 +36,7 @@ function requireElement(id: string): HTMLElement {
 
 /**
  * The Radix bubble: a 1×1 clipped `<select>` plus a portal `role=option` that is what a user
- * clicks. The select stays `visible` to the visibility walk — the bug is that the walk cannot
- * tell this duplicate from a control.
+ * clicks. A select the user can see gets the same duplicate without the clip.
  */
 function mountDuplicate(selectWidth: number, selectHeight: number): HTMLSelectElement {
   document.body.innerHTML = '';
@@ -46,8 +45,10 @@ function mountDuplicate(selectWidth: number, selectHeight: number): HTMLSelectEl
   select.style.position = 'absolute';
   select.style.width = `${String(selectWidth)}px`;
   select.style.height = `${String(selectHeight)}px`;
-  select.style.overflow = 'hidden';
-  select.style.clip = 'rect(0, 0, 0, 0)';
+  if (selectWidth <= VISUALLY_HIDDEN_PX && selectHeight <= VISUALLY_HIDDEN_PX) {
+    select.style.overflow = 'hidden';
+    select.style.clip = 'rect(0, 0, 0, 0)';
+  }
   const pear = document.createElement('option');
   pear.value = 'pear';
   pear.textContent = 'Pear';
@@ -91,9 +92,9 @@ describe('a role query for an option prefers the visible actionable one', () => 
     const select = mountDuplicate(VISUALLY_HIDDEN_PX, VISUALLY_HIDDEN_PX);
     const portal = requireElement(PORTAL_ID);
     const native = nativeApple(select);
-    // Both nodes are visible to the walk. Hiding is the 1×1 clip, not display/aria-hidden.
-    expect(isVisible(select)).toBe(true);
-    expect(isVisible(native)).toBe(true);
+    // The sr-only clip hides the bubble from the visibility walk; only the portal is on screen.
+    expect(isVisible(select)).toBe(false);
+    expect(isVisible(native)).toBe(false);
     expect(isVisible(portal)).toBe(true);
 
     const found = appleQuery();

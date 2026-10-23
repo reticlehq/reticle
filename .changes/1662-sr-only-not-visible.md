@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser`: screen-reader-only text counted as visible.** Text hidden with the usual sr-only CSS (a positioned box with `clip: rect(0 0 0 0)`, a `clip-path: inset(50%)`, or a 1×1 box with `overflow: hidden`) is on the page for screen readers and paints nothing. A `text` check with `visible: true` could pass on a live-region announcement nobody saw, and an absence check on visible text failed because the announcement still matched. That text is now `visible: false`. A presence check still finds it, and it still names its control. Closes [#1662](https://github.com/reticlehq/reticle/issues/1662).
