@@ -34,6 +34,23 @@ async function settledJournal(session: Session) {
 }
 
 /**
+ * Did the caller name a session that has DEPARTED?
+ *
+ * `resolve` answers a departed id with its live SUCCESSOR. That is right for everything that
+ * observes -- a tab reloads, its id survives in sessionStorage, and an `assert` should keep
+ * working -- and wrong for a call that changes a session's state: it acts on a tab the caller never
+ * named (#983, #1774). An id the daemon has never seen is not departed; it falls through to
+ * `resolve`, which refuses it with the live ids named.
+ */
+function namedSessionDeparted(sessions: SessionManager, requested: string | undefined): boolean {
+  return (
+    requested !== undefined &&
+    sessions.get(requested) === undefined &&
+    sessions.departed(requested) !== undefined
+  );
+}
+
+/**
  * The session an id-less yield hands back.
  *
  * Yield is non-destructive: it only gives the tab back to the human. With several projects connected,
@@ -89,6 +106,26 @@ const DISCONNECT_NEEDS_SESSION_ID =
   '`disconnect: true` needs the `sessionId` of the page to detach — list them with ' +
   'reticle_session{action:"list"}; it is never picked for you, because detaching the wrong window ' +
   'cuts you off from the app.';
+
+/** A resume on a named session that has departed: there is no pause left to clear (#1774). */
+function resumeDepartedNote(requested: string): string {
+  return (
+    `session '${requested}' had already disconnected, so there was no pause to clear. ` +
+    'Nothing else was resumed: a named session is matched exactly, never substituted.'
+  );
+}
+
+/**
+ * A review on a named session that has departed. Marks belong to one tab, so a listing from another
+ * tab answers a question the caller did not ask.
+ */
+function reviewDepartedError(requested: string): string {
+  return (
+    `session '${requested}' had already disconnected, so its marks are gone. ` +
+    'No other session was read: a named session is matched exactly, never substituted. ' +
+    'List the live sessions with reticle_session{action:"list"}.'
+  );
+}
 
 /** The agent's claim, when it is one of the words a run verdict uses. */
 function claimOf(value: unknown): VerdictStatus | undefined {
@@ -162,25 +199,14 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
         return Promise.resolve({ ended: true, note: YIELD_WITHOUT_SESSION_NOTE });
       }
       // A NAMED session that has DEPARTED is already ended, and nothing else may be ended in its
-      // place.
-      //
-      // `resolve` answers a departed id with its live SUCCESSOR. That is right for everything
-      // that observes -- a tab reloads, its id survives in sessionStorage, and an `assert` should
-      // keep working -- and wrong here, because ending a session is destructive and cannot be
-      // taken back. Reported from the field: `sessionId: "sac14d46c…"` returned `ended: true` for
-      // `"s08e37e5c…"`, once where the requested session's browser had just closed, so the
-      // behaviour was "target missing => end something else" rather than "target missing => say
-      // so" (#983).
+      // place. Ending a session is destructive and cannot be taken back. Reported from the field:
+      // `sessionId: "sac14d46c…"` returned `ended: true` for `"s08e37e5c…"`, once where the
+      // requested session's browser had just closed, so the behaviour was "target missing => end
+      // something else" rather than "target missing => say so" (#983).
       //
       // Not an error, either: this tool is documented as idempotent, and "the session you named is
-      // already gone" is precisely the idempotent answer. An id the daemon has never seen IS a
-      // mistake about which tab, and falls through to `resolve`, which refuses it with the live
-      // ids named.
-      if (
-        requested !== undefined &&
-        deps.sessions.get(requested) === undefined &&
-        deps.sessions.departed(requested) !== undefined
-      ) {
+      // already gone" is precisely the idempotent answer.
+      if (namedSessionDeparted(deps.sessions, requested)) {
         return Promise.resolve({
           ended: true,
           sessionId: requested,
@@ -262,6 +288,18 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
           note: YIELD_WITHOUT_SESSION_NOTE,
         });
       }
+      // A NAMED session that has DEPARTED has nothing to hand back, and no other tab may be marked
+      // as waiting in its place (#1774). The same idempotent answer `end` gives.
+      if (namedSessionDeparted(deps.sessions, requested)) {
+        return Promise.resolve({
+          yielded: true,
+          mode: ask ? PresenterTone.ASK : PresenterTone.WAITING,
+          sessionId: requested,
+          note:
+            `session '${String(requested)}' had already disconnected, so there was nothing to yield. ` +
+            'Nothing else was yielded: a named session is matched exactly, never substituted.',
+        });
+      }
       const session = resolveYieldTarget(deps.sessions, requested);
       const note = asString(args['note']);
       const tone = ask ? PresenterTone.ASK : PresenterTone.WAITING;
@@ -286,9 +324,15 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       'Clear a human pause and resume driving the page. Sets state "active" and syncs the panel ' +
       '(PRESENTER). Call after you have addressed the human guidance returned by a paused reticle_act.',
     inputSchema: { ...sessionIdShape },
-    outputSchema: { ok: z.boolean() },
+    outputSchema: { ok: z.boolean(), note: z.string().optional() },
     handler: (deps, args) => {
-      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const requested = asString(args['sessionId']);
+      // A NAMED session that has DEPARTED has no pause to clear. Resuming its successor would clear a
+      // pause the human set by hand on a tab the agent never named (#1774). Idempotent, as `end` is.
+      if (namedSessionDeparted(deps.sessions, requested)) {
+        return Promise.resolve({ ok: true, note: resumeDepartedNote(String(requested)) });
+      }
+      const session = deps.sessions.resolve(requested);
       // setState echoes ACTIVE to the panel in a single PRESENTER push.
       session.setState(SessionState.ACTIVE);
       return Promise.resolve({ ok: true });
@@ -376,7 +420,13 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
         ),
     },
     handler: (deps, args) => {
-      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const requested = asString(args['sessionId']);
+      // A NAMED session that has DEPARTED is refused, not substituted: a listing or a `resolve` on its
+      // successor reads or retires marks on a tab the caller never named (#1774).
+      if (namedSessionDeparted(deps.sessions, requested)) {
+        throw new Error(reviewDepartedError(String(requested)));
+      }
+      const session = deps.sessions.resolve(requested);
       const resolveId = asString(args['resolve']);
       let resolved: boolean | undefined;
       let resolvedNote: string | undefined;

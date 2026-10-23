@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle_session { action: "yield" }`, `reticle_resume` and `reticle_review` acted on a different tab when the named tab had closed.** A call with the `sessionId` of a closed tab acted on the live tab that replaced it. A yield marked that tab as waiting. A resume cleared a pause that the human had set on it. A review listed its marks and could retire one of them. These calls now match a named session exactly, as `end` does. A yield or a resume on a closed tab answers that the tab has disconnected, and no other session changes. A review on a closed tab is refused, because its marks are gone. Closes [#1774](https://github.com/reticlehq/reticle/issues/1774).
