@@ -23,6 +23,10 @@ function render(text: string): void {
 const textOf = (result: ReturnType<typeof matchQuery>): string | undefined =>
   result.elements[0]?.text;
 
+/** The 4th and 5th arguments are wholePhrase and diagnose. Full text is the 6th. */
+const matchFull = (query: Parameters<typeof matchQuery>[0]): ReturnType<typeof matchQuery> =>
+  matchQuery(query, undefined, undefined, undefined, undefined, true);
+
 beforeEach(() => {
   document.body.innerHTML = '';
 });
@@ -39,15 +43,13 @@ suite('matchQuery describes text at display size by default', () => {
 suite('matchQuery with fullText describes the whole text', () => {
   it('returns a text longer than the display bound intact', () => {
     render(LEGEND);
-    expect(textOf(matchQuery(SCOPED, undefined, undefined, undefined, undefined, true))).toBe(
-      LEGEND,
-    );
+    expect(textOf(matchFull(SCOPED))).toBe(LEGEND);
   });
 
   it('still cuts a text beyond the full-text bound, and the cut is detectable', () => {
     const huge = 'z'.repeat(TRANSPORT_LIMITS.MAX_FULL_TEXT + 500);
     render(huge);
-    const text = textOf(matchQuery(SCOPED, undefined, undefined, undefined, undefined, true)) ?? '';
+    const text = textOf(matchFull(SCOPED)) ?? '';
     expect(text).toBe(`${'z'.repeat(TRANSPORT_LIMITS.MAX_FULL_TEXT)}…`);
     expect(text.length).toBeGreaterThan(TRANSPORT_LIMITS.MAX_FULL_TEXT);
   });
@@ -55,16 +57,14 @@ suite('matchQuery with fullText describes the whole text', () => {
   it('leaves a text exactly at the full-text bound whole', () => {
     const atBound = 'q'.repeat(TRANSPORT_LIMITS.MAX_FULL_TEXT);
     render(atBound);
-    expect(textOf(matchQuery(SCOPED, undefined, undefined, undefined, undefined, true))).toBe(
-      atBound,
-    );
+    expect(textOf(matchFull(SCOPED))).toBe(atBound);
   });
 
   it('keeps a fieldset legend that is the same text as the fieldset’s name', () => {
     // A fieldset's accessible name IS its legend. The descriptor leaves `text` out when it only
     // repeats the name, and a caller judging the text would read the missing field as empty.
     document.body.innerHTML = `<fieldset data-testid="legend"><legend>${LEGEND}</legend></fieldset>`;
-    const described = matchQuery(SCOPED, undefined, undefined, true).elements[0];
+    const described = matchFull(SCOPED).elements[0];
     expect(described?.name).toBe(LEGEND);
     expect(described?.text).toBe(LEGEND);
   });
@@ -81,13 +81,13 @@ suite('matchQuery says whether it honoured fullText, and how many it read', () =
 
   it('echoes the request, so a page that ignored it can be told from one that did not', () => {
     render(LEGEND);
-    expect(matchQuery(SCOPED, undefined, undefined, true).fullText).toBe(true);
+    expect(matchFull(SCOPED).fullText).toBe(true);
     expect(matchQuery(SCOPED).fullText).toBeUndefined();
   });
 
   it('reads at most MAX_FULL_TEXT_ELEMENTS in full, and count still says how many matched', () => {
     rows();
-    const full = matchQuery({ by: 'testid', value: 'row' }, undefined, undefined, true);
+    const full = matchFull({ by: 'testid', value: 'row' });
     expect(full.count).toBe(ROWS);
     expect(full.elements).toHaveLength(TRANSPORT_LIMITS.MAX_FULL_TEXT_ELEMENTS);
   });
