@@ -89,8 +89,42 @@ function selfCssHidden(el: Element, style: CSSStyleDeclaration | null): boolean 
     if (0 === Number.parseFloat(style.opacity || '1') && !stalledFade(el)) {
       return true;
     }
+    if (clippedAway(style)) {
+      return true;
+    }
   }
   return false;
+}
+
+/**
+ * The visually-hidden (sr-only) pattern keeps text for screen readers and paints none of it: a
+ * `clip: rect()` with no area on a positioned box, or a `clip-path: inset()` whose edges meet.
+ */
+function clippedAway(style: CSSStyleDeclaration): boolean {
+  const rect = /^rect\((.*)\)$/.exec(style.getPropertyValue('clip').trim());
+  if (null !== rect && ('absolute' === style.position || 'fixed' === style.position)) {
+    const [top, right, bottom, left] = (rect[1] ?? '').split(/[\s,]+/).map(Number.parseFloat);
+    // `auto` edges parse as NaN and leave that side unclipped.
+    if (right !== undefined && left !== undefined && right <= left) {
+      return true;
+    }
+    if (bottom !== undefined && top !== undefined && bottom <= top) {
+      return true;
+    }
+  }
+  const inset = /^inset\(([^)]*)\)$/.exec(style.getPropertyValue('clip-path').trim());
+  const edges =
+    inset?.[1]
+      ?.split(/\s+round\s/)[0]
+      ?.trim()
+      .split(/\s+/) ?? [];
+  // Percentages and zero lengths can be judged without layout.
+  const known = (edge: string): boolean => edge.endsWith('%') || 0 === Number.parseFloat(edge);
+  if (0 === edges.length || !edges.every(known)) {
+    return false;
+  }
+  const [top = 0, right = top, bottom = top, left = right] = edges.map(Number.parseFloat);
+  return top + bottom >= 100 || left + right >= 100;
 }
 
 /**
@@ -407,7 +441,7 @@ export function isInViewport(el: Element, memo?: Map<Element, boolean>): boolean
  * A box of no size that clips its own overflow shows nothing: a control collapsed to 0×0 read
  * `visible` and a visible-state check on it held. Only an element that clips is judged, because an
  * unclipped one can still show content overflowing it; one with no layout box (display: contents)
- * is left alone.
+ * is left alone. A 1×1 box clipped on both axes is the sr-only pattern and shows nothing either.
  */
 function collapsed(el: Element, memo: Map<Element, VisibilityInfo>): boolean {
   const own = ownVisibilityInfo(el, memo);
@@ -417,7 +451,12 @@ function collapsed(el: Element, memo: Map<Element, VisibilityInfo>): boolean {
   const rects = Array.from(el.getClientRects());
   return (
     rects.length > 0 &&
-    rects.every((r) => (own.clipX && 0 === r.width) || (own.clipY && 0 === r.height))
+    rects.every(
+      (r) =>
+        (own.clipX && 0 === r.width) ||
+        (own.clipY && 0 === r.height) ||
+        (own.clipX && own.clipY && r.width <= 1 && r.height <= 1),
+    )
   );
 }
 

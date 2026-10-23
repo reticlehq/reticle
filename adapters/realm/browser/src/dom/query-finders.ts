@@ -203,9 +203,9 @@ function isVisuallyHiddenBox(select: HTMLSelectElement): boolean {
  * so a form can submit, and paints the choice a person clicks as `role="option"` in a portal.
  * Both compute the same accessible name. The native node is first in the document, so a role+name
  * anchor resolved to it, replay dispatched a click, and the selected value never moved — the
- * handler lives on the portal node. The visibility walk does not catch this: the bubble select is
- * not `display:none` or `aria-hidden`, and an `<option>` has no layout box of its own, so both
- * come back `visible`.
+ * handler lives on the portal node. The visibility walk catches the bubble only by its sr-only
+ * clip; a bare 1×1 box that does not clip still reads `visible`, and so do its options, which have
+ * no layout box of their own.
  *
  * Drop every native `<option>` whose `<select>` is not a control a person can use. When a portal
  * duplicate exists it is the one replay should target; when the dropdown is closed and only the
