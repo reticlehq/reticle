@@ -414,6 +414,8 @@ export const VisualReason = {
   // quietly downgraded: a caller who asked for the whole scroll height and silently got the visible
   // part would bank a baseline that says nothing about the content below the fold.
   FULL_PAGE_UNSUPPORTED: 'full-page-unsupported',
+  // Desktop capture returns the whole window and cannot honor clip or ref.
+  CROP_UNSUPPORTED: 'crop-unsupported',
   // The shell answered, and the window had no composited frame to photograph yet. Distinct from
   // CAPTURE_FAILED on purpose: the capture ran and the window was empty, which is a timing fact
   // about the window rather than a failure of the capture path. Electron's `capturePage()` returns
