@@ -157,7 +157,17 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * flow, so it lives in core. Spelling `'network'` here would keep this number flat by breaking the
  * rule it protects. It joins the import `predicate-eval.ts` already has, so the file count is unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 68;
+/*
+ * 68 -> 69 for the `match` command's `fullText` argument, the same case as the raises above it.
+ *
+ * A `text` predicate's `satisfies` was graded on the 80-character display form of the element's
+ * text, so the evaluator has to ask the page for all of it. The argument's name crosses the wire,
+ * so it lives in core as `MatchArg` and rule 3 forbids spelling it here; inlining the string would
+ * keep this number flat by breaking the rule the number exists to protect. One more symbol in the
+ * two files that already import core, so the file count is unmoved. The bound it asks for,
+ * `TRANSPORT_LIMITS.MAX_FULL_TEXT`, is a constant the engine already borrowed the container of.
+ */
+const MAX_DISTINCT_SYMBOLS = 69;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

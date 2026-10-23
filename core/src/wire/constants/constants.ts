@@ -238,6 +238,12 @@ export const TRANSPORT_LIMITS = {
   MAX_STACK_LENGTH: 4000,
   MAX_SERIALIZE_DEPTH: 8,
   MAX_COLLECTION_ITEMS: 200,
+  /** What a descriptor carries of an element's text for an agent to READ: 80 characters and an ellipsis. */
+  MAX_DESCRIBED_TEXT: 80,
+  /** What a descriptor carries when a verdict has to JUDGE the text (`MatchArg.FULL_TEXT`); a text MORE than this long was cut. */
+  MAX_FULL_TEXT: 4000,
+  /** Elements a MATCH describes in full-text mode, about half the transport's character budget; `count` still reports all. */
+  MAX_FULL_TEXT_ELEMENTS: 32,
   MAX_OBJECT_KEYS: 200,
   MAX_STRING_LENGTH: 64 * 1024,
   /** Human review marks: the note the human types when flagging a mistake on the page. */

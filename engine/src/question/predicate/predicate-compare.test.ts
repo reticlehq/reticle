@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   EventType,
+  MatchArg,
   PredicateSchema,
   REDACTED_VALUE,
   ReticleCommand,
@@ -51,9 +52,15 @@ class PageSession implements PredicateSession {
       const text = this.texts[scope];
       const elements =
         text === undefined ? [] : [{ ref: 'e1', role: 'generic', name: '', text, visible: true }];
+      // A current page answers a full-text request and says so; a text side is read that way.
       return Promise.resolve({
         ok: true,
-        result: { matched: elements.length > 0, count: elements.length, elements },
+        result: {
+          matched: elements.length > 0,
+          count: elements.length,
+          elements,
+          ...(true === args?.[MatchArg.FULL_TEXT] ? { fullText: true } : {}),
+        },
       } as CommandResult);
     }
     if (ReticleCommand.STATE_READ === name) {
