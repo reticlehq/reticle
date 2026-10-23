@@ -6,6 +6,11 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Wait 7 days before a version update. The Shai-Hulud worms ship a poisoned patch release, and
+    # npm removes it within days. Auto-merge takes every green minor and patch PR, so without this a
+    # poisoned version can reach main with no person reading it. Security updates do not wait.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     groups:
       # Non-breaking bumps land together; majors come as individual PRs so they're reviewed on purpose.
@@ -44,6 +49,11 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Wait 7 days before a version update. The Shai-Hulud worms ship a poisoned patch release, and
+    # npm removes it within days. Auto-merge takes every green minor and patch PR, so without this a
+    # poisoned version can reach main with no person reading it. Security updates do not wait.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       actions:
@@ -59,6 +69,11 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Wait 7 days before a version update. The Shai-Hulud worms ship a poisoned patch release, and
+    # npm removes it within days. Auto-merge takes every green minor and patch PR, so without this a
+    # poisoned version can reach main with no person reading it. Security updates do not wait.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       minor-and-patch:
@@ -91,6 +106,11 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Wait 7 days before a version update. The Shai-Hulud worms ship a poisoned patch release, and
+    # npm removes it within days. Auto-merge takes every green minor and patch PR, so without this a
+    # poisoned version can reach main with no person reading it. Security updates do not wait.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       minor-and-patch:

@@ -942,7 +942,7 @@ jobs:
       # npm 10, so this one cell uses npm 11.
       - name: npm 11 for the Angular scaffold
         if: matrix.scaffold == 'angular'
-        run: npm install -g npm@11
+        run: npm install -g npm@11.11.1
       # Both phases share one registry publish/prepack. Recheck the control when its machinery
       # changes, plus nightly/manual qualification; product changes always run the positive install.
       - name: Install gate (with negative control when needed)

@@ -19,3 +19,12 @@ packages:
   # Local fixtures and demos. Never published; deliberately allowed to depend on anything.
   - 'apps/*'
   - 'apps/examples/*'
+
+# Do not resolve a version that is less than 3 days old. The Shai-Hulud worms (keyv 6.0.0 in August
+# 2026, tensorlake 0.5.144 in October 2026) published a poisoned patch release, and npm removed each
+# one within days. A frozen-lockfile install does not resolve, so this applies only when the lockfile
+# changes. Our own packages are excluded, because a release must be installable at once.
+minimumReleaseAge: 4320
+minimumReleaseAgeExclude:
+  - '@reticlehq/*'
+  - 'open-verification'
