@@ -2,6 +2,7 @@ import { refs } from '@/dom/addressing/refs.js';
 import { readTestId } from '@/dom/addressing/testid-attr.js';
 import { getAccessibleName, getRole } from '@/dom/a11y.js';
 import { hitTestOccluder } from '@/dom/occlusion.js';
+import { devOverlayName } from '@/dom/dom-ignore.js';
 import { nativeFrame } from '@/timers/native/native-timers.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import type { ActionTarget } from '@/dom/realm.js';
@@ -217,7 +218,11 @@ function hitTest(
   const top = hitTestOccluder(el, rect);
   return null === top
     ? { occluded: false, occludedBy: null }
-    : { occluded: true, occludedBy: refs.refFor(top), occluderName: nameOf(top) };
+    : {
+        occluded: true,
+        occludedBy: refs.refFor(top),
+        occluderName: devOverlayName(top) ?? nameOf(top),
+      };
 }
 
 /** An element in words a person can find it by: its test id, else role and name, else its tag. */
