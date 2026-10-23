@@ -231,8 +231,8 @@ function runtimeOf(deps: ToolDeps, sessionId: string | undefined): string | unde
  * to one app and the screenshot aimed at a different (desktop) session, CDP fails and the shell
  * capture is still correct.
  *
- * `clip`/`ref` are honoured only on the CDP path — the shell photographs the whole window. Scoping is
- * left to the caller rather than cropped here, so a clip never silently becomes a full-window image.
+ * CDP and leased pages honor `clip`/`ref`. The desktop shell photographs the whole window,
+ * so scoped desktop captures are refused instead of saved or compared as full-window images.
  *
  * `fullPage` is different, because it cannot be emulated by cropping: only WebKitGTK (Tauri on Linux)
  * can render a full document offscreen. Where the shell cannot, it REFUSES and this reports
@@ -273,7 +273,14 @@ async function capture(
   // The window's own backing store, via the Electron/Tauri adapter — the only route whose pixels
   // really are the desktop app.
   const desktop = await desktopCapture(deps, sessionId, true === args['fullPage']);
-  if (desktop.png !== undefined) return { png: desktop.png, runtime: runtimeOf(deps, sessionId) };
+  if (desktop.png !== undefined) {
+    // Check the route that supplied the pixels, not the session runtime: a desktop session can
+    // use CDP, and a page without desktop capture can still fall back to a leased browser.
+    if (args['clip'] !== undefined || args['ref'] !== undefined) {
+      return { reason: VisualReason.CROP_UNSUPPORTED };
+    }
+    return { png: desktop.png, runtime: runtimeOf(deps, sessionId) };
+  }
   if (desktop.reason !== undefined) return desktop;
 
   /*

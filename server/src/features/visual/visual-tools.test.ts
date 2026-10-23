@@ -1,6 +1,6 @@
 import { removeTempDir } from '@/machine/temp-dir.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, stat } from 'node:fs/promises';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PNG } from 'pngjs';
@@ -16,6 +16,7 @@ import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/f
 import type { RealInputProvider } from '@/portal/input/real-input.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
+import { AppRuntime, RETICLE_CAPTURE_FILE_PREFIX, ReticleCommand } from '@reticlehq/core';
 
 const now = (): number => 0;
 const SESSION_URL = 'http://localhost:3100/';
@@ -91,6 +92,93 @@ describe('visual tools — temp dir, never touches the repo', () => {
     expect(r.ok).toBe(false);
     expect(r.reason).toBe(VisualReason.NO_PROVIDER);
     expect(r.recommendation).toContain('reticle drive');
+  });
+  describe.each([AppRuntime.ELECTRON, AppRuntime.TAURI])('%s desktop capture', (runtime) => {
+    it.each([
+      { label: 'whole window', scope: {}, refused: false },
+      { label: 'clip', scope: { clip: { x: 1, y: 1, width: 2, height: 2 } }, refused: true },
+      { label: 'ref', scope: { ref: 'panel' }, refused: true },
+    ])('handles $label', async ({ scope, refused }) => {
+      const captureDir = await mkdtemp(join(tmpdir(), RETICLE_CAPTURE_FILE_PREFIX));
+      const capturePath = join(captureDir, `${RETICLE_CAPTURE_FILE_PREFIX}test.png`);
+      try {
+        await writeFile(capturePath, solidPng([255, 255, 255]));
+        const command = vi.fn((name: string) => {
+          if (name !== ReticleCommand.CAPTURE) throw new Error(`Unexpected command: ${name}`);
+          return Promise.resolve({ ok: true, result: { ok: true, path: capturePath } });
+        });
+        const session = { ...fakeSession(runtime), command } as unknown as Session;
+        const d = deps();
+        d.sessions = { resolve: () => session } as unknown as SessionManager;
+        const result = await tool(ReticleTool.SCREENSHOT).handler(d, {
+          name: 'desktop-scope',
+          sessionId: 'demo',
+          ...scope,
+        });
+        if (refused) {
+          expect(result).toMatchObject({ ok: false, reason: VisualReason.CROP_UNSUPPORTED });
+          expect(result).not.toMatchObject({ saved: true });
+          expect(await readdir(root).catch(() => [])).toEqual([]);
+          // The shared capture path must refuse scoped visual diffs too.
+          await writeFile(capturePath, solidPng([255, 255, 255]));
+          expect(
+            await tool(ReticleTool.VISUAL_DIFF).handler(d, {
+              baseline: 'desktop-scope',
+              sessionId: 'demo',
+              ...scope,
+            }),
+          ).toMatchObject({ ok: false, reason: VisualReason.CROP_UNSUPPORTED });
+        } else {
+          expect(result).toMatchObject({ ok: true, saved: true });
+        }
+        expect(command).toHaveBeenCalledWith(ReticleCommand.CAPTURE, { fullPage: false });
+        expect(await readdir(captureDir)).toEqual([]);
+      } finally {
+        await removeTempDir(captureDir);
+      }
+    });
+  });
+
+  it.each(['clip', 'ref'])('keeps browser %s cropping for a desktop session', async (scope) => {
+    const clip = { x: 1, y: 1, width: 2, height: 2 };
+    const png = solidPng([255, 255, 255]);
+    const screenshot = vi.fn(() => Promise.resolve(png));
+    const provider = { ...fakeProvider(png), screenshot };
+    const d = deps(provider, AppRuntime.ELECTRON);
+    const command = vi.fn(() => Promise.resolve({ ok: true, result: { box: clip } }));
+    d.sessions = {
+      resolve: () => ({ ...fakeSession(AppRuntime.ELECTRON), command }),
+    } as unknown as SessionManager;
+    expect(
+      await tool(ReticleTool.SCREENSHOT).handler(d, {
+        name: 'browser-scope',
+        sessionId: 'demo',
+        ...('clip' === scope ? { clip } : { ref: 'panel' }),
+      }),
+    ).toMatchObject({ ok: true, saved: true });
+    expect(screenshot).toHaveBeenCalledWith(SESSION_URL, { clip });
+    expect(command).not.toHaveBeenCalledWith(ReticleCommand.CAPTURE, expect.anything());
+  });
+
+  it('passes clip to the leased screenshot', async () => {
+    const clip = { x: 100, y: 50, width: 300, height: 200 };
+
+    const screenshotLease = vi.fn().mockResolvedValue(solidPng([255, 255, 255]));
+
+    const d = deps();
+
+    // The fake pool records the options passed to the lease.
+    d.pool = {
+      screenshotLease,
+    } as unknown as NonNullable<ToolDeps['pool']>;
+
+    await tool(ReticleTool.SCREENSHOT).handler(d, {
+      name: 'leased-clip',
+      sessionId: 'demo',
+      clip,
+    });
+
+    expect(screenshotLease).toHaveBeenCalledWith('demo', expect.objectContaining({ clip }));
   });
 
   // Re-check: a Tauri release build without `in-release` refused the capture, and the agent
