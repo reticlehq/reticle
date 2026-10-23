@@ -7,7 +7,7 @@ icon: circle-check
 `reticle verify` is the CI command: no model in the loop, no MCP. On a free port it boots the engine in drive mode, waits for the in-page SDK to dial back, replays every saved flow, renders the verdict, and exits. When a Reticle daemon already owns the port, it asks that daemon to replay the flows instead.
 
 ```bash
-npx @reticlehq/server verify <url> [--headed] [--timeout N] [--storage-state <file>]
+npx @reticlehq/server verify <url> [--headed] [--timeout N] [--storage-state <file>] [--expect <json> | --expect-file <path>]
 ```
 
 It uses the same runner and the same verdict as the MCP and HTTP paths, so a platform agent that can only run a shell command gets a byte-identical artifact.
@@ -27,6 +27,13 @@ It uses the same runner and the same verdict as the MCP and HTTP paths, so a pla
 | `--expect '<json predicate>'` / `--expect-file <path>` | string | unset | One verdict on one predicate, no saved flows needed. Asks the daemon that owns the port and never starts one; with no daemon it refuses. Waits up to `--timeout` for the predicate, the way `reticle_assert { action: "wait" }` does, so a request still in flight after the page loads is waited for. Exits `0` only on `verified: "yes"`. Cannot be combined with `--storage-state` |
 | `--explore` / `--persona "<who does what>"` | boolean / string | off | No saved flows yet? The Harness drives the app and records them. `--persona` implies `--explore` |
 | `--confirm-dangerous` | boolean | off | Let this run press the controls the replay guard holds as destructive, such as a "Place order" or "Delete" button in a saved flow. Without it such a step is refused, so a checkout flow cannot pass. It covers this run only and is never saved into a flow. |
+
+On Windows PowerShell, write the predicate to a file and pass `--expect-file` so the JSON never goes through shell quoting:
+
+```powershell
+'{"kind":"text","contains":"Saved"}' | Set-Content expect.json
+npx @reticlehq/server verify http://localhost:3000 --expect-file expect.json
+```
 
 ## What it prints
 
