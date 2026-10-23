@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — TanStack Query entries whose key holds an object no longer overwrite each other.** The adapter wrote each key part with `String(part)`, so `['todo', { id: 1 }]` and `['todo', { id: 2 }]` both became `todo/[object Object]`. `reticle_state` then showed one entry, and a `state` predicate could read the wrong query. Object and array parts are now JSON with sorted keys, the same order TanStack uses for its own key hash. String and number parts keep their form, so saved `state` paths do not change. Closes [#1645](https://github.com/reticlehq/reticle/issues/1645).

@@ -59,6 +59,25 @@ function copyPlain(value: unknown, seen: WeakMap<object, unknown>): unknown {
   return out;
 }
 
+/**
+ * Write one part of a TanStack query key as text. A string or a number keeps its form, so saved
+ * state paths do not change. An object or an array becomes JSON with sorted plain-object keys.
+ * TanStack hashes a query key the same way, so two keys that TanStack treats as one query also
+ * give one state path.
+ */
+function queryKeyPart(part: unknown): string {
+  if ('object' !== typeof part || null === part) return String(part);
+  return JSON.stringify(part, (_key, value: unknown) => {
+    if ('object' !== typeof value || null === value || Array.isArray(value)) return value;
+    const proto: unknown = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return value;
+    const plain = value as Record<string, unknown>;
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(plain).sort()) sorted[key] = plain[key];
+    return sorted;
+  });
+}
+
 /** The minimum of TanStack Query's `QueryClient` that this adapter touches. */
 interface QueryLike {
   queryKey: readonly unknown[];
@@ -112,7 +131,7 @@ export function tanstackQueryStore(client: QueryClientLike): StoreLike {
     getState: (): Record<string, QuerySnapshot> => {
       const out: Record<string, QuerySnapshot> = {};
       for (const query of client.getQueryCache().getAll()) {
-        const key = query.queryKey.map((part) => String(part)).join('/');
+        const key = query.queryKey.map(queryKeyPart).join('/');
         out[key] = {
           status: query.state.status,
           fetchStatus: query.state.fetchStatus,
