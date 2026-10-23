@@ -373,7 +373,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .string()
       .optional()
       .describe(
-        "Absolute path of the .reticle folder this lease's runs belong in — the caller's project. Without it, the page's project id decides, and a page with none lands in ~/.reticle/unmatched, which nothing syncs.",
+        "Absolute path of the .reticle folder this lease's runs belong in — the caller's project. The project folder itself is accepted when it contains a .reticle. Without it, the page's project id decides, and a page with none lands in ~/.reticle/unmatched, which nothing syncs.",
       ),
   },
   outputSchema: {

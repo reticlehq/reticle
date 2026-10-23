@@ -9,19 +9,42 @@
  * reconnect after a navigation, or an app that names its own session, still finds the claim. Lives
  * until the lease is released.
  */
-import { basename, isAbsolute } from 'node:path';
+import { statSync } from 'node:fs';
+import { basename, isAbsolute, join } from 'node:path';
 import { RETICLE_URL_PARAM, ReticleDir } from '@reticlehq/core';
 
 const claims = new Map<string, string>();
 /** Every root claimed in this process. Kept after release, so sync still sends what the lease wrote. */
 const everClaimed = new Set<string>();
 
-/** Claim `root` for the session a lease registers. Refuses anything but an absolute `.reticle`. */
-export function claimArtifactRoot(leaseId: string, root: string): void {
-  if (!isAbsolute(root) || ReticleDir.ROOT !== basename(root))
+/**
+ * The `.reticle` folder a caller meant by `root`. Agents pass the project folder, the one they work
+ * in, so a folder that holds a `.reticle` stands for it. Anything else is refused with the path to pass.
+ */
+function resolveArtifactRoot(root: string): string {
+  if (!isAbsolute(root))
     throw new Error(`root must be an absolute path to a ${ReticleDir.ROOT} folder, got ${root}`);
-  claims.set(leaseId, root);
-  everClaimed.add(root);
+  if (ReticleDir.ROOT === basename(root)) return root;
+  const inside = join(root, ReticleDir.ROOT);
+  if (isDirectory(inside)) return inside;
+  throw new Error(
+    `root must be the ${ReticleDir.ROOT} folder, or a project folder that contains one, got ${root}. Pass ${inside}`,
+  );
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Claim `root` for the session a lease registers. Takes a `.reticle` folder or the project folder holding one. */
+export function claimArtifactRoot(leaseId: string, root: string): void {
+  const resolved = resolveArtifactRoot(root);
+  claims.set(leaseId, resolved);
+  everClaimed.add(resolved);
 }
 
 /** Every root a lease claimed in this process, released or not. Sync reads it to find the work. */

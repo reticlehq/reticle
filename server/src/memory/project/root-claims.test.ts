@@ -4,6 +4,9 @@
  * nothing linked or synced, and try's wait for its run timed out. A lease now carries the root of
  * whoever opened it, and the session it registers writes there.
  */
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { claimArtifactRoot, claimedArtifactRoot, dropArtifactRootClaim } from './root-claims.js';
 
@@ -31,9 +34,33 @@ describe('artifact root claims', () => {
     expect(claimedArtifactRoot('tab-9', 'http://localhost:3000/')).toBeUndefined();
   });
 
-  it('refuses a root that is not an absolute .reticle folder', () => {
-    expect(() => claimArtifactRoot('lease-1', 'relative/.reticle')).toThrow();
-    expect(() => claimArtifactRoot('lease-1', '/work/shop')).toThrow();
+  it('refuses a relative root', () => {
+    expect(() => claimArtifactRoot('lease-1', 'relative/.reticle')).toThrow(/absolute/);
+  });
+
+  it('takes a project folder that holds a .reticle as that .reticle', () => {
+    const project = mkdtempSync(join(tmpdir(), 'reticle-root-'));
+    try {
+      mkdirSync(join(project, '.reticle'));
+      claimArtifactRoot('lease-1', project);
+      expect(claimedArtifactRoot('lease-1', 'http://localhost:3000/')).toBe(
+        join(project, '.reticle'),
+      );
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a folder with no .reticle and names the path to pass', () => {
+    const project = mkdtempSync(join(tmpdir(), 'reticle-root-'));
+    try {
+      expect(() => claimArtifactRoot('lease-1', project)).toThrow(
+        `Pass ${join(project, '.reticle')}`,
+      );
+      expect(claimedArtifactRoot('lease-1', 'http://localhost:3000/')).toBeUndefined();
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
   });
 
   it('forgets the claim when the lease is released', () => {
