@@ -50,6 +50,41 @@ describe('tanstackQueryStore', () => {
     expect(Object.keys(state)).toEqual(['deployments/42']);
   });
 
+  it('keeps queries apart when their keys differ only in an object part (#1645)', () => {
+    // String(part) made both keys `todo/[object Object]`, so the later query replaced the
+    // earlier one and a state predicate could read the wrong query.
+    const todo = (queryKey: unknown[], data: unknown) => ({
+      queryKey,
+      state: { status: 'success', data },
+      isStale: () => false,
+    });
+    const { client } = fakeQueryClient([
+      todo(['todo', { id: 1 }], 'first'),
+      todo(['todo', { id: 2 }], 'second'),
+    ]);
+    const state = tanstackQueryStore(client).getState() as Record<string, Record<string, unknown>>;
+    expect(Object.keys(state)).toEqual(['todo/{"id":1}', 'todo/{"id":2}']);
+    expect(state['todo/{"id":1}']?.['data']).toBe('first');
+    expect(state['todo/{"id":2}']?.['data']).toBe('second');
+  });
+
+  it('serializes object and array key parts with a stable key order', () => {
+    // TanStack hashes a key the same for any property order, so the state path must too.
+    const page = (queryKey: unknown[]) => ({
+      queryKey,
+      state: { status: 'success', data: null },
+      isStale: () => false,
+    });
+    const { client } = fakeQueryClient([
+      page(['todos', { status: 'done', page: 2, filter: { tag: 'a', owner: 'me' } }]),
+      page(['tags', ['b', 'a']]),
+    ]);
+    expect(Object.keys(tanstackQueryStore(client).getState() as object)).toEqual([
+      'todos/{"filter":{"owner":"me","tag":"a"},"page":2,"status":"done"}',
+      'tags/["b","a"]',
+    ]);
+  });
+
   it('carries freshness, not just the value — the whole point of reading the cache', () => {
     // A stale-cache bug renders a plausible number and fires NO request. Only isStale/fetchStatus/
     // dataUpdatedAt let an agent assert the UI read from FRESH data rather than merely correct-looking
