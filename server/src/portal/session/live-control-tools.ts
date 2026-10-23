@@ -107,6 +107,26 @@ const DISCONNECT_NEEDS_SESSION_ID =
   'reticle_session{action:"list"}; it is never picked for you, because detaching the wrong window ' +
   'cuts you off from the app.';
 
+/** A resume on a named session that has departed: there is no pause left to clear (#1774). */
+function resumeDepartedNote(requested: string): string {
+  return (
+    `session '${requested}' had already disconnected, so there was no pause to clear. ` +
+    'Nothing else was resumed: a named session is matched exactly, never substituted.'
+  );
+}
+
+/**
+ * A review on a named session that has departed. Marks belong to one tab, so a listing from another
+ * tab answers a question the caller did not ask.
+ */
+function reviewDepartedError(requested: string): string {
+  return (
+    `session '${requested}' had already disconnected, so its marks are gone. ` +
+    'No other session was read: a named session is matched exactly, never substituted. ' +
+    'List the live sessions with reticle_session{action:"list"}.'
+  );
+}
+
 /** The agent's claim, when it is one of the words a run verdict uses. */
 function claimOf(value: unknown): VerdictStatus | undefined {
   const claims: readonly unknown[] = [
@@ -304,9 +324,15 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       'Clear a human pause and resume driving the page. Sets state "active" and syncs the panel ' +
       '(PRESENTER). Call after you have addressed the human guidance returned by a paused reticle_act.',
     inputSchema: { ...sessionIdShape },
-    outputSchema: { ok: z.boolean() },
+    outputSchema: { ok: z.boolean(), note: z.string().optional() },
     handler: (deps, args) => {
-      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const requested = asString(args['sessionId']);
+      // A NAMED session that has DEPARTED has no pause to clear. Resuming its successor would clear a
+      // pause the human set by hand on a tab the agent never named (#1774). Idempotent, as `end` is.
+      if (namedSessionDeparted(deps.sessions, requested)) {
+        return Promise.resolve({ ok: true, note: resumeDepartedNote(String(requested)) });
+      }
+      const session = deps.sessions.resolve(requested);
       // setState echoes ACTIVE to the panel in a single PRESENTER push.
       session.setState(SessionState.ACTIVE);
       return Promise.resolve({ ok: true });
@@ -394,7 +420,13 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
         ),
     },
     handler: (deps, args) => {
-      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const requested = asString(args['sessionId']);
+      // A NAMED session that has DEPARTED is refused, not substituted: a listing or a `resolve` on its
+      // successor reads or retires marks on a tab the caller never named (#1774).
+      if (namedSessionDeparted(deps.sessions, requested)) {
+        throw new Error(reviewDepartedError(String(requested)));
+      }
+      const session = deps.sessions.resolve(requested);
       const resolveId = asString(args['resolve']);
       let resolved: boolean | undefined;
       let resolvedNote: string | undefined;
