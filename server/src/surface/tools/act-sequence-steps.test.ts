@@ -452,6 +452,23 @@ describe('an expect this tool cannot parse', () => {
     ).toThrow(/Nothing was acted on/);
   });
 
+  /*
+   * The refusal was one fixed sentence with three generic examples, so it never named the key that
+   * failed. `reticle_assert` answers the same predicate with the field that is wrong and the fields
+   * that work, so the step gives the same answer.
+   */
+  it('names the field that failed and the query fields that work', () => {
+    expect(() =>
+      assertSequenceSteps([
+        {
+          target: { testid: 'checkout' },
+          action: 'click',
+          expect: { kind: 'element', query: { css: '.total' } },
+        },
+      ]),
+    ).toThrow(/step 0[\s\S]*unknown field css[\s\S]*query accepts:[^.]*\bscope\b/);
+  });
+
   it('still accepts every predicate the grader understands', () => {
     expect(() =>
       assertSequenceSteps([
