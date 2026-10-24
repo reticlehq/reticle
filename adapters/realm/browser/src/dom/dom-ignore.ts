@@ -157,11 +157,16 @@ const NEXT_DIALOG = '[data-nextjs-dialog]';
 /** Vite mounts this element only while it shows an error, and it covers the viewport. */
 const VITE_OVERLAY = 'vite-error-overlay';
 
+const DevOverlayName = {
+  NEXT: 'Next.js dev overlay',
+  AGENTATION: 'Agentation overlay',
+} as const;
+
 /** Names for dev UI that is absent from snapshots but can still block a pointer. */
 const DEV_OVERLAY_NAMES = [
   [NEXT_DIALOG, FrameworkErrorDialog.NEXT],
-  [`${NEXT_PORTAL},[data-nextjs-toast],#__next-build-watcher`, 'Next.js dev overlay'],
-  ['[data-agentation]', 'Agentation overlay'],
+  [`${NEXT_PORTAL},[data-nextjs-toast],#__next-build-watcher`, DevOverlayName.NEXT],
+  ['[data-agentation]', DevOverlayName.AGENTATION],
 ] as const;
 
 /** Name a dev overlay even when the hit element lives inside its shadow root. */
