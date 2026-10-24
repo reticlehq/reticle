@@ -281,6 +281,15 @@ async function dispatchFor(
   action: string,
   args: Record<string, unknown>,
 ): Promise<DispatchOutcome> {
+  if (ActionType.CLICK === action || ActionType.TAP === action) {
+    // Same rule as check and fill: a disabled control does not receive the gesture, so dispatching
+    // one lets an app handler run for an input no person could make.
+    if (!enabledOf(el)) {
+      throw new Error(
+        `cannot ${action} a disabled control — a real user could not, so neither will Reticle`,
+      );
+    }
+  }
   if (ActionType.CLICK === action) {
     // Full pointer/mouse sequence (not a bare click) so pointer- and focus-gated handlers fire the
     // way they do for a real user.

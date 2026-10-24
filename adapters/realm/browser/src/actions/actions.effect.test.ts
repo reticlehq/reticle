@@ -50,10 +50,15 @@ describe('action effect: enabled / visible probes', () => {
     },
   );
 
-  it('enabled=false for a disabled button', async () => {
+  it('refuses a click on a disabled button, and does not dispatch it', async () => {
     document.body.innerHTML = '<button disabled>Save</button>';
-    const r = await executeAction(refOf('button'), 'click');
-    expect(r.effect.enabled).toBe(false);
+    const button = document.querySelector('button') as HTMLButtonElement;
+    let clicked = false;
+    button.addEventListener('click', () => {
+      clicked = true;
+    });
+    await expect(executeAction(refOf('button'), 'click')).rejects.toThrow(/real user could not/i);
+    expect(clicked).toBe(false);
   });
 
   it('visible=false for a display:none button', async () => {
