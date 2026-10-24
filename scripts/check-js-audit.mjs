@@ -3,14 +3,14 @@
  * failing. Founder decision, 2026-10-09: a high advisory in a dev-only path was dropping unrelated
  * PRs from the merge queue, while a critical one still has to stop the merge.
  *
- * Two reviewed exceptions for unpatched development tools remain. An exception matches an
+ * One reviewed exception for an unpatched development tool remains. An exception matches an
  * advisory's exact version and sole dependency path; another path, a patched release, or a missing
  * advisory makes the exception stale, and a stale exception still fails the gate so the reviewed
  * list cannot rot.
  *
  * Incident: #1307 and #1311 had required CI verify jobs fail on unchanged-main lockfile paths
- * (runs 37089554301 and 37090675948). The exceptions stay reviewed while those
- * upstream packages have no fix. Remove each exception when its dependency can be updated.
+ * (runs 37089554301 and 37090675948). The remaining exception stays reviewed while that
+ * upstream package has no fix. Remove an exception when its dependency can be updated.
  * See .github/REPOSITORY-SETTINGS.md.
  */
 import { spawnSync } from 'node:child_process';
@@ -23,14 +23,6 @@ const EXCEPTIONS = new Map([
       package: 'http-cache-semantics',
       version: '4.2.0',
       path: 'apps__e2e>verdaccio>@verdaccio/hooks>got>cacheable-request>http-cache-semantics',
-    },
-  ],
-  [
-    'GHSA-vfj7-8cjw-p6xm',
-    {
-      package: 'braces',
-      version: '3.0.3',
-      path: '.>tsc-alias>chokidar>braces',
     },
   ],
 ]);
@@ -167,7 +159,7 @@ function selfTest() {
   if (reviewAudit(unknownSeverity).failures.length === 0)
     throw new Error('unknown severity passed');
   const newPath = clone();
-  newPath.advisories['GHSA-vfj7-8cjw-p6xm'].findings[0].paths.push('.>other>braces');
+  newPath.advisories['GHSA-ch52-4w7c-c8xp'].findings[0].paths.push('.>other>http-cache-semantics');
   if (reviewAudit(newPath).failures.length === 0) throw new Error('new path passed');
   const patched = clone();
   patched.advisories['GHSA-ch52-4w7c-c8xp'].patched_versions = '4.2.1';
