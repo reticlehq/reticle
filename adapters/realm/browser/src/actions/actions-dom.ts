@@ -59,6 +59,8 @@ function pointerEventFor(el: Element, type: string, init: PointerEventInit): Mou
 /** `buttons` bitmask for the primary button: 1 while held, 0 once released. */
 const BUTTON_HELD = 1;
 const BUTTON_RELEASED = 0;
+/** The pointer id on every synthetic pointer event this file dispatches. */
+const SYNTHETIC_POINTER_ID = 1;
 
 /**
  * One pointer or mouse event at a point, with the button state a real pointer would report.
@@ -91,7 +93,7 @@ function fireAt(
   };
   return el.dispatchEvent(
     type.startsWith('pointer')
-      ? pointerEventFor(el, type, { ...init, pointerId: 1, isPrimary: true })
+      ? pointerEventFor(el, type, { ...init, pointerId: SYNTHETIC_POINTER_ID, isPrimary: true })
       : mouseEventFor(el, type, init),
   );
 }
@@ -249,6 +251,47 @@ interface Point {
  */
 const DRAG_STEPS = 5;
 
+/**
+ * Remember which element called `setPointerCapture` for this drag's pointer.
+ *
+ * A synthetic event is not an active browser pointer, so the browser will not retarget the moves
+ * we dispatch. jsdom has no `setPointerCapture` at all. For the length of one drag the call is
+ * recorded, and the original method still runs when the page has one.
+ */
+function installedCapture(): ((this: Element, pointerId: number) => void) | undefined {
+  const value: unknown = Object.getOwnPropertyDescriptor(
+    Element.prototype,
+    'setPointerCapture',
+  )?.value;
+  if ('function' !== typeof value) return undefined;
+  return value as (this: Element, pointerId: number) => void;
+}
+
+function watchPointerCapture(): { captured: () => Element | null; stop: () => void } {
+  let captured: Element | null = null;
+  const previous = installedCapture();
+  const note = (node: Element, id: number): void => {
+    if (SYNTHETIC_POINTER_ID === id) captured = node;
+  };
+  Element.prototype.setPointerCapture = function (id: number): void {
+    note(this, id);
+    if (undefined === previous) return;
+    try {
+      previous.call(this, id);
+    } catch {
+      // The browser rejects a pointer id it did not start. The drag still owes the moves to the
+      // element that asked to capture them.
+    }
+  };
+  return {
+    captured: () => captured,
+    stop: () => {
+      if (undefined === previous) Reflect.deleteProperty(Element.prototype, 'setPointerCapture');
+      else Element.prototype.setPointerCapture = previous;
+    },
+  };
+}
+
 /** The centre of an element in client coordinates — what a real pointer would be over. */
 function centreOf(el: ActionTarget): Point {
   const box = el.getBoundingClientRect();
@@ -282,66 +325,71 @@ export async function dragElement(
   const crosses = (rect: DOMRect, p: Point): boolean =>
     p.x >= rect.left && p.x <= rect.right && p.y >= rect.top && p.y <= rect.bottom;
 
-  fireAt(source, 'pointerdown', from, BUTTON_HELD);
-  fireAt(source, 'mousedown', from, BUTTON_HELD);
-  await nativeFrame();
-  // A path, not a jump. `activationConstraint: { distance: N }` is the standard way to keep a
-  // draggable card clickable, and a sensor only starts a drag once it has SEEN the pointer travel
-  // that far — which a single move from A to B never shows it.
-  //
-  // The crossing announces itself: the first step outside the source fires out/leave on it, and
-  // the first step inside the destination fires over/enter on it, both with the button still held.
-  // Without these, React never synthesises `onMouseEnter` on the destination (it derives that from
-  // delegated `mouseover`/`mouseout`), so drag-to-select grids never extend their selection.
-  let leftSource = false;
-  let enteredDest = false;
-  for (let step = 1; step <= DRAG_STEPS; step += 1) {
-    const at = lerp(from, to, step / DRAG_STEPS);
-    if (!leftSource && !crosses(sourceRect, at)) {
-      leftSource = true;
-      // relatedTarget is the element the pointer crossed TO/FROM; React's enter/leave synthesis
-      // reads it off the delegated over/out pair to know which boundary was crossed.
-      fireAt(source, 'pointerout', at, BUTTON_HELD, dest);
-      fireAt(source, 'mouseout', at, BUTTON_HELD, dest);
-      fireAt(source, 'pointerleave', at, BUTTON_HELD, dest);
-      fireAt(source, 'mouseleave', at, BUTTON_HELD, dest);
-    }
-    if (leftSource && !enteredDest && destRect !== null && crosses(destRect, at)) {
-      enteredDest = true;
-      fireAt(dest, 'pointerover', at, BUTTON_HELD, source);
-      fireAt(dest, 'mouseover', at, BUTTON_HELD, source);
-      fireAt(dest, 'pointerenter', at, BUTTON_HELD, source);
-      fireAt(dest, 'mouseenter', at, BUTTON_HELD, source);
-    }
-    fireAt(dest, 'pointermove', at, BUTTON_HELD);
-    fireAt(dest, 'mousemove', at, BUTTON_HELD);
+  const capture = watchPointerCapture();
+  try {
+    fireAt(source, 'pointerdown', from, BUTTON_HELD);
+    fireAt(source, 'mousedown', from, BUTTON_HELD);
     await nativeFrame();
-  }
-  // A short hop whose sampled steps never land inside the destination box still crossed into it;
-  // announce the arrival rather than silently skipping the pair.
-  if (!enteredDest && destRect !== null) {
-    fireAt(dest, 'pointerover', to, BUTTON_HELD, source);
-    fireAt(dest, 'mouseover', to, BUTTON_HELD, source);
-    fireAt(dest, 'pointerenter', to, BUTTON_HELD, source);
-    fireAt(dest, 'mouseenter', to, BUTTON_HELD, source);
-  }
-  fireAt(dest, 'pointerup', to, BUTTON_RELEASED);
-  fireAt(dest, 'mouseup', to, BUTTON_RELEASED);
+    // A path, not a jump. `activationConstraint: { distance: N }` is the standard way to keep a
+    // draggable card clickable, and a sensor only starts a drag once it has SEEN the pointer travel
+    // that far — which a single move from A to B never shows it.
+    //
+    // The crossing announces itself: the first step outside the source fires out/leave on it, and
+    // the first step inside the destination fires over/enter on it, both with the button still held.
+    // Without these, React never synthesises `onMouseEnter` on the destination (it derives that from
+    // delegated `mouseover`/`mouseout`), so drag-to-select grids never extend their selection.
+    let leftSource = false;
+    let enteredDest = false;
+    for (let step = 1; step <= DRAG_STEPS; step += 1) {
+      const at = lerp(from, to, step / DRAG_STEPS);
+      if (!leftSource && !crosses(sourceRect, at)) {
+        leftSource = true;
+        // relatedTarget is the element the pointer crossed TO/FROM; React's enter/leave synthesis
+        // reads it off the delegated over/out pair to know which boundary was crossed.
+        fireAt(source, 'pointerout', at, BUTTON_HELD, dest);
+        fireAt(source, 'mouseout', at, BUTTON_HELD, dest);
+        fireAt(source, 'pointerleave', at, BUTTON_HELD, dest);
+        fireAt(source, 'mouseleave', at, BUTTON_HELD, dest);
+      }
+      if (leftSource && !enteredDest && destRect !== null && crosses(destRect, at)) {
+        enteredDest = true;
+        fireAt(dest, 'pointerover', at, BUTTON_HELD, source);
+        fireAt(dest, 'mouseover', at, BUTTON_HELD, source);
+        fireAt(dest, 'pointerenter', at, BUTTON_HELD, source);
+        fireAt(dest, 'mouseenter', at, BUTTON_HELD, source);
+      }
+      fireAt(capture.captured() ?? dest, 'pointermove', at, BUTTON_HELD);
+      fireAt(dest, 'mousemove', at, BUTTON_HELD);
+      await nativeFrame();
+    }
+    // A short hop whose sampled steps never land inside the destination box still crossed into it;
+    // announce the arrival rather than silently skipping the pair.
+    if (!enteredDest && destRect !== null) {
+      fireAt(dest, 'pointerover', to, BUTTON_HELD, source);
+      fireAt(dest, 'mouseover', to, BUTTON_HELD, source);
+      fireAt(dest, 'pointerenter', to, BUTTON_HELD, source);
+      fireAt(dest, 'mouseenter', to, BUTTON_HELD, source);
+    }
+    fireAt(capture.captured() ?? dest, 'pointerup', to, BUTTON_RELEASED);
+    fireAt(dest, 'mouseup', to, BUTTON_RELEASED);
 
-  let dropPrevented = false;
-  if ('function' === typeof DragEvent) {
-    const dataTransfer = makeDataTransfer(data);
-    const init: DragEventInit = { bubbles: true, cancelable: true };
-    if (dataTransfer !== null) init.dataTransfer = dataTransfer;
-    source.dispatchEvent(new DragEvent('dragstart', init));
-    await nativeFrame();
-    dest.dispatchEvent(new DragEvent('dragenter', init));
-    dest.dispatchEvent(new DragEvent('dragover', init));
-    await nativeFrame();
-    dropPrevented = !dest.dispatchEvent(new DragEvent('drop', init));
-    source.dispatchEvent(new DragEvent('dragend', init));
+    let dropPrevented = false;
+    if ('function' === typeof DragEvent) {
+      const dataTransfer = makeDataTransfer(data);
+      const init: DragEventInit = { bubbles: true, cancelable: true };
+      if (dataTransfer !== null) init.dataTransfer = dataTransfer;
+      source.dispatchEvent(new DragEvent('dragstart', init));
+      await nativeFrame();
+      dest.dispatchEvent(new DragEvent('dragenter', init));
+      dest.dispatchEvent(new DragEvent('dragover', init));
+      await nativeFrame();
+      dropPrevented = !dest.dispatchEvent(new DragEvent('drop', init));
+      source.dispatchEvent(new DragEvent('dragend', init));
+    }
+    return dropPrevented;
+  } finally {
+    capture.stop();
   }
-  return dropPrevented;
 }
 
 /**
