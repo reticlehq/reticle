@@ -14,7 +14,7 @@ import type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-type
 export type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import { evalConsole } from '@reticlehq/engine/question/predicate/predicate-console.js';
-import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
+import { appScope, stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import {
   AnchorKind,
   DriftReason,
@@ -779,7 +779,10 @@ export async function replayFlow(
       const cursorAfter = session.elapsed();
       // ONE builder, shared with the live act path, so a driven step and a replayed one describe what
       // happened in identical words rather than in two vocabularies that agree by coincidence.
-      Object.assign(result, stepEffect(windowEvents, { since: cursorBefore, until: cursorAfter }));
+      Object.assign(
+        result,
+        stepEffect(windowEvents, { since: cursorBefore, until: cursorAfter }, appScope(session)),
+      );
       /*
        * A prefix step is setup and is not reported -- UNLESS it failed.
        *

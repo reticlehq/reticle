@@ -49,7 +49,7 @@ import {
   offerToKeep,
   type StepExpectation,
 } from './act/sequence-grade.js';
-import { stepEffect, type StepEffect } from '@reticlehq/engine/evidence/step-effect.js';
+import { stepEffect, appScope, type StepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import type { Session } from '@/portal/session/session.js';
 // resolveActTarget moved out of act-tools into its own module on this branch; #706 was written
 // against the older layout where act-tools re-exported it.
@@ -71,7 +71,11 @@ import { unreachableTargetNote } from './act/act-observation.js';
  */
 function effectOf(session: Session, since: number): StepEffect {
   try {
-    return stepEffect(session.eventsSince(since), { since, until: session.elapsed() });
+    return stepEffect(
+      session.eventsSince(since),
+      { since, until: session.elapsed() },
+      appScope(session),
+    );
   } catch {
     return {};
   }

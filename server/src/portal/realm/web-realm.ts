@@ -649,7 +649,11 @@ export class WebRealm extends Realm {
    */
   #effectElsewhere(window: ProtocolWindow): readonly BlindSpot[] {
     const events = this.#deps.session.eventsSince(window.openedAt);
-    return findContradictions(events, { actionSince: window.openedAt })
+    return findContradictions(events, {
+      actionSince: window.openedAt,
+      appOrigin: this.#deps.session.url,
+      background: this.#deps.session.background,
+    })
       .filter((c) => ContradictionKind.CONSEQUENCE_ELSEWHERE === c.kind)
       .map((c) => ({
         kind: BlindSpotKind.EFFECT_ELSEWHERE,
@@ -712,9 +716,11 @@ export class WebRealm extends Realm {
     // finding relative to ONE action. Passing `{}` left that rule switched off, and a planted
     // double submit came back proved. In this protocol the window IS the action's extent, so
     // its opening moment is exactly the boundary those rules are asking for.
-    const found = findContradictions(events, { actionSince: window.openedAt }).filter(
-      (c) => !REPORTED_AS_COVERAGE.has(c.kind),
-    );
+    const found = findContradictions(events, {
+      actionSince: window.openedAt,
+      appOrigin: this.#deps.session.url,
+      background: this.#deps.session.background,
+    }).filter((c) => !REPORTED_AS_COVERAGE.has(c.kind));
     // Synchronous underneath: the rules read a buffer that is already in memory. The interface
     // is async for a realm that has to go and ask.
     return Promise.resolve(

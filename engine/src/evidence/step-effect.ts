@@ -44,14 +44,34 @@ export interface StepEffect {
   contradictions?: Contradiction[];
 }
 
-export function stepEffect(events: readonly ReticleEvent[], window: StepWindow): StepEffect {
+/** The page origin and declared background, omitted when the caller cannot say. Absence fails open. */
+export function appScope(session: { url?: string; background?: readonly string[] }): {
+  appOrigin?: string;
+  background?: readonly string[];
+} {
+  return {
+    ...(session.url === undefined ? {} : { appOrigin: session.url }),
+    ...(session.background === undefined ? {} : { background: session.background }),
+  };
+}
+
+export function stepEffect(
+  events: readonly ReticleEvent[],
+  window: StepWindow,
+  /** The page under test, so a third-party write is not graded as the app ignoring a response. */
+  scope: { appOrigin?: string; background?: readonly string[] } = {},
+): StepEffect {
   const effect: StepEffect = {};
   if (window.until > window.since) effect.window = { since: window.since, until: window.until };
   effect.digest = summarizeReaction(buildReactionReport([...events], window.until - window.since));
   // `actionSince` is what tells the detectors which window belongs to THIS action. Without it the
   // headline rule cannot attribute a failed request to the click that moved the screen, and the
   // whole family goes quiet while looking perfectly wired.
-  const contradictions = findContradictions(events, { actionSince: window.since });
+  const contradictions = findContradictions(events, {
+    actionSince: window.since,
+    ...(scope.appOrigin === undefined ? {} : { appOrigin: scope.appOrigin }),
+    ...(scope.background === undefined ? {} : { background: scope.background }),
+  });
   if (contradictions.length > 0) effect.contradictions = contradictions;
   return effect;
 }

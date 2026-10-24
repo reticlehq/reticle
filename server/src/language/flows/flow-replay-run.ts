@@ -54,7 +54,7 @@ import {
 } from '@/memory/project/session-root.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { computeSegments } from '@/memory/journal/rollups.js';
-import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
+import { appScope, stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import { AssertionTiersStore } from './stores/assertion-tiers-store.js';
 import { toFlowSources } from './change/flow-sources.js';
 import { reportAndAccumulate } from '@/memory/journal/deviation-service.js';
@@ -793,7 +793,7 @@ export async function replayNamedFlow(
     try {
       const span = { since: replayFloor, until: session.elapsed() };
       const events = session.eventsSince(replayFloor).filter((e) => e.t >= replayFloor);
-      return crossStepOnly(stepEffect(events, span).contradictions ?? [], steps);
+      return crossStepOnly(stepEffect(events, span, appScope(session)).contradictions ?? [], steps);
     } catch {
       return [];
     }
