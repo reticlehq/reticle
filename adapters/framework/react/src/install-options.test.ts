@@ -8,12 +8,16 @@
  * `install({ discoverStores: false })` opts out of store discovery entirely while
  * keeping commit counting and the `__reticle_renders` store working.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, createContext, createElement, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerStore, storeNames, unregisterStore } from '@reticlehq/browser';
-import { resetAutoStores } from './auto-stores.js';
-import { install, resetInstallForTest, getRenderStats, resetRenderMeter } from './index.js';
+
+let install: typeof import('./index.js').install;
+let getRenderStats: typeof import('./index.js').getRenderStats;
+let resetRenderMeter: typeof import('./index.js').resetRenderMeter;
+let resetAutoStores: typeof import('./auto-stores.js').resetAutoStores;
+let resetRenderMeterForTest: typeof import('./render-meter.js').resetRenderMeterForTest;
 
 const HOOK_KEY = '__REACT_DEVTOOLS_GLOBAL_HOOK__';
 type AnyHook = {
@@ -25,6 +29,25 @@ type AnyHook = {
   onPostCommitFiberRoot?: () => void;
   onCommitFiberUnmount?: () => void;
 };
+
+async function resetState(): Promise<void> {
+  vi.resetModules();
+  const index = await import('./index.js');
+  const autoStores = await import('./auto-stores.js');
+  const renderMeter = await import('./render-meter.js');
+  install = index.install;
+  getRenderStats = index.getRenderStats;
+  resetRenderMeter = index.resetRenderMeter;
+  resetAutoStores = autoStores.resetAutoStores;
+  resetRenderMeterForTest = renderMeter.resetRenderMeterForTest;
+
+  document.body.innerHTML = '';
+  delete (globalThis as unknown as Record<string, unknown>)[HOOK_KEY];
+  resetRenderMeterForTest();
+  resetAutoStores();
+  for (const name of storeNames()) unregisterStore(name);
+  resetRenderMeter();
+}
 
 function fireCommit(): void {
   const h = (globalThis as unknown as Record<string, AnyHook | undefined>)[HOOK_KEY];
@@ -68,13 +91,8 @@ function mountTwoProviders(): void {
 }
 
 describe('install({ discoverStores: false })', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-    delete (globalThis as unknown as Record<string, unknown>)[HOOK_KEY];
-    resetInstallForTest();
-    resetAutoStores();
-    for (const name of storeNames()) unregisterStore(name);
-    resetRenderMeter();
+  beforeEach(async () => {
+    await resetState();
   });
 
   it('provider stores are NOT registered after a commit when discoverStores is false', () => {
@@ -108,13 +126,8 @@ describe('install({ discoverStores: false })', () => {
 });
 
 describe('install({ discoverStores: true }) and default install()', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-    delete (globalThis as unknown as Record<string, unknown>)[HOOK_KEY];
-    resetInstallForTest();
-    resetAutoStores();
-    for (const name of storeNames()) unregisterStore(name);
-    resetRenderMeter();
+  beforeEach(async () => {
+    await resetState();
   });
 
   it('provider stores ARE auto-registered when discoverStores is true (default)', () => {

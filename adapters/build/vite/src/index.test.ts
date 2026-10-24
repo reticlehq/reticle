@@ -243,6 +243,14 @@ describe('connect options the SDK supports are reachable from the plugin', () =>
     expect(connectModuleSource({ present: true })).not.toContain('present');
   });
 
+  it('forwards discoverStores to install() only when explicitly false', () => {
+    expect(connectModuleSource({ discoverStores: false })).toContain(
+      'install({ discoverStores: false });',
+    );
+    expect(connectModuleSource({})).toContain('install();');
+    expect(connectModuleSource({ discoverStores: true })).toContain('install();');
+  });
+
   it('forwards allowNonLocalhost, and omits it when unset', () => {
     expect(connectModuleSource({ allowNonLocalhost: true })).toContain('allowNonLocalhost');
     expect(connectModuleSource({})).not.toContain('allowNonLocalhost');

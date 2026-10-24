@@ -309,7 +309,7 @@ export function hasHoverHandlers(el: Element): boolean {
   return HOVER_HANDLER_KEYS.some((k) => 'function' === typeof p[k]);
 }
 
-import { installRenderMeter, resetRenderMeterForTest } from './render-meter.js';
+import { installRenderMeter } from './render-meter.js';
 
 let installed = false;
 
@@ -352,19 +352,11 @@ export function install(options?: InstallOptions): void {
   installRenderMeter({ discoverStores: false !== options?.discoverStores });
 }
 
-/** Reset install state for test isolation. */
-export function resetInstallForTest(): void {
-  installed = false;
-  resetRenderMeterForTest();
-}
-
 export {
   installRenderMeter,
   resetRenderMeter,
   getRenderStats,
-  resetRenderMeterForTest,
   type RenderStats,
-  type RenderMeterOptions,
 } from './render-meter.js';
 export {
   HYDRATION_COMPLETE_SIGNAL,
