@@ -35,6 +35,7 @@ import { isValidRunId, stepShotDir } from '@/memory/project/dir/reticle-dir.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { UPLOAD_TEXT_MAX } from '@reticlehq/core/artifacts';
+import { sdkBehindNote } from '@/command/version/version-skew.js';
 
 /** The connected tab, as the tool layer hands it out. */
 type Session = ReturnType<ToolDeps['sessions']['resolve']>;
@@ -77,10 +78,14 @@ interface Pixels {
  * Read rather than trusted: the run record and the upload both state the size.
  */
 export function jpegSize(bytes: Uint8Array): { width: number; height: number } | undefined {
-  if (bytes.length < 4 || 0xff !== bytes[0] || 0xd8 !== bytes[1]) return undefined;
+  if (bytes.length < 4 || 0xff !== bytes[0] || 0xd8 !== bytes[1]) {
+    return undefined;
+  }
   let i = 2;
   while (i + 9 < bytes.length) {
-    if (0xff !== bytes[i]) return undefined;
+    if (0xff !== bytes[i]) {
+      return undefined;
+    }
     const marker = bytes[i + 1] ?? 0;
     const length = ((bytes[i + 2] ?? 0) << 8) | (bytes[i + 3] ?? 0);
     // The start-of-frame markers carry the size; 0xC4, 0xC8 and 0xCC share the range and are not frames.
@@ -98,19 +103,33 @@ export function jpegSize(bytes: Uint8Array): { width: number; height: number } |
 async function browserPixels(deps: ToolDeps, session: Session): Promise<Uint8Array | undefined> {
   const opts = { jpegQuality: CDP_QUALITY, cssScale: true };
   const leased = await deps.pool?.screenshotLease(session.id, opts);
-  if (leased !== undefined) return leased;
+  if (leased !== undefined) {
+    return leased;
+  }
+  // A lease capture that failed still has a reason. Leaving it on the floor made the only text
+  // the page's "I cannot draw", which says nothing about the browser that was asked first.
+  const failed = deps.pool?.leaseCaptureError(session.id);
+  if (failed !== undefined) {
+    throw new Error(failed);
+  }
   // Only a provider driving THIS tab: a launched provider photographs the one page it owns whatever
   // url it is handed, which is how a screenshot of one tab was once filed under another (#1407).
-  if (true !== (await deps.realInput?.isAvailableFor(session.url))) return undefined;
+  if (true !== (await deps.realInput?.isAvailableFor(session.url))) {
+    return undefined;
+  }
   return deps.realInput?.screenshot?.(session.url, opts);
 }
 
 /** The page drawn by the SDK. The answer is base64 in chunks — see `ReticleCommand.RENDER`. */
 async function renderedPixels(session: Session): Promise<Uint8Array | string> {
   const res = await session.command(ReticleCommand.RENDER, {});
-  if (!res.ok) return res.error ?? 'the page did not answer';
+  if (!res.ok) {
+    return res.error ?? 'the page did not answer';
+  }
   const r = asRecord(res.result);
-  if (true !== r['ok']) return 'string' === typeof r['reason'] ? r['reason'] : 'render failed';
+  if (true !== r['ok']) {
+    return 'string' === typeof r['reason'] ? r['reason'] : 'render failed';
+  }
   const chunks = Array.isArray(r['chunks']) ? r['chunks'] : [];
   return new Uint8Array(
     Buffer.from(chunks.filter((c) => 'string' === typeof c).join(''), 'base64'),
@@ -123,17 +142,25 @@ async function capture(deps: ToolDeps, session: Session): Promise<Pixels | strin
   try {
     const real = await browserPixels(deps, session);
     const size = real === undefined ? undefined : jpegSize(real);
-    if (real !== undefined && size !== undefined)
+    if (real !== undefined && size !== undefined) {
       return { bytes: real, source: ScreenshotSource.BROWSER, ...size };
+    }
   } catch (error) {
     reasons.push(error instanceof Error ? error.message : String(error));
   }
   try {
     const drawn = await renderedPixels(session);
-    if ('string' === typeof drawn) reasons.push(`the page could not draw itself: ${drawn}`);
-    else {
+    if ('string' === typeof drawn) {
+      reasons.push(`the page could not draw itself: ${drawn}`);
+      const behind = sdkBehindNote(session.sdkVersion);
+      if (behind !== undefined) {
+        reasons.push(behind);
+      }
+    } else {
       const size = jpegSize(drawn);
-      if (size !== undefined) return { bytes: drawn, source: ScreenshotSource.RENDERED, ...size };
+      if (size !== undefined) {
+        return { bytes: drawn, source: ScreenshotSource.RENDERED, ...size };
+      }
       reasons.push('the page drew something that is not a JPEG');
     }
   } catch (error) {
@@ -145,9 +172,15 @@ async function capture(deps: ToolDeps, session: Session): Promise<Pixels | strin
 /** Which source this tab's next result names, or undefined when the last capture got nothing. */
 async function predict(deps: ToolDeps, session: Session): Promise<ScreenshotSource | undefined> {
   const last = lastSource.get(session.id);
-  if (NOTHING === last) return undefined;
-  if (last !== undefined) return last;
-  if (true === deps.pool?.leasedSessionIds().includes(session.id)) return ScreenshotSource.BROWSER;
+  if (NOTHING === last) {
+    return undefined;
+  }
+  if (last !== undefined) {
+    return last;
+  }
+  if (true === deps.pool?.leasedSessionIds().includes(session.id)) {
+    return ScreenshotSource.BROWSER;
+  }
   const driven =
     deps.realInput?.screenshot !== undefined &&
     true === (await deps.realInput.isAvailableFor(session.url));
@@ -209,7 +242,9 @@ async function shoot(
   // Read before anything is awaited: the action this call's verdict was recorded on.
   const actionId = true === verdict ? session.lastActionId : undefined;
   const runId = runIdOfCall(session.id);
-  if (!isValidRunId(runId)) return { error: `no screenshot: unusable run id ${runId}` };
+  if (!isValidRunId(runId)) {
+    return { error: `no screenshot: unusable run id ${runId}` };
+  }
   const dir = stepShotDir(root, runId);
   void filmTab(deps, session, dir);
   const seq = await allocate(deps.fs, dir);
@@ -259,7 +294,9 @@ async function shoot(
     }
   });
   noteLanding(dir, land);
-  if (predicted !== undefined) return { path, source: predicted, pending: true };
+  if (predicted !== undefined) {
+    return { path, source: predicted, pending: true };
+  }
   // Nothing worked last time: wait, and tell the truth either way.
   const pixels = await taken;
   await land;
@@ -332,7 +369,9 @@ const framesIn = new Map<string, number>();
 
 /** Is this a tab Reticle drives, with a real browser behind it? */
 async function driven(deps: ToolDeps, session: Session): Promise<boolean> {
-  if (true === deps.pool?.leasedSessionIds().includes(session.id)) return true;
+  if (true === deps.pool?.leasedSessionIds().includes(session.id)) {
+    return true;
+  }
   return (
     deps.realInput?.screenshot !== undefined &&
     true === (await deps.realInput.isAvailableFor(session.url))
@@ -348,8 +387,12 @@ async function filmTab(deps: ToolDeps, session: Session, dir: string): Promise<v
     film.still = 1;
     return;
   }
-  if (!(await driven(deps, session).catch(() => false))) return;
-  if (films.has(session.id)) return;
+  if (!(await driven(deps, session).catch(() => false))) {
+    return;
+  }
+  if (films.has(session.id)) {
+    return;
+  }
   const timer = setInterval(() => {
     void filmNow(session.id);
   }, FRAME.EVERY_MS);
@@ -361,7 +404,9 @@ async function filmTab(deps: ToolDeps, session: Session, dir: string): Promise<v
 /** Stop filming a tab. Safe to call for a tab that is not filmed. */
 export function stopFilming(sessionId: string): void {
   const film = films.get(sessionId);
-  if (film === undefined) return;
+  if (film === undefined) {
+    return;
+  }
   clearInterval(film.timer);
   films.delete(sessionId);
 }
@@ -369,7 +414,9 @@ export function stopFilming(sessionId: string): void {
 /** One tick of a tab's film: one frame, when the budget, the gap and the page allow. Never throws. */
 export async function filmNow(sessionId: string): Promise<void> {
   const film = films.get(sessionId);
-  if (film === undefined || film.busy !== undefined) return;
+  if (film === undefined || film.busy !== undefined) {
+    return;
+  }
   film.busy = frame(sessionId, film).finally(() => {
     film.busy = undefined;
   });
@@ -381,7 +428,9 @@ async function frame(sessionId: string, film: Film): Promise<void> {
   try {
     session = film.deps.sessions.resolve(sessionId);
     // An ended tab has nothing more to show.
-    if (session.isEnded()) session = undefined;
+    if (session.isEnded()) {
+      session = undefined;
+    }
   } catch {
     session = undefined;
   }
@@ -391,15 +440,21 @@ async function frame(sessionId: string, film: Film): Promise<void> {
   }
   const dir = film.dir;
   const kept = framesIn.get(dir) ?? 0;
-  if (kept >= FRAME.MAX_PER_RUN) return;
+  if (kept >= FRAME.MAX_PER_RUN) {
+    return;
+  }
   film.idle += 1;
   const gap = 2 ** Math.floor(kept / (FRAME.MAX_PER_RUN / FRAME_STAGES));
-  if (film.idle < Math.max(gap, film.still)) return;
+  if (film.idle < Math.max(gap, film.still)) {
+    return;
+  }
   film.idle = 0;
   try {
     const bytes = await framePixels(film.deps, session);
     const size = bytes === undefined ? undefined : jpegSize(bytes);
-    if (bytes === undefined || size === undefined) return;
+    if (bytes === undefined || size === undefined) {
+      return;
+    }
     const sha256 = createHash('sha256').update(bytes).digest('hex');
     if (film.recent.includes(sha256)) {
       film.still = Math.min(film.still * 2, MAX_STILL_TICKS);
@@ -409,7 +464,9 @@ async function frame(sessionId: string, film: Film): Promise<void> {
     film.still = 1;
     const seq = await allocate(film.deps.fs, dir);
     // The step shots' own limit is the platform's: a frame never takes the last of it.
-    if (seq > STEP_SCREENSHOT.MAX_PER_RUN) return;
+    if (seq > STEP_SCREENSHOT.MAX_PER_RUN) {
+      return;
+    }
     framesIn.set(dir, kept + 1);
     const file = `${String(seq).padStart(SEQ_WIDTH, '0')}-${FRAME.TOOL}${JPEG_EXT}`;
     const record: RunScreenshot = {
@@ -437,7 +494,11 @@ async function frame(sessionId: string, film: Film): Promise<void> {
 async function framePixels(deps: ToolDeps, session: Session): Promise<Uint8Array | undefined> {
   const opts = { jpegQuality: FRAME.JPEG_QUALITY, cssScale: true };
   const leased = await deps.pool?.screenshotLease(session.id, opts);
-  if (leased !== undefined) return leased;
-  if (true !== (await deps.realInput?.isAvailableFor(session.url))) return undefined;
+  if (leased !== undefined) {
+    return leased;
+  }
+  if (true !== (await deps.realInput?.isAvailableFor(session.url))) {
+    return undefined;
+  }
   return deps.realInput?.screenshot?.(session.url, opts);
 }

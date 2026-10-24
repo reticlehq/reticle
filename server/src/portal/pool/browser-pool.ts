@@ -309,13 +309,20 @@ export class BrowserPool {
       return undefined;
     }
     this.touch(sessionId);
+    delete lease.captureError;
     try {
       return await lease.page.screenshot(opts);
-    } catch {
-      // A capture that fails is not a broken lease. Report "could not capture" and leave the lease
-      // usable — the alternative is losing a working context to one bad frame.
+    } catch (error) {
+      // A capture that fails is not a broken lease. Keep the reason and leave the lease usable,
+      // so the screenshot error says why the browser capture failed.
+      lease.captureError = error instanceof Error ? error.message : String(error);
       return undefined;
     }
+  }
+
+  /** The reason {@link screenshotLease} last failed for this session, if it did. */
+  leaseCaptureError(sessionId: string): string | undefined {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.captureError;
   }
 
   /** The URL a lease was opened on — the one that carries its Reticle identity. */

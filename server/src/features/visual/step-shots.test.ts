@@ -55,6 +55,10 @@ afterEach(async () => {
 interface Fakes {
   render?: () => unknown;
   browser?: () => Uint8Array | undefined;
+  /** Page SDK version, when the test is about a page older than this daemon. */
+  sdkVersion?: string;
+  /** What a leased-tab capture failed with, when this daemon drives the tab. */
+  leaseError?: string;
 }
 
 async function setup(fakes: Fakes): Promise<{ deps: ToolDeps; root: string; sessionId: string }> {
@@ -67,6 +71,7 @@ async function setup(fakes: Fakes): Promise<{ deps: ToolDeps; root: string; sess
     url: 'http://localhost:5173/',
     artifactRoot: root,
     isEnded: () => false,
+    ...(fakes.sdkVersion === undefined ? {} : { sdkVersion: fakes.sdkVersion }),
     command: (name: string) => {
       if (name !== ReticleCommand.RENDER) return Promise.resolve({ ok: false, error: 'no' });
       const result = fakes.render?.();
@@ -87,6 +92,15 @@ async function setup(fakes: Fakes): Promise<{ deps: ToolDeps; root: string; sess
           realInput: {
             isAvailableFor: () => Promise.resolve(true),
             screenshot: () => Promise.resolve(fakes.browser?.()),
+          },
+        }),
+    ...(fakes.leaseError === undefined
+      ? {}
+      : {
+          pool: {
+            screenshotLease: () => Promise.resolve(undefined),
+            leaseCaptureError: () => fakes.leaseError,
+            leasedSessionIds: () => [],
           },
         }),
   } as unknown as ToolDeps;
@@ -194,6 +208,17 @@ describe('takeStepShot', () => {
     expect((await readStepShots(deps.fs, root, driveRunId(sessionId))).map((s) => s.seq)).toEqual([
       1,
     ]);
+  });
+
+  it('names an old page SDK, and keeps the reason a lease capture failed', async () => {
+    const { deps, sessionId } = await setup({ sdkVersion: '3.6.2', leaseError: 'renderer busy' });
+
+    const shot = await takeStepShot(deps, sessionId, 'reticle_assert');
+    const error = 'error' in shot ? shot.error : '';
+
+    expect(error).toContain('3.6.2');
+    expect(error).toContain('reticle update');
+    expect(error).toContain('renderer busy');
   });
 
   it('says why when no picture could be taken, rather than leaving the field out', async () => {

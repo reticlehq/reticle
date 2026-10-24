@@ -129,6 +129,8 @@ export interface ActiveLease {
    * context for "why did the page look frozen for a moment", not a log an agent needs to replay.
    */
   lastDialogMessage?: string;
+  /** Why the last screenshot of this lease failed, if it did. Cleared by the next one that works. */
+  captureError?: string;
   /**
    * The disposable handle of the caller's init script, when the lease was opened with one — a stub
    * of the bindings a desktop shell injects. Disposed with the lease, so a reload or a later

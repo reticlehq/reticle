@@ -974,11 +974,6 @@
       "count": 5
     }
   },
-  "src/features/visual/step-shots.ts": {
-    "curly": {
-      "count": 26
-    }
-  },
   "src/features/visual/visual-diff.ts": {
     "curly": {
       "count": 5
