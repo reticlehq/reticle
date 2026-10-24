@@ -344,7 +344,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
         .string()
         .optional()
         .describe(
-          'Accessible name filter — narrows results when `by` is role and the page has many elements of that role.',
+          'Exact accessible-name filter - narrows results when `by` is role and the page has many elements of that role. Matches the whole name; use `text` for a partial match.',
         ),
       scope: z
         .string()

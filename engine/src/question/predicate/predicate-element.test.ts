@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest';
-import { ElementState } from '@reticlehq/core';
+import { ElementState, type ElementDescriptor, type Ref } from '@reticlehq/core';
 
 import { ARIA_HIDDEN_NOTE, evalElement, HTML_TAG_TO_ARIA_ROLE } from './predicate-element.js';
+import { residualQueryChecks, satisfiesResiduals } from './predicate-schema.js';
 import type { PredicateSession } from './predicate-session.js';
 
 const session: PredicateSession = {
@@ -347,4 +348,33 @@ it('is inconclusive, never a pass, when a framework error dialog covers the matc
   const result = await evalElement(covered, { text: 'Welcome back' }, undefined, false, true);
   expect(result.pass).toBe(false);
   expect(result.inconclusive).toContain('Next.js error dialog');
+});
+
+/**
+ * One name rule, whichever locator carries the check (#1839).
+ *
+ * Sent with `role`, a name check runs in the browser through `exactVisibleText`, which trims,
+ * collapses inner whitespace and compares in NFC. Sent with `testid`, the browser drops `name`
+ * and the engine enforces it back here - which compared with trim alone. An accessible name
+ * carrying an inner line break (aria-label="Save\nDraft") matched the first way and missed the
+ * second, so the same check flipped its answer with the locator that carried it. The residual
+ * check now applies the same rule.
+ */
+it('compares a dropped name under the same whitespace rule the browser applies (#1839)', () => {
+  const { checks } = residualQueryChecks({ by: 'testid', value: 'save-btn', name: 'Save Draft' });
+  expect(checks).toContainEqual(['name', 'Save Draft']);
+  const named = (name: string): ElementDescriptor => ({
+    ref: 'e1' as Ref,
+    role: 'button',
+    name,
+    states: [],
+    visible: true,
+  });
+
+  // An inner line break or doubled space is one name, whichever locator carried the check.
+  expect(satisfiesResiduals(named('Save\nDraft'), checks)).toBe(true);
+  expect(satisfiesResiduals(named('  Save  Draft '), checks)).toBe(true);
+  // The rule stays exact: a different name or part of one still does not match.
+  expect(satisfiesResiduals(named('Save All'), checks)).toBe(false);
+  expect(satisfiesResiduals(named('Save Draft Now'), checks)).toBe(false);
 });

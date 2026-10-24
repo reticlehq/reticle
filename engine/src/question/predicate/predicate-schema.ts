@@ -143,12 +143,24 @@ function matchesRole(actual: string, queried: string): boolean {
   return false;
 }
 
+/**
+ * The one name rule, on this side of the wire (#1839). The browser compares a name it CAN match
+ * through `exactVisibleText` - trim, collapse inner whitespace, compare in NFC - so a name the
+ * locator dropped and the engine enforces back here must answer the same question the same way,
+ * or a check flips its answer with the locator that carried it. Kept in step with
+ * `adapters/realm/browser/src/dom/text-match.ts` by hand: the engine cannot import the browser
+ * adapter, and moving the rule into core would move the wire contract for two lines.
+ */
+function normaliseName(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().normalize('NFC');
+}
+
 const RESIDUAL_CHECKS: Readonly<
   Record<string, (element: ElementDescriptor, want: string) => boolean>
 > = {
   value: (element, want) => (element.value ?? '').trim() === want.trim(),
   role: (element, want) => matchesRole(element.role, want),
-  name: (element, want) => element.name.trim() === want.trim(),
+  name: (element, want) => normaliseName(element.name) === normaliseName(want),
   text: (element, want) => (element.text ?? element.name).includes(want),
   [ALT_FIELD]: (element, want) => {
     const alt = element.attrs?.[ALT_FIELD];

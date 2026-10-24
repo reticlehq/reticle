@@ -96,4 +96,14 @@ describe('a reported name is a usable name', () => {
     document.body.innerHTML = '<button>Save</button><button>Save all</button>';
     expect(runQuery({ by: QueryBy.ROLE, value: 'button', name: 'Save' }).count).toBe(1);
   });
+
+  it('round-trips an aria-label name that keeps an inner line break (#1839)', () => {
+    // aria-label text is reported with inner whitespace intact, and matching collapses it, so a
+    // check answers the same however the caller spells the name and whichever locator carries it.
+    document.body.innerHTML = '<button aria-label="Save\nchanges"></button>';
+    const { reported, refound } = roundTrip('button');
+    expect(reported).toContain('Save');
+    expect(refound).toBe(1);
+    expect(runQuery({ by: QueryBy.ROLE, value: 'button', name: 'Save changes' }).count).toBe(1);
+  });
 });
