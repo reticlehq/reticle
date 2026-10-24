@@ -1,13 +1,19 @@
-import type { FlowReplayResult } from '@reticlehq/core';
+import {
+  asNumber,
+  asString,
+  mutationTargetsFor,
+  perturbationFor,
+  ReplayStatus,
+  type FlowReplayResult,
+} from '@reticlehq/core';
 import { runSavedFlow } from '@/hooks/driven-by.js';
-import { asNumber, asString, mutationTargetsFor, perturbationFor } from '@reticlehq/core';
 import { sessionPerturbationPort } from '@/surface/tools/lease-tools.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
-import { flowsForSession } from './flow-store-for-session.js';
 import { safeSessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
+import { flowsForSession } from './flow-store-for-session.js';
 import { replayNamedFlow } from './flow-replay-run.js';
+import { noteReplayCheck } from './flow-result.js';
 import { recordingSources, withLearnedSources } from './learned-sources.js';
-import { ReplayStatus } from '@reticlehq/core';
 
 function targetOf(deps: ToolDeps, args: Record<string, unknown>): ProjectTarget {
   return safeSessionTarget(deps, asString(args['sessionId']));
@@ -46,6 +52,29 @@ export async function persistLearning(
     // Bookkeeping only.
   }
   return result;
+}
+
+/**
+ * One check of the session that ran this replay, whatever the replay returned.
+ *
+ * A missing session is not a failed replay: the result already says what the flow did, and there
+ * is no journal to put the check in.
+ */
+function rememberReplay(
+  deps: ToolDeps,
+  args: Record<string, unknown>,
+  result: FlowReplayResult,
+): void {
+  try {
+    noteReplayCheck(
+      deps.sessions.resolve(asString(args['sessionId'])),
+      result.name,
+      result.status,
+      undefined !== result.unverifiable,
+    );
+  } catch {
+    // resolve throws when no tab is connected. The replay result still stands.
+  }
 }
 
 /**
@@ -90,6 +119,9 @@ export async function replayAndLearn(
       return recorded.session;
     }),
   );
+  // Every outcome, including one that returned before a step ran. The runner used to record only
+  // a replay that finished its steps, so a failed or unverifiable suite was absent from the end.
+  rememberReplay(deps, args, result);
   // Only a clean run teaches a file: a drifted step may have resolved to the wrong element.
   if (result.status === ReplayStatus.OK && recorded !== undefined && recorded.sources.size > 0) {
     await persistSources(deps, args, recorded.sources);

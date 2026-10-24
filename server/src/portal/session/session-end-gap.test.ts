@@ -21,10 +21,13 @@ const action = (verified: Verified, i: number): JournalAction => ({
   at: 0,
 });
 
-function depsWith(actions: JournalAction[]): { deps: unknown; panel: () => string | undefined } {
+function depsWith(
+  actions: JournalAction[],
+  id = 's1',
+): { deps: unknown; panel: () => string | undefined } {
   let shown: string | undefined;
   const session = {
-    id: 's1',
+    id,
     setState: (_state: string, text?: string) => {
       shown = text;
     },
@@ -43,10 +46,57 @@ describe('reticle_session {action:"end"} reports the gap', () => {
       string,
       unknown
     >;
-    expect(result['gap']).toEqual(['1 of 2 claims held', '1 unknown']);
+    expect(result['gap']).toEqual(['1 of 2 claims held', '1 unknown: claim 1']);
     expect(panel()).toBe('Checkout fixed\n1 of 2 claims held');
     // Not on an ordinary end: the founder's call is offered to someone stuck, never at every end.
     expect(result['talk_to_us']).toBeUndefined();
+  });
+
+  it('lists an unverifiable suite beside a passed act, and does not agree the session passed', async () => {
+    const passed = action(Verified.YES, 0);
+    const suite: JournalAction = {
+      ...passed,
+      actionId: 'suite',
+      tool: ReticleTool.FLOW_REPLAY,
+      effect: {
+        claim: 'the flow "checkout" replays and its checks hold',
+        verified: Verified.UNKNOWN,
+      },
+    };
+    const { deps } = depsWith([passed, suite], 's-suite');
+    const result = (await endTool?.handler(deps as never, { claim: 'pass' })) as Record<
+      string,
+      unknown
+    >;
+    expect(result['gap']).toEqual([
+      '1 of 2 claims held',
+      '1 unknown: the flow "checkout" replays and its checks hold',
+    ]);
+    expect(result['claim']).toEqual({ claimed: 'pass', graded: 'partial', agrees: false });
+  });
+
+  it('lists a failed suite beside a passed act, and does not agree the session passed', async () => {
+    const passed = action(Verified.YES, 0);
+    const suite: JournalAction = {
+      ...passed,
+      actionId: 'suite-fail',
+      tool: ReticleTool.FLOW_REPLAY,
+      effect: {
+        claim: 'the flow "checkout" replays and its checks hold',
+        verified: Verified.NO,
+      },
+    };
+    const { deps } = depsWith([passed, suite], 's-fail');
+    const result = (await endTool?.handler(deps as never, { claim: 'pass' })) as Record<
+      string,
+      unknown
+    >;
+    expect(result['gap']).toEqual([
+      '1 of 2 claims held',
+      '1 failed',
+      '  ✗ the flow "checkout" replays and its checks hold',
+    ]);
+    expect(result['claim']).toEqual({ claimed: 'pass', graded: 'fail', agrees: false });
   });
 
   it('says plainly when the session claimed nothing', async () => {

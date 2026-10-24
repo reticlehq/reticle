@@ -45,7 +45,12 @@ export function gapReportLines(gap: GapSummary): string[] {
     const owners = Object.entries(gap.undecidedBy)
       .map(([owner, n]) => `${owner}: ${String(n)}`)
       .join(', ');
-    lines.push(`${String(gap.undecided)} unknown${'' === owners ? '' : ` (${owners})`}`);
+    const named = (gap.undecidedClaims ?? []).join('; ');
+    lines.push(
+      `${String(gap.undecided)} unknown${'' === owners ? '' : ` (${owners})`}${
+        '' === named ? '' : `: ${named}`
+      }`,
+    );
   }
   if (0 < gap.nothingToProve) lines.push(`${String(gap.nothingToProve)} proved nothing`);
   for (const failure of gap.failures) lines.push(`  ✗ ${failure.claim}`);

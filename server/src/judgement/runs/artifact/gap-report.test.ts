@@ -10,6 +10,7 @@ const gap = (over: Partial<GapSummary>): GapSummary => ({
   undecided: 0,
   nothingToProve: 0,
   undecidedBy: {},
+  undecidedClaims: [],
   falseGreensCaught: 0,
   failures: [],
   ...over,

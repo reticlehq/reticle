@@ -56,6 +56,8 @@ export interface GapSummary {
    * guessed one.
    */
   undecidedBy: Partial<Record<VerdictAttribution, number>>;
+  /** The claims that stayed unknown, so an end can name the suite instead of only the count. */
+  undecidedClaims: string[];
   /**
    * Failures where a CHANNEL disagreed with what the app showed.
    *
@@ -96,6 +98,7 @@ export function gapSummary(actions: readonly JournalAction[]): GapSummary {
     undecided: 0,
     nothingToProve: 0,
     undecidedBy: {},
+    undecidedClaims: [],
     falseGreensCaught: 0,
     failures: [],
   };
@@ -135,6 +138,7 @@ export function gapSummary(actions: readonly JournalAction[]): GapSummary {
         if (owner !== undefined && VerdictAttribution.NONE !== owner) {
           summary.undecidedBy[owner] = (summary.undecidedBy[owner] ?? 0) + 1;
         }
+        summary.undecidedClaims.push(verdict.claim);
         break;
       }
       case Verified.NO_FAULT:

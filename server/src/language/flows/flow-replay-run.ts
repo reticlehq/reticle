@@ -89,7 +89,7 @@ export function latestRecordedFlow(
 }
 
 export { flowErrorMessage } from './flow-result.js';
-import { flowErrorMessage, noteReplayCheck } from './flow-result.js';
+import { flowErrorMessage } from './flow-result.js';
 
 /** Replay statuses that represent an actual recorded run in project.json. */
 type RecordedReplayStatus = Exclude<ReplayStatus, typeof ReplayStatus.UNVERIFIABLE>;
@@ -897,8 +897,6 @@ export async function replayNamedFlow(
   const cannotFail =
     status === ReplayStatus.OK ? unverifiableReason(loaded.value, invokedFlows) : undefined;
   if (cannotFail !== undefined) result.unverifiable = { reason: cannotFail };
-  // One check of the session that ran it, so its end does not say "nothing was checked".
-  noteReplayCheck(session, name, status, cannotFail !== undefined);
   if (status !== ReplayStatus.OK)
     result.decision = buildDecision(result, loaded.value, intentSaid, invokedFlows);
   applyStartPathHint(result, startPathHint);

@@ -151,6 +151,7 @@ describe('reticle_context', () => {
         undecided: 0,
         nothingToProve: 0,
         undecidedBy: {},
+        undecidedClaims: [],
         falseGreensCaught: 0,
         failures: [],
       },
