@@ -18,6 +18,7 @@ import {
   MCP_SHUTDOWN_EVENT,
   ReticleEnv,
   CONTRACT_FINGERPRINT,
+  ReticleTool,
 } from '@reticlehq/core';
 import { SseFrameParser } from './sse-frame-parser.js';
 export { SseFrameParser, type SseFrame } from './sse-frame-parser.js';
@@ -181,7 +182,7 @@ export function streamLossReplies(
 ): string[] {
   const replies = pending.drain().map((id) => {
     const parsed = JSON.parse(id) as unknown;
-    return transportLossReply(parsed, reason, nextStep, pending.isDrive(parsed));
+    return transportLossReply(parsed, reason, nextStep, pending.isDrive(parsed), true);
   });
   pending.clearDrives();
   return replies;
@@ -200,18 +201,26 @@ const TRANSPORT_LOSS_CODE = -32001;
  * `nextStep` is appended when the caller knows one. Without it this reply describes a condition and
  * stops there, which is all a first-run user got out of their first ever tool call.
  */
-function transportLossReply(id: unknown, reason: string, nextStep?: string, drive = false): string {
+export function transportLossReply(
+  id: unknown,
+  reason: string,
+  nextStep?: string,
+  drive = false,
+  /** The daemon already had this call. A stream drop is that; a failed POST is not. */
+  received = false,
+): string {
+  const dropped = `the daemon connection dropped (${reason}) before this call was answered`;
+  const body = drive
+    ? `${dropped}. ${MSG_DRIVE_MAY_BE_RUNNING}`
+    : received
+      ? `${dropped}. The outcome is unknown: the action may have run. Check the app with ${ReticleTool.LOOK} before retrying a non-idempotent action.`
+      : `${dropped} — it did NOT complete. Reticle is recovering the connection; retry if the action is safe to repeat.`;
   return JSON.stringify({
     jsonrpc: '2.0',
     id,
     error: {
       code: TRANSPORT_LOSS_CODE,
-      message:
-        (drive
-          ? `the daemon connection dropped (${reason}) before this call was answered. ${MSG_DRIVE_MAY_BE_RUNNING}`
-          : `the daemon connection dropped (${reason}) before this call was answered — it did NOT ` +
-            'complete. Reticle is recovering the connection; retry if the action is safe to repeat.') +
-        (nextStep === undefined ? '' : ` ${nextStep}`),
+      message: body + (nextStep === undefined ? '' : ` ${nextStep}`),
     },
   });
 }

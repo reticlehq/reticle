@@ -18,7 +18,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { PendingRequests, streamLossReplies } from './mcp-proxy.js';
+import { ReticleTool } from '@reticlehq/core';
+import { PendingRequests, streamLossReplies, transportLossReply } from './mcp-proxy.js';
 import { MSG_DRIVE_MAY_BE_RUNNING } from './proxy/drive-calls.js';
 
 describe('streamLossReplies', () => {
@@ -89,6 +90,17 @@ describe('a lost connection under a Harness drive', () => {
       expect(byId.get(id)).toContain(MSG_DRIVE_MAY_BE_RUNNING);
       expect(byId.get(id)).not.toContain('did NOT');
     }
-    expect(byId.get(3)).toContain('did NOT');
+    expect(byId.get(3)).toContain('outcome is unknown');
+    expect(byId.get(3)).toContain(ReticleTool.LOOK);
+    expect(byId.get(3)).not.toContain('did NOT');
+  });
+
+  it('keeps the old text when the POST never reached the daemon', () => {
+    const message = (
+      JSON.parse(transportLossReply(4, 'socket_closed')) as { error: { message: string } }
+    ).error.message;
+    expect(message).toContain('did NOT complete');
+    expect(message).toContain('retry if the action is safe to repeat');
+    expect(message).not.toContain('outcome is unknown');
   });
 });

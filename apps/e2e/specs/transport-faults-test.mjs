@@ -103,7 +103,7 @@ chk('  and the MCP server survives that too', alive());
 // Every fault so far was applied BEFORE the call, so the call was queued and never forwarded, and
 // each was answered by the 20s queue timer reading "no daemon could be reached". That is correct,
 // and it is one of three populations. The other one that matters is a call that WAS forwarded and
-// then lost — where the answer has to say the call did not complete and may be unsafe to repeat,
+// then lost — where the answer has to say the outcome is unknown, because the action may have run,
 // and has to arrive quickly, because the agent is holding a write it cannot classify.
 //
 // LATENCY is what makes this reachable at all: it holds the response open long enough to cut the
