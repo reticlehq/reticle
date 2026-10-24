@@ -176,7 +176,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
     ],
   },
   description:
-    "Drive a WHOLE journey in ONE round-trip, with NO snapshot first. Name each step's element by {testid} | {label} | {role,name} | {text} in `target` and Reticle resolves it AT THE MOMENT THAT STEP RUNS — so a control that does not exist yet (a modal an earlier step opens, a row it creates) is still addressable, and waits up to timeout_ms to appear. This is the fast path: snapshot -> act -> snapshot -> act costs a model turn per step and is the slowest thing an agent can do. Give each step an `expect` and the sequence stops at the first one that does not hold, returning the un-run `tail` verbatim so you re-plan only the failure. Returns per-step effects[] (see reticle_act).",
+    "Drive a WHOLE journey in ONE round-trip, with NO snapshot first. Name each step's element by {testid} | {label} | {role,name} | {text} in `target` and Reticle resolves it AT THE MOMENT THAT STEP RUNS — so a control that does not exist yet (a modal an earlier step opens, a row it creates) is still addressable, and waits up to timeout_ms to appear. This is the fast path: snapshot -> act -> snapshot -> act costs a model turn per step and is the slowest thing an agent can do. Give each step an `expect` and the sequence stops at the first one that does not hold, returning the un-run `tail` verbatim so you re-plan only the failure. Returns per-step effects[] (see reticle_act). Each entry in `steps[]` carries `held` (true | false) — the per-step verdict — and `observed` when it did not hold. `stopped_at` names the index of the first miss.",
   inputSchema: {
     steps: z
       .array(z.record(z.unknown()))
@@ -228,10 +228,12 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
     /** Steps never run, verbatim, so a caller re-plans the failure rather than the whole journey. */
     tail: z.array(z.record(z.unknown())).optional(),
     /**
-     * Each step carries the same effect record a REPLAYED step carries: `window` (the
-     * `reticle_observe { since, until }` drill address), `digest` (what the app did, as counts) and
-     * `contradictions` (channels that disagree, present even when the step passed). Declared here
-     * because an undeclared field is stripped from structuredContent and would be silently lost.
+     * Each step carries: `held` (true | false) — the per-step verdict when an `expect`
+     * was given; `observed` — why it missed (present when `held` is false); and the same effect
+     * record a REPLAYED step carries: `window` (the `reticle_observe { since, until }` drill
+     * address), `digest` (what the app did, as counts) and `contradictions` (channels that disagree,
+     * present even when the step passed). Declared here because an undeclared field is stripped from
+     * structuredContent and would be silently lost.
      */
     steps: z.array(z.record(z.unknown())).optional(),
     result: z.unknown().optional(),
