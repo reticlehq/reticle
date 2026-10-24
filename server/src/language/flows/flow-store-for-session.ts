@@ -24,7 +24,7 @@
  * returned unchanged.
  */
 import { FlowStore } from './flows.js';
-import { sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
+import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import type { ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
@@ -32,19 +32,19 @@ export function flowsForSession(
   deps: ToolDeps,
   target: ProjectTarget,
 ): { flows: FlowStore; root: string } {
-  const resolved = deps.artifactRootFor?.(target.projectId, target.origin);
-  if (resolved === undefined || resolved.root === deps.reticleRoot) {
-    return { flows: deps.flows, root: deps.reticleRoot };
-  }
+  // The lease's claimed folder wins over the origin map. Two worktrees share a project id,
+  // and the origin names whichever checkout registered first.
+  const root = rootForTarget(deps, target);
+  if (root === deps.reticleRoot) return { flows: deps.flows, root: deps.reticleRoot };
   const onWrote = deps.onRunPersisted;
   return {
     flows: new FlowStore(
       deps.fs,
-      resolved.root,
+      root,
       { now: deps.now },
       onWrote === undefined ? {} : { onWrote },
     ),
-    root: resolved.root,
+    root,
   };
 }
 
