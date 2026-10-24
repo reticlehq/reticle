@@ -33,6 +33,31 @@ describe('reticle open, when it silently used a different daemon', () => {
   it('never advises a bare `reticle` binary, which the npx install does not create', () => {
     expect(openFailureNote(4400, 4470)).not.toMatch(/`reticle (init|serve|open)\b/);
   });
+
+  it('leads with a refusal the daemon recorded, and does not tell the caller to run init', () => {
+    const refusal =
+      'no browser session connected: the page at http://localhost:5173 dialled this daemon and was REFUSED because the wire contract does not match; fix: restart the daemon.';
+    const note = openFailureNote(4400, 4400, refusal);
+    expect(note.startsWith(refusal)).toBe(true);
+    expect(note).not.toContain('carries no Reticle SDK');
+  });
+
+  it('still names a missing SDK when the daemon recorded no refusal', () => {
+    const note = openFailureNote(
+      4400,
+      4400,
+      'no browser session connected. The app carries no Reticle SDK yet.',
+    );
+    expect(note).toContain('carries no Reticle SDK');
+    expect(note).not.toContain('wire contract');
+  });
+
+  it('states a substituted port before the refusal', () => {
+    const refusal = 'the page dialled this daemon and was REFUSED because the token is stale.';
+    const note = openFailureNote(4400, 4470, refusal);
+    expect(note.indexOf('NOTE FIRST')).toBeLessThan(note.indexOf(refusal));
+    expect(note).not.toContain('carries no Reticle SDK');
+  });
 });
 
 describe('reticle open, when the OS browser launcher fails', () => {

@@ -5,6 +5,7 @@ import { handleSetupMcp, handleSetupInstall } from './cli/setup-mcp-cli.js';
 import { reportStepFromCli } from './cli-onboarding.js';
 import { pathToFileURL } from 'node:url';
 import { openFailureNote, openLaunchFailureNote } from './cli/answers/open-note.js';
+import { waitForNewSession } from './cli/answers/open-wait.js';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { installCrashGuard } from './setup/setup-command.js';
@@ -462,25 +463,6 @@ function ensureDaemon(port: number): Promise<void> {
  * the daemon, then reuses the already-connected tab or opens a new browser at the url. Idempotent:
  * re-running never piles up duplicate tabs.
  */
-/** How long `reticle open` waits for the launched page to register before reporting on it. */
-const OPEN_SESSION_WAIT_MS = 8000;
-
-/**
- * Poll until a NEW session shows up, or the wait runs out. Returns whether one did.
- *
- * Compares against the count taken before launching rather than against zero, so opening a second
- * app while one is already connected is not reported as an instant success.
- */
-async function waitForNewSession(port: number, before: number): Promise<boolean> {
-  const deadline = Date.now() + OPEN_SESSION_WAIT_MS;
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    const { sessions } = summarizeStatus(await fetchStatus(port));
-    if (sessions.length > before) return true;
-  }
-  return false;
-}
-
 /** What to do about a same-origin tab `open` left where it was. */
 const OPEN_LEFT_AS_IS_REMEDY =
   'Pass --navigate to move it, drive it with reticle_navigate, or open the url in the browser yourself.';
@@ -567,13 +549,15 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
       // Say whether a SESSION appeared, not merely that a launcher was invoked. `{"opened": url}`
       // was printed unconditionally, so a run where nothing ever opened looked identical to a run
       // where it did — reported from the field as twenty minutes lost to a phantom port problem.
-      const connected = await waitForNewSession(port, sessions.length);
+      const waited = await waitForNewSession(sessions.length, () =>
+        fetchStatus(port).then(summarizeStatus),
+      );
       log('reticle_open', {
         port,
         ...(port === requestedPort ? {} : { requestedPort }),
         opened: decision.url,
-        connected,
-        ...(connected
+        connected: waited.connected,
+        ...(waited.connected
           ? {}
           : {
               // Two claims used to live here that this command cannot support. It said the browser
@@ -583,7 +567,11 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
               // about a browser THIS command never uses, so a missing Chromium reads as the
               // explanation for a session that is missing for an unrelated reason. Both misdirects
               // were reported from the field, each costing several calls of app-side wiring hunt.
-              note: openFailureNote(port, requestedPort),
+              // A refusal recorded during the wait outranks that guess: the page did connect.
+              note:
+                waited.whyLead === undefined
+                  ? openFailureNote(port, requestedPort)
+                  : openFailureNote(port, requestedPort, waited.whyLead),
             }),
       });
     })

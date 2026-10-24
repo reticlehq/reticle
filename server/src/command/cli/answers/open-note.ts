@@ -36,7 +36,12 @@ const OpenLaunchFailureCopy = {
  *
  * So the substitution is stated FIRST, with both numbers, before any cause that assumes they match.
  */
-export function openFailureNote(port: number, requestedPort: number): string {
+export function openFailureNote(
+  port: number,
+  requestedPort: number,
+  /** The daemon's no-session lead from the wait, when `/status` had one. */
+  recorded?: string,
+): string {
   const substituted =
     port === requestedPort
       ? ''
@@ -45,6 +50,11 @@ export function openFailureNote(port: number, requestedPort: number): string {
         `${String(requestedPort)}, that is the whole problem — nothing below applies. Start a daemon ` +
         `on ${String(requestedPort)} (\`npx @reticlehq/server serve --port ${String(requestedPort)}\`) ` +
         `or point the app at ${String(port)}. `;
+  // The diagnosis writes REFUSED only when a page dialled and was turned away. Any other lead is an
+  // absence, and the paragraph below is the one for that case.
+  const refusal =
+    recorded !== undefined && recorded.includes('REFUSED') ? recorded.trim() : undefined;
+  if (refusal !== undefined) return `${substituted}${refusal}`;
   return (
     `${substituted}the URL was handed to the system default browser (this command does not use ` +
     `Reticle's own Chromium, so a chromium warning from \`reticle doctor\` is unrelated ` +
