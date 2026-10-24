@@ -11,6 +11,7 @@
  * outcome than "unknown".
  */
 import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate-schema.js';
+import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 import { SESSION_REF, isGlobalPressCall, unissuedRefRefusal } from '@reticlehq/core';
 import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js';
 import { SessionReplacedError } from '@/portal/session/page-commands/pending-commands.js';
@@ -105,6 +106,22 @@ export function sequenceStepArgs(step: Record<string, unknown>): Record<string, 
   return { ...flat, ...(null !== nested && 'object' === typeof nested ? nested : {}) };
 }
 
+/**
+ * Why `parsePredicate` refuses this `expect`, as the sentence `reticle_assert` gives.
+ *
+ * Called only after `PredicateSchema` has refused the value, so the parse throws. The schema stays
+ * the test for refusal: `parsePredicate` also refuses a value that the schema accepts, and this
+ * check must not refuse more than it did before.
+ */
+function expectParseIssue(value: unknown): string {
+  try {
+    parsePredicate(value);
+    return '';
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 export function assertSequenceSteps(steps: readonly unknown[]): void {
   if (0 === steps.length) {
     throw new Error(
@@ -131,13 +148,15 @@ export function assertSequenceSteps(steps: readonly unknown[]): void {
      * declared; nothing told it the declaration was discarded, and that sentence invites it to add
      * the very thing it just wrote. Same false green as an unreadable key, through a key this tool
      * does read.
+     *
+     * The reason is the sentence `reticle_assert` gives for the same predicate: the field that failed
+     * and the fields that work. A fixed sentence with generic examples did not say that `css` is not a
+     * `query` field, so the caller had to guess again.
      */
     if (step['expect'] !== undefined && !PredicateSchema.safeParse(step['expect']).success) {
       throw new Error(
-        `step ${String(i)} carries an \`expect\` this tool cannot parse. ` +
-          'A consequence is a predicate object with a `kind` — e.g. { kind: "signal", name: ' +
-          '"order:placed" }, { kind: "element", by: "testid", value: "receipt" }, or ' +
-          '{ kind: "settled" } — the same shape reticle_act_and_wait takes as `until`. ' +
+        `step ${String(i)} carries an \`expect\` this tool cannot parse: ` +
+          `${expectParseIssue(step['expect'])} ` +
           'Refused rather than dropped, because a step whose declaration was discarded reports ' +
           'as a step that declared nothing. Nothing was acted on.',
       );
