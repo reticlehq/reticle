@@ -119,6 +119,7 @@ export interface PooledMockRule {
   status?: number;
   body?: string;
   contentType?: string;
+  headers?: Record<string, string>;
   delayMs?: number;
   abort?: boolean;
 }

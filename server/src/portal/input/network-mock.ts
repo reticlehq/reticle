@@ -24,6 +24,8 @@ export interface MockRule {
   body?: string;
   /** Response content type (default application/json). */
   contentType?: string;
+  /** Response headers, e.g. `Retry-After` or `Content-Disposition`. `contentType` wins over a `Content-Type` here. */
+  headers?: Record<string, string>;
   /** Delay (ms) before fulfilling — simulate a slow endpoint. */
   delayMs?: number;
   /** Simulate a network failure (offline / connection refused) instead of a response. */
@@ -36,11 +38,28 @@ interface MockOutcome {
   status?: number;
   body?: string;
   contentType?: string;
+  headers?: Record<string, string>;
   delayMs?: number;
 }
 
 const DEFAULT_STATUS = 200;
 const DEFAULT_CONTENT_TYPE = 'application/json';
+const CONTENT_TYPE_HEADER = 'content-type';
+
+/**
+ * The content type to send, or undefined when the headers already carry one.
+ *
+ * Playwright writes `contentType` over a `Content-Type` in `headers`. So the default replaced the
+ * type the caller wrote, and an app that downloads a CSV read `application/json`.
+ */
+function contentTypeFor(
+  contentType: string | undefined,
+  headers: Record<string, string> | undefined,
+): string | undefined {
+  if (contentType !== undefined) return contentType;
+  const named = Object.keys(headers ?? {}).some((h) => CONTENT_TYPE_HEADER === h.toLowerCase());
+  return named ? undefined : DEFAULT_CONTENT_TYPE;
+}
 
 /**
  * Decide the outcome for a request from the active rules. Pure: no IO, no clock. The first rule
@@ -68,15 +87,15 @@ export function matchMock(rules: MockRule[], req: { url: string; method: string 
       rule.status === undefined &&
       rule.body === undefined &&
       rule.contentType === undefined &&
+      rule.headers === undefined &&
       rule.delayMs !== undefined
     ) {
       return { kind: 'continue', delayMs: rule.delayMs };
     }
-    const outcome: MockOutcome = {
-      kind: 'fulfill',
-      status: rule.status ?? DEFAULT_STATUS,
-      contentType: rule.contentType ?? DEFAULT_CONTENT_TYPE,
-    };
+    const outcome: MockOutcome = { kind: 'fulfill', status: rule.status ?? DEFAULT_STATUS };
+    const contentType = contentTypeFor(rule.contentType, rule.headers);
+    if (contentType !== undefined) outcome.contentType = contentType;
+    if (rule.headers !== undefined) outcome.headers = rule.headers;
     if (rule.body !== undefined) outcome.body = rule.body;
     if (rule.delayMs !== undefined) outcome.delayMs = rule.delayMs;
     return outcome;
@@ -102,11 +121,14 @@ export async function applyOutcome(
     return;
   }
   if (outcome.delayMs !== undefined && outcome.delayMs > 0) await sleep(outcome.delayMs);
-  await route.fulfill({
+  const response: Parameters<Route['fulfill']>[0] = {
     status: outcome.status ?? DEFAULT_STATUS,
-    contentType: outcome.contentType ?? DEFAULT_CONTENT_TYPE,
     body: outcome.body ?? '',
-  });
+  };
+  const contentType = contentTypeFor(outcome.contentType, outcome.headers);
+  if (contentType !== undefined) response.contentType = contentType;
+  if (outcome.headers !== undefined) response.headers = outcome.headers;
+  await route.fulfill(response);
 }
 
 const realSleep = (ms: number): Promise<void> => new Promise((res) => setTimeout(res, ms));
