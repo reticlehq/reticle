@@ -20,7 +20,7 @@
  * fresh one on the next call, which is a path already exercised hundreds of times a day.
  */
 
-import { STATUS_HOLD_MS } from '@reticlehq/core';
+import { SESSION_LIFECYCLE, STATUS_HOLD_MS } from '@reticlehq/core';
 
 /** Set the first time any tool is dispatched through runTool — the chokepoint every path shares. */
 let servedToolCall = false;
@@ -57,10 +57,23 @@ function setupHolding(now: number): boolean {
   return undefined !== setupHeldAt && now - setupHeldAt < SETUP_HOLD_MS;
 }
 
+/** When an agent last attached or detached. Undefined until the first one. */
+let agentSeenAt: number | undefined;
+
+/** Call on each attach and each detach of an agent. */
+export function noteAgentPresence(now: number): void {
+  agentSeenAt = now;
+}
+
+function agentRecent(now: number): boolean {
+  return undefined !== agentSeenAt && now - agentSeenAt < SESSION_LIFECYCLE.DAEMON_AGENT_RECENT_MS;
+}
+
 /** Tests only. */
 export function resetDaemonUsefulness(): void {
   servedToolCall = false;
   setupHeldAt = undefined;
+  agentSeenAt = undefined;
 }
 
 interface UsefulnessFacts {
@@ -108,9 +121,10 @@ export function buildIdlePredicate(
   pool: IdlePool,
   now: () => number = () => Date.now(),
 ): () => boolean {
+  // An agent that attached recently counts as attached: see DAEMON_AGENT_RECENT_MS.
   return () =>
     !setupHolding(now()) &&
-    (!agentConnected() ||
+    (!(agentConnected() || agentRecent(now())) ||
       isUselessDaemon({
         servedToolCall: everServedToolCall(),
         everConnected: sessions.everConnected(),

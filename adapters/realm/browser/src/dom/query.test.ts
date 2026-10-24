@@ -70,6 +70,28 @@ describe('matchCase', () => {
   });
 });
 
+/**
+ * A page often shows a typographic quote or dash where the check was typed with a plain one. The
+ * text is on the screen, so a check that answers `no` reports a defect that does not exist.
+ */
+describe('typographic quotes and dashes', () => {
+  it('a text check matches a curly apostrophe and an en dash with their plain forms', () => {
+    document.body.innerHTML = '<p>It\u2019s saved \u2013 done</p>';
+    expect(runQuery({ text: "It's saved - done", matchCase: true }).count).toBe(1);
+    expect(runQuery({ text: "it's saved - done" }).count).toBe(1);
+  });
+
+  it('a check with curly double quotes and an em dash matches the plain text', () => {
+    document.body.innerHTML = '<p>Say "hi" - now</p>';
+    expect(runQuery({ text: 'Say \u201chi\u201d \u2014 now', matchCase: true }).count).toBe(1);
+  });
+
+  it('a role name matches across the same fold', () => {
+    document.body.innerHTML = '<button>Don\u2019t save</button>';
+    expect(runQuery({ by: 'role', value: 'button', name: "Don't save" }).count).toBe(1);
+  });
+});
+
 describe('label queries prefer exact accessible names', () => {
   it('does not include a longer button name when an exact control label exists', () => {
     document.body.innerHTML =

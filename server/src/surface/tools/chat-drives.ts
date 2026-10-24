@@ -48,7 +48,7 @@ import {
 } from '../../features/harness/platform/local-apps.js';
 import { serverOptionsFromEnv } from '../../features/harness/platform/server-driver.js';
 import { EXPLORE_TOOLS, driveForChat } from './explore-tools.js';
-import { harnessLockRefusal, withLinkedCredential } from './harness-explore.js';
+import { harnessStartRefusal, withLinkedCredential } from './harness-explore.js';
 import { runTool } from './invoke-tool.js';
 import {
   announcedChannels,
@@ -470,7 +470,7 @@ export async function hudDrive(
   }
 }
 
-/** Run Harness: the gate, the platform's grant, then the drive, saying why at each refusal. */
+/** Run Harness: the build check, the platform's grant, then the drive, saying why at each refusal. */
 async function startHudRun(
   deps: ToolDeps,
   sessionId: string,
@@ -478,9 +478,9 @@ async function startHudRun(
   say: (text: string) => void,
   grant: (platform: { url: string; apiKey: string }) => Promise<FreeDrive>,
 ): Promise<void> {
-  // Before the grant: a drive the gate refuses must not take one. The panel shows the prompt.
+  // Before the grant: a drive refused for version skew must not take one.
   const env = await withLinkedCredential(deps, process.env, { sessionId });
-  const locked = await harnessLockRefusal(deps, sessionId, env);
+  const locked = await harnessStartRefusal(deps, sessionId);
   if (locked !== undefined) return say(locked.text.split('\n')[0] ?? locked.text);
   const platform = serverOptionsFromEnv(env);
   // The person's sentence: the agent's (`MSG_NO_HARNESS_KEY`) names tools they never call.

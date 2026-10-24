@@ -61,7 +61,7 @@ import { join } from 'node:path';
  * and where to add it. That is the point: these are not tests of what the code does today, they are
  * a tripwire on the ways the telemetry can silently stop being true.
  *
- * See `docs/telemetry-contract.md` for the human-facing version of these rules.
+ * See `contributing/telemetry/contract.md` for the human-facing version of these rules.
  */
 
 /** Events an agent's tool call can produce. Each must have somewhere it is actually emitted from. */
@@ -122,11 +122,11 @@ describe('every telemetry event kind is real and reachable', () => {
  */
 describe('every telemetry event kind is documented', () => {
   it('appears by name in the contract doc', () => {
-    const doc = readFileSync(join(REPO_ROOT, 'docs/telemetry-contract.md'), 'utf8');
+    const doc = readFileSync(join(REPO_ROOT, 'contributing/telemetry/contract.md'), 'utf8');
     const undocumented = Object.values(TelemetryEventKind).filter((kind) => !doc.includes(kind));
     expect(
       undocumented,
-      `add these to docs/telemetry-contract.md: ${undocumented.join(', ')}`,
+      `add these to contributing/telemetry/contract.md: ${undocumented.join(', ')}`,
     ).toEqual([]);
   });
 });
@@ -352,8 +352,8 @@ describe('no vocabulary is hand-copied', () => {
 });
 
 /**
- * The platform and Harness nudges, and the coverage a refused Harness drive was at, are counted by
- * kind and bucket. Both keys are closed enums from core: a kind or bucket that is not listed never
+ * The platform and Harness nudges are counted by kind. An older daemon's coverage refusals still
+ * parse by bucket. Both keys are closed enums from core: a kind or bucket that is not listed never
  * reaches the wire, and every one that is listed does.
  */
 describe('nudges and Harness refusals are counted by closed names', () => {
@@ -369,13 +369,12 @@ describe('nudges and Harness refusals are counted by closed names', () => {
     expect(summary({ harnessRefusedCoverage: { '62%': 1 } })).toBe(false);
   });
 
-  it('counts what was shown and refused, in the summary', () => {
+  it('counts what was shown, and sends no coverage refusals: no score gates the Harness', () => {
     const metrics = new SessionMetrics(() => 0);
     metrics.recordNudge(AgentNudgeKind.CONNECT);
-    metrics.recordHarnessRefused(62);
     const out = metrics.summarize(false);
     expect(out.nudgesShown).toEqual({ [AgentNudgeKind.CONNECT]: 1 });
-    expect(out.harnessRefusedCoverage).toEqual({ [CoverageBucket.B60]: 1 });
+    expect(out.harnessRefusedCoverage).toBeUndefined();
     expect(SessionSummarySchema.safeParse(out).success).toBe(true);
   });
 });

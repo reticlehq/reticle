@@ -9,7 +9,13 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { InitConfirmation, RETICLE_DEFAULT_PORT, type InitOutcome } from '@reticlehq/core';
-import { FEEDBACK_HINT, Framework, InitFailure, type InitResult } from '@reticlehq/init';
+import {
+  COMMUNITY_HINT,
+  FEEDBACK_HINT,
+  Framework,
+  InitFailure,
+  type InitResult,
+} from '@reticlehq/init';
 import { confirmInstall, nodeConfirmDeps } from '@/command/setup/terminal/confirm.js';
 import { writeLicenseKey } from '@/command/setup/license-key.js';
 import {
@@ -357,6 +363,7 @@ export async function continueAfterInit(
             io.print(`   ${String(i + 1)}. ${step}`);
           // Already spaced by the blank line above when nothing was listed.
           ask(0 < outcome.fallback.length);
+          io.print(COMMUNITY_HINT);
           return;
         }
         if (outcome.ok) {
@@ -365,6 +372,7 @@ export async function continueAfterInit(
               'saved. The tab stays open; a linked project sends the flow and its run to your dashboard.',
           );
           ask();
+          io.print(COMMUNITY_HINT);
           return;
         }
         // A run that produced no verdict did not succeed, and the exit code is the one place a caller

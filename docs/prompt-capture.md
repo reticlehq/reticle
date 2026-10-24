@@ -34,7 +34,7 @@ The hook writes two files in the project's `.reticle/` folder:
 
 Secrets are removed before anything is written: credential assignments (`password: …`, `STRIPE_SECRET_KEY=…`), vendor keys (`sk_live_…`, `ghp_…`, `AKIA…`, `AIza…`, `glpat-…`, `xoxb-…`), JWTs, emails, card numbers, phone numbers, home paths and hostnames. This is a pattern match, not a proof: a secret that looks like an ordinary word stays. A prompt is capped at 20,000 characters.
 
-All three files are in `.reticle/.gitignore`. Reticle adds them to an older ignore file that does not have them, and keeps every line you wrote.
+`request.json`, `requests.jsonl` and `requests.1.jsonl` are in `.reticle/.gitignore`. Reticle adds them to an older ignore file that does not have them, and keeps every line you wrote.
 
 The hook makes no network call of its own and never blocks a prompt: a failure is exit 0 and nothing written. `npx` downloads the pinned version once when its cache does not have it. Nothing about a prompt reaches telemetry.
 

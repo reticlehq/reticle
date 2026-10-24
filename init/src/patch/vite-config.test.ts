@@ -96,6 +96,26 @@ export default defineConfig(buildOptions());
     expect(r.kind).toBe(VitePatchKind.MANUAL);
   });
 
+  it('never adds a second `plugins` key when the list is built by a call', () => {
+    // A second key wins over the first, so the user's own plugins vanish and ours is the only one
+    // left, or the other way round. Either way init reported a wiring it did not make.
+    const r = patchViteConfig(`import { defineConfig } from 'vite';
+export default defineConfig({ plugins: wrap(() => [react()]) });
+`);
+    expect(r.kind).toBe(VitePatchKind.MANUAL);
+    if (r.kind !== VitePatchKind.MANUAL) {
+      return;
+    }
+    expect(r.reason).toContain('reticle()');
+  });
+
+  it('never adds a second `plugins` key for a shorthand property', () => {
+    const r = patchViteConfig(`const plugins = [react()];
+export default defineConfig({ plugins });
+`);
+    expect(r.kind).toBe(VitePatchKind.MANUAL);
+  });
+
   it('prepends the import when the config has none', () => {
     const r = patchViteConfig('export default { plugins: [] };\n');
     if (r.kind !== VitePatchKind.APPLY) throw new Error('expected apply');

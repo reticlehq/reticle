@@ -29,6 +29,7 @@ import { FORCE_FLAG } from './cli-kill.js';
 export {
   AGENT_FLAG,
   BUG_FLAG,
+  CONTACT_FLAG,
   FEEDBACK_KINDS,
   KIND_FLAG,
   RATING_FLAG,
@@ -88,6 +89,15 @@ export const DAEMON_INNER_COMMAND = '_daemon';
 export const UNKNOWN_COMMAND = 'unknown';
 const HELP_COMMAND = 'help';
 const HELP_FLAGS: ReadonlySet<string> = new Set(['--help', '-h']);
+/**
+ * Commands that only ask about the CLI. An agent often runs one before anything else, so the first
+ * run on a machine is not the install until a real command follows.
+ */
+export const PROBE_COMMANDS: ReadonlySet<string> = new Set([
+  VERSION_COMMAND,
+  HELP_COMMAND,
+  TELEMETRY_COMMAND,
+]);
 /** Every command the typed parser below routes. The parser refuses any word not in this list. */
 export const LOCAL_COMMANDS: readonly string[] = [
   INIT_COMMAND,

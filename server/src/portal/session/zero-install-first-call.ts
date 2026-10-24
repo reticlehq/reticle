@@ -11,8 +11,9 @@
  * browser opened on another repo's app produces a confident verdict about code nobody touched. It
  * changes nothing in the repo — wiring it for good stays the agent's call, named in the notice.
  *
- * Where the serving process cannot be observed (no `lsof`, so Windows) nothing is opened and the
- * no-session answer names the lease and the init command instead.
+ * Where the serving process cannot be observed nothing is opened, and the no-session answer names
+ * the lease and the init command instead. On Windows the lookup reads the listener's command line
+ * (see `findListenerCwd`), so a dev server run from the project's `node_modules` counts.
  */
 import { realpathSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
@@ -21,6 +22,7 @@ import { callingClientDirectory } from '@/hooks/client-directory.js';
 import { detectDevCommandInProject, initCommandIn } from './dev-server/dev-command.js';
 import { probeDevServerStates } from './dev-server/dev-server-probe.js';
 import { firstRunWiring, type FirstRunWiring } from './first-run-wiring.js';
+import { wiringConsent } from './no-session-next-action.js';
 import { servingDirectoryOf } from './serving-directory.js';
 
 const LOCALHOST = 'http://localhost';
@@ -65,8 +67,8 @@ function openedNotice(url: string, init: string): string {
   return (
     `This app is not wired for Reticle, so Reticle opened ${url} in its own browser and supplied ` +
     'the SDK (zero-install: DOM, network, console and routes; no component state and no source ' +
-    `file:line). To wire it for good, run \`${init}\`, then ` +
-    'restart the dev server and reload the page.'
+    `file:line). To wire it for good: ${wiringConsent(init)} Then restart the dev server and ` +
+    'reload the page.'
   );
 }
 
@@ -94,15 +96,14 @@ export function firstCallOpener(io: FirstCallIo): () => Promise<FirstCallOpened 
 
 /**
  * The daemon's two answers to an app nobody wired, built together because both ask the same
- * question first — which unwired web app is this caller in. `firstRun` wires it when the agent
+ * question first — which unwired web app is this caller in. `firstRun` names it when the agent
  * lists sessions; `openUnwiredApp` opens it zero-install on a page-needing call.
  */
 export function agentWiring(
-  port: number,
   sessions: { list(): readonly unknown[] },
   lease: (url: string) => Promise<unknown>,
 ): { firstRun: FirstRunWiring; openUnwiredApp: () => Promise<FirstCallOpened | undefined> } {
-  const firstRun = firstRunWiring({ port, cliPath: process.argv[1] ?? '' });
+  const firstRun = firstRunWiring();
   const openUnwiredApp = firstCallOpener({
     project: () => firstRun.projectDirectory(callingClientDirectory() ?? process.cwd()),
     serving: async (ports) => (await probeDevServerStates(ports)).serving,

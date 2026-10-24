@@ -14,12 +14,15 @@ import { getTelemetry } from './telemetry.js';
 import { appEverConnected } from './app-instrumented.js';
 
 let connectsSeen = 0;
+/** The proxies already reported. A proxy sends one id on every connect of its process. */
+const proxiesSeen = new Set<string>();
 /** Set when the daemon starts, so the FIRST connect can report how long Reticle sat unused. */
 let daemonStartedAt: number | undefined;
 
 export function markDaemonStart(now: number): void {
   daemonStartedAt = now;
   connectsSeen = 0;
+  proxiesSeen.clear();
 }
 
 /**
@@ -35,12 +38,29 @@ export function markDaemonStart(now: number): void {
  * An unnamed call reports NOTHING. A stream that opens and never completes a handshake is a probe,
  * not a client attaching, and counting it was what put an unattributable row exactly where the name
  * belonged.
+ *
+ * ONCE per proxy. `attachId` is the proxy's own id, and the proxy sends the same id each time it
+ * reconnects. A reconnect of a known proxy is the same agent coming back, and an event for each one
+ * made this the largest event kind with no new fact in it. The proxy counts its own drops on
+ * `mcp_proxy_exited`. An older proxy sends no id, so each of its connects still reports.
  */
 /** `connection.client`'s wire cap. */
 const MAX_CLIENT_NAME = 64;
 
-export function reportMcpConnected(client?: string, now: () => number = () => Date.now()): void {
-  if (client === undefined) return;
+export function reportMcpConnected(
+  client?: string,
+  attachId?: string,
+  now: () => number = () => Date.now(),
+): void {
+  if (client === undefined) {
+    return;
+  }
+  if (attachId !== undefined) {
+    if (proxiesSeen.has(attachId)) {
+      return;
+    }
+    proxiesSeen.add(attachId);
+  }
   try {
     const reconnect = connectsSeen > 0;
     connectsSeen += 1;
@@ -59,6 +79,9 @@ export function reportMcpConnected(client?: string, now: () => number = () => Da
         // `app_instrumented` sets, never a second counter, so the two halves of the funnel cannot
         // disagree about one daemon run.
         appConnected: appEverConnected(),
+        // The proxy that attached. Its `mcp_connection_lost` and `mcp_proxy_exited` rows carry the
+        // same id and no `sessionId`, so this row is how they join this daemon run.
+        ...(attachId === undefined ? {} : { proxyId: attachId }),
       },
     });
   } catch {
@@ -69,5 +92,6 @@ export function reportMcpConnected(client?: string, now: () => number = () => Da
 /** Tests only. */
 export function resetMcpConnections(): void {
   connectsSeen = 0;
+  proxiesSeen.clear();
   daemonStartedAt = undefined;
 }

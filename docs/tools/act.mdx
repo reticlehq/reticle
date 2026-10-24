@@ -61,6 +61,8 @@ Real response:
 
 `click` · `dblclick` · `hover` · `focus` · `blur` · `fill` · `type` · `clear` · `select` · `check` · `uncheck` · `submit` · `press` · `upload` · `scrollIntoView` · `scroll` · `drag` · `tap` · `zoom`
 
+Name the element with `ref`, or with `target` to find it in the same call: `{ testid }`, `{ text }`, `{ role, name }` or `{ label }`. A `target` that matches more than one element is refused. A press of Escape, Tab or a shortcut such as Cmd+K needs neither.
+
 | Action           | Arguments                                                       |
 | ---------------- | --------------------------------------------------------------- |
 | `fill`, `select` | `{ value }`                                                     |
@@ -72,11 +74,11 @@ Real response:
 
 This is where `act` earns its place even though it proves nothing.
 
-- **`valueChanged: true`**. The field actually took the value. `false` on a `fill` usually means the input is controlled and rejected it, or it's readonly.
-- **`focusMoved: "null->e104"`**, focus went where you expected.
-- **`domMutatedWithin: 9`**, something re-rendered within 9ms. A `fill` that mutates nothing often means no handler is attached.
-- **`defaultPrevented`**. A handler called `preventDefault()`, which is why your form didn't submit.
-- **`occluded` / `occludedBy`**. The click landed on something else. This is the answer to at least half of all "the button doesn't work" reports.
+- **`valueChanged: true`**: the field took the value. `false` on a `fill` usually means that the input is controlled and rejected it, or that it is readonly.
+- **`focusMoved: "null->e104"`**: focus went where you expected.
+- **`domMutatedWithin: 9`**: something re-rendered within 9 ms. A `fill` that changes nothing often means that no handler is attached.
+- **`defaultPrevented`**: a handler called `preventDefault()`, which is why your form did not submit.
+- **`occluded` / `occludedBy`**: the click landed on something else. This is the answer to at least half of all "the button does not work" reports.
 
 ## `settled: false` is not a failure
 

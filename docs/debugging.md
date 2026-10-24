@@ -100,7 +100,7 @@ Two things that trace makes visible and nothing else did. Planning is ~2ms, so i
 ### Adding a span
 
 ```ts
-import { span } from '../trace.js';
+import { span } from '@/trace.js';
 
 const result = await span('predicate.eval', { kind: predicate.kind }, () => evaluate(predicate));
 ```

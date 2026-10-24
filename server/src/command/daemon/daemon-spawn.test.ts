@@ -9,6 +9,7 @@ import {
   statSync,
   renameSync,
   closeSync,
+  utimesSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -175,5 +176,34 @@ describe('spawnDaemon with injectable deps', () => {
 
     expect(ok).toBe(true);
     expect(readFileSync(pidFile, 'utf8')).toBe('12345');
+  });
+
+  /**
+   * The orphan branch is the only place a daemon that died without a clean stop is ever seen. It
+   * wrote one line to the daemon log, which nobody uploads, so how often daemons die (and how old
+   * they were) had no number.
+   */
+  it('reports a predecessor that died unclean, with its age', () => {
+    const pidFile = join(home, 'daemon-4008.pid');
+    writeFileSync(pidFile, '11111', 'utf8');
+    const startedSecondsAgo = Date.now() / 1000 - 60;
+    utimesSync(pidFile, startedSecondsAgo, startedSecondsAgo);
+    const ages: number[] = [];
+
+    const { deps } = makeDeps({
+      pidAlive: () => false,
+      onUncleanDeath: (ageMs) => ages.push(ageMs),
+    });
+    spawnDaemon('node', 'script.mjs', [], 4008, deps);
+
+    expect(ages).toHaveLength(1);
+    expect(ages[0]).toBeGreaterThanOrEqual(59_000);
+  });
+
+  it('reports nothing when there was no predecessor', () => {
+    const ages: number[] = [];
+    const { deps } = makeDeps({ onUncleanDeath: (ageMs) => ages.push(ageMs) });
+    spawnDaemon('node', 'script.mjs', [], 4009, deps);
+    expect(ages).toEqual([]);
   });
 });

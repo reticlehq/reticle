@@ -233,27 +233,37 @@ What is still missing on Preact is the enrichment above the DOM: `reticle_inspec
 
 No config file to patch, so `connect()` goes in your entry module.
 
-```ts
-// src/index.tsx
-import { reticle } from '@reticlehq/browser';
+```js
+// src/index.js
 if (process.env.NODE_ENV !== 'production') {
   // The bridge refuses a connect with no pairing token, even on localhost.
-  reticle.connect({ token: '<pairing token>' });
+  void Promise.all([
+    import('@reticlehq/browser'),
+    import('../reticle.local.js').catch(() => ({})),
+  ]).then(([{ reticle }, local]) => {
+    reticle.connect({ token: local.token });
+  });
 }
 ```
 
-The token is the contents of `~/.reticle/pairing-token`; do not commit it. On Create React App, `init` writes this for you: a dev-only connect module that reads the token from `REACT_APP_RETICLE_TOKEN`, which it puts in the gitignored `.env.development.local`. The same shape works for webpack, Parcel, and the Vue and Svelte CLIs.
+`reticle init` writes this machine's pairing token to `reticle.local.js` at the project root and adds that file to `.gitignore`. Point the import at that file from your entry module. Do not commit it: each teammate runs `reticle init` for their own. The same shape works for webpack, Parcel, and the Vue and Svelte CLIs. On Create React App, `init` writes the connect for you: a dev-only connect module that reads the token from `REACT_APP_RETICLE_TOKEN`, which it puts in the git-ignored `.env.development.local`.
 
 ## Plain HTML
 
-A directory with an `index.html` and no `package.json` is wired by `init` itself: it writes the connect snippet into `index.html`, before `</body>`, writes `.reticle.json`, and hands over to setup. The block is marked, so a re-run finds it and never writes a second one, and a re-run with a new `--port` rewrites the port inside it. It loads the SDK from a CDN and runs only when the page is opened on `localhost`, `127.0.0.1` or `[::1]`: a static file has no development build to strip it, so the host is the only line between the snippet and a published page. The page carries no pairing token: `init` writes it into `reticle.local.js` beside the page, which the snippet imports, and adds that file to `.gitignore`. Keep it out of anything you publish, and let each teammate run `reticle init` for their own. Several pages and no `index.html` is a choice `init` does not make for you: it prints the snippet, filled in with your project id and token, for you to paste:
+A directory with an `index.html` and no `package.json` is wired by `init` itself: it writes the connect snippet into `index.html`, before `</body>`, writes `.reticle.json`, and hands over to setup. The block is marked, so a re-run finds it and never writes a second one, and a re-run with a new `--port` rewrites the port inside it. It loads the SDK from a CDN and runs only when the page is opened on `localhost`, `127.0.0.1` or `[::1]`: a static file has no development build to strip it, so the host is the only line between the snippet and a published page. The page carries no pairing token: `init` writes it into `reticle.local.js` beside the page, which the snippet imports, and adds that file to `.gitignore`. Keep it out of anything you publish, and let each teammate run `reticle init` for their own. Several pages and no `index.html` is a choice `init` does not make for you: it prints the snippet, filled in with your project id, for you to paste. The snippet does not contain the token. It imports `reticle.local.js`, which `init` writes at the project root and adds to `.gitignore`. If your page is not served from the project root, change `./reticle.local.js` so that it points to that file:
 
 ```html
 <script type="module">
-  import { reticle } from 'https://cdn.jsdelivr.net/npm/@reticlehq/browser@<version>/+esm';
-  reticle.connect({ projectId: '<your-project-id>', token: '<pairing token>' });
+  Promise.all([
+    import('https://cdn.jsdelivr.net/npm/@reticlehq/browser@<version>/+esm'),
+    import('./reticle.local.js').catch(() => ({})),
+  ]).then(([{ reticle }, local]) =>
+    reticle.connect({ projectId: '<your-project-id>', token: local.token }),
+  );
 </script>
 ```
+
+An Electron app with a static `index.html` is the exception. Its packaged renderer can also run on `localhost`, so `init` writes neither the snippet nor `reticle.local.js`, and gives a manual step instead. Connect only in development, for example only when `!app.isPackaged`, and see [Desktop apps](/desktop).
 
 A bare `/node_modules/...` import does not work here: the SDK's own `dist` imports bare specifiers, which a browser cannot resolve without a bundler. A page with a `package.json` and a bundler takes the entry-module path above instead.
 
@@ -282,12 +292,24 @@ Middleware is the Django-shaped answer: one place, runs for every page, no templ
 ```python
 # reticle_dev.py: add to MIDDLEWARE while DEBUG is on:
 #   MIDDLEWARE = [..., "reticle_dev.ReticleDevMiddleware"]
+import json
+import os
+from pathlib import Path
+
 from django.conf import settings
 
 _SNIPPET = """<script type="module">
   import { reticle } from 'https://cdn.jsdelivr.net/npm/@reticlehq/browser@<version>/+esm';
-  reticle.connect({ projectId: '<your-project-id>', token: '<pairing token>' });
+  reticle.connect({ ...{ projectId: '<your-project-id>' }, token: __RETICLE_PAIRING_TOKEN__ });
 </script>"""
+
+
+def _reticle_pairing_token():
+    folder = os.environ.get("RETICLE_PAIRING_TOKEN_DIR") or str(Path.home() / ".reticle")
+    try:
+        return (Path(folder) / "pairing-token").read_text().strip()
+    except OSError:
+        return ""
 
 
 class ReticleDevMiddleware:
@@ -308,7 +330,8 @@ class ReticleDevMiddleware:
         body = response.content.decode(response.charset)
         if "</body>" not in body:
             return response
-        response.content = body.replace("</body>", _SNIPPET + "</body>", 1).encode(
+        snippet = _SNIPPET.replace("__RETICLE_PAIRING_TOKEN__", json.dumps(_reticle_pairing_token()))
+        response.content = body.replace("</body>", snippet + "</body>", 1).encode(
             response.charset
         )
         if response.has_header("Content-Length"):
@@ -316,7 +339,7 @@ class ReticleDevMiddleware:
         return response
 ```
 
-`reticle init` emits this with your real version, project id and pairing token filled in. Copy it from there rather than from this page: the placeholders above are the three things that have to be right.
+`reticle init` prints this with your real version and project id. Copy it from there, not from this page. The middleware reads this machine's pairing token from `~/.reticle/pairing-token` (or `RETICLE_PAIRING_TOKEN_DIR`) each time it serves a page, so the token is never in your code.
 
 Four details in that middleware are load-bearing, and each is there because the obvious version is wrong:
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   describeForeignHolder,
   findListenerCwd,
+  parseCommandLineRoot,
   parsePortHolder,
   parseProcessCwd,
 } from './port-holder.js';
@@ -167,12 +168,54 @@ describe('findListenerCwd', () => {
       return args.includes('-sTCP:LISTEN') ? 'p4242\ncnode\n' : 'p4242\nfcwd\nn/wt/pr-7\n';
     };
 
-    expect(findListenerCwd(5174, exec)).toBe('/wt/pr-7');
+    // Pinned: on a Windows runner the default platform takes the PowerShell branch.
+    expect(findListenerCwd(5174, exec, 'darwin')).toBe('/wt/pr-7');
     expect(calls[0]).toContain('-sTCP:LISTEN');
     expect(calls[1]).toEqual(['lsof', '-a', '-p', '4242', '-d', 'cwd', '-Fn']);
   });
 
   it('is null when nothing listens, or lsof cannot run', () => {
-    expect(findListenerCwd(5174, () => null)).toBeNull();
+    expect(findListenerCwd(5174, () => null, 'darwin')).toBeNull();
+  });
+
+  it('on Windows, asks PowerShell for the listener and reads the project from its command line', () => {
+    // Windows has no lsof, so the zero-install first call never opened the app there.
+    const calls: { command: string; args: readonly string[]; timeoutMs?: number }[] = [];
+    const exec = (command: string, args: readonly string[], timeoutMs?: number): string => {
+      calls.push({ command, args, ...(timeoutMs === undefined ? {} : { timeoutMs }) });
+      return '"C:\\Program Files\\nodejs\\node.exe" C:\\work\\shop\\node_modules\\vite\\bin\\vite.js\r\n';
+    };
+    expect(findListenerCwd(5173, exec, 'win32')).toBe('C:\\work\\shop');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.command).toBe('powershell');
+    expect(calls[0]?.args.join(' ')).toContain('-LocalPort 5173');
+    expect(calls[0]?.timeoutMs).toBeGreaterThan(2_000);
+  });
+
+  it('on Windows, is null when PowerShell cannot answer', () => {
+    expect(findListenerCwd(5173, () => null, 'win32')).toBeNull();
+  });
+});
+
+describe('parseCommandLineRoot', () => {
+  it('takes the folder that holds node_modules, after a quoted node path', () => {
+    expect(
+      parseCommandLineRoot(
+        '"C:\\Program Files\\nodejs\\node.exe" C:\\work\\shop\\node_modules\\.pnpm\\vite@6\\node_modules\\vite\\bin\\vite.js',
+      ),
+    ).toBe('C:\\work\\shop');
+  });
+
+  it('starts at the last drive before node_modules, so an unquoted node path is not part of it', () => {
+    expect(
+      parseCommandLineRoot(
+        'C:\\nodejs\\node.exe D:\\My Apps\\shop\\node_modules\\next\\dist\\bin\\next dev',
+      ),
+    ).toBe('D:\\My Apps\\shop');
+  });
+
+  it('is null when the command line names no node_modules: no evidence, so nothing opens', () => {
+    expect(parseCommandLineRoot('C:\\Python312\\python.exe -m http.server 8000')).toBeNull();
+    expect(parseCommandLineRoot('')).toBeNull();
   });
 });

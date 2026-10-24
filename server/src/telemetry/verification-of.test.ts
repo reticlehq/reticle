@@ -345,3 +345,27 @@ describe('a verdict says who drove it', () => {
     expect(verdict !== undefined && 'driven' in verdict).toBe(false);
   });
 });
+
+/**
+ * The page SDK version, beside the daemon's own `version`. A verdict on a page whose SDK is older
+ * than the daemon misses the newer page fixes, and without this field no verdict could show it.
+ */
+describe('the page SDK version rides on the verdict', () => {
+  it('carries the version the page announced', () => {
+    expect(
+      verificationOf(VERIFY, { status: 'pass' }, 1, undefined, false, '3.7.1')?.sdkVersion,
+    ).toBe('3.7.1');
+  });
+
+  it('reports other for a value that is not one of our release numbers', () => {
+    expect(
+      verificationOf(VERIFY, { status: 'pass' }, 1, undefined, false, '/home/someone/app')
+        ?.sdkVersion,
+    ).toBe('other');
+  });
+
+  it('omits the field when the page did not announce a version', () => {
+    const verification = verificationOf(VERIFY, { status: 'pass' }, 1);
+    expect(verification !== undefined && 'sdkVersion' in verification).toBe(false);
+  });
+});

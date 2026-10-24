@@ -4,7 +4,7 @@ import { navigateResult } from './act/navigation/navigate-result.js';
 import {
   absoluteTarget,
   awaitArrival,
-  idsAtTarget,
+  idsOpenAtDispatch,
   ARRIVAL_TIMEOUT_MS,
 } from './act/navigation/navigate-arrival.js';
 import { reloadResult } from './act/navigation/reload-result.js';
@@ -156,10 +156,11 @@ export const BROWSER_TOOLS: ToolDef[] = [
       // lease — see carryReticleIdentity. A tab that claims no identity is untouched.
       const url = carryReticleIdentity(session.url, requested);
       // Sampled BEFORE dispatch, because that is the only moment it can be known. A session already
-      // sitting on the target is not evidence that THIS navigation arrived — and the arrival scan,
-      // which reads whatever is at the target afterwards, cannot tell the two apart on its own.
+      // connected is not evidence that THIS navigation arrived: one on the target was there before,
+      // and another tab (a lease) can reach the target during the wait. The arrival scan, which
+      // reads whatever is at the target afterwards, cannot tell them apart on its own.
       const target = absoluteTarget(url, session.url);
-      const priorIds = idsAtTarget(deps.sessions, target);
+      const priorIds = idsOpenAtDispatch(deps.sessions);
       // The document the tab is on NOW. Sampled before dispatch because the replacement can
       // connect while the NAVIGATE reply is still pending, and reading it after the await would
       // record the replacement as the starting document (#1320).

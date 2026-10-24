@@ -3,7 +3,7 @@ name: agentic-tdd
 description: Test-driven development for behaviour a unit test cannot reach, by writing the expectation against the running app before writing the code. Declare the consequence first, watch it fail, implement, watch it pass. Use when building a user-facing feature, when the user asks for TDD on UI or full-stack work, when a unit test cannot express the outcome that matters, or when you want a red-green loop that runs against the real app instead of mocks.
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -12,7 +12,7 @@ metadata:
 
 Unit tests drive the units. They cannot say "clicking Deploy posts to `/api/deploy`, moves the store to `deploying`, and shows the banner": that outcome only exists when the whole app runs. So the loop stalls exactly where the interesting bugs are, and the agent falls back to writing code and hoping.
 
-This runs the same discipline one level up, using **Reticle** to drive the real app. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+This runs the same discipline one level up, using **Reticle** to drive the real app. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## Why this is TDD and not just testing afterwards
 
@@ -52,6 +52,9 @@ Now change the implementation freely and re-run. Predicates are bound to behavio
 A journey worth writing test-first is a journey worth re-running forever. Save it once:
 
 ```
+reticle_run({ tool: "reticle_record", sessionId, args: { action: "start", name: "deploy" } })
+// drive the journey with reticle_act_and_wait, as in step 1
+reticle_run({ tool: "reticle_record", sessionId, args: { action: "stop", name: "deploy" } })
 reticle_run({ tool: "reticle_flow_save", sessionId, args: { flowName: "deploy" } })
 reticle_run({ tool: "reticle_verify", sessionId, args: { action: "flows" } })   // every saved flow, no model per flow
 ```

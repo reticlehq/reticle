@@ -76,6 +76,12 @@ export const OnboardingSteps = {
   ],
   [OnboardingPhase.FIRST_RUN]: [
     'project_detected',
+    /**
+     * The first session call in an unwired project named a next step (`offered`) and changed no
+     * file. Reported `started` when it is offered, and `completed` on the agent's next call, with
+     * `nextFollowed`.
+     */
+    'next_step_offered',
     /** The SDK is in the bundle. Files written is NOT this — see `app_instrumented`. */
     'instrumented',
     /** A page loaded and the SDK dialled the bridge. The half of the install nothing else can see. */
@@ -94,6 +100,17 @@ export const OnboardingSteps = {
     'verdict_produced',
   ],
 } as const;
+
+/**
+ * The next step that the first session call in an unwired project offers. `lease` checks the
+ * running app now and installs nothing. `init_consent` asks the user to agree to wire the app,
+ * when no app is up to lease.
+ */
+export const NextStepOffered = {
+  LEASE: 'lease',
+  INIT_CONSENT: 'init_consent',
+} as const;
+export type NextStepOffered = (typeof NextStepOffered)[keyof typeof NextStepOffered];
 
 /**
  * ONE event for every step of every phase, rather than an event name per step.
@@ -154,5 +171,9 @@ export const OnboardingStepSchema = z.object({
    * home that could not be written (which fires once per process instead).
    */
   firstEver: z.boolean().optional(),
+  /** Only on `next_step_offered`: the step the first session call offered. */
+  offered: z.nativeEnum(NextStepOffered).optional(),
+  /** Only on a `completed` `next_step_offered`: the agent's next call did the offered step. */
+  nextFollowed: z.boolean().optional(),
 });
 export type OnboardingStep = z.infer<typeof OnboardingStepSchema>;

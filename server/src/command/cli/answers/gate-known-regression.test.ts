@@ -71,12 +71,15 @@ describe('a regression the gate fails on', () => {
   });
 });
 
-/** `login`, `link` and `push --help` documented neither `--email`, `--org` nor `--code`. */
+/**
+ * `login`, `link` and `push --help` named no sign-in without a browser. Email sign-in is gone, so
+ * the help names the key instead, and never the removed `--email` path.
+ */
 describe('the help a person reads before signing in without a browser', () => {
-  it('names the email sign-in, and serve says it returns', () => {
+  it('names the key for CI, not the removed email sign-in, and serve says it returns', () => {
     const connect = renderHelp('login', new Map([['login', 'connect']]));
-    expect(connect).toContain('reticle login --email <e> [--org <name>]');
-    expect(connect).toContain('--code <123456>');
+    expect(connect).toContain('RETICLE_API_KEY');
+    expect(connect).not.toContain('--email');
     expect(renderHelp('serve')).toContain('in the background');
     expect(renderHelp('sync')).toContain('`reticle push` is the same command');
   });

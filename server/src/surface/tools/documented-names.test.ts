@@ -31,12 +31,12 @@ const AGENT_DOCS = [
   'docs/usage.md',
   // Every published skill. These are the files a user PASTES into their agent, so they are the most
   // agent-facing documents in the repository — and they were not checked here at all, which is how
-  // five call-shaped examples of tools that are not advertised came to ship. `plugin/SKILL.md` is
+  // five call-shaped examples of tools that are not advertised came to ship. `plugins/reticle/SKILL.md` is
   // the marketplace copy of the root skill and travels the same way.
   ...readdirSync(join(REPO_ROOT, 'skills'), { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => join('skills', entry.name, 'SKILL.md')),
-  'plugin/SKILL.md',
+  'plugins/reticle/SKILL.md',
 ];
 
 /**

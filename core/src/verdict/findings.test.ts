@@ -38,11 +38,9 @@ describe('tierOfFinding', () => {
     // no business moving. The precedence matters — an advisory kind must never also be read as
     // absence-derived, or it would downgrade through the other branch.
     for (const kind of Object.values(ContradictionKind)) {
-      const expected = isAdvisory(kind)
-        ? FindingTier.ADVISORY
-        : isAbsenceDerived(kind)
-          ? FindingTier.ABSENCE_DERIVED
-          : FindingTier.OBSERVED;
+      let expected: FindingTier = FindingTier.OBSERVED;
+      if (isAbsenceDerived(kind)) expected = FindingTier.ABSENCE_DERIVED;
+      if (isAdvisory(kind)) expected = FindingTier.ADVISORY;
       expect(tierOfFinding(kind), kind).toBe(expected);
     }
   });

@@ -5,6 +5,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { ADVERTISE_ALL_ENV, TOOL_PROFILE_ENV, TOOL_SURFACE } from './tool-surface.js';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { MAX_BLOCKING_WAIT_MS } from './args/numeric-bounds.js';
+import { mergedNameRedirect } from './merged-name-redirect.js';
 
 /**
  * The two meta-tools are the answer to the per-turn tool-definition tax — they advertise just two
@@ -291,5 +292,30 @@ describe('reticle_tools shows numeric bounds', () => {
     const label = params.find((p) => 'label' === p.name);
     expect(label?.min).toBeUndefined();
     expect(label?.max).toBeUndefined();
+  });
+});
+
+/**
+ * The meta-tools' own text is the first thing an agent reads about the tools behind them. The flow
+ * recipe skipped `reticle_record { action: "stop" }`, so `reticle_flow_save` refused the recording
+ * that was still running, and both examples named `reticle_network`, which the default surface
+ * answers only with a redirect.
+ */
+describe('the meta-tools teach calls that work', () => {
+  const [tools, run] = buildDynamicTools(TOOLS);
+  const runTool = run?.inputSchema['tool'];
+  const text = `${tools?.description ?? ''} ${runTool?.description ?? ''}`;
+
+  it('stops the recording before it saves the flow', () => {
+    const stop = text.indexOf(`${ReticleTool.RECORD}{action:"stop"}`);
+    expect(stop).toBeGreaterThan(-1);
+    expect(stop).toBeLessThan(text.indexOf(ReticleTool.FLOW_SAVE));
+  });
+
+  it('names no merged tool as an example', () => {
+    const merged = [...text.matchAll(/reticle_[a-z0-9_]+/g)]
+      .map((m) => m[0])
+      .filter((name) => mergedNameRedirect(name) !== undefined);
+    expect(merged).toEqual([]);
   });
 });

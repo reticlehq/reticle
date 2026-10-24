@@ -2,6 +2,7 @@
 title: Gates
 description: 'I changed some files. Which command do I run before I push?'
 icon: shield-check
+noindex: true
 ---
 
 If you changed anything at all, run `pnpm verify` (`format:check`, `lint`, `typecheck`, `test:unit`; about two minutes). If you also touched the tool surface, install, desktop or Rust, section 1 below names the one extra command your change needs. CI is path-routed too, and `gate` counts a skipped job as green, so a gate you skip here may also be skipped in CI.
@@ -68,7 +69,7 @@ Find the row that matches what you changed. Run its commands. That is the whole 
 | `@reticlehq/electron`, `adapters/realm/tauri`, the IPC observer, desktop capture | ↑ **and** `pnpm test:e2e:desktop` | +~3 min |
 | `open-verification`, the adjudicator, `WebRealm`, or anything a verdict is derived from | ↑ **and** `pnpm gate:conformance` | +~3 min |
 | Session selection, the artifact root, or anything that tells git worktrees apart | ↑ **and** `pnpm gate:worktrees` | +~20s |
-| Telemetry, feedback, or anything that emits an event | ↑ **and** read [`telemetry-contract.md`](./telemetry-contract.md) first. `pnpm test:e2e` covers it (`telemetry-events-test`) | n/a |
+| Telemetry, feedback, or anything that emits an event | ↑ **and** read [`contributing/telemetry/contract.md`](https://github.com/reticlehq/reticle/blob/main/contributing/telemetry/contract.md) first. `pnpm test:e2e` covers it (`telemetry-events-test`) | n/a |
 | `adapters/realm/tauri` (Rust) | ↑ **and** `cd adapters/realm/tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings` | +~2 min |
 | Docs, README, comments only | `pnpm format:check` | seconds |
 
@@ -92,7 +93,7 @@ Which means a gate skipped locally can also be skipped in CI, if what you change
 | `early-gates` and `break-matrix` | a change to `init/`, `server/src/command/cli/`, `server/src/command/setup/`, `install/` or `break/`; nightly and on demand. The shipped CLI's first-run refusals on Linux, macOS and Windows; the hostile-environment matrix |
 | `launchers` | a change to `install/`; nightly and on demand. Both launchers parse, are pure ASCII, and install the published CLI on Linux, macOS and Windows (PowerShell 5.1 and 7) |
 | `package-quality` | always: publint, are-the-types-wrong and the pack-size budgets for every published package |
-| `bench` | in the merge queue and on a push to main when something that could move the numbers changed, nightly, and on demand. It is ~19 minutes, so it does not run on a pull request; the queue stops a token regression before it reaches `main` |
+| `bench` | in the merge queue and on a push to main when something that could move the numbers changed, nightly, and on demand. It is ~19 minutes, so a pull request runs it only when it changes the tool surface (`server/src/surface/` or `core/src/wire/tool-names.ts`): those changes move the price on every turn, and review needs the number. The queue stops a token regression before it reaches `main` |
 
 ---
 

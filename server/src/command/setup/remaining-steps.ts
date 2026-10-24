@@ -5,6 +5,7 @@
  * caller should not have to re-read the whole procedure and work out for itself which parts already
  * worked — it should pick up at the step that did not. Ordered, and only ever the REMAINING steps.
  */
+import { FEEDBACK_KIND_CHOICES } from '@reticlehq/core';
 
 /** How far a run got. Everything here is knowable from the result object setup already builds. */
 export interface Progress {
@@ -27,8 +28,7 @@ const DOCS_INDEX = 'https://docs.reticle.sh/llms.txt';
  * the tool surface is unreachable. Naming the tool here would ask the reader to file through the
  * thing that is broken. The shell command needs no daemon and no session.
  */
-const FEEDBACK_CMD =
-  'npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"';
+const FEEDBACK_CMD = `npx @reticlehq/server feedback --agent --kind ${FEEDBACK_KIND_CHOICES} "what happened"`;
 
 export function remainingSteps(p: Progress): string[] {
   const steps: string[] = [];

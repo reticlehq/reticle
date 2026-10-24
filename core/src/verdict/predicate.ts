@@ -486,7 +486,7 @@ function predicateUnion() {
       .object({
         kind: z.literal(PredicateKind.SETTLED),
         quietMs: z.number().positive().optional(),
-        channel: z.literal(SettledChannel.NETWORK).optional(),
+        channel: z.enum([SettledChannel.NETWORK, SettledChannel.APP]).optional(),
       })
       .strict(),
     z

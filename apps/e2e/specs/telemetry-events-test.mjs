@@ -58,6 +58,14 @@ process.env.RETICLE_TELEMETRY_KEY = 'phc_probe';
 process.env.RETICLE_TELEMETRY = '1';
 delete process.env.DO_NOT_TRACK;
 delete process.env.VITEST;
+delete process.env.RETICLE_INSTALL_SOURCE;
+delete process.env.RETICLE_STATE_DIR;
+// A state home of its own, set before the modules below read it. The version record and the install
+// claim live in `~/.reticle`: with the real home, a version move in this spec wrote the developer's
+// `last-version`, and the next run then reported a move that did not happen.
+const specHome = mkdtempSync(join(tmpdir(), 'reticle-spec-home-'));
+process.env.HOME = specHome;
+process.env.USERPROFILE = specHome;
 
 // A scratch project OUTSIDE the reticle checkout — the source-checkout guard disables telemetry inside it.
 const root = mkdtempSync(join(tmpdir(), 'reticle-verify-'));
@@ -73,7 +81,7 @@ const { getSessionMetrics, resetSessionMetrics } = await import(`${DIST}/telemet
 const { installDaemonTelemetry } = await import(`${DIST}/telemetry/daemon-telemetry.js`);
 const { installDaemonResilience } = await import(`${DIST}/command/daemon/daemon-resilience.js`);
 const { submitFeedback } = await import(`${DIST}/telemetry/feedback.js`);
-const { reportCliRun } = await import(`${DIST}/telemetry/cli-telemetry.js`);
+const { reportCliRun, cliActorOf } = await import(`${DIST}/telemetry/cli-telemetry.js`);
 const { runTool } = await import(`${DIST}/surface/tools/invoke-tool.js`);
 const { TOOLS } = await import(`${DIST}/surface/tools/tools.js`);
 const { buildErrorPayload } = await import(`${DIST}/surface/tools/error-recovery.js`);
@@ -87,6 +95,11 @@ const { decideVerified } = await import(`${ENGINE_DIST}/evidence/verified.js`);
 const { VerifiedReason } = await import(new URL('../../../core/dist/index.js', import.meta.url).href);
 const VERIFIED_REASONS = new Set(Object.values(VerifiedReason));
 const { classifyConnectFailure } = await import(`${DIST}/telemetry/connect-failure.js`);
+const { PROXY_ID } = await import(`${DIST}/telemetry/proxy-telemetry.js`);
+const { SERVER_VERSION } = await import(`${DIST}/command/version/identity/server-version.js`);
+const { firstRunWiring } = await import(`${DIST}/portal/session/first-run-wiring.js`);
+const { runWithClientDirectory } = await import(`${DIST}/hooks/client-directory.js`);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 if (!getTelemetry().enabled) {
   console.log('FATAL: telemetry resolved disabled — cannot verify anything');
@@ -164,7 +177,8 @@ check('`mcp` does NOT count as a CLI run — it is the agent\'s transport, not a
   // tile counting sessions was ~6x high.
   check('every DAEMON event carries a sessionId', captured.filter((e) => SESSION_SCOPED_EVENTS.has(e.event)).every((e) => typeof e.properties.sessionId === 'string'));
   check('  a one-shot CLI run carries NONE — it is not a session', find('cli_command_run').every((e) => e.properties.sessionId === undefined && e.properties.$session_id === undefined));
-  check('  nor does it carry `actor` — human by definition once `mcp` is excluded', find('cli_command_run').every((e) => e.properties.actor === undefined));
+  // An agent also runs commands through a shell, and marks the shell. `actor` says which ran it.
+  check('  carries `actor`: agent under an agent marker, else human', find('cli_command_run').every((e) => e.properties.actor === cliActorOf(process.env)));
   // Dead fields from the v2→v3 migration that nothing set any more.
   check('  the dead sessionMs/tool fields are gone', captured.every((e) => e.properties.sessionMs === undefined && e.properties.tool === undefined));
 }
@@ -187,6 +201,8 @@ const fakeSession = {
   blindSpots: () => [],
   health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
   throttled: () => false,
+  // The page SDK version from the handshake. Verdicts on this session carry it.
+  sdkVersion: '3.8.0',
 };
 const deps = { sessions: { resolve: () => fakeSession } };
 
@@ -235,6 +251,7 @@ await settle();
   check('  and its failed verdict is recorded as not-passed', aw?.properties.verification_passed === false, String(aw?.properties.verification_passed));
   const bugs = find('bug_found').filter((e) => e.properties.bug_tool === 'reticle_act_and_wait');
   check('  a failed act_and_wait verdict is counted as a bug', bugs.length === 1, `got ${bugs.length}`);
+  check('  every verdict names the page SDK version it was judged on', vs.length > 0 && vs.every((e) => e.properties.verification_sdkVersion === '3.8.0'), vs.map((e) => e.properties.verification_sdkVersion).join(','));
 }
 {
   const vs = find('verification_completed');
@@ -396,15 +413,19 @@ metrics.recordConnectAttempt('attached')(classifyConnectFailure(new Error('conne
 
 // ── 4d. MCP client attached — "running" vs "actually being used" ──────────────
 markDaemonStart(Date.now() - 5000);
-reportMcpConnected('claude-code');
-reportMcpConnected('claude-code');
+reportMcpConnected('claude-code', 'proxy-e2e-1');
+reportMcpConnected('claude-code', 'proxy-e2e-1'); // the same proxy reconnects: not sent again
+reportMcpConnected('claude-code', 'proxy-e2e-2');
 await settle();
 {
   const cs = find('mcp_client_connected');
-  check('mcp_client_connected fires when an agent actually attaches', cs.length === 2, `got ${cs.length}`);
+  check('mcp_client_connected fires once per proxy when an agent attaches', cs.length === 2, `got ${cs.length}`);
   check('  first attach is not a reconnect', cs[0]?.properties.connection_reconnect === false);
   check('  a re-attach IS flagged, so churn is distinguishable from usage', cs[1]?.properties.connection_reconnect === true);
   check('  carries how long the daemon sat before anyone used it', (cs[0]?.properties.connection_daemonAgeMs ?? 0) >= 5000);
+  check('  asks PostHog not to look up a location', cs.every((e) => e.properties.$geoip_disable === true));
+  check('  keeps the request address off the row', cs.every((e) => e.properties.$ip === '0.0.0.0'));
+  check('  carries the proxy id, the join key for the proxy\'s own rows', cs[0]?.properties.connection_proxyId === 'proxy-e2e-1' && cs[1]?.properties.connection_proxyId === 'proxy-e2e-2', cs.map((e) => e.properties.connection_proxyId).join(','));
 }
 
 // ── 4d-bis. MCP outage — the transport-stability metric ──────────────────────
@@ -426,6 +447,7 @@ await settle();
   check('  carries WHY the stream went away', first?.properties.outage_reason === 'sse_ended', String(first?.properties.outage_reason));
   check('  carries how many reconnects had been tried', spent?.properties.outage_attempts === 12, String(spent?.properties.outage_attempts));
   check('  two DIFFERENT outages are not byte-identical', JSON.stringify(first) !== JSON.stringify(spent));
+  check('  carries this proxy\'s id, so an outage joins its daemon run', os_.every((e) => e.properties.outage_proxyId === PROXY_ID && UUID.test(PROXY_ID)), os_.map((e) => e.properties.outage_proxyId).join(','));
 }
 {
   // The reason is a closed vocabulary: the proxy's own strings are free text feeding a log, and an
@@ -561,6 +583,21 @@ await settle();
   check('human feedback sends', human.sent === true, human.reason ?? '');
   const f = find('feedback_submitted').find((e) => e.properties.feedback_source === 'human');
   check('  carries the rating', f?.properties.feedback_rating === 5);
+  check('  carries no reply address the person did not give', !('feedback_contact' in (f?.properties ?? {})));
+}
+
+// ── 8a. A reply address, sent only when the person gives it ──────────────────
+const withContact = await submitFeedback({
+  source: 'human',
+  kind: 'feature_request',
+  text: 'please add a reply',
+  contact: 'reply-e2e@example.com',
+});
+await settle();
+{
+  check('feedback with a reply address sends', withContact.sent === true, withContact.reason ?? '');
+  const f = find('feedback_submitted').find((e) => e.properties.feedback_kind === 'feature_request' && e.properties.feedback_source === 'human');
+  check('  carries the address as feedback_contact, unredacted', f?.properties.feedback_contact === 'reply-e2e@example.com');
 }
 
 // ── 8b. Version changed (update + rollback) ───────────────────────────────────
@@ -576,30 +613,78 @@ await settle();
 }
 
 // ── 8c. First-ever run, in a child with a pristine HOME ───────────────────────
+const { execFileSync } = await import('node:child_process');
+/** Run `body` as a module in a child with its own HOME, then let its detached sends land. */
+const runChild = (home, body, extraEnv = {}, input = undefined) => {
+  try {
+    execFileSync(process.execPath, ['--input-type=module', '-e', body], {
+      env: { ...process.env, HOME: home, USERPROFILE: home, ...extraEnv },
+      cwd: root,
+      timeout: 20000,
+      ...(input === undefined ? {} : { input }),
+    });
+  } catch {}
+};
+const cliRun = (argv) => `
+  const m = await import('${DIST}/telemetry/cli-telemetry.js');
+  m.reportCliRun(${JSON.stringify(argv)});
+  await new Promise(r => setTimeout(r, 1500));
+`;
 {
-  const { execFileSync } = await import('node:child_process');
   const fakeHome = mkdtempSync(join(tmpdir(), 'reticle-home-'));
-  const script = `
-    const m = await import('${DIST}/telemetry/cli-telemetry.js');
-    m.reportCliRun(['version']);
-    await new Promise(r => setTimeout(r, 1500));
-  `;
   // Count BEFORE, and assert the DELTA. The absolute count is a statement about the machine, not
   // about the product: a developer's box already has `~/.reticle`, so only this child fires the
   // event and the total is 1 — but a fresh CI runner does not, so everything earlier in this spec
   // fires it too and the total was 3. The contract is "a machine that has never run Reticle emits
   // it exactly once", which is a delta.
   const installedBefore = find('reticle_installed').length;
-  try {
-    execFileSync(process.execPath, ['--input-type=module', '-e', script], {
-      env: { ...process.env, HOME: fakeHome, USERPROFILE: fakeHome },
-      cwd: root,
-      timeout: 20000,
-    });
-  } catch {}
+  // An agent often runs `--version` first. That probe declares the channel and reports no install.
+  runChild(fakeHome, cliRun(['--version']), { RETICLE_INSTALL_SOURCE: 'plugin' });
   await settle();
-  const fromPristineHome = find('reticle_installed').length - installedBefore;
-  check('reticle_installed fires on a machine that has never run Reticle', fromPristineHome === 1, `got ${fromPristineHome} from the pristine HOME`);
+  const fromProbe = find('reticle_installed').length - installedBefore;
+  check('reticle_installed is NOT sent on a --version probe', fromProbe === 0, `got ${fromProbe} from the probe`);
+  // The next real command reports the install, with the channel the probe recorded.
+  runChild(fakeHome, cliRun(['status']));
+  await settle(() => find('reticle_installed').length - installedBefore >= 1);
+  const installed = find('reticle_installed').slice(installedBefore);
+  check('reticle_installed fires on a machine that has never run Reticle', installed.length === 1, `got ${installed.length} from the pristine HOME`);
+  check('  on the first real command, with the source the probe recorded', installed[0]?.properties.installSource === 'plugin', String(installed[0]?.properties.installSource));
+  removeScratch(fakeHome);
+}
+
+// ── 8d. A version move found at start, not only through `reticle update` ─────
+{
+  const fakeHome = mkdtempSync(join(tmpdir(), 'reticle-home-'));
+  mkdirSync(join(fakeHome, '.reticle'), { recursive: true });
+  writeFileSync(join(fakeHome, '.reticle', 'last-version'), '3.0.0');
+  const movesBefore = find('version_changed').length;
+  runChild(fakeHome, cliRun(['status']));
+  await settle(() => find('version_changed').length > movesBefore);
+  // A second start on the same version is not a move.
+  runChild(fakeHome, cliRun(['status']));
+  await settle();
+  const moves = find('version_changed').slice(movesBefore);
+  check('version_changed fires once when a start finds a newer version', moves.length === 1, `got ${moves.length}`);
+  check('  carries from -> to', moves[0]?.properties.version_from === '3.0.0' && moves[0]?.properties.version_to === SERVER_VERSION, `${moves[0]?.properties.version_from} -> ${moves[0]?.properties.version_to}`);
+  check('  as an update', moves[0]?.properties.version_direction === 'update', String(moves[0]?.properties.version_direction));
+  removeScratch(fakeHome);
+}
+
+// ── 8e. The real MCP proxy, whose client closes stdin ─────────────────────────
+// No daemon: the proxy is given no way to start one, and its port has no listener. Closing stdin
+// is the client going away, the one clean exit, and the exit is reported before the process goes.
+{
+  const fakeHome = mkdtempSync(join(tmpdir(), 'reticle-home-'));
+  const exitsBefore = find('mcp_proxy_exited').length;
+  runChild(fakeHome, `
+    const m = await import('${DIST}/surface/mcp/mcp-proxy.js');
+    m.startMcpProxy(${PORT + 3}).catch(() => {});
+  `, {}, '');
+  await settle(() => find('mcp_proxy_exited').length > exitsBefore);
+  const exits = find('mcp_proxy_exited').slice(exitsBefore);
+  check('mcp_proxy_exited fires when the client closes stdin', exits.length === 1, `got ${exits.length}`);
+  check('  says the client went away', exits[0]?.properties.proxyExit_reason === 'stdin_end', String(exits[0]?.properties.proxyExit_reason));
+  check('  carries the proxy id', UUID.test(exits[0]?.properties.proxyExit_proxyId ?? ''), String(exits[0]?.properties.proxyExit_proxyId));
   removeScratch(fakeHome);
 }
 
@@ -650,6 +735,8 @@ await daemon.shutdown('idle');
   // Telemetry fails silently: a field dropped from the emit allow-list throws nothing and reddens no
   // unit test, and the data is simply, permanently absent.
   check('  reports whether an app ever connected (zero is the finding)', arrived && typeof p.session_appConnects === 'number', String(p.session_appConnects));
+  // No app connected in this spec, so every call came before one.
+  check('  counts the tool calls made before an app connected', arrived && p.session_toolCallsBeforeApp === 12, String(p.session_toolCallsBeforeApp));
   check('  reports WHY the daemon exited, so a designed idle exit is not an outage', arrived && p.session_exit === 'idle', String(p.session_exit));
   const params = p.session_toolParams ?? {};
   check('  recorded tool PARAM names', arrived && JSON.stringify(params).includes('ref'));
@@ -715,7 +802,7 @@ await waitUntil(() => find('project_profiled').length > 0);
   reportHudUse({ panel: 'chat' }, 'tab-e2e');
   reportHudUse({ panel: 'harness' }, 'tab-e2e'); // within 30s: deduped
   reportHudUse({ prompt: 'rail' }, 'tab-e2e');
-  reportHudUse({ prompt: 'rail' }, 'tab-e2e'); // once per surface per tab
+  reportHudUse({ prompt: 'rail' }, 'tab-e2e-reload'); // once per surface per daemon, across a reload
   reportPlatformLinked({ via: 'hud', priorProjectId: undefined, projectId: 'p1', workspaceId: 'org_e2e' });
   await reportHarnessRun(
     { source: 'hud', hosted: true },
@@ -729,7 +816,7 @@ await waitUntil(() => find('project_profiled').length > 0);
   check('  dedupes the same page on the same tab within 30s', views.filter((e) => e.properties.hud_view === 'harness').length === 1, String(views.length));
   check('  carries the tab-count bucket', views.every((e) => e.properties.hud_tabs === '1'));
   const prompts = find('hud_signin_prompted');
-  check('hud_signin_prompted fires once per surface per tab', prompts.length === 1, String(prompts.length));
+  check('hud_signin_prompted fires once per surface per daemon', prompts.length === 1, String(prompts.length));
   check('  carries the surface', prompts[0]?.properties.hud_surface === 'rail');
   const linked = find('platform_linked')[0];
   check('platform_linked fires', linked !== undefined);
@@ -746,6 +833,41 @@ await waitUntil(() => find('project_profiled').length > 0);
   check('  carries how reticle was launched, as a bucket', ['npx', 'global', 'project', 'other'].includes(views[0]?.properties.launch));
   const blob = JSON.stringify([...views, ...prompts, ...runs, linked]);
   check('  leaks NO workspace name', !blob.includes('Acme Secret Corp'));
+}
+
+// ── 12. The first session call in an unwired project offers a step, and writes nothing ──
+{
+  const { existsSync, readdirSync, statSync } = await import('node:fs');
+  const unwired = mkdtempSync(join(tmpdir(), 'reticle-unwired-'));
+  writeFileSync(join(unwired, 'package.json'), JSON.stringify({ scripts: { dev: 'vite' }, dependencies: { react: '^18.3.1', vite: '^5.4.0' } }));
+  writeFileSync(join(unwired, 'index.html'), '<div id="root"></div>');
+  const tree = () => JSON.stringify(readdirSync(unwired, { recursive: true }).sort().map((f) => [f, statSync(join(unwired, f)).mtimeMs]));
+  const before = tree();
+  const sessionTool = TOOLS.find((t) => t.name === 'reticle_sessions');
+  const emptyDeps = {
+    sessions: {
+      ...deps.sessions,
+      list: () => [],
+      noSessionHint: () => 'no tab is connected',
+      noSessionNextAction: () => ({ action: 'open_app', port: 5173, reason: 'an app is up and not wired' }),
+    },
+    firstRun: firstRunWiring(),
+    // The proxy starts the daemon in the agent's own folder, so the daemon is rooted IN the
+    // unwired project. That is the case where a write lands in the project.
+    reticleRoot: join(unwired, '.reticle'),
+  };
+  const answer = await runWithClientDirectory(unwired, () => runTool(sessionTool, emptyDeps, { action: 'list' }));
+  await settle(() => find('onboarding_step').some((e) => e.properties.onboarding_step === 'next_step_offered'));
+  const offers = find('onboarding_step').filter((e) => e.properties.onboarding_step === 'next_step_offered');
+  check('onboarding_step next_step_offered fires on the first session call in an unwired project', offers.length === 1, `got ${offers.length}`);
+  check('  as started, naming the step it offered', offers[0]?.properties.onboarding_status === 'started' && offers[0]?.properties.onboarding_offered === 'lease', `${offers[0]?.properties.onboarding_status}/${offers[0]?.properties.onboarding_offered}`);
+  check('  and the agent got that step', JSON.stringify(answer ?? {}).includes('"offered":"lease"'));
+  // The impact ledger writes on a debounce. Flush it, so a late write cannot pass this by timing.
+  const { impactStore } = await import(`${DIST}/memory/impact/impact-recorder.js`);
+  impactStore(emptyDeps.reticleRoot)?.flush();
+  check('  and NO file was written in the project', tree() === before, tree());
+  check('  and the project has no .reticle directory', !existsSync(emptyDeps.reticleRoot));
+  removeScratch(unwired);
 }
 
 // ── the session key, checked once EVERY event has been emitted ────────────────
@@ -788,4 +910,5 @@ const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 console.log(`events captured: ${JSON.stringify(Object.fromEntries(Object.entries(captured.reduce((a, e) => ({ ...a, [e.event]: (a[e.event] ?? 0) + 1 }), {}))))}`);
 removeScratch(root);
+removeScratch(specHome);
 process.exit(failed.length === 0 ? 0 : 1);

@@ -4,7 +4,7 @@
  * order; these say how often and by whom, which a window summed across a session cannot.
  *
  * Sent by the daemon, like every HUD measure, so every opt-out applies, and only from the names the
- * wire schema already narrowed. The dedupe (per tab, per page or surface) lives in `HudMetrics`.
+ * wire schema already narrowed. The dedupe (per daemon, per page or surface) lives in `HudMetrics`.
  */
 import type { HudUseData } from '@reticlehq/core';
 import { TelemetryEventKind, countBucket } from '@reticlehq/core/telemetry';

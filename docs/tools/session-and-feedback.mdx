@@ -13,9 +13,9 @@ The presenter panel in your app shows a live transcript of what the agent is doi
 | Action | What it does |
 | --- | --- |
 | `list` | Which tabs are connected, and whether they can be driven. Your first call. An empty list carries a `why` naming the cause |
-| `feedback` | Tell the maintainers Reticle got something wrong. Takes the fields described under [reticle_feedback](#reticle-feedback) below |
+| `feedback` | Tell the maintainers Reticle got something wrong. Takes the fields described under [Feedback](#feedback) below |
 | `yield` | Hand control back between turns. `mode: "waiting"` or `"ask"`. Revivable |
-| `end` | The task is done. Frees the session; revives on the next action |
+| `end` | The whole task is done. Ends the session for good, and it does not revive. Ending a leased tab also releases the lease |
 | `tune` | Adjust session behaviour: `idleEndMs`, the idle-end window, or `hud`: `hidden`, `shown`, `removed` (until reload), or a corner (`top-left`, `top-right`, `bottom-left`, `bottom-right`) when the HUD covers a control you must test |
 | `resume` | Clear a pause the human applied |
 | `messages` | Drain the human-to-agent inbox |
@@ -48,12 +48,11 @@ And each lease carries the rule in the payload itself:
 ```
 
 <Tip>
-  `yield` when you are pausing and might come back. `end` when you are finished. Both revive on your
-  next action, so neither is destructive. The difference is what the human watching the panel is
-  told.
+  Use `yield` when you pause and might come back: your next action revives the session. Use `end`
+  only when the whole task is done: it is final, and the panel shows the session as ended.
 </Tip>
 
-## reticle_feedback
+## Feedback
 
 <Note>
   `reticle_feedback` is not advertised by default. Call `reticle_session { action: "feedback", kind, text }`: the same fields, routed on `action`. The old name answers with the new call.
@@ -82,6 +81,8 @@ Reticle is built for agents, which creates an unusual problem: the primary user'
 `experience` is the only kind here that is not a complaint, and that is why it exists. Every other row grows the corpus into a defect list, which says nothing about which parts are worth protecting when we change them. File it unprompted, when you actually notice it, and name the concrete moment: which call, what it saved you, what you would have done instead.
 
 The `rating` is secondary to that text on purpose. A score produced because something asked for one is indistinguishable from a score that was earned, and once both sit in the same column neither means anything. The text is the part that can be acted on or quoted.
+
+`contact` is an email address for a reply from the maintainers. Send only an address that the user typed for this purpose. Never guess one or reuse one from somewhere else. It must be one plain address of at most 254 characters. Anything else is refused with a reason, and nothing is filed. Without `contact`, no address is sent.
 
 ### It will tell you when it cannot send
 
@@ -118,6 +119,8 @@ The setup that failed to finish is exactly the setup that most needs reporting, 
 ```bash
 npx @reticlehq/server feedback --agent --kind gap "reticle init finished but no session ever connected"
 ```
+
+To get a reply, add `--contact you@example.com`. Use only an address that the user typed for this purpose. Without the flag, no address is sent.
 
 <Note>
   Report defects in **Reticle**. A bug you find in the app under test is Reticle working correctly,

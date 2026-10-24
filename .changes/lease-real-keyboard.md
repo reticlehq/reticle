@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — on a leased tab, Tab moved no focus and Enter or Space pressed nothing.** A lease drove every key with a synthetic keydown, and `press { native: true }` was refused as "real input not configured". A keyboard-only journey could be audited but never driven. A press on a lease now uses the page's real keyboard in `reticle_act`, `reticle_act_and_wait` and `reticle_act { steps }`. A press that names an element focuses it first, so Enter or Space presses the control a person tabbed to. An element that cannot take focus keeps the in-page press and says `target-cannot-hold-focus`. Held-together `keys` and an explicit `code` stay in the page, as before.

@@ -1,0 +1,130 @@
+{
+  "src/App.tsx": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/components/BuildLogStream.tsx": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/components/CommandPalette.tsx": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/components/DeepPanels.tsx": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/components/DeployDrawer.tsx": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/components/DeployTable.tsx": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/components/Login.tsx": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/components/NewDeployModal.tsx": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/components/QueryPanel.tsx": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/components/TimingPanel.tsx": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/components/primitives.tsx": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/lib/enterprise-config.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/lib/reticle-bridge.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/main.tsx": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/reticle-ambient.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/reticle-bug-injector.ts": {
+    "curly": {
+      "count": 48
+    }
+  },
+  "src/reticle-opaque.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/reticle-regress.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/reticle-render-setup.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/store/store.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/views/AwkwardControls.tsx": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/views/Compose.tsx": {
+    "curly": {
+      "count": 1
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/views/Diagnostics.tsx": {
+    "no-nested-ternary": {
+      "count": 2
+    }
+  },
+  "src/views/Enterprise.tsx": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/views/SavedItems.tsx": {
+    "curly": {
+      "count": 3
+    }
+  }
+}

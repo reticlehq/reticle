@@ -473,6 +473,27 @@ describe('BrowserPool', () => {
     expect(pool.leasedSessionIds().sort()).toEqual([back.sessionId, other.sessionId].sort());
   });
 
+  // A proxy that reconnects keeps its id, so it is the SAME owner coming back. Its leases must not
+  // close under it: the grace exists for an owner that is gone, and this one is not.
+  it('keeps the leases of an owner that reattached within the grace', async () => {
+    const { launch } = fakeLauncher();
+    let clock = 1000;
+    const pool = new BrowserPool(launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+      now: () => clock,
+      leaseTtlMs: 300_000,
+    });
+    const lease = await pool.acquire('http://localhost:3000/a', { owner: 'agent-1' });
+
+    pool.detachOwner('agent-1');
+    pool.reattachOwner('agent-1');
+    clock += ORPHANED_LEASE_GRACE_MS + 1;
+
+    expect(await pool.sweepExpired()).toEqual([]);
+    expect(pool.heldBy(lease.sessionId, 'agent-1')).toBe(true);
+  });
+
   // An idle Chromium held about 90MB, plus its helpers, until the daemon itself went idle.
   it('closes the browser when its last lease is released, and relaunches on the next acquire', async () => {
     const { launch, browsers } = fakeLauncher();

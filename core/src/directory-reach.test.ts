@@ -54,7 +54,7 @@ describe('the contract knows only what it is allowed to know', () => {
     expect(reaches(CORE).size).toBeGreaterThan(4);
   });
 
-  it('has 10 directories, and each one was a decision', () => {
+  it('has 11 directories, and each one was a decision', () => {
     // the contract. Eight directories; the two constant tables moving into wire/constants/ made the eighth and took core from four mutual pairs to two.
     //
     // The ninth is `hooks/`: what Reticle says happened, for anyone building on top of it. It is a
@@ -67,11 +67,17 @@ describe('the contract knows only what it is allowed to know', () => {
     // production drive is held to. Grouped because `wire/constants/` crossed the flat-file line the
     // day these two arrived. It reaches only `zod`, and the mutual-pair count did not move.
     //
+    // The eleventh is `graph/`: the App Graph, an app as screens, actions, requests and things made,
+    // folded from runs. One fold so the cloud and the open-source daemon describe an app the same way.
+    // It reads event types from `wire`, so it could not live in `artifacts/` (which wire reaches:
+    // that made artifacts <-> wire a second mutual pair). It reaches only `wire`; nothing in core
+    // reaches it but the package entry, and the mutual-pair count did not move.
+    //
     // Recorded by EQUALITY, not as a floor. The check above only proves the scan read
     // something; it stays green when a directory appears, and appearing unnoticed is how a
     // grouping gets made without anybody looking at what it did to the shape of the package.
     // Adding or removing one here means writing the new number down in the same commit.
-    expect(directories(CORE).length).toBe(10);
+    expect(directories(CORE).length).toBe(11);
   });
 
   it('has no two directories sharing a basename', () => {

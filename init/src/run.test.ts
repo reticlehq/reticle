@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { FEEDBACK_HINT } from './diagnose/closing-hint.js';
+import { COMMUNITY_HINT, FEEDBACK_HINT } from './diagnose/closing-hint.js';
 import { SILENT_HOST } from './host.js';
 import { runInit, resolveLockfiles, type InitIo, type InitOptions } from './run.js';
 import { codexAvailableProbe } from './register/mcp.js';
@@ -241,6 +241,28 @@ describe('runInit', () => {
     expect(io.written['.reticle.json']).toBeDefined();
   });
 
+  // A token in the output stays in terminal history, agent transcripts and any file the snippet
+  // is pasted into. The snippet reads it from a local file instead.
+  it.each([
+    ['Django', { 'manage.py': 'x', 'settings.py': 'DEBUG = True' }],
+    ['Streamlit', { 'requirements.txt': 'streamlit\n', 'app.py': 'import streamlit as st' }],
+    ['a non-JS ecosystem', { 'requirements.txt': 'fastapi\n', 'app.py': 'x' }],
+  ])('prints no pairing token for %s', (_name, files) => {
+    const io = memoryIo(files);
+    runInit(OPTS, io);
+    const out = io.lines.join('\n');
+    expect(out).toContain('reticle.connect(');
+    expect(out).not.toContain(HOST_TOKEN);
+  });
+
+  it('writes the token to a gitignored module for a static page it only prints', () => {
+    const io = memoryIo({ 'requirements.txt': 'fastapi\n', 'app.py': 'x' });
+    runInit(OPTS, io);
+    expect(io.written['reticle.local.js']).toContain(HOST_TOKEN);
+    expect(io.written['.gitignore']).toContain('reticle.local.js');
+    expect(io.lines.join('\n')).toContain("import('./reticle.local.js')");
+  });
+
   it('hands a non-JS project the script-tag snippet, not just a diagnosis', () => {
     // This exit is where every server-rendered app lands: FastAPI, Flask, Django, Rails, Streamlit.
     // It used to end at an explanation, and readers acted on the explanation as a refusal. The
@@ -252,7 +274,7 @@ describe('runInit', () => {
       return io.lines.join('\n');
     })();
     expect(out).toContain('script type="module"');
-    expect(out).toMatch(/import \{ reticle \} from 'https:\/\//);
+    expect(out).toMatch(/import\('https:\/\//);
     expect(out).toContain('reticle.connect(');
     expect(out).not.toMatch(/from '@reticlehq\/\w+'/);
   });
@@ -295,18 +317,6 @@ describe('runInit', () => {
     expect(out).toContain("import('https://");
     expect(out).toContain('reticle.connect(');
     expect(out).not.toMatch(/paste this into the page|script-tag snippet below/i);
-  });
-
-  it('inlines the host-supplied pairing token into that snippet', () => {
-    // The CDN path has no build step. An empty token here is a page that can never authenticate,
-    // and regenerating the file later makes the pasted literal stale as well as wrong — so `init`
-    // asks the host for the token (which mints one when the daemon has never run) instead of
-    // reading the file itself.
-    const io = memoryIo({ 'requirements.txt': 'fastapi\n', 'app.py': 'x' });
-    runInit(OPTS, io);
-    const out = io.lines.join('\n');
-    expect(out).toContain(HOST_TOKEN);
-    expect(out).toMatch(/token:\s*'[0-9a-f]+'/);
   });
 
   /**
@@ -578,6 +588,20 @@ describe('runInit', () => {
     const noPkg = memoryIo({});
     runInit(OPTS, noPkg);
     expect(noPkg.lines.join('\n')).toContain(FEEDBACK_HINT);
+  });
+
+  it('ends a successful run with the community line, and only a successful run', () => {
+    const ok = memoryIo(VITE_FILES);
+    runInit(OPTS, ok);
+    expect(ok.lines.at(-1)).toBe(COMMUNITY_HINT);
+
+    const dry = memoryIo(VITE_FILES);
+    runInit({ ...OPTS, dryRun: true }, dry);
+    expect(dry.lines).not.toContain(COMMUNITY_HINT);
+
+    const noPkg = memoryIo({});
+    runInit(OPTS, noPkg);
+    expect(noPkg.lines).not.toContain(COMMUNITY_HINT);
   });
 
   // When the runtime follows (dev server, browser, connect), asking here put the request for

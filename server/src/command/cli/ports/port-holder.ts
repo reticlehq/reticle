@@ -33,9 +33,13 @@ const LOOKUP_TIMEOUT_MS = 2_000;
  * identify the holder, rather than asserting the holder is not ours — a claim it has no evidence
  * for, and one that was wrong for every Windows user.
  */
-export function captureLookup(command: string, args: readonly string[]): string | null {
+export function captureLookup(
+  command: string,
+  args: readonly string[],
+  timeoutMs: number = LOOKUP_TIMEOUT_MS,
+): string | null {
   try {
-    const result = spawnSync(command, [...args], { encoding: 'utf8', timeout: LOOKUP_TIMEOUT_MS });
+    const result = spawnSync(command, [...args], { encoding: 'utf8', timeout: timeoutMs });
     return 0 === result.status && 'string' === typeof result.stdout ? result.stdout : null;
   } catch {
     return null;
@@ -61,16 +65,25 @@ export function parsePortHolder(stdout: string): PortHolder | null {
   let command: string | undefined;
   for (const raw of stdout.split('\n')) {
     const line = raw.trim();
-    if (0 === line.length) continue;
+    if (0 === line.length) {
+      continue;
+    }
     const value = line.slice(1);
     if (line.startsWith(PID_FIELD)) {
-      if (pid !== undefined) break; // a second record: the first one is the answer
+      // A second record: the first one is the answer.
+      if (pid !== undefined) {
+        break;
+      }
       const parsed = Number(value);
-      if (!Number.isInteger(parsed) || parsed <= 0) return null;
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        return null;
+      }
       pid = parsed;
       continue;
     }
-    if (line.startsWith(COMMAND_FIELD) && command === undefined) command = value;
+    if (line.startsWith(COMMAND_FIELD) && command === undefined) {
+      command = value;
+    }
   }
   return pid === undefined || command === undefined ? null : { pid, command };
 }
@@ -147,24 +160,68 @@ const NAME_FIELD = 'n';
 /** The path in `lsof -a -p <pid> -d cwd -Fn` output, or null when it printed none. */
 export function parseProcessCwd(stdout: string): string | null {
   for (const raw of stdout.split('\n')) {
-    if (raw.startsWith(NAME_FIELD) && raw.length > NAME_FIELD.length) return raw.slice(1);
+    if (raw.startsWith(NAME_FIELD) && raw.length > NAME_FIELD.length) {
+      return raw.slice(1);
+    }
   }
   return null;
+}
+
+/** A Windows PowerShell cold start alone can take more than the lsof bound. */
+const WINDOWS_LOOKUP_TIMEOUT_MS = 8_000;
+
+/** The listener's command line: Windows does not show another process's working directory. */
+const windowsListenerScript = (port: number): string =>
+  `$c = Get-NetTCPConnection -State Listen -LocalPort ${String(port)} -ErrorAction Stop | ` +
+  'Select-Object -First 1; ' +
+  '(Get-CimInstance Win32_Process -Filter "ProcessId=$($c.OwningProcess)").CommandLine';
+
+const NODE_MODULES = /[\\/]node_modules[\\/]/i;
+const DRIVE_START = /[A-Za-z]:[\\/]/g;
+
+/**
+ * The folder that holds the `node_modules` a command line runs from, or null.
+ *
+ * A dev server started from a project runs a script under that project's `node_modules`, so the
+ * folder before it is the project. The path starts at the last drive letter before it, because an
+ * unquoted node path can come first. No `node_modules` is no evidence, and the answer is null.
+ * ponytail: compares as written; a drive letter in another case does not match.
+ */
+export function parseCommandLineRoot(commandLine: string): string | null {
+  const end = commandLine.search(NODE_MODULES);
+  if (end < 0) {
+    return null;
+  }
+  const head = commandLine.slice(0, end);
+  const starts = [...head.matchAll(DRIVE_START)];
+  const start = starts[starts.length - 1]?.index;
+  return start === undefined ? null : head.slice(start);
 }
 
 /**
  * The working directory of whatever LISTENS on `port`, or null.
  *
  * How the daemon tells which checkout served a page when every git worktree declares the same
- * projectId: the dev server runs inside exactly one of them. Null wherever `lsof` cannot answer —
- * Windows, a slim container — and the caller then keeps the answer it had without this.
+ * projectId: the dev server runs inside exactly one of them. Null wherever the lookup cannot answer
+ * — a slim container with no `lsof` — and the caller then keeps the answer it had without this.
+ *
+ * Windows has no `lsof`, and no command shows another process's working directory. There the
+ * answer is the project folder in the listener's command line, from PowerShell.
  */
 export function findListenerCwd(
   port: number,
-  exec: (command: string, args: readonly string[]) => string | null,
+  exec: (command: string, args: readonly string[], timeoutMs?: number) => string | null,
+  platform: NodeJS.Platform = process.platform,
 ): string | null {
+  if ('win32' === platform) {
+    const args = ['-NoProfile', '-NonInteractive', '-Command', windowsListenerScript(port)];
+    const line = exec('powershell', args, WINDOWS_LOOKUP_TIMEOUT_MS);
+    return null === line ? null : parseCommandLineRoot(line.trim());
+  }
   const holder = findPortHolder(port, exec);
-  if (null === holder) return null;
+  if (null === holder) {
+    return null;
+  }
   const out = exec('lsof', ['-a', '-p', String(holder.pid), '-d', 'cwd', '-Fn']);
   return null === out ? null : parseProcessCwd(out);
 }

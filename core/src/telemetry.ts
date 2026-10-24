@@ -16,6 +16,7 @@
  */
 import { z } from 'zod';
 import {
+  NextStepOffered,
   OnboardingPhase,
   OnboardingStepSchema,
   OnboardingStepStatus,
@@ -28,6 +29,7 @@ import {
  * re-exported here so every `@reticlehq/core/telemetry` import reaches it.
  */
 export {
+  NextStepOffered,
   OnboardingPhase,
   OnboardingStepSchema,
   OnboardingStepStatus,
@@ -44,7 +46,7 @@ import { BrowserBrand, FeedbackSchema } from './telemetry-feedback.js';
 import { CaptureLoss, VerifiedReason } from './verdict/verified-constants.js';
 import { IdentitySchema } from './telemetry-feedback.js';
 import { LicenseActivation } from './telemetry-license.js';
-import { SIGNAL_FIELDS } from './telemetry-signals.js';
+import { OutageErrCode, SIGNAL_FIELDS, TRANSPORT_FIELDS } from './telemetry-signals.js';
 import { BugFoundSchema } from './telemetry-bug.js';
 export * from './telemetry-bug.js';
 
@@ -91,7 +93,7 @@ export const TelemetryEventKind = {
    * tool never idle-exits, so only idle ones reach a clean shutdown. Emitting a periodic flush under
    * an exit's name therefore describes active sessions at one end and abandoned ones at the other.
    *
-   * Count sessions with DAEMON_STOPPED. Sum work with both.
+   * Count daemon runs with DAEMON_STARTED, clean exits with DAEMON_STOPPED. Sum work with both.
    */
   SESSION_PROGRESS: 'session_progress',
   /**
@@ -105,7 +107,10 @@ export const TelemetryEventKind = {
    * between a retention problem and an activation problem. Once per daemon start, so it is cheap.
    */
   PROJECT_PROFILED: 'project_profiled',
-  /** `reticle update` or `reticle rollback` moved the installed version. Carries from → to. */
+  /**
+   * A start found a version that differs from the last start on this machine, or `reticle update` /
+   * `reticle rollback` moved it. Carries from → to.
+   */
   VERSION_CHANGED: 'version_changed',
   /** An uncaught exception or unhandled rejection reached the top of the daemon. Crash analytics. */
   RUNTIME_CRASHED: 'runtime_crashed',
@@ -168,6 +173,17 @@ export const TelemetryEventKind = {
    * that decides whether this is fixed.
    */
   MCP_CONNECTION_LOST: 'mcp_connection_lost',
+  /**
+   * The MCP proxy process ended. The agent lost its tools until the client starts a new one.
+   *
+   * `mcp_connection_lost` cannot see this: the stream to the daemon can be healthy when the proxy
+   * leaves. Sent even when the proxy has no other counts to report. See `ProxyExitSchema`.
+   */
+  MCP_PROXY_EXITED: 'mcp_proxy_exited',
+  /** A daemon start found the pidfile of a daemon that died without a clean stop. */
+  DAEMON_DIED_UNCLEAN: 'daemon_died_unclean',
+  /** The proxy found the daemon port held by a stranger or by another project, and did not use it. */
+  WAKE_REFUSED: 'wake_refused',
   /**
    * `reticle init` finished. The onboarding funnel had no instrumentation at all, so a setup that
    * failed on a missing dependency was indistinguishable from a user who never tried.
@@ -386,6 +402,8 @@ export const VerificationSchema = z.object({
    * `VerificationDriver`. Absent is the ordinary case and means the agent called the tool itself.
    */
   driven: z.nativeEnum(VerificationDriver).optional(),
+  /** The page SDK version from its HELLO: our own release number, or `other`. Absent if unsaid. */
+  sdkVersion: z.string().min(1).max(32).optional(),
 });
 export type Verification = z.infer<typeof VerificationSchema>;
 
@@ -529,6 +547,8 @@ export const McpConnectionSchema = z.object({
    * OPTIONAL because an older sender has none. Absent means not measured, never `false`.
    */
   appConnected: z.boolean().optional(),
+  /** The id of the proxy process that attached. Its outages carry the same id. */
+  proxyId: z.string().min(1).max(64).optional(),
 });
 export type McpConnection = z.infer<typeof McpConnectionSchema>;
 
@@ -598,6 +618,11 @@ export const OutageReason = {
   SSE_CLOSED: 'sse_closed',
   /** A reconnect attempt could not reach the daemon at all. */
   CONNECT_ERROR: 'connect_error',
+  /**
+   * A stream that was already serving was reset. The request saw the error before the response
+   * closed, so this used to read as `connect_error`, which says the daemon was never reached.
+   */
+  SSE_RESET: 'sse_reset',
   /** Anything the proxy reported that this list does not name. A classifier must be able to say so. */
   OTHER: 'other',
 } as const;
@@ -629,6 +654,12 @@ export const McpOutageSchema = z.object({
    * worth driving down.
    */
   pendingLost: z.number().int().nonnegative().optional(),
+  /** The socket error code behind the drop, when the drop came with one. */
+  errCode: z.nativeEnum(OutageErrCode).optional(),
+  /** The stream got a response before it failed: a live stream dropped, not a refused connect. */
+  responded: z.boolean().optional(),
+  /** The proxy process. It joins `mcp_client_connected`, which carries the daemon's `sessionId`. */
+  proxyId: z.string().min(1).max(64).optional(),
 });
 export type McpOutage = z.infer<typeof McpOutageSchema>;
 
@@ -665,6 +696,8 @@ export const InstallSource = {
   DOCS_SITE: 'docs_site',
   /** The repository README's install snippet. */
   README: 'readme',
+  /** reticle.sh/blog, whose posts' install snippets carry the marker. */
+  BLOG: 'blog',
   /** Somebody typed the command with no channel in front of it. Only ever self-declared. */
   CLI_DIRECT: 'cli_direct',
   /** No marker, or one this list does not name. The honest answer, and expected to dominate. */
@@ -926,5 +959,7 @@ export const TelemetryEventSchema = z.object({
   licenseKeyPresent: z.boolean().optional(),
   // Account, workspace, client, launch, and the HUD / link / Harness-run blocks: see that file.
   ...SIGNAL_FIELDS,
+  // The proxy-exit, unclean-death and wake-refusal blocks: see telemetry-signals.ts.
+  ...TRANSPORT_FIELDS,
 });
 export type TelemetryEvent = z.infer<typeof TelemetryEventSchema>;

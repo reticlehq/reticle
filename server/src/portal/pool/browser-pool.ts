@@ -13,11 +13,7 @@
 import { unreachableUrlIn, type SeedStorage } from '@reticlehq/core';
 import { seedStorageInto, targetOriginOf } from './storage-seed.js';
 import { installLeaseMarker, leaseMarkerOf } from './lease-marker-stamp.js';
-import {
-  grantLeasePermissions,
-  NOTIFICATION_PERMISSION_READ,
-  NOTIFICATION_READ_TIMEOUT_MS,
-} from './context-permissions.js';
+import { grantLeasePermissions, readNotificationPermission } from './context-permissions.js';
 import type {
   InitScriptHandle,
   Launcher,
@@ -28,7 +24,7 @@ import type {
   ScreenshotOptions,
 } from './pool-contract.js';
 import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
-import type { LeaseEmulation, LeaseMedia } from './lease-emulation.js';
+import { readViewport, type LeaseEmulation, type LeaseMedia } from './lease-emulation.js';
 import { NotHtmlDocumentError, READER_NOT_HTML } from './zero-install.js';
 export type {
   InitScriptHandle,
@@ -370,6 +366,18 @@ export class BrowserPool {
   }
 
   /**
+   * The MCP connection `owner` came back: a proxy that reconnects keeps its id. Its leases stop
+   * their grace, because the owner they wait for is here again.
+   */
+  reattachOwner(owner: string): void {
+    for (const lease of this.#active.values()) {
+      if (lease.owner === owner) {
+        delete lease.detachedAt;
+      }
+    }
+  }
+
+  /**
    * Reclaim leases untouched for longer than the TTL — a hung/crashed agent never holds a slot
    * forever. Returns the released sessionIds. This is the fault-tolerance backstop for the pool.
    */
@@ -499,6 +507,12 @@ export class BrowserPool {
     }
   }
 
+  /** The size a leased page reports for itself, or undefined when it cannot be read. */
+  async viewportOfLease(sessionId: string): Promise<{ width: number; height: number } | undefined> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    return lease === undefined ? undefined : readViewport(lease.page);
+  }
+
   async setMocksLease(sessionId: string, rules: readonly PooledMockRule[]): Promise<boolean> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease === undefined || lease.page.installMocks === undefined) return false;
@@ -558,19 +572,7 @@ export class BrowserPool {
    */
   async notificationPermission(sessionId: string): Promise<string | undefined> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined || lease.page.evaluate === undefined) return undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const gaveUp = new Promise<undefined>((resolve) => {
-      timer = setTimeout(() => resolve(undefined), NOTIFICATION_READ_TIMEOUT_MS);
-    });
-    try {
-      const value = await Promise.race([lease.page.evaluate(NOTIFICATION_PERMISSION_READ), gaveUp]);
-      return 'string' === typeof value ? value : undefined;
-    } catch {
-      return undefined;
-    } finally {
-      clearTimeout(timer);
-    }
+    return lease === undefined ? undefined : readNotificationPermission(lease.page);
   }
 
   async sweepExpired(): Promise<string[]> {

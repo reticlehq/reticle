@@ -10,6 +10,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { OutageReason, TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { OutageStage, reportMcpOutage, resetOutageReporting } from './mcp-outage.js';
 import { getTelemetry } from '@/telemetry/telemetry.js';
+import { PROXY_ID } from '@/telemetry/proxy-telemetry.js';
 
 describe('reportMcpOutage', () => {
   beforeEach(() => {
@@ -25,8 +26,21 @@ describe('reportMcpOutage', () => {
         reason: OutageReason.SSE_ENDED,
         attempts: 1,
         pendingLost: 0,
+        proxyId: PROXY_ID,
       },
     });
+    emit.mockRestore();
+  });
+
+  /**
+   * The proxy is not the daemon, so an outage carries no `sessionId`. The proxy id is the join: the
+   * same id is on `mcp_client_connected`, which carries the daemon's `sessionId`.
+   */
+  it('names the proxy process, so an outage joins its daemon run', () => {
+    const emit = vi.spyOn(getTelemetry(), 'emit').mockResolvedValue(true);
+    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.SSE_ABORTED, attempts: 1 });
+    const outage = (emit.mock.calls[0]?.[1] as { outage?: { proxyId?: string } }).outage;
+    expect(outage?.proxyId).toBe(PROXY_ID);
     emit.mockRestore();
   });
 
@@ -140,7 +154,7 @@ describe('a benign drop cannot mask a real one', () => {
     const reasons = emit.mock.calls.map(
       (call) => (call[1] as { outage: { reason: string } }).outage.reason,
     );
-    expect(reasons).toEqual([OutageReason.DAEMON_SHUTDOWN, OutageReason.SSE_ABORTED]);
+    expect(reasons).toEqual([OutageReason.SSE_ABORTED]);
     emit.mockRestore();
   });
 
@@ -157,9 +171,17 @@ describe('a benign drop cannot mask a real one', () => {
 
   it('reports one benign drop per stage, not one per retirement', () => {
     const emit = vi.spyOn(getTelemetry(), 'emit').mockResolvedValue(true);
-    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.DAEMON_SHUTDOWN, attempts: 1 });
-    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.DAEMON_SHUTDOWN, attempts: 1 });
+    reportMcpOutage(OutageStage.RECOVERED, { reason: OutageReason.DAEMON_SHUTDOWN, attempts: 2 });
+    reportMcpOutage(OutageStage.RECOVERED, { reason: OutageReason.DAEMON_SHUTDOWN, attempts: 2 });
     expect(emit).toHaveBeenCalledTimes(1);
+    emit.mockRestore();
+  });
+
+  it('does not report the idle exit as a first outage, because it is not one', () => {
+    // The daemon retires on schedule after it sits idle. `daemon_stopped` already says so.
+    const emit = vi.spyOn(getTelemetry(), 'emit').mockResolvedValue(true);
+    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.DAEMON_SHUTDOWN, attempts: 1 });
+    expect(emit).not.toHaveBeenCalled();
     emit.mockRestore();
   });
 });

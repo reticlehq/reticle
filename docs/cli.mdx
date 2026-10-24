@@ -48,7 +48,7 @@ npx @reticlehq/server <command>
 | Command | What it does | Page |
 | --- | --- | --- |
 | `reticle status [--json]` | Is the daemon up, which pages connected, who is signed in, is this repo linked | [status](/cli/status) |
-| `reticle doctor` | Diagnose setup: Chromium, daemon, port | [doctor](/cli/doctor) |
+| `reticle doctor` | Find what is wrong with the setup (Chromium, daemon, port, agent link), and what is missing from coverage | [doctor](/cli/doctor) |
 | `reticle open [url]` | Show the app: reuse the connected tab, else open one | [open](/cli/open) |
 | `reticle stop [--force]` | Stop the daemon we started; `--force` frees the port by its listener, never the agent's MCP proxy | [stop](/cli/stop) |
 | `reticle restart` | Free the port, then start a daemon and wait for a real bind | [restart](/cli/restart) |
@@ -93,7 +93,7 @@ The old names below still work for one release and print one line naming the new
 | Old | Now |
 | --- | --- |
 | `reticle kill` | `reticle stop --force` |
-| `reticle login`, `reticle link` | `reticle connect` |
+| `reticle login`, `reticle link` | `reticle connect`. `reticle login --email` is gone: sign-in is only in the browser, with Google or GitHub. Without a browser, set `RETICLE_API_KEY` |
 | `reticle project` | `reticle connect --project <name\|id>` |
 | `reticle whoami` | `reticle status` |
 | `reticle push` | `reticle sync` |
@@ -122,7 +122,7 @@ reticle init  [--env KEY=VALUE]... [--app <dir>] [--license <key>]
               [--json] [--files-only] [--relaunch] [--no-open] [--no-agents]
               [--url <app url>] [--timeout S] [--dry-run] [--hooks]
               [--port N] [--no-mcp] [--no-install] [--start]
-              [--capture-bodies] [--no-first-run] [--new-id]
+              [--capture-bodies] [--no-first-run] [--new-id] [--no-prompt-capture]
 ```
 
 `--env` and `--app` are the answers the command cannot work out for itself: what the app needs to reach a usable state, and which app in a monorepo. Which journey proves what you care about is asked on the first run, as `--persona`. `--files-only` is what `init` did before it learned to boot the app: it still registers the MCP server and pre-approves Reticle's tools, so it doubles as the upgrade path for an existing install.
@@ -143,7 +143,7 @@ npx @reticlehq/server doctor
 reticle doctor
   node         v22.14.0
   chromium     ✓ installed (chromium-1234)
-  daemon       ✓ running on :4400 (pid 72698, v3.7.0)
+  daemon       ✓ running on :4400 (pid 72698, v3.8.0)
   sessions     ✓ 1 page connected
   bridge port  4400  (your app must dial THIS port, not your dev-server port)
   agent link   ✓ an MCP client attached here and called tools before (a record, not a live check)
@@ -163,7 +163,7 @@ reticle status
   daemon       ✓ running on :4400 (pid 90790)
   sessions     ✓ 1 page connected
                http://localhost:4310/
-  agent link   enumerated
+  agent link   ✓ your agent has read and used Reticle's tools
 ```
 
 Add `--json` for the same facts as one machine-readable event line. See [`reticle status`](/cli/status) for the fields.
@@ -308,6 +308,9 @@ Measured exit code: **`1`**, with the flow lists trimmed above. That run genuine
 ```bash
 # humans
 npx @reticlehq/server feedback "what worked, what didn't"
+
+# humans who want a reply: one email address, sent only when you give it
+npx @reticlehq/server feedback --contact you@example.com "what worked, what didn't"
 
 # agents, including from a setup that never finished
 npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "what happened"

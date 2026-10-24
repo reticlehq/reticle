@@ -321,7 +321,7 @@ export async function runSetupCommand(
       flowSaved: false,
       notes: undefined === daemon.message ? [] : [daemon.message],
       fallback: [
-        `Once those sessions are done, free the port with \`npx @reticlehq/server kill --port ${String(input.bridgePort)}\` and re-run init.`,
+        `Once those sessions are done, free the port with \`npx @reticlehq/server stop --force --port ${String(input.bridgePort)}\` and re-run init.`,
       ],
     };
   }

@@ -40,7 +40,8 @@ export const SESSION_TOOLS: ToolDef[] = [
           ...(Object.values(HudVisibility) as [HudVisibility, ...HudVisibility[]]),
           ...Object.values(HudCorner),
         ])
-        .optional(),
+        .optional()
+        .describe('Hide, show or remove the HUD, or move it to a corner.'),
       sessionId: z
         .string()
         .optional()

@@ -3,7 +3,7 @@ name: verify-login-logout
 description: 'Prove sign-in lands the user where they should be, sign-out really ends the session so a protected page sends them back to sign in, and an expired session asks to sign in again instead of breaking. Use when auth, a login form, a logout button, route guards or token refresh were added or changed, or when a user reports being logged out, or not logged out, unexpectedly.'
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -12,7 +12,7 @@ metadata:
 
 A login form that shows the dashboard after submit proves the page changed. It does not prove the server accepted the credentials, that signing out ends anything, or that a user whose session ran out gets a sign-in page instead of a blank screen and a loop of 401s.
 
-**Reticle** can check all three in the running app. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+**Reticle** can check all three in the running app. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## Before you start
 

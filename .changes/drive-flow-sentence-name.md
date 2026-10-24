@@ -1,3 +1,0 @@
-### Changed
-
-- **`@reticlehq/core`, `@reticlehq/server` — an auto-saved drive flow without an intent gets a readable name.** A drive that declared no `intent` was saved under its request path and a hash (`drive-get-v1-runs-issues-c69f82`), and the file said nothing about what it checked. It now carries a sentence built from what its steps expect ("A POST request to /api/login is made, then the page moves to /home") as `intent`, marked `intentDerived: true`, and the file is named from that sentence, bounded in length, with the start page kept so two journeys stay apart. A built sentence never enters the intent ledger. Flows saved before this keep their names. A declared `intent` still names the flow, as before.

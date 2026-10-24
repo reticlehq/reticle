@@ -83,6 +83,8 @@ export const ReticleTool = {
   INTENT: 'reticle_intent',
   /** what THIS run has established, proved, and not yet discharged — pulled when memory is gone. */
   CONTEXT: 'reticle_context',
+  /** the app as the App Graph sees it, folded from the project's journals: screens, frontier, a path. */
+  MAP: 'reticle_map',
   VERIFY: 'reticle_verify',
   /** read cross-run history (.reticle/project.json) + diff-vs-last for a name. */
   PROJECT: 'reticle_project',

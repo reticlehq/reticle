@@ -3,7 +3,7 @@ name: debug-broken-ui
 description: Find out why something in a running web app does not work, when the console is empty and the code looks correct. Reads the click, the request, the store and the console together and returns the file:line to open. Use when a button does nothing, a form will not submit, data will not load, a page renders blank or stale, a modal will not close, or the user says "it's broken" and the code review says it is fine.
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -12,7 +12,7 @@ metadata:
 
 Reading the source again will not tell you why. The evidence is in the running app, and most of it never reaches the screen: the request that failed, the store that never moved, the handler that was never bound, the element covered by something invisible.
 
-**Reticle** reads all of it from inside the page. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+**Reticle** reads all of it from inside the page. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## Do not start by guessing. Start by reproducing.
 
@@ -44,8 +44,8 @@ reticle_look({ action: "state", sessionId, store })
 | `2xx` but nothing changed | the app never read the response: verdict says `outcome_unread` | usually a real bug in the success path |
 | Request fine, DOM fine, **store stale** | UI-vs-state desync, invisible to any screenshot | `reticle_look { action: "state" }` is the only witness; this is the highest-value read here |
 | Click did nothing, no error | the control is dead, occluded, or disabled | `reticle_look { action: "element" }` returns `occluded`, `box` (0×0), `styles.cursor`, `opacity` |
-| Element "not found" that you can see | virtualised list has not mounted it | `reticle_scroll_to`. A `query` that misses is not evidence of absence |
-| Looks logged in, behaves logged out | the token never persisted | `reticle_storage` |
+| Element "not found" that you can see | virtualised list has not mounted it | `reticle_run({ tool: "reticle_scroll_to", args: { by: "text", value } })`. A `find` that misses is not evidence of absence |
+| Looks logged in, behaves logged out | the token never persisted | `reticle_run({ tool: "reticle_storage", args: {} })` |
 | Console error that predates your click | a pre-existing fault, not your bug | call it out before continuing |
 
 ## Get the file, not a theory

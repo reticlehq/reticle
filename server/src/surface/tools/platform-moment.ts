@@ -19,12 +19,10 @@ import { join } from 'node:path';
 import {
   AgentNudgeKind,
   CONNECT_COMMAND,
-  HARNESS_UNLOCK_COVERAGE,
   ReticleDir,
   ReticleTool,
   Verified,
 } from '@reticlehq/core';
-import { instrumentationOf, type InstrumentedTab } from '@/portal/session/recorded-gaps.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { DRIVE_RECORD_SUFFIX, reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { FlakeFileSchema } from '@/language/flows/recording/flake.js';
@@ -227,13 +225,12 @@ export function resetPlatformMoments(): void {
  * One-time advisories, on the agent's own tool results, that point at the platform and the Harness.
  *
  * Reticle has two drivers: the user's coding agent, through these tools (local, free), and Reticle
- * Harness on the platform (opt-in, credits, unlocks at 80% instrumentation). The agent is the one
+ * Harness on the platform (opt-in, credits, no setup score needed). The agent is the one
  * reader who can tell the user the second exists at the moment it would help, so each kind is said:
  *
  *   connect     unlinked, after a verdict: results stay here; `reticle connect` keeps them and lets
  *               the Harness test the whole app, with free credits to start
- *   close_gaps  linked, below the gate: closing the named gaps unlocks the Harness
- *   switch_on   linked, at the gate, Harness off: the user can switch it on
+ *   switch_on   linked, Harness off: the user can switch it on
  *   explore     Harness on, the agent driving a long journey by hand: hand it to explore
  *
  * Guardrails: each kind at most once per agent session per project; never on a result that failed
@@ -249,20 +246,14 @@ export function resetPlatformMoments(): void {
  */
 export const LONG_JOURNEY_ACTS = 1;
 
-const UNLOCK_PERCENT = Math.round(HARNESS_UNLOCK_COVERAGE * 100);
-
 export const NudgeText = {
   CONNECT:
     'Tell the user, once, in one line after your answer: this result is only on this machine; ' +
     '`reticle connect` saves it to the Reticle dashboard and lets Reticle Harness test the whole ' +
     'app — a new account gets free credits to start.',
-  closeGaps: (reason: string): string =>
-    `Tell the user, once, in one line: ${reason} Closing those gaps unlocks Reticle Harness; offer ` +
-    'to close them (`reticle doctor` prints the prompt with each fix).',
-  switchOn: (percent: number): string =>
-    `Tell the user, once, in one line: this app is at ${String(percent)}% instrumentation ` +
-    `(${String(UNLOCK_PERCENT)}% unlocks it), so Reticle Harness can be switched on in the HUD's ` +
-    'Settings or the dashboard; it drives whole journeys on the platform and saves them as flows.',
+  SWITCH_ON:
+    "Tell the user, once, in one line: Reticle Harness can be switched on in the HUD's Settings " +
+    'or the dashboard; it drives whole journeys on the platform and saves them as flows.',
   // No count: it was kept per agent connection, which a client may open per call, so "you have
   // driven 1 step by hand" was said after twenty.
   explore: (): string =>
@@ -285,8 +276,6 @@ export interface NudgeInput {
   failed: boolean;
   /** Whether the project is linked to the platform. Read only when a kind needs it. */
   linked: () => Promise<boolean>;
-  /** The driven tab's Harness gate, when one is resolved. */
-  gate: { percent: number; unlocked: boolean; reason?: string } | undefined;
   /** Whether the Harness is switched on, when the platform has said. Read only when needed. */
   harnessOn: () => boolean | undefined;
   /** Whether this call drives the page by hand. */
@@ -332,12 +321,8 @@ export async function takeNudge(
       return fresh(AgentNudgeKind.CONNECT)
         ? say(AgentNudgeKind.CONNECT, NudgeText.CONNECT)
         : undefined;
-    const gate = input.gate;
-    if (gate === undefined) return undefined;
-    if (!gate.unlocked && gate.reason !== undefined && fresh(AgentNudgeKind.CLOSE_GAPS))
-      return say(AgentNudgeKind.CLOSE_GAPS, NudgeText.closeGaps(gate.reason));
-    if (gate.unlocked && false === harnessOn && fresh(AgentNudgeKind.SWITCH_ON))
-      return say(AgentNudgeKind.SWITCH_ON, NudgeText.switchOn(gate.percent));
+    if (false === harnessOn && fresh(AgentNudgeKind.SWITCH_ON))
+      return say(AgentNudgeKind.SWITCH_ON, NudgeText.SWITCH_ON);
     return undefined;
   } catch {
     return undefined; // an advisory never costs a tool call anything
@@ -357,7 +342,7 @@ const HAND_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The advisory for one agent call, wired to this daemon: the tab's gate, the project's link and the
+ * The advisory for one agent call, wired to this daemon: the project's link and the
  * Harness switch as the platform last said it. Counted when shown. Never throws.
  */
 export async function agentNudge(input: {
@@ -365,11 +350,10 @@ export async function agentNudge(input: {
   tool: string;
   raw: Record<string, unknown>;
   isError: boolean;
-  tab: InstrumentedTab | undefined;
   root: string | undefined;
   harnessOn: () => boolean | undefined;
 }): Promise<string | undefined> {
-  const { deps, raw, tab } = input;
+  const { deps, raw } = input;
   const linkedCloud = deps.linkedCloud;
   const nudge = await takeNudge({
     session: deps.attachId,
@@ -379,7 +363,6 @@ export async function agentNudge(input: {
     failed: resultFailed(raw, input.isError),
     // No link port (an embedder, a test double): nothing to say about linking.
     linked: async () => linkedCloud === undefined || null !== (await linkedCloud()),
-    gate: tab === undefined ? undefined : instrumentationOf(tab).harnessGate,
     harnessOn: input.harnessOn,
     acted: HAND_TOOLS.has(input.tool),
   });

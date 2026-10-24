@@ -11,8 +11,6 @@ const ready = {
   provider: 'jev',
   available: { jev: true },
   harnessEnabled: true,
-  harnessUnlocked: true,
-  coverageScore: 0.875,
   credits: { used: 2, limit: 500, kind: 'trial' },
   plan: { kind: 'trial', daysLeft: 14, seats: 2 },
   harnessRunCredits: { typical: 5, max: 10 },
@@ -84,31 +82,26 @@ describe('where the user stands, for the coding agent', () => {
         left: 498,
         said: 'Trial: 2 of 500 credits used · 498 left · 14 days left',
       },
-      harness: { on: true, unlocked: true, setupScore: 87, runCredits: { typical: 5, max: 10 } },
+      harness: { on: true, runCredits: { typical: 5, max: 10 } },
     });
     expect(facts['next']).toBe(ACCOUNT_NEXT.ready(5, 10));
   });
 
-  it('below the gate: the score, what is missing, and the setup prompt', () => {
+  it("an older platform's low setup score and lock change nothing: the Harness is ready", () => {
     const facts = accountFacts({
       signedIn: true,
       platform: {
         ...ready,
         harnessUnlocked: false,
-        coverageScore: 0.62,
+        coverageScore: 0.12,
         harnessLock: { reason: 'Missing: Stable test ids.', prompt: 'Add data-testid…' },
       },
     });
-    expect(facts['harness']).toMatchObject({
-      unlocked: false,
-      setupScore: 62,
-      missing: 'Missing: Stable test ids.',
-      setupPrompt: 'Add data-testid…',
-    });
-    expect(facts['next']).toBe(ACCOUNT_NEXT.locked(62, 'Missing: Stable test ids.'));
+    expect(facts['harness']).toEqual({ on: true, runCredits: { typical: 5, max: 10 } });
+    expect(facts['next']).toBe(ACCOUNT_NEXT.ready(5, 10));
   });
 
-  it('unlocked and off: switch it on; no credits left: says so first', () => {
+  it('off: switch it on; no credits left: says so first', () => {
     expect(
       accountFacts({ signedIn: true, platform: { ...ready, harnessEnabled: false } })['next'],
     ).toBe(ACCOUNT_NEXT.OFF);

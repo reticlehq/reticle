@@ -25,7 +25,7 @@ import {
   withLinkedCredential,
   MSG_NO_HARNESS_KEY,
   MSG_HARNESS_DISABLED,
-  MSG_GATE_PROMPT_LEAD,
+  firstLine,
   refusedByPlatform,
   MSG_HARNESS_UNCLAIMED,
   MSG_HARNESS_UNCONFIRMED,
@@ -586,24 +586,22 @@ describe('turning the harness off', () => {
   });
 
   /**
-   * The platform's lock outranks its switch. A fresh tab has recorded no gaps, so the daemon's own
-   * per-tab check passed, the project-wide lock was ignored, and the person was told the Harness was
-   * "off" when it was locked below the coverage gate — the one refusal that names a fix.
+   * An older platform still sends a setup-score lock. No score gates the Harness, so the lock is
+   * not read: switched on, the drive goes ahead; switched off, it is "off", never "locked".
    */
-  it('says it is locked, with the prompt, before saying it is off', async () => {
-    const refusal = refusedByPlatform(linked, {
-      configFetch: platformSays({
-        provider: 'jev',
-        harnessEnabled: false,
-        harnessUnlocked: false,
-        coverageScore: 0.75,
-        harnessLock: { reason: 'Harness unlocks at 80%.', prompt: 'Add test ids.' },
-      }),
-    });
-    await expect(refusal).resolves.toEqual({
-      text: `Harness unlocks at 80%.\n\n${MSG_GATE_PROMPT_LEAD}\nAdd test ids.`,
-      reason: HarnessRunReason.COVERAGE_GATE,
-    });
+  it("does not refuse on an older platform's harnessUnlocked: false", async () => {
+    const lock = {
+      provider: 'jev',
+      harnessUnlocked: false,
+      coverageScore: 0.12,
+      harnessLock: { reason: 'Harness unlocks at 80%.', prompt: 'Add test ids.' },
+    };
+    await expect(
+      refusedByPlatform(linked, { configFetch: platformSays({ ...lock, harnessEnabled: true }) }),
+    ).resolves.toBeUndefined();
+    await expect(
+      refusedByPlatform(linked, { configFetch: platformSays({ ...lock, harnessEnabled: false }) }),
+    ).resolves.toEqual({ text: MSG_HARNESS_DISABLED, reason: HarnessRunReason.HARNESS_OFF });
   });
 
   // Persona drive: the credits refusal linked to the API origin (`:17000/settings?group=billing`),
@@ -741,19 +739,11 @@ describe('what the explore tool says it needs', () => {
  */
 describe('a saved plan the platform refuses', () => {
   const linked = { [ReticleEnv.API_KEY]: 'rk_live_x', [ReticleEnv.CLOUD_URL]: 'https://api.test' };
-  const locked = () =>
+  const off = () =>
     Promise.resolve({
       ok: true,
       status: 200,
-      text: () =>
-        Promise.resolve(
-          JSON.stringify({
-            provider: 'jev',
-            harnessEnabled: true,
-            harnessUnlocked: false,
-            harnessLock: { reason: 'Harness unlocks at 80%.' },
-          }),
-        ),
+      text: () => Promise.resolve(JSON.stringify({ provider: 'jev', harnessEnabled: false })),
     });
   const plan = (step: Record<string, unknown>) => ({
     version: 1,
@@ -775,13 +765,18 @@ describe('a saved plan the platform refuses', () => {
       exploreApp(depsWithFlows([]), linked, {
         planId: 'hp_1',
         driver: finishing(''),
-        configFetch: locked,
+        configFetch: off,
       }),
-    ).rejects.toThrow('Harness unlocks at 80%.');
+    ).rejects.toThrow(MSG_HARNESS_DISABLED);
     expect(posted.map((body) => JSON.parse(body) as unknown)).toEqual([
       {
         results: [
-          { id: 'signin', title: 'Sign in', status: 'blocked', line: 'Harness unlocks at 80%.' },
+          {
+            id: 'signin',
+            title: 'Sign in',
+            status: 'blocked',
+            line: firstLine(MSG_HARNESS_DISABLED),
+          },
         ],
       },
     ]);
@@ -859,16 +854,16 @@ describe('a saved plan the platform refuses', () => {
     expect(result.drive.creditsSpent).toBe(2);
   });
 
-  it('is not refused by the lock when the plan only replays saved flows', async () => {
+  it('is not refused by the switch when the plan only replays saved flows', async () => {
     const posted: string[] = [];
     vi.stubGlobal('fetch', platformWith(plan({ kind: 'replay', flow: 'signin' }), posted));
     const run = exploreApp(depsWithFlows([]), linked, {
       planId: 'hp_1',
       driver: finishing(''),
-      configFetch: locked,
+      configFetch: off,
     });
     await expect(run.catch((error: unknown) => String(error))).resolves.not.toContain(
-      'Harness unlocks at 80%.',
+      MSG_HARNESS_DISABLED,
     );
   });
 });

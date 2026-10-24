@@ -107,10 +107,18 @@ describe('agentPromptFor', () => {
     const prompt = agentPromptFor({ gaps, appName: 'shop', url: 'http://localhost:3000/' });
     expect(prompt.startsWith(AGENT_PROMPT_LEAD)).toBe(true);
     const lines = prompt.split('\n');
+    // `--expect` takes a JSON predicate and refuses prose, so the prompt names the predicate form.
     expect(lines.at(-2)).toBe(
-      'Then run: reticle verify http://localhost:3000/ --expect "<one journey you changed>"',
+      "Then run: npx @reticlehq/server verify http://localhost:3000/ --expect '<JSON predicate for " +
+        "the end state of one journey you changed>'",
     );
     expect(lines.at(-1)).toBe(AGENT_PROMPT_TAIL);
+  });
+
+  // The prompt told agents to read https://reticle.sh/SKILL.md, which answered 404. The docs host
+  // serves the skill.
+  it('links the skill on the docs host', () => {
+    expect(AGENT_PROMPT_LEAD).toContain('https://docs.reticle.sh/skill.md');
   });
 
   it('lists only the gaps it was given, each with its fix and the control it names', () => {

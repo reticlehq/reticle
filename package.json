@@ -1,6 +1,6 @@
 {
   "name": "reticle-monorepo",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "private": true,
   "description": "Reticle \u2014 the proof layer for AI agents. Observe and verify a running web app over MCP, no screenshots.",
   "packageManager": "pnpm@10.33.2",
@@ -15,6 +15,7 @@
     "check:lossy": "node scripts/check-lossy-transforms.mjs",
     "check:pack-size": "node scripts/check-pack-size.mjs",
     "changelog:assemble": "node scripts/assemble-changelog.mjs",
+    "skill:sync": "node scripts/sync-skill.mjs",
     "lint:docs": "pnpm --filter @reticlehq/server exec vitest run src/guards/docs/docs-commands-run.test.ts src/guards/docs/docs-code-blocks.test.ts src/surface/tools/docs-index-coverage.test.ts src/guards/docs/guidance-commands-run.test.ts src/surface/tools/e2e-surface-drift.test.ts src/guards/release/published-skill-artifacts.test.ts",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test:unit test:guards",
@@ -34,6 +35,7 @@
     "bench:gate": "node bench/harness/gate.mjs",
     "bench:dashboard": "node bench/dashboard.mjs",
     "bench:intent-effect": "node bench/harness/intent-effect.mjs",
+    "bench:parallel": "node bench/harness/parallel-agents.mjs",
     "publish:dry-run": "pnpm build && pnpm -r publish --access public --no-git-checks --dry-run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "docs:api": "typedoc",

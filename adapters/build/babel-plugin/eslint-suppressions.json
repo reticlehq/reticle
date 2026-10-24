@@ -1,0 +1,12 @@
+{
+  "src/ignore.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/index.ts": {
+    "curly": {
+      "count": 6
+    }
+  }
+}

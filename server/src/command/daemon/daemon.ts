@@ -17,6 +17,7 @@ import { spawn } from 'node:child_process';
 import { daemonRegistryFileName, ReticleEnv, type DaemonRegistryEntry } from '@reticlehq/core';
 import { log } from '@/log.js';
 import { uncleanPredecessor } from './lifetime/unclean-predecessor.js';
+import { reportDaemonDiedUnclean } from '@/telemetry/proxy-telemetry.js';
 import { MAX_DAEMON_LOG_BYTES, pruneOldDaemonLogs } from './lifetime/log-cap.js';
 
 // Re-exported from their owner so callers outside this directory — the proxy log, the rotation
@@ -237,6 +238,11 @@ export interface SpawnDaemonDeps {
     options: { detached: boolean; stdio: readonly ('ignore' | number)[] },
   ): SpawnedChild;
   pidAlive(pid: number): boolean;
+  /**
+   * A predecessor died without a clean stop; `ageMs` is how long it had run. Optional so a test that
+   * does not care reports nothing. The default sends `daemon_died_unclean`.
+   */
+  onUncleanDeath?(ageMs: number): void;
 }
 
 function defaultSpawnDaemonDeps(): SpawnDaemonDeps {
@@ -249,7 +255,21 @@ function defaultSpawnDaemonDeps(): SpawnDaemonDeps {
     spawnChild: (command, args, options) =>
       spawn(command, [...args], { detached: options.detached, stdio: [...options.stdio] }),
     pidAlive: isAlive,
+    onUncleanDeath: (ageMs) => void reportDaemonDiedUnclean(ageMs),
   };
+}
+
+/**
+ * Report a dead predecessor, aged from its pidfile: the parent writes that file at spawn time.
+ * Read before the unlink, because after it nothing is left to age. A report must never stop a start.
+ */
+function reportUncleanAge(pidFilePath: string, deps: SpawnDaemonDeps): void {
+  try {
+    // The clock is read at this I/O boundary, the same as the log timestamps in this file.
+    deps.onUncleanDeath?.(Math.max(0, Date.now() - statSync(pidFilePath).mtimeMs));
+  } catch {
+    // An unreadable pidfile has no age to report.
+  }
 }
 
 /**
@@ -297,6 +317,9 @@ export function spawnDaemon(
     // a crashed daemon is reclaimed"), it just never said it out loud. Captured before the unlink,
     // because after it there is no trace left that the previous daemon died at all.
     orphanPid = uncleanPredecessor(existing, false, process.pid);
+    if (null !== orphanPid) {
+      reportUncleanAge(pidFilePath, deps);
+    }
     try {
       unlinkSync(pidFilePath);
       lockFd = deps.openFile(pidFilePath, 'wx');

@@ -368,14 +368,12 @@ describe('shipped docs never name a tool a reader cannot call', () => {
   /**
    * Both published skill roots, which are two directories for two distribution channels.
    *
-   * `skills/` is the skills-CLI package. `plugin/SKILL.md` is the single skill the Claude Code plugin
+   * `skills/` is the skills-CLI package. `plugins/reticle/SKILL.md` is the single skill the Claude Code plugin
    * ships, and it is the file a `/reticle` user reads first, so leaving it out of these checks would
    * exempt the most-read guidance in the repo from every rule the rest of it follows.
    */
   function skillFiles(): string[] {
-    return [...walkSkills(join(REPO, 'skills')), join(REPO, 'plugin', 'SKILL.md')].filter(
-      existsSync,
-    );
+    return [...walkSkills(join(REPO, 'skills')), join(REPO, 'plugins', 'reticle', 'SKILL.md')];
   }
 
   it('finds docs to check', () => {

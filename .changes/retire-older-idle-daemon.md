@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a newer MCP server kept using an older daemon that nobody used.** After an update, the agent's MCP server found the daemon from the earlier release on its port. It only described the version difference, so tools refused or answered `unknown` until a person ran `reticle restart`. Now, when no tab and no other agent is attached to the older daemon, the MCP server stops it and starts the daemon of its own release. When a tab or another agent is attached, the daemon stays, and the version difference is described as before. A daemon older than 3.6.0 does not report which agents are attached to it, so it also stays.

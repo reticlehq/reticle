@@ -44,10 +44,10 @@ It registers Reticle with every coding agent it finds and closes with **Next ste
 The order matters. An agent reads its MCP server list when it starts, so a prompt pasted into an agent that is already running has no `reticle_*` tools to call until that agent restarts.
 
 <Tip>
-  Prefer installing the skills instead? `npx skills add reticlehq/reticle` on most agents, or
-  `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq` on Claude
-  Code, which registers the MCP server and the Reticle skill in one step. Then type `/reticle` and
-  the agent runs this same setup from the skill.
+  Prefer installing the skill instead? `npx skills add reticlehq/reticle --skill reticle` on most
+  agents, or `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq` on
+  Claude Code, which registers the MCP server and the Reticle skill in one step. Then type
+  `/reticle` and the agent runs this same setup from the skill.
 </Tip>
 
 <Note>
@@ -70,27 +70,18 @@ reticle init (dry run, no files written)
   in /tmp/initdemo
 
   [·] MCP server (Claude, global) → global (claude user scope)
-      reticle already registered (install once, used by every project)
-  [·] MCP server (Cursor, global) → /Users/you/.cursor/mcp.json
-      reticle already in Cursor global config
+  [·] MCP server (Cursor) → /Users/you/.cursor/mcp.json
   [⚠] MCP server (Codex CLI) → /Users/you/.codex/config.toml
       add this to /Users/you/.codex/config.toml by hand:
       [mcp_servers.reticle]
       command = "npx"
       args = ["@reticlehq/server", "mcp"]
-
   [✓] Agent verification rule → CLAUDE.md
-      teach the agent to verify features with Reticle after building them
   [✓] The /reticle command → .claude/commands/reticle.md
-      type /reticle to verify one flow in the browser
   [✓] Install dependencies → package.json
-      npm i -D @reticlehq/react@<version> @reticlehq/vite-plugin@<version>
   [✓] Reticle config → .reticle.json
-      write project config (framework + port)
   [✓] Vite plugin → vite.config.ts
-      add reticle() to plugins (also injects connect())
   [✓] Capabilities + store → src/reticle-dev.ts
-      no data-testid values yet; no state library detected
 ```
 
 ## Reading the marks
@@ -111,15 +102,17 @@ There are five, and they mean different things. This is the part worth understan
   Codex simply never sees the tools.
 </Warning>
 
-That `ℹ` line is the one people skim past, so here it is in full:
+An `ℹ` line is the one people skim past. Init prints this one when it finds a state library that it cannot register for you (punctuation changed to fit these docs):
 
 ```
   [ℹ] AGENT: finish the capabilities file → src/reticle-dev.ts
-      src/reticle-dev.ts was written but registers nothing, so `hasCapabilities` stays false
-      and reticle_look { action: "state" } has nothing to read.
+      This app's state lives in a library nothing in the running app points at, so it is the one thing Reticle cannot find for itself: reticle_state will not see it until you say where it is.
+      Do this now, before driving anything:
+        1. In src/reticle-dev.ts, uncomment the suggested line and complete it: <the hint for your library>.
+        2. Prove it: drive one flow and check reticle_state returns your key. An empty state read means the line is still not doing anything, whatever else went green.
 ```
 
-`init` wrote the file, but a brand-new Vite template has no testids and no state library, so there was nothing to register. Reticle tells you this instead of counting it as a win. See [Instrument your app](/instrumentation) for what to put in it.
+Do the two steps. Reticle tells you this instead of counting the file as a win. See [Instrument your app](/instrumentation) for what to put in the file.
 
 ## What it actually changes
 
@@ -190,12 +183,17 @@ The files it writes in your project, none of them mysterious.
   </Accordion>
 
   <Accordion title="src/reticle-dev.ts (your capabilities)">
+    Trimmed, with the punctuation changed to fit these docs: the real file also has a comment block about where to start and a `declare global` block for the `DEV` type.
+
     ```ts
-    // Dev-only. Loaded for you after connect() by @reticlehq/vite-plugin's injected connect, so you do not import it.
+    // Dev-only. Loaded for you after connect() (by @reticlehq/vite-plugin's injected connect, or by
+    // the connect file init wrote for a framework that connects itself), so you do not import it.
     // Self-guards on import.meta.env.DEV, so it is a no-op in a production build.
     import { registerCapabilities } from '@reticlehq/react';
 
     if (import.meta.env.DEV) {
+      // No state library detected. If you add one, register it here. See https://docs.reticle.sh/state-management
+
       registerCapabilities({
         testids: [], // none found; add data-testid to your key elements
         signals: [], // names you pass to reticle.signal()
@@ -219,6 +217,7 @@ The files it writes in your project, none of them mysterious.
 
 ```
 reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
+              [--env KEY=VALUE]... [--files-only] [--json] [--relaunch]
               --app picks WHICH app in a monorepo, when several are found
               --no-mcp skips MORE than the server registration: also the agent rule files
               (CLAUDE.md / AGENTS.md / .cursor) and the /reticle command, because all three

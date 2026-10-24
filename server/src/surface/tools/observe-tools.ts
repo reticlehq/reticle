@@ -69,7 +69,8 @@ import {
 } from './assert/assert-grade.js';
 import { assertVerdict } from './assert/assert-verdict.js';
 import { followLostObservation } from './act/act-observation.js';
-import { withGapNovelty } from './gap-novelty.js';
+import { engineBlindSpotsOutput, withGapNovelty } from './gap-novelty.js';
+import { engineBlindSpotsField } from '@/portal/session/recorded-gaps.js';
 import { assertionSource } from './assert/assert-source.js';
 import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
 import { openSessionIntents } from '@/memory/intent/open-intents.js';
@@ -538,6 +539,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .describe(
           'What the APP did not tell Reticle, and the one change that would fix it — each entry is { kind, missing, cost, fix, source?, ref? }. Reported ONLY where an absence made THIS verdict weaker: a failing assertion with no source to point at, or a state assertion against an app that registers no store. Never a survey of the page, so an entry is always work worth doing now. OMITTED when the app told Reticle everything it needed.',
         ),
+      engineBlindSpots: engineBlindSpotsOutput,
     },
     handler: async (deps, args) => {
       const timeout = asNumber(args['timeout_ms']) ?? 0;
@@ -602,8 +604,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
             : {};
       // Asked of every verdict drawn after an observed edit, not once per edit — see
       // isChangeUndeclared for why repeating it is disclosure rather than nagging.
+      // Read once: the undeclared-change check and the engine's claim reading share it.
+      const declared = await openSessionIntents(deps, asString(args['sessionId']));
       const changeUndeclared = await isChangeUndeclared(session.currentEditEpoch, () =>
-        openSessionIntents(deps, asString(args['sessionId'])),
+        Promise.resolve(declared),
       );
       const { decision, contradictions, coverage, gaps, verdictEffect } = await assertVerdict(
         session,
@@ -669,6 +673,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         // The filter belongs where the response is assembled anyway — telemetry above keeps the
         // full text. See gap-novelty.ts.
         ...(gaps.length > 0 ? { instrumentationGaps: withGapNovelty(session.id, gaps) } : {}),
+        ...engineBlindSpotsField(session.id, predicate, args['intent'], declared),
         ...advice,
         ...coverage,
         // The SAME pointer the journal keeps, not a second lookup — one verdict, one file:line.

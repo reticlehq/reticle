@@ -1,8 +1,16 @@
-import { describe, it, expect, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, afterEach, afterAll, beforeEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -52,6 +60,45 @@ describe('readPairingToken', () => {
     expect(typeof token).toBe('string');
     expect((token ?? '').length).toBeGreaterThan(0);
     expect(readPairingToken()).toBe(token);
+  });
+});
+
+// The daemon resolves a relative token folder against the working folder and does not use a
+// Windows path on POSIX. The plugin must pick the same token file, or the bridge refuses the page.
+describe('readPairingToken with a token folder that is not absolute', () => {
+  const previous = { dir: process.env[TOKEN_ENV], home: process.env.HOME };
+  /** @type {string} */
+  let cwd = '';
+  /** @type {string} */
+  let home = '';
+  beforeEach(() => {
+    cwd = mkdtempSync(join(tmpdir(), 'reticle-next-cwd-'));
+    home = mkdtempSync(join(tmpdir(), 'reticle-next-home-'));
+    vi.spyOn(process, 'cwd').mockReturnValue(cwd);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    process.env.HOME = home;
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (previous.dir === undefined) delete process.env[TOKEN_ENV];
+    else process.env[TOKEN_ENV] = previous.dir;
+    if (previous.home === undefined) delete process.env.HOME;
+    else process.env.HOME = previous.home;
+  });
+
+  it('uses the token file in the working folder, as the daemon does', () => {
+    process.env[TOKEN_ENV] = 'relative-token-dir';
+    const token = readPairingToken();
+    expect(token).toBe(readFileSync(join(cwd, 'relative-token-dir', 'pairing-token'), 'utf8'));
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it.runIf('/' === sep)('uses the home folder for a Windows path on POSIX', () => {
+    process.env[TOKEN_ENV] = 'C:\\Users\\u\\.reticle';
+    const token = readPairingToken();
+    expect(token).toBe(readFileSync(join(home, '.reticle', 'pairing-token'), 'utf8'));
+    expect(readdirSync(cwd)).toEqual([]);
+    expect(console.warn).toHaveBeenCalled();
   });
 });
 

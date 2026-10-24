@@ -1,0 +1,92 @@
+{
+  "src/announce.integration.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/announce.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/connect-args.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/connect-module-stability.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/discover-port.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/index.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/index.ts": {
+    "curly": {
+      "count": 21
+    }
+  },
+  "src/injection-postcondition.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/installed.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/project-id.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/project-id.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/source-edit-freshness.integration.test.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/stamping.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/svelte-source.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/token/ensure-token.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/token/missing-token.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/vitest-browser.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/watch-ignore.ts": {
+    "curly": {
+      "count": 1
+    }
+  }
+}

@@ -177,29 +177,20 @@ describe('the grant end date', () => {
   });
 });
 
-describe("the platform's coverage gate", () => {
-  it('reads harnessUnlocked, coverageScore and harnessLock, rounding the percent down', async () => {
+describe("an older platform's coverage gate", () => {
+  it('tolerates harnessUnlocked, coverageScore and harnessLock, and reads no gate from them', async () => {
     const got = await fetchPlatformConfig(
       LINKED,
       answering({
         provider: 'jev',
+        harnessEnabled: true,
         harnessUnlocked: false,
-        coverageScore: 0.799,
+        coverageScore: 0.1,
         harnessLock: { reason: 'Harness unlocks at 80%…', prompt: 'p', command: null },
       }),
     );
-    expect(got?.gate).toEqual({
-      unlocked: false,
-      percent: 79,
-      reason: 'Harness unlocks at 80%…',
-      prompt: 'p',
-    });
-  });
-
-  it('carries no gate from a platform that sends none', async () => {
-    expect(
-      (await fetchPlatformConfig(LINKED, answering({ provider: 'jev' })))?.gate,
-    ).toBeUndefined();
+    expect(got?.harnessEnabled).toBe(true);
+    expect(got).not.toHaveProperty('gate');
   });
 });
 

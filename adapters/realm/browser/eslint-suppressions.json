@@ -1,0 +1,1007 @@
+{
+  "src/actions/action-report.ts": {
+    "curly": {
+      "count": 18
+    }
+  },
+  "src/actions/actions-dom.ts": {
+    "curly": {
+      "count": 13
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/actions/actions-press.ts": {
+    "curly": {
+      "count": 23
+    }
+  },
+  "src/actions/actions.auto-anchor.test.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/actions/actions.click.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/actions/actions.danger-context.test.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/actions/actions.effect.test.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/actions/actions.event-view.test.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/actions/actions.fill-autofill.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/actions/actions.gestures.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/actions/actions.interactions.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/actions/actions.press-escape-dialog.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/actions/actions.press-key.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/actions/actions.press-keypress.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/actions/actions.press-modifiers.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/actions/actions.settle-bound.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/actions/actions.settle-causality.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/actions/actions.ts": {
+    "curly": {
+      "count": 25
+    },
+    "no-nested-ternary": {
+      "count": 3
+    }
+  },
+  "src/actions/appeared-text.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/actions/check-state.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/actions/click-target.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/actions/danger-context.ts": {
+    "curly": {
+      "count": 11
+    }
+  },
+  "src/actions/scroll.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/actions/value-input.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/activate.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/activate.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/busy.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/commands/animations-target.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/commands/commands.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/commands/commands.ts": {
+    "curly": {
+      "count": 11
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/commands/commands.upload-inspect.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/commands/inspect-catches-the-ancestor.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/commands/inspect-reveals.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/commands/truncation-is-visible.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/core-boundary.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/dom/a11y.test.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/dom/a11y.ts": {
+    "curly": {
+      "count": 71
+    }
+  },
+  "src/dom/addressing/refs.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/dom/addressing/source.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/dom/browser.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/dom/chart.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/dom/desktop-capture.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/dom/dom-ignore.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/dom/dom-ignore.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/dom/layout-audit.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/dom/occlusion.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/dom/option-target.test.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/dom/paint-context.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/dom/paint-context.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/dom/query.count.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/dom/query.role-coverage.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/dom/query.ts": {
+    "curly": {
+      "count": 72
+    }
+  },
+  "src/dom/query.visible-text-hint.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/dom/realm.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/dom/realm.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/dom/refs.navigation.test.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/dom/render-page.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/dom/shadow-registry.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/dom/snapshot-ids.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/dom/snapshot.pierce.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/dom/stable-selector.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/dom/text-match.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/dom/theme.ts": {
+    "curly": {
+      "count": 12
+    }
+  },
+  "src/dom/virtualized.test.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/dom/virtualized.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/edit-epoch.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/first-load-size.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/observers/blind-spots.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/observers/blind-spots.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/observers/console.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/observers/context-open.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/observers/departure.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/observers/departure.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/observers/dialogs.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/observers/dom.ts": {
+    "curly": {
+      "count": 16
+    }
+  },
+  "src/observers/download.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/observers/download.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/observers/error-repeats.test.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/observers/error-repeats.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/observers/field.test.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/observers/field.ts": {
+    "curly": {
+      "count": 20
+    }
+  },
+  "src/observers/focus.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/observers/foreign-wrapper-survives.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/observers/frames.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/observers/health.ts": {
+    "curly": {
+      "count": 16
+    }
+  },
+  "src/observers/ipc.test.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/observers/ipc.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/observers/navigation.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/observers/navigation.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/observers/net-detail/network-body.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/observers/network-error-bodies.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/observers/network-stream.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/observers/network.body-reason.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/observers/network.streaming.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/observers/network.test.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/observers/network.ts": {
+    "curly": {
+      "count": 37
+    }
+  },
+  "src/observers/network.wrapper-blindspot.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/observers/observation-never-throws.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/observers/perf.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/observers/perf.ts": {
+    "curly": {
+      "count": 13
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/observers/route.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/observers/route.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/observers/scroll.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/observers/state.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/observers/state.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/observers/storage.noop-write.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/observers/storage.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/observers/storage.ts": {
+    "curly": {
+      "count": 16
+    }
+  },
+  "src/patching/capture-method.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/carousel/carousel.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/carousel/carousel.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/presenter/chrome/log-memory.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/chrome/presenter-effects.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/presenter/chrome/presenter-log-rows.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/presenter/chrome/presenter-log.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/presenter/chrome/presenter-morph.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/presenter/chrome/presenter-report-copy.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/presenter/chrome/presenter-tally.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/presenter/escape-belongs-to-the-app.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/hud-telemetry-pages.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/presenter/hud-telemetry.ts": {
+    "curly": {
+      "count": 18
+    }
+  },
+  "src/presenter/presenter-account-menu.test.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/presenter/presenter-account-styles.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-account.ts": {
+    "curly": {
+      "count": 18
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-agent-link.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-agent-link.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/presenter/presenter-chat-views.test.ts": {
+    "curly": {
+      "count": 10
+    }
+  },
+  "src/presenter/presenter-chat-views.ts": {
+    "curly": {
+      "count": 42
+    }
+  },
+  "src/presenter/presenter-config.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-controls.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-controls.ts": {
+    "curly": {
+      "count": 23
+    }
+  },
+  "src/presenter/presenter-dock-layout.ts": {
+    "curly": {
+      "count": 17
+    }
+  },
+  "src/presenter/presenter-drag.ts": {
+    "curly": {
+      "count": 14
+    }
+  },
+  "src/presenter/presenter-frame.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/presenter/presenter-glow.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/presenter/presenter-harness-row.ts": {
+    "curly": {
+      "count": 20
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-hud-position.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-impact-dot.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/presenter/presenter-nav-and-plan.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-personas.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-plan.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/presenter/presenter-report.ts": {
+    "curly": {
+      "count": 18
+    },
+    "no-nested-ternary": {
+      "count": 7
+    }
+  },
+  "src/presenter/presenter-run-state.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/presenter/presenter-settings.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-settings.ts": {
+    "curly": {
+      "count": 31
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-shell-minimised.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/presenter-shell.test.ts": {
+    "curly": {
+      "count": 18
+    }
+  },
+  "src/presenter/presenter-shell.ts": {
+    "curly": {
+      "count": 36
+    }
+  },
+  "src/presenter/presenter-workspace.ts": {
+    "curly": {
+      "count": 20
+    }
+  },
+  "src/presenter/presenter.test-helpers.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/presenter/presenter.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/presenter/presenter.ts": {
+    "curly": {
+      "count": 58
+    },
+    "no-nested-ternary": {
+      "count": 2
+    }
+  },
+  "src/presenter/reticle-presenter.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/presenter/settings-are-wired.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/presenter/toolbar-even-spacing.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/presenter/tour/tour-scrim-never-eats-the-app.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/presenter/tour/tour-view.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/presenter/tour/tour.test.ts": {
+    "curly": {
+      "count": 14
+    }
+  },
+  "src/presenter/tour/tour.ts": {
+    "curly": {
+      "count": 27
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/recorder/recorder.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/recorder/recorder.ts": {
+    "curly": {
+      "count": 36
+    }
+  },
+  "src/registry/adapter-guide.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/registry/auto-testids.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/registry/capabilities.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/registry/declared-channels.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/registry/declared-platform.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/registry/domains.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/registry/emitter.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/registry/store-adapters.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/registry/store-adapters.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/registry/stores.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/registry/stores/adapters.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/reticle-presenter-helpers.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/reticle.late-project-id.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/reticle.ts": {
+    "curly": {
+      "count": 35
+    }
+  },
+  "src/review/annotator.test.ts": {
+    "curly": {
+      "count": 11
+    }
+  },
+  "src/review/annotator.ts": {
+    "curly": {
+      "count": 49
+    }
+  },
+  "src/review/mark-anchor.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/review/mark-anchor.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/security/lossy-conformance.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/security/page-location.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/security/serialization.test.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/security/serialization.ts": {
+    "curly": {
+      "count": 11
+    }
+  },
+  "src/timers/clock.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/timers/clock.ts": {
+    "curly": {
+      "count": 16
+    }
+  },
+  "src/timers/native/native-timers.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/transport/transport.backoff.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/transport/transport.bridge-loss.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/transport/transport.churn-eviction.test.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/transport/transport.close-codes.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/transport/transport.overflow-marker.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/transport/transport.reconnect-on-focus.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/transport/transport.silent-drop.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/transport/transport.ts": {
+    "curly": {
+      "count": 12
+    }
+  },
+  "src/transport/transport.unreachable.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  }
+}

@@ -83,3 +83,18 @@ describe('resizing a leased page', () => {
     expect(await poolWith().setViewportLease('s-unknown', MOBILE)).toBe(false);
   });
 });
+
+describe('reading a leased page size back', () => {
+  it('reports the size the page itself reports', async () => {
+    const pool = poolWith({ evaluate: () => Promise.resolve([390, 844]) });
+    const lease = await pool.acquire('http://app.test/');
+    expect(await pool.viewportOfLease(lease.sessionId)).toEqual(MOBILE);
+  });
+
+  it('reports nothing when the page cannot be read, rather than a size it did not report', async () => {
+    const pool = poolWith({ evaluate: () => Promise.reject(new Error('target closed')) });
+    const lease = await pool.acquire('http://app.test/');
+    expect(await pool.viewportOfLease(lease.sessionId)).toBeUndefined();
+    expect(await poolWith().viewportOfLease('s-unknown')).toBeUndefined();
+  });
+});

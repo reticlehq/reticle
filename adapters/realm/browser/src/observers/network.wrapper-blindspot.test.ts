@@ -110,3 +110,45 @@ describe('known limit of the native-fetch heuristic', () => {
     ).toHaveLength(0);
   });
 });
+
+/**
+ * Two copies of the SDK on one page each wrapped fetch, and every request was recorded twice.
+ *
+ * Seen against a live app that ships the SDK and was also given the injected one: one POST at the
+ * server, two `net.request` events in the ledger, one with the request body and one without (the
+ * two copies had different capture settings, so nothing merged them). A doubled write is exactly
+ * what a `duplicate-request` finding keys on, so this was a false positive waiting to fire. The
+ * module-local `OURS` cannot see another copy's wrapper; the page-wide mark can.
+ */
+describe('one page, one network capture', () => {
+  it('records a request once when a second install finds the first still in place', async () => {
+    const native = (() => Promise.resolve(new Response('{}'))).bind(
+      null,
+    ) as unknown as typeof fetch;
+    vi.stubGlobal('fetch', native);
+    const { emit, events } = collect();
+    teardowns.push(installNetwork(emit, {}));
+    teardowns.push(installNetwork(emit, { captureBodies: true }));
+
+    await window.fetch('/v1/things', { method: 'POST', body: '{"a":1}' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(events.filter((e) => e.type === EventType.NET_REQUEST)).toHaveLength(1);
+  });
+
+  it('captures again after the first install is torn down', async () => {
+    const native = (() => Promise.resolve(new Response('{}'))).bind(
+      null,
+    ) as unknown as typeof fetch;
+    vi.stubGlobal('fetch', native);
+    const first = collect();
+    installNetwork(first.emit, {})();
+    const second = collect();
+    teardowns.push(installNetwork(second.emit, {}));
+
+    await window.fetch('/v1/things');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(second.events.filter((e) => e.type === EventType.NET_REQUEST)).toHaveLength(1);
+  });
+});

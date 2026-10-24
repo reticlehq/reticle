@@ -16,7 +16,7 @@ This is what `reticle init` registers, so you rarely type it yourself.
 
 | Flag | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Bridge port |
+| `--port N` | number | `RETICLE_PORT`, else the port in `.reticle.json`, else `4400` | The preferred bridge port. When this project's daemon runs, the proxy uses it on any port. When another project's daemon holds the preferred port, the proxy uses a free port. A wake resolves the port again |
 | `--drive <url>` | string | unset | Have the daemon launch its own browser at this URL, so the agent has autonomous control without relying on your tab |
 | `--headless` | boolean | on when `CI` or `RETICLE_HEADLESS` is set, or on Linux with no display | Hide that browser |
 | `--headed` | boolean | on otherwise | Show it |
@@ -26,11 +26,14 @@ This is what `reticle init` registers, so you rarely type it yourself.
 
 ## The rule this command lives by
 
-The proxy **is** the MCP server the editor launched. Nothing respawns it, so an uncaught throw here is what a user experiences as "the MCP server disconnected". Four behaviours follow from that:
+The proxy **is** the MCP server the editor launched. Nothing respawns it, so an uncaught throw here is what a user experiences as "the MCP server disconnected". Seven behaviours follow from that:
 
 - Crash handlers write to the proxy's own log file, not just stderr, because the editor swallows stderr.
 - A daemon that is not there is not fatal. The proxy answers `initialize` itself, serves the cached tool catalog, and retries a daemon on every client request. Present and complaining beats absent, because absent needs a human.
 - Reconnect is self-healing: if the daemon exited, crashed, was stopped, or shut itself down as idle, the reconnect path spawns a new one rather than retrying a dead port until the budget runs out.
+- A wake resolves the port again. When another project's daemon took the port after an idle exit, the proxy finds this project's daemon where it moved, or starts one on a free port, and connects there.
+- After an update, a proxy that meets an older daemon with no tab and no other agent attached stops it and starts the daemon of its own release. When a tab or another agent is attached, or the daemon is older than 3.6.0, the daemon stays and the proxy describes the version difference.
+- A short drop of the link does not end your session. Each proxy sends a fixed id on every connect, so it keeps its identity, its leases and its tab. The daemon waits 10 seconds after the last agent detaches before it ends the browser sessions. A daemon that has served a tool call counts an agent that attached in the last 30 minutes as attached, so a client that starts a new proxy for each turn (Codex) does not wait for a cold start.
 - A proxy with no client traffic and no work in flight exits after 24 hours, so abandoned editor sessions do not leave process pairs behind forever. Set `RETICLE_MCP_PROXY_IDLE_MS=0` to disable that watcher, or set an explicit millisecond window.
 
 ## What it prints

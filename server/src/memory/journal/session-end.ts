@@ -152,6 +152,8 @@ interface SessionEndDeps {
  * starts already knowing which regions churn.
  */
 export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget) => Promise<void> {
+  // The `flow_recorded` outcomes this daemon already reported. See saveDrivenFlow.
+  const flowStepsSent = new Set<string>();
   return async (session) => {
     /*
      * Retention is maintenance of a directory, not a part of journalling, so it runs either way.
@@ -226,7 +228,7 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
     // Saved only when the tape declared a consequence — see drive-flow.ts for why the alternative is
     // a false-green factory running once per session.
     try {
-      await saveDrivenFlow(deps, session);
+      await saveDrivenFlow(deps, session, flowStepsSent);
     } catch (error: unknown) {
       // A flow is a by-product of the session; failing to write one never fails the teardown. It is
       // logged, because a drive that leaves no flow and no reason is otherwise undiagnosable.
@@ -308,7 +310,9 @@ export async function recordDriveRun(
 ): Promise<void> {
   // Called through the object, not lifted into a local: a lifted method loses its `this`, and the
   // real Session's reader closes over the journal it was constructed with.
-  if (session.readJournalActions === undefined) return;
+  if (session.readJournalActions === undefined) {
+    return;
+  }
   const actions = await session.readJournalActions();
   const root = session.artifactRoot ?? deps.reticleRoot;
   const inputs = driveRunsFrom(actions, {
@@ -324,7 +328,9 @@ export async function recordDriveRun(
     ...(session.projectId === undefined ? {} : { projectId: session.projectId }),
     projectName: basename(dirname(root)),
   });
-  if (0 === inputs.length) return;
+  if (0 === inputs.length) {
+    return;
+  }
   // The protocol reaching the artifact a person actually reads. Only when the session could say
   // where it was: a subject with no locator is not a weaker subject, it is a guess, and the
   // schema makes the field optional so that absence can be told from invention.
@@ -362,10 +368,16 @@ export async function recordDriveRun(
 }
 
 /** Persist what this session drove as a replayable flow, when it declared anything provable. */
-async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): Promise<void> {
+async function saveDrivenFlow(
+  deps: SessionEndDeps,
+  session: SessionEndTarget,
+  stepsSent: Set<string>,
+): Promise<void> {
   const takeTape = deps.takeAmbientTape;
   const flows = deps.flowsAt?.(session.artifactRoot ?? deps.reticleRoot) ?? deps.flows;
-  if (takeTape === undefined || flows === undefined) return;
+  if (takeTape === undefined || flows === undefined) {
+    return;
+  }
   // One flow per journey the session contained, not one flow per session — see drive-flow.ts.
   const { programs, outcome } = driveFlowsFrom(takeTape(session.id));
   const author = deps.author?.();
@@ -383,7 +395,7 @@ async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): 
   // which is a real outcome and not our bug. Counting it as a failure would blame the product for a
   // choice the agent made, and counting it as success would claim a regression test that cannot go
   // red. `unprovenSteps` is what separates "drove and proved nothing" from "drove nothing at all".
-  await deps.reportStep?.({
+  const step = {
     phase: OnboardingPhase.FIRST_RUN,
     step: 'flow_recorded',
     status: 0 === programs.length ? OnboardingStepStatus.SKIPPED : OnboardingStepStatus.COMPLETED,
@@ -394,7 +406,15 @@ async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): 
     ...(0 < programs.length || outcome.mockedSteps === undefined
       ? {}
       : { reason: DriveFlowSkipReason.DRIVEN_UNDER_NETWORK_MOCKS }),
-  });
+  };
+  // Once per daemon for each status and reason. A browser session ends at every page reload, and
+  // a page that reloads in a loop sent this step without end. A repeat tells the funnel nothing.
+  const key = `${step.status}/${step.reason ?? ''}`;
+  if (stepsSent.has(key)) {
+    return;
+  }
+  stepsSent.add(key);
+  await deps.reportStep?.(step);
 }
 
 /**
@@ -411,7 +431,9 @@ async function dropUndrivenJournal(
 ): Promise<void> {
   try {
     const actions = await fs.readFile(journalActionsPath(root, sessionId)).catch(() => '');
-    if (actions.trim().length > 0) return;
+    if (actions.trim().length > 0) {
+      return;
+    }
     await fs.rm(sessionDirPath(root, sessionId));
   } catch {
     // tidying is never the reason a teardown fails

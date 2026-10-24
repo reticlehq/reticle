@@ -1,0 +1,315 @@
+{
+  "src/artifacts/credit-wording.test.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/artifacts/drive-script.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/artifacts/flow-constants.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/artifacts/flow-expect-flat.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/artifacts/flow-expect-flat.ts": {
+    "curly": {
+      "count": 19
+    }
+  },
+  "src/artifacts/flow-mutation-target.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/artifacts/flow-order.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/artifacts/flow-select.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/artifacts/flow-types.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/artifacts/flow-unreached.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/artifacts/harness-credits.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/artifacts/hud-notices.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/artifacts/prompt-context.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/artifacts/prompt-context.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/capabilities.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/hooks/hook-payload-carries-no-secret.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/identity/checkout.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/identity/document-identity.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/identity/edit-epoch.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/identity/project-id.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/identity/source-constants.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/lossy-conformance.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/package-scripts-resolve.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/realm/registry.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/realm/registry.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/redaction-config.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/registry/daemon-registry.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/registry/dev-server-registry.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/registry/project-registry.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/telemetry-signals.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/verdict/check-sentence.ts": {
+    "curly": {
+      "count": 15
+    },
+    "no-nested-ternary": {
+      "count": 3
+    }
+  },
+  "src/verdict/compare-source.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/verdict/findings.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/verdict/findings.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/verdict/instrumentation-coverage-score.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/verdict/instrumentation-coverage.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/verdict/instrumentation-coverage.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/verdict/instrumentation-gap.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/verdict/intent.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/verdict/one-vocabulary-for-checks.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/verdict/predicate-tree.ts": {
+    "curly": {
+      "count": 10
+    }
+  },
+  "src/verdict/predicate.ts": {
+    "curly": {
+      "count": 14
+    }
+  },
+  "src/verdict/run-context.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/verdict/security.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/verdict/security.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/verdict/verification-run.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/wire/channel.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/wire/constants/constants.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/wire/desktop-contract.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/wire/global-press.ts": {
+    "curly": {
+      "count": 10
+    }
+  },
+  "src/wire/hold.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/wire/narrow.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/wire/net.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/wire/platform-link.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/wire/platform-link.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/wire/production/activation-ticket.ts": {
+    "curly": {
+      "count": 10
+    }
+  },
+  "src/wire/redaction.ts": {
+    "curly": {
+      "count": 12
+    }
+  },
+  "src/wire/state-select.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/wire/state-select.ts": {
+    "curly": {
+      "count": 18
+    }
+  },
+  "src/wire/toon.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/wire/types.recorded.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/words/unreachable-notice.ts": {
+    "curly": {
+      "count": 1
+    }
+  }
+}

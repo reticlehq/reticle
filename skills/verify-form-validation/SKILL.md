@@ -3,7 +3,7 @@ name: verify-form-validation
 description: 'Check that a form actually rejects bad input: the error message renders, the submit button stays disabled, and no request goes out. Use when validation logic was written but never driven, when a "required" or pattern check looks right on screen but was never proven, or when a bug report says the form submitted invalid data anyway.'
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -12,7 +12,7 @@ metadata:
 
 Validation code is written once, glanced at in the browser with one obviously-bad value, and never driven again. The bug that ships is never the value you tried. It's the one you didn't: a submit button that isn't disabled until the field blurs, a button that's disabled only by CSS and still clickable, or a handler that fires the request before the check finishes.
 
-**Reticle** can drive the real form and check all three failure points at once. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+**Reticle** can drive the real form and check all three failure points at once. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## Read this before you start: the browser's own validation can mask the app's
 

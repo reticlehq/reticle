@@ -7,6 +7,7 @@ import { ReticleCommand, ScreenshotSource } from '@reticlehq/core';
 import { removeTempDir } from '@/machine/temp-dir.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { withShotRun } from '@/judgement/runs/default-run-id.js';
+import { driveRunId } from '@/judgement/runs/drive-run.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { readStepShots, shotsLanded } from '@/judgement/runs/artifact/run-store.js';
 import { FRAME, filmNow, jpegSize, stopFilming, takeStepShot } from './step-shots.js';
@@ -107,12 +108,12 @@ describe('takeStepShot', () => {
     const shot = await takeStepShot(deps, sessionId, 'reticle_act');
 
     expect(shot).toEqual({
-      path: join(root, 'visual', 'runs', `drive-${sessionId}`, '0001-act.jpg'),
+      path: join(root, 'visual', 'runs', driveRunId(sessionId), '0001-act.jpg'),
       source: ScreenshotSource.RENDERED,
     });
-    await shotsLanded(root, `drive-${sessionId}`);
+    await shotsLanded(root, driveRunId(sessionId));
     expect(new Uint8Array(await readFile('path' in shot ? shot.path : ''))).toEqual(image);
-    expect(await readStepShots(deps.fs, root, `drive-${sessionId}`)).toEqual([
+    expect(await readStepShots(deps.fs, root, driveRunId(sessionId))).toEqual([
       {
         seq: 1,
         file: '0001-act.jpg',
@@ -130,9 +131,9 @@ describe('takeStepShot', () => {
     Object.assign(deps.sessions.resolve(sessionId), { lastActionId: 'a7' });
 
     await takeStepShot(deps, sessionId, 'reticle_assert', { verdict: true });
-    await shotsLanded(root, `drive-${sessionId}`);
+    await shotsLanded(root, driveRunId(sessionId));
 
-    const [shot] = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    const [shot] = await readStepShots(deps.fs, root, driveRunId(sessionId));
     expect(shot).toMatchObject({ verdict: true, actionId: 'a7' });
   });
 
@@ -147,8 +148,8 @@ describe('takeStepShot', () => {
 
     expect(first).toMatchObject({ source: ScreenshotSource.BROWSER });
     expect('path' in second ? second.path.endsWith('0002-assert.jpg') : false).toBe(true);
-    await shotsLanded(root, `drive-${sessionId}`);
-    const shots = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    await shotsLanded(root, driveRunId(sessionId));
+    const shots = await readStepShots(deps.fs, root, driveRunId(sessionId));
     expect(shots.map((s) => [s.file, s.width, s.height])).toEqual([
       ['0001-act_and_wait.jpg', 1280, 720],
       ['0002-assert.jpg', 1280, 720],
@@ -162,9 +163,9 @@ describe('takeStepShot', () => {
     });
 
     await takeStepShot(deps, sessionId, 'reticle_act');
-    await shotsLanded(root, `drive-${sessionId}`);
+    await shotsLanded(root, driveRunId(sessionId));
 
-    const [shot] = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    const [shot] = await readStepShots(deps.fs, root, driveRunId(sessionId));
     expect(shot?.source).toBe(ScreenshotSource.RENDERED);
     // The next prediction follows what actually worked.
     expect(await takeStepShot(deps, sessionId, 'reticle_act')).toMatchObject({
@@ -190,7 +191,7 @@ describe('takeStepShot', () => {
     const first = await takeStepShot(deps, sessionId, 'reticle_act');
     expect(first).toMatchObject({ source: ScreenshotSource.RENDERED });
     expect(new Uint8Array(await readFile('path' in first ? first.path : ''))).toEqual(image);
-    expect((await readStepShots(deps.fs, root, `drive-${sessionId}`)).map((s) => s.seq)).toEqual([
+    expect((await readStepShots(deps.fs, root, driveRunId(sessionId))).map((s) => s.seq)).toEqual([
       1,
     ]);
   });
@@ -201,12 +202,12 @@ describe('takeStepShot', () => {
     // The first capture of a tab is waited for, so its answer is the reason already.
     const first = await takeStepShot(deps, sessionId, 'reticle_act');
     expect('error' in first ? first.error : '').toContain('render');
-    await shotsLanded(root, `drive-${sessionId}`);
+    await shotsLanded(root, driveRunId(sessionId));
 
     // Nothing worked last time, so this one waits for the capture and reports what happened.
     const answer = await takeStepShot(deps, sessionId, 'reticle_act');
     expect('error' in answer ? answer.error : '').toContain('render');
-    expect(await readStepShots(deps.fs, root, `drive-${sessionId}`)).toEqual([]);
+    expect(await readStepShots(deps.fs, root, driveRunId(sessionId))).toEqual([]);
   });
 
   it('sets pending: true on the fast path so callers know the file may not be on disk yet', async () => {
@@ -265,8 +266,8 @@ describe('frames between steps', () => {
     await filmNow(sessionId);
     await filmNow(sessionId);
     await filmNow(sessionId);
-    await shotsLanded(root, `drive-${sessionId}`);
-    const shots = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    await shotsLanded(root, driveRunId(sessionId));
+    const shots = await readStepShots(deps.fs, root, driveRunId(sessionId));
     expect(shots.map((s) => s.tool)).toEqual(['reticle_act', FRAME.TOOL, FRAME.TOOL]);
     expect(shots.map((s) => s.file)).toEqual(['0001-act.jpg', '0002-frame.jpg', '0003-frame.jpg']);
   });
@@ -277,8 +278,8 @@ describe('frames between steps', () => {
     const { deps, root, sessionId } = await setup({ browser: () => fakeJpeg(8, 6, n++ % 2) });
     await takeStepShot(deps, sessionId, 'reticle_act');
     for (let i = 0; i < 20; i += 1) await filmNow(sessionId);
-    await shotsLanded(root, `drive-${sessionId}`);
-    const shots = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    await shotsLanded(root, driveRunId(sessionId));
+    const shots = await readStepShots(deps.fs, root, driveRunId(sessionId));
     expect(shots.filter((s) => FRAME.TOOL === s.tool).length).toBeLessThanOrEqual(2);
   });
 
@@ -301,8 +302,8 @@ describe('frames between steps', () => {
     const { deps, root, sessionId } = await setup({ render: rendered(fakeJpeg(8, 6)) });
     await takeStepShot(deps, sessionId, 'reticle_act');
     await filmNow(sessionId);
-    await shotsLanded(root, `drive-${sessionId}`);
-    const shots = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+    await shotsLanded(root, driveRunId(sessionId));
+    const shots = await readStepShots(deps.fs, root, driveRunId(sessionId));
     expect(shots.map((s) => s.tool)).toEqual(['reticle_act']);
   });
 
@@ -314,8 +315,8 @@ describe('frames between steps', () => {
       await takeStepShot(deps, sessionId, 'reticle_act');
       for (let i = 0; i < 2_000; i += 1) await filmNow(sessionId);
       await takeStepShot(deps, sessionId, 'reticle_act');
-      await shotsLanded(root, `drive-${sessionId}`);
-      const shots = await readStepShots(deps.fs, root, `drive-${sessionId}`);
+      await shotsLanded(root, driveRunId(sessionId));
+      const shots = await readStepShots(deps.fs, root, driveRunId(sessionId));
       expect(shots.filter((s) => FRAME.TOOL === s.tool)).toHaveLength(FRAME.MAX_PER_RUN);
       expect(shots.filter((s) => 'reticle_act' === s.tool)).toHaveLength(2);
     },

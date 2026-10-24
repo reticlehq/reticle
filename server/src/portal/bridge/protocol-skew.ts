@@ -27,9 +27,12 @@ import type { RefusedPage } from '@/portal/session/session-manager.js';
 /** The page is older than the daemon: its SDK cannot speak the protocol the daemon expects. */
 export const BROWSER_IS_OLDER = 'protocol mismatch — upgrade @reticlehq/browser in this app';
 
-/** The daemon is older than the page. Usually an npx cache serving a stale @reticlehq/server. */
+/**
+ * The daemon is older than the page. Usually an npx cache serving a stale @reticlehq/server. The
+ * MCP server starts the daemon, so it is named first: a stop alone brings the same old daemon back.
+ */
 export const DAEMON_IS_OLDER =
-  'protocol mismatch — the daemon is older; run `reticle stop`, then retry';
+  'protocol mismatch — the daemon is older; update the MCP server or plugin, then `reticle stop`';
 
 /** The versions disagree but not in a direction we can read. */
 export const SKEW_UNKNOWN = 'protocol version mismatch — @reticlehq/browser and server disagree';

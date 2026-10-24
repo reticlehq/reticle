@@ -32,6 +32,12 @@ export const MCP_SHUTDOWN_EVENT = 'reticle-shutdown';
 /** Local-only daemon introspection — `reticle status` GETs this for sessions + health at a glance. */
 export const STATUS_PATH = '/status';
 /**
+ * Local-only stop request — `reticle stop` and `reticle kill` POST here first, with the pairing token
+ * as a bearer token. It runs the daemon's normal shutdown path. A signal cannot do that on Windows,
+ * where it ends the process at once.
+ */
+export const SHUTDOWN_PATH = '/shutdown';
+/**
  * Query flag on STATUS_PATH: the caller (a running `reticle init`) is waiting on this daemon, so it
  * must not idle out yet. Without it the daemon init started exited mid-wait on a slow desktop build.
  */
@@ -306,6 +312,8 @@ export const ReticleDir = {
   VISUAL_SUBDIR: 'visual',
   /** verification-run artifacts —.reticle/runs/<runId>.json (the OEM/CI-consumable verdict). */
   RUNS_SUBDIR: 'runs',
+  /** Dev-server logs, only when the state home cannot be written. Machine-local, like `runs/`. */
+  LOGS_SUBDIR: 'logs',
   /** fail-to-pass bug capsules —.reticle/capsules/<id>.json (a minimal failing flow + its evidence). */
   CAPSULES_SUBDIR: 'capsules',
   /**
@@ -509,6 +517,12 @@ export type PhenomenonType = (typeof PhenomenonType)[keyof typeof PhenomenonType
 export const RETICLE_HYDRATION_SIGNAL = 'reticle:hydration-complete';
 
 /**
+ * Work the app declared it is doing (`reticle.busy(work)`): `{ delta: 1 }` when it starts and
+ * `{ delta: -1 }` when it ends. `settled` counts it as in flight, like a request. Shared browser↔server.
+ */
+export const RETICLE_BUSY_SIGNAL = 'reticle:busy';
+
+/**
  * The registered-store name the React adapter uses for render stats, read via reticle_state. It crosses
  * the wire as a store id AND the browser SDK special-cases it as reticle-owned (so it isn't flagged as
  * an unregistered store), so the name is one fact in core — a rename in the adapter must not silently
@@ -614,6 +628,9 @@ export const InputModeReason = {
    */
   NOT_CONFIGURED: 'real-input-not-configured-for-this-session',
   TARGET_NOT_FOCUSABLE: 'target-cannot-hold-focus', // lease press: the named element took no focus
+  /** A production drive presses only in the page. A native key goes to whatever holds focus, so
+   * the production policy could not judge the control it pressed. */
+  PRODUCTION_PRESS_IN_PAGE: 'production-drive-presses-in-page',
 } as const;
 export type InputModeReason = (typeof InputModeReason)[keyof typeof InputModeReason];
 

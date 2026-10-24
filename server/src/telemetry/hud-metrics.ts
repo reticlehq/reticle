@@ -35,7 +35,10 @@ export interface HudSummary {
 const MAX_SLIDE_IDS = 20;
 const SLIDE_ID = /^[a-z0-9-]{1,56}$/;
 
-/** The same page opened again on the same tab within this long is one view, not two. */
+/**
+ * The same page opened again within this long is one view, not two. Per daemon, not per tab: a page
+ * reload makes a new tab id, and a page that reloads in a loop is still one person on one page.
+ */
 export const HUD_VIEW_DEDUPE_MS = 30_000;
 
 /** A tab whose page reported HUD use without saying which tab: an older caller, or a test. */
@@ -52,16 +55,13 @@ interface TabState {
   view: Open<HudView> | undefined;
   panel: Open<HudPanel> | undefined;
   hidden: boolean;
-  /** When each page last counted as a view on this tab. Session-lifetime, like the prompts. */
-  readonly viewedAt: Map<HudPanel, number>;
-  readonly prompted: Set<HudPromptSurface>;
 }
 
 /** What one HUD use means for the per-event signals, beside what it adds to the summary. */
 export interface HudSignals {
-  /** A page this tab had not opened within the dedupe window. */
+  /** A page not opened within the dedupe window. */
   viewed?: HudPanel;
-  /** A sign-in prompt this tab had not shown before. */
+  /** A sign-in prompt this daemon had not shown before. */
   prompted?: HudPromptSurface;
   /** Tabs with a HUD right now. */
   tabs: number;
@@ -75,6 +75,10 @@ export class HudMetrics {
   readonly #journey: string[] = [];
   readonly #slides = new Map<string, number>();
   readonly #tabs = new Map<string, TabState>();
+  /** When each page last counted as a view. Daemon-lifetime: a window reset keeps it. */
+  readonly #viewedAt = new Map<HudPanel, number>();
+  /** The prompts already reported. Daemon-lifetime, like the views. */
+  readonly #prompted = new Set<HudPromptSurface>();
   #cut = false;
   /** Did anything happen this window. A HUD merely sitting open is not worth a flush of its own. */
   #changed = false;
@@ -86,8 +90,8 @@ export class HudMetrics {
   record(use: HudUseData, tabId: string = UNNAMED_TAB): HudSignals {
     const tab = this.#tab(tabId);
     const signals: HudSignals = { tabs: this.#tabs.size };
-    if (use.prompt !== undefined && !tab.prompted.has(use.prompt)) {
-      tab.prompted.add(use.prompt);
+    if (use.prompt !== undefined && !this.#prompted.has(use.prompt)) {
+      this.#prompted.add(use.prompt);
       signals.prompted = use.prompt;
     }
     // A control the HUD never rendered is dropped here, the one place HUD use is counted, so free
@@ -110,13 +114,16 @@ export class HudMetrics {
       this.#step(`view:${use.view}`);
     }
     if (use.panel !== undefined && use.panel !== tab.panel?.value) {
+      // The HUD opens the Agent Log by itself when a page loads. That is not a choice, so it is not
+      // a view. Its time still counts in `hudPanelMs`.
+      const opensByItself = tab.panel === undefined && HudPanel.CHAT === use.panel;
       this.#close(tab.panel, this.#panelMs);
       tab.panel = { value: use.panel, since };
       if (use.panel !== HudPanel.NONE) {
         this.#step(`panel:${use.panel}`);
-        const last = tab.viewedAt.get(use.panel);
-        if (last === undefined || at - last >= HUD_VIEW_DEDUPE_MS) {
-          tab.viewedAt.set(use.panel, at);
+        const last = this.#viewedAt.get(use.panel);
+        if (!opensByItself && (last === undefined || at - last >= HUD_VIEW_DEDUPE_MS)) {
+          this.#viewedAt.set(use.panel, at);
           signals.viewed = use.panel;
         }
       }
@@ -157,8 +164,6 @@ export class HudMetrics {
       view: undefined,
       panel: undefined,
       hidden: false,
-      viewedAt: new Map(),
-      prompted: new Set(),
     };
     this.#tabs.set(tabId, tab);
     return tab;

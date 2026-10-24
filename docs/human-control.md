@@ -4,9 +4,9 @@ description: 'Watch the agent’s live transcript, steer it mid-run, or end the 
 icon: hand
 ---
 
-With the presenter on (`reticle.connect({ present: true })`), the floating panel in your page lets you watch the agent's live transcript and steer it: **pause** it (its next action tool refuses until you resume) or **end** the session. You can also point at a broken element with **Flag a bug** and hand the agent the element plus its source `file:line`.
+With the presenter on (`reticle.connect({ present: true })`), the floating panel in your page lets you watch the agent's live transcript and steer it: **pause** it (its next action tool refuses until you resume) or **end** the session. You can also open **Notes**, select **Add notes**, and click a broken element. The agent gets the element and its source `file:line`.
 
-When you run with the presenter on (`reticle.connect({ present: true })`), the floating panel is a **two-way control surface**. You watch the agent's live transcript _and_ can steer it (pause it or end the session) without leaving the page. To tell the agent something, talk to it in its own window: the panel sends it no text. There's also a clean, unmistakable "session ended" signal for both you and the agent.
+When you run with the presenter on (`reticle.connect({ present: true })`), the floating panel is a **two-way control surface**. You watch the agent's live transcript _and_ can steer it (pause it or end the session) without leaving the page. To give the agent an instruction, talk to it in its own window. The panel sends only notes pinned to elements, and the pause and end controls. There's also a clean, unmistakable "session ended" signal for both you and the agent.
 
 ## Watch the testing score climb (the live verdict tally)
 
@@ -28,16 +28,16 @@ The floating panel (bottom-center, `present: true`) gives you:
 - **Coding agent.** The Agent Log names the coding agent attached to Reticle (`Claude Code connected`, read from the MCP handshake). With no agent attached it says `No coding agent connected` and offers **Copy prompt**, a prompt to paste into one.
 - **Run Harness**, on the Harness page, drives the page as a person you pick: First-time visitor (the default), Returning power user, On a phone, slow connection, Keyboard only, Careless user (bad and unexpected input), Admin / settings, or Custom… in your own words. The pick is remembered per project. The agent hears about the drive on its next tool call (`harness`), with the `runId` to follow it.
 - **Minimise (▾)** collapses the panel to a bar that streams only the live line; click the bar to restore.
-- **Flag a bug**, the button in the corner. Toggle it on, click the element that looks wrong, type what's wrong (⌘/Ctrl+Enter to send, Esc to back out). Reticle pins a numbered marker, logs your flag in the panel, and hands the agent a structured mark. Notes are kept in `.reticle/notes.json` (pending and resolved), so a reload or a daemon restart does not lose them, and a linked project syncs them to the dashboard.
+- **Notes.** Open the Notes page and select **Add notes**. Click the element that looks wrong and type what is wrong (⌘/Ctrl+Enter sends, Esc backs out). Reticle pins a numbered marker and gives the agent a structured mark. Notes are kept in `.reticle/notes.json` (pending and resolved), so a reload or a daemon restart does not lose them. A linked project syncs them to the dashboard.
 
-## Flag a bug: annotate the mistake where you see it
+## Notes: annotate the mistake where you see it
 
-You don't have to describe a bug in prose. **Point at it.** The flag captures the element's re-resolvable anchor _and_ the source `file:line` (when the framework stamped one), so the agent fixes the exact element and code, not a guess. The loop:
+You don't have to describe a bug in prose. **Point at it.** The note captures the element's re-resolvable anchor _and_ the source `file:line` (when the framework stamped one), so the agent fixes the exact element and code, not a guess. The loop:
 
-1. **You** flag the element and type the problem → Reticle emits a `HUMAN_MARK`.
-2. **The agent** drains it with `reticle_session { action: "review" }`, getting note + element label + `source: { file, line }` + a ready-to-act `fix` hint. `reticle_session { action: "list" }` also reports `pendingMarks` so the agent notices flags.
+1. **You** add a note on the element and type the problem → Reticle emits a `HUMAN_MARK`.
+2. **The agent** drains it with `reticle_session { action: "review" }`, getting note + element label + `source: { file, line }` + a ready-to-act `fix` hint. `reticle_session { action: "list" }` also reports `pendingMarks` so the agent notices notes.
 3. **The agent** opens the file, fixes it, and calls `reticle_session({ action: "review", resolve: "m1" })`.
-4. **You** see **"✓ fixed: \<your note\>"** land in the panel. Flag → fix → confirmation.
+4. **You** see **"✓ fixed: \<your note\>"** land in the panel. Note → fix → confirmation.
 
 See [`reticle_session { action: "review" }` in the usage guide](/usage) for the tool shape. Suppress the button with `annotate: false` if you don't want it.
 

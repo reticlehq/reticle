@@ -60,7 +60,7 @@ pnpm gate:install-sandbox                       #    ~10 min, Docker: the publis
 pnpm gate:worktrees                             #    ~20s: two agents in two git worktrees of one app each
                                                 #    reach only their own tab, through the real daemon
 pnpm lint:docs                                  #    every documented command still parses; see below
-claude plugin validate ./plugin                 #    the published Claude Code plugin still resolves
+claude plugin validate ./plugins/reticle                 #    the published Claude Code plugin still resolves
 npx skills add reticlehq/reticle -l             #    the published skills are all still discoverable
 
 node scripts/set-version.mjs 3.2.0              # 3. every artifact that carries the number, in lockstep

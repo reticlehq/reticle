@@ -1,5 +1,5 @@
 {
-  "docsOnly": "^(docs/|skills/|\\.changes/|\\.claude-plugin/|plugin/|[A-Za-z0-9._-]+\\.md$|\\.github/(ISSUE_TEMPLATE|PULL_REQUEST_TEMPLATE\\.md|labeler)|LICENSE|CODEOWNERS|SECURITY\\.md|CONTRIBUTING\\.md|GOVERNANCE\\.md|ROADMAP\\.md|CHANGELOG\\.md)",
+  "docsOnly": "^(docs/|skills/|\\.changes/|\\.claude-plugin/|plugins/|[A-Za-z0-9._-]+\\.md$|\\.github/(ISSUE_TEMPLATE|PULL_REQUEST_TEMPLATE\\.md|labeler)|LICENSE|CODEOWNERS|SECURITY\\.md|CONTRIBUTING\\.md|GOVERNANCE\\.md|ROADMAP\\.md|CHANGELOG\\.md)",
   "allTiersPrefix": "^(\\.github/workflows/|scripts/ci/)",
   "tiers": {
     "e2e": "^(core|engine|server|init|open-verification|spec-runner|adapters/(build|lint|realm/browser|realm/electron|realm/cli|realm/tauri|framework)|apps/(e2e|api|bench-app|next-smoke|atlas|examples))/|^(package\\.json|pnpm-lock\\.yaml|turbo\\.json|\\.github/workflows/ci\\.yml)$",
@@ -11,6 +11,7 @@
     "windows": "^(core|engine|server|init|open-verification|spec-runner|conformance|adapters/(build|lint|realm/browser|realm/electron|realm/cli|realm/tauri|framework)|scripts)/|^apps/e2e/|^(package\\.json|pnpm-lock\\.yaml|turbo\\.json|\\.github/workflows/ci\\.yml)$",
     "rust": "^(adapters/realm/tauri/|apps/tauri-smoke/src-tauri/|\\.github/workflows/ci\\.yml)",
     "break": "^(break/|install/|init/|server/src/command/(setup|cli)/|\\.github/workflows/ci\\.yml)",
-    "launchers": "^install/"
+    "launchers": "^install/",
+    "toolsurface": "^(server/src/surface/|core/src/wire/tool-names\\.ts)"
   }
 }

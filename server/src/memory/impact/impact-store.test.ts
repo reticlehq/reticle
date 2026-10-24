@@ -74,6 +74,8 @@ describe('the impact record', () => {
 
   it('writes both scopes atomically and reads them back', () => {
     const root = mkdtempSync(join(tmpdir(), 'impact-project-'));
+    // A wired project: an unwired one gets no `.reticle/` (see impact-recorder.test.ts).
+    writeFileSync(join(root, '.reticle.json'), '{"projectId":"demo"}');
     // Its own home: without `globalRoot` this flush wrote a 1970 day into the developer's real
     // ~/.reticle/impact.json on every test run, which is what kept the machine streak at 1.
     const store = new ImpactStore({

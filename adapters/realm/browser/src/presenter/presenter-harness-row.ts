@@ -3,8 +3,7 @@
  *
  * The foot row says the state in two or three words and opens the page; while a drive runs it is the
  * drive's steps and Stop. The page holds everything else, each state as one sentence and the one
- * action that fixes it: sign in, link this project, raise the setup score, switch on, pick who to
- * test as and run. Linking is a button here, not a command to type: the daemon links the project of
+ * action that fixes it: sign in, link this project, switch on, pick who to test as and run. Linking is a button here, not a command to type: the daemon links the project of
  * the tab that asked.
  */
 import {
@@ -39,11 +38,7 @@ export const HARNESS_ROW_TEXT = {
   NO_CREDITS: 'No credits left',
   NO_PROVIDER: 'No model provider set',
   OFF: 'Harness is off',
-  /** At the coverage gate with the Harness off: it can be switched on now. */
-  canSwitchOn: (percent: number): string => `Setup score ${String(percent)}%. Harness is off.`,
   TURN_ON: 'Switch on',
-  COPY_PROMPT: 'Copy setup prompt',
-  COPIED: 'Copied',
   SET_UP: 'Set up ↗',
   PLANS: 'See plans ↗',
   PLAN: 'Plan ↗',
@@ -60,7 +55,6 @@ export const HARNESS_ROW_TEXT = {
   FOOT_NO_CREDITS: 'No credits',
   FOOT_NOT_ENTITLED: 'Not on your plan',
   FOOT_NO_PROVIDER: 'No model provider',
-  footSetup: (percent: number): string => `Setup ${String(percent)}% · needs 80%`,
   PAGE_TITLE: 'Reticle Harness',
   LOG_LABEL: 'What the Harness did',
   LOG_EMPTY: 'Runs show here, step by step.',
@@ -79,64 +73,9 @@ export const HARNESS_OPEN_ATTR = 'data-reticle-harness-open';
 export const HARNESS_LOG_ATTR = 'data-reticle-harness-log';
 /** The foot row's on/off switch: the same write-through as Settings and the dashboard. */
 export const HARNESS_TOGGLE_ATTR = 'data-reticle-harness-toggle';
-/** Copies the prompt that closes the coverage gate. */
-export const HARNESS_COPY_PROMPT_ATTR = 'data-reticle-harness-copy-prompt';
-
-/** The Harness coverage gate, as the daemon pushes it on this tab's instrumentation. */
-export interface HarnessGateView {
-  percent: number;
-  unlocked: boolean;
-  reason?: string;
-  /** The prompt for the coding agent that closes the gate. Copied, never rendered. */
-  prompt?: string;
-}
-
-/**
- * The gate the HUD shows: the platform's when it sent one (it enforces it), with the local prompt
- * when it sent none; else the daemon's local score from this tab's instrumentation.
- */
-export function harnessGateIn(
-  instrumentation: Readonly<Record<string, unknown>> | undefined,
-  config?: HarnessConfig,
-): HarnessGateView | undefined {
-  const local = localGateIn(instrumentation);
-  const platform = config?.gate;
-  if (platform === undefined) return local;
-  const prompt = platform.prompt ?? local?.prompt;
-  const reason = platform.unlocked ? undefined : (platform.reason ?? local?.reason);
-  return {
-    percent: platform.percent ?? local?.percent ?? 0,
-    unlocked: platform.unlocked,
-    ...(reason === undefined ? {} : { reason }),
-    ...(prompt === undefined ? {} : { prompt }),
-  };
-}
-
-/** The gate out of the loose `instrumentation` record, or undefined when an older daemon sent none. */
-function localGateIn(
-  instrumentation: Readonly<Record<string, unknown>> | undefined,
-): HarnessGateView | undefined {
-  const raw = instrumentation?.['harnessGate'];
-  if ('object' !== typeof raw || null === raw) return undefined;
-  const gate = raw as Record<string, unknown>;
-  const percent = gate['percent'];
-  const unlocked = gate['unlocked'];
-  if ('number' !== typeof percent || 'boolean' !== typeof unlocked) return undefined;
-  const reason = gate['reason'];
-  const prompt = instrumentation?.['prompt'];
-  return {
-    percent: Math.round(percent),
-    unlocked,
-    ...('string' === typeof reason ? { reason } : {}),
-    ...('string' === typeof prompt ? { prompt } : {}),
-  };
-}
-
 export interface HarnessRowState {
   account: AccountState | undefined;
   config: HarnessConfig | undefined;
-  /** This tab's coverage gate. Absent: an older daemon, which never locks. */
-  gate?: HarnessGateView | undefined;
   drive: HarnessDrive | undefined;
   /** Whether this panel can start and stop drives at all. */
   canDrive: boolean;
@@ -190,9 +129,6 @@ function creditsUsedRow(credits: Credits, planUrl: string): string {
 /** The two or three words the foot row says for this state. */
 function footState(s: HarnessRowState): string {
   if (true === s.starting) return HARNESS_ROW_TEXT.STARTING;
-  const gate = s.gate;
-  if (gate !== undefined && !gate.unlocked && gate.reason !== undefined)
-    return HARNESS_ROW_TEXT.footSetup(gate.percent);
   const config = s.config;
   if (config === undefined) return HARNESS_ROW_TEXT.FOOT_LINK;
   if (config.credits !== undefined && creditsSpent(config.credits))
@@ -205,11 +141,10 @@ function footState(s: HarnessRowState): string {
     : HARNESS_ROW_TEXT.creditsLeft(Math.max(0, credits.limit - credits.used), credits.daysLeft);
 }
 
-/** The switch shows only where switching does something: linked, unlocked, entitled, credits left. */
+/** The switch shows only where switching does something: linked, entitled, credits left. */
 function switchable(s: HarnessRowState): boolean {
   const config = s.config;
   if (config === undefined) return false;
-  if (s.gate !== undefined && !s.gate.unlocked && s.gate.reason !== undefined) return false;
   if (config.credits !== undefined && creditsSpent(config.credits)) return false;
   return config.harnessEntitled && false !== config.providerReady;
 }
@@ -257,16 +192,6 @@ export function harnessRowHtml(s: HarnessRowState): string {
         STOP_BUTTON,
       ) + personaCustomHtml(s.pick, true)
     );
-  // The coverage gate before the platform's answers: it is this app's to fix, whatever the plan.
-  const gate = s.gate;
-  if (gate !== undefined && !gate.unlocked && gate.reason !== undefined)
-    return wrapRow(
-      `${said(esc(gate.reason))}${
-        gate.prompt === undefined
-          ? ''
-          : `<button type="button" ${HARNESS_COPY_PROMPT_ATTR} class="reticle-harness-link">${HARNESS_ROW_TEXT.COPY_PROMPT}</button>`
-      }`,
-    );
   const config = s.config;
   if (config === undefined)
     return wrapRow(
@@ -281,7 +206,7 @@ export function harnessRowHtml(s: HarnessRowState): string {
     return row(`${said(HARNESS_ROW_TEXT.NO_PROVIDER)}${link(s.setupUrl, HARNESS_ROW_TEXT.SET_UP)}`);
   if (!config.harnessEnabled)
     return row(
-      `${said(gate === undefined ? HARNESS_ROW_TEXT.OFF : HARNESS_ROW_TEXT.canSwitchOn(gate.percent))}<button type="button" ${HARNESS_SWITCH_ON_ATTR} class="reticle-harness-run">${HARNESS_ROW_TEXT.TURN_ON}</button>`,
+      `${said(HARNESS_ROW_TEXT.OFF)}<button type="button" ${HARNESS_SWITCH_ON_ATTR} class="reticle-harness-run">${HARNESS_ROW_TEXT.TURN_ON}</button>`,
     );
   if (!s.canDrive) return '';
   const starting = true === s.starting;

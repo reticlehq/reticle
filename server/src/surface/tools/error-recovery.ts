@@ -233,13 +233,14 @@ export const RECOVERY = {
    * something that is not a top-level parameter is the whole distance between a one-line retry and
    * a lost budget.
    *
-   * The classifier is also wider than "destructive": it matches `deploy` and `publish`, so an
-   * ordinary "New deploy" button trips it. Naming a real trigger word here keeps that from reading
-   * as a malfunction on an app where nothing is being deleted.
+   * The classifier also stops a control that moves money, which is not "destructive". Naming the
+   * real trigger words here keeps a refusal on a "Pay" button from reading as a malfunction. Only
+   * words the classifier matches are named: `deploy` and `publish` are excluded on purpose (see
+   * `core/src/verdict/security.ts`).
    */
   CONFIRM_DANGEROUS:
-    'Reticle blocked a control whose label reads as consequential (delete, remove, revoke, deploy, ' +
-    'publish, pay…) on purpose. If you mean it, send the SAME call again with ' +
+    'Reticle blocked a control whose label reads as consequential (delete, remove, revoke, pay…) ' +
+    'on purpose. If you mean it, send the SAME call again with ' +
     '`args: { confirmDangerous: true }` — it goes inside the `args` object, not beside it. This is ' +
     'a deliberate refusal, not a defect: there is nothing to report.',
   UNSUPPORTED_SURFACE:
@@ -324,9 +325,9 @@ export const RECOVERY = {
    * agent's malformed call: it was then told to fix arguments that were never wrong.
    */
   HARNESS_LOCKED:
-    'The Harness unlocks once Reticle sees enough of this app; the refusal names what is missing ' +
-    'and how to close each gap. Nothing to report: close them, or drive the journey yourself with ' +
-    'reticle_act_and_wait and an `until` on its last step. Every other tool works at any coverage.',
+    'An older Reticle platform locked the Harness on its setup score. Nothing to report: drive the ' +
+    'journey yourself with reticle_act_and_wait and an `until` on its last step. Every tool works ' +
+    'at any coverage.',
 } as const;
 
 /**
@@ -416,10 +417,8 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
   // platform's: matching it is matching ourselves.
   { match: /credits are used\./, hint: RECOVERY.HARNESS_OFF },
   {
-    // The gate's own words, and the platform's "locked: connect your app first": expected states.
-    match: new RegExp(
-      `(?:^Harness unlocks at \\d+% instrumentation)|(?:^${escapeRegExp(RefusalLead[PlatformRefusalCode.HARNESS_LOCKED])})`,
-    ),
+    // An older platform's "locked": an expected state, not a defect.
+    match: new RegExp(`^${escapeRegExp(RefusalLead[PlatformRefusalCode.HARNESS_LOCKED])}`),
     hint: RECOVERY.HARNESS_LOCKED,
   },
   // Three conditions the daemon understands perfectly and still asked for a bug report about. Each

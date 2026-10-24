@@ -127,6 +127,24 @@ describe('parseCliArgs', () => {
     });
   });
 
+  it('takes a reply address with `--contact`, and keeps it out of the message', () => {
+    expect(
+      parseCliArgs(['feedback', '--contact', 'ada@example.com', 'great', 'tool'], PORT),
+    ).toEqual({
+      kind: 'feedback',
+      text: 'great tool',
+      contact: 'ada@example.com',
+      bug: false,
+      agent: false,
+    });
+  });
+
+  it('refuses a `--contact` that is not one plain address, and says why', () => {
+    const parsed = parseCliArgs(['feedback', '--contact', 'not-an-address', 'x'], PORT);
+    expect(parsed).toMatchObject({ kind: 'error' });
+    expect(JSON.stringify(parsed)).toContain('--contact');
+  });
+
   it('parses `affected <file...>` into the changed-file list', () => {
     expect(parseCliArgs(['affected', 'src/a.ts', 'src/b.tsx'], PORT)).toEqual({
       kind: 'affected',

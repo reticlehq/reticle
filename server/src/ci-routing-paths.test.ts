@@ -262,6 +262,15 @@ describe('CI routing decisions', () => {
     });
   });
 
+  it('runs the bench before merge for a tool-surface change, and not for other server code', () => {
+    // A tool description or schema is charged to the agent on every turn. The bench ran only in
+    // the merge queue, so a pull request that changed the price got no number before review.
+    expect(route(['server/src/surface/tools/act-tools.ts']).toolsurface).toBe('true');
+    expect(route(['core/src/wire/tool-names.ts']).toolsurface).toBe('true');
+    expect(route(['server/src/command/cli/setup-mcp-cli.ts']).toolsurface).toBe('false');
+    expect(route(['adapters/realm/browser/src/index.ts']).toolsurface).toBe('false');
+  });
+
   it('runs break jobs when init changes', () => {
     expect(route(['init/src/run.ts']).break).toBe('true');
   });

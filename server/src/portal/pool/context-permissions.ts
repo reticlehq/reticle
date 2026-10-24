@@ -15,7 +15,7 @@
  * `denied`. A page that gates its UI on the second never sees the grant, so a lease that reported
  * "granted" there would be reporting something the page cannot see.
  */
-import type { PooledContext } from './pool-contract.js';
+import type { PooledContext, PooledPage } from './pool-contract.js';
 
 /** The permission whose grant the headless shell does not pass on to `Notification.permission`. */
 export const NOTIFICATIONS_PERMISSION = 'notifications';
@@ -57,5 +57,30 @@ export async function grantLeasePermissions(
     await context.grantPermissions([...permissions], { origin: new URL(url).origin });
   } catch (err) {
     throw new LeasePermissionError(`could not grant ${permissions.join(', ')}: ${reasonOf(err)}`);
+  }
+}
+
+/**
+ * What the page's `Notification.permission` says, or undefined when it cannot be asked.
+ *
+ * Read back rather than inferred from the grant, because the headless shell answers `denied`
+ * after a notifications grant. Bounded, so a page that never answers reads as "could not ask"
+ * instead of holding the caller.
+ */
+export async function readNotificationPermission(page: PooledPage): Promise<string | undefined> {
+  if (page.evaluate === undefined) {
+    return undefined;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const gaveUp = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), NOTIFICATION_READ_TIMEOUT_MS);
+  });
+  try {
+    const value = await Promise.race([page.evaluate(NOTIFICATION_PERMISSION_READ), gaveUp]);
+    return 'string' === typeof value ? value : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
   }
 }

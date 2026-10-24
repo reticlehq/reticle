@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Start or deploy your app first; the action needs a URL that answers.
-      - uses: reticlehq/reticle/action@v3.7.0
+      - uses: reticlehq/reticle/action@v3.8.0
         with:
           url: https://preview.example.com
           api-key: ${{ secrets.RETICLE_API_KEY }}

@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`, `@reticlehq/browser` — a click no person could make could verify "yes".** Synthetic dispatch reaches a covered, 0×0 or off-screen target, so `reticle_act_and_wait` and `reticle_act { steps }` came back `verified: "yes"` while the act result itself warned "a real user could not click it". The verdict now agrees with the warning: `unknown` (`inconclusive`), with `because` naming the cause and the fix ("covered by [data-testid=\"sheet\"]", "has no size", "outside the viewport even after scrolling"). The act effect carries `occluderName`, `noSize` and `offViewport` so the cause has words. A target a person can click is unchanged.

@@ -6,8 +6,6 @@ icon: repeat
 
 A **flow** is a recorded interactive run that Reticle stores as JSON under `.reticle/flows/` and replays forever with no AI model in the loop. Steps are anchored on **meaning** (a testid, a signal, or an auto-derived component + source location), never on a `eXX` ref or a coordinate, so they survive refactors; when an anchor does drift, `reticle_flow_replay` names what changed and `reticle_verify { action: "heal" }` can rebind it.
 
-Reticle turns an interactive run into a **git-checked, replayable program** stored under `.reticle/`. Flows are anchored on **meaning** (testid + signal), not volatile element refs or coordinates, so they survive refactors, and when an anchor does drift, Reticle tells you _why_ and can repair it. This is what makes Reticle "the project's living test suite a human seeds and an agent maintains."
-
 > All of this is on-disk and human-readable, so flows are reviewed in PRs and diffed like code.
 
 ## The `.reticle/` directory
@@ -188,7 +186,7 @@ With `apply: false` the flow file is **never modified**; you get the proposed di
 
 ## Flows are your test suite
 
-`.reticle/` flows can be executed as CI specs via `@reticlehq/test`'s `flowsAsSpecs`, replayed with their `expect`/`success` predicates and skipping `dynamic` regions. See [Testing with Reticle](testing.md).
+`.reticle/` flows can run as CI tests. `registerFlowSpecs('.reticle/flows', getSession)` from `@reticlehq/test` registers one vitest test for each flow. Each test replays the flow's `expect` and `success` predicates and skips its `dynamic` regions. To run the flows without vitest, call `flowsAsSpecs('.reticle/flows')`. It returns one spec for each flow, and you call `spec.run(session)` on each. See [Testing with Reticle](testing.md).
 
 ## Tool reference
 

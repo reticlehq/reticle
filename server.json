@@ -3,7 +3,7 @@
   "name": "io.github.reticlehq/reticle",
   "title": "Reticle",
   "description": "Verify a running web app from the inside over MCP: look, act, observe, assert. No screenshots.",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "websiteUrl": "https://www.reticle.sh",
   "repository": {
     "url": "https://github.com/reticlehq/reticle",
@@ -14,7 +14,7 @@
     {
       "registryType": "npm",
       "identifier": "@reticlehq/server",
-      "version": "3.7.0",
+      "version": "3.8.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

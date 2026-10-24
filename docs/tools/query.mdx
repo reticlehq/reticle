@@ -11,7 +11,7 @@ icon: magnifying-glass
   `allowedTools` allowlist or an MCP permission rule naming it refuses before Reticle is asked.
 </Warning>
 
-`reticle_look { action: "find" }` answers "where is the thing I mean?" without dumping the whole page into your context window. It queries the way a testing library does. By role, label, text, testid. So your agent binds to meaning rather than to DOM structure that a refactor will move.
+`reticle_look { action: "find" }` answers "where is the thing I mean?" without dumping the whole page into your context window. It queries the way a testing library does: by role, label, text or testid. Your agent then binds to meaning, not to DOM structure that a refactor will move.
 
 ## Example
 
@@ -48,7 +48,7 @@ Real response from a running app, with four of the six elements trimmed out for 
 }
 ```
 
-Seven buttons, each with a `ref` to act on and a source file to open, for 236 tokens.
+Seven buttons matched and six came back, because `limit` is 6. Each one has a `ref` to act on and a source file to open, for 236 tokens.
 
 ## Arguments
 
@@ -121,7 +121,7 @@ The testid existed, on another route. `hint.route` says where you actually are, 
 
 `ref` is the handle for every other call: `reticle_act`, `reticle_look { action: "element" }`, `reticle_look { action: "state" }`. It stays valid until the element leaves the DOM, so you do not need to re-snapshot between actions on the same element.
 
-`source` appears when the app is built in dev with the Reticle build plugin; production builds omit it. Note that both sidebar buttons above report `Sidebar.tsx:41`, and so do the three trimmed out of the example. That is the line where the component renders all five in a loop, which is exactly the line you want to edit.
+`source` appears when the app is built in development with the Reticle build plugin. Production builds omit it. Both sidebar buttons above report `Sidebar.tsx:41`. That is the line where the component renders its nav buttons in a loop, which is the line you want to edit.
 
 `truncated: true` with `total: 7` means `limit` cut the list, not that Reticle ran out of room. Neither field is emitted when nothing was cut, so their absence is itself the signal that you are looking at every match.
 

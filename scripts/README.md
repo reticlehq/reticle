@@ -43,6 +43,7 @@ Rarely, and deliberately.
 
 | script | when |
 | --- | --- |
+| `sync-skill.mjs` | After you edit root `SKILL.md`. `pnpm skill:sync` writes `docs/skill.md`, `plugins/reticle/SKILL.md`, `skills/reticle/SKILL.md` and `skills/install-and-verify/SKILL.md` from it. `init/src/skill-copies-agree.test.ts` fails until the copies agree. `sync-skill.d.mts` beside it is the type declaration that guard imports. |
 | `set-version.mjs` | During a release. Sets one version across every file that carries one. `RELEASING.md` is the procedure. |
 | `local-registry.sh` | Publishes the packages to a registry on your own machine, so you can install them into a real outside app without publishing to npm. `verdaccio.yaml` beside it is that registry's config. The install gate uses both. See [local-registry.md](../docs/local-registry.md). |
 | `issue-license.mjs` | Mints an enterprise licence key. Only useful if you hold the issuing key. |

@@ -14,7 +14,13 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { alreadyWired, binaryExists, flowsSaved, probePage } from './node-effects.js';
+import {
+  alreadyWired,
+  binaryExists,
+  flowsSaved,
+  probePage,
+  writableLogDir,
+} from './node-effects.js';
 
 /**
  * From the BUILT module, like the handover tests below: the server runs under a supervisor script
@@ -178,6 +184,24 @@ describe('the dev server this process owns', () => {
     }
     await sleep(50);
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  // A sandboxed agent host or a locked-down profile cannot write the state home. Init had already
+  // wired the project, and then stopped here with a file-system error.
+  it('logs into the project when the state home cannot be written', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'unwritable-state-'));
+    const blocker = join(dir, 'not-a-folder');
+    writeFileSync(blocker, '');
+    const server = new OwnedDevServer(join(blocker, 'state'));
+    try {
+      expect(() => server.start('node -e "setTimeout(() => {}, 5000)"', dir, {})).not.toThrow();
+      expect(server.logPath()?.startsWith(join(dir, '.reticle', 'logs'))).toBe(true);
+      expect(readFileSync(join(dir, '.reticle', 'logs', '.gitignore'), 'utf8')).toBe('*\n');
+    } finally {
+      server.stop();
+      await sleep(50);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('has nothing to stop when nothing was started', () => {
@@ -439,4 +463,29 @@ describe('handing the dev server over', () => {
       }
     }
   }, 20_000);
+});
+
+/** A state home this process cannot write: init logs into the project, under its own ignore file. */
+describe('writableLogDir falls back to the project', () => {
+  function unwritableHome(): { preferred: string; project: string } {
+    const root = mkdtempSync(join(tmpdir(), 'reticle-logdir-'));
+    // A file where the folder must go: mkdir fails, as it does on a read-only home.
+    writeFileSync(join(root, 'home'), '');
+    return { preferred: join(root, 'home', 'logs'), project: join(root, 'app') };
+  }
+
+  it('writes an ignore file for the logs it keeps in the project', () => {
+    const { preferred, project } = unwritableHome();
+    const dir = writableLogDir(preferred, project);
+    expect(dir).toBe(join(project, '.reticle', 'logs'));
+    expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toBe('*\n');
+  });
+
+  it('keeps an ignore file that is already there', () => {
+    const { preferred, project } = unwritableHome();
+    mkdirSync(join(project, '.reticle', 'logs'), { recursive: true });
+    writeFileSync(join(project, '.reticle', 'logs', '.gitignore'), 'mine\n');
+    const dir = writableLogDir(preferred, project);
+    expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toBe('mine\n');
+  });
 });

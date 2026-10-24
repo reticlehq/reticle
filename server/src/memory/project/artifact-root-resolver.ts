@@ -40,6 +40,7 @@ import {
   type ConfigDiscovery,
 } from '@/command/cli/config/config-discovery.js';
 import { log } from '@/log.js';
+import { isUnmatchedRoot } from '@/memory/project/dir/reticle-dir.js';
 import { checkoutAt, hasLinkedWorktrees } from '@/command/cli/config/checkout.js';
 import {
   ArtifactRootReason,
@@ -51,17 +52,24 @@ import {
 } from './artifact-root.js';
 
 /**
- * Is the daemon's own directory a Reticle project, or is it a guest there?
+ * May the daemon write into this `.reticle` root? This is the one answer for every writer.
  *
- * Answered ONCE per resolver rather than per session: a directory does not become a project between
- * two tabs connecting, and this is the IO half `unmatchedRoot` deliberately does not do.
+ * The resolver asks it ONCE for the daemon's own root: a directory does not become a project
+ * between two tabs connecting, and this is the IO half `unmatchedRoot` deliberately does not do.
+ * A writer that holds a root for the daemon's life (the impact ledger) asks it on each write, so
+ * that it starts to write into the project when `init` wires it.
  */
-function daemonSitsInAProject(daemonRoot: string): boolean {
+export function mayWriteIntoRoot(reticleRoot: string): boolean {
   try {
     // Either mark counts. `.reticle.json` means somebody ran `init` here; an existing `.reticle/`
     // means Reticle has been invited into this tree before, including by a version that predates
     // the config file. A directory with neither has never agreed to hold anybody's session data.
-    return existsSync(daemonRoot) || hasProjectConfig(dirname(daemonRoot));
+    // An unmatched bucket is in the user's own `~/.reticle`, which is Reticle's to write.
+    return (
+      existsSync(reticleRoot) ||
+      hasProjectConfig(dirname(reticleRoot)) ||
+      isUnmatchedRoot(reticleRoot)
+    );
   } catch {
     // Unreadable is not a licence to write. Treat it as somebody else's directory.
     return false;
@@ -71,7 +79,7 @@ function daemonSitsInAProject(daemonRoot: string): boolean {
 /**
  * The project a candidate list says lives at the daemon's own directory.
  *
- * Not the same question as `daemonSitsInAProject`: that one asks whether the tree invited Reticle in
+ * Not the same question as `mayWriteIntoRoot`: that one asks whether the tree invited Reticle in
  * at all (either mark counts, including a bare `.reticle/` from a version that predates the config
  * file), and this one asks WHICH project it is. The difference is the whole of #1244 — a daemon in
  * repo A serving an app from a git worktree B belongs to A and is being asked about B.
@@ -148,13 +156,16 @@ function announcedDevServers(): { projectId?: string | undefined; root: string }
   const servers: { projectId?: string | undefined; root: string }[] = [];
   try {
     for (const name of readdirSync(dir)) {
-      if (null === devServerRegistryPort(name)) continue;
+      if (null === devServerRegistryPort(name)) {
+        continue;
+      }
       try {
         const parsed = DevServerEntrySchema.safeParse(
           JSON.parse(readFileSync(join(dir, name), 'utf8')),
         );
-        if (parsed.success)
+        if (parsed.success) {
           servers.push({ projectId: parsed.data.projectId, root: parsed.data.root });
+        }
       } catch {
         /* one bad announcement does not hide the others */
       }
@@ -175,7 +186,9 @@ function announcedDevServers(): { projectId?: string | undefined; root: string }
  * own project id.
  */
 export function projectDirectoryFor(projectId: string | undefined): string | undefined {
-  if (projectId === undefined) return undefined;
+  if (projectId === undefined) {
+    return undefined;
+  }
   const directories = new Set(
     knownProjectCandidates()
       .filter((candidate) => candidate.projectId === projectId)
@@ -210,7 +223,7 @@ export function artifactRootResolver(
   deps: ArtifactRootResolverDeps,
 ): (projectId: ProjectId | undefined, origin?: string) => ArtifactRoot {
   const candidates = deps.candidates ?? knownProjectCandidates;
-  const sitsInAProject = deps.daemonIsProject ?? daemonSitsInAProject;
+  const sitsInAProject = deps.daemonIsProject ?? mayWriteIntoRoot;
   const { servingDirectory } = deps;
   const daemonIsProject = sitsInAProject(daemonRoot);
   // Resolved beside it and ONCE, for the same reason: a directory's `.reticle.json` does not change
@@ -241,7 +254,9 @@ export function artifactRootResolver(
     // port that moves to another worktree is a new connection whose work must move with it.
     let served: { directory: string | undefined } | undefined;
     const serving = (): string | undefined => {
-      if (origin === undefined) return undefined;
+      if (origin === undefined) {
+        return undefined;
+      }
       served ??= { directory: servingDirectory(origin) };
       return served.directory;
     };
@@ -274,7 +289,9 @@ export function artifactRootResolver(
       const project = dirname(resolved.root);
       const from = origin === undefined ? undefined : checkout(project);
       // Only a repository that HAS worktrees pays for the serving lookup.
-      if (from === undefined || !hasWorktrees(from.commonDir)) return resolved;
+      if (from === undefined || !hasWorktrees(from.commonDir)) {
+        return resolved;
+      }
       const moved = inServingCheckout([project], serving());
       return moved === undefined || moved === project
         ? resolved

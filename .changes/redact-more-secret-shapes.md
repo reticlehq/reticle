@@ -1,3 +1,0 @@
-### Security
-
-- **`@reticlehq/server` — the redactor that cleans each captured prompt and each feedback report kept many secrets.** A bare Stripe key (`sk_live_…`, `sk_test_…`), an environment line such as `STRIPE_SECRET_KEY=…`, `AWS_SECRET_ACCESS_KEY=…` or `DB_PASS: …`, a Google key (`AIza…`), a GitLab token (`glpat-…`), a GitHub fine-grained token (`github_pat_…`), a card number and a phone number all passed through unchanged. "my password is hunter2" lost the word "is" and kept the password. Each of these is now removed before anything is written or sent. A card number is removed only when it passes the Luhn check, so ids and timestamps stay.

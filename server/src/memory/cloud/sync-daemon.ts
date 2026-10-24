@@ -156,13 +156,13 @@ const FIRST_CYCLE_DELAY_MS = 5_000;
 const NUDGE_DELAY_MS = 1_500;
 
 /**
- * How long a flush waits for a cycle already in flight before running its own.
+ * The whole time a flush may take: the wait for a cycle in flight, and its own cycle.
  *
- * Shutdown budget, not a sync budget: every call inside a cycle already carries its own timeout, so
- * this only bounds the WAIT. Generous enough for an ordinary cycle to finish, short enough that a
- * stalled one cannot hold a daemon open.
+ * Shutdown budget, not a sync budget. `reticle stop` sends SIGKILL 5 s after SIGTERM, and the daemon
+ * sends its stop event (up to 2 s) before it flushes. A flush past this budget let the kill come
+ * first. Runs that are not sent stay on disk, and the next daemon sends them.
  */
-const FLUSH_WAIT_MS = 3_000;
+const FLUSH_BUDGET_MS = 1_500;
 const FLUSH_POLL_MS = 25;
 
 interface SyncDaemonDeps {
@@ -353,7 +353,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       if (refusedUnder.get(root) === gate.credential) {
         gate = {
           state: BackgroundSyncState.REFUSED,
-          why: 'the platform refused this sign-in: run `reticle login` again',
+          why: 'the platform refused this sign-in: run `reticle connect` again',
         };
       } else refusedUnder.delete(root);
     }
@@ -780,11 +780,17 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       timer = undefined;
       // A cycle already running may have started BEFORE the write being flushed, so its report says
       // nothing about that artifact. Wait it out rather than skipping on the overlap guard.
-      const deadline = Date.now() + FLUSH_WAIT_MS;
-      while (running && Date.now() < deadline)
+      const deadline = now() + FLUSH_BUDGET_MS;
+      while (running && now() < deadline)
         await new Promise((resolve) => setTimeout(resolve, FLUSH_POLL_MS));
       // Not `asked`: on the way out, the run goes first; the memory and the other repos only if due.
-      await cycle();
+      // Bounded by what is left of the budget: a cycle can wait on a network that does not answer.
+      let lateTimer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<void>((resolve) => {
+        lateTimer = setTimeout(resolve, Math.max(0, deadline - now()));
+      });
+      await Promise.race([cycle().then(() => undefined), late]);
+      clearTimeout(lateTimer);
     },
   };
 }

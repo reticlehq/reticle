@@ -192,18 +192,18 @@ export function buildDynamicTools(
     // surface it is the first thing an agent reads about this tool and it names a tool that is not
     // there, so it is said only where it can be acted on.
     description:
-      'Discover Reticle tools on demand. Call with no arguments to list every tool (name + one-line summary); call with names:["reticle_network", …] to load full descriptions and parameters for specific tools.' +
+      'Discover Reticle tools on demand. Call with no arguments to list every tool (name + one-line summary); call with names:["reticle_screenshot", …] to load full descriptions and parameters for specific tools.' +
       (callable === undefined
         ? ' Then invoke them with reticle_run.'
         : ' Every tool it lists is callable directly by name.') +
       ' This avoids paying for every tool definition on every turn.' +
-      // The flow workflow is taught ONLY where it can be followed. Three of its four calls —
+      // The flow workflow is taught ONLY where it can be followed. Most of its calls —
       // reticle_record, reticle_flow_save, reticle_verify { action: "heal" } — are in the merged table but are not
       // advertised, and a closed surface has no dispatch hatch to reach them, so naming them here
-      // hands the reader a four-step recipe of which one step works. Replaying flows that already
+      // hands the reader a recipe of which one step works. Replaying flows that already
       // exist is reachable either way, via reticle_verify, so that half is still offered.
       (callable === undefined
-        ? ' To make a verification REUSABLE (record once, replay free forever), the flow workflow lives here: reticle_record{action:"start"} → act → reticle_flow_save → reticle_verify{action:"flows"} (and reticle_verify { action: "heal" } on drift). Load those names when you want to save or re-run a flow.'
+        ? ' To make a verification REUSABLE (record once, replay free forever), the flow workflow lives here: reticle_record{action:"start"} → act → reticle_record{action:"stop"} → reticle_flow_save → reticle_verify{action:"flows"} (and reticle_verify { action: "heal" } on drift). Load those names when you want to save or re-run a flow.'
         : ' Flows that already exist replay with reticle_verify { action: "flows" }. RECORDING a new one is not reachable from this surface; start the daemon with RETICLE_ADVERTISE_ALL_TOOLS=1 if you need to build one.'),
     inputSchema: toolsShape,
     handler: (_deps: ToolDeps, args: Record<string, unknown>) => {
@@ -275,7 +275,7 @@ export function buildDynamicTools(
   };
 
   const runShape = {
-    tool: z.string().describe('Tool name to invoke, e.g. reticle_network.'),
+    tool: z.string().describe('Tool name to invoke, e.g. reticle_clock.'),
     args: z.record(z.unknown()).optional().describe('Arguments object for that tool.'),
     // Accepted AND FORWARDED, not merely tolerated. reticle_run is the only way to reach an
     // unadvertised tool, so on a machine running several projects it has to be aimable — and

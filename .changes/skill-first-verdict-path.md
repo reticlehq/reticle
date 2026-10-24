@@ -1,0 +1,3 @@
+### Changed
+
+- **Skill — `SKILL.md` now starts with three steps: install, wire the app, prove one flow.** The drive example is in step 3, so an agent gets to its first verdict without reading the architecture first. The Harness and CLI sections are shorter. "Find the rest" tells the agent to fetch one page at `https://docs.reticle.sh/<page>.md` and not `llms-full.txt`. After the first proved verdict in the session that set Reticle up, the agent tells the user once how to star the repository and how to tell the maintainers what they build. The agent does not star, join or send anything for the user.

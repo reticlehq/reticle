@@ -8,6 +8,7 @@ import {
   InputModeReason,
   INSPECT_IN_VIEWPORT_FIELD,
   INSPECT_REVEAL_ARG,
+  HelloScope,
   SessionState,
 } from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
@@ -30,6 +31,7 @@ import {
   withLeaseKeyboard,
 } from '@/surface/tools/real-input-attempt.js';
 import { actCommand } from '@/surface/tools/act-tools.js';
+import { ProductionDrive } from '@/portal/production/production-drive.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
 const SOURCE_BOX: ElementBox = { x: 0, y: 0, width: 200, height: 100 };
@@ -59,6 +61,8 @@ interface FakeSessionState {
   revealRefs?: string[];
   /** An SDK that predates the viewport field: INSPECT never reports it. */
   legacySdk?: boolean;
+  /** When set, a production nonce opened the session. */
+  production?: ProductionDrive;
 }
 
 function fakeSession(state: FakeSessionState): Session {
@@ -151,6 +155,7 @@ function fakeSession(state: FakeSessionState): Session {
     // Spread rather than assigned: `exactOptionalPropertyTypes` rejects an explicit `undefined`
     // for an optional field, and an absent skew is exactly what every other case wants.
     ...(state.versionSkew === undefined ? {} : { versionSkew: state.versionSkew }),
+    production: state.production,
   };
   return stub as Session;
 }
@@ -835,6 +840,66 @@ describe('keyboard on a lease', () => {
     expect(res.result).toMatchObject({ inputMode: InputMode.REAL });
     expect(pressed).toEqual([{ text: 'Tab' }]);
     expect(state.actCalls).toBe(0);
+  });
+});
+
+/**
+ * The production policy judges a command when the daemon dispatches it, by the control it names. A
+ * native key goes to whatever holds focus, so the policy could not see what it pressed: an agent
+ * could focus a refused control and press Enter on it.
+ */
+describe('a key press on a production drive', () => {
+  const production = (): ProductionDrive =>
+    new ProductionDrive({ scope: HelloScope.ACT, expiresAt: Number.MAX_SAFE_INTEGER }, () => 0);
+
+  it('never reaches the native driver, and runs in the page with the reason', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [], production: production() };
+    const res = await runAct(fakeDeps(provider, state), {
+      action: 'press',
+      args: { text: 'Escape' },
+    });
+
+    expect(provider.calls).toEqual([]);
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.PRODUCTION_PRESS_IN_PAGE);
+    expect(state.actCalls).toBe(1);
+  });
+
+  it('never presses the lease keyboard', async () => {
+    const pressed: Record<string, unknown>[] = [];
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      actActions: [],
+      focusableRef: 'e1',
+      production: production(),
+    };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = {
+      hasKeyboard: () => true,
+      pressLease: (_id: string, args: Record<string, unknown>) => {
+        pressed.push({ ...args });
+        return Promise.resolve({ performed: true, inputMode: InputMode.REAL });
+      },
+    } as unknown as BrowserPool;
+    const res = await runAct(deps, { ref: 'e1', action: 'press', args: { text: 'Enter' } });
+
+    expect(pressed).toEqual([]);
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(state.actActions).toEqual(['press']);
+  });
+
+  it('still drives a press natively on a session that is not a production drive', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(provider, state), {
+      action: 'press',
+      args: { text: 'Escape' },
+    });
+
+    expect(provider.calls).toHaveLength(1);
+    expect(res.inputMode).toBe(InputMode.REAL);
   });
 });
 

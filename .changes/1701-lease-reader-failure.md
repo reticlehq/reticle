@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — `reticle_lease` gave a raw Playwright error when the zero-install reader failed.** This occurred on a URL that is not an HTML page (an `.svg`, for example) and on a tab that closed during setup. The agent got `page.evaluate` or `page.addInitScript` text and no next action. Now the reader does nothing on a page that is not HTML. The acquire answers `ready: false` with `notReadyReason: "not_html_document"` or `"reader_failed"`, and a hint gives the short cause. The lease is released, so its slot is free. Closes [#1701](https://github.com/reticlehq/reticle/issues/1701).

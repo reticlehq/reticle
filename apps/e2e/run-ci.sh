@@ -31,6 +31,9 @@ export RETICLE_PORT="${RETICLE_PORT:-14400}"
 export RETICLE_TEST_STATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/reticle-web-e2e.XXXXXX")"
 export RETICLE_STATE_DIR="$RETICLE_TEST_STATE_DIR"
 export RETICLE_PAIRING_TOKEN_DIR="$RETICLE_TEST_STATE_DIR"
+# The daemon reads linked projects and sign-ins from the real home, not the state dir. Without this,
+# a test daemon on a developer machine pushed that person's linked projects to the platform on exit.
+export RETICLE_BACKGROUND_SYNC=0
 
 TOKEN_DIR="${RETICLE_PAIRING_TOKEN_DIR:-$HOME/.reticle}"
 TOKEN_FILE="$TOKEN_DIR/pairing-token"

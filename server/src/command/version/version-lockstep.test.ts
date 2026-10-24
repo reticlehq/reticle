@@ -55,3 +55,22 @@ describe('the scaffolder ships in lockstep with the daemon', () => {
     ).toBe(manifest('server').name);
   });
 });
+
+/**
+ * The GitHub Action's README tells users to pin the action at a release tag. On a release branch it
+ * still named the previous release's tag, because `set-version` did not write it, so a user who
+ * copied it ran the previous release's action.
+ */
+describe('the action README pins the release it ships with', () => {
+  it('names the tag of the server version', () => {
+    const readme = readFileSync(join(REPO, 'action', 'README.md'), 'utf8');
+    const pins = [...readme.matchAll(/reticlehq\/reticle\/action@v(\d+\.\d+\.\d+)/g)].map(
+      (m) => m[1],
+    );
+    expect(pins.length).toBeGreaterThan(0);
+    expect(
+      new Set(pins),
+      'action/README.md pins another release. `node scripts/set-version.mjs <v>` writes it.',
+    ).toEqual(new Set([manifest('server').version]));
+  });
+});

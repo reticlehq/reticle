@@ -604,3 +604,35 @@ describe('nextActionFor: an app nobody has wired yet', () => {
     expect(next.reason).not.toContain('reticle_lease');
   });
 });
+
+/**
+ * `init` changes package.json, the lockfile and the build config. The first answer's `next_step`
+ * told the agent to ask the user first, while `next_action.reason` in the same answer told it to
+ * run the command itself. Every offer of `init` here asks first.
+ */
+describe('every offer of init asks the user first', () => {
+  const ASK = 'Ask the user before you wire the app';
+
+  it('the run-init action, and its rendered line does not order the command', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [5173],
+      dev: DEV,
+    });
+    expect(next.action).toBe(NoSessionAction.RUN_INIT);
+    expect(next.reason).toContain(ASK);
+    expect(renderNextAction(next)).toBe(`NEXT ACTION: ${next.reason}`);
+  });
+
+  it('the start-dev-server action on a project never wired', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: false,
+      listening: [],
+      dev: DEV,
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.reason).toContain(ASK);
+  });
+});

@@ -3,7 +3,7 @@
  *
  * The event kinds, their zod schemas, and the two payloads a PERSON writes (feedback + identity).
  * Separate from the root entry point because this is a different wire from the browser↔bridge one:
- * it goes to the capture endpoint, not to the agent. See docs/telemetry-contract.md.
+ * it goes to the capture endpoint, not to the agent. See contributing/telemetry/contract.md.
  *
  * Every name below is ALSO exported from the root entry point, which stays as it was.
  */

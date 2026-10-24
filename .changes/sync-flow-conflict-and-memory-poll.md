@@ -1,5 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — the same flow edited on two machines: the last save silently won, and the other machine kept a copy that no longer matched.** Each flow push now names the platform version it was based on. When another machine saved over that version first, the platform refuses the push as a conflict and returns its own version. This machine keeps its edit beside the flow as `<name>-conflict-<n>` and takes the platform's version. `reticle sync` and the daemon log count open conflicts until the copy is merged or deleted. A platform that does not know versions stores pushes as before.
-- **`@reticlehq/server` — a decision made on the dashboard took up to ten minutes to reach an idle laptop.** An idle daemon now makes one conditional memory read a minute. While nothing has moved, the platform answers with a bodiless 304.
-- **`@reticlehq/server` — a dispute resolved on the dashboard reached the losing machine as the kept words, but still marked proposed.** The status the team settled now arrives with the words in the same read.

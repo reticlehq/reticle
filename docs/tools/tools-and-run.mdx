@@ -16,17 +16,18 @@ icon: boxes-stacked
 
 Returns every tool with a one-line summary. A sample of what lives in the cold tail. (`reticle_verify` is advertised, so its `flows`, `change`, `crawl` and `coverage` actions need no hop.)
 
-| Tool                   | What it does                                                           |
-| ---------------------- | ---------------------------------------------------------------------- |
+| Tool | What it does |
+| --- | --- |
 | `reticle_capabilities` | The app's advertised testable surface, testids, signals, stores, flows |
-| `reticle_screenshot`   | Pixel screenshot of the driven page, saved as a visual baseline        |
-| `reticle_visual_diff`  | Perceptually diff the live page against that baseline                  |
-| `reticle_network_mock` | Force a 500, go offline, or delay a response                           |
-| `reticle_viewport`     | Pin the viewport so screenshots are reproducible across machines       |
-| `reticle_clock`        | Freeze time or fast-forward timers, toasts, debounces, auto-dismiss    |
-| `reticle_storage`      | localStorage, sessionStorage and readable cookies                      |
-| `reticle_reconcile`    | Compare what the API returned against what the page actually renders   |
-| `reticle_scroll_to`    | Find a row in a virtualised list that has not rendered yet             |
+| `reticle_screenshot` | Pixel screenshot of the driven page, saved as a visual baseline |
+| `reticle_visual_diff` | Perceptually diff the live page against that baseline |
+| `reticle_network_mock` | Force a 500, go offline, or delay a response |
+| `reticle_viewport` | Pin the viewport so screenshots are reproducible across machines |
+| `reticle_clock` | Freeze time or fast-forward timers, toasts, debounces, auto-dismiss |
+| `reticle_storage` | localStorage, sessionStorage and readable cookies |
+| `reticle_reconcile` | Compare what the API returned against what the page actually renders |
+| `reticle_scroll_to` | Find a row in a virtualised list that has not rendered yet |
+| `reticle_map` | The app as Reticle has seen it: screens, how much of each is proved, where to test next, and, with `to`, the controls to press to reach a route |
 
 The response also tells you which surface is active:
 

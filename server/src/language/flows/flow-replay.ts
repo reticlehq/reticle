@@ -14,7 +14,7 @@ import type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-type
 export type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import { evalConsole } from '@reticlehq/engine/question/predicate/predicate-console.js';
-import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
+import { appScope, stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import {
   AnchorKind,
   DriftReason,
@@ -666,6 +666,13 @@ export async function replayFlow(
         continue;
       }
       const label = anchorLabel(step.anchor);
+      /** One sub-step's expect, over the window that sub-step opened. See runSequenceStep. */
+      const judgeSubStep = async (expectation: StepExpect, since: number) =>
+        (await assertStepExpect(session, expectation, waitForSignal, waitFor(step), since)) ??
+        lateConsoleDrift(
+          expectation,
+          session.eventsSince(since).filter((e) => e.t >= since),
+        );
       // The page this step runs on (the journey's "which page") — captured before the action.
       const page = currentRoute(session);
       // Event-time floor so the consequence reflects only THIS step's aftermath, not prior steps'.
@@ -695,6 +702,7 @@ export async function replayFlow(
               confirmDangerous,
               sleep,
               dynamic,
+              index < from ? undefined : judgeSubStep,
             );
           }
           if (step.anchor.kind === AnchorKind.SIGNAL) {
@@ -722,27 +730,20 @@ export async function replayFlow(
       // Once the anchor resolved and the action ran, the step's own expect is evaluated — signal, net,
       // console and store truth alike — deterministically, in the same cheap replay loop, with no LLM.
       /*
-       * The step's own expect, and then every sub-step's.
+       * The step's own expect. A sub-step's expect was judged by the sequence runner, in the window
+       * of that sub-step, as the live `act_sequence` path judges it.
        *
-       * `classifyFlowAssertions` already walks act_sequence sub-steps and counts an expect on either
-       * level, and states the invariant plainly: this and what replay enforces must move together, or
-       * "the difference is a false green or a lost verification". Enforcing only the top level was
-       * that difference -- a sequence whose sub-step declared a consequence was GRADED asserted and
-       * checked by nothing, so it could not go red while wearing the grade that says it could.
-       *
-       * WEAKER THAN THE LIVE PATH, and deliberately so rather than silently. A recorded sequence is
-       * dispatched as ONE batched command, so there are no per-sub-step cursors to open a window with
-       * -- every sub-step expect is evaluated against the window the whole sequence opened, which
-       * means sub-step three's claim can be satisfied by sub-step one's consequence. The live
-       * `act_sequence` path takes a cursor before each dispatch and does not have this. Narrowing it
-       * here means dispatching sub-steps individually on replay, which is a behaviour change to the
-       * replay path and belongs in its own commit.
+       * `classifyFlowAssertions` walks act_sequence sub-steps and counts an expect on either level,
+       * and this and what replay enforces must move together, or "the difference is a false green or
+       * a lost verification". Judged here, at the end, a route expect on a middle sub-step failed
+       * once a later one moved on, and a later claim could pass on an earlier sub-step's request.
        */
       const declared = [step.expect, ...(step.steps ?? []).map((sub) => sub.expect)].filter(
         (expectation): expectation is NonNullable<FlowStep['expect']> => expectation !== undefined,
       );
+      const own = step.expect === undefined ? [] : [step.expect];
       // A setup step's consequence is not checked: it is re-driven to get somewhere, not to prove it.
-      const checked = index < from ? [] : declared;
+      const checked = index < from ? [] : own;
       for (const expectation of checked) {
         if (!result.ok || result.drift !== undefined) break;
         const expectDrift = await assertStepExpect(
@@ -779,7 +780,15 @@ export async function replayFlow(
       const cursorAfter = session.elapsed();
       // ONE builder, shared with the live act path, so a driven step and a replayed one describe what
       // happened in identical words rather than in two vocabularies that agree by coincidence.
-      Object.assign(result, stepEffect(windowEvents, { since: cursorBefore, until: cursorAfter }));
+      Object.assign(
+        result,
+        stepEffect(
+          windowEvents,
+          { since: cursorBefore, until: cursorAfter },
+          // A failure the step declared is its expected result, as it is on the live path.
+          { ...appScope(session), declared },
+        ),
+      );
       /*
        * A prefix step is setup and is not reported -- UNLESS it failed.
        *

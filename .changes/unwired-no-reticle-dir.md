@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a project with no Reticle wiring got an untracked `.reticle/impact.json`.** The daemon records each tool call in the impact ledger and writes the ledger to its own folder. When the agent's MCP client started the daemon in a project that was never wired, the first `reticle_session` call made `.reticle/` there, although the call says that it changes no file. Now the daemon writes into its folder only when the folder has a `.reticle.json` or a `.reticle/` already. Until then the project count stays in memory, and the machine-wide count in `~/.reticle` continues. After `reticle init`, the next write puts the full count into the project.

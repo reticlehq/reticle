@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`: a saved `reticle_act { steps }` journey drifted on its first replay when a later step clicked something an earlier step renders.** Live, "click Edit, then click the Cancel its form shows" passes, because each step is resolved after the one before it ran. Replay resolved every sub-step's anchor before it ran any of them, so it reported "Cancel not found" and ran nothing. Replay now resolves a sub-step that is not on the page yet when its turn comes, after the sub-steps before it ran. A sub-step that still cannot be found drifts at its own position. A sequence whose anchors are all on the page at the start still goes as one batch. Closes [#1523](https://github.com/reticlehq/reticle/issues/1523).

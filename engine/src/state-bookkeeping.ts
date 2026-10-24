@@ -65,3 +65,9 @@ export function isMeaningfulStateChange(event: ReticleEvent): boolean {
   const after = 'value' in event.data ? event.data['value'] : event.data['new'];
   return !isCacheBookkeepingDiff(event.data['old'], after);
 }
+
+/** The name prefixes of Reticle's own signals and stores (`reticle:busy`, `__reticle…`). */
+const RETICLE_VOICE = /^(?:reticle:|__reticle)/;
+
+/** True for a signal or store that Reticle sends about itself. It says nothing about the app. */
+export const isReticleVoice = (name: string): boolean => RETICLE_VOICE.test(name);

@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { join, sep } from 'node:path';
+import { resolveBridgeSecurityWithAutoToken } from './bridge-security.js';
 import { ReticleEnv } from '@reticlehq/core';
 import {
   configuredPairingToken,
@@ -107,4 +108,52 @@ describe('configuredPairingToken', () => {
     );
     expect(await configuredPairingToken({}, deps)).toBeUndefined();
   });
+});
+
+/**
+ * Up to 3.7 a relative token folder was used against the working folder (CI, docker compose). A
+ * rule that threw on it stopped the daemon at start, so the agent had no daemon at all.
+ */
+describe('a pairing token folder that is not absolute', () => {
+  function withTokenDir(value: string, body: () => unknown): () => Promise<void> {
+    return async () => {
+      const saved = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+      const cwd = mkdtempSync(join(tmpdir(), 'reticle-relative-token-'));
+      const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(cwd);
+      const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      process.env[ReticleEnv.PAIRING_TOKEN_DIR] = value;
+      try {
+        await body();
+      } finally {
+        cwdSpy.mockRestore();
+        stderr.mockRestore();
+        if (saved === undefined) {
+          delete process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+        } else {
+          process.env[ReticleEnv.PAIRING_TOKEN_DIR] = saved;
+        }
+      }
+    };
+  }
+
+  it(
+    'does not stop the daemon: the token is made in the working folder',
+    withTokenDir('relative/.reticle', async () => {
+      const security = await resolveBridgeSecurityWithAutoToken({});
+      const file = join(process.cwd(), 'relative', '.reticle', 'pairing-token');
+      expect(security.token).toBe(readFileSync(file, 'utf8'));
+      expect(readOrCreatePairingTokenSync(defaultPairingTokenDir())).toBe(security.token);
+    }),
+  );
+
+  it(
+    'uses the home folder for a Windows path on POSIX, and makes no folder in the working folder',
+    withTokenDir('C:\\Users\\u\\.reticle', () => {
+      if ('/' !== sep) {
+        return;
+      }
+      expect(defaultPairingTokenDir()).toBe(join(homedir(), '.reticle'));
+      expect(readdirSync(process.cwd())).toEqual([]);
+    }),
+  );
 });

@@ -2,6 +2,7 @@
 title: Local registry
 description: 'Exercise local, unpublished Reticle changes in a real external app before they ship.'
 icon: box
+noindex: true
 ---
 
 To test unpublished `@reticlehq/*` changes in a real external app, publish the workspace to a local Verdaccio with `bash scripts/local-registry.sh`, then point that app's `.npmrc` at `http://127.0.0.1:4873/` as the **default** registry, not scoped to `@reticlehq`, for the reason in step 2. That is the whole procedure; the rest of this page is the detail.

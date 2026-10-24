@@ -34,7 +34,7 @@ describe('the lease hint is ranked by evidence, not by a static differential', (
 
   it('does not recommend init on an app that is already wired', () => {
     const hint = leaseNotConnectedHint('http://localhost:5173/', 4400, { initialized: true });
-    expect(hint).not.toContain('reticle init');
+    expect(hint).not.toContain('server init');
   });
 
   it('leads with the dev-server restart for Nuxt, where HMR does not register a new plugin', () => {
@@ -93,8 +93,9 @@ describe('a project that has connected before is not proof THIS app is wired', (
     expect(hint).toMatch(/different app|another app/i);
   });
 
-  it('names `reticle init`, which every listed cause assumes has already happened', () => {
-    expect(hint).toMatch(/reticle init/);
+  it('names `init`, which every listed cause assumes has already happened, and asks first', () => {
+    // Through npx: the default MCP registration puts no `reticle` on PATH.
+    expect(hint).toContain('ask the user, then run `npx @reticlehq/server init`');
   });
 
   /** The port evidence is still real and must survive: that half of the inference is sound. */

@@ -107,6 +107,11 @@ describe('telemetry emitter', () => {
     expect(item?.properties['version']).toBe('2.2.0');
     // Personless mode: anonymous-by-construction users must never create PostHog person profiles.
     expect(item?.properties['$process_person_profile']).toBe(false);
+    // No location and no address: PostHog must not look up the sender's IP, nor store it. PostHog
+    // fills `$ip` from the request when the event leaves it empty, so a fixed placeholder takes its
+    // place.
+    expect(item?.properties['$geoip_disable']).toBe(true);
+    expect(item?.properties['$ip']).toBe('0.0.0.0');
     // The project fingerprint is a hash — never the raw path.
     expect(item?.properties['projectId']).not.toContain('proj-a');
   });

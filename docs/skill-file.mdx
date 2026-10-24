@@ -11,7 +11,7 @@ icon: graduation-cap
 https://docs.reticle.sh/skill.md
 ```
 
-Paste that URL into the agent and say "read this and set up Reticle". It is the canonical file with [Agent Skill](https://agentskills.io) frontmatter (`name`, `description`) added. The repository copy, `https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md`, has the same body without the frontmatter, and a test fails if the two ever differ. To install the rules as a skill instead, `npx skills add reticlehq/reticle` installs `reticle` (the Claude Code plugin's shorter restructure of this file, held to the same rules by that test) and the task skills beside it. The same file ships inside the package, so an agent with no network can read it from disk:
+Paste that URL into the agent and say "read this and set up Reticle". It is the canonical file with [Agent Skill](https://agentskills.io) frontmatter (`name`, `description`) added. The repository copy, `https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md`, has the same body without the frontmatter, and a test fails if the two ever differ. To install it as a skill instead, run `npx skills add reticlehq/reticle --skill reticle`. It installs one file with the same body. Without `--skill`, the command lists the task skills too. The same file ships inside the package, so an agent with no network can read it from disk:
 
 ```
 node_modules/@reticlehq/server/SKILL.md

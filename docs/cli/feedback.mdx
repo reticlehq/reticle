@@ -7,7 +7,7 @@ icon: comment
 `reticle feedback` is the feedback channel as a command: no prompts, no editor, no account. It exists so the cost of telling the maintainers something is lower than the cost of shrugging and moving on.
 
 ```bash
-npx @reticlehq/server feedback [--rating 1-5] [--bug] "what worked, what didn't"
+npx @reticlehq/server feedback [--rating 1-5] [--bug] [--contact you@example.com] "what worked, what didn't"
 npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "what happened"
 ```
 
@@ -21,6 +21,7 @@ The `--agent` form is for an agent that cannot reach the `reticle_session { acti
 | `--bug` | boolean | `false` | Shorthand for `--kind bug` |
 | `--kind K` | one of `bug`, `gap`, `ambiguity`, `feature_request`, `improvement`, `experience` | `experience`, or `bug` with `--bug` | The report's class. Wins over `--bug` |
 | `--agent` | boolean | `false` | File as the agent, so agent reports never dilute the human rating signal |
+| `--contact EMAIL` | one email address, at most 254 characters | unset | An address for a reply from the maintainers. Sent only when you give it. Anything that is not one plain address is refused |
 
 Everything that is not a flag or a flag's value becomes the message, joined with spaces. Quoting is still your job for shell reasons.
 
@@ -29,7 +30,7 @@ Everything that is not a flag or a flag's value becomes the message, joined with
 The payload is printed **before** it is sent, every time. A channel that carries free text and does not show you what it sends is asking for trust it has not earned.
 
 ```
-sending      {"stack":"vite","version":"3.7.0","os":"darwin","ci":false}
+sending      {"stack":"vite","version":"3.8.0","os":"darwin","ci":false}
 redacted     email (removed before sending)
 thanks       your feedback is in. it genuinely changes what gets built next.
 ```
@@ -39,17 +40,18 @@ thanks       your feedback is in. it genuinely changes what gets built next.
 Run with no message and no rating, it prints usage and exits `1`. Real capture:
 
 ```
-usage: reticle feedback [--rating 1-5] [--bug] "what worked, what didn't"
+usage: reticle feedback [--rating 1-5] [--bug] [--contact you@example.com] "what worked, what didn't"
        agents: reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "what happened"
        your words go to the maintainers; nothing from your app is ever included.
+       --contact adds an address for a reply. It is sent only when you give it.
 ```
 
 ## Exit codes
 
-| Code | Meaning                                                         |
-| ---- | --------------------------------------------------------------- |
-| `0`  | The report was submitted, or attempted and reported as not sent |
-| `1`  | No message and no rating, or an invalid `--rating` or `--kind`  |
+| Code | Meaning                                                                     |
+| ---- | --------------------------------------------------------------------------- |
+| `0`  | The report was submitted, or attempted and reported as not sent             |
+| `1`  | No message and no rating, or an invalid `--rating`, `--kind` or `--contact` |
 
 ## Worked example
 

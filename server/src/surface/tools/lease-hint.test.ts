@@ -116,7 +116,7 @@ describe('a page whose CSP blocks the bridge', () => {
     });
     expect(hint).toContain('Content-Security-Policy');
     expect(hint).toContain(cspBlock.fix);
-    expect(hint).not.toContain('run `reticle init`');
+    expect(hint).not.toContain('@reticlehq/server init');
   });
 
   it('outranks the guessed causes, but not a page that dialled the wrong port', () => {
@@ -137,7 +137,7 @@ describe('a production build whose SDK was stubbed', () => {
     expect(hint).toMatch(/production build/i);
     expect(hint).toMatch(/stub|strip/i);
     expect(hint).toMatch(/dev server/i);
-    expect(hint).not.toContain('reticle init');
+    expect(hint).not.toContain('@reticlehq/server init');
   });
 
   it('treats a non-localhost URL as likely production even without a marker check', () => {
@@ -150,7 +150,7 @@ describe('a production build whose SDK was stubbed', () => {
   // install: the production note may join the init advice, never replace it.
   it('keeps the init advice for an unwired project whose page carried no marker', () => {
     const hint = leaseNotConnectedHint('http://localhost:4173/', 4400, { sdkMarker: false });
-    expect(hint).toContain('reticle init');
+    expect(hint).toContain('@reticlehq/server init');
     expect(hint).toMatch(/production build/i);
   });
 
@@ -178,7 +178,7 @@ describe('a production build whose SDK was stubbed', () => {
       sdkMarker: false,
     });
     expect(hint).toMatch(/DIFFERENT app/i);
-    expect(hint).toMatch(/reticle init/i);
+    expect(hint).toContain('@reticlehq/server init');
     expect(hint).toMatch(/production build/i);
   });
 

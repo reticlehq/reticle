@@ -12,7 +12,7 @@ icon: magnifying-glass
 
 | `action` | What it returns | Unmerged name | Details |
 | --- | --- | --- | --- |
-| `page` (default) | The semantic snapshot of what is rendered, with a `ref` for each control. `mode: "interactive"` keeps only what you can act on; `diff: true` returns only what changed since the last look | `reticle_snapshot` | [Snapshot](/tools/snapshot) |
+| `page` (default) | The semantic snapshot of what is rendered, with a `ref` for each control. `mode: "interactive"` keeps only what you can act on; `diff: true` returns only what changed since the last look; `ids: true` adds each control's test id; `audit: true` also reports clipped text, overlapping controls and low contrast | `reticle_snapshot` | [Snapshot](/tools/snapshot) |
 | `find` | A locator (testid, role, text, label, component) resolved to refs you can act on. `limit` caps the list; `count_only` returns just the count | `reticle_query` | [Query](/tools/query) |
 | `element` | Everything about one `ref`: geometry, scroll, design tokens, and on React the source `file:line` | `reticle_inspect` | [Inspect](/tools/inspect) |
 | `state` | A registered store's value. Scope it with `store`, `path` and `depth` | `reticle_state` | [State](/tools/state) |

@@ -5,7 +5,7 @@ description: Install Reticle, connect your coding agent, and get a real verdict 
 icon: rocket
 ---
 
-**Four steps: run the installer once per machine, run `reticle init` once per project, then optionally `reticle connect` for the dashboard and `reticle sync` to send runs.** Skip `init` and your agent's first `reticle_session` call wires the app instead. Reticle embeds a dev-only SDK in your running app and proves a browser session connected. No account needed for steps 1 and 2.
+**Run the installer once per machine, then `reticle init` once per project. The dashboard (`reticle connect`) is optional.** Skip `init` and your agent can still check the app with the zero-install lease, and it asks you before it wires the app. Reticle embeds a dev-only SDK in your running app and proves a browser session connected. No account needed for steps 1 and 2.
 
 By the end of this page your agent will click a button in your app and prove what happened: the request that fired, the state that changed, and the file to open if it didn't.
 
@@ -67,10 +67,10 @@ Step 1 is once per machine. This step is once per project. **Skipping it is a co
 
 <Note>
   **Skipped this step?** Ask your agent to verify something in the app. Its first `reticle_session`
-  call finds a project that has never connected, runs `init` there itself, and lists every file it
-  changed under `wired`. Asked about something unrelated, it offers to wire the app instead of doing
-  it. This works in Claude Code, Codex, Cursor and other MCP agents, including a second project
-  while Reticle is already running for another one.
+  call finds a project that has never connected and changes no file. It names the zero-install
+  lease, which checks the running app now with nothing installed, and it tells the agent to ask you
+  before it runs `init`. This works in Claude Code, Codex, Cursor and other MCP agents, including a
+  second project while Reticle is already running for another one.
 </Note>
 
 Prefer to install the skill and let the agent run setup itself? On Claude Code the plugin registers the MCP server and the skill in one step:
@@ -83,7 +83,7 @@ Prefer to install the skill and let the agent run setup itself? On Claude Code t
 On Cursor, Codex, Copilot, Gemini and anything else the skills CLI supports:
 
 ```bash
-npx skills add reticlehq/reticle
+npx skills add reticlehq/reticle --skill reticle
 ```
 
 Then type `/reticle` and the agent runs the install from the skill.
@@ -285,10 +285,12 @@ That third state is the one that matters. Most tools have two outcomes and quiet
 </Accordion>
 
 <Accordion title="Will any of this end up in my production build?">
-  No. The SDK is dev-only. A production `vite build` with the Vite plugin injects nothing and
-  replaces the SDK with an inert stub, and `connect()` self-disables when the build reports
-  `NODE_ENV=production`. The recommended wiring also guards the call behind `import.meta.env.DEV`,
-  so there are two independent locks.
+  No, not unless you add it on purpose. The SDK is dev-only. A production `vite build` with the Vite
+  plugin injects nothing and replaces the SDK with an inert stub, and `connect()` disables itself
+  when the build reports `NODE_ENV=production`. The recommended wiring also guards the call behind
+  `import.meta.env.DEV`, so there are two independent locks. The one exception is [Production
+  mode](/production-mode): you add its loader to your production build yourself, and it loads
+  nothing until a signed ticket activates it.
 </Accordion>
 
 <Accordion title="Does my code or my app's data leave my machine?">

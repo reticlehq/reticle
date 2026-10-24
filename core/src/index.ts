@@ -25,6 +25,7 @@ export * from './artifacts/flow-order.js'; // orderFlows — prerequisites first
 export * from './artifacts/flow-select.js'; // selectFlows — which flows a run replays, and what it held back
 export * from './artifacts/flow-unreached.js'; // unreachedRoutes — known routes this run never visited
 export * from './artifacts/flow-mutation-target.js'; // what a flow says it depends on: mutationTargetsFor + perturbationFor
+export * from './graph/app-graph.js'; // the App Graph: an app as screens, actions, requests; one fold for cloud and daemon
 export * from './wire/constants/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
 export * from './wire/constants/response-body-reason.js'; // why a NET_REQUEST carries no response body (#1520)
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
@@ -47,6 +48,7 @@ export * from './identity/edit-epoch.js'; // which round of source edits an obse
 export * from './wire/messages.js'; // ReticleEvent + the message schemas
 export * from './wire/production/hello-mode.js'; // HelloEnv / HelloScope: a leaf the SDK sends
 export * from './wire/production/production-policy.js'; // the production action policy: rules + refused requests
+export * from './wire/production/activation-ticket.js'; // the signed ticket a live page checks before it loads the SDK
 export * from './wire/event-payloads.js'; // per-event payload schemas + wire vocab
 export * from './wire/event-priority.js'; // which events survive the bridge rate cap
 export * from './artifacts/flow-constants.js'; // moved off wire/constants/constants, which had no use for them
@@ -83,6 +85,7 @@ export * from './verdict/predicate-tree.js';
 export * from './artifacts/flow-expect-flat.js';
 export * from './identity/project-id.js';
 export * from './identity/checkout.js';
+export * from './identity/state-dir.js'; // resolveStateDir: refuses a state folder that is not absolute
 export * from './words/notices.js';
 export * from './artifacts/journal.js';
 // Not an API — three names that exist so importing the BROWSER SDK from here fails with a sentence

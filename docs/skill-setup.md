@@ -6,7 +6,7 @@ icon: wrench
 
 You only need this page while you are setting Reticle up, which happens once per project. Once an app is connected, the everyday loop lives in `SKILL.md` and you never need to come back here.
 
-**One command. It wires the app and proves a session connected. The verdict is the first run, after it.**
+**One command. It wires the app and proves a session connected. The verdict is the first run, after it.** `init` changes files, so run it only when the user asked you to set Reticle up, or agreed when you asked. Until then, the zero-install lease checks a running app with nothing installed: `reticle_session { action: "list" }` names it in `next_step`.
 
 ```bash
 RETICLE_INSTALL_SOURCE=skill_file npx @reticlehq/server@latest init
@@ -26,7 +26,7 @@ The command reads the repository. It cannot read the request, and three things l
 | `--env KEY=VALUE` | what the app needs to reach a usable state: the key from `.env.example`, the mock backend in the README, the variable that skips an auth wall. Repeatable. Without it a real app sits on a login screen and there is no flow to drive at all. |
 | `--app <dir>` | which app in a monorepo. It can list the ones that are servable; only the request says which one is being worked on. |
 
-**Ask the user nothing.** Not the framework, package manager, port, editor or MCP client: every one is answerable from the repo you are sitting in. Read `.env.example`, the README and `package.json`, decide, and say what you decided in one line.
+**Ask the user nothing else.** After the user agrees to the setup, do not ask about the framework, package manager, port, editor or MCP client: the repo you are in answers each one. Read `.env.example`, the README and `package.json`, decide, and say what you decided in one line.
 
 **Never ask about the port.** There are two, and conflating them is a top setup failure. The dev-server port (3000, 5173) belongs to the project's own dev script. The bridge port (**4400**) is the daemon-to-SDK channel and defaults correctly.
 

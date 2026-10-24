@@ -14,6 +14,7 @@
  * everything uninstrumented on the page. The test is *did this absence change the answer the agent
  * just got?* — if not, it does not fire.
  */
+import { z } from 'zod';
 
 /**
  * The kinds of absence that can weaken a verdict. Most name a capability the app did not provide;
@@ -203,4 +204,89 @@ export function dedupeGaps(gaps: readonly InstrumentationGap[]): Instrumentation
     out.push(gap);
   }
   return out;
+}
+
+/**
+ * What the ENGINE could not observe in a run, so a host can refuse to call that run clean.
+ *
+ * Not an instrumentation gap: nothing the app adds closes these, because this engine has no reader
+ * for them. Each verdict result (`reticle_act_and_wait`, `reticle_assert`) carries the list under
+ * `ENGINE_BLIND_SPOTS_FIELD`, CUMULATIVE for its session: everything seen since the session began,
+ * and `[]` when there is nothing. So the LAST verdict result of a run is the run's list. A host that
+ * predates the field ignores it; nothing else in the result changes.
+ */
+export const EngineBlindSpotKind = {
+  /**
+   * An action ran while a `<canvas>` was visible, and this engine records no canvas digest.
+   *
+   * The pixels are the output there. A colour picker that no longer reaches the renderer leaves the
+   * DOM, the network and the store exactly as they were on the build that works, so "nothing
+   * disagreed" is not evidence that the canvas is right.
+   */
+  PIXELS_UNOBSERVED: 'pixels-unobserved',
+  /**
+   * A claim under test names a number or a total, and no verdict ran a computed comparison
+   * (`compare`).
+   *
+   * "Each hit adds one point" is broken by a handler that adds two. The store, the screen and the
+   * wire all agree with each other on that build, so only the arithmetic the claim states can catch
+   * it, and nothing checked it.
+   */
+  CLAIM_ARITHMETIC_UNCHECKED: 'claim-arithmetic-unchecked',
+} as const;
+export type EngineBlindSpotKind = (typeof EngineBlindSpotKind)[keyof typeof EngineBlindSpotKind];
+
+export const EngineBlindSpotSchema = z.object({
+  kind: z.nativeEnum(EngineBlindSpotKind),
+  /** What could not be seen, in words. */
+  detail: z.string().min(1),
+});
+export type EngineBlindSpot = z.infer<typeof EngineBlindSpotSchema>;
+
+/** The verdict-result field that carries a session's `EngineBlindSpot[]`. */
+export const ENGINE_BLIND_SPOTS_FIELD = 'engineBlindSpots';
+
+/** Number words and arithmetic nouns a claim uses to state an amount. Whole words only. */
+const ARITHMETIC_WORDS =
+  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|hundred|thousand|once|twice|double|triple|half|total|sum|subtotal|count|score|points?|balance|average|percent)\b/i;
+
+/** True when a claim states an amount: a digit, a percent sign, or a number word. */
+export function namesArithmetic(claim: string): boolean {
+  return /\d|%/.test(claim) || ARITHMETIC_WORDS.test(claim);
+}
+
+/** What a session's run has shown so far, for `engineBlindSpots`. */
+export interface EngineBlindSpotFacts {
+  /** An action in this session ran while a `<canvas>` was visible. */
+  canvasSeen: boolean;
+  /** A verdict in this session ran a computed comparison. */
+  compared: boolean;
+  /** The claims under test: inline intents and this run's declared intents. */
+  claims: readonly (string | undefined)[];
+}
+
+/**
+ * What this engine could not observe in a session, cumulative. See `EngineBlindSpotKind`.
+ *
+ * Pixels: this engine records no canvas digest, so a visible canvas is always unobserved.
+ */
+export function engineBlindSpots(facts: EngineBlindSpotFacts): EngineBlindSpot[] {
+  const spots: EngineBlindSpot[] = [];
+  if (facts.canvasSeen) {
+    spots.push({
+      kind: EngineBlindSpotKind.PIXELS_UNOBSERVED,
+      detail:
+        'an action ran while a canvas was visible, and no canvas digest was recorded, so what it draws was not compared',
+    });
+  }
+  const numeric = facts.claims.find(
+    (claim): claim is string => claim !== undefined && namesArithmetic(claim),
+  );
+  if (numeric !== undefined && !facts.compared) {
+    spots.push({
+      kind: EngineBlindSpotKind.CLAIM_ARITHMETIC_UNCHECKED,
+      detail: `the claim "${numeric}" states an amount, and no verdict ran a computed comparison against it`,
+    });
+  }
+  return spots;
 }

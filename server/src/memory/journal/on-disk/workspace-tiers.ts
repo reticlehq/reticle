@@ -56,6 +56,8 @@ const sharedFile = { durability: Durability.MEMORY, sharing: Sharing.COMMIT, isD
 export const WORKSPACE_TIERS: Readonly<Record<string, WorkspaceTier>> = {
   [ReticleDir.SESSIONS_SUBDIR]: localDir,
   [ReticleDir.RUNS_SUBDIR]: localDir,
+  // A dev server's output, written here only when the state home cannot be written.
+  [ReticleDir.LOGS_SUBDIR]: localDir,
   [ReticleDir.VISUAL_SUBDIR]: localDir,
   // Write-only: a local copy of what was already sent. The outbox is the record.
   [ReticleDir.FEEDBACK_SUBDIR]: localDir,

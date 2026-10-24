@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, WRITING_RULE_SHORT } from '@reticlehq/core';
 import { CORE_TOOL_NAMES } from '@/surface/tools/tool-surface.js';
 import { buildServerInstructions, localizeInstructions } from './server-instructions.js';
 import { degradedInstructions } from './proxy/proxy-handshake.js';
+
+/** About what Claude Code shows of `instructions` (4,096), less a margin. A client limit, not a budget. */
+const CLIENT_SHOWN_CHARS = 4000;
 
 /**
  * The instructions string is the only channel that reaches an agent with no skill file, no restart
@@ -55,8 +58,8 @@ describe('buildServerInstructions', () => {
       expect(degraded).toMatch(/A session on this project's app listed there is the proof/);
     });
 
-    // The first run wires the app, not the install: the agent's first session call does it and
-    // says which files changed. Restarting a dev server is no longer the agent's move at all.
+    // Wiring changes the user's files, so it waits for the user's agreement. The session call
+    // changes no file. Restarting a dev server is no longer the agent's move at all.
     // An agent read "until one appears no other tool can tell you anything about this app", so in an
     // unwired project it wrote a throwaway Playwright script instead, though a zero-install lease
     // gets a verdict with no file changed. Measured with `claude -p` on a fresh Vite app: no Reticle
@@ -68,9 +71,12 @@ describe('buildServerInstructions', () => {
       expect(text).not.toMatch(/no other tool can tell you anything/);
     });
 
-    it('has the first session call wire the app and name what changed', () => {
-      expect(text).toContain('Its first call wires the app');
-      expect(text).toContain('`wired` lists the files it changed');
+    it('wires the app only when the user agrees, and says the session call changes no file', () => {
+      expect(text).toMatch(
+        /Ask the user before you wire the app\. If they agree, run `npx @reticlehq\/server init`/,
+      );
+      expect(text).toMatch(/changes no file/);
+      expect(text).not.toMatch(/first call wires the app/);
       expect(text).not.toMatch(/then RESTART the dev server/);
     });
 
@@ -92,9 +98,9 @@ describe('buildServerInstructions', () => {
     const text = buildServerInstructions({ previouslyConnected: false, appHere: true });
 
     it('tells the agent to raise it with the user unprompted, and to ask first', () => {
-      expect(text.slice(0, 900)).toMatch(/first reply/);
+      expect(text.slice(0, 1200)).toMatch(/first reply/);
       expect(text).toMatch(/even if .*unrelated/);
-      expect(text).toMatch(/only if they agree/);
+      expect(text).toMatch(/ask the consent question/);
     });
 
     it('does not say so where no app was found', () => {
@@ -111,8 +117,10 @@ describe('buildServerInstructions', () => {
       expect(wired).not.toMatch(/first reply/);
     });
 
-    it('stays under the instruction budget', () => {
-      expect(text.length).toBeLessThan(4200);
+    it('stays under the instruction budget, with the nudge it adds', () => {
+      // The longest unwired state: the nudge for a web app in this directory is part of it.
+      const longest = buildServerInstructions({ previouslyConnected: false, appHere: true });
+      expect(longest.length).toBeLessThan(CLIENT_SHOWN_CHARS);
     });
   });
 
@@ -225,10 +233,13 @@ describe('buildServerInstructions', () => {
     // The ratchet warning above still stands, and this raise accepts its terms: if the next one
     // cannot show a number like that, cut an older sentence instead.
     for (const previouslyConnected of [true, false]) {
-      // 4200, raised once from 4000: the default surface now carries the two-meta-tool sentence it
-      // always should have, because `reticle_run` is advertised there and the hop genuinely works.
-      // Guidance that is true and reachable earns its bytes; the budget exists to stop padding.
-      expect(buildServerInstructions({ previouslyConnected }).length).toBeLessThan(4200);
+      // Was 4200 for the two-meta-tool sentence. Now 4000, and this one is NOT a budget that a
+      // measurement can buy a raise from: it is the client's limit. Claude Code shows about the
+      // first 4,096 characters of `instructions` and drops the rest with "[truncated]". At 4,190
+      // the writing rule at the end never reached the agent. To add a sentence, cut one.
+      expect(buildServerInstructions({ previouslyConnected }).length).toBeLessThan(
+        CLIENT_SHOWN_CHARS,
+      );
     }
   });
 });
@@ -362,5 +373,67 @@ describe('localizeInstructions', () => {
 
   it('never adds it to a project that has connected', () => {
     expect(localizeInstructions(wired, true)).toBe(wired);
+  });
+});
+
+/**
+ * The default MCP registration runs Reticle through npx and puts no `reticle` on PATH. The feedback
+ * fallback for "tools unreachable" said `reticle feedback`, which fails in exactly that case.
+ */
+describe('every command the briefing names runs under npx', () => {
+  it('in both states', () => {
+    for (const previouslyConnected of [true, false]) {
+      const text = buildServerInstructions({ previouslyConnected });
+      expect(text).not.toMatch(/`reticle [a-z]/);
+      expect(text).toContain('`npx @reticlehq/server feedback --agent');
+    }
+  });
+});
+
+/**
+ * Claude Code showed the handshake cut with "[truncated]" after the `limit` paragraph. The writing
+ * rule was the last line, so no agent on that client ever read it.
+ */
+describe('the writing rule is inside what a client shows', () => {
+  it('in every state, before the client limit', () => {
+    for (const previouslyConnected of [true, false]) {
+      for (const appHere of [true, false]) {
+        const text = buildServerInstructions({ previouslyConnected, appHere });
+        const at = text.indexOf(WRITING_RULE_SHORT);
+        expect(at, 'the briefing has no writing rule').toBeGreaterThan(0);
+        expect(at + WRITING_RULE_SHORT.length).toBeLessThan(CLIENT_SHOWN_CHARS);
+      }
+    }
+  });
+});
+
+/**
+ * The degraded handshake put about 870 characters in front of the briefing. At about 4,600
+ * characters, the client cut it, so the writing rule never reached the agent.
+ */
+describe('the degraded handshake is inside what a client shows', () => {
+  // The longest reason the proxy gives: a foreign port holder, then a state directory problem.
+  const longReason =
+    'port 4400 is held by pid 65704 ("node"), which is not a Reticle daemon\n' +
+    'Reticle cannot write to its state directory at /Users/someone/.reticle. Everything it keeps — ' +
+    'the daemon log, the pid file, saved flows — lives there, so the daemon cannot start. Make it ' +
+    'writable (`chmod u+w`), or point Reticle elsewhere with HOME.';
+
+  it('in every state, under the client limit, with the writing rule', () => {
+    for (const previouslyConnected of [true, false]) {
+      for (const appHere of [true, false]) {
+        const healthy = buildServerInstructions({ previouslyConnected, appHere });
+        const degraded = degradedInstructions(healthy, 4400, longReason);
+        expect(degraded.length).toBeLessThan(CLIENT_SHOWN_CHARS);
+        expect(degraded).toContain(WRITING_RULE_SHORT);
+      }
+    }
+  });
+
+  it('names a doctor command that runs under npx', () => {
+    const healthy = buildServerInstructions({ previouslyConnected: false });
+    const degraded = degradedInstructions(healthy, 4400, longReason);
+    expect(degraded).toContain('`npx @reticlehq/server doctor`');
+    expect(degraded).not.toMatch(/`reticle [a-z]/);
   });
 });

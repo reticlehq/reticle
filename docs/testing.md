@@ -55,7 +55,7 @@ Any failed matcher throws with the structured evidence (near-miss, failure reaso
 ## Deterministic + honest
 
 - **`t.clock`** bakes `reticle_clock` into the spec, so time-gated UI (a 5s auto-dismiss, a 500ms hover dwell) is tested deterministically instead of racing real timers.
-- **`t.expectInputModeReal()`**: a hover/drag spec asserts native input is active; if it's running synthetic (no CDP), the spec is **skipped with a reason**, never silently passing on a no-op. Enable real input headless with `reticle drive` (see [usage §18](usage.md#18-real-input-mode-native-hover--drag)).
+- **`t.expectInputModeReal()`**: a hover/drag spec asserts native input is active; if it's running synthetic (no CDP), the spec is **skipped with a reason**, never silently passing on a no-op. Enable real input headless with `reticle drive` (see [usage §18](usage.md#18-real-input-mode-native-hover-&-drag)).
 
 ## Run a suite (headless, the same path CI uses)
 
@@ -70,7 +70,7 @@ const booted = await bootSession({ driveUrl: 'http://localhost:4310', headless: 
 const { summary } = await runSpecs({
   invoke: booted.invoke,
   now: () => Date.now(),
-  buildContext: (invoke) => createTestContext(invoke, { sessionId: 'my-app' }),
+  buildContext: (invoke) => createTestContext(invoke), // one tab: omit sessionId
   print: (line) => process.stdout.write(line + '\n'),
 });
 await booted.close();
@@ -88,9 +88,13 @@ import { toJUnitXml, writeJUnit } from '@reticlehq/test';
 `.reticle/` flows (see [Flows](flows.md)) can be executed directly as specs, replayed with their `expect`/`success` predicates and skipping `dynamic` (LLM-output) regions, so the recorded map and the suite can't drift apart:
 
 ```ts
-import { flowsAsSpecs } from '@reticlehq/test';
-// register one reticleTest per flow under .reticle/flows/
+import { registerFlowSpecs } from '@reticlehq/test';
+// In a vitest file: one test per flow under .reticle/flows/. Await it at the top level.
+// `session` is the FlowReplaySession (from @reticlehq/server) for the app under test.
+await registerFlowSpecs('.reticle/flows', () => session);
 ```
+
+Without vitest, `flowsAsSpecs('.reticle/flows')` returns the specs. Call `await spec.run(session)` on each one, and read `outcome` (`pass` or `fail`).
 
 ## Authoring tip: record → prune → commit
 
@@ -126,4 +130,4 @@ Yes, `toJUnitXml` and `writeJUnit` are both exported from `@reticlehq/test`. Pas
 
 ### Do I have to write specs by hand if I already have flows?
 
-No. `flowsAsSpecs` registers one `reticleTest` per flow under `.reticle/flows/`, replayed with that flow's own `expect` and `success` predicates and skipping its `dynamic` regions. That keeps the recorded map and the CI suite from drifting apart, because they are the same artifact.
+No. `registerFlowSpecs` registers one vitest test for each flow under `.reticle/flows/`. Each test replays the flow's own `expect` and `success` predicates and skips its `dynamic` regions. These are vitest tests, not `reticleTest` specs, so `runSpecs` does not run them. That keeps the recorded map and the CI suite from drifting apart, because they are the same artifact.

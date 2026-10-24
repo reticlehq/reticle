@@ -14,7 +14,7 @@ import { DOCUMENT_ID_LENGTH } from '@/identity/document-identity.js';
 import { NO_EDITS_OBSERVED } from '@/identity/edit-epoch.js';
 import { PlatformProfile } from './platform.js';
 import { ChannelId } from './channel.js';
-import { HelloEnv, HelloScope } from './production/hello-mode.js';
+import { HelloEnv, HelloInstrumentation, HelloScope } from './production/hello-mode.js';
 import { OutwardAction } from '@/verdict/security.js';
 
 const sessionIdSchema = z.string().min(1).max(TRANSPORT_LIMITS.MAX_SESSION_ID_LENGTH);
@@ -244,6 +244,11 @@ export const HelloMessageSchema = z.object({
    * would suppress the honest gap for every app that simply has no source mapping at all.
    */
   sourceMapping: z.boolean().optional(),
+  /**
+   * Who put the SDK in this page: `installed` by the app, or `injected` from outside by a hosted
+   * verifier. ABSENT means `installed`. See `HelloInstrumentation`.
+   */
+  instrumentation: z.nativeEnum(HelloInstrumentation).optional(),
   /**
    * The version of the SDK in the page, so a version-skewed pair can SAY so.
    *

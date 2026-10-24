@@ -55,7 +55,7 @@ function textFiles(dir: string, out: string[] = []): string[] {
 const ROOT_DOCS = [
   'README.md',
   'SKILL.md',
-  'plugin/SKILL.md',
+  'plugins/reticle/SKILL.md',
   'MIGRATION.md',
   'CONTRIBUTING.md',
   'RELEASING.md',

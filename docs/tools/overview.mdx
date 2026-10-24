@@ -9,7 +9,7 @@ Your agent is shown **ten** tools by default: `reticle_navigate`, `reticle_look`
 
 Most of the rest were not removed. They were **merged**. `reticle_snapshot` is `reticle_look { action: "page" }`; `reticle_console` is `reticle_observe { action: "console" }`. One tool, one action argument, same work. Calling a retired name returns the call that replaced it, and `reticle_tools` prints the whole mapping.
 
-That is not a limitation, it's the design. MCP re-sends every advertised tool definition to the model on **every single turn**, so the tool list is not a menu you pay for once. It's rent.
+That is not a limitation. It is the design. MCP re-sends every advertised tool definition to the model on **every single turn**, so the tool list is not a menu you pay for once. It's rent.
 
 A wider surface costs tokens on every message. Less obviously, it makes the model wander: give it fifty ways to look at a page and it will try several before doing anything useful.
 
@@ -82,7 +82,7 @@ Those repeats were not retries. The calls succeeded and got repeated, because th
 
 `reticle_run` takes a tool name and its arguments. `reticle_tools` lists what's available and returns the full argument grammar for any of them, so your agent can discover a tool mid-task without you having pre-loaded its schema.
 
-Notable residents of the cold tail: flow recording and replay, visual diffing and screenshots, network mocking, viewport pinning, coverage, autonomous crawling, and the human-in-the-loop session controls.
+Notable residents of the cold tail: flow recording and replay, visual diffing and screenshots, network mocking, viewport pinning, the clock, storage, and the App Graph map (`reticle_map`).
 
 ## Read responses carry their cost
 
@@ -156,7 +156,7 @@ These pages are named for the unmerged tools. Each one gives the default spellin
 | [`reticle_assert`](/tools/assert) | Did the named consequence hold? **Produces a verdict** |
 | [`reticle_tools`](/tools/tools-and-run) | What else is available, and what are its arguments? |
 | [`reticle_run`](/tools/tools-and-run) | Invoke any other registered tool by name |
-| [`reticle_session`](/tools/session-and-feedback) | Hand control back to the human |
+| [`reticle_session`](/tools/session-and-feedback) | List connected tabs (the default), hand control back with `yield`, tune the HUD, read the account |
 | [`reticle_session { action: "feedback" }`](/tools/session-and-feedback) | Tell the maintainers Reticle got something wrong (`reticle_feedback` is its unmerged name, not advertised by default) |
 
 <Card title="The complete reference" icon="book" href="/usage">

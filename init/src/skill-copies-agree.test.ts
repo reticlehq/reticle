@@ -2,23 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { SKILL_COPIES, syncSkill } from '../../scripts/sync-skill.mjs';
 
 /**
- * Three copies of the skill file ship, and only one of them cannot drift.
+ * Root `SKILL.md` is the one hand-written skill. `scripts/sync-skill.mjs` writes every other copy
+ * from it: `docs/skill.md` (the docs host serves it), `plugins/reticle/SKILL.md` (the Claude Code plugin),
+ * `skills/reticle/SKILL.md` (the skills CLI) and `skills/install-and-verify/SKILL.md` (an older name
+ * for the same skill). Each copy is its own frontmatter plus the root body, with its own
+ * install-source marker.
  *
- *   SKILL.md                  the canonical one, and the paste-URL agents fetch from raw.githubusercontent
- *   server/SKILL.md  GENERATED — scripts/pack-docs.mjs copies the root in at prepack, gitignored
- *   plugin/SKILL.md           hand-maintained, shipped to Claude Code via .claude-plugin/marketplace.json
- *
- * The third is the problem this pins. It is a deliberate restructure — its own frontmatter, its own
- * ordering, shorter — so it cannot be generated and byte-equality would be the wrong rule. What it
- * must not do is disagree with the canonical file about the RULES, and it silently did: the root
- * gained a clarification that `init` writing a pre-approval for the `reticle` server is not the same
- * as bypassing a host's permission prompt, and the plugin copy kept the older sentence. An agent
- * loading the plugin then has strictly worse guidance about the one thing where being wrong means
- * touching a permissions file it should not.
- *
- * So: the normative sentences are shared verbatim, and the version is the one being shipped.
+ * The plugin and install-and-verify copies were hand restructures. They drifted from the root about
+ * the permission rule, named a step that did not exist, and told agents to call a removed tool.
  */
 // Asked rather than counted. A walk of `..` segments up to the repository is a statement about how
 // deeply this package sits, not about the repository, and packages move -- when one did, every such
@@ -37,11 +31,8 @@ const allSkillFiles = (): string[] =>
     .filter((rel) => existsSync(join(ROOT, rel)));
 
 /**
- * Sentences both copies must carry, verbatim.
- *
- * Deliberately only the NORMATIVE ones — what an agent must not do, and the one exception. Prose that
- * is merely explanatory is free to differ, because the plugin file is a restructure and pinning its
- * wording would make every edit a two-file chore for no safety gain.
+ * Sentences every copy that states the permission rule must carry, verbatim. The generated copies
+ * carry them because the root does; the check below stops a task skill from restating half of it.
  */
 const SHARED_RULES = [
   'Your host asks the human to approve a command.',
@@ -50,33 +41,46 @@ const SHARED_RULES = [
   'No recognisable dev script in `package.json`.',
 ];
 
-/**
- * Every hand-maintained copy, not just the plugin.
- *
- * Watching `plugin/SKILL.md` alone found one of three: `skills/install-and-verify/SKILL.md` carried
- * the same stale sentence and was missed, because "it is a task skill, not a copy of the root" was
- * an assumption rather than a grep. A guard that covers one of the places a rule lives will keep
- * being true while the rule rots everywhere else.
- *
- * A copy is INCLUDED here only if it already states the rule — the other eleven skills are about
- * verifying, not installing, and have no business repeating install guidance. That is what makes
- * this a drift check rather than a demand that every file say everything.
- */
-const HAND_MAINTAINED = [
-  'SKILL.md',
-  'docs/skill.md',
-  'plugin/SKILL.md',
-  'skills/install-and-verify/SKILL.md',
-];
+const GENERATED = SKILL_COPIES.map((copy) => copy.path);
+const ALL_COPIES = ['SKILL.md', ...GENERATED];
 
 describe('the skill copies agree about the rules', () => {
-  it('carries every normative sentence in every hand-maintained copy', () => {
-    for (const file of HAND_MAINTAINED) {
-      const text = read(file);
-      for (const rule of SHARED_RULES) {
-        expect(text, `${file} is missing: ${rule}`).toContain(rule);
-      }
+  it('carries every normative sentence in the canonical skill', () => {
+    for (const rule of SHARED_RULES) {
+      expect(read('SKILL.md'), `SKILL.md is missing: ${rule}`).toContain(rule);
     }
+  });
+
+  it('commits every generated copy exactly as `pnpm skill:sync` writes it', () => {
+    for (const [path, text] of syncSkill(ROOT)) {
+      expect(read(path), `${path} is out of date: run pnpm skill:sync`).toBe(text);
+    }
+  });
+
+  /**
+   * `npx skills add reticlehq/reticle --skill reticle` installed the whole 11 MB `docs/` directory as
+   * the skill on macOS and Windows, because `docs/skill.md` matched `SKILL.md` on a case-insensitive
+   * file system. On Linux it installed `plugin/`, whose text said the plugin had registered the MCP
+   * server. The CLI reads the repository root one level deep before `skills/`, the first skill with
+   * a name wins, and a named `--skill` also finds `internal` skills. So no directory at the root may
+   * hold a skill named `reticle`, and the docs and plugin copies are `internal`.
+   */
+  it('lets the skills CLI find `reticle` only in skills/reticle', () => {
+    const name = (text: string): string | undefined => /^name:\s*(.+)$/m.exec(text)?.[1]?.trim();
+    const atRoot = readdirSync(ROOT, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && e.name !== 'skills')
+      .flatMap((e) =>
+        readdirSync(join(ROOT, e.name))
+          .filter((f) => 'skill.md' === f.toLowerCase())
+          .map((f) => `${e.name}/${f}`),
+      )
+      .filter((rel) => 'reticle' === name(read(rel)));
+    expect(atRoot, 'a root directory holds a skill named reticle').toEqual([]);
+    const internal = /^\s+internal:\s*true$/m;
+    for (const path of ['docs/skill.md', 'plugins/reticle/SKILL.md']) {
+      expect(read(path), `${path} must declare metadata.internal: true`).toMatch(internal);
+    }
+    expect(read('skills/reticle/SKILL.md')).not.toMatch(internal);
   });
 
   /**
@@ -87,7 +91,7 @@ describe('the skill copies agree about the rules', () => {
   it('finds no copy outside the list restating the rule in part', () => {
     const anchor = 'That prompt belongs to the host.';
     const strays = allSkillFiles()
-      .filter((f) => !HAND_MAINTAINED.includes(f) && read(f).includes(anchor))
+      .filter((f) => !ALL_COPIES.includes(f) && read(f).includes(anchor))
       .filter((f) => !SHARED_RULES.every((r) => read(f).includes(r)));
     expect(strays, `these state the rule but not all of it: ${strays.join(', ')}`).toEqual([]);
   });
@@ -99,7 +103,7 @@ describe('the skill copies agree about the rules', () => {
    */
   it('declares the version actually being shipped, in every copy that declares one', () => {
     const shipped = (JSON.parse(read('server/package.json')) as { version: string }).version;
-    for (const file of [...HAND_MAINTAINED, ...allSkillFiles()]) {
+    for (const file of [...ALL_COPIES, ...allSkillFiles()]) {
       const declared = /^\s*version:\s*(.+)$/m.exec(read(file))?.[1]?.trim();
       // Not every copy has frontmatter — the canonical one has none at all.
       if (declared === undefined) continue;
@@ -121,12 +125,15 @@ describe('the skill copies agree about the rules', () => {
    * making people type an attribution environment variable there would complicate the first-run
    * path. Its invocations intentionally fall into `unknown` rather than claiming a false channel.
    *
-   * The plugin is deliberately absent: it sets the marker in the `env` of the MCP server it
-   * registers (plugin/.claude-plugin/plugin.json), not in prose an agent types.
+   * The plugin also sets the marker in the `env` of the MCP server it registers
+   * (plugins/reticle/.claude-plugin/plugin.json); its skill copy carries the same channel.
    */
   it('carries the install-source marker in every channel that ships a command', () => {
     const channels = [
       ['SKILL.md', 'skill_file'],
+      ['docs/skill.md', 'skill_file'],
+      ['plugins/reticle/SKILL.md', 'plugin'],
+      ['skills/reticle/SKILL.md', 'npx_skill'],
       ['skills/install-and-verify/SKILL.md', 'npx_skill'],
     ] as const;
     for (const [file, source] of channels) {
@@ -153,8 +160,24 @@ describe('the skill copies agree about the rules', () => {
   });
 
   it('registers the plugin channel where the plugin actually declares it', () => {
-    const manifest = read('plugin/.claude-plugin/plugin.json');
+    const manifest = read('plugins/reticle/.claude-plugin/plugin.json');
     expect(manifest).toContain('"RETICLE_INSTALL_SOURCE": "plugin"');
+  });
+
+  /**
+   * The plugin pins its daemon to one server version, and its nudge pins `init` to the same one, so
+   * the SDK that `init` installs speaks the daemon's contract. The plugin's skill copy said
+   * `@latest`: after the next release, a plugin user got a newer SDK than the pinned daemon.
+   */
+  it('makes the plugin copy run the init of the server version the plugin pins', () => {
+    const manifest = JSON.parse(read('plugins/reticle/.claude-plugin/plugin.json')) as {
+      mcpServers: { reticle: { args: string[] } };
+    };
+    const pinned = manifest.mcpServers.reticle.args.find((a) => a.startsWith('@reticlehq/server@'));
+    expect(pinned, 'plugin.json pins no @reticlehq/server version').toBeDefined();
+    const copy = read('plugins/reticle/SKILL.md');
+    expect(copy).toContain(`npx ${pinned ?? ''} init`);
+    expect(copy).not.toContain('@reticlehq/server@latest init');
   });
 
   /**

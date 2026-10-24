@@ -2,6 +2,7 @@
 title: Release gate plan
 description: 'What has to be true before a PR merges and before a release ships, and what is built so far.'
 icon: list-check
+noindex: true
 ---
 
 Two gates, not one: a **merge gate** that answers "does this PR break anything" and runs on every PR in minutes, and a **release gate** that answers "does this version work in the clients people use" and runs on a release candidate over hours. Phases 0, 1, 2 and 4 are built; Phase 3 (the client matrix) has its tooling built but almost no client records, and Tier 2 is blocked on a token that cannot be created from inside this repo.

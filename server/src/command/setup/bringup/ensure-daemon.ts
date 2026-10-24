@@ -110,7 +110,7 @@ export async function ensureDaemon(
           `The Reticle daemon on port ${String(port)} is ${theirs}, which speaks a different wire ` +
           `contract than this init, so it will refuse your app — and ` +
           `${String(sessionCount)} session(s) are still using it, so init will not stop it. When ` +
-          `they are done, run \`npx @reticlehq/server kill --port ${String(port)}\` and re-run init.`,
+          `they are done, run \`npx @reticlehq/server stop --force --port ${String(port)}\` and re-run init.`,
       };
     }
     if (!(await deps.replace(port))) return { state: EnsureDaemon.UNAVAILABLE };

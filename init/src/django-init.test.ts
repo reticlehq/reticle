@@ -11,7 +11,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { detectDjangoProject, djangoSetupMessage } from './detect/non-js-project.js';
-import { djangoMiddlewareSnippet, reticleConfigContent } from './patch/snippets.js';
+import { reticleConfigContent } from './patch/snippets.js';
+import { djangoMiddlewareSnippet } from './patch/python-snippets.js';
 import { deriveProjectId } from './project/project-id.js';
 import { Framework } from './detect/detect.js';
 

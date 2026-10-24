@@ -52,7 +52,7 @@ import {
 } from '@/telemetry/harness-run.js';
 import { driveVerdict, type RemoteDriveOutcome } from '@/features/harness/platform/remote-drive.js';
 import {
-  harnessLockRefusal,
+  harnessStartRefusal,
   firstLine,
   exploreApp,
   harnessAvailable,
@@ -100,14 +100,15 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         .describe(
           'Active session ID from reticle_sessions. Omit when only one browser session is open.',
         ),
-      driveId: z.string().optional(),
-      // Bare on purpose: the description and every `running` answer say how to poll, and this
-      // schema is re-sent on every turn of every session.
+      driveId: z.string().optional().describe('The drive id an explore call answered with.'),
       wait: z.number().min(0).max(WAIT_MAX_S).optional().describe('Seconds; default 50.'),
-      runId: z.string().optional(),
+      runId: z
+        .string()
+        .optional()
+        .describe('The run id an explore call answered with; pass it to poll that run.'),
       planId: z.string().optional().describe('Run a plan saved on the dashboard, as it stands.'),
-      stop: z.boolean().optional(),
-      say: z.string().optional(),
+      stop: z.boolean().optional().describe('With runId: stop that Harness run.'),
+      say: z.string().optional().describe('With runId: a note to the running Harness.'),
     },
     // Everything the handler returns has to be declared, or a schema-aware client never sees it.
     // Optional throughout: a drive still running answers only its status, id and progress.
@@ -269,7 +270,7 @@ export async function answerExplore(
     // Billed to the one free drive the platform granted, never to another.
     ...('string' === typeof driveId ? { [ReticleEnv.DRIVE_ID]: driveId } : {}),
   };
-  // The coverage gate first: it is local, and the one thing to fix before anything else matters.
+  // The build check first: it is local, and the one thing to fix before anything else matters.
   // Not for a saved plan that only replays flows (no model turn to guard), and a plan it refuses
   // is told so, so the plan's history records the attempt.
   const planId = str(args['planId']);
@@ -288,7 +289,7 @@ export async function answerExplore(
     source: harnessRunSource(origin, planId),
     hosted: platform !== undefined,
   };
-  const locked = replayOnly ? undefined : await harnessLockRefusal(deps, sessionId, env);
+  const locked = replayOnly ? undefined : await harnessStartRefusal(deps, sessionId);
   if (locked !== undefined) {
     reportHarnessBlocked(runStart, locked.reason);
     if (planId !== undefined && platform !== undefined)

@@ -1,8 +1,8 @@
-import { afterAll, describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect, vi } from 'vitest';
 import { OPTIMIZER_OPTIONS_KEY, optimizerOptionsKey, viteMajor } from './installed.js';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { transformSync } from '@babel/core';
 import reticleSource from '@reticlehq/babel-plugin';
 import { RETICLE_DEFAULT_PORT, ReticleDir, ReticleEnv } from '@reticlehq/core';
@@ -12,6 +12,7 @@ import {
   RETICLE_CONNECT_MODULE,
   connectModuleSource,
   installedSdk,
+  readPairingToken,
 } from './index.js';
 import { ignoredFileNotice } from './stamping.js';
 
@@ -895,5 +896,53 @@ describe('the opt-out report', () => {
     expect(line).toContain('Generated.tsx');
     expect(line).toContain('@reticle-ignore');
     expect(line.toLowerCase()).toContain('source');
+  });
+});
+
+/**
+ * The daemon resolves a relative token folder against the working folder and does not use a
+ * Windows path on POSIX. The plugin must pick the same token file, or the bridge refuses the page.
+ */
+describe('readPairingToken with a token folder that is not absolute', () => {
+  function withEnv(tokenDir: string, body: (cwd: string, home: string) => void): void {
+    const saved = { dir: process.env[ReticleEnv.PAIRING_TOKEN_DIR], home: process.env['HOME'] };
+    const cwd = mkdtempSync(join(tmpdir(), 'reticle-vite-cwd-'));
+    const home = mkdtempSync(join(tmpdir(), 'reticle-vite-home-'));
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(cwd);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    process.env[ReticleEnv.PAIRING_TOKEN_DIR] = tokenDir;
+    process.env['HOME'] = home;
+    try {
+      body(cwd, home);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      cwdSpy.mockRestore();
+      warn.mockRestore();
+      for (const [key, value] of [
+        [ReticleEnv.PAIRING_TOKEN_DIR, saved.dir],
+        ['HOME', saved.home],
+      ] as const) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
+  }
+
+  it('uses the token file in the working folder, as the daemon does', () => {
+    withEnv('relative-token-dir', (cwd) => {
+      const token = readPairingToken();
+      expect(token).toBe(readFileSync(join(cwd, 'relative-token-dir', 'pairing-token'), 'utf8'));
+    });
+  });
+
+  it.runIf('/' === sep)('uses the home folder for a Windows path on POSIX', () => {
+    withEnv('C:\\Users\\u\\.reticle', (cwd, home) => {
+      const token = readPairingToken();
+      expect(token).toBe(readFileSync(join(home, '.reticle', 'pairing-token'), 'utf8'));
+      expect(readdirSync(cwd)).toEqual([]);
+    });
   });
 });

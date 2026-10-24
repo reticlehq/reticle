@@ -546,6 +546,25 @@ describe('the last push', () => {
     expect(server.count()).toBe(0);
   });
 
+  it('returns in time for `reticle stop` when the platform does not answer', async () => {
+    // `reticle stop` sends SIGTERM, waits 5 s, then sends SIGKILL. The daemon sends its stop event
+    // first (up to 2 s), then flushes. An unbounded flush on a slow network held the exit past 5 s,
+    // so the kill came first: no exit line in the log, no pid file removed, no browser closed.
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      request: () => new Promise(() => undefined),
+      intervalMs: 60_000,
+    });
+    let finished = false;
+    const done = d.flush().then(() => {
+      finished = true;
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(finished).toBe(true);
+    await done;
+  });
+
   it('stops the timer, so a flushed daemon never cycles again', async () => {
     const server = counting();
     const d = startSyncDaemon({

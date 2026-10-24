@@ -6,12 +6,9 @@ import { REPO_ROOT } from '@/machine/repo-root.js';
 /**
  * The HTTP transport has its own page. The places an agent reads when `reticle_*` is missing
  * from the catalog did not point at it, so the agents who needed it found the endpoints by
- * reading the server. Both of those pages have to name the path.
+ * reading the server. That page has to name the path.
  */
-const PAGES = [
-  'docs/troubleshooting.mdx',
-  'skills/install-and-verify/references/troubleshooting.md',
-];
+const PAGES = ['docs/troubleshooting.mdx'];
 
 describe('an empty tool catalog points at the HTTP transport', () => {
   it('names /mcp/sse on the troubleshooting pages', () => {

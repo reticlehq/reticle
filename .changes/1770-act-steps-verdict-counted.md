@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — a verdict from `reticle_act { steps }` was not counted as a verification.** On the default tool surface a sequence runs under the `reticle_act` name, and that name was not in the set of verdict tools. A sequence that answered `verified: "yes"` did not settle the actions before it, so the next result carried a false `verify_next` nudge ("no verdict was asked for"). Each sequence verdict now counts once. A single `reticle_act` action still counts as no verdict, and no longer can carry the feedback ask that belongs to a verification. Closes [#1770](https://github.com/reticlehq/reticle/issues/1770).

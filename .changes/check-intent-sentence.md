@@ -1,3 +1,0 @@
-### Added
-
-- **`@reticlehq/core`, `@reticlehq/server` — every recorded check carries a sentence a person can read.** A check made with `reticle_act_and_wait`, `reticle_assert` or a step of `reticle_act { steps }` without an `intent` reached the dashboard as engine wording ("a request PATCH matching '/assignee'"). Each check in the journal and in the run artifact's `checks[]` now carries `intent`: the agent's own, else a sentence built from the predicate in the failure voice ("No PATCH request to /assignee was made"), marked `intentDerived: true`. A failed `allOf` also records `failedPart`, the index of the part that failed, and the built sentence names that part. The fields are additive: older readers ignore them.

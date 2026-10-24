@@ -417,3 +417,43 @@ describe('arriveAtStartPath — replay navigates to the flow start page before s
     expect(sent).toContain(`${RETICLE_URL_PARAM.SESSION}=lease-1`);
   });
 });
+
+/**
+ * Replay waited a fixed 5 s for the start page to reconnect. A dev server that compiles the route
+ * on the first visit takes longer, and the flow ended as unverifiable with nothing run. The wait
+ * now spends the first step's budget when that is longer.
+ */
+describe('arriveAtStartPath waits for as long as the first step may wait', () => {
+  it('continues on a page that reconnects at 8 s when the step budget is 15 s', async () => {
+    const clock = instantClock(100);
+    const { session } = tab(undefined, { id: 'gone' });
+    const fresh = successor('http://localhost:3000/login');
+    const sessions = {
+      resolve: () => {
+        if (clock.now() < 8_000) {
+          throw new Error('no connected session');
+        }
+        return fresh as Session;
+      },
+    } as unknown as SessionManager;
+    const slow: FlowFile = {
+      ...flow('/login'),
+      steps: [
+        {
+          tool: 'reticle_act',
+          anchor: { kind: AnchorKind.TESTID, value: 'submit' },
+          timeoutMs: 15_000,
+        },
+      ],
+    };
+    const arrived = await arriveAtStartPath(
+      sessions,
+      { ...session, url: 'http://localhost:3000/reset-password' },
+      slow,
+      undefined,
+      clock,
+    );
+    expect(arrived.lost).toBeUndefined();
+    expect(arrived.session).toBe(fresh);
+  });
+});

@@ -3,7 +3,7 @@ name: verify-language-switch
 description: 'Prove a language switch translates what the user sees, keeps what they had already typed, and is still in force after a reload. Use when i18n, a locale picker, a language menu or translation files were added or changed, when a string is suspected of staying in the old language or showing a raw translation key, or when a user reports losing their form or their language choice after switching or refreshing.'
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -12,7 +12,7 @@ metadata:
 
 Clicking the language menu and seeing one word change proves one string was wired up. It does not prove the rest of the page followed, that the field the user was in the middle of filling still holds what they typed, or that the choice outlives a refresh. Those are three separate bugs. Each ships regularly, and glancing at the page after the click catches none of them.
 
-**Reticle** can prove all three in the running app, with no test code. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+**Reticle** can prove all three in the running app, with no test code. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## Before you start
 

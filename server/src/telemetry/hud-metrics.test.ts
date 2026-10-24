@@ -121,7 +121,7 @@ describe('HUD time is per tab, and only while somebody can see it', () => {
 });
 
 describe('HUD page views and prompts, for their own events', () => {
-  it('says a page was viewed, once per page per tab within the dedupe window', () => {
+  it('says a page was viewed, once per page per daemon within the dedupe window', () => {
     const c = clock();
     const m = new HudMetrics(c.now);
     expect(m.record({ view: HudView.EXPANDED, panel: HudPanel.HARNESS }, 'a').viewed).toBe(
@@ -132,15 +132,23 @@ describe('HUD page views and prompts, for their own events', () => {
     expect(
       m.record({ view: HudView.EXPANDED, panel: HudPanel.HARNESS }, 'a').viewed,
     ).toBeUndefined();
-    // Another tab is another view.
-    expect(m.record({ view: HudView.EXPANDED, panel: HudPanel.HARNESS }, 'b').viewed).toBe(
-      HudPanel.HARNESS,
-    );
+    // Another tab is not another view: a reload makes a new tab id.
+    expect(
+      m.record({ view: HudView.EXPANDED, panel: HudPanel.HARNESS }, 'b').viewed,
+    ).toBeUndefined();
     c.advance(1);
     m.record({ view: HudView.EXPANDED, panel: HudPanel.CHAT }, 'a');
     expect(m.record({ view: HudView.EXPANDED, panel: HudPanel.HARNESS }, 'a').viewed).toBe(
       HudPanel.HARNESS,
     );
+  });
+
+  it('does not call the Agent Log a view when the HUD opens it by itself on load', () => {
+    const m = new HudMetrics(clock().now);
+    expect(m.record({ view: HudView.EXPANDED, panel: HudPanel.CHAT }, 'a').viewed).toBeUndefined();
+    m.record({ panel: HudPanel.FLOWS }, 'a');
+    // The person opened it again: that is a choice, and a view.
+    expect(m.record({ panel: HudPanel.CHAT }, 'a').viewed).toBe(HudPanel.CHAT);
   });
 
   it('never calls the closed HUD a page view', () => {
@@ -156,13 +164,14 @@ describe('HUD page views and prompts, for their own events', () => {
     expect(m.record({ view: HudView.EXPANDED, panel: HudPanel.FLOWS }, 'b').tabs).toBe(1);
   });
 
-  it('says a sign-in prompt was shown once per surface per tab', () => {
+  it('says a sign-in prompt was shown once per surface per daemon', () => {
     const m = new HudMetrics(clock().now);
     expect(m.record({ prompt: HudPromptSurface.RAIL }, 'a').prompted).toBe(HudPromptSurface.RAIL);
     expect(m.record({ prompt: HudPromptSurface.RAIL }, 'a').prompted).toBeUndefined();
     expect(m.record({ prompt: HudPromptSurface.HEADER }, 'a').prompted).toBe(
       HudPromptSurface.HEADER,
     );
-    expect(m.record({ prompt: HudPromptSurface.RAIL }, 'b').prompted).toBe(HudPromptSurface.RAIL);
+    // A reload makes a new tab id. It is the same ask to the same person.
+    expect(m.record({ prompt: HudPromptSurface.RAIL }, 'b').prompted).toBeUndefined();
   });
 });

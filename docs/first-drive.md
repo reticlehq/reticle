@@ -2,6 +2,7 @@
 title: Your first drive
 description: 'Clone to a real verdict in about fifteen minutes, and the traps that cost other people a debugging session.'
 icon: play
+noindex: true
 ---
 
 The goal of this page is narrow and deliberate: **end with a real verdict on screen**, produced by Reticle against a running app, in a checkout you just cloned. Not a passing unit test, the thing the project exists to do.
@@ -105,7 +106,7 @@ node -e "import('./apps/e2e/gate-harness.mjs').then(m=>m.freePortSafely(4400,{on
 
 **Fixtures are in a second repo.** The apps in `apps/` are all already instrumented, so none of them can tell you whether a fresh install still works. That question lives in [`reticle-fixtures`](https://github.com/reticlehq/reticle-fixtures), which keeps a pristine `clean` branch of real third-party apps plus `main` and `reticle/<version>`. See [`fixtures.md`](fixtures.md).
 
-**Telemetry fails silently.** Nothing throws, no test reddens, the data is just permanently gone. Read [`telemetry-contract.md`](telemetry-contract.md) before touching anything that emits.
+**Telemetry fails silently.** Nothing throws, no test reddens, the data is just permanently gone. Read [`contributing/telemetry/contract.md`](https://github.com/reticlehq/reticle/blob/main/contributing/telemetry/contract.md) before touching anything that emits.
 
 **`core` is the contract and may not gain dependencies.** Anything crossing browser ↔ bridge ↔ agent is defined there as a constant plus a zod schema. Never inline a wire string elsewhere.
 

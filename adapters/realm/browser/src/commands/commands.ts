@@ -327,6 +327,10 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
       // Only the completion re-read sets this: it re-reads a branch the truncated walk stopped
       // BEFORE emitting, so that branch's own line has to come back with its descendants.
       includeRoot: true === args['includeRoot'],
+      // A harness building a map of the app asks for each control's test id (`SnapshotOptions.ids`).
+      ids: true === args['ids'],
+      // And a harness looking for what a person would see broken asks for the layout audit.
+      audit: true === args['audit'],
     }),
   );
   reg.set(ReticleCommand.QUERY, (args) => {

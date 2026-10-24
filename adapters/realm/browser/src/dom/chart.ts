@@ -124,6 +124,12 @@ export interface CanvasChartData {
   data: unknown;
 }
 
+/** The chart libraries `canvasChartData` reads. Each is optional: a page can load neither. */
+export interface ChartGlobals {
+  Chart?: { getChart?: (el: Element) => { data?: unknown } | undefined };
+  echarts?: { getInstanceByDom?: (el: Element) => { getOption?: () => unknown } | undefined };
+}
+
 /**
  * Read the data behind a CANVAS chart.
  *
@@ -138,16 +144,15 @@ export interface CanvasChartData {
  */
 export function canvasChartData(
   canvas: Element,
-  globals: {
-    Chart?: { getChart?: (el: Element) => { data?: unknown } | undefined };
-    echarts?: { getInstanceByDom?: (el: Element) => { getOption?: () => unknown } | undefined };
-  },
+  globals: ChartGlobals | Window,
 ): CanvasChartData | null {
-  const chartjs = globals.Chart?.getChart?.(canvas);
+  // `lib.dom` does not declare the two libraries on `Window`, but they are page globals at runtime.
+  const libs = globals as ChartGlobals;
+  const chartjs = libs.Chart?.getChart?.(canvas);
   if (chartjs !== undefined && chartjs !== null) {
     return { library: 'chartjs', data: chartjs.data ?? null };
   }
-  const echart = globals.echarts?.getInstanceByDom?.(canvas);
+  const echart = libs.echarts?.getInstanceByDom?.(canvas);
   if (echart !== undefined && echart !== null) {
     return { library: 'echarts', data: echart.getOption?.() ?? null };
   }

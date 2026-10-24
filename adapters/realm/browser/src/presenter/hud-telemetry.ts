@@ -146,7 +146,7 @@ export function installHudTelemetry(
     lastSlide = slide;
     send({ slide });
   };
-  // Each ask once per page load; the daemon keeps its own once-per-tab on top.
+  // Each ask once per page load; the daemon keeps its own once-per-daemon on top.
   const prompted = new Set<HudPromptSurface>();
   const onPrompt = (): void => {
     const at = viewOf(root);

@@ -120,6 +120,8 @@ export class Transport {
   #closed = false;
   /** The bridge refused this page (1008): no timed retry, only one when the person returns. */
   #refused = false;
+  /** Dial once more on the next refusal: the hello now carries a token the bridge has not seen. */
+  #redialOnRefusal = false;
   /** When the current continuous outage began (nativeNow), or undefined while connected. */
   #disconnectedSince: number | undefined;
   /** Current reconnect delay; grows on each failure, resets on a successful open or on focus. */
@@ -227,6 +229,11 @@ export class Transport {
       // bridge puts an actionable message there, e.g. "upgrade @reticlehq/browser") instead of a
       // silent reconnect storm. End the session cleanly so the HUD doesn't hang on "running".
       if (event.code === WS_POLICY_VIOLATION) {
+        if (this.#redialOnRefusal && !this.#closed) {
+          this.#redialOnRefusal = false;
+          this.#open();
+          return;
+        }
         this.#refused = true;
         const reason = event.reason.length > 0 ? event.reason : 'policy violation';
         nativeWarn(
@@ -381,6 +388,23 @@ export class Transport {
    * appeared to the agent as having none, and nothing ever corrected it. Cheap and idempotent: the
    * bridge treats a hello as the session's current identity, not as a new session.
    */
+  /**
+   * The hello changed in a way the bridge may now accept (a new token). Dial again at once when the
+   * bridge already refused this page, or once on the next refusal when a socket is still open.
+   */
+  redialAfterRefusal(): void {
+    if (this.#closed) {
+      return;
+    }
+    if (this.#refused && this.#ws === undefined) {
+      this.#refused = false;
+      this.#reconnectDelay = RECONNECT_DELAY_MS;
+      this.#open();
+      return;
+    }
+    this.#redialOnRefusal = true;
+  }
+
   reannounce(): void {
     if (this.#ws === undefined || this.#ws.readyState !== WebSocket.OPEN) return;
     this.#ws.send(JSON.stringify(this.#deps.hello()));

@@ -251,6 +251,22 @@ describe('parallel fan-out is not a race', () => {
     expect(found).toHaveLength(1);
   });
 
+  it("does not read the newer response's own render as applying the older one", () => {
+    // Seen on a fixture bench, intermittently, on the CORRECT twin of a quote race: the app dropped
+    // the superseded answer, but the newer one had rendered 50ms before it landed, inside the slack
+    // the rule allows for a reaction stamped early. That render belongs to the response that caused
+    // it, the nearest completion, not to the loser that happened to land within the window.
+    expect(
+      findStaleResponses([
+        pending(0, '/api/quote?symbol=AAPL', 'a'),
+        pending(60, '/api/quote?symbol=MSFT', 'b'),
+        settled(650, 'b'),
+        applied(650), // the NEWER quote rendered…
+        settled(700, 'a'), // …and the older one landed after it, and was dropped
+      ]),
+    ).toEqual([]);
+  });
+
   it('ignores a reaction far enough after to be unrelated', () => {
     expect(
       findStaleResponses([

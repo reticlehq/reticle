@@ -37,11 +37,11 @@ const SERVER_SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Each behavioural set, and the file that owns it. */
 const ALLOWLISTS: ReadonlyArray<{ readonly name: string; readonly file: string }> = [
-  { name: 'ACTION_TOOLS', file: 'tools/invoke-tool.ts' },
-  { name: 'CDP_TOOLS', file: 'tools/invoke-tool.ts' },
-  { name: 'REF_MINTING_TOOLS', file: 'tools/invoke-tool.ts' },
-  { name: 'SESSION_BOUND_TOOLS', file: 'tools/invoke-tool.ts' },
-  { name: 'SESSION_EXEMPT_TOOLS', file: 'tools/invoke-tool.ts' },
+  { name: 'ACTION_TOOLS', file: 'tools/tool-kit.ts' },
+  { name: 'CDP_TOOLS', file: 'tools/tool-kit.ts' },
+  { name: 'REF_MINTING_TOOLS', file: 'tools/tool-kit.ts' },
+  { name: 'SESSION_BOUND_TOOLS', file: 'tools/tool-kit.ts' },
+  { name: 'SESSION_EXEMPT_TOOLS', file: 'tools/tool-kit.ts' },
   { name: 'VERDICT_TOOLS', file: 'tools/feedback-tools.ts' },
   { name: 'CORE_TOOL_NAMES', file: 'tools/tool-surface.ts' },
   { name: 'EXTENDED_TOOL_NAMES', file: 'tools/tool-surface.ts' },
@@ -175,7 +175,15 @@ describe('tool allowlists are complete', () => {
      * in TOOLS of its own). Every other set no: it acts on no page, mints no ref, and produces no
      * verdict.
      */
-    const PINNED_RAW_TOOL_COUNT = 65;
+    /*
+     * 66 since `reticle_map`: the App Graph folded from the project's journals. SESSION_EXEMPT_TOOLS
+     * YES, because the agent asks for the map before it has opened anything, and it reads only disk
+     * and the live tabs' journals. Every other set no: it acts on no page (ACTION, CDP), mints no
+     * ref, and produces no verdict about the app (VERDICT: counting it would inflate the headline
+     * metric with reads). On no advertised surface (CORE, EXTENDED, VERIFY, LEAN): unproven, so one
+     * `reticle_run` hop like `reticle_context`, and the extended surface is at its shared cap.
+     */
+    const PINNED_RAW_TOOL_COUNT = 66;
 
     expect(
       RAW_TOOLS.length,

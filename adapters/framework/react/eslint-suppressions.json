@@ -1,0 +1,92 @@
+{
+  "src/actions-controlled.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/auto-stores.live.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/auto-stores.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/auto-stores.ts": {
+    "curly": {
+      "count": 18
+    }
+  },
+  "src/cdp-reader.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/cdp-reader.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/commit-aggregator.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/drag-select.test.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/error-boundary.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/hydration-error.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/hydration.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/index.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/index.ts": {
+    "curly": {
+      "count": 25
+    }
+  },
+  "src/relative-to-root.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/render-meter.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/render-meter.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/source-seam.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/store.ts": {
+    "curly": {
+      "count": 1
+    }
+  }
+}

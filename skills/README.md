@@ -5,12 +5,12 @@ One directory per skill, each holding a `SKILL.md`. This is the whole format. Th
 ## Installing
 
 ```bash
+npx skills add reticlehq/reticle --skill reticle        # the Reticle skill: install, wire, prove one flow
 npx skills add reticlehq/reticle                        # pick from the list
-npx skills add reticlehq/reticle --skill install-and-verify -y   # just one, non-interactive
 npx skills add reticlehq/reticle --list                 # look without installing
 ```
 
-Claude Code users get the same content through the plugin (`plugin/SKILL.md`, registered in `.claude-plugin/marketplace.json`), which also registers the MCP server in the same step.
+`skills/reticle/SKILL.md` is generated from root `SKILL.md` by `pnpm skill:sync`. Do not edit it. `skills/install-and-verify/` is the same skill under its older name. Claude Code users get the same text through the plugin (`plugins/reticle/SKILL.md`, registered in `.claude-plugin/marketplace.json`), which also registers the MCP server. Do not put a `SKILL.md` named `reticle` in a directory at the repository root: the CLI reads those first, and the first name wins. `docs/skill.md` is named `reticle-docs`, and it and the plugin copy declare `metadata.internal: true`, so the CLI does not list them.
 
 ## Publishing
 

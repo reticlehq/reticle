@@ -81,6 +81,21 @@ const STATIC_TOKEN_DETAIL = `write this machine’s pairing token to ${STATIC_TO
 const STATIC_IGNORE_DETAIL = `add ${STATIC_TOKEN_MODULE} to ${STATIC_GITIGNORE_PATH} — it holds this machine’s pairing token`;
 const STATIC_CONNECT_DETAIL = 'write the dev-only connect snippet (loopback hosts only)';
 const STATIC_CONNECT_ALREADY_DETAIL = `${HTML_INDEX_PATH} already loads the Reticle SDK`;
+/** The package whose presence makes a static page an Electron renderer. */
+const ELECTRON_PACKAGE = 'electron';
+/**
+ * An Electron app often serves its renderer from a local HTTP server, so the packaged app runs on
+ * `localhost` on every user's machine. The localhost-only guard then lets the snippet run in
+ * production, and a packager glob such as `**\/*.js` can ship the token module.
+ */
+const ELECTRON_STATIC_DETAIL =
+  `This is an Electron app. Its packaged renderer can also run on localhost, so init did not ` +
+  `write the localhost-only snippet into ${HTML_INDEX_PATH} or the ${STATIC_TOKEN_MODULE} token ` +
+  'module. Connect only in development: for example, send `!app.isPackaged` from the main ' +
+  'process to the renderer, and call `reticle.connect()` only when it is true. Use ' +
+  `@reticlehq/electron for IPC and capture. If ${STATIC_TOKEN_MODULE} is in the project, keep ` +
+  `it out of the package: electron-builder \`files: ["!${STATIC_TOKEN_MODULE}"]\`, or Electron ` +
+  `Forge \`packagerConfig.ignore: [/${STATIC_TOKEN_MODULE.replaceAll('.', '\\.')}$/]\`.`;
 
 /**
  * Turn a conservative source patch into a step: applied when it patched, already when the wiring is
@@ -745,6 +760,19 @@ export function astroSteps(input: PlanInput): Step[] {
   ];
 }
 
+/** Write the gitignored module that holds this machine's pairing token, and its ignore line. */
+function staticTokenSteps(input: PlanInput): Step[] {
+  return Object.entries(
+    staticTokenFiles(input.pairingToken, (path) => input.htmlLocalSources?.[path] ?? null),
+  ).map(([path, content]) => ({
+    title: StepTitle.STATIC_PAIRING_TOKEN,
+    target: path,
+    status: StepStatus.APPLY,
+    detail: STATIC_GITIGNORE_PATH === path ? STATIC_IGNORE_DETAIL : STATIC_TOKEN_DETAIL,
+    write: { path, content },
+  }));
+}
+
 /**
  * The plain-HTML path: write the static connect when the page exists, otherwise print the recipe.
  *
@@ -753,19 +781,21 @@ export function astroSteps(input: PlanInput): Step[] {
  * where the if/else chain this replaced used to hand it these instructions silently.
  */
 export function htmlSteps(input: PlanInput): Step[] {
+  if (input.detection.dependencies?.[ELECTRON_PACKAGE] !== undefined) {
+    return [
+      {
+        title: StepTitle.CONNECT_SNIPPET,
+        target: HTML_INDEX_PATH,
+        status: StepStatus.MANUAL,
+        detail: ELECTRON_STATIC_DETAIL,
+      },
+    ];
+  }
   const index = input.htmlIndexSource ?? null;
   if (null !== index) {
     // The page is publishable; the pairing token belongs in its gitignored sibling module instead.
     // Refresh that module even when the connect block itself is already in place.
-    const steps: Step[] = Object.entries(
-      staticTokenFiles(input.pairingToken, (path) => input.htmlLocalSources?.[path] ?? null),
-    ).map(([path, content]) => ({
-      title: StepTitle.STATIC_PAIRING_TOKEN,
-      target: path,
-      status: StepStatus.APPLY,
-      detail: STATIC_GITIGNORE_PATH === path ? STATIC_IGNORE_DETAIL : STATIC_TOKEN_DETAIL,
-      write: { path, content },
-    }));
+    const steps = staticTokenSteps(input);
     const written = withStaticSnippet(
       index,
       connectArg(input.options.port, input.options.projectId),
@@ -793,6 +823,8 @@ export function htmlSteps(input: PlanInput): Step[] {
     ];
   }
   return [
+    // The manual snippet imports the token from this module rather than printing it.
+    ...staticTokenSteps(input),
     {
       title: StepTitle.CONNECT_SNIPPET,
       target: HTML_INDEX_PATH,

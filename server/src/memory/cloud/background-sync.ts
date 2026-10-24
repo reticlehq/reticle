@@ -87,7 +87,7 @@ export function backgroundSyncGate(input: {
   if (token === undefined) {
     return {
       state: BackgroundSyncState.SIGNED_OUT,
-      why: `nobody is signed in to ${cloud.config.url}: run \`reticle login --url ${cloud.config.url}\``,
+      why: `nobody is signed in to ${cloud.config.url}: run \`reticle connect --url ${cloud.config.url}\``,
     };
   }
   return {

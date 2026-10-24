@@ -18,6 +18,8 @@ import {
   MCP_SHUTDOWN_EVENT,
   ReticleEnv,
   CONTRACT_FINGERPRINT,
+  ProxyExitReason,
+  PROXY_ID_PARAM,
 } from '@reticlehq/core';
 import { SseFrameParser } from './sse-frame-parser.js';
 export { SseFrameParser, type SseFrame } from './sse-frame-parser.js';
@@ -37,7 +39,13 @@ import {
   OnRequest,
 } from './proxy/proxy-lifecycle.js';
 import { describePresence, probePresence } from '@/command/daemon/binding/port-presence.js';
-import { flushProxySessionMetrics } from '@/telemetry/proxy-telemetry.js';
+import {
+  PROXY_ID,
+  flushProxyExit,
+  noteProxyDrop,
+  noteProxyToolCall,
+} from '@/telemetry/proxy-telemetry.js';
+export { flushProxyExit, reportWakeRefused } from '@/telemetry/proxy-telemetry.js';
 import { detectStack } from '@/telemetry/feedback-context.js';
 /**
  * The same `/status` probe `doctor`, `status` and `kill` ask with. Reused rather than re-written:
@@ -58,7 +66,7 @@ export {
   setProxyLogPort,
 } from './proxy/proxy-log.js';
 import { proxyLog } from './proxy/proxy-log.js';
-import { OutageReason, OutageStage, reportMcpOutage } from './faults/mcp-outage.js';
+import { OutageReason, OutageStage, reportMcpOutage, type DropCause } from './faults/mcp-outage.js';
 import { postToSession } from './proxy/mcp-post-transport.js';
 import { MSG_DRIVE_MAY_BE_RUNNING, isHarnessDriveCall } from './proxy/drive-calls.js';
 import { reconnectDelayMs } from './proxy/proxy-backoff.js';
@@ -270,8 +278,8 @@ export function shouldRetryFirstConnect(error: unknown, elapsedMs: number): bool
 export function queueExpiryNextStep(port: number): string {
   return (
     `No Reticle daemon answered on port ${String(port)}. Retry the call — the next request starts ` +
-    'one. If it keeps failing, run `reticle doctor` in a terminal: it reports what is holding the ' +
-    'port and whether the daemon can start at all.'
+    'one. If it keeps failing, run `npx @reticlehq/server doctor` in a terminal: it reports what ' +
+    'is holding the port and whether the daemon can start at all.'
   );
 }
 
@@ -397,13 +405,14 @@ function withStateDirDiagnostic(reason: string): string {
 }
 
 export function startMcpProxy(
-  port: number,
+  bootPort: number,
   /**
    * Bring a daemon back before reconnecting. Without it the proxy retried a DEAD port until the
    * budget ran out and then killed itself, taking the agent's whole Reticle surface with it — the
-   * failure mode for a daemon that crashed, was stopped, or shut itself down as idle.
+   * failure mode for a daemon that crashed, was stopped, or shut itself down as idle. A returned
+   * port is where the daemon now is; the proxy dials it from then on.
    */
-  ensureDaemon?: () => Promise<void>,
+  ensureDaemon?: () => Promise<number | void>,
   /** Observe the real shutdown boundary in transport tests without terminating their worker. */
   exitProcess: (code: number) => void = (code) => process.exit(code),
   /**
@@ -416,6 +425,7 @@ export function startMcpProxy(
    */
   onUsableSession: () => void = () => undefined,
 ): Promise<never> {
+  let port = bootPort;
   return new Promise<never>((_resolve, reject) => {
     // A client just started us, which is the only honest evidence that Reticle is registered with
     // one at all: a config entry proves somebody wrote JSON, not that a client ever read it. Paired
@@ -496,12 +506,12 @@ export function startMcpProxy(
     const replay = new HandshakeReplay();
     const appHere = detectStack(process.cwd()).stack !== undefined;
     const pending = new PendingRequests();
-    const quit = (code: number): void => {
+    const quit = (code: number, reason: ProxyExitReason): void => {
       if (stopped) return;
       stopped = true;
       idleExit.stop();
       // Await: fire-and-forget here is how daemon_stopped never arrived.
-      void flushProxySessionMetrics().finally(() => exitProcess(code));
+      void flushProxyExit(reason).finally(() => exitProcess(code));
     };
     const idleExit = new ProxyIdleExit({
       graceMs: resolveProxyIdleExitMs(process.env[ReticleEnv.MCP_PROXY_IDLE]),
@@ -512,7 +522,7 @@ export function startMcpProxy(
           idleMs,
           note: 'the client link was quiet for the configured idle window with no work in flight; exiting the abandoned proxy',
         });
-        quit(0);
+        quit(0, ProxyExitReason.IDLE);
       },
     });
     idleExit.start();
@@ -634,9 +644,10 @@ export function startMcpProxy(
       }
     }
 
-    function scheduleReconnect(rawReason: string, detail?: string): void {
+    function scheduleReconnect(rawReason: string, detail?: string, cause?: DropCause): void {
       if (stopped) return;
       postUrl = null;
+      noteProxyDrop();
       // A stream the daemon warned us about is a planned shutdown, not a fault. The socket looks
       // identical either way from here, so this flag is the only thing that can tell them apart —
       // and without it every scheduled retirement was counted as an outage the agent suffered.
@@ -662,11 +673,11 @@ export function startMcpProxy(
       // Once per process: this session has now lost its tools at least once, which is the number
       // that says whether the transport work actually landed for real users. `pendingLost` is the
       // part an agent can FEEL — almost every measured drop killed nothing in flight.
-      reportMcpOutage(OutageStage.FIRST, { reason, attempts, pendingLost });
+      reportMcpOutage(OutageStage.FIRST, { reason, attempts, pendingLost, ...cause });
       // The severe stage: we are about to stop retrying. Reported so the share of sessions where
       // MCP never came back on its own is a number rather than an anecdote.
       if (attempts > MAX_RECONNECT_ATTEMPTS) {
-        reportMcpOutage(OutageStage.BUDGET_SPENT, { reason, attempts, pendingLost });
+        reportMcpOutage(OutageStage.BUDGET_SPENT, { reason, attempts, pendingLost, ...cause });
         // Stop RETRYING, never stop SERVING. See onReconnectBudgetSpent: exiting here made the
         // client mark the MCP server disconnected and left a human to reconnect it by hand.
         dormant = onReconnectBudgetSpent() === OnDrop.DORMANT;
@@ -717,7 +728,7 @@ export function startMcpProxy(
     function connect(first: boolean): void {
       // Announce this process to the daemon on the connect we already make — it is the single judge
       // of version skew, and this is the only moment it learns the agent's MCP server exists.
-      const announce = `${MCP_SSE_PATH}?${PEER_VERSION_PARAM}=${encodeURIComponent(SERVER_VERSION)}&${PEER_CONTRACT_PARAM}=${encodeURIComponent(CONTRACT_FINGERPRINT)}`;
+      const announce = `${MCP_SSE_PATH}?${PEER_VERSION_PARAM}=${encodeURIComponent(SERVER_VERSION)}&${PEER_CONTRACT_PARAM}=${encodeURIComponent(CONTRACT_FINGERPRINT)}&${PROXY_ID_PARAM}=${PROXY_ID}`;
       /**
        * ONE reconnect per connect attempt, whoever notices the failure first.
        *
@@ -748,19 +759,19 @@ export function startMcpProxy(
         responded = true;
         if (!first) proxyLog('reticle_mcp_proxy_reconnected', { port });
         res.setEncoding('utf8');
-        const drop = (reason: string, detail?: string): void => {
+        const drop = (reason: string, detail?: string, cause?: DropCause): void => {
           if (settled) return;
           settled = true;
           // What the dead session owed is settled inside scheduleReconnect, so the other half of the
           // socket's death pays exactly the same debt when it is the one that notices first.
-          scheduleReconnect(reason, detail);
+          scheduleReconnect(reason, detail, cause ?? { responded });
         };
         const sse = new SseFrameParser();
         res.on('data', (chunk: string) => {
           for (const frame of sse.push(chunk)) onSseEvent(frame.event, frame.data, port);
         });
         res.on('end', () => drop('sse_ended'));
-        res.on('error', (err) => drop('sse_error', err.message));
+        res.on('error', (err) => drop('sse_error', err.message, { error: err, responded }));
         // A socket dying under us (daemon killed, network stack reset) emits NEITHER `end` nor
         // `error` — only `aborted`/`close`. Listening for just the first two is why the proxy sat
         // there afterwards holding a dead stream. `settled` keeps the clean case single-fire.
@@ -792,7 +803,10 @@ export function startMcpProxy(
           reject(err);
           return;
         }
-        scheduleReconnect('connect_error', err.message);
+        // A reset of a stream that was already serving also lands here, because the request sees
+        // the error before the response closes. That is a dropped stream, not a refused connect.
+        const reason = responded ? OutageReason.SSE_RESET : OutageReason.CONNECT_ERROR;
+        scheduleReconnect(reason, err.message, { error: err, responded });
       });
     }
 
@@ -900,7 +914,10 @@ export function startMcpProxy(
         // The hop every other check misses. Recorded on the REQUEST rather than a reply, because
         // the question is whether anything ever left the agent — a call that leaves and gets no
         // answer is a different fault from one that was never made, and only this side sees it.
-        if (isToolCallRequest(trimmed)) rememberToolCalled(reticleStateHome(), port);
+        if (isToolCallRequest(trimmed)) {
+          rememberToolCalled(reticleStateHome(), port);
+          noteProxyToolCall();
+        }
         const action = onClientRequest(postUrl !== null, dormant);
         if (action === OnRequest.SEND && postUrl !== null) {
           forward(postUrl, trimmed);
@@ -931,7 +948,10 @@ export function startMcpProxy(
           attemptsBeforeDormant += attempts;
           attempts = 0;
           void (ensureDaemon?.() ?? Promise.resolve())
-            .then(() => connect(false))
+            .then((resolved) => {
+              port = resolved ?? port;
+              return connect(false);
+            })
             .catch((err: unknown) => {
               dormant = true;
               const reason = withStateDirDiagnostic(
@@ -959,7 +979,7 @@ export function startMcpProxy(
     process.stdin.on('end', () => {
       if (stopped) return;
       if (0 === pending.unanswered.length) {
-        quit(0);
+        quit(0, ProxyExitReason.STDIN_END);
         return;
       }
       const deadline = Date.now() + SHUTDOWN_DRAIN_MS;
@@ -967,13 +987,13 @@ export function startMcpProxy(
         const stuck = pending.unanswered;
         if (0 === stuck.length) {
           clearInterval(poll);
-          quit(0);
+          quit(0, ProxyExitReason.STDIN_END);
           return;
         }
         if (Date.now() < deadline) return;
         clearInterval(poll);
         proxyLog('reticle_mcp_proxy_unanswered_at_exit', { port, ids: stuck });
-        quit(1);
+        quit(1, ProxyExitReason.STDIN_END);
       }, SHUTDOWN_DRAIN_POLL_MS);
     });
   });

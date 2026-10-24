@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`: a flow that pressed Escape (or Tab, or a shortcut) with no target drifted at that step on every replay.** Live, `reticle_act { action: "press", args: { text: "Escape" } }` presses the key at the document, and it works. The recorder then saved the step with the degraded placeholder anchor. Every replay of the flow stopped there with `anchor_degraded` ("add a data-testid"), but the step has no element to add one to. The step is now saved with a `document` anchor and replayed the way it ran: at the document, with no ref, as a single step or inside a sequence. A step that has no anchor because its element could not be identified still reports `anchor_degraded`. Closes [#1559](https://github.com/reticlehq/reticle/issues/1559).

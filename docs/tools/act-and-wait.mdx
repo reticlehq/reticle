@@ -90,29 +90,32 @@ Real response. The `initiatorStack`, `storageDiffs` and per-event trace detail a
     "coverage": { "pct": 100, "partial": false },
     "integrity": { "clean": true, "issues": [] }
   },
+  "engineBlindSpots": [],
   "since": 44395
 }
 ```
 
 `trace` is a digest of what the app did in the window. When the counts are not enough, pass the top-level `since` cursor to [`reticle_observe`](/tools/observe) for the per-event timeline.
 
+`engineBlindSpots` lists what Reticle could not see in this session: `pixels-unobserved` once an action ran with a `<canvas>` on screen, and `claim-arithmetic-unchecked` while a claim states an amount and no `compare` ran. Do not call a run clean while it holds an entry.
+
 ## The predicate grammar
 
 `until` takes `{ kind, ...fields }`. The kinds:
 
-| Kind                      | Asserts                                                        |
-| ------------------------- | -------------------------------------------------------------- |
-| `signal`                  | The app fired a named signal, the strongest evidence available |
-| `state`                   | A store path reached a value                                   |
-| `net`                     | A request matched; `count` asserts an **exact** number         |
-| `route`                   | The route **changed**                                          |
-| `element`                 | An element appeared; `absent: true` asserts it went away       |
-| `text`                    | Text appeared or, with `absent`, disappeared                   |
-| `console`                 | Something logged; `absent: true` asserts a clean console       |
-| `animation`               | An animation ran or finished                                   |
-| `settled`                 | The page went quiet                                            |
-| `compare`                 | Two readings agree                                             |
-| `allOf` / `anyOf` / `not` | Combine the above                                              |
+| Kind | Asserts |
+| --- | --- |
+| `signal` | The app fired a signal, the strongest evidence available. With no `name`, only the app's own signals count, not Reticle's `reticle:` signals. `count` is exact |
+| `state` | A store path reached a value |
+| `net` | A request matched. `count` is **exact**, `count: 0` means it never fired, and no `count` means at least one |
+| `route` | The route **changed** |
+| `element` | An element appeared; `absent: true` asserts it went away |
+| `text` | Text appeared or, with `absent`, disappeared |
+| `console` | Something logged; `absent: true` asserts a clean console |
+| `animation` | An animation ran or finished |
+| `settled` | The page went quiet |
+| `compare` | Two readings agree |
+| `allOf` / `anyOf` / `not` | Combine the above |
 
 ### Predicates that catch real bugs
 
@@ -169,6 +172,7 @@ A verification tool that cannot describe the quality of its own evidence is aski
 | `timeout_ms` | Maximum wait, defaulting to 4000. `0` evaluates the predicate once, no wait |
 | `refuseWhenThrottled` | Throw rather than act on a throttled tab |
 | `intent` | What the change is supposed to make true, in prose, or the id of an intent declared earlier. Recorded on the verdict |
+| `detail` | `"compact"` keeps only the deciding fields. Omit it for the full result |
 | `durable` | After a `yes`, reload the page and require the element, text and state parts of `until` to hold again. A consequence that is gone after the reload turns the verdict into `no`: the UI advanced, the change did not persist |
 
 Omitting `until` waits for network and DOM idle, which is the deterministic replacement for a fixed sleep. To assert a consequence **and** settle, combine them:

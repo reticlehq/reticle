@@ -7,6 +7,7 @@
  * artifact and therefore synced nothing.
  */
 import { runDrivenBy } from '@/hooks/driven-by.js';
+import { isValidRunId } from '@/memory/project/dir/reticle-dir.js';
 import { describe, expect, it } from 'vitest';
 import { DisparityKind, PredicateKind, Verified, type JournalAction } from '@reticlehq/core';
 import {
@@ -211,7 +212,17 @@ describe('the run id for a drive', () => {
   it('is derived from the session, so a re-fold rewrites the same row', () => {
     const id = 'scc5398dc-8e92-4733-bbdd-1787041cb69d';
     expect(driveRunId(id)).toBe(driveRunId(id));
-    expect(driveRunId(id)).toContain(id);
+  });
+
+  it('is short: every step screenshot path an agent reads carries it', () => {
+    // A uuid session id made the id 43 characters long, and it went into each step's path.
+    const id = 'scc5398dc-8e92-4733-bbdd-1787041cb69d';
+    expect(driveRunId(id)).toMatch(/^drive-[0-9a-f]{16}$/);
+  });
+
+  it('still accepts an old long id as a run id, so older runs stay readable', () => {
+    expect(isValidRunId('drive-scc5398dc-8e92-4733-bbdd-1787041cb69d')).toBe(true);
+    expect(isValidRunId('3f0c6a7e-2b1d-4c8e-9f3a-5d6e7f8a9b0c')).toBe(true);
   });
 
   it('separates two sessions, which are two drives', () => {
@@ -222,12 +233,11 @@ describe('the run id for a drive', () => {
     expect(driveRunId('s-one').startsWith('drive-')).toBe(true);
   });
 
-  it('falls back to a random id for a session id that is not a safe path segment', () => {
-    // A session id is a free string on the wire. Losing idempotence for one session is the right
-    // concession; letting `../` reach a file path is not.
+  it('is a safe path segment for a session id that is not one, and stays stable', () => {
+    // A session id is a free string on the wire. It must never put `../` into a file path.
     const unsafe = '../../etc/passwd';
-    expect(driveRunId(unsafe)).not.toContain('..');
-    expect(driveRunId(unsafe)).not.toBe(driveRunId(unsafe));
+    expect(isValidRunId(driveRunId(unsafe))).toBe(true);
+    expect(driveRunId(unsafe)).toBe(driveRunId(unsafe));
   });
 });
 

@@ -82,7 +82,7 @@ const RULES = [
   },
   {
     what: 'plugin + marketplace manifests',
-    files: () => ['plugin/.claude-plugin/plugin.json', '.claude-plugin/marketplace.json'],
+    files: () => ['plugins/reticle/.claude-plugin/plugin.json', '.claude-plugin/marketplace.json'],
     // The directory refuses an unpinned npx, so the MCP command carries the release version too.
     edit: (text, from, to) =>
       text
@@ -104,7 +104,8 @@ const RULES = [
   },
   {
     what: 'SKILL.md frontmatter',
-    files: () => tracked('plugin/SKILL.md', 'skills/*/SKILL.md'),
+    // docs/skill.md is the published copy of the skill and declares the version too.
+    files: () => tracked('plugins/*/SKILL.md', 'skills/*/SKILL.md', 'docs/skill.md'),
     edit: (text, from, to) => text.replace(`version: ${from}`, `version: ${to}`),
   },
   {
@@ -129,6 +130,15 @@ const RULES = [
     files: () => ['docs/matrix/MATRIX.md', 'docs/matrix/README.md'],
     edit: (text, from, to) =>
       text.split(`**${from}**`).join(`**${to}**`).split(`is ${from}.`).join(`is ${to}.`),
+  },
+  {
+    what: 'GitHub Action pin in its README',
+    // The README pins the action at a release tag. It did not hold the current version when it
+    // drifted, so the containment check above cannot find it: match any version.
+    files: () => ['action/README.md'],
+    matchesAnyVersion: true,
+    edit: (text, _from, to) =>
+      text.replace(/reticlehq\/reticle\/action@v\d+\.\d+\.\d+/g, `reticlehq/reticle/action@v${to}`),
   },
   {
     what: 'crate pin in docs (major.minor, Cargo caret semantics)',

@@ -68,6 +68,12 @@ interface PluginCallOptions {
 }
 /** Matches the start of a `plugins: [` array literal. */
 const PLUGINS_ARRAY = /plugins\s*:\s*\[/;
+/**
+ * A `plugins` key in any shape: `plugins: <expr>`, or the shorthand `{ plugins }`. When this holds
+ * and PLUGINS_ARRAY does not, the key is there but not as an array literal, so adding our own key
+ * would make a second one. The later key wins, and one of the two lists is lost.
+ */
+const PLUGINS_KEY = /\bplugins\s*[:,}]/;
 /** Matches an ES import statement (used to place our import after the last one). */
 const IMPORT_LINE = /^import\s.+from\s+['"][^'"]+['"];?\s*$/gm;
 /**
@@ -88,6 +94,9 @@ export type VitePatchKind = PatchKind;
 type VitePatch = SourcePatch;
 
 const NO_PLUGINS_REASON = "couldn't find a `plugins: [...]` array to extend";
+const PLUGINS_NOT_ARRAY_REASON =
+  'the `plugins` key is not an array literal, so init did not change it. Add `reticle()` to the ' +
+  'list that the key builds. Do not add a second `plugins` key: the later key replaces the first.';
 
 function insertImport(source: string): string {
   const matches = [...source.matchAll(IMPORT_LINE)];
@@ -158,6 +167,9 @@ export function patchViteConfig(
   const call = reticlePluginCall({ port, captureBodies, inject, sourceMapping });
   if (PLUGINS_ARRAY.test(source)) {
     return { kind: VitePatchKind.APPLY, code: insertImport(insertPlugin(source, call)) };
+  }
+  if (PLUGINS_KEY.test(source)) {
+    return { kind: VitePatchKind.MANUAL, reason: PLUGINS_NOT_ARRAY_REASON };
   }
   if (CONFIG_OBJECT.test(source)) {
     return { kind: VitePatchKind.APPLY, code: insertImport(insertPluginsKey(source, call)) };

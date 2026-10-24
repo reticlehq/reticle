@@ -160,3 +160,18 @@ export function samePath(observed: string, expected: string): boolean {
   const comparable = expected.includes('?') ? observed : withoutQuery(observed);
   return trimmed(comparable) === trimmed(expected);
 }
+
+/** The least time replay waits for the SDK to reconnect on the start page. */
+const START_PATH_ARRIVAL_TIMEOUT_MS = 5_000;
+
+/**
+ * How long replay waits for the start page: the first step's budget when that is longer.
+ *
+ * A dev server that compiles a route on its first visit can take longer than the floor, and the
+ * flow then ended as unverifiable with nothing run. A step the caller let wait 15 s for its
+ * consequence can also wait 15 s for its page.
+ */
+export function startPathBudgetMs(flow: FlowFile): number {
+  const first = flow.steps[0]?.timeoutMs ?? flow.signalTimeoutMs ?? 0;
+  return Math.max(START_PATH_ARRIVAL_TIMEOUT_MS, first);
+}

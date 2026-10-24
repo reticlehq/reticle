@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { DRIVE_RECORD_SUFFIX } from '@/memory/project/dir/reticle-dir.js';
 import { callingAttachId } from '@/hooks/coding-agents.js';
+import { INIT_COMMAND } from '@/portal/session/no-session-next-action.js';
 
 /**
  * The one thing the agent should do next, on the result of the call it just made.
@@ -47,14 +48,14 @@ export const NextText = {
     const app = serving === undefined ? "This app's" : `The app served from ${serving}: its`;
     const lead = `${app} runs and flows are going to ${root}, not your project, so they will not reach the dashboard: `;
     if (0 === contenders.length) {
-      return `${lead}no folder on this machine declares its project. Run \`reticle init\` in the app's folder.`;
+      return `${lead}no folder on this machine declares its project. Run \`${INIT_COMMAND}\` in the app's folder.`;
     }
     // `reticle init` alone keeps the id already on disk, so it cannot separate a copy from its original.
     const copy = serving ?? 'the copy';
     return (
       `${lead}${String(contenders.length)} folders claim its project id (${contenders.join(', ')}). ` +
       'Serve the app from the checkout that owns the id, or give the copy its own id: ' +
-      `\`cd ${copy} && reticle init --new-id\`. That rewrites only the copy's .reticle.json, so keep the change on the copy's branch.`
+      `\`cd ${copy} && ${INIT_COMMAND} --new-id\`. That rewrites only the copy's .reticle.json, so keep the change on the copy's branch.`
     );
   },
   REPLAY: (flows: number): string =>

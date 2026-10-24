@@ -16,6 +16,7 @@ import {
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { flowPath, reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { anchorForStep, FlowStore, recordedStepToFlowStep } from './flows.js';
+import { flowSources } from './change/flow-sources.js';
 import type { CompiledProgram, RecordedStep } from './recording/tape/recordings.js';
 
 const FROZEN = 1234;
@@ -350,6 +351,39 @@ describe('recordedStepToFlowStep (pure)', () => {
       component: 'NewDeployButton',
       source: { file: 'src/Deployments.tsx', line: 107 },
     });
+  });
+});
+
+/**
+ * A step anchored by role and name was saved with no source. The gate then called the driven
+ * component unflowed, and `affected` replayed the flow for every change.
+ */
+describe('a role-anchored step keeps the stamped source', () => {
+  const SOURCE = { file: 'src/Save.tsx', line: 12 };
+  const roleArgs = {
+    by: QueryBy.ROLE,
+    value: 'button',
+    name: 'Save',
+    source: SOURCE,
+    action: ActionType.CLICK,
+    args: {},
+  };
+
+  it('saves the source on a single step', () => {
+    const out = recordedStepToFlowStep({ tool: 'reticle_act', stable: true, args: roleArgs });
+    expect(out.anchor.kind).toBe(AnchorKind.ROLE);
+    expect(out.source).toEqual(SOURCE);
+    expect(flowSources([out])).toEqual([SOURCE.file]);
+  });
+
+  it('saves the source on a sub-step of a sequence', () => {
+    const out = recordedStepToFlowStep({
+      tool: 'reticle_act_sequence',
+      stable: true,
+      args: { steps: [roleArgs] },
+    });
+    expect(out.steps?.[0]?.source).toEqual(SOURCE);
+    expect(flowSources([out])).toEqual([SOURCE.file]);
   });
 });
 

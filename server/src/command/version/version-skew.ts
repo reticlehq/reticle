@@ -210,6 +210,16 @@ export function compareVersions(a: string | undefined, b: string): number | unde
   return 0;
 }
 
+/** True when the page SDK is a minor release or more behind the daemon. A patch is not behind. */
+export function sdkIsBehind(sdk: string | undefined, daemon: string): boolean {
+  const minorOf = (v: string): string => v.split('-')[0]?.split('.').slice(0, 2).join('.') ?? v;
+  if (sdk === undefined) {
+    return false;
+  }
+  const order = compareVersions(minorOf(sdk), minorOf(daemon));
+  return order !== undefined && order < 0;
+}
+
 /** The same fact for the person looking at the page, on its overlay. */
 export const SDK_BEHIND_NARRATION = (sdk: string, daemon: string): string =>
   `This app runs Reticle SDK ${sdk}, older than Reticle ${daemon}. Run \`reticle update\` in the ` +
@@ -230,10 +240,7 @@ export function describeSdkBehind(
   daemon: string,
   fix: () => string,
 ): string | undefined {
-  const minorOf = (v: string): string => v.split('-')[0]?.split('.').slice(0, 2).join('.') ?? v;
-  if (sdk === undefined) return undefined;
-  const order = compareVersions(minorOf(sdk), minorOf(daemon));
-  if (order === undefined || order >= 0) return undefined;
+  if (sdk === undefined || !sdkIsBehind(sdk, daemon)) return undefined;
   return (
     `This page runs Reticle SDK ${sdk}, older than Reticle ${daemon}. It connects and verifies, ` +
     `but everything added since is missing from the page, the overlay's newer controls included. ` +
@@ -270,6 +277,40 @@ function sdkUpdateConverges(daemonVersion: string, agentVersion: string): string
 }
 
 /**
+ * The newest page SDK version that is newer than `agentVersion`, or undefined when no page is.
+ *
+ * The agent's MCP server starts the daemon. When a page is newer than it, `reticle stop` only
+ * starts a daemon at the same old version again, and the advice loops.
+ */
+function newestPageAhead(
+  pageSdkVersions: readonly (string | undefined)[],
+  agentVersion: string,
+): string | undefined {
+  let newest: string | undefined;
+  for (const version of pageSdkVersions) {
+    const ahead = compareVersions(version, agentVersion);
+    if (version === undefined || ahead === undefined || ahead <= 0) {
+      continue;
+    }
+    const order = newest === undefined ? 1 : compareVersions(version, newest);
+    if (order !== undefined && order > 0) {
+      newest = version;
+    }
+  }
+  return newest;
+}
+
+/** The MCP server is the old part: a daemon restart comes back at its version. */
+function mcpServerIsOld(agentVersion: string, pageVersion: string): string {
+  return (
+    `The connected pages run SDK ${pageVersion}, but the agent's MCP server is ${agentVersion}. ` +
+    `The MCP server starts the daemon, so \`reticle stop\` starts a ${agentVersion} daemon again. ` +
+    'Do not stop the daemon. Tell the human to update the MCP entry (or the Reticle plugin) to ' +
+    `@reticlehq/server@${pageVersion} or later, clear a cached npx copy, and restart the agent.`
+  );
+}
+
+/**
  * The fix line for another Reticle process that disagrees with the daemon it attached to.
  *
  * Branches on DIRECTION, which the old unconditional `reticle stop` did not (#618). Restarting the
@@ -301,6 +342,11 @@ export function daemonFix(
       'replace it with another newer daemon and leave the same mismatch. Tell the human to restart ' +
       'the agent so it spawns a current MCP server (or update the package it spawns), then retry.'
     );
+  }
+  const pageAhead =
+    agentVersion === undefined ? undefined : newestPageAhead(pageSdkVersions, agentVersion);
+  if (agentVersion !== undefined && pageAhead !== undefined) {
+    return mcpServerIsOld(agentVersion, pageAhead);
   }
   if (
     order !== undefined &&

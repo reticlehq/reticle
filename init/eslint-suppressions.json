@@ -1,0 +1,421 @@
+{
+  "src/angular.test.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/detect/capabilities.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/detect/declared/app-choice.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/detect/detect.ts": {
+    "curly": {
+      "count": 14
+    }
+  },
+  "src/detect/dev-script.ts": {
+    "curly": {
+      "count": 19
+    }
+  },
+  "src/detect/dev-server-ports.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/detect/existing-config.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/detect/lockfiles.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/detect/non-js-project.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/detect/prettier-config.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/detect/workspace-apps.ts": {
+    "curly": {
+      "count": 14
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/detect/workspace-redirect-command.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/detect/workspace-redirect.ts": {
+    "curly": {
+      "count": 10
+    }
+  },
+  "src/diagnose/containerised-dev-server.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/diagnose/csp-check.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/diagnose/csp-doctor.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/diagnose/csp-step.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/diagnose/desktop-doctor.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/diagnose/install-retries.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/diagnose/terminal-wrap.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/diagnose/terminal-wrap.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/gather-plan-input.ts": {
+    "curly": {
+      "count": 16
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/memory-io.test-helpers.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/no-package-json.ts": {
+    "curly": {
+      "count": 8
+    },
+    "no-nested-ternary": {
+      "count": 2
+    }
+  },
+  "src/node-io.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/non-localhost-guidance.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/nuxt.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/one-bridge-url.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/patch/angular.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/patch/astro-host.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/patch/astro-patch.test.ts": {
+    "curly": {
+      "count": 14
+    }
+  },
+  "src/patch/astro-patch.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/patch/brace-scan.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/patch/cra.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/patch/electron-patch.test.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/patch/electron-patch.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/patch/electron-vite-patch.test.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/patch/electron-vite-patch.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/patch/format-generated.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/patch/next-patch.test.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/patch/next-patch.ts": {
+    "curly": {
+      "count": 19
+    }
+  },
+  "src/patch/prettier-ignore.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/patch/snippets.ts": {
+    "curly": {
+      "count": 6
+    },
+    "no-nested-ternary": {
+      "count": 2
+    }
+  },
+  "src/patch/static-page.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/patch/tanstack-start.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/patch/vite-config.test.ts": {
+    "curly": {
+      "count": 20
+    }
+  },
+  "src/patch/vite-owning-config.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/plan/framework-adapter.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/plan/notices.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/plan/plan-framework.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/plan/plan-framework.ts": {
+    "curly": {
+      "count": 4
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/plan/plan-vite.ts": {
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/plan/plan.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/plan/plan.ts": {
+    "curly": {
+      "count": 19
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/plan/port-steps.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/plan/preflight.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/plan/prompt-hook-step.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/plan/stop-hook-step.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/project/agent-rules.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/project/agent-rules.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/project/install-source-config.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/project/project-id.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/project/remember-project.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/r3f-source-mapping.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/react-router-framework-mode.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/register/codex-toml.ts": {
+    "curly": {
+      "count": 15
+    }
+  },
+  "src/register/detect-clients.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/register/mcp-clients.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/register/mcp-clients.ts": {
+    "curly": {
+      "count": 10
+    }
+  },
+  "src/register/mcp.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/register/prompt-hooks.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/register/prompt-hooks.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/register/windows-quote.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/register/windows-quote.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/remix.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/run.test.ts": {
+    "curly": {
+      "count": 5
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/run.ts": {
+    "curly": {
+      "count": 24
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/skill-copies-agree.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/static-page.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  }
+}

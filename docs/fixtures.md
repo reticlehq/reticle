@@ -2,6 +2,7 @@
 title: Fixture apps
 description: 'Why the apps in apps/ cannot answer the one question that matters before a release, and what does.'
 icon: cubes
+noindex: true
 ---
 
 The apps in `apps/` cannot tell you whether the install still works, because every one of them is already wired to Reticle. That question is answered in a separate repo, **`reticle-fixtures`** (not public), which keeps a pristine `clean` branch of real third-party apps and runs `node scripts/verify.mjs` to install into each one and assert a session actually connects.

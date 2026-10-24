@@ -1,3 +1,0 @@
-### Security
-
-- **`@reticlehq/server` — the prompt history could be committed to git.** `.reticle/.gitignore` was written once and never changed, so a project set up before prompt capture had one without `requests.jsonl`. The rotated history, `requests.1.jsonl`, was not ignored at all, and the prompt hook could write before any daemon had written the ignore file. One `git add -A` then committed every prompt you typed. Reticle now adds `request.json`, `requests.jsonl` and `requests.1.jsonl` to an existing `.reticle/.gitignore` when they are missing, and keeps every line you wrote. The prompt hook writes or updates the ignore file before it writes a prompt.

@@ -16,6 +16,7 @@ import {
   QueryBy,
   ReplayStatus,
   ReticleCommand,
+  type Drift,
   type FlowAnchor,
   type FlowReplayResult,
   type FlowStep,
@@ -618,6 +619,11 @@ export async function runSequenceStep(
   sleep: Sleep,
   /** Testids whose presence is deliberately NOT asserted — the LLM-output case. */
   dynamic: ReadonlySet<string> = new Set(),
+  /**
+   * Judge one sub-step's `expect` over the window from `since`, which opens just before that
+   * sub-step's dispatch. Omitted for a setup step, whose consequences are not checked.
+   */
+  judge?: (expectation: Predicate, since: number) => Promise<Drift | undefined>,
 ): Promise<FlowStepResult> {
   type LiveSubStep = { ref: string; action: string; args: Record<string, unknown> };
 
@@ -830,7 +836,8 @@ export async function runSequenceStep(
    *
    * The walk costs a round trip per sub-step, so only a flow that declared something pays for it.
    */
-  const declaring = subs.some((sub) => declaredBy(sub) !== undefined);
+  const judged = (sub: FlowStep): boolean => judge !== undefined && sub.expect !== undefined;
+  const declaring = subs.some((sub) => declaredBy(sub) !== undefined || judged(sub));
   for (let next = 0; next < subs.length;) {
     const stretch = await resolveFrom(next);
     if ('stop' in stretch) return stretch.stop;
@@ -841,9 +848,21 @@ export async function runSequenceStep(
       for (let at = next; at < end; at += 1) {
         const sub = subs[at];
         if (sub === undefined) continue;
+        const since = session.elapsed();
         if (!(await dispatchFrom(at, at + 1))) return result;
         const testid = declaredBy(sub);
         if (testid !== undefined && !(await assertDeclared(testid))) return result;
+        // The claim is about THIS sub-step: a later one has not run, and an earlier one is before
+        // `since`. Judged at the end, a middle route expect failed and a late claim passed early.
+        const drift =
+          judge !== undefined && sub.expect !== undefined
+            ? await judge(sub.expect, since)
+            : undefined;
+        if (drift !== undefined) {
+          result.ok = false;
+          result.drift = drift;
+          return result;
+        }
       }
     }
     next = end;

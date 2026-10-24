@@ -65,6 +65,11 @@ interface ArtifactRootQuery {
    * exactly one of them. A lone match in a different tree from it is a second checkout, refused.
    */
   servingDirectory?: string | undefined;
+  /**
+   * The platform whose path rules apply. Windows paths are not case-sensitive, so `C:\app` and
+   * `c:\app` are one folder there. Defaults to this process's platform; a test names it.
+   */
+  platform?: NodeJS.Platform;
 }
 
 export interface ArtifactRoot {
@@ -93,7 +98,10 @@ export function resolveArtifactRoot(query: ArtifactRootQuery): ArtifactRoot {
     return { root: daemonRoot, reason: ArtifactRootReason.NO_PROJECT_ID };
   }
 
-  const matches = dedupeByDirectory(candidates.filter((c) => c.projectId === projectId));
+  const matches = dedupeByDirectory(
+    candidates.filter((c) => c.projectId === projectId),
+    query.platform ?? process.platform,
+  );
 
   if (0 === matches.length) {
     return { root: daemonRoot, reason: ArtifactRootReason.NO_MATCH };
@@ -190,12 +198,21 @@ function isSameOrInside(dir: string, path: string): boolean {
  * it twice would read as two competing checkouts and make the resolver refuse, which is the one
  * outcome worse than either source alone.
  */
-function dedupeByDirectory(matches: readonly ProjectCandidate[]): ProjectCandidate[] {
+function dedupeByDirectory(
+  matches: readonly ProjectCandidate[],
+  platform: NodeJS.Platform,
+): ProjectCandidate[] {
+  // Windows paths are not case-sensitive: one checkout seen from two shells can differ by case.
+  const keyOf = (directory: string): string =>
+    'win32' === platform ? directory.toLowerCase() : directory;
   const seen = new Set<string>();
   const out: ProjectCandidate[] = [];
   for (const candidate of matches) {
-    if (seen.has(candidate.directory)) continue;
-    seen.add(candidate.directory);
+    const key = keyOf(candidate.directory);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
     out.push(candidate);
   }
   return out;

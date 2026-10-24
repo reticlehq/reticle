@@ -606,3 +606,35 @@ describe('rebaseIntoCheckout', () => {
     expect(rebaseIntoCheckout(app, main, undefined)).toBe(app);
   });
 });
+
+/**
+ * Windows paths are not case-sensitive. One checkout recorded as `C:\work\app` by one shell and as
+ * `c:\work\app` by another was counted as two checkouts, and the run went to `unmatched/`.
+ */
+describe('one checkout under two drive-letter casings', () => {
+  const id = asProjectId('acme-web-9f3c1d');
+  const found = [
+    { path: 'C:\\work\\app\\.reticle.json', directory: 'C:\\work\\app', projectId: id },
+    { path: 'c:\\work\\app\\.reticle.json', directory: 'c:\\work\\app', projectId: id },
+  ];
+
+  it('is one project on Windows', () => {
+    const r = resolveArtifactRoot({
+      projectId: id,
+      candidates: candidatesOf(found),
+      daemonRoot: DAEMON_ROOT,
+      platform: 'win32',
+    });
+    expect(r.reason).toBe(ArtifactRootReason.MATCHED_PROJECT);
+  });
+
+  it('stays two folders where paths are case-sensitive', () => {
+    const r = resolveArtifactRoot({
+      projectId: id,
+      candidates: candidatesOf(found),
+      daemonRoot: DAEMON_ROOT,
+      platform: 'linux',
+    });
+    expect(r.reason).toBe(ArtifactRootReason.AMBIGUOUS);
+  });
+});

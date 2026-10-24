@@ -1,9 +1,9 @@
 ---
 name: verify-unattended
-description: 'Install, instrument and verify a web app end to end without pausing for a human. Use in an autonomous or goal-mode agent, in CI, or in any client that asks for approval on every command: it never says "restart your client" or "open a browser", because it takes a route that needs neither. Prefer the normal install-and-verify skill when a human is present and can answer.'
+description: 'Install, instrument and verify a web app end to end without pausing for a human. Use in an autonomous or goal-mode agent, in CI, or in any client that asks for approval on every command: it never says "restart your client" or "open a browser", because it takes a route that needs neither. Prefer the normal reticle skill when a human is present and can answer.'
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -27,7 +27,9 @@ Instead, branch once on what you already have:
 
 Both routes end in a verdict. Pick the one your process allows and go.
 
-## Step 1: wire it, once, quietly
+## Step 1: wire it, once
+
+Run this only when the user's goal asks for Reticle or for a verified result: `init` changes package.json, the lockfile and the build config. Otherwise skip to step 3 and use the lease, which changes no file.
 
 ```
 export RETICLE_INSTALL_SOURCE=npx_skill
@@ -100,7 +102,7 @@ Without the MCP tools:
 npx @reticlehq/server verify http://localhost:<port>/
 ```
 
-Exit 0 is a pass. It drives the app and re-verifies **saved flows**, so if the project has none, it will tell you nothing was checked. That is not a pass. Record one first, or say plainly that there was nothing to verify.
+Exit 0 is a pass. It drives the app and re-verifies **saved flows**, so if the project has none, it will tell you nothing was checked. That is not a pass. Record one first, or say plainly that there was nothing to verify. With no saved flows, prove one end state instead: `npx @reticlehq/server verify http://localhost:<port>/ --expect '{"kind":"element","query":{"testid":"order-confirmed"}}'`. It asks a running daemon, never starts one, and exits 0 only on `verified: "yes"`.
 
 ## Step 5: read the verdict honestly
 

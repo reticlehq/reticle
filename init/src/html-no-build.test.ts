@@ -38,7 +38,7 @@ describe('the no-build-step path', () => {
   it('imports from a URL, which is the whole reason it works', () => {
     // A bare specifier is exactly what does NOT resolve in a plain page, and shipping one here
     // would reintroduce the original defect while looking like the fix.
-    const line = snippet.split('\n').find((l) => l.includes('import { reticle }')) ?? '';
+    const line = snippet.split('\n').find((l) => l.includes('@reticlehq/browser@')) ?? '';
     expect(line).toMatch(/https:\/\//);
   });
 

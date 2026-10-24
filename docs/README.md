@@ -94,8 +94,8 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [adapters.md](adapters.md) | what an adapter is, the three kinds, and how to write one |
 | [state-files.md](state-files.md) | what to do when a file on disk came from a different version of Reticle |
 | [system-map.md](system-map.md) | how a tool call reaches the app, and which failures are silent |
-| [telemetry-contract.md](telemetry-contract.md) | required reading before touching anything that emits |
-| [telemetry-events.mdx](telemetry-events.mdx) | every event kind and its payload, and the question each one exists to answer |
+| [contributing/telemetry/contract.md](../contributing/telemetry/contract.md) | required reading before touching anything that emits |
+| [contributing/telemetry/events.md](../contributing/telemetry/events.md) | every event kind and its payload, when it is sent, why, and an example |
 | [first-drive.md](first-drive.md) | clone to a real verdict in about fifteen minutes, and the traps on the way |
 | [debugging.md](debugging.md) | debugging Reticle itself: the four signals and what each answers |
 | [fixtures.md](fixtures.md) | the sibling `reticle-fixtures` repo: install complexity, not regressions |

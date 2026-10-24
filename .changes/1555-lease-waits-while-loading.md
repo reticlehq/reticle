@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — `reticle_lease` said `sdk_never_dialled` for an app that connected a second after its ~20 s window.** On a slow first dev compile (seen with Angular) the leased page was still loading when the wait ran out, so agents were told to check the install and retried or debugged a setup that worked. The lease now keeps waiting, for up to 30 s more, while the page's document has not finished loading. If it is still loading at the end, the hint says so ("still loading after N s") instead of pointing at the install. Closes [#1555](https://github.com/reticlehq/reticle/issues/1555).

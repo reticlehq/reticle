@@ -4,9 +4,9 @@ description: 'Enforce verification at the moment code becomes a preview URL, as 
 icon: circle-check
 ---
 
-To gate a PR on Reticle, run `npx @reticlehq/server verify <preview-url>` in CI when the preview deploy succeeds. It exits **0** when every saved flow passes and **1** otherwise, so the job's own pass/fail becomes the check on the PR. There is no workflow-level integration to write beyond that one command.
+To gate a PR on Reticle, run `npx @reticlehq/server verify <preview-url>` in CI when the preview deploy succeeds. It exits **0** when every saved flow passes and **1** otherwise, so the job's own pass/fail becomes the check on the PR.
 
-The strongest place to enforce verification is the moment code becomes a preview URL. Every deploy already produces one, and both Vercel and Netlify let a third party attach a **check** to it: pass/fail, shown on the PR, with no workflow file to write.
+The strongest place to enforce verification is the moment code becomes a preview URL. Every deploy already makes one. Today you run Reticle from a CI job on the deploy event (Recipe A). A hosted check provider that needs no workflow file does not exist yet (Recipe B).
 
 That makes the non-developer story complete: the SDK is auto-injected by the build plugin, flows are minted from toolbar recordings with auto-proposed consequences, and verification runs at publish, **without anyone writing a test.**
 
@@ -43,9 +43,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
+      - run: npm install -g @reticlehq/server
+      # Install the Chromium that Reticle's own Playwright uses, not the latest one.
+      - run: cd "$(npm root -g)/@reticlehq/server" && npx playwright install --with-deps chromium
       # Reticle drives the preview and owns its own browser + daemon.
-      - run: npx @reticlehq/server verify "${{ github.event.deployment_status.target_url }}" --timeout 60000
+      - run: reticle verify "${{ github.event.deployment_status.target_url }}" --timeout 60000
 ```
 
 The job's own pass/fail becomes the PR check. Nothing else is required.
@@ -71,7 +73,7 @@ The deploy check catches what reaches a preview. `reticle gate` catches it earli
 npx @reticlehq/server gate --since origin/main    # exit 1 unless passing artifacts cover the affected flows
 ```
 
-Use both: `gate` in the agent's Stop hook (see `agent-cheatsheet`), `verify` at the deploy. They read the same run artifacts, so a green gate locally and a green check on the PR mean the same thing.
+Use both: `gate` in the agent's Stop hook (see the [agent cheat sheet](agent-cheatsheet.md)), `verify` at the deploy. They read the same run artifacts, so a green gate locally and a green check on the PR mean the same thing.
 
 ## Honest limits
 
@@ -99,4 +101,4 @@ If you want an agent to be unable to call a change finished without re-verifying
 
 ### verify exited 1 but I cannot see which flow failed.
 
-The verdict is in the run artifact, not only in the log. Each run writes `.reticle/runs/<id>.json` with `repair.failurePackets[]` naming what broke and where; `reticle_run_export { format: "report" }` renders it legibly. The artifact is stable and versioned precisely so a CI surface can render it without parsing log lines. Each entry in `checks[]` carries `intent`, a sentence a person can read: the agent's own `intent` when it gave one, else a sentence built from the predicate in the failure voice ("No PATCH request to /assignee was made"), marked `intentDerived: true`. A failed `allOf` also carries `failedPart`, the index of the part that failed, so a title can name the one thing that did not happen.
+The verdict is in the run artifact, not only in the log. Each run writes `.reticle/runs/<id>.json` with `repair.failurePackets[]` naming what broke and where; `reticle_run({ tool: "reticle_run_export", args: { format: "report" } })` prints it as a ✓/✗ report. The artifact is stable and versioned precisely so a CI surface can render it without parsing log lines. Each entry in `checks[]` carries `intent`, a sentence a person can read: the agent's own `intent` when it gave one, else a sentence built from the predicate in the failure voice ("No PATCH request to /assignee was made"), marked `intentDerived: true`. A failed `allOf` also carries `failedPart`, the index of the part that failed, so a title can name the one thing that did not happen.

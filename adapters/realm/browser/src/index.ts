@@ -1,4 +1,6 @@
 export { reticle } from './reticle-singleton.js';
+import { reticle } from './reticle-singleton.js';
+import { trackShortTimers as trackTimers } from './busy.js';
 
 export { Reticle } from './reticle.js';
 export type { ReticleConnectOptions } from './reticle.js';
@@ -77,10 +79,19 @@ export { buildSnapshot } from './dom/snapshot.js';
 // geometry (see ElementDescriptor.chart), and exported for direct use — canvasChartData is the only
 // route to a canvas chart's data, since its pixels are not DOM.
 export { inspectChart, canvasChartData } from './dom/chart.js';
-export type { ChartReport, ChartFinding, CanvasChartData } from './dom/chart.js';
+export type { ChartReport, ChartFinding, CanvasChartData, ChartGlobals } from './dom/chart.js';
 export { matchQuery, runQuery } from './dom/query.js';
 export { executeAction, executeSequence } from './actions/actions.js';
 export { describe, getRole, getAccessibleName, getStates, isVisible } from './dom/a11y.js';
 export { refs, RefRegistry } from './dom/addressing/refs.js';
 export { Annotator, installAnnotator, type AnnotatorDeps } from './review/annotator.js';
 export { resolveMarkAnchor, type MarkAnchor } from './review/mark-anchor.js';
+
+/**
+ * Opt-in: count every short `setTimeout` (at most `maxMs`, a second by default) as busy work, so a wait
+ * for the page to settle holds through a debounce. Returns the undo. Off unless called.
+ */
+export const trackShortTimers = (maxMs?: number): (() => void) =>
+  trackTimers((name, data) => {
+    reticle.signal(name, data);
+  }, maxMs);

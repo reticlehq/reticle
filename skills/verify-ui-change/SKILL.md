@@ -3,7 +3,7 @@ name: verify-ui-change
 description: Check that a change to a web app actually works in the running app before calling it done. Drives the real page and returns a pass/fail verdict with the request that fired, the state that moved, and the file:line to fix. Use after editing a component, a form, a route, or an API call; when you have said "fixed" but have not opened the app; when the user asks "does it actually work?"; or when a change looks right on screen and you cannot prove it.
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -21,8 +21,8 @@ reticle_session({ action: "list" })
 ```
 
 - **A session comes back** → go to step 2.
-- **Tools do not exist** → Reticle is not installed. Run `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then keep going without the tools: fix every `⚠` it printed, start the project's own dev script in the background if nothing is serving the app, and open it with `npx @reticlehq/server open <the url the dev server is serving>`. Only once the app is running and connected, ask for the one thing you cannot do yourself: a client restart, so it picks up the MCP server. Stopping at the `init` command leaves the user with config files and an uninstrumented page. Full setup is in the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
-- **Tools exist, list is empty** → read the `why` field on the response. It distinguishes "no app running" from "an app is running that never dialled this daemon" from "a tab was here and closed", and each has a different fix. If no app is running, start the project's own dev script from `package.json` in the background yourself and tell the user in one line that it is running and how to stop it: never a second one, never a guessed command, never kill anything, and the permission prompt is your host's. If one IS running, the app is not the missing piece and the SDK is; do not send the user to start what they already started.
+- **Tools do not exist** → Reticle is not installed. Ask the user first: `init` changes package.json, the lockfile and the build config. If they agree, run `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then keep going without the tools: fix every `⚠` it printed, start the project's own dev script in the background if nothing is serving the app, and open it with `npx @reticlehq/server open <the url the dev server is serving>`. Only once the app is running and connected, ask for the one thing you cannot do yourself: a client restart, so it picks up the MCP server. Stopping at the `init` command leaves the user with config files and an uninstrumented page. Full setup is in the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill.
+- **Tools exist, list is empty** → read `next_step` first if it is there: it asks the consent question for `init`, and names the zero-install lease when an app is running. Otherwise read the `why` field on the response. It distinguishes "no app running" from "an app is running that never dialled this daemon" from "a tab was here and closed", and each has a different fix. If no app is running, start the project's own dev script from `package.json` in the background yourself and tell the user in one line that it is running and how to stop it: never a second one, never a guessed command, never kill anything, and the permission prompt is your host's. If one IS running, the app is not the missing piece and the SDK is; do not send the user to start what they already started.
 
 ## 2. Name the consequence BEFORE you act
 

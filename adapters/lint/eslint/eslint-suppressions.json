@@ -1,0 +1,20 @@
+{
+  "src/no-internal-tags.ts": {
+    "curly": {
+      "count": 8
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/no-runaway-comment.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/require-signal-on-mutation.ts": {
+    "curly": {
+      "count": 3
+    }
+  }
+}

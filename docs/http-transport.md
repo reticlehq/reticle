@@ -17,7 +17,7 @@ It is the same tool surface. Not a subset, not a simplified one. `reticle_look {
 | `GET` | `/mcp/sse` | Opens a session. The response is an SSE stream that stays open, and every reply the server sends comes back on it. |
 | `POST` | `/mcp/message?sessionId=<id>` | Sends one JSON-RPC message into an open session. |
 
-The daemon listens on port **4400** by default (`RETICLE_PORT`, or `reticle serve --port N`). Run `reticle status` to confirm which port is live.
+The daemon port comes from `reticle serve --port N`, else `RETICLE_PORT`, else `port` in `.reticle.json`, else **4400**. Run `reticle status` to see which port is live.
 
 ## The handshake
 
@@ -64,7 +64,7 @@ Authorization: Bearer <token>
 /mcp/sse?token=<token>
 ```
 
-Set it with `RETICLE_TOKEN`. With no token configured, the daemon binds loopback-only and non-local requests are refused outright rather than falling back to trust.
+The daemon uses `RETICLE_TOKEN` when it is set. Otherwise it uses the token it writes to `~/.reticle/pairing-token` (or `$RETICLE_PAIRING_TOKEN_DIR/pairing-token`). Read the token from there for a remote client, and do not paste it into a file that git tracks.
 
 ## A minimal client
 

@@ -32,19 +32,6 @@ const NOT_OUR_TREE = [/^src\//, /^app\//, /^pages\//, /^specs\//, /^reticle-fixt
 
 const DOCUMENTS_THAT_RECORD_THE_PAST = ['CHANGELOG.md', 'bench/JEV-SCORECARD.md'];
 
-/**
- * Two documents with the same defect, excluded rather than fixed.
- *
- * `docs/telemetry-contract.md` and `docs/telemetry-events.mdx` name eight paths that do not
- * resolve, several of them under the dead `packages/` prefix. They are not excluded because
- * they are correct. They are excluded because telemetry is owned by somebody else in this
- * repository and editing their documents to satisfy a guard I wrote is not mine to do.
- *
- * This entry is a handoff, not an absolution: delete it and fix the paths in the same commit,
- * whoever gets there first.
- */
-const OWNED_ELSEWHERE = ['docs/telemetry-contract.md', 'docs/telemetry-events.mdx'];
-
 /** Backtick-quoted strings shaped like a path to a source file in this repository. */
 const PATH_LIKE = /`([A-Za-z0-9_][\w./-]*\/[\w./-]*\.(?:ts|tsx|mjs|mts|cjs|rs))`/g;
 
@@ -57,8 +44,7 @@ function documents(): string[] {
     .split('\n')
     .filter((path) => '' !== path)
     .filter((path) => !path.startsWith('docs/matrix/'))
-    .filter((path) => !DOCUMENTS_THAT_RECORD_THE_PAST.includes(path))
-    .filter((path) => !OWNED_ELSEWHERE.includes(path));
+    .filter((path) => !DOCUMENTS_THAT_RECORD_THE_PAST.includes(path));
 }
 
 /**

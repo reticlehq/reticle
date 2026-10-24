@@ -12,6 +12,43 @@ function snapshotLocation(): { pathname: string; search: string; hash: string; h
   };
 }
 
+/**
+ * The app's route patterns, declared once (`reticle.routes([...])`), so a change can say WHICH screen
+ * it reached rather than only which address: `/personas/pe_4f79…` is `/personas/:personaId`. A map
+ * keyed on addresses makes every record its own screen; one keyed on the app's own patterns does not.
+ */
+let declared: readonly { pattern: string; parts: readonly string[] }[] = [];
+
+/** Declare the app's route patterns (`:param` for a segment, `*` for the rest). Replaces any before. */
+export function declareRoutes(patterns: readonly string[]): void {
+  declared = patterns.map((pattern) => ({ pattern, parts: pattern.split('/').filter(Boolean) }));
+}
+
+/** Next.js's own pattern for the page showing (`/runs/[runId]` read as `/runs/:runId`), when present. */
+function nextPattern(): string | undefined {
+  const raw = (globalThis as { next?: { router?: { pathname?: unknown } } }).next?.router?.pathname;
+  if ('string' !== typeof raw || !raw.startsWith('/')) return undefined;
+  return raw.replace(/\[\.\.\.[^\]]+\]/g, '*').replace(/\[([^\]]+)\]/g, ':$1');
+}
+
+/**
+ * The pattern a path is an instance of: the most specific declared one it matches (fewest params),
+ * else Next.js's own, else none (the reader falls back to its own guess).
+ */
+export function patternOf(pathname: string): string | undefined {
+  const segments = pathname.split('/').filter(Boolean);
+  let best: { pattern: string; params: number } | undefined;
+  for (const { pattern, parts } of declared) {
+    const rest = '*' === parts.at(-1);
+    const fixed = rest ? parts.slice(0, -1) : parts;
+    if (rest ? segments.length < fixed.length : segments.length !== fixed.length) continue;
+    if (!fixed.every((part, i) => part.startsWith(':') || part === segments[i])) continue;
+    const params = parts.filter((part) => part.startsWith(':') || '*' === part).length;
+    if (best === undefined || params < best.params) best = { pattern, params };
+  }
+  return best?.pattern ?? nextPattern();
+}
+
 /** Patch the History API + listen to popstate/hashchange to emit route.change. */
 export function installRoute(emit: Emit): Teardown {
   const ac = new AbortController();
@@ -35,10 +72,12 @@ export function installRoute(emit: Emit): Teardown {
       if (to.href === from) return;
       lastHref = to.href;
       // Compared raw above, sent redacted: a sign-in leaves its token in the query or fragment.
+      const pattern = patternOf(to.pathname);
       emit(EventType.ROUTE_CHANGE, {
         from: redactUrl(from),
         to: redactUrl(to.href),
         pathname: to.pathname,
+        ...(pattern === undefined ? {} : { pattern }),
         search: redactUrl(to.search),
         hash: redactUrl(to.hash),
         [ROUTE_CHANGE_HOW_FIELD]: how,

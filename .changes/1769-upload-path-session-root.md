@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — an upload `path` resolved against the daemon's folder, not the session's project.** A session in a git worktree, or in a project other than the one where the daemon started, could not upload its own fixture. The upload was refused as "file not found" or as outside every allowed root. A saved flow that named a fixture failed on replay for the same reason. The path now resolves against the session's project, and `uploadRoots` comes from that project's `.reticle.json`. Absolute paths and the allowed-root check work as before. Closes [#1769](https://github.com/reticlehq/reticle/issues/1769).

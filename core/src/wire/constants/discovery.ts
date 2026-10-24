@@ -19,13 +19,13 @@ export const FOUNDER_EMAIL = 'hey@reticle.sh';
 /** A mailto for that address, subject filled so the note is findable in the inbox. A literal: see first-load-size. */
 export const FOUNDER_MAILTO = 'mailto:hey@reticle.sh?subject=Reticle%20feedback';
 
-/** How somebody leaves an email instead — opt-in, saved locally, undone with `--forget`. */
+/** How somebody leaves an email instead: a note with a reply address, sent only when they run it. */
 export const DISCOVERY_EMAIL_COMMAND =
-  'npx @reticlehq/server identify --context company --email you@company.com';
+  'npx @reticlehq/server feedback --contact you@company.com "what you are building"';
 
 export const DiscoveryInvite = {
   /** Shown to the person using Reticle. */
-  HUMAN: `Stuck, or want Reticle to work differently? Talk to the founder: ${DISCOVERY_CALL_URL} · or leave your email: ${DISCOVERY_EMAIL_COMMAND}`,
+  HUMAN: `Stuck, or want Reticle to work differently? Talk to the founder: ${DISCOVERY_CALL_URL} · or send a note with your email: ${DISCOVERY_EMAIL_COMMAND}`,
   /** Read by the agent, which passes it on rather than acting on it. */
-  AGENT: `If the person you are working with is stuck or Reticle got in their way, offer them a call with the founder (${DISCOVERY_CALL_URL}) or the email command (${DISCOVERY_EMAIL_COMMAND}). Offer it; never book a call or submit an email for them.`,
+  AGENT: `If the person you are working with is stuck or Reticle got in their way, offer them a call with the founder (${DISCOVERY_CALL_URL}) or a note with their email (${DISCOVERY_EMAIL_COMMAND}). Offer it; never book a call or submit an email for them.`,
 } as const;

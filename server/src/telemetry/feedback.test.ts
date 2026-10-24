@@ -2,7 +2,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FEEDBACK_TEXT_MAX, StackUnknownReason } from '@reticlehq/core/telemetry';
+import {
+  FEEDBACK_TEXT_MAX,
+  StackUnknownReason,
+  isFeedbackContact,
+  type Feedback,
+} from '@reticlehq/core/telemetry';
+import * as telemetryModule from './telemetry.js';
 import {
   FEEDBACK_ENV,
   REDACTED,
@@ -388,5 +394,46 @@ describe('summarizeTrace', () => {
     for (const leak of ['hunter2', 'Jane', 'Smith', 'e3', 'Welcome']) {
       expect(out).not.toContain(leak);
     }
+  });
+});
+
+/**
+ * A reply address, only when the person gave one. It is the one personal value this channel sends,
+ * so it must arrive exactly as given and must be absent from every report that did not give it.
+ */
+describe('a reply address on feedback', () => {
+  it('sends the address as given, and only when it is given', async () => {
+    const project = mkdtempSync(join(tmpdir(), 'feedback-contact-'));
+    // The outbox is written under the home folder before the send. Keep it out of the real one.
+    vi.stubEnv('HOME', project);
+    const emit = vi.fn(() => Promise.resolve(true));
+    vi.spyOn(telemetryModule, 'getTelemetry').mockReturnValue({
+      emit,
+      enabled: true,
+      firstRun: false,
+    });
+    await submitFeedback(
+      { source: 'human', kind: 'experience', text: 'works well', contact: 'ada@example.com' },
+      { cwd: project, env: {} },
+    );
+    await submitFeedback(
+      { source: 'human', kind: 'experience', text: 'works well' },
+      { cwd: project, env: {} },
+    );
+    const blocks = (emit.mock.calls as unknown as [string, { feedback: Feedback }][]).map(
+      (call) => call[1].feedback,
+    );
+    expect(blocks[0]?.contact).toBe('ada@example.com');
+    expect(blocks[1]).not.toHaveProperty('contact');
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it('accepts one plain address and refuses anything else', () => {
+    expect(isFeedbackContact('ada@example.com')).toBe(true);
+    expect(isFeedbackContact('ada example.com')).toBe(false);
+    expect(isFeedbackContact('ada@example.com, bob@example.com')).toBe(false);
+    expect(isFeedbackContact('ada@localhost')).toBe(false);
+    expect(isFeedbackContact(`${'a'.repeat(250)}@example.com`)).toBe(false);
   });
 });

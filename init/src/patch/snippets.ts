@@ -56,27 +56,23 @@ export function connectArg(port: number | undefined, projectId?: string): string
   return parts.length > 0 ? `{ ${parts.join(', ')} }` : '';
 }
 
+/** The gitignored module beside the page that holds this machine's pairing token. */
+export const LOCAL_TOKEN_MODULE = 'reticle.local.js';
+
+/** The token as the printed and written snippets read it, from the module they import. */
+const LOCAL_TOKEN_EXPR = 'local.token';
+
 /**
- * The same literal, with the pairing token folded in.
+ * A connect literal with `token` set to a JS expression, never to the token itself.
  *
- * The token belongs INSIDE the call the user pastes. Every other stack has a build step to inline
- * it (the Vite plugin's `define`, Next's NEXT_PUBLIC_*, Astro's config, CRA's .env); the hand-wired
- * paths have none, so `init` inlines the literal it already read. Without it the bridge closes the
- * socket with AUTH_FAILED and no session ever appears: see Bridge's hello handler.
- *
- * An empty token is omitted rather than emitted as `token: ''`. A daemon that could not write to
- * $HOME runs without auth and trusts loopback, and an empty string would fail the comparison against
- * one that does hold a token.
+ * The token used to be a literal in every printed snippet. It then stayed in terminal history,
+ * in agent transcripts, and in every file the snippet was pasted into. The snippets now read it at
+ * run time: from the gitignored module, or, in Python, from the token file.
  */
-export function connectArgWithToken(
-  port: number | undefined,
-  projectId: string | undefined,
-  pairingToken: string | undefined,
-): string {
-  const base = connectArg(port, projectId);
-  if (pairingToken === undefined || 0 === pairingToken.length) return base;
-  const inner = base.length > 0 ? base.slice(1, -1).trim() : '';
-  return `{ ${[inner, `token: '${pairingToken}'`].filter((p) => p.length > 0).join(', ')} }`;
+export function withTokenExpression(connectArgLiteral: string, tokenExpression: string): string {
+  return '' === connectArgLiteral
+    ? `{ token: ${tokenExpression} }`
+    : `{ ...${connectArgLiteral}, token: ${tokenExpression} }`;
 }
 
 /**
@@ -600,84 +596,14 @@ export function staticPageSnippet(connectArgLiteral: string): string {
       </script>`;
 }
 
-/**
- * Streamlit has no served HTML template, and `st.markdown` inserts script markup without executing
- * it. Streamlit 1.63 added an explicit JavaScript boundary to `st.html`; use a classic script there
- * so it can dynamically import the ESM SDK in the app document. A head marker makes reruns
- * idempotent and is removed after an import failure so the next rerun can retry.
- */
-export function streamlitPageSnippet(connectArgLiteral: string): string {
-  return `import streamlit as st
-
-st.html(
-    """
-    <script>
-      (() => {
-        if (document.getElementById('reticle-streamlit-connect')) return;
-        const marker = document.createElement('meta');
-        marker.id = 'reticle-streamlit-connect';
-        document.head.appendChild(marker);
-        void import('${CDN_SDK_URL}')
-          .then(({ reticle }) => reticle.connect(${connectArgLiteral}))
-          .catch((error) => {
-            marker.remove();
-            throw error;
-          });
-      })();
-    </script>
-    """,
-    unsafe_allow_javascript=True,
-)`;
-}
-
-/**
- * DEBUG-only middleware that injects Reticle into every Django-rendered page.
- *
- * Django serves templates, so the generic script tag has no single home: an app has many templates
- * and a base template it may not have. Middleware has exactly one, runs for every page, and is the
- * idiomatic Django answer — a field reporter arrived at this same shape by hand after `init` printed
- * a script tag and exited 1, and had to write the middleware and `.reticle.json` themselves.
- *
- * Guarded on `settings.DEBUG` so it can never reach production, and on the response being HTML so it
- * does not corrupt a JSON API response or a file download. Injected before `</body>` rather than in
- * `<head>`, so the SDK sees a parsed document.
- */
-export function djangoMiddlewareSnippet(connectArgLiteral: string): string {
-  return `# reticle_dev.py: add to MIDDLEWARE while DEBUG is on:
-#   MIDDLEWARE = [..., "reticle_dev.ReticleDevMiddleware"]
-from django.conf import settings
-
-_SNIPPET = """<script type="module">
-  import { reticle } from '${CDN_SDK_URL}';
-  reticle.connect(${connectArgLiteral});
-</script>"""
-
-
-class ReticleDevMiddleware:
-    """Inject the Reticle SDK into HTML responses during development only."""
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        response = self.get_response(request)
-        if not settings.DEBUG:
-            return response
-        if "text/html" not in response.get("Content-Type", ""):
-            return response
-        # Streaming responses have no .content to rewrite; leave them alone.
-        if getattr(response, "streaming", False):
-            return response
-        body = response.content.decode(response.charset)
-        if "</body>" not in body:
-            return response
-        response.content = body.replace("</body>", _SNIPPET + "</body>", 1).encode(
-            response.charset
-        )
-        if response.has_header("Content-Length"):
-            response["Content-Length"] = str(len(response.content))
-        return response
-`;
+/** The same snippet, with the token read from the gitignored module beside the page. */
+export function staticPageSnippetWithLocalToken(connectArgLiteral: string): string {
+  return `      <script type="module">
+        Promise.all([
+          import('${CDN_SDK_URL}'),
+          import('./${LOCAL_TOKEN_MODULE}').catch(() => ({})),
+        ]).then(([{ reticle }, local]) => reticle.connect(${withTokenExpression(connectArgLiteral, LOCAL_TOKEN_EXPR)}));
+      </script>`;
 }
 
 export function htmlManual(
@@ -689,22 +615,30 @@ export function htmlManual(
   // is not there.
   uiLibrary: UiLibrary = UiLibrary.UNKNOWN,
 ): string {
-  const withToken = connectArgWithToken(port, projectId, pairingToken);
+  const base = connectArg(port, projectId);
+  // The token is read from the gitignored module that `init` writes, never printed here.
+  const hasToken = pairingToken !== undefined && 0 < pairingToken.length;
+  const withToken = hasToken ? withTokenExpression(base, LOCAL_TOKEN_EXPR) : base;
   const sdk = sdkImport(uiLibrary, Framework.HTML);
-  const bundledImport = sdk.usesInstall
-    ? `void import('${sdk.specifier}').then(({ reticle, install }) => {
-          install();
+  const install = sdk.usesInstall ? '\n          install();' : '';
+  const names = sdk.usesInstall ? '{ reticle, install }' : '{ reticle }';
+  const bundledImport = hasToken
+    ? `void Promise.all([
+          import('${sdk.specifier}'),
+          import('./${LOCAL_TOKEN_MODULE}').catch(() => ({})),
+        ]).then(([${names}, local]) => {${install}
           reticle.connect(${withToken});
         });`
-    : `void import('${sdk.specifier}').then(({ reticle }) => {
+    : `void import('${sdk.specifier}').then((${names}) => {${install}
           reticle.connect(${withToken});
         });`;
-  const tokenNote =
-    pairingToken === undefined || 0 === pairingToken.length
-      ? ''
-      : `\n\n  The \`token\` is this machine's pairing token, read from ~/.reticle/pairing-token. Keep it: the
-  bridge REJECTS a connect without it ("authentication failed") and no session appears. It is
-  per-machine and local-only, so do not commit it — a teammate's daemon mints their own.`;
+  const tokenNote = hasToken
+    ? `\n\n  \`${LOCAL_TOKEN_MODULE}\` holds this machine's pairing token. Init wrote it at the project root and
+  added it to .gitignore. Change the import path so it points there from your entry module. Keep it:
+  the bridge REJECTS a connect without the token ("authentication failed") and no session appears.
+  It is per-machine, so do not commit it. A teammate runs \`reticle init\` for their own.`
+    : '';
+  const pageSnippet = hasToken ? staticPageSnippetWithLocalToken(base) : staticPageSnippet(base);
   return `No Vite/Next plugin detected — wire the dev-only connect by hand. Pick the form for your setup:
 
   • Bundled app (Create React App, webpack, Parcel, Vue/Svelte CLI, etc.) — add to your ENTRY module
@@ -718,7 +652,7 @@ export function htmlManual(
     paste this into the page, in a template you only serve in development. There is nothing to
     install: no npm, no bundler, no package.json.
 
-${staticPageSnippet(withToken)}
+${pageSnippet}
 
   Serving the app on something other than localhost (a hosts-file alias, a LAN IP, a container, a
   tunnel)? You need TWO things, not one: \`allowNonLocalhost: true\` AND a pairing token, passed as

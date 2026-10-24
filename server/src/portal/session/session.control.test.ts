@@ -249,4 +249,12 @@ describe('Live-control unknown / invalid control via pushEvent', () => {
     expect(buffered).toHaveLength(1);
     expect(buffered[0]?.t).toBe(50);
   });
+
+  it('#25 a note from an older SDK with the HUD note box still reaches the inbox', () => {
+    // That SDK sends the literal wire value. Protocol 1 still accepts it, so the daemon must keep
+    // the kind and keep the note.
+    const { session } = makeSession();
+    session.pushEvent(controlEvent({ kind: 'message', text: 'check the date picker too' }));
+    expect(session.drainInbox().map((m) => m.text)).toEqual(['check the date picker too']);
+  });
 });

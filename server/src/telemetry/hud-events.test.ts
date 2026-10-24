@@ -42,10 +42,11 @@ describe('HUD events', () => {
     expect(t.sent.filter((e) => e.extra?.hud?.view === HudPanel.FLOWS)).toHaveLength(1);
   });
 
-  it('sends hud_signin_prompted once per surface per tab', () => {
+  it('sends hud_signin_prompted once per surface per daemon', () => {
     const t = recorder();
     reportHudUse({ prompt: HudPromptSurface.RAIL }, 'tab-1', t);
     reportHudUse({ prompt: HudPromptSurface.RAIL }, 'tab-1', t);
+    reportHudUse({ prompt: HudPromptSurface.RAIL }, 'tab-2', t);
     expect(t.sent).toEqual([
       {
         kind: TelemetryEventKind.HUD_SIGNIN_PROMPTED,

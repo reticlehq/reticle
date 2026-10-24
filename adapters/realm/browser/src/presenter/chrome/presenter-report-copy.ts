@@ -116,34 +116,12 @@ export const REPORT_TEXT = {
   /** What the chip means and what to do about it, on hover. */
   NOT_SENT_HELP:
     'Runs saved on this machine but not on your dashboard yet. Run reticle connect in this project to send them.',
-  /** How much of this app Reticle sees: capabilities covered out of the eight. */
-  INSTRUMENTATION: 'What Reticle can see',
-  INSTRUMENTATION_HELP:
-    'What Reticle can see in this app, from its handshake and the gaps its verdicts recorded',
-  covered: (covered: number, total: number): string => `${String(covered)} of ${String(total)}`,
-  /** Shown after the names nothing has confirmed either way yet. */
-  NOT_SEEN_YET: 'not checked yet',
   COPY_PROMPT: 'Copy prompt for your coding agent',
   SHARE_LABEL: 'Share',
   POST_X: 'X',
   POST_IN: 'LinkedIn',
   REFER: 'Invite a friend',
 } as const;
-
-/**
- * The eight capabilities in words a first-time user reads without a glossary. Keyed by the names
- * core's coverage model reports; a name this HUD does not know is shown as sent, escaped.
- */
-export const CAPABILITY_WORDS: Readonly<Record<string, string>> = {
-  'page connected': 'Page connected',
-  'DOM actions': 'Clicks and typing',
-  network: 'Network requests',
-  console: 'Console errors',
-  'app state (store registered)': 'App state',
-  'signals on mutation': 'Success signals from your code',
-  'file:line source mapping': 'Source file and line',
-  'stable test ids': 'Stable test ids',
-};
 
 /** "4.2k", "1.3M" - a number a person reads at a glance rather than counts digits in. */
 export function compactNumber(n: number): string {

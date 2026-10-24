@@ -21,3 +21,18 @@ export const HelloScope = {
   ACT: 'act',
 } as const;
 export type HelloScope = (typeof HelloScope)[keyof typeof HelloScope];
+
+/**
+ * Who put the SDK in this page. Absent means `installed`: every SDK before this field was one the app
+ * imported itself.
+ *
+ * `injected` is a page a hosted verifier instrumented from outside (a URL-only check), with nothing
+ * in the app's own code. Whatever such a session reports (a framework, stores found in the React
+ * tree) came from the verifier, not the app. A reader must not count it as the app having the SDK
+ * installed: signals, registered module stores and file:line still need the app to add them.
+ */
+export const HelloInstrumentation = {
+  INSTALLED: 'installed',
+  INJECTED: 'injected',
+} as const;
+export type HelloInstrumentation = (typeof HelloInstrumentation)[keyof typeof HelloInstrumentation];

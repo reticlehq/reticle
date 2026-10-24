@@ -3,7 +3,7 @@ name: drive-desktop-app
 description: Drive and verify an Electron or Tauri desktop app from the inside, including the main-process and Rust IPC calls a browser tool cannot see. Use when a desktop app needs testing, when a feature works in the browser but not in the packaged app, when an IPC or invoke call needs proving, when a desktop screenshot or visual diff is wanted, or when you need a headless run of a desktop UI in CI.
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -12,7 +12,7 @@ metadata:
 
 A desktop app reaches its backend over **IPC, not HTTP**. Patching `fetch`/`XHR` cannot see that, so a browser-shaped tool is blind to every backend call the app makes: the network log reads empty, an action has no in-flight request to settle on, and asserting on the network is vacuously true. That is a false green by construction.
 
-**Reticle** observes the renderer _and_ the IPC boundary, so a desktop verdict means what a web one does. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+**Reticle** observes the renderer _and_ the IPC boundary, so a desktop verdict means what a web one does. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## Electron: two lines, none in your app code
 

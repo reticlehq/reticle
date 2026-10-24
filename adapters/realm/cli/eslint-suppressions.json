@@ -1,0 +1,50 @@
+{
+  "src/cli-realm.ts": {
+    "curly": {
+      "count": 6
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/detect.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/hud/frame.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/hud/live.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/net/proxy.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/process/node-supervisor.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/report.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/state-contract.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/workspace/snapshot.ts": {
+    "curly": {
+      "count": 6
+    }
+  }
+}

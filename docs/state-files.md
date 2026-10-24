@@ -1,6 +1,7 @@
 ---
 title: Reading a file Reticle wrote earlier
 description: What to do when a file on disk was written by a different version, and why repairing it is sometimes the wrong answer.
+noindex: true
 ---
 
 Reticle keeps a few files: what it has learned about your project, which runs happened, where your projects live, the flows you saved. Every one of them carries a version number.

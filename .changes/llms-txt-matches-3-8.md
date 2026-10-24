@@ -1,0 +1,3 @@
+### Fixed
+
+- **Docs — `llms.txt` and the agent instructions on every docs page now match 3.8.0.** They called Reticle "localhost-only" and said the SDK never connects in production, which the signed activate loader (`@reticlehq/browser/activate`) changed. They now say that the loader is the one exception, and that a site adds it on purpose. `llms.txt` now installs one skill with `npx skills add reticlehq/reticle --skill reticle`, gives the lease call its required `action`, and names the HUD **Notes** panel, whose marks the agent reads with `reticle_session { action: "review" }`. The contributor page about adapters no longer appears in `llms.txt`.

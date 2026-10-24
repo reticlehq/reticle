@@ -81,7 +81,7 @@ describe('ensureDaemon', () => {
     const result = await ensureDaemon(PORT, d);
     expect(result.state).toBe(EnsureDaemon.SKEWED_IN_USE);
     expect(calls.replaced).toBe(0);
-    expect(result.message).toContain(`kill --port ${String(PORT)}`);
+    expect(result.message).toContain(`stop --force --port ${String(PORT)}`);
   });
 
   it('is unavailable, not adopted, when the skewed daemon will not go', async () => {

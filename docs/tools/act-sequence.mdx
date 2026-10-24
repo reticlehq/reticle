@@ -45,72 +45,50 @@ Steps may also name a `target` instead of a `ref`, the same locator [`reticle_ac
 }
 ```
 
-Real response. Each `effects[]` entry also carries `targetMatched`, `visible`, `enabled`, `defaultPrevented`, `occluded`, `occludedBy` and `scrolledIntoView`, and each `steps[]` entry also carries `dispatched`, `settled`, `settleReason`, `component`, `role` and `name`. Those are trimmed here for length:
+Real response shape, trimmed. Each `steps[]` entry also carries `settled`, `settleReason`, `component`, `role` and `name`, and `window`, `digest` and `contradictions` for that step:
 
 ```json
 {
   "since": 3915,
   "dispatched": true,
-  "result": {
-    "ok": true,
-    "count": 3,
-    "effects": [
-      {
-        "dispatched": true,
-        "focusMoved": "null->e603",
-        "valueChanged": false,
-        "domMutatedWithin": 0
-      },
-      {
-        "dispatched": true,
-        "focusMoved": "e603->e604",
-        "valueChanged": true,
-        "domMutatedWithin": 9
-      },
-      {
-        "dispatched": true,
-        "focusMoved": "e604->null",
-        "domMutatedWithin": 15,
-        "appeared": "Signing in… | Invalid email or password | Sign in"
-      }
-    ],
-    "steps": [
-      {
-        "ref": "e603",
-        "action": "fill",
-        "testid": "login-email",
-        "source": { "file": "src/components/Login.tsx", "line": 48 }
-      },
-      {
-        "ref": "e604",
-        "action": "fill",
-        "testid": "login-password",
-        "source": { "file": "src/components/Login.tsx", "line": 59 }
-      },
-      {
-        "ref": "e605",
-        "action": "click",
-        "testid": "login-submit",
-        "source": { "file": "src/components/Login.tsx", "line": 81 }
-      }
-    ]
-  }
+  "completed": 3,
+  "recorded": 3,
+  "verified": "unknown",
+  "because": "all 3 step(s) declared nothing, so the app was driven but not verified: give each step an `expect` naming the consequence it causes",
+  "coverage": { "declared": 0, "total": 3 },
+  "steps": [
+    {
+      "ref": "e603",
+      "action": "fill",
+      "dispatched": true,
+      "testid": "login-email",
+      "source": { "file": "src/components/Login.tsx", "line": 48 }
+    },
+    {
+      "ref": "e604",
+      "action": "fill",
+      "dispatched": true,
+      "testid": "login-password",
+      "source": { "file": "src/components/Login.tsx", "line": 59 }
+    },
+    {
+      "ref": "e605",
+      "action": "click",
+      "dispatched": true,
+      "testid": "login-submit",
+      "source": { "file": "src/components/Login.tsx", "line": 81 }
+    }
+  ]
 }
 ```
 
 ## Read that response again
 
-`ok: true`. `count: 3`. Every step dispatched. And the login **failed**, look at `appeared`:
-
-```
-"appeared": "Signing in… | Invalid email or password | Sign in"
-```
-
-That password was wrong. The app rejected it. And this tool still reported `ok: true`, correctly, because `ok` means _the three actions were dispatched_, which they were.
+Every step dispatched. In this run the password was wrong, and the login **failed**. No step declared an `expect`, so the sequence cannot know that. It does not claim a pass: it answers `verified: "unknown"`, and `because` says that the app was driven but not verified.
 
 <Warning>
-  `ok: true` is a statement about the input, not about the outcome. A step with no `expect` proves
-  nothing. Put an `expect` on the step that ends the journey, or finish with
+  `dispatched: true` is a statement about the input, not about the outcome. A step with no `expect`
+  proves nothing. Put an `expect` on the step that ends the journey, or finish with
   [`reticle_act_and_wait`](/tools/act-and-wait) or [`reticle_assert`](/tools/assert).
 </Warning>
 
@@ -136,24 +114,20 @@ which returns the verdict. Putting `"expect": { "kind": "signal", "name": "auth:
 ```json
 {
   "verified": "yes",
-  "verifiedReason": "proved",
-  "because": "assertion held at signal grade over a clean capture with no channel disagreeing",
-  "verdict": {
-    "pass": true,
-    "evidence": { "name": "auth:granted", "data": { "email": "admin@reticle.dev" } }
-  },
-  "honesty": { "grade": "signal", "coverage": { "pct": 100, "partial": false } }
+  "because": "every declared consequence held, but only 1 of 3 steps declared one; the rest were driven, not verified",
+  "coverage": { "declared": 1, "total": 3 }
 }
 ```
 
-Two calls instead of four, and the last one returns a verdict. Note `grade: "signal"`, the strongest Reticle awards, because the app said so itself.
+Two calls instead of four, and the last one returns a verdict. A proved plan also carries `keep`, which is the call that saves it as a regression flow.
 
 ## What each step reports
 
-Every step comes back with the same `effect` fields as [`reticle_act`](/tools/act): `valueChanged`, `focusMoved`, `domMutatedWithin`, `occluded`. Plus its `testid`, `component` and `source`. When a sequence goes wrong, that per-step detail tells you which step, and which line of which file.
+Each step comes back with its `testid`, `component` and `source`, its `digest` (what the app did, as counts) and any `contradictions`. A step with an `expect` also carries `held`, and `observed` when it missed. When a sequence goes wrong, this tells you which step, and which line of which file.
 
 <Note>
-  Steps run in order and do not stop on a soft failure, because "the field rejected the value" is
-  not an exception. It's a result you need to see. Read `effects[]` rather than assuming `ok: true`
-  means all three did what you wanted.
+  A step that cannot be performed stops the sequence: `stalled_at` names it, and the step's `error`
+  says why. A step whose `expect` does not hold stops it too (`stopped_at`), unless you pass
+  `onDeviation: "continue"`. The steps that did not run come back unchanged in `tail`. Read
+  `verified` and `because`, not `dispatched`.
 </Note>

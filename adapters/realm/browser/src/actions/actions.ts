@@ -50,7 +50,13 @@ import {
   closeModalOnEscape,
   keyboardEvent,
 } from './actions-press.js';
-import { anchorOf, result, type ActionEffect, type ActionResult } from './action-report.js';
+import {
+  anchorOf,
+  result,
+  visibleCanvases,
+  type ActionEffect,
+  type ActionResult,
+} from './action-report.js';
 
 function asString(value: unknown, fallback = ''): string {
   return 'string' === typeof value ? value : fallback;
@@ -728,6 +734,7 @@ export async function executeAction(
     // Omitted unless it applies: an absent key means the action actually drove the control (or is
     // not a check at all), which is the only reading that must not be ambiguous.
     ...(alreadyAtValue ? { alreadyAtValue: true as const } : {}),
+    ...canvasesOnScreen(),
   };
   // Honesty caveats: a visually-occluded click is reported even though synthetic dispatch landed;
   // else synthetic hover may not fire framework enter/leave handlers (no native hit-test).
@@ -744,6 +751,12 @@ export async function executeAction(
   const done = result(ref, action, effect, settled, settleReason, anchor, warning);
   // Only reachable with the HUD exposed: said so the recorder keeps it out of the app's flows.
   return isReticleUi(el) ? { ...done, reticleUi: true } : done;
+}
+
+/** `{ canvases }` when any are on screen, else nothing: an absent key means none. */
+function canvasesOnScreen(): { canvases?: number } {
+  const canvases = visibleCanvases(document);
+  return canvases > 0 ? { canvases } : {};
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => nativeSetTimeout(r, ms));

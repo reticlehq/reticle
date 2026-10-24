@@ -4,7 +4,7 @@ description: 'The recommended shape for a real codebase: a minimal production fo
 icon: shapes
 ---
 
-The recommended shape for a real codebase is three decisions: put `createReticleEmitter()` in one `app/emit.ts` so components depend on an interface and `@reticlehq/browser` is imported in exactly one place; emit signals from the **store layer** rather than from N call sites; and let each feature self-register its testids and signals with `registerReticleDomain`. Then turn on `reticle/require-signal-on-mutation` so the signal layer cannot silently rot.
+The recommended shape for a real codebase is three decisions: put `createReticleEmitter()` in one `app/emit.ts` so components depend on an interface and `@reticlehq/browser` stays out of your components; emit signals from the **store layer** rather than from N call sites; and let each feature self-register its testids and signals with `registerReticleDomain`. Then turn on `reticle/require-signal-on-mutation` so the signal layer cannot silently rot.
 
 The basics in [Getting Started](getting-started.md) work with **zero app changes**. This doc is the _recommended_ shape for a real codebase: a minimal production footprint, a signal layer that can't silently drift, and an adoption path that starts paying off on day one, with no rewrite required.
 
@@ -12,7 +12,7 @@ The basics in [Getting Started](getting-started.md) work with **zero app changes
 - [2. Inject the emitter (zero prod bundle)](#2-inject-the-emitter-zero-prod-bundle)
 - [3. Emit signals from the store layer, not N call sites](#3-emit-signals-from-the-store-layer-not-n-call-sites)
 - [4. Self-registering domains (`registerReticleDomain`)](#4-self-registering-domains-registerreticledomain)
-- [5. Keep the signal layer from rotting (`@reticlehq/eslint-plugin`)](#5-keep-the-signal-layer-from-rotting-reticleeslint-plugin)
+- [5. Keep the signal layer from rotting (`@reticlehq/eslint-plugin`)](#5-keep-the-signal-layer-from-rotting-@reticlehq/eslint-plugin)
 - [6. Limitation: un-scriptable tabs, use `reticle drive`](#6-limitation-un-scriptable-tabs-use-reticle-drive)
 - [Checklist](#checklist)
 
@@ -158,17 +158,17 @@ export default [
 ];
 ```
 
-Or turn it on with the shipped preset: `plugin.configs.recommended`, which sets `reticle/require-signal-on-mutation` to `warn` (with empty no-op defaults you then configure) and the plugin's other two rules, `reticle/no-internal-tags` and `reticle/no-runaway-comment`, to `error`. A function that calls a mutator and a signal together passes; a mutator with no signal reports `store mutation without a mapped Reticle signal`. The documented view-level exceptions from §3 simply don't list those view callees as `mutators`, so they never fire.
+Or turn it on with the shipped preset: `plugin.configs.recommended`, which sets `reticle/require-signal-on-mutation` to `warn` (with empty no-op defaults you then configure) and the plugin's other two rules to `error`. `reticle/no-internal-tags` reports design-document codes (such as `N5` or `§4.3`) and version strings (such as `v2.2.0`) in comments, test names and file names. `reticle/no-runaway-comment` reports a block comment of more than 60 lines. If your code base uses either pattern, turn the rule off in your config, or enable only `reticle/require-signal-on-mutation`. A function that calls a mutator and a signal together passes; a mutator with no signal reports `store mutation without a mapped Reticle signal`. The documented view-level exceptions from §3 simply don't list those view callees as `mutators`, so they never fire.
 
 ## 6. Limitation: un-scriptable tabs, use `reticle drive`
 
 Reticle observes and drives a tab through the in-page SDK plus (optionally) CDP. It **cannot bring to front or recover a browser tab the OS won't let it script**: a backgrounded tab, say, or a non-default browser (Dia, etc.) reporting `hidden:true` / `throttled:true`.
 
-When that happens, `reticle_session { action: "list" }` and every act/assert result carry a `session.recommendation` saying so. The escape hatch is **`reticle drive <url>`**, which opens in the foreground (`--headless` hides it). Reticle launches and owns a guaranteed-scriptable browser. See [usage §18](usage.md#18-real-input-mode-native-hover--drag) for the full note.
+When that happens, `reticle_session { action: "list" }` and every act/assert result carry a `session.recommendation` saying so. The agent's way out is a lease: `reticle_run({ tool: "reticle_lease", args: { action: "acquire", url } })` opens a tab that Reticle owns. A person can run **`reticle drive <url>`**, which opens a browser in the foreground (`--headless` hides it). The person who watches sees nothing of a lease, so prefer the open tab while someone follows along. See [usage §18](usage.md#18-real-input-mode-native-hover-&-drag) for the full note.
 
 ## Checklist
 
-- [ ] One `app/emit.ts` is the **only** module importing `@reticlehq/browser`; components import the emitter.
+- [ ] Components import the emitter from `app/emit.ts`, never `@reticlehq/browser`. Only `app/emit.ts`, the store layer and the `reticle.ts` domain files import the SDK.
 - [ ] `reticle.connect()` is dev-gated; the prod bundle has no `@reticlehq/browser`.
 - [ ] Signals fire from the store layer (middleware or `commitAndSignal`); view-level exceptions are explicit.
 - [ ] Each domain self-registers via `registerReticleDomain`; `reticle_run({ tool: "reticle_capabilities", args: {} })` returns the full surface.

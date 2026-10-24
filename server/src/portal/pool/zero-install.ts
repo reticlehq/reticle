@@ -27,6 +27,8 @@ export interface InjectedConnect {
 export function injectedConnectArgs(opts: InjectedConnect): Record<string, unknown> {
   return {
     allowNonLocalhost: true,
+    // Lets a page's own SDK take this token when the bridge refused the one its build baked in.
+    lease: true,
     ...(opts.token === undefined ? {} : { token: opts.token }),
     url: opts.url,
   };
@@ -53,7 +55,8 @@ const NOT_HTML_GUARD =
  *
  * The guard is on the SINGLETON, not on a timer: a page that loaded its own SDK already holds
  * `__reticleInstance`, and evaluating a second copy would register a second session for one tab.
- * `connect` is a no-op once connected, so calling it on the page's own instance is safe.
+ * `connect` is a no-op once connected, so calling it on the page's own instance is safe, except that
+ * the `lease` mark lets that instance replace a token the bridge refused.
  */
 export function zeroInstallScript(bundle: string, opts: InjectedConnect): string {
   const args = JSON.stringify(injectedConnectArgs(opts));

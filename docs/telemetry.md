@@ -1,16 +1,16 @@
 ---
 title: Telemetry
-description: 'The complete description of the anonymous usage data Reticle collects, what it is for, and how to turn it off.'
+description: 'The complete description of the usage data Reticle collects, what it is for, and how to turn it off.'
 icon: chart-line
 ---
 
-Reticle sends anonymous usage counters (which commands ran, which tools an agent called, whether a verification produced a verdict) and nothing from the app under test. To turn it off permanently, run `npx @reticlehq/server telemetry disable`.
+Reticle sends usage counters (which commands ran, which tools an agent called, whether a verification produced a verdict) and nothing from the app under test. To turn it off permanently, run `npx @reticlehq/server telemetry disable`.
 
 This page is the complete description of what is collected. If something is not listed here, it is not sent.
 
 ## The short version
 
-- **Anonymous.** We cannot tell who you are, and we do not try.
+- **No name, no email, no account.** The events do not carry who you are, and we do not try to find out. Two fields can connect events to an organization: the workspace id of a project you linked, and the licence id of a licensed build. See [the fields on every event](#what-is-sent).
 - **No code, no app data.** Nothing from the app under test (no DOM, no network traffic, no console output, no source, no file paths) ever leaves your machine.
 - **The one exception is feedback you deliberately send us**, and it is never collected passively. See [Feedback](#feedback) below.
 - **Opt out any time**, permanently, with one command:
@@ -25,18 +25,21 @@ Twenty-two kinds of events, each a single small JSON object. This is the whole l
 
 | Event | When | Extra data |
 | --- | --- | --- |
-| `reticle_installed` | The first time Reticle runs on a machine | n/a |
+| `reticle_installed` | The first real command Reticle runs on a machine. `--version`, `--help` and `telemetry` do not count | n/a |
 | `cli_command_run` | You run a `reticle` command | Which subcommand (`verify`, `status`, …) and which flags were present, by name |
 | `daemon_started` | The local daemon starts | n/a |
 | `daemon_stopped` | The local daemon stops | A summary of the session; see below |
 | `session_progress` | Periodically, from a daemon that is still running | The same summary as `daemon_stopped`, marked `final: false`. It exists so a long session is not invisible until it exits |
 | `app_instrumented` | The first time your app's SDK connects in a given daemon run | Nothing beyond the common fields. It is the second half of the install funnel: registering the MCP server is one thing, getting the SDK into a running page is another |
-| `verification_completed` | A verification produces a verdict | Whether it passed, whether Reticle refused to call a passing check verified, and **why** the verdict came out that way; see below |
+| `verification_completed` | A verification produces a verdict | Whether it passed, whether Reticle refused to call a passing check verified, **why** the verdict came out that way, and the version of the Reticle SDK in the page; see below |
 | `project_profiled` | Once per daemon start | The shape of the project; see below |
-| `version_changed` | You update or roll back | The two version numbers, and which direction |
+| `version_changed` | Reticle starts on a version that differs from the last start on this machine, or you update or roll back | The two version numbers, which direction, and whether an agent had been told about the new version |
 | `runtime_crashed` | The daemon hits an uncaught error | The error's type, **Reticle's own** stack frames, and the message with variables stripped; see below |
-| `mcp_client_connected` | An agent attaches to the daemon | Whether it is a reconnect, and how long the daemon had been idle |
-| `mcp_connection_lost` | The agent's MCP tools go away | Which stage (`first`, or `budget_spent` when it stopped retrying), the cause, and the attempt count. **At most twice per session**, because a reconnect loop can fire many times in a row and an event each would bill for the pathology instead of measuring it |
+| `mcp_client_connected` | An agent attaches to the daemon | Whether it is a reconnect, how long the daemon had been idle, and the random id of the process that gives the agent its tools |
+| `mcp_connection_lost` | The agent's MCP tools go away | Which stage (`first`, or `budget_spent` when it stopped retrying), the cause, the attempt count, and the random id of the process that gives the agent its tools. **At most twice per session**, because a reconnect loop can fire many times in a row and an event each would bill for the pathology instead of measuring it |
+| `mcp_proxy_exited` | The process that gives your agent its Reticle tools ends | Why it ended (`stdin_end`, `idle`, `client_gone_storm`, `wake_failed`), how long it ran, and two counts: how many times it lost the daemon and how many tool calls it carried, with its random id. Never what the calls were |
+| `daemon_died_unclean` | Reticle finds that an earlier daemon stopped without a clean exit | How long that daemon had run. Nothing else |
+| `wake_refused` | Reticle will not use the daemon port it found, because something else holds it | Whether the holder was another program (`foreign`) or a Reticle daemon for another project (`other_project`). Never the port or the project |
 | `onboarding_step` | One step of getting set up begins, finishes, fails, is skipped, or is walked away from | Which phase (`install`, `onboard`, `first_run`), which step, what became of it, how long it took, and the framework. The step name comes from a closed list we define -- it can only ever be one of the names in `core/src/onboarding.ts`, so nothing you typed or any path on your disk can arrive in it. `unattended` says whether anybody was asked anything |
 | `init_completed` | `reticle init` finishes | Whether it worked, a classified reason when it did not, and which published install route you came through, DECLARED by that route via `RETICLE_INSTALL_SOURCE` and never inferred, and `unknown` when nothing declared one |
 | `bug_found` | Reticle finds a defect in the app under test | The **kind** of defect (`signal-contradicted`, `console-error`, …) and how it was found, never what it was found in |
@@ -52,7 +55,7 @@ Twenty-two kinds of events, each a single small JSON object. This is the whole l
 
 **Parameter and flag NAMES are collected; their VALUES are not.** We record that `reticle_act` was called with `ref` and `action`, and that you ran `reticle serve --headed --port`. We do not record what you set them to. This distinction is the whole safety property, and it is absolute for CLI flags: `--http-token` holds a secret, `--drive` holds a URL, `--storage-state` holds a file path, so no flag value is ever sent. For tool parameters there is one narrow exception: a short, explicit allowlist of parameters whose values are enums _we_ defined (`action: "click"`), listed in [`argument-shape.ts`](https://github.com/reticlehq/reticle/blob/main/server/src/telemetry/argument-shape.ts). A value outside that allowlist reports as `other`, so a future schema change cannot quietly start forwarding free text. `reticle_act`'s `args` (the text being typed into your app, which on a login form is a password) is **never** in that allowlist.
 
-`daemon_stopped` carries: how long the session ran, how many tool calls and of which tools, how long each tool took (total and worst case), how many failed, how many verifications ran, browser/lease connection attempts with their failure causes, and which MCP clients connected (`claude-code`, `cursor`). It also carries how the in-page HUD was used: presses per control (`hudControls`, by the control's name from a closed list Reticle defines, a toggle as `name:on` / `name:off`), how long the HUD sat as a bubble, collapsed or open and on which page (`hudViewMs`, `hudPanelMs`), which rail slides were shown (`hudSlides`), and the order of those presses and views, cut at 60 (`hudJourney`). Control names, never anything typed or shown on the page.
+`daemon_stopped` carries: how long the session ran, how many tool calls and of which tools, how many of those calls came before an app connected, the version of the Reticle SDK in the last page that connected, how long each tool took (total and worst case), how many failed, how many verifications ran, browser/lease connection attempts with their failure causes, and which MCP clients connected (`claude-code`, `cursor`). It also carries how the in-page HUD was used: presses per control (`hudControls`, by the control's name from a closed list Reticle defines, a toggle as `name:on` / `name:off`), how long the HUD sat as a bubble, collapsed or open and on which page (`hudViewMs`, `hudPanelMs`), which rail slides were shown (`hudSlides`), and the order of those presses and views, cut at 60 (`hudJourney`). Control names, never anything typed or shown on the page.
 
 It also carries a snapshot of the **machine's** state (our own process's memory, free and total system RAM, load average and CPU count), taken at shutdown and again on any crash. This is what separates "your machine ran out of memory" from "Reticle has a bug", which otherwise produce identical-looking failures. No hostname, no username, no paths, no process list.
 
@@ -98,11 +101,12 @@ Every event carries the same few fields:
 | Field | What it is | What it is not |
 | --- | --- | --- |
 | `anonymousId` | A random UUID minted locally on first run, stored at `~/.reticle/telemetry-id` | Not derived from your name, email, hardware, or anything else about you |
-| `projectId` | A one-way SHA-256 hash of the git origin URL, or of the directory path outside a repo | Not reversible: we can count _distinct_ projects, but not learn any project's name, URL, or location. Hashing the origin means one repo counts once instead of once per teammate and per clone |
+| `projectId` | A SHA-256 hash of the git origin URL, or of the directory path outside a repo | Not the URL or the path. We use it to count _distinct_ projects. A hash cannot be turned back into a URL, but anyone who has a URL can hash it and compare: for a public repository, the id can be matched to the repository. Hashing the origin means one repo counts once instead of once per teammate and per clone |
 | `actor` | Whether a person or an agent caused this: a typed `reticle` command is a person, an MCP tool call is the agent | Not a claim about _why_. Whether you asked your agent to verify, or it decided to, lives in a prompt Reticle never sees, and we do not guess |
 | `sessionId` | A random id for this daemon run, held in memory and never written to disk | Not a device id and not persistent: a restarted daemon gets a new one. It only groups one run's own events together |
 | `accountState` / `linked` | Whether this machine is signed out, signed in, or signed in with this project linked to a workspace | Not who is signed in: read from whether a sign-in file exists, never from what is in it |
 | `workspaceId` | Only once this project is linked: the Reticle workspace's id, the `orgId` in `.reticle/cloud.json` | Not the workspace's name and not your email. It is the one key the Reticle platform can join this usage to the workspace you created there; see [The platform side](#the-platform-side) |
+| `licenseId` | Only on a licensed (enterprise) build: the id of the licence key it runs with, sent as the event's `organization` group | Not sent by an open-source install. Our licence records connect each licence id to the company that holds the key, so these events are not anonymous to us |
 | `client` | Which coding agent the event came from, from a closed list (`claude_code`, `cursor`, `codex`, and so on, or `other`) | Not the name your agent sent: a name we do not list arrives as `other` |
 | `launch` | How `reticle` was started: `npx`, `global`, `project` or `other` | Not the path it was started from; only the bucket leaves |
 | `projectIdSource` | Whether `projectId` came from a shared git origin or from the local directory path | Not the origin or the path. It exists so we can tell when "how many people share this project" is a real measurement. Outside a pushed repo there is nothing shared to hash, so those rows always show one user |
@@ -110,7 +114,9 @@ Every event carries the same few fields:
 | `os` | The platform (`darwin` / `linux` / `win32`) | Not the OS version, hostname, or hardware |
 | `ci` | Whether the run is inside CI | n/a |
 
-There are no IP-based profiles, no cookies, no fingerprinting, and no person profiles: events are processed in "personless" mode, so they are never joined into an identity.
+There are no IP-based profiles, no cookies, no fingerprinting, and no person profiles: events are processed in "personless" mode, so they are never joined into a person profile.
+
+Your IP address is not stored, and no location is found from it. Each event tells PostHog not to look up a location (`$geoip_disable: true`). Each event also sets `$ip` to `0.0.0.0`, so PostHog does not store the address the request came from. Events from older versions do not do this.
 
 ## The platform side
 
@@ -120,11 +126,11 @@ The sign-in page Reticle opens also says where the sign-in started (`from=termin
 
 ## What is never sent
 
-Your code. Your app's DOM, network requests or responses, console logs, application state, or screenshots. File paths, project names, or git remote URLs. Your name, email or employer. Any account identifier, with one exception you opt into by linking a project: the workspace id, above. Environment variables. Anything typed into the app under test. The names of your flows, baselines, or tests. Error messages, and any stack frame belonging to your application.
+Your code. Your app's DOM, network requests or responses, console logs, application state, or screenshots. File paths, project names, or git remote URLs. Your name or email, except a reply address that you give with [feedback](#feedback). Any account identifier, with two exceptions: the workspace id of a project you linked, and the licence id of a licensed build, both above. Environment variables. Anything typed into the app under test. The names of your flows, baselines, or tests. Error messages, and any stack frame belonging to your application.
 
 A few of these are worth being explicit about, because they are the ones a product team is most tempted by:
 
-- **We do not send your project's name or its GitHub URL.** `projectId` is a one-way hash. It lets us count distinct projects and see that a project came back next week; it cannot be turned back into a repository, and we cannot look you up from it.
+- **We do not send your project's name or its GitHub URL.** `projectId` is a hash of the URL. It lets us count distinct projects and see that a project came back next week. We do not use it to find the repository. The hash is not a secret: for a public repository, anyone who has the URL can compute the same id.
 - **We do not try to work out who you work for.** No domain sniffing, no email inference, no matching a repo against a company. If you _want_ us to know, [email us](#telling-us-who-you-are).
 - **We do not record what you asked your agent to verify.** The `verification_completed` event knows that a verification happened and how it turned out. The prompt behind it is not something Reticle can see, and we do not reconstruct it.
 
@@ -137,12 +143,14 @@ Reticle verifies apps for AI agents, and for a long time it had no way to hear w
 | Who | How | What it carries |
 | --- | --- | --- |
 | Your agent | Calls the `reticle_session { action: "feedback" }` MCP tool (after a failure, **or to ask for a feature**) | What it wrote: an analysis, or a request with the goal behind it, what would improve, and how it works around the gap today. Plus the model it is running, which it tells us because MCP cannot |
-| You | Run `npx @reticlehq/server feedback [--rating 1-5] [--bug] "your words"` | Your words and your rating |
+| You | Run `npx @reticlehq/server feedback [--rating 1-5] [--bug] [--contact you@example.com] "your words"` | Your words and your rating, and your reply address if you give one |
 | Your agent, before Reticle works | Runs `npx @reticlehq/server feedback --agent --kind <bug\|gap\|ambiguity\|feature_request\|improvement\|experience> "what happened"` | The same words, filed from the shell. This exists for the phase where there is no daemon and no MCP tools (a failed `init`, half-finished wiring), which is the failure we are otherwise never told about |
 
 Agents are instructed, in the tool description itself, never to include app source, secrets, or user data, and to describe the failure in their own words instead.
 
 **It is redacted before it leaves your machine.** Emails, credentials in URLs, `Authorization` headers and API-key assignments, recognizable vendor tokens (`sk-…`, `ghp_…`, `AKIA…`, `xoxb-…`, JWTs), and home-directory paths are stripped and replaced with `[redacted]`. This runs client-side, in [`feedback.ts`](https://github.com/reticlehq/reticle/blob/main/server/src/telemetry/feedback.ts), so you can read exactly what it removes rather than take our word for it. It is a safety net, not a guarantee: it cannot catch a secret that looks like an ordinary sentence, which is why the instruction above comes first.
+
+**A reply address is sent only when you give it.** `--contact you@example.com` on `reticle feedback` adds one email address so that the maintainers can answer you. Your agent can pass one on with `contact`, but only an address that you typed for this purpose. It must not guess one or reuse one from somewhere else. The address goes as `feedback_contact` on that one report. It is not redacted, because you gave it to be read. Without `--contact` or `contact`, no address is sent.
 
 **It shows you what it sends.** `reticle feedback` prints the exact payload before transmitting, and names any redaction rule that fired.
 
@@ -160,7 +168,7 @@ Alongside the report, a feedback event carries context about the environment it 
 
 Plus the `version`, `os`, and `ci` fields every event carries. No paths, no project name, no dependency list, no user-agent string.
 
-**It has its own off switch.** To keep the anonymous counters but never send free text:
+**It has its own off switch.** To keep the usage counters but never send free text:
 
 ```bash
 RETICLE_FEEDBACK=0
@@ -170,7 +178,7 @@ Every switch in [Your choices](#your-choices) disables feedback too. If telemetr
 
 ## Telling us who you are
 
-Everything above is anonymous, and stays that way. There is no command that sends who you are: `reticle identify`, which used to, has been removed, and this version never sends an `identified` event. If you want support, an enterprise licence, or to be a design partner, email support@reticlehq.com.
+Nothing above names you, and no command adds your name: `reticle identify`, which used to, has been removed, and this version never sends an `identified` event. If you want support, an enterprise licence, or to be a design partner, email support@reticlehq.com.
 
 An identity sent by an earlier version with `reticle identify` stays linked to that machine's anonymous id until you ask for it to be removed: email support@reticlehq.com.
 

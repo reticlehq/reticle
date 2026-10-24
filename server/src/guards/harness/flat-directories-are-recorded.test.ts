@@ -59,7 +59,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // registry imports it lazily, so a page downloads the renderer only when a picture is first drawn.
   // +1: stable-selector.ts, split out of query.ts when that file crossed the 1000-line cap (#1147).
   // +1: text-match.ts, the text rules split out of query.ts at the 1000-line cap (#1782).
-  'adapters/realm/browser/src/dom': 15,
+  // +1: layout-audit.ts, the snapshot's opt-in audit. Not `dom/audit/`: it reads dom's a11y and refs
+  // and snapshot reads it, so a subdirectory would be two directories that need each other.
+  'adapters/realm/browser/src/dom': 16,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 25,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
@@ -169,7 +171,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 13 with `telemetry-bug.ts`: the `bug_found` schema, split out when the accuracy and signal
   // changes together pushed `telemetry.ts` over the cap. Grouping the seven `telemetry-*.ts` files
   // into one directory is the next step if this grows again.
-  'core/src': 13,
+  // 14 with `activation-entry.ts`: the `./activation` subpath. A subpath entry sits at the root
+  // beside `hud-entry.ts` and `tour-entry.ts`, so the page loader does not load the core barrel.
+  'core/src': 14,
   // 19 with `state-bookkeeping.ts`: telling a query cache's own bookkeeping from a state change.
   // 20 with `superseded-checks.ts`: the one rule every fold of a run's checks applies.
   'engine/src/evidence': 20,
@@ -204,7 +208,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: nuxt-snippets.ts, split out of snippets.ts when it crossed the 1000-line cap.
   // +3: angular.ts, remix.ts and static-page.ts — one per stack `init` learned to wire, each beside
   // the patchers of its kind rather than folded into snippets.ts, which is near the cap already.
-  'init/src/patch': 20,
+  // +1: python-snippets.ts, split from snippets.ts when the snippets started to read the token at
+  // run time, because snippets.ts was near the cap.
+  'init/src/patch': 21,
   // Crossed the line at 11 with `plan-angular.ts` and `plan-electron-vite.ts`, one per stack `init`
   // learned to wire, each beside the other per-framework builders. 12 with `plan-vite.ts`: the Vite
   // plugin and capabilities steps every Vite-based stack composes, split out of `plan-framework.ts`
@@ -264,7 +270,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 51 with `harness-gate.ts`: whether a Harness drive may start, split from `harness-explore.ts` at
   // its line cap; every gate caller already sits in this directory.
   // 52 with `run-report.ts`: the end-of-run report, beside `reticle-result.ts` whose words it shares.
-  'server/src/surface/tools': 52,
+  // 53 with `map-tools.ts`: `reticle_map`, a tool definition like its neighbours. The fold it reads
+  // with sits in `judgement/app-graph/` and imports no tool code, so the two never need each other.
+  'server/src/surface/tools': 53,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

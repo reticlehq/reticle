@@ -209,6 +209,51 @@ describe('an agent can report that something worked, not only that it broke', ()
   });
 });
 
+/** A reply address, only one the user typed for this purpose. */
+describe('an agent can pass on a reply address the user gave', () => {
+  const tool = TOOLS.find((t) => t.name === ReticleTool.FEEDBACK);
+  const deps = {
+    sessions: {
+      resolve: () => {
+        throw new Error('no browser session connected');
+      },
+    },
+  } as unknown as Parameters<NonNullable<typeof tool>['handler']>[0];
+
+  it('tells the agent never to guess or reuse an address', () => {
+    const description = JSON.stringify(tool?.inputSchema['contact']?.description ?? '');
+    expect(description).toContain('Never guess or reuse one.');
+  });
+
+  it('carries the address through to the report', async () => {
+    const filed: Record<string, unknown>[] = [];
+    const spy = vi.spyOn(feedbackModule, 'submitFeedback').mockImplementation((input: unknown) => {
+      filed.push(input as Record<string, unknown>);
+      return Promise.resolve({ sent: false, accepted: true, redacted: [], note: '' } as never);
+    });
+    await tool?.handler(deps, {
+      kind: FeedbackKind.EXPERIENCE,
+      text: 'works well',
+      contact: 'ada@example.com',
+    });
+    expect(filed[0]?.['contact']).toBe('ada@example.com');
+    spy.mockRestore();
+  });
+
+  it('refuses a report whose address is not one plain address, and files nothing', async () => {
+    const spy = vi.spyOn(feedbackModule, 'submitFeedback');
+    const result = (await tool?.handler(deps, {
+      kind: FeedbackKind.EXPERIENCE,
+      text: 'works well',
+      contact: 'ada@example.com; bob@example.com',
+    })) as { accepted?: boolean; reason?: string } | undefined;
+    expect(result?.accepted).toBe(false);
+    expect(result?.reason).toContain('contact');
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
+
 /**
  * Incident: three independent field reports said a `reticle_feedback` call carrying a
  * summary and a trace came back "String must contain at least 1 character(s)" and was lost. They

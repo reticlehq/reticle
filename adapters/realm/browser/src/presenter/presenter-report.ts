@@ -25,7 +25,6 @@ import {
   compactDuration,
   compactNumber,
   COVERAGE_LEVELS,
-  CAPABILITY_WORDS,
 } from './chrome/presenter-report-copy.js';
 
 /**
@@ -226,64 +225,6 @@ function syncStatusHtml(sync: Readonly<Record<string, unknown>> | undefined): st
   return `<span class="reticle-sync-status" data-reticle-sync-status="${esc(String(status))}" title="${esc(said)}">${label}</span>${seeRun}`;
 }
 
-/** A capability name in plain words, escaped: the daemon's list is loose on the wire. */
-const capabilityWords = (name: unknown): string | undefined =>
-  'string' === typeof name ? esc(CAPABILITY_WORDS[name] ?? name) : undefined;
-
-/** One capability chip: a mark, the plain name, and on a missing one what it costs. */
-function capabilityItem(state: 'seen' | 'missing' | 'unseen', name: string, cost = ''): string {
-  const mark = 'seen' === state ? '✓' : 'missing' === state ? '✕' : '○';
-  const why = '' === cost ? '' : `<span class="reticle-report-cap-cost">${cost}</span>`;
-  return `<li class="reticle-report-cap" data-state="${state}"><span class="reticle-report-cap-mark" aria-hidden="true">${mark}</span><span class="reticle-report-cap-name">${name}</span>${why}</li>`;
-}
-
-/**
- * This tab's instrumentation: capabilities covered out of the total, then each one by name — seen,
- * missing (with what that costs) or not checked yet — and, once a verdict recorded a gap, the button
- * that copies the prompt for a coding agent. Numbers are checked as numbers, every name is escaped,
- * and the prompt is never rendered, only copied.
- */
-export function instrumentationHtml(
-  instrumentation: Readonly<Record<string, unknown>> | undefined,
-): string {
-  if (instrumentation === undefined) return '';
-  const covered = instrumentation['covered'];
-  const total = instrumentation['total'];
-  if ('number' !== typeof covered || 'number' !== typeof total) return '';
-  const list = (key: string): readonly unknown[] => {
-    const value = instrumentation[key];
-    return Array.isArray(value) ? (value as unknown[]) : [];
-  };
-  const seen = list('seen').flatMap((n) => {
-    const name = capabilityWords(n);
-    return name === undefined ? [] : [capabilityItem('seen', name)];
-  });
-  const missing = list('missing').flatMap((m) => {
-    if ('object' !== typeof m || null === m) return [];
-    const gap = m as Record<string, unknown>;
-    const name = capabilityWords(gap['capability']);
-    const cost = 'string' === typeof gap['cost'] ? esc(gap['cost']) : '';
-    return name === undefined ? [] : [capabilityItem('missing', name, cost)];
-  });
-  const unseen = list('notSeenYet').flatMap((n) => {
-    const name = capabilityWords(n);
-    return name === undefined ? [] : [capabilityItem('unseen', name)];
-  });
-  const items = [...missing, ...seen, ...unseen];
-  const caps =
-    0 === items.length
-      ? ''
-      : `<ul class="reticle-report-caps">${items.join('')}</ul>${0 === unseen.length ? '' : `<span class="reticle-report-caps-note">○ ${REPORT_TEXT.NOT_SEEN_YET}</span>`}`;
-  const copy =
-    'string' === typeof instrumentation['prompt']
-      ? `<button type="button" class="reticle-report-copy-prompt" ${COPY_PROMPT_ATTR}>${REPORT_TEXT.COPY_PROMPT}</button>`
-      : '';
-  return `<div class="reticle-report-instrumentation" title="${REPORT_TEXT.INSTRUMENTATION_HELP}"><div class="reticle-report-instrumentation-head"><span class="reticle-report-section">${REPORT_TEXT.INSTRUMENTATION}</span><span class="reticle-report-instrumentation-value">${REPORT_TEXT.covered(Math.round(covered), Math.round(total))}</span></div>${caps}${copy}</div>`;
-}
-
-/** Marks the copy-prompt button; the click is delegated, since the body repaints. */
-const COPY_PROMPT_ATTR = 'data-reticle-copy-prompt';
-
 /**
  * Reticle Coverage: the headline is controls PROVED, the level that is evidence rather than a visit;
  * the rest show beside it. Only levels this HUD knows are rendered, so a key from the daemon is never
@@ -310,8 +251,6 @@ export function reportBodyHtml(
   coverage?: Readonly<Record<string, number>>,
   /** Where this project's work stands with the platform. Project scope only. */
   sync?: Readonly<Record<string, unknown>>,
-  /** This tab's instrumentation coverage and agent prompt. Project scope only. */
-  instrumentation?: Readonly<Record<string, unknown>>,
 ): string {
   const c = scope.counts;
   if (0 === c.calls) return `<p class="reticle-report-empty">${REPORT_TEXT.EMPTY}</p>`;
@@ -352,7 +291,7 @@ export function reportBodyHtml(
    * will not find. The two never both render — `localOnly` is gated on there being NO dashboard.
    */
   const identity = `<div class="reticle-report-identity">${accountControlHtml(account, { dashboardUrl, projectName, verdicts: c.verdicts, defects: c.failed })}${syncButtonHtml(dashboardUrl)}${syncStatusHtml(sync)}</div>`;
-  return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}${instrumentationHtml(instrumentation)}${coverageHtml(coverage)}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
+  return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}${coverageHtml(coverage)}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
 }
 
 /**
@@ -471,13 +410,6 @@ export class PresenterReport {
         void this.#copy(ACCOUNT_TEXT.SIGNIN_COMMAND, signin);
         return;
       }
-      const copyPrompt = target.closest(`[${COPY_PROMPT_ATTR}]`);
-      const prompt = this.#snapshot?.instrumentation?.['prompt'];
-      if (copyPrompt !== null && 'string' === typeof prompt) {
-        e.stopPropagation();
-        void this.#copy(prompt, copyPrompt);
-        return;
-      }
       const sync = target.closest(`[${SYNC_BTN_ATTR}]`);
       if (sync !== null) {
         e.stopPropagation();
@@ -561,7 +493,6 @@ export class PresenterReport {
             this.#snapshot?.projectName,
             this.#global ? undefined : this.#snapshot?.coverage,
             this.#global ? undefined : this.#snapshot?.sync,
-            this.#global ? undefined : this.#snapshot?.instrumentation,
           );
   }
 

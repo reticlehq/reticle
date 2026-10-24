@@ -24,7 +24,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { LOOPBACK_HOST } from '@reticlehq/core';
+import { LOOPBACK_HOST, WRITING_RULE_SHORT } from '@reticlehq/core';
 import { degradedInstructions, localInitializeResponse } from './proxy/proxy-handshake.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { startMcpProxy } from './mcp-proxy.js';
@@ -48,7 +48,8 @@ describe('the instructions a locally-answered handshake carries', () => {
   });
 
   it('keeps the real instructions underneath, so the degraded agent is not also uninstructed', () => {
-    expect(degradedInstructions(HEALTHY, PORT, REASON)).toContain(HEALTHY);
+    const kept = HEALTHY.slice(0, HEALTHY.indexOf(WRITING_RULE_SHORT) + WRITING_RULE_SHORT.length);
+    expect(degradedInstructions(HEALTHY, PORT, REASON)).toContain(kept);
   });
 
   it('is absent from a healthy handshake', () => {

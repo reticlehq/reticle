@@ -224,3 +224,19 @@ export function sessionBoundField(predicate: Predicate): string | undefined {
       return undefined;
   }
 }
+
+/** True when any clause of this predicate, at any depth, is a computed `compare`. */
+export function computesComparison(predicate: Predicate | undefined): boolean {
+  if (predicate === undefined) return false;
+  switch (predicate.kind) {
+    case PredicateKind.COMPARE:
+      return true;
+    case PredicateKind.ALL_OF:
+    case PredicateKind.ANY_OF:
+      return predicate.predicates.some(computesComparison);
+    case PredicateKind.NOT:
+      return computesComparison(predicate.predicate);
+    default:
+      return false;
+  }
+}

@@ -90,18 +90,14 @@ export const RENAMED_COMMANDS: ReadonlyMap<string, string> = new Map([
 ]);
 
 const HELP_FLAGS: ReadonlySet<string> = new Set(['--help', '-h']);
-/** `login --email` is the documented sign-in without a browser, so it is not a renamed `connect`. */
-const BROWSERLESS_LOGIN = { command: 'login', flag: '--email' } as const;
 
 /**
  * The command an old name now goes by, when the note saying so should print; otherwise undefined.
- * Not for a request for help (that answer names the new command itself), and not for
- * `login --email`, which `connect --help` documents as the sign-in for CI and agents.
+ * Not for a request for help (that answer names the new command itself).
  */
 export function renamedCommandFor(argv: readonly string[]): string | undefined {
   const name = argv[0];
   if (name === undefined || argv.some((arg) => HELP_FLAGS.has(arg))) return undefined;
-  if (BROWSERLESS_LOGIN.command === name && argv.includes(BROWSERLESS_LOGIN.flag)) return undefined;
   return RENAMED_COMMANDS.get(name);
 }
 

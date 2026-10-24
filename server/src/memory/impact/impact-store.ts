@@ -13,6 +13,7 @@ import {
   unsentRunCount,
 } from '@/memory/cloud/unsynced-roots.js';
 import { readDashboardUrl } from '@/memory/project/sync-status.js';
+import { mayWriteIntoRoot } from '@/memory/project/artifact-root-resolver.js';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { readAccountState } from '@/memory/cloud/account-state.js';
@@ -146,8 +147,12 @@ function streakEndingAtLatest(sortedDates: readonly string[]): number {
   let later: string | undefined;
   for (let i = sortedDates.length - 1; i >= 0; i -= 1) {
     const date = sortedDates[i];
-    if (date === undefined) break;
-    if (later !== undefined && !isNextDay(date, later)) break;
+    if (date === undefined) {
+      break;
+    }
+    if (later !== undefined && !isNextDay(date, later)) {
+      break;
+    }
     streak += 1;
     later = date;
   }
@@ -191,7 +196,9 @@ export function applyDelta(
   byDate.set(today, todayCounts);
   const dates = [...byDate.keys()].sort();
   const days = dates.map((date) => ({ date, counts: byDate.get(date) ?? emptyImpactCounts() }));
-  while (days.length > IMPACT_DAILY_BUCKETS) days.shift();
+  while (days.length > IMPACT_DAILY_BUCKETS) {
+    days.shift();
+  }
 
   const records = { ...scope.records };
   records.bestVerdictDay = Math.max(records.bestVerdictDay, todayCounts.verdicts);
@@ -229,8 +236,9 @@ export function applyDelta(
 /** The larger of two counters, key by key. */
 function maxEach<T extends Record<string, number>>(a: T, b: T): T {
   const out = { ...a };
-  for (const key of Object.keys(b) as (keyof T)[])
+  for (const key of Object.keys(b) as (keyof T)[]) {
     out[key] = Math.max(a[key] ?? 0, b[key] ?? 0) as T[keyof T];
+  }
   return out;
 }
 
@@ -337,8 +345,9 @@ export class ImpactStore {
 
   #syncStatus(dashboardUrl: string | undefined): Record<string, unknown> | undefined {
     const now = this.#now();
-    if (this.#sync !== undefined && now - this.#sync.at < SYNC_STATUS_EVERY_MS)
+    if (this.#sync !== undefined && now - this.#sync.at < SYNC_STATUS_EVERY_MS) {
       return this.#sync.value;
+    }
     // Not linked: one line when runs or flows sit here that nothing will send, and nothing otherwise.
     // `pending` counts both, so the HUD's existing "N not sent" includes a flow saved with no run.
     if (dashboardUrl === undefined) {
@@ -402,15 +411,21 @@ export class ImpactStore {
       project: this.#project,
       global: atLeastProject(this.#global, this.#project),
     };
-    if (this.#projectName !== undefined) snap.projectName = this.#projectName;
+    if (this.#projectName !== undefined) {
+      snap.projectName = this.#projectName;
+    }
     // Re-read, like the account: `reticle link` runs in another terminal while this store lives as
     // long as the daemon, so a construction-time read said "Not linked" until a restart.
     this.#dashboardUrl = readDashboardUrl(this.#root);
-    if (this.#dashboardUrl !== undefined) snap.dashboardUrl = this.#dashboardUrl;
+    if (this.#dashboardUrl !== undefined) {
+      snap.dashboardUrl = this.#dashboardUrl;
+    }
     snap.account = this.#account();
     // Absent stays absent: the HUD reads that as "we have not heard" and renders no control.
     const cfg = this.#config.read();
-    if (cfg !== undefined) snap.harnessConfig = configForHud(cfg, this.#now());
+    if (cfg !== undefined) {
+      snap.harnessConfig = configForHud(cfg, this.#now());
+    }
     // Chosen here, where the account and the entitlement are both known. Absent when nothing applies,
     // so the HUD falls back to the slides bundled with the SDK.
     const notices = selectNotices(this.#notices.read(), {
@@ -419,13 +434,19 @@ export class ImpactStore {
       sdkVersion: this.#sdkVersion,
       now: this.#now(),
     });
-    if (0 < notices.length) snap.notices = notices;
+    if (0 < notices.length) {
+      snap.notices = notices;
+    }
     const coverage = this.#coverage?.();
-    if (coverage !== undefined) snap.coverage = coverage;
+    if (coverage !== undefined) {
+      snap.coverage = coverage;
+    }
     // Only for a linked project: an unlinked one has nothing on the platform, and the HUD already
     // offers the way to link it.
     const sync = this.#syncStatus(this.#dashboardUrl);
-    if (sync !== undefined) snap.sync = sync;
+    if (sync !== undefined) {
+      snap.sync = sync;
+    }
     return snap;
   }
 
@@ -435,8 +456,11 @@ export class ImpactStore {
       clearTimeout(this.#timer);
       this.#timer = undefined;
     }
-    // One writer: the in-memory copy IS the truth.
-    writeScope(this.#paths.project, this.#project);
+    // One writer: the in-memory copy IS the truth. A project with no Reticle wiring gets no
+    // `.reticle/`: its scope stays in memory, and the first flush after `init` writes all of it.
+    if (mayWriteIntoRoot(this.#root)) {
+      writeScope(this.#paths.project, this.#project);
+    }
     this.#flushGlobal();
   }
 
@@ -453,7 +477,9 @@ export class ImpactStore {
    * plus a stale timeout) if the counters are ever load-bearing for anything but the HUD.
    */
   #flushGlobal(): void {
-    if (0 === this.#pendingGlobal.length) return;
+    if (0 === this.#pendingGlobal.length) {
+      return;
+    }
     const merged = this.#pendingGlobal.reduce(
       (scope, p) => applyDelta(scope, p.delta, p.now, p.meta),
       readScope(this.#paths.global, this.#now()),
@@ -464,7 +490,9 @@ export class ImpactStore {
   }
 
   #scheduleFlush(): void {
-    if (this.#timer !== undefined) return;
+    if (this.#timer !== undefined) {
+      return;
+    }
     this.#timer = setTimeout(() => {
       this.#timer = undefined;
       this.flush();

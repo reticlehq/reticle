@@ -15,7 +15,7 @@
  * finally established (see `replayLines`), so the daemon still gets its handshake in order.
  */
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
-import { MCP_SERVER_NAME } from '@reticlehq/core';
+import { MCP_SERVER_NAME, WRITING_RULE_SHORT } from '@reticlehq/core';
 
 /** The version we answer with if the client proposed none. */
 const FALLBACK_PROTOCOL_VERSION = '2024-11-05';
@@ -115,6 +115,9 @@ export function toolsChangedNotification(catalogWasLocal: boolean): string | nul
   return JSON.stringify({ jsonrpc: '2.0', method: TOOLS_CHANGED_NOTIFICATION });
 }
 
+/** Says that the degraded text is shorter than the healthy one. */
+const DEGRADED_OMITTED = 'This text omits the replay and argument notes.';
+
 /**
  * What a locally-answered handshake must say about itself.
  *
@@ -134,17 +137,23 @@ export function toolsChangedNotification(catalogWasLocal: boolean): string | nul
  * on the initialize result, which SUCCEEDED, and every host we target puts it in front of the model.
  * A tool description cannot reach an agent that was handed no tools.
  *
- * The healthy block is kept underneath rather than replaced: an agent that IS about to get a working
- * surface (the common case — the first call wakes a daemon) still needs to know how to drive it.
+ * The healthy block is kept underneath: an agent that IS about to get a working surface (the common
+ * case — the first call wakes a daemon) still needs to know how to drive it. Only its part up to the
+ * writing rule is kept. Claude Code shows about the first 4,096 characters, and the notice plus the
+ * whole block came to about 4,600, so the client cut the writing rule. The text says what it left
+ * out, so the cut is not silent.
  */
 export function degradedInstructions(healthy: string, port: number, reason: string): string {
-  return `DEGRADED SURFACE — READ THIS BEFORE ANY reticle_* CALL: no Reticle daemon answered on port ${String(port)} (${reason}), so this handshake was completed by the Reticle MCP proxy itself, not by Reticle's daemon. Any tool list you were handed came from a cache or is empty — it is not evidence that anything is behind it.
+  const ruleAt = healthy.indexOf(WRITING_RULE_SHORT);
+  const kept = -1 === ruleAt ? healthy : healthy.slice(0, ruleAt + WRITING_RULE_SHORT.length);
+  const omitted = kept.length < healthy.length ? `\n\n${DEGRADED_OMITTED}` : '';
+  return `DEGRADED SURFACE. READ THIS BEFORE ANY reticle_* CALL. No Reticle daemon answered on port ${String(port)} (${reason}). The Reticle MCP proxy answered this handshake, not the daemon. A tool list you got is from a cache or is empty: it proves nothing.
 
-Reticle IS installed: this process is Reticle. Do NOT report it as missing, not present, or not installed — that is the wrong diagnosis and it is the one this state reliably produces. The right one is that the daemon is not reachable yet.
+Reticle IS installed: this process is Reticle. Do NOT report it as missing or not installed. The daemon is not reachable yet.
 
-Your next reticle_* call starts a daemon and then either works or fails with the specific reason. If you have NO reticle_* tools at all, say exactly that to the user and tell them to run \`reticle doctor\` in a terminal — it reports what is holding port ${String(port)} and whether a daemon can start at all.
+Your next reticle_* call starts a daemon. Then it works, or it fails with the reason. If you have NO reticle_* tools, tell the user that, and tell them to run \`npx @reticlehq/server doctor\` in a terminal. It shows what holds port ${String(port)} and if a daemon can start.
 
-${healthy}`;
+${kept}${omitted}`;
 }
 
 /**

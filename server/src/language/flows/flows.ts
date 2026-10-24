@@ -168,6 +168,7 @@ function subStepToFlowStep(raw: unknown): FlowStep {
   const args = asRecord(sub['args']);
   const { anchor, degraded } = anchorForStep(sub);
   const step = buildStep(ReticleTool.ACT, anchor, action, args, degraded, markedSecret(sub));
+  keepRoleSource(step, sub);
   /*
    * The sub-step's own declared consequence, carried rather than folded into the parent.
    *
@@ -263,6 +264,18 @@ export function anchorFieldName(anchor: FlowAnchor): string | undefined {
   return undefined;
 }
 
+/**
+ * A role anchor has no room for a source, so the stamped source goes on the step. Without it the
+ * flow named no file: the gate called the driven component unflowed, and `affected` replayed the
+ * flow for every change.
+ */
+function keepRoleSource(step: FlowStep, src: Record<string, unknown>): void {
+  const source = sourceArg(src);
+  if (AnchorKind.ROLE === step.anchor.kind && source !== undefined) {
+    step.source = { file: source.file, line: source.line };
+  }
+}
+
 function buildStep(
   tool: string,
   anchor: FlowAnchor,
@@ -324,6 +337,7 @@ function anchoredStep(step: RecordedStep): FlowStep {
   const args = asRecord(step.args['args']);
   const { anchor, degraded } = anchorForStep(step.args);
   const out = buildStep(step.tool, anchor, action, args, degraded, markedSecret(step.args));
+  keepRoleSource(out, step.args);
   if (step.expect !== undefined) out.expect = step.expect;
   return out;
 }

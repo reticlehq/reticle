@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/engine` — `stale-response-applied` let a filter through when it used a paging parameter's name.** Two reads that differ only in a paging parameter are left alone, but only the names were compared, so `first=John` against `first=Jane`, `size=S` against `size=XL`, or a date range in `start`, `end`, `after` or `before` read as paging, and a real stale response went unreported. A count or a position (`page`, `offset`, `limit`, `size`, `first`, `start`, `end` and the rest) now pages only when both values are whole numbers, and a cursor (`cursor`, `after`, `before`) pages with any value except a date. Follows [#1730](https://github.com/reticlehq/reticle/pull/1730).

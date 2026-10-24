@@ -125,3 +125,24 @@ describe('a replayed step reports channels that disagree', () => {
     expect(results[0]?.contradictions).toBeUndefined();
   });
 });
+
+describe('a replayed step that declared the failure', () => {
+  it('does not report the failure it expects as a contradiction', async () => {
+    const declared = flow('archive');
+    const [step] = declared.steps;
+    if (step !== undefined) {
+      step.expect = { kind: 'net', method: 'POST', status: 500 };
+    }
+    const results = await replayFlow(
+      new EventfulSession(new Set(['archive']), UI_ADVANCED_OVER_A_FAILURE),
+      declared,
+      waitForPredicate,
+      FAST,
+    );
+
+    expect(results[0]?.ok).toBe(true);
+    expect(results[0]?.contradictions?.map((c) => c.kind) ?? []).not.toContain(
+      ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
+    );
+  });
+});

@@ -1,3 +1,5 @@
+import type { z } from 'zod';
+
 /**
  * Parameters that mean the same thing on every tool, documented ONCE instead of every turn.
  *
@@ -23,7 +25,7 @@
 /** The short form left in the per-turn schema. Must still make sense with no instructions at all. */
 export const SHARED_PARAM_SHORT: Readonly<Record<string, string>> = {
   sessionId: 'Target a specific tab. Omit unless you mean one — see instructions.',
-  since: 'Cursor from a prior act/observe, or a git ref.',
+  since: 'Cursor (a number) from a prior act or observe result.',
   limit: 'Cap descriptors to the first N.',
 };
 
@@ -33,6 +35,22 @@ export const SHARED_PARAM_GUIDANCE =
   'tab; Reticle scopes to your project, prefers the active one, and refuses rather than guesses when ' +
   'ambiguous. `since` — a cursor from a prior act/observe, bounding an observation to what came ' +
   'after it, or a git ref when verifying a change. `limit` — caps returned descriptors.';
+
+/** A value only a string-typed `since` accepts. */
+const GIT_REF_PROBE = 'main';
+
+/**
+ * The short form for one parameter, or undefined when it keeps its own text.
+ *
+ * `since` is a cursor (a number) on every tool but `reticle_verify`, where it is a git ref. That one
+ * keeps its own description, so the cursor text never reaches a parameter that takes a ref.
+ */
+export function sharedParamShort(name: string, schema: z.ZodTypeAny): string | undefined {
+  if ('since' === name && schema.safeParse(GIT_REF_PROBE).success) {
+    return undefined;
+  }
+  return SHARED_PARAM_SHORT[name];
+}
 
 /** Is this a parameter whose guidance now lives in the instructions block? */
 export function isSharedParam(name: string): boolean {

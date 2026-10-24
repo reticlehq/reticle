@@ -11,9 +11,10 @@
  * recorder was a module singleton whose comment described first-root-wins as a design decision.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { RETICLE_CONFIG_BASENAME } from '@/command/cli/ports/resolve/cli-port.js';
 import {
   impactSnapshot,
   impactStore,
@@ -107,5 +108,58 @@ describe('impact is recorded per project root', () => {
 
     expect(verdictsIn(first)).toBe(1);
     expect(verdictsIn(second)).toBe(0);
+  });
+});
+
+/**
+ * The first session call in a project with no Reticle wiring must change no file there.
+ *
+ * Every tool call records here, and the flush wrote `<daemon root>/.reticle/impact.json`. The proxy
+ * starts the daemon in the agent's project, so an unwired project got an untracked `.reticle/`.
+ */
+describe('an unwired project gets no .reticle directory', () => {
+  const project = (): string => mkdtempSync(join(tmpdir(), 'impact-project-'));
+  const wire = (dir: string): void =>
+    writeFileSync(join(dir, RETICLE_CONFIG_BASENAME), JSON.stringify({ projectId: 'demo' }));
+
+  it('keeps the count in memory and writes nothing into an unwired root', () => {
+    const dir = project();
+    const reticleRoot = join(dir, '.reticle');
+    const machine = home();
+    initImpact({ reticleRoot, globalRoot: machine });
+
+    recordImpact({ calls: 1 });
+    impactStore(reticleRoot)?.flush();
+
+    expect(existsSync(reticleRoot)).toBe(false);
+    expect(verdictsIn(reticleRoot)).toBe(0);
+    expect(impactStore(reticleRoot)?.snapshot().project.counts.calls).toBe(1);
+    // The machine-wide record is in the machine state directory, so it still gets the count.
+    expect(existsSync(join(machine, '.reticle', 'impact.json'))).toBe(true);
+  });
+
+  it('writes the ledger into the project once the project is wired', () => {
+    const dir = project();
+    const reticleRoot = join(dir, '.reticle');
+    initImpact({ reticleRoot, globalRoot: home() });
+    recordImpact({ calls: 1 });
+    impactStore(reticleRoot)?.flush();
+
+    wire(dir);
+    impactStore(reticleRoot)?.flush();
+
+    expect(existsSync(join(reticleRoot, 'impact.json'))).toBe(true);
+  });
+
+  it('writes the ledger into a wired root', () => {
+    const dir = project();
+    wire(dir);
+    const reticleRoot = join(dir, '.reticle');
+    initImpact({ reticleRoot, globalRoot: home() });
+
+    recordImpact({ calls: 1 });
+    impactStore(reticleRoot)?.flush();
+
+    expect(existsSync(join(reticleRoot, 'impact.json'))).toBe(true);
   });
 });

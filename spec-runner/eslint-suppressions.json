@@ -1,0 +1,102 @@
+{
+  "src/boot.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/boot.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/context/clock.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/context/input-mode.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/context/input-mode.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/context/matchers.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/context/resolve.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/context/resolve.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/flow-spec.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/junit.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/matchers.absent.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/matchers.element.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/matchers.net.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/matchers.signal.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/outcome/skip.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/register.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/runner.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/summary.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/test-context.act.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/verified-gate.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  }
+}

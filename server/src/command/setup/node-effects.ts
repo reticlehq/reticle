@@ -13,9 +13,20 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import {
+  accessSync,
+  constants as fsConstants,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ReticleDir } from '@reticlehq/core';
 import { isAlive } from '@/command/daemon/daemon.js';
 import { DEV_SERVER_LOG_CAP_BYTES, ROTATED_SUFFIX } from './bringup/dev-server-log-cap.js';
 import {
@@ -45,6 +56,37 @@ const PROBE_TIMEOUT_MS = 5_000;
 /** The supervisor that owns the server's output and keeps its log bounded. */
 const LOG_CAP_SCRIPT = fileURLToPath(new URL('./bringup/dev-server-log-cap.js', import.meta.url));
 
+/** The error code of a `wx` write to a file that is already there. */
+const EEXIST = 'EEXIST';
+
+/**
+ * The state home when this process can write it, else the project's own `.reticle/logs`.
+ *
+ * A sandboxed agent host or a locked-down profile cannot write the state home. Init had already
+ * wired the project by then, so a log folder must not be the reason it stops. The caller prints the
+ * log path, so the fallback is never silent.
+ */
+export function writableLogDir(preferred: string, projectDir: string): string {
+  try {
+    mkdirSync(preferred, { recursive: true });
+    accessSync(preferred, fsConstants.W_OK);
+    return preferred;
+  } catch {
+    const fallback = join(projectDir, ReticleDir.ROOT, ReticleDir.LOGS_SUBDIR);
+    mkdirSync(fallback, { recursive: true });
+    // Its own ignore file, because the workspace one may not be written yet on a first init. `wx`
+    // creates it only when it is absent, in one step, so a file that is already there is kept.
+    try {
+      writeFileSync(join(fallback, '.gitignore'), '*\n', { flag: 'wx' });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== EEXIST) {
+        throw error;
+      }
+    }
+    return fallback;
+  }
+}
+
 /** The dev server this process started, and the only one it will ever stop. */
 export class OwnedDevServer {
   private child: ChildProcess | undefined;
@@ -66,11 +108,11 @@ export class OwnedDevServer {
    * dev-server-log-cap.ts. It is the process group leader, so `pid()` and `stop()` cover both.
    */
   start(command: string, cwd: string, env: Readonly<Record<string, string>>): void {
-    mkdirSync(this.logDir, { recursive: true });
+    const logDir = writableLogDir(this.logDir, cwd);
     // Logs of servers that are gone, from every project, so the state home stops growing a file
     // per app ever started. This one's are replaced below anyway.
-    sweepDeadDevServers(this.logDir, { alive: isAlive, now: Date.now(), keep: cwd });
-    const log = join(this.logDir, devServerLogName(cwd));
+    sweepDeadDevServers(logDir, { alive: isAlive, now: Date.now(), keep: cwd });
+    const log = join(logDir, devServerLogName(cwd));
     // Unlinked rather than truncated: a previous server for this project may still hold the old
     // file open, and truncating under it would interleave its lines into this run's output.
     rmSync(log, { force: true });

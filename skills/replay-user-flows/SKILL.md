@@ -3,7 +3,7 @@ name: replay-user-flows
 description: Turn a user journey you just clicked through into a saved regression check that re-runs deterministically, with no model in the loop and no test code to write. Use when you have driven the same flow twice, when the user wants regression coverage without a Playwright suite, when a refactor needs proving against every existing journey, or when re-verifying by hand is costing a full drive every time.
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -12,7 +12,7 @@ metadata:
 
 Exploring an app to find a journey is the expensive part, and re-driving it with a model pays that cost again on every change. **Reticle flows** pay it once: the journey is saved with semantic anchors and replayed deterministically afterwards.
 
-Needs Reticle wired in the project. Not there? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+Needs Reticle wired in the project. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## Record
 
@@ -26,7 +26,7 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "signal",
 
 That step replays as a test. A bare `reticle_act` saves a click with nothing to prove, and replays green through any regression.
 
-To name a flow deliberately rather than take the automatic one, `reticle_record` and `reticle_flow_save` do it through `reticle_run { tool, args }`. Neither is advertised, and neither needs to be: `reticle_run` is on the default surface and dispatches to any registered tool by name. `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises them outright instead, which suits a suite that calls by name rather than a running agent.
+To name a flow deliberately rather than take the automatic one, `reticle_record` and `reticle_flow_save` do it through `reticle_run { tool, args }`. Neither is advertised, and neither needs to be: `reticle_run` is on the default surface and dispatches to any registered tool by name. `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises them outright, under older, unmerged tool names. Do not set it for an agent: the calls in this skill use the default names.
 
 Annotate the business outcome, not just the clicks, so a replay proves the journey _achieved_ something. Extended surface, like the two above:
 
@@ -62,7 +62,7 @@ reticle_verify({ sessionId, action: "flows" })
 // → { status, total, passed, failed, failures: [{ flow, verdict, whatChanged, whereInSource, nextAction }] }
 ```
 
-One call, every saved flow, no model per flow. Only failures carry detail, so a green suite is cheap to check. Build → `flow_verify` → fix from each `nextAction` → repeat is the regression loop, and it is the point of recording in the first place.
+One call, every saved flow, no model per flow. Only failures carry detail, so a green suite is cheap to check. Build → `reticle_verify { action: "flows" }` → fix from each `nextAction` → repeat is the regression loop, and it is the point of recording in the first place.
 
 ### Only the flows your change could have broken
 
@@ -72,7 +72,7 @@ On a large suite, replaying everything after a one-file edit is waste. Hand it t
 reticle_verify({ sessionId, action: "change", since: "HEAD~1" })
 ```
 
-It works out which saved flows cover the files you edited and replays only those. Give it a git ref or the file list. Use this in the inner loop and `flow_verify` before you ship: the narrow one is fast, the whole one is the guarantee.
+It works out which saved flows cover the files you edited and replays only those. Give it a git ref or the file list. Use this in the inner loop and `reticle_verify { action: "flows" }` before you ship: the narrow one is fast, the whole one is the guarantee.
 
 ### Which of your flows actually prove anything
 

@@ -928,7 +928,7 @@ export const FLOW_TOOLS: ToolDef[] = [
     inputSchema: {
       flow: FLOW_NAME_ALIAS,
       flowName: z.string().describe('Flow file name to heal (from reticle_flow{action:"list"}).'),
-      apply: z.boolean().optional(),
+      apply: z.boolean().optional().describe('Write the rebind. Omit to see the proposal only.'),
       confirmDangerous: confirmDangerousArg('this heal replay'),
       sessionId: z
         .string()

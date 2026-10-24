@@ -101,7 +101,8 @@ describe('reticle_viewport tool', () => {
         captured = { sessionId, size };
         return Promise.resolve(true);
       },
-    } as ToolDeps['pool'];
+      viewportOfLease: () => Promise.resolve(undefined),
+    } as unknown as ToolDeps['pool'];
 
     const res = (await tool().handler(depsWith(undefined, pool), {
       width: 390,
@@ -174,6 +175,7 @@ describe('reticle_viewport sets media on a lease', () => {
         calls.push({ media });
         return Promise.resolve(true);
       },
+      viewportOfLease: () => Promise.resolve(undefined),
     }) as unknown as ToolDeps['pool'];
 
   it('sets reduced motion and a dark scheme without resizing when no size is given', async () => {
@@ -208,5 +210,64 @@ describe('reticle_viewport sets media on a lease', () => {
     })) as Record<string, unknown>;
     expect(res['applied']).toBe(false);
     expect(res['ok']).toBe(false);
+  });
+});
+
+/**
+ * `reticle_viewport { sessionId: <lease> }` resized the driven tab and answered `applied: true`
+ * while the leased tab kept its width. An agent then read desktop boxes as mobile ones.
+ */
+describe('reticle_viewport on a leased tab', () => {
+  const LEASE = 'lease-1';
+  const MOBILE = { width: 375, height: 812 };
+
+  function leaseDeps(
+    driven: RealInputProvider | undefined,
+    observed: { width: number; height: number } | undefined,
+    resized: string[],
+  ): ToolDeps {
+    const sessions: Partial<SessionManager> = {
+      resolve: () => ({ id: LEASE, url: 'http://localhost:5173/app' }) as never,
+    };
+    const pool = {
+      leaseUrl: (id: string) => (id === LEASE ? 'http://localhost:5173/app' : undefined),
+      setViewportLease: (id: string) => {
+        resized.push(id);
+        return Promise.resolve(true);
+      },
+      viewportOfLease: () => Promise.resolve(observed),
+    } as unknown as ToolDeps['pool'];
+    return { sessions: sessions as SessionManager, realInput: driven, pool } as unknown as ToolDeps;
+  }
+
+  const drivenProvider = (resized: string[]): RealInputProvider =>
+    ({
+      isAvailableFor: () => Promise.resolve(true),
+      perform: () => Promise.resolve({ performed: true }),
+      setViewport: () => {
+        resized.push('driven');
+        return Promise.resolve(true);
+      },
+    }) as unknown as RealInputProvider;
+
+  it('resizes the lease, and not the driven page, when the session is a lease', async () => {
+    const resized: string[] = [];
+    const res = (await tool().handler(leaseDeps(drivenProvider(resized), MOBILE, resized), {
+      ...MOBILE,
+      sessionId: LEASE,
+    })) as Record<string, unknown>;
+    expect(resized).toEqual([LEASE]);
+    expect(res['applied']).toBe(true);
+    expect(res['observed']).toEqual(MOBILE);
+  });
+
+  it('says applied: false, with the size the page reports, when the page kept its size', async () => {
+    const resized: string[] = [];
+    const res = (await tool().handler(leaseDeps(undefined, { width: 1280, height: 720 }, resized), {
+      ...MOBILE,
+      sessionId: LEASE,
+    })) as Record<string, unknown>;
+    expect(res['applied']).toBe(false);
+    expect(res['observed']).toEqual({ width: 1280, height: 720 });
   });
 });

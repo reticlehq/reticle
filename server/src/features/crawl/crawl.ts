@@ -496,6 +496,8 @@ export async function crawl(
         // need — without it a crawl would report nothing about the UI moving, which is most of what a
         // crawl is for.
         actionSince: since,
+        // The control clicked, so a failed write is judged by what became of it.
+        ref: item.ref,
       })) {
         counts.contradictions += 1;
         anomalies.push({

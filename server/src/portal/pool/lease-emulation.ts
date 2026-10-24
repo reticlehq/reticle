@@ -25,3 +25,22 @@ export interface LeaseMedia {
 export interface LeaseEmulation extends LeaseMedia {
   viewport?: { width: number; height: number };
 }
+
+/** The page's own layout viewport, read back after a resize. */
+const VIEWPORT_READ_SCRIPT = '[window.innerWidth, window.innerHeight]';
+
+/** The size a page reports for itself, or undefined when it cannot be read. */
+export async function readViewport(page: {
+  evaluate?(script: string): Promise<unknown>;
+}): Promise<{ width: number; height: number } | undefined> {
+  if (page.evaluate === undefined) {
+    return undefined;
+  }
+  try {
+    const size = await page.evaluate(VIEWPORT_READ_SCRIPT);
+    const [width, height] = Array.isArray(size) ? (size as unknown[]) : [];
+    return 'number' === typeof width && 'number' === typeof height ? { width, height } : undefined;
+  } catch {
+    return undefined;
+  }
+}

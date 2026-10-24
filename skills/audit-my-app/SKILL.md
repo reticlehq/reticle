@@ -3,14 +3,14 @@ name: audit-my-app
 description: Sweep a whole running web app for what is broken, without writing a script or knowing the codebase. Clicks every reachable control and reports dead buttons, console errors, failed requests, and places where the API and the screen disagree. Use on an unfamiliar codebase, before a release, after a big merge or dependency bump, when the user asks for a smoke test or a health check, or when someone says "just check everything still works".
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
 
 # Sweep the whole app and report what is broken
 
-You do not need to understand the codebase to check it. **Reticle** drives every reachable control in the running app and reports the anomalies. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+You do not need to understand the codebase to check it. **Reticle** drives every reachable control in the running app and reports the anomalies. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## 1. Ask the app what it can do
 

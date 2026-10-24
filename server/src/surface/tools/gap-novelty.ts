@@ -21,6 +21,7 @@
  * Scoped per session id, because a new session is a new agent that has been told nothing.
  */
 
+import { z } from 'zod';
 import { recordGaps } from '@/portal/session/recorded-gaps.js';
 
 /** The fields worth repeating. Everything else on a gap is the remedy, said once. */
@@ -84,3 +85,14 @@ export function forgetGapNovelty(sessionId: string): void {
 export function resetGapNovelty(): void {
   toldBySession.clear();
 }
+
+/**
+ * The output-schema entry for `engineBlindSpots`, shared by every verdict tool so they cannot word
+ * it two ways. See `EngineBlindSpotKind` in core.
+ */
+export const engineBlindSpotsOutput = z
+  .array(z.unknown())
+  .optional()
+  .describe(
+    'What this engine could not observe in the session so far, cumulative: each entry is { kind, detail }, kind "pixels-unobserved" or "claim-arithmetic-unchecked". [] when nothing. The last verdict of a run carries the run\'s list; a host must not call a run clean while it holds an entry.',
+  );

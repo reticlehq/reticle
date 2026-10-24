@@ -3,7 +3,7 @@ name: design-system-compliance
 description: Check that the UI you actually rendered uses the design system, by reading computed styles in the running app against the project's design tokens. Catches hardcoded hex colors, off-palette backgrounds, invisible or unusable controls, and animations that never ran. Use after building or restyling a component, when a design review is wanted, when a UI looks slightly off but nobody can say why, or when a design system exists and nothing checks whether the code follows it.
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -12,7 +12,7 @@ metadata:
 
 Reading the source tells you what the component _asks_ for. It cannot tell you what the browser resolved: a token overridden three layers up, a hardcoded `#3b82f6` that happens to look close, a dark-theme scope that never applied. That answer only exists in the running page.
 
-**Reticle** reads computed styles in the live app and compares them against the project's tokens. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+**Reticle** reads computed styles in the live app and compares them against the project's tokens. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## The check
 

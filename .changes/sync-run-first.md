@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — a run took up to 8 s to reach the dashboard while a drive was on.** Every sync cycle paged the project's whole shared memory down (nine round trips on a project with ~850 entries) before sending anything, and walked every other linked repo on the machine before the one that changed. The memory is now re-read only when intent changed, after a re-link, on a requested sync, or once a minute; the repo that changed goes first, and the other linked repos are walked at most once a minute (and on the backstop timer). Measured with a simulated 150 ms round trip and two other linked repos: p95 from file write to dashboard row 8.1 s → 3.1 s, with about a quarter of the requests. Idle cost is unchanged.

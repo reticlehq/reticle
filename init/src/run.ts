@@ -8,7 +8,7 @@ import type { InitOptions, InitIo, InitResult, InitContext } from './run-types.j
 import { explainInstallFailure } from './diagnose/install-retries.js';
 import { preflight } from './plan/preflight.js';
 import { devCommandFrom } from './detect/dev-script.js';
-import { restartHint, FEEDBACK_HINT } from './diagnose/closing-hint.js';
+import { restartHint, COMMUNITY_HINT, FEEDBACK_HINT } from './diagnose/closing-hint.js';
 import { projectIdOf, rememberProjectOnDisk } from './project/remember-project.js';
 import type { PackageManager } from './detect/detect.js';
 import { initWithoutPackageJson } from './no-package-json.js';
@@ -360,6 +360,9 @@ export function runInit(options: InitOptions, io: InitIo): InitResult {
   if (true !== options.redirected && true !== options.continuesToRuntime) {
     io.print('');
     io.print(FEEDBACK_HINT);
+    if (result.ok && true !== options.dryRun) {
+      io.print(COMMUNITY_HINT);
+    }
   }
   return result;
 }

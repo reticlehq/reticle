@@ -21,12 +21,14 @@ describe('zeroInstallScript — the reader a page with no SDK is given', () => {
     const page = run({});
     expect(page['__connectedWith']).toEqual({
       allowNonLocalhost: true,
+      lease: true,
       token: 'tok',
       url: OPTS.url,
     });
   });
 
   // A page that DID load an SDK keeps its own instance: a second copy would be a second session.
+  // The call is marked `lease`, so that SDK takes the daemon's token if the bridge refused its own.
   it('leaves an SDK the page already has in place, and only connects it', () => {
     const own = {
       connect(a: unknown) {
@@ -39,6 +41,7 @@ describe('zeroInstallScript — the reader a page with no SDK is given', () => {
     expect(page['__reticleInstance']).toBe(own);
     expect(page['__connectedWith']).toEqual({
       allowNonLocalhost: true,
+      lease: true,
       token: 'tok',
       url: OPTS.url,
     });
@@ -60,6 +63,7 @@ describe('zeroInstallScript — the reader a page with no SDK is given', () => {
       const page = run({ document: { contentType } });
       expect(page['__connectedWith']).toEqual({
         allowNonLocalhost: true,
+        lease: true,
         token: 'tok',
         url: OPTS.url,
       });

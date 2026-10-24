@@ -34,7 +34,7 @@ reticle status
   sessions     ✓ 2 pages connected
                http://localhost:5173/  (throttled, hidden)
                http://localhost:7699/  (throttled, hidden)
-  agent link   enumerated
+  agent link   ✓ your agent has read and used Reticle's tools
 ```
 
 And with no daemon on the port:
@@ -43,7 +43,11 @@ And with no daemon on the port:
 reticle status
   daemon       ✗ not running on :4999
                port presence: free
-  agent link   never-attached
+  agent link   no agent has started Reticle on this port yet
+               no MCP client has started Reticle on this port, so either the server is not
+               registered with your client or nothing has attached since this record began:
+               register it with `npx @reticlehq/server init`, then restart your MCP client and
+               run status again.
   next         no daemon is running on this port, which is normal. An agent starts it when it
                first calls a Reticle tool, and it exits again when idle. Ask your agent to verify
                something, then run status again.

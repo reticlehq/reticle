@@ -10,20 +10,28 @@ Production mode lets an agent drive a live site, not only a development build. I
 
 - A Reticle service that issues activation tickets (`POST /v1/production-mode/tickets`). A service without this route answers 404, and the lease says "the server does not offer production mode".
 - This project linked to that service: `reticle connect`, or `RETICLE_API_KEY`.
-- A site whose server redeems the ticket. The service signs the ticket, and only that service can check it. Today the Reticle dashboard is the only site that does this. Another site cannot start production mode yet.
-- A browser that is signed in to the site, as the person whose API key asks for the ticket. The service redeems a ticket only for that person, in that workspace. A leased browser starts signed out, so give the lease your session cookies in `seedStorage` (see below).
-- The site loads `@reticlehq/browser` lazily, only when an activation is present, and calls:
+- The loader in your site's staging and production builds (below). It checks the ticket in the page, with the service's public key.
+- A browser that is signed in to the site, as the person whose API key asks for the ticket. The service issues a ticket only for that person, in that workspace. A leased browser starts signed out, so give the lease your session cookies in `seedStorage` (see below).
 
-  ```ts
-  reticle.connect({
-    port, // from the activation
-    token: nonce, // the session nonce, never the pairing token
-    allowInProduction: true,
-    allowNonLocalhost: true,
-    env: 'production',
-    scope, // "observe" or "act"
-  });
-  ```
+## Install the loader on staging and production
+
+Call `activate` once, at startup, with the public key that the dashboard shows you:
+
+```ts
+import { activate } from '@reticlehq/browser/activate';
+
+void activate({ publicKey: '<the public key from the dashboard>' });
+```
+
+In Vite, put it in `main.ts`. In Next.js, put it in a client component that the root layout renders, inside a `useEffect`.
+
+A visitor's page load reads one query parameter and stops. It loads no SDK, opens no socket, and writes no storage and no DOM. Only a URL with a valid `reticle_activate` ticket loads the SDK. The loader then removes the parameter from the address bar and connects with the ticket's nonce, bridge and scope. The loader refuses a ticket that has a bad signature, that expired, that is for another origin, or whose bridge is not `wss://` (`ws://` only on a loopback host). A refused ticket loads nothing and writes one `console.warn` line.
+
+The session reads as an installed SDK, not an injected one.
+
+### The ticket
+
+The ticket is `<payload>.<signature>`, both base64url. The payload is JSON: `{ v: 1, nonce, origin, bridge, scope, exp }`, where `exp` is epoch ms. The signature is Ed25519 over the ASCII bytes of the payload part. A service mints tickets with `signActivationTicket(privateKey, payload)` from `@reticlehq/core`. The page checks them with `verifyActivationTicket`.
 
 ## Activate a drive
 
@@ -45,8 +53,10 @@ One `reticle_lease` call does it:
 The daemon then does three things:
 
 1. It mints a single-use session nonce for the site's origin. The nonce expires after 60 minutes.
-2. It asks the service for a ticket with the linked API key: `{ workspaceId, nonce, bridgePort, scope }`. The service decides who may activate, and signs the ticket.
+2. It asks the service for a ticket with the linked API key: `{ workspaceId, nonce, bridgePort, scope, origin, bridge }`. `origin` is the site's origin and `bridge` is the bridge the page dials (`ws://127.0.0.1:<port>/reticle`). The service signs the ticket for exactly those two values. It also decides who may activate.
 3. It opens `https://app.example.com/?reticle_activate=<ticket>` in a leased browser.
+
+A host that embeds the engine and runs its own bridge passes its cloud link as `ToolDeps.linkedCloud`, and its bridge as `bridgePort` and `nonces`. It needs no `cloud.json`. Such a host must not inject the SDK into a production lease's browser context. An injected copy connects first, as a development session, and the loader's `connect` then does nothing.
 
 If no page connects, the lease answers `ready: false`. The usual cause is a signed-out browser: the service refused the ticket, and the page loaded without an activation. Release the lease, then acquire again with your session cookies in `seedStorage`.
 
@@ -75,6 +85,8 @@ The daemon recognises an action in two ways:
 - **The request.** Its method and path, from a policy list. The service can send its own list with the ticket. Without one, the daemon uses `DEFAULT_PRODUCTION_POLICY` from `@reticlehq/core`.
 
 In a leased browser, each request the page sends passes the policy before it leaves the browser. A refused request gets a 403 and never reaches the site.
+
+A key press on a production drive runs in the page, never on the native keyboard. A native key goes to the control that has focus, so the policy could not see it. The policy judges a key press by the control it names. A key press that names no control is judged only by the requests it sends.
 
 These are always allowed:
 

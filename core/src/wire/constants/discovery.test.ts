@@ -13,11 +13,10 @@ describe('the discovery invitation', () => {
     expect(DISCOVERY_CALL_URL).toBe('https://calendar.app.google/h9NRDbBBQetyTzWM6');
   });
 
-  it('gives the human both ways in: a call, or an email through identify', () => {
+  it('gives the human both ways in: a call, or a note with a reply address', () => {
     expect(DiscoveryInvite.HUMAN).toContain(DISCOVERY_CALL_URL);
     expect(DiscoveryInvite.HUMAN).toContain(DISCOVERY_EMAIL_COMMAND);
-    expect(DISCOVERY_EMAIL_COMMAND).toContain('identify');
-    expect(DISCOVERY_EMAIL_COMMAND).toContain('--email');
+    expect(DISCOVERY_EMAIL_COMMAND).toContain('feedback --contact');
   });
 
   it('tells the agent to offer it, and never to book or submit anything itself', () => {

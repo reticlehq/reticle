@@ -63,6 +63,8 @@ const RETICLE_WS_PATH = '/reticle';
  * @returns {string | undefined}
  */
 function ensurePairingToken(dir) {
+  // Only a home folder that is not absolute gets here (see pairingTokenDir).
+  if (!path.isAbsolute(dir)) return undefined;
   const file = path.join(dir, PAIRING_TOKEN_FILE);
   try {
     const existing = fs.readFileSync(file, 'utf8').trim();
@@ -88,7 +90,35 @@ function ensurePairingToken(dir) {
  * @returns {string | undefined}
  */
 function readPairingToken() {
-  return ensurePairingToken(reticleHomeDir());
+  return ensurePairingToken(pairingTokenDir());
+}
+
+/** A Windows drive path: `C:\...`, `C:/...` or the drive-relative `C:x`. */
+const WINDOWS_DRIVE = /^[A-Za-z]:/;
+
+/**
+ * The token folder, by the same rule as core's `resolveStateDir` (this file is plain CJS and does
+ * not depend on core). A relative override is resolved against the working folder. A Windows path
+ * on POSIX is not used, because there it is a relative path. Both warn, and neither stops `next dev`.
+ * @returns {string}
+ */
+function pairingTokenDir() {
+  const override = process.env[PAIRING_TOKEN_DIR_ENV];
+  const fallback = path.join(os.homedir(), RETICLE_HOME_DIR);
+  if (override === undefined || override.length === 0 || path.isAbsolute(override)) {
+    return reticleHomeDir();
+  }
+  if (path.sep === '/' && WINDOWS_DRIVE.test(override)) {
+    console.warn(
+      `[reticle] ${PAIRING_TOKEN_DIR_ENV} "${override}" is a Windows path, and this system does not use Windows paths. Reticle uses "${fallback}".`,
+    );
+    return fallback;
+  }
+  const resolved = path.resolve(override);
+  console.warn(
+    `[reticle] ${PAIRING_TOKEN_DIR_ENV} "${override}" is a relative path. Reticle uses "${resolved}", in the folder this process runs in.`,
+  );
+  return resolved;
 }
 
 /**

@@ -3,7 +3,7 @@ name: verify-cli-run
 description: Prove that a command-line tool actually did what it said, instead of trusting its exit code and its output. Snapshots the filesystem before and after, names the expected consequence in advance, and returns one of four verdicts with what could not be seen. Use after running a build, a migration, a scaffolder, a formatter, a codegen step, or an AI coding CLI; when a command printed success and you are about to report "done"; when you are about to write "exit code 0, so it worked"; or when a tool claims it edited files. Needs nothing installed.
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -82,7 +82,7 @@ Before running, check whether your expected consequence **already holds**. If it
 
 Keep the exit code. You are not going to use it as proof. You are going to use it to explain the verdict, and to notice when it disagrees with the filesystem.
 
-Two things worth knowing:
+Three things to know:
 
 - Exit codes wrap: `sh -c 'exit 256'` exits **0**. A large code is not always what you think.
 - `130` is a `SIGINT`, `137` is usually a kill. Those are facts about how the run _ended_, not about whether it worked.

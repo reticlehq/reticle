@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { PlatformRefusalCode, refusalSentence } from '@/features/harness/platform/refusal.js';
-import { RefusalReason, TRANSPORT_LIMITS, unissuedRefRefusal } from '@reticlehq/core';
+import {
+  RefusalReason,
+  TRANSPORT_LIMITS,
+  isDangerousActionText,
+  unissuedRefRefusal,
+} from '@reticlehq/core';
 import {
   FEEDBACK_ASK,
   RECOVERY,
@@ -93,12 +98,8 @@ describe('recoveryFor — every known error carries an actionable next move', ()
         'The Reticle Harness is off for this project. The user can switch it on in the HUD.',
       ),
     ).toBe(RECOVERY.HARNESS_OFF);
-    expect(
-      recoveryFor(
-        'Harness unlocks at 80% instrumentation. This app is at 62%: missing stable test ids.',
-      ),
-    ).toBe(RECOVERY.HARNESS_LOCKED);
-    // The platform's lock arrives with its code, and the code — never the wording — is the contract.
+    // An older platform's lock arrives with its code, and the code — never the wording — is the
+    // contract. The engine itself no longer locks on a setup score.
     // Driven over MCP: the platform reworded it ("Harness is locked. Setup score: …") and a regex on
     // its old words answered every locked Harness with "may be a defect in Reticle".
     for (const words of [
@@ -410,6 +411,17 @@ describe('browser-side action guards are recognized refusals, not unknown defect
     expect(
       recoveryFor('potentially destructive action blocked; retry with args.confirmDangerous=true'),
     ).toBe(RECOVERY.CONFIRM_DANGEROUS);
+  });
+
+  // The text named `deploy` and `publish`, which the classifier excludes on purpose, so an agent
+  // read a wrong reason for the refusal. Every word it names must be one the guard stops on.
+  it('the destructive-action block names only words the guard stops on', () => {
+    const named = /\(([^)]*)…\)/.exec(RECOVERY.CONFIRM_DANGEROUS)?.[1] ?? '';
+    const words = named.split(',').map((word) => word.trim());
+    expect(words.length).toBeGreaterThan(1);
+    for (const word of words) {
+      expect(isDangerousActionText(word), word).toBe(true);
+    }
   });
 
   it('an unsupported surface is named as unsupported, not as a possible bug', () => {
@@ -904,12 +916,11 @@ describe('the destructive-control refusal names the argument it wants', () => {
   });
 
   /**
-   * The classifier matches `deploy` and `publish`, so an ordinary "New deploy" button trips it.
-   * Listing only delete/remove/revoke made the refusal read as a malfunction on an app where
-   * nothing was being destroyed.
+   * The classifier also stops a control that moves money. Listing only delete/remove/revoke made a
+   * refusal on a "Pay" button read as a malfunction on an app where nothing was being destroyed.
    */
   it('names a trigger word that is not destruction', () => {
-    expect(recoveryFor(blocked) ?? '').toMatch(/deploy|publish/);
+    expect(recoveryFor(blocked) ?? '').toMatch(/\bpay\b/);
   });
 });
 

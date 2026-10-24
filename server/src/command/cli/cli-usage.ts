@@ -9,6 +9,7 @@
  * not: `npx reticle` resolves the PACKAGE named `reticle`, which belongs to somebody else, and npx
  * will happily fetch and run it. So the npx spelling leads every page.
  */
+import { FEEDBACK_KIND_CHOICES } from '@reticlehq/core';
 
 export const HelpGroup = {
   START: 'Get started',
@@ -36,7 +37,7 @@ interface CommandDoc {
 
 const INIT_DETAIL = `init wires the project, boots the app and proves a page connected. It ends with the
 instrumentation score, what is missing, and a prompt for your coding agent, which proves
-the first flow. It never drives: the Harness is opt-in and unlocks at 80% instrumentation.
+the first flow. It never drives: the Harness is opt-in and runs at any instrumentation score.
 
   --app <dir>        which app in a monorepo: writes its files only (add --start to boot it)
   --env KEY=VALUE    what the app needs to reach a usable state (repeatable)
@@ -94,9 +95,8 @@ const COMMANDS: readonly CommandDoc[] = [
       '  --project <name|id>    the dashboard project to link\n' +
       '  --workspace <name|id>  the workspace to link in, when you belong to more than one\n' +
       '  --url <origin>         the Reticle platform, when it is not the default\n\n' +
-      'Without a browser (CI, an agent), in two steps:\n' +
-      '  reticle login --email <e> [--org <name>]     emails a 6-digit code\n' +
-      '  reticle login --email <e> --code <123456>    signs in, then links this repo',
+      'Sign-in is with Google or GitHub, in the browser. Without a browser (CI, an agent), set\n' +
+      'RETICLE_API_KEY to a key from Settings > API keys. Email sign-in is gone.',
   },
   {
     name: 'try',
@@ -143,7 +143,8 @@ const COMMANDS: readonly CommandDoc[] = [
     summary: 'Stop Reticle; --force frees its port even without a recorded pid',
     group: HelpGroup.MACHINE,
     detail:
-      'Without --force, stops the daemon Reticle started, by its recorded pid.\n' +
+      'Without --force, asks the daemon to stop (an authenticated request on loopback), and sends\n' +
+      'a signal to its recorded pid only if it does not accept.\n' +
       "With --force, frees the port by the Reticle daemon LISTENING on it, never the agent's MCP\n" +
       'proxy, and refuses a listener that is not Reticle.',
   },
@@ -167,12 +168,13 @@ const COMMANDS: readonly CommandDoc[] = [
   },
   {
     name: 'feedback',
-    synopsis: 'feedback [--rating 1-5] [--bug] "message"',
+    synopsis: 'feedback [--rating 1-5] [--bug] [--contact <email>] "message"',
     summary: "Tell us what worked and what didn't; prints exactly what it sends",
     group: HelpGroup.ACCOUNT,
     detail:
-      'Agents: reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "message"\n' +
-      'works from anywhere, including a setup that never finished.',
+      `Agents: reticle feedback --agent --kind ${FEEDBACK_KIND_CHOICES} "message"\n` +
+      'works from anywhere, including a setup that never finished.\n' +
+      '--contact <email> adds an address for a reply. It is sent only when you give it.',
   },
   {
     name: 'telemetry',

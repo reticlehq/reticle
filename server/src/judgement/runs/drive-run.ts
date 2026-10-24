@@ -27,7 +27,7 @@ import { supersededChecks } from '@reticlehq/engine/evidence/superseded-checks.j
 import type { JournalVerdictEffect } from '@reticlehq/core/artifacts';
 import { isValidRunId } from '@/memory/project/dir/reticle-dir.js';
 import { defaultRunId } from './runner-port.js';
-import { currentShotRun } from './default-run-id.js';
+import { currentShotRun, stableRunId } from './default-run-id.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
 import {
   JournalVerdictEffectSchema,
@@ -136,13 +136,12 @@ const DRIVE_RUN_PREFIX = 'drive-';
  * reload, each a superset of the last, and the dashboard would fill with overlapping copies of one
  * drive. Derived from the session instead, so the fold is idempotent.
  *
- * A session id is a free string on the wire, so the derived id is CHECKED before it becomes a path
- * segment; anything that would not be a safe one falls back to a random id, which loses idempotence
- * for that session rather than refusing to record it.
+ * A hash of the session id, not the id itself. A session id is a free string on the wire, and a
+ * uuid one put 36 characters into every step screenshot path. The hash is short, stable and always
+ * a safe path segment. A run that an older daemon wrote keeps its long id and stays readable.
  */
 export function driveRunId(sessionId: string): string {
-  const candidate = `${DRIVE_RUN_PREFIX}${sessionId}`;
-  return isValidRunId(candidate) ? candidate : defaultRunId();
+  return `${DRIVE_RUN_PREFIX}${stableRunId(sessionId)}`;
 }
 
 /** The run of the `segment`th agent session in a tab: the tab's id first, then `-2`, `-3`… */

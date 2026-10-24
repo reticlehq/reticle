@@ -91,3 +91,28 @@ describe('the SDK remedy does not name a package the project must not have', () 
     expect(sdkFix('2.4.1')).toContain('restart');
   });
 });
+
+/**
+ * The MCP server starts the daemon. When the pages are newer than the MCP server, `reticle stop`
+ * only starts the same old daemon again, and the advice loops.
+ */
+describe('daemon advice names the MCP server when the pages are newer than it', () => {
+  it('same daemon and agent version, newer pages: update the MCP server, do not stop', () => {
+    const fix = daemonFix('3.2.0', '3.2.0', ['3.7.0']);
+    expect(fix).not.toMatch(/Run `reticle stop`/);
+    expect(fix).toContain("agent's MCP server is 3.2.0");
+    expect(fix).toContain('3.7.0');
+    expect(fix).toContain('plugin');
+  });
+
+  it('daemon older than an agent that is still older than the pages: update the MCP server', () => {
+    const fix = daemonFix('3.2.0', '3.5.0', ['3.7.0']);
+    expect(fix).not.toMatch(/Run `reticle stop`/);
+    expect(fix).toContain("agent's MCP server is 3.5.0");
+  });
+
+  it('pages not newer than the agent: keep the earlier advice', () => {
+    expect(daemonFix('3.2.0', '3.7.0', ['3.7.0'])).toMatch(/Run `reticle stop`/);
+    expect(daemonFix('3.2.0', '3.2.0', ['3.2.0'])).toMatch(/Run `reticle stop`/);
+  });
+});

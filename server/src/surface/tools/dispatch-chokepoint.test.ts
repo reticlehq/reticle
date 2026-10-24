@@ -6,7 +6,7 @@ import { REPO_ROOT } from '@/machine/repo-root.js';
 /**
  * Every tool call must pass through `runTool`, or be declared here as a path that does not.
  *
- * `docs/telemetry-contract.md` rule 1: tool usage, timing, errors, verdicts and defects are recorded
+ * `contributing/telemetry/contract.md` rule 1: tool usage, timing, errors, verdicts and defects are recorded
  * in ONE place — `runTool` in `tools/invoke-tool.ts`. Adding a tool to `TOOLS` is all it takes to be
  * instrumented. The contract then says the thing this file exists to enforce:
  *

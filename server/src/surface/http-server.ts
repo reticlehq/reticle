@@ -8,6 +8,8 @@ import {
   STATUS_PATH,
   STATUS_HOLD_QUERY,
   DRIVE_PATH,
+  SHUTDOWN_PATH,
+  PROXY_ID_PARAM,
 } from '@reticlehq/core';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import {
@@ -34,7 +36,7 @@ export interface SharedServer {
    * so each concurrent Claude Code client needs its own McpServer.
    * Must be called before listen.
    */
-  attachMcp(factory: (peerSkew?: string) => McpServer): void;
+  attachMcp(factory: (peerSkew?: string, proxyId?: string) => McpServer): void;
   /**
    * SDK version of each page connected when an agent attaches.
    * The daemon skew advice reads this so it does not tell the agent to restart over matching pages.
@@ -52,6 +54,12 @@ export interface SharedServer {
    * unattached, the route 404s, which is exactly what a newer CLI needs to hear from an older daemon.
    */
   attachDrive(provider: (url: string) => Promise<unknown>): void;
+  /**
+   * Register the handler behind POST /shutdown: the daemon's normal shutdown path. Only a loopback
+   * caller with the pairing token reaches it. Left unattached, the route 404s, and the caller falls
+   * back to a signal.
+   */
+  attachShutdown(handler: () => void): void;
   /**
    * Register a callback fired when the AGENT presence changes — true when the first MCP client (any
    * agent: Codex/OpenCode/Claude/Hermes) connects, false when the last one disconnects. Agent-
@@ -81,11 +89,12 @@ export interface SharedServer {
  * WS /reticle → browser SDK connections (via WebSocketServer)
  */
 export function createSharedServer(options: { token?: string } = {}): SharedServer {
-  type McpFactory = (peerSkew?: string) => McpServer;
+  type McpFactory = (peerSkew?: string, proxyId?: string) => McpServer;
   let mcpFactory: McpFactory | undefined;
   let pageSdkVersions: () => readonly (string | undefined)[] = () => [];
   let statusProvider: ((held: boolean) => unknown) | undefined;
   let driveProvider: ((url: string) => Promise<unknown>) | undefined;
+  let shutdownHandler: (() => void) | undefined;
   let agentPresence: ((connected: boolean) => void) | undefined;
   const transports = new Map<string, SSEServerTransport>();
   /**
@@ -164,6 +173,31 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
       return;
     }
 
+    if ('POST' === req.method && path === SHUTDOWN_PATH) {
+      // Stricter than the routes above: loopback alone is not enough to stop a daemon that serves
+      // every agent on this machine. The caller must also show the pairing token.
+      if (!isLoopbackPeer(req.socket.remoteAddress) || token === undefined) {
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
+        res.end('forbidden');
+        return;
+      }
+      if (!tokensMatch(token, requestToken(req, url))) {
+        res.writeHead(401, { 'Content-Type': 'text/plain' });
+        res.end('unauthorized');
+        return;
+      }
+      const handler = shutdownHandler;
+      if (handler === undefined) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('not found');
+        return;
+      }
+      // Answer first: the shutdown closes this server.
+      res.writeHead(202, { 'Content-Type': 'text/plain' });
+      res.end('stopping', () => handler());
+      return;
+    }
+
     if ('POST' === req.method && path === DRIVE_PATH) {
       if (driveProvider === undefined) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -237,7 +271,7 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
       // one active transport per Server instance, so concurrent clients each need
       // their own instance backed by the same shared ToolDeps.
       // Handed to THIS connection's server only: the skew is about this agent, not the daemon (#1136).
-      const mcpServer = mcpFactory(peerSkew);
+      const mcpServer = mcpFactory(peerSkew, proxyIdOf(url.searchParams.get(PROXY_ID_PARAM)));
       const transport = new SSEServerTransport(MCP_MESSAGE_PATH, res);
       const sid = transport.sessionId;
       transports.set(sid, transport);
@@ -317,6 +351,10 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
     driveProvider = provider;
   }
 
+  function attachShutdown(handler: () => void): void {
+    shutdownHandler = handler;
+  }
+
   function attachAgentPresence(cb: (connected: boolean) => void): void {
     agentPresence = cb;
   }
@@ -385,6 +423,7 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
     attachPageSdkVersions,
     attachStatus,
     attachDrive,
+    attachShutdown,
     attachAgentPresence,
     announceShutdown,
     close,
@@ -403,6 +442,12 @@ const MAX_DRIVE_BODY_BYTES = 8 * 1024;
  * because real clients send them.
  */
 const JSON_MEDIA_TYPE = 'application/json';
+
+/** A proxy id is a UUID. Anything else is not an id this daemon keys an agent by. */
+const PROXY_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function proxyIdOf(raw: string | null): string | undefined {
+  return null !== raw && PROXY_ID_SHAPE.test(raw) ? raw : undefined;
+}
 
 function isJsonRequest(req: http.IncomingMessage): boolean {
   // Read through the typed accessor rather than indexing the header bag: the index signature is

@@ -2,6 +2,7 @@ import { FeedbackKind, FeedbackSource } from '@reticlehq/core/telemetry';
 import {
   AGENT_FLAG,
   BUG_FLAG,
+  CONTACT_FLAG,
   FEEDBACK_KINDS,
   KIND_FLAG,
   RATING_FLAG,
@@ -31,16 +32,20 @@ export async function handleFeedback(
   bug: boolean,
   feedbackKind?: string,
   agent = false,
+  contact?: string,
 ): Promise<void> {
   const line = (s: string): void => {
     process.stdout.write(`${s}\n`);
   };
   if ('' === text && rating === undefined) {
-    line(`usage: reticle feedback [${RATING_FLAG} 1-5] [${BUG_FLAG}] "what worked, what didn't"`);
+    line(
+      `usage: reticle feedback [${RATING_FLAG} 1-5] [${BUG_FLAG}] [${CONTACT_FLAG} you@example.com] "what worked, what didn't"`,
+    );
     line(
       `       agents: reticle feedback ${AGENT_FLAG} ${KIND_FLAG} <${FEEDBACK_KINDS.join('|')}> "what happened"`,
     );
     line('       your words go to the maintainers; nothing from your app is ever included.');
+    line(`       ${CONTACT_FLAG} adds an address for a reply. It is sent only when you give it.`);
     process.exitCode = 1;
     return;
   }
@@ -56,8 +61,12 @@ export async function handleFeedback(
     // A rating with no words is a real report, but the schema wants text — say what the rating means.
     text: '' === text ? `rated ${String(rating)}/5 with no comment` : text,
     ...(rating !== undefined ? { rating } : {}),
+    ...(contact !== undefined ? { contact } : {}),
   });
   line(`sending      ${JSON.stringify(describeFeedbackPayload(receipt.context))}`);
+  if (contact !== undefined) {
+    line(`contact      ${contact} (sent so that the maintainers can answer you)`);
+  }
   if (receipt.redacted.length > 0) {
     line(`redacted     ${receipt.redacted.join(', ')} (removed before sending)`);
   }

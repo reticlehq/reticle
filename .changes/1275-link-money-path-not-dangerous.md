@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser` — a link to a billing page was refused as a destructive action.** A link such as `<a href="/billing/payment">Orders & invoices</a>` needed `confirmDangerous`, because a money word in its path matched the guard. Following a link only opens a page, and opening a page moves no money. Now a link that navigates needs `confirmDangerous` only when its path destroys something (`/account/delete`) or when it goes to a payment provider. A link with an inert href (`#`) and a button such as "Pay now" are judged as before. Closes [#1275](https://github.com/reticlehq/reticle/issues/1275).

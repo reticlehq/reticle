@@ -20,10 +20,12 @@ npx @reticlehq/server doctor
 ```
 reticle doctor
   node         v22.14.0
-  chromium     ✓ installed
+  chromium     ✓ installed (chromium-1234)
   daemon       ✓ running on :4400 (pid 24735, v<the version you have>)
   sessions     ✓ 1 page connected
   bridge port  4400  (your app must dial THIS port, not your dev-server port)
+  agent link   ✓ an MCP client attached here and called tools before (a record, not a live check)
+  project      ✓ wired here (my-app)
   daemon log   /Users/you/.reticle/daemon-4400.log
   tracing      RETICLE_TRACE=1 on the daemon for per-stage timings in that log
 ```
@@ -57,7 +59,7 @@ If nothing ever connected:
 
 The daemon still does not do it, on purpose. A build process started by a long-lived background daemon is invisible to whoever's machine it is running on, was never consented to, cannot easily be stopped, and orphans when the daemon exits. It would also mean a piece of standing infrastructure runs arbitrary `package.json` scripts. An agent already has shell access in your repo, already runs install and build commands, and runs inside a host that asks you before it does. A dev server the agent starts is in the transcript, attributable to a step you approved, and stoppable.
 
-The agent does not have to work out the command. When `reticle_session { action: "list" }` comes back with nothing connected, it carries a `next_action` naming which of four cases this is and, where one applies, the literal command and port: start the dev server, run `reticle init`, open the app, or reopen a tab that went away. The command is read from this project's own scripts, so a project with no recognisable dev script gets no command rather than a guess.
+The agent does not have to work out the command. When `reticle_session { action: "list" }` comes back with nothing connected, it carries a `next_action`. Its `action` names the case: `daemon_split` (the app is on a different daemon; start nothing), `start_dev_server`, `run_init`, `open_app` or `reopen_app`. Where one applies, it also gives the literal command and the port. In a project that was never wired, it also carries `next_step`. Its `lease` checks the running app now with nothing installed. Its `consent` is the question to ask before `reticle init` changes files. Run `init` only when the user agrees. The command is read from this project's own scripts, so a project with no recognisable dev script gets no command rather than a guess.
 
 The guards, which apply wherever this instruction appears:
 
@@ -107,8 +109,8 @@ failed. That is everything the page can see: from inside the browser it cannot t
 is not there from one it is not allowed to reach, so this is not evidence about the daemon. What
 answers it: run `npx @reticlehq/server status` to see whether one is listening and on which port.
 If your app runs in a container, devcontainer or WSL, the daemon is on a different host, so point
-the page at it explicitly (Vite plugin: RETICLE_PORT or reticle({ port }); by hand:
-reticle.connect({ url })). An https page cannot open a ws:// socket at all. Still retrying…
+the page at it: RETICLE_PORT or reticle({ port }) with the Vite plugin, reticle.connect({ url })
+by hand. An https page cannot open a ws:// socket. Still retrying…
 ```
 
 **You should not have to read this page to find that out.** If the agent opened the app with `reticle_lease`, which is the path `init` steers it to, the daemon reads that address off the page's own console, compares it with the port it is bound to, and puts the mismatch in the tool result:
@@ -210,7 +212,7 @@ Before concluding "no request fired", read the buffer note:
 ## Assertions are flaky on async UIs
 
 - Use `timeout_ms` on `assert` and `wait_for`.
-- Pass the `since` cursor from `reticle_act` so only post-action events count. Without it, an assertion can pass on an event from two clicks ago.
+- By default an assertion counts only the events after your last act. Pass a `since` cursor from `reticle_act` or `reticle_observe` to set that window yourself.
 
 ## `reticle_look { action: "state" }` returns nothing
 
@@ -240,7 +242,7 @@ It is off by default. When it is on, certificate checks are skipped for every si
 
 ## `ERESOLVE` installing next to a prerelease
 
-`@reticlehq/next` declares `peer next >=13` and `@reticlehq/react` declares `peer react >=18`. On a Next canary or React RC, npm refuses. See [the prerelease notes](/getting-started#installing-alongside-a-nextjs-or-react-prerelease).
+`@reticlehq/next` declares `peer next >=13` and `@reticlehq/react` declares `peer react >=18`. On a Next canary or React RC, npm refuses. See [the prerelease notes](/getting-started#installing-alongside-a-next-js-or-react-prerelease).
 
 ## The tool list is empty
 
@@ -251,8 +253,8 @@ Some clients read their MCP tool list once, at startup, and never again. Cursor 
 ## Restarting things
 
 ```bash
-npx @reticlehq/server stop     # clean daemon shutdown, no pkill needed
-npx @reticlehq/server status   # confirm it came back
+npx @reticlehq/server restart  # clean stop, then start and wait until it listens
+npx @reticlehq/server status   # confirm it is back
 ```
 
 <Warning>
@@ -274,7 +276,7 @@ Stale sessions pointing at dev servers you restarted an hour ago look completely
 ## Frequently asked questions
 
 <AccordionGroup>
-  <Accordion title="Why does reticle_session { action: "list" } return nothing when my app is clearly running?">
+  <Accordion title='Why does reticle_session { action: "list" } return nothing when my app is clearly running?'>
     Your app running is not the same as your app being connected. The SDK has to dial the daemon's
     bridge port over a WebSocket. If `npx @reticlehq/server doctor` shows the daemon up and
     `sessions` at zero, either `reticle.connect()` never executed (check the dev guard is actually

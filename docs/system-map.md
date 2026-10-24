@@ -2,13 +2,14 @@
 title: System map
 description: 'How a tool call travels from a coding agent to your app and back, and which of those failures are silent.'
 icon: map
+noindex: true
 ---
 
 A tool call crosses five processes and four hops: coding agent → `reticle mcp` proxy (stdio) → daemon on `:4400` (HTTP POST out, SSE back) → browser SDK (WebSocket) → your app. Each hop has its own failure vocabulary and its own way of lying, and the ones marked **silent** below fail with no error reaching either the agent or you.
 
 > How a tool call gets from a coding agent to your app and back, what each hop can do wrong, and which of those failures are **silent**. Written for anyone touching the transport, the daemon, the bridge, or a gate, and for contributors trying to work out where their change lives.
 >
-> Companion pages: [`harness-rules.md`](https://github.com/reticlehq/reticle/blob/main/apps/e2e/harness-rules.md) (what a gate must do about all this) and [`telemetry-contract.md`](./telemetry-contract.md) (the rules for anything that emits).
+> Companion pages: [`harness-rules.md`](https://github.com/reticlehq/reticle/blob/main/apps/e2e/harness-rules.md) (what a gate must do about all this) and [`contributing/telemetry/contract.md`](https://github.com/reticlehq/reticle/blob/main/contributing/telemetry/contract.md) (the rules for anything that emits).
 
 ## 1. Topology: 5 processes, 4 hops
 

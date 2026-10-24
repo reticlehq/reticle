@@ -1,6 +1,7 @@
 ---
 title: Which checks can block a merge
 description: A workflow that runs on every pull request does not necessarily stop anything being merged. Here is which ones do.
+noindex: true
 ---
 
 A workflow running on every pull request does not, on its own, stop anything being merged. GitHub only blocks a merge on checks the repository's **branch protection** setting names as required. That setting lives in the GitHub interface, not in this repository.

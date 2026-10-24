@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/inst
 irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex   # Windows
 ```
 
-It puts the CLI on the machine and registers the MCP server with the coding agents it finds. Then do what it prints: restart your coding agent so it loads Reticle's tools, and paste the prompt the script prints into it. The agent runs `reticle init` in your app (build plugin, SDK connect file, agent rules), then proves one flow. No agent? Run `reticle init` in the app yourself.
+It puts the CLI on the machine and registers the MCP server with the coding agents it finds. Then do what it prints: restart your coding agent so it loads Reticle's tools, and paste the prompt the script prints into it. To teach the agent the workflow, also add the skill: `npx skills add reticlehq/reticle --skill reticle`. The agent runs `reticle init` in your app (build plugin, SDK connect file, agent rules), then proves one flow. No agent? Run `reticle init` in the app yourself.
 
 ### B. A platform / CI, driven from your pipeline (no MCP, no human)
 
@@ -56,7 +56,7 @@ const { run } = await (
 if (run.verdict.status !== 'pass') {
   for (const p of run.repair?.failurePackets ?? []) fixerAgent.send(p.suggestedPrompt); // self-heal
   blockDeploy(run);
-} else attachToDeploy(run); // "verified ✓"; set profile:"prod-preview" to redact internals downstream
+} else attachToDeploy(run); // "verified ✓". POST /verify redacts internals by default (profile "prod-preview"); pass profile:"dev" for the full run.
 ```
 
 Or skip the HTTP server entirely with the one-shot CLI: `reticle verify <preview-url>` drives the preview, replays the saved flows, prints the verdict, and exits non-zero on fail (ideal for a CI step).
@@ -140,9 +140,17 @@ The shape is identical (in-app SDK in the template → verify in the sandbox →
 
 ## The verdict artifact
 
-`POST /verify` (and `reticle_run_export`) return a stable, versioned `ReticleVerificationRun` (defined in `@reticlehq/core`): `verdict` (pass/fail/partial, confidence, blockingRisks), `flows[]`, `checks[]`, `risks[]` (auth/payment/db/…), `repair.failurePackets[]` (what + where to fix), `evidence`. Render a legible report with `renderRunReport()` or `reticle_run_export { format: "report" }`. Profiles: `dev` (full) vs `prod-preview` (source + state redacted for downstream sharing).
+`POST /verify` (and `reticle_run_export`) return a stable, versioned `ReticleVerificationRun` (defined in `@reticlehq/core`): `verdict` (pass/fail/partial, confidence, blockingRisks), `flows[]`, `checks[]`, `risks[]` (auth/payment/db/…), `repair.failurePackets[]` (what + where to fix), `evidence`. Render a legible report with `renderRunReport()` or `reticle_run({ tool: "reticle_run_export", args: { format: "report" } })`. Profiles: `dev` (full) and `prod-preview` (source and state redacted for sharing). `POST /verify` uses `prod-preview` unless you pass `profile: "dev"`.
 
 **Why trust it:** the verdict is mechanical, derived only from observed outcomes, so it can't report green for something it never ran (a severed backend reads as _fail_, never a confident pass). Proof: `server/src/judgement/runs/false-green.test.ts`.
+
+## Building a hosted verifier on the engine
+
+A service that drives apps it did not build uses these seams.
+
+- **Follow a drive to another origin.** `new Bridge({ ..., followNavigation })` lets a session continue on an origin the bridge was not built with. A page on a new origin can only continue a session the bridge already admitted, after the token or nonce check, and only when `followNavigation({ sessionId, from, to, url })` returns `true`. Return `true` only when your own browser's top frame is now on `to`. Without the option, nothing changes.
+- **Refuse `clean` over what the engine could not see.** Every `reticle_act_and_wait` and `reticle_assert` result carries `engineBlindSpots`: what this engine could not observe in the session so far. It is cumulative, so the last verdict result of a run is the run's list, and `[]` means none. `pixels-unobserved`: an action ran while a `<canvas>` was visible, and no canvas digest is recorded. `claim-arithmetic-unchecked`: a claim under test (the call's `intent`, or an intent declared in the run) states an amount, and no verdict ran a `compare`. Do not call a run clean while its list has an entry. The kinds and the schema are `EngineBlindSpotKind` and `EngineBlindSpotSchema` in `@reticlehq/core`.
+- **Say that you injected the SDK.** When your init script connects the SDK into a page that does not import it, call `reticle.connect({ ..., injected: true })`. The HELLO then carries `instrumentation: "injected"`, `Session.instrumentation` holds it, and the session listing shows it. Do not count such a session as an app with the SDK installed: signals, module-scope stores and file:line still need the app. To read React component state and provider-passed stores (Redux, TanStack Query) on such a page, bundle `install()` from `@reticlehq/react` into the same init script and call it before `connect`. That entry imports only `@reticlehq/browser` and `@reticlehq/core` at runtime, so the bundle holds no copy of React.
 
 ## Licensing for embedding
 

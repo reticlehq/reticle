@@ -58,11 +58,11 @@ describe('the every-turn rules name the escape hatches', () => {
     expect(RULE_BODY).toContain('reticle_tools');
   });
 
-  it('says how to reach the wider surface, rather than naming a dispatch tool that is absent', () => {
-    expect(RULE_BODY).toContain('RETICLE_ADVERTISE_ALL_TOOLS');
-    expect(RULE_BODY, 'the merged surface has no dispatch tool to route through').not.toContain(
-      'reticle_run',
-    );
+  // The merged surface now advertises `reticle_run` again, so it is the route. The wider surface is
+  // named only as the thing NOT to switch to: its tool names are older than the ones these rules use.
+  it('names `reticle_run` as the route to every other tool, not a daemon restart', () => {
+    expect(RULE_BODY).toContain('every other tool is one `reticle_run` call away');
+    expect(RULE_BODY).toContain('Do not restart the daemon with `RETICLE_ADVERTISE_ALL_TOOLS=1`');
   });
 });
 

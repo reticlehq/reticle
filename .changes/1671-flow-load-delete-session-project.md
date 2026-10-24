@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`: `reticle_flow` `load` and `delete` read the daemon's folder, while `list` and replay read the session's project.** This happens when the daemon starts outside the app it drives, for example with a user-scoped MCP registration, a lease, or a sub-app in a monorepo. `list` showed a flow, and `load` answered `flow_not_found` for it. `load` and `delete` also reached a flow in the daemon's folder that `list`, replay and `verify` could not see. Now `load` and `delete` resolve the session's project, the same as `list` and replay. Closes [#1671](https://github.com/reticlehq/reticle/issues/1671).

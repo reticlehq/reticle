@@ -31,7 +31,7 @@ function connections(): () => Record<string, unknown>[] {
 describe('reportMcpConnected', () => {
   it('carries the name the client gave at its handshake', () => {
     const seen = connections();
-    reportMcpConnected('claude-code', () => 2_000);
+    reportMcpConnected('claude-code', undefined, () => 2_000);
     expect(seen()[0]).toMatchObject({
       client: 'claude-code',
       reconnect: false,
@@ -52,15 +52,29 @@ describe('reportMcpConnected', () => {
 
   it('counts reconnect churn over named connects only', () => {
     const seen = connections();
-    reportMcpConnected('cursor', () => 2_000);
+    reportMcpConnected('cursor', 'proxy-a', () => 2_000);
     reportMcpConnected();
-    reportMcpConnected('cursor', () => 3_000);
+    reportMcpConnected('cursor', 'proxy-b', () => 3_000);
     expect(seen().map((connection) => connection['reconnect'])).toEqual([false, true]);
+  });
+
+  it('reports a proxy once, not again when the same proxy reconnects', () => {
+    const seen = connections();
+    reportMcpConnected('cursor', 'proxy-a', () => 2_000);
+    reportMcpConnected('cursor', 'proxy-a', () => 3_000);
+    reportMcpConnected('cursor', 'proxy-a', () => 4_000);
+    expect(seen()).toHaveLength(1);
+  });
+
+  it('carries the proxy id, the key that joins an outage to this daemon run', () => {
+    const seen = connections();
+    reportMcpConnected('cursor', 'proxy-a', () => 2_000);
+    expect(seen()[0]?.['proxyId']).toBe('proxy-a');
   });
 
   it('caps a client name to the wire limit, so the event is not dropped as invalid', () => {
     const seen = connections();
-    reportMcpConnected('x'.repeat(500), () => 2_000);
+    reportMcpConnected('x'.repeat(500), undefined, () => 2_000);
     expect(String(seen()[0]?.['client']).length).toBe(64);
   });
 });

@@ -25,7 +25,7 @@ It uses the same runner and the same verdict as the MCP and HTTP paths, so a pla
 | `--session-id <id>` | string | unset | Use a tab that is already connected |
 | `--select <label>` | string, repeatable | unset | Verify only flows carrying this label |
 | `--expect '<json predicate>'` / `--expect-file <path>` | string | unset | One verdict on one predicate, no saved flows needed. Asks the daemon that owns the port and never starts one; with no daemon it refuses. Waits up to `--timeout` for the predicate, the way `reticle_assert { action: "wait" }` does, so a request still in flight after the page loads is waited for. Exits `0` only on `verified: "yes"`. Cannot be combined with `--storage-state` |
-| `--explore` / `--persona "<who does what>"` | boolean / string | off | No saved flows yet? The Harness drives the app and records them. `--persona` implies `--explore` |
+| `--explore` / `--persona "<who does what>"` | boolean / string | off | No saved flows yet? The Harness drives the app and records them. `--persona` implies `--explore`. Needs a linked project (`reticle connect`, or `RETICLE_API_KEY` in CI). It runs at any instrumentation score |
 | `--confirm-dangerous` | boolean | off | Let this run press the controls the replay guard holds as destructive, such as a "Place order" or "Delete" button in a saved flow. Without it such a step is refused, so a checkout flow cannot pass. It covers this run only and is never saved into a flow. |
 
 ## What it prints

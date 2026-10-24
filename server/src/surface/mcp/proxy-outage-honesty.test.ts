@@ -28,13 +28,16 @@ import {
   LOOPBACK_HOST,
   MCP_SSE_PATH,
   MCP_SHUTDOWN_EVENT,
+  OutageErrCode,
   OutageReason,
   OutageStage,
+  ProxyExitReason,
   STATUS_PATH,
   TelemetryEventKind,
 } from '@reticlehq/core';
 import { startMcpProxy } from './mcp-proxy.js';
 import { resetOutageReporting } from './faults/mcp-outage.js';
+import { resetProxyExitReporting } from '@/telemetry/proxy-telemetry.js';
 import { getTelemetry } from '@/telemetry/telemetry.js';
 
 const SESSION_PATH = '/session/honesty';
@@ -125,6 +128,8 @@ interface OutagePayload {
   stage: string;
   reason: string;
   attempts: number;
+  errCode?: string;
+  responded?: boolean;
 }
 
 describe('what an outage event is allowed to say', () => {
@@ -135,6 +140,7 @@ describe('what an outage event is allowed to say', () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     resetOutageReporting();
+    resetProxyExitReporting();
   });
 
   /** Every outage this process has emitted SO FAR. Read again after each step, never snapshotted. */
@@ -146,19 +152,49 @@ describe('what an outage event is allowed to say', () => {
         .map((call) => (call[1] as { outage: OutagePayload }).outage);
   }
 
-  function driveProxy(port: number, ensureDaemon?: () => Promise<void>): PassThrough {
+  function driveProxy(
+    port: number,
+    ensureDaemon?: () => Promise<void>,
+    exitProcess: (code: number) => void = () => undefined,
+  ): PassThrough {
     vi.stubEnv('HOME', mkdtempSync(join(tmpdir(), 'reticle-outage-honesty-')));
     const stdin = new PassThrough({ encoding: 'utf8' });
     const realStdin = process.stdin;
     Object.defineProperty(process, 'stdin', { value: stdin, configurable: true });
     vi.spyOn(process.stdout, 'write').mockReturnValue(true);
-    void startMcpProxy(port, ensureDaemon).catch(() => {});
+    void startMcpProxy(port, ensureDaemon, exitProcess).catch(() => {});
     cleanups.push(() => {
       Object.defineProperty(process, 'stdin', { value: realStdin, configurable: true });
       stdin.destroy();
     });
     return stdin;
   }
+
+  /**
+   * A live stream that is RESET reports the reset, not a refused connect.
+   *
+   * A reset emits on the request before the response closes, so it reached the `connect_error`
+   * branch. That branch says "the daemon could not be reached", which is false for a stream that
+   * was already serving. On Windows, a dropped stream is often reset this way.
+   *
+   * First in the file on purpose: a proxy from an earlier test can still report its own drops into
+   * the same spy, and the assertion reads the first outage.
+   */
+  it('calls a reset of a live stream a reset, with its code, not a connect error', async () => {
+    const daemon = await startFakeDaemon();
+    cleanups.push(() => daemon.close());
+    const seen = outageReader();
+    const stdin = driveProxy(daemon.port);
+    stdin.write(clientCall(1));
+    await vi.waitFor(() => expect(daemon.posts.length).toBe(1));
+
+    daemon.streams[0]?.socket?.resetAndDestroy();
+
+    await vi.waitFor(() => expect(seen().length).toBeGreaterThan(0));
+    expect(seen()[0]?.reason).toBe(OutageReason.SSE_RESET);
+    expect(seen()[0]?.errCode).toBe(OutageErrCode.ECONNRESET);
+    expect(seen()[0]?.responded).toBe(true);
+  });
 
   /**
    * The daemon retiring on schedule is not the agent losing its tools, and on the socket it looks
@@ -176,8 +212,10 @@ describe('what an outage event is allowed to say', () => {
     daemon.streams[0]?.write(SHUTDOWN_FRAME);
     daemon.streams[0]?.end();
 
+    // The planned exit is not an outage, so it sends no `first` row. The link coming back still
+    // reports, and names the shutdown as its cause.
     await vi.waitFor(() => expect(seen().length).toBeGreaterThan(0));
-    expect(seen()[0]?.stage).toBe(OutageStage.FIRST);
+    expect(seen()[0]?.stage).toBe(OutageStage.RECOVERED);
     expect(seen()[0]?.reason).toBe(OutageReason.DAEMON_SHUTDOWN);
   });
 
@@ -192,8 +230,11 @@ describe('what an outage event is allowed to say', () => {
 
     daemon.streams[0]?.end();
 
-    await vi.waitFor(() => expect(seen().length).toBeGreaterThan(0));
-    expect(seen()[0]?.reason).toBe(OutageReason.SSE_ENDED);
+    // Read by reason: the proxy of the test before can still report its own drop into this spy.
+    await vi.waitFor(() =>
+      expect(seen().some((o) => OutageReason.SSE_ENDED === o.reason)).toBe(true),
+    );
+    expect(seen().some((o) => OutageReason.DAEMON_SHUTDOWN === o.reason)).toBe(false);
   });
 
   /**
@@ -274,4 +315,33 @@ describe('what an outage event is allowed to say', () => {
     // And it cost at least the one dial the wake made. The point is that it is reported at all.
     expect(recovered?.attempts).toBeGreaterThan(0);
   }, 30_000);
+
+  /**
+   * The proxy leaving is the agent losing its tools, and it sent nothing.
+   *
+   * The only send on the way out was the session roll-up, and that returns early when its counts
+   * are empty. A proxy that served a whole session and then left was therefore invisible.
+   */
+  it('reports its own exit on stdin end, even with nothing else to report', async () => {
+    const daemon = await startFakeDaemon();
+    cleanups.push(() => daemon.close());
+    const emit = vi.spyOn(getTelemetry(), 'emit').mockResolvedValue(true);
+    const exits: number[] = [];
+    const stdin = driveProxy(daemon.port, undefined, (code) => exits.push(code));
+    await vi.waitFor(() => expect(daemon.streams.length).toBe(1));
+
+    stdin.end();
+
+    await vi.waitFor(() => expect(exits).toEqual([0]));
+    const exited = emit.mock.calls.filter(
+      (call) => TelemetryEventKind.MCP_PROXY_EXITED === call[0],
+    );
+    expect(exited).toHaveLength(1);
+    // `drops` is not asserted: the counts are per process, and a proxy from an earlier test in this
+    // worker can still be dropping. proxy-telemetry.test.ts pins the counts.
+    expect(exited[0]?.[1]?.proxyExit).toMatchObject({
+      reason: ProxyExitReason.STDIN_END,
+      toolCalls: 0,
+    });
+  });
 });

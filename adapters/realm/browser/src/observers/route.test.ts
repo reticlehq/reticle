@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { EventType, ROUTE_CHANGE_HOW_FIELD, RouteChangeHow } from '@reticlehq/core';
-import { installRoute } from './route.js';
+import { declareRoutes, installRoute, patternOf } from './route.js';
 import { captureMethod } from '@/patching/capture-method.js';
 import type { Emit, Teardown } from './types.js';
 
@@ -149,5 +149,39 @@ describe('installRoute', () => {
     history.pushState({}, '', '/x');
     expect(outerCalls).toBe(1);
     history.pushState = origPush; // don't leak the wrapper into other tests
+  });
+});
+
+// A screen is identified by the app's own route pattern, not by its address: a map built on addresses
+// makes every record its own screen. The app declares its patterns once (any router), or the SDK
+// reads them where the framework exposes them (Next.js); each route change then carries its pattern.
+describe('the route pattern a change carries', () => {
+  let teardown: Teardown | undefined;
+  afterEach(() => {
+    teardown?.();
+    teardown = undefined;
+    declareRoutes([]);
+  });
+
+  it('is the most specific declared pattern the path matches', () => {
+    declareRoutes(['/', '/personas', '/personas/:personaId', '/settings/:group', '/settings/keys']);
+    expect(patternOf('/personas/pe_4f79')).toBe('/personas/:personaId');
+    expect(patternOf('/settings/keys')).toBe('/settings/keys');
+    expect(patternOf('/settings/billing')).toBe('/settings/:group');
+    expect(patternOf('/nowhere/at/all')).toBeUndefined();
+  });
+
+  it('rides on the route change', () => {
+    declareRoutes(['/chat/:conversationId']);
+    const { emit, events } = collect();
+    teardown = installRoute(emit);
+    history.pushState({}, '', '/chat/chat_659b61951bdf4e7d86670a75750421a4');
+    expect(events[0]?.data['pattern']).toBe('/chat/:conversationId');
+  });
+
+  it('is read from Next.js when nothing was declared', () => {
+    (globalThis as { next?: unknown }).next = { router: { pathname: '/runs/[runId]' } };
+    expect(patternOf('/runs/run_9')).toBe('/runs/:runId');
+    delete (globalThis as { next?: unknown }).next;
   });
 });

@@ -1,5 +1,6 @@
 import {
   ActionType,
+  NextStepOffered,
   OnboardingPhase,
   OnboardingStepStatus,
   ReticleTool,
@@ -130,6 +131,67 @@ export function noteVerdictProduced(elapsedMs: number): void {
     status: OnboardingStepStatus.COMPLETED,
     elapsedMs: Math.max(0, Math.round(elapsedMs)),
   });
+}
+
+/**
+ * Did the agent do the next step that the first session call offered?
+ *
+ * The first session call in an unwired project changes no file. It offers a step: the lease, or
+ * the consent question for `init`. The offer is reported `started`. The agent's next call reports
+ * it `completed`, with `nextFollowed`. The lease is followed when that call acquires a lease. The
+ * consent question is followed when the project is wired by then (the user agreed and `init` ran).
+ */
+interface PendingOffer {
+  offered: NextStepOffered;
+  wired: () => boolean;
+}
+
+// ponytail: one pending offer per daemon, not per agent. Two agents in two unwired projects at the
+// same moment can close each other's offer. Key it by attach id if the data shows that case.
+let pending: PendingOffer | undefined;
+
+const STEP = 'next_step_offered';
+const ACQUIRE = 'acquire';
+
+export function noteNextStepOffered(offered: NextStepOffered, wired: () => boolean): void {
+  pending = { offered, wired };
+  void reportOnboardingStep({
+    phase: OnboardingPhase.FIRST_RUN,
+    step: STEP,
+    status: OnboardingStepStatus.STARTED,
+    offered,
+  });
+}
+
+/** Called on every agent call, before its handler runs. Closes an open offer, once. */
+export function noteNextCall(tool: string, args: Record<string, unknown>): void {
+  const offer = pending;
+  if (offer === undefined) {
+    return;
+  }
+  pending = undefined;
+  void reportOnboardingStep({
+    phase: OnboardingPhase.FIRST_RUN,
+    step: STEP,
+    status: OnboardingStepStatus.COMPLETED,
+    offered: offer.offered,
+    nextFollowed: followed(offer, tool, args),
+  });
+}
+
+function followed(offer: PendingOffer, tool: string, args: Record<string, unknown>): boolean {
+  if (NextStepOffered.LEASE === offer.offered) {
+    return (
+      ReticleTool.LEASE_ACQUIRE === tool ||
+      (ReticleTool.LEASE === tool && ACQUIRE === args['action'])
+    );
+  }
+  return offer.wired();
+}
+
+/** Tests only: forget an open offer. */
+export function resetNextStepOffered(): void {
+  pending = undefined;
 }
 
 /** Looking: the tools that read the page without changing it. */

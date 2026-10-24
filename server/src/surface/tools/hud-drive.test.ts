@@ -4,10 +4,8 @@ import type { ToolDeps } from './tool-kit.js';
 // The tool table first, as the daemon loads it: the explore module sits on an import cycle with it.
 import './tools.js';
 import { hudDrive, unsyncedReport } from './chat-drives.js';
-import { coverageRefusal, harnessLockRefusal, MSG_GATE_PROMPT_LEAD } from './harness-explore.js';
-import type { ConfigFetch } from '@/features/harness/platform-config.js';
-import { answerExplore } from './explore-tools.js';
-import { getSessionMetrics, resetSessionMetrics } from '@/telemetry/session-metrics.js';
+import { harnessStartRefusal } from './harness-explore.js';
+import { resetSessionMetrics } from '@/telemetry/session-metrics.js';
 import { DriveOrigin, forgetDrives, startDrive } from '@/features/harness/drive-runs.js';
 import { forgetAllRecordedGaps } from '@/portal/session/recorded-gaps.js';
 
@@ -43,40 +41,26 @@ function tabDeps(channels: string[], said: string[] = []): ToolDeps {
     sessions: { get: () => tab, resolve: () => tab },
   } as unknown as ToolDeps;
 }
-/** No store and no signals: 5 of 8, below the gate. */
-const BELOW = ['ui', 'net', 'log'];
+/** No store and no signals: 5 of 8, a low setup score. */
+const LOW = ['ui', 'net', 'log'];
 /** Everything but test ids: 7 of 8. */
 const ABOVE = ['ui', 'net', 'log', 'state', 'signal'];
 
-describe('the Harness coverage gate', () => {
-  it('refuses below 80% with one reason sentence, then the prompt that closes it', () => {
-    const refusal = coverageRefusal(tabDeps(BELOW), 's1') ?? '';
-    const [reason, , lead] = refusal.split('\n');
-    expect(reason).toMatch(
-      /^Harness unlocks at 80% instrumentation\. This app is at 62%: missing /,
-    );
-    expect(lead).toBe(MSG_GATE_PROMPT_LEAD);
-    expect(refusal).toContain('reticle verify http://localhost:5173/');
-    expect(getSessionMetrics().summarize(false).harnessRefusedCoverage).toEqual({ '60-79': 1 });
+/*
+ * The founder's rule: the Harness works out of the box. A setup score was a gate at 80%, and most
+ * new apps could never start a run. No score refuses a drive now.
+ */
+describe('no setup score gates the Harness', () => {
+  it('lets a drive start at a low score, or with nothing announced at all', async () => {
+    expect(await harnessStartRefusal(tabDeps(LOW), 's1')).toBeUndefined();
+    expect(await harnessStartRefusal(tabDeps([]), 's1')).toBeUndefined();
   });
 
-  it('lets a drive start at 80% or more', () => {
-    expect(coverageRefusal(tabDeps(ABOVE), 's1')).toBeUndefined();
-  });
-
-  it('refuses an agent explore below the gate before anything is started', async () => {
-    await expect(
-      answerExplore(tabDeps(BELOW), {}, undefined, () => {
-        throw new Error('must not drive');
-      }),
-    ).rejects.toThrow(/^Harness unlocks at 80%/);
-  });
-
-  it('refuses Run Harness below the gate without asking the platform for a grant', async () => {
+  it('asks the platform for a grant on Run Harness at a low score', async () => {
     const said: string[] = [];
     let asked = false;
     await hudDrive(
-      tabDeps(BELOW, said),
+      tabDeps(LOW, said),
       's1',
       { kind: HumanControlKind.HARNESS_RUN },
       noSwitch,
@@ -85,9 +69,8 @@ describe('the Harness coverage gate', () => {
         return Promise.resolve({ granted: false, needsCard: false, message: 'no' });
       },
     );
-    expect(asked).toBe(false);
-    expect(said).toHaveLength(1);
-    expect(said[0]).toMatch(/^Harness unlocks at 80% instrumentation\. This app is at 62%/);
+    expect(asked).toBe(true);
+    expect(said).toEqual(['no']);
   });
 });
 
@@ -109,63 +92,18 @@ describe('version skew refuses a drive before it spends anything', () => {
       linkedCloud: () => Promise.resolve({ apiKey: 'rk_live_x', url: 'https://app.reticle.test' }),
       sessions: { get: () => tab, resolve: () => tab },
     } as unknown as ToolDeps;
-    const refusal = (await harnessLockRefusal(skewed, 's1', {}))?.text ?? '';
+    const refusal = (await harnessStartRefusal(skewed, 's1'))?.text ?? '';
     expect(refusal).toMatch(/^The page's Reticle SDK and this daemon are different builds/);
     expect(refusal).toContain('Install 3.7.0.');
   });
 });
 
 /**
- * The daemon refused (or the platform locked mid-drive) at 75% while `/v1/model/config` said 87.5%
- * unlocked in the same minute. A linked project's platform verdict is the one the lock obeys.
+ * bench-app (55 test ids, a source stamp on every element) was once refused at 75% because nothing
+ * had acted on it yet. The start still asks the page what it carries, so the platform's reading is
+ * current, and it never refuses on what the page lacks.
  */
-describe('the platform gate is the lock when the project is linked', () => {
-  const LINKED = { RETICLE_API_KEY: 'rk_live_x', RETICLE_CLOUD_URL: 'https://app.reticle.test' };
-  const answering =
-    (unlocked: boolean): ConfigFetch =>
-    () =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-        text: () =>
-          Promise.resolve(
-            JSON.stringify({ provider: 'jev', harnessUnlocked: unlocked, coverageScore: 0.875 }),
-          ),
-      });
-
-  it('lets a run start that the platform unlocked, whatever this tab scores', async () => {
-    expect(await harnessLockRefusal(tabDeps(BELOW), 's1', LINKED, answering(true))).toBeUndefined();
-  });
-
-  it("keeps the daemon's sentence when the platform says locked too", async () => {
-    expect(
-      (await harnessLockRefusal(tabDeps(BELOW), 's1', LINKED, answering(false)))?.text,
-    ).toMatch(/^Harness unlocks at 80% instrumentation/);
-  });
-
-  it('refuses on its own reading when no platform answers', async () => {
-    expect((await harnessLockRefusal(tabDeps(BELOW), 's1', {}))?.text).toMatch(
-      /^Harness unlocks at 80%/,
-    );
-  });
-
-  it('asks nothing of the platform when this tab is already above the gate', async () => {
-    let asked = false;
-    const spy: ConfigFetch = () => {
-      asked = true;
-      return answering(false)('', { method: 'GET', headers: {} });
-    };
-    expect(await harnessLockRefusal(tabDeps(ABOVE), 's1', LINKED, spy)).toBeUndefined();
-    expect(asked).toBe(false);
-  });
-});
-
-/**
- * BLOCKER from the whole-platform drive: bench-app (55 test ids, a source stamp on every element)
- * was refused at 75% ("missing file:line source mapping, stable test ids") because nothing had acted
- * on it yet. The gate asks the page what it carries before it refuses.
- */
-describe('the gate reads what the page carries', () => {
+describe('the start reads what the page carries', () => {
   afterEach(() => {
     forgetAllRecordedGaps();
   });
@@ -187,13 +125,11 @@ describe('the gate reads what the page carries', () => {
   }
 
   it('lets a fully instrumented app run before anything acted on it', async () => {
-    expect(await harnessLockRefusal(pageDeps(['source', 'testid']), 'bench', {})).toBeUndefined();
+    expect(await harnessStartRefusal(pageDeps(['source', 'testid']), 'bench')).toBeUndefined();
   });
 
-  it('still refuses a page that carries neither', async () => {
-    expect((await harnessLockRefusal(pageDeps([]), 'bench', {}))?.text).toMatch(
-      /This app is at 75%: missing file:line source mapping, stable test ids/,
-    );
+  it('lets a page that carries neither marker run too', async () => {
+    expect(await harnessStartRefusal(pageDeps([]), 'bench')).toBeUndefined();
   });
 });
 

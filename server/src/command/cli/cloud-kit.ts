@@ -134,7 +134,7 @@ export class CredentialRefusedError extends Error {
             reason === undefined || KEY_REFUSED === reason
               ? 'it expired, was revoked, or you no longer have access to the workspace'
               : reason.replace(/\.$/, '')
-          }. Run \`reticle login\`.`,
+          }. Run \`npx @reticlehq/server connect\`.`,
     );
   }
 }

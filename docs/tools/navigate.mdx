@@ -44,7 +44,7 @@ Most tools would return `ok: true` and let you assume arrival. When the page the
 
 `confirmed: false` with a `landedOn` URL is a different case: the page arrived, but the app sent it somewhere else, such as a login or route-guard redirect. `landedOn` says where the browser actually is.
 
-`waitedMs` says which of two things you are looking at. Reticle stopped waiting at the budget it had, or the page never came back. The first is fixed by asking for more: a single-page app reattaching under HMR has been measured at 30–60s, which no default should wait for on every call, but which the caller who knows the app can grant.
+`waitedMs` is how long Reticle waited for the page to come back before it stopped. The page may still arrive after that. A single-page app that reattaches under HMR can take 30–60 s, so give a slow app a larger `timeout_ms`:
 
 ```json
 { "url": "/deployments", "timeout_ms": 45000 }

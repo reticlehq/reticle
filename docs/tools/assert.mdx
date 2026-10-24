@@ -10,7 +10,7 @@ Verdicts come from [`reticle_act_and_wait`](/tools/act-and-wait), `reticle_asser
 
 ## A real failure
 
-Failures are more instructive than passes, so here is one. I asserted that signing in lands on `/dashboard`, after a click that did not navigate. The page was still on `/login`:
+Failures teach more than passes. This assert claims that signing in lands on `/dashboard`, after a click that did not navigate. The page was still on `/login`:
 
 ```json
 { "predicate": { "kind": "route", "pathname": "/dashboard" } }

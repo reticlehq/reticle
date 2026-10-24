@@ -91,7 +91,7 @@ Open the "Delete project" dialog with `press` (`args: { "text": "Enter" }`) and 
 - **Page performance entries.** The SDK records largest-contentful-paint, a running layout-shift total and long tasks as `perf` events, which you read with `reticle_observe { filters: ["perf"] }`. The layout-shift figure is a running sum without the windowing a Core Web Vitals CLS score uses, so it works for "no layout shift on load" and trends, not as an exact CWV number.
 - **Request timing.** Every captured request carries its duration in `reticle_observe { action: "network" }`.
 - **React render rate.** With the React adapter, the commit count is readable as the `__reticle_renders` store, so a component that re-renders continuously while the screen looks idle shows up.
-- **Recurring re-verification.** `npx @reticlehq/server verify <url>` replays your saved flows against a dev server or a staging/preview deployment and exits non-zero on a failure, so it runs in CI or on a schedule. The SDK refuses to connect in a production build, so this covers environments you control, not live production traffic.
+- **Recurring re-verification.** `npx @reticlehq/server verify <url>` replays your saved flows against a dev server or a staging/preview deployment and exits non-zero on a failure, so it runs in CI or on a schedule. By default the SDK does not connect in a production build, so this covers environments you control. To drive a live site, see [Production mode](/production-mode).
 
 Type "shoes" into a debounced search box and require exactly one request:
 

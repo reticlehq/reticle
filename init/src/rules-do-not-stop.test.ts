@@ -71,10 +71,13 @@ describe('the every-turn budget still holds', () => {
   });
 });
 
-describe('no app connected is a job for the agent, not a question for the user', () => {
+describe('no app connected is a job for the agent, once the user agrees', () => {
   // An install through the MCP server alone never runs `init`, and an agent that reads "no session"
-  // without being told the wiring is its own to do stops there.
-  it('tells the agent to run init in the app folder itself', () => {
-    expect(RULE_BODY).toMatch(/No app connected at all\?[^\n]*init[^\n]*app's own folder yourself/);
+  // without being told the wiring is its own to do stops there. `init` changes the user's files, so
+  // the agent asks one question first, as the server's own answers say.
+  it('tells the agent to ask, then run init in the app folder', () => {
+    expect(RULE_BODY).toMatch(
+      /No app connected at all\?[^\n]*Ask the user, then run[^\n]*init[^\n]*app's own folder/,
+    );
   });
 });

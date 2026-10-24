@@ -1,3 +1,0 @@
-### Added
-
-- **`@reticlehq/server`, `@reticlehq/init` — `reticle init --new-id` gives a copied checkout its own project id.** A copied repository keeps the original's `.reticle.json`, so Reticle refuses its sessions as ambiguous. The refusal told you to run `reticle init` in the copy, but `init` keeps the id already on disk, so nothing changed. `--new-id` replaces `projectId` in the copy's `.reticle.json` (and in the agent-root copy that names the same id) with the id for that folder, and keeps every other field. The refusal now names every folder that claims the id and the exact command: `cd <copy> && reticle init --new-id`.

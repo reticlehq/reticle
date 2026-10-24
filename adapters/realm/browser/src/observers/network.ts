@@ -460,7 +460,22 @@ function isNativeFetch(fn: typeof window.fetch): boolean {
 /** Wrappers this module installed, so a re-install does not report itself as a foreign wrapper. */
 const OURS = new WeakSet<typeof window.fetch>();
 
+/**
+ * The page-wide mark of an installed network capture, shared by every copy of this module on the page.
+ *
+ * `OURS` is per module, so a second copy of the SDK (an app that ships it, given the injected one as
+ * well) wrapped fetch again and every request was recorded twice: one POST at the server, two
+ * `net.request` events, which is what a `duplicate-request` finding keys on. The first capture keeps
+ * the page; a later one installs nothing. `Symbol.for` is what makes the key the same across copies.
+ */
+const PAGE_CAPTURE = Symbol.for('reticle.network');
+const pageSlots = (): Record<symbol, unknown> => window as unknown as Record<symbol, unknown>;
+
 export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown {
+  // Another capture already owns this page: a second wrapper would only record every request twice.
+  if (undefined !== pageSlots()[PAGE_CAPTURE]) return () => undefined;
+  const owner = {};
+  pageSlots()[PAGE_CAPTURE] = owner;
   const captureBodies = true === opts.captureBodies;
   // Default TRUE, unlike `captureBodies`. The two answer different questions: the general flag is a
   // volume-and-privacy decision about every 200 the app makes, and this one is about the handful of
@@ -957,6 +972,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
   }
 
   return () => {
+    if (pageSlots()[PAGE_CAPTURE] === owner) delete pageSlots()[PAGE_CAPTURE];
     subresourceObserver?.disconnect();
     // Restore each slot ONLY if it still holds OUR wrapper. Between connect() and disconnect() the app
     // (or Sentry/analytics/a router) may have wrapped fetch/XHR/EventSource/WebSocket/sendBeacon ON TOP

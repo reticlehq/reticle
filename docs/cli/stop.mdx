@@ -22,7 +22,7 @@ npx @reticlehq/server stop [--port N] [--quiet] [--force]
 
 ## How it stops
 
-1. `SIGTERM` first, then poll every 100ms.
+1. Ask the daemon to stop with `POST /shutdown` on loopback, with the pairing token. The daemon then runs its normal shutdown path on every OS, Windows included. An older daemon without the route, or a refused request, gets `SIGTERM` instead. Then poll every 100ms.
 2. Still alive after 5 seconds: `SIGKILL`. A daemon that ignores `SIGTERM` is wedged, which is the one situation this command exists for, and giving up there left the port held and a human reaching for `kill -9`.
 3. Still alive 2 seconds after that: report `reticle_daemon_stop_timeout` with the pid and exit `1`. Surviving `SIGKILL` means the pid is not yours to kill, or it is an unkillable zombie. Neither is retryable.
 
@@ -79,7 +79,7 @@ With `--quiet` that same run prints nothing at all and still exits `0`.
 1. Look up the listener with `lsof -nP -iTCP:<port> -sTCP:LISTEN`. Client sockets are excluded by construction, so the proxy is never a candidate.
 2. It is Reticle's if it answers `/status`, **or** if it is the pid Reticle recorded for the port. `/status` outranks the pid file, so a daemon started from another checkout is still recognised as ours.
 3. Anything else is refused, by name: it is someone else's process.
-4. `SIGTERM`, then `SIGKILL` after 5 seconds, then report that it survived and exit `1`.
+4. For a Reticle daemon, `POST /shutdown` first, as above; else `SIGTERM`. Then `SIGKILL` after 5 seconds, then report that it survived and exit `1`.
 
 ### What `--force` prints
 
@@ -94,7 +94,7 @@ Killed:
 Refused, because the listener is not ours. This one was captured with `python3 -m http.server 4498` holding the port:
 
 ```
-{"t":"2026-08-15T18:43:57.128Z","event":"reticle_kill_refused","port":4498,"reason":"pid 78795 (\"Python\") is listening, and it is not a Reticle daemon ... it never answered /status and it is not the pid Reticle recorded. Killing it would be killing someone else's process. Run it again with --force if that is what you meant, or start Reticle on another port.","holder":"Python"}
+{"t":"2026-08-15T18:43:57.128Z","event":"reticle_kill_refused","port":4498,"reason":"pid 78795 (\"Python\") is listening, and it is not a Reticle daemon ... it never answered /status and it is not the pid Reticle recorded. Killing it would be killing someone else's process. If that is what you meant, `reticle restart --force` stops it and starts Reticle there (`stop --force` never does); or start Reticle on another port.","holder":"Python"}
 ```
 
 Nothing to free:

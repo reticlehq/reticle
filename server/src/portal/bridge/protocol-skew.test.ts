@@ -28,6 +28,8 @@ describe('the remedy follows the direction of the skew', () => {
     // The remedy matches the one `version/version-skew.ts` gives for a stale daemon. A user who
     // hits both paths must not be told two different things.
     expect(protocolSkewReason(2, 1)).toContain('reticle stop');
+    // The MCP server starts the daemon. A stop alone brings the same old daemon back.
+    expect(protocolSkewReason(2, 1)).toContain('MCP server');
   });
 
   it('names both rather than guessing when the version cannot be read', () => {

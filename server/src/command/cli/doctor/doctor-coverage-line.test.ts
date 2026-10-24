@@ -12,7 +12,7 @@ describe('doctor coverage rows', () => {
           missing: [{ capability: 'file:line source mapping' }],
           notSeenYet: ['stable test ids'],
           prompt:
-            'Read https://reticle.sh/SKILL.md, then improve…\nReport the coverage line it prints.',
+            'Read https://docs.reticle.sh/skill.md, then improve…\nReport the coverage line it prints.',
         },
       ],
     });
@@ -22,13 +22,12 @@ describe('doctor coverage rows', () => {
     expect(lines.join('\n')).toContain('Report the coverage line it prints.');
   });
 
-  it('says the Harness gate in the sentence a refused drive says', () => {
-    const reason =
-      'Harness unlocks at 80% instrumentation. This app is at 75%: missing stable test ids.';
+  it('prints no Harness lock line, even for an older daemon that still sends one', () => {
+    const reason = 'Harness unlocks at 80% instrumentation. This app is at 75%.';
     const lines = coverageLines({
       coverage: [{ covered: 6, total: 8, harnessGate: { percent: 75, unlocked: false, reason } }],
     });
-    expect(lines[1]).toBe(`    ${reason}`);
+    expect(lines).toHaveLength(1);
   });
 
   it('prints nothing for a daemon too old to report coverage', () => {

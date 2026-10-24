@@ -1,6 +1,7 @@
 ---
 title: Writing an adapter
 description: What an adapter is, which kinds exist, and how to build one of your own.
+noindex: true
 ---
 
 Reticle watches an app from the inside. Most of what it does is the same everywhere: a click is a click, a failed request is a failed request. A few things are not, and those are what adapters are for.

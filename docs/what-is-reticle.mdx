@@ -11,7 +11,7 @@ It exists because an agent that writes code cannot otherwise tell whether that c
 
 ## How it works, in three parts
 
-1. **An SDK inside the app.** Dev-only, stripped from production builds, added by a build plugin. It instruments the DOM, network, routing, console, animations, and your state library.
+1. **An SDK inside the app.** Dev-only by default, stripped from production builds, added by a build plugin. It instruments the DOM, network, routing, console, animations, and your state library.
 2. **A local bridge.** The SDK connects over a WebSocket to a daemon on your machine, bound to `127.0.0.1`. The daemon never manages your dev server; it attaches to the app that is running. On first setup, `npx @reticlehq/server init` starts the dev server with your project's own dev script and opens the app.
 3. **An MCP server.** The daemon exposes the app to your agent as tools. `reticle_look` to look, `reticle_act_and_wait` to act and prove in one call, `reticle_observe` to read what the app did, `reticle_assert` to check.
 
@@ -29,7 +29,7 @@ Reticle sits next to several familiar categories, and it works alongside each of
 
 **Security, accessibility, performance and SEO.** Reticle checks how your running app behaves in each: access control by role, calls that must never fire, focus and keyboard behaviour, request counts and long tasks, titles, links and redirects. It pairs with a vulnerability scanner, a full WCAG audit tool such as axe, and an SEO crawler. [Use cases](/use-cases) has what each check covers.
 
-**Monitoring.** Reticle runs against environments you control (a dev server, a staging or preview deployment) and replays saved flows in CI. The SDK refuses to connect in a production build, so it complements an APM or error tracker rather than watching live traffic.
+**Monitoring.** Reticle runs against environments you control (a dev server, a staging or preview deployment) and replays saved flows in CI. By default the SDK does not connect in a production build. [Production mode](/production-mode) lets an agent drive a live site for one activated drive, but Reticle never watches your users' traffic, so it complements an APM or error tracker.
 
 **Not an accessibility auditor.** `reticle_look { action: "page" }` addresses elements by role and name, which is not the same as auditing contrast, focus order, or screen reader behaviour. Use a dedicated accessibility tool for that.
 

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`, `@reticlehq/vite-plugin`, `@reticlehq/next` — a pairing token folder that is not an absolute path no longer stops Reticle.** A relative `RETICLE_PAIRING_TOKEN_DIR` (as in CI or docker compose) is resolved against the folder the process runs in, as in 3.7, and Reticle writes a warning once. A Windows-style path such as `C:\Users\me\.reticle`, read by a POSIX Node (WSL, a container), is a relative path there and made a `C:` folder inside the app. Reticle does not use such a path. It uses `~/.reticle` and writes a warning. The daemon, `init`, `verify`, `try`, `open` and the Vite and Next plugins use the same rule, so they pick the same token file.

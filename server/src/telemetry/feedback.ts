@@ -309,7 +309,16 @@ const FIELD_CAPS: Record<string, number> = {
 /** What the author supplies; the environment context is detected, never asked for. */
 type FeedbackInput = Pick<
   Feedback,
-  'source' | 'kind' | 'text' | 'trace' | 'rating' | 'need' | 'impact' | 'currentApproach' | 'model'
+  | 'source'
+  | 'kind'
+  | 'text'
+  | 'trace'
+  | 'rating'
+  | 'need'
+  | 'impact'
+  | 'currentApproach'
+  | 'model'
+  | 'contact'
 >;
 
 interface FeedbackReceipt {
@@ -428,6 +437,8 @@ export async function submitFeedback(
     ),
     text: body.text,
     ...(input.rating !== undefined ? { rating: input.rating } : {}),
+    // Not redacted: the person gave this address so the maintainers can answer. Sent only then.
+    ...(input.contact !== undefined ? { contact: input.contact } : {}),
     ...context,
   });
   if (!parsed.success) {

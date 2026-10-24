@@ -410,7 +410,9 @@ describe('a session that served no tool call', () => {
     const dir = sessionDirPath(root, asSessionId(id));
     await fs.mkdir(dir);
     await fs.writeFile(join(dir, 'events.jsonl'), '{"t":1}\n');
-    if (actions !== undefined) await fs.writeFile(join(dir, 'actions.jsonl'), actions);
+    if (actions !== undefined) {
+      await fs.writeFile(join(dir, 'actions.jsonl'), actions);
+    }
     return dir;
   }
 
@@ -455,6 +457,26 @@ describe('teardown saves what a session drove as ONE flow per journey', () => {
   });
   afterEach(async () => {
     await removeTempDir(join(root, '..'));
+  });
+
+  it('reports the flow_recorded step once per daemon, not at every browser session end', async () => {
+    // A page that reloads in a loop ends a session each time. The funnel step has one answer.
+    const reported: { step: string; status: string }[] = [];
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows: new FlowStore(fs, root, { now: () => 1 }),
+      takeAmbientTape: () => ({ steps: [] }),
+      reportStep: (step) => {
+        reported.push(step);
+        return Promise.resolve(true);
+      },
+    });
+    await end(fakeSession('tab-1', {}));
+    await end(fakeSession('tab-2', {}));
+    await end(fakeSession('tab-3', {}));
+    expect(reported.filter((s) => 'flow_recorded' === s.step)).toHaveLength(1);
   });
 
   it('merges two sessions of the same journey and stamps who drove it', async () => {

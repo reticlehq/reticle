@@ -7,7 +7,7 @@ icon: screwdriver-wrench
 
 **Installing Reticle by hand is two independent halves: register the MCP server so your agent gets the `reticle_*` tools, then add the SDK to your app so there is something for those tools to talk to.** You need both, in that order.
 
-Do only the first half and the tools appear but every call reports no session. Do only the second and your app connects to a daemon nobody is asking questions. Stop after the first half and your agent's first Reticle call wires the app itself when you ask it to verify something, and offers to otherwise.
+Do only the first half and the tools appear but every call reports no session. Do only the second and your app connects to a daemon nobody is asking questions. Stop after the first half and your agent can still check the running app with the zero-install lease, which installs nothing. It asks you before it runs `init`.
 
 <Warning>
   **You probably do not need this page.** Two commands do all of it:
@@ -141,6 +141,8 @@ Run `npx @reticlehq/server init` even here: it wires plain HTML, Angular, Remix,
 
 If you really are wiring `connect()` by hand, pass the token. The daemon writes it to `~/.reticle/pairing-token` on first start and refuses a page that does not present it, on localhost too. Without it the page console says `bridge refused the connection: authentication failed: no pairing token on the page…`.
 
+`init` gives you a module for this: it writes the token to `reticle.local.js` at the project root, adds that file to `.gitignore`, and prints a snippet that imports it. To do it without `init`, pass the token yourself:
+
 ```ts
 import { reticle, SESSION_AUTO } from '@reticlehq/browser';
 
@@ -183,7 +185,7 @@ Screenshots and headless mode need the Rust crate, which is versioned independen
 
 ```toml
 [dependencies]
-reticle-tauri = "3.7"
+reticle-tauri = "3.8"
 ```
 
 ```rust
@@ -192,7 +194,7 @@ tauri::Builder::default()
     .on_page_load(reticle_tauri::on_page_load)
 ```
 
-**Dev builds only.** In a release build the crate is inert: `reticle_capture` refuses and `on_page_load` does nothing, so the binary you sign and ship carries no Reticle capability. A release build you test with Reticle (a CI fixture) turns it on with `reticle-tauri = { version = "3.7", features = ["in-release"] }`.
+**Dev builds only.** In a release build the crate is inert: `reticle_capture` refuses and `on_page_load` does nothing, so the binary you sign and ship carries no Reticle capability. A release build you test with Reticle (a CI fixture) turns it on with `reticle-tauri = { version = "3.8", features = ["in-release"] }`.
 
 IPC observation needs nothing on the Rust side. An `invoke('load_todos')` already reaches Reticle as `ipc://load_todos`.
 

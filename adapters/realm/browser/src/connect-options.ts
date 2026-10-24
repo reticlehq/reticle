@@ -1,4 +1,9 @@
-import type { HelloEnv, HelloScope, RedactionConfig } from '@reticlehq/core';
+import {
+  HelloInstrumentation,
+  type HelloEnv,
+  type HelloScope,
+  type RedactionConfig,
+} from '@reticlehq/core';
 
 /**
  * What `reticle.connect()` accepts.
@@ -39,6 +44,18 @@ export interface ReticleConnectOptions {
   env?: HelloEnv;
   /** What a drive may do here: `observe` or `act`. Required with `env: "production"`. */
   scope?: HelloScope;
+  /**
+   * Set by a hosted verifier that put this SDK into a page from outside (an init script), never by
+   * an app. The HELLO then says `instrumentation: "injected"`, so nothing reads this session as an
+   * app that has the SDK installed.
+   */
+  injected?: boolean;
+  /**
+   * Set by a daemon-driven lease, never by an app. A lease call with a different `token` replaces
+   * the token, and dials again when the bridge refused the old one. A page that ships its own SDK
+   * with a stale token then still connects.
+   */
+  lease?: boolean;
   /**
    * The attribute this app marks controls with, when it is not `data-testid` — `data-test-subj`
    * (Elastic UI), `data-cy` (Cypress), `data-test`. Read by the `testid` locator, by the testids the
@@ -166,4 +183,51 @@ export interface ReticleConnectOptions {
    * RegExp entries and `allow` do NOT cross - see docs/usage.md ("Extending the redaction rules") for why, and what that means.
    */
   redact?: RedactionConfig;
+}
+
+/**
+ * The env, scope and instrumentation connect() named, for the HELLO. Absent stays absent: an older
+ * daemon reads it, and an absent `instrumentation` means installed.
+ */
+export function helloMode(options: Pick<ReticleConnectOptions, 'env' | 'scope' | 'injected'>): {
+  env?: HelloEnv;
+  scope?: HelloScope;
+  instrumentation?: HelloInstrumentation;
+} {
+  return {
+    ...(options.env === undefined ? {} : { env: options.env }),
+    ...(options.scope === undefined ? {} : { scope: options.scope }),
+    ...(true === options.injected ? { instrumentation: HelloInstrumentation.INJECTED } : {}),
+  };
+}
+
+/**
+ * Runtime backstop for the dev-only SDK: block connecting when the build reports production, unless
+ * explicitly overridden. Pure so it's testable; connect reads NODE_ENV safely (process may be absent
+ * in a raw browser). This is defense-in-depth - the primary guard is the consumer gating the import
+ * behind `import.meta.env.DEV` so the SDK is dead-code-eliminated from prod bundles entirely.
+ */
+export function shouldBlockProduction(
+  nodeEnv: string | undefined,
+  allowInProduction: boolean,
+): boolean {
+  return 'production' === nodeEnv && !allowInProduction;
+}
+
+/**
+ * The token a lease call brings, or undefined when it changes nothing.
+ *
+ * A lease that reaches a page whose own SDK started with a stale token: the bridge refused that
+ * token, and the lease's `connect()` used to do nothing. Only a lease-marked call replaces the
+ * token. An app's own second `connect()` must not change who the page says it is.
+ */
+export function leaseToken(
+  options: ReticleConnectOptions,
+  current: string | undefined,
+): string | undefined {
+  const token = options.token;
+  if (true !== options.lease || token === undefined || 0 === token.length || token === current) {
+    return undefined;
+  }
+  return token;
 }

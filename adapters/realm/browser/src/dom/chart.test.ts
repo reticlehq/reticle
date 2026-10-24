@@ -130,6 +130,10 @@ describe('canvasChartData', () => {
   it('returns null when neither library owns the canvas, rather than guessing', () => {
     expect(canvasChartData(document.createElement('canvas'), {})).toBeNull();
   });
+
+  it('accepts `window` as the globals, as the docs show', () => {
+    expect(canvasChartData(document.createElement('canvas'), window)).toBeNull();
+  });
 });
 
 describe('describe() surfaces chart faults on the descriptor', () => {

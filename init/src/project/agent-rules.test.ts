@@ -7,7 +7,12 @@ import {
   RETICLE_MD_PATH,
   AgentRuleStatus,
 } from './agent-rules.js';
-import { DISCOVERY_CALL_URL, DISCOVERY_EMAIL_COMMAND } from '@reticlehq/core';
+import {
+  DISCOVERY_CALL_URL,
+  DISCOVERY_EMAIL_COMMAND,
+  FEEDBACK_KIND_CHOICES,
+} from '@reticlehq/core';
+import { SLASH_COMMAND_BODY } from '../register/slash-command.js';
 
 describe('agent verification rule — content', () => {
   it('states WHEN to verify, HOW, and the never-weaken guard', () => {
@@ -148,5 +153,41 @@ describe('RETICLE.md offers the person a call with the founder', () => {
     expect(body).toContain(DISCOVERY_CALL_URL);
     expect(body).toContain(DISCOVERY_EMAIL_COMMAND);
     expect(body).toMatch(/never book/i);
+  });
+});
+
+/**
+ * What `init` writes must agree with what the server says at runtime. The rule block told the agent
+ * to run `init` "yourself" while the server said to ask first; RETICLE.md told it to ask a human to
+ * restart Claude Code while `init` itself said to use `--relaunch`; the feedback command left out
+ * the `experience` kind; and the rule told a reader who missed a tool to restart the daemon on a
+ * surface whose tool names the rule itself does not use.
+ */
+describe('the files init writes match the runtime', () => {
+  it('asks the user before it wires a project', () => {
+    expect(markedBlock()).toContain('Ask the user, then run `npx @reticlehq/server init`');
+    expect(markedBlock()).not.toMatch(/init` in the app's own folder yourself/);
+    expect(SLASH_COMMAND_BODY).toContain('Tell the user in one line that `init` will change');
+    expect(SLASH_COMMAND_BODY).not.toContain('Do not ask first');
+  });
+
+  it('names every verdict source in the slash command', () => {
+    expect(SLASH_COMMAND_BODY).toContain(
+      '**Only `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` with an `expect`, and `reticle_verify` produce a verdict.**',
+    );
+  });
+
+  it('lists every feedback kind', () => {
+    expect(reticleMdFile()).toContain(`--kind ${FEEDBACK_KIND_CHOICES}`);
+  });
+
+  it('restarts Claude Code and Codex with --relaunch, not with a human', () => {
+    expect(reticleMdFile()).toContain('npx @reticlehq/server init --relaunch');
+  });
+
+  it('installs the one skill, and keeps the reader on the default surface', () => {
+    expect(markedBlock()).toContain('npx skills add reticlehq/reticle --skill reticle');
+    expect(markedBlock()).toContain('every other tool is one `reticle_run` call away');
+    expect(markedBlock()).not.toMatch(/RETICLE_ADVERTISE_ALL_TOOLS=1` advertises/);
   });
 });

@@ -97,7 +97,7 @@ describe('what the agent is told to do next', () => {
     });
     expect(first).toBe(NextText.UNMATCHED(unmatched.root, unmatched.contenders));
     expect(first).toContain('/code/mono-clone/apps/web');
-    expect(first).toContain('reticle init');
+    expect(first).toContain('npx @reticlehq/server init');
     expect(
       nextStep({ tool: 'reticle_flow_save', verdict: false, root: r, now: NOW, unmatched }),
     ).not.toBe(first);
@@ -150,7 +150,7 @@ describe('what the agent is told to do next', () => {
       '/code/clone',
     );
     expect(said).toContain('/code/mono');
-    expect(said).toContain('cd /code/clone && reticle init --new-id');
+    expect(said).toContain('cd /code/clone && npx @reticlehq/server init --new-id');
   });
 
   it('on a linked project with nothing wrong, says the run syncs on its own', () => {

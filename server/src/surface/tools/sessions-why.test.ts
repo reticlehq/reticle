@@ -12,7 +12,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { NoSessionAction } from '@reticlehq/core';
+import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { NextStepOffered, NoSessionAction } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { TOOLS } from './tools.js';
 import type { NoSessionNextAction } from '@/portal/session/no-session-next-action.js';
@@ -153,50 +156,90 @@ describe('reticle_sessions names the last known page when the list is empty', ()
   });
 });
 
-// Installing Reticle wires no app; the agent's first use in an unwired project does, and says what.
-describe('the first session call wires an unwired project', () => {
+/*
+ * The first session call in an unwired project changes no file. It used to run `init` there
+ * unasked: an agent that only listed sessions changed package.json, the lockfile and the build
+ * config, and started a second dev server. Wiring needs the user's agreement; the lease does not.
+ */
+describe('the first session call in an unwired project', () => {
+  function unwiredApp(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-unwired-'));
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ scripts: { dev: 'vite' }, devDependencies: { vite: '6' } }),
+    );
+    return dir;
+  }
   const runInit: NoSessionNextAction = {
     action: NoSessionAction.RUN_INIT,
-    command: 'reticle init',
+    command: 'npx @reticlehq/server init',
+    port: 5173,
     reason: 'no .reticle.json',
   };
-  const wired = { ok: true, directory: '/w/shop', steps: [], url: 'http://localhost:5173/' };
 
-  it('runs the wiring in its own project and returns the session it brought up', async () => {
-    const list: unknown[] = [];
-    const asked: string[] = [];
+  it('writes no file, offers the lease, and asks for consent to wire', async () => {
+    const dir = unwiredApp();
+    const before = readdirSync(dir);
+    const wireCalls: string[] = [];
     const deps = {
-      ...depsWith(list, 'prose', runInit),
-      reticleRoot: '/w/shop/.reticle',
+      ...depsWith([], 'prose', runInit),
+      reticleRoot: join(dir, '.reticle'),
       firstRun: {
-        projectDirectory: (dir: string) => dir,
-        wire: (dir: string) => {
-          asked.push(dir);
-          list.push({ sessionId: 's1' });
-          return Promise.resolve({ ...wired, directory: dir });
+        projectDirectory: (d: string) => d,
+        // What wiring does to the project, so a call to it shows in the file system.
+        wire: (d: string) => {
+          wireCalls.push(d);
+          writeFileSync(join(d, '.reticle.json'), '{}');
+          return Promise.resolve({ ok: true, directory: d, steps: [] });
         },
       },
     } as unknown as ToolDeps;
     const result = (await sessionsTool?.handler(deps, {})) as {
-      sessions: unknown[];
-      wired?: { directory: string };
+      wired?: unknown;
+      next_step?: { offered: string; lease?: string; consent: string };
     };
-    expect(asked).toEqual(['/w/shop']);
-    expect(result.sessions).toHaveLength(1);
-    expect(result.wired?.directory).toBe('/w/shop');
+    expect(wireCalls).toEqual([]);
+    expect(readdirSync(dir)).toEqual(before);
+    expect(result.wired).toBeUndefined();
+    expect(result.next_step?.offered).toBe(NextStepOffered.LEASE);
+    expect(result.next_step?.lease).toContain('reticle_lease');
+    expect(result.next_step?.lease).toContain('http://localhost:5173');
+    expect(result.next_step?.consent).toMatch(/ask the user/i);
+    expect(result.next_step?.consent).toContain('npx @reticlehq/server init');
+    expect(sessionsTool?.outputSchema).toHaveProperty('next_step');
   });
 
-  it('asks instead of guessing when it cannot tell which project', async () => {
+  it('asks for consent first when no app is up to lease', async () => {
+    const dir = unwiredApp();
+    const deps = {
+      ...depsWith([], 'prose', {
+        action: NoSessionAction.START_DEV_SERVER,
+        command: 'npm run dev',
+        reason: 'nothing is listening',
+      }),
+      reticleRoot: join(dir, '.reticle'),
+      firstRun: { projectDirectory: (d: string) => d },
+    } as unknown as ToolDeps;
+    const result = (await sessionsTool?.handler(deps, {})) as {
+      next_step?: { offered: string; lease?: string };
+      next_action?: NoSessionNextAction;
+    };
+    expect(result.next_step?.offered).toBe(NextStepOffered.INIT_CONSENT);
+    expect(result.next_step?.lease).toBeUndefined();
+    expect(result.next_action?.command).toBe('npm run dev');
+  });
+
+  it('offers nothing when it cannot tell which project', async () => {
     const deps = {
       ...depsWith([], 'prose', runInit),
       reticleRoot: '/home/u/.reticle',
-      firstRun: { projectDirectory: () => undefined, wire: () => Promise.reject(new Error('no')) },
+      firstRun: { projectDirectory: () => undefined },
     } as unknown as ToolDeps;
     const result = (await sessionsTool?.handler(deps, {})) as {
       next_action?: NoSessionNextAction;
-      wired?: unknown;
+      next_step?: unknown;
     };
-    expect(result.wired).toBeUndefined();
+    expect(result.next_step).toBeUndefined();
     expect(result.next_action?.action).toBe(NoSessionAction.RUN_INIT);
   });
 });

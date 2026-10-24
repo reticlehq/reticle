@@ -13,12 +13,12 @@ import {
   type ToolSurface,
 } from '@/surface/tools/tool-surface.js';
 import { ReticleTool } from '@reticlehq/core';
-import { SHARED_PARAM_SHORT } from './shared-params.js';
+import { sharedParamShort } from './shared-params.js';
 import { buildDynamicTools } from '@/surface/tools/dynamic-tools.js';
 import { runTool } from '@/surface/tools/invoke-tool.js';
 import { sessionEnvelopeShape, newSnapshotCache, type ToolCall } from '@/surface/tools/tool-kit.js';
 import { buildErrorPayload, codedRefusalOf } from '@/surface/tools/error-recovery.js';
-import { takeVersionSkewOnto } from '@/command/version/version-nudge.js';
+import { connectionSkew, takeVersionSkewOnto } from '@/command/version/version-nudge.js';
 import { resultIsError } from './faults/mcp-is-error.js';
 import { consumerVerdictRefusal, reservedVerdictKeysIn } from './consumer-verdict-guard.js';
 import { buildServerInstructions, type InstructionState } from './server-instructions.js';
@@ -182,7 +182,7 @@ function leanZodShape(
     }
     // Shared boilerplate is documented once in the initialize instructions instead of on every
     // tool, every turn. `sessionId` alone was 2,076 bytes of identical text across 16 tools.
-    const shared = SHARED_PARAM_SHORT[key];
+    const shared = sharedParamShort(key, schema);
     if (shared !== undefined) {
       // `.describe` returns the same schema with new prose, so optionality carries over. Re-wrapping
       // in `.optional()` would nest one inside another and change the parameter's TYPE, which is a
@@ -602,6 +602,31 @@ function toolNameOf(request: unknown): string | undefined {
 }
 
 /**
+ * The daemon's factory for one MCP server for each attach. A proxy's id is its agent identity, so a
+ * reconnect from the same proxy is the same owner and keeps its leases. An attach with no proxy id
+ * gets a new random id from `createMcpServer`.
+ *
+ * `instructions` is read for each attach, not once: a project that gets wired while the daemon is
+ * alive must stop being told to wire itself on the next agent that connects.
+ */
+export function mcpServerFactoryFor(
+  deps: ToolDeps,
+  profile: ToolSurface,
+  instructions: () => boolean | Omit<InstructionState, 'advertised'>,
+): (peerSkew?: string, proxyId?: string) => McpServer {
+  return (peerSkew, proxyId) =>
+    createMcpServer(
+      {
+        ...deps,
+        ...(peerSkew === undefined ? {} : { peerSkew: connectionSkew(peerSkew) }),
+        ...(proxyId === undefined ? {} : { attachId: proxyId }),
+      },
+      profile,
+      instructions(),
+    );
+}
+
+/**
  * The tools this codebase ships. Anything outside it came from a host via the `tools` parameter, and
  * is held to the verdict rule below.
  *
@@ -650,6 +675,9 @@ export function createMcpServer(
    * store keeps it.
    */
   const deps = { snapshots: newSnapshotCache(), attachId: randomUUID(), ...rawDeps };
+  // A proxy that reconnects brings its own id as `attachId`, so this is the same owner coming back:
+  // take its leases out of their grace. A new random id owns no leases, so this does nothing.
+  deps.pool?.reattachOwner(deps.attachId);
   const encoding = (process.env[ENCODING_ENV] ?? '').toLowerCase();
   // Which surface this daemon advertises. The 18-tool default and the 48-tool full surface are
   // different products from inside an agent's context, so outcomes are only comparable when the
@@ -686,11 +714,13 @@ export function createMcpServer(
     // the first moment it can carry WHO. It used to fire from the SSE `connect()` resolution, which
     // happens before the handshake — so every connect row was anonymous, and the field meant to say
     // which agent client converts best was empty on every event ever sent.
-    void runAsAgent(deps.attachId, () => Promise.resolve(reportMcpConnected(info.name)));
+    void runAsAgent(deps.attachId, () =>
+      Promise.resolve(reportMcpConnected(info.name, deps.attachId)),
+    );
   };
   server.server.onclose = () => {
     noteAgentDetached(deps.attachId);
-    // A reconnect is a new owner and never takes these leases back; start their short grace.
+    // Start the leases' short grace. A reconnect from the same proxy takes them back (see above).
     deps.pool?.detachOwner(deps.attachId);
   };
   // Which agent is on the other end, for a feedback report. Registered as a lazy hook rather than

@@ -144,6 +144,9 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
   hud: { view: 'harness', tabs: '1' },
   link: { via: 'connect' },
   harness: { phase: 'completed', source: 'hud', hosted: true, outcome: 'proved', journeys: '1' },
+  proxyExit: { reason: 'stdin_end', uptimeMs: 1, drops: 0, toolCalls: 0 },
+  daemonDeath: { ageMs: 1 },
+  wakeRefusal: { presence: 'foreign' },
 };
 
 async function propertiesFor(extra: TelemetryExtra): Promise<Record<string, unknown>> {

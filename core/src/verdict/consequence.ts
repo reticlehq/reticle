@@ -41,7 +41,12 @@ export type PresenceKind = (typeof PresenceKind)[keyof typeof PresenceKind];
  * only, for a check about requests — a counted `net` claim waits for a late duplicate, and DOM churn
  * from an animation must not hold it open.
  */
-export const SettledChannel = { NETWORK: 'network' } as const;
+/**
+ * What a `settled` waits out. NETWORK: completed requests only. APP: the default's activity plus every
+ * framework render commit, for an app whose commits are its work (the default leaves them out: on many
+ * pages they are ambient, a clock re-rendering every second, and would never go quiet).
+ */
+export const SettledChannel = { NETWORK: 'network', APP: 'app' } as const;
 export type SettledChannel = (typeof SettledChannel)[keyof typeof SettledChannel];
 
 export const PredicateKind = {

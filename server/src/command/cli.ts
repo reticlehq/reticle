@@ -665,6 +665,8 @@ function handleDaemonInner(parsed: {
       // argument, which would otherwise arrive as the reason.
       process.on('SIGTERM', () => shutdown(DaemonExitReason.SIGNAL));
       process.on('SIGINT', () => shutdown(DaemonExitReason.SIGNAL));
+      // `reticle stop` asks here first: on Windows a signal ends the process with no shutdown path.
+      server.onShutdownRequest?.(() => shutdown(DaemonExitReason.SIGNAL));
       // Self-shut-down when idle so a detached daemon (and any headless Chromium it launched) never
       // lingers on the user's machine after the editor closes. Reuses the same clean shutdown path.
       const attachedGraceEnv = process.env[ReticleEnv.IDLE_ATTACHED];
@@ -910,6 +912,7 @@ export function main(): void {
         parsed.bug,
         parsed.feedbackKind,
         parsed.agent,
+        parsed.contact,
       );
       break;
     case 'version':

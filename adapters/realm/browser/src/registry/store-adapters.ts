@@ -134,6 +134,15 @@ export function tanstackQueryStore(client: QueryClientLike): StoreLike {
 }
 
 /**
+ * `T`, but TypeScript does not infer `T` from this position. It is `NoInfer` for TypeScript before 5.4.
+ *
+ * The atom map must not set the atom type. Atoms of different value types give a union, and the
+ * library's generic `get` cannot accept a union, so the documented call did not compile. The store
+ * sets the type (`Atom<unknown>` for Jotai, `RecoilValue<unknown>` for Recoil), and each atom fits it.
+ */
+type Deferred<T> = [T][T extends unknown ? 0 : never];
+
+/**
  * The minimum of a Jotai vanilla store this adapter touches, generic in the ATOM type.
  *
  * `atom: object` was rejected by TypeScript for a real store and the reason is contravariance, not
@@ -159,7 +168,10 @@ interface JotaiStoreLike<A> {
  * registerStore('app', jotaiStore(getDefaultStore(), { cart: cartAtom, user: userAtom }));
  * ```
  */
-export function jotaiStore<A>(store: JotaiStoreLike<A>, atoms: Record<string, A>): StoreLike {
+export function jotaiStore<A>(
+  store: JotaiStoreLike<A>,
+  atoms: Record<string, Deferred<A>>,
+): StoreLike {
   return {
     getState: (): Record<string, unknown> => {
       const out: Record<string, unknown> = {};
@@ -321,7 +333,7 @@ function projectLoadable(loadable: RecoilLoadableLike): RecoilAtomSnapshot {
  * ```
  */
 export function recoilStore<A>(
-  atoms: Record<string, A>,
+  atoms: Record<string, Deferred<A>>,
   snapshot: () => RecoilSnapshotLike<A>,
   subscribe: StoreSubscribe,
 ): StoreLike {

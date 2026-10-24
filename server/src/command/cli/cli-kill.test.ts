@@ -12,8 +12,11 @@
  * every platform while the signalling stays at the call site.
  */
 
-import { describe, expect, it } from 'vitest';
-import { KillAction, planKill } from './cli-kill.js';
+import { afterEach, describe, expect, it } from 'vitest';
+import * as http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { SHUTDOWN_PATH } from '@reticlehq/core';
+import { KillAction, planKill, requestShutdown } from './cli-kill.js';
 
 const DAEMON_PID = 70244;
 const STRANGER_PID = 99001;
@@ -102,5 +105,63 @@ describe('planKill', () => {
       const plan = planKill({ listener: null, recordedPid: null, answersStatus: true, force });
       expect(plan.action).not.toBe(KillAction.KILL);
     }
+  });
+});
+
+/**
+ * `stop` and `kill` ask the daemon over loopback before they send a signal. On Windows a signal ends
+ * the process at once, so the daemon never ran its shutdown path and sent no stop event.
+ */
+describe('requestShutdown', () => {
+  const TOKEN = 'a-secret-pairing-token';
+  let server: http.Server | undefined;
+  afterEach(async () => {
+    await new Promise<void>((done) => (server ? server.close(() => done()) : done()));
+    server = undefined;
+  });
+
+  function daemon(answer: (req: http.IncomingMessage) => number): Promise<number> {
+    server = http.createServer((req, res) => {
+      res.writeHead(answer(req)).end();
+    });
+    const listening = server;
+    return new Promise((resolve) => {
+      listening.listen(0, '127.0.0.1', () => {
+        resolve((listening.address() as AddressInfo).port);
+      });
+    });
+  }
+
+  it('sends the pairing token and says yes when the daemon accepts', async () => {
+    const port = await daemon((req) =>
+      'POST' === req.method &&
+      SHUTDOWN_PATH === req.url &&
+      `Bearer ${TOKEN}` === req.headers.authorization
+        ? 202
+        : 401,
+    );
+    expect(await requestShutdown(port, TOKEN)).toBe(true);
+  });
+
+  it('says no for an older daemon without the route, so the caller sends the signal', async () => {
+    const port = await daemon(() => 404);
+    expect(await requestShutdown(port, TOKEN)).toBe(false);
+  });
+
+  it('says no with no token to send, and does not ask', async () => {
+    let asked = false;
+    const port = await daemon(() => {
+      asked = true;
+      return 202;
+    });
+    expect(await requestShutdown(port, undefined)).toBe(false);
+    expect(asked).toBe(false);
+  });
+
+  it('says no when nothing listens', async () => {
+    const port = await daemon(() => 202);
+    await new Promise<void>((done) => server?.close(() => done()));
+    server = undefined;
+    expect(await requestShutdown(port, TOKEN)).toBe(false);
   });
 });

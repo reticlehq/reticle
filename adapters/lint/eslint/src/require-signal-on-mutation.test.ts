@@ -1,7 +1,10 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { RuleTester } from '@typescript-eslint/rule-tester';
 import { requireSignalOnMutation } from './require-signal-on-mutation.js';
-import { MessageId, RULE_NAME } from './constants.js';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { DOCS_URL_ROOT, MessageId, RULE_NAME } from './constants.js';
 import { normalizeOptions } from './options.js';
 import { DEFAULT_SIGNAL_CALLEES } from './constants.js';
 
@@ -191,4 +194,18 @@ ruleTester.run(`${RULE_NAME} (ordinary code)`, requireSignalOnMutation, {
       errors: [{ messageId: MessageId.MUTATION_WITHOUT_SIGNAL }],
     },
   ],
+});
+
+/**
+ * ESLint shows `DOCS_URL_ROOT` to the user as the rule's documentation link. It named
+ * `eslint-plugin/README.md`, which moved, so the link answered 404. The path after the branch must
+ * be a file in this repository.
+ */
+describe('the rule documentation link', () => {
+  it('names a file that exists in the repository', () => {
+    const prefix = 'https://github.com/reticlehq/reticle/blob/main/';
+    expect(DOCS_URL_ROOT.startsWith(prefix)).toBe(true);
+    const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+    expect(existsSync(join(repoRoot, DOCS_URL_ROOT.slice(prefix.length)))).toBe(true);
+  });
 });

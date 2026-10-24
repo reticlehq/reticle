@@ -33,15 +33,19 @@ import { REPO_ROOT } from '@/machine/repo-root.js';
 const REPO = REPO_ROOT;
 const SKILLS = join(REPO, 'skills');
 /**
- * The Claude Code plugin lives in its OWN root, `plugin/`, and not at the repo root.
+ * The Claude Code plugin lives in its OWN root, `plugins/reticle/`, and not at the repo root.
  *
  * Plugin components are namespaced by plugin name, so every skill the plugin ships shows up as
  * `/reticle:<skill>`. With the plugin rooted at the repo root it auto-discovered all twelve skills
  * under `skills/`, and typing `/reticle` answered with a twelve-item menu instead of doing anything
  * — the opposite of the one-command install the docs promise. `skills/` is the skills-CLI channel
  * and nothing else; the plugin ships exactly one skill, its root `SKILL.md`.
+ *
+ * It sits two levels deep so that the skills CLI does not find it. The CLI reads each directory at
+ * the repository root before `skills/`, and the first skill named `reticle` wins, so a plugin at
+ * `plugin/` replaced `skills/reticle` for `npx skills add reticlehq/reticle --skill reticle`.
  */
-const PLUGIN_ROOT = join(REPO, 'plugin');
+const PLUGIN_ROOT = join(REPO, 'plugins', 'reticle');
 /** Where each manifest actually lives now that the two roots differ. */
 const MANIFEST: Record<string, string> = {
   'plugin.json': join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'),
@@ -266,7 +270,7 @@ describe('the Claude Code plugin manifests are ones the loader can resolve', () 
   });
 
   /**
-   * The whole reason `plugin/` exists as a separate root, pinned so a well-meaning tidy-up cannot
+   * The whole reason `plugins/reticle/` exists as a separate root, pinned so a well-meaning tidy-up cannot
    * merge it back. A plugin with a `skills/` directory ships one `/reticle:<name>` entry per skill;
    * a plugin whose root holds a single `SKILL.md` and no `skills/` ships one command, `/reticle`.
    * The twelve skills under the repo's own `skills/` are the skills-CLI channel and must stay out of
@@ -279,7 +283,7 @@ describe('the Claude Code plugin manifests are ones the loader can resolve', () 
     ).toBe(true);
     expect(
       existsSync(join(PLUGIN_ROOT, 'skills')),
-      'plugin/skills/ exists — every entry in it becomes a separate /reticle:<name>, which is the ' +
+      'plugins/reticle/skills/ exists — every entry in it becomes a separate /reticle:<name>, which is the ' +
         'menu this layout was split apart to remove. Publish extra skills under the repo-root ' +
         'skills/ for the skills CLI instead.',
     ).toBe(false);

@@ -31,7 +31,7 @@ Real capture, restarting over a running daemon (exit `0`), with the long `note` 
 Real capture, when the port is held by something that is not ours (exit `1`). Both `reason` strings are trimmed at the ellipsis:
 
 ```
-{"t":"2026-08-15T18:43:57.317Z","event":"reticle_kill_refused","port":4498,"reason":"pid 78795 (\"Python\") is listening, and it is not a Reticle daemon ... it never answered /status and it is not the pid Reticle recorded. Killing it would be killing someone else's process. Run it again with --force if that is what you meant, or start Reticle on another port.","holder":"Python"}
+{"t":"2026-08-15T18:43:57.317Z","event":"reticle_kill_refused","port":4498,"reason":"pid 78795 (\"Python\") is listening, and it is not a Reticle daemon ... it never answered /status and it is not the pid Reticle recorded. Killing it would be killing someone else's process. If that is what you meant, `reticle restart --force` stops it and starts Reticle there (`stop --force` never does); or start Reticle on another port.","holder":"Python"}
 {"t":"2026-08-15T18:43:57.318Z","event":"reticle_restart_aborted","port":4498,"reason":"the port was not freed, so nothing was started ... the old holder is still there"}
 ```
 

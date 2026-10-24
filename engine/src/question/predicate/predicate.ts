@@ -551,7 +551,7 @@ function assertsExactCount(predicate: Predicate): boolean {
 }
 
 /**
- * Does this predicate claim that something did NOT happen: an `absent` check, or a `not`?
+ * Does this predicate claim that something did NOT happen: an `absent` check, a `count: 0`, or a `not`?
  *
  * Such a claim is about the END of a window for the same reason an exact count is, and reads true
  * at the start of every window by construction. Settled on its first reading, a clean-console check
@@ -563,7 +563,12 @@ function claimsAbsence(predicate: Predicate): boolean {
   if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
     return predicate.predicates.some(claimsAbsence);
   }
-  return 'absent' in predicate && true === predicate.absent;
+  if ('absent' in predicate && true === predicate.absent) {
+    return true;
+  }
+  // `count: 0` is absence written as arithmetic. Held only for COUNT_CONFIRM_MS, a request sent
+  // 500 ms after the action passed a "no request" check.
+  return 'count' in predicate && 0 === predicate.count;
 }
 
 /**

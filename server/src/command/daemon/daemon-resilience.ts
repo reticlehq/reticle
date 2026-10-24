@@ -331,6 +331,11 @@ export function installProxyResilience(
   log: LogFn,
   onCrash: (kind: CrashKind, cause: unknown) => void = reportCrash,
   onGone: () => void = () => process.exit(0),
+  /**
+   * The pipes to the client (stdin and stdout). Only THEIR errors count toward DISCONNECT_STORM.
+   * Empty by default, so a test that wires a fake process never touches the real stdio.
+   */
+  clientPipes: readonly ProcessLike[] = [],
 ): ProxyResilience {
   const expected: ExpectedEvents = {
     disconnected: 'reticle_mcp_proxy_client_disconnected',
@@ -338,26 +343,35 @@ export function installProxyResilience(
   };
   // "Absorb the disconnect and keep serving" is right for ONE disconnect and catastrophic for a
   // stream of them — see DISCONNECT_STORM. Counted since the last USABLE SESSION rather than since
-  // this process started: a lifetime tally reaches the threshold on a working week, because the
-  // classifier reads `ECONNRESET` as "the peer vanished" and on this leg the peer is the DAEMON,
-  // which restarts routinely and is the thing the proxy exists to survive.
+  // this process started, and counted ONLY on the client pipes. An error that reaches the process
+  // comes from a socket with no listener, and in this process those are the sockets to the DAEMON,
+  // which restarts routinely and is the thing the proxy exists to survive. Counting them made the
+  // proxy leave a healthy daemon, and the agent lost its tools.
   let disconnects = 0;
   let gone = false;
-  const absorb = (value: unknown): boolean => {
-    if (!absorbExpected(value, log, expected)) return false;
-    if (false === expectedCode(value)?.unreachable) {
-      disconnects += 1;
-      if (disconnects >= DISCONNECT_STORM && !gone) {
-        gone = true;
-        log('reticle_mcp_proxy_client_gone', {
-          disconnects,
-          note: 'the client end is gone for good, not between reconnects — exiting instead of retrying forever',
-        });
-        onGone();
-      }
+  const absorb = (value: unknown): boolean => absorbExpected(value, log, expected);
+  const onClientPipeError = (err: unknown): void => {
+    if (!absorb(err)) {
+      log('reticle_mcp_proxy_client_pipe_error', { error: describe(err) });
+      onCrash(CrashKind.UNCAUGHT_EXCEPTION, err);
+      return;
     }
-    return true;
+    if (true === expectedCode(err)?.unreachable) {
+      return;
+    }
+    disconnects += 1;
+    if (disconnects >= DISCONNECT_STORM && !gone) {
+      gone = true;
+      log('reticle_mcp_proxy_client_gone', {
+        disconnects,
+        note: 'the client end is gone for good, not between reconnects — exiting instead of retrying forever',
+      });
+      onGone();
+    }
   };
+  for (const pipe of clientPipes) {
+    pipe.on('error', onClientPipeError);
+  }
   const noteUsableSession = (): void => {
     // Not after `gone`: the process is already leaving, and a late frame must not look like a
     // reason to stay. Nothing brings the proxy back from `onGone` by design.

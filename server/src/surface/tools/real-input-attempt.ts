@@ -527,6 +527,12 @@ export async function tryRealInput(
   if (action === ActionType.HOVER) {
     return hoverForReal(deps, session, ref, inner, provider);
   }
+  // The production policy judges a command by the control it names, when the daemon dispatches
+  // it. A native key goes to whatever holds focus, so the policy cannot see what it presses. On a
+  // production drive a press runs in the page, where the daemon judges it.
+  if (action === ActionType.PRESS && session.production !== undefined) {
+    return synthetic(InputModeReason.PRODUCTION_PRESS_IN_PAGE);
+  }
   if (provider === undefined) {
     if (action === ActionType.PRESS) {
       const leased = await pressOnLease(deps, session, ref, inner);

@@ -104,7 +104,7 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
       'reproducible across machines — the missing piece of CI-stable visual regression, alongside ' +
       'reticle_visual_diff `masks` and a frozen clock (reticle_clock). Set it once before reticle_screenshot / ' +
       'reticle_visual_diff. On a lease it also sets prefers-color-scheme and prefers-reduced-motion; ' +
-      'give only those to change the media and keep the size. Returns { applied, width, height } or the no-provider recommendation.',
+      'give only those to change the media and keep the size. Returns { applied, width, height, observed } or the no-provider recommendation; `observed` is the size the leased page reports after the resize.',
     inputSchema: {
       width: viewportPxSchema.optional().describe('Viewport width in CSS px (e.g. 1280).'),
       height: viewportPxSchema.optional().describe('Viewport height in CSS px (e.g. 800).'),
@@ -116,6 +116,7 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
       applied: z.boolean(),
       width: z.number(),
       height: z.number(),
+      observed: z.object({ width: z.number(), height: z.number() }).optional(),
       colorScheme: z.string().optional(),
       reducedMotion: z.string().optional(),
       ok: z.boolean().optional(),
@@ -134,7 +135,11 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
       const width = clampDim('width', args['width']);
       const height = clampDim('height', args['height']);
       const session = deps.sessions.resolve(asString(args['sessionId']));
-      const provider = viewportProvider(deps);
+      // A lease is resized as the lease. The driven provider resizes its own page, whatever
+      // session was named, so taking it first resized the wrong tab and said `applied: true`.
+      const driven = viewportProvider(deps);
+      const provider =
+        driven !== undefined && deps.pool?.leaseUrl(session.id) === undefined ? driven : undefined;
       if (provider !== undefined) {
         const applied = await provider.setViewport(session.url, { width, height });
         // The driven page takes the size; its media stay as the person's browser has them.
@@ -151,14 +156,24 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
       // recommendation printed alongside the refusal asked the reader to install a second browser.
       const leased = await deps.pool?.setViewportLease(session.id, { width, height });
       if (true !== leased) return refused();
-      if (media === undefined) return { applied: true, width, height };
+      // What the page reports after the resize, so `applied` is a reading and not a hope.
+      const observed = await deps.pool?.viewportOfLease(session.id);
+      if (observed !== undefined && (observed.width !== width || observed.height !== height)) {
+        return { applied: false, width, height, observed, ok: false, reason: VIEWPORT_NOT_TAKEN };
+      }
+      const seen = observed === undefined ? {} : { observed };
+      if (media === undefined) return { applied: true, width, height, ...seen };
       if (true === (await deps.pool?.emulateLease(session.id, media))) {
-        return { applied: true, width, height, ...media };
+        return { applied: true, width, height, ...seen, ...media };
       }
       return { ...refused(), width, height, recommendation: MEDIA_NEEDS_A_LEASE };
     },
   },
 ];
+
+/** The resize went through, but the page still reports another size. */
+const VIEWPORT_NOT_TAKEN =
+  'the page still reports the size in `observed` after the resize, so the size was not applied';
 
 /** prefers-color-scheme and prefers-reduced-motion are set on a leased page only. */
 const MEDIA_NEEDS_A_LEASE =

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ContradictionKind, type Contradiction, type FlowStepResult } from '@reticlehq/core';
-import { crossStepOnly } from './flow-cross-step.js';
+import {
+  AnchorKind,
+  ContradictionKind,
+  ReticleTool,
+  type Contradiction,
+  type FlowStep,
+  type FlowStepResult,
+} from '@reticlehq/core';
+import { crossStepOnly, declaredIn } from './flow-cross-step.js';
 
 /**
  * The contradictions no per-step window can see, by construction.
@@ -53,5 +60,23 @@ describe('what the whole-span pass adds over the per-step ones', () => {
 
   it('is empty when the whole-span pass found nothing', () => {
     expect(crossStepOnly([], [step(0, [failed])])).toEqual([]);
+  });
+});
+
+describe('what the whole-span pass is told the flow expected', () => {
+  it('collects every declared consequence, sub-steps included', () => {
+    const refused = { kind: 'net', method: 'POST', status: 402 } as const;
+    const shown = { kind: 'text', contains: 'Limit reached' } as const;
+    const anchor = { kind: AnchorKind.TESTID, value: 'generate' } as const;
+    const steps: FlowStep[] = [
+      { tool: ReticleTool.ACT, anchor, args: {} },
+      {
+        tool: ReticleTool.ACT_SEQUENCE,
+        anchor,
+        expect: shown,
+        steps: [{ tool: ReticleTool.ACT, anchor, args: {}, expect: refused }],
+      },
+    ];
+    expect(declaredIn(steps)).toEqual([shown, refused]);
   });
 });

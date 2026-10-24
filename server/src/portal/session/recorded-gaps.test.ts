@@ -88,7 +88,7 @@ describe('a tab’s coverage', () => {
     expect(announcedChannels(plain)).not.toContain(CoverageMarker.SOURCE);
   });
 
-  /** Every channel but test ids: 7 of 8, above the Harness gate. */
+  /** Every channel but test ids: 7 of 8. */
   const open = {
     id: 's1',
     url: 'http://localhost:3000/',
@@ -96,23 +96,20 @@ describe('a tab’s coverage', () => {
     sourceMapping: true,
   };
 
-  it('above the gate, carries a prompt only once a verdict recorded a gap, naming only that gap', () => {
-    expect(instrumentationOf(open).harnessGate).toEqual({ percent: 87, unlocked: true });
+  it('carries a prompt only once a verdict recorded a gap, naming only that gap', () => {
+    expect(instrumentationOf(open).setupScore).toBe(87);
     expect(instrumentationOf(open).prompt).toBeUndefined();
     recordGaps('s1', [gap('e1')], 1);
     const prompt = instrumentationOf(open).prompt ?? '';
     expect(prompt).toContain('missing: e1');
-    expect(prompt).toContain('reticle verify http://localhost:3000/');
+    expect(prompt).toContain('@reticlehq/server verify http://localhost:3000/');
   });
 
-  it('below the gate, says why and always carries the prompt that closes it', () => {
-    const below = instrumentationOf(tab);
-    expect(below.harnessGate.unlocked).toBe(false);
-    expect(below.harnessGate.reason).toMatch(
-      /^Harness unlocks at 80% instrumentation\. This app is at 62%: missing /,
-    );
-    expect(below.prompt).toContain(CoverageCapability.TEST_IDS);
-    expect(below.prompt).toContain('reticle verify http://localhost:3000/');
+  it('reports a low score as information only: no lock, no reason, and no prompt without a gap', () => {
+    const low = instrumentationOf(tab);
+    expect(low.setupScore).toBe(62);
+    expect(low).not.toHaveProperty('harnessGate');
+    expect(low.prompt).toBeUndefined();
   });
 });
 
@@ -146,7 +143,7 @@ describe('an app with several tabs', () => {
       projectId: 'shop',
       channels: ['ui', 'net', 'log', 'state', 'signal'],
     };
-    expect(instrumentationOf(fresh).harnessGate).toEqual({ percent: 100, unlocked: true });
+    expect(instrumentationOf(fresh).setupScore).toBe(100);
     // Another app on the same daemon does not inherit it.
     const other = { ...fresh, id: 's3', url: 'http://localhost:4000/', projectId: 'blog' };
     expect(instrumentationOf(other).seen).not.toContain(CoverageCapability.TEST_IDS);
@@ -180,9 +177,9 @@ describe('what the page itself carries', () => {
 
   it('unlocks an app whose page carries test ids and file:line stamps before anything acted', async () => {
     const tab = { id: 's1', url: 'http://localhost:4312/', projectId: 'bench', channels: FULL };
-    expect(instrumentationOf(tab).harnessGate.percent).toBe(75);
+    expect(instrumentationOf(tab).setupScore).toBe(75);
     await probeMarkers([{ ...tab, ...answering(['source', 'testid']) }]);
-    expect(instrumentationOf(tab).harnessGate).toEqual({ percent: 100, unlocked: true });
+    expect(instrumentationOf(tab).setupScore).toBe(100);
   });
 
   it("is the app's: a hidden tab of the same project that was never asked reports it too", async () => {
@@ -209,7 +206,7 @@ describe('what the page itself carries', () => {
       },
     ]);
     expect(notApplicableOf(tab)).toEqual([CoverageCapability.SOURCE_MAPPING]);
-    expect(instrumentationOf(tab).harnessGate).toEqual({ percent: 100, unlocked: true });
+    expect(instrumentationOf(tab).setupScore).toBe(100);
   });
 
   it('asks a page once both are known, and survives a page that cannot answer', async () => {

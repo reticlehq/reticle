@@ -14,9 +14,9 @@ import { z } from 'zod';
 export const AgentNudgeKind = {
   /** Unlinked, after the first verdict: `reticle connect` keeps it and lets the Harness test the app. */
   CONNECT: 'connect',
-  /** Linked, below the Harness's coverage: close the named gaps. */
+  /** An older build's "close the gaps" advisory. No longer sent: the Harness has no coverage gate. */
   CLOSE_GAPS: 'close_gaps',
-  /** Linked, at the Harness's coverage with the Harness off: the user can switch it on. */
+  /** Linked, with the Harness off: the user can switch it on. */
   SWITCH_ON: 'switch_on',
   /** Harness on, and the agent is driving a long journey by hand: hand it to explore. */
   EXPLORE: 'explore',
@@ -322,6 +322,17 @@ export const SessionSummarySchema = z.object({
    */
   msToFirstApp: z.number().int().nonnegative().optional(),
   /**
+   * The SDK version of the last page that connected to this daemon, from its HELLO. Our own
+   * release number, or `other`. Absent when no page announced one.
+   */
+  sdkVersion: z.string().min(1).max(32).optional(),
+  /**
+   * Tool calls made before the first app connected. Session lifetime, like `appConnects`: read the
+   * last row, never sum. Absent when there were none. With `appConnects: 0`, it is an agent that
+   * worked against a daemon with no app, which sends no verdict and often no refusal.
+   */
+  toolCallsBeforeApp: z.number().int().nonnegative().optional(),
+  /**
    * What state the AGENT's work was in when the session ended. Absent on a periodic flush.
    *
    * Distinct from `exit`, which says why the PROCESS ended. A daemon can exit tidily on idle while
@@ -433,8 +444,8 @@ export const SessionSummarySchema = z.object({
    */
   nudgesShown: z.record(z.nativeEnum(AgentNudgeKind), z.number().int().positive()).optional(),
   /**
-   * Harness drives refused for coverage below the gate, by coverage bucket (`CoverageBucket`).
-   * Windowed; absent when none was refused.
+   * Harness drives an older build refused for low coverage, by coverage bucket (`CoverageBucket`).
+   * No longer sent: the Harness has no coverage gate. Kept so an older daemon's events still parse.
    */
   harnessRefusedCoverage: z
     .record(z.nativeEnum(CoverageBucket), z.number().int().positive())

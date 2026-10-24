@@ -41,6 +41,9 @@ import {
   type InstallSource,
   type McpConnection,
   type McpOutage,
+  type DaemonDeath,
+  type ProxyExit,
+  type WakeRefusal,
   type ToolRefusal,
   type AppInstrumentation,
   type HarnessRun,
@@ -84,6 +87,13 @@ const POSTHOG_KEY = 'phc_q4yCxKMXHfWQ43VAz4HxJXZFLqFi4nBbg5v3avemggYo';
  * still key on distinct_id.
  */
 const POSTHOG_PERSONLESS = { $process_person_profile: false } as const;
+
+/**
+ * No address and no location leave with an event. `$geoip_disable` stops PostHog from looking up a
+ * city, a postal code and coordinates from the IP. PostHog also stores the request IP as `$ip` when
+ * the event leaves `$ip` empty (`null` counts as empty), so a fixed placeholder takes its place.
+ */
+const POSTHOG_NO_IP = { $geoip_disable: true, $ip: '0.0.0.0' } as const;
 
 /**
  * PostHog's group type for a licensed customer. Sent as `$groups` so PostHog can aggregate a whole
@@ -411,6 +421,12 @@ export interface TelemetryExtra {
   link?: PlatformLink;
   /** `harness_run`: one phase of one Harness run. */
   harness?: HarnessRun;
+  /** `mcp_proxy_exited`: why the proxy left, and what it saw in its life. */
+  proxyExit?: ProxyExit;
+  /** `daemon_died_unclean`: how old the dead daemon was when its pidfile was found. */
+  daemonDeath?: DaemonDeath;
+  /** `wake_refused`: what held the port. */
+  wakeRefusal?: WakeRefusal;
   /**
    * `platform_linked`: the workspace just linked. Overrides the envelope's own reading, which looks
    * at the daemon's working directory and not at the project the HUD linked.
@@ -600,6 +616,9 @@ export const createTelemetry = (opts: {
       ...(extra?.hud !== undefined ? { hud: extra.hud } : {}),
       ...(extra?.link !== undefined ? { link: extra.link } : {}),
       ...(extra?.harness !== undefined ? { harness: extra.harness } : {}),
+      ...(extra?.proxyExit !== undefined ? { proxyExit: extra.proxyExit } : {}),
+      ...(extra?.daemonDeath !== undefined ? { daemonDeath: extra.daemonDeath } : {}),
+      ...(extra?.wakeRefusal !== undefined ? { wakeRefusal: extra.wakeRefusal } : {}),
     };
     // The wire schema's caps are only real if something applies them. An event that fails is
     // DROPPED, never sent and never repaired: the payload is exactly what the caps exist to stop.
@@ -634,6 +653,9 @@ export const createTelemetry = (opts: {
       hud,
       link,
       harness,
+      proxyExit,
+      daemonDeath,
+      wakeRefusal,
       ...rest
     } = event;
     // `$session_id` is PostHog's OWN session property, so sending ours under that name lights up
@@ -670,6 +692,9 @@ export const createTelemetry = (opts: {
       hud,
       link,
       harness,
+      proxyExit,
+      daemonDeath,
+      wakeRefusal,
     };
     for (const [prefix, block] of Object.entries(blocks)) {
       for (const [key, value] of Object.entries(block ?? {})) {
@@ -683,6 +708,7 @@ export const createTelemetry = (opts: {
       properties: {
         ...properties,
         ...POSTHOG_PERSONLESS,
+        ...POSTHOG_NO_IP,
         // Only on a licensed build. An unlicensed event has no organisation to belong to, and an
         // empty group key would mint a phantom "no org" bucket that every OSS install falls into.
         ...(event.licenseId !== undefined

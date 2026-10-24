@@ -221,17 +221,26 @@ const APPLY_SLACK_MS = 100;
  * detector that accuses correct code teaches people to ignore it, and it takes the true positives
  * down with it.
  */
-function appliedAfter(events: readonly ReticleEvent[], settledAt: number): boolean {
+function appliedAfter(
+  events: readonly ReticleEvent[],
+  loser: Flight,
+  all: readonly Flight[],
+): boolean {
+  const { settledAt } = loser;
   return events.some((event) => {
     if (event.t < settledAt - APPLY_SLACK_MS || event.t > settledAt + APPLY_WINDOW_MS) return false;
-    return (
+    const reacts =
       event.type === EventType.STATE_CHANGE ||
       event.type === EventType.SIGNAL ||
       event.type === EventType.DOM_TEXT ||
       event.type === EventType.DOM_ADDED ||
       event.type === EventType.DOM_REMOVED ||
-      event.type === EventType.DOM_ATTR
-    );
+      event.type === EventType.DOM_ATTR;
+    // A reaction belongs to the completion nearest it. The slack lets a render stamped a moment
+    // early count, and so it also took in the NEWER response's own render landing just before the
+    // loser: a correct app that dropped the loser was accused (seen intermittently on a bench twin).
+    const own = Math.abs(event.t - settledAt);
+    return reacts && !all.some((f) => f.id !== loser.id && Math.abs(event.t - f.settledAt) < own);
   });
 }
 
@@ -239,7 +248,8 @@ export function findStaleResponses(events: readonly ReticleEvent[]): OwnContradi
   // Grouped by path first: two reads of DIFFERENT endpoints can never race, and comparing them was
   // the bulk of the work on any real page, which talks to many endpoints at once.
   const byPath = new Map<string, Flight[]>();
-  for (const flight of flights(events)) {
+  const all = flights(events);
+  for (const flight of all) {
     if (flight.method !== 'GET') continue;
     const path = pathOf(flight.url);
     const group = byPath.get(path) ?? [];
@@ -248,7 +258,7 @@ export function findStaleResponses(events: readonly ReticleEvent[]): OwnContradi
   }
   for (const group of byPath.values()) {
     const reads = group.slice(-MAX_FLIGHTS_PER_PATH);
-    const found = raceIn(reads, events);
+    const found = raceIn(reads, events, all);
     if (found !== undefined) return [found];
   }
   return [];
@@ -257,6 +267,7 @@ export function findStaleResponses(events: readonly ReticleEvent[]): OwnContradi
 function raceIn(
   reads: readonly Flight[],
   events: readonly ReticleEvent[],
+  all: readonly Flight[],
 ): OwnContradiction | undefined {
   for (const first of reads) {
     for (const second of reads) {
@@ -269,7 +280,7 @@ function raceIn(
       if (!couldSupersede(queryOf(first.url), queryOf(second.url))) continue;
       // The race happened. Whether it MATTERS is whether the app acted on the loser — an app that
       // drops superseded responses races just as visibly and is not broken.
-      if (!appliedAfter(events, first.settledAt)) continue;
+      if (!appliedAfter(events, first, all)) continue;
       return {
         kind: ContradictionKind.STALE_RESPONSE_APPLIED,
         claim: `both reads of ${pathOf(first.url)} returned successfully and the page settled`,

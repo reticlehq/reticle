@@ -1,5 +1,6 @@
 import { takeCallSecrets, withCallSecrets } from './tool-kit.js';
 import { healthEnvelope } from '@/portal/session/session-health.js';
+import { sdkBehindNote } from '@/portal/session/session-info.js';
 import { logToolCall, toolLogPath } from '@/hooks/tool-log.js';
 import { nextStep } from './next-step.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
@@ -41,12 +42,21 @@ import { emitBugFoundHook, emitVerdictHook } from '@/hooks/hook-emit.js';
 import {
   noteActed,
   noteFirstVerdict,
+  noteNextCall,
   noteOnboardingFirst,
   noteVerdictProduced,
 } from '@/telemetry/onboarding-firsts.js';
 import { DiscoveryInvite, isPlainRecord as isPlainObject } from '@reticlehq/core';
 import { SESSION_ID_ARG, sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
-import { EnvelopeKey, HOST_STUB_NOTE, STEP_SHOT_TOOLS } from './tool-kit.js';
+import {
+  ACTION_TOOLS,
+  CDP_TOOLS,
+  EnvelopeKey,
+  HOST_STUB_NOTE,
+  REF_MINTING_TOOLS,
+  SESSION_BOUND_TOOLS,
+  STEP_SHOT_TOOLS,
+} from './tool-kit.js';
 import { ReticleTool } from '@reticlehq/core';
 import { takeFeedbackPrompt } from './feedback-tools.js';
 import { takeFeedbackUndelivered } from '@/telemetry/feedback-delivery.js';
@@ -66,136 +76,6 @@ import { VACUOUS_BECAUSE } from '@reticlehq/engine/evidence/verified.js';
 import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
 
 /**
- * The live-session tools whose result MUST carry the
- * session-health envelope. Owned in ONE place — not retrofitted per handler — so a throttled tab
- * can never return a healthy-looking result from any of these. `runTool` is the single choke point
- * (mcp.ts + tool-invoker.ts) that splices health on; the guard test asserts the set is exhaustive.
- */
-/**
- * Tools that DRIVE the page. An action with no verdict after it is the signature of the loop
- * breaking mid-task — see `abandonedActions`. `act_and_wait` is one of these AND a verification, so
- * it settles its own action, which is exactly right: it is the tool that does both.
- */
-const ACTION_TOOLS: ReadonlySet<string> = new Set([
-  ReticleTool.ACT,
-  ReticleTool.ACT_SEQUENCE,
-  ReticleTool.ACT_AND_WAIT,
-]);
-
-/**
- * Tools that go through Playwright CDP rather than the page SDK.
- *
- * Under version skew these fail with "Target page, context or browser has been closed" while every
- * DOM tool against the same tab still works (#688). They are session-EXEMPT (own result contracts),
- * so the bound-tool resolve above never runs for them — resolve again here so we can refuse with
- * the skew sentence before Playwright lies about a closed page.
- */
-const CDP_TOOLS: ReadonlySet<string> = new Set([
-  ReticleTool.SCREENSHOT,
-  ReticleTool.VISUAL_DIFF,
-  ReticleTool.NETWORK_MOCK,
-  ReticleTool.VIEWPORT,
-  // Breaks a request through the same Playwright route `reticle_network_mock` uses, so it fails the
-  // same way under version skew and must be refused with the same sentence.
-  ReticleTool.FLOW_MUTATE,
-]);
-
-/**
- * Tools whose result hands the agent refs. The tab they were minted in is remembered, so the call
- * that spends one cannot be routed to a different tab without saying so — see ref-provenance.ts.
- *
- * Over-inclusion is the safe direction here and under-inclusion is not dangerous either: both ends
- * produce a REFUSAL naming the two tabs, never a silent drive against the wrong one.
- */
-const REF_MINTING_TOOLS: ReadonlySet<string> = new Set([
-  ReticleTool.SNAPSHOT,
-  ReticleTool.QUERY,
-  ReticleTool.INSPECT,
-  // The same three merged, on the `merged` surface. Its `state` action mints nothing, and
-  // over-inclusion is the safe direction here: the worst case is a refusal naming two tabs.
-  ReticleTool.LOOK,
-  ReticleTool.EXPLORE,
-  // `crawl` mints refs for the controls it drives and `coverage` for the ones it reports untouched.
-  // Both are actions on the merged verify tool now.
-  ReticleTool.VERIFY,
-]);
-
-export const SESSION_BOUND_TOOLS: ReadonlySet<string> = new Set([
-  // Resolves a session and reads its event window (`session.eventsSince`), exactly as OBSERVE and
-  // NETWORK do. Without this it runs with no session and answers from nothing.
-  ReticleTool.SNAPSHOT,
-  ReticleTool.QUERY,
-  ReticleTool.INSPECT,
-  // All four merged. Every member here is session-bound, so unlike `verify` there is no split to
-  // adjudicate — the merged tool inherits the only answer its members ever gave.
-  ReticleTool.LOOK,
-  // Merged change/flows/affected/coverage/crawl. Its members were SPLIT across bound and exempt —
-  // coverage/change/crawl bound, flow_verify exempt because it returns its own suite contract — and
-  // a merged tool has to be one or the other. Bound is the right side: `crawl` drives the app
-  // itself, so a throttled or event-dropping tab is exactly the condition its verdict depends on,
-  // and dropping the health disclosure there to protect a sibling's output shape would trade an
-  // honesty signal for a formatting preference.
-  ReticleTool.VERIFY,
-  ReticleTool.ACT,
-  ReticleTool.ACT_SEQUENCE,
-  ReticleTool.ACT_AND_WAIT,
-  ReticleTool.OBSERVE,
-  ReticleTool.WAIT_FOR,
-  ReticleTool.ASSERT,
-  // Reads the live page as well as the event window, so a throttled tab can make it compare a stale
-  // render against fresh data — exactly the case the health envelope exists to disclose.
-  ReticleTool.RECONCILE,
-  ReticleTool.NETWORK,
-  ReticleTool.CONSOLE,
-  ReticleTool.ANIMATIONS,
-  ReticleTool.BASELINE, // merged save/list/diff — save+diff are live reads
-  ReticleTool.RECORD, // merged start/stop — both live
-  ReticleTool.REPLAY,
-  ReticleTool.CLOCK,
-  ReticleTool.STATE,
-  ReticleTool.STORAGE,
-  ReticleTool.EXPLORE,
-  ReticleTool.SCROLL_TO,
-  ReticleTool.NAVIGATE,
-]);
-
-/**
- * Tools that carry a `sessionId` arg but are NOT live-session-health tools — they read/write
- * disk (capabilities/contract/flow/project), drain a buffer, or steer session lifecycle. They are
- * exempt from the health splice ON PURPOSE. Kept explicit so the guard test can force every new
- * `sessionId`-bearing tool to be classified into exactly one set (bound XOR exempt).
- */
-export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
-  ReticleTool.CAPABILITIES, // has a fromDisk mode with no live session
-  ReticleTool.CONTRACT_SAVE, // persists the registry to disk
-  ReticleTool.FLOW_SAVE, // sessionId only scopes the write to the app's flow subdir; disk-side
-  ReticleTool.FLOW, // merged list/load/delete — sessionId only scopes the project; all disk-side
-  ReticleTool.FLOW_REPLAY, // returns its own FlowReplayResult contract (+ auto-records a run)
-  ReticleTool.FLOW_SAVE_RECORDED, // reads the recording buffer, writes disk
-  // FLOW_HEAL is no longer a name runTool ever sees: it became `reticle_verify {action:"heal"}`,
-  // and VERIFY is already listed here, so the exemption is inherited from the parent. Left as a
-  // dangling name it would be a lie this file's own test 6 is written to catch.
-  ReticleTool.INTENT, // reads/writes .reticle/intent/; sessionId only picks the project
-  ReticleTool.CONTEXT, // folds the journal + intent ledger; must still answer when nothing is connected
-  ReticleTool.PROJECT, // reads .reticle/project.json
-  // Reads the team's shared memory over HTTP; sessionId only resolves WHICH project's link file to
-  // use. It must answer with no tab connected — "what does this project know?" is a question an
-  // agent asks before it has opened anything.
-  ReticleTool.MEMORY,
-  ReticleTool.RUN_EXPORT, // reads .reticle/runs/<id>.json (verification-run artifact)
-  ReticleTool.SESSION, // merged lifecycle/human-channel family (tune/yield/end/resume/messages/review/narrate)
-  ReticleTool.SCREENSHOT, // own contract; provider-driven, not a live-DOM-health read
-  ReticleTool.VISUAL_DIFF, // own contract (matched/ratio/region)
-  ReticleTool.NETWORK_MOCK, // own contract (applied/count); provider-driven, not a live-DOM read
-  ReticleTool.VIEWPORT, // own contract (applied/width/height); provider-driven, not a live-DOM read
-  ReticleTool.ANNOTATE, // annotates a recording's steps; pure disk-side metadata, no live DOM read
-  ReticleTool.LEASE, // merged acquire/release — its sessionId is a pool lease id, not a live session
-  // Its sessionId only enriches the report with the tab's runtime/engine, and it must stay callable
-  // when NO session exists — "nothing ever connected" is feedback we especially want.
-  ReticleTool.FEEDBACK,
-]);
-
-/**
  * Emit `verification_completed` when a verification tool produced a verdict.
  *
  * Read off the RESULT here rather than emitted from `decideVerified`, which is where the verdict is
@@ -211,6 +91,7 @@ function recordVerification(
   durationMs: number,
   brand: BrowserBrand | undefined,
   sessionId: string | undefined,
+  sdkVersion: string | undefined,
 ): boolean {
   const verification = verificationOf(
     toolName,
@@ -218,6 +99,7 @@ function recordVerification(
     durationMs,
     brand,
     currentDrivenBy() !== undefined,
+    sdkVersion,
   );
   if (verification === undefined) return false;
   getSessionMetrics().recordVerification();
@@ -413,6 +295,10 @@ export async function runTool<Ext>(
         deps.attachId !== undefined &&
         ReticleTool.RUN !== tool.name &&
         'function' === typeof deps.now;
+      // Closes the offer of an earlier first session call: did the agent do the offered step?
+      if (agentCall) {
+        noteNextCall(tool.name, args);
+      }
       const ends = endsRun(tool.name, args);
       // A call that only ends a run starts none: a second yield in a row carries no empty report.
       if (agentCall && !ends && deps.attachId !== undefined)
@@ -699,6 +585,7 @@ async function dispatchTool<Ext>(
       Date.now() - startedAt,
       session?.brand,
       session?.id,
+      session?.sdkVersion,
     );
     reportBugsFound(tool.name, raw, session?.id);
   }
@@ -803,7 +690,6 @@ async function dispatchTool<Ext>(
           tool: tool.name,
           raw: answer,
           isError: resultIsError(answer),
-          tab: session,
           root: safeRoot(() => sessionRoot(deps, rawSessionId)),
           harnessOn: () => impactSnapshot(artifactRoot)?.harnessConfig?.harnessEnabled,
         })
@@ -884,6 +770,10 @@ async function dispatchTool<Ext>(
   // stub", never as a crash on the whole tool surface.
   if (true === deps.pool?.stubInstalled?.(resolved.id)) {
     envelope[EnvelopeKey.HOST_STUB] = HOST_STUB_NOTE;
+  }
+  const behind = sdkBehindNote(resolved);
+  if (behind !== undefined && 'verified' in result) {
+    envelope[EnvelopeKey.SDK_BEHIND] = behind;
   }
   // The health block is idempotent: add it only when the handler didn't already include a `session`.
   if (!('session' in result)) Object.assign(envelope, healthEnvelope(resolved));

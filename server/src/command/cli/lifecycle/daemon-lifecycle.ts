@@ -36,7 +36,7 @@ import {
 } from '@/command/daemon/binding/port-presence.js';
 import { daemonSpawnArgs } from '@/command/cli/daemon-start-options.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
-import { runKill } from '@/command/cli/cli-kill.js';
+import { requestShutdown, runKill } from '@/command/cli/cli-kill.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 
 export function handleServe(parsed: {
@@ -185,7 +185,18 @@ export function handleStop(port: number, quiet: boolean): void {
     });
     return;
   }
-  process.kill(pid, 'SIGTERM');
+  // Ask the daemon first, on every OS: on Windows a signal ends it at once, with no shutdown path
+  // and no stop event. The signal is the fallback for an older daemon or a refused request.
+  void requestShutdown(port).then((asked) => {
+    if (!asked) {
+      process.kill(pid, 'SIGTERM');
+    }
+    waitForStop(port, pid, quiet);
+  });
+}
+
+/** Poll until `pid` is gone: SIGKILL after the graceful window, give up after the forced one. */
+function waitForStop(port: number, pid: number, quiet: boolean): void {
   const started = Date.now();
   let escalated = false;
   const poll = setInterval(() => {

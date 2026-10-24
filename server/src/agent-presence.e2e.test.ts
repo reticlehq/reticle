@@ -10,7 +10,8 @@ import {
   MessageKind,
   SessionState,
 } from '@reticlehq/core';
-import { MCP_SSE_PATH } from '@reticlehq/core';
+import { MCP_SSE_PATH, PROXY_ID_PARAM } from '@reticlehq/core';
+import { withDetachGrace } from './surface/agent-presence-grace.js';
 import { createSharedServer, type SharedServer } from './surface/http-server.js';
 import { Bridge } from './portal/bridge/bridge.js';
 import { endAllSessions } from './portal/session/session-reaper.js';
@@ -26,6 +27,8 @@ let shared: SharedServer | undefined;
 let bridge: Bridge | undefined;
 /** Every presence transition the stack reported, so a test can wait for one instead of guessing. */
 let presence: boolean[] = [];
+/** The proxy id each MCP server was built for, in order. */
+let builtFor: (string | undefined)[] = [];
 
 afterEach(async () => {
   await bridge?.close();
@@ -33,19 +36,28 @@ afterEach(async () => {
   shared = undefined;
   bridge = undefined;
   presence = [];
+  builtFor = [];
 });
 
-/** Replicates the three lines of production wiring in index.ts (startDaemon). Returns the bound port. */
-async function startStack(): Promise<number> {
+/**
+ * Replicates the production wiring in index.ts (startDaemon), grace included. Returns the bound
+ * port. The grace is a parameter so a test can make it short; production uses its core constant.
+ */
+async function startStack(graceMs = 0): Promise<number> {
   shared = createSharedServer();
-  shared.attachMcp(fakeMcpServer);
+  shared.attachMcp((_peerSkew, proxyId) => {
+    builtFor.push(proxyId);
+    return fakeMcpServer();
+  });
   const srv = shared.httpServer;
   bridge = new Bridge({ port: 0, server: srv });
   const b = bridge;
-  shared.attachAgentPresence((connected) => {
-    presence.push(connected);
-    if (!connected) endAllSessions(b.sessions, AGENT_STOPPED_NOTICE);
-  });
+  shared.attachAgentPresence(
+    withDetachGrace((connected) => {
+      presence.push(connected);
+      if (!connected) endAllSessions(b.sessions, AGENT_STOPPED_NOTICE);
+    }, graceMs),
+  );
   await new Promise<void>((resolve) => srv.listen(0, '127.0.0.1', resolve));
   return (srv.address() as AddressInfo).port;
 }
@@ -103,11 +115,11 @@ class FakeBrowser {
   }
 }
 
-function openSse(port: number): Promise<http.ClientRequest> {
+function openSse(port: number, proxyId?: string): Promise<http.ClientRequest> {
+  const path =
+    proxyId === undefined ? MCP_SSE_PATH : `${MCP_SSE_PATH}?${PROXY_ID_PARAM}=${proxyId}`;
   return new Promise((resolve) => {
-    const req = http.get({ host: '127.0.0.1', port, path: MCP_SSE_PATH, agent: false }, () =>
-      resolve(req),
-    );
+    const req = http.get({ host: '127.0.0.1', port, path, agent: false }, () => resolve(req));
     req.on('error', () => undefined);
   });
 }
@@ -188,6 +200,33 @@ describe('agent presence → panel notice (end to end)', () => {
       'the ended notice after the last agent leaves',
     );
     expect(hasPresenterNotice(browser)).toBe(true);
+    browser.close();
+  });
+
+  /**
+   * A proxy that reconnects is the same agent coming back. It closed one stream and opened another,
+   * and that ended the user's session: the agent's next call found "no connected session".
+   */
+  it('keeps the session and the agent identity when the same proxy reconnects in the grace', async () => {
+    const graceMs = 400;
+    const proxyId = '6f1c2a4e-8b0d-4c3e-9a7f-1d2e3f4a5b6c';
+    const port = await startStack(graceMs);
+    const browser = new FakeBrowser(port, 'sess-reconnect');
+    await browser.open();
+    await waitFor(() => 1 === bridge?.sessions.count(), 'the browser session to register');
+
+    const first = await openSse(port, proxyId);
+    await waitFor(() => true === presence.at(-1), 'the agent SSE to register as present');
+    first.destroy();
+    const again = await openSse(port, proxyId);
+    await quietWindow(graceMs * 2); // negative check: past the grace, nothing may have ended
+
+    expect(hasPresenterNotice(browser)).toBe(false);
+    expect(presence).toEqual([true]);
+    expect(builtFor).toEqual([proxyId, proxyId]);
+
+    again.destroy(); // now it is really gone: the session ends, as before, after the grace
+    await waitFor(() => hasPresenterNotice(browser), 'the ended notice after the grace');
     browser.close();
   });
 });

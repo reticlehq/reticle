@@ -2,8 +2,9 @@ import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { ReticleDir, ReticleEnv } from '@reticlehq/core';
+import { isAbsolute, join, resolve, sep } from 'node:path';
+import { ReticleDir, ReticleEnv, resolveStateDir } from '@reticlehq/core';
+import { log } from '@/log.js';
 
 /**
  * Auto-provisioned bridge pairing token. The daemon reads-or-creates a per-user secret at
@@ -27,11 +28,30 @@ const TOKEN_BYTES = 24;
 /** Env override for the token directory (`RETICLE_PAIRING_TOKEN_DIR`) — relocate the secret off $HOME. */
 export const PAIRING_TOKEN_DIR_ENV = ReticleEnv.PAIRING_TOKEN_DIR;
 
+/** The warnings already written, so that each one is written once for each process. */
+const warnedOnce = new Set<string>();
+
+function warnOnce(warning: string): void {
+  if (warnedOnce.has(warning)) {
+    return;
+  }
+  warnedOnce.add(warning);
+  log('state_dir_warning', { warning });
+}
+
+/** The token folder for `override`, by the shared rule. A setting that cannot be used warns and never throws. */
+function tokenDir(override: string | undefined): string {
+  return resolveStateDir(
+    override,
+    join(homedir(), ReticleDir.ROOT),
+    { isAbsolute, resolve, sep },
+    warnOnce,
+  );
+}
+
 /** The default directory that holds the token — the per-user ~/.reticle so it's shared across projects. */
 export function defaultPairingTokenDir(): string {
-  const override = process.env[PAIRING_TOKEN_DIR_ENV];
-  if (override !== undefined && override.length > 0) return override;
-  return join(homedir(), ReticleDir.ROOT);
+  return tokenDir(process.env[PAIRING_TOKEN_DIR_ENV]);
 }
 
 /**
@@ -80,8 +100,26 @@ export async function configuredPairingToken(
   return readOrCreatePairingToken(dir, deps);
 }
 
+/**
+ * The token a local command shows the daemon: `RETICLE_TOKEN`, else the stored file. Never creates
+ * one, because a new token is not the token the running daemon holds.
+ */
+export function storedPairingToken(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const fromEnv = env[ReticleEnv.TOKEN]?.trim();
+  if (fromEnv !== undefined && 0 < fromEnv.length) {
+    return fromEnv;
+  }
+  try {
+    const stored = readFileSync(pairingTokenPath(defaultPairingTokenDir()), 'utf8').trim();
+    return 0 < stored.length ? stored : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The token file in `dir`, with `dir` resolved by the same rule as `RETICLE_PAIRING_TOKEN_DIR`. */
 export function pairingTokenPath(dir: string): string {
-  return join(dir, ReticleDir.PAIRING_TOKEN_FILE);
+  return join(tokenDir(dir), ReticleDir.PAIRING_TOKEN_FILE);
 }
 
 /** Production IO adapter: 0600 file + 0700 dir so only the owner can read the secret. */
@@ -109,9 +147,10 @@ export async function readOrCreatePairingToken(
   dir: string,
   deps: PairingTokenDeps,
 ): Promise<string | undefined> {
-  const path = pairingTokenPath(dir);
+  const folder = tokenDir(dir);
+  const file = join(folder, ReticleDir.PAIRING_TOKEN_FILE);
   try {
-    const existing = (await deps.readFile(path)).trim();
+    const existing = (await deps.readFile(file)).trim();
     if (existing.length > 0) return existing;
   } catch {
     // Missing/unreadable — fall through to create one.
@@ -119,8 +158,8 @@ export async function readOrCreatePairingToken(
   try {
     const token = deps.randomToken().trim();
     if (0 === token.length) return undefined;
-    await deps.mkdir(dir);
-    await deps.writeFile(path, token);
+    await deps.mkdir(folder);
+    await deps.writeFile(file, token);
     return token;
   } catch {
     return undefined;
@@ -132,9 +171,10 @@ export async function readOrCreatePairingToken(
  * synchronous, and a snippet printed with no token is a page that can never authenticate.
  */
 export function readOrCreatePairingTokenSync(dir: string): string | undefined {
-  const path = pairingTokenPath(dir);
+  const folder = tokenDir(dir);
+  const file = join(folder, ReticleDir.PAIRING_TOKEN_FILE);
   try {
-    const existing = readFileSync(path, 'utf8').trim();
+    const existing = readFileSync(file, 'utf8').trim();
     if (existing.length > 0) return existing;
   } catch {
     /* missing or unreadable — fall through and create one */
@@ -142,9 +182,9 @@ export function readOrCreatePairingTokenSync(dir: string): string | undefined {
   try {
     const token = randomBytes(TOKEN_BYTES).toString('hex');
     if (0 === token.length) return undefined;
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    writeFileSync(path, token, { encoding: 'utf8', mode: 0o600 });
-    chmodSync(path, 0o600);
+    mkdirSync(folder, { recursive: true, mode: 0o700 });
+    writeFileSync(file, token, { encoding: 'utf8', mode: 0o600 });
+    chmodSync(file, 0o600);
     return token;
   } catch {
     return undefined;

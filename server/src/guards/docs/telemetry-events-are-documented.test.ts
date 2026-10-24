@@ -2,7 +2,7 @@
  * Every telemetry event kind appears on both telemetry pages.
  *
  * THE DEFECT THIS EXISTS FOR: `onboarding_step` shipped collected and undocumented. It was absent
- * from `docs/telemetry-events.mdx`, the contributor reference whose own opening line promises
+ * from the contributor reference (then `docs/telemetry-events.mdx`, now `contributing/telemetry/events.md`) whose own opening line promises
  * "every event Reticle emits is listed below", and absent from `docs/telemetry.md`, the page that
  * tells a user what is collected about them. Found on 2026-09-22 by diffing `TelemetryEventKind`
  * against the two files by hand, while answering a question about the setup funnel -- which is the
@@ -25,7 +25,7 @@ import { REPO_ROOT } from '@/machine/repo-root.js';
 
 /** The pages that promise to list every kind, and what each promises to a different reader. */
 const PAGES = [
-  { path: 'docs/telemetry-events.mdx', reader: 'a contributor looking for the schema' },
+  { path: 'contributing/telemetry/events.md', reader: 'a contributor looking for the schema' },
   { path: 'docs/telemetry.md', reader: 'a user asking what leaves their machine' },
 ] as const;
 

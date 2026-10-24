@@ -14,8 +14,14 @@
  * outage) and the share where it never came back on its own (the budget being spent).
  */
 
-import { OutageReason, OutageStage, TelemetryEventKind } from '@reticlehq/core/telemetry';
+import {
+  OutageErrCode,
+  OutageReason,
+  OutageStage,
+  TelemetryEventKind,
+} from '@reticlehq/core/telemetry';
 import { getTelemetry } from '@/telemetry/telemetry.js';
+import { PROXY_ID } from '@/telemetry/proxy-telemetry.js';
 
 /**
  * `OutageStage` and `OutageReason` are core's — this re-export only saves the proxy an import. They
@@ -31,6 +37,24 @@ export { OutageReason, OutageStage };
 const KNOWN_REASONS: ReadonlySet<string> = new Set(Object.values(OutageReason));
 function outageReason(raw: string): OutageReason {
   return KNOWN_REASONS.has(raw) ? (raw as OutageReason) : OutageReason.OTHER;
+}
+
+/**
+ * What the proxy knew about a drop besides its reason: the socket error, if one came with it, and
+ * whether the stream had got a response first.
+ */
+export interface DropCause {
+  readonly error?: unknown;
+  readonly responded: boolean;
+}
+
+const KNOWN_ERR_CODES: ReadonlySet<string> = new Set(Object.values(OutageErrCode));
+/** The error's `code`, narrowed to the closed set. Never the message. */
+export function outageErrCode(error: unknown): OutageErrCode {
+  const raw = (error as { code?: unknown } | null | undefined)?.code;
+  return 'string' === typeof raw && KNOWN_ERR_CODES.has(raw)
+    ? (raw as OutageErrCode)
+    : OutageErrCode.OTHER;
 }
 
 /**
@@ -61,9 +85,14 @@ export function resetOutageReporting(): void {
  */
 export function reportMcpOutage(
   stage: OutageStage,
-  facts: { reason: string; attempts: number; pendingLost?: number },
+  facts: { reason: string; attempts: number; pendingLost?: number } & Partial<DropCause>,
 ): void {
   const reason = outageReason(facts.reason);
+  // The idle exit is not an outage. The daemon retires on schedule, `daemon_stopped` says so, and
+  // a `first` row for it was most of this event's volume. A real fault keeps its own slot below.
+  if (OutageStage.FIRST === stage && isBenign(reason)) {
+    return;
+  }
   const slot = `${stage}:${isBenign(reason) ? 'benign' : 'fault'}`;
   if (reported.has(slot)) return;
   reported.add(slot);
@@ -75,6 +104,10 @@ export function reportMcpOutage(
       // Always sent, including zero: zero is the finding — a drop no agent could feel. See
       // McpOutageSchema.pendingLost.
       pendingLost: facts.pendingLost ?? 0,
+      ...(facts.error !== undefined ? { errCode: outageErrCode(facts.error) } : {}),
+      ...(facts.responded !== undefined ? { responded: facts.responded } : {}),
+      // The join key: this event has no `sessionId`, and `mcp_client_connected` carries this id.
+      proxyId: PROXY_ID,
     },
   });
 }

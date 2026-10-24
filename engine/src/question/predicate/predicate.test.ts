@@ -3,6 +3,7 @@ import {
   asRef,
   EventType,
   ReticleCommand,
+  RETICLE_BUSY_SIGNAL,
   THROTTLED_STARVED_NOTE,
   type CommandResult,
   type ElementQuery,
@@ -227,6 +228,22 @@ describe('predicate engine', () => {
       dataMatches: { score: 78 },
     };
     expect((await evaluatePredicate(session, predicate, 20)).pass).toBe(true);
+  });
+
+  // Reticle sends its own bookkeeping as signals (`reticle:busy` for declared work and short
+  // timers). A signal check that names no signal asks about the app, so those do not count.
+  it("a nameless signal check is not met by Reticle's own signals", async () => {
+    const busy = [
+      ev(EventType.SIGNAL, { name: RETICLE_BUSY_SIGNAL, data: { delta: 1 } }, 2),
+      ev(EventType.SIGNAL, { name: RETICLE_BUSY_SIGNAL, data: { delta: -1 } }, 3),
+    ];
+    expect((await evaluatePredicate(new FakeSession(busy), { kind: 'signal' })).pass).toBe(false);
+    const app = new FakeSession([...busy, ev(EventType.SIGNAL, { name: 'saved' }, 4)]);
+    expect((await evaluatePredicate(app, { kind: 'signal' })).pass).toBe(true);
+    expect((await evaluatePredicate(app, { kind: 'signal', count: 1 })).pass).toBe(true);
+    expect(
+      (await evaluatePredicate(app, { kind: 'signal', name: RETICLE_BUSY_SIGNAL, count: 2 })).pass,
+    ).toBe(true);
   });
 
   it('console absent passes when no errors, fails when present', async () => {
@@ -1871,6 +1888,18 @@ describe('absence and negation hold like a count — a late error must not pass'
     expect((await verdict).pass).toBe(true);
   }, 3_000);
 
+  // The other side of #1644: `count: 0` now holds like an absence, and a quiet page must still pass
+  // it before the budget ends.
+  it('still passes a quiet `count: 0`, without burning the timeout', async () => {
+    const session = new LiveSession();
+    const verdict = waitForPredicate(
+      session,
+      { kind: 'signal', name: 'order:placed', count: 0 },
+      10_000,
+    );
+    expect((await verdict).pass).toBe(true);
+  }, 3_000);
+
   // #1344: a click handler that calls `setTimeout(() => console.error('boom'), 800)`. A hold of
   // 300ms passed the step and the error landed in nobody's window.
   it('FAILS a clean-console check when the error lands 800ms later, past the old 300ms hold', async () => {
@@ -1881,6 +1910,40 @@ describe('absence and negation hold like a count — a late error must not pass'
       5000,
     );
     setTimeout(() => session.push(ev(EventType.CONSOLE_ERROR, { message: 'boom' }, 800)), 800);
+    expect((await verdict).pass).toBe(false);
+  });
+
+  // `count: 0` is an absence. It held only for the 300ms count hold, so a handler that awaits
+  // 500ms and then sends the request passed a "no request" check.
+  it('FAILS a `net count: 0` check when the request is sent 500ms later', async () => {
+    const session = new LiveSession();
+    const verdict = waitForPredicate(
+      session,
+      { kind: 'net', method: 'POST', urlContains: '/api/save', count: 0 },
+      5000,
+    );
+    setTimeout(
+      () =>
+        session.push(
+          ev(
+            EventType.NET_REQUEST,
+            { id: 'n1', method: 'POST', url: '/api/save', status: 200 },
+            500,
+          ),
+        ),
+      500,
+    );
+    expect((await verdict).pass).toBe(false);
+  });
+
+  it('FAILS a `signal count: 0` check when the signal fires 500ms later', async () => {
+    const session = new LiveSession();
+    const verdict = waitForPredicate(
+      session,
+      { kind: 'signal', name: 'order:placed', count: 0 },
+      5000,
+    );
+    setTimeout(() => session.push(ev(EventType.SIGNAL, { name: 'order:placed' }, 500)), 500);
     expect((await verdict).pass).toBe(false);
   });
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FEEDBACK_KIND_CHOICES } from '@reticlehq/core';
 import { remainingSteps, type Progress } from './remaining-steps.js';
 
 const at = (p: Partial<Progress>): Progress => ({
@@ -99,5 +100,13 @@ describe('picking up where setup stopped', () => {
     );
     expect(steps).toHaveLength(1);
     expect(steps[0]).toContain('docs.reticle.sh');
+  });
+});
+
+// The shell feedback command left out the `experience` kind that the CLI accepts.
+describe('the feedback command in the remaining steps', () => {
+  it('lists every feedback kind', () => {
+    const text = remainingSteps(at({})).join('\n');
+    expect(text).toContain(`--kind ${FEEDBACK_KIND_CHOICES}`);
   });
 });

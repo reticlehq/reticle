@@ -602,6 +602,7 @@ jobs:
       windows: ${{ steps.filter.outputs.windows }}
       break: ${{ steps.filter.outputs.break }}
       launchers: ${{ steps.filter.outputs.launchers }}
+      toolsurface: ${{ steps.filter.outputs.toolsurface }}
       # WHICH scaffolds run on WHICH os, decided per event rather than hard-coded in the matrix.
       install_matrix: ${{ steps.install_matrix.outputs.value }}
     steps:
@@ -613,7 +614,7 @@ jobs:
           # Full qualification must also work when manually dispatched on a feature branch.
           case "${{ github.event_name }}" in
             schedule|workflow_dispatch)
-              for tier in install gateself desktop bench conformance rust e2e windows break launchers; do
+              for tier in install gateself desktop bench conformance rust e2e windows break launchers toolsurface; do
                 echo "$tier=true" >> "$GITHUB_OUTPUT"
               done
               exit 0
@@ -646,7 +647,8 @@ jobs:
             echo "e2e=true" >> "$GITHUB_OUTPUT"
             echo "windows=true" >> "$GITHUB_OUTPUT"
             echo "break=true" >> "$GITHUB_OUTPUT"
-            echo "launchers=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "launchers=true" >> "$GITHUB_OUTPUT"
+            echo "toolsurface=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CHANGED="$(git diff --name-only "$BASE"...HEAD || true)"
           # Still fails OPEN. A base that resolves but produces nothing — a force-push, an empty
@@ -663,7 +665,8 @@ jobs:
             echo "e2e=true" >> "$GITHUB_OUTPUT"
             echo "windows=true" >> "$GITHUB_OUTPUT"
             echo "break=true" >> "$GITHUB_OUTPUT"
-            echo "launchers=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "launchers=true" >> "$GITHUB_OUTPUT"
+            echo "toolsurface=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "changed files:"; echo "$CHANGED" | sed 's/^/  /'
           # What each tier in scripts/ci/tier-patterns.json is for. The regexes moved there; the
@@ -734,6 +737,10 @@ jobs:
           #
           # `launchers`: install/ only. The job runs the two launchers, which install the PUBLISHED
           # CLI from npm, so a server or init change cannot change its answer.
+          #
+          # `toolsurface`: the MCP surface and the tool names. It runs the bench on a PULL REQUEST,
+          # before merge. A tool description or schema is charged to the agent on every turn, so a
+          # change to it moves the price, and review needs that number before the queue.
           #
           # Path routing lives in scripts/ci/changes.mjs. A changed path that matches no tier and
           # is not docs-only turns EVERY tier on: a new adapters/realm/* used to look routed and
@@ -1283,8 +1290,10 @@ jobs:
     # `bench:full` in the merge queue and on push to main (both path-routed), nightly and on demand.
     # It joined the queue after green nightlies on main from 2026-10-16 to 2026-10-19 (#1514), so a
     # token regression stops in the queue instead of turning main red.
+    # A pull request runs it only when it changes the tool surface (`toolsurface`): other pull
+    # requests do not pay for the bench, and the queue still grades them.
     if: >-
-      ((github.event_name == 'push' || github.event_name == 'merge_group') && needs.changes.outputs.bench == 'true') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      ((github.event_name == 'push' || github.event_name == 'merge_group') && needs.changes.outputs.bench == 'true') || (github.event_name == 'pull_request' && needs.changes.outputs.toolsurface == 'true') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -17,6 +17,7 @@ import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   AGENT_STOPPED_NOTICE,
+  AGENT_DETACH_GRACE_MS,
   RETICLE_DEFAULT_PORT,
   ReticleCommand,
   ReticleDir,
@@ -31,7 +32,6 @@ import { resolveBridgeSecurityWithAutoToken } from './portal/bridge/bridge-secur
 import type { StartOptions } from './start-options.js';
 export type { StartOptions } from './start-options.js';
 import { Bridge } from './portal/bridge/bridge.js';
-import { connectionSkew } from './command/version/version-nudge.js';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { BaselineStore } from './memory/project/baselines.js';
 import { RecordingStore } from './language/flows/recording/tape/recordings.js';
@@ -49,7 +49,7 @@ import { ReticleRunner } from './judgement/runs/reticle-runner.js';
 import { createRunnerPort } from './judgement/runs/runner-port.js';
 import { RunStore } from './judgement/runs/artifact/run-store.js';
 import { startVerifyServer } from './judgement/runs/verify-server.js';
-import { createMcpServer } from './surface/mcp/mcp.js';
+import { createMcpServer, mcpServerFactoryFor } from './surface/mcp/mcp.js';
 import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
 import { attachHudHarness, projectLinkOnly, startChatDrives } from './surface/tools/chat-drives.js';
@@ -60,7 +60,12 @@ import {
   MCP_DISCONNECT_SUMMARY,
 } from './portal/session/session-reaper.js';
 import { wireSessionScope } from './portal/session/no-session-watch.js';
-import { buildIdlePredicate, noteSetupHold } from './command/daemon/lifetime/daemon-usefulness.js';
+import { withDetachGrace } from './surface/agent-presence-grace.js';
+import {
+  buildIdlePredicate,
+  noteAgentPresence,
+  noteSetupHold,
+} from './command/daemon/lifetime/daemon-usefulness.js';
 import { resolveToolSurface } from './surface/tools/tool-surface.js';
 import { statusPayload } from './status-payload.js';
 import type { BrowserPool } from './portal/pool/browser-pool.js';
@@ -98,6 +103,10 @@ export { replayVerdictLine } from './language/flows/replay-from-hud.js';
 export { ReticleTool } from '@reticlehq/core';
 export { RingBuffer } from '@reticlehq/engine/window/ring-buffer.js';
 export { Bridge } from './portal/bridge/bridge.js';
+export type {
+  FollowNavigation,
+  OriginFollowRequest,
+} from './portal/bridge/origin/origin-follow.js';
 export { Session } from './portal/session/session.js';
 export { SessionManager } from './portal/session/session-manager.js';
 export type { SessionInfo, SessionHealth } from './portal/session/session.js';
@@ -106,7 +115,8 @@ export type { RecommendationInputs } from './portal/session/presence/session-rec
 export { TOOLS } from './surface/tools/tools.js';
 export type { ToolDeps, ToolDef } from './surface/tools/tools.js';
 export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './surface/tools/tool-invoker.js';
-export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './surface/tools/invoke-tool.js';
+export { runTool } from './surface/tools/invoke-tool.js';
+export { SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './surface/tools/tool-kit.js';
 export type { ToolInvoker } from './surface/tools/tool-invoker.js';
 
 /**
@@ -180,6 +190,8 @@ export interface RunningServer {
    * the client owns the process and there is no stream to warn. See SharedServer.announceShutdown.
    */
   announceShutdown?: () => void;
+  /** Daemon only: run `handler` when a caller with the pairing token POSTs SHUTDOWN_PATH. */
+  onShutdownRequest?: (handler: () => void) => void;
   close: () => Promise<void>;
 }
 
@@ -445,11 +457,17 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // prompt into a dead session. A returning agent's next tool call revives the auto-ended session.
   // Track agent presence for the idle-shutdown predicate (below): the daemon is "idle" only when no
   // agent is attached AND no browser tab is connected AND no pool lease is active.
+  // The detach waits a short grace: a proxy that reconnects inside it keeps the sessions.
   let agentConnected = false;
-  shared.attachAgentPresence((connected) => {
-    agentConnected = connected;
-    if (!connected) endAllSessions(bridge.sessions, AGENT_STOPPED_NOTICE);
-  });
+  shared.attachAgentPresence(
+    withDetachGrace((connected) => {
+      agentConnected = connected;
+      noteAgentPresence(Date.now());
+      if (!connected) {
+        endAllSessions(bridge.sessions, AGENT_STOPPED_NOTICE);
+      }
+    }, AGENT_DETACH_GRACE_MS),
+  );
 
   const reaper = new SessionReaper(bridge.sessions);
   reaper.start();
@@ -579,21 +597,15 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     bridgePort: port,
     nonces: bridge.nonces,
     browserProbe: probeLaunchableChromium,
-    ...agentWiring(port, bridge.sessions, leaseUrl),
+    ...agentWiring(bridge.sessions, leaseUrl),
     // A finished verification should not sit behind a one-minute timer — see ToolDeps.onRunPersisted.
     onRunPersisted: (): void => cloudSync.nudge(),
     syncNow: () => cloudSync.syncNow(),
   };
   const profile = resolveToolSurface(options.toolProfile);
   const effectiveDeps = realInput !== undefined ? { ...deps, realInput } : deps;
-  // Read per attach, not once: a project that gets wired while this daemon is alive should stop
-  // being told to wire itself on the next agent that connects.
-  shared.attachMcp((peerSkew) =>
-    createMcpServer(
-      peerSkew === undefined
-        ? effectiveDeps
-        : { ...effectiveDeps, peerSkew: connectionSkew(peerSkew) },
-      profile,
+  shared.attachMcp(
+    mcpServerFactoryFor(effectiveDeps, profile, () =>
       instructionStateAt(port, bridge.sessions.count()),
     ),
   );
@@ -704,6 +716,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     // says WHETHER it is idle; this says how long that quiet should be tolerated — see idle-grace.
     agentAttached: () => agentConnected,
     announceShutdown: () => shared.announceShutdown(),
+    onShutdownRequest: (handler) => shared.attachShutdown(handler),
     close: async () => {
       reaper.stop();
       await cleanupCaptureDirectories();

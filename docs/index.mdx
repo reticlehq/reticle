@@ -23,7 +23,7 @@ Four steps. Each command says what it did and is safe to run twice. Needs Node 2
 | 3. Connect _(optional)_ | `reticle connect --project "My App"` | project | `reticle status` shows this folder linked |
 | 4. Sync _(optional)_ | `reticle sync` | whenever you like | your runs show on the dashboard |
 
-On Windows, step 1 is `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`. The installer puts `reticle` on your PATH, registers it with every coding agent it finds. It does not wire your app: that is step 2. Skip step 2 and your agent's first `reticle_session` call wires the app instead. The [quickstart](/quickstart) walks every step.
+On Windows, step 1 is `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`. The installer puts `reticle` on your PATH, registers it with every coding agent it finds. It does not wire your app: that is step 2. Skip step 2 and your agent can still check the app with the zero-install lease, which installs nothing. It asks you before it wires the app. The [quickstart](/quickstart) walks every step.
 
 A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict.
 
@@ -39,7 +39,7 @@ The installer ends with **Next steps**. Do them in order:
   neither one touches your app, so you still run `reticle init` afterwards to instrument it. On
   Claude Code, `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq`
   registers the MCP server and the skills in one step; on most other agents, `npx skills add
-  reticlehq/reticle`.
+  reticlehq/reticle --skill reticle`.
 </Tip>
 
 <Card title="What that command actually changes" icon="wand-magic-sparkles" href="/install-agentic">

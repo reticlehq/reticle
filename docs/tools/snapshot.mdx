@@ -21,7 +21,7 @@ icon: camera
 | `interactive` | Only clickable and focusable elements | **65 tokens**         |
 | `full`        | Every element                         | Depends on the page   |
 
-### `status`. the cheapest possible check
+### `status`: the cheapest check
 
 ```json
 { "mode": "status" }
@@ -39,7 +39,7 @@ icon: camera
 
 Ninety-eight bytes to answer "where am I?". Use it after a navigation instead of re-reading the page.
 
-### `interactive`. the usual working view
+### `interactive`: the usual working view
 
 ```json
 { "mode": "interactive" }
@@ -59,11 +59,13 @@ Everything you can act on, with a `ref` for each, for 65 tokens. Note the passwo
 
 ## Arguments
 
-| Argument | What it does                                                                 |
-| -------- | ---------------------------------------------------------------------------- |
-| `mode`   | `full` (the default) · `interactive` · `status`                              |
-| `scope`  | CSS selector or ref, to snapshot one subtree                                 |
-| `diff`   | Return only what changed since your last snapshot of the same scope and mode |
+| Argument | What it does |
+| --- | --- |
+| `mode` | `full` (the default) · `interactive` · `status` |
+| `scope` | CSS selector or ref, to snapshot one subtree |
+| `diff` | Return only what changed since your last snapshot of the same scope and mode |
+| `ids` | Add `[testid=…]` to each control that has one. Off by default, because it costs tokens |
+| `audit` | Also measure what a person would see as broken: text cut off with no ellipsis, controls drawn over each other, text below WCAG contrast. Returns `audit: [{ kind, ref, what, detail }]`. Off by default, because it forces layout |
 
 ## `diff` is how you keep a long session cheap
 

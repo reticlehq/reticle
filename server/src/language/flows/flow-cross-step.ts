@@ -1,4 +1,5 @@
-import type { Contradiction, FlowStepResult } from '@reticlehq/core';
+import type { Contradiction, FlowStep, FlowStepResult, Predicate } from '@reticlehq/core';
+import { flattenSteps } from './flow-classify.js';
 
 /** A contradiction's identity for de-duplication: the rule that fired, and the evidence it fired on. */
 function contradictionId(found: Contradiction): string {
@@ -25,4 +26,13 @@ export function crossStepOnly(
 ): Contradiction[] {
   const seen = new Set(steps.flatMap((step) => (step.contradictions ?? []).map(contradictionId)));
   return whole.filter((found) => !seen.has(contradictionId(found)));
+}
+
+/**
+ * Every consequence the flow declared, sub-steps included. The whole-span pass judges the same
+ * window the steps did, so a failure a step expected is expected here too. Without it, the per-step
+ * pass dropped the declared failure and this pass reported it again as a cross-step finding.
+ */
+export function declaredIn(steps: readonly FlowStep[]): Predicate[] {
+  return flattenSteps(steps).flatMap((step) => (step.expect === undefined ? [] : [step.expect]));
 }

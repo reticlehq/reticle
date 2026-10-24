@@ -11,7 +11,7 @@ import {
 } from './mcp.js';
 import { TOOL_SURFACE } from '@/surface/tools/tool-surface.js';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
-import { SESSION_BOUND_TOOLS } from '@/surface/tools/invoke-tool.js';
+import { SESSION_BOUND_TOOLS } from '@/surface/tools/tool-kit.js';
 import { ReticleTool } from '@reticlehq/core';
 import { getSessionMetrics, resetSessionMetrics } from '@/telemetry/session-metrics.js';
 
@@ -322,8 +322,8 @@ describe('a wrong-shaped call is answered with a correct one', () => {
     expect(instructions).toContain('Feedback is first-class');
     expect(instructions).toContain(ReticleTool.FEEDBACK);
     // Including the phase before the tools work at all.
-    expect(instructions).toMatch(/install, the wiring, or the setup/);
-    expect(instructions).toContain('reticle feedback --agent --kind');
+    expect(instructions).toMatch(/install, wiring or setup/);
+    expect(instructions).toContain('server feedback --agent --kind');
     await close();
   });
 

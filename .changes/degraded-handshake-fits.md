@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — the degraded MCP handshake now fits in what Claude Code shows.** When no daemon answers, the proxy answers the handshake and puts a notice in front of the instructions. The notice made the text about 4,600 characters, so Claude Code cut the end, and the writing rule never reached the agent. The notice is now shorter, and the text stops after the writing rule and says what it omits. The text is under 4,000 characters in every state. The notice and the queue-expiry reply now say `npx @reticlehq/server doctor` in place of `reticle doctor`, which the default install does not put on PATH.

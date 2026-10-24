@@ -23,12 +23,10 @@ import { htmlManual } from './patch/snippets.js';
  * Kept as a snippet test for the same reason as `snippets-compile.test.ts`: this string is never
  * parsed, linted or run inside this repo. It is only ever executed on a stranger's machine.
  */
-describe('the manual connect snippet carries the pairing token', () => {
-  it('inlines the token it was given', () => {
-    const snippet = htmlManual(4400, 'demo', 'tok_abc123');
-    expect(snippet).toContain('tok_abc123');
-    // Passed as `token`, the field the bridge reads off `hello` — not as some adjacent name.
-    expect(snippet).toMatch(/token:\s*'tok_abc123'/);
+describe('the manual connect snippet reads the pairing token from a local module', () => {
+  it('never prints the token itself', () => {
+    // A token in printed output stays in terminal history and agent transcripts.
+    expect(htmlManual(4400, 'demo', 'tok_abc123')).not.toContain('tok_abc123');
   });
 
   it('keeps the token on the SAME connect call as the projectId', () => {
@@ -40,30 +38,27 @@ describe('the manual connect snippet carries the pairing token', () => {
     // without having looked at a single connect call.
     expect(calls.length, 'no connect call found in the snippet').toBeGreaterThan(0);
     for (const call of calls) {
-      expect(call, 'a connect call without the token').toContain('tok_abc123');
+      expect(call, 'a connect call without the token').toContain('token: local.token');
+      expect(call).toContain("projectId: 'demo'");
     }
+  });
+
+  it('imports the gitignored module on both forms', () => {
+    const snippet = htmlManual(4400, 'demo', 'tok_abc123');
+    expect(snippet.match(/import\('\.\/reticle\.local\.js'\)/g)?.length).toBe(2);
   });
 
   it('says why the token is there, so nobody deletes it as noise', () => {
     const snippet = htmlManual(4400, 'demo', 'tok_abc123');
-    expect(snippet.toLowerCase()).toContain('token');
+    expect(snippet).toContain('reticle.local.js');
     expect(snippet).toMatch(/refus|reject|authentication/i);
   });
 
-  it('carries the token on the no-build-step path too, which needs it most', () => {
-    // The CDN path has no bundler, no `define`, and no `.env` — the literal in the snippet is the
-    // only way a token ever reaches that page.
-    const snippet = htmlManual(4400, 'demo', 'tok_abc123');
-    const cdn = snippet.slice(snippet.indexOf('script type="module"'));
-    expect(cdn).toContain('tok_abc123');
-  });
-
-  it('degrades honestly when there is no token to inline', () => {
+  it('degrades honestly when there is no token', () => {
     // An unwritable $HOME means the daemon runs WITHOUT auth and trusts loopback, so a tokenless
-    // snippet is correct there. It must not emit `token: ''`, which would fail the comparison
-    // against a daemon that does hold one — the failure this test exists to prevent.
+    // snippet is correct there, and there is no module to import.
     const snippet = htmlManual(4400, 'demo');
+    expect(snippet).not.toContain('reticle.local.js');
     expect(snippet).not.toMatch(/token:\s*''/);
-    expect(snippet).not.toMatch(/token:\s*undefined/);
   });
 });

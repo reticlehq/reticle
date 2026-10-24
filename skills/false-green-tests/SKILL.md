@@ -3,7 +3,7 @@ name: false-green-tests
 description: 'Find out why the tests pass but the app is broken. Catches false greens: a green suite over a feature that does not work, a mocked API standing in for a real one, an assertion that holds no matter what the app does, a click handler wired to nothing. Use when the suite is green and the user says it is broken, when a test never fails, when coverage looks fine but bugs still ship, or before trusting a passing run you did not watch.'
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -12,7 +12,7 @@ metadata:
 
 A green test is evidence about the test, not about the app. This skill separates the two by running the real app and comparing what it _does_ against what the test _claims_.
 
-It uses **Reticle**, which observes the running app from the inside: DOM, network, console, routing, and framework state. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then see the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+It uses **Reticle**, which observes the running app from the inside: DOM, network, console, routing, and framework state. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## The five shapes, in the order they are worth checking
 

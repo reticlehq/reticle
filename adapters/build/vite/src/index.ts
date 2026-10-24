@@ -2,13 +2,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { missingTokenWarning } from './token/missing-token.js';
 import { ensurePairingToken } from './token/ensure-token.js';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve, sep } from 'node:path';
 import {
   RETICLE_RENDER_PREHOOK,
   ReticleDir,
   ReticleEnv,
   RETICLE_ROOT_GLOBAL,
   RETICLE_SDK_VERSION_GLOBAL,
+  resolveStateDir,
 } from '@reticlehq/core';
 import { readConfiguredTestIdAttribute, resolveProjectId } from './project-id.js';
 import { resolveDaemonPort } from './discover-port.js';
@@ -418,9 +419,21 @@ function isHtmlEntry(id: string, specifier: string | undefined, root: string | u
  * undefined if the daemon hasn't started yet (the page reloads once it has). Exported for testing.
  */
 export function readPairingToken(): string | undefined {
-  const override = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
-  const dir =
-    override !== undefined && override.length > 0 ? override : join(homedir(), ReticleDir.ROOT);
+  let dir: string;
+  try {
+    // The daemon's rule: a relative folder is resolved against the working folder, and a Windows
+    // path on POSIX is not used. Both warn, so the two sides agree on one token file.
+    dir = resolveStateDir(
+      process.env[ReticleEnv.PAIRING_TOKEN_DIR],
+      join(homedir(), ReticleDir.ROOT),
+      { isAbsolute, resolve, sep },
+      (warning) => console.warn(`[reticle] ${warning}`),
+    );
+  } catch (error) {
+    // Only a home folder that is not absolute gets here. The dev server still starts.
+    console.warn(`[reticle] ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
   // Read-or-CREATE, matching the daemon. Reading alone meant a dev server started before the daemon
   // baked in an empty token and every page it served was refused — with the SDK loading and the
   // socket opening, so nothing looked broken. See ensure-token for the bisect.

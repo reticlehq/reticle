@@ -76,12 +76,10 @@ import { HarnessNotLinkedError, MSG_NO_HARNESS_KEY, refusedForPlan } from './har
 // The gate a drive passes before it starts moved to its own module; its names are still asked for here.
 export {
   HarnessNotLinkedError,
-  MSG_GATE_PROMPT_LEAD,
   MSG_NO_HARNESS_KEY,
-  coverageRefusal,
   firstLine,
   harnessAvailable,
-  harnessLockRefusal,
+  harnessStartRefusal,
   refusedByPlatform,
   withLinkedCredential,
 } from './harness-gate.js';

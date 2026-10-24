@@ -19,7 +19,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { haltedFrom } from './recording/replay-halt.js';
-import { establishedState, samePath } from './flow-journey.js';
+import { establishedState, samePath, startPathBudgetMs } from './flow-journey.js';
 import { asRecord, asString } from '@reticlehq/core';
 import {
   navigablePath,
@@ -54,7 +54,7 @@ import {
 } from '@/memory/project/session-root.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { computeSegments } from '@/memory/journal/rollups.js';
-import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
+import { appScope, stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import { AssertionTiersStore } from './stores/assertion-tiers-store.js';
 import { toFlowSources } from './change/flow-sources.js';
 import { reportAndAccumulate } from '@/memory/journal/deviation-service.js';
@@ -74,7 +74,7 @@ import { replayStepShooter } from '@/features/visual/step-shots.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
-import { CROSS_STEP_INDEX, crossStepOnly } from './flow-cross-step.js';
+import { CROSS_STEP_INDEX, crossStepOnly, declaredIn } from './flow-cross-step.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -253,8 +253,7 @@ export function startPathMismatchHint(
   return `this flow's journey starts on ${startPath} but the tab is on ${current} — navigate there (reticle_navigate { url: "${startPath}" }), then replay`;
 }
 
-/** How long replay waits for the SDK to reconnect on the start page before falling back to the hint. */
-const START_PATH_ARRIVAL_TIMEOUT_MS = 5_000;
+/** How often replay looks for the SDK on the start page; how long is `startPathBudgetMs`. */
 const START_PATH_POLL_MS = 100;
 
 const REAL_ARRIVAL_CLOCK: ArrivalClock = {
@@ -362,7 +361,7 @@ export async function arriveAtStartPath(
     command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
   },
   flow: FlowFile,
-  timeoutMs: number = START_PATH_ARRIVAL_TIMEOUT_MS,
+  timeoutMs: number = startPathBudgetMs(flow),
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
 ): Promise<StartPathArrival> {
   const target = flow.startPath;
@@ -472,7 +471,7 @@ export async function navigateAndAwait(
   },
   destination: string,
   expectedPath: string,
-  timeoutMs: number = START_PATH_ARRIVAL_TIMEOUT_MS,
+  timeoutMs: number,
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
   /** True when the destination is the page we are already on — see `arrivedSuccessor`. */
   isReload: boolean = false,
@@ -785,15 +784,15 @@ export async function replayNamedFlow(
   // `steps.length` no longer counts only the flow's own steps and the arithmetic is wrong.
   const halted = haltedFrom(steps, loaded.value.steps.length);
   /*
-   * The whole-span pass, run once the journey is over. Best-effort by construction: a session stub
-   * without `eventsSince` must not be able to abort a healthy replay, and a missing cross-step
-   * finding is a smaller loss than a run that dies computing one.
+   * The whole-span pass, run once the journey is over. Best-effort: a session stub without
+   * `eventsSince` must not abort a healthy replay. A missing cross-step finding costs less.
    */
   const crossStep = ((): Contradiction[] => {
     try {
       const span = { since: replayFloor, until: session.elapsed() };
       const events = session.eventsSince(replayFloor).filter((e) => e.t >= replayFloor);
-      return crossStepOnly(stepEffect(events, span).contradictions ?? [], steps);
+      const scope = { ...appScope(session), declared: declaredIn(loaded.value.steps) };
+      return crossStepOnly(stepEffect(events, span, scope).contradictions ?? [], steps);
     } catch {
       return [];
     }

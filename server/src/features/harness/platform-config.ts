@@ -71,8 +71,6 @@ export interface PlatformModelConfig {
    * the API's origin 404s. Absent from an older platform.
    */
   planUrl?: string;
-  /** The platform's coverage gate (`harnessUnlocked`, `coverageScore`, `harnessLock`), when it sent one. */
-  gate?: PlatformGate;
   /** The plan in force (`plan`), for the HUD's account menu. */
   plan?: PlatformPlan;
   /** Harness runs the platform holds for this project (`harnessRuns.total`). */
@@ -131,33 +129,10 @@ function webUrl<K extends string>(value: unknown, key: K): Partial<Record<K, str
   }
 }
 
-/** The platform's Harness coverage gate, as the HUD is pushed it. */
-export interface PlatformGate {
-  unlocked: boolean;
-  percent?: number;
-  reason?: string;
-  prompt?: string;
-}
-
-/** The gate out of `/v1/model/config`, or undefined from a platform that does not send one. */
-function gateOf(record: Record<string, unknown>): PlatformGate | undefined {
-  const unlocked = record['harnessUnlocked'];
-  if ('boolean' !== typeof unlocked) return undefined;
-  const score = record['coverageScore'];
-  const lock = record['harnessLock'];
-  const lockRecord =
-    'object' === typeof lock && null !== lock ? (lock as Record<string, unknown>) : {};
-  const reason = lockRecord['reason'];
-  const prompt = lockRecord['prompt'];
-  return {
-    unlocked,
-    // Rounded down, as core's rule is: a locked app never shows 80%.
-    ...('number' === typeof score ? { percent: Math.floor(score * 100 + 1e-9) } : {}),
-    ...('string' === typeof reason ? { reason } : {}),
-    ...('string' === typeof prompt ? { prompt } : {}),
-  };
-}
-
+/*
+ * An older platform still sends `harnessUnlocked`, `coverageScore` and `harnessLock`. They are not
+ * read: the Harness has no setup-score gate, so no answer from the platform can lock it.
+ */
 /** A GET, narrowed to what this file uses, so a test can answer it without a network. */
 export type ConfigFetch = (
   url: string,
@@ -205,7 +180,6 @@ function parse(body: string): PlatformModelConfig | undefined {
       'object' === typeof credits && null !== credits
         ? Object.values(CreditKind).find((k) => k === (credits as Record<string, unknown>)['kind'])
         : undefined;
-    const gate = gateOf(record);
     const endsAt = endsAtOf(
       'object' === typeof credits && null !== credits
         ? (credits as Record<string, unknown>)['endsAt']
@@ -216,7 +190,6 @@ function parse(body: string): PlatformModelConfig | undefined {
       harnessEnabled: true === enabled,
       harnessEntitled: 'boolean' === typeof entitled ? entitled : true,
       providerReady: 'boolean' === typeof ready ? ready : true,
-      ...(gate === undefined ? {} : { gate }),
       ...hudFieldsOf(record),
       ...webUrl(record['planUrl'], 'planUrl'),
       ...('number' === typeof used && 'number' === typeof limit

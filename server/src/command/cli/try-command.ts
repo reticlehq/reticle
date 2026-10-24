@@ -340,8 +340,7 @@ export async function cmdTry(argv: readonly string[], cloudCommands: TryCloud): 
 /**
  * How `init` ends once the connection is proved: what Reticle sees of the app, what it is missing,
  * and the prompt that hands the rest to the coding agent, which proves the first flow. `init` never
- * drives: the Harness is opt-in and unlocks at a coverage score (core's `instrumentation-coverage.ts`), and a
- * freshly wired app is rarely there yet.
+ * drives: the Harness is opt-in. It runs at any setup score.
  *
  * Read from the daemon's `/status`, the same coverage `doctor` prints, so the two never disagree.
  */
@@ -370,25 +369,21 @@ const names = (value: unknown): string[] =>
 
 /**
  * The closing lines for one tab's coverage, as `/status` reports it: the score, what is missing, the
- * Harness gate in its own sentence, and the prompt for the coding agent. Pure.
+ * Harness switch, and the prompt for the coding agent. Pure.
  */
 export function initCoverageLines(tab: Record<string, unknown> | undefined, url: string): string[] {
-  const gate = asRecord(tab?.['harnessGate']);
-  const percent = gate['percent'];
+  const percent = tab?.['setupScore'];
   if (tab === undefined || 'number' !== typeof percent)
     return [
       'Instrumentation is measured on an open tab of the app: run `reticle doctor` with it open.',
       msgProveOneFlow(url),
     ];
   const unseen = [...names(tab['missing']), ...names(tab['notSeenYet'])];
-  const reason = gate['reason'];
   const prompt = tab['prompt'];
   return [
     `Instrumentation: ${String(percent)}%` +
       (0 === unseen.length ? '' : ` — missing: ${unseen.join(', ')}`),
-    'string' === typeof reason
-      ? reason
-      : `Harness can be switched on: it is off until you switch it on in the HUD's Settings.`,
+    `Harness can be switched on: it is off until you switch it on in the HUD's Settings.`,
     ...('string' === typeof prompt
       ? [
           'Paste this into your coding agent; it closes the gaps and proves the first flow:',

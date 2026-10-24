@@ -3,16 +3,16 @@ name: fix-what-i-pointed-at
 description: Pick up the bugs a human flagged by pointing at them in the running app, each arriving with the element, the note they typed, and the source file and line. Use when the user says they marked or flagged something, when starting a session on an app someone has been clicking through, when a designer or PM has left feedback in the UI, or when the user describes a problem as "that button there" without saying which file.
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
 
 # The human pointed at the bug. Go fix it.
 
-"The spacing on that card is wrong" is unactionable in chat and precise in the app. **Reticle**'s running app has a **Flag a bug** control: the human clicks it, points at an element, and types what is wrong. Each flag becomes a mark carrying the element, the note, and the `file:line`, so the round trip that usually costs a screenshot, a description, and two clarifying questions costs one call.
+"The spacing on that card is wrong" is unactionable in chat and precise in the app. The **Reticle** HUD in the running app has a **Notes** panel. The human clicks **Add notes**, points at an element, and types what is wrong. Each note becomes a mark carrying the element, the note, and the `file:line`, so the round trip that usually costs a screenshot, a description, and two clarifying questions costs one call.
 
-Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## Drain the marks
 

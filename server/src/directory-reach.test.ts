@@ -311,6 +311,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'impact',
     // A production nonce decides whether a HELLO opens a production session, and with what scope.
     'production',
+    // Whether a session may follow its own navigation to an origin the bridge was not built with.
+    'origin',
     'session',
     'telemetry',
     'version',
@@ -568,6 +570,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     // by the next push the drive's own tool calls make.
     'harness',
     'human',
+    // The listing and each verdict compare the page SDK with this daemon's own version.
+    'identity',
     'impact',
     'input',
     'journal',
@@ -773,6 +777,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'dev-server',
     // `reticle_coverage { app: true }` folds a session into the app-wide ledger.
     'exhaust',
+    // `reticle_map` reads each session's journal as driven steps. A leaf: `app-graph` imports
+    // nothing from this package, so this adds no mutual pair.
+    'app-graph',
     'hooks',
     'navigation',
     'lifetime',

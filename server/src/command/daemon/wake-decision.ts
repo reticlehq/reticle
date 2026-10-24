@@ -38,7 +38,11 @@ export function decideWake(
   daemonProjectId: string | undefined,
   callerProjectId: string | undefined,
 ): WakeAction {
-  if (PortPresence.FREE === presence) return WakeAction.SPAWN;
-  if (PortPresence.DAEMON !== presence) return WakeAction.REFUSE;
+  if (PortPresence.FREE === presence) {
+    return WakeAction.SPAWN;
+  }
+  if (PortPresence.DAEMON !== presence) {
+    return WakeAction.REFUSE;
+  }
   return adoptable(daemonProjectId, callerProjectId) ? WakeAction.USE : WakeAction.REFUSE;
 }

@@ -11,7 +11,7 @@
  * WHICH CHANNELS ARE GENUINELY DETECTABLE TODAY, so nobody later reads a small `unknown` as success:
  *  - `plugin` — real. The Claude Code plugin registers the MCP server itself and can set the marker
  *    in that server's `env`, so it is carried by the process without anybody typing anything.
- *  - `skill_file` / `npx_skill` / `docs_site` / `readme` — real ONLY where that channel's own copy
+ *  - `skill_file` / `npx_skill` / `docs_site` / `readme` / `blog` — real ONLY where that channel's own copy
  *    of the install command carries the marker. Each is a separately published artifact, so a copy
  *    that has not been updated is indistinguishable from no channel at all.
  *  - `cli_direct` — NOT detectable. Nobody types a marker to say they typed a command. It exists so

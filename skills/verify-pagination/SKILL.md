@@ -3,7 +3,7 @@ name: verify-pagination
 description: 'Prove the next page of a list, or the next batch of an infinite scroll, loads NEW rows from the server, repeats none, and that the end of the list is handled. Use when pagination or infinite scroll was added or changed, when a list shows the same rows twice or skips some, or when the last page still offers a next control.'
 license: Apache-2.0
 metadata:
-  version: 3.7.0
+  version: 3.8.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -12,7 +12,7 @@ metadata:
 
 A list that renders its first page proves the first request works. The second page is where the offset is off by one, the cursor is reused, the same rows come back, or the append replaces what was there. The last page is where the "Next" button still fires a request for rows that do not exist.
 
-**Reticle** can check all of that in the running app, against the requests the page really made. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
+**Reticle** can check all of that in the running app, against the requests the page really made. Not set up? Follow the [`reticle`](https://github.com/reticlehq/reticle/blob/main/skills/reticle/SKILL.md) skill: it installs Reticle, asks the user before `init` changes the app's files, and proves one flow.
 
 ## Confirm the session can observe
 

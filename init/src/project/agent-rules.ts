@@ -20,7 +20,11 @@
 
 import { NPX } from '@/register/mcp.js';
 import { RETICLE_NPM_PACKAGE } from '@/version.js';
-import { DISCOVERY_CALL_URL, DISCOVERY_EMAIL_COMMAND } from '@reticlehq/core';
+import {
+  DISCOVERY_CALL_URL,
+  DISCOVERY_EMAIL_COMMAND,
+  FEEDBACK_KIND_CHOICES,
+} from '@reticlehq/core';
 
 /** Project-root instruction files the agent re-reads every session. */
 export const CLAUDE_MD_PATH = 'CLAUDE.md';
@@ -136,7 +140,7 @@ This app is instrumented by **Reticle**, an in-app verification layer exposed as
 6. **On a failure, read \`expected\` / \`observed\` / the nearest candidates before retrying.** Never weaken a check to make it green.
 7. **Open \`screenshot.path\` only when the look matters;** \`reticle_observe { since }\` has the rest.
 8. **Predicates:** \`{ kind: "signal", name }\` · \`{ kind: "net", method, urlContains, status }\` · \`{ kind: "route", pathname }\` · \`{ kind: "state", path, equals }\` · \`{ kind: "element", query: { role, name } }\` · \`{ kind: "text", contains }\` · \`allOf\` / \`anyOf\` / \`not\`.
-9. **No session?** \`reticle_session { action: "list" }\` and do its \`next_action\`. **No app connected at all?** Run \`${CLI} init\` in the app's own folder yourself. **A version-skew warning?** \`${CLI} stop\`, then retry.
+9. **No session?** \`reticle_session { action: "list" }\` and do its \`next_action\`. **No app connected at all?** Ask the user, then run \`${CLI} init\` in the app's own folder. **A version-skew warning?** \`${CLI} stop\`, then retry.
 10. **End with the Reticle result block the server gives you**, verbatim.
 11. **If your context was compacted or you lost track, run \`${CLI} context --compact\` first.** It is the daemon's own record of what was proved, what failed and what is still owed.
 
@@ -165,9 +169,9 @@ If a server IS listening and still nothing connects, the cause is the SDK not lo
 - **If Reticle cannot run** (no daemon, or this is not a running web app), say so. Do not skip verification silently.
 - **Setup is not finished until one real flow has been driven and produced a verdict.** \`init\` exiting 0, the tools appearing, and a session being listed are all things that happen before anything has been verified.
 
-**The \`/reticle\` skill runs this whole loop for you** — detect, connect, drive one flow, report. If your client does not have it, install it once: \`/plugin marketplace add reticlehq/reticle\` then \`/plugin install reticle@reticlehq\` in Claude Code, or \`npx skills add reticlehq/reticle\` anywhere the skills CLI works.
+**The \`/reticle\` skill runs this whole loop for you** — detect, connect, drive one flow, report. If your client does not have it, install it once: \`/plugin marketplace add reticlehq/reticle\` then \`/plugin install reticle@reticlehq\` in Claude Code, or \`npx skills add reticlehq/reticle --skill reticle\` anywhere the skills CLI works.
 
-**A tool you need is missing?** Call \`reticle_tools\` before assuming it: this surface merges several families behind an \`action\`, so what looks absent is usually one argument away. It is the verify loop and nothing else on purpose, and a daemon started with \`RETICLE_ADVERTISE_ALL_TOOLS=1\` advertises the wider set — it reads that at startup, so it takes effect on the next one.
+**A tool you need is missing?** Call \`reticle_tools\` before assuming it: this surface merges several families behind an \`action\`, so what looks absent is usually one argument away. It is the verify loop and nothing else on purpose: every other tool is one \`reticle_run\` call away. Do not restart the daemon with \`RETICLE_ADVERTISE_ALL_TOOLS=1\`: it uses older tool names that the rules above do not.
 
 **Report Reticle's own defects with \`reticle_session { action: "feedback" }\` the moment you notice**, then carry on with your task. You are the user Reticle is built for and the only one who can say what it cost you, and that knowledge is gone when your context is.
 
@@ -189,7 +193,7 @@ The short version lives in your agent instruction file (\`CLAUDE.md\` / \`AGENTS
 
 They have not been loaded yet, which is not the same as broken. \`init\` registers the MCP server, but a client reads its server list at startup and does not re-read it, and no slash command reloads it (\`/mcp\` only manages servers already loaded).
 
-Ask the human to RESTART their client: restart Claude Code, reload the window in Cursor, or hit Start in \`.vscode/mcp.json\` in VS Code. Then wait and carry on. This is once per machine, because Reticle is registered globally and later projects already have the tools. \`${CLI} status\` works meanwhile and says whether the daemon is up and whether the app has connected.
+On Claude Code and Codex, run \`${CLI} init --relaunch\` and run the command it prints: it restarts this conversation with the tools. Elsewhere, ask the human to restart their client: reload the window in Cursor, or press Start in \`.vscode/mcp.json\` in VS Code. Then wait and carry on. This is once per machine, because Reticle is registered globally and later projects already have the tools. \`${CLI} status\` works meanwhile and says whether the daemon is up and whether the app has connected.
 
 ## A result carries \`verify_next\`
 
@@ -216,12 +220,12 @@ Finish that file when you see it. It is what lets you check what the app BELIEVE
 - **Send it with \`reticle_session { action: "feedback" }\` the moment you notice.** One call, then carry straight on. Do not batch reports, do not wait until the task is done, and do not decide something is too minor. The small awkward things are what nobody ever reports, so they never get fixed.
 - **Everything counts, in both directions.** A tool that returned something wrong (\`bug\`), something Reticle could not observe at all (\`gap\`), a verdict you could not act on (\`ambiguity\`), something you wished existed (\`feature_request\`), something that works but costs too many calls (\`improvement\`).
 - **Setup and installation count too, and are the easiest to lose.** Anything that went wrong while installing, wiring, or starting Reticle: a step in the docs that did not match reality, a plugin that had to be added by hand, a daemon that would not start, an OS-specific detour. You hit these before any verification runs, which is exactly why they go unreported.
-- **When the tools are not reachable yet**, file the same report from the shell: \`${CLI} feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"\`. It needs no daemon and no working install, so a Reticle that broke before it started can still be reported.
+- **When the tools are not reachable yet**, file the same report from the shell: \`${CLI} feedback --agent --kind ${FEEDBACK_KIND_CHOICES} "what happened"\`. It needs no daemon and no working install, so a Reticle that broke before it started can still be reported.
 - **Write it so it can be acted on.** For a failure: what you called, what you expected, what you got, and the call trail in \`trace\`. For a request: the GOAL in \`need\` (not your guess at the solution), what improves in \`impact\`, and how you work around it today in \`currentApproach\`. That workaround is usually the most useful line in the report. Set \`model\` to the model you are running.
 - **Working around a Reticle defect in silence is the one thing not to do.** A silent workaround is how the same defect survives to the next user.
 - **Report defects in *Reticle*, not in the app under test.** A bug you find in this app is Reticle working as intended; that one belongs in your report to the user.
 - **Never include app source, secrets, user data, or customer records** in a report.
-- **When the person you work with is stuck, or Reticle got in their way, offer them a call with the founder** (${DISCOVERY_CALL_URL}) or leaving an email with \`${DISCOVERY_EMAIL_COMMAND}\`. That conversation is where Reticle's direction comes from. Offer it; never book a call or submit an email for them.
+- **When the person you work with is stuck, or Reticle got in their way, offer them a call with the founder** (${DISCOVERY_CALL_URL}) or a note with their email: \`${DISCOVERY_EMAIL_COMMAND}\`. That conversation is where Reticle's direction comes from. Offer it; never book a call or submit an email for them.
 
 ## More
 

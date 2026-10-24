@@ -20,7 +20,10 @@ import {
   resetDaemonUsefulness,
   noteSetupHold,
   SETUP_HOLD_MS,
+  noteAgentPresence,
 } from './daemon-usefulness.js';
+import { IdleShutdown } from '../idle-shutdown.js';
+import { SESSION_LIFECYCLE } from '@reticlehq/core';
 
 beforeEach(() => resetDaemonUsefulness());
 
@@ -122,5 +125,55 @@ describe('buildIdlePredicate', () => {
 
   it('never idle while a session is connected, even with no agent attached', () => {
     expect(buildIdlePredicate(() => false, sessions(1, true), pool(0))()).toBe(false);
+  });
+
+  // A client that starts a new MCP proxy for each turn (Codex) detaches between turns. The daemon
+  // saw no agent, exited after 5 minutes, and the next turn waited for a cold start.
+  it('keeps a used daemon up between the turns of a client that detaches after each turn', () => {
+    let now = 1_000_000;
+    let attached = true;
+    noteToolCall();
+    noteAgentPresence(now);
+    const idle = buildIdlePredicate(
+      () => attached,
+      sessions(0, true),
+      pool(0),
+      () => now,
+    );
+    let exited = false;
+    const watcher = new IdleShutdown({
+      graceMs: SESSION_LIFECYCLE.DAEMON_IDLE_SHUTDOWN_MS,
+      isIdle: idle,
+      agentAttached: () => attached,
+      clock: () => now,
+      onShutdown: () => {
+        exited = true;
+      },
+    });
+    attached = false;
+    noteAgentPresence(now);
+    for (let minute = 0; minute < 6; minute += 1) {
+      now += 60_000;
+      watcher.check();
+    }
+    expect(exited).toBe(false);
+    attached = true;
+    noteAgentPresence(now);
+    watcher.check();
+    expect(exited).toBe(false);
+  });
+
+  it('still exits once no agent has attached for the whole recent window', () => {
+    let now = 1_000_000;
+    noteToolCall();
+    noteAgentPresence(now);
+    const idle = buildIdlePredicate(
+      () => false,
+      sessions(0, true),
+      pool(0),
+      () => now,
+    );
+    now += SESSION_LIFECYCLE.DAEMON_AGENT_RECENT_MS;
+    expect(idle()).toBe(true);
   });
 });

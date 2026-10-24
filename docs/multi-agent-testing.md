@@ -4,15 +4,15 @@ description: 'Several apps at once, ports that shift between runs, and many agen
 icon: users
 ---
 
-Many agents can drive the same app at once without a browser each: `reticle_run { tool: "reticle_lease", args: { action: "acquire" } }` hands each one an **isolated context** (its own cookies, storage and DOM) from a single shared headless Chromium. One daemon per machine, and identity is the **app** (a stable `projectId` stamped by the build plugin), not the port, so an app that boots on `:3001` today is still the same app.
+Many agents can drive the same app at once without a browser each: `reticle_run { tool: "reticle_lease", args: { action: "acquire" } }` hands each one an **isolated context** (its own cookies, storage and DOM) from a single shared headless Chromium. One daemon for each project, and identity is the **app** (a stable `projectId` stamped by the build plugin), not the port, so an app that boots on `:3001` today is still the same app.
 
 Reticle is built for the messy real world: several apps running at once, ports that shift between runs, and many agents driving different flows of the same app in parallel, without each one spinning up its own Chromium. This page explains how that works and how to use it.
 
 ## The mental model
 
-- **One daemon per machine.** `reticle mcp` discovers a running daemon (via `~/.reticle`) or starts one. A crashed daemon's stale pidfile is reclaimed automatically, so you never chase "port already in use" or a zombie server.
+- **One daemon for each project.** `reticle mcp` finds this project's daemon through `~/.reticle`, or starts one. When another project's daemon holds the port, it starts one on a free port. A crashed daemon's stale pidfile is reclaimed automatically, so you never chase "port already in use" or a zombie server.
 - **Identity is the app, not the port.** The build plugin stamps a stable `projectId` that travels in every connection. If your Next app usually runs on `:3000` but boots on `:3001` today, Reticle still knows which app it is, and an agent scoped to project A will never accidentally drive project B's tab. Origin is only a fallback hint.
-- **One browser, many contexts.** When agents need their own headless tabs, the daemon's **browser pool** launches a single Chromium and hands out isolated contexts (one per flow). They are cheap, and capped so a big fan-out can't exhaust the machine. Over-cap requests queue.
+- **One browser, many contexts.** When agents need their own headless tabs, the daemon's **browser pool** launches a single Chromium and hands out isolated contexts (one per flow). They are cheap, and capped so a big fan-out can't exhaust the machine. An acquire over the cap is refused at once and names the cap.
 - **Attach-only daemon.** The daemon never starts your dev server. It connects to an app that is running (or opens a headless tab pointed at it). When nothing is running, the agent starts your project's own dev script in the background and tells you. A build process spawned by a background daemon would be invisible, unconsented, and orphaned when the daemon exits.
 
 ## Manual testing: ~5 minutes
@@ -20,7 +20,7 @@ Reticle is built for the messy real world: several apps running at once, ports t
 1. Add the plugin (Vite/Next) or one `reticle.connect()` call. (See [getting-started](./getting-started.md).)
 2. Start your app as you normally do.
 3. Open it in a browser; the in-page panel shows Reticle is connected.
-4. Click around; flag anything that looks wrong with the "Flag a bug" annotator. The agent drains those with `reticle_session { action: "review" }`.
+4. Click around. To report something that looks wrong, open **Notes** in the panel, select **Add notes**, and click the element. The agent drains those with `reticle_session { action: "review" }`.
 
 ## Agent testing: ~2 minutes
 

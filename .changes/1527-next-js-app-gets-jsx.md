@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/init`: `reticle init` broke a JavaScript Next.js app that had `typescript` in its dependencies.** Many JavaScript apps list `typescript` for editor types or ESLint. `init` read that as a TypeScript project and wrote `app/reticle-dev.tsx`. On the next `next dev`, Next saw the `.tsx` file and generated a `tsconfig.json`. A `tsconfig.json` makes Next ignore `jsconfig.json`, so every `@/` import stopped resolving and the app did not compile. `init` now follows Next's own rule: it writes `.tsx` only when a `tsconfig.json` exists or the layout it patches is `.ts`/`.tsx`, and `.jsx` otherwise. Closes [#1527](https://github.com/reticlehq/reticle/issues/1527).

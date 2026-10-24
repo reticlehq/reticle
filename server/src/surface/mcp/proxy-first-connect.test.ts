@@ -48,7 +48,7 @@ describe('queue expiry message', () => {
   it('names the port and a command the reader can actually run', () => {
     const step = queueExpiryNextStep(4400);
     expect(step).toContain('4400');
-    expect(step).toContain('reticle doctor');
+    expect(step).toContain('`npx @reticlehq/server doctor`');
     expect(step).toContain('Retry the call');
   });
 });

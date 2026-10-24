@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SHARED_PARAM_SHORT, SHARED_PARAM_GUIDANCE, isSharedParam } from './shared-params.js';
+import { advertisedConfig, advertisedTools } from './mcp.js';
+import { resolveToolSurface } from '@/surface/tools/tool-surface.js';
 
 describe('shared parameter vocabulary', () => {
   it('every short form is shorter than the guidance it points at', () => {
@@ -33,5 +35,36 @@ describe('shared parameter vocabulary', () => {
   it('recognises exactly the parameters it documents', () => {
     expect(isSharedParam('sessionId')).toBe(true);
     expect(isSharedParam('ref'), 'ref differs per tool and is not shared boilerplate').toBe(false);
+  });
+});
+
+/**
+ * What the default surface sends for each argument, after the lean rewrite.
+ *
+ * `since` on `reticle_observe` and `reticle_assert` is a number, but the shared text called it "a
+ * cursor, or a git ref", so an agent could send a branch name and get a type error. Seven arguments,
+ * among them the `runId` that the instructions tell an agent to poll, went out with no text at all.
+ */
+describe('the advertised arguments', () => {
+  const surface = resolveToolSurface();
+  const advertised = advertisedTools(surface);
+  const params = advertised.flatMap((tool) =>
+    Object.entries(advertisedConfig(tool, advertised, surface).inputSchema).map(
+      ([name, schema]) => ({ at: `${tool.name}.${name}`, name, schema }),
+    ),
+  );
+
+  it('every argument says what it is', () => {
+    const bare = params.filter((p) => 0 === (p.schema.description ?? '').trim().length);
+    expect(bare.map((p) => p.at)).toEqual([]);
+  });
+
+  it('a `since` that takes no string does not offer a git ref', () => {
+    const since = params.filter((p) => 'since' === p.name);
+    expect(since.length).toBeGreaterThan(1);
+    for (const p of since) {
+      const takesRef = p.schema.safeParse('main').success;
+      expect(/git ref/i.test(p.schema.description ?? ''), p.at).toBe(takesRef);
+    }
   });
 });

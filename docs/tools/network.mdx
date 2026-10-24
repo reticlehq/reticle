@@ -16,10 +16,10 @@ icon: satellite-dish
 ## Example
 
 ```json
-{ "limit": 3 }
+{ "limit": 3, "bodies": true }
 ```
 
-Real response, with the second call's `headers` block trimmed off:
+Real response with `bodies: true`, with the second call's `headers` block trimmed off:
 
 ```json
 {
@@ -76,15 +76,17 @@ Most tools would return an empty array and let you draw the wrong conclusion. Th
 
 ## Filters
 
-| Argument          | What it does                                                           |
-| ----------------- | ---------------------------------------------------------------------- |
-| `urlContains`     | Substring the URL must contain                                         |
-| `method`          | `GET` · `POST` · `PUT` · `DELETE` · `PATCH`                            |
-| `status`          | Exact status code, e.g. `500`                                          |
-| `ok`              | `false` keeps only failures. The fastest way to "did anything break?"  |
-| `limit`           | Most recent N. Older matches are dropped and counted                   |
-| `actionId`        | Only requests attributed to one action: "what did that click request?" |
-| `since` / `until` | Cursors from a prior act, to scope to a window between two actions     |
+| Argument | What it does |
+| --- | --- |
+| `urlContains` | Substring the URL must contain |
+| `method` | `GET` · `POST` · `PUT` · `DELETE` · `PATCH` |
+| `status` | Exact status code, e.g. `500` |
+| `ok` | `false` keeps only failures. The fastest way to "did anything break?" |
+| `limit` | Most recent N. Older matches are dropped and counted |
+| `actionId` | Only requests attributed to one action: "what did that click request?" |
+| `since` / `until` | Cursors from a prior act, to scope to a window between two actions |
+| `bodies` | Omitted: keep a body only where it can decide a verdict (failures, unscored calls, calls your filter named), and report the rest in `bodiesWithheld`. `true`: every captured body. `false`: no bodies |
+| `assets` | `true` lists the dev server's own successful asset requests. Omitted: they are folded into `assetsFolded` |
 
 ## Catching a double submit
 

@@ -40,6 +40,16 @@ export interface Contradiction {
 export const ContradictionKind = {
   /** The screen moved forward while a request in the same window failed — the swallowed rejection. */
   UI_ADVANCED_REQUEST_FAILED: 'ui-advanced-request-failed',
+  /**
+   * The UI moved while a write failed, and the app publishes no signal and no store change.
+   *
+   * The same window as `ui-advanced-request-failed`, but nothing could decide whether the app
+   * handled the failure: no acted control to follow, and no voice of the app's own. Measured on a
+   * zero-install live feed: the correct build and the broken one both produced the strong finding,
+   * because a feed that appends rows on its own is a UI that moves. Absence-derived, so it makes a
+   * verdict unknown, never no.
+   */
+  UI_ADVANCED_UNSIGNALLED: 'ui-advanced-unsignalled',
   /** The app fired its own success signal while a request in the same window failed. Strongest form:
    *  the app did not merely look right, it explicitly ASSERTED success against its own evidence. */
   SIGNAL_CONTRADICTED: 'signal-contradicted',
@@ -275,6 +285,8 @@ export type ContradictionKind = (typeof ContradictionKind)[keyof typeof Contradi
  */
 export const ABSENCE_DERIVED_CONTRADICTIONS: ReadonlySet<ContradictionKind> = new Set([
   ContradictionKind.REQUEST_NEVER_SETTLED,
+  // The app has no voice to say it handled the failure, and no acted control showed it either way.
+  ContradictionKind.UI_ADVANCED_UNSIGNALLED,
   ContradictionKind.RESPONSE_IGNORED,
   // The app said something happened and nothing corroborated it. That is an absence of agreement,
   // never proof the app is wrong — a signal about non-visual state has nothing to corroborate it by
@@ -400,6 +412,7 @@ export const MUTATING_METHODS: readonly string[] = ['POST', 'PUT', 'PATCH', 'DEL
  */
 export const CONTRADICTION_CHANNELS: Record<ContradictionKind, readonly [ChannelId, ChannelId]> = {
   [ContradictionKind.UI_ADVANCED_REQUEST_FAILED]: [ChannelId.UI, ChannelId.NET],
+  [ContradictionKind.UI_ADVANCED_UNSIGNALLED]: [ChannelId.UI, ChannelId.NET],
   [ContradictionKind.SIGNAL_CONTRADICTED]: [ChannelId.SIGNAL, ChannelId.NET],
   [ContradictionKind.RESPONSE_IGNORED]: [ChannelId.NET, ChannelId.UI],
   [ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE]: [ChannelId.SIGNAL, ChannelId.NET],

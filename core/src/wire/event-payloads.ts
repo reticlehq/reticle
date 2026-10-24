@@ -229,6 +229,8 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     search: z.string(),
     hash: z.string(),
     [ROUTE_CHANGE_HOW_FIELD]: z.nativeEnum(RouteChangeHow),
+    /** The app's own route pattern for the screen reached (`/personas/:personaId`), when known. */
+    pattern: z.string().optional(),
   }),
   [EventType.CONSOLE_LOG]: consoleSchema,
   [EventType.CONSOLE_WARN]: consoleSchema,

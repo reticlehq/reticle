@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { DRIVE_PATH, MCP_SHUTDOWN_EVENT, MCP_SSE_PATH, STATUS_PATH } from '@reticlehq/core';
+import {
+  DRIVE_PATH,
+  MCP_SHUTDOWN_EVENT,
+  MCP_SSE_PATH,
+  SHUTDOWN_PATH,
+  STATUS_PATH,
+} from '@reticlehq/core';
 import { PEER_CONTRACT_PARAM, PEER_VERSION_PARAM } from './command/version/peer-announce.js';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { createSharedServer, type SharedServer } from './surface/http-server.js';
@@ -451,5 +457,54 @@ describe('a request target the URL parser cannot read', () => {
     expect(status).toBe(400);
     // The proof the process survived: the very next request is served normally.
     expect((await get(port, STATUS_PATH)).status).toBe(200);
+  });
+});
+
+/**
+ * `reticle stop` sent a signal. On Windows a signal is TerminateProcess, so the shutdown path never
+ * ran and the daemon sent no stop event. This route runs the normal shutdown path on every OS.
+ */
+describe('POST /shutdown', () => {
+  const TOKEN = 'a-secret-pairing-token';
+  function postShutdown(port: number, headers: http.OutgoingHttpHeaders = {}): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        { host: '127.0.0.1', port, path: SHUTDOWN_PATH, method: 'POST', headers },
+        (res) => {
+          res.resume();
+          res.on('end', () => resolve(res.statusCode ?? 0));
+        },
+      );
+      req.on('error', reject);
+      req.end();
+    });
+  }
+
+  it('refuses a loopback caller with no token, although loopback is trusted elsewhere', async () => {
+    shared = createSharedServer({ token: TOKEN });
+    const asked = vi.fn();
+    shared.attachShutdown(asked);
+    const port = await listen(shared);
+    expect(await postShutdown(port)).toBe(401);
+    expect(await postShutdown(port, { authorization: 'Bearer wrong' })).toBe(401);
+    expect(asked).not.toHaveBeenCalled();
+  });
+
+  it('refuses every caller when the daemon has no token to check', async () => {
+    shared = createSharedServer();
+    const asked = vi.fn();
+    shared.attachShutdown(asked);
+    const port = await listen(shared);
+    expect(await postShutdown(port, { authorization: `Bearer ${TOKEN}` })).toBe(403);
+    expect(asked).not.toHaveBeenCalled();
+  });
+
+  it('runs the shutdown path for a caller with the pairing token', async () => {
+    shared = createSharedServer({ token: TOKEN });
+    const asked = vi.fn();
+    shared.attachShutdown(asked);
+    const port = await listen(shared);
+    expect(await postShutdown(port, { authorization: `Bearer ${TOKEN}` })).toBe(202);
+    await vi.waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
   });
 });

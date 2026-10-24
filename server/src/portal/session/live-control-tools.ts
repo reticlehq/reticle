@@ -111,7 +111,7 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       'until the daemon restarts — for a stray window (a hidden desktop webview, a 404 page) that keeps coming back. ' +
       'Ending a tab you leased also releases that lease (`leaseReleased: true`).',
     inputSchema: {
-      summary: z.string().optional(),
+      summary: z.string().optional().describe('One sentence: what this session proved.'),
       claim: z
         .enum([VerdictStatus.PASS, VerdictStatus.FAIL, VerdictStatus.PARTIAL])
         .optional()

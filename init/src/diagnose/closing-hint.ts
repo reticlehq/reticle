@@ -6,6 +6,7 @@
  * install, a wrong sentence loses a user quietly.
  */
 
+import { FEEDBACK_KIND_CHOICES } from '@reticlehq/core';
 import { StepStatus } from '@/plan/plan.js';
 import { wasMcpRegistered } from '@/register/mcp-registered.js';
 import { CLI } from '@/project/agent-rules.js';
@@ -22,14 +23,17 @@ import { CLI } from '@/project/agent-rules.js';
 export const FEEDBACK_HINT =
   'Anything wrong, missing, or awkward — in this setup or in Reticle itself? Tell us; it is the ' +
   'one thing that decides what gets fixed:\n' +
-  `  ${CLI} feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"   (agents)\n` +
+  `  ${CLI} feedback --agent --kind ${FEEDBACK_KIND_CHOICES} "what happened"   (agents)\n` +
   `  ${CLI} feedback "what worked, what didn't"   (humans)`;
+
+/**
+ * The last line of a successful `init`, after the ask: where the user can tell the maintainers what
+ * they build. Only on success: on a failure, the ask above is the thing to do.
+ */
+export const COMMUNITY_HINT = 'Tell us what you are building: https://discord.gg/BwAbzv9ZRz';
 
 /** User-facing closing copy for `restartHint` — one named home per sentence block. */
 const RestartHintCopy = {
-  DEMO:
-    'Then drive one real flow of your app end to end and report the verdict — that is the install ' +
-    "proving itself, and it is the agent's job, not a separate command.",
   PROVE:
     'Then run `npx @reticlehq/server status` — it confirms the app connected, or says exactly why ' +
     'it has not.',
@@ -41,11 +45,15 @@ const RestartHintCopy = {
     'do and the tools are available there now. They are NOT available in the clients whose ' +
     'step above still needs a hand edit (',
   ALREADY_REGISTERED_CLAUDE_TAIL: ') until that is done.',
+  CLOSING_NO_MCP:
+    'Once it shows a session, drive one flow and report the verdict — that is the install finished.',
   CLOSING_ALREADY_NO_MANUAL:
-    'Once it shows a session, drive a flow — that is the install finished. Carry straight on; ' +
+    'Once it shows a session, drive one flow and report the verdict — that is the install ' +
+    'finished. Carry straight on; ' +
     'nothing here is waiting on a human.',
   CLOSING_ALREADY_WITH_MANUAL:
-    'Once it shows a session, drive a flow where the tools are already available — that is the ' +
+    'Once it shows a session, drive one flow and report the verdict where the tools are already ' +
+    'available — that is the ' +
     'install finished on that client. The hand-edit step above still needs a human for the other ' +
     'clients named there.',
 } as const;
@@ -114,12 +122,14 @@ export function restartHint(
   //
   // So the close hands the agent the sequence instead. It is deliberately one drive of one real
   // flow ending in a verdict, because an install that ends in "the tools are available" is an
-  // install that ends in nothing.
-  const demo = RestartHintCopy.DEMO;
+  // install that ends in nothing. It is said ONCE, last: after the status check and after the client
+  // restart, because that is the order in which a reader can do it.
   const prove = RestartHintCopy.PROVE;
   // Nothing registered this run (`--no-mcp`, or a client that needs a manual edit): a restart picks
   // up nothing, so advice about one would be advice about something we did not do.
-  if (!wasMcpRegistered(mcpStatus)) return `${dev}\n${demo}\n${prove}`;
+  if (!wasMcpRegistered(mcpStatus)) {
+    return `${dev}\n${prove}\n${RestartHintCopy.CLOSING_NO_MCP}`;
+  }
   // ALREADY: the tools are reachable RIGHT NOW, and this is the branch that used to lie.
   //
   // `wasMcpRegistered` is true for both APPLY and ALREADY, which is wrong here: the two cases have
@@ -140,11 +150,10 @@ export function restartHint(
       0 === manualClients.length
         ? RestartHintCopy.CLOSING_ALREADY_NO_MANUAL
         : RestartHintCopy.CLOSING_ALREADY_WITH_MANUAL;
-    return `${dev}\n${demo}\n${availability}\n${prove}\n${closing}`;
+    return `${dev}\n${availability}\n${prove}\n${closing}`;
   }
   return (
     `${dev}\n` +
-    `${demo}\n` +
     'Then restart your agent so it picks up the new MCP server. On Claude Code and Codex, do NOT ' +
     'ask a human to do it: `npx @reticlehq/server init --relaunch` prints the exact resume command ' +
     'for THIS conversation — run that command and the restart continues the work on the other ' +

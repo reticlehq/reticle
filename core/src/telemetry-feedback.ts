@@ -67,6 +67,9 @@ export const FeedbackKind = {
 } as const;
 export type FeedbackKind = (typeof FeedbackKind)[keyof typeof FeedbackKind];
 
+/** Every feedback kind as one `<a|b>` choice for help text. Derived, so no kind is left out. */
+export const FEEDBACK_KIND_CHOICES = `<${Object.values(FeedbackKind).join('|')}>`;
+
 /** Which shell the verified app runs in. Mirrors the SDK's own `PAGE_HEALTH` runtime report. */
 export const AppRuntime = {
   WEB: 'web',
@@ -126,6 +129,18 @@ export const FEEDBACK_RATING_MIN = 1;
 export const FEEDBACK_RATING_MAX = 5;
 /** Cap for the structured why/impact/workaround fields — prose, but bounded prose. */
 export const FEEDBACK_FIELD_MAX = 1000;
+/** The longest reply address a feedback report takes: the longest address mail can carry. */
+export const FEEDBACK_CONTACT_MAX = 254;
+/**
+ * One plain address: no spaces, one `@`, and a dot in the domain. A simple shape, not full RFC 5322:
+ * it refuses a list, a name with an address, and text that is not an address at all.
+ */
+const FEEDBACK_CONTACT_SHAPE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
+
+/** True for one plain reply address that a feedback report may carry. */
+export function isFeedbackContact(value: string): boolean {
+  return value.length <= FEEDBACK_CONTACT_MAX && FEEDBACK_CONTACT_SHAPE.test(value);
+}
 
 /**
  * The feedback body. Everything here is either author-written (`text`, `trace`, `rating`) or
@@ -191,6 +206,12 @@ export const FeedbackSchema = z.object({
   /** The MCP client on the other end (`claude-code`, `cursor`, …) — self-reported at initialize. */
   client: z.string().min(1).max(64).optional(),
   mcpScope: z.nativeEnum(McpScope).optional(),
+  /**
+   * A reply address, so the maintainers can answer. Present ONLY when the person gave it for this
+   * purpose (`reticle feedback --contact`, or the agent relayed one the user typed). The one
+   * personal value this channel carries, and never taken from anywhere else.
+   */
+  contact: z.string().max(FEEDBACK_CONTACT_MAX).refine(isFeedbackContact).optional(),
 });
 export type Feedback = z.infer<typeof FeedbackSchema>;
 

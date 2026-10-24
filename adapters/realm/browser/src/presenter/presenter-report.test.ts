@@ -6,14 +6,8 @@ import {
   IMPACT_BASIS,
 } from '@reticlehq/core';
 import type { ImpactDefect, ImpactScope, ImpactSnapshot } from '@reticlehq/core';
-import {
-  PresenterReport,
-  instrumentationHtml,
-  reportBodyHtml,
-  reportPanelHtml,
-} from './presenter-report.js';
+import { PresenterReport, reportBodyHtml, reportPanelHtml } from './presenter-report.js';
 import { Presenter } from './presenter.js';
-import { REPORT_CSS } from './presenter-report-styles.js';
 import {
   buildLinkedInShareUrl,
   buildShareText,
@@ -408,6 +402,28 @@ describe('a snapshot from the daemon, painted', () => {
     ...(dashboardUrl === undefined ? {} : { dashboardUrl }),
   });
 
+  // The Harness needs no setup score, so the panel shows no score, no capability list and no
+  // prompt to raise it. The agent tells the user to instrument; the HUD stays clean.
+  it('shows no setup score and no instrumentation prompt, whatever the daemon sends', () => {
+    const { root, report } = mountPanel();
+    report.setSnapshot({
+      ...snapshotWith([]),
+      instrumentation: {
+        covered: 2,
+        total: 8,
+        seen: ['page connected'],
+        missing: [{ capability: 'signals on mutation', cost: 'no success signal' }],
+        prompt: 'Read the gaps and add the missing instrumentation.',
+      },
+    });
+    report.open();
+    const body = root.querySelector('[data-reticle-report-body]');
+    expect(body?.textContent ?? '').not.toContain('What Reticle can see');
+    expect(body?.textContent ?? '').not.toContain('Copy prompt');
+    expect(body?.textContent ?? '').not.toContain('2 of 8');
+    expect(body?.querySelector('.reticle-report-instrumentation')).toBeNull();
+  });
+
   it('paints the defects the daemon sent into the open panel', () => {
     const { root, report } = mountPanel();
     report.setSnapshot(
@@ -619,16 +635,8 @@ describe('the sync status beside Sync now', () => {
 
 describe('what the HUD says once a run syncs, or never will', () => {
   const SCOPE = scope({ calls: 3, verdicts: 2, passed: 2 });
-  const at = (sync: Record<string, unknown>, instrumentation?: Record<string, unknown>) =>
-    reportBodyHtml(
-      SCOPE,
-      'https://app.reticle.sh/p',
-      { signedIn: true },
-      'x',
-      undefined,
-      sync,
-      instrumentation,
-    );
+  const at = (sync: Record<string, unknown>) =>
+    reportBodyHtml(SCOPE, 'https://app.reticle.sh/p', { signedIn: true }, 'x', undefined, sync);
 
   it('links the run that synced on its own dashboard page', () => {
     const html = at({
@@ -649,46 +657,5 @@ describe('what the HUD says once a run syncs, or never will', () => {
     // "2 not sent" alone said nothing about what was not sent where, or what to do.
     expect(html).toContain('not on your dashboard yet');
     expect(html).toContain('reticle connect');
-  });
-
-  it('shows the coverage line, and the copy button only once a prompt exists', () => {
-    expect(instrumentationHtml({ covered: 5, total: 8 })).toContain('5 of 8');
-    expect(instrumentationHtml({ covered: 5, total: 8 })).not.toContain('Copy prompt');
-    expect(instrumentationHtml({ covered: 5, total: 8, prompt: 'Read …' })).toContain(
-      'Copy prompt for your coding agent',
-    );
-    expect(instrumentationHtml({ covered: '<b>', total: 8 })).toBe('');
-  });
-
-  // Driven before release: the coverage line shipped with no rules at all, so the copy button drew as
-  // the browser's default white button over the cards below it.
-  it('styles every class the coverage line renders', () => {
-    const html = instrumentationHtml({ covered: 5, total: 8, prompt: 'Read …' });
-    const classes = [...html.matchAll(/class="([^"]+)"/g)].flatMap((m) => (m[1] ?? '').split(' '));
-    for (const name of classes) expect(REPORT_CSS).toContain(`.${name}{`);
-  });
-
-  it('names what Reticle can and cannot see yet, in plain words', () => {
-    const host = document.createElement('div');
-    host.innerHTML = instrumentationHtml({
-      covered: 2,
-      total: 8,
-      seen: ['page connected', 'network'],
-      missing: [
-        { capability: 'signals on mutation', cost: 'the app never says <b>it</b> succeeded' },
-      ],
-      notSeenYet: ['stable test ids', '<img src=x>'],
-    });
-    const items = [...host.querySelectorAll('[data-state]')].map(
-      (el) =>
-        `${el.getAttribute('data-state') ?? ''}:${el.querySelector('.reticle-report-cap-name')?.textContent ?? ''}`,
-    );
-    expect(items).toContain('seen:Page connected');
-    expect(items).toContain('seen:Network requests');
-    expect(items).toContain('missing:Success signals from your code');
-    expect(items).toContain('unseen:Stable test ids');
-    // Daemon text is escaped, never markup.
-    expect(host.querySelector('b,img')).toBeNull();
-    expect(host.textContent).toContain('the app never says <b>it</b> succeeded');
   });
 });

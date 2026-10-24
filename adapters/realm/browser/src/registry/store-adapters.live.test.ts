@@ -66,6 +66,15 @@ describe('store adapters against the libraries they claim to support', () => {
     expect(fired).toBe(afterUnsub);
   });
 
+  // `tsc -b` compiles this file, so the call below is also a type test: it is the documented call.
+  it('jotai: atoms of different value types compile and read', () => {
+    const store = createStore();
+    const cartAtom = atom({ items: 2 });
+    const userAtom = atom({ name: 'ada' });
+    const adapter = jotaiStore(store, { cart: cartAtom, user: userAtom });
+    expect(adapter.getState()).toEqual({ cart: { items: 2 }, user: { name: 'ada' } });
+  });
+
   it('valtio: reads the live proxy and fires on a NESTED mutation', async () => {
     const state = proxy({ cart: { items: 0 } });
     const adapter = valtioStore(state, snapshot, subscribe);
@@ -185,6 +194,21 @@ describe('store adapters against the libraries they claim to support', () => {
       set(count, 42);
     });
     expect(adapter.getState()).toMatchObject({ count: { value: 42 } });
+  });
+
+  it('recoil: atoms of different value types compile and read', () => {
+    const cartAtom = recoilAtom({ key: 'live-cart', default: { items: 2 } });
+    const userAtom = recoilAtom({ key: 'live-user', default: { name: 'ada' } });
+    const current = snapshot_UNSTABLE();
+    const adapter = recoilStore(
+      { cart: cartAtom, user: userAtom },
+      () => current,
+      () => () => undefined,
+    );
+    expect(adapter.getState()).toEqual({
+      cart: { status: 'hasValue', value: { items: 2 }, error: null },
+      user: { status: 'hasValue', value: { name: 'ada' }, error: null },
+    });
   });
 
   it('svelte: pulls the live value with no lasting subscription, and skips the immediate call', () => {

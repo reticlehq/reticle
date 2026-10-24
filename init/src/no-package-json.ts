@@ -27,12 +27,14 @@ import {
 } from './patch/static-page.js';
 import {
   connectArg,
-  connectArgWithToken,
-  djangoMiddlewareSnippet,
   reticleConfigContent,
-  staticPageSnippet,
-  streamlitPageSnippet,
+  staticPageSnippetWithLocalToken,
 } from './patch/snippets.js';
+import {
+  djangoMiddlewareSnippet,
+  pythonConnectArg,
+  streamlitPageSnippet,
+} from './patch/python-snippets.js';
 import { RETICLE_CONFIG_FILE } from './detect/existing-config.js';
 import { deriveProjectId } from './project/project-id.js';
 import { portMoveDetail, retargetConfigPort, retargetPort } from './plan/port-steps.js';
@@ -44,8 +46,10 @@ const SNIPPET_WRITTEN =
   `opened on localhost. This machine’s pairing token is in ${STATIC_TOKEN_MODULE}, which is ` +
   'gitignored — keep it out of anything you publish, and let each teammate run `reticle init` ' +
   'for their own.';
+const TOKEN_MODULE_WRITTEN =
+  `This machine’s pairing token is in ${STATIC_TOKEN_MODULE}, which is gitignored. Serve it beside ` +
+  'the page: the snippet imports it. Keep it out of anything you publish.';
 const SNIPPET_ALREADY = `${HTML_INDEX_PATH} already loads the Reticle SDK — nothing to change.`;
-const DRY_RUN_PAIRING_TOKEN = 'DRY_RUN_TOKEN_NOT_FOR_USE';
 /** How far up `init` looks for the app it was run inside. The same bound as the workspace walk. */
 const MAX_ANCESTOR_DEPTH = 8;
 const HOME_FOLDER =
@@ -82,12 +86,28 @@ function namedDirectory(io: InitIo): string | undefined {
  * print the snippet and exit 1 with `no_package_json`, which read to the funnel — and to the person —
  * as the setup failing on exactly the path that works.
  */
-function wireStaticPage(options: InitOptions, io: InitIo, connect: string): InitResult {
+/** Write the gitignored token module and its ignore line, only where they change. */
+function writeTokenModule(io: InitIo): void {
   for (const [path, content] of Object.entries(
     staticTokenFiles(io.host.pairingToken(), (p) => io.readFile(p)),
   )) {
     io.writeFile(path, content);
   }
+}
+
+/** The snippet for this kind of project. Each one reads the token at run time. */
+function printedSnippet(streamlit: boolean, django: boolean, connect: string): string {
+  if (streamlit) {
+    return streamlitPageSnippet(pythonConnectArg(connect));
+  }
+  if (django) {
+    return djangoMiddlewareSnippet(pythonConnectArg(connect));
+  }
+  return staticPageSnippetWithLocalToken(connect);
+}
+
+function wireStaticPage(options: InitOptions, io: InitIo, connect: string): InitResult {
+  writeTokenModule(io);
   const html = io.readFile(HTML_INDEX_PATH) ?? '';
   // A page that already connects still has its port compared: the snippet bakes the daemon URL, and
   // a re-run with a new `--port` that answered "already" left the page dialling the old daemon.
@@ -145,7 +165,7 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
   const nonJsProjectId = deriveProjectId(undefined, io.cwd());
   const writeConfig = (): void => {
     if (options.dryRun) {
-      io.print('Dry run: no files written; the snippet uses a placeholder pairing token.');
+      io.print('Dry run: no files written.');
       return;
     }
     // Except its port. A re-run with a new `--port` starts the daemon there, and a config still
@@ -164,20 +184,17 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
     rememberProjectOnDisk(io, nonJsProjectId, io.cwd(), Date.now());
     io.print(`Wrote ${RETICLE_CONFIG_FILE} (project "${nonJsProjectId}").`);
   };
-  const connect = connectArgWithToken(
-    options.port,
-    nonJsProjectId,
-    options.dryRun ? DRY_RUN_PAIRING_TOKEN : io.host.pairingToken(),
-  );
+  // No snippet below holds the token. A printed token stays in terminal history and transcripts.
+  const connect = connectArg(options.port, nonJsProjectId);
   // One page at the root is a page we can see whole. Several, or none, is a choice that is not ours.
   if (!streamlit && !django && io.exists(HTML_INDEX_PATH)) {
     writeConfig();
     if (options.dryRun) {
-      io.print(staticPageSnippet(connect));
+      io.print(staticPageSnippetWithLocalToken(connect));
       return { ok: true, applied: 0, manual: 0 };
     }
-    // Without the token: the page is the deployable artifact, so the token goes beside it instead.
-    return wireStaticPage(options, io, connectArg(options.port, nonJsProjectId));
+    // The page is the deployable artifact, so the token goes beside it instead.
+    return wireStaticPage(options, io, connect);
   }
   io.print(
     // Two genuinely different situations used to share one sentence: a JS developer in the wrong
@@ -190,13 +207,12 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
   writeConfig();
   // The message says "add the snippet below". Print the snippet, or the message is the same broken
   // promise in the other direction.
-  io.print(
-    streamlit
-      ? streamlitPageSnippet(connect)
-      : django
-        ? djangoMiddlewareSnippet(connect)
-        : staticPageSnippet(connect),
-  );
+  io.print(printedSnippet(streamlit, django, connect));
+  // The page snippet imports the token from this module. Python reads the token file instead.
+  if (!streamlit && !django && !options.dryRun) {
+    writeTokenModule(io);
+    io.print(TOKEN_MODULE_WRITTEN);
+  }
   // The onboarding funnel had NO instrumentation, so a setup that died here was indistinguishable
   // from someone who never ran the command — the two failure modes with the most different fixes.
   if (!options.dryRun) io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });

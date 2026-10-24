@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`: `reticle_domain` and the verify runner listed the daemon's flows, not the session's project.** This happens when the daemon starts outside the app it drives, as in [#1671](https://github.com/reticlehq/reticle/issues/1671). `reticle_domain` built its model and gaps from the wrong flows. The runner behind `reticle verify` and the HTTP verify endpoint listed flows from one folder and replayed them from another, so a listed flow could fail as not found. Now both read the session's project, the same as `reticle_flow` and replay. Closes [#1733](https://github.com/reticlehq/reticle/issues/1733).

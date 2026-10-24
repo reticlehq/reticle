@@ -9,7 +9,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import { awaitArrival, idsAtTarget, type ArrivalScope } from './navigate-arrival.js';
+import { awaitArrival, idsOpenAtDispatch, type ArrivalScope } from './navigate-arrival.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 
@@ -741,8 +741,8 @@ describe('awaitArrival', () => {
   });
 });
 
-describe('idsAtTarget', () => {
-  it('names the sessions already on the target, so arrival can exclude them', () => {
+describe('idsOpenAtDispatch', () => {
+  it('names every session connected when the navigation is sent, wherever it is', () => {
     const { sessions } = fakeSessions([
       [
         { id: 'here', url: 'http://localhost:3000/dashboard?x=1' },
@@ -750,8 +750,56 @@ describe('idsAtTarget', () => {
         { id: 'other-origin', url: 'http://localhost:9999/dashboard' },
       ],
     ]);
-    // Same origin+pathname rule the arrival scan uses — one function, so the "was it already there"
-    // question and the "is it there now" question can never disagree.
-    expect([...idsAtTarget(sessions, TARGET)]).toEqual(['here']);
+    // A tab that was already connected cannot be the new document this navigation makes.
+    expect([...idsOpenAtDispatch(sessions)]).toEqual(['here', 'elsewhere', 'other-origin']);
+  });
+});
+
+/**
+ * `reticle_navigate { sessionId: A }` reported another tab when that tab reached the target first.
+ * A lease on the same app is the common case: it is connected the whole time, or it reconnects
+ * under its own claimed identity.
+ */
+describe('only the navigated tab, or its new document, is the arrival', () => {
+  const LEASE_AT_TARGET = `${TARGET}?__reticle_session=lease-1`;
+
+  it('does not name a tab that was connected at dispatch and reached the target first', async () => {
+    const { sessions: atDispatch } = fakeSessions([
+      [
+        { id: 'A', url: 'http://localhost:3000/orders' },
+        { id: 'lease', url: 'http://localhost:3000/faq' },
+      ],
+    ]);
+    const priorIds = idsOpenAtDispatch(atDispatch);
+    const { sessions } = fakeSessions([
+      [
+        { id: 'A', url: 'http://localhost:3000/orders' },
+        { id: 'lease', url: TARGET },
+      ],
+      [
+        { id: 'A', url: TARGET },
+        { id: 'lease', url: TARGET },
+      ],
+    ]);
+    const scope: ArrivalScope = { ...drove('A'), priorIds };
+    await expect(awaitArrival(sessions, TARGET, scope, 500, fakeClock(100))).resolves.toEqual({
+      sessionId: 'A',
+    });
+  });
+
+  it('does not name a lease that reconnects at the target under its own identity', async () => {
+    const { sessions } = fakeSessions([
+      [
+        { id: 'A', url: 'http://localhost:3000/orders' },
+        { id: 'lease', url: LEASE_AT_TARGET },
+      ],
+      [
+        { id: 'A', url: TARGET },
+        { id: 'lease', url: LEASE_AT_TARGET },
+      ],
+    ]);
+    await expect(awaitArrival(sessions, TARGET, drove('A'), 500, fakeClock(100))).resolves.toEqual({
+      sessionId: 'A',
+    });
   });
 });

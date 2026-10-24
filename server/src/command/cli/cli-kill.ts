@@ -24,6 +24,9 @@ import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { log } from '@/log.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { captureLookup, findPortHolder, type PortHolder } from './ports/port-holder.js';
+import * as http from 'node:http';
+import { LOOPBACK_HOST, SHUTDOWN_PATH } from '@reticlehq/core';
+import { storedPairingToken } from '@/portal/bridge/pairing-token.js';
 
 /** What the plan says to do with the port. */
 export const KillAction = {
@@ -103,14 +106,59 @@ const GRACEFUL_KILL_MS = 5_000;
 const FORCED_KILL_MS = 2_000;
 const KILL_POLL_MS = 100;
 
+/** A loopback call: a daemon that does not answer in this time gets the signal instead. */
+const SHUTDOWN_REQUEST_TIMEOUT_MS = 1_000;
+
+/**
+ * Ask the daemon on `port` to run its own shutdown path. True when it accepted.
+ *
+ * Asked before any signal, on every OS. On Windows a signal ends the process at once, so the daemon
+ * did not close its browser or send its stop event. False for an older daemon without the route, a
+ * wrong token, or no answer: the caller then sends the signal as before.
+ */
+export function requestShutdown(
+  port: number,
+  token: string | undefined = storedPairingToken(),
+): Promise<boolean> {
+  if (token === undefined) {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    const req = http.request(
+      {
+        host: LOOPBACK_HOST,
+        port,
+        path: SHUTDOWN_PATH,
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}` },
+        timeout: SHUTDOWN_REQUEST_TIMEOUT_MS,
+      },
+      (res) => {
+        res.resume();
+        resolve(202 === res.statusCode);
+      },
+    );
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.end();
+  });
+}
+
 /**
  * Signal ONE pid and wait for it to go: SIGTERM, then SIGKILL, then give up and say it survived.
+ * `asked`: the daemon already accepted a shutdown request, so the SIGTERM is not sent.
  *
  * The escalation is the reason this exists rather than a bare SIGTERM — there is a field report of a
  * daemon that ignored SIGTERM until a human ran `kill -9` by hand, which is the moment the `lsof -ti`
  * pipeline gets typed and the agent's proxy dies with the daemon.
  */
-async function terminate(pid: number): Promise<{ gone: boolean; escalated: boolean }> {
+async function terminate(
+  pid: number,
+  asked = false,
+): Promise<{ gone: boolean; escalated: boolean }> {
   const signal = (name: NodeJS.Signals): void => {
     try {
       process.kill(pid, name);
@@ -118,7 +166,9 @@ async function terminate(pid: number): Promise<{ gone: boolean; escalated: boole
       // Gone between the liveness check and here. The next poll reports it as gone.
     }
   };
-  signal('SIGTERM');
+  if (!asked) {
+    signal('SIGTERM');
+  }
   const started = Date.now();
   let escalated = false;
   for (;;) {
@@ -172,7 +222,8 @@ export async function runKill(port: number, force: boolean): Promise<boolean> {
     log('reticle_kill_nothing_to_do', { port, presence });
     return true;
   }
-  const { gone, escalated } = await terminate(pid);
+  const asked = PortPresence.DAEMON === presence && (await requestShutdown(port));
+  const { gone, escalated } = await terminate(pid, asked);
   if (gone) removePid(port);
   log(gone ? 'reticle_killed' : 'reticle_kill_survived', {
     port,

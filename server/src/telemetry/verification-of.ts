@@ -22,6 +22,7 @@ import {
 } from '@reticlehq/core';
 import { VERDICT_TOOLS } from '@/surface/tools/feedback-tools.js';
 import { getBrowserMode } from './browser-mode.js';
+import { releaseVersionOf } from '@/command/update/version-seen.js';
 
 /**
  * The deciding clause, read off the result `decideVerified` wrote it onto.
@@ -137,6 +138,8 @@ export function verificationOf(
   brand?: BrowserBrand,
   /** The call ran inside a Harness drive's async context (`currentDrivenBy()`), read by the caller. */
   drivenByHarness = false,
+  /** The page SDK version the session announced on HELLO. */
+  pageSdkVersion?: string,
 ): Verification | undefined {
   if (!VERDICT_TOOLS.has(toolName)) return undefined;
   // A paused session REFUSES the call — nothing driven, nothing asserted. The refusal carries a
@@ -159,6 +162,7 @@ export function verificationOf(
   if (verified === undefined && passed === undefined) return undefined;
   const reason = reasonOf(result);
   const uncleanLoss = uncleanLossOf(result, reason);
+  const sdkVersion = releaseVersionOf(pageSdkVersion);
   return {
     via: toolName,
     verified: verified ?? (true === passed ? 'yes' : 'no'),
@@ -197,5 +201,7 @@ export function verificationOf(
     // agent keeps calling tools, so a process-wide flag credited the agent's verdicts too. Absent is
     // the ordinary case — the agent called the tool itself.
     ...(drivenByHarness ? { driven: VerificationDriver.HARNESS } : {}),
+    // WHICH page SDK the verdict was judged on. A page older than the daemon misses newer fixes.
+    ...(sdkVersion === undefined ? {} : { sdkVersion }),
   };
 }

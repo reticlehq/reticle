@@ -1,0 +1,437 @@
+{
+  "src/core-coupling-only-shrinks.test.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/disagreement/body-failures.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/disagreement/body-failures.ts": {
+    "curly": {
+      "count": 14
+    }
+  },
+  "src/disagreement/contradiction-evidence.ts": {
+    "curly": {
+      "count": 39
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/disagreement/contradiction-folds.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/disagreement/contradiction-folds.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/disagreement/contradictions.declare-hint.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/disagreement/contradictions.ts": {
+    "curly": {
+      "count": 20
+    },
+    "no-nested-ternary": {
+      "count": 2
+    }
+  },
+  "src/disagreement/echo-mismatch.ts": {
+    "curly": {
+      "count": 30
+    }
+  },
+  "src/disagreement/reconcile.ts": {
+    "curly": {
+      "count": 20
+    }
+  },
+  "src/disagreement/stale-response.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/disagreement/stale-response.ts": {
+    "curly": {
+      "count": 22
+    }
+  },
+  "src/disagreement/unit-mismatch.ts": {
+    "curly": {
+      "count": 19
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/disagreement/witness-disagreement.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/evidence/accepted-write.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/evidence/already-true.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/evidence/baseline.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/evidence/baseline.ts": {
+    "curly": {
+      "count": 9
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/evidence/blind-spots.ts": {
+    "curly": {
+      "count": 11
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/evidence/body-capture-remedy.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/evidence/gap-ledger.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/evidence/honesty.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/evidence/instrumentation-gaps.ts": {
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/evidence/learned-guards.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/evidence/observability.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/evidence/step-effect.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/evidence/superseded-checks.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/evidence/uncaptured-bodies.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/evidence/undeclared-change.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/evidence/unread-outcome.ts": {
+    "curly": {
+      "count": 10
+    }
+  },
+  "src/evidence/unsettled.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/evidence/verdict-intent-gap.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/evidence/verified.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/question/declared.ts": {
+    "curly": {
+      "count": 12
+    }
+  },
+  "src/question/document-navigation-is-not-resource-timing.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/question/lineage.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/question/predicate-element-value.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/question/predicate-empty-combinator.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/question/predicate-not-evidence.test.ts": {
+    "curly": {
+      "count": 1
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/question/predicate-spelling.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/question/predicate-strict.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/question/predicate-text-scope.test.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/question/predicate/body-key-fragment.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/question/predicate/name-near-miss.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/question/predicate/net-blind-spots.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/question/predicate/net-evidence.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/question/predicate/observed-in-window.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/question/predicate/predicate-asks.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/question/predicate/predicate-compare.ts": {
+    "curly": {
+      "count": 11
+    }
+  },
+  "src/question/predicate/predicate-console.ts": {
+    "curly": {
+      "count": 3
+    }
+  },
+  "src/question/predicate/predicate-element.ts": {
+    "curly": {
+      "count": 13
+    }
+  },
+  "src/question/predicate/predicate-eval-kit.ts": {
+    "curly": {
+      "count": 25
+    }
+  },
+  "src/question/predicate/predicate-eval.ts": {
+    "curly": {
+      "count": 39
+    }
+  },
+  "src/question/predicate/predicate-parse.ts": {
+    "curly": {
+      "count": 9
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/question/predicate/predicate-precheck.ts": {
+    "curly": {
+      "count": 11
+    }
+  },
+  "src/question/predicate/predicate-request-body.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/question/predicate/predicate-route.ts": {
+    "curly": {
+      "count": 14
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/question/predicate/predicate-schema.ts": {
+    "curly": {
+      "count": 23
+    },
+    "no-nested-ternary": {
+      "count": 3
+    }
+  },
+  "src/question/predicate/predicate-state.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/question/predicate/predicate.test.ts": {
+    "curly": {
+      "count": 9
+    }
+  },
+  "src/question/predicate/predicate.ts": {
+    "curly": {
+      "count": 31
+    }
+  },
+  "src/question/predicate/property.ts": {
+    "curly": {
+      "count": 16
+    }
+  },
+  "src/question/predicate/split-text-miss.ts": {
+    "curly": {
+      "count": 2
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/question/predicate/testid-near-miss.ts": {
+    "curly": {
+      "count": 2
+    }
+  },
+  "src/question/reaction.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/state-bookkeeping.ts": {
+    "curly": {
+      "count": 7
+    }
+  },
+  "src/the-rules-stand-alone.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/window/adversary.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/window/ambient.test.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/window/ambient.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/window/appearance-budget.test.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/window/appearance-budget.ts": {
+    "curly": {
+      "count": 1
+    }
+  },
+  "src/window/asset-noise.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/window/body-relevance.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/window/event-filters.ts": {
+    "curly": {
+      "count": 19
+    }
+  },
+  "src/window/json-salvage.ts": {
+    "curly": {
+      "count": 6
+    }
+  },
+  "src/window/network-detail-merge.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/window/ring-buffer-armed-window.test.ts": {
+    "curly": {
+      "count": 8
+    }
+  },
+  "src/window/ring-buffer-window-loss.test.ts": {
+    "curly": {
+      "count": 4
+    }
+  },
+  "src/window/ring-buffer.test.ts": {
+    "curly": {
+      "count": 5
+    }
+  },
+  "src/window/ring-buffer.ts": {
+    "curly": {
+      "count": 8
+    }
+  }
+}

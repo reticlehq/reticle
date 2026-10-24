@@ -185,13 +185,14 @@ describe('a package.json with no UI library', () => {
     expect(again.written['.gitignore']).toBeUndefined();
   });
 
-  it('keeps the manual recipe when no index.html exists and writes no static token files', () => {
+  it('keeps the manual recipe when no index.html exists, with the token in its module only', () => {
     const io = memoryIo({ 'package.json': files['package.json'], 'about.html': PAGE });
     expect(runInit(OPTS, io).ok).toBe(false);
     expect(io.lines.join('\n')).toContain('reticle.connect(');
+    expect(io.lines.join('\n')).not.toContain(TEST_PAIRING_TOKEN);
     expect(io.written['index.html']).toBeUndefined();
-    expect(io.written[STATIC_TOKEN_MODULE]).toBeUndefined();
-    expect(io.written['.gitignore']).toBeUndefined();
+    expect(io.written[STATIC_TOKEN_MODULE]).toContain(TEST_PAIRING_TOKEN);
+    expect(io.written['.gitignore']).toContain(STATIC_TOKEN_MODULE);
   });
 
   it('does not write files or mint a pairing token during a dry run', () => {
@@ -251,5 +252,37 @@ describe('a package.json with no UI library', () => {
     const result = runInit(OPTS, io);
     expect(io.lines.join('\n')).not.toContain('will NOT connect');
     expect(result.ok).toBe(true);
+  });
+});
+
+/**
+ * An Electron app often serves its renderer from a local HTTP server, so a packaged app on every
+ * user's machine runs on `localhost` too. The localhost-only guard does not keep the snippet out of
+ * production there, and a packager glob such as `**\/*.js` can ship the token module.
+ */
+describe('an Electron app with a static renderer page', () => {
+  const files = {
+    'package.json': JSON.stringify({
+      name: 'desk',
+      scripts: { dev: 'electron .' },
+      devDependencies: { electron: '^33.0.0' },
+    }),
+    'index.html': PAGE,
+  };
+
+  it('writes neither the localhost-only snippet nor the token module', () => {
+    const io = memoryIo(files);
+    runInit(OPTS, io);
+    expect(io.written['index.html']).toBeUndefined();
+    expect(io.written[STATIC_TOKEN_MODULE]).toBeUndefined();
+  });
+
+  it('says how to keep the token module out of the package', () => {
+    const io = memoryIo(files);
+    runInit(OPTS, io);
+    const out = io.lines.join('\n');
+    expect(out).toContain('Electron');
+    expect(out).toContain(`!${STATIC_TOKEN_MODULE}`);
+    expect(out).not.toContain(TEST_PAIRING_TOKEN);
   });
 });

@@ -46,9 +46,10 @@ answer. Every step below is yours to do without them. Work these in order, and s
 on, one line each:
 
 0. **Is Reticle even wired into this project?** \`cat .reticle.json\`. If it is not there, this
-   project was never set up: run \`npx @reticlehq/server@latest init\`,
-   fix every \`⚠\` and \`ℹ\` it prints, and carry on. Do not ask first, and do not ask which
-   framework or port — both come out of the repo you are sitting in.
+   project was never set up. Tell the user in one line that \`init\` will change package.json,
+   the lockfile and the build config, then run \`npx @reticlehq/server@latest init\`, fix every
+   \`⚠\` and \`ℹ\` it prints, and carry on. Do not ask which framework or port — both come out
+   of the repo you are sitting in.
 
 1. **Is anything serving the app at all?** If a dev server is already listening, use it and go to
    step 2 — the cause is then almost always that the SDK never loaded in the page, not a missing
@@ -106,7 +107,7 @@ State which flow you picked in one line before you start.
    that the thing it was supposed to do actually happened.
 4. Finish with \`reticle_observe { action: "console" }\` and \`reticle_observe { action: "network" }\` to catch errors the DOM does not show.
 
-**Only \`reticle_act_and_wait\` and \`reticle_assert\` produce a verdict.** A run that ends on a
+**Only \`reticle_act_and_wait\`, \`reticle_assert\`, \`reticle_act { steps }\` with an \`expect\`, and \`reticle_verify\` produce a verdict.** A run that ends on a
 snapshot has proved nothing, however many tools it used.
 
 ## Report

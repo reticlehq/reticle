@@ -11,12 +11,8 @@ import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { getTelemetry } from '@/telemetry/telemetry.js';
 import { wasNudged } from './nudge-credit.js';
 
-/** Which way the installed version moved. A rollback means a release hurt someone enough to retreat. */
-const VersionChangeDirection = {
-  UPDATE: 'update',
-  ROLLBACK: 'rollback',
-} as const;
-type VersionChangeDirection = (typeof VersionChangeDirection)[keyof typeof VersionChangeDirection];
+import { VersionChangeDirection, noteRunningVersion } from './version-seen.js';
+import { INSTALL_STATE_DIR } from '@/telemetry/install-source.js';
 
 /**
  * Report a completed version move. Never throws — an install that worked must still be reported done.
@@ -37,6 +33,8 @@ export async function reportVersionChange(
       // updated from a shell script or a package bump with no agent involved at all.
       versionChange: { from, to, direction, ...(nudged ? { nudged } : {}) },
     });
+    // Record the new version now, so the next start does not report this move a second time.
+    noteRunningVersion(to, INSTALL_STATE_DIR);
   } catch {
     /* best-effort, like every other send */
   }

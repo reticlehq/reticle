@@ -2,11 +2,11 @@
  * One daemon, two projects. A past session in the project the daemon was started in must not
  * become the answer for a different project that has never connected (#1465).
  *
- * The first `reticle_session` in that second project wires it and lists the files. The same call
- * from the first project still says to reopen the tab that was there.
+ * The first `reticle_session` in that second project offers B's own next step and changes no file.
+ * The same call from the first project still says to reopen the tab that was there.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { WebSocket } from 'ws';
@@ -20,21 +20,12 @@ import {
 import { runWithClientDirectory } from '@/hooks/client-directory.js';
 import { TOOLS } from '@/surface/tools/tools.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
-import { firstRunWiring, type RunCli } from './first-run-wiring.js';
+import { firstRunWiring } from './first-run-wiring.js';
 import { Session } from './session.js';
 import { SessionManager } from './session-manager.js';
 import { startNoSessionWatch } from './no-session-watch.js';
 
 const APP_A_URL = 'http://localhost:5173/orders';
-const PLAN = [
-  '  [✓] Vite plugin → vite.config.ts',
-  '  [✓] Reticle config → .reticle.json',
-  '{',
-  '  "ok": true,',
-  '  "url": "http://localhost:5174/"',
-  '}',
-].join('\n');
-
 const roots: string[] = [];
 afterEach(() => {
   for (const dir of roots.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -56,7 +47,7 @@ function tempDir(): string {
 const sessionsTool = TOOLS.find((tool) => ReticleTool.SESSIONS === tool.name);
 
 describe("a second project is not the first project's closed tab", () => {
-  it('wires B on its first call, and still tells A to reopen A', async () => {
+  it('offers B its own next step, and still tells A to reopen A', async () => {
     const root = tempDir();
     const appA = join(root, 'a');
     const appB = join(root, 'b');
@@ -92,12 +83,6 @@ describe("a second project is not the first project's closed tab", () => {
     sessions.add(tab);
     sessions.remove(tab);
 
-    const wiredIn: string[] = [];
-    const run: RunCli = (_args, cwd) => {
-      wiredIn.push(cwd);
-      const at = PLAN.indexOf('{');
-      return Promise.resolve({ code: 0, stdout: PLAN.slice(at), stderr: PLAN.slice(0, at) });
-    };
     const stop = startNoSessionWatch({
       sessions,
       port: 4400,
@@ -117,25 +102,20 @@ describe("a second project is not the first project's closed tab", () => {
     const deps = {
       sessions,
       reticleRoot: join(appA, '.reticle'),
-      firstRun: firstRunWiring({ port: 4400, cliPath: 'reticle', run }),
+      firstRun: firstRunWiring(),
     } as unknown as ToolDeps;
-    const wired = (await runWithClientDirectory(appB, () => sessionsTool.handler(deps, {}))) as {
-      wired?: { directory: string; steps: { target: string }[] };
-      next_action?: { command?: string };
+    const offered = (await runWithClientDirectory(appB, () => sessionsTool.handler(deps, {}))) as {
+      next_step?: { consent: string };
     };
-    expect(wiredIn).toEqual([appB]);
-    expect(wired.wired?.directory).toBe(appB);
-    expect(wired.wired?.steps.map((step) => step.target)).toEqual([
-      'vite.config.ts',
-      '.reticle.json',
-    ]);
-    expect(JSON.stringify(wired)).not.toContain(APP_A_URL);
+    expect(offered.next_step?.consent).toContain('init');
+    expect(readdirSync(appB)).toEqual(['package.json']);
+    expect(JSON.stringify(offered)).not.toContain(APP_A_URL);
 
     const fromA = (await runWithClientDirectory(appA, () => sessionsTool.handler(deps, {}))) as {
       next_action?: { action: string; command?: string };
-      wired?: unknown;
+      next_step?: unknown;
     };
-    expect(fromA.wired).toBeUndefined();
+    expect(fromA.next_step).toBeUndefined();
     expect(fromA.next_action?.action).toBe(NoSessionAction.REOPEN_APP);
     expect(fromA.next_action?.command).toContain(APP_A_URL);
 
@@ -208,7 +188,7 @@ describe("a second project is not the first project's closed tab", () => {
     stop();
   });
 
-  it("wires B while A's tab is still open", async () => {
+  it("offers B its next step while A's tab is still open", async () => {
     const root = tempDir();
     const appA = join(root, 'a');
     const appB = join(root, 'b');
@@ -238,12 +218,6 @@ describe("a second project is not the first project's closed tab", () => {
         () => 0,
       ),
     );
-    const wiredIn: string[] = [];
-    const run: RunCli = (_args, cwd) => {
-      wiredIn.push(cwd);
-      const at = PLAN.indexOf('{');
-      return Promise.resolve({ code: 0, stdout: PLAN.slice(at), stderr: PLAN.slice(0, at) });
-    };
     const stop = startNoSessionWatch({
       sessions,
       port: 4400,
@@ -257,14 +231,14 @@ describe("a second project is not the first project's closed tab", () => {
     const deps = {
       sessions,
       reticleRoot: join(appA, '.reticle'),
-      firstRun: firstRunWiring({ port: 4400, cliPath: 'reticle', run }),
+      firstRun: firstRunWiring(),
     } as unknown as ToolDeps;
     const result = (await runWithClientDirectory(appB, () => sessionsTool.handler(deps, {}))) as {
-      wired?: { directory: string };
+      next_step?: { consent: string };
       sessions: { projectId?: string }[];
     };
-    expect(wiredIn).toEqual([appB]);
-    expect(result.wired?.directory).toBe(appB);
+    expect(result.next_step?.consent).toContain('init');
+    expect(readdirSync(appB)).toEqual(['package.json']);
     expect(result.sessions.some((session) => 'app-a' === session.projectId)).toBe(true);
     stop();
   });

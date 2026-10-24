@@ -14,7 +14,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { buildSessionInfo } from './session-info.js';
-import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/core';
+import { HelloInstrumentation, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/core';
+import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 
 const view = (title: string) => ({
   id: 's1',
@@ -84,5 +85,45 @@ describe('the listing says which runtime answered', () => {
     const info = buildSessionInfo(withRuntime(undefined));
     expect(info.runtime).toBeUndefined();
     expect('runtime' in info).toBe(false);
+  });
+});
+
+// A URL-only hosted check injects the SDK. The listing must not let it pass for an installed one.
+describe('buildSessionInfo — who put the SDK in the page', () => {
+  it('says injected when the page said so', () => {
+    const info = buildSessionInfo({
+      ...view('App'),
+      instrumentation: HelloInstrumentation.INJECTED,
+    });
+    expect(info.instrumentation).toBe(HelloInstrumentation.INJECTED);
+  });
+
+  it('says nothing for an SDK the app installed, as every older page did', () => {
+    expect(buildSessionInfo(view('App'))).not.toHaveProperty('instrumentation');
+  });
+});
+
+/**
+ * The listing named a skewed page, but not a page that is merely behind. That page still lacks the
+ * newer commands and fixes, and nothing on the listing said which SDK it ran.
+ */
+describe('buildSessionInfo — the page SDK version', () => {
+  it('lists the page SDK version', () => {
+    const info = buildSessionInfo({ ...view('App'), sdkVersion: SERVER_VERSION });
+    expect(info.sdkVersion).toBe(SERVER_VERSION);
+    expect(info).not.toHaveProperty('sdkBehind');
+  });
+
+  it('says the SDK is behind, with the fix, when the page is a minor release or more older', () => {
+    const info = buildSessionInfo({ ...view('App'), sdkVersion: '0.1.0' });
+    expect(info.sdkVersion).toBe('0.1.0');
+    expect(info.sdkBehind).toContain('0.1.0');
+    expect(info.sdkBehind).toContain('reticle update');
+  });
+
+  it('omits both when the page did not say', () => {
+    const info = buildSessionInfo(view('App'));
+    expect(info).not.toHaveProperty('sdkVersion');
+    expect(info).not.toHaveProperty('sdkBehind');
   });
 });

@@ -54,6 +54,75 @@ describe('the effect record for one window', () => {
     expect(effect.contradictions).toBeUndefined();
   });
 
+  it('does not treat a cross-site write as a response the page ignored', () => {
+    const analytics = ev(1, EventType.NET_REQUEST, {
+      id: 'a1',
+      method: 'POST',
+      url: 'https://analytics.example/collect',
+      status: 204,
+      ok: true,
+    });
+    const blind = stepEffect([analytics], { since: 0, until: 40 });
+    expect(blind.contradictions?.map((c) => c.kind)).toContain(ContradictionKind.RESPONSE_IGNORED);
+    const effect = stepEffect(
+      [analytics],
+      { since: 0, until: 40 },
+      {
+        appOrigin: 'http://localhost:5173/',
+        background: [],
+      },
+    );
+    expect(effect.contradictions).toBeUndefined();
+  });
+
+  it('still reports a first-party write the page ignored', () => {
+    const effect = stepEffect(
+      [
+        ev(1, EventType.NET_REQUEST, {
+          id: 'n1',
+          method: 'POST',
+          url: '/api/save',
+          status: 204,
+          ok: true,
+        }),
+      ],
+      { since: 0, until: 40 },
+      { appOrigin: 'http://localhost:5173/', background: [] },
+    );
+    expect(effect.contradictions?.map((c) => c.kind)).toContain(ContradictionKind.RESPONSE_IGNORED);
+  });
+
+  describe('a failure the step declared', () => {
+    const REFUSED_SAVE: ReticleEvent[] = [
+      ev(1, EventType.DOM_ADDED, { path: 'p.refusal' }),
+      ev(2, EventType.NET_REQUEST, {
+        id: 'n3',
+        method: 'POST',
+        url: '/api/save',
+        status: 409,
+        ok: false,
+      }),
+    ];
+
+    it('is not a contradiction when the step expects it', () => {
+      const effect = stepEffect(
+        REFUSED_SAVE,
+        { since: 0, until: 40 },
+        { declared: [{ kind: 'net', method: 'POST', status: 409 }] },
+      );
+      expect(effect.contradictions?.map((c) => c.kind) ?? []).not.toContain(
+        ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
+      );
+    });
+
+    it('is still a contradiction when the step did not declare it', () => {
+      const effect = stepEffect(REFUSED_SAVE, { since: 0, until: 40 }, { declared: [] });
+      expect(effect.contradictions?.map((c) => c.kind)).toContain(
+        ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
+      );
+    });
+  });
+
   it('omits the window where no clock advanced, rather than claiming a zero-width one', () => {
     const effect = stepEffect([], { since: 7, until: 7 });
     expect(effect.window).toBeUndefined();

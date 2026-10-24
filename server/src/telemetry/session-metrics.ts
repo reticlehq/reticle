@@ -17,7 +17,6 @@
  */
 import {
   BrowserLaunchKind,
-  coverageBucketOf,
   type AgentNudgeKind,
   type ConnectFailure,
   type ConnectionStats,
@@ -31,6 +30,7 @@ import { describeToolParams } from './argument-shape.js';
 import { machineSnapshot } from './machine-snapshot.js';
 import { classifyError } from './error-class.js';
 import { HudMetrics, type HudSignals } from './hud-metrics.js';
+import { releaseVersionOf } from '@/command/update/version-seen.js';
 
 /** Cap the distinct error shapes held in memory — a pathological loop must not grow unbounded. */
 const MAX_ERROR_KINDS = 40;
@@ -157,7 +157,6 @@ export class SessionMetrics {
   /** Platform and Harness advisories shown to an agent this window, by kind. */
   readonly #nudges = new Map<string, number>();
   /** Harness drives refused for coverage this window, by coverage bucket. */
-  readonly #harnessRefused = new Map<string, number>();
   /** Error buckets by whose defect, this window. */
   readonly #errorClasses = new Map<string, number>();
   /**
@@ -174,6 +173,13 @@ export class SessionMetrics {
    */
   #appConnects = 0;
   #firstAppAt: number | undefined;
+  /**
+   * Tool calls before the first app connected, session-lifetime like `#appConnects`. An agent that
+   * works against a daemon with no app sends no verdict and often no refusal; this gives it a shape.
+   */
+  #toolCallsBeforeApp = 0;
+  /** The SDK version of the last page that connected, session-lifetime like `#appConnects`. */
+  #sdkVersion: string | undefined;
   readonly #clients = new Set<string>();
   /** Client name -> version, session-lifetime. Never cleared: who drove is a fact about the session. */
   readonly #clientVersions = new Map<string, string>();
@@ -285,6 +291,9 @@ export class SessionMetrics {
     }
     this.#toolCalls += 1;
     this.#lifetimeToolCalls += 1;
+    if (this.#firstAppAt === undefined) {
+      this.#toolCallsBeforeApp += 1;
+    }
     bump(this.#toolCounts, tool);
     this.#inFlight = tool;
     this.#breadcrumb.push(tool);
@@ -410,8 +419,9 @@ export class SessionMetrics {
    * Zero of these at shutdown means the daemon ran and no app ever connected — a broken install.
    * Non-zero with no tool calls is the opposite problem. See SessionSummary.appConnects.
    */
-  recordAppConnected(): void {
+  recordAppConnected(sdkVersion?: string): void {
     this.#appConnects += 1;
+    this.#sdkVersion = releaseVersionOf(sdkVersion) ?? this.#sdkVersion;
     this.#firstAppAt ??= this.#now();
   }
 
@@ -517,11 +527,6 @@ export class SessionMetrics {
     bump(this.#nudges, kind);
   }
 
-  /** A Harness drive was refused because the app's coverage is below the gate. */
-  recordHarnessRefused(percent: number): void {
-    bump(this.#harnessRefused, coverageBucketOf(percent));
-  }
-
   /** Which tool surface was advertised to agents this session. */
   recordSurface(surface: string): void {
     this.#surface = surface.slice(0, 32);
@@ -605,9 +610,6 @@ export class SessionMetrics {
         : {}),
       ...(this.#feedbackPrompted > 0 ? { feedbackPrompted: this.#feedbackPrompted } : {}),
       ...(this.#nudges.size > 0 ? { nudgesShown: Object.fromEntries(this.#nudges) } : {}),
-      ...(this.#harnessRefused.size > 0
-        ? { harnessRefusedCoverage: Object.fromEntries(this.#harnessRefused) }
-        : {}),
       ...(this.#errorClasses.size > 0
         ? { errorClasses: Object.fromEntries(this.#errorClasses) }
         : {}),
@@ -619,6 +621,8 @@ export class SessionMetrics {
       ...(this.#firstAppAt === undefined
         ? {}
         : { msToFirstApp: Math.max(0, this.#firstAppAt - this.#startedAt) }),
+      ...(this.#sdkVersion === undefined ? {} : { sdkVersion: this.#sdkVersion }),
+      ...(this.#toolCallsBeforeApp > 0 ? { toolCallsBeforeApp: this.#toolCallsBeforeApp } : {}),
       ...this.#hud.summarize(),
       final,
       // Only on a real exit. A periodic flush carrying `exit: "unknown"` would read as a daemon that
@@ -679,7 +683,6 @@ export class SessionMetrics {
       0 === this.#postSocketFailures &&
       0 === this.#postRetriesSaved &&
       0 === this.#nudges.size &&
-      0 === this.#harnessRefused.size &&
       this.#hud.empty
     );
   }
@@ -712,7 +715,6 @@ export class SessionMetrics {
     this.#bugKinds.clear();
     this.#hud.reset();
     this.#nudges.clear();
-    this.#harnessRefused.clear();
     // These five were never cleared, so every flush restated them and a sum over a session's
     // windows came out larger than its tool calls. Counts are windowed, all of them; only the
     // facts below (an app ever connected, which clients, which bug kinds seen) outlive a window.

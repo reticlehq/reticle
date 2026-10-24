@@ -16,7 +16,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { restartHint } from './diagnose/closing-hint.js';
+import { FEEDBACK_KIND_CHOICES } from '@reticlehq/core';
+import { FEEDBACK_HINT, restartHint } from './diagnose/closing-hint.js';
 import { StepStatus } from './plan/plan.js';
 
 const closing = (status: StepStatus) => restartHint(status, 'pnpm dev');
@@ -50,5 +51,25 @@ describe('it still tells the truth about what happened', () => {
 
   it('still says there is no restart to do when the tools are already there', () => {
     expect(closing(StepStatus.ALREADY)).not.toMatch(/restart your agent/i);
+  });
+});
+
+/**
+ * The closing told the reader to drive a flow twice, and the first time came before the status
+ * check and before the client restart that makes the tools exist. It now says it once, last.
+ */
+describe('the closing says to drive a flow once, after the status check', () => {
+  it.each([StepStatus.APPLY, StepStatus.ALREADY, StepStatus.SKIP, StepStatus.MANUAL, undefined])(
+    '%s',
+    (status) => {
+      const text = closing(status as StepStatus);
+      const drives = [...text.matchAll(/drive (one|a) (real )?flow/gi)];
+      expect(drives).toHaveLength(1);
+      expect(drives[0]?.index ?? -1).toBeGreaterThan(text.indexOf('npx @reticlehq/server status'));
+    },
+  );
+
+  it('lists every feedback kind in the feedback ask', () => {
+    expect(FEEDBACK_HINT).toContain(`--kind ${FEEDBACK_KIND_CHOICES}`);
   });
 });

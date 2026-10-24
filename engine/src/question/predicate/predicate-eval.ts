@@ -11,6 +11,7 @@ import {
   REDACTED_VALUE,
   type ReticleEvent,
 } from '@reticlehq/core';
+import { isReticleVoice } from '../../state-bookkeeping.js';
 import { describeObserved } from './observed-in-window.js';
 import { netEvidence } from './net-evidence.js';
 import {
@@ -536,7 +537,9 @@ export function evalAnimation(
   const wantType = true === p.completed ? EventType.ANIM_END : EventType.ANIM_START;
   const hit = events.find((e) => {
     if (e.type !== wantType) return false;
-    if (p.name !== undefined && str(e.data['name']) !== p.name) return false;
+    const name = str(e.data['name']);
+    // A check with no name asks about the app, so Reticle's own bookkeeping signals do not count.
+    if (p.name === undefined ? isReticleVoice(name ?? '') : name !== p.name) return false;
     if (p.target !== undefined && e.ref !== p.target) return false;
     return true;
   });
@@ -563,7 +566,9 @@ export function evalSignal(
   let redactedField: string | undefined;
   const isMatch = (e: ReticleEvent): boolean => {
     if (e.type !== EventType.SIGNAL) return false;
-    if (p.name !== undefined && str(e.data['name']) !== p.name) return false;
+    const name = str(e.data['name']);
+    // A check with no name asks about the app, so Reticle's own bookkeeping signals do not count.
+    if (p.name === undefined ? isReticleVoice(name ?? '') : name !== p.name) return false;
     if (p.dataMatches !== undefined) {
       const payload = (e.data['data'] ?? {}) as Record<string, unknown>;
       const hidden =
@@ -679,6 +684,9 @@ const SETTLE_ACTIVITY: ReadonlySet<EventType> = new Set([
   EventType.DOM_ATTR,
 ]);
 
+/** An app-scoped settle: the default's activity, and every framework render commit. */
+const APP_ACTIVITY: ReadonlySet<EventType> = new Set([...SETTLE_ACTIVITY, EventType.RENDER_COMMIT]);
+
 /** The quiet window of a network-scoped settle: a completed request is the only activity. */
 const NETWORK_ACTIVITY: ReadonlySet<EventType> = new Set([EventType.NET_REQUEST]);
 
@@ -691,6 +699,8 @@ const NET_TYPES: ReadonlySet<EventType> = new Set([
 
 /** Default quiet window — enough to absorb a render+xhr settle without waiting on slow polls. */
 const DEFAULT_QUIET_MS = 500;
+/** Work the app declared (`reticle.busy`; core's `RETICLE_BUSY_SIGNAL`); not imported: coupling only shrinks. */
+const RETICLE_BUSY_SIGNAL = 'reticle:busy';
 
 /**
  * Did the browser LEAVE for this record, rather than make a request whose result we will see?
@@ -837,13 +847,33 @@ export function evalSettled(
   }
   const streaming = openStreams.size;
 
+  // Work only the app can see (`reticle.busy`): starts minus ends, in order, never below zero, so an
+  // end whose start fell before this window is not credit against work started inside it.
+  let appBusy = 0;
+  for (const e of events) {
+    if (e.type !== EventType.SIGNAL || RETICLE_BUSY_SIGNAL !== e.data['name']) continue;
+    const delta = (e.data['data'] as { delta?: unknown } | undefined)?.delta;
+    if ('number' === typeof delta) appBusy = Math.max(0, appBusy + Math.sign(delta));
+  }
+  if (appBusy > 0 && 0 === inFlight + streaming) {
+    const what = `${String(appBusy)} app task(s) still pending`;
+    return {
+      pass: false,
+      failureReason: `not settled: ${what}`,
+      observed: what,
+      expected: 'no work the app declared still pending',
+      assertion: 'settled.app-busy',
+      evidence: { settled: false, appBusy, ...disclosure },
+    };
+  }
+
   if (inFlight + streaming > 0) {
-    const what =
-      0 === streaming
-        ? `${String(inFlight)} request(s) still in flight`
-        : 0 === inFlight
-          ? `${String(streaming)} response body(ies) still streaming`
-          : `${String(inFlight)} request(s) in flight and ${String(streaming)} response body(ies) still streaming`;
+    let what = `${String(inFlight)} request(s) in flight and ${String(streaming)} response body(ies) still streaming`;
+    if (0 === streaming) {
+      what = `${String(inFlight)} request(s) still in flight`;
+    } else if (0 === inFlight) {
+      what = `${String(streaming)} response body(ies) still streaming`;
+    }
     return {
       pass: false,
       failureReason: `not settled: ${what}`,
@@ -861,7 +891,12 @@ export function evalSettled(
 
   // A network-scoped settle reads only completed requests for the quiet window; the in-flight checks
   // above already ran for every scope.
-  const activity = SettledChannel.NETWORK === p.channel ? NETWORK_ACTIVITY : SETTLE_ACTIVITY;
+  let activity = SETTLE_ACTIVITY;
+  if (SettledChannel.NETWORK === p.channel) {
+    activity = NETWORK_ACTIVITY;
+  } else if (SettledChannel.APP === p.channel) {
+    activity = APP_ACTIVITY;
+  }
   let lastT = -1;
   let lastType: EventType | undefined;
   for (const e of events) {

@@ -27,6 +27,7 @@ Real response from a healthy session:
       "url": "http://localhost:4310/",
       "title": "Reticle · Mission Control",
       "adapters": ["react"],
+      "sdkVersion": "3.8.0",
       "hasCapabilities": true,
       "hidden": false,
       "lastSeenMs": 155,
@@ -68,6 +69,8 @@ An empty list is not silent. It comes back with a `why` that separates the two c
 
 That string is trimmed. The full text also lists the exact ports it scanned, says a server on any other port is invisible to the scan (ask for the app's URL and open it with `reticle open <url>`), and warns that in a monorepo the daemon often runs at the root while the app lives in a subdirectory.
 
+The empty list also carries `next_action`, the same answer as a command to run. In a project that was never wired, it carries `next_step` too. Nothing was installed and no file changed. `lease` is the call that checks the running app now with nothing installed: do it first. `consent` is the question to ask before `reticle init` wires the app. Run `init` only when the user agrees.
+
 ## The fields that decide whether driving will work
 
 | Field | Why it matters |
@@ -78,6 +81,10 @@ That string is trimmed. The full text also lists the exact ports it scanned, say
 | `adapters` | `["react"]` means you get component names and source pointers |
 | `realInputAvailable` | `true` when native CDP input is available, under `reticle drive` |
 | `outages` | How often the connection has dropped. Non-zero is worth investigating |
+| `sdkVersion` | The page's SDK version |
+| `sdkBehind` | Present when the page SDK is a minor release or more behind the daemon. Newer commands and fixes are missing. It says how to update |
+| `versionSkew` | Present when the page SDK and the daemon differ. Fix it before you trust a verdict |
+| `instrumentation` | `injected` when a hosted verifier put the SDK into the page from outside. Absent means the app installed it |
 
 <Warning>
   A hidden tab (`hidden: true`, which also sets `throttled`) is the most common cause of "the click

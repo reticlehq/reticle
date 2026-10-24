@@ -96,10 +96,10 @@ describe('a generated connect declares what the app can be driven by', () => {
     });
   }
 
-  it('leaves plain HTML alone — it has no file to write', () => {
+  it('writes no connect file for plain HTML, only the gitignored token module', () => {
     const steps = FRAMEWORK_ADAPTERS[Framework.HTML].steps(
       planInput(Framework.HTML, UiLibrary.REACT),
     );
-    expect(writes(steps)).toEqual([]);
+    expect(writes(steps).filter((content) => content.includes('reticle.connect('))).toEqual([]);
   });
 });

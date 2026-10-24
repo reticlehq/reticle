@@ -6,7 +6,8 @@ import { ReticleTool } from '@reticlehq/core';
 import { EnvelopeKey } from './tool-kit.js';
 import { getSessionMetrics, resetSessionMetrics } from '@/telemetry/session-metrics.js';
 import { buildDynamicTools } from './dynamic-tools.js';
-import { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './invoke-tool.js';
+import { runTool } from './invoke-tool.js';
+import { SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './tool-kit.js';
 import { BaselineStore } from '@/memory/project/baselines.js';
 import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { FlowStore } from '@/language/flows/flows.js';
@@ -16,6 +17,7 @@ import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { claimArtifactRoot, dropArtifactRootClaim } from '@/memory/project/root-claims.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import type { Session } from '@/portal/session/session.js';
+import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 
 const ROOT = '/tmp/reticle-invoke-test/.reticle';
@@ -625,5 +627,41 @@ describe('unmatched evidence for a claimed root', () => {
       {},
     )) as { next?: string };
     expect(String(r.next ?? '')).toContain(UNMATCHED);
+  });
+});
+
+/**
+ * A page on an older SDK connects and verifies, but it lacks the commands and fixes added since.
+ * The agent heard it once, on one tool result. Each verdict on that page now says it again.
+ */
+describe('a verdict on a page whose SDK is behind the daemon', () => {
+  it('carries a short note that names the page SDK version', async () => {
+    const r = (await runTool(
+      stubTool(ReticleTool.ASSERT, { verified: 'yes' }),
+      fakeDeps(throttledSession({ sdkVersion: '0.1.0' })),
+      {},
+    )) as Record<string, unknown>;
+
+    expect(String(r[EnvelopeKey.SDK_BEHIND])).toContain('0.1.0');
+  });
+
+  it('says nothing when the page SDK is current', async () => {
+    const r = (await runTool(
+      stubTool(ReticleTool.ASSERT, { verified: 'yes' }),
+      fakeDeps(throttledSession({ sdkVersion: SERVER_VERSION })),
+      {},
+    )) as Record<string, unknown>;
+
+    expect(r[EnvelopeKey.SDK_BEHIND]).toBeUndefined();
+  });
+
+  it('says nothing on a result that is not a verdict', async () => {
+    const r = (await runTool(
+      stubTool(ReticleTool.ASSERT, { ok: true }),
+      fakeDeps(throttledSession({ sdkVersion: '0.1.0' })),
+      {},
+    )) as Record<string, unknown>;
+
+    expect(r[EnvelopeKey.SDK_BEHIND]).toBeUndefined();
   });
 });

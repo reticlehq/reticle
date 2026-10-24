@@ -20,7 +20,10 @@
 
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
-import { awaitDocumentSuccessor } from '../../../../portal/session/session-successor.js';
+import {
+  awaitDocumentSuccessor,
+  claimedSessionOf,
+} from '../../../../portal/session/session-successor.js';
 
 import type { NavigateArrival } from './navigate-result.js';
 
@@ -115,23 +118,21 @@ export interface ArrivalScope {
    */
   navigatedFromDocumentId?: string;
 
-  /** Sessions already on the target before dispatch cannot prove this navigation arrived. */
+  /**
+   * Sessions connected before dispatch cannot prove this navigation arrived. One already on the
+   * target was there before it. One elsewhere, such as a lease on the same app, is another tab: it
+   * can reach the target during the wait, but it is not the new document of the navigated tab.
+   */
   priorIds: ReadonlySet<string>;
 }
 
 /**
- * The sessions already on `target` — the set `ArrivalScope.priorIds` is built from, sampled before
- * the navigation is dispatched.
- *
- * Shares `samePage` with the arrival scan on purpose: "was it already there" and "is it there now"
- * are the same question asked at two moments, and two spellings of it would eventually disagree.
+ * The sessions connected when the navigation is dispatched: the set `ArrivalScope.priorIds` is
+ * built from. The navigated tab's new document is not one of them, so none of the others can be
+ * the arrival.
  */
-export function idsAtTarget(sessions: SessionManager, target: string): ReadonlySet<string> {
-  const ids = new Set<string>();
-  for (const s of sessions.all()) {
-    if (samePage(s.url, target)) ids.add(s.id);
-  }
-  return ids;
+export function idsOpenAtDispatch(sessions: SessionManager): ReadonlySet<string> {
+  return new Set(sessions.all().map((s) => s.id));
 }
 
 /**
@@ -182,9 +183,13 @@ function findArrival(
       continue;
     }
 
-    // A different session that was already at the target cannot prove this
+    // A different session that was connected at dispatch cannot prove this
     // navigation arrived.
     if (scope.priorIds.has(s.id)) continue;
+
+    // A session that claims another identity (a lease) is another tab, not the new document of
+    // the navigated one, even when it reconnects at the target during the wait.
+    if (claimedSessionOf(s.url) !== claimedSessionOf(scope.navigatedFrom)) continue;
 
     // While the replaced document is still connected, a DIFFERENT session at the target is an
     // unrelated arrival (a second tab, a neighbour app): the replacement this navigation waits

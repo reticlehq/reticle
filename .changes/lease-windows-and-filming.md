@@ -1,5 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — browser windows piled up when an agent reconnected.** A closed MCP connection did not let go of its leases. A reconnect is a new owner, so it could not take them back, and it opened a new window each time. Each old window stayed open for the full five-minute lease TTL. The leases of a closed connection now close 30 seconds later, unless the agent uses them again in that time.
-- **`@reticlehq/server` — an idle browser kept its memory.** When the last lease closed, Chromium stayed open until the daemon itself went idle. The pool now closes its browsers when nothing holds or waits for a lease, and starts one again on the next lease.
-- **`@reticlehq/server` — a driven tab was captured every second for as long as it was open.** Filming compared a new frame only with the frame before it. A page that did not change was still captured every second, and a page that flipped between two looks, such as a blinking caret, was saved every second. Filming now treats a frame that matches one of the last four as unchanged, and waits twice as long after each unchanged frame, up to 32 seconds. The next step starts the one-second rate again.

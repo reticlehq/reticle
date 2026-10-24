@@ -5,7 +5,7 @@
  * is the one command whose arguments are free text, so it is the only place in the grammar where
  * "everything that is not a flag" is a rule with edge cases rather than a one-liner.
  */
-import { FeedbackKind } from '@reticlehq/core/telemetry';
+import { FEEDBACK_CONTACT_MAX, FeedbackKind, isFeedbackContact } from '@reticlehq/core/telemetry';
 
 /** `reticle feedback --rating 4 "the words"` — the human half of the channel. */
 export const RATING_FLAG = '--rating';
@@ -20,6 +20,8 @@ export const BUG_FLAG = '--bug';
  */
 export const KIND_FLAG = '--kind';
 export const AGENT_FLAG = '--agent';
+/** `--contact <email>`: a reply address, sent only when the person gives it. */
+export const CONTACT_FLAG = '--contact';
 /** Accepted `--kind` values, from core's enum — never a second hand-written list to drift from it. */
 export const FEEDBACK_KINDS: readonly string[] = Object.values(FeedbackKind);
 
@@ -34,6 +36,8 @@ export type ParsedFeedback =
       bug: boolean;
       /** `--agent`: file as the agent, so agent reports never dilute the human rating signal. */
       agent: boolean;
+      /** `--contact`: a reply address the person gave. */
+      contact?: string;
     }
   | { kind: 'error'; message: string };
 
@@ -49,6 +53,14 @@ export function parseFeedbackArgs(rest: string[]): ParsedFeedback {
   if (feedbackKind !== undefined && !FEEDBACK_KINDS.includes(feedbackKind)) {
     return { kind: 'error', message: `${KIND_FLAG} takes one of: ${FEEDBACK_KINDS.join(', ')}` };
   }
+  const contactAt = rest.indexOf(CONTACT_FLAG);
+  const contact = -1 === contactAt ? undefined : (rest[contactAt + 1] ?? '');
+  if (contact !== undefined && !isFeedbackContact(contact)) {
+    return {
+      kind: 'error',
+      message: `${CONTACT_FLAG} takes one email address of at most ${String(FEEDBACK_CONTACT_MAX)} characters, such as you@example.com`,
+    };
+  }
   // Everything that is not a flag or a flag's VALUE is the message. Quoting is the user's job for
   // shell reasons, but joining the remainder means an unquoted sentence still works. Both value
   // positions have to be consumed: without that, `--kind bug "..."` filed a report whose text began
@@ -56,6 +68,7 @@ export function parseFeedbackArgs(rest: string[]): ParsedFeedback {
   const consumed = new Set([
     ...(-1 === ratingAt ? [] : [ratingAt, ratingAt + 1]),
     ...(-1 === kindAt ? [] : [kindAt, kindAt + 1]),
+    ...(-1 === contactAt ? [] : [contactAt, contactAt + 1]),
   ]);
   const text = rest
     .filter((arg, i) => !consumed.has(i) && !arg.startsWith('--'))
@@ -68,5 +81,6 @@ export function parseFeedbackArgs(rest: string[]): ParsedFeedback {
     ...(feedbackKind !== undefined ? { feedbackKind } : {}),
     bug: rest.includes(BUG_FLAG),
     agent: rest.includes(AGENT_FLAG),
+    ...(contact !== undefined ? { contact } : {}),
   };
 }

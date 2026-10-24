@@ -51,17 +51,6 @@ export const PRUNED_FILES = [
   'fixtures.md',
   // How to publish THIS repo to a local registry to test unpublished changes: a contributor task.
   'local-registry.md',
-  // Both are about ADDING telemetry to Reticle rather than about using it. `telemetry-contract.md`
-  // opens "read this before adding a tool, an event, a finding kind, or a failure path", and
-  // `telemetry-events.mdx` documents where each event is emitted FROM. Somebody who installed the
-  // package cannot act on either, and together they are 88KB of a package that went over its size
-  // budget by 72KB on the first CI run that measured it.
-  //
-  // `telemetry.md` deliberately stays. It describes what Reticle collects and how to turn it off,
-  // which is the one telemetry page a person who installed this is entitled to find without going
-  // to the website.
-  'telemetry-contract.md',
-  'telemetry-events.mdx',
 ];
 
 /** Deleting into a directory Windows still holds a handle on is the normal case, so retry. */

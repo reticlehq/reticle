@@ -10,7 +10,7 @@ icon: wand-magic-sparkles
 npx @reticlehq/server init [--env KEY=VALUE]... [--app <dir>] [--license <key>] [--json]
                            [--files-only] [--relaunch] [--no-open] [--no-agents] [--url <app url>]
                            [--timeout S] [--dry-run] [--hooks] [--port N] [--no-mcp] [--no-install]
-                           [--start] [--capture-bodies] [--no-first-run] [--new-id]
+                           [--start] [--capture-bodies] [--no-first-run] [--new-id] [--no-prompt-capture]
 ```
 
 ## Flags
@@ -44,47 +44,50 @@ npx @reticlehq/server init [--env KEY=VALUE]... [--app <dir>] [--license <key>] 
   command go with it, because all three only make sense once the tools are reachable.
 </Warning>
 
+## When init runs, and when it asks for a hand
+
+Your agent runs `init` only when you agree. The first `reticle_session` call in a project that was never wired changes no file. It offers the zero-install lease, which checks the running app with nothing installed. `reticle init`, `reticle connect` and a setup request from you still wire the app.
+
+Some apps get a `⚠` manual step instead of an edit:
+
+- **An Electron app with a static `index.html`.** A packaged renderer can also run on `localhost`, so init does not write the localhost-only snippet or `reticle.local.js`. Connect only in development, for example only when `!app.isPackaged`. Keep `reticle.local.js` out of the package: electron-builder `files: ["!reticle.local.js"]`, or Electron Forge `packagerConfig.ignore: [/reticle\.local\.js$/]`.
+- **A Vite config whose `plugins` is a call or the shorthand `{ plugins }`.** Init leaves the config unchanged and tells you where to add `reticle()`.
+
+When `~/.reticle` cannot be written (a sandboxed agent host), init writes the dev server log to `.reticle/logs/` in the project and prints where it is.
+
 ## What it prints
 
-A plan, one line per step, each with a status mark: `✓` written, `·` already in place or left alone, `⚠` needs a hand, `–` deliberately skipped by a flag, `ℹ` done, but incomplete in a way that matters. Captured from a real `--dry-run` inside `apps/bench-app`:
+A plan, one line per step, each with a status mark: `✓` written, `·` already in place or left alone, `⚠` needs a hand, `–` deliberately skipped by a flag, `ℹ` done, but incomplete in a way that matters. Captured from a real `--dry-run` inside `apps/bench-app`, trimmed to one row of each kind:
 
 ```
 reticle init (dry run, no files written)
   in /Users/you/reticle/apps/bench-app
 
   [·] MCP server (Claude, global) → global (claude user scope)
-      reticle already registered (install once, used by every project)
   [·] MCP server (Cursor) → /Users/you/.cursor/mcp.json
-      reticle already registered with Cursor
   [⚠] MCP server (Codex CLI) → /Users/you/.codex/config.toml
       add this to /Users/you/.codex/config.toml by hand:
       [mcp_servers.reticle]
       command = "npx"
       args = ["@reticlehq/server", "mcp"]
-
   [✓] Agent verification rule → CLAUDE.md
-      teach the agent to verify features with Reticle after building them
   [✓] Agent verification rule → AGENTS.md
-      teach the agent to verify features with Reticle after building them
   [✓] Full agent rules → RETICLE.md
-      the reference the always-loaded rule points at (when NOT to verify, recovery, feedback)
   [✓] The /reticle command → .claude/commands/reticle.md
-      type /reticle to verify one flow in the browser
+  [✓] Claude Code resume-after-compaction hook → .claude/settings.json
+  [✓] Prompt capture: Claude Code → .claude/settings.json
+  [ℹ] Prompt capture → .reticle/request.json
   [✓] Install dependencies → package.json
-      pnpm add -D @reticlehq/react@3.7.0 @reticlehq/vite-plugin@3.7.0
   [✓] Reticle config → .reticle.json
-      write project config (framework + port)
   [✓] Vite plugin → vite.config.ts
-      add reticle() to plugins (also injects connect())
   [·] Capabilities + store → src/reticle-dev.ts
-      file exists, left alone, it is yours to edit
 
 Restart your dev server (`vite`).
 ```
 
-The install line pins the packages to the version of Reticle you are running. When the `codex` binary is on your PATH, the Codex row is not a hand edit: it reads `[✓] MCP server (Codex CLI)` and registers through `codex mcp add reticle -- npx @reticlehq/server mcp`.
+`init` pins the packages to the version of Reticle you are running. When the `codex` binary is on your PATH, the Codex row is not a hand edit: it reads `[✓] MCP server (Codex CLI)` and registers through `codex mcp add reticle -- npx @reticlehq/server mcp`.
 
-Below the plan it also prints the two things that actually finish the install: restart your agent so it re-reads its MCP server list, then run `npx @reticlehq/server status` to confirm the app connected.
+Below the plan it also prints the two things that actually finish the install: restart your agent so it re-reads its MCP server list, then run `npx @reticlehq/server status` to confirm the app connected. A successful run ends with one more line, `Tell us what you are building: https://discord.gg/BwAbzv9ZRz`. A dry run and a failed run do not print it.
 
 With `--no-mcp`, the whole MCP and rules group collapses into one skipped line:
 

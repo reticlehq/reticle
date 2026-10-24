@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { InitResult } from '@reticlehq/init';
+import { COMMUNITY_HINT, type InitResult } from '@reticlehq/init';
 import { continueAfterInit, htmlCarriesSdk } from './init-runtime.js';
 import { registerOtherAgents, runSetupCommand } from '../setup-command.js';
 import { LicenseWrite, writeLicenseKey } from '../license-key.js';
@@ -112,6 +112,19 @@ describe('init reports its deferred outcome once, after runtime setup', () => {
     await continueAfterInit(ARGS, RESULT, { print }, '/app');
     vi.unstubAllEnvs();
     expect(print.mock.calls.flat().join('\n')).not.toContain('Restart your coding agent');
+  });
+
+  it('ends a connected setup with the community line', async () => {
+    const print = vi.fn();
+    await continueAfterInit(ARGS, RESULT, { print }, '/app');
+    expect(print.mock.calls.at(-1)).toEqual([COMMUNITY_HINT]);
+  });
+
+  it('does not print the community line when setup did not finish', async () => {
+    vi.mocked(runSetupCommand).mockResolvedValue({ ...SUCCESS, ok: false });
+    const print = vi.fn();
+    await expect(continueAfterInit(ARGS, RESULT, { print }, '/app')).rejects.toThrow('exit');
+    expect(print.mock.calls.flat()).not.toContain(COMMUNITY_HINT);
   });
 
   it('records a connected app after the default continuation', async () => {

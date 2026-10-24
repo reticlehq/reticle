@@ -46,6 +46,8 @@ describe('firstCallOpener', () => {
     expect(opened?.notice).toMatch(/source file:line/);
     expect(opened?.notice).toContain('npx @reticlehq/server init');
     expect(opened?.notice).toMatch(/restart the dev server/i);
+    // `init` changes the user's files, so the notice asks first, as every other offer of it does.
+    expect(opened?.notice).toContain('Ask the user before you wire the app');
   });
 
   it('accepts a server running in a folder inside the project (a workspace app)', async () => {

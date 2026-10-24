@@ -20,6 +20,7 @@
 
 import { isLoopbackHostname, LeaseNotReadyReason } from '@reticlehq/core';
 import type { LeaseReaderFailure } from './lease-readiness.js';
+import { INIT_COMMAND } from '@/portal/session/no-session-next-action.js';
 
 /** What the daemon can say for certain at the moment a lease comes back unconnected. */
 export interface LeaseEvidence {
@@ -191,7 +192,7 @@ export function leaseNotConnectedHint(
       true === evidence.sdkMarker
         ? ''
         : ' That may have been a DIFFERENT app, though: this one may carry no Reticle SDK at all, ' +
-          'in which case run `reticle init` in ITS directory first — every cause below assumes the ' +
+          `in which case ask the user, then run \`${INIT_COMMAND}\` in ITS directory — every cause below assumes the ` +
           'SDK is already installed.';
     // Never beside a marker that WAS found: "it ships the SDK" and "the build stripped it" cannot
     // both be the story.
@@ -219,7 +220,7 @@ export function leaseNotConnectedHint(
   const noSdk =
     true === evidence.sdkMarker
       ? ''
-      : ' If the app carries no Reticle SDK at all, run `reticle init` in it first.' +
+      : ` If the app carries no Reticle SDK at all, ask the user, then run \`${INIT_COMMAND}\` in it.` +
         (false === evidence.sdkMarker || isRemoteUrl(url) ? PRODUCTION_STUB : '');
   return `${opening}${nuxt}${marker} ${PORT_DIFFERENTIAL}${noSdk} ${REAL_CAUSES} ${RELEASE}`;
 }

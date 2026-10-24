@@ -23,7 +23,7 @@ export const PLUGIN_NAME = 'reticle';
 
 /** Docs URL builder root for ESLintUtils.RuleCreator. */
 export const DOCS_URL_ROOT =
-  'https://github.com/reticlehq/reticle/blob/main/eslint-plugin/README.md';
+  'https://github.com/reticlehq/reticle/blob/main/adapters/lint/eslint/README.md';
 
 /** Rule that keeps design-doc codes and internal version strings out of source comments. */
 export const INTERNAL_TAGS_RULE_NAME = 'no-internal-tags';

@@ -21,6 +21,13 @@ import {
 } from '@reticlehq/core';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
 import { connectInstalls, runCloudCommand } from './cloud-cli.js';
+import { EMAIL_SIGN_IN_REMOVED } from './cloud-login.js';
+
+// The device flow opens a browser; a test must never.
+vi.mock('./auth/device-flow.js', async (original) => ({
+  ...(await original<typeof import('./auth/device-flow.js')>()),
+  openBrowser: () => undefined,
+}));
 
 interface RecordedRequest {
   url: string;
@@ -162,9 +169,18 @@ describe('cloud-cli verb contracts (#555)', () => {
    */
   describe('auto-link after login only fires for a repo that can actually report', () => {
     const loginResponder = (url: string): { body: unknown } =>
-      url.endsWith('/v1/auth/request-code')
-        ? { body: { devCode: '654321' } }
-        : { body: { token: 'tok_1', org: { name: 'Acme', id: 'org_acme' } } };
+      url.endsWith('/v1/auth/device/start')
+        ? {
+            body: {
+              deviceCode: 'd',
+              userCode: 'U',
+              verificationUri: 'https://app.test/device',
+              verificationUriComplete: 'https://app.test/device?code=U',
+              interval: 0,
+              expiresAt: Date.now() + 60_000,
+            },
+          }
+        : { body: { status: 'approved', token: 'tok_1', org: { name: 'Acme', id: 'org_acme' } } };
 
     it('does not link a directory that has a .reticle/ but no .reticle.json', async () => {
       process.env['RETICLE_CLOUD_URL'] = TEST_URL;
@@ -172,7 +188,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       // The artifacts directory alone — the shape bench-app was in.
       await writeRepoFile(['impact.json'], '{}');
 
-      const code = await runCloudCommand(['login', '--email', 'dev@example.com']);
+      const code = await runCloudCommand(['login']);
 
       expect(code).toBe(0);
       // Signed in, but nothing was minted or bound: no key request went out.
@@ -183,8 +199,7 @@ describe('cloud-cli verb contracts (#555)', () => {
     it('links when .reticle.json is present, which is what init writes', async () => {
       process.env['RETICLE_CLOUD_URL'] = TEST_URL;
       responder = (url) => {
-        if (url.endsWith('/v1/auth/request-code') || url.endsWith('/v1/auth/login'))
-          return loginResponder(url);
+        if (url.includes('/v1/auth/device/')) return loginResponder(url);
         if (url.endsWith('/v1/keys'))
           return { body: { projectId: 'p1', projectName: 'P1', key: 'rk_live_minted0000' } };
         // The responder cannot see the METHOD, and /v1/projects is both listed and created against.
@@ -193,37 +208,36 @@ describe('cloud-cli verb contracts (#555)', () => {
       };
       await writeFile(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'p1' }));
 
-      const code = await runCloudCommand(['login', '--email', 'dev@example.com']);
+      const code = await runCloudCommand(['login']);
 
       expect(code).toBe(0);
       expect(requests.filter((r) => r.url.endsWith('/v1/keys')).length).toBe(1);
     });
   });
 
-  it('login --email exchanges a dev-mailed code and persists the session (POST shapes)', async () => {
+  // The platform answers every email sign-in route with 410 email_sign_in_removed. A CLI that still
+  // asked for a code printed "check your inbox" for a code that never came.
+  it.each([
+    [['login', '--email', 'dev@example.com', '--org', 'Acme']],
+    [['login', '--email', 'dev@example.com', '--code', '654321']],
+    [['login', 'dev@example.com']],
+  ])('%j stops with the sentence and sends nothing', async (argv) => {
     process.env['RETICLE_CLOUD_URL'] = TEST_URL;
-    responder = (url) =>
-      url.endsWith('/v1/auth/request-code')
-        ? { body: { devCode: '654321' } }
-        : { body: { token: 'tok_1', org: { name: 'Acme' } } };
+    expect(await runCloudCommand(argv)).toBe(2);
+    expect(stderrBuf).toContain(EMAIL_SIGN_IN_REMOVED);
+    expect(requests).toEqual([]);
+  });
 
-    const code = await runCloudCommand(['login', '--email', 'dev@example.com', '--org', 'Acme']);
-
-    expect(code).toBe(0);
-    expect(requests).toHaveLength(2);
-    expect(requests[0]?.method).toBe('POST');
-    expect(requests[0]?.url).toBe(`${TEST_URL}/v1/auth/request-code`);
-    expect(requests[0]?.body).toEqual({ email: 'dev@example.com', orgName: 'Acme' });
-    expect(requests[0]?.authorization).toBeNull();
-    expect(requests[1]?.method).toBe('POST');
-    expect(requests[1]?.url).toBe(`${TEST_URL}/v1/auth/login`);
-    expect(requests[1]?.body).toEqual({ email: 'dev@example.com', code: '654321' });
-    const session = JSON.parse(
-      await readFile(join(home, RETICLE_DIR, SESSION_FILE), 'utf8'),
-    ) as Record<string, unknown>;
-    expect(session['token']).toBe('tok_1');
-    expect(session['orgName']).toBe('Acme');
-    expect(session['url']).toBe(TEST_URL);
+  it('a 410 from the platform prints its own sentence, never a stack trace', async () => {
+    process.env['RETICLE_CLOUD_URL'] = TEST_URL;
+    const said = 'Email sign-in is gone. Sign in with Google or GitHub.';
+    responder = () => ({
+      status: 410,
+      body: { error: { code: 'email_sign_in_removed', message: said } },
+    });
+    expect(await runCloudCommand(['login'])).toBe(1);
+    expect(stderrBuf).toContain(said);
+    expect(stderrBuf).not.toContain('    at ');
   });
 
   // `reticle connect --no-install` was refused as a usage error by the cloud half, after its init
