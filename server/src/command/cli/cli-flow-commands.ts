@@ -84,7 +84,10 @@ export async function loadNamedFlows(
   const flows: NamedFlow[] = [];
   for (const name of await store.list(projectId)) {
     const loaded = await store.load(name, projectId);
-    if (loaded.ok) flows.push({ name: loaded.value.name, steps: loaded.value.steps });
+    // The listed name is the address the suite replays. The name inside the file can disagree
+    // with it (a hand edit, a copy), and reporting that copy made `affected` name a flow `change`
+    // then could not find.
+    if (loaded.ok) flows.push({ name, steps: loaded.value.steps });
   }
   return flows;
 }

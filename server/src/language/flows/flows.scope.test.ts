@@ -86,6 +86,24 @@ describe('FlowStore — per-project storage (shared-daemon isolation)', () => {
     expect(await store.list(APP_B)).toEqual(['b-only', 'shared-legacy']);
   });
 
+  it('lists two namespaced flows under the names they were saved with', async () => {
+    await store.saveFlow(flow('onboarding/signup'));
+    await store.saveFlow(flow('admin/tiers'));
+    expect(await store.list()).toEqual(['admin/tiers', 'onboarding/signup']);
+    expect((await store.load('onboarding/signup')).ok).toBe(true);
+    expect((await store.load('admin/tiers')).ok).toBe(true);
+  });
+
+  it('lists namespaced flows inside a project under those same names', async () => {
+    await store.saveFlow(flow('onboarding/signup'), APP_A);
+    await store.saveFlow(flow('admin/tiers'), APP_A);
+    expect(await store.list(APP_A)).toEqual(['admin/tiers', 'onboarding/signup']);
+    expect((await store.load('onboarding/signup', APP_A)).ok).toBe(true);
+    expect((await store.load('admin/tiers', APP_A)).ok).toBe(true);
+    await store.saveFlow(flow('billing/refund'), APP_B);
+    expect(await store.list(APP_A)).not.toContain('billing/refund');
+  });
+
   it('unscoped list (CLI/CI) returns every flow across all projects + flat', async () => {
     await store.saveFlow(flow('a-only'), APP_A);
     await store.saveFlow(flow('b-only'), APP_B);

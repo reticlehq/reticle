@@ -74,6 +74,21 @@ describe('flow lookup is addressed by argument, not by the daemon’s cwd', () =
     }
   });
 
+  it('reports two namespaced flows under the names they were saved with', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-ns-'));
+    try {
+      const root = join(dir, '.reticle');
+      const fs = createNodeFileSystem();
+      const store = new FlowStore(fs, root, { now: () => 0 });
+      await store.save(program('onboarding/signup'), undefined, SESSION_PROJECT);
+      await store.save(program('admin/tiers'), undefined, SESSION_PROJECT);
+      const named = await loadNamedFlows(fs, root, SESSION_PROJECT);
+      expect(named.map((flow) => flow.name).sort()).toEqual(['admin/tiers', 'onboarding/signup']);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('takes the repo to diff from its caller', () => {
     expect(
       resolveChangedFiles.length,

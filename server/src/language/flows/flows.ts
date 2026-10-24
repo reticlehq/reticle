@@ -15,7 +15,7 @@ import {
 export { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
 import { changeInPlace } from './narrow-write.js';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { gitTracks } from '@/machine/git-tracks.js';
 export type { FlowResult } from './flow-result.js';
 import {
@@ -375,6 +375,31 @@ function withAnnotations(flow: FlowFile, ann: FlowAnnotations | undefined): Flow
 const JSON_INDENT = 2;
 const FLOW_SUFFIX = '.json';
 
+/** The name a flow file claims, when the text parses and the field is a non-empty string. */
+function flowNameInText(text: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  if ('object' !== typeof parsed || null === parsed || Array.isArray(parsed)) return undefined;
+  const name = (parsed as Record<string, unknown>)['name'];
+  return 'string' === typeof name && name.length > 0 ? name : undefined;
+}
+
+/**
+ * Drop the first directory of a path under `.reticle/flows/`.
+ *
+ * That directory is a project id for `app-a/signup`, and the flow's name is `signup`. For
+ * `app-a/onboarding/signup` the rest is already the namespaced name. A file that says its own name
+ * wins; this is only the fallback when it does not.
+ */
+function nameFromListing(relative: string): string {
+  const slash = relative.indexOf('/');
+  return -1 === slash ? relative : relative.slice(slash + 1);
+}
+
 /** Persists anchored flows to .reticle/flows/<name>.json. Filesystem + clock are injected. */
 export class FlowStore {
   readonly #fs: FileSystemPort;
@@ -731,26 +756,60 @@ export class FlowStore {
   async #listOwn(projectId?: ProjectId): Promise<string[]> {
     const flowsDir = reticleDirPaths(this.#root).flows;
     const pid = safeProjectId(projectId);
-    const legacy = await this.#namesIn(flowsDir);
     if (pid !== undefined) {
-      const own = await this.#namesIn(flowDir(this.#root, pid));
+      // Flat files in `.reticle/flows/` are the legacy untagged set. Subdirectories of that folder
+      // are other projects, so this listing does not walk them. This project's own namespaces live
+      // under its directory, and those are walked.
+      const legacy = await this.#namesIn(flowsDir);
+      const own = await this.#namesDeep(flowDir(this.#root, pid));
       return [...new Set([...own, ...legacy])].sort();
     }
-    if (!(await this.#fs.exists(flowsDir))) return [];
+    return this.#unscopedNames(flowsDir);
+  }
+
+  /** Flow names at any depth under `dir`. `onboarding/signup.json` is `onboarding/signup`. */
+  async #namesDeep(dir: string, prefix = ''): Promise<string[]> {
+    if (!(await this.#fs.exists(dir))) return [];
     let entries: string[];
     try {
-      entries = await this.#fs.readdir(flowsDir);
+      entries = await this.#fs.readdir(dir);
     } catch {
-      return legacy.sort();
+      return [];
     }
-    // Every subdirectory of `.reticle/flows/` is a project's, by construction: this class is the
-    // only thing that creates one, and it creates it from a projectId that already passed
-    // `safeProjectId`. Reading the name back is the third provenance boundary, not a cast.
-    const subdirs = entries.filter((e) => !e.endsWith(FLOW_SUFFIX));
-    const nested = (
-      await Promise.all(subdirs.map((d) => this.#namesIn(flowDir(this.#root, asProjectId(d)))))
-    ).flat();
-    return [...new Set([...legacy, ...nested])].sort();
+    const names: string[] = [];
+    for (const entry of entries) {
+      const relative = '' === prefix ? entry : `${prefix}/${entry}`;
+      if (entry.endsWith(FLOW_SUFFIX)) {
+        names.push(relative.slice(0, -FLOW_SUFFIX.length));
+        continue;
+      }
+      names.push(...(await this.#namesDeep(join(dir, entry), relative)));
+    }
+    return names;
+  }
+
+  /**
+   * Every flow in the store, named the way it was saved.
+   *
+   * A directory directly under `.reticle/flows/` is not always a project. `onboarding/signup` is a
+   * file inside `onboarding/`, and that directory is a namespace. The name in the file tells those
+   * apart: a project file says `signup`, a namespaced file says `onboarding/signup`.
+   */
+  async #unscopedNames(flowsDir: string): Promise<string[]> {
+    const relative = await this.#namesDeep(flowsDir);
+    const names = await Promise.all(
+      relative.map(async (rel) => {
+        if (!rel.includes('/')) return rel;
+        let text: string;
+        try {
+          text = await this.#fs.readFile(join(flowsDir, `${rel}.json`));
+        } catch {
+          return nameFromListing(rel);
+        }
+        return flowNameInText(text) ?? nameFromListing(rel);
+      }),
+    );
+    return [...new Set(names)].sort();
   }
 
   /** The path a flow actually lives at: nested (per-project) if present, else legacy flat, else null. */
