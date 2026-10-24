@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: a non-string `name` (or other string-typed field) in `target` is now refused with a clear error instead of being silently dropped.** When `target.name` is an object, a number, or an array, `resolveActTarget` returns `"target.name must be a string, got <type>"` before the query runs. Previously the field was ignored and the query matched every element with the given role, which either acted on the wrong element or produced a misleading ambiguity refusal. The check covers `name`, `role`, `testid`, `text`, `label`, `placeholder`, and `alt`. Closes [#1777](https://github.com/reticlehq/reticle/issues/1777).

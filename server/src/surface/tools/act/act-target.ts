@@ -73,7 +73,9 @@ export async function resolveActTarget(
     if (isGlobalPressCall(args)) return { kind: 'global', ref: '' };
     return { kind: 'error', message: MISSING_ACT_TARGET };
   }
-  const q = normalizeQueryArgs(asRecord(target));
+  const targetRecord = asRecord(target);
+  const q = normalizeQueryArgs(targetRecord);
+  if (q instanceof Error) return { kind: 'error', message: q.message };
   /*
    * Look again while the step's own budget lasts, instead of once.
    *
