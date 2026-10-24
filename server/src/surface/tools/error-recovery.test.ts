@@ -23,6 +23,7 @@ import {
   MSG_HARNESS_UNCONFIRMED,
   MSG_NO_HARNESS_KEY,
 } from './harness-explore.js';
+import { navFailureMessage } from './lease-seed.js';
 
 describe('recoveryFor — every known error carries an actionable next move', () => {
   it('maps the no-session footgun to a concrete recovery', () => {
@@ -936,5 +937,55 @@ describe('a RETICLE_CHROMIUM_PATH the daemon cannot launch', () => {
   it('wins over a rule that a word in the path would otherwise match', () => {
     const message = refusal('/srv/throttled/reticle_lease/chrome', ChromiumPathProblem.MISSING);
     expect(buildErrorPayload(message).recovery).toBe(RECOVERY.CHROMIUM_PATH);
+  });
+});
+
+/**
+ * A lease navigation where nothing is listening at the URL. The message asks "is the app running?"
+ * but does not name the fix; a self-recovering analysis would miss the concrete next step (#1678).
+ */
+describe('a lease navigation to a URL where nothing is serving (#1678)', () => {
+  const refused = navFailureMessage(
+    'http://localhost:3000',
+    new Error('net::ERR_CONNECTION_REFUSED'),
+  );
+  const timedOut = navFailureMessage(
+    'http://localhost:3000',
+    new Error('Timeout 30000ms exceeded.\nnet::ERR_TIMED_OUT'),
+  );
+  const certErr = navFailureMessage(
+    'http://localhost:3000',
+    new Error('net::ERR_CERT_AUTHORITY_INVALID'),
+  );
+
+  it('refused: recovery names starting the app and acquiring again, no feedback ask', () => {
+    const payload = buildErrorPayload(refused);
+    expect(payload.recovery).toBe(RECOVERY.LEASE_NAV);
+    expect(payload.recovery).toMatch(/Start the app/i);
+    expect(payload.feedback).toBeUndefined();
+  });
+
+  it('refused: refusal reason is NOT_READY, not OTHER', () => {
+    expect(refusalReasonFor(refused)).toBe(RefusalReason.NOT_READY);
+  });
+
+  it('timed out: already self-recovering — no extra recovery hint and no feedback ask', () => {
+    const payload = buildErrorPayload(timedOut);
+    expect(payload.recovery).toBeUndefined();
+    expect(payload.feedback).toBeUndefined();
+  });
+
+  it('timed out: refusal reason is NOT_READY, not OTHER', () => {
+    expect(refusalReasonFor(timedOut)).toBe(RefusalReason.NOT_READY);
+  });
+
+  it('cert error: already self-recovering — no extra recovery hint and no feedback ask', () => {
+    const payload = buildErrorPayload(certErr);
+    expect(payload.recovery).toBeUndefined();
+    expect(payload.feedback).toBeUndefined();
+  });
+
+  it('cert error: refusal reason is NOT_READY, not OTHER', () => {
+    expect(refusalReasonFor(certErr)).toBe(RefusalReason.NOT_READY);
   });
 });
