@@ -50,7 +50,13 @@ import {
   closeModalOnEscape,
   keyboardEvent,
 } from './actions-press.js';
-import { anchorOf, result, type ActionEffect, type ActionResult } from './action-report.js';
+import {
+  anchorOf,
+  result,
+  type ActionEffect,
+  type ActionResult,
+  type CapturedAnchor,
+} from './action-report.js';
 
 function asString(value: unknown, fallback = ''): string {
   return 'string' === typeof value ? value : fallback;
@@ -110,6 +116,15 @@ const CLICK_LIKE = new Set<string>([
 function dragTargetRef(args: Record<string, unknown>): string {
   const named = asString(args['toRef']);
   return '' !== named ? named : asString(args['target']);
+}
+
+/** The drop target's anchor, read while it is still mounted. Absent for a free drag. */
+function capturedDrop(args: Record<string, unknown>): CapturedAnchor | undefined {
+  const toRef = dragTargetRef(args);
+  if ('' === toRef) return undefined;
+  const resolved = refs.resolve(toRef);
+  if (!isActionTarget(resolved)) return undefined;
+  return anchorOf(resolved);
 }
 
 /**
@@ -639,6 +654,7 @@ export async function executeAction(
   // A refless press reports no anchor: minting a testid/component of whatever is focused would
   // invent a target the caller did not name.
   const anchor = named ? anchorOf(el) : {};
+  const drop = named && ActionType.DRAG === action ? capturedDrop(args) : undefined;
   const visible = isVisible(el);
   const enabled = enabledOf(el);
   const prevFocus = activeRef(el);
@@ -742,8 +758,9 @@ export async function executeAction(
           ? ActionWarning.CLICK_NOT_A_CONTROL
           : undefined;
   const done = result(ref, action, effect, settled, settleReason, anchor, warning);
+  const reported = drop === undefined ? done : { ...done, drop };
   // Only reachable with the HUD exposed: said so the recorder keeps it out of the app's flows.
-  return isReticleUi(el) ? { ...done, reticleUi: true } : done;
+  return isReticleUi(el) ? { ...reported, reticleUi: true } : reported;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => nativeSetTimeout(r, ms));
@@ -771,6 +788,8 @@ interface SequenceStepResult {
   role?: string;
   name?: string;
   source?: { file: string; line: number; column?: number };
+  /** The drag's drop target, so a saved sequence can anchor it. See ActionResult.drop. */
+  drop?: CapturedAnchor;
   secret?: true;
   /** best-effort caveat for this step (e.g. synthetic hover may not fire enter/leave). */
   warning?: string;
@@ -799,6 +818,7 @@ export async function executeSequence(steps: ActionStep[]): Promise<{
     if (res.role !== undefined) stepBase.role = res.role;
     if (res.name !== undefined) stepBase.name = res.name;
     if (res.source !== undefined) stepBase.source = res.source;
+    if (res.drop !== undefined) stepBase.drop = res.drop;
     if (res.secret !== undefined) stepBase.secret = res.secret;
     if (res.warning !== undefined) stepBase.warning = res.warning;
     stepResults.push(stepBase);

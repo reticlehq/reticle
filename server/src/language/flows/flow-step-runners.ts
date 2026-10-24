@@ -23,7 +23,7 @@ import {
   type Predicate,
 } from '@reticlehq/core';
 import { ReticleTool, isGlobalPressCall } from '@reticlehq/core';
-import { replayActionArgs } from './replay.js';
+import { resolveActionArgs } from './replay.js';
 import { isStaleRefError } from '@/surface/tools/act/act-sequence-retry.js';
 import { waitForReaction } from '@/surface/tools/act/react-grace.js';
 import { unreachableTargetNote } from '@/surface/tools/act/act-observation.js';
@@ -232,7 +232,7 @@ export async function actOnResolvedRef(
       const r = await session.command(ReticleCommand.ACT, {
         ref: at,
         action: step.action ?? '',
-        args: replayActionArgs(step.args, confirmDangerous, field),
+        args: await resolveActionArgs(session, step.args, confirmDangerous, field),
       });
       return { ok: r.ok, error: r.error, result: r.result };
     } finally {
@@ -646,7 +646,7 @@ export async function runSequenceStep(
         live: {
           ref: '',
           action: sub.action ?? '',
-          args: replayActionArgs(sub.args, confirmDangerous, undefined),
+          args: await resolveActionArgs(session, sub.args, confirmDangerous, undefined),
         },
       };
     }
@@ -686,7 +686,12 @@ export async function runSequenceStep(
         action: sub.action ?? '',
         // Each sub-step carries its OWN anchor, so each gets its own field name. A sequence that ends
         // in a login is the shape this was reported on, and the sub-step is where the fill lives.
-        args: replayActionArgs(sub.args, confirmDangerous, anchorFieldName(sub.anchor)),
+        args: await resolveActionArgs(
+          session,
+          sub.args,
+          confirmDangerous,
+          anchorFieldName(sub.anchor),
+        ),
       },
     };
   };

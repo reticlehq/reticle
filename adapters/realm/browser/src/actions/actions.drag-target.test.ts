@@ -65,6 +65,16 @@ describe('drag refuses a target it cannot resolve', () => {
     ).rejects.toThrow(/e999-does-not-exist/);
   });
 
+  it('reports the drop target anchor, so a later page can find it without the old ref', async () => {
+    document.body.innerHTML =
+      '<div id="a" data-testid="card">A</div><div id="b" data-testid="bin">B</div>';
+    const a = document.getElementById('a');
+    const b = document.getElementById('b');
+    if (null === a || null === b) throw new Error('fixture missing');
+    const res = await executeAction(refs.refFor(a), ActionType.DRAG, { toRef: refs.refFor(b) });
+    expect(res.drop?.testid).toBe('bin');
+  });
+
   it('still allows a genuine free drag when no target is named at all', async () => {
     const { a } = pair();
     await expect(executeAction(refs.refFor(a), ActionType.DRAG, {})).resolves.toBeDefined();

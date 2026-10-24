@@ -125,6 +125,11 @@ export interface ActionResult {
   warning?: string;
   /** The target is Reticle's own UI (reachable only with the HUD exposed): never an app step. */
   reticleUi?: true;
+  /**
+   * The drop target of a drag, read before the gesture. `args.toRef` is a ref from this page
+   * load. A saved flow keeps this anchor and resolves it on the next one.
+   */
+  drop?: CapturedAnchor;
 }
 
 /** The element's stable anchor: testid (gold), else component/source (auto-anchor). */

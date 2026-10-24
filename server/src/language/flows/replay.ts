@@ -5,6 +5,7 @@ import {
   secretValue,
 } from './fields/flow-secret-field.js';
 import {
+  ActionType,
   EventType,
   FlowPredicateSchema,
   MUTATING_METHODS,
@@ -83,6 +84,36 @@ export function replayActionArgs(
     if (supplied !== undefined && supplied.length > 0) args['value'] = supplied;
   }
   return args;
+}
+
+/**
+ * Replay args, with a drag's saved drop anchor turned back into a live `toRef`.
+ *
+ * The anchor was saved because the ref from the recording page does not exist after a reload.
+ */
+export async function resolveActionArgs(
+  session: {
+    command(
+      name: string,
+      args?: Record<string, unknown>,
+      timeoutMs?: number,
+    ): Promise<CommandResult>;
+  },
+  value: unknown,
+  confirmDangerous = false,
+  field?: string,
+): Promise<Record<string, unknown>> {
+  const live = replayActionArgs(value, confirmDangerous, field);
+  const to = live['to'];
+  if (null === to || 'object' !== typeof to || Array.isArray(to)) return live;
+  const resolved = await resolveRef(session, to as Record<string, unknown>);
+  if (0 === resolved.ref.length) {
+    throw new Error('drag target anchor did not resolve to an element');
+  }
+  const next = { ...live };
+  delete next['to'];
+  next['toRef'] = resolved.ref;
+  return next;
 }
 
 /**
@@ -295,12 +326,52 @@ function compileAnchorArgs(
   return compiled;
 }
 
+function anchoredDragTarget(
+  action: string,
+  res: Record<string, unknown>,
+  actArgs: Record<string, unknown>,
+): Record<string, unknown> {
+  if (ActionType.DRAG !== action) return actArgs;
+  const to = dropAnchor(asRecord(res['drop']));
+  if (to === undefined) return actArgs;
+  const next = { ...actArgs };
+  delete next['toRef'];
+  delete next['target'];
+  next['to'] = to;
+  return next;
+}
+
+function dropAnchor(drop: Record<string, unknown>): Record<string, unknown> | undefined {
+  const testid = asString(drop['testid']);
+  const shared = 'number' === typeof drop['testidOf'] && 1 < drop['testidOf'];
+  const role = asString(drop['role']);
+  const name = asString(drop['name']);
+  const named = role !== undefined && name !== undefined;
+  if (testid !== undefined && !(shared && named)) return { by: QueryBy.TESTID, value: testid };
+  if (named) {
+    const out: Record<string, unknown> = { by: QueryBy.ROLE, value: role, name };
+    if ('number' === typeof drop['nth'] && 'number' === typeof drop['of']) {
+      out['nth'] = drop['nth'];
+      out['of'] = drop['of'];
+    }
+    return out;
+  }
+  const component = asString(drop['component']);
+  const source = sourceFromResult(drop);
+  if (component === undefined && source === undefined) return undefined;
+  const out: Record<string, unknown> = { by: QueryBy.COMPONENT };
+  if (component !== undefined) out['component'] = component;
+  if (source !== undefined) out['source'] = source;
+  return out;
+}
+
 function anchorArgs(
   r: Record<string, unknown>,
   ref: string,
   action: string,
-  actArgs: Record<string, unknown>,
+  rawArgs: Record<string, unknown>,
 ): { args: Record<string, unknown>; stable: boolean } {
+  const actArgs = anchoredDragTarget(action, r, rawArgs);
   // A document-key press with no ref ran live against no element (act-target resolves it to the
   // document), so there is nothing to anchor and nothing missing. It used to fall through to the
   // ref-bound branch with an empty ref, which saved as the degraded placeholder and drifted on every
@@ -410,24 +481,19 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
  * the first of them.
  */
 async function resolveRef(
-  session: Session,
-  step: {
-    by?: unknown;
-    value?: unknown;
-    ref?: unknown;
-    name?: unknown;
-    component?: unknown;
-    source?: unknown;
-    nth?: unknown;
-    of?: unknown;
-    action?: unknown;
-    args?: unknown;
+  session: {
+    command(
+      name: string,
+      args?: Record<string, unknown>,
+      timeoutMs?: number,
+    ): Promise<CommandResult>;
   },
+  step: Record<string, unknown>,
 ): Promise<{ ref: string; note?: string }> {
   // Dispatched the way it ran live: at the document, with no ref. See compileAnchorArgs.
   if (isDocumentPress(step)) return { ref: '' };
-  const by = asString(step.by);
-  const value = asString(step.value);
+  const by = asString(step['by']);
+  const value = asString(step['value']);
   if (by === QueryBy.TESTID && value !== undefined) {
     const result = await session.command(ReticleCommand.QUERY, { by, value });
     if (!result.ok) throw new Error(result.error ?? 'query failed');
@@ -439,7 +505,7 @@ async function resolveRef(
   // Role + accessible NAME: the anchor that distinguishes one row's control from another's, which
   // neither a testid-less app nor a shared JSX source location can do.
   if (by === QueryBy.ROLE && value !== undefined) {
-    const name = asString(step.name);
+    const name = asString(step['name']);
     const query: Record<string, unknown> = { by, value, ...(name === undefined ? {} : { name }) };
     const result = await session.command(ReticleCommand.QUERY, query);
     if (!result.ok) throw new Error(result.error ?? 'query failed');
@@ -452,8 +518,8 @@ async function resolveRef(
     return meant === undefined ? { ref, note: ambiguousRoleNote(value, String(name)) } : { ref };
   }
   if (by === QueryBy.COMPONENT) {
-    const component = asString(step.component);
-    const source = step.source;
+    const component = asString(step['component']);
+    const source = step['source'];
     const query: Record<string, unknown> = {
       by,
       ...(component === undefined ? {} : { component, value: component }),
@@ -476,7 +542,7 @@ async function resolveRef(
         }
       : { ref };
   }
-  const ref = asString(step.ref);
+  const ref = asString(step['ref']);
   if (ref === undefined || 0 === ref.length) {
     throw new Error('step has no resolvable anchor (testid, role+name, component) and no ref');
   }
@@ -579,7 +645,12 @@ export async function replayProgram(
           liveSteps.push({
             ref,
             action: asString(sub['action']) ?? '',
-            args: replayActionArgs(sub['args'], confirmDangerous, recordedFieldName(sub)),
+            args: await resolveActionArgs(
+              session,
+              sub['args'],
+              confirmDangerous,
+              recordedFieldName(sub),
+            ),
           });
         }
         // Attribute the step's effects to the step: unattributed effects are learned as ambient
@@ -604,7 +675,8 @@ export async function replayProgram(
           r = await session.command(ReticleCommand.ACT, {
             ref,
             action: asString(step.args['action']) ?? '',
-            args: replayActionArgs(
+            args: await resolveActionArgs(
+              session,
               step.args['args'],
               confirmDangerous,
               recordedFieldName(step.args),
