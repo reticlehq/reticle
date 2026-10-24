@@ -272,10 +272,12 @@ export async function dragElement(
   source: ActionTarget,
   target: ActionTarget | null,
   data: unknown,
+  /** Pixels from the source centre. Set only when the caller named no drop target. */
+  by?: { x: number; y: number },
 ): Promise<boolean> {
   const dest = target ?? source;
   const from = centreOf(source);
-  const to = centreOf(dest);
+  const to = undefined === by ? centreOf(dest) : { x: from.x + by.x, y: from.y + by.y };
   /** Is this path point inside an element's box? Rects are cached; jsdom reports zeros otherwise. */
   const sourceRect = source.getBoundingClientRect();
   const destRect = target !== null ? dest.getBoundingClientRect() : null;

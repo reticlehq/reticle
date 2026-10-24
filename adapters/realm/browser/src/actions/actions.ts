@@ -112,6 +112,47 @@ function dragTargetRef(args: Record<string, unknown>): string {
   return '' !== named ? named : asString(args['target']);
 }
 
+/** Keys `drag` reads. Anything else is a guess, and a guess used to drag nowhere and report success. */
+const DRAG_ARG_KEYS: ReadonlySet<string> = new Set(['toRef', 'target', 'data', 'by']);
+
+/**
+ * A pixel offset, or undefined when the call did not name one.
+ *
+ * A swipe has no drop target. `{ by: { x, y } }` is that distance from the element's centre.
+ * A value that is not two finite numbers is a refused call, not a drag of zero.
+ */
+function dragOffset(value: unknown): { x: number; y: number } | undefined {
+  if (undefined === value) return undefined;
+  if (null === value || 'object' !== typeof value || Array.isArray(value)) {
+    throw new Error('drag by must be args.by: { x, y }, both finite numbers');
+  }
+  const fields = value as Record<string, unknown>;
+  const x = asFiniteNumber(fields['x']);
+  const y = asFiniteNumber(fields['y']);
+  if (undefined === x || undefined === y) {
+    throw new Error('drag by must be args.by: { x, y }, both finite numbers');
+  }
+  return { x, y };
+}
+
+/** Refuse a drag argument this action would ignore, before any pointer event. */
+function assertDragArgs(args: Record<string, unknown>): { x: number; y: number } | undefined {
+  const dropped = Object.keys(args).filter(
+    (key) => !DRAG_ARG_KEYS.has(key) && !GENERIC_ACTION_ARG_KEYS.has(key),
+  );
+  if (0 < dropped.length) {
+    throw new Error(
+      `drag does not read ${dropped.join(', ')}. Name a drop target as args.toRef ` +
+        '(alias: args.target), or a pixel offset as args.by: { x, y }.',
+    );
+  }
+  const by = dragOffset(args['by']);
+  if (undefined !== by && '' !== dragTargetRef(args)) {
+    throw new Error('drag takes a drop target or a pixel offset, not both');
+  }
+  return by;
+}
+
 /**
  * The keys `upload` actually reads, and the generic ones every action accepts.
  *
@@ -598,9 +639,12 @@ async function dispatchOther(
       return !inputOk;
     }
     case ActionType.DRAG: {
+      const by = assertDragArgs(args);
       const toRef = dragTargetRef(args);
       // asString falls back to '' (never undefined), so the old `!== undefined` was always true and
       // handed '' to refs.resolve. A drag with NO target named is a free drag — resolve nothing.
+      // An offset is that free drag with a destination, so it does not look up a ref.
+      if (undefined !== by) return await dragElement(el, null, args['data'], by);
       if ('' === toRef) return await dragElement(el, null, args['data']);
       // A target WAS named and did not resolve. That is a malformed call, not a free drag: dragging
       // nowhere and reporting `ok: true` is a false green, and a guessed target name reads as "no
