@@ -664,6 +664,25 @@ describe('reticle_lease_acquire', () => {
     expect(probes).toEqual([]);
   });
 
+  it('names a refused dial, and the hint carries the cause', async () => {
+    const { pool } = fakePool();
+    const cause = 'the pairing token does not match';
+    const sessions = {
+      get: () => undefined,
+      all: () => [],
+      lastClosure: () => ({ at: 1, reason: cause }),
+    };
+
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { ready: boolean; notReadyReason?: string; hint?: string };
+
+    expect(result.ready).toBe(false);
+    expect(result.notReadyReason).toBe(LeaseNotReadyReason.SDK_DIAL_REFUSED);
+    expect(result.hint).toContain(cause);
+  }, 20_000);
+
   it('names the other reason when no SDK ever dialled in', async () => {
     // The two `ready: false` situations are opposite, and they used to share a bare `false`: check
     // the install, versus recover a tab that is wedged.

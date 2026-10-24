@@ -399,6 +399,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     notReadyReason: z
       .enum([
         LeaseNotReadyReason.SDK_NEVER_DIALLED,
+        LeaseNotReadyReason.SDK_DIAL_REFUSED,
         LeaseNotReadyReason.SDK_STOPPED_ANSWERING,
         LeaseNotReadyReason.TAB_HIDDEN,
         LeaseNotReadyReason.NOT_HTML_DOCUMENT,
@@ -406,7 +407,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       ])
       .optional()
       .describe(
-        'Present only when ready is false. sdk_never_dialled ⇒ nothing connected within the wait, so check the install (the app may not embed @reticlehq/core), unless the hint says the page was still loading, in which case it is a slow first compile and checking reticle_session { action: "list" } shortly is the next step. sdk_stopped_answering ⇒ an SDK did connect and has stopped replying, so the tab is wedged and needs recovering, not reinstalling. tab_hidden ⇒ the SDK answers but its tab is hidden, so timers and animations are throttled and nothing on it verifies; bring the tab to the front, or release and re-acquire. not_html_document ⇒ the URL is not an HTML page (an `.svg`, for example), so acquire an HTML page of the app instead. reader_failed ⇒ the zero-install reader failed, for example because the tab closed during setup; the hint gives the cause. For both, the lease is already released.',
+        'Present only when ready is false. sdk_never_dialled ⇒ nothing connected within the wait, so check the install (the app may not embed @reticlehq/core), unless the hint says the page was still loading, in which case it is a slow first compile and checking reticle_session { action: "list" } shortly is the next step. sdk_dial_refused ⇒ a page dialled and was turned away; the hint has the cause, so do not reinstall. sdk_stopped_answering ⇒ an SDK did connect and has stopped replying, so the tab is wedged and needs recovering, not reinstalling. tab_hidden ⇒ the SDK answers but its tab is hidden, so timers and animations are throttled and nothing on it verifies; bring the tab to the front, or release and re-acquire. not_html_document ⇒ the URL is not an HTML page (an `.svg`, for example), so acquire an HTML page of the app instead. reader_failed ⇒ the zero-install reader failed, for example because the tab closed during setup; the hint gives the cause. For both, the lease is already released.',
       ),
     expiresInMs: z
       .number()
@@ -662,10 +663,13 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       if (readerFailure === undefined) tellWatchers(deps, projectId, AGENT_DRIVING_ELSEWHERE);
       // ready means the SDK dialled in — not that contracts match. Carry the skew warning on acquire
       // so the agent does not learn it only after a CDP tool invents a closed page (#688).
+      const dialRefusal = !ready ? deps.sessions.lastClosure()?.reason : undefined;
       const mintReason =
         readerFailure?.reason ??
         (!ready
-          ? LeaseNotReadyReason.SDK_NEVER_DIALLED
+          ? dialRefusal !== undefined
+            ? LeaseNotReadyReason.SDK_DIAL_REFUSED
+            : LeaseNotReadyReason.SDK_NEVER_DIALLED
           : tabHidden(session)
             ? LeaseNotReadyReason.TAB_HIDDEN
             : undefined);

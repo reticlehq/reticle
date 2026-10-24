@@ -875,6 +875,8 @@ export type MessageKind = (typeof MessageKind)[keyof typeof MessageKind];
 export const LeaseNotReadyReason = {
   /** No SDK dialled in within the wait. The install is the thing to look at. */
   SDK_NEVER_DIALLED: 'sdk_never_dialled',
+  /** A page dialled and the bridge turned it away. The hint carries the cause. */
+  SDK_DIAL_REFUSED: 'sdk_dial_refused',
   /** One dialled in and stopped answering: the tab is attached but wedged. */
   SDK_STOPPED_ANSWERING: 'sdk_stopped_answering',
   /** The SDK answers, but its tab is hidden: timers and rAF are throttled, so nothing on it verifies. */
