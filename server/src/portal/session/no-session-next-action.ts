@@ -291,6 +291,13 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   const ports = facts.listening.join(', ');
   const only = 1 === facts.listening.length ? facts.listening[0] : undefined;
   const where = '' === ports ? 'on a port this daemon did not scan' : `${ports} listening`;
+  // The dev script's own port outranks a lone listener when the two disagree: the port scan is
+  // machine-wide and may belong to any project, while the dev script names THIS project's port.
+  // Only applies when the dev port is not already listening — if it is, `only` already carries it.
+  const devTarget =
+    facts.dev?.port !== undefined && !facts.listening.includes(facts.dev.port)
+      ? facts.dev.port
+      : undefined;
 
   // A refusal against a project that IS initialised here. The daemon has the config, so this is not
   // a scope problem — the page reached the right daemon and presented a credential it would not
@@ -432,6 +439,21 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     };
   }
 
+  // The dev script names a port that is not yet listening: the app has not started. Do not open it —
+  // opening a port nothing serves gives the wrong error. Start the dev server instead (#1687).
+  if (devTarget !== undefined) {
+    const dev = facts.dev!;
+    const inApp = dev.directory === undefined ? '' : `cd ${dev.directory} && `;
+    return {
+      action: NoSessionAction.START_DEV_SERVER,
+      command: `${inApp}${dev.command}`,
+      port: devTarget,
+      reason:
+        `something is listening (${ports}) but this project's dev script targets port ${String(devTarget)}, ` +
+        `which is not among them — the app is probably not running on its own port. ` +
+        `Run the dev script in the background, then call reticle_session { action: "list" } again.`,
+    };
+  }
   if (only === undefined) {
     return {
       action: NoSessionAction.OPEN_APP,

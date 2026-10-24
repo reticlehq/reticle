@@ -604,3 +604,41 @@ describe('nextActionFor: an app nobody has wired yet', () => {
     expect(next.reason).not.toContain('reticle_lease');
   });
 });
+
+describe('wired project: dev script names a port, but a different port is listening (#1687)', () => {
+  it('uses the dev-script port, not the unrelated listener', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [5173],
+      dev: { command: 'npm run dev', script: 'dev', port: 3000 },
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.port).toBe(3000);
+    expect(next.command).toContain('npm run dev');
+    expect(next.command).not.toContain('5173');
+  });
+
+  it('when multiple listeners but dev script names a port, uses the dev port', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [5173, 8080],
+      dev: { command: 'npm run dev', script: 'dev', port: 3000 },
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.port).toBe(3000);
+    expect(next.command).toContain('npm run dev');
+  });
+
+  it('when dev port IS the one listener, uses it normally', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [3000],
+      dev: { command: 'npm run dev', script: 'dev', port: 3000 },
+    });
+    expect(next.action).toBe(NoSessionAction.OPEN_APP);
+    expect(next.port).toBe(3000);
+  });
+});
