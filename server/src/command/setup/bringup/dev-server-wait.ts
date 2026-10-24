@@ -78,7 +78,7 @@ export function judgeWait(facts: WaitFacts): WaitVerdict {
  */
 const CRA_PORT_BUSY = /Something is already running on port (\d+)/i;
 const NAMED_PORT_BUSY = /Port (\d+) is (?:already )?in use/i;
-const EADDRINUSE_PORT = /(?:EADDRINUSE|address already in use)[^\d]*(\d+)/i;
+const EADDRINUSE_PORT = /(?:EADDRINUSE|address already in use)[^\n]*:(\d+)(?!\d)/i;
 
 export function portBusyMessage(output: string): string | undefined {
   const match =

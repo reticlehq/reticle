@@ -94,6 +94,24 @@ describe('a taken port is named, not reported as a silent exit (#802)', () => {
   it('stays quiet when the output does not name a busy port', () => {
     expect(portBusyMessage('Compiled successfully.')).toBeUndefined();
   });
+
+  it('reads the port after the host colon for IPv4', () => {
+    expect(
+      portBusyMessage('Error: listen EADDRINUSE: address already in use 0.0.0.0:3000'),
+    ).toMatch(/port 3000 is already in use/);
+  });
+
+  it('reads the port after the host colon for IPv6', () => {
+    expect(portBusyMessage('Error: listen EADDRINUSE: address already in use :::5173')).toMatch(
+      /port 5173 is already in use/,
+    );
+  });
+
+  it('reads the port after the host colon for 127.0.0.1', () => {
+    expect(
+      portBusyMessage('Error: listen EADDRINUSE: address already in use 127.0.0.1:5173'),
+    ).toMatch(/port 5173 is already in use/);
+  });
 });
 
 /**
