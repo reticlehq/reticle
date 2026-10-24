@@ -341,8 +341,20 @@ export async function replayNamedFlow(
   // connected session — and the hint below turns the wrong-page drift into an actionable next move.
   // Continuing at a step means the page is already there; going to the start would undo it.
   const { to, at: continueAt } = replayWindow(args);
+  const pool = deps.pool;
+  // Only a pool lease can say it is still loading; any other tab keeps the fixed window.
+  const stillLoading = pool === undefined ? undefined : () => pool.leaseLoading(connected.id);
   const arrival =
-    continueAt === undefined ? await arriveAtStartPath(deps.sessions, connected, loaded.value) : {};
+    continueAt === undefined
+      ? await arriveAtStartPath(
+          deps.sessions,
+          connected,
+          loaded.value,
+          undefined,
+          undefined,
+          stillLoading,
+        )
+      : {};
   // Continuing on `connected` after the tab left timed every step out on a dead handle (#1129).
   if (arrival.lost !== undefined) {
     const reason = arrival.lost;

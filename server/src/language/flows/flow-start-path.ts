@@ -24,6 +24,7 @@ import type { Session } from '@/portal/session/session.js';
 import { anchorPrecondition, anchorQueryArgs } from './flow-step-runners.js';
 import { queryRefs } from './replay.js';
 import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js';
+
 /** The slice of a session the start-path logic reads: the live URL plus the event buffer. */
 interface StartPathSession {
   url?: string;
@@ -81,7 +82,22 @@ export function startPathMismatchHint(
 
 /** How long replay waits for the SDK to reconnect on the start page before falling back to the hint. */
 const START_PATH_ARRIVAL_TIMEOUT_MS = 5_000;
+/**
+ * How long replay keeps waiting past that while the page says it is still loading (#1705). A dev
+ * server compiling a route on its first visit holds the document longer than 5s; the bound keeps a
+ * page that never finishes from holding the replay forever.
+ */
+const START_PATH_LOADING_CAP_MS = 30_000;
 const START_PATH_POLL_MS = 100;
+
+/** A probe that fails counts as loaded, so it can only end the wait, never stretch it. */
+async function pageStillLoading(probe: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return true === (await probe());
+  } catch {
+    return false;
+  }
+}
 
 const REAL_ARRIVAL_CLOCK: ArrivalClock = {
   now: () => Date.now(),
@@ -190,6 +206,9 @@ export async function arriveAtStartPath(
   flow: FlowFile,
   timeoutMs: number = START_PATH_ARRIVAL_TIMEOUT_MS,
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
+  /** Whether the tab is still loading; replay passes one for a pool lease, the only tab it can ask. */
+  stillLoading?: () => Promise<boolean>,
+  loadingCapMs: number = START_PATH_LOADING_CAP_MS,
 ): Promise<StartPathArrival> {
   const target = flow.startPath;
   if (target === undefined || 0 === target.length) return {};
@@ -225,13 +244,17 @@ export async function arriveAtStartPath(
     timeoutMs,
     clock,
     here,
+    stillLoading,
+    loadingCapMs,
   );
   if ('lost' === outcome.kind) {
+    const why = outcome.stillLoading
+      ? 'The page was still loading when replay stopped waiting: check that the app finishes loading, then replay'
+      : 'A slow or backgrounded tab can take longer to come back: bring it to the front and replay';
     return {
       lost:
         `replay ${here ? 'reloaded' : 'navigated to'} ${target} before step 1 and no page was connected ` +
-        `after ${String(timeoutMs)}ms, so the session it was driving is gone and nothing ran. A slow ` +
-        `or backgrounded tab can take longer to come back: bring it to the front and replay`,
+        `after ${String(outcome.waitedMs)}ms, so the session it was driving is gone and nothing ran. ${why}`,
     };
   }
   if ('refused' === outcome.kind) return {};
@@ -286,7 +309,7 @@ export type NavigateOutcome =
   | { kind: 'arrived'; session: Session }
   | { kind: 'redirected'; session: Session }
   | { kind: 'refused' }
-  | { kind: 'lost' };
+  | { kind: 'lost'; waitedMs: number; stillLoading: boolean };
 
 export async function navigateAndAwait(
   sessions: SessionManager,
@@ -302,6 +325,9 @@ export async function navigateAndAwait(
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
   /** True when the destination is the page we are already on — see `arrivedSuccessor`. */
   isReload: boolean = false,
+  /** Whether the navigated page is still loading; absent when it cannot be asked. */
+  stillLoading?: () => Promise<boolean>,
+  loadingCapMs: number = START_PATH_LOADING_CAP_MS,
 ): Promise<NavigateOutcome> {
   // A leased tab is addressed by URL params, so navigating without them would strand the lease.
   const url = carryReticleIdentity(session.url, destination);
@@ -315,15 +341,19 @@ export async function navigateAndAwait(
     // startPath died at step 1 on an app that had loaded perfectly. Anything else is a real refusal.
     if (!isDocumentGoneError(error)) return { kind: 'refused' };
   }
-  const deadline = clock.now() + timeoutMs;
+  const start = clock.now();
+  const deadline = start + timeoutMs;
+  const cap = start + Math.max(timeoutMs, loadingCapMs);
   for (;;) {
     const arrived = arrivedSuccessor(sessions, session.id, expectedPath, session, isReload);
     if (true === arrived?.matches) return { kind: 'arrived', session: arrived.session };
-    // A live redirect is a different result from no SDK reconnection at all.
-    if (clock.now() >= deadline)
-      return arrived === undefined
-        ? { kind: 'lost' }
-        : { kind: 'redirected', session: arrived.session };
+    if (clock.now() >= deadline) {
+      // A live redirect is a different result from no SDK reconnection at all.
+      if (arrived !== undefined) return { kind: 'redirected', session: arrived.session };
+      const loading = stillLoading !== undefined && (await pageStillLoading(stillLoading));
+      if (!loading || clock.now() >= cap)
+        return { kind: 'lost', waitedMs: clock.now() - start, stillLoading: loading };
+    }
     await clock.sleep(START_PATH_POLL_MS);
   }
 }

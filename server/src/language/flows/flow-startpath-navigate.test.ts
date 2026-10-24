@@ -310,6 +310,63 @@ describe('arriveAtStartPath — replay navigates to the flow start page before s
     expect(arrived.lost).toContain('no page was connected after 500ms');
   });
 
+  // #1705: a dev server compiling the route on first visit holds the document past the window.
+  it('keeps waiting past the window while the page is still loading', async () => {
+    const { session } = tab('http://localhost:3000/reset-password');
+    // The SDK reconnects on the eleventh look, at t=1000ms, twice the 500ms window.
+    const sessions = manager([
+      ...Array<Partial<Session>>(10).fill(session),
+      successor('http://localhost:3000/login'),
+    ]);
+    const arrived = await arriveAtStartPath(
+      sessions,
+      session,
+      flow('/login'),
+      500,
+      instantClock(100),
+      () => Promise.resolve(true),
+      3_000,
+    );
+    expect(arrived.lost).toBeUndefined();
+    expect(arrived.session?.id).toBe('fresh');
+  });
+
+  it('stops at the cap when the page never finishes loading, and says how long it waited', async () => {
+    const { session } = tab('http://localhost:3000/reset-password');
+    const arrived = await arriveAtStartPath(
+      manager([session]),
+      session,
+      flow('/login'),
+      500,
+      instantClock(100),
+      () => Promise.resolve(true),
+      3_000,
+    );
+    expect(arrived.session).toBeUndefined();
+    expect(arrived.lost).toContain('no page was connected after 3000ms');
+    expect(arrived.lost).toContain('still loading');
+  });
+
+  it('does not wait past the window once the page has finished loading', async () => {
+    const { session } = tab('http://localhost:3000/reset-password');
+    let asked = 0;
+    const arrived = await arriveAtStartPath(
+      manager([session]),
+      session,
+      flow('/login'),
+      500,
+      instantClock(100),
+      () => {
+        asked++;
+        return Promise.resolve(false);
+      },
+      3_000,
+    );
+    expect(asked).toBeGreaterThan(0);
+    expect(arrived.lost).toContain('no page was connected after 500ms');
+    expect(arrived.lost).not.toContain('still loading');
+  });
+
   it('uses a live successor on an auth redirect instead of calling the page lost', async () => {
     const { session } = tab('http://localhost:3000/home');
     const login = successor('http://localhost:3000/auth');
