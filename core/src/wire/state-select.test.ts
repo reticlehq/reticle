@@ -7,6 +7,23 @@ describe('selectPath', () => {
     expect(selectPath(root, 'items.1.id')).toEqual({ found: true, value: 2 });
   });
 
+  it('reads a bracket index the same way as a dotted index', () => {
+    const root = { items: [{ id: 'a1' }, { id: 'b2' }] };
+    expect(selectPath(root, 'items[0].id')).toEqual(selectPath(root, 'items.0.id'));
+    expect(selectPath(root, 'items[1].id')).toEqual({ found: true, value: 'b2' });
+  });
+
+  it('reads the first element of an array root by 0 or [0]', () => {
+    const root = [{ id: 'a1' }, { id: 'b2' }];
+    expect(selectPath(root, '0.id')).toEqual({ found: true, value: 'a1' });
+    expect(selectPath(root, '[0].id')).toEqual(selectPath(root, '0.id'));
+  });
+
+  it('does not treat a padded bracket index as an index', () => {
+    const root = { items: [{ id: 'a1' }, { id: 'b2' }] };
+    expect(selectPath(root, 'items[01].id').found).toBe(false);
+  });
+
   it('reports found:false + availableKeys on a missing key', () => {
     const r = selectPath({ a: 1, b: 2 }, 'c');
     expect(r.found).toBe(false);

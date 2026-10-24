@@ -268,7 +268,9 @@ const DEFAULT_SURFACE_BYTE_BUDGET = 32_000;
 
 describe('advertised surface cost', () => {
   it(`the default surface fits in ${String(DEFAULT_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {
-    const bytes = bytesOf(await listToolsJson(TOOL_SURFACE.DEFAULT, 'no-session', false));
+    const json = await listToolsJson(TOOL_SURFACE.DEFAULT, 'no-session', false);
+    expect(json).toContain('items[0].id');
+    const bytes = bytesOf(json);
     // A budget assertion alone passes on an EMPTY payload, which is how a broken transport reads as
     // a spectacular saving. Both this and the stability checks below serialize the same call, so one
     // floor covers them all.

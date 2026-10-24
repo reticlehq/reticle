@@ -213,18 +213,31 @@ export interface FieldReading {
   availableKeys?: string[];
 }
 
+/** A JSON object or a JSON array. Both can be walked by a field path. */
+export type JsonFields = Record<string, unknown> | unknown[];
+
+/** An own field. An array is indexed only by a canonical index, which is the only key JSON gives it. */
+function ownField(actual: JsonFields, key: string): unknown {
+  if (Array.isArray(actual)) {
+    const index = Number(key);
+    return String(index) === key ? actual[index] : undefined;
+  }
+  return actual[key];
+}
+
 /**
  * Read one pattern key out of a payload.
  *
  * A key the payload holds AS WRITTEN wins, so a literal `"a.b"` key keeps meaning what it always
- * meant. Otherwise a dotted key is a path in the grammar `state.path` already speaks — own keys and
- * canonical array indices, via `selectPath` — because most APIs wrap their answer
- * (`{ data: { status } }`) and a top-level-only match left `bodyContains` as the only reach for a
- * nested field, the substring a key name has already fooled once.
+ * meant. Otherwise a dotted key, or a bracket index (`items[0]`), is a path in the grammar
+ * `state.path` already speaks — own keys and canonical array indices, via `selectPath` — because
+ * most APIs wrap their answer (`{ data: { status } }`) and a top-level-only match left
+ * `bodyContains` as the only reach for a nested field, the substring a key name has already fooled
+ * once.
  */
-export function readField(actual: Record<string, unknown>, key: string): FieldReading {
-  if (Object.hasOwn(actual, key)) return { found: true, value: actual[key] };
-  if (!key.includes('.'))
+export function readField(actual: JsonFields, key: string): FieldReading {
+  if (Object.hasOwn(actual, key)) return { found: true, value: ownField(actual, key) };
+  if (!key.includes('.') && !key.includes('['))
     return { found: false, value: undefined, availableKeys: Object.keys(actual) };
   const selection = selectPath(actual, key);
   return selection.found
@@ -245,10 +258,7 @@ export function readField(actual: Record<string, unknown>, key: string): FieldRe
  * compared whole, as `equals` is: loosening that would quietly turn every existing exact assertion
  * into a partial one, and the dotted path is the field-by-field form.
  */
-export function dataMatches(
-  actual: Record<string, unknown>,
-  pattern: Record<string, unknown>,
-): boolean {
+export function dataMatches(actual: JsonFields, pattern: Record<string, unknown>): boolean {
   for (const [key, want] of Object.entries(pattern)) {
     if (!matchValue(readField(actual, key).value, want)) return false;
   }
@@ -263,7 +273,7 @@ export function dataMatches(
  * dotted path that would have matched the one field, because that is the mistake it almost always is.
  */
 export function describeFieldMiss(
-  actual: Record<string, unknown>,
+  actual: JsonFields,
   pattern: Record<string, unknown>,
 ): string | undefined {
   for (const [key, want] of Object.entries(pattern)) {
@@ -299,14 +309,15 @@ export function describeBodyFieldMiss(
   return actual === undefined ? undefined : describeFieldMiss(actual, pattern);
 }
 
-export function parseJsonObject(body: string): Record<string, unknown> | undefined {
+export function parseJsonObject(body: string): JsonFields | undefined {
   let payload: unknown;
   try {
     payload = JSON.parse(body);
   } catch {
     return undefined;
   }
-  if (null === payload || 'object' !== typeof payload || Array.isArray(payload)) return undefined;
+  if (null === payload || 'object' !== typeof payload) return undefined;
+  if (Array.isArray(payload)) return payload as unknown[];
   return payload as Record<string, unknown>;
 }
 
@@ -316,8 +327,8 @@ export function parseJsonObject(body: string): Record<string, unknown> | undefin
  * A parent redacted wholesale (`{ secrets: "[REDACTED]" }`) makes every field under it unreadable,
  * and reporting that as "missing" would blame the server for the observer's own redaction.
  */
-export function redactedOnPath(actual: Record<string, unknown>, key: string): boolean {
-  if (Object.hasOwn(actual, key)) return REDACTED_VALUE === actual[key];
+export function redactedOnPath(actual: JsonFields, key: string): boolean {
+  if (Object.hasOwn(actual, key)) return REDACTED_VALUE === ownField(actual, key);
   const segments = key.split('.');
   for (let i = 1; i <= segments.length; i += 1) {
     const prefix = selectPath(actual, segments.slice(0, i).join('.'));
@@ -339,12 +350,12 @@ export type BodyFieldVerdict = 'match' | 'mismatch' | { redacted: string };
  * JSON field match over a captured body, for either half of the exchange.
  *
  * One function because both halves ask the identical question, and the request side already had
- * this exact sequence written out — parse, reject a non-object, check the wanted keys for
- * `[REDACTED]`, then `dataMatches`.
+ * this exact sequence written out — parse, reject anything that is not a JSON object or array,
+ * check the wanted keys for `[REDACTED]`, then `dataMatches`.
  *
- * A body that is not a JSON object counts as a mismatch rather than an error: guessing at form
- * encoding here would answer a different question than the one asked, and the substring clauses
- * exist for those bodies.
+ * A body that is not JSON, or is a JSON scalar, counts as a mismatch rather than an error: guessing
+ * at form encoding here would answer a different question than the one asked, and the substring
+ * clauses exist for those bodies. A top-level array is a body, and `0.id` reads it.
  */
 export function matchJsonBody(body: string, pattern: Record<string, unknown>): BodyFieldVerdict {
   const actual = parseJsonObject(body);

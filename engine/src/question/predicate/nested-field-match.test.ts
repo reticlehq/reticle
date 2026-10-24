@@ -72,6 +72,27 @@ describe('bodyMatches reaches a nested field by its dotted path', () => {
     expect((await response(WRAPPED, { 'items.1.id': 'a1' })).pass).toBe(false);
   });
 
+  it('reads items[0].id the same way as items.0.id', async () => {
+    const dotted = await response(WRAPPED, { 'items.0.id': 'a1' });
+    const bracket = await response(WRAPPED, { 'items[0].id': 'a1' });
+    expect(dotted.pass).toBe(true);
+    expect(bracket.pass).toBe(true);
+    expect(bracket.failureReason).toBe(dotted.failureReason);
+  });
+
+  it('still matches a key that is literally named items[0]', async () => {
+    const body = JSON.stringify({ 'items[0]': 'literal', items: ['indexed'] });
+    expect((await response(body, { 'items[0]': 'literal' })).pass).toBe(true);
+  });
+
+  it('reads a top-level array body by 0.id and [0].id', async () => {
+    const body = JSON.stringify([{ id: 'a1' }, { id: 'b2' }]);
+    expect((await response(body, { '0.id': 'a1' })).pass).toBe(true);
+    expect((await response(body, { '[0].id': 'a1' })).pass).toBe(true);
+    expect((await response(body, { '[1].id': 'b2' })).pass).toBe(true);
+    expect((await response(body, { '[0].id': 'b2' })).pass).toBe(false);
+  });
+
   it('applies operators at any depth', async () => {
     expect((await response(WRAPPED, { 'data.total': { $gte: 10 } })).pass).toBe(true);
     expect((await response(WRAPPED, { 'items.length': 2 })).pass).toBe(true);

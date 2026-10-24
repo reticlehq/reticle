@@ -108,14 +108,49 @@ function miss(value: unknown): PathSelection {
 }
 
 /**
+ * `items[0]` is an index, unless the value actually has a key by that name.
+ *
+ * A dotted index (`items.0`) already walked. The bracket form was one segment, so it was read as a
+ * key called `items[0]` and missed. A key that really is named `items[0]` still wins. `01` inside
+ * the brackets is not an index, for the same reason `items.01` is not.
+ */
+function unpackBracket(current: unknown, segment: string): string[] | undefined {
+  if (!segment.includes('[')) return undefined;
+  if ('object' === typeof current && null !== current && Object.hasOwn(current, segment)) {
+    return undefined;
+  }
+  const parts: string[] = [];
+  let rest = segment;
+  while (rest.includes('[')) {
+    const matched = /^([^[\]]*)\[(\d+)\](.*)$/.exec(rest);
+    if (null === matched) return undefined;
+    const index = matched[2] ?? '';
+    if (String(Number(index)) !== index) return undefined;
+    const name = matched[1] ?? '';
+    if (name.length > 0) parts.push(name);
+    parts.push(index);
+    rest = matched[3] ?? '';
+    if (rest.startsWith('.')) rest = rest.slice(1);
+  }
+  if (rest.length > 0) parts.push(rest);
+  return 0 === parts.length ? undefined : parts;
+}
+
+/**
  * Walk `path` (e.g. "captionCache.v3.0.text") into `root`. Empty path returns root unchanged.
- * Segments are own keys, canonical array indices, Map keys, Set members, `length` on an
- * array/string, or `size` on a Set/Map.
+ * Segments are own keys, canonical array indices, bracket indices (`items[0]`), Map keys, Set
+ * members, `length` on an array/string, or `size` on a Set/Map.
  */
 export function selectPath(root: unknown, path: string): PathSelection {
   const segments = path.split('.').filter((s) => s.length > 0);
   let current: unknown = root;
-  for (const segment of segments) {
+  for (let i = 0; i < segments.length; i += 1) {
+    const raw = segments[i] ?? '';
+    const unpacked = unpackBracket(current, raw);
+    if (unpacked !== undefined) {
+      segments.splice(i, 1, ...unpacked);
+    }
+    const segment = segments[i] ?? '';
     if (LENGTH_SEGMENT === segment && hasIntrinsicLength(current)) {
       current = current.length;
       continue;
