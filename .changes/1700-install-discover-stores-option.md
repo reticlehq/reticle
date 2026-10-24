@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/react` — `install()` accepts `{ discoverStores: false }` to opt out of provider-store auto-discovery.** An app with more than one context provider had no way to stop `install()` from registering every store it found in the fiber tree. The only escape was to skip `install()` and call `registerAdapter` by hand, which also dropped the render meter. `install({ discoverStores: false })` now skips `autoRegisterStores` entirely while keeping commit counting and the `__reticle_renders` store intact. Explicit `registerStore('safe', myStore)` calls continue to work. `install()` and `install({})` are unchanged. Closes [#1700](https://github.com/reticlehq/reticle/issues/1700).

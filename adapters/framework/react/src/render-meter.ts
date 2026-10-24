@@ -66,13 +66,14 @@ const DISCOVERY_COMMITS = 10;
  * ran would have got none at all.
  */
 let discoveryAttempts = 0;
+let shouldDiscover = true;
 
 /** One React commit: bump the counter, fire hydration on the first, and feed the throttled stream. */
 function onReactCommit(): void {
   commits += 1;
   hydration.onCommit();
   commitStream.onCommit();
-  if (discoveryAttempts < DISCOVERY_COMMITS && 'undefined' !== typeof document) {
+  if (shouldDiscover && discoveryAttempts < DISCOVERY_COMMITS && 'undefined' !== typeof document) {
     discoveryAttempts += 1;
     // Never allowed to break a render: this runs inside React's own commit callback.
     try {
@@ -126,13 +127,33 @@ export function resetRenderMeter(): void {
   commits = 0;
 }
 
+/** Options for {@link installRenderMeter}. */
+export interface RenderMeterOptions {
+  /**
+   * When true (default), walk the React fiber tree after early commits and auto-register
+   * discovered stores. When false, skip auto-discovery entirely.
+   */
+  discoverStores?: boolean;
+}
+
+/** Reset internal state for test isolation. */
+export function resetRenderMeterForTest(): void {
+  installed = false;
+  shouldDiscover = true;
+  discoveryAttempts = 0;
+  commits = 0;
+}
+
 /**
  * Install (or augment) the React commit hook + register the `__reticle_renders` store. Idempotent and
  * never throws. Call BEFORE react-dom loads.
  */
-export function installRenderMeter(): void {
+export function installRenderMeter(options?: RenderMeterOptions): void {
   if (installed) return;
   installed = true;
+  if (false === options?.discoverStores) {
+    shouldDiscover = false;
+  }
   try {
     const root = globalThis as unknown as Record<string, DevtoolsHook | undefined>;
     // Adopt the pre-hook if the Vite plugin installed one.

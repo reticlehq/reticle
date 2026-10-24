@@ -168,6 +168,11 @@ export interface ReticleVitePluginOptions {
   /** Auto-inject the dev-gated reticle.connect call. Default true. */
   inject?: boolean;
   /**
+   * Auto-register context stores found in the React fiber tree (Redux, QueryClient, etc.).
+   * Default true. Set false to disable store discovery in React apps.
+   */
+  discoverStores?: boolean;
+  /**
    * This build is an Electron/Tauri renderer. Changes two things a desktop shell needs and a web app
    * must not get:
    *
@@ -518,7 +523,8 @@ export function connectModuleSource(
   const args = connectArgs(options);
   const sdk = installedSdk(options.root ?? process.cwd());
   const named = sdk.usesInstall ? 'reticle, install' : 'reticle';
-  const call = sdk.usesInstall ? 'install();\n' : '';
+  const installArg = false === options.discoverStores ? '{ discoverStores: false }' : '';
+  const call = sdk.usesInstall ? `install(${installArg});\n` : '';
   // The only place in a Vite app that can see hot updates. `import.meta.hot` exists per module and
   // only for modules Vite serves through its own transform; the SDK is a dependency, pre-bundled by
   // the optimizer, and gets no hot context however it is written — so the channel is handed to it

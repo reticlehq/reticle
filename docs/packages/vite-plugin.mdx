@@ -67,6 +67,7 @@ Plus a dynamic import of your dev module if one exists. It looks for `src/reticl
 | `present` | `boolean` | `true`. Set `false` to hide Reticle's presenter while keeping the agent connection active |
 | `sourceMapping` | `boolean` | `true`. Set `false` to skip the Babel pass |
 | `inject` | `boolean` | `true`. Set `false` to call `connect()` yourself |
+| `discoverStores` | `boolean` | `true`. Set `false` to disable auto-discovery of context stores in React apps (`install({ discoverStores: false })`) |
 | `desktop` | `boolean` | `false`. When `true` the connect passes `allowInProduction: true`, which an Electron or Tauri renderer needs, and a `vite build` in a non-production mode (`--mode development`) is instrumented too. A production-mode build is stubbed like a web build |
 | `captureNetworkBodies` | `boolean` | `false`. Also enabled by `VITE_RETICLE_CAPTURE_BODIES=1` |
 | `networkBodyMaxChars` | `number` | `8192`, clamped to 256 to 262144. Also `VITE_RETICLE_BODY_MAX_CHARS` |

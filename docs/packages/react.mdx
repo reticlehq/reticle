@@ -32,9 +32,21 @@ reticle.connect();
 
 | Export | Signature | What it does |
 | --- | --- | --- |
-| `install` | `(): void` | Idempotent. Registers the `react` adapter and installs the render meter. Call it once, before `connect()` |
+| `install` | `(options?: InstallOptions): void` | Idempotent. Registers the `react` adapter and installs the render meter. Call it once, before `connect()` |
 
-The [Vite plugin](/packages/vite-plugin) injects `install()` and `reticle.connect()` for you, so a Vite user never writes either line.
+#### `InstallOptions`
+
+| Option | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `discoverStores` | `boolean` | `true` | When `true`, `install` walks the React fiber tree after each of the first ten commits and registers stores it finds in Redux `Provider`, TanStack `QueryClientProvider`, and similar context providers. Set to `false` to skip auto-discovery. Use this when your app has more than one context provider and you want only the stores you name with `registerStore` to appear in `reticle_look`. The render meter still runs. |
+
+```ts
+// Only expose the store you control:
+install({ discoverStores: false });
+registerStore('safe', safeStore);
+```
+
+The [Vite plugin](/packages/vite-plugin) injects `install()` and `reticle.connect()` for you. In Vite, pass `discoverStores: false` to the plugin (`reticle({ discoverStores: false })`) to disable auto-discovery. With manual setup, pass `{ discoverStores: false }` to `install()` before calling `reticle.connect()`.
 
 ### Mapping a node to its component
 
