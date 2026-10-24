@@ -35,6 +35,7 @@ import { isValidRunId, stepShotDir } from '@/memory/project/dir/reticle-dir.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { UPLOAD_TEXT_MAX } from '@reticlehq/core/artifacts';
+import { sdkBehindNote } from '@/command/version/version-skew.js';
 
 /** The connected tab, as the tool layer hands it out. */
 type Session = ReturnType<ToolDeps['sessions']['resolve']>;
@@ -99,6 +100,10 @@ async function browserPixels(deps: ToolDeps, session: Session): Promise<Uint8Arr
   const opts = { jpegQuality: CDP_QUALITY, cssScale: true };
   const leased = await deps.pool?.screenshotLease(session.id, opts);
   if (leased !== undefined) return leased;
+  // A lease capture that failed still has a reason. Leaving it on the floor made the only text
+  // the page's "I cannot draw", which says nothing about the browser that was asked first.
+  const failed = deps.pool?.leaseCaptureError(session.id);
+  if (failed !== undefined) throw new Error(failed);
   // Only a provider driving THIS tab: a launched provider photographs the one page it owns whatever
   // url it is handed, which is how a screenshot of one tab was once filed under another (#1407).
   if (true !== (await deps.realInput?.isAvailableFor(session.url))) return undefined;
@@ -130,8 +135,11 @@ async function capture(deps: ToolDeps, session: Session): Promise<Pixels | strin
   }
   try {
     const drawn = await renderedPixels(session);
-    if ('string' === typeof drawn) reasons.push(`the page could not draw itself: ${drawn}`);
-    else {
+    if ('string' === typeof drawn) {
+      reasons.push(`the page could not draw itself: ${drawn}`);
+      const behind = sdkBehindNote(session.sdkVersion);
+      if (behind !== undefined) reasons.push(behind);
+    } else {
       const size = jpegSize(drawn);
       if (size !== undefined) return { bytes: drawn, source: ScreenshotSource.RENDERED, ...size };
       reasons.push('the page drew something that is not a JPEG');

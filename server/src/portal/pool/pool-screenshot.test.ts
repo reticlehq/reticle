@@ -83,7 +83,9 @@ describe('capturing a lease', () => {
     });
     const lease = await pool.acquire('http://app.test/');
     expect(await pool.screenshotLease(lease.sessionId)).toBeUndefined();
+    expect(pool.leaseCaptureError(lease.sessionId)).toBe('renderer busy');
     expect(await pool.screenshotLease(lease.sessionId)).toEqual(PNG);
+    expect(pool.leaseCaptureError(lease.sessionId)).toBeUndefined();
     await pool.shutdown();
   });
 

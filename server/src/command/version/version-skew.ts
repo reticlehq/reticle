@@ -24,6 +24,7 @@
  */
 
 import { RETIRED_WIRE_NAMES } from '@reticlehq/core';
+import { SERVER_VERSION } from './identity/server-version.js';
 import { resolveSdkFix } from './sdk-fix.js';
 
 /** Which pair disagreed. Named so the nudge can report each independently. */
@@ -210,10 +211,22 @@ export function compareVersions(a: string | undefined, b: string): number | unde
   return 0;
 }
 
+/** What to run so the page picks up the daemon's SDK. */
+const UPDATE_THE_SDK = "Run `reticle update` in the app's folder, then restart its dev server.";
+
 /** The same fact for the person looking at the page, on its overlay. */
 export const SDK_BEHIND_NARRATION = (sdk: string, daemon: string): string =>
-  `This app runs Reticle SDK ${sdk}, older than Reticle ${daemon}. Run \`reticle update\` in the ` +
-  "app's folder, then restart its dev server.";
+  `This app runs Reticle SDK ${sdk}, older than Reticle ${daemon}. ${UPDATE_THE_SDK}`;
+
+/**
+ * The sentence for a screenshot the page cannot draw because its SDK is behind this daemon.
+ *
+ * `render` is one of the things a behind page does not have. The refusal from the page names the
+ * missing command and nothing else; this is the same update the overlay already shows.
+ */
+export function sdkBehindNote(sdk: string | undefined): string | undefined {
+  return describeSdkBehind(sdk, SERVER_VERSION, () => UPDATE_THE_SDK);
+}
 
 /**
  * A page whose SDK is a minor release or more behind this daemon.

@@ -159,6 +159,8 @@ interface ActiveLease {
    * context for "why did the page look frozen for a moment", not a log an agent needs to replay.
    */
   lastDialogMessage?: string;
+  /** Why the last screenshot of this lease failed, if it did. Cleared by the next one that works. */
+  captureError?: string;
   /**
    * The disposable handle of the caller's init script, when the lease was opened with one — a stub
    * of the bindings a desktop shell injects. Disposed with the lease, so a reload or a later
@@ -390,13 +392,21 @@ export class BrowserPool {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease === undefined || lease.page.screenshot === undefined) return undefined;
     this.touch(sessionId);
+    delete lease.captureError;
     try {
       return await lease.page.screenshot(opts);
-    } catch {
-      // A capture that fails is not a broken lease. Report "could not capture" and leave the lease
-      // usable — the alternative is losing a working context to one bad frame.
+    } catch (error) {
+      // A capture that fails is not a broken lease. Keep the reason and leave the lease usable —
+      // the alternative is losing a working context to one bad frame, or a screenshot error that
+      // only says the page could not draw itself.
+      lease.captureError = error instanceof Error ? error.message : String(error);
       return undefined;
     }
+  }
+
+  /** The reason {@link screenshotLease} last failed for this session, if it did. */
+  leaseCaptureError(sessionId: string): string | undefined {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.captureError;
   }
 
   /** The URL a lease was opened on — the one that carries its Reticle identity. */
