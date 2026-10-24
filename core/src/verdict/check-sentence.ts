@@ -39,6 +39,17 @@ function elementNoun(query: ElementQuery): string {
   return `an element matching ${JSON.stringify(query)}`;
 }
 
+/** A route claim that names only the document title, so the sentence is about the title. */
+function titleOnly(
+  predicate: Extract<Predicate, { kind: typeof PredicateKind.ROUTE }>,
+): predicate is Extract<Predicate, { kind: typeof PredicateKind.ROUTE }> & { title: string } {
+  return (
+    undefined !== predicate.title &&
+    undefined === predicate.pathname &&
+    undefined === predicate.contains
+  );
+}
+
 /** What a claim is about, as a noun: "a PATCH request to /assignee", 'the text "Saved"'. */
 function noun(predicate: Predicate): string {
   switch (predicate.kind) {
@@ -51,6 +62,7 @@ function noun(predicate: Predicate): string {
     case PredicateKind.SIGNAL:
       return predicate.name === undefined ? 'a signal' : `the app reporting "${predicate.name}"`;
     case PredicateKind.ROUTE:
+      if (titleOnly(predicate)) return `the document title "${predicate.title}"`;
       return predicate.pathname !== undefined
         ? `a move to ${predicate.pathname}`
         : predicate.contains !== undefined
@@ -94,6 +106,7 @@ function missed(predicate: Predicate, assertion?: string): string {
         ? 'The app reported no signal'
         : `The app never reported "${predicate.name}"`;
     case PredicateKind.ROUTE:
+      if (titleOnly(predicate)) return `The document title never became "${predicate.title}"`;
       return predicate.pathname !== undefined
         ? `The page never moved to ${predicate.pathname}`
         : predicate.contains !== undefined

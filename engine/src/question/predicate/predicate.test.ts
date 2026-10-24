@@ -312,6 +312,40 @@ describe('predicate engine', () => {
     );
   });
 
+  it('route title matches the document title, and fails when that title does not change', async () => {
+    // A click that opens a record often leaves the path alone and renames the tab. The last title
+    // in the window is the one the click produced.
+    const changed = new FakeSession([
+      ev(EventType.ROUTE_CHANGE, {
+        pathname: '/invoices',
+        search: '',
+        hash: '',
+        title: 'Invoices',
+      }),
+      ev(EventType.ROUTE_CHANGE, {
+        pathname: '/invoices',
+        search: '',
+        hash: '',
+        title: 'Invoice 42',
+      }),
+    ]);
+    expect((await evaluatePredicate(changed, { kind: 'route', title: 'Invoice 42' })).pass).toBe(
+      true,
+    );
+
+    const unchanged = new FakeSession([
+      ev(EventType.ROUTE_CHANGE, {
+        pathname: '/invoices',
+        search: '',
+        hash: '',
+        title: 'Invoices',
+      }),
+    ]);
+    expect((await evaluatePredicate(unchanged, { kind: 'route', title: 'Invoice 42' })).pass).toBe(
+      false,
+    );
+  });
+
   it('route contains still matches a query string', async () => {
     const session = new FakeSession([
       ev(EventType.ROUTE_CHANGE, { pathname: '/search', search: '?q=widgets', hash: '' }),

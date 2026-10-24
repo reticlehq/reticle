@@ -25,6 +25,34 @@ describe('installRoute', () => {
     teardown = undefined;
   });
 
+  it('sends the document title, and a later title change that does not move the url', async () => {
+    document.title = 'Invoices';
+    const { emit, events } = collect();
+    teardown = installRoute(emit);
+
+    history.pushState({}, '', '/invoices/42');
+    expect(events[0]?.data['title']).toBe('Invoices');
+
+    document.title = 'Invoice 42';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(events.at(-1)?.data['title']).toBe('Invoice 42');
+    expect(String(events.at(-1)?.data['pathname'])).toContain('/invoices/42');
+  });
+
+  it('removes a known secret from the document title it sends', () => {
+    document.title = 'Invoice ghp_abcdefghijklmnopqrst';
+    const { emit, events } = collect();
+    teardown = installRoute(emit);
+
+    // A same-href push is dropped, so this cannot reuse the path the title test already opened.
+    history.pushState({}, '', '/invoices/secret');
+
+    const sent = JSON.stringify(events.map((event) => event.data));
+    expect(sent).not.toContain('ghp_abcdefghijklmnopqrst');
+    expect(events[0]?.data['title']).toBe('Invoice [REDACTED]');
+  });
+
   it('emits ROUTE_CHANGE on pushState to a new url', () => {
     const { emit, events } = collect();
     teardown = installRoute(emit);

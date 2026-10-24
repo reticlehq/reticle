@@ -1,7 +1,12 @@
-import { EventType, ROUTE_CHANGE_HOW_FIELD, RouteChangeHow } from '@reticlehq/core';
+import {
+  EventType,
+  ROUTE_CHANGE_HOW_FIELD,
+  RouteChangeHow,
+  redactUrl,
+  scrubKnownSecrets,
+} from '@reticlehq/core';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { captureMethod } from '@/patching/capture-method.js';
-import { redactUrl } from '@reticlehq/core';
 
 function snapshotLocation(): { pathname: string; search: string; hash: string; href: string } {
   return {
@@ -26,6 +31,7 @@ export function installRoute(emit: Emit): Teardown {
   // — including pushState/replaceState — so a later Back nav isn't compared against a stale href
   // (which made `to === from` trip and silently drop the back navigation).
   let lastHref = location.href;
+  let lastTitle = scrubKnownSecrets(document.title);
 
   // Guarded whole: this runs inside the app's own `history.pushState` (and inside a popstate
   // listener), so a throw anywhere in reading location or emitting would crash a router's navigate.
@@ -34,6 +40,8 @@ export function installRoute(emit: Emit): Teardown {
       const to = snapshotLocation();
       if (to.href === from) return;
       lastHref = to.href;
+      const title = scrubKnownSecrets(document.title);
+      lastTitle = title;
       // Compared raw above, sent redacted: a sign-in leaves its token in the query or fragment.
       emit(EventType.ROUTE_CHANGE, {
         from: redactUrl(from),
@@ -41,10 +49,34 @@ export function installRoute(emit: Emit): Teardown {
         pathname: to.pathname,
         search: redactUrl(to.search),
         hash: redactUrl(to.hash),
+        title,
         [ROUTE_CHANGE_HOW_FIELD]: how,
       });
     });
   };
+
+  // A click can rename the tab without moving the URL. `fire` drops a same-href update, so the
+  // title is watched on its own and sent as a replace of the current address.
+  const titles = new MutationObserver(() => {
+    const next = scrubKnownSecrets(document.title);
+    if (next === lastTitle) return;
+    lastTitle = next;
+    observeSafely(() => {
+      const loc = snapshotLocation();
+      emit(EventType.ROUTE_CHANGE, {
+        from: redactUrl(loc.href),
+        to: redactUrl(loc.href),
+        pathname: loc.pathname,
+        search: redactUrl(loc.search),
+        hash: redactUrl(loc.hash),
+        title: next,
+        [ROUTE_CHANGE_HOW_FIELD]: RouteChangeHow.REPLACE,
+      });
+    });
+  });
+  if (null !== document.head) {
+    titles.observe(document.head, { subtree: true, characterData: true, childList: true });
+  }
 
   const patchedPush = (data: unknown, unused: string, url?: string | URL | null): void => {
     const from = location.href;
@@ -71,6 +103,7 @@ export function installRoute(emit: Emit): Teardown {
     // uninstall THEIR instrumentation too — the SDK harming the app it only meant to observe.
     if (history.pushState === patchedPush) history.pushState = origPush;
     if (history.replaceState === patchedReplace) history.replaceState = origReplace;
+    titles.disconnect();
     ac.abort();
   };
 }

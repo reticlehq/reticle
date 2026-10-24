@@ -140,9 +140,10 @@ describe('refusing what was already true before the action', () => {
     expect(reason).toContain('reticle_observe');
   });
 
-  it('allows a route that names a pathname or a substring', () => {
+  it('allows a route that names a pathname, a substring, or a document title', () => {
     expect(vacuousPredicateReason({ kind: 'route', pathname: '/checkout' })).toBeUndefined();
     expect(vacuousPredicateReason({ kind: 'route', contains: 'checkout' })).toBeUndefined();
+    expect(vacuousPredicateReason({ kind: 'route', title: 'Invoice 42' })).toBeUndefined();
   });
 
   it('allows a state predicate that names a path, or compares the whole store', () => {

@@ -60,6 +60,21 @@ describe('parseEventPayload', () => {
     expect(r.success).toBe(true);
   });
 
+  it('keeps a document title on a route change', () => {
+    const r = parseEventPayload(EventType.ROUTE_CHANGE, {
+      from: '/a',
+      to: 'http://x/b',
+      pathname: '/b',
+      search: '',
+      hash: '',
+      title: 'Invoice 42',
+      [ROUTE_CHANGE_HOW_FIELD]: RouteChangeHow.REPLACE,
+    });
+    expect(r.success).toBe(true);
+    if (!r.success || null === r.data || 'object' !== typeof r.data) return;
+    expect('title' in r.data && r.data.title).toBe('Invoice 42');
+  });
+
   it('rejects a route.change that omits how, or names one outside push/replace/pop', () => {
     expect(
       parseEventPayload(EventType.ROUTE_CHANGE, {

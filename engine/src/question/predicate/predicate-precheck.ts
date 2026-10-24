@@ -72,7 +72,8 @@ export function unevaluablePredicateReason(predicate: unknown): string | undefin
  */
 const DECLARE_INSTEAD =
   'Declare something the action CHANGES: a `signal` (by name) or a `net` call (method, urlContains, ' +
-  'status) can be declared without knowing the app, a `route` needs a `pathname` or `contains`, and ' +
+  'status) can be declared without knowing the app, a `route` needs a `pathname`, `contains`, or ' +
+  '`title`, and ' +
   'a `state` needs a non-empty `path` or a value to compare. One reticle_observe call gives you the ' +
   "app's real signal names and endpoint paths to name here. Nothing was acted on: this predicate was " +
   'already true before the action, so the only thing it could ever have proved is that the action ' +
@@ -88,7 +89,8 @@ function vacuousLeafReason(p: Record<string, unknown>): string | undefined {
   if (
     PredicateKind.ROUTE === p['kind'] &&
     undefined === p['pathname'] &&
-    undefined === p['contains']
+    undefined === p['contains'] &&
+    undefined === p['title']
   )
     return (
       'a bare `route` predicate is true the moment it is written — there is always a current route, ' +

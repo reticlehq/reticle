@@ -35,6 +35,9 @@ describe('a check in words, when the agent gave none', () => {
     expect(failureSentence({ kind: PredicateKind.ROUTE, contains: 'issue=' })).toBe(
       'The address never came to hold "issue="',
     );
+    expect(failureSentence({ kind: PredicateKind.ROUTE, title: 'Invoice 42' })).toBe(
+      'The document title never became "Invoice 42"',
+    );
     expect(failureSentence({ kind: PredicateKind.SIGNAL, name: 'auth:code_sent' })).toBe(
       'The app never reported "auth:code_sent"',
     );

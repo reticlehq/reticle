@@ -25,6 +25,8 @@ interface RouteReading {
   /** The path the ROUTER is on: the fragment's path under a hash router, else the document path. */
   routePath: string;
   full: string;
+  /** `document.title` from the route event. A current-URL fallback has none. */
+  title?: string;
   decidedBy: (typeof RouteDecidedBy)[keyof typeof RouteDecidedBy];
   data: Record<string, unknown>;
 }
@@ -62,6 +64,8 @@ interface RouteParts {
   hash: string;
   search: string;
   full: string;
+  /** `document.title` when the page sent one. Absent on a session URL, which has no title. */
+  title?: string;
 }
 
 function asPayload(value: unknown): Record<string, unknown> | undefined {
@@ -83,12 +87,14 @@ function partsFromPayload(data: Record<string, unknown>): RouteParts | undefined
   if (docPath === undefined) return undefined;
   const hash = str(data['hash']) ?? '';
   const search = str(data['search']) ?? '';
+  const title = str(data['title']);
   return {
     routePath: routePathOf(docPath, hash),
     docPath,
     hash,
     search,
     full: `${docPath}${search}${hash}`,
+    ...(undefined === title ? {} : { title }),
   };
 }
 
@@ -231,6 +237,7 @@ export function evalRoute(
           full: changed.full,
           decidedBy: RouteDecidedBy.CHANGE,
           data: routeEvidence({ ...last.data, decidedBy: RouteDecidedBy.CHANGE }),
+          ...(undefined === changed.title ? {} : { title: changed.title }),
         }
       : currentUrl === undefined || 0 === currentUrl.length
         ? undefined
@@ -250,7 +257,7 @@ export function evalRoute(
         failureReason: reason,
         inconclusive: reason,
         observed: `${unanswered.count} request(s) still in flight, no route change`,
-        expected: `a route change to ${p.pathname ?? p.contains ?? 'any route'}`,
+        expected: `a route change to ${p.pathname ?? p.contains ?? p.title ?? 'any route'}`,
         assertion: 'route.server-pending',
       };
     }
@@ -258,7 +265,7 @@ export function evalRoute(
       pass: false,
       failureReason: 'no route change observed',
       observed: 'no route change in the window',
-      expected: `a route change to ${p.pathname ?? p.contains ?? 'any route'}`,
+      expected: `a route change to ${p.pathname ?? p.contains ?? p.title ?? 'any route'}`,
       assertion: 'route.changed',
     };
   }
@@ -287,6 +294,20 @@ export function evalRoute(
       observed: `${describeRouteSource(reading)} '${fullRoute}'`,
       expected: `a route containing '${p.contains}'`,
       assertion: 'route.contains',
+    };
+  }
+  // Exact, like `pathname`. `contains` stays a URL substring, so a title is its own field.
+  if (p.title !== undefined && reading.title !== p.title) {
+    const got = reading.title;
+    return {
+      pass: false,
+      failureReason:
+        undefined === got
+          ? `document title was not sent, expected '${p.title}'`
+          : `document title is '${got}', expected '${p.title}'`,
+      observed: undefined === got ? 'document title was not sent' : `document title '${got}'`,
+      expected: `document title '${p.title}'`,
+      assertion: 'route.title',
     };
   }
   return {

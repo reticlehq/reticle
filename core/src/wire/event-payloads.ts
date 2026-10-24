@@ -228,6 +228,8 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     pathname: z.string(),
     search: z.string(),
     hash: z.string(),
+    // Present when the page read `document.title`. Older events omit it.
+    title: z.string().optional(),
     [ROUTE_CHANGE_HOW_FIELD]: z.nativeEnum(RouteChangeHow),
   }),
   [EventType.CONSOLE_LOG]: consoleSchema,

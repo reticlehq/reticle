@@ -82,7 +82,14 @@ export type Predicate =
       /** Repeats of this call are expected (a read over POST), so they are not a double submit. */
       repeatable?: boolean;
     }
-  | { kind: typeof PredicateKind.ROUTE; pathname?: string; contains?: string; since?: number }
+  | {
+      kind: typeof PredicateKind.ROUTE;
+      pathname?: string;
+      contains?: string;
+      /** Exact `document.title`, the way `pathname` is an exact path. */
+      title?: string;
+      since?: number;
+    }
   | {
       kind: typeof PredicateKind.CONSOLE;
       level?: string;
@@ -427,6 +434,7 @@ function predicateUnion() {
         kind: z.literal(PredicateKind.ROUTE),
         pathname: z.string().optional(),
         contains: z.string().optional(),
+        title: z.string().optional(),
         since: z.number().optional(),
       })
       .strict(),
