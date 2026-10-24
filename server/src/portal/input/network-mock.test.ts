@@ -212,3 +212,73 @@ describe('a delay with no substitute response delays the real one', () => {
     expect(out.kind).toBe('abort');
   });
 });
+
+/**
+ * A rule sets the response headers that the app reads (#1845).
+ *
+ * A rule took only `status` and `body`. So an app that reads `Retry-After`, `Content-Disposition`
+ * or a custom header could not be tested against a mocked response.
+ */
+describe('a rule sets response headers', () => {
+  const headers = { 'Retry-After': '30', 'X-Request-Id': 'abc' };
+
+  it('puts the headers on the fulfilled response', () => {
+    const out = matchMock([{ urlContains: '/api/pay', status: 429, headers }], {
+      url: 'https://app.test/api/pay',
+      method: 'POST',
+    });
+    expect(out).toEqual({ kind: 'fulfill', status: 429, contentType: 'application/json', headers });
+  });
+
+  it('fulfills headers with a delay, because headers say WHAT to return', () => {
+    const out = matchMock([{ urlContains: '/api/pay', delayMs: 300, headers }], {
+      url: 'https://app.test/api/pay',
+      method: 'POST',
+    });
+    expect(out.kind).toBe('fulfill');
+    expect(out.headers).toEqual(headers);
+  });
+
+  it('sends the headers to the route', async () => {
+    const { route, calls } = recordingRoute('/api/pay', 'POST');
+    await applyOutcome(route, { kind: 'fulfill', status: 429, headers }, () => Promise.resolve());
+    expect(calls).toEqual([
+      {
+        fn: 'fulfill',
+        arg: { status: 429, contentType: 'application/json', body: '', headers },
+      },
+    ]);
+  });
+
+  /*
+   * Playwright writes `contentType` over a `Content-Type` in `headers`. So the default
+   * `application/json` replaced the type the caller wrote, and the app read JSON.
+   */
+  for (const name of ['Content-Type', 'content-type']) {
+    it(`keeps a \`${name}\` header when the rule has no contentType`, async () => {
+      const csv = { [name]: 'text/csv' };
+      const out = matchMock([{ urlContains: '/export', body: 'a,b', headers: csv }], {
+        url: 'https://app.test/export',
+        method: 'GET',
+      });
+      expect(out.contentType).toBeUndefined();
+      const { route, calls } = recordingRoute('/export', 'GET');
+      await applyOutcome(route, out, () => Promise.resolve());
+      expect(calls).toEqual([{ fn: 'fulfill', arg: { status: 200, body: 'a,b', headers: csv } }]);
+    });
+  }
+
+  it('uses contentType when the rule has both, as Playwright does', () => {
+    const out = matchMock(
+      [
+        {
+          urlContains: '/export',
+          contentType: 'text/plain',
+          headers: { 'Content-Type': 'text/csv' },
+        },
+      ],
+      { url: 'https://app.test/export', method: 'GET' },
+    );
+    expect(out.contentType).toBe('text/plain');
+  });
+});

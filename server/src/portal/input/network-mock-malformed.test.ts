@@ -62,6 +62,33 @@ describe('a malformed mock rule is refused, not turned into a clear', () => {
     expect(rules[2]?.abort).toBe(true);
   });
 
+  it('keeps the response headers of a rule (#1845)', () => {
+    const rules = toRules([
+      { urlContains: '/api/pay', status: 429, headers: { 'Retry-After': '30' } },
+    ]);
+    expect(rules[0]?.headers).toEqual({ 'Retry-After': '30' });
+  });
+
+  it('refuses a header value that is not a string, and names `headers`', () => {
+    expect(() => toRules([{ urlContains: '/api/pay', headers: { 'Retry-After': 30 } }])).toThrow(
+      /mocks\.0\.headers\.Retry-After/,
+    );
+  });
+
+  /*
+   * Chromium does not fulfill a response with a header like these, and the request then waits
+   * for ever: the app shows a spinner and no error says why. Measured on a real lease.
+   */
+  for (const [label, headers] of [
+    ['a name with a space', { 'Retry After': '30' }],
+    ['an empty name', { '': '30' }],
+    ['a value with a line break', { 'X-Note': 'one\ntwo' }],
+  ] as const) {
+    it(`refuses ${label}, which would leave the request waiting`, () => {
+      expect(() => toRules([{ urlContains: '/api/pay', headers }])).toThrow(/mocks\.0\.headers/);
+    });
+  }
+
   it('still treats an explicit empty array as a deliberate clear', () => {
     // The documented way to turn mocking off must keep working — this fix must not make `[]` an error.
     expect(toRules([])).toEqual([]);
