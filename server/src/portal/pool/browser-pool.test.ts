@@ -232,6 +232,22 @@ describe('BrowserPool', () => {
     ]);
   });
 
+  // #1705: replay asks by session id, which may be the app's own name for the lease.
+  it('answers whether a lease is loading by its id or its alias, and false for a non-lease', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+    const lease = await pool.acquire('http://localhost:3000/');
+    pool.alias('app-named', lease.sessionId);
+    const page = browsers[0]?.contexts[0]?.pages[0];
+    if (page === undefined) throw new Error('no page');
+    page.evaluateResult = 'loading';
+    expect(await pool.leaseLoading(lease.sessionId)).toBe(true);
+    expect(await pool.leaseLoading('app-named')).toBe(true);
+    page.evaluateResult = 'complete';
+    expect(await pool.leaseLoading('app-named')).toBe(false);
+    expect(await pool.leaseLoading('not-a-lease')).toBe(false);
+  });
+
   it('reuses one browser across many leases; each context is isolated', async () => {
     const { launch, browsers } = fakeLauncher();
     const pool = new BrowserPool(launch, { maxContexts: 8, genSessionId: counterIds() });

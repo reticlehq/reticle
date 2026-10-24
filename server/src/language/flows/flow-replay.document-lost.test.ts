@@ -25,7 +25,8 @@ import {
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { DocumentLostDuringReplay, replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { SESSION_DISCONNECTED_REASON } from '@/portal/session/facts/session-replaced.js';
-import { lostDocumentResult, navigateAndAwait } from './flow-replay-run.js';
+import { lostDocumentResult } from './flow-replay-run.js';
+import { navigateAndAwait } from './flow-start-path.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
 
@@ -215,6 +216,8 @@ describe('navigateAndAwait — the navigation that kills its own transport', () 
     expect(await navigateAndAwait(sessions, dying, 'http://x/login', '/login', 300, clock)).toEqual(
       {
         kind: 'lost',
+        waitedMs: 300,
+        stillLoading: false,
       },
     );
   });

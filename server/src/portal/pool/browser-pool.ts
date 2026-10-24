@@ -178,6 +178,13 @@ interface ActiveLease {
   ignoresHTTPSErrors: boolean;
 }
 
+/** Whether the page's document has not finished loading. A page that cannot be asked counts as loaded. */
+async function pageLoading(page: PooledPage): Promise<boolean> {
+  if (page.evaluate === undefined) return false;
+  const state = await page.evaluate('document.readyState');
+  return 'string' === typeof state && state !== 'complete';
+}
+
 /**
  * Owns a headless browser (and, when asked, a headed one) and leases isolated contexts out of them,
  * capped at `maxContexts` across both.
@@ -448,6 +455,20 @@ export class BrowserPool {
     try {
       await lease.page.emulateMedia(media);
       return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Whether this lease's page says it has not finished loading. False when this is not a lease, its
+   * page cannot be asked, or the question fails: unknown counts as loaded.
+   */
+  async leaseLoading(sessionId: string): Promise<boolean> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    if (lease === undefined) return false;
+    try {
+      return await pageLoading(lease.page);
     } catch {
       return false;
     }
@@ -784,11 +805,7 @@ export class BrowserPool {
           if (READER_NOT_HTML === (await page.evaluate(script))) throw new NotHtmlDocumentError();
           return true;
         },
-        isLoading: async (): Promise<boolean> => {
-          if (page.evaluate === undefined) return false;
-          const state = await page.evaluate('document.readyState');
-          return 'string' === typeof state && state !== 'complete';
-        },
+        isLoading: () => pageLoading(page),
       };
     } catch (err) {
       // Setup failed after we claimed the slot — give it back so a queued acquire isn't stuck, and
