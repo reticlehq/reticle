@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EventType } from './constants/constants.js';
+import { EventType, PerfMetric } from './constants/constants.js';
 import {
   EVENT_PAYLOAD_SCHEMAS,
   ROUTE_CHANGE_HOW_FIELD,
@@ -87,6 +87,18 @@ describe('parseEventPayload', () => {
       parseEventPayload(EventType.HUMAN_MARK, { note: '', anchor: 'testid:x', strategy: 'testid' })
         .success,
     ).toBe(false);
+  });
+
+  it('keeps the layout-shift baseline on a perf payload', () => {
+    const parsed = parseEventPayload(EventType.PERF, {
+      metric: PerfMetric.CLS,
+      value: 0.42,
+      prior: 0.25,
+      at: 10,
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).toMatchObject({ prior: 0.25, value: 0.42 });
   });
 
   it('rejects an unknown net.stream transport', () => {

@@ -82,6 +82,18 @@ function largestShifted(
     : { ref: refs.refFor(best.el), selector: shortSelector(best.el) };
 }
 
+/** True when every named source is Reticle's own UI. An unnamed source is the page. */
+function everySourceIsReticle(sources: readonly LayoutShiftSource[] | undefined): boolean {
+  if (sources === undefined || 0 === sources.length) return false;
+  for (const source of sources) {
+    const node = source.node ?? null;
+    if (null === node) return false;
+    const el = isElement(node) ? node : node.parentElement;
+    if (null === el || !isReticleOverlay(el)) return false;
+  }
+  return true;
+}
+
 /**
  * Observe the web-perf signals a screenshot tool fundamentally cannot verify — largest-contentful-paint
  * (LCP), cumulative layout shift (CLS), and long tasks — and emit them into the ring buffer so an agent
@@ -124,11 +136,15 @@ export function installPerf(emit: Emit): Teardown {
     const ls = e as LayoutShiftEntry;
     // Shifts within 500ms of a user input are expected (not CLS) — the spec's hadRecentInput flag.
     if (true === ls.hadRecentInput) return;
+    // The HUD moves on its own. Counting it makes an idle page look like it shifted.
+    if (everySourceIsReticle(ls.sources)) return;
+    const prior = cls;
     cls += ls.value ?? 0;
     const shifted = largestShifted(ls.sources);
     emit(EventType.PERF, {
       metric: PerfMetric.CLS,
       value: cls,
+      prior,
       at: Math.round(e.startTime),
       ...(shifted === undefined ? {} : { shifted }),
     });

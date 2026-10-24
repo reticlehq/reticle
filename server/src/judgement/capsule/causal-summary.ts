@@ -231,7 +231,8 @@ export function causalSummary(
   let route: string | undefined;
   const signals: string[] = [];
   const fieldsChanged: string[] = [];
-  let layoutShift: number | undefined;
+  let clsLast: number | undefined;
+  let clsBaseline: number | undefined;
   let longTasks = 0;
   let ignoredBookkeeping = 0;
 
@@ -305,7 +306,12 @@ export function causalSummary(
         break;
       case EventType.PERF:
         if (data['metric'] === PerfMetric.CLS && 'number' === typeof data['value']) {
-          layoutShift = Math.max(layoutShift ?? 0, data['value']);
+          // `value` is the page total since load. `prior` is that total before this shift, so the
+          // first event in the window carries the baseline the action did not cause.
+          if (clsBaseline === undefined) {
+            clsBaseline = 'number' === typeof data['prior'] ? data['prior'] : 0;
+          }
+          clsLast = data['value'];
         } else if (data['metric'] === PerfMetric.LONGTASK) {
           longTasks += 1;
         }
@@ -315,6 +321,10 @@ export function causalSummary(
     }
   }
 
+  const layoutShift =
+    clsLast === undefined || clsBaseline === undefined || clsLast <= clsBaseline
+      ? undefined
+      : clsLast - clsBaseline;
   const elided: Partial<Record<CappedList, number>> = {};
   // `stateSettleMs` is computed over EVERY diff, before the cap: the interval is a fact about the
   // store, and shrinking it because the evidence was trimmed would make the transient window read as

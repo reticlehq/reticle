@@ -74,6 +74,14 @@ describe('causalSummary', () => {
     expect(summary.longTasks).toBe(1);
   });
 
+  it('reports the layout shift inside this window, not the page total since load', () => {
+    const summary = causalSummary([
+      e(EventType.PERF, { metric: PerfMetric.CLS, value: 0.3, prior: 0.25, at: 1 }),
+      e(EventType.PERF, { metric: PerfMetric.CLS, value: 0.42, prior: 0.3, at: 2 }),
+    ]);
+    expect(summary.layoutShift).toBeCloseTo(0.17);
+  });
+
   it('reports state/storage as before→after DIFFS, using the shape the observers really emit', () => {
     // STATE_CHANGE is emitted by the store observer as { name, path, value, old } — `value` is the AFTER
     // side. An earlier version of this test invented an {old,new} shape, so stateDiffs silently stayed

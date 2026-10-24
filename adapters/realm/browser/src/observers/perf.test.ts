@@ -66,7 +66,7 @@ describe('installPerf', () => {
 
     const perf = t.events.filter((e) => e.type === EventType.PERF).map((e) => e.data);
     expect(perf).toContainEqual({ metric: PerfMetric.LCP, value: 1235, at: 1235 });
-    expect(perf).toContainEqual({ metric: PerfMetric.CLS, value: 0.12, at: 500 });
+    expect(perf).toContainEqual({ metric: PerfMetric.CLS, value: 0.12, prior: 0, at: 500 });
     expect(perf).toContainEqual({ metric: PerfMetric.LONGTASK, value: 80, at: 700 });
     expect(perf.filter((p) => p['metric'] === PerfMetric.CLS)).toHaveLength(1);
   });
@@ -157,6 +157,25 @@ describe('installPerf', () => {
       [...document.body.children].forEach((el, i) => {
         expect(document.querySelector(selectors[i] ?? ''), selectors[i]).toBe(el);
       });
+    });
+
+    it('does not count a shift whose sources are all Reticle UI', () => {
+      document.body.innerHTML = '<div data-reticle-hud></div><div id="banner"></div>';
+      const hud = document.querySelector('[data-reticle-hud]');
+      const banner = document.getElementById('banner');
+      const t = install();
+      byType('layout-shift')?.fire([
+        {
+          value: 0.4,
+          startTime: 100,
+          hadRecentInput: false,
+          sources: [{ node: hud, currentRect: rect(300, 300) }],
+        } as unknown as PerformanceEntry,
+      ]);
+      byType('layout-shift')?.fire([shift([{ node: banner, currentRect: rect(40, 20) }])]);
+      t();
+
+      expect(clsEvents(t).map((d) => d['value'])).toEqual([0.2]);
     });
 
     it("never names Reticle's own overlay, and omits the field when nothing can be named", () => {
