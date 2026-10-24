@@ -153,6 +153,13 @@ function isAuditTimestampKey(key: string): boolean {
 }
 
 /**
+ * Words an envelope uses for the call itself: `{ status: "success" }` next to `message` or `data`.
+ * They are not the value the caller asked to store. A copy of the same key inside the record is
+ * still compared, so a stored `status` that came back different is still a dropped write.
+ */
+const ENVELOPE_RESULT_WORDS: ReadonlySet<string> = new Set(['success', 'ok', 'error', 'failed']);
+
+/**
  * Every scalar value the response carries for each key, at any depth.
  *
  * Depth matters because the echo is usually nested — `{ok:true, saved:{...}}`, `{data:{...}}`,
@@ -164,10 +171,12 @@ function scalarsByKey(
   into: Map<string, Set<string>> = new Map(),
   depth = 0,
   omitSentinels = false,
+  omitEnvelopeResults = false,
 ): Map<string, Set<string>> {
   if (depth > 6 || into.size > MAX_ECHO_KEYS) return into;
   if (Array.isArray(body)) {
-    for (const item of body) scalarsByKey(item, into, depth + 1, omitSentinels);
+    for (const item of body)
+      scalarsByKey(item, into, depth + 1, omitSentinels, omitEnvelopeResults);
     return into;
   }
   if (!isRecord(body)) return into;
@@ -175,9 +184,10 @@ function scalarsByKey(
     if (omitSentinels && isSentinelValue(value)) continue;
     const scalar = normalize(value);
     if (scalar === undefined) {
-      scalarsByKey(value, into, depth + 1, omitSentinels);
+      scalarsByKey(value, into, depth + 1, omitSentinels, omitEnvelopeResults);
       continue;
     }
+    if (omitEnvelopeResults && 0 === depth && ENVELOPE_RESULT_WORDS.has(scalar)) continue;
     const seen = into.get(key) ?? new Set<string>();
     seen.add(scalar);
     into.set(key, seen);
@@ -324,7 +334,7 @@ export function findEchoMismatches(
     const response = parse(event.data['responseBody']);
     if (request === undefined || response === undefined) continue;
 
-    const echoed = scalarsByKey(response);
+    const echoed = scalarsByKey(response, new Map(), 0, false, true);
     const asked = scalarsByKey(request, new Map(), 0, true);
     if (!responseRestatesRequest(asked, echoed)) continue;
     // See ADDRESSING_KEYS: on an addressed write the container key names nothing on its own, so

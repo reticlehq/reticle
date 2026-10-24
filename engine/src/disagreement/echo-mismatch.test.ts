@@ -333,3 +333,23 @@ describe('findEchoMismatches — sentinels and identity keys are not ignored wri
     expect(found?.detail).not.toContain('no way to know');
   });
 });
+
+/**
+ * An envelope's own `status` describes the call. `{ status: "success", message: "updated" }` is not
+ * the server saying it stored `status: "success"` when the request asked for `suspended`.
+ */
+describe('findEchoMismatches — an envelope result word is not the stored field', () => {
+  it('stays silent when the only status in the response is the envelope result', () => {
+    expect(
+      kinds(write({ id: 7, status: 'suspended' }, { status: 'success', message: 'updated' })),
+    ).toEqual([]);
+  });
+
+  it('still names a stored status that came back different inside the record', () => {
+    expect(
+      kinds(
+        write({ id: 7, status: 'suspended' }, { status: 'success', data: { status: 'active' } }),
+      ),
+    ).toContain(ContradictionKind.WRITE_FIELD_IGNORED);
+  });
+});
