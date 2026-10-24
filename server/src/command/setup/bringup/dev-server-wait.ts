@@ -78,7 +78,9 @@ export function judgeWait(facts: WaitFacts): WaitVerdict {
  */
 const CRA_PORT_BUSY = /Something is already running on port (\d+)/i;
 const NAMED_PORT_BUSY = /Port (\d+) is (?:already )?in use/i;
-const EADDRINUSE_PORT = /(?:EADDRINUSE|address already in use)[^\d]*(\d+)/i;
+// Node prints `address already in use <address>:<port>`; the port sits after the last colon of the
+// address, so the first digit can belong to the host (`0.0.0.0:3000` said port 0, #1846).
+const EADDRINUSE_PORT = /(?:EADDRINUSE|address already in use)\D*(?:.*:)?(\d+)/i;
 
 export function portBusyMessage(output: string): string | undefined {
   const match =
