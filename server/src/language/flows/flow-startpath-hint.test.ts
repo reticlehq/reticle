@@ -6,7 +6,7 @@ import {
   type FlowFile,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { startPathMismatchHint } from './flow-replay-run.js';
+import { startPathMismatchHint } from './flow-start-path.js';
 
 const flow = (startPath?: string): FlowFile => ({
   version: FLOW_FILE_VERSION,

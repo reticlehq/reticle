@@ -16,7 +16,7 @@ import {
   type CommandResult,
   type FlowFile,
 } from '@reticlehq/core';
-import { arriveAtStartPath } from './flow-replay-run.js';
+import { arriveAtStartPath } from './flow-start-path.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
 

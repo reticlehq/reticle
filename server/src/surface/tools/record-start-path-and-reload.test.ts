@@ -21,7 +21,7 @@ import type { ToolDeps } from './tools.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
-import { startPathMismatchHint } from '@/language/flows/flow-replay-run.js';
+import { startPathMismatchHint } from '@/language/flows/flow-start-path.js';
 import {
   recordingBacktrackWarning,
   routesFromRecording,
