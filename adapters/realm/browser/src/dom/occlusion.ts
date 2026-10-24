@@ -1,4 +1,5 @@
-import { isReticleUi } from './dom-ignore.js';
+import { isIgnored, isReticleUi } from './dom-ignore.js';
+import { capturedRootOf } from './shadow-registry.js';
 
 /**
  * Where to look. The centre, plus four points inset from the corners.
@@ -64,7 +65,17 @@ export function hitTestOccluder(el: Element, rect: DOMRect): Element | null {
     !candidate.contains(el);
   const topAt = (x: number, y: number): Element | null => {
     const found = withStack.elementsFromPoint?.(x, y) ?? [doc.elementFromPoint(x, y)];
-    return found.find((c): c is Element => null !== c && !isOursButNotTheTarget(c)) ?? null;
+    const top = found.find((c): c is Element => null !== c && !isOursButNotTheTarget(c)) ?? null;
+    if (null === top || top === el || top.contains(el) || !isIgnored(top)) return top;
+    // Snapshot exclusion does not make a dev overlay pointer-transparent. The document retargets
+    // a shadow hit to its host, whose box can be 0x0. Keep the blocker, but resolve its real box.
+    let hit: Element = top;
+    for (;;) {
+      const root: ShadowRoot | null = hit.shadowRoot ?? capturedRootOf(hit);
+      const inner: Element | null | undefined = root?.elementFromPoint?.(x, y);
+      if (inner === undefined || null === inner || inner === hit) return hit;
+      hit = inner;
+    }
   };
 
   // Counted by element, so the answer names the thing actually covering the control rather than
