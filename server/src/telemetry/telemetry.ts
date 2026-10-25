@@ -44,6 +44,7 @@ import {
   type DaemonDeath,
   type ProxyExit,
   type WakeRefusal,
+  type DaemonSpawnMethod,
   type ToolRefusal,
   type AppInstrumentation,
   type HarnessRun,
@@ -427,6 +428,8 @@ export interface TelemetryExtra {
   daemonDeath?: DaemonDeath;
   /** `wake_refused`: what held the port. */
   wakeRefusal?: WakeRefusal;
+  /** `daemon_started`: how the parent started the daemon. */
+  spawnMethod?: DaemonSpawnMethod;
   /**
    * `platform_linked`: the workspace just linked. Overrides the envelope's own reading, which looks
    * at the daemon's working directory and not at the project the HUD linked.
@@ -619,6 +622,8 @@ export const createTelemetry = (opts: {
       ...(extra?.proxyExit !== undefined ? { proxyExit: extra.proxyExit } : {}),
       ...(extra?.daemonDeath !== undefined ? { daemonDeath: extra.daemonDeath } : {}),
       ...(extra?.wakeRefusal !== undefined ? { wakeRefusal: extra.wakeRefusal } : {}),
+      // A SCALAR: the event build and the wire schema, no `blocks` entry.
+      ...(extra?.spawnMethod !== undefined ? { spawnMethod: extra.spawnMethod } : {}),
     };
     // The wire schema's caps are only real if something applies them. An event that fails is
     // DROPPED, never sent and never repaired: the payload is exactly what the caps exist to stop.

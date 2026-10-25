@@ -11,7 +11,7 @@
 | `core/src/telemetry.ts` | `TelemetryEventKind`, the envelope, and most payload blocks |
 | `core/src/telemetry-session.ts` | `SessionSummarySchema`, `ProjectProfileSchema`, `MachineSnapshotSchema` |
 | `core/src/telemetry-feedback.ts` | `FeedbackSchema`, `IdentitySchema` |
-| `core/src/telemetry-signals.ts` | the `hud`, `link`, `harness`, `proxyExit`, `daemonDeath` and `wakeRefusal` blocks, and the account and client fields |
+| `core/src/telemetry-signals.ts` | the `hud`, `link`, `harness`, `proxyExit`, `daemonDeath` and `wakeRefusal` blocks, the `spawnMethod` scalar, and the account and client fields |
 | `core/src/telemetry-bug.ts` | `BugFoundSchema` |
 | `server/src/telemetry/telemetry.ts` | `emit()`, which builds every event and flattens its block |
 
@@ -145,13 +145,18 @@ There is no uninstall event. npm 7 and pnpm run no uninstall script. Infer churn
 
 ## daemon_started
 
-**When:** the daemon comes up. Sent from `server/src/telemetry/daemon-telemetry.ts`. **Why:** the denominator of every rate per daemon run. **Unit:** one daemon run. Most runs are an MCP spawn that never sees an app. **Fields:** the envelope, with `sessionId`.
+**When:** the daemon comes up. Sent from `server/src/telemetry/daemon-telemetry.ts`. **Why:** the denominator of every rate per daemon run. **Unit:** one daemon run. Most runs are an MCP spawn that never sees an app. **Fields:** the envelope, with `sessionId`, and one scalar.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `spawnMethod` | `DaemonSpawnMethod`, optional | How the parent started the daemon. `detached`: a detached child, the start on macOS and Linux. `wmi`: Windows only, started through WMI, outside the Job Object of the parent. `wmi_fallback`: Windows only, the WMI start failed and the parent used the detached start. On Windows a detached daemon stays in the job of its parent and stops when that job closes. Absent for a daemon that started in the foreground, and from older senders. |
 
 ```json
 {
   "sessionId": "5e5e5e5e-0000-4000-8000-000000000001",
   "installSource": "plugin",
-  "client": "claude_code"
+  "client": "claude_code",
+  "spawnMethod": "wmi"
 }
 ```
 

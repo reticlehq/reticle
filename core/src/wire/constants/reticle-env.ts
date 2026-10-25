@@ -135,4 +135,6 @@ export const ReticleEnv = {
   PROMPT_CAPTURE: 'RETICLE_PROMPT_CAPTURE',
   /** "0"/"false"/"off" stops the daemon's background sync, on this whole machine. */
   BACKGROUND_SYNC: 'RETICLE_BACKGROUND_SYNC',
+  /** Set by the parent that starts the daemon: how it started it. A `DaemonSpawnMethod`. */
+  SPAWN_METHOD: 'RETICLE_SPAWN_METHOD',
 } as const;

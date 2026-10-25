@@ -5,7 +5,12 @@
  * It lives apart from `cli.ts` because it has its own timers and its own failure rule — nothing here
  * may ever be able to fail a daemon start — and because `cli.ts` is a dispatcher.
  */
-import { TelemetryEventKind, type SessionSummary } from '@reticlehq/core/telemetry';
+import {
+  DaemonSpawnMethod,
+  TelemetryEventKind,
+  type SessionSummary,
+} from '@reticlehq/core/telemetry';
+import { ReticleEnv } from '@reticlehq/core';
 import { getTelemetry } from './telemetry.js';
 import { getSessionMetrics } from './session-metrics.js';
 import { profileProject, type InstallFacts } from './project-profile.js';
@@ -81,6 +86,14 @@ function withNudgeState(summary: SessionSummary): SessionSummary {
   };
 }
 
+/** How the parent started this daemon, from the env it set. Anything else reads as absent. */
+export function daemonSpawnMethod(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): DaemonSpawnMethod | undefined {
+  const value = env[ReticleEnv.SPAWN_METHOD];
+  return Object.values(DaemonSpawnMethod).find((method) => method === value);
+}
+
 /** Stops the timers this installed. Called from the daemon's shutdown path. */
 interface DaemonTelemetry {
   /**
@@ -112,7 +125,11 @@ export function installDaemonTelemetry(
   port?: number,
 ): DaemonTelemetry {
   const metrics = getSessionMetrics(now);
-  void getTelemetry().emit(TelemetryEventKind.DAEMON_STARTED);
+  const spawnMethod = daemonSpawnMethod();
+  void getTelemetry().emit(
+    TelemetryEventKind.DAEMON_STARTED,
+    spawnMethod === undefined ? undefined : { spawnMethod },
+  );
   // Reports a past send could not deliver. Off the boot path, and never able to throw into it.
   void drainFeedbackOutbox().catch(() => undefined);
   // Ask npm whether a newer Reticle exists, so the agent can tell the human. Nothing checked before

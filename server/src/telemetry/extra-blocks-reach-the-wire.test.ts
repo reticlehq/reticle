@@ -19,6 +19,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AgentClient,
+  DaemonSpawnMethod,
   InstallSource,
   LaunchMethod,
   TelemetryAccountState,
@@ -202,6 +203,11 @@ describe('every declared block survives to the wire', () => {
   it('carries a scalar extra, which has no block to be flattened out of', async () => {
     const properties = await propertiesFor({ installSource: InstallSource.PLUGIN });
     expect(properties['installSource']).toBe(InstallSource.PLUGIN);
+  });
+
+  it('carries how the daemon was started', async () => {
+    const properties = await propertiesFor({ spawnMethod: DaemonSpawnMethod.WMI_FALLBACK });
+    expect(properties['spawnMethod']).toBe(DaemonSpawnMethod.WMI_FALLBACK);
   });
 
   it('carries the account, workspace, client and launch scalars on every event', async () => {

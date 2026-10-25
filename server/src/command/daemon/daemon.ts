@@ -14,11 +14,17 @@ import {
   writeSync,
 } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { daemonRegistryFileName, ReticleEnv, type DaemonRegistryEntry } from '@reticlehq/core';
+import {
+  daemonRegistryFileName,
+  DaemonSpawnMethod,
+  ReticleEnv,
+  type DaemonRegistryEntry,
+} from '@reticlehq/core';
 import { log } from '@/log.js';
 import { uncleanPredecessor } from './lifetime/unclean-predecessor.js';
 import { reportDaemonDiedUnclean } from '@/telemetry/proxy-telemetry.js';
 import { MAX_DAEMON_LOG_BYTES, pruneOldDaemonLogs } from './lifetime/log-cap.js';
+import { escapeJobViaWmi, type EscapeRequest, type EscapeResult } from './win32-escape.js';
 
 // Re-exported from their owner so callers outside this directory — the proxy log, the rotation
 // tests — keep reaching `daemon` rather than `lifetime`, which is a sink. See lifetime/log-cap.ts.
@@ -235,9 +241,17 @@ export interface SpawnDaemonDeps {
   spawnChild(
     command: string,
     args: readonly string[],
-    options: { detached: boolean; stdio: readonly ('ignore' | number)[] },
+    options: {
+      detached: boolean;
+      stdio: readonly ('ignore' | number)[];
+      env?: Record<string, string | undefined>;
+    },
   ): SpawnedChild;
   pidAlive(pid: number): boolean;
+  /** `process.platform`. Optional so a test that does not care runs the detached start. */
+  readonly platform?: string;
+  /** Windows only: start the daemon outside the Job Object of this process. See win32-escape.ts. */
+  readonly escapeJob?: (request: EscapeRequest) => EscapeResult;
   /**
    * A predecessor died without a clean stop; `ageMs` is how long it had run. Optional so a test that
    * does not care reports nothing. The default sends `daemon_died_unclean`.
@@ -253,8 +267,14 @@ function defaultSpawnDaemonDeps(): SpawnDaemonDeps {
     fileSize: (path) => (existsSync(path) ? statSync(path).size : 0),
     renameFile: renameSync,
     spawnChild: (command, args, options) =>
-      spawn(command, [...args], { detached: options.detached, stdio: [...options.stdio] }),
+      spawn(command, [...args], {
+        detached: options.detached,
+        stdio: [...options.stdio],
+        ...(options.env === undefined ? {} : { env: options.env }),
+      }),
     pidAlive: isAlive,
+    platform: process.platform,
+    escapeJob: escapeJobViaWmi,
     onUncleanDeath: (ageMs) => void reportDaemonDiedUnclean(ageMs),
   };
 }
@@ -269,6 +289,28 @@ function reportUncleanAge(pidFilePath: string, deps: SpawnDaemonDeps): void {
     deps.onUncleanDeath?.(Math.max(0, Date.now() - statSync(pidFilePath).mtimeMs));
   } catch {
     // An unreadable pidfile has no age to report.
+  }
+}
+
+const WINDOWS = 'win32';
+
+/** The WMI start must never stop a daemon start: a throw reads as "nothing launched". */
+function tryEscapeJob(
+  escape: (request: EscapeRequest) => EscapeResult,
+  request: EscapeRequest,
+): EscapeResult {
+  try {
+    return escape(request);
+  } catch {
+    return { launched: false };
+  }
+}
+
+function removeQuietly(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch {
+    // racing another reclaimer — fine
   }
 }
 
@@ -366,11 +408,36 @@ export function spawnDaemon(
       // A log we cannot write is not a reason to refuse to start the daemon.
     }
   }
+  let method: DaemonSpawnMethod = DaemonSpawnMethod.DETACHED;
+  if (WINDOWS === deps.platform && deps.escapeJob !== undefined) {
+    const escaped = tryEscapeJob(deps.escapeJob, {
+      command: nodeExec,
+      args: [scriptPath, ...args],
+      cwd: process.cwd(),
+      env: { ...process.env, [ReticleEnv.SPAWN_METHOD]: DaemonSpawnMethod.WMI },
+      logPath: logFilePath,
+      specPath: join(deps.home, `daemon-${port}.spawn.json`),
+    });
+    if (escaped.launched) {
+      deps.closeFile(logFd);
+      // No pid in time: release the lock, so the pidfile never names a process that is not ours.
+      if (escaped.pid === undefined) {
+        deps.closeFile(lockFd);
+        removeQuietly(pidFilePath);
+        return true;
+      }
+      writeFileSync(lockFd, String(escaped.pid), 'utf8');
+      deps.closeFile(lockFd);
+      return true;
+    }
+    method = DaemonSpawnMethod.WMI_FALLBACK;
+  }
   let child: SpawnedChild;
   try {
     child = deps.spawnChild(nodeExec, [scriptPath, ...args], {
       detached: true,
       stdio: ['ignore', logFd, logFd],
+      env: { ...process.env, [ReticleEnv.SPAWN_METHOD]: method },
     });
   } catch {
     // spawn can throw synchronously on some platforms (e.g. ENOMEM, invalid args).

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — on Windows, the daemon stopped when the agent host closed its Job Object.** Some agent hosts run `reticle mcp` in a Job Object that kills every process in it when it closes. The daemon was a detached child, but a detached child stays in the job of its parent, so the daemon stopped with the host. The bridge was then gone for every app on the machine. On Windows, Reticle now starts the daemon through WMI, outside the job. The daemon writes to the same `daemon-<port>.log`, and the pidfile holds the daemon pid. If WMI is not available or fails, Reticle uses the detached start as before.

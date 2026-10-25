@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { installDaemonTelemetry } from './daemon-telemetry.js';
+import { DaemonSpawnMethod, ReticleEnv } from '@reticlehq/core';
+import { daemonSpawnMethod, installDaemonTelemetry } from './daemon-telemetry.js';
 import { resetSessionMetrics } from './session-metrics.js';
 
 /**
@@ -39,5 +40,18 @@ describe('daemon telemetry shutdown', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('daemonSpawnMethod', () => {
+  it('reads the start method that the parent put in the env', () => {
+    expect(daemonSpawnMethod({ [ReticleEnv.SPAWN_METHOD]: DaemonSpawnMethod.WMI })).toBe(
+      DaemonSpawnMethod.WMI,
+    );
+  });
+
+  it('drops a value that is not a start method, so free text never reaches the wire', () => {
+    expect(daemonSpawnMethod({ [ReticleEnv.SPAWN_METHOD]: 'C:\\Users\\me' })).toBeUndefined();
+    expect(daemonSpawnMethod({})).toBeUndefined();
   });
 });

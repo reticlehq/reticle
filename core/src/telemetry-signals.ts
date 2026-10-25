@@ -236,6 +236,17 @@ export const DaemonDeathSchema = z.object({
 });
 export type DaemonDeath = z.infer<typeof DaemonDeathSchema>;
 
+/** How the parent started the daemon. On Windows a start through WMI leaves the Job Object. */
+export const DaemonSpawnMethod = {
+  /** A detached child of the parent. On Windows it stays in the job of the parent. */
+  DETACHED: 'detached',
+  /** Windows only: started through WMI `Win32_Process.Create`, outside every job. */
+  WMI: 'wmi',
+  /** Windows only: the WMI start failed, so the parent used the detached start. */
+  WMI_FALLBACK: 'wmi_fallback',
+} as const;
+export type DaemonSpawnMethod = (typeof DaemonSpawnMethod)[keyof typeof DaemonSpawnMethod];
+
 /** What held the port when a wake was refused. */
 export const WakeRefusalPresence = {
   /** Something that is not a Reticle daemon holds the port. */
@@ -259,4 +270,6 @@ export const TRANSPORT_FIELDS = {
   daemonDeath: DaemonDeathSchema.optional(),
   /** Only on `wake_refused`. */
   wakeRefusal: WakeRefusalSchema.optional(),
+  /** Only on `daemon_started`: how the parent started the daemon. A scalar. */
+  spawnMethod: z.nativeEnum(DaemonSpawnMethod).optional(),
 };

@@ -1,0 +1,33 @@
+name: Win32 job probe
+
+# Evidence probe, not a gate. It runs apps/e2e/win32-job-kill.mjs, which checks whether a child
+# started like spawnDaemon dies when the Job Object of its parent closes with KILL_ON_JOB_CLOSE, and
+# which start methods escape the job. Its `real-spawn-daemon` arm calls the built spawnDaemon and
+# fails the job when that daemon does not survive. It runs on manual dispatch, and on a push to the
+# fix branch only (a dispatch needs the file on main first). Never on a pull request.
+# Remove the push trigger before this branch merges.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/win32-daemon-escape]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/ci-run.mjs pnpm turbo run build --filter=@reticlehq/server...
+      - run: node apps/e2e/win32-job-kill.mjs
+        env:
+          RETICLE_TELEMETRY: '0'
