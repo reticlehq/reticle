@@ -557,12 +557,19 @@ jobs:
       # announced: installing the browser is idempotent and no product code has run yet.
       - id: browser
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: pnpm exec playwright install --with-deps chromium
       - if: steps.browser.outcome == 'failure'
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: |
           echo "::warning::installing Chromium failed or hung on the first attempt; retrying once"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            # The first attempt's apt-get can outlive its timed-out step and hold the dpkg lock.
+            sudo pkill -9 -x apt-get || true
+            sudo pkill -9 -x dpkg || true
+            sudo dpkg --configure -a || true
+            echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-dpkg-lock-timeout > /dev/null
+          fi
           pnpm exec playwright install --with-deps chromium
       - run: pnpm test:smoke
       - name: Smoke evidence (including first failure)
@@ -940,12 +947,19 @@ jobs:
       # Bounded with one announced retry: see the first Chromium install step in this file.
       - id: browser
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       - if: steps.browser.outcome == 'failure'
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: |
           echo "::warning::installing Chromium failed or hung on the first attempt; retrying once"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            # The first attempt's apt-get can outlive its timed-out step and hold the dpkg lock.
+            sudo pkill -9 -x apt-get || true
+            sudo pkill -9 -x dpkg || true
+            sudo dpkg --configure -a || true
+            echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-dpkg-lock-timeout > /dev/null
+          fi
           pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # Angular 21's dependency tree crashes npm 10's installer ("Cannot read properties of null
       # (reading 'edgesOut')") during the scaffold's own install, before Reticle is involved;
@@ -1053,12 +1067,19 @@ jobs:
       # Bounded with one announced retry: see the first Chromium install step in this file.
       - id: browser
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       - if: steps.browser.outcome == 'failure'
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: |
           echo "::warning::installing Chromium failed or hung on the first attempt; retrying once"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            # The first attempt's apt-get can outlive its timed-out step and hold the dpkg lock.
+            sudo pkill -9 -x apt-get || true
+            sudo pkill -9 -x dpkg || true
+            sudo dpkg --configure -a || true
+            echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-dpkg-lock-timeout > /dev/null
+          fi
           pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # Headless Chromium + a multi-service boot flakes on shared runners (timing, resource
       # contention). Retry with a clean slate between attempts so a transient flake doesn't red CI;
@@ -1257,12 +1278,19 @@ jobs:
       # Bounded with one announced retry: see the first Chromium install step in this file.
       - id: browser
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       - if: steps.browser.outcome == 'failure'
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: |
           echo "::warning::installing Chromium failed or hung on the first attempt; retrying once"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            # The first attempt's apt-get can outlive its timed-out step and hold the dpkg lock.
+            sudo pkill -9 -x apt-get || true
+            sudo pkill -9 -x dpkg || true
+            sudo dpkg --configure -a || true
+            echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-dpkg-lock-timeout > /dev/null
+          fi
           pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       - run: pnpm build
       # FIRST, as the install gate's self-test is. It makes the subject answer "yes" to every
@@ -1326,12 +1354,19 @@ jobs:
       # Bounded with one announced retry: see the first Chromium install step in this file.
       - id: browser
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       - if: steps.browser.outcome == 'failure'
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: |
           echo "::warning::installing Chromium failed or hung on the first attempt; retrying once"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            # The first attempt's apt-get can outlive its timed-out step and hold the dpkg lock.
+            sudo pkill -9 -x apt-get || true
+            sudo pkill -9 -x dpkg || true
+            sudo dpkg --configure -a || true
+            echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-dpkg-lock-timeout > /dev/null
+          fi
           pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # The token proxy is a python package, and without it `countTokensProxy` returns null for every
       # payload — so every token dimension reads "this pass measured nothing" and the gate fails
