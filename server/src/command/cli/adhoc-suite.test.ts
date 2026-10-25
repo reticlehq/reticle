@@ -10,11 +10,17 @@
  * Same trick as `runAdhocVerdict` and deliberately no new surface: ask the running daemon the
  * question an agent would ask it, over the transport it already serves.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { ReticleTool } from '@reticlehq/core';
 import { runAdhocExplore, runAdhocSuite } from './adhoc-suite.js';
 import type { ToolCaller } from './adhoc-verdict.js';
+import { FLOW_TOOLS } from '@/language/flows/flow-tools.js';
+import { createMcpServer } from '@/surface/mcp/mcp.js';
 import { KEY_REFUSED_LINE } from '@/surface/tools/reticle-result.js';
+import { TOOL_SURFACE } from '@/surface/tools/tool-surface.js';
+import type { ToolDeps } from '@/surface/tools/tools.js';
 
 function caller(answer: unknown): { tool: ToolCaller; calls: { name: string; args: unknown }[] } {
   const calls: { name: string; args: unknown }[] = [];
@@ -287,5 +293,52 @@ describe('exploring through the running daemon', () => {
   it('fails the run when the replay fails', async () => {
     const c = recording({ flows: { structuredContent: { status: 'fail' } } });
     expect((await explore(c.tool)).code).toBe(1);
+  });
+});
+
+/**
+ * The recorded-call test above checks the key we send, not whether `reticle_verify` accepts it.
+ * A key the tool does not declare is refused by the real MCP server, so this one sends the call there.
+ */
+describe('--select against the real tool surface', () => {
+  it('reaches the flows handler with the labels, instead of being refused', async () => {
+    const flows = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
+    if (flows === undefined) {
+      throw new Error('flow_verify missing');
+    }
+    const handler = vi.spyOn(flows, 'handler').mockResolvedValue({ status: 'pass' });
+
+    const tab = {
+      health: () => ({ throttled: false, focused: true }),
+      takeSessionLease: () => undefined,
+      ageWarning: () => undefined,
+    };
+    const server = createMcpServer(
+      { sessions: { resolve: () => tab } } as unknown as ToolDeps,
+      TOOL_SURFACE.DEFAULT,
+    );
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverSide);
+    const client = new Client({ name: 'c', version: '0' });
+    await client.connect(clientSide);
+    const tool: ToolCaller = {
+      call: (name, args) => client.callTool({ name, arguments: args }),
+      close: () => client.close(),
+    };
+
+    try {
+      const result = await runAdhocSuite({
+        port: 4400,
+        select: ['smoke'],
+        connect: () => Promise.resolve(tool),
+      });
+      expect(result.lines[0], result.lines.join(' ')).toBe('status: pass');
+      expect(result.code).toBe(0);
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler.mock.calls[0]?.[1]).toMatchObject({ action: 'flows', labels: ['smoke'] });
+    } finally {
+      handler.mockRestore();
+      await server.close();
+    }
   });
 });
