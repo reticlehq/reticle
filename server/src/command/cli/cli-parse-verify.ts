@@ -17,8 +17,8 @@ import {
   unknownArgument,
 } from './cli-parse-grammar.js';
 
-const TIMEOUT_FLAG = '--timeout';
-const STORAGE_STATE_FLAG = '--storage-state';
+export const TIMEOUT_FLAG = '--timeout';
+export const STORAGE_STATE_FLAG = '--storage-state';
 /** The same predicate, read from a file, which no shell can mangle. See `parseExpect`. */
 const EXPECT_FILE_FLAG = '--expect-file';
 const SESSION_ID_FLAG = '--session-id';
