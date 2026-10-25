@@ -1,0 +1,5 @@
+### Fixed
+
+- **`@reticlehq/server` — the body-capture remedy named a setting that `connect()` does not have.** `reticle_capabilities` told agents to pass `captureBodies: true`, which changed nothing. It now names `captureNetworkBodies: true`. Every message about a body that was not recorded now also says that a failed response (HTTP 400 and up) keeps its body by default, and that a request body needs the setting.
+- **`@reticlehq/server` — a version-skew message now ends with one line that fixes every case:** update the CLI and the app SDK (`reticle update` in the app's folder does both), then restart the MCP host. `SKILL.md` gives the same step. Before, it said to stop the daemon, which can leave the page on the old SDK.
+- **Docs.** A `text` predicate reads rendered text, not the value of an input or a textarea: use `value` on an `element` predicate. Lease the exact host that the dev server binds. A strict CSP blocks the bridge until `connect-src` allows it. A host with no MCP tools uses `reticle serve` and `reticle verify --expect`.

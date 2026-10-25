@@ -240,6 +240,16 @@ A dev server on `https://` with a self-signed or mkcert certificate makes `retic
 
 It is off by default. When it is on, certificate checks are skipped for every site opened in that lease's browser context, including resources loaded from other sites. Other leases keep their checks. A context cannot change the setting once it is made, so acquiring again with the other value replaces the lease instead of reusing it.
 
+## The page never connects under a strict CSP
+
+A build that sends a strict Content-Security-Policy blocks the bridge socket. A production build that you run locally (`next start`, `vite preview`) often sends one. The app runs, and the SDK never connects, with no error in the app. Add the bridge to `connect-src`, with your bridge port if it is not `4400`:
+
+```text
+connect-src 'self' ws://localhost:4400 ws://127.0.0.1:4400
+```
+
+Add it only in the builds that Reticle drives, never in the policy that you deploy. If the policy also blocks inline scripts, `script-src` stops a pasted connect snippet before it runs: serve that snippet as an external module. `reticle doctor` reads the policy that the page serves and names the line to add, and a lease result says the same. For [production mode](/production-mode), add the `wss://` bridge from the ticket instead. Desktop apps have their own note in [Desktop](/desktop).
+
 ## `ERESOLVE` installing next to a prerelease
 
 `@reticlehq/next` declares `peer next >=13` and `@reticlehq/react` declares `peer react >=18`. On a Next canary or React RC, npm refuses. See [the prerelease notes](/getting-started#installing-alongside-a-next-js-or-react-prerelease).

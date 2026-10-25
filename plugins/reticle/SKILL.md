@@ -149,7 +149,7 @@ Stop at the first row that fits. Replaying a saved journey costs a few hundred t
 | "Did my edit break anything?" | `reticle_verify { action: "change", files: ["src/App.tsx"] }` |
 | "Does every saved journey still work?" | `reticle_verify { action: "flows" }` |
 | "Does this new behaviour work?" | `reticle_act_and_wait` on the step that ENDS the journey |
-| No MCP at all | `npx @reticlehq/server verify <url> --expect '<predicate JSON>'` |
+| No MCP tools (a cloud agent, a worker) | `npx @reticlehq/server serve`, then `npx @reticlehq/server verify <url> --expect '<predicate JSON>'`. `open <url> --navigate` moves a connected tab to `<url>` |
 
 `change` answers `unknown` when no saved flow covers your files: nothing ran, so drive it yourself and never read it as a pass. A locator that was renamed rather than broken: `reticle_verify { action: "heal", flowName }` proposes the rebind, and `apply: true` writes it after it proves the saved consequence again.
 
@@ -172,7 +172,7 @@ A journey in one call: `reticle_act { steps: [{ target, action, args?, expect? }
 | ref no longer resolves | the DOM re-rendered: target by `testid` or `role`+`name` |
 | predicate did not parse | it names the field: fix the shape against the table above |
 | destructive action blocked | `args.confirmDangerous: true`, only if the user wants that press |
-| version skew | `npx @reticlehq/server stop`, then retry |
+| version skew | update the CLI and the app SDK (`npx @reticlehq/server update` in the app's folder), then restart the MCP host |
 | port held by a non-Reticle process | stop that process, or run Reticle on another `--port` |
 | tab served from another worktree | start the dev server in your own worktree; keep the port |
 

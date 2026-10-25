@@ -60,6 +60,17 @@ interface RequestBodyState {
   redactedField?: string;
 }
 
+/** What the SDK keeps with no setting, so an agent does not switch capture on for a body it has. */
+export const BODY_CAPTURE_DEFAULTS =
+  'A failed response (HTTP 400 and up) keeps its body by default. A request body, and the body of ' +
+  'a successful response, need `captureNetworkBodies: true`.';
+
+/** The remedy when capture is off: the defaults, then where the setting goes. */
+export const REMEDY_BODY_CAPTURE =
+  `${BODY_CAPTURE_DEFAULTS} Turn it on where the app calls connect(): ` +
+  '`reticle.connect({ captureNetworkBodies: true })`, or in the Vite plugin: ' +
+  '`reticle({ captureNetworkBodies: true })`.';
+
 /**
  * The remedy for a request body the SDK did not record although capture is on, or `undefined`.
  *
@@ -148,7 +159,7 @@ export function requestBodyVerdict(
   }
   if (state.unrecorded) {
     // Unknown, not different: nothing was read, so nothing says the body did not match (#1520).
-    const reason = `a call matched but its REQUEST body was not recorded, so the request-body clause could not be checked — ${requestBodySkipRemedy(state.unrecordedType) ?? 'enable it where the app calls connect(): reticle({ captureNetworkBodies: true })'}`;
+    const reason = `a call matched but its REQUEST body was not recorded, so the request-body clause could not be checked — ${requestBodySkipRemedy(state.unrecordedType) ?? REMEDY_BODY_CAPTURE}`;
     return {
       pass: false,
       failureReason: reason,

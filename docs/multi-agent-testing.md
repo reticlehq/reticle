@@ -36,6 +36,8 @@ reticle_run { tool: "reticle_lease", args: { action: "release", sessionId } }   
 
 `reticle_run { tool: "reticle_lease", args: { action: "acquire" } }` opens a fresh isolated headless context against your **already-running** app, stamps the lease identity into the URL so the app's own SDK registers under a sessionId you can target, and waits until that tab has connected (`ready: true`) before returning, so the sessionId is usable immediately. Release when the flow finishes.
 
+**Lease the exact host that the dev server binds.** `http://localhost:3000` and `http://127.0.0.1:3000` are two origins, and they are not the same address. A dev server that binds only `::1` (Vite can do this for `localhost`) refuses a lease on `127.0.0.1`, and a server that binds only `127.0.0.1` does not answer on `::1`. The two origins also have their own cookies and storage, and a lease is reused for each origin. Copy the url that the dev server prints, host and port included.
+
 ## Permissions
 
 A lease starts with every permission undecided. Pass `permissions` to grant some on the app's origin before the first navigation, so the first render already sees them:

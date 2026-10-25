@@ -13,6 +13,7 @@
  * does not check whether it applies. A wrong remedy is worse than none, because it is followed.
  */
 import { skippedBodyRemedy } from '@/question/predicate/predicate-eval.js';
+import { BODY_CAPTURE_DEFAULTS } from '@/question/predicate/predicate-request-body.js';
 
 /** The earliest SDK release whose observer can capture network bodies at all. */
 export const BODY_CAPTURE_MIN_VERSION = '2.4.0';
@@ -43,6 +44,7 @@ function isAtLeast(version: string, minimum: string): boolean {
 
 /** The sentence naming the setting — only ever produced for an SDK that HAS it. */
 const ENABLE_IT =
+  `${BODY_CAPTURE_DEFAULTS} ` +
   'Turn it on where your app calls connect(): `reticle.connect({ captureNetworkBodies: true })`, ' +
   'or for the Vite plugin `reticle({ captureNetworkBodies: true })` / VITE_RETICLE_CAPTURE_BODIES=1. ' +
   'Before bodies are kept, built-in rules redact keys such as `password`, `apiKey` and ' +

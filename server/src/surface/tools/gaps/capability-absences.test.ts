@@ -20,7 +20,11 @@ describe('what a session cannot do is reported, but only when it said so', () =>
     const [absence] = capabilityAbsences({ captureBodies: false });
     expect(absence?.capability).toBe('network-bodies');
     expect(absence?.meaning).toContain('refused before it spends an action');
-    expect(absence?.remedy).toContain('captureBodies: true');
+    // connect() has no `captureBodies` option: the remedy named an internal flag, so following it
+    // changed nothing. A failed response keeps its body anyway, so the meaning must not deny it.
+    expect(absence?.remedy).toContain('captureNetworkBodies: true');
+    expect(absence?.remedy).not.toMatch(/\bcaptureBodies\b/);
+    expect(absence?.meaning).toMatch(/failed response.*keeps its body/);
   });
 
   it('source mapping switched off is reported, and says it is often on purpose', () => {

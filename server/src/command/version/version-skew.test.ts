@@ -6,6 +6,7 @@ import {
   daemonFix,
   isPlaywrightClosedError,
   rewriteClosedAsSkew,
+  SKEW_CONVERGE,
   type PeerIdentity,
 } from './version-skew.js';
 
@@ -55,6 +56,18 @@ describe('describeSkew — the contract decides, not the version', () => {
     expect(msg).not.toMatch(/@2\.4\.1/);
     expect(msg).toMatch(/reticle restart/);
     expect(msg).toMatch(/reload/);
+  });
+
+  // Agents asked what to do in one line: the long fix names a package manager and a direction,
+  // and agents stopped at the daemon restart, which left the page on the old SDK.
+  it('ends a cross-version skew with the one line that converges all three pieces', () => {
+    const msg = describeSkew(page({ version: '2.2.1', contract: 'bbbb2222' }), SELF) ?? '';
+    expect(msg).toContain(SKEW_CONVERGE);
+    expect(SKEW_CONVERGE).toMatch(/update the CLI and the app SDK.*then restart the MCP host/);
+  });
+
+  it('does not tell a same-version pair to update, because both are already on that version', () => {
+    expect(describeSkew(page({ contract: 'bbbb2222' }), SELF) ?? '').not.toContain(SKEW_CONVERGE);
   });
 
   it('names both versions and a concrete fix when the contracts differ', () => {

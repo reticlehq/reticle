@@ -16,6 +16,7 @@ import { describeObserved } from './observed-in-window.js';
 import { netEvidence } from './net-evidence.js';
 import {
   checkRequestBody,
+  REMEDY_BODY_CAPTURE,
   newRequestBodyState,
   requestBodyVerdict,
 } from './predicate-request-body.js';
@@ -266,7 +267,7 @@ function unrecordedBodyReason(
   reason: unknown,
 ): string {
   const head = `a call matching ${describeNetFilter(p)} was answered, but its body was not recorded, so ${wantedBody(p)} could not be checked, which is not the same as absent.`;
-  return `${head} ${skippedBodyRemedy(reason) ?? 'Enable it where the app calls connect(): reticle({ captureNetworkBodies: true })'}`;
+  return `${head} ${skippedBodyRemedy(reason) ?? REMEDY_BODY_CAPTURE}`;
 }
 
 export function evalNet(

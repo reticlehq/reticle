@@ -15,6 +15,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { bodyCaptureRemedy, BODY_CAPTURE_MIN_VERSION } from './body-capture-remedy.js';
+import {
+  BODY_CAPTURE_DEFAULTS,
+  REMEDY_BODY_CAPTURE,
+} from '@/question/predicate/predicate-request-body.js';
 
 describe('the body-capture remedy checks whether it applies', () => {
   it('does NOT name the setting when the SDK predates it', () => {
@@ -60,5 +64,21 @@ describe('the body-capture remedy checks whether it applies', () => {
     expect(message).toContain('redact.keys');
     expect(message).toContain('Other credential fields may remain');
     expect(message).toContain('https://docs.reticle.sh/what-is-recorded');
+  });
+});
+
+// Agents read "enable captureNetworkBodies" and turned it on to read a 500's body, which the SDK
+// already keeps. Then they did not know the request body needs the setting.
+describe('the body-capture remedy says what is kept by default', () => {
+  it('says a failed response keeps its body and a request body needs the setting', () => {
+    const message = bodyCaptureRemedy(undefined);
+    expect(message).toContain(BODY_CAPTURE_DEFAULTS);
+    expect(BODY_CAPTURE_DEFAULTS).toMatch(/400 and up.*by default/);
+    expect(BODY_CAPTURE_DEFAULTS).toMatch(/request body.*captureNetworkBodies/);
+  });
+
+  it('gives the same sentence in the fallback remedy of a body clause', () => {
+    expect(REMEDY_BODY_CAPTURE).toContain(BODY_CAPTURE_DEFAULTS);
+    expect(REMEDY_BODY_CAPTURE).toContain('reticle.connect({ captureNetworkBodies: true })');
   });
 });

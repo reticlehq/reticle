@@ -48,6 +48,7 @@ Two consequences worth knowing:
 
 - **You can assert what a field contains.** Do not read the value with `reticle_look { action: "find" }` and compare it in prose: that produces no verdict and does not count as verification.
 - **`{ role, text }` checks the text,** so it does not match every button with that role.
+- **A `text` predicate reads rendered text, not a field's value.** Text typed into an `<input>` or a `<textarea>` is not on the page as text, so `{ kind: "text", contains }` does not see it. Assert it with `value` on an `element` predicate, as above.
 
 Fields that nothing can check are refused rather than ignored: `by` without a `value`, and `label`, `placeholder`, `testid` or `component` when a higher-precedence field already selected the element. `alt` is the one that can still be checked beside another locator: on an image it is compared with the image's `alt` attribute (so `alt: ""` passes on a decorative image but not on one missing its alt), and on anything that is not an image it is refused, with a hint to use `name`. An element query is a first-match dispatch, not a conjunction.
 
@@ -163,6 +164,17 @@ Recent additions, each of which answers a question agents were previously asking
 1. **First move, always:** `reticle_session { action: "list" }` finds the connected tab. Just ran `reticle init` or restarted the dev server? You do not need to poll: live tools wait briefly for a tab that is about to connect. Omit `sessionId` if there's only one tab. **An empty list is not a dead end: read `why`.** It names the case (no app running, an app that never dialled this daemon, a project that is not wired, or a tab that closed) and the fix for each. In a project that is not wired, `next_step` also names the next calls. `lease` (present when an app is running) is the zero-install check of the running app: do it first, because it changes no file. `consent` is the question for `init`, which changes `package.json`, the lockfile and the build config: ask the user, and run `init` only if they agree. Do not fall back to static reasoning until you have read `why`.
 2. `reticle_run({ tool: "reticle_domain", args: {} })` learns the app BEFORE testing: the saved flows, what each asserts, and the **gaps** (declared signals/testids that no flow verifies, i.e. untested intent). Tells you what to test and where the real risk is without crawling the whole app. Falls back to `reticle_run({ tool: "reticle_capabilities", args: {} })` for the raw testable surface (`testids`, `signals`, `stores`, `flows`).
 3. Run the loop: **look → act → observe → assert**, cross-checking the 4 layers on anything that matters.
+
+## No MCP tools in this host
+
+A cloud agent or a worker can have a shell and no MCP tools. Use the CLI. `verify --expect` asks a running daemon and never starts one, so start it first:
+
+```bash
+npx @reticlehq/server serve --headless
+npx @reticlehq/server verify http://localhost:5173/ --expect '{"kind":"text","contains":"Welcome"}'
+```
+
+It exits `0` only on `verified: "yes"`. `--expect-file <path>` reads the predicate from a file, and `--timeout N` sets how long it waits (default `4000` ms). To move a connected tab to another page first, run `npx @reticlehq/server open <url> --navigate`. For an action that `--expect` cannot do, use the [HTTP MCP transport](/http-transport).
 
 ## Token note
 

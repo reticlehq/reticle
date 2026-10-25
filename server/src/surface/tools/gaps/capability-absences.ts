@@ -46,10 +46,11 @@ export function capabilityAbsences(session: CapabilityFacts): CapabilityAbsence[
     absences.push({
       capability: 'network-bodies',
       meaning:
-        'request and response bodies are not recorded, so an assertion that reads one cannot be ' +
-        'answered here and will be refused before it spends an action',
+        'request bodies and successful response bodies are not recorded (a failed response keeps ' +
+        'its body by default), so an assertion that reads one cannot be answered here and will be ' +
+        'refused before it spends an action',
       remedy:
-        "pass captureBodies: true to connect() in this app's Reticle setup, then reload the page. " +
+        "pass captureNetworkBodies: true to connect() in this app's Reticle setup, then reload the page. " +
         'Bodies can carry personal data, so this is off unless a project asks for it.',
     });
   }

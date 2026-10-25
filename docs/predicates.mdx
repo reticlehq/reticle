@@ -73,6 +73,12 @@ Add `"absent": true` to assert something is **gone**. The predicate for a remova
 
 `contains` is the field the published schema declares. `value`, `text` and `query` are accepted as aliases and rewritten to it. The match is case-sensitive. `ignoreCase: true` relaxes that. Curly quotes (`‘ ’ “ ”`), the en dash and the em dash match their plain forms. So `It's saved - done` matches a page that shows `It’s saved – done`. Text that Reticle reports back keeps the page's own characters. `absent: true` asserts the text is not present, and `visible: true` requires it to be on screen rather than merely in the DOM.
 
+`text` reads the text that the page renders. It does not read what is typed into an `<input>` or a `<textarea>`, because that is the field's value, not text on the page. `value` on a `text` predicate is only an alias for `contains`, so it also reads rendered text. To assert what a field holds, use an `element` predicate with `value`:
+
+```json
+{ "kind": "element", "query": { "role": "textbox", "name": "Notes", "value": "Ship on Friday" } }
+```
+
 Use `scope` to restrict the search to a CSS selector or element ref. If Reticle reports that the text is split across the scope's children, retry its generated predicate with `"self": true`; that checks the scope root's combined subtree text while still enforcing `contains`.
 
 `satisfies` asserts a PROPERTY of the rendered text instead of its exact bytes: the same shape and the same properties [`state` accepts](#satisfies-asserting-a-property-instead-of-exact-bytes), applied where the user actually reads the value:

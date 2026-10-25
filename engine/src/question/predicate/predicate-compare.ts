@@ -28,7 +28,7 @@ import type { PredicateSession } from './predicate-session.js';
 import { evalElement, joinedText } from './predicate-element.js';
 import { evalState } from './predicate-state.js';
 import { skippedBodyRemedy } from './predicate-eval.js';
-import { requestBodySkipRemedy } from './predicate-request-body.js';
+import { REMEDY_BODY_CAPTURE, requestBodySkipRemedy } from './predicate-request-body.js';
 
 type ComparePredicate = Extract<Predicate, { kind: typeof PredicateKind.COMPARE }>;
 /** Derived from the predicate rather than imported: one fewer name borrowed from core. */
@@ -37,9 +37,6 @@ type Scalar = string | number | boolean | null;
 
 /** One side, read: its value and how to name it, or the result that ends the comparison. */
 type Reading = { value: Scalar; label: string } | { result: EvalResult };
-
-const REMEDY_BODY_CAPTURE =
-  'enable it where the app calls connect(): reticle({ captureNetworkBodies: true })';
 
 function unknown(reason: string): { result: EvalResult } {
   return { result: { pass: false, failureReason: reason, inconclusive: reason } };
