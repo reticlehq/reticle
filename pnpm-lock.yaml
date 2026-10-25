@@ -412,8 +412,8 @@ importers:
         specifier: ^10.1.0
         version: 10.1.0
       electron:
-        specifier: ^44.5.0
-        version: 44.5.0
+        specifier: ^44.9.1
+        version: 44.9.1
       vite:
         specifier: ^8.2.1
         version: 8.2.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -425,10 +425,10 @@ importers:
     dependencies:
       '@electron-toolkit/preload':
         specifier: ^3.0.2
-        version: 3.0.2(electron@44.5.0)
+        version: 3.0.2(electron@44.9.1)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
-        version: 4.0.0(electron@44.5.0)
+        version: 4.0.0(electron@44.9.1)
       pinia:
         specifier: ^4.0.3
         version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
@@ -458,8 +458,8 @@ importers:
         specifier: ^6.0.9
         version: 6.0.9(vite@7.3.6(@types/node@26.6.2)(jiti@2.7.0)(lightningcss@1.33.0)(yaml@2.9.1))(vue@3.5.43(typescript@5.9.3))
       electron:
-        specifier: ^44.5.0
-        version: 44.5.0
+        specifier: ^44.9.1
+        version: 44.9.1
       electron-builder:
         specifier: ^26.0.12
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
@@ -1117,6 +1117,10 @@ packages:
 
   '@electron-internal/extract-zip@1.0.5':
     resolution: {integrity: sha512-+bqFCP98pLI0Tt0XQo1TmlXtwjWchISndDOxCkEcIuUgXWpBnLyRI+2DU+mesvnMMX6L1XDqYNA0lXNDHd/yiA==}
+    engines: {node: '>=22.12.0'}
+
+  '@electron-internal/extract-zip@1.0.6':
+    resolution: {integrity: sha512-/aQLgFDdCSnwChfUwqekSmE1q2dCTzhUy5saIHBb5vyYn5LzWaKPaIz1wM0lDMCZYBoIG4svJNvAJb6vkI8BuA==}
     engines: {node: '>=22.12.0'}
 
   '@electron-toolkit/eslint-config-prettier@3.0.0':
@@ -2767,6 +2771,9 @@ packages:
   '@types/node@24.19.0':
     resolution: {integrity: sha512-zY+5tKxXdhGh1PYI0ac+7juvEu4OI6vWtVVoj5i2m42jxAY1U+zHGt6QCyOFwykdP62sM3MJ9stoYYUw5aCWew==}
 
+  '@types/node@24.19.2':
+    resolution: {integrity: sha512-93d49wCWJkCyN87MxLpNN6KXPCwFw7bVUg79mGUV1OS40JGWwVCr8n61DXCSqz7CV6/VfPkb7xec7uP2M+QHWQ==}
+
   '@types/node@26.6.2':
     resolution: {integrity: sha512-X1P21scMv4zGKLYqjdGjaKa7COa0RKVYYZZN/NfvLQ1JegxFhdhpZG/Lyn8AXx6CDUavKAd11v6BvfpkDByK8g==}
 
@@ -3875,8 +3882,8 @@ packages:
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
-  electron@44.5.0:
-    resolution: {integrity: sha512-gVUJ6DZcRY80Alh/krc7uwjjCfxjZ3T2suvpBmHsN6zE4ShAc4vzG14kbMgT+ZteaPLddoKg4Pie0CjDdIDdyg==}
+  electron@44.9.1:
+    resolution: {integrity: sha512-x/tECFFDa2OFNjMObFH0EGKWrCnFZPOR1wP2iMIVt0STecGl8FmDXdaiaryY0kf8mtw9kSLP2yK8dfdaWkfDmw==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -7194,6 +7201,8 @@ snapshots:
 
   '@electron-internal/extract-zip@1.0.5': {}
 
+  '@electron-internal/extract-zip@1.0.6': {}
+
   '@electron-toolkit/eslint-config-prettier@3.0.0(eslint@9.39.4(jiti@2.7.0))(prettier@3.9.9)':
     dependencies:
       eslint: 9.39.4(jiti@2.7.0)
@@ -7214,17 +7223,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@electron-toolkit/preload@3.0.2(electron@44.5.0)':
+  '@electron-toolkit/preload@3.0.2(electron@44.9.1)':
     dependencies:
-      electron: 44.5.0
+      electron: 44.9.1
 
   '@electron-toolkit/tsconfig@2.0.0(@types/node@26.6.2)':
     dependencies:
       '@types/node': 26.6.2
 
-  '@electron-toolkit/utils@4.0.0(electron@44.5.0)':
+  '@electron-toolkit/utils@4.0.0(electron@44.9.1)':
     dependencies:
-      electron: 44.5.0
+      electron: 44.9.1
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -8434,6 +8443,10 @@ snapshots:
       '@types/unist': 3.0.3
 
   '@types/node@24.19.0':
+    dependencies:
+      undici-types: 7.24.6
+
+  '@types/node@24.19.2':
     dependencies:
       undici-types: 7.24.6
 
@@ -9896,11 +9909,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.5.0:
+  electron@44.9.1:
     dependencies:
-      '@electron-internal/extract-zip': 1.0.5
+      '@electron-internal/extract-zip': 1.0.6
       '@electron/get': 5.1.0
-      '@types/node': 24.19.0
+      '@types/node': 24.19.2
     transitivePeerDependencies:
       - supports-color
 
