@@ -3,8 +3,12 @@
 
 export const WIRE_SCHEMA_NAMES: readonly string[];
 
+export function draft7Converter(z: {
+  toJSONSchema: (schema: never, options: object) => object;
+}): (schema: unknown, name?: string) => object;
+
 export function buildWireSchemas(
   core: Record<string, unknown>,
-  zodToJsonSchema: (schema: unknown, name: string) => object,
+  convert: (schema: unknown, name?: string) => object,
   z: { enum: (values: [string, ...string[]]) => unknown },
 ): Record<string, object>;

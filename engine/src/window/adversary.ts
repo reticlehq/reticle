@@ -19,68 +19,64 @@
  * is what a real minimal client looks like and what no fixture in this repository resembles.
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 import { EVENT_PAYLOAD_SCHEMAS, EventType, type ReticleEvent } from '@reticlehq/core';
 
 /** A value that satisfies a schema while carrying as little as the contract allows. */
-function barestValue(schema: z.ZodTypeAny): unknown {
-  const def: {
-    typeName?: string;
-    innerType?: z.ZodTypeAny;
-    shape?: () => Record<string, z.ZodTypeAny>;
-    options?: z.ZodTypeAny[];
-    value?: unknown;
-    type?: z.ZodTypeAny;
-  } = schema._def as never;
-
-  switch (def.typeName) {
-    // An optional field is the whole point: leave it out.
-    case 'ZodOptional':
-    case 'ZodNullable':
-      return undefined;
-    case 'ZodDefault':
-      return undefined;
-    case 'ZodString': {
-      // A minimum length is part of the contract, not decoration: `note` and `anchor` on a human
-      // mark both demand one. The barest string that still parses is one character, not none.
-      const checks = (def as { checks?: { kind: string; value: number }[] }).checks ?? [];
-      const min = checks.find((c) => 'min' === c.kind)?.value ?? 0;
-      return 'x'.repeat(min);
-    }
-    case 'ZodNumber': {
-      const checks = (def as { checks?: { kind: string; value: number }[] }).checks ?? [];
-      return checks.find((c) => 'min' === c.kind)?.value ?? 0;
-    }
-    case 'ZodBoolean':
-      return false;
-    case 'ZodArray':
-      return [];
-    // A tuple has a fixed length, so the barest one still has every item.
-    case 'ZodTuple':
-      return ((def as { items?: z.ZodTypeAny[] }).items ?? []).map((item) => barestValue(item));
-    case 'ZodLiteral':
-      return def.value;
-    case 'ZodEnum':
-      return (schema as unknown as z.ZodEnum<[string]>).options[0];
-    case 'ZodNativeEnum':
-      return Object.values((schema as unknown as z.ZodNativeEnum<never>)._def.values)[0];
-    case 'ZodUnion':
-      return barestValue((def.options ?? [])[0] as z.ZodTypeAny);
-    case 'ZodRecord':
-      return {};
-    case 'ZodObject':
-      return barestObject(schema as unknown as z.ZodObject<z.ZodRawShape>);
-    default:
-      // Unknown, any, and anything else the contract does not constrain.
-      return undefined;
+function barestValue(schema: z.ZodType): unknown {
+  // An optional field is the whole point: leave it out.
+  if (
+    schema instanceof z.ZodOptional ||
+    schema instanceof z.ZodNullable ||
+    schema instanceof z.ZodDefault
+  ) {
+    return undefined;
   }
+  if (schema instanceof z.ZodString) {
+    // A minimum length is part of the contract, not decoration: `note` and `anchor` on a human
+    // mark both demand one. The barest string that still parses is one character, not none.
+    return 'x'.repeat(schema.minLength ?? 0);
+  }
+  if (schema instanceof z.ZodNumber) {
+    // `.int()` reports the smallest safe integer as its minimum; that is no lower bound to honour.
+    const min = schema.minValue;
+    const value = null !== min && Number.MIN_SAFE_INTEGER < min ? min : 0;
+    return schema.safeParse(value).success ? value : value + 1;
+  }
+  if (schema instanceof z.ZodBoolean) {
+    return false;
+  }
+  if (schema instanceof z.ZodArray) {
+    return [];
+  }
+  if (schema instanceof z.ZodRecord) {
+    return {};
+  }
+  // A tuple has a fixed length, so the barest one still has every item.
+  if (schema instanceof z.ZodTuple) {
+    return schema.def.items.map((item) => barestValue(item as z.ZodType));
+  }
+  if (schema instanceof z.ZodLiteral) {
+    return schema.value;
+  }
+  if (schema instanceof z.ZodEnum) {
+    return schema.options[0];
+  }
+  if (schema instanceof z.ZodUnion) {
+    return barestValue(schema.options[0] as z.ZodType);
+  }
+  if (schema instanceof z.ZodObject) {
+    return barestObject(schema);
+  }
+  // Unknown, any, and anything else the contract does not constrain.
+  return undefined;
 }
 
 /** The smallest object that still parses: required keys only, each at its barest value. */
-function barestObject(schema: z.ZodObject<z.ZodRawShape>): Record<string, unknown> {
+function barestObject(schema: z.ZodObject): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, field] of Object.entries(schema.shape)) {
-    const value = barestValue(field);
+    const value = barestValue(field as z.ZodType);
     if (value !== undefined) {
       out[key] = value;
     }

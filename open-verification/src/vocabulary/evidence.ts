@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { ChannelIdSchema, Grade, Independence } from './channel.js';
 import { SubjectRefSchema } from './subject.js';
 
@@ -30,7 +30,7 @@ export const ObservationSchema = z.object({
   /** When, on the realm's clock. */
   at: z.number().int(),
   /** What was seen. Opaque: the protocol does not standardise a realm's payloads. */
-  value: z.unknown(),
+  value: z.unknown().optional(),
   /** A human-readable rendering, so a verdict is legible without the realm. */
   summary: z.string().min(1),
 });

@@ -89,7 +89,7 @@ describe('QUERY output schema declares every field a descriptor can carry', () =
     if (!(arr instanceof z.ZodArray)) throw new Error('elements is not an array as expected');
     const obj = arr.element as z.ZodTypeAny;
     if (!(obj instanceof z.ZodObject)) throw new Error('element is not an object as expected');
-    const keys = Object.keys((obj as z.ZodObject<z.ZodRawShape>).shape);
+    const keys = Object.keys((obj as z.ZodObject<Record<string, z.ZodType>>).shape);
     expect(keys).toContain('chart');
     expect(keys).toContain('source');
   });
@@ -123,6 +123,8 @@ describe('QUERY output schema declares every field a descriptor can carry', () =
     ];
     if (!(verdict instanceof z.ZodObject))
       throw new Error('act_and_wait verdict is not an object schema');
-    expect(Object.keys((verdict as z.ZodObject<z.ZodRawShape>).shape)).toContain('inconclusive');
+    expect(Object.keys((verdict as z.ZodObject<Record<string, z.ZodType>>).shape)).toContain(
+      'inconclusive',
+    );
   });
 });

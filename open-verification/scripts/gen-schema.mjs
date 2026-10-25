@@ -5,7 +5,7 @@
 // one contract is the drift problem, not the fix. Nobody writes JSON Schema here. It is generated,
 //
 // ONE THING THIS CANNOT CARRY, and it decides how rules get written here: a `.refine()` does
-// not survive. `zod-to-json-schema` emits the object and discards the predicate, with no
+// not survive. `z.toJSONSchema` emits the object and discards the predicate, with no
 // warning, so a conditional MUST written that way is enforced for people who install the
 // TypeScript and absent for everybody this file exists to serve.
 //
@@ -17,14 +17,14 @@
 // every build, from the same zod that the reference implementation validates against, so a schema
 // that disagrees with the code is not a thing that can exist.
 //
-// `zod-to-json-schema` is a build-time devDependency and never ships. What ships is `schema/*.json`
+// The generator is build-time code and never ships. What ships is `schema/*.json`
 // plus `dist/`, so an implementation in Python, Go or Rust conforms by validating against the JSON
 // and needs none of this package's code.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z } from 'zod';
 import * as ovp from '../dist/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -82,10 +82,33 @@ export const SCHEMAS = Object.freeze({
   'verification-run': ovp.VerificationRunSchema,
 });
 
+/**
+ * zod's own converter, in the JSON Schema draft that every validator in every language reads.
+ *
+ * `z.undefined()` has no JSON Schema form, and zod emits it as `{}`, which accepts anything. A
+ * conditional rule is a union whose other branch forbids the field, so it is written as
+ * `{ not: {} }`: nothing matches it, and the field must be absent.
+ */
+export function toDraft7(schema) {
+  return z.toJSONSchema(schema, {
+    target: 'draft-7',
+    io: 'input',
+    unrepresentable: 'any',
+    override: forbidUndefined,
+  });
+}
+
+/** Write a `z.undefined()` field as one no value matches. */
+export function forbidUndefined(ctx) {
+  if ('undefined' === ctx.zodSchema._zod.def.type) {
+    ctx.jsonSchema.not = {};
+  }
+}
+
 export function buildSchemas(schemas = SCHEMAS) {
   const built = {};
   for (const [name, schema] of Object.entries(schemas)) {
-    built[name] = { $id: `${BASE}/${name}.json`, ...zodToJsonSchema(schema, { name }) };
+    built[name] = { $id: `${BASE}/${name}.json`, title: name, ...toDraft7(schema) };
   }
   return built;
 }

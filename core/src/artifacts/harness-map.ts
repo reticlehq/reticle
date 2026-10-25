@@ -6,7 +6,7 @@
  * platform when a drive starts. A drive that misses its goal on one page looks it up here instead of
  * guessing, and the search before grading starts from it.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 
 /** Bounds on what one map holds: a dashboard's pages, not its rows. */
 export const HarnessMapLimit = {

@@ -41,7 +41,7 @@ export const durableArg = z
 
 // Loose and undescribed on purpose: the output surface is re-sent every turn. `because` carries
 // the answer; this is the detail — { held?, observed?, skipped? }.
-export const durableOutput = z.record(z.unknown()).optional();
+export const durableOutput = z.record(z.string(), z.unknown()).optional();
 
 const RE_READABLE: ReadonlySet<string> = new Set([
   PredicateKind.ELEMENT,

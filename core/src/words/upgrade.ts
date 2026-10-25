@@ -12,7 +12,7 @@
  * - fully silenceable via the env switch below,
  * - the agent's objective never includes "drive upgrades" — it reports a blocker, it does not sell.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 
 /** Env switch that silences ALL upgrade hints — respected by the server before any hint is emitted. */
 export const UPGRADE_HINT_SILENCE_ENV = 'RETICLE_NO_UPSELL';

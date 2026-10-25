@@ -25,6 +25,7 @@ import type { StepExpect } from '@/judgement/outcome/assertion-integrity.js';
 const AssertionTiersFileSchema = z.object({
   version: z.literal(1),
   flows: z.record(
+    z.string(),
     z.object({
       steps: z.array(z.object({ step: z.number(), expect: z.unknown().optional() })),
       /** Source files this flow covered when it last passed — lets the gate scope DELETION findings to

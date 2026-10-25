@@ -99,7 +99,7 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
           'Treat statePath as an INVARIANT that must still hold AFTER the action settles (a blast-radius "this unrelated path must not have moved" check), not a condition to wait for. Without it a wait-until-true read passes before an over-reaching side-effect lands.',
         ),
       dataMatches: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .optional()
         .describe('Key/value pairs the signal payload must match (assert-signal only).'),
       net: z

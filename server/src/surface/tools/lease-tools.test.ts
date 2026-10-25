@@ -1243,7 +1243,9 @@ describe('reticle_lease with seedStorage', () => {
         url: 'http://localhost:3000/',
         seedStorage: { local: 12345 as unknown as Record<string, string> },
       }),
-    ).rejects.toThrow(/seedStorage is invalid: local: Expected object, received number/);
+    ).rejects.toThrow(
+      /seedStorage is invalid: local: Invalid input: expected record, received number/,
+    );
   });
 
   it('rejects an unrecognised seedStorage key instead of silently stripping it (#1142)', async () => {

@@ -56,9 +56,6 @@
     "test:guards": "node ../scripts/guard-tests.mjs guards"
   },
   "dependencies": {
-    "zod": "^3.23.8"
-  },
-  "devDependencies": {
-    "zod-to-json-schema": "^3.23.5"
+    "zod": "^4.6.6"
   }
 }

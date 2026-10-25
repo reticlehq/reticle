@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * What a change was supposed to make true, captured while somebody still knows.

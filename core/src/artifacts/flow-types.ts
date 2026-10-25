@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { CROSS_STEP_ADDRESS } from './flow-step-tool.js';
 import { READABLE_FLOW_VERSIONS } from './flow-constants.js';
 import { StepEffect } from './step-effect.js';
@@ -236,7 +236,7 @@ const baseFlowStep = z.object({
   /** See FlowStep.writes. */
   writes: z.boolean().optional(),
   action: z.nativeEnum(ActionType).optional(),
-  args: z.record(z.unknown()).optional(),
+  args: z.record(z.string(), z.unknown()).optional(),
   expect: ExpectSchema.optional(),
   degraded: z.boolean().optional(),
   timeoutMs: z.number().int().nonnegative().optional(),

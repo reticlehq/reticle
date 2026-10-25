@@ -328,7 +328,7 @@ describe('what a step reports', () => {
 
 /**
  * A sub-step reads `{ ref | target, action, args }` and NOTHING else. The schema is
- * `z.record(z.unknown())`, so any other key is accepted and dropped — and the keys an agent is most
+ * `z.record(z.string(), z.unknown())`, so any other key is accepted and dropped — and the keys an agent is most
  * likely to reach for are the ones that claim a consequence, because `until` is what the neighbouring
  * act_and_wait calls its assertion.
  *

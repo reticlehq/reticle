@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { HudPanel, HudPromptSurface, HudToggle, HudView } from './constants/hud-use.js';
 import {
   EventAttribution,
@@ -123,7 +123,7 @@ export const ReticleEventSchema = z.object({
    */
   editEpoch: z.number().int().min(NO_EDITS_OBSERVED).optional(),
   /** Event-type-specific payload. Kept open here; refined per observer at the edges. */
-  data: z.record(z.unknown()).default({}),
+  data: z.record(z.string(), z.unknown()).default({}),
 });
 export type ReticleEvent = z.infer<typeof ReticleEventSchema>;
 
@@ -297,7 +297,7 @@ export const CommandMessageSchema = z.object({
   id: z.string().min(1).max(TRANSPORT_LIMITS.MAX_COMMAND_ID_LENGTH),
   sessionId: sessionIdSchema.optional(),
   name: z.string().min(1).max(TRANSPORT_LIMITS.MAX_COMMAND_NAME_LENGTH),
-  args: z.record(z.unknown()).default({}),
+  args: z.record(z.string(), z.unknown()).default({}),
   /** Set when the Harness sent it, so the HUD can say who is driving. */
   by: z.nativeEnum(CommandActor).optional(),
   /**

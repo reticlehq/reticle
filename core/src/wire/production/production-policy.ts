@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { HelloScope } from './hello-mode.js';
 
 /**

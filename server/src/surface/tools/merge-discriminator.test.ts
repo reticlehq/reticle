@@ -16,7 +16,7 @@ import type { ToolDef } from './tool-kit.js';
  *
  * Caught before it shipped; the test is here because the failure mode is invisible from the outside.
  */
-const tool = (name: string, shape: z.ZodRawShape): ToolDef => ({
+const tool = (name: string, shape: Record<string, z.ZodType>): ToolDef => ({
   name,
   description: name,
   inputSchema: shape,

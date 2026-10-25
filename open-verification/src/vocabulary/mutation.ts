@@ -14,7 +14,7 @@
  * suite.
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * Ways a subject can be broken on purpose.

@@ -37,7 +37,7 @@ interface PausedResult {
  * human's message entirely (not merely hides it). Declared here beside PausedResult so the schema and
  * the runtime shape are the same source; spread into each act tool's outputSchema.
  */
-export const pausedOutputShape: z.ZodRawShape = {
+export const pausedOutputShape: Record<string, z.ZodType> = {
   paused: z.boolean().optional(),
   guidance: z.array(z.string()).optional(),
   hint: z.string().optional(),

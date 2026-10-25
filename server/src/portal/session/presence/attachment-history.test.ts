@@ -119,7 +119,7 @@ describe('AttachmentHistory', () => {
       // ever dropped, the field goes back to over-claiming silently.
       const sessions = TOOLS.find((t) => t.name === ReticleTool.SESSIONS);
       const rows = (
-        sessions?.outputSchema as Record<string, z.ZodArray<z.ZodObject<z.ZodRawShape>>>
+        sessions?.outputSchema as Record<string, z.ZodArray<z.ZodObject<Record<string, z.ZodType>>>>
       )['sessions'];
       const described = rows?.element.shape['attachment']?.description ?? '';
       expect(

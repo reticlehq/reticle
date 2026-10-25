@@ -11,7 +11,7 @@
  *   seen          its channel or marker was announced
  *   not seen yet  neither — never counted as covered
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { ChannelId } from 'open-verification';
 import { InstrumentationGapKind, fixForGap } from './instrumentation-gap.js';
 import { CoverageMarker, SOURCE_MAPPING_CAPABILITY } from '../wire/platform-link.js';

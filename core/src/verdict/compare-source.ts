@@ -13,7 +13,7 @@
  * payload field, a store path, an element's text). Route, console and animation carry events, not
  * values, so they are not sources.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { PredicateKind } from './consequence.js';
 
 /** Which half of an exchange a `net` source reads. */

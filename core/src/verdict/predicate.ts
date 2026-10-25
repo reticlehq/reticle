@@ -15,7 +15,7 @@
  * the contract, not the reasoning. A reader looking for "what may I write" is in the right file; a
  * reader looking for "what does it decide" is one package out.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { ElementQuerySchema, type ElementQuery } from '@/wire/types.js';
 import { ElementState } from '@/wire/constants/constants.js';
 import {
@@ -244,7 +244,7 @@ function keysOfEachKind(): ReadonlyMap<string, ReadonlySet<string>> {
   const out = new Map<string, ReadonlySet<string>>();
   for (const option of predicateUnion().options) {
     const shape = (option as unknown as { shape: Record<string, unknown> }).shape;
-    const kind = (shape['kind'] as { _def: { value: string } })._def.value;
+    const kind = String((shape['kind'] as z.ZodLiteral<string>).value);
     const flat: readonly string[] = PredicateKind.ELEMENT === kind ? ELEMENT_QUERY_FIELDS : [];
     out.set(
       kind,
@@ -553,7 +553,7 @@ function predicateUnion() {
       .object({
         kind: z.literal(PredicateKind.SIGNAL),
         name: z.string().optional(),
-        dataMatches: z.record(z.unknown()).optional(),
+        dataMatches: z.record(z.string(), z.unknown()).optional(),
         /**
          * Exact number of matching signals since the action — presence becomes cardinality.
          *
@@ -738,8 +738,9 @@ export function predicateShapeFor(kind: string): z.ZodRawShape | null {
   for (const option of predicateUnion().options) {
     const shape = (option as unknown as { shape?: Record<string, z.ZodTypeAny> }).shape;
     const literal = shape?.['kind'];
-    const value = (literal as unknown as { _def?: { value?: unknown } } | undefined)?._def?.value;
-    if (value === kind) return shape as z.ZodRawShape;
+    if (literal instanceof z.ZodLiteral && literal.value === kind) {
+      return shape as z.ZodRawShape;
+    }
   }
   return null;
 }

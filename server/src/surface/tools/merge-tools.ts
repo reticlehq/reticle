@@ -93,8 +93,8 @@ function strayKeysRefusal(
 }
 
 /** The union of member input shapes, every field optional so one schema serves every action. */
-function unionShape(actions: Record<string, ToolDef>): z.ZodRawShape {
-  const shape: z.ZodRawShape = {};
+function unionShape(actions: Record<string, ToolDef>): Record<string, z.ZodType> {
+  const shape: Record<string, z.ZodType> = {};
   for (const tool of Object.values(actions)) {
     for (const [key, schema] of Object.entries(tool.inputSchema)) {
       // First definition wins; siblings share field names/meanings by construction.

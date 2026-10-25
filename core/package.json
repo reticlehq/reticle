@@ -55,11 +55,10 @@
   },
   "dependencies": {
     "open-verification": "workspace:*",
-    "zod": "^3.24.1"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
-    "fast-check": "^4.10.2",
-    "zod-to-json-schema": "^3.24.0"
+    "fast-check": "^4.10.2"
   },
   "license": "Apache-2.0",
   "author": "Reticle contributors",

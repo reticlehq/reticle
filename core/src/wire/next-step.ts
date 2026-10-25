@@ -5,7 +5,7 @@
  * wrote its own, the Harness refusal said `reticle connect` and the recovery beside it said
  * `npx @reticlehq/server connect`: two spellings of one command, in one answer.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { ReticleTool } from './tool-names.js';
 
 /** The command that signs a person in and links a project. The docs spell it this way. */

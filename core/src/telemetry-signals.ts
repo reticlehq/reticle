@@ -7,7 +7,7 @@
  * Its own file so the vocabulary has one home and `telemetry.ts` only wires it in. Every value here is
  * a closed set, a boolean or a bucket: none of these fields can carry a URL, a path, a name or text.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { HudPanel, HudPromptSurface } from './wire/constants/hud-use.js';
 
 /**

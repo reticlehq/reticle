@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { TRANSPORT_LIMITS, TruncationChannel } from '@/wire/constants/constants.js';
 import { Verified } from '@/verdict/verified-constants.js';
 import { PredicateKind } from '@/verdict/consequence.js';
@@ -41,7 +41,7 @@ export const JournalActionSchema = z.object({
   /** The MCP tool / command name that drove it (e.g. "reticle_act"). */
   tool: z.string().min(1).max(TRANSPORT_LIMITS.MAX_COMMAND_NAME_LENGTH),
   /** Redacted invocation args. */
-  args: z.record(z.unknown()).default({}),
+  args: z.record(z.string(), z.unknown()).default({}),
   /** Bounded effect summary (settle glyph, target, etc.). Kept open; narrowed by the writer. */
   effect: z.unknown().optional(),
   /** Whether the page settled within budget after the action, when known. */

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * The impact record: what Reticle has actually done for this user, and what that is worth.
@@ -314,17 +314,17 @@ export const ImpactSnapshotSchema = z.object({
    * Reticle Coverage: each level's percentage from the project's coverage ledger (`reached` routes,
    * `proved` controls, `executed` code, ...). Numbers only. Absent until something was measured.
    */
-  coverage: z.record(z.number()).optional(),
+  coverage: z.record(z.string(), z.number()).optional(),
   /**
    * Where this project's work stands with the platform (status, runs on it, waiting, refused, last
    * push, and the sentence describing it). Loose here, shaped by the daemon's sync-status.
    */
-  sync: z.record(z.unknown()).optional(),
+  sync: z.record(z.string(), z.unknown()).optional(),
   /**
    * How much of THIS tab's app Reticle sees, and the prompt that asks a coding agent to close the
    * rest (`covered`, `total`, `missing`, `prompt`). Loose here, shaped by the daemon's coverageOf.
    */
-  instrumentation: z.record(z.unknown()).optional(),
+  instrumentation: z.record(z.string(), z.unknown()).optional(),
 });
 export type ImpactSnapshot = z.infer<typeof ImpactSnapshotSchema>;
 

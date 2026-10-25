@@ -20,17 +20,17 @@ import {
   MAX_BLOCKING_WAIT_MS,
 } from './numeric-bounds.js';
 
-function inputShape(name: string): z.ZodRawShape {
+function inputShape(name: string): Record<string, z.ZodType> {
   const tool = RAW_TOOLS.find((t) => t.name === name) ?? TOOLS.find((t) => t.name === name);
   if (tool === undefined) throw new Error(`missing tool ${name}`);
   return tool.inputSchema;
 }
 
 function parseField(
-  shape: z.ZodRawShape,
+  shape: Record<string, z.ZodType>,
   key: string,
   value: unknown,
-): z.SafeParseReturnType<unknown, unknown> {
+): z.ZodSafeParseResult<unknown> {
   const field = shape[key];
   if (field === undefined) throw new Error(`missing field ${key}`);
   return z.object({ [key]: field }).safeParse({ [key]: value });
@@ -38,27 +38,21 @@ function parseField(
 
 function unwrap(schema: ZodTypeAny): ZodTypeAny {
   let current: ZodTypeAny = schema;
-  const seen = new Set<ZodTypeAny>();
-  while (!seen.has(current)) {
-    seen.add(current);
-    const def = current._def as { typeName?: string; innerType?: ZodTypeAny; schema?: ZodTypeAny };
+  for (;;) {
     if (
-      'ZodOptional' === def.typeName ||
-      'ZodNullable' === def.typeName ||
-      'ZodDefault' === def.typeName
+      current instanceof z.ZodOptional ||
+      current instanceof z.ZodNullable ||
+      current instanceof z.ZodDefault
     ) {
-      if (def.innerType === undefined) break;
-      current = def.innerType;
+      current = current.def.innerType as ZodTypeAny;
       continue;
     }
-    if ('ZodEffects' === def.typeName) {
-      if (def.schema === undefined) break;
-      current = def.schema;
+    if (current instanceof z.ZodPipe) {
+      current = (current.in instanceof z.ZodTransform ? current.out : current.in) as ZodTypeAny;
       continue;
     }
-    break;
+    return current;
   }
-  return current;
 }
 
 /** Cursors are positions in a stream — a floor of 0 is the bound; a max would refuse a real stamp. */
@@ -66,11 +60,10 @@ const CURSOR_KEYS = new Set(['since', 'until']);
 
 function isUnderboundedNumber(schema: ZodTypeAny, key: string): boolean {
   const inner = unwrap(schema);
-  const def = inner._def as { typeName?: string; checks?: readonly { kind: string }[] };
-  if ('ZodNumber' !== def.typeName) return false;
-  const checks = def.checks ?? [];
-  const hasMin = checks.some((c) => 'min' === c.kind);
-  const hasMax = checks.some((c) => 'max' === c.kind);
+  if (!(inner instanceof z.ZodNumber)) return false;
+  // `.int()` reports the safe-integer range; only a bound the schema author wrote counts.
+  const hasMin = Number.MIN_SAFE_INTEGER < (inner.minValue ?? Number.MIN_SAFE_INTEGER);
+  const hasMax = Number.MAX_SAFE_INTEGER > (inner.maxValue ?? Number.MAX_SAFE_INTEGER);
   if (CURSOR_KEYS.has(key)) return !hasMin;
   return !hasMin || !hasMax;
 }

@@ -14,7 +14,7 @@
  *
  * Daemon-side only: the HUD draws a plan from a flat view of it (`PlanView`), never this schema.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { PredicateSchema } from '../verdict/predicate.js';
 
 export const ScriptStepKind = {

@@ -185,7 +185,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
     "Drive a WHOLE journey in ONE round-trip, with NO snapshot first. Name each step's element by {testid} | {label} | {role,name} | {text} in `target` and Reticle resolves it AT THE MOMENT THAT STEP RUNS — so a control that does not exist yet (a modal an earlier step opens, a row it creates) is still addressable, and waits up to timeout_ms to appear. This is the fast path: snapshot -> act -> snapshot -> act costs a model turn per step and is the slowest thing an agent can do. Give each step an `expect` and the sequence stops at the first one that does not hold, returning the un-run `tail` verbatim so you re-plan only the failure. Returns per-step effects[] (see reticle_act).",
   inputSchema: {
     steps: z
-      .array(z.record(z.unknown()))
+      .array(z.record(z.string(), z.unknown()))
       .describe(
         'Ordered list of { ref | target, action, args?, expect? } objects. Each step is equivalent to one reticle_act call, and takes its arguments either way: `{ ref, action: "fill", value: "…" }` flat, as reticle_act does, or nested as `args: { value }`. Give `ref` from a snapshot/query, or `target` ({ testid } | { label } | { role, name } | { text }) to resolve in this call. Put confirmDangerous:true in a destructive step args object. `expect` is the same predicate shape as reticle_act_and_wait `until`, and it is what makes a step PROVE something: a step without one is driven, not verified, and the result says so. Naming the consequence is also FASTER — a named consequence is detected the instant it fires, where waiting for the page to settle can only conclude by waiting for silence.',
       ),
@@ -232,14 +232,14 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
     /** How many steps declared a consequence, of how many were driven. Never averaged away. */
     coverage: z.object({ declared: z.number(), total: z.number() }).optional(),
     /** Steps never run, verbatim, so a caller re-plans the failure rather than the whole journey. */
-    tail: z.array(z.record(z.unknown())).optional(),
+    tail: z.array(z.record(z.string(), z.unknown())).optional(),
     /**
      * Each step carries the same effect record a REPLAYED step carries: `window` (the
      * `reticle_observe { since, until }` drill address), `digest` (what the app did, as counts) and
      * `contradictions` (channels that disagree, present even when the step passed). Declared here
      * because an undeclared field is stripped from structuredContent and would be silently lost.
      */
-    steps: z.array(z.record(z.unknown())).optional(),
+    steps: z.array(z.record(z.string(), z.unknown())).optional(),
     result: z.unknown().optional(),
     session: z
       .object({ lastSeenMs: z.number(), throttled: z.boolean(), focused: z.boolean() })

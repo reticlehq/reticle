@@ -8,7 +8,7 @@
  *
  * Everything here is pure. Fetching and caching live in the daemon; the clock arrives as an argument.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 
 /** Where the daemon reads the notices from. Overridable for self-hosting and tests. */
 export const HUD_NOTICES_URL = 'https://reticle.sh/hud/notices.v1.json';

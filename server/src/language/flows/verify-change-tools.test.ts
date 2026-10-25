@@ -7,7 +7,9 @@ import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tools.js';
 
 const tool = VERIFY_CHANGE_TOOLS[0];
-if (tool === undefined) throw new Error('reticle_verify_change is not defined');
+if (tool === undefined) {
+  throw new Error('reticle_verify_change is not defined');
+}
 
 /** Deps whose flow store is empty — nothing on disk covers anything. */
 const depsWithNoFlows = (): ToolDeps =>
@@ -75,7 +77,9 @@ describe('reticle_verify_change — an uncovered change is never a pass', () => 
 describe('reticle_verify_change — it delegates rather than reimplements', () => {
   const withFlows = (suite: Record<string, unknown>): ToolDeps => {
     const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
-    if (verify === undefined) throw new Error('flow_verify missing');
+    if (verify === undefined) {
+      throw new Error('flow_verify missing');
+    }
     vi.spyOn(verify, 'handler').mockResolvedValue(suite);
     return depsWithNoFlows();
   };
@@ -190,7 +194,9 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
 
   it('reports NO when a contradiction appeared during a passing replay', async () => {
     const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
-    if (verify === undefined) throw new Error('flow_verify missing');
+    if (verify === undefined) {
+      throw new Error('flow_verify missing');
+    }
     vi.spyOn(verify, 'handler').mockResolvedValue(passingSuite);
     const affectedSpy = vi
       .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
@@ -211,7 +217,9 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
 
   it('reports an unrelated duplicate POST without failing a passing replay', async () => {
     const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
-    if (verify === undefined) throw new Error('flow_verify missing');
+    if (verify === undefined) {
+      throw new Error('flow_verify missing');
+    }
     const verifySpy = vi.spyOn(verify, 'handler').mockResolvedValue(passingSuite);
     const affectedSpy = vi
       .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
@@ -246,7 +254,9 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
 
   it('reports UNKNOWN when a contradiction appeared only in flows it cannot tie to the change', async () => {
     const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
-    if (verify === undefined) throw new Error('flow_verify missing');
+    if (verify === undefined) {
+      throw new Error('flow_verify missing');
+    }
     vi.spyOn(verify, 'handler').mockResolvedValue(passingSuite);
     const affectedSpy = vi
       .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
@@ -267,7 +277,9 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
 
   it('reports which controls the covering flows never drove', async () => {
     const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
-    if (verify === undefined) throw new Error('flow_verify missing');
+    if (verify === undefined) {
+      throw new Error('flow_verify missing');
+    }
     vi.spyOn(verify, 'handler').mockResolvedValue(passingSuite);
     const affectedSpy = vi
       .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
@@ -291,7 +303,9 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
    */
   it('says what it measured, so an absent finding is never read as a clean result', async () => {
     const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
-    if (verify === undefined) throw new Error('flow_verify missing');
+    if (verify === undefined) {
+      throw new Error('flow_verify missing');
+    }
     vi.spyOn(verify, 'handler').mockResolvedValue(passingSuite);
     const affectedSpy = vi
       .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
@@ -326,7 +340,7 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
  * replaced by a protocol error for every caller who had not already recorded a covering flow.
  */
 describe('what the handler returns satisfies the output schema it advertises', () => {
-  const outputShape = z.object(tool.outputSchema as Record<string, z.ZodTypeAny>);
+  const outputShape = z.object(tool.outputSchema);
 
   it('the no-files UNKNOWN return validates', async () => {
     const result = await tool.handler(depsWithNoFlows(), {});

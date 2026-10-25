@@ -15,7 +15,7 @@ import {
 } from '@/surface/tools/tool-surface.js';
 import { ReticleTool } from '@reticlehq/core';
 import { sharedParamShort } from './shared-params.js';
-import { buildDynamicTools } from '@/surface/tools/dynamic-tools.js';
+import { buildDynamicTools, descriptionOf } from '@/surface/tools/dynamic-tools.js';
 import { runTool } from '@/surface/tools/invoke-tool.js';
 import { sessionEnvelopeShape, newSnapshotCache, type ToolCall } from '@/surface/tools/tool-kit.js';
 import { buildErrorPayload, codedRefusalOf } from '@/surface/tools/error-recovery.js';
@@ -67,8 +67,8 @@ import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-p
  */
 export function withSessionEnvelope(
   _name: string,
-  outputSchema: z.ZodRawShape | undefined,
-): z.ZodRawShape | undefined {
+  outputSchema: Record<string, z.ZodType> | undefined,
+): Record<string, z.ZodType> | undefined {
   if (outputSchema === undefined) {
     return outputSchema;
   }
@@ -169,11 +169,11 @@ const COMPACT_PREDICATE_DESCRIPTION = `${PREDICATE_KINDS}${PREDICATE_FIELD_GRAMM
  * description pass through unchanged. Predicate params are replaced wholesale — see above.
  */
 function leanZodShape(
-  shape: z.ZodRawShape,
+  shape: Record<string, z.ZodType>,
   advertised: ReadonlySet<string>,
   predicateAnchor?: string,
-): z.ZodRawShape {
-  const out: z.ZodRawShape = {};
+): Record<string, z.ZodType> {
+  const out: Record<string, z.ZodType> = {};
   // The navigation hint is said ONCE per turn, so it is anchored to one parameter — not one tool.
   // A tool can carry two predicate parameters (a canonical name plus a neighbouring tool's alias),
   // and anchoring per-tool spelled the hint out on both.
@@ -181,11 +181,11 @@ function leanZodShape(
   for (const [key, schema] of Object.entries(shape)) {
     if (isPredicateParam(schema)) {
       // Every tool keeps the kinds; only the navigation hint is anchored.
-      const compact = z
-        .record(z.unknown())
-        .describe(hintSpent ? PREDICATE_KINDS : COMPACT_PREDICATE_DESCRIPTION);
+      const compact = z.record(z.string(), z.unknown());
+      out[key] = (schema.isOptional() ? compact.optional() : compact).describe(
+        hintSpent ? PREDICATE_KINDS : COMPACT_PREDICATE_DESCRIPTION,
+      );
       hintSpent = true;
-      out[key] = schema.isOptional() ? compact.optional() : compact;
       continue;
     }
     // Shared boilerplate is documented once in the initialize instructions instead of on every
@@ -200,7 +200,7 @@ function leanZodShape(
     }
     // Through the same rewrite as tool descriptions: a parameter that says "a ref from
     // reticle_snapshot" names a tool this surface does not have.
-    const desc = schema.description;
+    const desc = descriptionOf(schema);
     out[key] =
       'string' === typeof desc
         ? schema.describe(liveCallText(firstSentence(desc), advertised))
@@ -239,8 +239,8 @@ type ReticleRegisterTool = (
   name: string,
   config: {
     description: string;
-    inputSchema: z.ZodRawShape;
-    outputSchema?: z.ZodRawShape;
+    inputSchema: Record<string, z.ZodType>;
+    outputSchema?: Record<string, z.ZodType>;
     annotations?: ToolAnnotations;
   },
   handler: (
@@ -365,8 +365,8 @@ export function advertisedConfig(
   profile: ToolSurface,
 ): {
   description: string;
-  inputSchema: z.ZodRawShape;
-  outputSchema?: z.ZodRawShape;
+  inputSchema: Record<string, z.ZodType>;
+  outputSchema?: Record<string, z.ZodType>;
   annotations: ToolAnnotations;
 } {
   // Hybrid is the terse one. NOT `profile !== FULL`, which reads equivalent and is not: it also

@@ -415,7 +415,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
             states: z.array(z.string()),
             visible: z.boolean(),
             attrs: z
-              .record(z.string())
+              .record(z.string(), z.string())
               .optional()
               .describe(
                 'Present only for attributes requested via `attrs` and found on the element.',

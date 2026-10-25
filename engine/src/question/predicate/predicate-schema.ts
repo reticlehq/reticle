@@ -7,7 +7,7 @@
  * reads off disk. Core is the contract; this is the reasoning over it. Both halves are re-exported
  * from here, so every existing importer of this module keeps working unchanged.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import {
   PredicateKind,
   PredicateSchema,
@@ -352,7 +352,7 @@ export function nestedKeysOf(schema: z.ZodTypeAny | undefined): readonly string[
   return Object.keys((inner as z.ZodObject<z.ZodRawShape>).shape);
 }
 
-/** Peel optional/nullable/default/effects wrappers off a field to reach the schema underneath. */
+/** Peel optional/nullable/default/pipe wrappers off a field to reach the schema underneath. */
 function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
   let current = schema;
   for (;;) {
@@ -361,11 +361,12 @@ function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
       current instanceof z.ZodNullable ||
       current instanceof z.ZodDefault
     ) {
-      current = current._def.innerType as z.ZodTypeAny;
+      current = current.def.innerType as z.ZodTypeAny;
       continue;
     }
-    if (current instanceof z.ZodEffects) {
-      current = current._def.schema as z.ZodTypeAny;
+    // A transform is a pipe from the schema into the transform; a preprocess is the other way round.
+    if (current instanceof z.ZodPipe) {
+      current = (current.in instanceof z.ZodTransform ? current.out : current.in) as z.ZodTypeAny;
       continue;
     }
     return current;
@@ -391,7 +392,7 @@ export function predicateNestedFieldsFor(
   const nested: Record<string, readonly string[]> = {};
   for (const [field, schema] of Object.entries(shape)) {
     if ('kind' === field) continue;
-    const keys = nestedKeysOf(schema);
+    const keys = nestedKeysOf(schema as z.ZodTypeAny);
     if (0 < keys.length) nested[field] = keys;
   }
   return nested;

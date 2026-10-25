@@ -48,10 +48,13 @@ const LedgerSchema = z.object({
   controls: z.object({ seen: names, touched: names, proved: names }),
   journeys: z.object({ completed: names }),
   writes: z.object({ seen: names, branched: names, unhandled: names }),
-  code: z.record(z.record(z.object({ name: z.string(), executed: z.boolean() }))),
+  code: z.record(
+    z.string(),
+    z.record(z.string(), z.object({ name: z.string(), executed: z.boolean() })),
+  ),
   /** Per file, when its code coverage was last taken. Absent in a ledger from before it existed. */
-  codeTaken: z.record(z.number()).default({}),
-  best: z.record(z.number()),
+  codeTaken: z.record(z.string(), z.number()).default({}),
+  best: z.record(z.string(), z.number()),
 });
 export type AppLedger = z.infer<typeof LedgerSchema>;
 

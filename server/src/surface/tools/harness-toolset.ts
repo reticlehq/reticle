@@ -9,7 +9,6 @@
  */
 
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
   AppRuntime,
   ConsequenceKind,
@@ -113,8 +112,8 @@ const INJECTED_PARAMS: ReadonlySet<string> = new Set(['sessionId']);
  */
 const TOOL_TIMEOUT_MS = 300_000;
 
-/** What the MCP SDK passes its own converter, restated so the two surfaces cannot drift apart. */
-const MCP_SCHEMA_OPTIONS = { strictUnions: true, pipeStrategy: 'input' } as const;
+/** What the MCP SDK passes zod's own converter, restated so the two surfaces cannot drift apart. */
+const MCP_SCHEMA_OPTIONS = { target: 'draft-7', io: 'input' } as const;
 
 /** Convert one tool's zod shape into the JSON Schema the model wire wants. */
 function toHarnessTool(tool: ToolDef): HarnessTool {
@@ -133,7 +132,7 @@ function toHarnessTool(tool: ToolDef): HarnessTool {
      * argument that decides whether a drive proves anything. Definitions and refs are what every
      * agent driving Reticle over MCP already reads.
      */
-    inputSchema: zodToJsonSchema(z.object(asked), MCP_SCHEMA_OPTIONS),
+    inputSchema: z.toJSONSchema(z.object(asked), MCP_SCHEMA_OPTIONS),
   };
 }
 

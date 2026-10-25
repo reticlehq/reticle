@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * The three phases between "never heard of Reticle" and "it produced a verdict on my app".

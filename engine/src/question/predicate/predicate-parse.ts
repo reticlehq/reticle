@@ -11,7 +11,7 @@
  * the pattern #108 asks for: name the parameter, say whether anything ran, show a valid call.
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 import { PredicateKind } from '@reticlehq/core';
 import { PredicateSchema, predicateFieldsFor, predicateNestedFieldsFor } from './predicate-eval.js';
 

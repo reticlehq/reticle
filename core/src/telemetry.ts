@@ -14,7 +14,7 @@
  * the tool's behaviour). Same conventions as the rest of core: enums are `as const` narrowed with
  * `z.nativeEnum`, timestamps are epoch-ms NUMBERS, no `any`.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import {
   NextStepOffered,
   OnboardingPhase,

@@ -134,17 +134,22 @@ export function coerceFlowFileExpects(raw: unknown): CoerceExpectResult {
  * The issues a union rejection buries.
  *
  * `expect` accepts a predicate OR a v1 expect, and zod reports a union failure as one
- * `invalid_union` issue whose branch errors live inside `unionErrors`. The one that matters is the
+ * `invalid_union` issue whose branch errors live inside `errors`, with paths relative to the union. The one that matters is the
  * v1 branch's `unrecognized_keys` — the misspelled field. Without this the file was still correctly
  * REFUSED and the message said only "malformed", which sends the author back to hunt a
  * one-character typo we had already identified.
  */
 function flatten(issues: readonly ZodIssue[]): ZodIssue[] {
-  return issues.flatMap((issue) =>
-    'invalid_union' === issue.code
-      ? [issue, ...flatten(issue.unionErrors.flatMap((e) => e.issues))]
-      : [issue],
-  );
+  return issues.flatMap((issue) => {
+    if ('invalid_union' !== issue.code) {
+      return [issue];
+    }
+    const branches = issue.errors.flat().map((inner) => ({
+      ...inner,
+      path: [...issue.path, ...inner.path],
+    }));
+    return [issue, ...flatten(branches)];
+  });
 }
 
 export function describeFlowZodFailure(error: ZodError): string {
@@ -158,11 +163,13 @@ export function describeFlowZodFailure(error: ZodError): string {
    * top-level `invalid_union` says only "malformed", which is true and useless.
    */
   const named = (one: ZodIssue): boolean => {
-    // NOT the discriminator complaint. `invalid_union_discriminator` on `expect.kind` is the
+    // NOT the discriminator complaint. An `invalid_union` with a `discriminator` on `expect.kind` is the
     // PREDICATE branch objecting that a v1 expect has no `kind` — which is true of every v1 expect
     // ever written and tells the author nothing. The useful issue is the one from the branch they
     // were actually writing.
-    if ('invalid_union_discriminator' === one.code) return false;
+    if ('invalid_union' === one.code && undefined !== one.discriminator) {
+      return false;
+    }
     return (
       ('steps' === one.path[0] && 'expect' === one.path[2] && one.path.length > 3) ||
       ('success' === one.path[0] && one.path.length > 1)

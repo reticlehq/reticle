@@ -13,6 +13,15 @@ import type { ZodTypeAny } from 'zod';
 /** Every schema published as JSON, keyed by the file name it is written to. */
 export const SCHEMAS: Readonly<Record<string, ZodTypeAny>>;
 
+/** Write a `z.undefined()` field as one no value matches. */
+export function forbidUndefined(ctx: {
+  zodSchema: { _zod: { def: { type: string } } };
+  jsonSchema: Record<string, unknown>;
+}): void;
+
+/** zod's own converter, in JSON Schema draft 7. */
+export function toDraft7(schema: ZodTypeAny): Record<string, unknown>;
+
 /** The generated JSON Schemas, keyed the same way. Each carries an `$id`. */
 export function buildSchemas(
   schemas?: Readonly<Record<string, ZodTypeAny>>,

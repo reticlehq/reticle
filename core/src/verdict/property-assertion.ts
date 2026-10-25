@@ -8,7 +8,7 @@
  * Split out of the engine with the rest of the predicate contract, and for the same reason: a saved
  * flow carries one of these now, so core has to be able to parse what it reads.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { MeasureOp } from 'open-verification';
 
 export type PropertyAssertion =

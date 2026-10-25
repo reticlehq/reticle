@@ -339,7 +339,11 @@ export function shapeForAgent(
  * drops what is not there: `changed`, `ref` and `source` would be built and silently thrown away.
  */
 export function withCompactEnvelope<
-  T extends { name: string; inputSchema: z.ZodRawShape; outputSchema?: z.ZodRawShape },
+  T extends {
+    name: string;
+    inputSchema: Record<string, z.ZodType>;
+    outputSchema?: Record<string, z.ZodType>;
+  },
 >(tools: T[]): T[] {
   return tools.map((tool) => {
     if (!COMPACTED_TOOLS.has(tool.name)) return tool;

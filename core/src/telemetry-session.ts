@@ -5,7 +5,7 @@
  * happened", these answer "how much, how long, and on what". Nearly all the growth lands here —
  * every new thing worth measuring lands in one of these two shapes.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * The one-time advisories that point an agent at the platform and the Harness, by kind. Closed: a
@@ -273,7 +273,7 @@ export const SessionSummarySchema = z.object({
    * `toolCounts` reports five useful calls and five retries of one failing call identically, and
    * those are opposite facts: engagement versus an agent stuck. Only tools actually repeated appear.
    */
-  consecutiveRepeats: z.record(z.number().int().positive()).optional(),
+  consecutiveRepeats: z.record(z.string(), z.number().int().positive()).optional(),
   /**
    * Actions driven with no verdict after them — the signature of the loop breaking mid-task.
    *
@@ -431,10 +431,10 @@ export const SessionSummarySchema = z.object({
    * `hudJourneyCut`. `hudSlides` counts how often each rail slide was shown, by its id. Every key
    * is a control or slide id Reticle authored: names, never values.
    */
-  hudControls: z.record(z.number()).optional(),
-  hudViewMs: z.record(z.number()).optional(),
-  hudPanelMs: z.record(z.number()).optional(),
-  hudSlides: z.record(z.number()).optional(),
+  hudControls: z.record(z.string(), z.number()).optional(),
+  hudViewMs: z.record(z.string(), z.number()).optional(),
+  hudPanelMs: z.record(z.string(), z.number()).optional(),
+  hudSlides: z.record(z.string(), z.number()).optional(),
   hudJourney: z.array(z.string().max(64)).max(60).optional(),
   hudJourneyCut: z.literal(true).optional(),
   /**
@@ -442,13 +442,15 @@ export const SessionSummarySchema = z.object({
    * Whether a connect or an explore followed is read beside it: `cli_command_run` for `connect`, and
    * `toolCounts` / `toolParams` for `reticle_verify`'s explore. Windowed; absent when none was shown.
    */
-  nudgesShown: z.record(z.nativeEnum(AgentNudgeKind), z.number().int().positive()).optional(),
+  nudgesShown: z
+    .partialRecord(z.nativeEnum(AgentNudgeKind), z.number().int().positive())
+    .optional(),
   /**
    * Harness drives an older build refused for low coverage, by coverage bucket (`CoverageBucket`).
    * No longer sent: the Harness has no coverage gate. Kept so an older daemon's events still parse.
    */
   harnessRefusedCoverage: z
-    .record(z.nativeEnum(CoverageBucket), z.number().int().positive())
+    .partialRecord(z.nativeEnum(CoverageBucket), z.number().int().positive())
     .optional(),
   /** Was this a clean shutdown, or a periodic flush of a still-running session? */
   final: z.boolean(),

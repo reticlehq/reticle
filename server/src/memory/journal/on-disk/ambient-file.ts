@@ -12,5 +12,5 @@ import { z } from 'zod';
  */
 export const AmbientFileSchema = z.object({
   version: z.literal(1),
-  regions: z.record(z.number()),
+  regions: z.record(z.string(), z.number()),
 });

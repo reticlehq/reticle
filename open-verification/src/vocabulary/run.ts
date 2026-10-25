@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { ChannelDescriptorSchema } from './channel.js';
 import { ClaimSchema, ConstraintSchema, IntentSchema } from './intent.js';
 import { ActionReceiptSchema, ActionSchema, WindowSchema } from './realm-surface.js';

@@ -6,7 +6,7 @@
  * summarise it into a pass. Every number here was counted during the run. A number that was not
  * measured is left out, never shown as a zero.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { Verified } from './verified-constants.js';
 
 /** The output field that carries the report. */

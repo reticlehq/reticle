@@ -17,7 +17,7 @@
  * is the most expensive kind of green — it is a suite that only works in the order it was written.
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 import { SubjectRefSchema, type SubjectRef } from './subject.js';
 
 export const FixtureRefSchema = z.object({

@@ -29,7 +29,7 @@ function netEvent(url: string): ReticleEvent {
   };
 }
 
-function outputShape(name: string): z.ZodObject<z.ZodRawShape> {
+function outputShape(name: string): z.ZodObject<Record<string, z.ZodType>> {
   const tool = TOOLS.find((t) => t.name === name);
   if (tool?.outputSchema === undefined) throw new Error(`${name} declares no output schema`);
   return z.object(tool.outputSchema);

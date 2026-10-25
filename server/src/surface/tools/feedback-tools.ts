@@ -194,7 +194,7 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
       accepted: z.boolean(),
       reason: z.string().optional(),
       redacted: z.array(z.string()),
-      context: z.unknown(),
+      context: z.unknown().optional(),
       note: z.string(),
     },
     example: {

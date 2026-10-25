@@ -10,7 +10,7 @@
  * in memory is lifted. That is what makes the migration safe to ship to people whose flows are
  * committed to a repository they share.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { PredicateKind } from '@/verdict/consequence.js';
 import type { Predicate } from '@/verdict/predicate.js';
 
@@ -45,7 +45,7 @@ export const FlowExpectSchema = z
      * to match (the predicate DSL's signal.dataMatches). Additive/optional — a flow file with a
      * bare `signal` still parses, and the on-disk version stays FLOW_FILE_VERSION 1.
      */
-    signalData: z.record(z.unknown()).optional(),
+    signalData: z.record(z.string(), z.unknown()).optional(),
     /**
      * Exact number of times the signal must have fired — the signal-side twin of `net.count`, and the
      * only way a saved flow can keep a cardinality the agent actually asserted. Without it a

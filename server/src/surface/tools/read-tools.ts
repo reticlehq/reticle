@@ -236,7 +236,7 @@ export const READ_TOOLS: ToolDef[] = [
     },
     outputSchema: {
       recordingName: z.string(),
-      program: z.unknown(),
+      program: z.unknown().optional(),
       warning: z.string().optional(),
       proposedConsequences: z
         .array(z.unknown())
@@ -459,7 +459,7 @@ export const READ_TOOLS: ToolDef[] = [
       ...sessionIdShape,
     },
     outputSchema: {
-      stores: z.record(z.unknown()).optional(),
+      stores: z.record(z.string(), z.unknown()).optional(),
       storeNames: z.array(z.string()).optional(),
       found: z.boolean().optional(),
       value: z.unknown().optional(),
@@ -697,9 +697,9 @@ export const READ_TOOLS: ToolDef[] = [
       ...sessionIdShape,
     },
     outputSchema: {
-      local: z.record(z.string()).optional(),
-      session: z.record(z.string()).optional(),
-      cookies: z.record(z.string()).optional(),
+      local: z.record(z.string(), z.string()).optional(),
+      session: z.record(z.string(), z.string()).optional(),
+      cookies: z.record(z.string(), z.string()).optional(),
       area: z.string().optional(),
       key: z.string().optional(),
       value: z.string().optional(),

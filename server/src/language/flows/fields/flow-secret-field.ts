@@ -61,7 +61,7 @@ export const secretEnvKey = (field: string): string =>
 export { CALL_SECRETS_ARG };
 
 export const callSecretsArg = z
-  .record(z.string())
+  .record(z.string(), z.string())
   .optional()
   .describe('Redacted fields\' values, this call only, never kept: { "auth-password": "…" }');
 

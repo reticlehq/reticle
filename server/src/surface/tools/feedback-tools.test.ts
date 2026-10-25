@@ -150,7 +150,7 @@ describe('the human prompt re-arms, but is capped', () => {
  */
 describe('an agent can report that something worked, not only that it broke', () => {
   const tool = TOOLS.find((t) => t.name === ReticleTool.FEEDBACK);
-  const kindSchema = tool?.inputSchema['kind'] as z.ZodEnum<[string, ...string[]]> | undefined;
+  const kindSchema = tool?.inputSchema['kind'] as z.ZodEnum | undefined;
   const ratingSchema = tool?.inputSchema['rating'];
 
   it('offers the experience kind, which until now only a human could file', () => {

@@ -6,7 +6,7 @@
  * exactly one member of the enum below.
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 import { NoSessionReason } from './words/no-session-reason.js';
 
 /**

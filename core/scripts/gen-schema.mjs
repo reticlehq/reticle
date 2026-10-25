@@ -2,8 +2,7 @@
 //
 // This is the multi-language linchpin: a Python / Go / Rust SDK conforms to the wire spec by
 // validating against these JSON Schemas, without importing the TypeScript library. The converter
-// (`zod-to-json-schema`) is a BUILD-TIME devDependency — it never ships. Only the generated
-// dist/schema/*.json ships, so @reticlehq/core's runtime dependency stays `zod` only.
+// is zod's own `z.toJSONSchema`, run at build time. Only the generated dist/schema/*.json ships.
 //
 // `buildWireSchemas` is a pure function over its inputs so the parity test can call it with the
 // zod schemas straight from src (no dist needed) and assert coverage + validity. The CLI entry
@@ -26,6 +25,18 @@ export const WIRE_SCHEMA_NAMES = Object.freeze([
   // another language was told an event has a type from a list and a payload of arbitrary shape.
   'event-payloads',
 ]);
+
+/**
+ * zod's own converter, in the JSON Schema draft every validator in every language reads.
+ * @param {{ toJSONSchema: (schema: unknown, options: object) => object }} z  The zod namespace.
+ * @returns {(schema: unknown, name?: string) => object}  The converter `buildWireSchemas` takes.
+ */
+export function draft7Converter(z) {
+  return (schema, name) => ({
+    ...(name === undefined ? {} : { title: name }),
+    ...z.toJSONSchema(schema, { target: 'draft-7', io: 'input', unrepresentable: 'any' }),
+  });
+}
 
 /**
  * Build the JSON Schema map for the wire contract.
@@ -87,14 +98,13 @@ if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).
   const { fileURLToPath } = await import('node:url');
   const { dirname, join } = await import('node:path');
   const core = await import('../dist/index.js');
-  const { zodToJsonSchema } = await import('zod-to-json-schema');
   const { z } = await import('zod');
 
   const here = dirname(fileURLToPath(import.meta.url));
   const outDir = join(here, '..', 'dist', 'schema');
   await mkdir(outDir, { recursive: true });
 
-  const schemas = buildWireSchemas(core, zodToJsonSchema, z);
+  const schemas = buildWireSchemas(core, draft7Converter(z), z);
   for (const [name, schema] of Object.entries(schemas)) {
     await writeFile(join(outDir, `${name}.json`), JSON.stringify(schema, null, 2) + '\n');
   }

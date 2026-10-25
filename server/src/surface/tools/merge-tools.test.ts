@@ -7,7 +7,7 @@ import { MERGED_TOOLS, TOOLS } from './tools.js';
 
 const deps = {} as ToolDeps;
 
-function member(name: string, extra: z.ZodRawShape = {}): ToolDef {
+function member(name: string, extra: Record<string, z.ZodType> = {}): ToolDef {
   return {
     name,
     description: `${name} desc`,

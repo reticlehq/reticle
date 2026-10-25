@@ -79,7 +79,9 @@ const CACHE_COMPACT_AT = 1024;
  * bound is used in and silently disable it, which is the one failure mode a bound must not have.
  */
 function boundedOption(value: number | undefined, fallback: number, name: string): number {
-  if (value === undefined) return fallback;
+  if (value === undefined) {
+    return fallback;
+  }
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(
       `refusing a journal ${name} that is not a positive whole number: ${String(value)}`,
@@ -244,9 +246,13 @@ export class SessionJournal {
    * already on disk is deleted, and the loss is at the end where it can be declared.
    */
   async appendEvents(events: readonly ReticleEvent[]): Promise<void> {
-    if (0 === events.length) return;
+    if (0 === events.length) {
+      return;
+    }
     // Durable, not a field: see #writeLoss. A closed ledger is closed for a one-event batch too.
-    if ((await this.#closureReport()) !== undefined) return;
+    if ((await this.#closureReport()) !== undefined) {
+      return;
+    }
     await this.#ensureDir();
     const path = journalEventsPath(this.#root, this.#sessionId);
     const written = await this.#eventBytesOnDisk(path);
@@ -280,7 +286,9 @@ export class SessionJournal {
    */
   async #eventBytesOnDisk(path: string): Promise<number> {
     const known = this.#eventBytes;
-    if (known !== undefined) return known;
+    if (known !== undefined) {
+      return known;
+    }
     let size: number;
     try {
       size = (await this.#fs.stat(path)).size;
@@ -292,7 +300,9 @@ export class SessionJournal {
       // by exactly the conditions most likely to accompany a failing disk. Thrown before anything is
       // appended; `JournalRecorder` swallows sink errors, so a live session is never taken down by
       // one.
-      if (!this.#fs.isNotFound(error)) throw error;
+      if (!this.#fs.isNotFound(error)) {
+        throw error;
+      }
       size = 0;
     }
     this.#eventBytes = size;
@@ -309,13 +319,17 @@ export class SessionJournal {
    * necessarily the ceiling that closed the file.
    */
   async #closureReport(): Promise<JournalWriteLoss | undefined> {
-    if (this.#lossLoaded) return this.#writeLoss;
+    if (this.#lossLoaded) {
+      return this.#writeLoss;
+    }
     let text: string;
     try {
       text = await this.#fs.readFile(journalClosedPath(this.#root, this.#sessionId));
     } catch (error) {
       // Same rule as the size read above, and for the same reason: only ENOENT is "never closed".
-      if (!this.#fs.isNotFound(error)) throw error;
+      if (!this.#fs.isNotFound(error)) {
+        throw error;
+      }
       this.#lossLoaded = true;
       return undefined;
     }
@@ -439,7 +453,9 @@ export class SessionJournal {
     try {
       await this.#fs.appendFile(path, text);
     } catch (error) {
-      if (!this.#fs.isNotFound(error)) throw error;
+      if (!this.#fs.isNotFound(error)) {
+        throw error;
+      }
       this.#dirEnsured = false;
       await this.#ensureDir();
       await this.#fs.appendFile(path, text);
@@ -457,7 +473,9 @@ export class SessionJournal {
       try {
         chunk = await readFrom(path, this.#eventBytesConsumed, this.#maxReadBytes);
       } catch (error) {
-        if (this.#fs.isNotFound(error)) return this.#liveEvents();
+        if (this.#fs.isNotFound(error)) {
+          return this.#liveEvents();
+        }
         throw error;
       }
       // Shrink guard: if the file is smaller than what we consumed, the offset is meaningless — reset
@@ -474,7 +492,9 @@ export class SessionJournal {
       const from = chunk.from ?? this.#eventBytesConsumed;
       const skipped = Math.max(0, from - this.#eventBytesConsumed);
       this.#ingestTail(chunk.text);
-      if (skipped > 0) this.#noteCut(skipped);
+      if (skipped > 0) {
+        this.#noteCut(skipped);
+      }
       // Resume at the end of the last COMPLETE line, counted forward over the bytes that actually
       // ARRIVED. Not from `chunk.size`: that is the file's end as `fstat` reported it, and a read
       // truncated or cut short returns less — a cursor there would skip every unread byte, silently
@@ -489,7 +509,9 @@ export class SessionJournal {
     try {
       text = await this.#fs.readFile(path);
     } catch (error) {
-      if (this.#fs.isNotFound(error)) return this.#liveEvents();
+      if (this.#fs.isNotFound(error)) {
+        return this.#liveEvents();
+      }
       throw error;
     }
     // Fallback (whole-file) path: #eventCharsConsumed is a UTF-16 offset into the whole text. Shrink
@@ -534,9 +556,13 @@ export class SessionJournal {
    */
   #ingestTail(tail: string): void {
     const end = tail.lastIndexOf('\n') + 1;
-    if (0 === end) return; // no complete line yet
+    if (0 === end) {
+      return;
+    } // no complete line yet
     for (const line of tail.slice(0, end).split('\n')) {
-      if (0 === line.length) continue;
+      if (0 === line.length) {
+        continue;
+      }
       let parsed: unknown;
       try {
         parsed = JSON.parse(line);
@@ -582,7 +608,9 @@ export class SessionJournal {
       this.#droppedBytes += cost;
       this.#droppedEvents += 1;
       // Exact, unlike a byte cut: this record was parsed, so the millisecond it was lost at is known.
-      if (victim !== undefined) this.#lostThroughT = Math.max(this.#lostThroughT, victim.t);
+      if (victim !== undefined) {
+        this.#lostThroughT = Math.max(this.#lostThroughT, victim.t);
+      }
       // Release the payload now. Waiting for slot compaction keeps evicted snapshots strongly
       // reachable, so a short returned list alone would not bound retained evidence in memory.
       this.#eventCache[this.#cacheHead] = undefined;
@@ -613,7 +641,9 @@ export class SessionJournal {
    * is what carries this to a verdict.
    */
   readLoss(): JournalReadLoss | undefined {
-    if (0 === this.#droppedBytes && 0 === this.#droppedEvents) return undefined;
+    if (0 === this.#droppedBytes && 0 === this.#droppedEvents) {
+      return undefined;
+    }
     const bounded = Number.isFinite(this.#lostThroughT);
     return {
       droppedBytes: this.#droppedBytes,
@@ -638,7 +668,9 @@ export class SessionJournal {
   }
 
   async #ensureDir(): Promise<void> {
-    if (this.#dirEnsured) return;
+    if (this.#dirEnsured) {
+      return;
+    }
     await this.#fs.mkdir(sessionDirPath(this.#root, this.#sessionId));
     this.#dirEnsured = true;
   }
@@ -648,12 +680,16 @@ export class SessionJournal {
     try {
       text = await this.#fs.readFile(path);
     } catch (error) {
-      if (this.#fs.isNotFound(error)) return [];
+      if (this.#fs.isNotFound(error)) {
+        return [];
+      }
       throw error;
     }
     const out: z.infer<S>[] = [];
     for (const line of text.split('\n')) {
-      if (0 === line.length) continue;
+      if (0 === line.length) {
+        continue;
+      }
       let parsed: unknown;
       try {
         parsed = JSON.parse(line);
@@ -662,7 +698,9 @@ export class SessionJournal {
       }
       const result = schema.safeParse(parsed);
       // Validated at this boundary; ZodTypeAny widens `.data` to any, so re-narrow to the schema output.
-      if (result.success) out.push(result.data as z.infer<S>);
+      if (result.success) {
+        out.push(result.data);
+      }
     }
     return out;
   }

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * The dev-server discovery registry — the return leg of `daemon-registry.ts`.

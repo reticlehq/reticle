@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { ChannelIdSchema } from './channel.js';
 
 /**
@@ -123,7 +123,7 @@ export type Declaration = (typeof Declaration)[keyof typeof Declaration];
 export const AssertionSchema = z.object({
   id: z.string().min(1),
   /** What is being asserted, in whatever language the realm accepts. Opaque here on purpose. */
-  predicate: z.unknown(),
+  predicate: z.unknown().optional(),
   /** A human-readable rendering, so a verdict is legible to somebody without the realm. */
   reads: z.string().min(1),
   /** The channels answering this requires. The rule in channel.ts is applied to these. */
@@ -165,7 +165,7 @@ export const ConstraintSchema = z.object({
   id: z.string().min(1),
   statement: z.string().min(1),
   /** The condition, in the realm's language. */
-  predicate: z.unknown(),
+  predicate: z.unknown().optional(),
   channels: z.array(ChannelIdSchema).min(1),
   /**
    * What a violation means.

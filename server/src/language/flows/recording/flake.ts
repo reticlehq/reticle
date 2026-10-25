@@ -18,7 +18,7 @@ export type FlakeLedger = Record<string, FlakeRecord>;
 
 export const FlakeFileSchema = z.object({
   version: z.literal(1),
-  flows: z.record(FlakeRecordSchema),
+  flows: z.record(z.string(), FlakeRecordSchema),
 });
 
 /** Minimum unchanged-code replays before flakiness can be judged (too few = noise). */

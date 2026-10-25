@@ -3,7 +3,7 @@
  * statement in it and in the agent's declared intents, classified and attributed. Daemon-side only:
  * a run carries it loosely (`context`), so it adds nothing to what a page downloads.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 
 /** What a statement in the prompt context is, so a reader can tell a goal from a preference. */
 export const StatementKind = {

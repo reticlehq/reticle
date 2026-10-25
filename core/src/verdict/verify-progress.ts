@@ -19,7 +19,7 @@
  *   - **`total` is known before the loop starts**, because "step 3" without "of 12" tells a reader
  *     nothing about whether to keep waiting, which is the entire question they are asking.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 
 /** The phases a run passes through, in the order they occur. */
 export const VerifyPhase = {

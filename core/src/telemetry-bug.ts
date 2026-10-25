@@ -3,7 +3,7 @@
  * as its own subject, and re-exported from there, so every `@reticlehq/core/telemetry` import still
  * reaches it.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * How Reticle came to find a defect. Four routes, in descending order of "a human would have missed

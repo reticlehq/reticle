@@ -14,7 +14,7 @@
  * everything uninstrumented on the page. The test is *did this absence change the answer the agent
  * just got?* — if not, it does not fire.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * The kinds of absence that can weaken a verdict. Most name a capability the app did not provide;

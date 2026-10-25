@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { ActionSchema } from './realm-surface.js';
 import { AssertionSchema } from './intent.js';
 import { ProvenanceClass, ProvenanceSchema } from './evidence.js';

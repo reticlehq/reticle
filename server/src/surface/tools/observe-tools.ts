@@ -923,7 +923,9 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .optional()
         .describe('Total matches before `limit` — present only when capped.'),
       droppedOldest: z.number().optional().describe('How many older matches `limit` dropped.'),
-      hint: z.object({ totalInWindow: z.number(), byLevel: z.record(z.number()) }).optional(),
+      hint: z
+        .object({ totalInWindow: z.number(), byLevel: z.record(z.string(), z.number()) })
+        .optional(),
       cost: z.object({ bytes: z.number(), tokens: z.number() }).optional(),
       ...bufferOutputShape,
     },

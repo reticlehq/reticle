@@ -41,7 +41,7 @@ describe('withSessionEnvelope — spliced fields survive structuredContent valid
   // Every tool, because runTool adds `next` and the one-shot keys to any tool's result: a strict
   // session-exempt schema rejected the whole call the first time one rode on it.
   it('declares the envelope on a session-exempt tool too, keeping its own keys', () => {
-    const shape: z.ZodRawShape = { ok: z.boolean() };
+    const shape: Record<string, z.ZodType> = { ok: z.boolean() };
     const merged = withSessionEnvelope('not_a_session_tool', shape);
     expect(merged?.['ok']).toBe(shape['ok']);
     expect(Object.keys(merged ?? {})).toEqual(expect.arrayContaining(['next', 'update_available']));

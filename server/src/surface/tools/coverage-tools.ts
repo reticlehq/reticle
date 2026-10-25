@@ -79,7 +79,7 @@ export function buildCoverageTools(): ToolDef[] {
       outputSchema: {
         // The app-wide ledger — see features/exhaust/ledger.ts. Loose: run-only, and the levels
         // carry their own shape.
-        app: z.record(z.unknown()).optional(),
+        app: z.record(z.string(), z.unknown()).optional(),
         total: z.number(),
         exercised: z.number(),
         untouched: z.array(z.object({ ref: z.string(), label: z.string() })),

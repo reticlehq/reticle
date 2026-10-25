@@ -198,7 +198,7 @@ describe('the release bakes the issuer key', () => {
   // a separate workflow step before `pnpm publish`, and the packed tarball came out with an empty key,
   // nothing having failed. Nothing else in the repo can see this: unit tests run against src, and the
   // gates never pack. So the ordering is pinned here.
-  const PackageJsonSchema = z.object({ scripts: z.record(z.string()).optional() });
+  const PackageJsonSchema = z.object({ scripts: z.record(z.string(), z.string()).optional() });
   const packageJson: unknown = JSON.parse(
     readFileSync(join(REPO_ROOT, 'server', 'package.json'), 'utf8'),
   );

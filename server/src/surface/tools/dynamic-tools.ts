@@ -43,21 +43,44 @@ interface ParamInfo {
   max?: number;
 }
 
+/** One wrapper that does not change the value a schema accepts, peeled off; undefined at the core. */
+function unwrapOnce(schema: z.ZodTypeAny): z.ZodTypeAny | undefined {
+  if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) {
+    return schema.unwrap() as z.ZodTypeAny;
+  }
+  if (schema instanceof z.ZodDefault) {
+    return schema.removeDefault() as z.ZodTypeAny;
+  }
+  if (schema instanceof z.ZodPipe) {
+    // A transform pipes the schema into the transform; a preprocess pipes the other way round.
+    return (schema.in instanceof z.ZodTransform ? schema.out : schema.in) as z.ZodTypeAny;
+  }
+  return undefined;
+}
+
 /** The schema without the wrappers that do not change the value it accepts. */
 function unwrappedOf(schema: z.ZodTypeAny): z.ZodTypeAny {
-  let inner: z.ZodTypeAny = schema;
-  for (;;) {
-    if (inner instanceof z.ZodOptional || inner instanceof z.ZodNullable) {
-      inner = inner.unwrap() as z.ZodTypeAny;
-    } else if (inner instanceof z.ZodDefault) {
-      inner = inner.removeDefault() as z.ZodTypeAny;
-    } else if (inner instanceof z.ZodEffects) {
-      inner = inner.innerType() as z.ZodTypeAny;
-    } else {
-      break;
-    }
+  let inner = schema;
+  for (let next = unwrapOnce(inner); next !== undefined; next = unwrapOnce(inner)) {
+    inner = next;
   }
   return inner;
+}
+
+/**
+ * A parameter's description, wherever in its wrappers it was written.
+ *
+ * zod 4 keeps a description on the schema `.describe()` was called on. `z.string().describe(d)
+ * .optional()` has none on the outside, although the JSON Schema an agent reads still carries `d`.
+ */
+export function descriptionOf(schema: z.ZodTypeAny): string | undefined {
+  for (let current: z.ZodTypeAny | undefined = schema; current !== undefined;) {
+    if (current.description !== undefined) {
+      return current.description;
+    }
+    current = unwrapOnce(current);
+  }
+  return undefined;
 }
 
 /**
@@ -72,7 +95,11 @@ function boundsOf(schema: z.ZodTypeAny): { min?: number; max?: number } {
   if (!(inner instanceof z.ZodNumber)) {
     return {};
   }
-  const { minValue: min, maxValue: max } = inner;
+  // `.int()` reports the safe-integer range as its bounds. That range bounds nothing an agent sends.
+  const min =
+    Number.MIN_SAFE_INTEGER < (inner.minValue ?? Number.MIN_SAFE_INTEGER) ? inner.minValue : null;
+  const max =
+    Number.MAX_SAFE_INTEGER > (inner.maxValue ?? Number.MAX_SAFE_INTEGER) ? inner.maxValue : null;
   return { ...(null === min ? {} : { min }), ...(null === max ? {} : { max }) };
 }
 
@@ -97,13 +124,13 @@ function valuesOf(schema: z.ZodTypeAny): string[] | undefined {
 
 /** Compact param list from a tool's zod shape — name/required/description (the description already
  * carries the type, so no JSON-Schema machinery is needed), plus closed values and numeric bounds. */
-function paramInfo(shape: z.ZodRawShape): ParamInfo[] {
+function paramInfo(shape: Record<string, z.ZodType>): ParamInfo[] {
   return Object.entries(shape).map(([name, schema]) => {
     const values = valuesOf(schema);
     return {
       name,
       required: !schema.isOptional(),
-      description: schema.description ?? '',
+      description: descriptionOf(schema) ?? '',
       ...(values === undefined ? {} : { values }),
       ...boundsOf(schema),
     };
@@ -316,7 +343,7 @@ export function buildDynamicTools(
 
   const runShape = {
     tool: z.string().describe('Tool name to invoke, e.g. reticle_clock.'),
-    args: z.record(z.unknown()).optional().describe('Arguments object for that tool.'),
+    args: z.record(z.string(), z.unknown()).optional().describe('Arguments object for that tool.'),
     // Accepted AND FORWARDED, not merely tolerated. reticle_run is the only way to reach an
     // unadvertised tool, so on a machine running several projects it has to be aimable — and
     // `sessionId` is the shape an agent already uses on every other tool. Reported from the field

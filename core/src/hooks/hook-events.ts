@@ -17,7 +17,7 @@
  * rather than a hand-kept list.
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * The events a hook can attach to.

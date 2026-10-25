@@ -10,7 +10,7 @@ const ENVELOPE_FILE_VERSION = 1;
 
 const EnvelopeFileSchema = z.object({
   version: z.literal(ENVELOPE_FILE_VERSION),
-  routes: z.record(RouteEnvelopeSchema),
+  routes: z.record(z.string(), RouteEnvelopeSchema),
 });
 
 /**

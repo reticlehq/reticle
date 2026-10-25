@@ -99,7 +99,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
             ),
         }),
       ),
-      counts: z.record(z.number()),
+      counts: z.record(z.string(), z.number()),
       visited: z.array(z.string()).describe('The controls actually clicked, in order.'),
       coverageNote: z
         .string()
@@ -115,7 +115,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
           'Controls clicked whose silence could not be judged, e.g. on a background tab. They are NOT reported as dead, and they are not known to work either.',
         ),
       // Only on `exhaustive` — see features/exhaust/exhaust-run.ts. Loose: it carries the levels.
-      exhaustive: z.record(z.unknown()).optional(),
+      exhaustive: z.record(z.string(), z.unknown()).optional(),
     },
     handler: async (deps: ToolDeps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));

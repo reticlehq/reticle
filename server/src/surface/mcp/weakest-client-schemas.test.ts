@@ -31,7 +31,7 @@ import { TOOL_SURFACE, type ToolSurface } from '@/surface/tools/tool-surface.js'
  * Copied from the SDK's `registerTool` path rather than approximated: an approximation that
  * disagrees with the real conversion is how the degradation went unseen the first time.
  */
-const asClientSees = (shape: z.ZodRawShape): Record<string, unknown> =>
+const asClientSees = (shape: Record<string, z.ZodType>): Record<string, unknown> =>
   toJsonSchemaCompat(z.object(shape), {
     strictUnions: true,
     pipeStrategy: 'input',

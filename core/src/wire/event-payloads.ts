@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { CanvasTrigger, EventType, MediaEvent, PerfMetric } from './constants/constants.js';
 import { BlindSpotKind } from '@/verdict/verified-constants.js';
 import { BrowserBrand } from '@/telemetry-feedback.js';
@@ -120,7 +120,10 @@ export const SeedCookieSchema = z.object({
 });
 export type SeedCookie = z.infer<typeof SeedCookieSchema>;
 
-export const SeedCookiesSchema = z.union([z.record(z.string()), z.array(SeedCookieSchema)]);
+export const SeedCookiesSchema = z.union([
+  z.record(z.string(), z.string()),
+  z.array(SeedCookieSchema),
+]);
 export type SeedCookies = z.infer<typeof SeedCookiesSchema>;
 
 /**
@@ -130,11 +133,11 @@ export type SeedCookies = z.infer<typeof SeedCookiesSchema>;
 export const SeedStorageSchema = z
   .object({
     local: z
-      .record(z.string())
+      .record(z.string(), z.string())
       .optional()
       .describe('Key-value pairs to seed into window.localStorage before first navigation.'),
     session: z
-      .record(z.string())
+      .record(z.string(), z.string())
       .optional()
       .describe('Key-value pairs to seed into window.sessionStorage before first navigation.'),
     cookies: SeedCookiesSchema.optional().describe(
@@ -266,7 +269,9 @@ export const EVENT_PAYLOAD_SCHEMAS = {
   }),
   [EventType.REVEAL_SHOWN]: elementLabel.passthrough(),
   [EventType.SIGNAL]: z.object({ name: z.string(), data: z.unknown().optional() }),
-  [EventType.STATE_CHANGE]: z.object({ name: z.string(), value: z.unknown() }).passthrough(),
+  [EventType.STATE_CHANGE]: z
+    .object({ name: z.string(), value: z.unknown().optional() })
+    .passthrough(),
   [EventType.STORAGE_CHANGE]: z.object({
     area: z.nativeEnum(StorageArea),
     key: z.string(),
@@ -343,7 +348,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     [FieldChangeField.PREVIOUS]: z.string().optional(),
     [FieldChangeField.PREVIOUS_CHECKED]: z.boolean().optional(),
   }),
-  [EventType.FLOW_RECORDED]: z.object({ name: z.string(), flow: z.unknown() }),
+  [EventType.FLOW_RECORDED]: z.object({ name: z.string(), flow: z.unknown().optional() }),
   [EventType.TRANSPORT_OVERFLOW]: z.object({ dropped: z.number() }),
   [EventType.TRUNCATED]: z.object({ channel: z.string(), dropped: z.number() }),
   [EventType.BLIND_SPOT]: z.object({ kind: z.nativeEnum(BlindSpotKind), count: z.number() }),
@@ -359,7 +364,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
       url: z.string(),
       method: z.string().optional(),
       status: z.number(),
-      headers: z.record(z.string()),
+      headers: z.record(z.string(), z.string()),
       resourceType: z.string().optional(),
     })
     .passthrough(),
@@ -393,9 +398,6 @@ export const EVENT_PAYLOAD_SCHEMAS = {
 } satisfies Record<EventType, z.ZodTypeAny>;
 
 /** Narrow an event's `data` against its type's payload schema. Unknown in, typed-or-error out. */
-export function parseEventPayload(
-  type: EventType,
-  data: unknown,
-): z.SafeParseReturnType<unknown, unknown> {
+export function parseEventPayload(type: EventType, data: unknown): z.ZodSafeParseResult<unknown> {
   return EVENT_PAYLOAD_SCHEMAS[type].safeParse(data);
 }

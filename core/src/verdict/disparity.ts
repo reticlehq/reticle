@@ -6,7 +6,7 @@
  * that proved a goal the Harness could not find is a discoverability finding, not noise and not a
  * defect. Carried on a Harness run's artifact and on the explore tool's answer.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { Verified } from './verified-constants.js';
 
 /** How the two verdicts on one goal compare. */

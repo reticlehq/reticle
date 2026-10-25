@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * The daemon discovery registry: each live daemon drops a `daemon-<port>.json` in ~/.reticle so a

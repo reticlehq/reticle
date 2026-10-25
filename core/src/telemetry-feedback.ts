@@ -10,7 +10,7 @@
  * `reticle_feedback` or a human ran `reticle feedback`; an `Identity` exists because a human ran
  * `reticle identify`. There is no code path to either that a person did not start.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 
 /** Who authored the feedback. Agents report failures; humans also rate the experience. */
 export const FeedbackSource = {

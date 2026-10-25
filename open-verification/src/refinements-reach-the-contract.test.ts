@@ -86,7 +86,21 @@ describe('every published rule survives the trip to JSON Schema', () => {
         'utf8',
       );
       expect(schema, `${name}.json carries no conditional requirement`).toMatch(
-        /"required":\s*\[\s*"(summary|status)",\s*"(valueContains|abandonedBecause)"\s*\]/,
+        /"required":\s*\[[^\]]*"(summary|status)",\s*"(valueContains|abandonedBecause)"[^\]]*\]/,
+      );
+    }
+  });
+
+  it('the other branch still forbids the conditional field, so the rule cannot be skipped', () => {
+    // `z.undefined()` has no JSON Schema of its own. Emitted as `{}` it accepts anything, and a
+    // match with `valueContains` and no `summary` then passes the second branch: the rule is gone.
+    for (const name of ['match', 'intent']) {
+      const schema = readFileSync(
+        join(REPO, 'open-verification', 'dist', 'schema', `${name}.json`),
+        'utf8',
+      );
+      expect(schema, `${name}.json lets the conditional field through`).toMatch(
+        /"(valueContains|abandonedBecause)":\s*\{\s*"not":\s*\{\s*\}\s*\}/,
       );
     }
   });

@@ -1650,7 +1650,7 @@
   },
   "src/language/flows/flow-expect-grammar.ts": {
     "curly": {
-      "count": 12
+      "count": 11
     }
   },
   "src/language/flows/flow-intent-gap.test.ts": {
@@ -2041,11 +2041,6 @@
       "count": 2
     }
   },
-  "src/language/flows/verify-change-tools.test.ts": {
-    "curly": {
-      "count": 7
-    }
-  },
   "src/language/flows/verify-change-tools.ts": {
     "curly": {
       "count": 1
@@ -2401,11 +2396,6 @@
   "src/memory/journal/session-journal.test.ts": {
     "curly": {
       "count": 2
-    }
-  },
-  "src/memory/journal/session-journal.ts": {
-    "curly": {
-      "count": 19
     }
   },
   "src/memory/journal/session-query.test.ts": {
@@ -3588,7 +3578,7 @@
   },
   "src/surface/tools/args/numeric-bounds.test.ts": {
     "curly": {
-      "count": 8
+      "count": 6
     }
   },
   "src/surface/tools/assert-follows-document.test.ts": {

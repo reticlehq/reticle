@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { ChannelIdSchema } from './channel.js';
 import { impeachingSpots, type Coverage, type Observation } from './evidence.js';
 

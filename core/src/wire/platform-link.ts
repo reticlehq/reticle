@@ -18,7 +18,7 @@
  * Every arrow points out from the daemon: it asks, the platform answers. Nothing listens for the
  * platform on the person's machine.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 import { HudVisibility } from './constants/hud-use.js';
 
 /** Bumped only for a change an older reader would MISREAD. A new field is not one. */
@@ -211,7 +211,7 @@ export const sessionAskRetryable = (status: number): boolean =>
 const SessionCallSchema = z.object({
   seq: z.number().int().nonnegative(),
   tool: z.string().min(1).max(100),
-  args: z.record(z.unknown()).default({}),
+  args: z.record(z.string(), z.unknown()).default({}),
 });
 
 /**
