@@ -25,6 +25,7 @@ import {
   isRenderedOutsideAriaHidden,
   isVisible,
 } from './a11y.js';
+import { attachElementGeometry, type GeometryAsk } from './geometry.js';
 import { dialogCovering, isIgnored, isReticleOverlay, isWordsIgnored } from './dom-ignore.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { declaredTestids } from '@/registry/capabilities.js';
@@ -613,6 +614,7 @@ export function matchQuery(
    */
   wholePhrase = true,
   diagnose: boolean = true,
+  geometry?: GeometryAsk,
 ): MatchResult {
   // NO blanket try/catch here. It would turn ANY exception during candidate-finding into
   // `elements = []`, which is the same lie as the `default` arm above: a query that could not run
@@ -649,9 +651,11 @@ export function matchQuery(
     ) {
       base = { ...base, states: [...base.states, ElementState.IN_VIEWPORT] };
     }
-    if (attrs === undefined || 0 === attrs.length) return base;
-    const projected = projectAttrs(el, attrs);
-    return projected === undefined ? base : { ...base, attrs: projected };
+    if (attrs !== undefined && 0 < attrs.length) {
+      const projected = projectAttrs(el, attrs);
+      if (projected !== undefined) base = { ...base, attrs: projected };
+    }
+    return attachElementGeometry(base, el, geometry, visMemo, findCandidates);
   });
   const covered = dialogCovering(filtered);
   return {

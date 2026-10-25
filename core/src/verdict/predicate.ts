@@ -33,6 +33,24 @@ export type Predicate =
       query: ElementQuery;
       state?: ElementState;
       absent?: boolean;
+      /**
+       * The element's whole box is inside the viewport and inside every clipping ancestor
+       * (#1539). `state: "inViewport"` only asks that SOME of the box shows; a control half
+       * off the bottom of the screen satisfies it, which is the responsive-layout complaint
+       * this field exists to answer.
+       */
+      fullyInViewport?: boolean;
+      /**
+       * The element's text is cut off by the nearest clipping box: its own, or the nearest
+       * ancestor's for inline content, which has no clipping box of its own. Content beyond the
+       * client box under `overflow: hidden | clip`, or `text-overflow: ellipsis` in effect (#1539).
+       */
+      textClipped?: boolean;
+      /**
+       * Another element, as a query, whose box this element's box must intersect (#1539).
+       * Assert the negative with the `not` combinator around the whole predicate.
+       */
+      overlaps?: ElementQuery;
     }
   | {
       kind: typeof PredicateKind.TEXT;
@@ -312,6 +330,24 @@ function predicateUnion() {
         query: ElementQuerySchema,
         state: z.nativeEnum(ElementState).optional(),
         absent: z.boolean().optional(),
+        /**
+         * The element's whole box is inside the viewport and inside every clipping ancestor
+         * (#1539). `state: "inViewport"` only asks that SOME of the box shows; a control half
+         * off the bottom of the screen satisfies it, which is the responsive-layout complaint
+         * this field exists to answer.
+         */
+        fullyInViewport: z.boolean().optional(),
+        /**
+         * The element's text is cut off by the nearest clipping box: its own, or the nearest
+         * ancestor's for inline content, which has no clipping box of its own. Content beyond the
+         * client box under `overflow: hidden | clip`, or `text-overflow: ellipsis` in effect (#1539).
+         */
+        textClipped: z.boolean().optional(),
+        /**
+         * Another element, as a query, whose box this element's box must intersect (#1539).
+         * Assert the negative with the `not` combinator around the whole predicate.
+         */
+        overlaps: ElementQuerySchema.optional(),
       })
       .strict(),
     z

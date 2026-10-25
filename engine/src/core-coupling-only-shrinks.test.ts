@@ -157,7 +157,17 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * flow, so it lives in core. Spelling `'network'` here would keep this number flat by breaking the
  * rule it protects. It joins the import `predicate-eval.ts` already has, so the file count is unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 68;
+/*
+ * One more than main's 68 for the MATCH wire-arg names (#1539).
+ *
+ * The geometry asks need two MATCH arguments, `geometry` and `overlapsQuery`, and both cross the
+ * wire, so both live in core as one borrowed symbol, `MatchArg`. Inlining the two strings in
+ * `matchOnce` would keep this number flat by breaking the rule the number exists to protect
+ * (rule 3: never write a wire string inline outside core). It joins the import
+ * `predicate-element.ts` already has, so the file count is unmoved. A realm-shaped engine takes
+ * its MATCH vocabulary from the realm, and this goes with the rest.
+ */
+const MAX_DISTINCT_SYMBOLS = 69;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.
