@@ -568,7 +568,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
     handler: (deps, rawArgs) => {
       // Accept the predicate's named-field spelling too — see query-shape.ts.
       const normalized = normalizeQueryArgs(rawArgs);
-      if (normalized instanceof Error) return Promise.reject(normalized);
+      if (normalized instanceof Error) { return Promise.reject(normalized); }
       const args = normalized;
       const empty = emptyQueryRefusal(args);
       if (empty !== undefined) {

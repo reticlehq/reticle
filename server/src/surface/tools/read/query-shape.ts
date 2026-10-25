@@ -27,7 +27,15 @@ const FIELD_TO_STRATEGY: readonly (readonly [string, string])[] = [
 ];
 
 /** Every query field whose value the engine reads as a string. */
-const STRING_QUERY_FIELDS = ['name', 'role', 'testid', 'text', 'label', 'placeholder', 'alt'] as const;
+const STRING_QUERY_FIELDS = [
+  'name',
+  'role',
+  'testid',
+  'text',
+  'label',
+  'placeholder',
+  'alt',
+] as const;
 
 export function normalizeQueryArgs(args: Record<string, unknown>): Error | Record<string, unknown> {
   // Every field the query engine reads as a string must be a string when present. A non-string

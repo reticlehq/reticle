@@ -57,7 +57,7 @@ describe('normalizeQueryArgs', () => {
   it('leaves a call with neither shape alone, so the schema error still explains itself', () => {
     // Inventing a query here would turn "you forgot the arguments" into a confident wrong answer.
     const out = normalizeQueryArgs({ limit: 5 });
-    if (out instanceof Error) throw out;
+    if (out instanceof Error) { throw out; }
     expect(out['by']).toBeUndefined();
     expect(out['value']).toBeUndefined();
   });

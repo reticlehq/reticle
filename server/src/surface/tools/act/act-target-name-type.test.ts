@@ -24,7 +24,7 @@ describe('resolveActTarget — non-string target fields', () => {
       target: { role: 'link', name: {} },
     });
     expect(r.kind).toBe('error');
-    if (r.kind !== 'error') throw new Error('expected error');
+    if (r.kind !== 'error') { throw new Error('expected error'); }
     expect(r.message).toContain('target.name');
     expect(r.message).toContain('string');
   });
@@ -34,7 +34,7 @@ describe('resolveActTarget — non-string target fields', () => {
       target: { role: 'button', name: 42 },
     });
     expect(r.kind).toBe('error');
-    if (r.kind !== 'error') throw new Error('expected error');
+    if (r.kind !== 'error') { throw new Error('expected error'); }
     expect(r.message).toContain('target.name');
   });
 
@@ -43,7 +43,7 @@ describe('resolveActTarget — non-string target fields', () => {
       target: { role: 'link', name: ['Learn'] },
     });
     expect(r.kind).toBe('error');
-    if (r.kind !== 'error') throw new Error('expected error');
+    if (r.kind !== 'error') { throw new Error('expected error'); }
     expect(r.message).toContain('target.name');
   });
 
@@ -55,7 +55,7 @@ describe('resolveActTarget — non-string target fields', () => {
     }).catch((e: unknown) => ({ kind: 'threw' as const, e }));
     // Either the session threw (expected — we did not stub a real page) or it
     // returned an error from the query path, not from the type check.
-    if (r.kind === 'error') {
+    if ('error' === r.kind) {
       expect(r.message).not.toContain('must be a string');
     }
   });
