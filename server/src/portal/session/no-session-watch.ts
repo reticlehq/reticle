@@ -21,6 +21,11 @@ import { registeredElsewhere } from '@/memory/recall/registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
 import { detectDevCommandInProject, initCommandIn } from './dev-server/dev-command.js';
+import {
+  envFilePorts,
+  projectListenerPorts,
+  systemListenerProbe,
+} from './dev-server/project-ports.js';
 import { nextActionFor, portOfUrl, renderNextAction } from './no-session-next-action.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import {
@@ -132,6 +137,13 @@ interface NoSessionWatchOptions {
    * somebody else's app. Injected for tests; production reads the registry scoped by projectId/root.
    */
   ownDevServerPorts?: () => readonly number[];
+  /**
+   * The ports that processes running inside the project directory listen on (reticle#1543).
+   *
+   * Best effort: it finds an app whose port no file names. Injected for tests; production lists
+   * listeners with `lsof` where it can. A test that injects `probe` and omits this owns the scan.
+   */
+  projectListeners?: () => Promise<readonly number[]>;
   /**
    * What the route the last session was on answers right now, as an HTTP status, or undefined
    * when there is no answer to report.
@@ -315,6 +327,8 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     for (const port of ownDevServerPorts()) ports.add(port);
     const pinned = detectDevCommandInProject(directory)?.port;
     if (pinned !== undefined) ports.add(pinned);
+    // A script that reads its port from `.env` pins nothing in `package.json` (reticle#1543).
+    for (const port of envFilePorts(directory)) ports.add(port);
     const known = options.sessions.lastKnown?.();
     const knownPort = known === undefined ? undefined : portOfUrl(known.url);
     if (knownPort !== undefined) ports.add(knownPort);
@@ -365,39 +379,56 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     }
   };
 
+  /**
+   * The ports this project's own processes listen on. Off when a test owns the scan, like the
+   * sibling probe below, and off where the platform has no listener probe. Undefined when off, so
+   * the scan then starts in the same turn it always did.
+   */
+  const systemProbe = options.probe === undefined ? systemListenerProbe() : undefined;
+  const projectListeners: (() => Promise<readonly number[]>) | undefined =
+    options.projectListeners ??
+    (systemProbe === undefined ? undefined : () => projectListenerPorts(directory, systemProbe));
+
+  /** Probe `candidates`, then record what answered and what that implies. */
+  const scan = (candidates: readonly number[]): Promise<void> =>
+    (options.probe === undefined
+      ? probeDevServerStates(candidates).then((states) => {
+          slowListeners = states.slow;
+          return states.serving;
+        })
+      : options.probe(candidates)
+    ).then(async (ports) => {
+      probed = new Set(candidates);
+      listening = ports;
+      siblingListeners =
+        options.occupiedSiblings !== undefined
+          ? await options.occupiedSiblings()
+          : options.probe === undefined
+            ? await findOccupiedSiblings(options.port, probeDaemon)
+            : [];
+      // Asked once per departed URL, on the same background cadence as the port scan, and never
+      // on the hint's own path. A url already answered is not asked again; a new departure is.
+      const known = options.sessions.lastKnown?.();
+      if (known !== undefined && lastKnownStatus?.url !== known.url) {
+        const status = await routeStatus(known.url);
+        if (status !== undefined) lastKnownStatus = { url: known.url, status };
+      }
+      await autoAttach(ports);
+    });
+
   const refresh = (): void => {
     // Nothing to diagnose while a session is live, and no reason to scan. What the last scan saw
     // predates this session, so it is no observation of where the session goes on to depart from.
     if (options.sessions.count() > 0) probed = new Set();
     if (running || options.sessions.count() > 0) return;
     running = true;
-    const candidates = scanPorts();
-    void (
-      options.probe === undefined
-        ? probeDevServerStates(candidates).then((states) => {
-            slowListeners = states.slow;
-            return states.serving;
-          })
-        : options.probe(candidates)
-    )
-      .then(async (ports) => {
-        probed = new Set(candidates);
-        listening = ports;
-        siblingListeners =
-          options.occupiedSiblings !== undefined
-            ? await options.occupiedSiblings()
-            : options.probe === undefined
-              ? await findOccupiedSiblings(options.port, probeDaemon)
-              : [];
-        // Asked once per departed URL, on the same background cadence as the port scan, and never
-        // on the hint's own path. A url already answered is not asked again; a new departure is.
-        const known = options.sessions.lastKnown?.();
-        if (known !== undefined && lastKnownStatus?.url !== known.url) {
-          const status = await routeStatus(known.url);
-          if (status !== undefined) lastKnownStatus = { url: known.url, status };
-        }
-        await autoAttach(ports);
-      })
+    const scanned =
+      projectListeners === undefined
+        ? scan(scanPorts())
+        : projectListeners()
+            .catch((): readonly number[] => [])
+            .then((owned) => scan([...new Set([...scanPorts(), ...owned])]));
+    void scanned
       .catch(() => {
         /* a diagnostic hint must never take the daemon down */
       })

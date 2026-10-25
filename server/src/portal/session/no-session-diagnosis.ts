@@ -346,6 +346,15 @@ const DO_NOT_REINSTALL =
 const SCANNED_PORTS = [...DEV_SERVER_PORTS].join(', ');
 
 /**
+ * The project's own sources the scan adds to the well-known list (reticle#1367, reticle#1543).
+ *
+ * Named in the "nothing else" sentences so that "the scan is partial" says what it did check.
+ */
+const PROJECT_PORT_SOURCES =
+  "the port in this project's dev script and `.env` files, the ports its own processes listen " +
+  'on, and the ports of earlier sessions';
+
+/**
  * How to say "open the app" to an agent that may have no `reticle` binary.
  *
  * Reticle registers its MCP server as `npx @reticlehq/server mcp`, so the ordinary install puts
@@ -749,7 +758,7 @@ export function explainNoSession(facts: NoSessionFacts): {
           `(2) There is no \`.reticle.json\` in ${where}, which is the file ${INIT_CMD} writes, so ` +
           `the app may carry no Reticle SDK. Check the app's OWN directory before re-running it. ` +
           `${ZERO_INSTALL} ${RETRY}`,
-        `The scan covers ${SCANNED_PORTS} and nothing else, so a server on any other port is ` +
+        `The scan covers ${SCANNED_PORTS}, plus ${PROJECT_PORT_SOURCES}, and nothing else, so a server on any other port is ` +
           'invisible to it: if the app IS running, ask for its URL rather than assuming it is down, ' +
           `and open it with ${OPEN_CMD}. The missing config is not proof either — in a monorepo the ` +
           'daemon often runs at the root while the app lives in a subdirectory, and an app wired by ' +
@@ -768,7 +777,7 @@ export function explainNoSession(facts: NoSessionFacts): {
       // is not proof of absence. Reported twice, once against a server answering 200 on :7699 and
       // once against one on :5000 under a custom hostname. The common defaults are in the scanned
       // set, which narrows the gap and cannot close it — anything passed to `--port` is invisible.
-      `The scan covers ${SCANNED_PORTS} and nothing else, so it is not proof: a server on any other ` +
+      `The scan covers ${SCANNED_PORTS}, plus ${PROJECT_PORT_SOURCES}, and nothing else, so it is not proof: a server on any other ` +
         'port is invisible to it. If the app IS running, ask the human for its URL rather than ' +
         // Deliberately NOT offering reticle_lease here, and a test pins that: a lease opens a URL, and
         // if nothing is listening there is nothing at any URL to open. Asking for the real one is the
