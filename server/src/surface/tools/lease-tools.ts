@@ -338,7 +338,10 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
   inputSchema: {
     url: z
       .string()
-      .describe('URL of the already-running app to drive (e.g. http://localhost:3000/dashboard).'),
+      .optional()
+      .describe(
+        'URL of the already-running app to drive (e.g. http://localhost:3000/dashboard). Omit it to lease the one dev server that runs in this project folder.',
+      ),
     projectId: z
       .string()
       .optional()
@@ -441,9 +444,13 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
   handler: async (deps: ToolDeps, args) => {
     const pool = deps.pool;
     if (pool === undefined) throw new Error(POOL_UNAVAILABLE);
-    const url = asString(args['url']);
-    if (url === undefined || 0 === url.length)
-      throw new Error('reticle_lease{action:"acquire"} requires a url');
+    const given = asString(args['url']);
+    const url = given === undefined || 0 === given.length ? await deps.projectAppUrl?.() : given;
+    if (url === undefined) {
+      throw new Error(
+        'reticle_lease{action:"acquire"} requires a url: no single dev server runs in this project folder. Start the app, or pass the url it serves.',
+      );
+    }
     // Preflight the browser before spending the round trip. Without it a missing Playwright Chromium
     // only surfaces inside pool.acquire, where the launch failure is caught and reported as
     // "could not open <url> — is the app running?" — sending the caller to debug an app that is

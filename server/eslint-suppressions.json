@@ -3161,7 +3161,7 @@
   },
   "src/portal/session/zero-install-first-call.ts": {
     "curly": {
-      "count": 5
+      "count": 4
     }
   },
   "src/predicate-param-typing.test.ts": {
@@ -3909,7 +3909,7 @@
   },
   "src/surface/tools/lease-tools.ts": {
     "curly": {
-      "count": 29
+      "count": 28
     },
     "no-nested-ternary": {
       "count": 5

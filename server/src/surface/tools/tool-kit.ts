@@ -97,6 +97,8 @@ export interface ToolDeps<Ext = unknown> {
    * lease that supplies the SDK (see zero-install-first-call.ts). Absent: answer no-session as before.
    */
   openUnwiredApp?: () => Promise<{ url: string; notice: string } | undefined>;
+  /** The one dev server running in the caller's project folder, for a lease that names no url. */
+  projectAppUrl?: () => Promise<string | undefined>;
   /** cross-run outcome memory (.reticle/project.json). */
   project: ProjectStore;
   /** optional native-input provider. undefined ⇒ everything stays synthetic. */

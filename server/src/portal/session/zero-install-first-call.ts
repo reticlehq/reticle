@@ -72,21 +72,44 @@ function openedNotice(url: string, init: string): string {
   );
 }
 
+/**
+ * The one dev server that runs in this project's folder, or undefined when there is none or more
+ * than one. Two servers in one project is a choice the caller makes, not one Reticle guesses.
+ */
+async function projectAppUrlIn(
+  io: Pick<FirstCallIo, 'serving' | 'servingDirectory'>,
+  dir: string,
+): Promise<string | undefined> {
+  const pinned = detectDevCommandInProject(dir)?.port;
+  const candidates = new Set<number>(DEV_SERVER_PORTS);
+  if (pinned !== undefined) {
+    candidates.add(pinned);
+  }
+  const own = (await io.serving([...candidates]))
+    .map((port) => `${LOCALHOST}:${String(port)}`)
+    .filter((url) => within(io.servingDirectory(url), dir));
+  return 1 === own.length ? own[0] : undefined;
+}
+
+/** The caller's running app, for a lease that names no url. */
+export function projectAppUrlFinder(
+  io: Pick<FirstCallIo, 'project' | 'serving' | 'servingDirectory'>,
+): () => Promise<string | undefined> {
+  return async () => {
+    const dir = io.project();
+    return dir === undefined ? undefined : projectAppUrlIn(io, dir);
+  };
+}
+
 /** One lease per project for the daemon's life: a failure is reported once, never retried. */
 export function firstCallOpener(io: FirstCallIo): () => Promise<FirstCallOpened | undefined> {
   const tried = new Set<string>();
   return async () => {
     const dir = io.project();
     if (dir === undefined || tried.has(dir)) return undefined;
-    const pinned = detectDevCommandInProject(dir)?.port;
-    const candidates = new Set<number>(DEV_SERVER_PORTS);
-    if (pinned !== undefined) candidates.add(pinned);
-    const own = (await io.serving([...candidates]))
-      .map((port) => `${LOCALHOST}:${String(port)}`)
-      .filter((url) => within(io.servingDirectory(url), dir));
-    const [url] = own;
+    const url = await projectAppUrlIn(io, dir);
     // ponytail: nothing serving yet is not an attempt, so a later call looks again.
-    if (url === undefined || 1 !== own.length) return undefined;
+    if (url === undefined) return undefined;
     tried.add(dir);
     await io.lease(url).catch(() => undefined);
     if (!io.connected()) return undefined;
@@ -102,14 +125,24 @@ export function firstCallOpener(io: FirstCallIo): () => Promise<FirstCallOpened 
 export function agentWiring(
   sessions: { list(): readonly unknown[] },
   lease: (url: string) => Promise<unknown>,
-): { firstRun: FirstRunWiring; openUnwiredApp: () => Promise<FirstCallOpened | undefined> } {
+): {
+  firstRun: FirstRunWiring;
+  openUnwiredApp: () => Promise<FirstCallOpened | undefined>;
+  projectAppUrl: () => Promise<string | undefined>;
+} {
   const firstRun = firstRunWiring();
-  const openUnwiredApp = firstCallOpener({
+  const io: FirstCallIo = {
     project: () => firstRun.projectDirectory(callingClientDirectory() ?? process.cwd()),
     serving: async (ports) => (await probeDevServerStates(ports)).serving,
     servingDirectory: (url) => servingDirectoryOf(url),
     lease,
     connected: () => 0 < sessions.list().length,
-  });
-  return { firstRun, openUnwiredApp };
+  };
+  // Wired or not: a lease that names no url wants the app this caller works in either way.
+  const callerFolder = (): string => callingClientDirectory() ?? process.cwd();
+  return {
+    firstRun,
+    openUnwiredApp: firstCallOpener(io),
+    projectAppUrl: projectAppUrlFinder({ ...io, project: callerFolder }),
+  };
 }
