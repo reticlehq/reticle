@@ -47,6 +47,16 @@ describe('a framework error dialog over the page', () => {
     expect(matchQuery({ text: 'Welcome back', matchCase: true }).coveredBy).toBeUndefined();
   });
 
+  // An app can hide Next's whole dev UI with CSS on `nextjs-portal`. The dialog inside is then
+  // not on screen, so it covers nothing.
+  it('says nothing when CSS hides the Next.js portal itself', () => {
+    document.body.innerHTML = '<p>Welcome back</p>';
+    mountOverlay('nextjs-portal', '<div data-nextjs-dialog>Unhandled Runtime Error</div>');
+    const portal = document.querySelector('nextjs-portal');
+    portal?.setAttribute('style', 'display: none');
+    expect(matchQuery({ text: 'Welcome back', matchCase: true }).coveredBy).toBeUndefined();
+  });
+
   it('names the Vite error overlay on a match under it, but not on its own text', () => {
     document.body.innerHTML = '<p>Welcome back</p>';
     mountOverlay('vite-error-overlay', '<div class="window"><pre>Failed to compile</pre></div>');
