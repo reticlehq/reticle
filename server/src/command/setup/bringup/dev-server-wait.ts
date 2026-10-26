@@ -79,8 +79,10 @@ export function judgeWait(facts: WaitFacts): WaitVerdict {
 const CRA_PORT_BUSY = /Something is already running on port (\d+)/i;
 const NAMED_PORT_BUSY = /Port (\d+) is (?:already )?in use/i;
 // Node prints `address already in use <address>:<port>`; the port sits after the last colon of the
-// address, so the first digit can belong to the host (`0.0.0.0:3000` said port 0, #1846).
-const EADDRINUSE_PORT = /(?:EADDRINUSE|address already in use)\D*(?:.*:)?(\d+)/i;
+// address, so the first digit can belong to the host (`0.0.0.0:3000` said port 0, #1846). The scan
+// also stops at the line end: the stack frame under the error (`at Server (node:net:1817:16)`)
+// carries digits of its own, and they are not the port.
+const EADDRINUSE_PORT = /(?:EADDRINUSE|address already in use)[^\d\n]*(?:.*:)?(\d+)/i;
 
 export function portBusyMessage(output: string): string | undefined {
   const match =

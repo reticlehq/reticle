@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — setup names the real port when the dev server's port is taken.** Node prints `Error: listen EADDRINUSE: address already in use 0.0.0.0:3000`, and setup read the first number after the phrase — it said port 0 was busy, or port 1 for an IPv6 address, so the remedy pointed at a port nothing could be listening on. The port is now read from after the last colon of the address, so `0.0.0.0:3000`, `:::3000`, `[::1]:4400` and host names all name their real port, and the stack trace under the error line no longer donates a frame number as the port. Closes [#1846](https://github.com/reticlehq/reticle/issues/1846).
