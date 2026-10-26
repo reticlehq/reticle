@@ -212,16 +212,6 @@
       "count": 1
     }
   },
-  "src/verdict/security.test.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
-  "src/verdict/security.ts": {
-    "curly": {
-      "count": 7
-    }
-  },
   "src/wire/channel.ts": {
     "curly": {
       "count": 2

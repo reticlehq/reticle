@@ -74,13 +74,17 @@ const IPV4_OCTET_MAX = 255;
  */
 export function isLoopbackHostname(hostname: string): boolean {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (LOOPBACK_HOSTNAMES.includes(normalized)) return true;
+  if (LOOPBACK_HOSTNAMES.includes(normalized)) {
+    return true;
+  }
   const octets = normalized.split('.');
   return (
     IPV4_OCTET_COUNT === octets.length &&
     IPV4_LOOPBACK_FIRST_OCTET === octets[0] &&
     octets.every((octet) => {
-      if (!/^\d{1,3}$/.test(octet)) return false;
+      if (!/^\d{1,3}$/.test(octet)) {
+        return false;
+      }
       const value = Number(octet);
       return value >= 0 && value <= IPV4_OCTET_MAX;
     })
@@ -117,7 +121,9 @@ const LOCAL_APP_PROTOCOLS: readonly string[] = ['file:', 'app:', 'tauri:'];
  */
 export function isLocalPage(protocol: string, hostname: string): boolean {
   // `isLocalhostSubdomain` also covers `tauri.localhost`, the http origin Tauri v2 uses on Windows.
-  if (isLoopbackHostname(hostname) || isLocalhostSubdomain(hostname)) return true;
+  if (isLoopbackHostname(hostname) || isLocalhostSubdomain(hostname)) {
+    return true;
+  }
   return LOCAL_APP_PROTOCOLS.includes(protocol.toLowerCase());
 }
 
@@ -197,9 +203,13 @@ function filenameTokenEnd(run: string): number {
       extension += run.charAt(end).toLowerCase();
       end += 1;
     }
-    if (!FILENAME_EXTENSIONS.has(extension)) continue;
+    if (!FILENAME_EXTENSIONS.has(extension)) {
+      continue;
+    }
     const after = run.charAt(end);
-    if ('' === after || '.' === after || '-' === after) return end;
+    if ('' === after || '.' === after || '-' === after) {
+      return end;
+    }
   }
   return 0;
 }
@@ -230,7 +240,9 @@ export function withoutFilenameTokens(text: string): string {
  * role (a tool name, a click with no role on the descriptor) omit it and the text decides.
  */
 export function isDangerousActionText(text: string, role?: string): boolean {
-  if (role !== undefined && VALUE_PICKER_ROLES.has(role.trim().toLowerCase())) return false;
+  if (role !== undefined && VALUE_PICKER_ROLES.has(role.trim().toLowerCase())) {
+    return false;
+  }
   return DANGEROUS_ACTION.test(text.replace(WORD_JOINERS, ' '));
 }
 
@@ -354,7 +366,9 @@ const PAYMENT_FIELD_WORDS =
  * too); it travels in the facts so a numeric field named "cvv" still reads as one.
  */
 export function isPaymentField(facts: PaymentFieldFacts): boolean {
-  if (CARD_AUTOCOMPLETE.test(facts.autocomplete ?? '')) return true;
+  if (CARD_AUTOCOMPLETE.test(facts.autocomplete ?? '')) {
+    return true;
+  }
   const words = [facts.name, facts.id, facts.label]
     .map((w) => (w ?? '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' '))
     .join(' ');
@@ -368,8 +382,12 @@ export function isPaymentField(facts: PaymentFieldFacts): boolean {
  * that points at a payment provider. `PAY` stays in the journey vocabulary, so "she pays" allows it.
  */
 export function outwardActionOf(text: string, role?: string): OutwardAction | undefined {
-  if (role !== undefined && VALUE_PICKER_ROLES.has(role.trim().toLowerCase())) return undefined;
-  if (text.split(/\s+/).some(isPaymentProviderUrl)) return OutwardAction.PAY;
+  if (role !== undefined && VALUE_PICKER_ROLES.has(role.trim().toLowerCase())) {
+    return undefined;
+  }
+  if (text.split(/\s+/).some(isPaymentProviderUrl)) {
+    return OutwardAction.PAY;
+  }
   const words = text.replace(/[_-]+/g, ' ');
   return OUTWARD_WORDS.find(
     ([action, pattern]) => action !== OutwardAction.PAY && pattern.test(words),

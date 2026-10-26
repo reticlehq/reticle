@@ -27,11 +27,6 @@
       "count": 1
     }
   },
-  "src/actions/actions.danger-context.test.ts": {
-    "curly": {
-      "count": 9
-    }
-  },
   "src/actions/actions.effect.test.ts": {
     "curly": {
       "count": 7
@@ -108,11 +103,6 @@
   "src/actions/click-target.ts": {
     "curly": {
       "count": 2
-    }
-  },
-  "src/actions/danger-context.ts": {
-    "curly": {
-      "count": 11
     }
   },
   "src/actions/scroll.ts": {

@@ -3420,11 +3420,6 @@
       "count": 2
     }
   },
-  "src/surface/tools/act/act-danger.ts": {
-    "curly": {
-      "count": 13
-    }
-  },
   "src/surface/tools/act/act-helpers.ts": {
     "curly": {
       "count": 6

@@ -47,25 +47,35 @@ function descriptorRole(value: unknown): string | undefined {
 function isDestructiveDescriptor(value: unknown): boolean {
   // A real link is a navigation, judged by where it goes: the same rule as the SDK path.
   const href = asString(asRecord(value)['href']);
-  if (href !== undefined && !isInertHref(href)) return isDangerousNavigation(href);
+  if (href !== undefined && !isInertHref(href)) {
+    return isDangerousNavigation(href);
+  }
   return isDangerousActionText(descriptorText(value), descriptorRole(value));
 }
 
 /** A Harness call presses an outward control only when its journey asked (`harnessOutwardAllowed`). */
 function assertOutwardAllowed(...descriptors: unknown[]): void {
   const allowed = harnessOutwardAllowed();
-  if (allowed === undefined) return;
+  if (allowed === undefined) {
+    return;
+  }
   for (const descriptor of descriptors) {
     const kind = outwardActionOf(descriptorText(descriptor), descriptorRole(descriptor));
-    if (kind !== undefined && !allowed.includes(kind)) throw new Error(outwardRefusal(kind));
+    if (kind !== undefined && !allowed.includes(kind)) {
+      throw new Error(outwardRefusal(kind));
+    }
   }
 }
 
 /** A Harness call goes to a payment provider's origin only when its journey asked to pay. */
 export function assertNotPaymentNavigation(url: string): void {
   const allowed = harnessOutwardAllowed();
-  if (allowed === undefined || allowed.includes(OutwardAction.PAY)) return;
-  if (isPaymentProviderUrl(url)) throw new Error(outwardRefusal(OutwardAction.PAY));
+  if (allowed === undefined || allowed.includes(OutwardAction.PAY)) {
+    return;
+  }
+  if (isPaymentProviderUrl(url)) {
+    throw new Error(outwardRefusal(OutwardAction.PAY));
+  }
 }
 
 export function assertNotDestructive(
@@ -73,10 +83,16 @@ export function assertNotDestructive(
   innerArgs: Record<string, unknown>,
   inspected: unknown,
 ): void {
-  if (action !== ActionType.CLICK && action !== ActionType.DBLCLICK) return;
+  if (action !== ActionType.CLICK && action !== ActionType.DBLCLICK) {
+    return;
+  }
   assertOutwardAllowed(inspected);
-  if (true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG]) return;
-  if (!isDestructiveDescriptor(inspected)) return;
+  if (true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG]) {
+    return;
+  }
+  if (!isDestructiveDescriptor(inspected)) {
+    return;
+  }
   throw new Error(
     `potentially destructive native action blocked; retry with args.${DANGEROUS_ACTION_CONFIRM_ARG}=true`,
   );
@@ -93,8 +109,12 @@ export function assertDragNotDestructive(
   to: unknown,
 ): void {
   assertOutwardAllowed(from, to);
-  if (true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG]) return;
-  if (!isDestructiveDescriptor(from) && !isDestructiveDescriptor(to)) return;
+  if (true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG]) {
+    return;
+  }
+  if (!isDestructiveDescriptor(from) && !isDestructiveDescriptor(to)) {
+    return;
+  }
   throw new Error(
     `potentially destructive native action blocked; retry with args.${DANGEROUS_ACTION_CONFIRM_ARG}=true`,
   );
@@ -116,7 +136,9 @@ export const NATIVE_INPUT_UNSUPPORTED =
 
 /** Refuse rather than silently drop a native-input request the act-then-wait path cannot honour. */
 export function assertNativeInputSupported(innerArgs: Record<string, unknown>): void {
-  if (true === innerArgs[NATIVE_INPUT_ARG]) throw new Error(NATIVE_INPUT_UNSUPPORTED);
+  if (true === innerArgs[NATIVE_INPUT_ARG]) {
+    throw new Error(NATIVE_INPUT_UNSUPPORTED);
+  }
 }
 
 /**
@@ -134,8 +156,12 @@ export function confirmedByDeclaration(
   target: unknown,
   declared: boolean,
 ): Record<string, unknown> {
-  if (!declared || true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG]) return innerArgs;
-  if (currentDrivenBy() !== undefined) return innerArgs;
+  if (!declared || true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG]) {
+    return innerArgs;
+  }
+  if (currentDrivenBy() !== undefined) {
+    return innerArgs;
+  }
   const named = asRecord(target);
   // The words must themselves be the dangerous ones: naming "Continue" on a button whose form posts
   // to /delete-account consents to nothing, and the guard still reads the whole control.

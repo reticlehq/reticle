@@ -50,9 +50,15 @@ const LABEL_VALUED_INPUT_TYPES: ReadonlySet<string> = new Set([
  * way past such a block is `confirmDangerous: true`, which is how a safety guard becomes decorative.
  */
 function holdsUserText(el: ActionTarget): boolean {
-  if (isHtmlElement(el) && el.isContentEditable) return true;
-  if (el instanceof HTMLTextAreaElement) return true;
-  if (el instanceof HTMLInputElement) return !LABEL_VALUED_INPUT_TYPES.has(el.type.toLowerCase());
+  if (isHtmlElement(el) && el.isContentEditable) {
+    return true;
+  }
+  if (el instanceof HTMLTextAreaElement) {
+    return true;
+  }
+  if (el instanceof HTMLInputElement) {
+    return !LABEL_VALUED_INPUT_TYPES.has(el.type.toLowerCase());
+  }
   return false;
 }
 
@@ -65,14 +71,18 @@ const ANCHOR_TAG = 'A';
  */
 function navigatingHref(el: ActionTarget): string | undefined {
   // By tag, not `instanceof`: a link inside a same-origin iframe has that frame's constructors.
-  if (ANCHOR_TAG !== el.tagName) return undefined;
+  if (ANCHOR_TAG !== el.tagName) {
+    return undefined;
+  }
   const href = el.getAttribute('href');
   return null === href || isInertHref(href) ? undefined : href;
 }
 
 export function dangerousActionContext(el: ActionTarget): string {
   const href = navigatingHref(el);
-  if (href !== undefined) return href;
+  if (href !== undefined) {
+    return href;
+  }
   const form = el.closest('form');
   // The label surfaces only, when the content is the user's own. The accessible NAME still counts:
   // that is the prompt beside the field, and "Type DELETE to remove this account" is exactly the
@@ -81,10 +91,10 @@ export function dangerousActionContext(el: ActionTarget): string {
     ? ['', '']
     : [el.textContent ?? '', el.getAttribute('value') ?? ''];
   return [
-    getAccessibleName(el),
-    ...ownText,
-    el.getAttribute('title') ?? '',
-    el.getAttribute('aria-label') ?? '',
+    withoutFilenameTokens(getAccessibleName(el)),
+    withoutFilenameTokens(ownText.join(' ')),
+    withoutFilenameTokens(el.getAttribute('title') ?? ''),
+    withoutFilenameTokens(el.getAttribute('aria-label') ?? ''),
     el.getAttribute('href') ?? '',
     form?.getAttribute('action') ?? '',
   ].join(' ');
@@ -115,7 +125,9 @@ export function submitControlFor(el: ActionTarget): HTMLElement | null {
  */
 export function requiresDangerousConfirmation(el: ActionTarget): boolean {
   const href = navigatingHref(el);
-  if (href !== undefined) return isDangerousNavigation(href);
+  if (href !== undefined) {
+    return isDangerousNavigation(href);
+  }
   return isDangerousActionText(dangerousActionContext(el), getRole(el));
 }
 
@@ -132,11 +144,17 @@ export function setOutwardPolicy(allowed: readonly string[] | undefined): void {
  * action. The Harness pressed Invite in a customer's workspace when its journey said not to.
  */
 export function assertOutwardAllowed(targets: readonly (ActionTarget | null)[]): void {
-  if (outwardAllowed === undefined) return;
+  if (outwardAllowed === undefined) {
+    return;
+  }
   for (const el of targets) {
-    if (null === el) continue;
+    if (null === el) {
+      continue;
+    }
     const kind = outwardActionOf(dangerousActionContext(el), getRole(el));
-    if (kind !== undefined && !outwardAllowed.includes(kind)) throw new Error(outwardRefusal(kind));
+    if (kind !== undefined && !outwardAllowed.includes(kind)) {
+      throw new Error(outwardRefusal(kind));
+    }
   }
 }
 
@@ -145,7 +163,9 @@ export function assertOutwardAllowed(targets: readonly (ActionTarget | null)[]):
  * longer read as paying ("Start free trial"), this and a link to a payment provider are the boundary.
  */
 export function assertPaymentEntryAllowed(el: ActionTarget): void {
-  if (outwardAllowed === undefined || outwardAllowed.includes(OutwardAction.PAY)) return;
+  if (outwardAllowed === undefined || outwardAllowed.includes(OutwardAction.PAY)) {
+    return;
+  }
   const facts = {
     autocomplete: el.getAttribute('autocomplete') ?? undefined,
     name: el.getAttribute('name') ?? undefined,
@@ -153,5 +173,7 @@ export function assertPaymentEntryAllowed(el: ActionTarget): void {
     inputMode: el.getAttribute('inputmode') ?? undefined,
     label: `${getAccessibleName(el)} ${el.getAttribute('placeholder') ?? ''}`,
   };
-  if (isPaymentField(facts)) throw new Error(outwardRefusal(OutwardAction.PAY));
+  if (isPaymentField(facts)) {
+    throw new Error(outwardRefusal(OutwardAction.PAY));
+  }
 }

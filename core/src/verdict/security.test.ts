@@ -212,8 +212,9 @@ describe('what the Harness may press', () => {
    * words on a button.
    */
   it('presses a button whose label mentions a trial, an upgrade or a payment', () => {
-    for (const label of ['Start free trial', 'Upgrade', 'Subscribe', 'Checkout', 'Place order'])
+    for (const label of ['Start free trial', 'Upgrade', 'Subscribe', 'Checkout', 'Place order']) {
       expect(outwardActionOf(label)).toBeUndefined();
+    }
   });
 
   it('names a link or form that leaves for a payment provider as paying', () => {
@@ -267,8 +268,9 @@ describe('what the Harness may press', () => {
 /** A link to `/billing/payment` with the text "Orders & invoices" was refused as a payment (#1275). */
 describe('isDangerousNavigation', () => {
   it('does not refuse a same-app page because its path has a money word', () => {
-    for (const href of ['/billing/payments', '/billing/payment', '/shop/buy', '/orders/refund'])
+    for (const href of ['/billing/payments', '/billing/payment', '/shop/buy', '/orders/refund']) {
       expect(isDangerousNavigation(href)).toBe(false);
+    }
   });
 
   it('refuses a path that destroys something', () => {
