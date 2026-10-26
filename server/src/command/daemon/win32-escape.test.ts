@@ -16,6 +16,16 @@ import { escapeJobViaWmi, JOB_ESCAPE_LAUNCHER, type EscapeRequest } from './win3
 /** A generous bound for a detached node child to start and write one line. Not a duration check. */
 const CHILD_WRITE_TIMEOUT_MS = 15_000;
 
+/** Whether a process with this pid still runs. Signal 0 checks without sending anything. */
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 describe('escapeJobViaWmi', () => {
   let home: string;
   let request: EscapeRequest;
@@ -122,10 +132,14 @@ describe('JOB_ESCAPE_LAUNCHER', () => {
     execFileSync(process.execPath, ['-e', JOB_ESCAPE_LAUNCHER, specPath]);
 
     expect(existsSync(specPath)).toBe(false);
-    expect(Number(readFileSync(`${specPath}.pid`, 'utf8'))).toBeGreaterThan(0);
+    const pid = Number(readFileSync(`${specPath}.pid`, 'utf8'));
+    expect(pid).toBeGreaterThan(0);
     // The child runs detached, so its write lands after the launcher exits.
     await vi.waitFor(() => expect(readFileSync(logPath, 'utf8')).toBe('before\nfrom-daemon'), {
       timeout: CHILD_WRITE_TIMEOUT_MS,
     });
+    // Wait for the child to exit. On Windows a live child keeps the folder busy, and the cleanup
+    // then fails with EBUSY although the launcher is correct.
+    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: CHILD_WRITE_TIMEOUT_MS });
   });
 });
