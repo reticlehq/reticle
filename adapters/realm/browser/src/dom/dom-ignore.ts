@@ -1,5 +1,6 @@
 import { RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
 import { capturedRootOf } from './shadow-registry.js';
+import { isVisible } from './a11y.js';
 
 /**
  * Selectors for Reticle's own presenter overlay (cursor, HUD, glow) + the annotator's
@@ -159,18 +160,24 @@ const VITE_OVERLAY = 'vite-error-overlay';
  *
  * `DEV_OVERLAYS` keeps Next's dev UI out of snapshots, so without this no check could see that an
  * error dialog covers the page, and a text check on the content under it answered `yes` (#1768).
+ * Next 16 keeps the dialog mounted and hidden while it is collapsed to the issue badge, so only a
+ * visible dialog counts. A mounted one made every check on the page read `covered`.
  */
 function openFrameworkErrorDialog(doc: Document): { name: string; host: Element } | undefined {
   const vite = doc.querySelector(VITE_OVERLAY);
   if (vite !== null) return { name: FrameworkErrorDialog.VITE, host: vite };
   for (const portal of Array.from(doc.querySelectorAll(NEXT_PORTAL))) {
     const root = portal.shadowRoot ?? capturedRootOf(portal);
-    if (null !== (root ?? portal).querySelector(NEXT_DIALOG)) {
+    const dialog = (root ?? portal).querySelector(NEXT_DIALOG);
+    if (null !== dialog && isVisible(dialog)) {
       return { name: FrameworkErrorDialog.NEXT, host: portal };
     }
   }
   const light = doc.querySelector(NEXT_DIALOG);
-  return null === light ? undefined : { name: FrameworkErrorDialog.NEXT, host: light };
+  if (null === light || !isVisible(light)) {
+    return undefined;
+  }
+  return { name: FrameworkErrorDialog.NEXT, host: light };
 }
 
 /**

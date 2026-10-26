@@ -34,6 +34,19 @@ describe('a framework error dialog over the page', () => {
     expect(matchQuery({ text: 'Welcome back', matchCase: true }).coveredBy).toBeUndefined();
   });
 
+  // Next 16 wraps the error overlay in React `<Activity>`. A collapse to the issue badge keeps the
+  // dialog mounted and sets `display: none` on its top node, and every check read `covered`.
+  it('says nothing when the Next.js dialog is collapsed to the issue badge', () => {
+    document.body.innerHTML = '<p>Welcome back</p>';
+    mountOverlay(
+      'nextjs-portal',
+      '<div data-nextjs-dialog-overlay style="display: none !important">' +
+        '<div data-nextjs-dialog>Unhandled Runtime Error</div></div>' +
+        '<button data-issues>1 Issue</button>',
+    );
+    expect(matchQuery({ text: 'Welcome back', matchCase: true }).coveredBy).toBeUndefined();
+  });
+
   it('names the Vite error overlay on a match under it, but not on its own text', () => {
     document.body.innerHTML = '<p>Welcome back</p>';
     mountOverlay('vite-error-overlay', '<div class="window"><pre>Failed to compile</pre></div>');
