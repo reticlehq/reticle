@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getAccessibleName, isVisible } from './a11y.js';
+import { getAccessibleName } from './a11y.js';
+import { isVisible } from './visibility.js';
 import { installShadowRegistry } from './shadow-registry.js';
 import { matchQuery } from './query.js';
 

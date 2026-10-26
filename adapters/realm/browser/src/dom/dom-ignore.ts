@@ -1,6 +1,6 @@
 import { RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
 import { capturedRootOf } from './shadow-registry.js';
-import { isVisible } from './a11y.js';
+import { isVisible } from './visibility.js';
 
 /**
  * Selectors for Reticle's own presenter overlay (cursor, HUD, glow) + the annotator's

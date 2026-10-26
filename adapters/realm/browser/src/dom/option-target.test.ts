@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ActionType, QueryBy } from '@reticlehq/core';
 import { executeAction } from '@/actions/actions.js';
 import { refs } from './addressing/refs.js';
-import { isVisible } from './a11y.js';
+import { isVisible } from './visibility.js';
 import { runQuery } from './query.js';
 
 const APPLE = 'Apple';

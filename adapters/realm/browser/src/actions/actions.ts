@@ -23,7 +23,8 @@ import {
   isAutofillSafeTarget,
   setNativeValue,
 } from './value-input.js';
-import { isVisible, getStates } from '@/dom/a11y.js';
+import { getStates } from '@/dom/a11y.js';
+import { isVisible } from '@/dom/visibility.js';
 import { elementHasHoverHandlers } from '@/registry/stores/adapters.js';
 import {
   type ActionTarget,

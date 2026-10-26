@@ -1,6 +1,7 @@
 import { readTestId, testIdSelector } from '@/dom/addressing/testid-attr.js';
 import { EventType, REDACTED_VALUE, TruncationChannel } from '@reticlehq/core';
-import { getAccessibleName, getRole, isSensitiveField, isVisible } from '@/dom/a11y.js';
+import { getAccessibleName, getRole, isSensitiveField } from '@/dom/a11y.js';
+import { isVisible } from '@/dom/visibility.js';
 import { refs } from '@/dom/addressing/refs.js';
 
 /**

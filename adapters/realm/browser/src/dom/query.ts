@@ -15,16 +15,13 @@ import {
 } from '@reticlehq/core';
 import { isActionTarget, isElement, isFrame, isInput, isSelect, isTextArea } from './realm.js';
 import { capturedRootOf } from './shadow-registry.js';
+import { getAccessibleName, getRole, describe, getStates } from './a11y.js';
 import {
-  getAccessibleName,
-  getRole,
-  describe,
-  getStates,
   isHiddenByAriaOnly,
   isInViewport,
   isRenderedOutsideAriaHidden,
   isVisible,
-} from './a11y.js';
+} from './visibility.js';
 import { dialogCovering, isIgnored, isReticleOverlay, isWordsIgnored } from './dom-ignore.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { declaredTestids } from '@/registry/capabilities.js';

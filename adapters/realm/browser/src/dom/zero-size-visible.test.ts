@@ -4,7 +4,7 @@
  * person sees nothing there. jsdom does no layout, so the boxes are stubbed per element.
  */
 import { describe, expect, it, beforeEach } from 'vitest';
-import { isVisible } from './a11y.js';
+import { isVisible } from './visibility.js';
 
 const zeroBox = { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 };
 

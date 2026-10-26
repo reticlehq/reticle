@@ -61,7 +61,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: text-match.ts, the text rules split out of query.ts at the 1000-line cap (#1782).
   // +1: layout-audit.ts, the snapshot's opt-in audit. Not `dom/audit/`: it reads dom's a11y and refs
   // and snapshot reads it, so a subdirectory would be two directories that need each other.
-  'adapters/realm/browser/src/dom': 16,
+  // +1: visibility.ts, the visibility checks split out of a11y.ts at the 1000-line cap (#1662).
+  'adapters/realm/browser/src/dom': 17,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 27,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag

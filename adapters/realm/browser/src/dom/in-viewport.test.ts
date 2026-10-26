@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ElementState } from '@reticlehq/core';
-import { isInViewport, isVisible } from './a11y.js';
+import { isInViewport, isVisible } from './visibility.js';
 import { matchQuery } from './query.js';
 
 /**

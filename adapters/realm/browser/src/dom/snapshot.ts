@@ -1,7 +1,8 @@
 import { ElementState, SnapshotMode } from '@reticlehq/core';
 import { capturedRootOf } from './shadow-registry.js';
 import { isElement, isFrame } from './realm.js';
-import { getAccessibleName, getRole, getStates, getValue, isVisible } from './a11y.js';
+import { getAccessibleName, getRole, getStates, getValue } from './a11y.js';
+import { isVisible } from './visibility.js';
 import { refs } from './addressing/refs.js';
 import { readTestId } from './addressing/testid-attr.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';

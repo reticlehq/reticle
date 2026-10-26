@@ -21,7 +21,7 @@ export interface ActionEffect {
   dispatched: true;
   /** Ref resolved to a still-connected element at read time. */
   targetMatched: boolean;
-  /** a11y isVisible(el) at the start of the action. */
+  /** visibility isVisible(el) at the start of the action. */
   visible: boolean;
   /** Not disabled / aria-disabled at the start of the action. */
   enabled: boolean;
