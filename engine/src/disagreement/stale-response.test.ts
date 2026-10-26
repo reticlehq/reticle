@@ -235,6 +235,41 @@ describe('parallel fan-out is not a race', () => {
     ).toEqual([]);
   });
 
+  it("does not read the next click's own reaction as applying the older response", () => {
+    // Seen on a quote desk that guards correctly, driven in a fast burst: the slow first quote
+    // landed while the agent was already clicking again, and that click's own "loading" state write,
+    // stamped a few ms later, was nearer the loser's completion than any other completion. The rule
+    // called it applied, 1 run in 2. A reaction nearer a request being ISSUED was caused by the
+    // action that issued it.
+    expect(
+      findStaleResponses([
+        pending(0, '/api/quote?symbol=ACME', 'a'),
+        pending(50, '/api/quote?symbol=GLOBEX', 'b'),
+        settled(90, 'b'),
+        applied(90),
+        settled(4000, 'a'), // ignored by the app
+        pending(4004, '/api/quote?symbol=INITECH', 'c'),
+        applied(4004), // the click's own "loading" write
+        settled(4064, 'c'),
+        applied(4064),
+      ]),
+    ).toEqual([]);
+  });
+
+  it('still reports the older response applied while another request is being issued', () => {
+    expect(
+      findStaleResponses([
+        pending(0, '/api/quote?symbol=ACME', 'a'),
+        pending(50, '/api/quote?symbol=GLOBEX', 'b'),
+        settled(90, 'b'),
+        settled(4000, 'a'),
+        applied(4000), // the app rendered the loser, at its own completion
+        pending(4004, '/api/quote?symbol=INITECH', 'c'),
+        settled(4064, 'c'),
+      ]),
+    ).toHaveLength(1);
+  });
+
   it('counts a reaction stamped a moment BEFORE the completion it followed', () => {
     // Not a tolerance for sloppiness — a correction for which of the two is stamped first. The
     // observer emits NET_REQUEST when its wrapper sees the fetch settle, and the app's own handler

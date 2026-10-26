@@ -239,8 +239,18 @@ function appliedAfter(
     // A reaction belongs to the completion nearest it. The slack lets a render stamped a moment
     // early count, and so it also took in the NEWER response's own render landing just before the
     // loser: a correct app that dropped the loser was accused (seen intermittently on a bench twin).
+    // It also belongs to a request being ISSUED nearer it: an action's own write ("loading", the
+    // requested value) lands with its request, and a fast burst of clicks puts the next one a few
+    // ms after a slow loser lands (seen 1 run in 2 on a correctly guarded quote desk).
     const own = Math.abs(event.t - settledAt);
-    return reacts && !all.some((f) => f.id !== loser.id && Math.abs(event.t - f.settledAt) < own);
+    return (
+      reacts &&
+      !all.some(
+        (f) =>
+          f.id !== loser.id &&
+          (Math.abs(event.t - f.settledAt) < own || Math.abs(event.t - f.issuedAt) < own),
+      )
+    );
   });
 }
 
