@@ -101,6 +101,7 @@ export function repoIdentity(dir: string): string | undefined {
         cwd: dir,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
+        windowsHide: true,
       }).trim();
     const remote = git('config', '--get', 'remote.origin.url')
       .replace(/\.git$/, '')

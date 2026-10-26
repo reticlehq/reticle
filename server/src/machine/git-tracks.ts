@@ -22,6 +22,7 @@ export function gitTracks(path: string): boolean {
     cwd: existingAncestor(path),
     stdio: 'ignore',
     timeout: GIT_TIMEOUT_MS,
+    windowsHide: true,
   });
   const answer = CHECK_IGNORE_NOT_IGNORED === result.status;
   tracked.set(path, answer);

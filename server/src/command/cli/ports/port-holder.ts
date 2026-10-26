@@ -39,7 +39,12 @@ export function captureLookup(
   timeoutMs: number = LOOKUP_TIMEOUT_MS,
 ): string | null {
   try {
-    const result = spawnSync(command, [...args], { encoding: 'utf8', timeout: timeoutMs });
+    // The daemon has no console: without windowsHide, each lookup opens a visible window on Windows.
+    const result = spawnSync(command, [...args], {
+      encoding: 'utf8',
+      timeout: timeoutMs,
+      windowsHide: true,
+    });
     return 0 === result.status && 'string' === typeof result.stdout ? result.stdout : null;
   } catch {
     return null;
