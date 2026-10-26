@@ -97,7 +97,8 @@ describe('JOB_ESCAPE_LAUNCHER', () => {
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    // The detached child can still hold the log on Windows just after its write: retry the delete.
+    rmSync(home, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
   });
 
   it('has no double quote or backslash, so it passes as one Windows argument', () => {
