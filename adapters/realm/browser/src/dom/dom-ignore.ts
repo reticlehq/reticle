@@ -90,7 +90,9 @@ const HUD_DOCK = '[data-reticle-dock]';
  * change. The cursor and glow stay out even then: they move on every action and prove nothing.
  */
 export function isUnobserved(el: Element): boolean {
-  if (!isReticleOverlay(el)) return false;
+  if (!isReticleOverlay(el)) {
+    return false;
+  }
   return !exposed() || null === el.closest(HUD_DOCK);
 }
 
@@ -165,7 +167,9 @@ const VITE_OVERLAY = 'vite-error-overlay';
  */
 function openFrameworkErrorDialog(doc: Document): { name: string; host: Element } | undefined {
   const vite = doc.querySelector(VITE_OVERLAY);
-  if (vite !== null) return { name: FrameworkErrorDialog.VITE, host: vite };
+  if (vite !== null) {
+    return { name: FrameworkErrorDialog.VITE, host: vite };
+  }
   for (const portal of Array.from(doc.querySelectorAll(NEXT_PORTAL))) {
     const root = portal.shadowRoot ?? capturedRootOf(portal);
     const dialog = (root ?? portal).querySelector(NEXT_DIALOG);
@@ -186,16 +190,22 @@ function openFrameworkErrorDialog(doc: Document): { name: string; host: Element 
  */
 export function dialogCovering(matches: readonly Element[]): string | undefined {
   const first = matches[0];
-  if (first === undefined) return undefined;
+  if (first === undefined) {
+    return undefined;
+  }
   const dialog = openFrameworkErrorDialog(first.ownerDocument);
-  if (dialog === undefined) return undefined;
+  if (dialog === undefined) {
+    return undefined;
+  }
   return matches.some((el) => !isInsideHost(el, dialog.host)) ? dialog.name : undefined;
 }
 
 /** Whether `el` is the dialog's host or inside it, across its shadow root. */
 function isInsideHost(el: Element, host: Element): boolean {
   for (let node: Node | null = el; node !== null;) {
-    if (node === host) return true;
+    if (node === host) {
+      return true;
+    }
     const root = node.getRootNode();
     node = node.parentNode ?? (root instanceof ShadowRoot ? root.host : null);
   }
@@ -215,9 +225,15 @@ const APP_MODAL = 'dialog[open], [aria-modal="true"]';
  */
 export function appModalOpen(doc: Document): boolean {
   for (const el of Array.from(doc.querySelectorAll(APP_MODAL))) {
-    if (el.closest(RETICLE_OVERLAY) !== null) continue;
-    if (el instanceof HTMLElement && (el.hidden || null !== el.closest('[hidden]'))) continue;
-    if (el instanceof HTMLElement && 'none' === getComputedStyle(el).display) continue;
+    if (el.closest(RETICLE_OVERLAY) !== null) {
+      continue;
+    }
+    if (el instanceof HTMLElement && (el.hidden || null !== el.closest('[hidden]'))) {
+      continue;
+    }
+    if (el instanceof HTMLElement && 'none' === getComputedStyle(el).display) {
+      continue;
+    }
     return true;
   }
   return false;

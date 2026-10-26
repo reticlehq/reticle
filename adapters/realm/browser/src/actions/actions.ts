@@ -65,8 +65,12 @@ function asString(value: unknown, fallback = ''): string {
 
 function requireElement(ref: string): ActionTarget {
   const el = refs.resolve(ref);
-  if (null === el) throw new Error(`ref '${echoRef(ref)}' no longer resolves to an element`);
-  if (!isActionTarget(el)) throw new Error(`ref '${echoRef(ref)}' is not an HTML or SVG element`);
+  if (null === el) {
+    throw new Error(`ref '${echoRef(ref)}' no longer resolves to an element`);
+  }
+  if (!isActionTarget(el)) {
+    throw new Error(`ref '${echoRef(ref)}' is not an HTML or SVG element`);
+  }
   return el;
 }
 
@@ -162,7 +166,9 @@ const GENERIC_ACTION_ARG_KEYS: ReadonlySet<string> = new Set([
 function assertUploadArgs(args: Record<string, unknown>): void {
   const keys = Object.keys(args);
   const dropped = keys.filter((k) => !UPLOAD_ARG_KEYS.has(k) && !GENERIC_ACTION_ARG_KEYS.has(k));
-  if (0 === dropped.length && keys.some((k) => UPLOAD_ARG_KEYS.has(k))) return;
+  if (0 === dropped.length && keys.some((k) => UPLOAD_ARG_KEYS.has(k))) {
+    return;
+  }
   const detail =
     0 === dropped.length
       ? 'no file was described'
@@ -196,9 +202,12 @@ function assertActionAllowed(
   // nothing, so the form is none of its business.
   const submitter =
     action === ActionType.PRESS && 'Enter' === pressKey(args) ? submitControlFor(el) : null;
-  if (canTrigger)
+  if (canTrigger) {
     assertOutwardAllowed([el, submitter, isActionTarget(dragTarget) ? dragTarget : null]);
-  if (action === ActionType.FILL || action === ActionType.TYPE) assertPaymentEntryAllowed(el);
+  }
+  if (action === ActionType.FILL || action === ActionType.TYPE) {
+    assertPaymentEntryAllowed(el);
+  }
   const sourceDangerous =
     requiresDangerousConfirmation(el) ||
     (submitter !== null && requiresDangerousConfirmation(submitter));
@@ -221,7 +230,9 @@ function assertActionAllowed(
 
 /** The value of the option `named` names: its value, else the one option whose label it is. */
 function optionValueFor(options: readonly HTMLOptionElement[], named: string): string {
-  if (options.some((option) => option.value === named)) return named;
+  if (options.some((option) => option.value === named)) {
+    return named;
+  }
   const byLabel = options.filter((option) => option.label.trim() === named.trim());
   return 1 === byLabel.length ? (byLabel[0]?.value ?? named) : named;
 }
@@ -257,7 +268,9 @@ function valueOf(el: Element): string | undefined {
 /** Ref of the currently-focused element, treating body/null as "no focus". */
 function activeRef(el: Element): string | null {
   const active = el.ownerDocument.activeElement;
-  if (null === active || active === el.ownerDocument.body) return null;
+  if (null === active || active === el.ownerDocument.body) {
+    return null;
+  }
   return refs.refFor(active);
 }
 
@@ -356,7 +369,9 @@ async function dispatchOther(
       // hover-dwell: keep "hovering" for holdMs so timer-gated reveals can mount. Capped like
       // click's: unbounded, it is the same never-returns hazard.
       const holdMs = clampHoldMs(args['holdMs']);
-      if (holdMs > 0) await sleep(holdMs);
+      if (holdMs > 0) {
+        await sleep(holdMs);
+      }
       return !moved;
     }
     case ActionType.FOCUS:
@@ -399,7 +414,9 @@ async function dispatchOther(
         }
         assertEditable(el, 'fill');
         // Focus so a later blur commits; not a WebKit password field, where it raises AutoFill.
-        if (!isAutofillSafeTarget(el)) el.focus();
+        if (!isAutofillSafeTarget(el)) {
+          el.focus();
+        }
         return setNativeValue(el, args['value']);
       }
       assertNotRichText(el, 'fill');
@@ -489,7 +506,9 @@ async function dispatchOther(
       // enough to make an app that autosaves, logs or POSTs on change act on a no-op. Reported as
       // `effect.alreadyAtValue` — the same predicate, read again by executeAction — because "nothing
       // was dispatched" is not the same claim as "the app holds this value". See ActionEffect.
-      if (alreadyAtCheckedState(el, action)) return false;
+      if (alreadyAtCheckedState(el, action)) {
+        return false;
+      }
       // A real click, never `el.checked = …`. Assigning the property flips the pixel and tells no
       // framework: React binds a checkbox's onChange to the CLICK event, and its value tracker dedups
       // the change it would otherwise synthesise from a direct assignment — so a controlled
@@ -512,7 +531,9 @@ async function dispatchOther(
     }
     case ActionType.SUBMIT: {
       const form = isForm(el) ? el : el.closest('form');
-      if (null === form) throw new Error('no form to submit');
+      if (null === form) {
+        throw new Error('no form to submit');
+      }
       form.requestSubmit();
       return false; // requestSubmit returns void; the internal submit event is unobservable.
     }
@@ -522,7 +543,9 @@ async function dispatchOther(
       // SEVERAL keys held together, released in reverse — what a keyboard physically does.
       // `modifiers` cannot express this: they are flags on ONE event, so "Control held while k and
       // then j are struck" had no spelling at all.
-      if (combo.length > 0) return await pressCombo(el, combo, mods, clampHoldMs(args['holdMs']));
+      if (combo.length > 0) {
+        return await pressCombo(el, combo, mods, clampHoldMs(args['holdMs']));
+      }
       const key = pressKey(args);
       const code = pressCode(args, key);
       // Marked as ours like the click sequence: the annotator leaves annotate mode on Escape, so an
@@ -533,14 +556,18 @@ async function dispatchOther(
         ),
       );
       closeModalOnEscape(el, key, down); // on keydown, as a browser does, before any hold
-      if (down) dispatchKeypress(el, key, code, mods);
+      if (down) {
+        dispatchKeypress(el, key, code, mods);
+      }
       // A HELD key, with the auto-repeat a browser sends while it is down.
       //
       // The mouse has had `holdMs` since hold-to-confirm; the keyboard did not, so a key that has to
       // be held — a game control, hold-to-delete, a press-and-hold reveal — was undriveable while
       // the identical gesture with a mouse button worked. The asymmetry was the bug.
       const hold = clampHoldMs(args['holdMs']);
-      if (hold > 0) await holdKey(el, key, code, mods, hold);
+      if (hold > 0) {
+        await holdKey(el, key, code, mods, hold);
+      }
       asSyntheticInput(() =>
         el.dispatchEvent(keyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
       );
@@ -588,7 +615,9 @@ async function dispatchOther(
       if (true === args['__base64']) {
         const bin = atob(rawContent);
         const arr = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        for (let i = 0; i < bin.length; i++) {
+          arr[i] = bin.charCodeAt(i);
+        }
         // Use slice(0) to get a plain ArrayBuffer from the Uint8Array's backing store.
         // arr.buffer is SharedArrayBuffer-typed in strict tsconfigs; slice(0) narrows it to
         // ArrayBuffer and avoids the type assertion the linter would flag.
@@ -608,7 +637,9 @@ async function dispatchOther(
       const toRef = dragTargetRef(args);
       // asString falls back to '' (never undefined), so the old `!== undefined` was always true and
       // handed '' to refs.resolve. A drag with NO target named is a free drag — resolve nothing.
-      if ('' === toRef) return await dragElement(el, null, args['data']);
+      if ('' === toRef) {
+        return await dragElement(el, null, args['data']);
+      }
       // A target WAS named and did not resolve. That is a malformed call, not a free drag: dragging
       // nowhere and reporting `ok: true` is a false green, and a guessed target name reads as "no
       // target" while every effect field looks healthy.
@@ -640,8 +671,12 @@ export async function executeAction(
   // A document-key press is not aimed at the element we dispatch on. The destructive-action
   // guard classifies the ELEMENT, and inventing a target from body/focus would be the lie this
   // path exists to avoid.
-  if (named) assertActionAllowed(el, action, args);
-  if (named) assertNotLeaving(el);
+  if (named) {
+    assertActionAllowed(el, action, args);
+  }
+  if (named) {
+    assertNotLeaving(el);
+  }
   // Capture the anchor while the element is still mounted — the action may unmount it (navigation).
   // A refless press reports no anchor: minting a testid/component of whatever is focused would
   // invent a target the caller did not name.
@@ -740,15 +775,16 @@ export async function executeAction(
   // Honesty caveats: a visually-occluded click is reported even though synthetic dispatch landed;
   // else synthetic hover may not fire framework enter/leave handlers (no native hit-test).
   // A document-key press did not resolve a named target — say so rather than describing body.
-  const warning = !named
-    ? ActionWarning.GLOBAL_PRESS
-    : geometry.occluded
-      ? ActionWarning.CLICK_OCCLUDED
-      : action === ActionType.HOVER && elementHasHoverHandlers(el)
-        ? ActionWarning.HOVER_NATIVE_ENTER_LEAVE
-        : hitsNoControl
-          ? ActionWarning.CLICK_NOT_A_CONTROL
-          : undefined;
+  let warning: ActionWarning | undefined;
+  if (!named) {
+    warning = ActionWarning.GLOBAL_PRESS;
+  } else if (geometry.occluded) {
+    warning = ActionWarning.CLICK_OCCLUDED;
+  } else if (action === ActionType.HOVER && elementHasHoverHandlers(el)) {
+    warning = ActionWarning.HOVER_NATIVE_ENTER_LEAVE;
+  } else if (hitsNoControl) {
+    warning = ActionWarning.CLICK_NOT_A_CONTROL;
+  }
   const done = result(ref, action, effect, settled, settleReason, anchor, warning);
   // Only reachable with the HUD exposed: said so the recorder keeps it out of the app's flows.
   return isReticleUi(el) ? { ...done, reticleUi: true } : done;
@@ -808,13 +844,27 @@ export async function executeSequence(steps: ActionStep[]): Promise<{
       settled: res.settled,
       settleReason: res.settleReason,
     };
-    if (res.testid !== undefined) stepBase.testid = res.testid;
-    if (res.component !== undefined) stepBase.component = res.component;
-    if (res.role !== undefined) stepBase.role = res.role;
-    if (res.name !== undefined) stepBase.name = res.name;
-    if (res.source !== undefined) stepBase.source = res.source;
-    if (res.secret !== undefined) stepBase.secret = res.secret;
-    if (res.warning !== undefined) stepBase.warning = res.warning;
+    if (res.testid !== undefined) {
+      stepBase.testid = res.testid;
+    }
+    if (res.component !== undefined) {
+      stepBase.component = res.component;
+    }
+    if (res.role !== undefined) {
+      stepBase.role = res.role;
+    }
+    if (res.name !== undefined) {
+      stepBase.name = res.name;
+    }
+    if (res.source !== undefined) {
+      stepBase.source = res.source;
+    }
+    if (res.secret !== undefined) {
+      stepBase.secret = res.secret;
+    }
+    if (res.warning !== undefined) {
+      stepBase.warning = res.warning;
+    }
     stepResults.push(stepBase);
   }
   return { ok: true, count: steps.length, effects, steps: stepResults };

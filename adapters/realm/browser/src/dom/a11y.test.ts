@@ -186,9 +186,13 @@ describe('own hiding short-circuits ancestor metadata', () => {
       const outer = document.createElement('div');
       const inner = document.createElement('div');
       const button = document.createElement('button');
-      if ('hidden' === signal) button.hidden = true;
-      else if ('aria-hidden' === signal) button.setAttribute('aria-hidden', 'true');
-      else button.style.display = 'none';
+      if ('hidden' === signal) {
+        button.hidden = true;
+      } else if ('aria-hidden' === signal) {
+        button.setAttribute('aria-hidden', 'true');
+      } else {
+        button.style.display = 'none';
+      }
       inner.append(button);
       outer.append(inner);
       document.body.append(outer);
@@ -276,7 +280,9 @@ describe('slotted content inherits visibility from where it is slotted', () => {
     const shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML =
       '<details><summary><slot name="label"></slot></summary><slot></slot></details>';
-    if (open) shadow.querySelector('details')?.setAttribute('open', '');
+    if (open) {
+      shadow.querySelector('details')?.setAttribute('open', '');
+    }
     const kept = document.createElement('span');
     kept.slot = 'label';
     kept.textContent = 'Advanced';
@@ -818,8 +824,11 @@ describe('visibility inside overflow clipping ancestors', () => {
     'clips a %s child whose containing block is the clipping ancestor',
     (position) => {
       const { clip, child } = mount();
-      if ('absolute' === position) clip.style.position = 'relative';
-      else clip.style.transform = 'translateZ(0)';
+      if ('absolute' === position) {
+        clip.style.position = 'relative';
+      } else {
+        clip.style.transform = 'translateZ(0)';
+      }
       child.style.position = position;
       Object.defineProperty(child, 'offsetParent', { value: clip });
       expect(isVisible(child)).toBe(false);
@@ -1012,14 +1021,18 @@ describe('a page an open overlay hid from assistive tech', () => {
     document.body.innerHTML =
       '<header aria-hidden="true" data-aria-hidden="true"><button id="p">omar-blog</button></header>';
     const button = document.getElementById('p');
-    if (null === button) throw new Error('no button');
+    if (null === button) {
+      throw new Error('no button');
+    }
     expect(isVisible(button)).toBe(true);
   });
 
   it('while the app’s own aria-hidden still hides', () => {
     document.body.innerHTML = '<div aria-hidden="true"><button id="q">Hidden</button></div>';
     const button = document.getElementById('q');
-    if (null === button) throw new Error('no button');
+    if (null === button) {
+      throw new Error('no button');
+    }
     expect(isVisible(button)).toBe(false);
   });
 });

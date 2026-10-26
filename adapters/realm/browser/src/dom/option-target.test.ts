@@ -30,7 +30,9 @@ function box(el: Element, width: number, height: number): void {
 
 function requireElement(id: string): HTMLElement {
   const el = document.getElementById(id);
-  if (null === el) throw new Error(`fixture missing #${id}`);
+  if (null === el) {
+    throw new Error(`fixture missing #${id}`);
+  }
   return el;
 }
 
@@ -78,7 +80,9 @@ function appleQuery(): ReturnType<typeof runQuery> {
 
 function nativeApple(select: HTMLSelectElement): HTMLOptionElement {
   const option = [...select.options].find((item) => item.value === APPLE_VALUE);
-  if (option === undefined) throw new Error('fixture missing native option');
+  if (option === undefined) {
+    throw new Error('fixture missing native option');
+  }
   return option;
 }
 
@@ -101,7 +105,9 @@ describe('a role query for an option prefers the visible actionable one', () => 
     expect(found.elements[0]?.ref).toBe(refs.refFor(portal));
 
     const ref = found.elements[0]?.ref;
-    if (ref === undefined) throw new Error('resolved option has no ref');
+    if (ref === undefined) {
+      throw new Error('resolved option has no ref');
+    }
     await executeAction(ref, ActionType.CLICK);
     expect(select.value).toBe(APPLE_VALUE);
   });
@@ -113,7 +119,9 @@ describe('a role query for an option prefers the visible actionable one', () => 
     expect(found.count).toBe(1);
     expect(found.elements[0]?.ref).toBe(refs.refFor(requireElement(PORTAL_ID)));
     const ref = found.elements[0]?.ref;
-    if (ref === undefined) throw new Error('resolved option has no ref');
+    if (ref === undefined) {
+      throw new Error('resolved option has no ref');
+    }
     await executeAction(ref, ActionType.CLICK);
     expect(select.value).toBe(APPLE_VALUE);
   });

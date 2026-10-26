@@ -1,9 +1,4 @@
 {
-  "src/actions/action-report.ts": {
-    "curly": {
-      "count": 18
-    }
-  },
   "src/actions/actions-dom.ts": {
     "curly": {
       "count": 13
@@ -85,14 +80,6 @@
   "src/actions/actions.settle-causality.test.ts": {
     "curly": {
       "count": 5
-    }
-  },
-  "src/actions/actions.ts": {
-    "curly": {
-      "count": 25
-    },
-    "no-nested-ternary": {
-      "count": 3
     }
   },
   "src/actions/appeared-text.ts": {
@@ -180,11 +167,6 @@
       "count": 5
     }
   },
-  "src/dom/a11y.test.ts": {
-    "curly": {
-      "count": 8
-    }
-  },
   "src/dom/addressing/refs.ts": {
     "curly": {
       "count": 6
@@ -215,22 +197,12 @@
       "count": 2
     }
   },
-  "src/dom/dom-ignore.ts": {
-    "curly": {
-      "count": 8
-    }
-  },
   "src/dom/layout-audit.test.ts": {
     "curly": {
       "count": 1
     }
   },
   "src/dom/occlusion.ts": {
-    "curly": {
-      "count": 4
-    }
-  },
-  "src/dom/option-target.test.ts": {
     "curly": {
       "count": 4
     }
@@ -253,11 +225,6 @@
   "src/dom/query.role-coverage.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/dom/query.ts": {
-    "curly": {
-      "count": 51
     }
   },
   "src/dom/query.visible-text-hint.test.ts": {
