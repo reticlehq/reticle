@@ -257,7 +257,7 @@
   },
   "src/dom/query.ts": {
     "curly": {
-      "count": 72
+      "count": 51
     }
   },
   "src/dom/query.visible-text-hint.test.ts": {

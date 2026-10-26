@@ -7,7 +7,7 @@ import {
   NATIVE_INPUT_ARG,
   SettleReason,
 } from '@reticlehq/core';
-import { isHiddenNativeOption } from '@/dom/query.js';
+import { isHiddenNativeOption } from '@/dom/query-finders.js';
 import { isReticleUi } from '@/dom/dom-ignore.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { echoRef, refs } from '@/dom/addressing/refs.js';
