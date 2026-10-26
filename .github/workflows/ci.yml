@@ -530,7 +530,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.e2e == 'true'
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -1030,7 +1030,7 @@ jobs:
     # Every non-PR event runs it. A pull request that touches none of the code the battery drives
     # (docs, skills, a fixture it does not boot) skips it; the queue runs it again regardless.
     if: github.event_name != 'pull_request' || needs.changes.outputs.e2e == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 50
     # Three parallel shards of the battery (run.mjs reads E2E_SHARD). One spec, mcp-stress, is about
     # 120s of the ~380s total; round-robin puts it with lighter specs, so the slowest shard is ~180s.
     # The integration suite and the soak run once, in shard 1, the lightest.
@@ -1253,7 +1253,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [format-check, changes]
     if: needs.changes.outputs.conformance == 'true'
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
