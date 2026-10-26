@@ -1,10 +1,11 @@
 /**
  * Is a leased tab usable right now? The checks `reticle_lease` runs before it may say `ready: true`.
  * Presence in the sessions map is not enough: the tab has to answer, and it has to be visible.
- * The wait for the tab to connect is here too, with the zero-install reader for a page that stays silent.
+ * The wait for the tab to connect is here too, with the zero-install reader for a page that stays silent,
+ * and the move that takes a reused lease to the page it was asked for.
  */
 
-import { LeaseNotReadyReason, ReticleCommand } from '@reticlehq/core';
+import { LeaseNotReadyReason, ReticleCommand, RETICLE_URL_PARAM } from '@reticlehq/core';
 import { NotHtmlDocumentError } from '@/portal/pool/zero-install.js';
 
 /**
@@ -202,4 +203,59 @@ function readerFailureOf(err: unknown): LeaseReaderFailure {
         : LeaseNotReadyReason.READER_FAILED,
     cause,
   };
+}
+
+/** How long a moved lease's SDK gets to come back on the new page: the mint path's wait. */
+const REUSED_ARRIVAL_MS = LEASE_READY_ATTEMPTS * LEASE_READY_POLL_MS;
+
+/** A URL as a page: without Reticle's own params or the fragment. Undefined when it is not a URL. */
+function pageOf(url: string | undefined): string | undefined {
+  if (url === undefined) {
+    return undefined;
+  }
+  try {
+    const u = new URL(url);
+    for (const param of Object.values(RETICLE_URL_PARAM)) {
+      u.searchParams.delete(param);
+    }
+    u.hash = '';
+    return u.href;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Move a reused lease to the page it was asked for (#1667).
+ *
+ * Reuse hands back the tab wherever the last caller left it. Answering with the requested url
+ * while the tab stayed elsewhere sent the next read to another page. So the tab goes there, and
+ * the answer waits for its SDK to come back on that page, as a minted lease's does.
+ *
+ * `undefined` when there is nothing to move: the tab is already there, or its url is unknown.
+ * Otherwise `navigated` says whether the tab got there, `url` is the page it is on, and `arrived`
+ * whether its SDK connected there within the wait.
+ */
+export async function moveReusedLease(
+  tabUrl: () => string | undefined,
+  requested: string,
+  goto: () => Promise<boolean>,
+  now: () => number,
+): Promise<{ navigated: boolean; url: string; arrived: boolean } | undefined> {
+  const from = tabUrl();
+  const target = pageOf(requested);
+  if (pageOf(from) === undefined || target === undefined || pageOf(from) === target) {
+    return undefined;
+  }
+  const went = await Promise.resolve()
+    .then(goto)
+    .catch(() => false);
+  if (!went) {
+    return { navigated: false, url: from ?? requested, arrived: true };
+  }
+  const start = now();
+  while (pageOf(tabUrl()) !== target && now() - start < REUSED_ARRIVAL_MS) {
+    await sleep(LEASE_READY_POLL_MS);
+  }
+  return { navigated: true, url: requested, arrived: pageOf(tabUrl()) === target };
 }

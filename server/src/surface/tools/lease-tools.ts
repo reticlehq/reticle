@@ -18,7 +18,12 @@ import {
   leaseStillLoadingHint,
   type LeaseEvidence,
 } from './lease-hint.js';
-import { connectOrInject, notReadyReason, probeLeaseAlive } from './lease-readiness.js';
+import {
+  connectOrInject,
+  moveReusedLease,
+  notReadyReason,
+  probeLeaseAlive,
+} from './lease-readiness.js';
 import { probeSdkMarker } from './gaps/sdk-marker-probe.js';
 import { observeWebDocument } from '@/portal/session/dev-server/served-document.js';
 import { diagnoseObservedWebCsp } from '@reticlehq/init';
@@ -446,6 +451,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .describe(
         'True when this acquire returned an existing live lease on the same origin rather than minting a second context.',
       ),
+    navigated: z
+      .boolean()
+      .optional()
+      .describe(
+        'Present when a reused lease was on another page. True: its tab was moved to url. False: it could not be moved, and url is the page it is on.',
+      ),
     hint: z.string().optional(),
     production: production.PRODUCTION_LEASE_OUTPUT,
     versionSkew: z
@@ -593,12 +604,22 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           // old, or there may be none at all — `unresponsive` is set by past commands failing, and
           // its own contract says absence means "answering, OR NOT ASKED YET". So the happy path of
           // a first acquire pays nothing for this.
+          const tabUrl = (): string | undefined => deps.sessions.get(resolved)?.url;
+          const moved = await moveReusedLease(
+            tabUrl,
+            url,
+            () => pool.gotoLease(existing, carryReticleIdentity(tabUrl(), url)),
+            deps.now,
+          );
           const reusedSession = deps.sessions.get(resolved);
-          const alive = await probeLeaseAlive(reusedSession);
-          const reuseReason = notReadyReason(alive, reusedSession);
+          const reuseReason =
+            false === moved?.arrived
+              ? LeaseNotReadyReason.SDK_NEVER_DIALLED
+              : notReadyReason(await probeLeaseAlive(reusedSession), reusedSession);
           return {
             sessionId: resolved,
-            url,
+            url: moved?.url ?? url,
+            ...(moved === undefined ? {} : { navigated: moved.navigated }),
             ready: reuseReason === undefined,
             ...(reuseReason === undefined ? {} : { notReadyReason: reuseReason }),
             reused: true,

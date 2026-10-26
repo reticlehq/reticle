@@ -161,6 +161,8 @@ function fakePool(): {
     alias: (registeredId: string, leaseId: string) => {
       aliased.push([registeredId, leaseId]);
     },
+    // No page to move: a reused lease on another page stays where it is.
+    gotoLease: () => Promise.resolve(false),
   } as unknown as BrowserPool;
   return { pool, acquired, aliased, released };
 }
@@ -455,6 +457,95 @@ describe('reticle_lease_acquire', () => {
     // back; the answer says the identity comes with it.
     expect(second.hint).toMatch(/still signed in/);
     expect(acquired).toHaveLength(1);
+  });
+
+  // A reused lease answers for the page it was asked for (#1667). Its tab is wherever the last
+  // caller left it, so it is moved there first, and when it cannot be, the answer says where it is.
+  const reuseOnAnotherPage = (goto: (target: string) => Promise<boolean>) => {
+    const { pool } = fakePool();
+    const gotos: string[] = [];
+    const tab = { id: 'live', url: 'http://localhost:3000/a' };
+    (pool as unknown as { gotoLease: (id: string, target: string) => Promise<boolean> }).gotoLease =
+      (_id, target) => {
+        gotos.push(target);
+        return goto(target).then((went) => {
+          if (went) {
+            tab.url = target;
+          }
+          return went;
+        });
+      };
+    const deps = {
+      ...baseDeps,
+      pool,
+      sessions: { get: () => tab },
+      now: () => Date.now(),
+    } as unknown as ToolDeps;
+    return { deps, tab, gotos };
+  };
+
+  it('moves a reused lease to the requested page when its tab is on another one', async () => {
+    const { deps, tab, gotos } = reuseOnAnotherPage(() => Promise.resolve(true));
+    await tool(ReticleTool.LEASE_ACQUIRE)(deps, { url: 'http://localhost:3000/a' });
+    tab.url = 'http://localhost:3000/b';
+    const again = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/c',
+    })) as { url: string; reused?: boolean; ready: boolean; navigated?: boolean };
+
+    expect(gotos.map((u) => new URL(u).pathname)).toEqual(['/c']);
+    expect(new URL(tab.url).pathname).toBe('/c');
+    expect(again).toMatchObject({ reused: true, ready: true, navigated: true });
+    expect(new URL(again.url).pathname).toBe('/c');
+  });
+
+  it('leaves a reused lease in place when its tab is already on the requested page', async () => {
+    const { deps, tab, gotos } = reuseOnAnotherPage(() => Promise.resolve(true));
+    await tool(ReticleTool.LEASE_ACQUIRE)(deps, { url: 'http://localhost:3000/c' });
+    tab.url = `http://localhost:3000/c?${RETICLE_URL_PARAM.SESSION}=gen`;
+    const again = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/c',
+    })) as { reused?: boolean; navigated?: boolean };
+
+    expect(gotos).toEqual([]);
+    expect(again.reused).toBe(true);
+    expect(again.navigated).toBeUndefined();
+  });
+
+  it('says a moved lease is not ready when its SDK does not come back on the new page', async () => {
+    const { deps, tab } = reuseOnAnotherPage(() => Promise.resolve(true));
+    await tool(ReticleTool.LEASE_ACQUIRE)(deps, { url: 'http://localhost:3000/a' });
+    tab.url = 'http://localhost:3000/b';
+    // The tab went, but no SDK has reported from the new page; the clock runs out at once.
+    let clock = 0;
+    const silent = {
+      ...deps,
+      pool: {
+        ...deps.pool,
+        gotoLease: () => Promise.resolve(true),
+      },
+      now: () => (clock += 60_000),
+    } as unknown as ToolDeps;
+    const again = (await tool(ReticleTool.LEASE_ACQUIRE)(silent, {
+      url: 'http://localhost:3000/c',
+    })) as { ready: boolean; notReadyReason?: string; navigated?: boolean };
+
+    expect(again).toMatchObject({
+      ready: false,
+      notReadyReason: LeaseNotReadyReason.SDK_NEVER_DIALLED,
+      navigated: true,
+    });
+  });
+
+  it('answers with the page a reused lease is on when it cannot be moved', async () => {
+    const { deps, tab, gotos } = reuseOnAnotherPage(() => Promise.resolve(false));
+    await tool(ReticleTool.LEASE_ACQUIRE)(deps, { url: 'http://localhost:3000/a' });
+    tab.url = 'http://localhost:3000/b';
+    const again = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/c',
+    })) as { url: string; reused?: boolean; navigated?: boolean };
+
+    expect(gotos).toHaveLength(1);
+    expect(again).toMatchObject({ reused: true, navigated: false, url: 'http://localhost:3000/b' });
   });
 
   it('replaces a held lease asked for with the other certificate setting, and reuses it otherwise', async () => {
