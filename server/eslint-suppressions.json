@@ -1687,7 +1687,7 @@
   },
   "src/language/flows/flow-replay-run.ts": {
     "curly": {
-      "count": 45
+      "count": 27
     },
     "no-nested-ternary": {
       "count": 1
