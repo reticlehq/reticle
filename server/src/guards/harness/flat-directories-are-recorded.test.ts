@@ -309,6 +309,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // one file that names it.
   // +1: js-coverage.ts, the browser engine's code coverage beside the other driven-page capabilities.
   'server/src/portal/input': 12,
+  // 11 with `pool-lease.ts`: the lease types and the pool's limits, split out of browser-pool.ts at
+  // the 1000-line cap (#1705).
+  'server/src/portal/pool': 11,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on
