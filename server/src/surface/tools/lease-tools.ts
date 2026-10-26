@@ -18,7 +18,7 @@ import {
   leaseStillLoadingHint,
   type LeaseEvidence,
 } from './lease-hint.js';
-import { connectOrInject, probeLeaseAlive, tabHidden } from './lease-readiness.js';
+import { connectOrInject, notReadyReason, probeLeaseAlive } from './lease-readiness.js';
 import { probeSdkMarker } from './gaps/sdk-marker-probe.js';
 import { observeWebDocument } from '@/portal/session/dev-server/served-document.js';
 import { diagnoseObservedWebCsp } from '@reticlehq/init';
@@ -86,11 +86,15 @@ async function observedCspBlock(
   port: number,
 ): Promise<{ problem: string; fix: string } | undefined> {
   const document = await observeWebDocument(url);
-  if (document === undefined) return undefined;
+  if (document === undefined) {
+    return undefined;
+  }
   const refusesSocket = diagnoseObservedWebCsp(document, port).some((finding) =>
     `${finding.problem} ${finding.fix}`.includes(CONNECT_SRC),
   );
-  if (!refusesSocket) return undefined;
+  if (!refusesSocket) {
+    return undefined;
+  }
   const allow = `ws://localhost:${String(port)} ws://127.0.0.1:${String(port)}`;
   return {
     problem: `its ${CONNECT_SRC} does not allow ws://localhost:${String(port)}`,
@@ -148,7 +152,9 @@ export function appendReticleParams(
     if (projectId !== undefined && projectId.length > 0) {
       u.searchParams.set(RETICLE_URL_PARAM.PROJECT, projectId);
     }
-    if (hud !== undefined) u.searchParams.set(RETICLE_URL_PARAM.HUD, hud);
+    if (hud !== undefined) {
+      u.searchParams.set(RETICLE_URL_PARAM.HUD, hud);
+    }
     return u.toString();
   } catch {
     const sep = url.includes('?') ? '&' : '?';
@@ -194,7 +200,9 @@ export function resolveLeasedSessionId(
   sessions: { get: (id: string) => unknown; all: () => { id: string; url?: string }[] },
   leaseId: string,
 ): string | undefined {
-  if (sessions.get(leaseId) !== undefined) return leaseId;
+  if (sessions.get(leaseId) !== undefined) {
+    return leaseId;
+  }
   return sessions.all().find((s) => sessionParamOf(s.url) === leaseId)?.id;
 }
 
@@ -213,15 +221,21 @@ export function resolveLeasedSessionId(
  */
 export function carryReticleIdentity(fromUrl: string | undefined, toUrl: string): string {
   const session = sessionParamOf(fromUrl);
-  if (session === undefined) return toUrl;
+  if (session === undefined) {
+    return toUrl;
+  }
   // Already addressed (a caller passing the stamped URL back) — appending would be a no-op at best.
-  if (sessionParamOf(toUrl) !== undefined) return toUrl;
+  if (sessionParamOf(toUrl) !== undefined) {
+    return toUrl;
+  }
   const projectId = projectParamOf(fromUrl);
   return appendReticleParams(toUrl, session, projectId);
 }
 
 function projectParamOf(url: string | undefined): string | undefined {
-  if (url === undefined) return undefined;
+  if (url === undefined) {
+    return undefined;
+  }
   try {
     return new URL(url).searchParams.get(RETICLE_URL_PARAM.PROJECT) ?? undefined;
   } catch {
@@ -230,7 +244,9 @@ function projectParamOf(url: string | undefined): string | undefined {
 }
 
 function sessionParamOf(url: string | undefined): string | undefined {
-  if (url === undefined) return undefined;
+  if (url === undefined) {
+    return undefined;
+  }
   try {
     return new URL(url).searchParams.get(RETICLE_URL_PARAM.SESSION) ?? undefined;
   } catch {
@@ -288,7 +304,9 @@ export async function acquireLeasedSession(
     registeredId = resolveLeasedSessionId(sessions, lease.sessionId);
     return registeredId !== undefined;
   });
-  if (registeredId !== undefined) pool.alias?.(registeredId, lease.sessionId);
+  if (registeredId !== undefined) {
+    pool.alias?.(registeredId, lease.sessionId);
+  }
   const effectiveId = registeredId ?? lease.sessionId;
   if (seedStorage !== undefined) {
     const session = sessions.get(effectiveId) as
@@ -441,7 +459,9 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
   },
   handler: async (deps: ToolDeps, args) => {
     const pool = deps.pool;
-    if (pool === undefined) throw new Error(POOL_UNAVAILABLE);
+    if (pool === undefined) {
+      throw new Error(POOL_UNAVAILABLE);
+    }
     const given = asString(args['url']);
     const url = given === undefined || 0 === given.length ? await deps.projectAppUrl?.() : given;
     if (url === undefined) {
@@ -456,7 +476,9 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     // installed" so error-recovery routes it to the NO_POOL fix (install + drive a human tab).
     if (deps.browserProbe !== undefined) {
       const refusal = chromiumPreflightRefusal(await deps.browserProbe());
-      if (refusal !== undefined) throw new Error(refusal);
+      if (refusal !== undefined) {
+        throw new Error(refusal);
+      }
     }
     const projectId = asString(args['projectId']);
     const root = asString(args['root']);
@@ -573,11 +595,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           // a first acquire pays nothing for this.
           const reusedSession = deps.sessions.get(resolved);
           const alive = await probeLeaseAlive(reusedSession);
-          const reuseReason = !alive
-            ? LeaseNotReadyReason.SDK_STOPPED_ANSWERING
-            : tabHidden(reusedSession)
-              ? LeaseNotReadyReason.TAB_HIDDEN
-              : undefined;
+          const reuseReason = notReadyReason(alive, reusedSession);
           return {
             sessionId: resolved,
             url,
@@ -603,7 +621,9 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       }
       const sessionId = newLeaseId();
       // Before the page can dial in: the session is stamped with its root the moment it registers.
-      if (root !== undefined) claimArtifactRoot(sessionId, root);
+      if (root !== undefined) {
+        claimArtifactRoot(sessionId, root);
+      }
       const navUrl = appendReticleParams(activated?.url ?? url, sessionId, projectId, hud);
       let lease;
       try {
@@ -621,9 +641,13 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           ...(emulate === undefined ? {} : { emulate }),
         });
       } catch (err) {
-        if (err instanceof PoolAtCapacityError) throw err;
+        if (err instanceof PoolAtCapacityError) {
+          throw err;
+        }
         const refusal = permissionRefusal(err);
-        if (refusal !== undefined) throw refusal;
+        if (refusal !== undefined) {
+          throw refusal;
+        }
         if (err instanceof Error && err.message.startsWith('Storage seeding failed')) {
           throw new Error(scrubSeedFromError(err.message, validatedSeed));
         }
@@ -648,7 +672,9 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       // under the id we are about to hand back, and the pool is keyed by the id it navigated with;
       // without this the touches miss, the lease ages out despite continuous activity, and the
       // reaper closes the context mid-flow. See BrowserPool.alias and #157.
-      if (registeredId !== undefined) pool.alias(registeredId, lease.sessionId);
+      if (registeredId !== undefined) {
+        pool.alias(registeredId, lease.sessionId);
+      }
       const effectiveSessionId = registeredId ?? lease.sessionId;
       const session = deps.sessions.get(effectiveSessionId);
       if (validatedSeed !== undefined && session !== undefined) {
@@ -664,18 +690,28 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       }
       // The lease now exists, so any HUD a human is watching has just gone dark. Say so. A lease whose
       // reader failed is already released, so there is nothing to say.
-      if (readerFailure === undefined) tellWatchers(deps, projectId, AGENT_DRIVING_ELSEWHERE);
+      if (readerFailure === undefined) {
+        tellWatchers(deps, projectId, AGENT_DRIVING_ELSEWHERE);
+      }
       // ready means the SDK dialled in — not that contracts match. Carry the skew warning on acquire
       // so the agent does not learn it only after a CDP tool invents a closed page (#688).
       const mintReason =
         readerFailure?.reason ??
-        (!ready
-          ? LeaseNotReadyReason.SDK_NEVER_DIALLED
-          : tabHidden(session)
-            ? LeaseNotReadyReason.TAB_HIDDEN
-            : undefined);
+        notReadyReason(ready, session, LeaseNotReadyReason.SDK_NEVER_DIALLED);
       const versionSkew =
         registeredId === undefined ? undefined : deps.sessions.get(registeredId)?.versionSkew;
+      let notReadyHint: string | undefined;
+      if (!ready) {
+        if (readerFailure !== undefined) {
+          notReadyHint = leaseReaderFailedHint(url, readerFailure);
+        } else if (true === stillLoading) {
+          notReadyHint = leaseStillLoadingHint(url, Date.now() - waitStartedAt);
+        } else if (activated !== undefined) {
+          notReadyHint = production.notActivatedHint(url);
+        } else {
+          notReadyHint = await notConnectedHint(deps, url, pool.dialFailureUrl?.(lease.sessionId));
+        }
+      }
       return {
         sessionId: registeredId ?? lease.sessionId,
         url,
@@ -701,15 +737,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         ...production.summary(activated),
         ...(initScript === undefined ? {} : { hostStub: HOST_STUB_NOTE }),
         ...hintOf(
-          ready
-            ? undefined
-            : readerFailure !== undefined
-              ? leaseReaderFailedHint(url, readerFailure)
-              : true === stillLoading
-                ? leaseStillLoadingHint(url, Date.now() - waitStartedAt)
-                : activated !== undefined
-                  ? production.notActivatedHint(url)
-                  : await notConnectedHint(deps, url, pool.dialFailureUrl?.(lease.sessionId)),
+          notReadyHint,
           ready ? await notificationReadBack(pool, lease.sessionId, permissions) : undefined,
         ),
       };
@@ -751,7 +779,9 @@ const LEASE_RELEASE_TOOL: ToolDef = {
   },
   handler: async (deps: ToolDeps, args) => {
     const pool = deps.pool;
-    if (pool === undefined) throw new Error(POOL_UNAVAILABLE);
+    if (pool === undefined) {
+      throw new Error(POOL_UNAVAILABLE);
+    }
     const sessionId = asString(args['sessionId']);
     if (sessionId === undefined || 0 === sessionId.length) {
       throw new Error('reticle_lease{action:"release"} requires a sessionId');
@@ -787,7 +817,9 @@ export async function releaseLease(
   dropArtifactRootClaim(sessionId);
   // Only once the LAST lease is gone. Announcing "live again" while another lease still drives
   // would be a lie, and a HUD that says the wrong thing is worse than one that says nothing.
-  if (0 === pool.activeCount()) tellWatchers(deps, projectId, AGENT_DRIVING_HERE_AGAIN);
+  if (0 === pool.activeCount()) {
+    tellWatchers(deps, projectId, AGENT_DRIVING_HERE_AGAIN);
+  }
   return pool.activeCount();
 }
 
@@ -822,9 +854,13 @@ function liveTabFor(
   url: string,
 ): string | undefined {
   const pool = deps.pool;
-  if (pool === undefined) return undefined;
+  if (pool === undefined) {
+    return undefined;
+  }
   const wanted = originOf(url);
-  if (wanted === undefined) return undefined;
+  if (wanted === undefined) {
+    return undefined;
+  }
   try {
     const candidates = deps.sessions
       .all()
@@ -848,7 +884,9 @@ function liveTabFor(
  */
 function tellWatchers(deps: ToolDeps, projectId: string | undefined, text: string): void {
   const pool = deps.pool;
-  if (pool === undefined) return;
+  if (pool === undefined) {
+    return;
+  }
   try {
     const candidates = deps.sessions
       .all()

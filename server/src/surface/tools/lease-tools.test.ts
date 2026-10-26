@@ -37,7 +37,9 @@ import { NotHtmlDocumentError } from '@/portal/pool/zero-install.js';
 
 function tool(name: string): (deps: ToolDeps, args: Record<string, unknown>) => Promise<unknown> {
   const def = LEASE_TOOLS.find((t) => t.name === name);
-  if (def === undefined) throw new Error(`no lease tool ${name}`);
+  if (def === undefined) {
+    throw new Error(`no lease tool ${name}`);
+  }
   // Called on its own def rather than detached. `handler` is declared method-style (see tool-kit.ts),
   // so lifting the reference out drops the receiver — harmless for these handlers today, and exactly
   // the kind of thing that stops being harmless without warning.
@@ -105,9 +107,12 @@ function fakePool(): {
         ...(opts.headed === undefined ? {} : { headed: opts.headed }),
         ...(initScript === undefined ? {} : { initScript }),
       });
-      if (true === opts.headed && opts.sessionId !== undefined) headedIds.add(opts.sessionId);
-      if (true === opts.ignoreHTTPSErrors && opts.sessionId !== undefined)
+      if (true === opts.headed && opts.sessionId !== undefined) {
+        headedIds.add(opts.sessionId);
+      }
+      if (true === opts.ignoreHTTPSErrors && opts.sessionId !== undefined) {
         certSkipIds.add(opts.sessionId);
+      }
       active += 1;
       const sessionId = opts.sessionId ?? 'gen';
       owners.set(sessionId, opts.owner);
@@ -115,7 +120,9 @@ function fakePool(): {
         stubBySession.set(sessionId, initScript);
       }
       const origin = originOf(url);
-      if (origin !== undefined) byOrigin.set(origin, sessionId);
+      if (origin !== undefined) {
+        byOrigin.set(origin, sessionId);
+      }
       return Promise.resolve({ sessionId, url, release: () => Promise.resolve() });
     },
     release(sessionId: string): Promise<void> {
@@ -123,7 +130,9 @@ function fakePool(): {
       active = Math.max(0, active - 1);
       stubBySession.delete(sessionId);
       for (const [origin, id] of byOrigin) {
-        if (id === sessionId) byOrigin.delete(origin);
+        if (id === sessionId) {
+          byOrigin.delete(origin);
+        }
       }
       return Promise.resolve();
     },
@@ -131,7 +140,11 @@ function fakePool(): {
     queuedCount: () => 0,
     leasedSessionIds: () => [...byOrigin.values()],
     leaseUrl: (id: string) => {
-      for (const [origin, leased] of byOrigin) if (leased === id) return origin;
+      for (const [origin, leased] of byOrigin) {
+        if (leased === id) {
+          return origin;
+        }
+      }
       return undefined;
     },
     leaseTtlMs: () => 300_000,
@@ -592,7 +605,9 @@ describe('reticle_lease_acquire', () => {
       id,
       command: (name: string) => {
         probes.push(name);
-        if ('never' === answers) return Promise.reject(new Error('command timed out after 1500ms'));
+        if ('never' === answers) {
+          return Promise.reject(new Error('command timed out after 1500ms'));
+        }
         return Promise.resolve({
           ok: 'ok' === answers,
           error: 'error' === answers ? 'nope' : undefined,

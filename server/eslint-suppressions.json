@@ -3846,27 +3846,9 @@
       "count": 1
     }
   },
-  "src/surface/tools/lease-readiness.ts": {
-    "curly": {
-      "count": 7
-    }
-  },
   "src/surface/tools/lease-seed.ts": {
     "curly": {
       "count": 6
-    }
-  },
-  "src/surface/tools/lease-tools.test.ts": {
-    "curly": {
-      "count": 8
-    }
-  },
-  "src/surface/tools/lease-tools.ts": {
-    "curly": {
-      "count": 21
-    },
-    "no-nested-ternary": {
-      "count": 5
     }
   },
   "src/surface/tools/live-call-text.ts": {

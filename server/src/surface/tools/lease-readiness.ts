@@ -37,6 +37,21 @@ export function tabHidden(session: unknown): boolean {
 }
 
 /**
+ * Why a lease that connected is not ready: `failed` when it did not answer, `tab_hidden` when it
+ * answers from a hidden tab, nothing when it is ready.
+ */
+export function notReadyReason(
+  answered: boolean,
+  session: unknown,
+  failed: LeaseNotReadyReason = LeaseNotReadyReason.SDK_STOPPED_ANSWERING,
+): LeaseNotReadyReason | undefined {
+  if (!answered) {
+    return failed;
+  }
+  return tabHidden(session) ? LeaseNotReadyReason.TAB_HIDDEN : undefined;
+}
+
+/**
  * Does this tab still answer?
  *
  * PRESENCE IS NOT LIVENESS. The sessions map still holds a tab that is attached, streaming events,
@@ -61,7 +76,9 @@ export async function probeLeaseAlive(
   timeoutMs: number = LEASE_PROBE_TIMEOUT_MS,
 ): Promise<boolean> {
   const send = session?.command;
-  if (send === undefined) return true;
+  if (send === undefined) {
+    return true;
+  }
   try {
     await send.call(session, ReticleCommand.CAPABILITIES, {}, timeoutMs);
     return true;
@@ -90,7 +107,9 @@ export async function waitForLeasedSession(
   pollMs: number = LEASE_READY_POLL_MS,
 ): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
-    if (isConnected()) return true;
+    if (isConnected()) {
+      return true;
+    }
     await sleeper(pollMs);
   }
   return isConnected();
@@ -120,7 +139,9 @@ export async function connectOrInject(
   stillLoading?: true;
   readerFailure?: LeaseReaderFailure;
 }> {
-  if (await wait(isConnected)) return { ready: true, zeroInstall: false };
+  if (await wait(isConnected)) {
+    return { ready: true, zeroInstall: false };
+  }
   let injected: boolean;
   try {
     injected = true === (await lease.injectReader?.());
@@ -129,16 +150,24 @@ export async function connectOrInject(
     await lease.release?.().catch(() => undefined);
     return { ready: false, zeroInstall: false, readerFailure: readerFailureOf(err) };
   }
-  if (injected && (await wait(isConnected))) return { ready: true, zeroInstall: true };
+  if (injected && (await wait(isConnected))) {
+    return { ready: true, zeroInstall: true };
+  }
   // A slow first dev compile can hold the document past both waits, and its app connects a moment
   // later (#1555). Keep waiting while the page itself says it is still loading, bounded so a page
   // that never finishes cannot hold the acquire forever.
   for (let round = 0; round < graceRounds; round++) {
-    if (!(await pageStillLoading(lease))) break;
-    if (await wait(isConnected)) return { ready: true, zeroInstall: injected };
+    if (!(await pageStillLoading(lease))) {
+      break;
+    }
+    if (await wait(isConnected)) {
+      return { ready: true, zeroInstall: injected };
+    }
   }
   // Re-check right before answering: a connect that landed during the last loading probe counts.
-  if (isConnected()) return { ready: true, zeroInstall: injected };
+  if (isConnected()) {
+    return { ready: true, zeroInstall: injected };
+  }
   return (await pageStillLoading(lease))
     ? { ready: false, zeroInstall: false, stillLoading: true }
     : { ready: false, zeroInstall: false };
