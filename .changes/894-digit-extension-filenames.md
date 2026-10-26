@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/core` — filename tokens whose extension contains a digit were never stripped.** The scan that strips filename tokens before a label is classified read extension letters only, so for `clip.mp4` it read `mp`, stopped at the `4`, and never matched `mp4` (or `mp3`), even though both are known file extensions. A tile named `clip-remove.mp4` or `song-delete.mp3` therefore kept its destructive word and stayed blocked. The scan now reads letters and digits in an extension, so digit extensions are stripped like any other known extension. Follow-up on [#894](https://github.com/reticlehq/reticle/issues/894).

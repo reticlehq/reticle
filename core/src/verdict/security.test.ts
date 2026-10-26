@@ -9,6 +9,7 @@ import {
   isPaymentProviderUrl,
   outwardActionOf,
   outwardActionsAsked,
+  withoutFilenameTokens,
 } from './security.js';
 
 describe('isLoopbackHostname', () => {
@@ -278,5 +279,30 @@ describe('isDangerousNavigation', () => {
 
   it('refuses a payment provider URL', () => {
     expect(isDangerousNavigation('https://checkout.stripe.com/c/pay/xyz')).toBe(true);
+  });
+});
+
+/**
+ * Extensions with a digit: `mp4` and `mp3` are in the known-extension set, but the scan
+ * that strips filename tokens read extension letters only, so it stopped at the digit
+ * and never matched them. Reported on #1620: `clip-remove.mp4` and `song-delete.mp3`
+ * kept their destructive words and stayed blocked, while
+ * `photo-remove-background.webm` was stripped.
+ */
+describe('withoutFilenameTokens strips filenames whose extension contains a digit', () => {
+  it.each(['clip-remove.mp4', 'song-delete.mp3', 'photo-remove-background.webm'])(
+    'strips %s down to a blank',
+    (label) => {
+      expect(withoutFilenameTokens(label)).toBe(' ');
+    },
+  );
+
+  it('strips a digit-extension filename inside a longer label, keeping the other words', () => {
+    expect(withoutFilenameTokens('Play clip-remove.mp4 now')).toBe('Play   now');
+    expect(withoutFilenameTokens('Remove clip-remove.mp4')).toBe('Remove  ');
+  });
+
+  it('still leaves a token whose digit extension is not a known one', () => {
+    expect(withoutFilenameTokens('clip-remove.mp5')).toBe('clip-remove.mp5');
   });
 });

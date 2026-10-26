@@ -197,8 +197,8 @@ const FILENAME_EXTENSIONS: ReadonlySet<string> = new Set([
 /** One maximal run of filename characters in a label: a token, or a token with a tail. */
 const FILENAME_RUN = /[\w.-]+/g;
 
-/** One letter of a file extension. Extensions are letters only. */
-const EXTENSION_LETTER = /[a-zA-Z]/;
+/** One character of a file extension. Extensions are letters and digits: `mp4`, `mp3`. */
+const EXTENSION_CHARACTER = /[a-zA-Z0-9]/;
 
 /**
  * The end of the filename token at the start of `run`, or 0 when the run starts with no
@@ -211,7 +211,7 @@ function filenameTokenEnd(run: string): number {
   for (let dot = run.lastIndexOf('.'); 1 <= dot; dot = run.lastIndexOf('.', dot - 1)) {
     let end = dot + 1;
     let extension = '';
-    while (end < run.length && EXTENSION_LETTER.test(run.charAt(end))) {
+    while (end < run.length && EXTENSION_CHARACTER.test(run.charAt(end))) {
       extension += run.charAt(end).toLowerCase();
       end += 1;
     }
