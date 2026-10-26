@@ -3863,7 +3863,7 @@
   },
   "src/surface/tools/lease-tools.ts": {
     "curly": {
-      "count": 28
+      "count": 21
     },
     "no-nested-ternary": {
       "count": 5
