@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`, `@reticlehq/core` — replay gave up on a start page that was still loading at the step budget.** A cold dev server (a first Next.js compile) can hold the first page longer than the first step's budget, and the flow ended as unverifiable with nothing run while the app was fine. On a leased tab, replay now keeps waiting while the page says it is still loading, up to 30 s. A page that has loaded still fails at the budget. The replay result carries `startPageWait: { waitedMs, budgetMs, stillLoading }` when the wait went past the budget, and a page still loading at 30 s fails with a message that says so. Closes [#1705](https://github.com/reticlehq/reticle/issues/1705).

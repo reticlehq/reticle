@@ -8,7 +8,9 @@ import {
   ReticleCommand,
   type CommandResult,
   type FlowFile,
+  type FlowReplayResult,
   type ReticleEvent,
+  type StartPageWait,
 } from '@reticlehq/core';
 import { establishedState, samePath, startPathBudgetMs } from './flow-journey.js';
 import { asRecord } from '@reticlehq/core';
@@ -90,6 +92,20 @@ export function startPathMismatchHint(
 
 /** How often replay looks for the SDK on the start page; how long is `startPathBudgetMs`. */
 const START_PATH_POLL_MS = 100;
+/**
+ * How long replay keeps waiting past the step budget while the page says it is still loading
+ * (#1705). The bound keeps a page that never finishes from holding the replay forever.
+ */
+const START_PATH_LOADING_CAP_MS = 30_000;
+
+/** A probe that fails counts as loaded, so it can only end the wait, never stretch it. */
+async function pageStillLoading(probe: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return true === (await probe());
+  } catch {
+    return false;
+  }
+}
 
 const REAL_ARRIVAL_CLOCK: ArrivalClock = {
   now: () => Date.now(),
@@ -174,6 +190,21 @@ export interface StartPathArrival {
   lost?: string;
   /** A live successor arrived on a different route, so replay must not use the dead old handle. */
   redirected?: string;
+  /** Set when the page's loading kept replay waiting past the step budget. */
+  wait?: StartPageWait;
+}
+
+/** The replay result, with how long replay waited for its start page when that went past the budget. */
+export function withStartPageWait<R extends FlowReplayResult>(
+  result: R,
+  arrival: StartPathArrival,
+): R {
+  return arrival.wait === undefined ? result : { ...result, startPageWait: arrival.wait };
+}
+
+/** The `wait` an outcome carries, ready to spread into an arrival. */
+function waitOf(outcome: { wait?: StartPageWait }): { wait?: StartPageWait } {
+  return outcome.wait === undefined ? {} : { wait: outcome.wait };
 }
 
 /**
@@ -206,6 +237,9 @@ export async function arriveAtStartPath(
   flow: FlowFile,
   timeoutMs: number = startPathBudgetMs(flow),
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
+  /** Whether the tab is still loading. Replay passes one for a pool lease, the only tab it can ask. */
+  stillLoading?: () => Promise<boolean>,
+  loadingCapMs: number = START_PATH_LOADING_CAP_MS,
 ): Promise<StartPathArrival> {
   const target = flow.startPath;
   if (target === undefined || 0 === target.length) {
@@ -249,13 +283,18 @@ export async function arriveAtStartPath(
     timeoutMs,
     clock,
     here,
+    stillLoading,
+    loadingCapMs,
   );
   if ('lost' === outcome.kind) {
+    const why = outcome.stillLoading
+      ? 'The page was still loading when replay stopped waiting: check that the app finishes loading, then replay'
+      : 'A slow or backgrounded tab can take longer to come back: bring it to the front and replay';
     return {
       lost:
         `replay ${here ? 'reloaded' : 'navigated to'} ${target} before step 1 and no page was connected ` +
-        `after ${String(timeoutMs)}ms, so the session it was driving is gone and nothing ran. A slow ` +
-        `or backgrounded tab can take longer to come back: bring it to the front and replay`,
+        `after ${String(outcome.waitedMs)}ms, so the session it was driving is gone and nothing ran. ${why}`,
+      ...waitOf(outcome),
     };
   }
   if ('refused' === outcome.kind) {
@@ -266,15 +305,17 @@ export async function arriveAtStartPath(
     return {
       session: outcome.session,
       redirected: `replay ${here ? 'reloaded' : 'navigated to'} ${target} before step 1, but the tab reconnected on ${path}. Check the redirect or sign in before replaying`,
+      ...waitOf(outcome),
     };
   }
   const arrived = outcome.session;
   if (!resolvedBefore || (await firstStepResolvesHere(arrived, flow))) {
-    return { session: arrived };
+    return { session: arrived, ...waitOf(outcome) };
   }
   return {
     session: arrived,
     resetCost: resetCostHint(flow, target),
+    ...waitOf(outcome),
   };
 }
 
@@ -309,12 +350,15 @@ function resetCostHint(flow: FlowFile, target: string): string {
  * to move and this decides how, which is also why the deliberate short-circuits live up there and
  * not in here: a caller that has already decided it must move should not have to argue with them.
  */
-/** How a navigate ended: target, redirect, refusal (untouched tab), or no successor. */
+/**
+ * How a navigate ended: target, redirect, refusal (untouched tab), or no successor. `wait` is set
+ * when the page's loading earned it time past the budget.
+ */
 export type NavigateOutcome =
-  | { kind: 'arrived'; session: Session }
-  | { kind: 'redirected'; session: Session }
+  | { kind: 'arrived'; session: Session; wait?: StartPageWait }
+  | { kind: 'redirected'; session: Session; wait?: StartPageWait }
   | { kind: 'refused' }
-  | { kind: 'lost' };
+  | { kind: 'lost'; waitedMs: number; stillLoading: boolean; wait?: StartPageWait };
 
 export async function navigateAndAwait(
   sessions: SessionManager,
@@ -330,6 +374,9 @@ export async function navigateAndAwait(
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
   /** True when the destination is the page we are already on — see `arrivedSuccessor`. */
   isReload: boolean = false,
+  /** Whether the navigated page is still loading; absent when it cannot be asked. */
+  stillLoading?: () => Promise<boolean>,
+  loadingCapMs: number = START_PATH_LOADING_CAP_MS,
 ): Promise<NavigateOutcome> {
   // A leased tab is addressed by URL params, so navigating without them would strand the lease.
   const url = carryReticleIdentity(session.url, destination);
@@ -347,17 +394,36 @@ export async function navigateAndAwait(
       return { kind: 'refused' };
     }
   }
-  const deadline = clock.now() + timeoutMs;
+  const start = clock.now();
+  const deadline = start + timeoutMs;
+  const cap = start + Math.max(timeoutMs, loadingCapMs);
+  let loading = false;
+  let extended = false;
+  const extendedWait = (): { wait?: StartPageWait } =>
+    extended
+      ? { wait: { waitedMs: clock.now() - start, budgetMs: timeoutMs, stillLoading: loading } }
+      : {};
   for (;;) {
     const arrived = arrivedSuccessor(sessions, session.id, expectedPath, session, isReload);
     if (true === arrived?.matches) {
-      return { kind: 'arrived', session: arrived.session };
+      return { kind: 'arrived', session: arrived.session, ...extendedWait() };
     }
-    // A live redirect is a different result from no SDK reconnection at all.
     if (clock.now() >= deadline) {
-      return arrived === undefined
-        ? { kind: 'lost' }
-        : { kind: 'redirected', session: arrived.session };
+      // A live redirect is a different result from no SDK reconnection at all.
+      if (arrived !== undefined) {
+        return { kind: 'redirected', session: arrived.session, ...extendedWait() };
+      }
+      // Past the budget, only a page that says it is still loading earns more time (#1705).
+      loading = stillLoading !== undefined && (await pageStillLoading(stillLoading));
+      extended ||= loading;
+      if (!loading || clock.now() >= cap) {
+        return {
+          kind: 'lost',
+          waitedMs: clock.now() - start,
+          stillLoading: loading,
+          ...extendedWait(),
+        };
+      }
     }
     await clock.sleep(START_PATH_POLL_MS);
   }

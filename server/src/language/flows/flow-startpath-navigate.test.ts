@@ -12,11 +12,12 @@ import {
   PredicateKind,
   RETICLE_URL_PARAM,
   QueryBy,
+  ReplayStatus,
   ReticleCommand,
   type CommandResult,
   type FlowFile,
 } from '@reticlehq/core';
-import { arriveAtStartPath } from './flow-start-path.js';
+import { arriveAtStartPath, withStartPageWait } from './flow-start-path.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
 
@@ -457,5 +458,111 @@ describe('arriveAtStartPath waits for as long as the first step may wait', () =>
     );
     expect(arrived.lost).toBeUndefined();
     expect(arrived.session).toBe(fresh);
+  });
+});
+
+/**
+ * #1705, the other half: a cold dev server (a first Next.js compile) can hold the start page past
+ * the step budget. While the leased tab says the page is still loading, replay keeps waiting, up to
+ * a cap. A page that has loaded keeps the budget. The result says when the wait went past it.
+ */
+describe('arriveAtStartPath keeps waiting past the budget while the page is still loading', () => {
+  it('continues on a page that loads after the budget and before the cap, and says so', async () => {
+    const { session } = tab('http://localhost:3000/reset-password');
+    // The SDK reconnects on the eleventh look, at t=1000ms, twice the 500ms budget.
+    const sessions = manager([
+      ...Array<Partial<Session>>(10).fill(session),
+      successor('http://localhost:3000/login'),
+    ]);
+    const arrived = await arriveAtStartPath(
+      sessions,
+      session,
+      flow('/login'),
+      500,
+      instantClock(100),
+      () => Promise.resolve(true),
+    );
+    expect(arrived.lost).toBeUndefined();
+    expect(arrived.session?.id).toBe('fresh');
+    expect(arrived.wait).toEqual({ waitedMs: 1000, budgetMs: 500, stillLoading: true });
+  });
+
+  it('fails at the 30 s cap when the page never finishes loading, and says it was still loading', async () => {
+    const { session } = tab('http://localhost:3000/reset-password');
+    const arrived = await arriveAtStartPath(
+      manager([session]),
+      session,
+      flow('/login'),
+      undefined,
+      instantClock(100),
+      () => Promise.resolve(true),
+    );
+    expect(arrived.session).toBeUndefined();
+    expect(arrived.lost).toContain('no page was connected after 30000ms');
+    expect(arrived.lost).toContain('still loading');
+    expect(arrived.wait).toEqual({ waitedMs: 30_000, budgetMs: 5_000, stillLoading: true });
+  });
+
+  it('fails at the budget once the page has finished loading', async () => {
+    const { session } = tab('http://localhost:3000/reset-password');
+    let asked = 0;
+    const arrived = await arriveAtStartPath(
+      manager([session]),
+      session,
+      flow('/login'),
+      500,
+      instantClock(100),
+      () => {
+        asked++;
+        return Promise.resolve(false);
+      },
+    );
+    expect(asked).toBeGreaterThan(0);
+    expect(arrived.lost).toContain('no page was connected after 500ms');
+    expect(arrived.lost).not.toContain('still loading');
+    expect(arrived.wait).toBeUndefined();
+  });
+
+  it('fails at the budget on a page that connected on another route, loading or not', async () => {
+    const { session } = tab('http://localhost:3000/home');
+    const login = successor('http://localhost:3000/auth');
+    const arrived = await arriveAtStartPath(
+      manager([session, login]),
+      session,
+      flow('/checkout'),
+      300,
+      instantClock(100),
+      () => Promise.resolve(true),
+    );
+    expect(arrived.session).toBe(login);
+    expect(arrived.redirected).toContain('reconnected on /auth');
+    expect(arrived.wait).toBeUndefined();
+  });
+
+  it('counts a probe that fails as loaded, so it cannot stretch the wait', async () => {
+    const { session } = tab('http://localhost:3000/reset-password');
+    const arrived = await arriveAtStartPath(
+      manager([session]),
+      session,
+      flow('/login'),
+      500,
+      instantClock(100),
+      () => Promise.reject(new Error('page closed')),
+    );
+    expect(arrived.lost).toContain('no page was connected after 500ms');
+    expect(arrived.wait).toBeUndefined();
+  });
+});
+
+describe('withStartPageWait', () => {
+  const result = { name: 'sign-in', status: ReplayStatus.OK, steps: [] };
+
+  it('puts an extended wait on the replay result', () => {
+    const wait = { waitedMs: 12_000, budgetMs: 5_000, stillLoading: false };
+    expect(withStartPageWait(result, { wait })).toEqual({ ...result, startPageWait: wait });
+  });
+
+  it('leaves the result alone when the wait stayed inside the budget', () => {
+    expect(withStartPageWait(result, {})).toBe(result);
   });
 });

@@ -63,7 +63,7 @@ import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import { CROSS_STEP_INDEX, crossStepOnly, declaredIn } from './flow-cross-step.js';
-import { arriveAtStartPath, startPathMismatchHint } from './flow-start-path.js';
+import { arriveAtStartPath, startPathMismatchHint, withStartPageWait } from './flow-start-path.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -363,17 +363,33 @@ export async function replayNamedFlow(
   // connected session — and the hint below turns the wrong-page drift into an actionable next move.
   // Continuing at a step means the page is already there; going to the start would undo it.
   const { to, at: continueAt } = replayWindow(args);
+  const pool = deps.pool;
+  // Only a pool lease can say its page is still loading; any other tab keeps the step budget.
+  const stillLoading =
+    pool === undefined ? undefined : (): Promise<boolean> => pool.leaseLoading(connected.id);
   const arrival =
-    continueAt === undefined ? await arriveAtStartPath(deps.sessions, connected, loaded.value) : {};
+    continueAt === undefined
+      ? await arriveAtStartPath(
+          deps.sessions,
+          connected,
+          loaded.value,
+          undefined,
+          undefined,
+          stillLoading,
+        )
+      : {};
   // Continuing on `connected` after the tab left timed every step out on a dead handle (#1129).
   if (arrival.lost !== undefined) {
     const reason = arrival.lost;
-    return {
-      name: loaded.value.name,
-      status: ReplayStatus.UNVERIFIABLE,
-      steps: [],
-      unverifiable: { reason },
-    };
+    return withStartPageWait(
+      {
+        name: loaded.value.name,
+        status: ReplayStatus.UNVERIFIABLE,
+        steps: [],
+        unverifiable: { reason },
+      },
+      arrival,
+    );
   }
   const session = arrival.session ?? connected;
   // The reset's own cost outranks the wrong-page hint: if the reload is why step 1 cannot start,
@@ -423,33 +439,42 @@ export async function replayNamedFlow(
   const missing = unsuppliedSecrets(replayable, process.env);
   if (missing.length > 0) {
     const names = missing.map((each) => each.envKey).join(', ');
-    return {
-      name: replayable.name,
-      status: ReplayStatus.UNVERIFIABLE,
-      steps: [],
-      unverifiable: {
-        reason:
-          `this flow fills a redacted field and nothing supplied it, so nothing ran and nothing was ` +
-          `proved. Pass it with this call — secrets: { ${missing.map((each) => `"${each.field}": "…"`).join(', ')} } — or set ${names} where the daemon runs and restart it. Until then ` +
-          `the value typed would be the placeholder itself, and any failure after it would be ` +
-          `about this and not about the application.`,
+    return withStartPageWait(
+      {
+        name: replayable.name,
+        status: ReplayStatus.UNVERIFIABLE,
+        steps: [],
+        unverifiable: {
+          reason:
+            `this flow fills a redacted field and nothing supplied it, so nothing ran and nothing was ` +
+            `proved. Pass it with this call — secrets: { ${missing.map((each) => `"${each.field}": "…"`).join(', ')} } — or set ${names} where the daemon runs and restart it. Until then ` +
+            `the value typed would be the placeholder itself, and any failure after it would be ` +
+            `about this and not about the application.`,
+        },
       },
-    };
+      arrival,
+    );
   }
   const from = resumeArg(args['from']);
   const badResume = unresolvedResume(from, replayable.steps);
   if (badResume !== undefined) {
     const error = { code: FlowErrorCode.STEP_NOT_FOUND, message: badResume };
-    return { name: replayable.name, status: ReplayStatus.ERROR, steps: [], error };
+    return withStartPageWait(
+      { name: replayable.name, status: ReplayStatus.ERROR, steps: [], error },
+      arrival,
+    );
   }
   const unmet = await firstUnmetPrecondition(session, replayable, replayFloor);
   if (unmet !== undefined) {
-    return {
-      name: replayable.name,
-      status: ReplayStatus.UNVERIFIABLE,
-      steps: [],
-      unverifiable: { reason: unmet },
-    };
+    return withStartPageWait(
+      {
+        name: replayable.name,
+        status: ReplayStatus.UNVERIFIABLE,
+        steps: [],
+        unverifiable: { reason: unmet },
+      },
+      arrival,
+    );
   }
   let steps: FlowStepResult[];
   try {
@@ -485,11 +510,11 @@ export async function replayNamedFlow(
     if (!(error instanceof DocumentLostDuringReplay)) {
       throw error;
     }
-    return lostDocumentResult(name, error);
+    return withStartPageWait(lostDocumentResult(name, error), arrival);
   }
   // Only part of the journey was driven here: its steps were checked, nothing about the whole flow.
   if (0 < (continueAt ?? 0) || (to !== undefined && to < loaded.value.steps.length)) {
-    return { name, status: partialStatus(steps), steps };
+    return withStartPageWait({ name, status: partialStatus(steps), steps }, arrival);
   }
   // Computed HERE, before the synthetic success row is appended below: once that row is pushed,
   // `steps.length` no longer counts only the flow's own steps and the arithmetic is wrong.
@@ -535,7 +560,7 @@ export async function replayNamedFlow(
   }
   const staleTarget = staleTargetResult(name, steps);
   if (staleTarget !== undefined) {
-    return staleTarget;
+    return withStartPageWait(staleTarget, arrival);
   }
   const driftSteps = steps.filter((s) => s.drift !== undefined).length;
   const allOk = steps.every((s) => s.ok);
@@ -613,7 +638,7 @@ export async function replayNamedFlow(
     if (crossStep.length > 0) {
       errored.crossStep = crossStep;
     }
-    return errored;
+    return withStartPageWait(errored, arrival);
   }
   const result: FlowReplayResult = { name, status, steps };
   if (halted !== undefined) {
@@ -696,7 +721,7 @@ export async function replayNamedFlow(
    * lesson is smaller than losing the run that produced it. Skipped entirely when nothing moved,
    * so a clean replay of a flow with nothing to learn does not rewrite a file for no reason.
    */
-  return result;
+  return withStartPageWait(result, arrival);
 }
 
 /**

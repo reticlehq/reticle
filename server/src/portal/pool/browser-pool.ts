@@ -44,6 +44,7 @@ import {
   MAX_REMEMBERED_REAPED_LEASES,
   NO_HEADED_BROWSER,
   ORPHANED_LEASE_GRACE_MS,
+  pageLoading,
   PoolAtCapacityError,
   type ActiveLease,
   type BrowserPoolOptions,
@@ -371,6 +372,15 @@ export class BrowserPool {
     } catch {
       return false;
     }
+  }
+
+  /** Whether this lease's page is still loading. False for a non-lease, or a page that cannot say. */
+  async leaseLoading(sessionId: string): Promise<boolean> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    if (lease === undefined) {
+      return false;
+    }
+    return pageLoading(lease.page).catch(() => false);
   }
 
   /** Whether this session is a lease whose page has a real keyboard. */
@@ -735,13 +745,7 @@ export class BrowserPool {
           }
           return true;
         },
-        isLoading: async (): Promise<boolean> => {
-          if (page.evaluate === undefined) {
-            return false;
-          }
-          const state = await page.evaluate('document.readyState');
-          return 'string' === typeof state && state !== 'complete';
-        },
+        isLoading: () => pageLoading(page),
       };
     } catch (err) {
       // Setup failed after we claimed the slot — give it back so a queued acquire isn't stuck, and

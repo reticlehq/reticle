@@ -226,6 +226,8 @@ describe('navigateAndAwait — the navigation that kills its own transport', () 
     expect(await navigateAndAwait(sessions, dying, 'http://x/login', '/login', 300, clock)).toEqual(
       {
         kind: 'lost',
+        waitedMs: 300,
+        stillLoading: false,
       },
     );
   });

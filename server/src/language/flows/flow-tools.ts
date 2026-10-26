@@ -405,7 +405,8 @@ export const FLOW_TOOLS: ToolDef[] = [
       'document) — neither pass nor fail, treat as UNKNOWN. ' +
       'An ok replay of a flow asserting no consequence also carries unverifiable:{reason} — do not ' +
       'treat as proof. ' +
-      'Early halt carries halted:{atStep, notAttempted}: `steps` is shorter because replay stopped.',
+      'Early halt carries halted:{atStep, notAttempted}: `steps` is shorter because replay stopped. ' +
+      'A start page that kept loading past the step budget carries startPageWait:{waitedMs, budgetMs, stillLoading}.',
     inputSchema: {
       flow: FLOW_NAME_ALIAS,
       flowName: z
@@ -482,6 +483,13 @@ export const FLOW_TOOLS: ToolDef[] = [
         .optional()
         .describe(
           'Set when the replay STOPPED at a failing step: `steps` is shorter than the flow, and this says where it stopped and how many steps were never attempted. Absent means every step ran.',
+        ),
+      // Declared for the same reason as `halted`: an undeclared field is stripped.
+      startPageWait: z
+        .object({ waitedMs: z.number(), budgetMs: z.number(), stillLoading: z.boolean() })
+        .optional()
+        .describe(
+          'Set when replay waited past the step budget because the start page was still loading. stillLoading is what the tab said the last time replay asked. Absent means the wait stayed inside the budget.',
         ),
       // Declared here or a validating profile strips it -- the same way `name` was stripped once.
       // A field the handler sets and the schema omits arrives as nothing, silently.

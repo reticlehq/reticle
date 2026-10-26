@@ -370,6 +370,12 @@ export interface FlowReplayResult {
    */
   halted?: { atStep: number; notAttempted: number };
   /**
+   * Set when replay waited for the start page longer than the step budget, because the leased tab
+   * said the page was still loading (a cold dev server compiling the route). Absent means the wait
+   * stayed inside the budget.
+   */
+  startPageWait?: StartPageWait;
+  /**
    * Set on an `ok` replay whose flow cannot fail: it asserts no observable consequence, or has no
    * steps at all. The replay genuinely completed, so the status stays `ok` — but a bare `ok` read
    * as proof the feature works is exactly the false confidence `flow-risk.ts` argues against, and
@@ -400,6 +406,16 @@ export interface FlowReplayResult {
    * a wall of statements is a worse verdict.
    */
   knows?: { statement: string; status: string }[];
+}
+
+/** How long replay waited for a start page that was still loading. */
+export interface StartPageWait {
+  /** From the navigation to the page connecting, or to replay giving up. */
+  waitedMs: number;
+  /** The step budget the wait went past. */
+  budgetMs: number;
+  /** What the tab said the last time replay asked. True when replay gave up means it gave up at the cap. */
+  stillLoading: boolean;
 }
 
 /** A concrete, confidence-scored rebind proposed for one drifted step. */

@@ -147,3 +147,12 @@ export interface ActiveLease {
   /** Whether its context accepts any TLS certificate (#1255). Fixed when the context is made. */
   ignoresHTTPSErrors: boolean;
 }
+
+/** Whether the page's document has not finished loading. A page that cannot be asked counts as loaded. */
+export async function pageLoading(page: PooledPage): Promise<boolean> {
+  if (page.evaluate === undefined) {
+    return false;
+  }
+  const state = await page.evaluate('document.readyState');
+  return 'string' === typeof state && state !== 'complete';
+}
