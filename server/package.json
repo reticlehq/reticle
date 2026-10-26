@@ -74,7 +74,7 @@
     "cli"
   ],
   "reticle": {
-    "changelog": "On Windows, the daemon now keeps running when the agent process that started it ends. A collapsed Next.js \"1 Issue\" badge no longer turns every check into unknown. Reticle moves to zod 4 for a high-severity memory advisory. reticle_lease can omit url and lease the project's own dev server. reticle doctor checks that the daemon answers, and streamed SSE response bodies can be captured. Update the SDK in your app as well as the CLI.",
+    "changelog": "On Windows, the daemon now keeps running when the agent process that started it ends. A collapsed Next.js \"1 Issue\" badge no longer turns every check into unknown. Reticle moves to zod 4 for a high-severity memory advisory. reticle_lease can omit url and lease the project's own dev server. reticle doctor checks that the daemon answers, and streamed SSE response bodies can be captured. Replay waits for a start page that is still loading, a re-acquired lease moves to the page asked for, and a guarded app driven by fast clicks is no longer accused of applying a stale response. Update the SDK in your app as well as the CLI.",
     "breakingChanges": []
   },
   "publishConfig": {
