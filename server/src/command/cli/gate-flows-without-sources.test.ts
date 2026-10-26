@@ -80,9 +80,13 @@ describe('handleGate when the saved flows carry no sources', () => {
   const saveFlow = async (name: string, source?: string): Promise<void> => {
     const store = new FlowStore(createNodeFileSystem(), root, { now: () => 1 });
     await store.save({ name, version: 1, steps: [clickStep(name)] });
-    if (source === undefined) return;
+    if (source === undefined) {
+      return;
+    }
     const loaded = await store.load(name);
-    if (!loaded.ok) throw new Error(`${name} did not load`);
+    if (!loaded.ok) {
+      throw new Error(`${name} did not load`);
+    }
     await store.saveFlow({
       ...loaded.value,
       steps: loaded.value.steps.map((step) => ({ ...step, source: { file: source } })),
