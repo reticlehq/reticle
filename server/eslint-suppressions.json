@@ -1799,7 +1799,7 @@
   },
   "src/language/flows/flow-tools.ts": {
     "curly": {
-      "count": 13
+      "count": 11
     }
   },
   "src/language/flows/flow-verify-parallel.run.test.ts": {
