@@ -44,10 +44,14 @@ class NavigatingSession implements FlowReplaySession {
   #acts = 0;
   constructor(private readonly dyingAct: number) {}
   command(name: string): Promise<CommandResult> {
-    if (name !== ReticleCommand.ACT) return Promise.resolve(found('r1'));
+    if (name !== ReticleCommand.ACT) {
+      return Promise.resolve(found('r1'));
+    }
     this.#acts += 1;
     // `SessionManager.remove` rejects every in-flight command with this when the socket closes.
-    if (this.#acts === this.dyingAct) return Promise.reject(new Error(SESSION_DISCONNECTED_REASON));
+    if (this.#acts === this.dyingAct) {
+      return Promise.reject(new Error(SESSION_DISCONNECTED_REASON));
+    }
     return Promise.resolve(acted);
   }
   eventsSince(): ReticleEvent[] {
@@ -94,7 +98,9 @@ describe('a replay whose step navigates the document', () => {
       FLOW_SIGNAL_TIMEOUT_MS,
     ).catch((error: unknown) => error);
     expect(thrown).toBeInstanceOf(DocumentLostDuringReplay);
-    if (!(thrown instanceof DocumentLostDuringReplay)) return;
+    if (!(thrown instanceof DocumentLostDuringReplay)) {
+      return;
+    }
     expect(thrown.atStep, 'the second step is where the document went').toBe(1);
     expect(thrown.steps, 'only the step that actually answered').toHaveLength(1);
     expect(thrown.steps[0]?.ok).toBe(true);
@@ -109,7 +115,9 @@ describe('a replay whose step navigates the document', () => {
       FLOW_SIGNAL_TIMEOUT_MS,
     ).catch((error: unknown) => error);
     expect(thrown).toBeInstanceOf(DocumentLostDuringReplay);
-    if (!(thrown instanceof DocumentLostDuringReplay)) return;
+    if (!(thrown instanceof DocumentLostDuringReplay)) {
+      return;
+    }
     expect(thrown.steps, 'nothing answered, so nothing is reported').toHaveLength(0);
   });
 });
@@ -166,7 +174,9 @@ describe('navigateAndAwait — the navigation that kills its own transport', () 
     const sessions = {
       resolve: () => {
         look += 1;
-        if (look < 2) throw new Error('no connected session');
+        if (look < 2) {
+          throw new Error('no connected session');
+        }
         return fresh as unknown as Session;
       },
     } as unknown as SessionManager;

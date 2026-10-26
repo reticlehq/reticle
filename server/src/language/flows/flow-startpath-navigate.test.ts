@@ -97,7 +97,9 @@ function manager(resolutionsOverTime: (Partial<Session> | undefined)[]): Session
     resolve: () => {
       const found = resolutionsOverTime[Math.min(look, resolutionsOverTime.length - 1)];
       look++;
-      if (found === undefined) throw new Error('no connected session');
+      if (found === undefined) {
+        throw new Error('no connected session');
+      }
       return found as Session;
     },
   } as unknown as SessionManager;

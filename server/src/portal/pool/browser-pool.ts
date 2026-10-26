@@ -103,7 +103,9 @@ export class BrowserPool {
   readonly #waiters: Array<() => void> = [];
 
   constructor(launch: Launcher, opts: BrowserPoolOptions) {
-    if (opts.maxContexts < 1) throw new Error('maxContexts must be >= 1');
+    if (opts.maxContexts < 1) {
+      throw new Error('maxContexts must be >= 1');
+    }
     this.#headless = { launch, headed: false };
     this.#headed = { launch: opts.launchHeaded, headed: true };
     this.#max = opts.maxContexts;
@@ -150,18 +152,26 @@ export class BrowserPool {
    * Prefers the alias the agent was given, when the app registered under its own name.
    */
   leaseIdOnOrigin(origin: string, owner: string | undefined): string | undefined {
-    if (owner === undefined) return undefined;
+    if (owner === undefined) {
+      return undefined;
+    }
     for (const [leaseId, lease] of this.#active) {
-      if (lease.owner !== owner) continue;
+      if (lease.owner !== owner) {
+        continue;
+      }
       let leaseOrigin: string | undefined;
       try {
         leaseOrigin = new URL(lease.url).origin;
       } catch {
         continue;
       }
-      if (leaseOrigin !== origin) continue;
+      if (leaseOrigin !== origin) {
+        continue;
+      }
       for (const [alias, id] of this.#aliases) {
-        if (id === leaseId) return alias;
+        if (id === leaseId) {
+          return alias;
+        }
       }
       return leaseId;
     }
@@ -192,8 +202,12 @@ export class BrowserPool {
    * that would have read a computed value.
    */
   alias(registeredId: string, leaseId: string): void {
-    if (registeredId === leaseId) return;
-    if (!this.#active.has(leaseId)) return;
+    if (registeredId === leaseId) {
+      return;
+    }
+    if (!this.#active.has(leaseId)) {
+      return;
+    }
     this.#aliases.set(registeredId, leaseId);
   }
 
@@ -234,7 +248,9 @@ export class BrowserPool {
   /** Mark a lease as still in use (called on agent activity) so the reaper doesn't reclaim it. */
   touch(sessionId: string): void {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined) return;
+    if (lease === undefined) {
+      return;
+    }
     lease.touchedAt = this.#now();
     delete lease.detachedAt;
   }
@@ -246,7 +262,11 @@ export class BrowserPool {
    */
   detachOwner(owner: string): void {
     const now = this.#now();
-    for (const lease of this.#active.values()) if (lease.owner === owner) lease.detachedAt = now;
+    for (const lease of this.#active.values()) {
+      if (lease.owner === owner) {
+        lease.detachedAt = now;
+      }
+    }
   }
 
   /**
@@ -280,7 +300,9 @@ export class BrowserPool {
     opts: ScreenshotOptions = {},
   ): Promise<Uint8Array | undefined> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined || lease.page.screenshot === undefined) return undefined;
+    if (lease === undefined || lease.page.screenshot === undefined) {
+      return undefined;
+    }
     this.touch(sessionId);
     try {
       return await lease.page.screenshot(opts);
@@ -303,7 +325,9 @@ export class BrowserPool {
    */
   async gotoLease(sessionId: string, url: string, timeoutMs?: number): Promise<boolean> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined) return false;
+    if (lease === undefined) {
+      return false;
+    }
     this.touch(sessionId);
     try {
       await lease.page.goto(url, timeoutMs === undefined ? {} : { timeoutMs });
@@ -322,7 +346,9 @@ export class BrowserPool {
    */
   async hoverLease(sessionId: string, x: number, y: number): Promise<boolean> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined || lease.page.hover === undefined) return false;
+    if (lease === undefined || lease.page.hover === undefined) {
+      return false;
+    }
     this.touch(sessionId);
     try {
       await lease.page.hover(x, y);
@@ -335,7 +361,9 @@ export class BrowserPool {
   /** Set a live lease's media features, or false when this is not a lease or its page cannot. */
   async emulateLease(sessionId: string, media: LeaseMedia): Promise<boolean> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease?.page.emulateMedia === undefined) return false;
+    if (lease?.page.emulateMedia === undefined) {
+      return false;
+    }
     this.touch(sessionId);
     try {
       await lease.page.emulateMedia(media);
@@ -357,7 +385,9 @@ export class BrowserPool {
    */
   async pressLease(sessionId: string, args: RealInputArgs): Promise<RealInputResult | undefined> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease?.page.press === undefined) return undefined;
+    if (lease?.page.press === undefined) {
+      return undefined;
+    }
     this.touch(sessionId);
     return lease.page.press(args);
   }
@@ -381,7 +411,9 @@ export class BrowserPool {
     size: { width: number; height: number },
   ): Promise<boolean> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined || lease.page.setViewport === undefined) return false;
+    if (lease === undefined || lease.page.setViewport === undefined) {
+      return false;
+    }
     this.touch(sessionId);
     try {
       await lease.page.setViewport(size);
@@ -399,13 +431,17 @@ export class BrowserPool {
 
   async setMocksLease(sessionId: string, rules: readonly PooledMockRule[]): Promise<boolean> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined || lease.page.installMocks === undefined) return false;
+    if (lease === undefined || lease.page.installMocks === undefined) {
+      return false;
+    }
     this.touch(sessionId);
     try {
       await lease.page.installMocks(rules);
       // Mocks registered later are asked first, and one that lets a request through would skip
       // the production guard. Re-asserting the guard puts it back in front.
-      if (lease.guard !== undefined) await lease.page.guardRequests?.(lease.guard);
+      if (lease.guard !== undefined) {
+        await lease.page.guardRequests?.(lease.guard);
+      }
       return true;
     } catch {
       return false;
@@ -418,7 +454,9 @@ export class BrowserPool {
     decide: (method: string, url: string) => string | undefined,
   ): Promise<boolean> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined || lease.page.guardRequests === undefined) return false;
+    if (lease === undefined || lease.page.guardRequests === undefined) {
+      return false;
+    }
     await lease.page.guardRequests(decide);
     lease.guard = decide;
     return true;
@@ -468,11 +506,15 @@ export class BrowserPool {
           (lease.detachedAt !== undefined && now - lease.detachedAt >= ORPHANED_LEASE_GRACE_MS),
       )
       .map(([sessionId]) => sessionId);
-    for (const sessionId of expired) await this.#release(sessionId);
+    for (const sessionId of expired) {
+      await this.#release(sessionId);
+    }
     this.#reapedLeases += expired.length;
     for (const sessionId of expired) {
       this.#reapedLeaseIds.push(sessionId);
-      if (this.#reapedLeaseIds.length > MAX_REMEMBERED_REAPED_LEASES) this.#reapedLeaseIds.shift();
+      if (this.#reapedLeaseIds.length > MAX_REMEMBERED_REAPED_LEASES) {
+        this.#reapedLeaseIds.shift();
+      }
     }
     return expired;
   }
@@ -538,15 +580,21 @@ export class BrowserPool {
       emulate?: LeaseEmulation;
     } = {},
   ): Promise<Lease> {
-    if (this.#closed) throw new Error('browser pool is shut down');
+    if (this.#closed) {
+      throw new Error('browser pool is shut down');
+    }
     const slot = true === opts.headed ? this.#headed : this.#headless;
     // Refused before a slot is claimed, so a refusal never holds one.
-    if (slot.launch === undefined) throw new Error(NO_HEADED_BROWSER);
+    if (slot.launch === undefined) {
+      throw new Error(NO_HEADED_BROWSER);
+    }
     // #waitForSlot claims the slot synchronously (bumps #occupied) before returning, so the cap holds
     // even when many acquires race through the gate in the same tick. A refusing acquire claims the
     // same way, or claims nothing and says so.
     if ('refuse' === opts.whenFull) {
-      if (!this.#tryClaim()) throw new PoolAtCapacityError(this.#max);
+      if (!this.#tryClaim()) {
+        throw new PoolAtCapacityError(this.#max);
+      }
     } else {
       await this.#waitForSlot(opts.signal);
     }
@@ -563,8 +611,9 @@ export class BrowserPool {
       context = await browser.newContext(
         0 < Object.keys(contextOpts).length ? contextOpts : undefined,
       );
-      if (opts.permissions !== undefined)
+      if (opts.permissions !== undefined) {
         await grantLeasePermissions(context, opts.permissions, url);
+      }
       const page = await context.newPage();
       // A caller-supplied init script is a stub of the bindings a desktop shell injects, and it has
       // to exist before the app's first module runs. Installed here — before goto — so the very
@@ -587,18 +636,26 @@ export class BrowserPool {
       // retry backoff stretches out.
       page.onConsole?.((text) => {
         const dialled = unreachableUrlIn(text);
-        if (dialled === undefined) return;
+        if (dialled === undefined) {
+          return;
+        }
         const active = this.#active.get(sessionId);
-        if (active !== undefined) active.dialFailureUrl = dialled;
-        else pending = dialled; // logged during goto, before the lease is registered below
+        if (active !== undefined) {
+          active.dialFailureUrl = dialled;
+        } else {
+          pending = dialled;
+        } // logged during goto, before the lease is registered below
       });
       // Same "listen before goto" reasoning as onConsole above: a dialog opened during the initial
       // navigation (an app that confirms something in an onload handler) must still be dismissed, not
       // just ones opened after the lease is registered.
       page.onDialog?.((dialog) => {
         const active = this.#active.get(sessionId);
-        if (active !== undefined) active.lastDialogMessage = dialog.message;
-        else pendingDialogMessage = dialog.message;
+        if (active !== undefined) {
+          active.lastDialogMessage = dialog.message;
+        } else {
+          pendingDialogMessage = dialog.message;
+        }
         void dialog.dismiss();
       });
       const marker = leaseMarkerOf(url);
@@ -625,7 +682,9 @@ export class BrowserPool {
       // #occupied. Registering the lease now would resurrect a dead entry against a crashed browser with
       // the slot count out of sync (drifting below #active.size, eventually exceeding the cap). If we're
       // no longer the live browser, bail — the catch below closes the context and returns the slot.
-      if (slot.browser !== browser) throw new Error('browser crashed during navigation');
+      if (slot.browser !== browser) {
+        throw new Error('browser crashed during navigation');
+      }
       // Foreground it: a page opened beside other tabs can start hidden (#1351). Best-effort — a tab
       // that stays hidden is reported by name at the lease, which failing here would lose.
       await page.bringToFront?.().catch(() => undefined);
@@ -635,7 +694,9 @@ export class BrowserPool {
         if ('function' === typeof s) {
           try {
             const code: unknown = s.call(navRes);
-            if ('number' === typeof code) navStatus = code;
+            if ('number' === typeof code) {
+              navStatus = code;
+            }
           } catch {
             // ignore
           }
@@ -665,13 +726,19 @@ export class BrowserPool {
         release: () => this.#release(sessionId),
         injectReader: async (): Promise<boolean> => {
           const script = this.#zeroInstall?.();
-          if (script === undefined || page.evaluate === undefined) return false;
+          if (script === undefined || page.evaluate === undefined) {
+            return false;
+          }
           await page.addInitScript?.(script);
-          if (READER_NOT_HTML === (await page.evaluate(script))) throw new NotHtmlDocumentError();
+          if (READER_NOT_HTML === (await page.evaluate(script))) {
+            throw new NotHtmlDocumentError();
+          }
           return true;
         },
         isLoading: async (): Promise<boolean> => {
-          if (page.evaluate === undefined) return false;
+          if (page.evaluate === undefined) {
+            return false;
+          }
           const state = await page.evaluate('document.readyState');
           return 'string' === typeof state && state !== 'complete';
         },
@@ -679,7 +746,9 @@ export class BrowserPool {
     } catch (err) {
       // Setup failed after we claimed the slot — give it back so a queued acquire isn't stuck, and
       // close the half-open context.
-      if (context !== undefined) await settledWithin(context.close(), LEASE_CLOSE_TIMEOUT_MS);
+      if (context !== undefined) {
+        await settledWithin(context.close(), LEASE_CLOSE_TIMEOUT_MS);
+      }
       this.#releaseSlot();
       throw err;
     }
@@ -721,19 +790,27 @@ export class BrowserPool {
       }
       const browser = slot.browser;
       slot.browser = undefined;
-      if (browser !== undefined) await browser.close().catch(() => undefined);
+      if (browser !== undefined) {
+        await browser.close().catch(() => undefined);
+      }
     }
-    for (const waiter of this.#waiters.splice(0)) waiter();
+    for (const waiter of this.#waiters.splice(0)) {
+      waiter();
+    }
   }
 
   async #release(sessionId: string): Promise<void> {
     const lease = this.#active.get(sessionId);
-    if (lease === undefined) return; // already released or lost to a crash
+    if (lease === undefined) {
+      return;
+    } // already released or lost to a crash
     this.#active.delete(sessionId);
     // Drop any alias pointing here, or the map grows for the life of the daemon and a later lease
     // reusing that registered name would resolve to a context that is already closed.
     for (const [registered, leaseId] of this.#aliases) {
-      if (leaseId === sessionId) this.#aliases.delete(registered);
+      if (leaseId === sessionId) {
+        this.#aliases.delete(registered);
+      }
     }
     // Bounded: a close that never returned held the slot and kept the tab open after the agent left.
     const closed = await closeLeaseTab(lease, LEASE_CLOSE_TIMEOUT_MS);
@@ -764,10 +841,14 @@ export class BrowserPool {
    * nothing occupied means no acquire is between launching a browser and using it.
    */
   async #closeIfIdle(): Promise<void> {
-    if (this.#active.size > 0 || this.#occupied > 0 || this.#waiters.length > 0) return;
+    if (this.#active.size > 0 || this.#occupied > 0 || this.#waiters.length > 0) {
+      return;
+    }
     for (const slot of [this.#headless, this.#headed]) {
       const browser = slot.browser;
-      if (browser === undefined || slot.launching !== undefined) continue;
+      if (browser === undefined || slot.launching !== undefined) {
+        continue;
+      }
       slot.browser = undefined;
       await settledWithin(browser.close(), LEASE_CLOSE_TIMEOUT_MS);
     }
@@ -783,18 +864,24 @@ export class BrowserPool {
   }
 
   #waitForSlot(signal?: AbortSignal): Promise<void> {
-    if (this.#tryClaim()) return Promise.resolve();
+    if (this.#tryClaim()) {
+      return Promise.resolve();
+    }
     return new Promise<void>((resolve, reject) => {
       const onFree = (): void => {
         // The pool shut down while we waited → reject rather than relaunch a browser.
         if (this.#closed) {
-          if (signal !== undefined) signal.removeEventListener('abort', onAbort);
+          if (signal !== undefined) {
+            signal.removeEventListener('abort', onAbort);
+          }
           reject(new Error('browser pool is shut down'));
           return;
         }
         // Claim the freed slot; if another woken waiter beat us to it, re-queue.
         if (this.#tryClaim()) {
-          if (signal !== undefined) signal.removeEventListener('abort', onAbort);
+          if (signal !== undefined) {
+            signal.removeEventListener('abort', onAbort);
+          }
           resolve();
         } else {
           this.#waiters.push(onFree);
@@ -802,7 +889,9 @@ export class BrowserPool {
       };
       const onAbort = (): void => {
         const i = this.#waiters.indexOf(onFree);
-        if (i >= 0) this.#waiters.splice(i, 1);
+        if (i >= 0) {
+          this.#waiters.splice(i, 1);
+        }
         reject(new Error('acquire aborted'));
       };
       if (signal !== undefined) {
@@ -818,16 +907,26 @@ export class BrowserPool {
 
   /** Give back one occupied slot and hand it to the next waiter (which re-claims it synchronously). */
   #releaseSlot(): void {
-    if (this.#occupied > 0) this.#occupied -= 1;
+    if (this.#occupied > 0) {
+      this.#occupied -= 1;
+    }
     const next = this.#waiters.shift();
-    if (next !== undefined) next();
+    if (next !== undefined) {
+      next();
+    }
   }
 
   async #ensureBrowser(slot: BrowserSlot): Promise<PooledBrowser> {
-    if (this.#closed) throw new Error('browser pool is shut down');
-    if (slot.browser !== undefined && slot.browser.isConnected()) return slot.browser;
+    if (this.#closed) {
+      throw new Error('browser pool is shut down');
+    }
+    if (slot.browser !== undefined && slot.browser.isConnected()) {
+      return slot.browser;
+    }
     const launch = slot.launch;
-    if (launch === undefined) throw new Error(NO_HEADED_BROWSER);
+    if (launch === undefined) {
+      throw new Error(NO_HEADED_BROWSER);
+    }
     // De-dupe concurrent launches: the first acquire to find no browser starts one; the rest await it.
     if (slot.launching === undefined) {
       // The in-flight promise MUST be cleared on failure as well as success. It used to be cleared only
@@ -853,18 +952,24 @@ export class BrowserPool {
    * acquire of that kind relaunches it. The other browser's leases live on.
    */
   #onCrash(slot: BrowserSlot, crashed: PooledBrowser): void {
-    if (slot.browser !== crashed) return; // a stale handler from a prior browser
+    if (slot.browser !== crashed) {
+      return;
+    } // a stale handler from a prior browser
     slot.browser = undefined;
     let freed = 0;
     for (const [id, lease] of this.#active) {
-      if (lease.headed !== slot.headed) continue;
+      if (lease.headed !== slot.headed) {
+        continue;
+      }
       this.#active.delete(id);
       freed += 1;
     }
     // A lease mid-acquire on the dead browser holds a slot too; it frees it in its own catch. When
     // every lease belonged to this browser, nothing else can be holding one.
     this.#occupied = 0 === this.#active.size ? 0 : Math.max(0, this.#occupied - freed);
-    for (const waiter of this.#waiters.splice(0)) waiter(); // let them re-claim + relaunch
+    for (const waiter of this.#waiters.splice(0)) {
+      waiter();
+    } // let them re-claim + relaunch
   }
 
   /** Whether this lease's context skips certificate checks. A context cannot change it later. */

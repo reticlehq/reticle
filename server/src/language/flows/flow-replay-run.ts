@@ -70,9 +70,13 @@ export function latestRecordedFlow(
 ): { name: string; flow: import('@reticlehq/core').FlowFile } | undefined {
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i];
-    if (event?.type !== EventType.FLOW_RECORDED) continue;
+    if (event?.type !== EventType.FLOW_RECORDED) {
+      continue;
+    }
     const parsed = RecordedFlowSchema.safeParse(event.data);
-    if (parsed.success) return { name: parsed.data.name, flow: parsed.data.flow };
+    if (parsed.success) {
+      return { name: parsed.data.name, flow: parsed.data.flow };
+    }
   }
   return undefined;
 }
@@ -123,7 +127,9 @@ async function recordReplayRun(
   // it was worse here: a replay outcome that should have reached the dashboard silently did not,
   // because the daemon's own directory has no link file.
   const cloud = await resolveProjectCloud(deps.fs, recordRoot, homedir(), process.env);
-  if (null === cloud.config || !cloud.policy.memory) return; // not attached / memory disabled → local only
+  if (null === cloud.config || !cloud.policy.memory) {
+    return;
+  } // not attached / memory disabled → local only
   const result = await syncRunRecordToCloud(
     { kind: RunKind.FLOW_REPLAY, name, status: runStatus, at: deps.now(), durationMs },
     projectId,
@@ -153,11 +159,15 @@ async function consultProjectMemory(
   root: string,
 ): Promise<ConsultedMemory[] | undefined> {
   const subject = consultSubjectFor(flow);
-  if (subject === undefined) return undefined;
+  if (subject === undefined) {
+    return undefined;
+  }
   try {
     // The APP's root, not the daemon's (wherever it was launched): its link file is this project's.
     const cloud = await resolveProjectCloud(deps.fs, root, homedir(), process.env);
-    if (null === cloud.config || !cloud.policy.memory) return undefined;
+    if (null === cloud.config || !cloud.policy.memory) {
+      return undefined;
+    }
     // Scoped to the linked project. The key covers a whole workspace, so a read that named no
     // project could be answered with ANOTHER repo's knowledge and this replay would carry it into a
     // verdict as if it were this app's — see `memory-scope.ts` for the whole shape.
@@ -174,11 +184,15 @@ async function consultProjectMemory(
         return 200 === res.status ? await res.json() : undefined;
       },
     );
-    if (body === undefined) return undefined;
+    if (body === undefined) {
+      return undefined;
+    }
     // `undefined`: the response could not be shown to be this project's, so nothing is attached —
     // a verdict carrying another repo's "established knowledge" is worse than none. See memory-scope.
     const entries = scopedMemoryEntries(body, cloud.projectId);
-    if (entries === undefined) return undefined;
+    if (entries === undefined) {
+      return undefined;
+    }
     const picked = selectConsulted(entries as { statement?: unknown; status?: unknown }[]);
     return 0 === picked.length ? undefined : picked;
   } catch {
@@ -211,13 +225,19 @@ async function loadInvokedFlows(
   const seen = new Set<string>([flow.name]);
   while (queue.length > 0) {
     const current = queue.shift();
-    if (current === undefined) continue;
+    if (current === undefined) {
+      continue;
+    }
     for (const step of flattenSteps(current.steps)) {
       const name = step.invoke;
-      if (name === undefined || seen.has(name)) continue;
+      if (name === undefined || seen.has(name)) {
+        continue;
+      }
       seen.add(name);
       const sub = await flowsForSession(deps, target).flows.load(name, target.projectId);
-      if (!sub.ok) continue;
+      if (!sub.ok) {
+        continue;
+      }
       out.set(name, sub.value);
       queue.push(sub.value);
     }
@@ -248,7 +268,9 @@ async function firstUnmetPrecondition(
     try {
       drift = await assertStepExpect(session, claim, waitForPredicate, 0, since);
     } catch (error: unknown) {
-      if (!isDocumentGoneError(error)) throw error;
+      if (!isDocumentGoneError(error)) {
+        throw error;
+      }
       return `the page went away while this flow's preconditions were being checked, so nothing ran and nothing was proved. Replay again once the page is back.`;
     }
     if (drift !== undefined) {
@@ -460,12 +482,15 @@ export async function replayNamedFlow(
       },
     );
   } catch (error: unknown) {
-    if (!(error instanceof DocumentLostDuringReplay)) throw error;
+    if (!(error instanceof DocumentLostDuringReplay)) {
+      throw error;
+    }
     return lostDocumentResult(name, error);
   }
   // Only part of the journey was driven here: its steps were checked, nothing about the whole flow.
-  if (0 < (continueAt ?? 0) || (to !== undefined && to < loaded.value.steps.length))
+  if (0 < (continueAt ?? 0) || (to !== undefined && to < loaded.value.steps.length)) {
     return { name, status: partialStatus(steps), steps };
+  }
   // Computed HERE, before the synthetic success row is appended below: once that row is pushed,
   // `steps.length` no longer counts only the flow's own steps and the arithmetic is wrong.
   const halted = haltedFrom(steps, loaded.value.steps.length);
@@ -509,10 +534,19 @@ export async function replayNamedFlow(
     steps.push(row);
   }
   const staleTarget = staleTargetResult(name, steps);
-  if (staleTarget !== undefined) return staleTarget;
+  if (staleTarget !== undefined) {
+    return staleTarget;
+  }
   const driftSteps = steps.filter((s) => s.drift !== undefined).length;
   const allOk = steps.every((s) => s.ok);
-  const status = driftSteps > 0 ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.ERROR;
+  let status: ReplayStatus;
+  if (driftSteps > 0) {
+    status = ReplayStatus.DRIFT;
+  } else if (allOk) {
+    status = ReplayStatus.OK;
+  } else {
+    status = ReplayStatus.ERROR;
+  }
   await recordReplayRun(
     deps,
     name,
@@ -570,25 +604,42 @@ export async function replayNamedFlow(
     };
     errored.decision = buildDecision(errored, loaded.value, intentSaid, invokedFlows);
     applyStartPathHint(errored, startPathHint);
-    if (deviation !== undefined) errored.deviation = deviation;
-    if (knows !== undefined) errored.knows = knows;
-    if (crossStep.length > 0) errored.crossStep = crossStep;
+    if (deviation !== undefined) {
+      errored.deviation = deviation;
+    }
+    if (knows !== undefined) {
+      errored.knows = knows;
+    }
+    if (crossStep.length > 0) {
+      errored.crossStep = crossStep;
+    }
     return errored;
   }
   const result: FlowReplayResult = { name, status, steps };
-  if (halted !== undefined) result.halted = halted;
-  if (knows !== undefined) result.knows = knows;
+  if (halted !== undefined) {
+    result.halted = halted;
+  }
+  if (knows !== undefined) {
+    result.knows = knows;
+  }
   // A green that cannot go red is not a pass: the same judgement `reticle_flow_verify` makes.
   const cannotFail =
     status === ReplayStatus.OK ? unverifiableReason(loaded.value, invokedFlows) : undefined;
-  if (cannotFail !== undefined) result.unverifiable = { reason: cannotFail };
+  if (cannotFail !== undefined) {
+    result.unverifiable = { reason: cannotFail };
+  }
   // One check of the session that ran it, so its end does not say "nothing was checked".
   noteReplayCheck(session, name, status, cannotFail !== undefined);
-  if (status !== ReplayStatus.OK)
+  if (status !== ReplayStatus.OK) {
     result.decision = buildDecision(result, loaded.value, intentSaid, invokedFlows);
+  }
   applyStartPathHint(result, startPathHint);
-  if (deviation !== undefined) result.deviation = deviation;
-  if (crossStep.length > 0) result.crossStep = crossStep;
+  if (deviation !== undefined) {
+    result.deviation = deviation;
+  }
+  if (crossStep.length > 0) {
+    result.crossStep = crossStep;
+  }
   /*
    * What this run taught the flow.
    *
@@ -627,8 +678,12 @@ export async function replayNamedFlow(
     observed: steps.some((step) => step.digest !== undefined),
   });
   result.learned = learning.guards;
-  if (learning.promoted.length > 0) result.promoted = learning.promoted;
-  if (learning.regressed.length > 0) result.regressed = learning.regressed;
+  if (learning.promoted.length > 0) {
+    result.promoted = learning.promoted;
+  }
+  if (learning.regressed.length > 0) {
+    result.regressed = learning.regressed;
+  }
   /*
    * Write it back, or none of the above compounds.
    *
@@ -657,7 +712,9 @@ async function computeReplayDeviation(
 ): Promise<DeviationReport | undefined> {
   try {
     const segments = computeSegments(session.eventsSince(floor));
-    if (0 === segments.length) return undefined;
+    if (0 === segments.length) {
+      return undefined;
+    }
     return await reportAndAccumulate(new EnvelopeStore(deps.fs, root), segments);
   } catch {
     return undefined;
@@ -666,7 +723,9 @@ async function computeReplayDeviation(
 
 /** Fold a start-page-mismatch hint onto a non-passing replay's decision (the actionable next move). */
 function applyStartPathHint(result: FlowReplayResult, hint: string | undefined): void {
-  if (hint === undefined || result.decision === undefined) return;
+  if (hint === undefined || result.decision === undefined) {
+    return;
+  }
   result.decision.suggestedFix = hint;
   result.decision.nextAction = hint;
 }

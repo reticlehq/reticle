@@ -1685,14 +1685,6 @@
       "count": 16
     }
   },
-  "src/language/flows/flow-replay-run.ts": {
-    "curly": {
-      "count": 27
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/language/flows/flow-replay-upload-root.test.ts": {
     "curly": {
       "count": 1
@@ -1701,11 +1693,6 @@
   "src/language/flows/flow-replay.console-absent.test.ts": {
     "curly": {
       "count": 3
-    }
-  },
-  "src/language/flows/flow-replay.document-lost.test.ts": {
-    "curly": {
-      "count": 5
     }
   },
   "src/language/flows/flow-replay.dynamic.test.ts": {
@@ -1782,11 +1769,6 @@
       "count": 1
     }
   },
-  "src/language/flows/flow-startpath-navigate.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/language/flows/flow-step-runners.ts": {
     "curly": {
       "count": 31
@@ -1795,11 +1777,6 @@
   "src/language/flows/flow-success.ts": {
     "curly": {
       "count": 7
-    }
-  },
-  "src/language/flows/flow-tools.ts": {
-    "curly": {
-      "count": 11
     }
   },
   "src/language/flows/flow-verify-parallel.run.test.ts": {
@@ -2729,16 +2706,6 @@
   "src/portal/input/viewport-tools.ts": {
     "curly": {
       "count": 7
-    }
-  },
-  "src/portal/pool/browser-pool.test.ts": {
-    "curly": {
-      "count": 7
-    }
-  },
-  "src/portal/pool/browser-pool.ts": {
-    "curly": {
-      "count": 54
     }
   },
   "src/portal/pool/context-permissions.ts": {
@@ -4080,11 +4047,6 @@
     },
     "no-nested-ternary": {
       "count": 2
-    }
-  },
-  "src/surface/tools/record-start-path-and-reload.test.ts": {
-    "curly": {
-      "count": 1
     }
   },
   "src/surface/tools/record-stop-backtrack.test.ts": {

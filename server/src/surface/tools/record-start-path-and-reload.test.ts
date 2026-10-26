@@ -29,7 +29,9 @@ import {
 
 const tool = (name: string) => {
   const t = READ_TOOLS.find((x) => x.name === name);
-  if (t === undefined) throw new Error(`no ${name}`);
+  if (t === undefined) {
+    throw new Error(`no ${name}`);
+  }
   return t;
 };
 

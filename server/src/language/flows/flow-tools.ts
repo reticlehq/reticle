@@ -74,7 +74,9 @@ async function syncSavedFlowToCloud(
     homedir(),
     process.env,
   );
-  if (null === cloud.config || !cloud.policy.flows) return; // not attached / flows disabled → local only
+  if (null === cloud.config || !cloud.policy.flows) {
+    return;
+  } // not attached / flows disabled → local only
   const result = await syncFlowToCloud(flow, cloud.config, target.projectId, cloudFetch);
   if (result.outcome !== SyncOutcome.SYNCED) {
     log('cloud-flow-sync-failed', { flow: flow.name, status: result.status, error: result.error });
@@ -237,7 +239,9 @@ export const FLOW_TOOLS: ToolDef[] = [
       // A zero-step recording is not a flow. Saving it wrote a file the suite reports "unverifiable"
       // forever while telling the agent it had saved a regression test — see empty-flow.
       const emptyRefusal = emptyFlowRefusal(program.steps.length, name);
-      if (emptyRefusal !== undefined) return Promise.resolve(emptyRefusal);
+      if (emptyRefusal !== undefined) {
+        return Promise.resolve(emptyRefusal);
+      }
       const { flows, root } = flowsForSession(deps, target);
       const author = flowAuthor();
       const toSave = {
@@ -246,7 +250,9 @@ export const FLOW_TOOLS: ToolDef[] = [
         ...(author === undefined ? {} : { author }),
       };
       return flows.save(toSave, annotations, projectId).then(async (res) => {
-        if (!res.ok) return { error: flowErrorMessage(res.code, res.detail), code: res.code };
+        if (!res.ok) {
+          return { error: flowErrorMessage(res.code, res.detail), code: res.code };
+        }
         deps.annotations.clear(name);
         // Grade the saved flow's assertions so the agent learns immediately if it just saved a flow
         // that asserts nothing observable (passes even when the feature is broken).
@@ -346,7 +352,9 @@ export const FLOW_TOOLS: ToolDef[] = [
       return flows
         .load(asString(aliasParam(args, 'flowName', ['flow'])['flowName']) ?? '', projectId)
         .then((res) => {
-          if (!res.ok) return { error: flowErrorMessage(res.code, res.detail), code: res.code };
+          if (!res.ok) {
+            return { error: flowErrorMessage(res.code, res.detail), code: res.code };
+          }
           const { name, ...rest } = res.value;
           return { flowName: name, ...rest };
         });
@@ -378,7 +386,9 @@ export const FLOW_TOOLS: ToolDef[] = [
       return flows
         .remove(asString(aliasParam(args, 'flowName', ['flow'])['flowName']) ?? '', projectId)
         .then((res) => {
-          if (!res.ok) return { error: flowErrorMessage(res.code, res.detail), code: res.code };
+          if (!res.ok) {
+            return { error: flowErrorMessage(res.code, res.detail), code: res.code };
+          }
           return { deleted: true };
         });
     },
@@ -656,7 +666,9 @@ export const FLOW_TOOLS: ToolDef[] = [
           process.env,
         );
         const server = await runServerVerify(deps, cloud, sessionId, requested);
-        if (server !== null) return server;
+        if (server !== null) {
+          return server;
+        }
         // PARALLEL: flows race the DOM only when they share ONE tab. Given the lease pool, each
         // flow gets its own isolated context, so a large suite finishes in interactive time. Opt-in via
         // `parallel`; a missing prerequisite (no pool, unknown app URL) falls back to the sequential path
@@ -849,13 +861,17 @@ export const FLOW_TOOLS: ToolDef[] = [
       // The store stamps the project into the file AND routes it to the per-project subdir (a shared
       // daemon serves many apps), so location and content agree from one source of truth.
       const emptyRecorded = emptyFlowRefusal(flow.steps.length, flow.name);
-      if (emptyRecorded !== undefined) return emptyRecorded;
+      if (emptyRecorded !== undefined) {
+        return emptyRecorded;
+      }
       // Resolved like every other path now. This save used to go to the daemon's root while the
       // recorded-flow save resolved per session, so where a flow landed depended on which tool wrote
       // it — and the pair that disagreed were the two ways to save the same thing.
       const target: ProjectTarget = { projectId: session.projectId, origin: originOf(session.url) };
       const res = await flowsForSession(deps, target).flows.saveFlow(flow, session.projectId);
-      if (!res.ok) return { error: flowErrorMessage(res.code, res.detail), code: res.code };
+      if (!res.ok) {
+        return { error: flowErrorMessage(res.code, res.detail), code: res.code };
+      }
       // If logged in to Reticle, mirror the saved flow to the team's regression suite. Best-effort
       // and non-blocking: the flow is already on disk, so a sync failure never fails the save.
       void syncSavedFlowToCloud(deps, flow, target);
@@ -925,13 +941,19 @@ async function loadInvoked(
   const seen = new Set<string>([flow.name]);
   while (queue.length > 0) {
     const current = queue.shift();
-    if (current === undefined) continue;
+    if (current === undefined) {
+      continue;
+    }
     for (const step of flattenSteps(current.steps)) {
       const name = step.invoke;
-      if (name === undefined || seen.has(name)) continue;
+      if (name === undefined || seen.has(name)) {
+        continue;
+      }
       seen.add(name);
       const sub = await flows.load(name, projectId);
-      if (!sub.ok || sub.value === undefined) continue;
+      if (!sub.ok || sub.value === undefined) {
+        continue;
+      }
       out.set(name, sub.value);
       queue.push(sub.value);
     }
