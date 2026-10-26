@@ -183,7 +183,8 @@ describe('the dev server this process owns', () => {
       /* already gone */
     }
     await sleep(50);
-    rmSync(dir, { recursive: true, force: true });
+    // Windows holds the folder until the killed process is fully gone: retry instead of failing.
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10 });
   });
 
   // A sandboxed agent host or a locked-down profile cannot write the state home. Init had already
