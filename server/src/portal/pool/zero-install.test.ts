@@ -72,6 +72,44 @@ describe('zeroInstallScript — the reader a page with no SDK is given', () => {
 });
 
 /*
+ * A zero-install lease lost its session on every full navigation after the first page: a login that
+ * moved to /lab, a route change in a Next.js app, `reticle_navigate`. The reader runs again on each
+ * new document as an init script, before the parser makes <head> and <body>. `connect()` mounts
+ * page UI before it dials the bridge, threw on the null <head>, and never dialled.
+ */
+describe('zeroInstallScript — on a document the parser has not built yet', () => {
+  function loadingPage(): { page: Record<string, unknown>; fire: () => void } {
+    let handler: (() => void) | undefined;
+    const page: Record<string, unknown> = {
+      document: {
+        contentType: 'text/html',
+        readyState: 'loading',
+        addEventListener: (type: string, fn: () => void) => {
+          if ('DOMContentLoaded' === type) {
+            handler = fn;
+          }
+        },
+      },
+    };
+    return { page, fire: () => handler?.() };
+  }
+
+  it('waits for the DOM before it connects', () => {
+    const { page, fire } = loadingPage();
+    run(page);
+    expect(page['__reticleInstance']).toBeDefined();
+    expect(page['__connectedWith']).toBeUndefined();
+    fire();
+    expect(page['__connectedWith']).toMatchObject({ lease: true, token: 'tok' });
+  });
+
+  it('connects at once when the DOM is already there', () => {
+    const page = run({ document: { contentType: 'text/html', readyState: 'interactive' } });
+    expect(page['__connectedWith']).toMatchObject({ lease: true });
+  });
+});
+
+/*
  * The package ships ONE single-file build, and it has two readers: this daemon, which evaluates it
  * as a script, and webpack 4 (#680), which reads the `module` field and parses it as CommonJS. Each
  * reader used to get its own ~550KB copy, which is what took the SDK past its size budget.

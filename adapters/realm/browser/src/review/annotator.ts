@@ -144,6 +144,12 @@ export class Annotator {
 
   mount(): void {
     if (this.#root !== undefined || 'undefined' === typeof document) return;
+    // Before the parser makes <head> and <body> (an init script on a new document, or a <head>
+    // script) there is nowhere to mount. Throwing here stopped `connect()` before it dialled (#1897).
+    if (null === document.head || null === document.body) {
+      document.addEventListener('DOMContentLoaded', () => this.mount(), { once: true });
+      return;
+    }
     const style = document.createElement('style');
     style.setAttribute(MARK_ATTR, 'style');
     style.textContent = ANNOTATOR_CSS;

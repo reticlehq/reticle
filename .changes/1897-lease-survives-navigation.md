@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`, `@reticlehq/browser` — a zero-install lease lost its session at the first full page load.** On an app with no Reticle SDK, the lease worked on the first page. After the app moved to another page (a login that redirects, a route that loads a new document, or `reticle_navigate`), every call said there was no connected session. Reticle gives such a page its SDK again on each new document, before the page has a `<head>` and a `<body>`. The SDK then failed while it set up its page marker, before it connected. The supplied SDK now connects when the document is ready, and the page marker waits for `<head>` and `<body>`. This was not caused by a Content-Security-Policy. Closes [#1897](https://github.com/reticlehq/reticle/issues/1897).

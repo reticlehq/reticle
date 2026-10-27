@@ -50,6 +50,18 @@ const NOT_HTML_GUARD =
   `if (globalThis.document !== undefined && !${JSON.stringify(HTML_CONTENT_TYPES)}.includes(globalThis.document.contentType)) ` +
   `return ${JSON.stringify(READER_NOT_HTML)};`;
 
+/*
+ * Connect once the DOM exists. The reader also runs as an init script on every later document of the
+ * lease, before the parser makes <head> and <body>. `connect()` mounts page UI before it dials the
+ * bridge, so it threw there and never dialled: every full navigation after the first page lost the
+ * lease's session (#1897). The bundle still loads at once, so the observers start early.
+ */
+const CONNECT_WHEN_DOM_READY = (args: string): string =>
+  `const connect = () => globalThis.__reticleInstance.connect(${args});\n` +
+  `if (globalThis.document !== undefined && 'loading' === globalThis.document.readyState) ` +
+  `globalThis.document.addEventListener('DOMContentLoaded', connect, { once: true });\n` +
+  `else connect();`;
+
 /**
  * The script for a page: install the SDK if the page has none, then connect it to this daemon.
  *
@@ -60,7 +72,7 @@ const NOT_HTML_GUARD =
  */
 export function zeroInstallScript(bundle: string, opts: InjectedConnect): string {
   const args = JSON.stringify(injectedConnectArgs(opts));
-  return `(() => {\n${NOT_HTML_GUARD}\nif (!globalThis.__reticleInstance) {\n${bundle}\n}\nglobalThis.__reticleInstance.connect(${args});\n})();`;
+  return `(() => {\n${NOT_HTML_GUARD}\nif (!globalThis.__reticleInstance) {\n${bundle}\n}\n${CONNECT_WHEN_DOM_READY(args)}\n})();`;
 }
 
 /** The page is not an HTML document, so the lease did not give it the zero-install reader. */

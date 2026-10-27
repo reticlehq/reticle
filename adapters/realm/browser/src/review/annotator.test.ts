@@ -631,3 +631,21 @@ describe('the mark handed to the HUD identifies itself', () => {
     ann.toggle(false);
   });
 });
+
+/*
+ * The SDK can connect before the parser makes <head> and <body>: an init script on a new document
+ * (every full navigation of a zero-install lease), or an app's own <head> script. `mount()` threw on
+ * the null <head>, and `connect()` stopped before it dialled the bridge (#1897).
+ */
+describe('mounting before the document has a head and a body', () => {
+  it('does not throw, and mounts once the DOM is ready', () => {
+    const root = document.documentElement;
+    root.remove();
+    const ann = new Annotator({ emit: () => undefined, now: () => 0 });
+    expect(() => ann.mount()).not.toThrow();
+    document.appendChild(root);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    expect(document.head.querySelector('style')).not.toBeNull();
+    ann.destroy();
+  });
+});
