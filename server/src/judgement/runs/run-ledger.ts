@@ -7,7 +7,10 @@
  * zero.
  *
  * A call from another agent (another MCP attach id) starts a new run. An agent that stops without a
- * call that ends its run then does not leak its claims into the next agent's report.
+ * call that ends its run then does not leak its claims into the next agent's report. A record that
+ * a call from another connection writes is not this run's either: when two agents' calls overlap,
+ * the first agent's call can end after the second agent's run began, and its claim was listed in a
+ * report that agent never made (#1900).
  *
  * ponytail: one ledger for each daemon, not for each agent. Two agents that call at the same time
  * restart each other's run. Key the ledger by attach id when that happens.
@@ -22,6 +25,7 @@ import {
   type RunReport,
   type RunReportClaim,
 } from '@reticlehq/core';
+import { callingAttachId } from '@/hooks/coding-agents.js';
 
 const SAW = 'saw ';
 const FLOW = 'flow ';
@@ -63,7 +67,7 @@ export class RunLedger {
 
   /** A journal record from the agent's own call. A record with no verdict is not a claim. */
   verdict(action: JournalAction): void {
-    if (this.#idle() || action.drivenBy !== undefined) return;
+    if (this.#idle() || this.#foreign() || action.drivenBy !== undefined) return;
     // A replay is counted once, as a flow, decided as its run decides it (`replayed`). Its journal
     // record said `unknown` where the run said `no`, and one report gave both answers.
     if (ReticleTool.FLOW_REPLAY === action.tool) return;
@@ -72,12 +76,12 @@ export class RunLedger {
   }
 
   flowSaved(name: string): void {
-    if (!this.#idle()) this.#saved.add(name);
+    if (!this.#idle() && !this.#foreign()) this.#saved.add(name);
   }
 
   /** The last replay of a flow in this run is its verdict. */
   replayed(name: string, verified: Verified): void {
-    if (!this.#idle()) this.#replayed.set(name, verified);
+    if (!this.#idle() && !this.#foreign()) this.#replayed.set(name, verified);
   }
 
   memoryWritten(count = 1): void {
@@ -100,6 +104,16 @@ export class RunLedger {
    */
   #idle(): boolean {
     return this.#startedAt === undefined;
+  }
+
+  /**
+   * The current call came over another MCP connection than the one that owns this run. A call with
+   * no connection (the HUD, the CLI) is not foreign: dropping it would also drop the agent's own
+   * records that end outside the call context.
+   */
+  #foreign(): boolean {
+    const caller = callingAttachId();
+    return caller !== undefined && caller !== this.#owner;
   }
 
   /** The report, without the cloud line (the caller knows the project). Empties the ledger. */

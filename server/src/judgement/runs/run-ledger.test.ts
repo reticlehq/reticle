@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { JOURNAL_FILE_VERSION, Verified, type JournalAction } from '@reticlehq/core';
+import { runAsAgent } from '@/hooks/coding-agents.js';
 import { RunLedger } from './run-ledger.js';
 
 const verdict = (
@@ -41,6 +42,37 @@ describe('the run ledger', () => {
     expect(report.verified).toBe(Verified.YES);
     expect(report.wallMs).toBe(1_000);
     expect(report.firstVerdictMs).toBe(200);
+  });
+
+  /*
+   * Two agents on one daemon, with calls that overlap: a call from the first agent was still
+   * running when the second agent called, so its journal record landed in the second agent's run.
+   * The released lease's report then listed claims that agent never made.
+   */
+  it("keeps another agent's verdict out of this run, even when that agent's call ends inside it", async () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, AGENT);
+    ledger.begin(100, 'attach-2');
+    await runAsAgent(AGENT, () => {
+      ledger.verdict(verdict('a claim the first agent made', Verified.YES));
+      ledger.flowSaved('first-agent-flow');
+      ledger.replayed('first-agent-replay', Verified.NO);
+      return Promise.resolve();
+    });
+    await runAsAgent('attach-2', () => {
+      ledger.verdict(verdict('a claim of my own', Verified.YES));
+      return Promise.resolve();
+    });
+    const report = ledger.take(1_000);
+    expect(report.claims.map((c) => c.claim)).toEqual(['a claim of my own']);
+    expect(report.flows).toEqual({ saved: [], replayed: [] });
+  });
+
+  it('keeps a verdict that came from no MCP connection, as before', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, AGENT);
+    ledger.verdict(verdict('checked by a path with no connection', Verified.YES));
+    expect(ledger.take(10).claims).toHaveLength(1);
   });
 
   it('is empty until an agent call, and takes a report only once', () => {
