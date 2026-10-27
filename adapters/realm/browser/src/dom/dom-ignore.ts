@@ -173,7 +173,9 @@ const DEV_OVERLAY_NAMES = [
 export function devOverlayName(el: Element): string | undefined {
   for (let node: Element | null = el; node !== null;) {
     for (const [selector, name] of DEV_OVERLAY_NAMES) {
-      if (node.closest(selector) !== null) return name;
+      if (node.closest(selector) !== null) {
+        return name;
+      }
     }
     const root = node.getRootNode();
     node = root instanceof ShadowRoot ? root.host : null;

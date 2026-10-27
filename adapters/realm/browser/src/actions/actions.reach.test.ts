@@ -26,7 +26,9 @@ describe('a click a person could not make', () => {
       const portal = document.createElement('nextjs-portal');
       const root = portal.attachShadow({ mode: 'open' });
       const indicator = document.createElement('button');
-      if (dialog) indicator.setAttribute('data-nextjs-dialog', '');
+      if (dialog) {
+        indicator.setAttribute('data-nextjs-dialog', '');
+      }
       indicator.textContent = 'N';
       indicator.getBoundingClientRect = () => new DOMRect(20, 20, 60, 60);
       root.append(indicator);
