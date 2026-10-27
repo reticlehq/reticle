@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CoverageCapability, CoverageMarker, LINK_APP_GAPS_MAX } from '@reticlehq/core';
 import {
   announcedChannels,
+  engineBlindSpotsField,
   forgetAllRecordedGaps,
   forgetRecordedGaps,
   instrumentationOf,
@@ -220,5 +221,24 @@ describe('what the page itself carries', () => {
         { id: 's2', url: 'http://x/', command: () => Promise.reject(new Error('gone')) },
       ]),
     ).resolves.toBe(false);
+  });
+});
+
+/*
+ * An agent called act_and_wait and reticle_assert with an explicit intent for a new task. The
+ * answer's engineBlindSpots named an arithmetic claim from an earlier task: that intent was still
+ * open in the run's ledger, and every verdict judged it (#1938).
+ */
+describe('engineBlindSpotsField and the claims it judges', () => {
+  const EARLIER = [{ statement: 'the allocation totals 100 percent' }];
+
+  it("judges only the call's own intent when the call names one", () => {
+    const field = engineBlindSpotsField('s-1938-a', undefined, 'the reset email appears', EARLIER);
+    expect(field.engineBlindSpots).toEqual([]);
+  });
+
+  it("judges the run's open intents when the call names none", () => {
+    const field = engineBlindSpotsField('s-1938-b', undefined, undefined, EARLIER);
+    expect(field.engineBlindSpots.map((spot) => spot.detail).join(' ')).toContain('100 percent');
   });
 });

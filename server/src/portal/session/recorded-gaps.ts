@@ -213,7 +213,7 @@ const comparedSeen = new Set<string>();
 /**
  * The `engineBlindSpots` field for a verdict result: what this engine could not observe in the
  * session so far. Notes this verdict's own comparison first, so a `compare` clears the arithmetic
- * spot on the result that ran it. `claims`: the inline intent, then the run's declared intents.
+ * spot on the result that ran it. `claims`: the inline intent, or else the run's declared intents.
  */
 export function engineBlindSpotsField(
   sessionId: string,
@@ -222,7 +222,10 @@ export function engineBlindSpotsField(
   declared: readonly { statement: string }[],
 ): { [ENGINE_BLIND_SPOTS_FIELD]: EngineBlindSpot[] } {
   if (computesComparison(predicate)) comparedSeen.add(sessionId);
-  const claims = [text(intent), ...declared.map((each) => each.statement)];
+  // A call that names its own intent is judged on that intent alone. The run's open intents can be
+  // an earlier task's, and judging them reported that task's claim on this one (#1938).
+  const own = text(intent);
+  const claims = own === undefined ? declared.map((each) => each.statement) : [own];
   return {
     [ENGINE_BLIND_SPOTS_FIELD]: engineBlindSpots({
       canvasSeen: canvasSeen.has(sessionId),
