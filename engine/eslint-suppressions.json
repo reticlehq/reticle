@@ -14,14 +14,6 @@
       "count": 14
     }
   },
-  "src/disagreement/contradiction-evidence.ts": {
-    "curly": {
-      "count": 39
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/disagreement/contradiction-folds.test.ts": {
     "curly": {
       "count": 1
@@ -177,11 +169,6 @@
   "src/evidence/verified.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/question/declared.ts": {
-    "curly": {
-      "count": 12
     }
   },
   "src/question/document-navigation-is-not-resource-timing.test.ts": {

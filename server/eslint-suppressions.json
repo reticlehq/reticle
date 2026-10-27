@@ -3333,11 +3333,6 @@
       "count": 1
     }
   },
-  "src/surface/tools/act-verdict-parity.test.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/surface/tools/act/act-helpers.ts": {
     "curly": {
       "count": 6
