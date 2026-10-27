@@ -316,4 +316,37 @@ describe('evalNet — a navigation record the page cannot see the answer to', ()
 
     expect(r.inconclusive).toBeUndefined();
   });
+
+  // A later event from a different document proves that the page left: a plain link navigated.
+  const routeData: Record<string, unknown> = { to: '/orders' };
+  const newDocument = {
+    type: EventType.ROUTE_CHANGE,
+    t: 40,
+    documentId: 'doc-b',
+    data: routeData,
+  } as ReticleEvent;
+
+  it('still fails a plain navigation when a later event comes from a new document', () => {
+    const left = { ...departure(20), documentId: 'doc-a' } as ReticleEvent;
+    const r = evalNet([left, newDocument], { kind: PredicateKind.NET, status: 200, since: 10 });
+
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeUndefined();
+  });
+
+  it('keeps a download departure inconclusive even when a new document follows', () => {
+    const left = { ...departure(20, { download: true }), documentId: 'doc-a' } as ReticleEvent;
+    const r = evalNet([left, newDocument], { kind: PredicateKind.NET, status: 200, since: 10 });
+
+    expect(r.inconclusive).toBeDefined();
+    expect(r.assertion).toBe('net.native-download');
+  });
+
+  it('keeps a plain navigation inconclusive while every later event is from the same document', () => {
+    const stayed = { ...departure(20), documentId: 'doc-a' } as ReticleEvent;
+    const sameDocument = { ...newDocument, documentId: 'doc-a' } as ReticleEvent;
+    const r = evalNet([stayed, sameDocument], { kind: PredicateKind.NET, status: 200 });
+
+    expect(r.inconclusive).toBeDefined();
+  });
 });
