@@ -390,6 +390,10 @@ await settle();
   // The refusal message interpolates whatever the caller asked for — a baseline name, a selector, a
   // testid. Only the tool NAME and the bucket may leave; the message itself never does.
   check('  leaks no argument from the refused call', !JSON.stringify(rs).includes('checkout-v3') && !JSON.stringify(rs).includes('submit'));
+  // The NAMES of the call's arguments, so a tool that confuses agents can be told from one that is
+  // never reached. Only names, and our own enum values: the leak check above still holds.
+  const params = rs[2]?.properties.refusal_params;
+  check('  carries the names of the refused call\'s arguments', Array.isArray(params) && params.includes('name') && params.some((p) => String(p).startsWith('action')), JSON.stringify(params));
 }
 
 // ── 4b. SDK failures from the in-page half, arriving over the bridge ──────────

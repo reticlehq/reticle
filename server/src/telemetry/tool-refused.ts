@@ -16,6 +16,7 @@ import {
   TelemetryEventKind,
   type NoSessionReason,
 } from '@reticlehq/core/telemetry';
+import { describeToolParams } from './argument-shape.js';
 import { getTelemetry } from './telemetry.js';
 
 /**
@@ -65,8 +66,15 @@ export function noteToolServed(): void {
   lastRefusedTool = undefined;
 }
 
-/** One refused call, reported with its cause and whether it was itself a retry. */
-export function reportToolRefused(tool: string, reason: RefusalReason): void {
+/** How many argument names one refusal carries. A call with more is malformed in its own way. */
+const MAX_REFUSAL_PARAMS = 16;
+
+/** One refused call, reported with its cause, whether it was a retry, and the names of its arguments. */
+export function reportToolRefused(
+  tool: string,
+  reason: RefusalReason,
+  args: Record<string, unknown> = {},
+): void {
   const retried = lastRefusedTool === tool;
   lastRefusedTool = tool;
   // Read and clear whatever the throw left, whether or not this refusal can use it: a reason left
@@ -81,6 +89,10 @@ export function reportToolRefused(tool: string, reason: RefusalReason): void {
       tool,
       reason,
       retried,
+      ...((): { params?: string[] } => {
+        const params = describeToolParams(args).slice(0, MAX_REFUSAL_PARAMS);
+        return 0 === params.length ? {} : { params };
+      })(),
       // Only where it means something. On any other refusal reason this field would be answering
       // a question nobody asked of it.
       ...(RefusalReason.NO_SESSION === reason && noSessionReason !== undefined

@@ -185,11 +185,16 @@ function reportBugsFound(
  * tool's name, and then hands the same failure back out to be reported a second time as
  * `reticle_run`. A count that doubles because of HOW a tool was reached is not a measurement.
  */
-function reportRefusal(toolName: string, message: string, error?: unknown): void {
+function reportRefusal(
+  toolName: string,
+  args: Record<string, unknown>,
+  message: string,
+  error?: unknown,
+): void {
   if (toolName === ReticleTool.RUN) {
     return;
   }
-  reportToolRefused(toolName, refusalReasonFor(message, codedRefusalOf(error)));
+  reportToolRefused(toolName, refusalReasonFor(message, codedRefusalOf(error)), args);
 }
 
 /**
@@ -483,7 +488,7 @@ async function dispatchTool<Ext>(
       'value — a selector or an id rather than a document, or a slice of the text you need.';
     // Refused before the handler was ever entered, and still a refusal the agent has to recover
     // from. Reported here rather than at the return below, which this branch never reaches.
-    reportRefusal(tool.name, error);
+    reportRefusal(tool.name, args, error);
     return { error };
   }
   // One driver per tab. The Harness clicking through a page while the agent clicks too is two hands
@@ -491,7 +496,7 @@ async function dispatchTool<Ext>(
   const busy = ACTION_TOOLS.has(tool.name) ? harnessDriving(deps, args) : undefined;
   if (busy !== undefined) {
     const error = msgHarnessHasTheTab(busy);
-    reportRefusal(tool.name, error);
+    reportRefusal(tool.name, args, error);
     return { error };
   }
   // An ACTION is what gets abandoned. Counted here, against verifications, so "the agent drove the
@@ -540,7 +545,7 @@ async function dispatchTool<Ext>(
   // before Playwright invents a closed page. ready:true leases still hit this path.
   if (session?.versionSkew !== undefined && CDP_TOOLS.has(tool.name)) {
     const message = session.versionSkew;
-    reportRefusal(tool.name, message);
+    reportRefusal(tool.name, args, message);
     throw new Error(message);
   }
   // A ref that was handed out by a DIFFERENT tab, on a call that named no session. Refused here, at
@@ -558,7 +563,7 @@ async function dispatchTool<Ext>(
     if (wrongTab !== undefined) {
       // Refused before the handler was entered, so it is reported here — the same shape as the
       // oversized-argument refusal above.
-      reportRefusal(tool.name, wrongTab);
+      reportRefusal(tool.name, args, wrongTab);
       return { error: wrongTab };
     }
   }
@@ -610,7 +615,7 @@ async function dispatchTool<Ext>(
     const rewritten = rewriteClosedAsSkew(error, skewText);
     const toThrow = rewritten ?? error;
     const message = toThrow instanceof Error ? toThrow.message : String(toThrow);
-    reportRefusal(tool.name, message, toThrow);
+    reportRefusal(tool.name, args, message, toThrow);
     // The invitation on THIS path is the one `buildErrorPayload` attaches when it does not recognise
     // the error, and it was never counted — so the denominator excluded the commonest friction there
     // is. Gated on the payload actually carrying the ask, because a recognised error gets a recovery
@@ -685,7 +690,7 @@ async function dispatchTool<Ext>(
   // project the daemon was started in.
   session?.pushImpact?.(() => impactSnapshot(artifactRoot));
   if (resultIsError(raw)) {
-    reportRefusal(tool.name, (raw as { error: string }).error);
+    reportRefusal(tool.name, args, (raw as { error: string }).error);
   } else {
     noteToolServed();
     // Which tab these refs belong to. Recorded on the way OUT, so the next call that spends one is

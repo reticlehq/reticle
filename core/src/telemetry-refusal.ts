@@ -61,5 +61,12 @@ export const ToolRefusalSchema = z.object({
    * gets anybody unstuck.
    */
   retried: z.boolean(),
+  /**
+   * The arguments the refused call passed, by NAME, with the value only for an enum we defined
+   * (`action:list`, else `action:other`), as `toolParams` reports them. Never a free value. A
+   * `bad_args` refusal said nothing about the call's shape, so a tool that confuses agents could
+   * not be told apart from one that agents never reach.
+   */
+  params: z.array(z.string().min(1).max(64)).max(16).optional(),
 });
 export type ToolRefusal = z.infer<typeof ToolRefusalSchema>;

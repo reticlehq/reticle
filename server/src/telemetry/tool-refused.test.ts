@@ -76,3 +76,29 @@ describe('tool_refused', () => {
     expect(sent.length).toBe(50);
   });
 });
+
+/*
+ * A refused call said only `bad_args`. On 3.8.2, `reticle_session` was refused for bad arguments on
+ * several machines, and nothing said which arguments the agents passed, so the cause could not be
+ * found. The refusal now carries the argument NAMES (and our own enum values), never a value.
+ */
+describe('tool_refused carries the shape of the call', () => {
+  it('reports the names of the arguments that were passed, and no value', () => {
+    const sent = captureEmits();
+    reportToolRefused('reticle_session', RefusalReason.BAD_ARGS, {
+      action: 'lsit',
+      sessionId: 's-1',
+      note: 'my secret text',
+    });
+    const refusal = sent[0]?.refusal as { params?: string[] } | undefined;
+    expect(refusal?.params).toEqual(['action:other', 'note']);
+    expect(JSON.stringify(sent)).not.toContain('secret');
+    expect(JSON.stringify(sent)).not.toContain('lsit');
+  });
+
+  it('sends no params block when the call had no arguments', () => {
+    const sent = captureEmits();
+    reportToolRefused('reticle_session', RefusalReason.BAD_ARGS, {});
+    expect((sent[0]?.refusal as { params?: string[] } | undefined)?.params).toBeUndefined();
+  });
+});

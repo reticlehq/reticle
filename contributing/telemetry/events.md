@@ -345,6 +345,7 @@ The payload never carries a selector, a URL or a description of the app.
 | `reason` | `RefusalReason` | `no_session`, `no_match`, `unsupported`, `bad_args`, `not_ready` or `other`. |
 | `noSessionReason` | `NoSessionReason`, optional | For `no_session` only: which situation. |
 | `retried` | boolean | The call before this one was the same tool, also refused. |
+| `params` | string[], optional | The names of the arguments the refused call passed (at most 16). An argument whose value is one of our own enums carries it, as `action:list`, or `action:other` for a value not on the list. Never any other value. Absent when the call passed none. |
 
 > **Trap:** `noSessionReason` is absent on many `no_session` rows. Absent means the refusal named no situation, not that the cause was simple.
 
