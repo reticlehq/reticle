@@ -6,6 +6,7 @@
 import { parseFeedbackArgs, type ParsedFeedback } from './cli-parse-feedback.js';
 import { HEADLESS_FLAG, parseServeFlags } from './cli-parse-serve.js';
 import { parseVerifySuffix } from './cli-parse-verify.js';
+import { DAEMON_INNER_COMMAND } from '@/command/daemon/daemon-argv.js';
 import {
   HEADED_FLAG,
   PORT_FLAG,
@@ -23,7 +24,7 @@ import {
 
 // Re-exported because the daemon's own argv builder reaches for these through this module, which is
 // where the grammar has always lived as far as every caller is concerned.
-export { HEADED_FLAG, PORT_FLAG };
+export { DAEMON_INNER_COMMAND, HEADED_FLAG, PORT_FLAG };
 export {
   DRIVE_FLAG,
   HEADLESS_FLAG,
@@ -83,7 +84,6 @@ export const TelemetryAction = {
   DISABLE: 'disable',
 } as const;
 export type TelemetryAction = (typeof TelemetryAction)[keyof typeof TelemetryAction];
-export const DAEMON_INNER_COMMAND = '_daemon';
 
 /**
  * Every subcommand a person can type, as one closed vocabulary. Telemetry reports which one ran, and

@@ -38,10 +38,10 @@ import {
 import { spawnDaemon } from '@/command/daemon/daemon.js';
 import {
   PortPresence,
-  describePresence,
   presenceIsUsable,
   probePresence,
 } from '@/command/daemon/binding/port-presence.js';
+import { describePortState } from '@/command/daemon/port-state.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { probeDaemon, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
 import { readProjectPort } from '@/command/cli/ports/resolve/cli-port.js';
@@ -247,7 +247,7 @@ async function ensureTryDaemon(port: number): Promise<string | undefined> {
   const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
   if (presenceIsUsable(presence)) return undefined;
   // A stranger on the port: a daemon spawned now could not bind, so say who holds it instead.
-  if (PortPresence.FREE !== presence) return describePresence(presence, port);
+  if (PortPresence.FREE !== presence) return describePortState(presence, port);
   const script = process.argv[1];
   if (script === undefined) return 'Cannot locate the reticle daemon script.';
   spawnDaemon(process.execPath, script, [DAEMON_INNER_COMMAND, PORT_FLAG, String(port)], port);

@@ -49,7 +49,8 @@ import {
   OnDrop,
   OnRequest,
 } from './proxy/proxy-lifecycle.js';
-import { describePresence, probePresence } from '@/command/daemon/binding/port-presence.js';
+import { probePresence } from '@/command/daemon/binding/port-presence.js';
+import { describePortState } from '@/command/daemon/port-state.js';
 import {
   PROXY_ID,
   flushProxyExit,
@@ -586,7 +587,7 @@ export function startMcpProxy(
             // The sentence `doctor` has always been able to say, in the log the agent's own process
             // writes. A FOREIGN holder used to be indistinguishable from a free port here, and the
             // proxy spun against it instead of saying which one it was.
-            const sentence = describePresence(presence, port);
+            const sentence = describePortState(presence, port);
             proxyLog('reticle_mcp_proxy_dormant', { port, presence, note: sentence });
             // Nothing is coming that could answer the client's handshake through this port, and the
             // proxy now knows that rather than merely suspecting it. Waiting out LOCAL_HANDSHAKE_MS

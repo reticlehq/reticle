@@ -29,11 +29,8 @@ import {
   reticleStateHome,
 } from '@/command/daemon/daemon.js';
 import { readDaemonStartupCause } from '@/command/daemon/lifetime/startup-failure.js';
-import {
-  PortPresence,
-  probePresence,
-  describePresence,
-} from '@/command/daemon/binding/port-presence.js';
+import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
+import { describePortState } from '@/command/daemon/port-state.js';
 import { daemonSpawnArgs } from '@/command/cli/daemon-start-options.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { requestShutdown, runKill } from '@/command/cli/cli-kill.js';
@@ -115,9 +112,9 @@ async function serveWithHonestExit(parsed: {
     log('reticle_daemon_start_refused', {
       port: parsed.port,
       presence,
-      reason: describePresence(presence, parsed.port),
+      reason: describePortState(presence, parsed.port),
     });
-    process.stderr.write(`${describePresence(presence, parsed.port)}\n`);
+    process.stderr.write(`${describePortState(presence, parsed.port)}\n`);
     process.exit(1);
     return;
   }
@@ -140,7 +137,7 @@ async function serveWithHonestExit(parsed: {
     log('reticle_daemon_start_failed_parent', {
       port: parsed.port,
       presence: settled,
-      reason: describePresence(settled, parsed.port),
+      reason: describePortState(settled, parsed.port),
       log: logPath(parsed.port),
       stateDir: stateDirProblem(reticleStateHome()) === undefined ? 'writable' : 'unwritable',
       ...(startupCause === undefined ? {} : { cause: startupCause }),
@@ -153,7 +150,7 @@ async function serveWithHonestExit(parsed: {
     process.stderr.write(
       dirProblem === undefined
         ? startupCause === undefined
-          ? `the daemon did not come up on :${String(parsed.port)} — ${describePresence(settled, parsed.port)}\n` +
+          ? `the daemon did not come up on :${String(parsed.port)} — ${describePortState(settled, parsed.port)}\n` +
             `see ${logPath(parsed.port)}\n`
           : `the daemon did not come up on :${String(parsed.port)}.\n${startupCause}\n` +
             `see ${logPath(parsed.port)}\n`

@@ -434,7 +434,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // `facts` and `session`: a full page load replaces the session, and the explorer must follow it
   // (session-port.ts) with the same reconnect wait `navigate { reload }` uses.
   exhaust: ['dir', 'fs', 'project', 'facts', 'session'],
-  daemon: ['lifetime', 'binding', 'telemetry'],
+  // `ports`: port-state.ts names the process that holds the bridge port, so every surface says the
+  // same thing about a daemon that holds it and does not answer (#1937).
+  daemon: ['lifetime', 'binding', 'ports', 'telemetry'],
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
@@ -662,9 +664,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   /**
    * `reticle drive`. It attaches to a daemon that is already running rather than binding the
    * port itself, which is the whole reason the two files exist and why they reach the daemon,
-   * the launcher, the mcp surface and the port table.
+   * the port probe and the mcp surface.
    */
-  drive: ['binding', 'daemon', 'mcp', 'ports'],
+  drive: ['binding', 'daemon', 'mcp'],
   /**
    * This project's dev server: the literal command that starts it, read from the project's own
    * scripts, and which of the usual ports already have something listening. Named dev-server

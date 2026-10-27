@@ -14,8 +14,8 @@ import {
   PortPresence,
   probePresence,
   presenceIsUsable,
-  describePresence,
 } from '@/command/daemon/binding/port-presence.js';
+import { describePortState } from '@/command/daemon/port-state.js';
 import {
   waitForDaemon,
   startMcpProxy,
@@ -34,7 +34,7 @@ import {
 } from '@/command/daemon/daemon-resolve.js';
 import { daemonSpawnArgs } from './daemon-start-options.js';
 import { WakeAction, decideWake } from '@/command/daemon/wake-decision.js';
-import { runKill } from './cli-kill.js';
+import { runKill, stopWedgedDaemon } from './cli-kill.js';
 import { pickDaemonPortToBind } from '@/command/daemon/binding/free-port.js';
 import { fetchStatus, summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { isNewerVersion } from '@/command/update/update-nudge.js';
@@ -155,6 +155,9 @@ export async function handleMcp(opts: {
       reason: relocationReason(opts.port, to, projectId, reticleStateHome(), isAlive),
     });
   };
+  // A Reticle daemon stuck on the requested port is stopped, not moved away from: the app's SDK
+  // dials this port, and a daemon on another one gets no page (#1937).
+  await stopWedgedDaemon(opts.port);
   // `let`: a wake that finds the port taken resolves again, and the proxy follows (#1651, #1652).
   let port = await resolvePort();
   if (port !== opts.port) {
@@ -195,7 +198,12 @@ export async function handleMcp(opts: {
     // the bridge port answered "a daemon is here" — the proxy connected, the stream ended, and each
     // client request woke into the identical non-answer. Rejecting here is what puts the proxy
     // dormant with a reason, instead of pretending the wake succeeded.
-    const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
+    let presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
+    // A Reticle daemon that holds the port and does not answer: stop it and keep the port, as at
+    // boot. Relocating left the app dialling a port with no working daemon (#1937).
+    if (PortPresence.FOREIGN === presence && (await stopWedgedDaemon(port))) {
+      presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
+    }
     // Identity, not just presence. `resolveMcpPort` above already refuses to adopt a stranger's
     // daemon at boot; this is the same question asked on every WAKE, which is where it was missing.
     //
@@ -239,7 +247,7 @@ export async function handleMcp(opts: {
         PortPresence.DAEMON === presence
           ? `the daemon on port ${String(port)} belongs to a different project, so this one will ` +
               'not adopt it. Stop it, or start this project on its own port.'
-          : describePresence(presence, port),
+          : describePortState(presence, port),
       );
     }
     const scriptPath = process.argv[1];

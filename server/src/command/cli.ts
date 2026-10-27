@@ -22,6 +22,7 @@ import {
   resolveDaemonForProject,
 } from './daemon/daemon-resolve.js';
 import { pickDaemonPortToBind } from './daemon/binding/free-port.js';
+import { exitAfterClose } from './daemon/lifetime/daemon-exit.js';
 import { isSameOrAbove, portForInit, portFromEnv } from './setup/init/init-port.js';
 import { daemonStartOptions } from './cli/daemon-start-options.js';
 import { handleGate, loadNamedFlows, resolveChangedFiles } from './cli/cli-flow-commands.js';
@@ -46,12 +47,8 @@ import {
   discoverDaemonPort,
   writeDaemonRegistry,
 } from './daemon/daemon.js';
-import {
-  PortPresence,
-  probePresence,
-  presenceIsUsable,
-  describePresence,
-} from './daemon/binding/port-presence.js';
+import { PortPresence, probePresence, presenceIsUsable } from './daemon/binding/port-presence.js';
+import { describePortState } from '@/command/daemon/port-state.js';
 import { waitForDaemon, probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import {
   installDaemonResilience,
@@ -296,7 +293,7 @@ function ensureDaemon(port: number): Promise<void> {
       // success for a daemon that never bound" shape. Refuse instead, with the sentence `doctor`
       // says.
       if (PortPresence.FREE !== presence) {
-        throw new Error(describePresence(presence, port));
+        throw new Error(describePortState(presence, port));
       }
       const scriptPath = process.argv[1];
       if (scriptPath === undefined) {
@@ -506,25 +503,16 @@ function handleDaemonInner(parsed: {
         // to reach a socket that is still open.
         server.announceShutdown?.();
         // Awaited before the close/exit chain: `process.exit(0)` kills an in-flight POST, and this is
-        // the one event carrying the whole session. A failed send resolves anyway (emit swallows its
-        // own errors), so this can delay the exit by at most the send timeout, never prevent it.
-        void daemonTelemetry
-          // The reason rides out on the session summary, which is the only event that fires at this
-          // exact moment. The proxy emits the matching `mcp_connection_lost` and cannot know it —
-          // it sees a socket end and nothing more, which is how a scheduled idle exit came to make up
-          // the large majority of "outages". See SessionSummary.exit.
-          .shutdown(reason)
-          .then(() => server.close())
-          .then(() => {
-            removePid(parsed.port);
-            process.exit(0);
-          })
-          .catch((err: unknown) => {
-            const message = err instanceof Error ? err.message : String(err);
-            log('reticle_daemon_close_error', { error: message });
-            removePid(parsed.port);
-            process.exit(1);
-          });
+        // the one event carrying the whole session. The reason rides out on the session summary;
+        // the proxy sees only a socket end. See SessionSummary.exit. The summary and the close share
+        // one bound, so a close that never settles cannot keep this process on its port (#1937).
+        void exitAfterClose({
+          summary: () => daemonTelemetry.shutdown(reason),
+          close: () => server.close(),
+        }).then((code) => {
+          removePid(parsed.port);
+          process.exit(code);
+        });
       };
       // Wrapped rather than passed directly: a signal handler receives the signal name as its first
       // argument, which would otherwise arrive as the reason.

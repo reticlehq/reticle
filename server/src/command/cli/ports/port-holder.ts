@@ -19,6 +19,8 @@ import { spawnSync } from 'node:child_process';
 export interface PortHolder {
   pid: number;
   command: string;
+  /** Its command line is a Reticle daemon's. Set only by `identifyPortHolder`. */
+  reticleDaemon?: boolean;
 }
 
 /** Bound on the holder lookup. A hung `lsof` must not hang the commands that diagnose hangs. */
@@ -133,6 +135,14 @@ export function describeForeignHolder(
           'still around it is a wedged Reticle daemon, and `reticle stop` clears it.'
         : '';
     return `port ${String(port)} is held by a process Reticle could not identify — ${tail}${ours}`;
+  }
+  if (true === holder.reticleDaemon && ourPid !== holder.pid) {
+    // Not the pid we recorded, so `reticle stop` cannot find it. `restart` finds the listener.
+    return (
+      `port ${String(port)} is held by a Reticle daemon (pid ${String(holder.pid)}) that does not ` +
+      'answer, so nothing can use the port and no other daemon can bind it. Run `reticle restart`: ' +
+      'it stops that process and starts a new daemon on this port.'
+    );
   }
   if (ourPid !== null && ourPid !== undefined && ourPid === holder.pid) {
     return (

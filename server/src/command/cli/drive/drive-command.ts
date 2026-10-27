@@ -9,11 +9,10 @@
 
 import { start, type StartOptions } from '@/index.js';
 import { log } from '@/log.js';
-import { probePresence, describePresence } from '@/command/daemon/binding/port-presence.js';
+import { probePresence } from '@/command/daemon/binding/port-presence.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
-import { readPid } from '@/command/daemon/daemon.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
-import { captureLookup, findPortHolder } from '@/command/cli/ports/port-holder.js';
+import { describePortState } from '@/command/daemon/port-state.js';
 import {
   DriveMode,
   NO_ATTACHED_APP,
@@ -57,12 +56,7 @@ async function driveWithHonestConflict(
   const presence = await probePresence(parsed.port, { tcpOpen: probeDaemon, status: fetchStatus });
   const mode = decideDriveMode(presence);
   if (DriveMode.REFUSE === mode) {
-    const reason = driveForeignHolder(
-      describePresence(presence, parsed.port, {
-        ourPid: readPid(parsed.port),
-        holderPid: findPortHolder(parsed.port, captureLookup)?.pid,
-      }),
-    );
+    const reason = driveForeignHolder(describePortState(presence, parsed.port));
     log('reticle_drive_port_conflict', { port: parsed.port, presence, reason });
     process.stderr.write(`${reason}\n`);
     process.exit(1);

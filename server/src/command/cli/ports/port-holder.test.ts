@@ -6,6 +6,7 @@ import {
   parsePortHolder,
   parseProcessCwd,
 } from './port-holder.js';
+import { isReticleDaemonCommand } from '@/command/daemon/daemon-argv.js';
 
 /**
  * Naming the process that holds the port.
@@ -217,5 +218,21 @@ describe('parseCommandLineRoot', () => {
   it('is null when the command line names no node_modules: no evidence, so nothing opens', () => {
     expect(parseCommandLineRoot('C:\\Python312\\python.exe -m http.server 8000')).toBeNull();
     expect(parseCommandLineRoot('')).toBeNull();
+  });
+});
+
+/**
+ * #1937: `restart` and the MCP proxy stop a holder only when its command line is a Reticle daemon.
+ * The agent's own MCP proxy and a stranger must never match.
+ */
+describe('isReticleDaemonCommand', () => {
+  it('matches the daemon the proxy starts', () => {
+    expect(isReticleDaemonCommand('node /x/dist/cli.js _daemon --port 4400 --headless')).toBe(true);
+  });
+
+  it('does not match the MCP proxy or a stranger', () => {
+    expect(isReticleDaemonCommand('node /x/dist/cli.js mcp --port 4400')).toBe(false);
+    expect(isReticleDaemonCommand('node /x/my_daemon.js --port 4400')).toBe(false);
+    expect(isReticleDaemonCommand('python -m http.server 4400')).toBe(false);
   });
 });

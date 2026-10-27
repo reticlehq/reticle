@@ -1,11 +1,11 @@
 import * as net from 'node:net';
 import { LOOPBACK_HOST } from '@reticlehq/core';
 import {
-  describePresence,
   presenceIsUsable,
   probePresence,
   PortPresence,
 } from '@/command/daemon/binding/port-presence.js';
+import { describePortState } from '@/command/daemon/port-state.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { isAlive, readPid } from '@/command/daemon/daemon.js';
 
@@ -31,6 +31,18 @@ export function daemonPollDelayMs(attempt: number): number {
   return Math.min(DAEMON_POLL_INTERVAL_MS * attempt, DAEMON_POLL_MAX_INTERVAL_MS);
 }
 
+const CONNECTION_RESET = 'ECONNRESET';
+
+/**
+ * A loopback connect to a port with no listener is refused at once. A timeout means a listener
+ * whose queue is full because it accepts nothing: a daemon stuck in its exit (#1937). Read as
+ * "free", that made `status` say the port was free while a process held it.
+ *
+ * Not on Windows: it retries a refused loopback connect for about two seconds, so there a timeout
+ * is also what a free port gives.
+ */
+const TIMEOUT_MEANS_HELD = 'win32' !== process.platform;
+
 /**
  * Returns true if something is already listening on the reticle port.
  * Uses a plain TCP probe so we don't create a side-effectful SSE session
@@ -48,10 +60,11 @@ export function probeDaemon(port: number, host: string = LOOPBACK_HOST): Promise
       socket.destroy();
       resolve(true);
     });
-    socket.on('error', () => resolve(false));
+    // A reset is an answer from a listener, not "nothing listens".
+    socket.on('error', (err: NodeJS.ErrnoException) => resolve(CONNECTION_RESET === err.code));
     socket.on('timeout', () => {
       socket.destroy();
-      resolve(false);
+      resolve(TIMEOUT_MEANS_HELD);
     });
     socket.connect(port, host);
   });
@@ -88,7 +101,7 @@ export async function waitForDaemon(
     if (false === probes.alive?.()) {
       throw new Error(
         `the reticle daemon on port ${String(port)} exited before it was ready — ` +
-          describePresence(presence, port),
+          describePortState(presence, port),
       );
     }
     attempt++;
@@ -99,7 +112,7 @@ export async function waitForDaemon(
   // wrong one.
   throw new Error(
     `reticle daemon did not become ready on port ${String(port)} within ` +
-      `${String(DAEMON_READY_TIMEOUT_MS)}ms — ${describePresence(presence, port)}`,
+      `${String(DAEMON_READY_TIMEOUT_MS)}ms — ${describePortState(presence, port)}`,
   );
 }
 

@@ -23,7 +23,8 @@ import { isAlive, readPid, removePid } from '@/command/daemon/daemon.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { log } from '@/log.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
-import { captureLookup, findPortHolder, type PortHolder } from './ports/port-holder.js';
+import { captureLookup, type PortHolder } from './ports/port-holder.js';
+import { identifyPortHolder } from '@/command/daemon/port-state.js';
 import * as http from 'node:http';
 import { LOOPBACK_HOST, SHUTDOWN_PATH } from '@reticlehq/core';
 import { storedPairingToken } from '@/portal/bridge/pairing-token.js';
@@ -76,7 +77,8 @@ export function planKill(input: {
       return { action: KillAction.NOTHING, forced: false, identifiedListener: false };
     return { action: KillAction.KILL, pid: recordedPid, forced: false, identifiedListener: false };
   }
-  const ours = answersStatus || listener.pid === recordedPid;
+  // `reticleDaemon`: its command line says so, though it answers nothing and no pid file names it.
+  const ours = answersStatus || listener.pid === recordedPid || true === listener.reticleDaemon;
   if (ours || force) {
     return {
       action: KillAction.KILL,
@@ -196,12 +198,54 @@ const PROXY_SPARED_NOTE =
   'only the listener was signalled. Any `reticle mcp` proxy on this port holds a client connection, ' +
   'not the port, and was left alone — it goes dormant and starts a fresh daemon on the next tool call.';
 
+/**
+ * How long a daemon that holds the port gets to answer before it counts as stuck. A daemon that has
+ * just bound answers in far less, so a second look after this does not stop one that is starting.
+ */
+const WEDGED_GRACE_MS = 2_000;
+
+/**
+ * Stop a Reticle daemon that holds `port` and does not answer. True when it stopped one (#1937).
+ *
+ * The MCP proxy used to move to another port when it found one. The app's SDK dials the old port,
+ * so the new daemon got no page. Stopping the stuck daemon keeps the port the app dials. The holder
+ * must have a Reticle daemon's command line, so a stranger and the proxy itself are never signalled.
+ */
+export async function stopWedgedDaemon(
+  port: number,
+  deps: {
+    presence: () => Promise<PortPresence>;
+    holder: () => PortHolder | null;
+    kill: () => Promise<boolean>;
+    wait: (ms: number) => Promise<void>;
+  } = {
+    presence: () => probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }),
+    holder: () => identifyPortHolder(port, captureLookup),
+    kill: () => runKill(port, false),
+    wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  },
+): Promise<boolean> {
+  if (PortPresence.FOREIGN !== (await deps.presence())) {
+    return false;
+  }
+  const holder = deps.holder();
+  if (true !== holder?.reticleDaemon) {
+    return false;
+  }
+  await deps.wait(WEDGED_GRACE_MS);
+  if (PortPresence.FOREIGN !== (await deps.presence())) {
+    return false;
+  }
+  log('reticle_wedged_daemon_stopping', { port, pid: holder.pid });
+  return deps.kill();
+}
+
 /** `reticle kill` — free the port. Resolves to whether the port is now free. */
 export async function runKill(port: number, force: boolean): Promise<boolean> {
   const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
   const recorded = readPid(port);
   const plan = planKill({
-    listener: findPortHolder(port, captureLookup),
+    listener: identifyPortHolder(port, captureLookup),
     recordedPid: null !== recorded && isAlive(recorded) ? recorded : null,
     answersStatus: presence === PortPresence.DAEMON,
     force,

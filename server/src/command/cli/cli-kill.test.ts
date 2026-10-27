@@ -16,7 +16,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SHUTDOWN_PATH } from '@reticlehq/core';
-import { KillAction, planKill, requestShutdown } from './cli-kill.js';
+import { KillAction, planKill, requestShutdown, stopWedgedDaemon } from './cli-kill.js';
+import { PortPresence } from '@/command/daemon/binding/port-presence.js';
 
 const DAEMON_PID = 70244;
 const STRANGER_PID = 99001;
@@ -100,6 +101,23 @@ describe('planKill', () => {
     expect(plan.identifiedListener).toBe(false);
   });
 
+  /**
+   * #1937: a daemon stuck in its exit holds the port, answers nothing, and the pid file no longer
+   * names it. Its command line still says it is a Reticle daemon, so `restart` may stop it. It used
+   * to refuse it as "not a Reticle daemon", and the port stayed held until a person killed it.
+   */
+  it('kills a listener whose command line is a Reticle daemon, with no record of its pid', () => {
+    const plan = planKill({
+      listener: { pid: STRANGER_PID, command: 'node', reticleDaemon: true },
+      recordedPid: null,
+      answersStatus: false,
+      force: false,
+    });
+    expect(plan.action).toBe(KillAction.KILL);
+    expect(plan.pid).toBe(STRANGER_PID);
+    expect(plan.forced).toBe(false);
+  });
+
   it('never plans to kill without a pid', () => {
     for (const force of [false, true]) {
       const plan = planKill({ listener: null, recordedPid: null, answersStatus: true, force });
@@ -163,5 +181,53 @@ describe('requestShutdown', () => {
     await new Promise<void>((done) => server?.close(() => done()));
     server = undefined;
     expect(await requestShutdown(port, TOKEN)).toBe(false);
+  });
+});
+
+/**
+ * #1937: the MCP proxy found a Reticle daemon that held the bridge port and did not answer. It
+ * moved to another port, which the app's SDK never dials. It must stop that daemon and keep the port.
+ */
+describe('stopWedgedDaemon', () => {
+  const PORT = 4400;
+  const fakes = (presences: PortPresence[], reticleDaemon: boolean) => {
+    const state = {
+      kills: 0,
+      presence: (): Promise<PortPresence> =>
+        Promise.resolve(presences.shift() ?? PortPresence.FREE),
+      holder: () => ({ pid: STRANGER_PID, command: 'node', reticleDaemon }),
+      kill: (): Promise<boolean> => {
+        state.kills += 1;
+        return Promise.resolve(true);
+      },
+      wait: (): Promise<void> => Promise.resolve(),
+    };
+    return state;
+  };
+
+  it('stops a Reticle daemon that holds the port and still does not answer', async () => {
+    const d = fakes([PortPresence.FOREIGN, PortPresence.FOREIGN], true);
+    expect(await stopWedgedDaemon(PORT, d)).toBe(true);
+    expect(d.kills).toBe(1);
+  });
+
+  it('never stops a holder whose command line is not a Reticle daemon', async () => {
+    const d = fakes([PortPresence.FOREIGN, PortPresence.FOREIGN], false);
+    expect(await stopWedgedDaemon(PORT, d)).toBe(false);
+    expect(d.kills).toBe(0);
+  });
+
+  it('leaves a daemon that answers on the second look, because it was only starting', async () => {
+    const d = fakes([PortPresence.FOREIGN, PortPresence.DAEMON], true);
+    expect(await stopWedgedDaemon(PORT, d)).toBe(false);
+    expect(d.kills).toBe(0);
+  });
+
+  it('does nothing on a free port or a daemon that answers', async () => {
+    for (const presence of [PortPresence.FREE, PortPresence.DAEMON]) {
+      const d = fakes([presence], true);
+      expect(await stopWedgedDaemon(PORT, d)).toBe(false);
+      expect(d.kills).toBe(0);
+    }
   });
 });

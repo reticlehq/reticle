@@ -20,8 +20,8 @@ import {
   PortPresence,
   probePresence,
   presenceIsUsable,
-  describePresence,
 } from '@/command/daemon/binding/port-presence.js';
+import { describePortState } from '@/command/daemon/port-state.js';
 import { summarizeStatus } from './launch/cli-launch.js';
 import { readProjectId } from './ports/resolve/cli-port.js';
 import { accountStatusFields } from './cloud-cli.js';
@@ -138,7 +138,7 @@ export async function handleStatus(port: number, json = false): Promise<void> {
       port,
       running: false,
       presence,
-      ...(presence === PortPresence.FOREIGN ? { reason: describePresence(presence, port) } : {}),
+      ...(presence === PortPresence.FOREIGN ? { reason: describePortState(presence, port) } : {}),
       // `init` promises this command says why the app has not connected. Without it the answer was
       // `running: false` and nothing else, which reads as "Reticle is broken" for what is usually
       // just a daemon that has not been asked to do anything yet.

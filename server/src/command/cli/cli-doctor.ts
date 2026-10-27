@@ -11,7 +11,8 @@ import { daemonLine, type DaemonIdentity } from './doctor/doctor-daemon-line.js'
 import { projectWiringLine } from './doctor/doctor-project-line.js';
 import { hasProjectConnectedBefore } from '@/memory/recall/prior/connection-memory.js';
 import { sessionsLine, type SessionsLine } from './doctor/doctor-sessions-line.js';
-import { captureLookup, describeForeignHolder, findPortHolder } from './ports/port-holder.js';
+import { captureLookup, describeForeignHolder } from './ports/port-holder.js';
+import { identifyPortHolder } from '@/command/daemon/port-state.js';
 import { chromiumHint } from './doctor/browser/chromium-hint.js';
 import { probeChromiumWithFallback } from '@/launch-chromium.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
@@ -164,7 +165,7 @@ export async function handleDoctor(port: number): Promise<void> {
     line(
       doctorRow(
         DoctorRow.DAEMON,
-        `✗ ${describeForeignHolder(port, findPortHolder(port, captureLookup), pid)}`,
+        `✗ ${describeForeignHolder(port, identifyPortHolder(port, captureLookup), pid)}`,
       ),
     );
   } else {
