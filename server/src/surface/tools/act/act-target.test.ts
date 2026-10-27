@@ -132,3 +132,29 @@ describe('resolveActTarget — a string target', () => {
     expect(command).not.toHaveBeenCalled();
   });
 });
+
+/*
+ * An agent's step target matched two elements. The refusal said to pass an explicit ref, so the
+ * agent passed `{ target: { ref: "e2401" } }`. The object was read as a query with no field, and the
+ * step failed with "Nothing was searched". It cost the agent two more calls.
+ */
+describe('resolveActTarget — a ref inside the target object', () => {
+  it('takes { ref } as that ref, and does not query', async () => {
+    const { session, command } = sessionThatMustNotBeQueried();
+    expect(
+      await resolveActTarget(session, { target: { ref: 'e2401' }, action: ActionType.CLICK }),
+    ).toEqual({ kind: 'ref', ref: 'e2401' });
+    expect(command).not.toHaveBeenCalled();
+  });
+
+  it('refuses a ref Reticle never issued, the same as a top-level ref', async () => {
+    const { session, command } = sessionThatMustNotBeQueried();
+    const r = await resolveActTarget(session, {
+      target: { ref: '#submit' },
+      action: ActionType.CLICK,
+    });
+    expect(r.kind).toBe('error');
+    expect('error' === r.kind ? r.message : '').toContain('is not a ref Reticle issued');
+    expect(command).not.toHaveBeenCalled();
+  });
+});

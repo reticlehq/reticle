@@ -61,7 +61,9 @@ export async function resolveActTarget(
    */
   appearanceMs?: number,
 ): Promise<TargetResolution> {
-  const ref = asString(args['ref']);
+  // A ref inside the target object (`target: { ref }`) is the same instruction as a top-level ref.
+  // Read as a query it named nothing, and the step failed with "Nothing was searched".
+  const ref = asString(args['ref']) ?? asString(asRecord(args['target'])['ref']);
   if (ref !== undefined && ref.length > 0) {
     // Refused here, at the boundary, and never re-read as a `target`: guessing what an arbitrary
     // string meant is the silent re-resolution the stale-ref refusal exists to prevent.
