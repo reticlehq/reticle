@@ -249,6 +249,54 @@ describe('dev overlays report what actually takes the pointer (#1698)', () => {
     expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(indicator);
   });
 
+  it('counts different shadow children of one overlay as the same blocker', () => {
+    const { app, root } = nextOverlay();
+    const tiles = {
+      topLeft: document.createElement('div'),
+      topRight: document.createElement('div'),
+      bottomLeft: document.createElement('div'),
+      bottomRight: document.createElement('div'),
+    };
+    const grid = document.createElement('div');
+    grid.style.cssText =
+      'position: fixed; left: 0; top: 0; width: 100px; height: 100px; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;';
+    grid.append(...Object.values(tiles));
+    root.replaceChildren(grid);
+    Object.defineProperty(root, 'elementFromPoint', {
+      value: (x: number, y: number) => {
+        if (y < 50) {
+          return x < 50 ? tiles.topLeft : tiles.topRight;
+        }
+        return x < 50 ? tiles.bottomLeft : tiles.bottomRight;
+      },
+      configurable: true,
+    });
+
+    // The centre and bottom-right samples hit one tile. Each other sample hits a different tile.
+    // All five samples are blocked by the same portal, even though no tile has three votes.
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(tiles.bottomRight);
+  });
+
+  it('does not combine votes from separate dev-overlay hosts', () => {
+    const { app, portal: left, indicator: leftIndicator } = nextOverlay();
+    const { app: otherApp, portal: right, indicator: rightIndicator } = nextOverlay();
+    otherApp.remove();
+    leftIndicator.style.width = '30px';
+    rightIndicator.style.left = '70px';
+    rightIndicator.style.width = '30px';
+    stubStack((x) => {
+      if (x < 30) {
+        return [left, app, document.body];
+      }
+      if (x > 70) {
+        return [right, app, document.body];
+      }
+      return [app, document.body];
+    });
+
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
   it('reports the indicator inside a full-viewport pointer-events:none host', () => {
     const { app, portal, indicator } = nextOverlay();
     portal.setAttribute('style', 'position: fixed; inset: 0; pointer-events: none;');
