@@ -221,11 +221,50 @@ function clearStarvedWhenSiblingsSaw(
     return p !== undefined && provesRender(p, r);
   });
   if (!rendered) return results;
-  return results.map((r) => {
-    if (THROTTLED_STARVED_NOTE !== r.inconclusive) return r;
-    const { inconclusive: _dropped, ...rest } = r;
-    return rest;
+  return results.map((r, i) => {
+    const p = predicates[i];
+    return p === undefined ? r : clearStarved(p, r);
   });
+}
+
+/**
+ * One arm without the starved-tab note.
+ *
+ * A `not` that was unreadable kept its child's result as evidence and never applied the negation.
+ * Dropping only the note left it at `pass: false`, which is the child's answer, not the negated
+ * one: a `not` of an absent element failed (reported on 3.8.2). So a `not` clears its child, then
+ * negates it again. Nested `not` recurses.
+ */
+function clearStarved(predicate: Predicate, result: EvalResult): EvalResult {
+  if (THROTTLED_STARVED_NOTE !== result.inconclusive) return result;
+  const child = result.evidence;
+  if (PredicateKind.NOT === predicate.kind && isEvalResult(child)) {
+    const inner = clearStarved(predicate.predicate, child);
+    return inner.inconclusive === undefined ? negate(predicate.predicate, inner) : result;
+  }
+  const { inconclusive: _dropped, ...rest } = result;
+  return rest;
+}
+
+/** A `not` keeps its child's result as its evidence. */
+function isEvalResult(value: unknown): value is EvalResult {
+  return (
+    'object' === typeof value && null !== value && 'boolean' === typeof Reflect.get(value, 'pass')
+  );
+}
+
+/**
+ * The `not` of a readable result.
+ *
+ * A green negation used to return a bare `{ pass: true }`, so the payload fell back to whatever
+ * the caller had — every element matching the OUTER locator. Three clauses negating three
+ * different names then produced byte-identical responses. The evidence is the whole answer here:
+ * what was looked for, and that it was not there.
+ */
+function negate(negated: Predicate, inner: EvalResult): EvalResult {
+  return inner.pass
+    ? { pass: false, failureReason: 'negated predicate unexpectedly held', evidence: inner }
+    : { pass: true, evidence: { negated, held: false, saw: inner } };
 }
 
 /**
@@ -471,14 +510,7 @@ async function evaluatePredicateRaw(
       // nobody could evaluate became a verdict of verified, manufactured out of a missing reading.
       // You cannot negate an answer nobody had.
       if (inner.inconclusive !== undefined) return unreadableComposite(inner, inner);
-      // A green negation used to return a bare `{ pass: true }`, so the payload fell back to
-      // whatever the caller had — every element matching the OUTER locator. Three clauses negating
-      // three different names then produced byte-identical responses, which reads as a checker that
-      // dropped the name rather than one that correctly found all three absent. The evidence is the
-      // whole answer here: what was looked for, and that it was not there.
-      return inner.pass
-        ? { pass: false, failureReason: 'negated predicate unexpectedly held', evidence: inner }
-        : { pass: true, evidence: { negated: predicate.predicate, held: false, saw: inner } };
+      return negate(predicate.predicate, inner);
     }
     default:
       return { pass: false, failureReason: 'unknown predicate' };

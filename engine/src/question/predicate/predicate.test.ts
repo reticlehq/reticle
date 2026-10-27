@@ -841,6 +841,39 @@ describe('a throttled tab timeout is not a missing render', () => {
     ).toBeUndefined();
   });
 
+  /*
+   * Reported on 3.8.2: "`not` predicate inside allOf fails when its inner element is absent, so the
+   * negation is not applied." On a throttled tab the inner miss gets the starved note, so the `not`
+   * is unreadable. A sibling that saw an element clears the note. Clearing only the note left the
+   * `not` at `pass: false`, which is the inner result without the negation: a false `no`.
+   */
+  it('a `not` inside allOf passes when its inner element is absent and a sibling saw the page', async () => {
+    const session = new ThrottledSession([], (query) => {
+      const found = 'Saved' === (query as { text?: string }).text;
+      return { matched: found, count: found ? 1 : 0, elements: [] };
+    });
+    const negated: Predicate = {
+      kind: 'not',
+      predicate: { kind: 'element', query: { text: 'Error' } },
+    };
+
+    const flat = await evaluatePredicate(session, {
+      kind: 'allOf',
+      predicates: [{ kind: 'element', query: { text: 'Saved' } }, negated],
+    });
+    expect(flat.pass, '"Saved" is on the page and "Error" is not').toBe(true);
+
+    const nested = await evaluatePredicate(session, {
+      kind: 'allOf',
+      predicates: [
+        { kind: 'element', query: { text: 'Saved' } },
+        { kind: 'not', predicate: negated },
+      ],
+    });
+    expect(nested.pass, 'not(not(absent)) is false').toBe(false);
+    expect(nested.inconclusive).toBeUndefined();
+  });
+
   /* The trade is unchanged where nothing was seen: every arm missed, so the caveat still holds. */
   it('still calls the composite starved when NO arm saw anything', async () => {
     const session = new ThrottledSession([]);
