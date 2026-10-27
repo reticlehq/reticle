@@ -261,6 +261,20 @@ function textWithoutHidden(node: Node): string {
     const alt = el.getAttribute('alt');
     return null === alt ? '' : alt;
   }
+  // An embedded form control contributes its value, not its option list or placeholder. AccName 1.2
+  // step 2C: a select's selected option text, an input or textarea's value. A `<label>Decision
+  // <select><option>Choose...</option><option>Approve</option></select></label>` is named "Decision
+  // Choose..." (#1554).
+  if (isSelect(el)) {
+    const select = el as HTMLSelectElement;
+    const selected =
+      select.selectedIndex >= 0 ? select.options[select.selectedIndex] : select.options[0];
+    return selected !== undefined ? (selected.textContent ?? '').trim() : '';
+  }
+  if (isInput(el) || isTextArea(el)) {
+    const control = el as HTMLInputElement | HTMLTextAreaElement;
+    return control.value;
+  }
   let result = '';
   let lastWasElement = false;
   for (const child of el.childNodes) {
