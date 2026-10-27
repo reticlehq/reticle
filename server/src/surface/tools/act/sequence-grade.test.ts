@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Verified } from '@reticlehq/core';
+import { Verified, VerifiedReason } from '@reticlehq/core';
 import { gradeSequence, type StepExpectation } from './sequence-grade.js';
 
 const held = (): StepExpectation => ({ declared: true, held: true });
@@ -159,5 +159,48 @@ describe('a step that could not be judged', () => {
       { declared: true, held: false, undecided: 'target matched no element' },
     ]);
     expect(grade.verified).toBe(Verified.NO);
+  });
+});
+
+/*
+ * `reticle_act { steps }` reported `verified: unknown` with no reason: the grade carried only a
+ * sentence, so telemetry recorded every undecided sequence with no reason and nobody could count
+ * why. Each grade names its clause from core's VerifiedReason, as a single action's verdict does.
+ */
+describe('gradeSequence names its reason', () => {
+  it.each([
+    [
+      'a miss',
+      () => gradeSequence([held(), missed('nothing moved')]),
+      VerifiedReason.ASSERTION_FAILED,
+    ],
+    [
+      'a contradiction',
+      () => gradeSequence([{ ...held(), contradicted: ['net'] }]),
+      VerifiedReason.CONTRADICTED,
+    ],
+    [
+      'an undecided step',
+      () => gradeSequence([{ declared: true, undecided: 'tab hidden' }]),
+      VerifiedReason.INCONCLUSIVE,
+    ],
+    [
+      'nothing declared',
+      () => gradeSequence([silent(), silent()]),
+      VerifiedReason.NOTHING_DECLARED,
+    ],
+    [
+      'a journey cut short',
+      () => gradeSequence([held()], { planned: 3, dispatched: true }),
+      VerifiedReason.EVIDENCE_INCOMPLETE,
+    ],
+    [
+      'an undeclared end',
+      () => gradeSequence([held(), silent()]),
+      VerifiedReason.EVIDENCE_INCOMPLETE,
+    ],
+    ['every consequence held', () => gradeSequence([held(), held()]), VerifiedReason.PROVED],
+  ])('%s', (_label, grade, reason) => {
+    expect(grade().reason).toBe(reason);
   });
 });

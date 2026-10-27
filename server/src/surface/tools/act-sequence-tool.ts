@@ -222,6 +222,8 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
     stopped_at: z.number().optional(),
     /** THE field to gate on: "yes" | "no" | "unknown" — see `because`. */
     verified: z.string().optional(),
+    /** The deciding clause of `verified`, from the same list as every other verdict. */
+    verifiedReason: z.string().optional(),
     because: z.string().optional(),
     /**
      * Present only when the plan PROVED something — see `offerToKeep`. A plan that declared nothing
@@ -560,6 +562,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
         ...(stalledAt !== undefined ? { stalled_at: stalledAt } : {}),
         ...(stoppedAt !== undefined ? { stopped_at: stoppedAt } : {}),
         verified: grade.verified,
+        verifiedReason: grade.reason,
         because: grade.because,
         // Offered at the one moment the compiled program is in hand and free to keep.
         ...((): Record<string, string> => {

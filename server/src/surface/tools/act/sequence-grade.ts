@@ -15,7 +15,7 @@
  * verified" would be the arithmetic that hides the nine.
  */
 
-import { Verified } from '@reticlehq/core';
+import { Verified, VerifiedReason } from '@reticlehq/core';
 
 /**
  * What to do when a step's declared consequence does not hold.
@@ -50,6 +50,8 @@ export interface StepExpectation {
 
 export interface SequenceGrade {
   verified: Verified;
+  /** The deciding clause, from core's list, so a sequence verdict is counted by reason like any other. */
+  reason: VerifiedReason;
   /** Steps that declared a consequence. */
   declared: number;
   total: number;
@@ -91,6 +93,7 @@ export function gradeSequence(
     const observed = missed.observed ?? 'nothing that matched';
     return {
       verified: Verified.NO,
+      reason: VerifiedReason.ASSERTION_FAILED,
       declared,
       total,
       because: `a declared consequence did not hold — observed ${observed}`,
@@ -103,6 +106,7 @@ export function gradeSequence(
     const kinds = (steps[contradictedAt]?.contradicted ?? []).join(', ');
     return {
       verified: Verified.NO,
+      reason: VerifiedReason.CONTRADICTED,
       declared,
       total,
       because: `step ${String(contradictedAt + 1)}: channels disagree about this action (${kinds}) even though it went on`,
@@ -114,6 +118,7 @@ export function gradeSequence(
   if (unjudged !== undefined)
     return {
       verified: Verified.UNKNOWN,
+      reason: VerifiedReason.INCONCLUSIVE,
       declared,
       total,
       because: `a step could not be judged — ${unjudged.undecided ?? ''}`,
@@ -135,6 +140,7 @@ export function gradeSequence(
   if (0 === declared) {
     return {
       verified: Verified.UNKNOWN,
+      reason: VerifiedReason.NOTHING_DECLARED,
       declared,
       total,
       because:
@@ -155,6 +161,7 @@ export function gradeSequence(
   if (steps.length < total) {
     return {
       verified: Verified.UNKNOWN,
+      reason: VerifiedReason.EVIDENCE_INCOMPLETE,
       declared,
       total,
       because: `only ${String(steps.length)} of ${String(total)} steps ran, so the journey never reached its end`,
@@ -163,6 +170,7 @@ export function gradeSequence(
   if (true !== steps.at(-1)?.declared) {
     return {
       verified: Verified.UNKNOWN,
+      reason: VerifiedReason.EVIDENCE_INCOMPLETE,
       declared,
       total,
       because: `the last step, where the journey ends, declared nothing — give it an \`expect\` naming the end state (${String(declared)} of ${String(total)} steps declared one)`,
@@ -171,6 +179,7 @@ export function gradeSequence(
 
   return {
     verified: Verified.YES,
+    reason: VerifiedReason.PROVED,
     declared,
     total,
     because:

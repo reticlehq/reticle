@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Verified } from '@reticlehq/core';
+import { Verified, VerifiedReason } from '@reticlehq/core';
 import { offerToKeep, type SequenceGrade } from './sequence-grade.js';
 
 /**
@@ -19,7 +19,13 @@ const grade = (
   verified: SequenceGrade['verified'],
   declared: number,
   total: number,
-): SequenceGrade => ({ verified, declared, total, because: '' });
+): SequenceGrade => ({
+  verified,
+  reason: Verified.YES === verified ? VerifiedReason.PROVED : VerifiedReason.INCONCLUSIVE,
+  declared,
+  total,
+  because: '',
+});
 
 describe('whether a driven plan is worth saving as a flow', () => {
   it('offers to keep a plan whose declared consequences all held', () => {
