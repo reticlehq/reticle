@@ -15,6 +15,7 @@ import {
   type WakeRefusalPresence,
 } from '@reticlehq/core/telemetry';
 import { randomUUID } from 'node:crypto';
+import type { DaemonDeath } from '@reticlehq/core';
 import { getSessionMetrics, type SessionMetrics } from './session-metrics.js';
 import { getTelemetry, type Telemetry } from './telemetry.js';
 
@@ -93,10 +94,11 @@ export async function flushProxyExit(reason: ProxyExitReason): Promise<void> {
 /** Send `daemon_died_unclean`. Fire-and-forget is fine for callers: the process lives on. */
 export async function reportDaemonDiedUnclean(
   ageMs: number,
+  cause?: Omit<DaemonDeath, 'ageMs'>,
   telemetry: Telemetry = getTelemetry(),
 ): Promise<void> {
   await telemetry.emit(TelemetryEventKind.DAEMON_DIED_UNCLEAN, {
-    daemonDeath: { ageMs: Math.max(0, Math.round(ageMs)) },
+    daemonDeath: { ...cause, ageMs: Math.max(0, Math.round(ageMs)) },
   });
 }
 

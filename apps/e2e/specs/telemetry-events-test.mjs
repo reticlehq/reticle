@@ -870,6 +870,24 @@ await waitUntil(() => find('project_profiled').length > 0);
   removeScratch(unwired);
 }
 
+// ── 13. A dead daemon's cause, read from its log by the next start ─────────────
+{
+  const { reportDaemonDiedUnclean } = await import(`${DIST}/telemetry/proxy-telemetry.js`);
+  const { deathCauseFromLog } = await import(`${DIST}/command/daemon/lifetime/death-cause.js`);
+  const started = Date.now() - 120_000;
+  const log = [
+    JSON.stringify({ t: new Date(started + 30_000).toISOString(), event: 'reticle_daemon_alive', everyMs: 30_000, sessions: 1, served: true, rssMb: 210 }),
+    JSON.stringify({ t: new Date(started + 31_000).toISOString(), event: 'reticle_daemon_start_failed', error: 'listen EADDRINUSE: address already in use /Users/someone/secret-app' }),
+  ].join('\n');
+  await reportDaemonDiedUnclean(120_000, deathCauseFromLog(log, started, Date.now()));
+  await settle(() => find('daemon_died_unclean').length > 0);
+  const p = find('daemon_died_unclean')[0]?.properties ?? {};
+  check('daemon_died_unclean arrives with how the daemon ended', p.daemonDeath_end === 'died_silently', String(p.daemonDeath_end));
+  check('  with its silence, sessions, use and memory at the last beat', p.daemonDeath_silentMs > 0 && p.daemonDeath_sessions === 1 && p.daemonDeath_served === true && p.daemonDeath_rssMb === 210, JSON.stringify(p));
+  check('  with the error code only', p.daemonDeath_error === 'EADDRINUSE', String(p.daemonDeath_error));
+  check('  and never the message or the path in it', !JSON.stringify(p).includes('someone') && !JSON.stringify(p).includes('address already'));
+}
+
 // ── the session key, checked once EVERY event has been emitted ────────────────
 // Placed last on purpose: run in section 1b it saw only CLI events, which deliberately carry no
 // sessionId, so it compared an empty set and passed for the wrong reason.

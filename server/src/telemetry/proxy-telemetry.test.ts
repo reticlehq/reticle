@@ -144,9 +144,23 @@ describe('the proxy exit, unclean death and wake refusal reach the wire', () => 
 
   it('sends daemon_died_unclean with the age of the dead daemon', async () => {
     const { telemetry, calls } = recording();
-    await reportDaemonDiedUnclean(60_000, telemetry);
+    await reportDaemonDiedUnclean(60_000, undefined, telemetry);
     expect(calls[0]?.batch[0]?.event).toBe(TelemetryEventKind.DAEMON_DIED_UNCLEAN);
     expect(calls[0]?.batch[0]?.properties.daemonDeath_ageMs).toBe(60_000);
+  });
+
+  it('sends what the log of the dead daemon says about how it ended', async () => {
+    const { telemetry, calls } = recording();
+    await reportDaemonDiedUnclean(
+      60_000,
+      { end: 'died_silently', silentMs: 4_000, sessions: 1, served: true, rssMb: 210 },
+      telemetry,
+    );
+    const properties = calls[0]?.batch[0]?.properties;
+    expect(properties?.daemonDeath_end).toBe('died_silently');
+    expect(properties?.daemonDeath_silentMs).toBe(4_000);
+    expect(properties?.daemonDeath_rssMb).toBe(210);
+    expect(properties?.daemonDeath_ageMs).toBe(60_000);
   });
 
   it('sends wake_refused once per process, naming what held the port', async () => {

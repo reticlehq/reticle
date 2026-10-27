@@ -200,6 +200,33 @@ describe('spawnDaemon with injectable deps', () => {
     expect(ages[0]).toBeGreaterThanOrEqual(59_000);
   });
 
+  it('reports why the predecessor died, read from its log before the log is rotated', () => {
+    const pidFile = join(home, 'daemon-4010.pid');
+    writeFileSync(pidFile, '11111', 'utf8');
+    const startedMs = Date.now() - 120_000;
+    utimesSync(pidFile, startedMs / 1000, startedMs / 1000);
+    const lastBeat = JSON.stringify({
+      t: new Date(startedMs + 30_000).toISOString(),
+      event: 'reticle_daemon_alive',
+      everyMs: 30_000,
+      sessions: 1,
+      served: true,
+      rssMb: 150,
+    });
+    writeFileSync(join(home, 'daemon-4010.log'), `${lastBeat}\n`, 'utf8');
+    const causes: unknown[] = [];
+
+    const { deps } = makeDeps({
+      pidAlive: () => false,
+      onUncleanDeath: (_ageMs, cause) => causes.push(cause),
+    });
+    spawnDaemon('node', 'script.mjs', [], 4010, deps);
+
+    expect(causes).toEqual([
+      expect.objectContaining({ end: 'died_silently', sessions: 1, served: true, rssMb: 150 }),
+    ]);
+  });
+
   it('reports nothing when there was no predecessor', () => {
     const ages: number[] = [];
     const { deps } = makeDeps({ onUncleanDeath: (ageMs) => ages.push(ageMs) });

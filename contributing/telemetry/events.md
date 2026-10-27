@@ -434,14 +434,30 @@ The payload never carries a selector, a URL or a description of the app.
 
 ## daemon_died_unclean
 
-**When:** a daemon start finds the pidfile of a daemon that never stopped cleanly. Sent from `server/src/telemetry/proxy-telemetry.ts`, called from `spawnDaemon` in `server/src/command/daemon/daemon.ts`. **Why:** how often a daemon dies with no clean stop: a kill, a sleep, a crash. **Unit:** one dead daemon found.
+**When:** a daemon start finds the pidfile of a daemon that never stopped cleanly. Sent from `server/src/telemetry/proxy-telemetry.ts`, called from `spawnDaemon` in `server/src/command/daemon/daemon.ts`. **Why:** how often a daemon dies with no clean stop, and why: a reboot, a killed process tree, a memory kill, or a crash at startup. **Unit:** one dead daemon found.
 
-| Field   | Type | Meaning                                                               |
-| ------- | ---- | --------------------------------------------------------------------- |
-| `ageMs` | int  | Time from the dead daemon's start to this discovery. No pid, no port. |
+The new start reads the dead daemon's log before it rotates it (`server/src/command/daemon/lifetime/death-cause.ts`). Only lines written since the dead daemon started count, because the log is append-only across launches. Every field except `ageMs` is absent when the log cannot say.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `ageMs` | int | Time from the dead daemon's start to this discovery. No pid, no port. |
+| `end` | enum | How its log says it ended: `died_silently` (the heartbeat stopped), `signalled`, `clean`, `alive`, or `unknown` (no heartbeat at all). |
+| `silentMs` | int | Time from its last heartbeat to this discovery. Short, with `sessions` or `served`: it died while in use. Long: a reboot or a sleep. |
+| `signal` | string | The signal it logged, such as `SIGTERM`. A signal name only. |
+| `sessions` | int | Browser sessions connected at its last heartbeat. |
+| `served` | bool | Whether it had served any tool call by its last heartbeat. |
+| `rssMb` | int | Its resident memory at its last heartbeat, in MB. |
+| `error` | string | The Node error code of a failed start or a crash, such as `EADDRINUSE`. The code only, never the message, which can hold a path. |
 
 ```json
-{ "daemonDeath_ageMs": 7200000 }
+{
+  "daemonDeath_ageMs": 7200000,
+  "daemonDeath_end": "died_silently",
+  "daemonDeath_silentMs": 12000,
+  "daemonDeath_sessions": 1,
+  "daemonDeath_served": true,
+  "daemonDeath_rssMb": 210
+}
 ```
 
 ## wake_refused

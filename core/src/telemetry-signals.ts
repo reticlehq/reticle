@@ -229,10 +229,44 @@ export const ProxyExitSchema = z.object({
 });
 export type ProxyExit = z.infer<typeof ProxyExitSchema>;
 
+/** How a daemon's life ended, as far as its own log can say. */
+export const DaemonEnd = {
+  /** Still beating within tolerance. */
+  ALIVE: 'alive',
+  /** Logged its own exit, with no signal before it. */
+  CLEAN: 'clean',
+  /** A signal arrived: the cause an exit line with `code: 0` does not carry. */
+  SIGNALLED: 'signalled',
+  /** The beat simply stopped. No exit, no signal: killed, crashed, or swept. */
+  DIED_SILENTLY: 'died_silently',
+  /** No beat was ever emitted, so the log cannot answer the question. */
+  UNKNOWN: 'unknown',
+} as const;
+export type DaemonEnd = (typeof DaemonEnd)[keyof typeof DaemonEnd];
+
+/** A signal name, never anything else. */
+const SIGNAL_NAME = /^SIG[A-Z0-9]{1,12}$/;
+/** A Node error code, such as `EADDRINUSE` or `ERR_MODULE_NOT_FOUND`. Never a message or a path. */
+export const NODE_ERROR_CODE = /^(E[A-Z0-9]{2,30}|ERR_[A-Z0-9_]{2,60})$/;
+
 /** `daemon_died_unclean`: a daemon start found the pidfile of a daemon that never stopped cleanly. */
 export const DaemonDeathSchema = z.object({
   /** Time from the dead daemon's start (its pidfile write) to this discovery. */
   ageMs: z.number().int().nonnegative(),
+  /** How the dead daemon's own log says it ended. */
+  end: z.nativeEnum(DaemonEnd).optional(),
+  /** Time from its last heartbeat to this discovery. Short with a client connected: killed in use. */
+  silentMs: z.number().int().nonnegative().optional(),
+  /** The signal it logged before it exited. */
+  signal: z.string().regex(SIGNAL_NAME).optional(),
+  /** Browser sessions connected at its last heartbeat. */
+  sessions: z.number().int().nonnegative().optional(),
+  /** Whether it had served any tool call by its last heartbeat. */
+  served: z.boolean().optional(),
+  /** Its resident memory at its last heartbeat, in MB. */
+  rssMb: z.number().int().nonnegative().optional(),
+  /** The Node error code of a failed start or a crash. */
+  error: z.string().regex(NODE_ERROR_CODE).optional(),
 });
 export type DaemonDeath = z.infer<typeof DaemonDeathSchema>;
 

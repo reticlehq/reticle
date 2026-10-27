@@ -18,6 +18,7 @@
  * A heartbeat nobody interprets is just log volume.
  */
 
+import { DaemonEnd } from '@reticlehq/core';
 import { DAEMON_LOG_TRUNCATED_EVENT, guardDaemonLog } from './log-cap.js';
 
 /** The event name a beat carries. One `grep` separates liveness from everything else in the file. */
@@ -66,6 +67,11 @@ interface HeartbeatFacts {
    * and make a long-lived daemon look freshly idle.
    */
   served: boolean;
+  /**
+   * Resident memory in MB. Optional, so a caller that cannot read it sends no number rather than
+   * a guess. The next start reports it when this daemon dies, which separates a memory death.
+   */
+  rssMb?: number;
 }
 
 interface DaemonHeartbeatOptions {
@@ -122,6 +128,7 @@ export class DaemonHeartbeat {
       everyMs: this.#intervalMs,
       sessions: facts.sessions,
       served: facts.served,
+      ...(facts.rssMb === undefined ? {} : { rssMb: facts.rssMb }),
     });
   }
 
@@ -139,20 +146,8 @@ export class DaemonHeartbeat {
   }
 }
 
-/** How a daemon's life ended, as far as its own log can say. */
-export const DaemonEnd = {
-  /** Still beating within tolerance. */
-  ALIVE: 'alive',
-  /** Logged its own exit, with no signal before it. */
-  CLEAN: 'clean',
-  /** A signal arrived — the cause an exit line with `code: 0` does not carry. */
-  SIGNALLED: 'signalled',
-  /** The beat simply stopped. No exit, no signal: killed, crashed, or swept. */
-  DIED_SILENTLY: 'died_silently',
-  /** No beat was ever emitted, so this log cannot answer the question. */
-  UNKNOWN: 'unknown',
-} as const;
-export type DaemonEnd = (typeof DaemonEnd)[keyof typeof DaemonEnd];
+// The vocabulary lives in core, because `daemon_died_unclean` reports it too.
+export { DaemonEnd };
 
 /**
  * One parsed line of a daemon log. The index signature is not laziness: these lines carry whatever

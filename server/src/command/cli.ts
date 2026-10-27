@@ -321,6 +321,8 @@ function ensureDaemon(port: number): Promise<void> {
  */
 /** How long `reticle open` waits for the launched page to register before reporting on it. */
 const OPEN_SESSION_WAIT_MS = 8000;
+/** For the heartbeat's resident memory, in MB. */
+const BYTES_PER_MB = 1024 * 1024;
 
 /**
  * Poll until a NEW session shows up, or the wait runs out. Returns whether one did.
@@ -561,6 +563,7 @@ function handleDaemonInner(parsed: {
         facts: () => ({
           sessions: server.bridge.sessions.count(),
           served: everServedToolCall(),
+          rssMb: Math.round(process.memoryUsage().rss / BYTES_PER_MB),
         }),
       }).start();
     })
