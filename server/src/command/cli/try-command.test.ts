@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MSG_LOCAL_CHECK,
   MSG_SIGN_IN_FIRST,
   journeysOf,
   parseTryArgs,
@@ -49,11 +50,15 @@ describe('reticle try', () => {
   it('asks a machine that is not linked to sign in, and drives nothing', async () => {
     const { ports: p, seen } = ports({ linked: false });
     expect(await runTry({ url: URL_UNDER_TEST }, p)).toBe(1);
-    expect(seen.fail).toEqual([MSG_SIGN_IN_FIRST]);
+    expect(seen.fail).toEqual([MSG_SIGN_IN_FIRST, MSG_LOCAL_CHECK]);
     // A signed-in person in an unlinked folder was told to sign in. What `try` needs is a LINKED folder.
     expect(MSG_SIGN_IN_FIRST).toBe(
       'Link this folder first: reticle connect. It signs you in if you are not, and it is free, no card.',
     );
+    // An agent whose client had no reticle_* tools ran `try`, was told to sign in, and stopped with no
+    // verdict. `verify --expect` checks one claim locally, with no account and no MCP tools.
+    expect(MSG_LOCAL_CHECK).toContain('reticle verify <url> --expect');
+    expect(MSG_LOCAL_CHECK).toContain('no account');
     expect(seen.drives).toEqual([]);
   });
 

@@ -113,7 +113,8 @@ const COMMANDS: readonly CommandDoc[] = [
   {
     name: 'verify',
     synopsis: 'verify <url> [--explore] [--expect <json>]',
-    summary: 'Check the saved flows against the running app; exit 0 means pass',
+    summary:
+      'Check saved flows, or one claim with --expect, against the running app; exit 0 = pass',
     group: HelpGroup.CHECK,
     detail: VERIFY_DETAIL,
   },

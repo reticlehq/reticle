@@ -61,6 +61,14 @@ import {
 export const MSG_SIGN_IN_FIRST =
   'Link this folder first: reticle connect. It signs you in if you are not, and it is free, no card.';
 
+/**
+ * The local path that needs no account and no MCP tools. An agent whose client had no reticle_*
+ * tools ran `try`, was told to sign in, and stopped with no verdict.
+ */
+export const MSG_LOCAL_CHECK =
+  'To check one thing on this machine with no account and no MCP tools: ' +
+  `reticle verify <url> --expect '{"kind":"text","contains":"..."}'. Exit 0 means it held.`;
+
 const PERSONA_FLAG = '--persona';
 
 /** The whole drive, model turns and browser included, before the CLI stops waiting for it. */
@@ -155,6 +163,7 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
   const cloud = await ports.linked();
   if (null === cloud) {
     ports.fail(MSG_SIGN_IN_FIRST);
+    ports.fail(MSG_LOCAL_CHECK);
     return EXIT_FAIL;
   }
   const grant = await ports.requestDrive(cloud);
