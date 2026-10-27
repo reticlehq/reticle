@@ -498,7 +498,6 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     const permissions = production.leasePermissions(
       parseLeasePermissions(args['permissions']),
       args['production'],
-      url,
     );
     const emulate = leaseEmulationOf(args['emulate']);
     // The stub of the shell bindings, when the caller supplied one. Installed by the pool before

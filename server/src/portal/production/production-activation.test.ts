@@ -11,7 +11,6 @@ import {
 import { SessionNonces } from '@/portal/bridge/session-nonces.js';
 import {
   activateProduction,
-  leasePermissions,
   leaseWithoutInjection,
   notActivatedHint,
   PRODUCTION_MODE_NOT_LINKED,
@@ -189,28 +188,5 @@ describe('a production lease', () => {
     expect(hint).toMatch(/signed in/);
     expect(hint).toMatch(/seedStorage/);
     expect(hint).not.toMatch(/Content-Security-Policy|connect-src/);
-  });
-});
-
-describe('leasePermissions', () => {
-  // Field case: a headed lease on a hosted preview loaded and signed in, then answered
-  // sdk_never_dialled. Chromium blocks a public page from dialling loopback without this grant.
-  it('grants Local Network Access to a lease on a public origin', () => {
-    expect(leasePermissions(undefined, undefined, 'https://preview.example.app/')).toEqual([
-      'local-network-access',
-    ]);
-  });
-
-  it('grants nothing more to a lease on loopback', () => {
-    expect(leasePermissions(undefined, undefined, 'http://localhost:5173/')).toBeUndefined();
-    expect(leasePermissions(['clipboard-read'], undefined, 'http://127.0.0.1:3000/')).toEqual([
-      'clipboard-read',
-    ]);
-  });
-
-  it('keeps the grant for production mode and does not add it twice', () => {
-    expect(leasePermissions(['local-network-access'], {}, 'https://shop.example.com/')).toEqual([
-      'local-network-access',
-    ]);
   });
 });

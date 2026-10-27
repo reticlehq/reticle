@@ -15,7 +15,11 @@ import { log } from '@/log.js';
 import { closeLeaseTab, LEASE_CLOSE_TIMED_OUT, settledWithin } from './bounded-close.js';
 import { seedStorageInto, targetOriginOf } from './storage-seed.js';
 import { installLeaseMarker, leaseMarkerOf } from './lease-marker-stamp.js';
-import { grantLeasePermissions, readNotificationPermission } from './context-permissions.js';
+import {
+  grantLeasePermissions,
+  grantLocalNetworkAccess,
+  readNotificationPermission,
+} from './context-permissions.js';
 import type {
   InitScriptHandle,
   Launcher,
@@ -624,6 +628,7 @@ export class BrowserPool {
       if (opts.permissions !== undefined) {
         await grantLeasePermissions(context, opts.permissions, url);
       }
+      await grantLocalNetworkAccess(context, url);
       const page = await context.newPage();
       // A caller-supplied init script is a stub of the bindings a desktop shell injects, and it has
       // to exist before the app's first module runs. Installed here — before goto — so the very

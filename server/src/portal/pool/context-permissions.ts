@@ -15,6 +15,7 @@
  * `denied`. A page that gates its UI on the second never sees the grant, so a lease that reported
  * "granted" there would be reporting something the page cannot see.
  */
+import { isLoopbackHostname } from '@reticlehq/core';
 import type { PooledContext, PooledPage } from './pool-contract.js';
 
 /** The permission whose grant the headless shell does not pass on to `Notification.permission`. */
@@ -49,7 +50,9 @@ export async function grantLeasePermissions(
   permissions: readonly string[],
   url: string,
 ): Promise<void> {
-  if (0 === permissions.length) return;
+  if (0 === permissions.length) {
+    return;
+  }
   if (context.grantPermissions === undefined) {
     throw new LeasePermissionError('this browser context cannot grant permissions');
   }
@@ -57,6 +60,32 @@ export async function grantLeasePermissions(
     await context.grantPermissions([...permissions], { origin: new URL(url).origin });
   } catch (err) {
     throw new LeasePermissionError(`could not grant ${permissions.join(', ')}: ${reasonOf(err)}`);
+  }
+}
+
+/** Playwright's name for Chrome's Local Network Access grant (local + loopback network). */
+export const LOCAL_NETWORK_ACCESS = 'local-network-access';
+
+/**
+ * Let a page that is not on loopback dial the bridge on loopback. Chromium blocks that unless a
+ * person grants Local Network Access, and a leased browser has no person, so a lease on a hosted
+ * preview loaded, signed in, and answered `sdk_never_dialled`. A loopback page needs no grant.
+ *
+ * ponytail: best effort. A Playwright older than the permission name refuses it; the lease then
+ * opens as before, and a page that cannot dial still reports `sdk_never_dialled`.
+ */
+export async function grantLocalNetworkAccess(context: PooledContext, url: string): Promise<void> {
+  if (context.grantPermissions === undefined || !URL.canParse(url)) {
+    return;
+  }
+  const target = new URL(url);
+  if (isLoopbackHostname(target.hostname)) {
+    return;
+  }
+  try {
+    await context.grantPermissions([LOCAL_NETWORK_ACCESS], { origin: target.origin });
+  } catch {
+    // An unknown permission name on an older Playwright: open the lease without it.
   }
 }
 

@@ -2675,11 +2675,6 @@
       "count": 7
     }
   },
-  "src/portal/pool/context-permissions.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/portal/pool/lease-marker-stamp.ts": {
     "curly": {
       "count": 3

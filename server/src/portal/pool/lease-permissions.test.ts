@@ -14,12 +14,14 @@ import { BrowserPool } from './browser-pool.js';
 import type { Launcher, PooledContext, PooledPage } from './browser-pool.js';
 import {
   LeasePermissionError,
+  LOCAL_NETWORK_ACCESS,
   NOTIFICATION_PERMISSION_READ,
   NOTIFICATION_READ_TIMEOUT_MS,
 } from './context-permissions.js';
 
-const APP = 'http://app.test/dashboard?__reticle_session=x';
-const ORIGIN = 'http://app.test';
+// A dev server on loopback, so these tests see only the permissions they ask for.
+const APP = 'http://localhost:5173/dashboard?__reticle_session=x';
+const ORIGIN = 'http://localhost:5173';
 
 /** A context that records what was done to it, in order, alongside the page's navigation. */
 function recordingContext(calls: string[]): PooledContext {
@@ -177,5 +179,27 @@ describe('reading the notification permission back', () => {
     const lease = await pool.acquire(APP);
     expect(await pool.notificationPermission(lease.sessionId)).toBeUndefined();
     expect(await pool.notificationPermission('not-a-lease')).toBeUndefined();
+  });
+});
+
+describe('a lease on a page that is not on loopback', () => {
+  // Field case: a headed lease on a hosted preview loaded and signed in, then answered
+  // sdk_never_dialled. Chromium blocks a public page from dialling the bridge on loopback.
+  const PREVIEW = 'https://preview.example.app/orders';
+
+  it('grants Local Network Access on its origin before the first navigation', async () => {
+    const calls: string[] = [];
+    await poolOn(recordingContext(calls)).acquire(PREVIEW);
+    expect(calls).toEqual([`grant ${LOCAL_NETWORK_ACCESS} @ https://preview.example.app`, 'goto']);
+  });
+
+  it('still opens when the browser does not know the permission', async () => {
+    const calls: string[] = [];
+    const context: PooledContext = {
+      ...recordingContext(calls),
+      grantPermissions: () => Promise.reject(new Error('Unknown permission: local-network-access')),
+    };
+    await poolOn(context).acquire(PREVIEW);
+    expect(calls).toEqual(['goto']);
   });
 });
