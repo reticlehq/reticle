@@ -53,6 +53,11 @@ export interface ChromiumProbe {
    * `Microsoft Edge`) — see launch-chromium. Present only when `exists` is false and one was found.
    */
   fallback?: string | undefined;
+  /**
+   * Where Reticle looked for an installed Chrome or Edge when neither Playwright's build nor a
+   * fallback browser was found.
+   */
+  fallbackPaths?: readonly string[] | undefined;
   /** `executablePath` came from RETICLE_CHROMIUM_PATH, so the bundled build is not in play at all. */
   configured?: boolean | undefined;
   /** Why that configured executable cannot be launched. Present only when `exists` is false. */
@@ -227,7 +232,9 @@ function installedRevisions(root: string): string[] {
  * `executablePath()` resolves the revision the daemon will actually launch AND the root it will look
  * in, which is why the probe never reads `PLAYWRIGHT_BROWSERS_PATH` itself.
  */
-export async function probeChromium(): Promise<ChromiumProbe> {
+export async function probeChromium(
+  exists: (path: string) => boolean = existsSync,
+): Promise<ChromiumProbe> {
   const searched = playwrightResolutionRoots();
   try {
     const { chromium } = await import('playwright');
@@ -235,14 +242,14 @@ export async function probeChromium(): Promise<ChromiumProbe> {
     const parsed = parseChromiumRevision(executablePath);
     return {
       executablePath,
-      exists: existsSync(executablePath),
+      exists: exists(executablePath),
       playwrightVersion: bundledPlaywrightVersion(),
       ...(null === parsed
         ? {}
         : {
             wantedRevision: parsed.revision,
             browsersRoot: parsed.root,
-            installedRevisions: installedRevisions(parsed.root),
+            installedRevisions: exists === existsSync ? installedRevisions(parsed.root) : [],
           }),
     };
   } catch {
@@ -301,6 +308,9 @@ export function bundledPlaywrightVersion(): string | undefined {
  */
 export function chromiumPreflightRefusal(probe: ChromiumProbe): string | undefined {
   if (probe.exists) return undefined;
+  if (undefined !== probe.fallback) {
+    return undefined;
+  }
   if (true === probe.configured && probe.executablePath !== undefined) {
     return configuredChromiumRefusal(
       probe.executablePath,
@@ -338,18 +348,22 @@ export function chromiumHint(probe: ChromiumProbe): string {
     const where = 0 === searched.length ? '' : ` — looked in ${searched.join(', ')}`;
     return `✗ the playwright package is not installed${where}; run: ${command}`;
   }
+  const fallbackPaths = probe.fallbackPaths ?? [];
   const present = probe.installedRevisions ?? [];
   if (present.length > 0 && probe.wantedRevision !== undefined) {
     // The reported machine. Every fact here is one the reader could not otherwise get: what is
     // wanted, what is there, and where "there" is. `npx playwright install chromium` unpinned adds
     // a build to this list and changes nothing, which is what happened.
+    const fallbackWhere =
+      0 === fallbackPaths.length ? '' : `; also looked for ${fallbackPaths.join(', ')}`;
     return (
       `✗ wrong revision — the bundled playwright wants ${probe.wantedRevision}; ` +
-      `${probe.browsersRoot ?? ''} holds ${present.join(', ')}. run: ${command}`
+      `${probe.browsersRoot ?? ''} holds ${present.join(', ')}${fallbackWhere}. run: ${command}`
     );
   }
   // Naming the path is what turns "missing" from a verdict into evidence: a reader with browsers on
   // disk can see immediately whether this is a missing install or a lookup pointed somewhere else
   // (PLAYWRIGHT_BROWSERS_PATH, a different browsers root, a revision bump).
-  return `✗ missing — looked for ${probe.executablePath}; run: ${command}`;
+  const lookedFor = [probe.executablePath, ...fallbackPaths].join(', ');
+  return `✗ missing — looked for ${lookedFor}; run: ${command}`;
 }

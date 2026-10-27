@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
 import type { ChromiumLaunchOptions } from './chromium-launch-options.js';
-import { ChromiumPathProblem } from './command/cli/doctor/browser/chromium-hint.js';
+import {
+  ChromiumPathProblem,
+  chromiumPreflightRefusal,
+} from './command/cli/doctor/browser/chromium-hint.js';
 import { chromiumLaunchHint } from './portal/pool/playwright-launcher.js';
 import {
   announceOnce,
@@ -121,6 +124,63 @@ describe('channelExecutableCandidates', () => {
     expect(channelExecutableCandidates(ChromiumChannel.MSEDGE, 'linux', {})).toEqual([
       '/opt/microsoft/msedge/msedge',
     ]);
+  });
+
+  it('looks in /Applications and ~/Applications on macOS when HOME is set', () => {
+    expect(
+      channelExecutableCandidates(ChromiumChannel.CHROME, 'darwin', { HOME: '/Users/a' }),
+    ).toEqual([MAC_CHROME, `/Users/a${MAC_CHROME}`]);
+    expect(
+      channelExecutableCandidates(ChromiumChannel.MSEDGE, 'darwin', { HOME: '/Users/a' }),
+    ).toEqual([MAC_EDGE, `/Users/a${MAC_EDGE}`]);
+  });
+});
+
+describe('a browser in ~/Applications on macOS (#1952)', () => {
+  const HOME = '/Users/a';
+  const HOME_CHROME = `${HOME}${MAC_CHROME}`;
+  const env = { HOME };
+
+  it('is found and launched by executablePath when /Applications has no Chrome', async () => {
+    const m = machine([HOME_CHROME], { env });
+    expect(await resolveChromiumTarget(m.deps)).toEqual({
+      found: true,
+      executablePath: HOME_CHROME,
+    });
+    expect(m.installs()).toBe(0);
+    expect(m.announced.join('\n')).toMatch(/Google Chrome/);
+
+    const calls: ChromiumLaunchOptions[] = [];
+    await launchChromium(
+      {
+        executablePath: () => BUNDLED,
+        launch: (opts: ChromiumLaunchOptions) => {
+          calls.push(opts);
+          return Promise.resolve('browser');
+        },
+      },
+      true,
+      m.deps,
+    );
+    expect(calls[0]).toMatchObject({ headless: true, executablePath: HOME_CHROME });
+    expect(calls[0]).not.toHaveProperty('channel');
+  });
+
+  it('loses to a Chrome in /Applications, which still launches by channel', async () => {
+    const m = machine([MAC_CHROME, HOME_CHROME], { env });
+    expect(await resolveChromiumTarget(m.deps)).toEqual({
+      found: true,
+      channel: ChromiumChannel.CHROME,
+    });
+  });
+
+  it('is named alongside /Applications in the refusal when no browser is found', async () => {
+    const m = machine([], { env, installSucceeds: false });
+    for (const probe of [probeChromiumWithFallback, probeLaunchableChromium]) {
+      const refusal = chromiumPreflightRefusal(await probe(m.deps)) ?? '';
+      expect(refusal).toContain(MAC_CHROME);
+      expect(refusal).toContain(HOME_CHROME);
+    }
   });
 });
 

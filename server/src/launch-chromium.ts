@@ -66,6 +66,11 @@ const CHANNEL_PATHS: Record<ChromiumChannel, { darwin: string; linux: string; wi
 
 const WINDOWS_INSTALL_ROOTS = ['LOCALAPPDATA', 'PROGRAMFILES', 'PROGRAMFILES(X86)'] as const;
 
+function darwinChannelCandidates(appPath: string, env: NodeJS.ProcessEnv): string[] {
+  const home = env['HOME']?.replace(/\/+$/, '');
+  return undefined === home || 0 === home.length ? [appPath] : [appPath, `${home}${appPath}`];
+}
+
 /** Candidate executable paths for a channel on this platform; empty where it is not installable. */
 export function channelExecutableCandidates(
   channel: ChromiumChannel,
@@ -73,7 +78,7 @@ export function channelExecutableCandidates(
   env: NodeJS.ProcessEnv,
 ): string[] {
   const paths = CHANNEL_PATHS[channel];
-  if ('darwin' === platform) return [paths.darwin];
+  if ('darwin' === platform) return darwinChannelCandidates(paths.darwin, env);
   if ('linux' === platform) return [paths.linux];
   if ('win32' === platform) {
     return WINDOWS_INSTALL_ROOTS.flatMap((key) => {
@@ -84,13 +89,34 @@ export function channelExecutableCandidates(
   return [];
 }
 
+interface InstalledBrowser {
+  channel: ChromiumChannel;
+  /** Defined when the binary sits outside Playwright's channel registry (such as ~/Applications). */
+  executablePath?: string;
+}
+
+function findInstalledBrowser(
+  deps: Pick<ChromiumTargetDeps, 'exists' | 'platform' | 'env'>,
+): InstalledBrowser | undefined {
+  for (const channel of CHANNEL_ORDER) {
+    const found = channelExecutableCandidates(channel, deps.platform, deps.env).find((p) =>
+      deps.exists(p),
+    );
+    if (undefined !== found) {
+      // Playwright resolves a channel from its own registry (/Applications on macOS). A browser in
+      // ~/Applications is not in that registry, so launch it by executablePath instead.
+      const outsideRegistry = 'darwin' === deps.platform && found !== CHANNEL_PATHS[channel].darwin;
+      return outsideRegistry ? { channel, executablePath: found } : { channel };
+    }
+  }
+  return undefined;
+}
+
 /** The first installed Chrome/Edge on this machine, or undefined. Looks only; installs nothing. */
 export function findInstalledChannel(
   deps: Pick<ChromiumTargetDeps, 'exists' | 'platform' | 'env'>,
 ): ChromiumChannel | undefined {
-  return CHANNEL_ORDER.find((channel) =>
-    channelExecutableCandidates(channel, deps.platform, deps.env).some((p) => deps.exists(p)),
-  );
+  return findInstalledBrowser(deps)?.channel;
 }
 
 /** Everything the resolver touches, injected so it runs against a fake machine in tests. */
@@ -151,10 +177,12 @@ export async function resolveChromiumTarget(deps: ChromiumTargetDeps): Promise<C
     return { found: true };
   }
   if (deps.exists(bundled)) return { found: true };
-  const channel = findInstalledChannel(deps);
-  if (channel !== undefined) {
-    deps.announce(usingChannelLine(channel));
-    return { found: true, channel };
+  const installed = findInstalledBrowser(deps);
+  if (undefined !== installed) {
+    deps.announce(usingChannelLine(installed.channel));
+    return undefined === installed.executablePath
+      ? { found: true, channel: installed.channel }
+      : { found: true, executablePath: installed.executablePath };
   }
   deps.announce(installingLine(chromiumInstallCommand(bundledPlaywrightVersion())));
   const ok = await deps.install();
@@ -275,12 +303,14 @@ interface ProbeMachine {
   env: NodeJS.ProcessEnv;
   exists: (path: string) => boolean;
   pathProblem: (path: string) => ChromiumPathProblem | undefined;
+  platform?: NodeJS.Platform;
 }
 
 const THIS_MACHINE: ProbeMachine = {
   env: process.env,
   exists: existsSync,
   pathProblem: (path) => chromiumPathProblem(path, process.platform),
+  platform: process.platform,
 };
 
 /**
@@ -293,14 +323,27 @@ export async function probeLaunchableChromium(
 ): Promise<ChromiumProbe> {
   const configured = configuredChromiumProbe(machine.env, machine.pathProblem);
   if (configured !== undefined) return configured;
+  const platform = machine.platform ?? process.platform;
   try {
     const { chromium } = await import('playwright');
-    const target = await resolveChromiumTarget(defaultDeps(chromium));
+    const target = await resolveChromiumTarget({
+      ...defaultDeps(chromium),
+      exists: machine.exists,
+      pathProblem: machine.pathProblem,
+      platform,
+      env: machine.env,
+      ...(machine === THIS_MACHINE
+        ? {}
+        : {
+            install: () => Promise.resolve(false),
+            announce: () => {},
+          }),
+    });
     if (target.found) return { exists: true };
   } catch {
-    // No playwright at all — probeChromium below says so, with where it looked.
+    // No playwright at all — probeChromiumWithFallback below says so, with where it looked.
   }
-  return probeChromium();
+  return probeChromiumWithFallback(machine);
 }
 
 /**
@@ -312,12 +355,19 @@ export async function probeChromiumWithFallback(
 ): Promise<ChromiumProbe> {
   const configured = configuredChromiumProbe(machine.env, machine.pathProblem);
   if (configured !== undefined) return configured;
-  const probe = await probeChromium();
+  const probe = await probeChromium(machine.exists);
   if (probe.exists) return probe;
+  const platform = machine.platform ?? process.platform;
   const channel = findInstalledChannel({
     exists: machine.exists,
-    platform: process.platform,
+    platform,
     env: machine.env,
   });
-  return channel === undefined ? probe : { ...probe, fallback: CHANNEL_LABEL[channel] };
+  if (undefined !== channel) {
+    return { ...probe, fallback: CHANNEL_LABEL[channel] };
+  }
+  const fallbackPaths = CHANNEL_ORDER.flatMap((ch) =>
+    channelExecutableCandidates(ch, platform, machine.env),
+  );
+  return 0 === fallbackPaths.length ? probe : { ...probe, fallbackPaths };
 }
