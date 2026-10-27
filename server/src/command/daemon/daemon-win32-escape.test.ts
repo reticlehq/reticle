@@ -55,9 +55,7 @@ describe('spawnDaemon leaves the job on Windows', () => {
         spawnedEnv = options.env;
         return { pid: 12345, on: () => undefined, unref: () => undefined };
       },
-      // The daemon that WMI starts (pid 777) is alive; the predecessor check sees no pidfile.
-      pidAlive: (pid) => 777 === pid,
-      sleep: () => undefined,
+      pidAlive: () => false,
       platform,
       escapeJob: (request) => {
         escapes.push(request);
@@ -106,16 +104,6 @@ describe('spawnDaemon leaves the job on Windows', () => {
     expect(spawnDaemon('node', 'cli.js', [], PORT, h.deps)).toBe(true);
     expect(h.spawnedEnv()).toBeUndefined();
     expect(existsSync(pidFile())).toBe(false);
-  });
-
-  it('starts the daemon detached when the WMI daemon dies at once', () => {
-    // Field case: on one machine every daemon that WMI started died within a tenth of a second, and
-    // the next start found it dead. The detached start had worked on that machine.
-    const h = harness('win32', () => ({ launched: true, pid: 777 }));
-    const deps: SpawnDaemonDeps = { ...h.deps, pidAlive: () => false };
-    expect(spawnDaemon('node', 'cli.js', [], PORT, deps)).toBe(true);
-    expect(readFileSync(pidFile(), 'utf8')).toBe('12345');
-    expect(h.spawnedEnv()?.[ReticleEnv.SPAWN_METHOD]).toBe(DaemonSpawnMethod.WMI_FALLBACK);
   });
 
   it('does not use WMI on other platforms', () => {

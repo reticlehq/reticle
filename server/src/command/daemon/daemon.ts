@@ -257,8 +257,6 @@ export interface SpawnDaemonDeps {
   readonly platform?: string;
   /** Windows only: start the daemon outside the Job Object of this process. See win32-escape.ts. */
   readonly escapeJob?: (request: EscapeRequest) => EscapeResult;
-  /** Block for `ms`. Optional so a test does not wait; the default blocks the thread. */
-  readonly sleep?: (ms: number) => void;
   /**
    * A predecessor died without a clean stop; `ageMs` is how long it had run. Optional so a test that
    * does not care reports nothing. The default sends `daemon_died_unclean`.
@@ -282,7 +280,6 @@ function defaultSpawnDaemonDeps(): SpawnDaemonDeps {
     pidAlive: isAlive,
     platform: process.platform,
     escapeJob: escapeJobViaWmi,
-    sleep: (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
     onUncleanDeath: (ageMs) => void reportDaemonDiedUnclean(ageMs),
   };
 }
@@ -301,24 +298,6 @@ function reportUncleanAge(pidFilePath: string, deps: SpawnDaemonDeps): void {
 }
 
 const WINDOWS = 'win32';
-/** How long a daemon that WMI started must stay alive before we keep it. */
-const WMI_SURVIVE_MS = 1000;
-const WMI_SURVIVE_STEP_MS = 100;
-
-/**
- * Whether `pid` is still alive after a short wait. On one machine every daemon that WMI started
- * died at once, while the detached start had worked there. A dead WMI daemon gets one detached start.
- * ponytail: a fixed window, so a death after it is not caught; the next start finds that one.
- */
-function survivesWmiStart(pid: number, deps: SpawnDaemonDeps): boolean {
-  for (let waited = 0; waited < WMI_SURVIVE_MS; waited += WMI_SURVIVE_STEP_MS) {
-    if (!deps.pidAlive(pid)) {
-      return false;
-    }
-    deps.sleep?.(WMI_SURVIVE_STEP_MS);
-  }
-  return deps.pidAlive(pid);
-}
 
 /** The WMI start must never stop a daemon start: a throw reads as "nothing launched". */
 function tryEscapeJob(
@@ -444,15 +423,14 @@ export function spawnDaemon(
       logPath: logFilePath,
       specPath: join(deps.home, `daemon-${port}.spawn.json`),
     });
-    // No pid in time: release the lock, so the pidfile never names a process that is not ours.
-    if (escaped.launched && escaped.pid === undefined) {
+    if (escaped.launched) {
       deps.closeFile(logFd);
-      deps.closeFile(lockFd);
-      removeQuietly(pidFilePath);
-      return true;
-    }
-    if (escaped.launched && escaped.pid !== undefined && survivesWmiStart(escaped.pid, deps)) {
-      deps.closeFile(logFd);
+      // No pid in time: release the lock, so the pidfile never names a process that is not ours.
+      if (escaped.pid === undefined) {
+        deps.closeFile(lockFd);
+        removeQuietly(pidFilePath);
+        return true;
+      }
       writeFileSync(lockFd, String(escaped.pid), 'utf8');
       deps.closeFile(lockFd);
       return true;
