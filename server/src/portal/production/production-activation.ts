@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   bridgeWsUrl,
   HelloScope,
+  isLoopbackHostname,
   LOOPBACK_HOST,
   PRODUCTION_ACTIVATE_PARAM,
   PRODUCTION_TICKET_PATH,
@@ -253,20 +254,30 @@ export function notActivatedHint(url: string): string {
   );
 }
 
+/** Whether `url` names a page that is not on loopback. An unparseable url gets no grant. */
+function offLoopback(url: string | undefined): boolean {
+  if (url === undefined || !URL.canParse(url)) {
+    return false;
+  }
+  return !isLoopbackHostname(new URL(url).hostname);
+}
+
 /** Playwright's name for Chrome's Local Network Access grant (local + loopback network). */
 const LOCAL_NETWORK_ACCESS = 'local-network-access';
 
 /**
- * The permissions a lease is opened with. A production page on a public origin dials the bridge on
+ * The permissions a lease is opened with. A page that is not on loopback dials the bridge on
  * loopback, which Chromium blocks unless a person grants Local Network Access, and a leased browser
- * has no person. Granted on the lease's own origin only. Not a launch flag: a second
- * `--disable-features` replaces the list Playwright launches with instead of adding to it.
+ * has no person. This holds for a production page and also for a hosted preview: without the grant,
+ * the lease answered `sdk_never_dialled`. Granted on the lease's own origin only. Not a launch flag:
+ * a second `--disable-features` replaces the list Playwright launches with instead of adding to it.
  */
 export function leasePermissions(
   asked: readonly string[] | undefined,
   production: unknown,
+  url?: string,
 ): readonly string[] | undefined {
-  if (production === undefined) return asked;
+  if (production === undefined && !offLoopback(url)) return asked;
   const granted = asked ?? [];
   return granted.includes(LOCAL_NETWORK_ACCESS) ? granted : [...granted, LOCAL_NETWORK_ACCESS];
 }
