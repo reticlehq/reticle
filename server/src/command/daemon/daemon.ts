@@ -85,12 +85,17 @@ export function readPid(port: number, home: string = reticleStateHome()): number
   return isNaN(n) ? null : n;
 }
 
+/**
+ * Whether a process with this pid exists. `EPERM` means it exists and this process may not signal
+ * it, which a daemon that WMI started can answer on Windows; only `ESRCH` means it is gone. Reading
+ * every throw as "dead" reclaimed a live daemon and started a second one on its port.
+ */
 export function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    return err instanceof Error && 'code' in err && 'EPERM' === err.code;
   }
 }
 
