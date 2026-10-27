@@ -503,12 +503,22 @@ const PROBE_MARKUP = {
   },
 };
 
+/**
+ * The create-vite we scaffold with: the newest release, except one that is known to be broken.
+ *
+ * create-vite 9.3.2 was published without its template folders (5 files in the tarball, against 242
+ * in 9.3.1). `npm create vite@latest` then wrote no app and still exited 0, so every install gate on
+ * every pull request failed at "the scaffold ran to completion", before Reticle ran.
+ * ponytail: drop the exclusion once a fixed release is out, since 9.3.2 then stops being `latest`.
+ */
+const CREATE_VITE = 'vite@<9.3.2 || >9.3.2';
+
 const SCAFFOLDS = [
   {
     id: 'vite-react',
     what: 'Vite + React — the vite-plugin path (config patch + injected connect)',
     initDevPorts: INIT_DEV_PORTS.vite,
-    create: ['npm', ['create', 'vite@latest', 'app', '--yes', '--', '--template', 'react-ts']],
+    create: ['npm', ['create', CREATE_VITE, 'app', '--yes', '--', '--template', 'react-ts']],
   },
   {
     // The NON-REACT path, and the reason it is here is not hypothetical. 2.8.0 nearly shipped an
@@ -523,7 +533,7 @@ const SCAFFOLDS = [
     id: 'vite-vue',
     what: 'Vite + Vue — the non-React path (sensor instead of the React kit)',
     initDevPorts: INIT_DEV_PORTS.vite,
-    create: ['npm', ['create', 'vite@latest', 'app', '--yes', '--', '--template', 'vue']],
+    create: ['npm', ['create', CREATE_VITE, 'app', '--yes', '--', '--template', 'vue']],
   },
   {
     // The app with NO vite.config at all, which is what `npm create vite`'s vanilla template ships.
@@ -533,7 +543,7 @@ const SCAFFOLDS = [
     id: 'vite-vanilla',
     what: 'Vite, vanilla — no vite.config to patch, so init must create one',
     initDevPorts: INIT_DEV_PORTS.vite,
-    create: ['npm', ['create', 'vite@latest', 'app', '--yes', '--', '--template', 'vanilla-ts']],
+    create: ['npm', ['create', CREATE_VITE, 'app', '--yes', '--', '--template', 'vanilla-ts']],
   },
   {
     id: 'next-app-router',
