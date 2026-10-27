@@ -1,4 +1,4 @@
-import { EventType, URL_RAW, urlForMatch, type ReticleEvent } from '@reticlehq/core';
+import { EventType, NetInitiator, URL_RAW, urlForMatch, type ReticleEvent } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { mergeNetworkDetail } from './network-detail-merge.js';
 
@@ -295,4 +295,29 @@ export function consoleEmptyHint(allConsole: ReticleEvent[]): ConsoleEmptyHint {
     }
   }
   return { totalInWindow: allConsole.length, byLevel };
+}
+
+/**
+ * Did the browser leave for a URL this filter names, inside the window (#1936)?
+ *
+ * A click on `<a download>`, or on a link that the server answers as an attachment, is recorded as a
+ * navigation `NET_PENDING`. The response goes to the download manager. The page never sees its
+ * status, and no `NET_REQUEST` can close the record. A miss over this window is unobservable, not a
+ * failure: the file can be on disk while the net channel shows only the pending record.
+ */
+export function departedInWindow(
+  events: readonly ReticleEvent[],
+  since: number,
+  method: string | undefined,
+  urlContains: string | undefined,
+): boolean {
+  return events.some(
+    (e) =>
+      e.type === EventType.NET_PENDING &&
+      e.t >= since &&
+      e.data['initiator'] === NetInitiator.NAVIGATION &&
+      (method === undefined ||
+        asString(e.data['method'])?.toUpperCase() === method.toUpperCase()) &&
+      (urlContains === undefined || urlForMatch(e.data).includes(urlContains)),
+  );
 }
