@@ -435,6 +435,40 @@ describe('reticle_lease_acquire', () => {
     expect(released).toEqual([]);
   });
 
+  /*
+   * Sub-agents of one client share one MCP connection, so for the pool they are one owner, and a
+   * second acquire on the origin returned the first one's tab. Each drove the other's page (#1932).
+   */
+  it('mints a separate tab on the same origin when fresh is asked, and keeps the held one', async () => {
+    const { pool, acquired, released } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/dashboard' },
+    )) as { sessionId: string };
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/settings', fresh: true },
+    )) as { sessionId: string; reused?: boolean };
+
+    expect(second.sessionId).not.toBe(first.sessionId);
+    expect(second.reused).toBeUndefined();
+    expect(acquired).toHaveLength(2);
+    expect(released).toEqual([]);
+  });
+
+  it('names fresh in the hint when it hands back a held lease', async () => {
+    const { pool } = fakePool();
+    await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/a' },
+    );
+    const again = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/b' },
+    )) as { hint?: string };
+    expect(again.hint).toContain('fresh: true');
+  });
+
   it('reuses a live lease on the same origin rather than minting a second tab', async () => {
     // The reported case: acquire, the page needs a reload, acquire again. A second context
     // leaves both tabs connected and every later tool requires sessionId.

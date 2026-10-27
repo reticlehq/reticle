@@ -137,7 +137,7 @@ function alreadyHeldHint(sessionId: string, origin: string): string {
     `${ALREADY_HELD_LEASE} (${origin}): ${sessionId} — reused it rather than opening a second ` +
     'tab, which would make every later call require sessionId. It is still signed in as whoever ' +
     'used it last (cookies and storage come with it): release it first for a fresh context or ' +
-    'another identity.'
+    'another identity, or pass fresh: true to open a separate tab and keep this one.'
   );
 }
 
@@ -370,6 +370,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     seedStorage: SeedStorageSchema.optional().describe(
       'Initial storage state (local, session and cookies) to seed before the first navigation (e.g. `seedStorage: { local: { token: "..." } }` to start already authenticated).',
     ),
+    fresh: z
+      .boolean()
+      .optional()
+      .describe(
+        'Open a separate tab even when this connection already holds a lease on the origin, and keep that one. For parallel work that shares one MCP connection (sub-agents). Pass the returned sessionId to every later call.',
+      ),
     initScript: z
       .string()
       .optional()
@@ -552,8 +558,11 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       // an init script has to exist before the page's own scripts run, which a loaded page cannot
       // do, and the resolve below then finds nothing and mints a fresh context with the stub. A
       // lease of the other kind is left alone, exactly as it is when a window was asked for.
-      const heldForStub =
-        origin === undefined ? undefined : pool.leaseIdOnOrigin(origin, deps.attachId);
+      // `fresh` asks for a separate tab: the held one is neither reused nor released (#1932).
+      const fresh = true === args['fresh'];
+      const heldOn = (o: string | undefined): string | undefined =>
+        fresh || o === undefined ? undefined : pool.leaseIdOnOrigin(o, deps.attachId);
+      const heldForStub = heldOn(origin);
       if (
         initScript !== undefined &&
         heldForStub !== undefined &&
@@ -562,7 +571,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       ) {
         await pool.release(heldForStub);
       }
-      const held = origin === undefined ? undefined : pool.leaseIdOnOrigin(origin, deps.attachId);
+      const held = heldOn(origin);
       const existing = held !== undefined && pool.isHeaded(held) === headed ? held : undefined;
       // A context's certificate setting is fixed when it is made, so an explicit request for the
       // other one cannot be answered by the held lease: handing it back would keep checks off after
