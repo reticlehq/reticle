@@ -57,7 +57,7 @@ Signed tags and signed commits are useful separate controls. They do not substit
 
 `scripts/check-js-audit.mjs` keeps critical advisories fatal and reports high ones without failing. The reviewed exception below covers the exact lockfile path of one high advisory, and a stale exception still fails. It also checks that the direct dependency stays in a private development-tool manifest. Its self-test proves that a new critical advisory, unknown severity, changed path, available patch, stale exception, muted finding, or move into production dependencies fails CI. Remove an exception as soon as a patched release can be installed; dependency-path changes also require a new review.
 
-- `GHSA-ch52-4w7c-c8xp`: `http-cache-semantics@4.2.0` is reached only through `apps/e2e`'s `verdaccio@6.10.4` test-registry dependency. The install gate now binds that ephemeral registry to `127.0.0.1`; it stores test packages and an ephemeral test user, not production sessions or cross-user cached responses. The advisory concerns max-stale exposure of another user's cached session response. There is no upstream patch yet, so this exact development path is excepted. If this package reaches a shipped runtime or another path, the guard fails.
+No exception is in force. `GHSA-ch52-4w7c-c8xp` (`http-cache-semantics@4.2.0` through `apps/e2e`'s `verdaccio`) was excepted until GitHub withdrew the advisory on 2026-10-28. Its exception then went stale and failed every run, so it was removed.
 
 ## 4. Keep build tools pinned and tokens restricted
 

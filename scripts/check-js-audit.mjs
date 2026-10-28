@@ -3,7 +3,7 @@
  * failing. Founder decision, 2026-10-09: a high advisory in a dev-only path was dropping unrelated
  * PRs from the merge queue, while a critical one still has to stop the merge.
  *
- * One reviewed exception for an unpatched development tool remains. An exception matches an
+ * Reviewed exceptions for unpatched development tools go in EXCEPTIONS. An exception matches an
  * advisory's exact version and sole dependency path; another path, a patched release, or a missing
  * advisory makes the exception stale, and a stale exception still fails the gate so the reviewed
  * list cannot rot.
@@ -16,16 +16,9 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const EXCEPTIONS = new Map([
-  [
-    'GHSA-ch52-4w7c-c8xp',
-    {
-      package: 'http-cache-semantics',
-      version: '4.2.0',
-      path: 'apps__e2e>verdaccio>@verdaccio/hooks>got>cacheable-request>http-cache-semantics',
-    },
-  ],
-]);
+// GHSA-ch52-4w7c-c8xp (http-cache-semantics via verdaccio) was withdrawn on 2026-10-28, so its
+// exception went stale and failed every run. No reviewed exception remains.
+const EXCEPTIONS = new Map();
 const SEVERITIES = new Set(['info', 'low', 'moderate', 'high', 'critical']);
 
 function reviewDevelopmentRoots(e2e) {
@@ -40,7 +33,7 @@ function reviewDevelopmentRoots(e2e) {
   return failures;
 }
 
-function reviewAudit(report) {
+function reviewAudit(report, exceptions = EXCEPTIONS) {
   const failures = [];
   const warnings = [];
   const accepted = new Set();
@@ -65,7 +58,7 @@ function reviewAudit(report) {
     }
     if (advisory.severity !== 'high' && advisory.severity !== 'critical') continue;
     const id = advisory.github_advisory_id;
-    const exception = EXCEPTIONS.get(id);
+    const exception = exceptions.get(id);
     const findings = advisory.findings;
     const finding = Array.isArray(findings) && findings.length === 1 ? findings[0] : undefined;
     const exactPath =
@@ -94,7 +87,7 @@ function reviewAudit(report) {
     if (advisory.severity === 'critical') failures.push(`${detail} -- unreviewed critical finding`);
     else warnings.push(detail);
   }
-  for (const id of EXCEPTIONS.keys()) {
+  for (const id of exceptions.keys()) {
     if (!accepted.has(id))
       failures.push(`${id}: exception is stale or its dependency path changed`);
   }
@@ -106,10 +99,15 @@ function selfTest() {
   if (reviewDevelopmentRoots(e2e).length > 0) throw new Error('development roots rejected');
   if (reviewDevelopmentRoots({ ...e2e, dependencies: { verdaccio: '6.10.4' } }).length === 0)
     throw new Error('production dependency passed');
+  // A fixture, so the exception rules stay tested while EXCEPTIONS is empty.
+  const fixtures = new Map([
+    ['GHSA-fixture', { package: 'fixture-pkg', version: '1.0.0', path: 'apps__e2e>fixture-pkg' }],
+  ]);
+  const review = (r) => reviewAudit(r, fixtures);
   const report = {
     muted: [],
     advisories: Object.fromEntries(
-      [...EXCEPTIONS].map(([id, exception]) => [
+      [...fixtures].map(([id, exception]) => [
         id,
         {
           github_advisory_id: id,
@@ -122,11 +120,10 @@ function selfTest() {
     ),
   };
   const clone = () => structuredClone(report);
-  if (reviewAudit(report).failures.length !== 0) throw new Error('known paths were rejected');
+  if (review(report).failures.length !== 0) throw new Error('known paths were rejected');
   const newAdvisory = clone();
   newAdvisory.advisories.extra = { severity: 'critical', github_advisory_id: 'GHSA-new' };
-  if (reviewAudit(newAdvisory).failures.length === 0)
-    throw new Error('new critical advisory passed');
+  if (review(newAdvisory).failures.length === 0) throw new Error('new critical advisory passed');
   const newHigh = clone();
   newHigh.advisories.extra = {
     severity: 'high',
@@ -135,7 +132,7 @@ function selfTest() {
     patched_versions: '>=2.0.1',
     findings: [{ version: '2.0.0', paths: ['.>some-package'] }],
   };
-  const highResult = reviewAudit(newHigh);
+  const highResult = review(newHigh);
   if (highResult.failures.length !== 0) throw new Error('a high advisory failed the gate');
   if (
     highResult.warnings.length !== 1 ||
@@ -146,20 +143,19 @@ function selfTest() {
     throw new Error('a high advisory was not reported with package, path and fix version');
   const unknownSeverity = clone();
   unknownSeverity.advisories.extra = { severity: 'severe', github_advisory_id: 'GHSA-new' };
-  if (reviewAudit(unknownSeverity).failures.length === 0)
-    throw new Error('unknown severity passed');
+  if (review(unknownSeverity).failures.length === 0) throw new Error('unknown severity passed');
   const newPath = clone();
-  newPath.advisories['GHSA-ch52-4w7c-c8xp'].findings[0].paths.push('.>other>http-cache-semantics');
-  if (reviewAudit(newPath).failures.length === 0) throw new Error('new path passed');
+  newPath.advisories['GHSA-fixture'].findings[0].paths.push('.>other>fixture-pkg');
+  if (review(newPath).failures.length === 0) throw new Error('new path passed');
   const patched = clone();
-  patched.advisories['GHSA-ch52-4w7c-c8xp'].patched_versions = '4.2.1';
-  if (reviewAudit(patched).failures.length === 0) throw new Error('patched advisory passed');
+  patched.advisories['GHSA-fixture'].patched_versions = '1.0.1';
+  if (review(patched).failures.length === 0) throw new Error('patched advisory passed');
   const stale = clone();
-  delete stale.advisories['GHSA-ch52-4w7c-c8xp'];
-  if (reviewAudit(stale).failures.length === 0) throw new Error('stale exception passed');
+  delete stale.advisories['GHSA-fixture'];
+  if (review(stale).failures.length === 0) throw new Error('stale exception passed');
   const muted = clone();
   muted.muted.push({ id: 'GHSA-hidden' });
-  if (reviewAudit(muted).failures.length === 0) throw new Error('muted advisory passed');
+  if (review(muted).failures.length === 0) throw new Error('muted advisory passed');
   process.stdout.write('JavaScript audit exception self-test passed\n');
 }
 
