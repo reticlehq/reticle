@@ -56,6 +56,7 @@ describe('the zero-match hint declares everything the browser puts in it', () =>
         knownEmptyState: false,
         splitText: { ref: 'e1' },
         nameNearMiss: ['2 Mesh'],
+        nearest: [{ ref: 'e1', role: 'button', name: 'Save', nameTruncated: true }],
       },
     });
     expect(parsed.success).toBe(true);
@@ -65,7 +66,7 @@ describe('the zero-match hint declares everything the browser puts in it', () =>
   // Parsed, not introspected: zod STRIPS what it does not declare, so a field that survives a parse
   // is a field an agent will actually see. Reading the schema object would pass on a declaration
   // that is present but shaped wrong, which is the failure mode `sample` had.
-  it.each(['route', 'presentRegions', 'knownEmptyState', 'splitText', 'nameNearMiss'])(
+  it.each(['route', 'presentRegions', 'knownEmptyState', 'splitText', 'nameNearMiss', 'nearest'])(
     'passes %s through instead of stripping it',
     (field) => {
       expect(hintShape()).toContain(field);

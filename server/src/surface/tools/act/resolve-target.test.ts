@@ -19,7 +19,9 @@ describe('resolving a target query to one ref', () => {
       { ref: 'e9', role: 'button', name: 'Save', visible: true },
     ]);
     expect(r.kind).toBe('error');
-    if (r.kind !== 'error') return;
+    if (r.kind !== 'error') {
+      return;
+    }
     expect(r.message).toContain('2 elements');
     expect(r.message, 'names the candidates so the caller can narrow').toContain('e3');
     expect(r.message).toContain('e9');
@@ -42,7 +44,9 @@ describe('resolving a target query to one ref', () => {
   it('says nothing matched, and says no verdict is possible', () => {
     const r = resolveTargetRef([]);
     expect(r.kind).toBe('error');
-    if (r.kind !== 'error') return;
+    if (r.kind !== 'error') {
+      return;
+    }
     expect(r.message).toContain('no element');
     expect(r.message.toLowerCase()).toContain('no verdict');
   });
@@ -76,7 +80,9 @@ describe('an ambiguous refusal ranks the candidates it already has', () => {
       },
     ]);
     expect(r.kind).toBe('error');
-    if (r.kind !== 'error') return;
+    if (r.kind !== 'error') {
+      return;
+    }
     const e1 = r.message.indexOf('e1');
     const e2 = r.message.indexOf('e2');
     expect(e1, 'in-viewport candidate leads').toBeGreaterThanOrEqual(0);
@@ -92,7 +98,9 @@ describe('an ambiguous refusal ranks the candidates it already has', () => {
       { ref: 'e1309', role: 'button', name: 'New bill', visible: true },
     ]);
     expect(r.kind).toBe('error');
-    if (r.kind !== 'error') return;
+    if (r.kind !== 'error') {
+      return;
+    }
     expect(r.message.indexOf('e1309')).toBeLessThan(r.message.indexOf('e1310'));
   });
 
@@ -118,8 +126,55 @@ describe('an ambiguous refusal ranks the candidates it already has', () => {
   it('names what that role is really called when an exact name just missed', () => {
     const r = resolveTargetRef([], { nameNearMiss: ['billing Last run 1 minute ago'] });
     expect(r.kind).toBe('error');
-    if (r.kind !== 'error') return;
+    if (r.kind !== 'error') {
+      return;
+    }
     expect(r.message).toContain('"billing Last run 1 minute ago"');
     expect(r.message).toMatch(/testid|text/);
+  });
+});
+
+describe('a missed target names the nearest targets', () => {
+  /*
+   * Field: an act refused for a missing target, and most agents then read the page in a loop to
+   * find what they meant. The refusal names the nearest targets with refs, so the retry is one call.
+   */
+  it('lists the nearest targets with their refs, in the order the browser ranked them', () => {
+    const r = resolveTargetRef([], {
+      nearest: [
+        { ref: 'e4', role: 'button', name: 'Save' },
+        { ref: 'e3', role: 'button', name: 'Save draft' },
+        { ref: 'e5', role: 'button', name: 'Cancel' },
+      ],
+    });
+    expect(r.kind, 'a miss stays a refusal; the list is advice').toBe('error');
+    if (r.kind !== 'error') {
+      return;
+    }
+    expect(r.message).toMatch(/target matched no element/);
+    expect(r.message).toContain(
+      'e4 (button "Save"), e3 (button "Save draft"), e5 (button "Cancel")',
+    );
+  });
+
+  it('marks a name the browser cut', () => {
+    const r = resolveTargetRef([], {
+      nearest: [{ ref: 'e4', role: 'button', name: 'Save all', nameTruncated: true }],
+    });
+    if (r.kind !== 'error') {
+      throw new Error('expected a refusal');
+    }
+    expect(r.message).toContain('e4 (button "Save all…")');
+  });
+
+  it('keeps the plain refusal when there is no near target, or the list is malformed', () => {
+    for (const hint of [{}, { nearest: [] }, { nearest: [{ ref: 7 }] }]) {
+      const r = resolveTargetRef([], hint);
+      if (r.kind !== 'error') {
+        throw new Error('expected a refusal');
+      }
+      expect(r.message).not.toMatch(/nearest/);
+      expect(r.message).toMatch(/reticle_snapshot/);
+    }
   });
 });

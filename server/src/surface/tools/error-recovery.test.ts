@@ -886,6 +886,11 @@ describe('a selector that missed is not a malformed call', () => {
     expect(hint).not.toMatch(/re-read that tool's parameters/);
   });
 
+  it('points at the listed nearest refs before a snapshot, so the retry is one call', () => {
+    const hint = recoveryFor(missed) ?? '';
+    expect(hint).toMatch(/nearest targets/i);
+  });
+
   it('says the call was valid and nothing was acted on', () => {
     const hint = recoveryFor(missed) ?? '';
     expect(hint).toMatch(/valid/i);

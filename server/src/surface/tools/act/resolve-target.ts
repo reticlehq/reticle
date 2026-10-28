@@ -1,4 +1,5 @@
-import { asRecord, ElementState } from '@reticlehq/core';
+import * as z from 'zod';
+import { asRecord, ElementState, NearestTargetSchema } from '@reticlehq/core';
 
 /** One candidate the browser returned for a target query. */
 interface TargetCandidate {
@@ -34,7 +35,9 @@ const ROLE_RANK: Readonly<Record<string, number>> = {
 };
 
 function roleRank(role: unknown): number {
-  if ('string' !== typeof role) return 100;
+  if ('string' !== typeof role) {
+    return 100;
+  }
   return ROLE_RANK[role] ?? 50;
 }
 
@@ -54,7 +57,9 @@ function inViewport(c: TargetCandidate): boolean {
  */
 function compareCandidates(a: TargetCandidate, b: TargetCandidate): number {
   const viewport = Number(inViewport(b)) - Number(inViewport(a));
-  if (0 !== viewport) return viewport;
+  if (0 !== viewport) {
+    return viewport;
+  }
   return roleRank(a.role) - roleRank(b.role);
 }
 
@@ -69,10 +74,15 @@ function formatCandidate(c: TargetCandidate, anyInViewport: boolean): string {
   const ref = 'string' === typeof c.ref ? c.ref : '?';
   const visible = false !== c.visible;
   let where: string;
-  if (!visible) where = 'hidden';
-  else if (inViewport(c)) where = 'in-viewport';
-  else if (anyInViewport) where = 'off-screen';
-  else where = 'visible';
+  if (!visible) {
+    where = 'hidden';
+  } else if (inViewport(c)) {
+    where = 'in-viewport';
+  } else if (anyInViewport) {
+    where = 'off-screen';
+  } else {
+    where = 'visible';
+  }
   const head = name.length > 0 ? `${ref} (${role} "${name}"` : `${ref} (${role}`;
   return `${head}; ${where})`;
 }
@@ -92,6 +102,27 @@ function nearNamesClause(hint: unknown): string {
     `names are matched exactly, and that role is called ${names.map((n) => `"${n}"`).join(', ')}. ` +
     'Use that name, or — when the name carries a part that changes, like a time — target it by ' +
     '`testid` or by `text` (a contained match).'
+  );
+}
+
+const NearestTargetsSchema = z.array(NearestTargetSchema).min(1);
+
+/**
+ * The browser's `nearest` hint as a sentence: the targets most like the one asked for, with refs,
+ * so the retry is one call and not a snapshot loop. Empty when there is no list. It is advice
+ * only: the action stays refused, and nothing here picks a target.
+ */
+function nearestClause(hint: unknown): string {
+  const parsed = NearestTargetsSchema.safeParse(asRecord(hint)['nearest']);
+  if (!parsed.success) {
+    return '';
+  }
+  const listed = parsed.data
+    .map((t) => `${t.ref} (${t.role} "${t.name}${true === t.nameTruncated ? '…' : ''}")`)
+    .join(', ');
+  return (
+    ` The nearest targets on the page, most similar first: ${listed}. If one of them is the ` +
+    'element you meant, pass its ref as `ref`.'
   );
 }
 
@@ -125,7 +156,8 @@ export function resolveTargetRef(candidates: readonly unknown[], hint?: unknown)
       kind: 'error',
       message:
         'target matched no element. Nothing was acted on and no verdict is possible — ' +
-        nearNamesClause(hint),
+        nearNamesClause(hint) +
+        nearestClause(hint),
     };
   }
   if (usable.length > 1) {

@@ -255,7 +255,24 @@ export interface QueryEmptyHint {
    * technology", which have opposite fixes (#1070).
    */
   ariaHiddenMatch?: boolean;
+  /**
+   * Present only when a query missed and the page has visible targets like the one asked for: up
+   * to three, ranked by role and then by name similarity. Advice for one retry, never a match.
+   */
+  nearest?: NearestTarget[];
 }
+
+/**
+ * One target near a query that matched nothing. `name` is cut at 60 characters, and
+ * `nameTruncated` is true when it was cut.
+ */
+export const NearestTargetSchema = z.object({
+  ref: z.string(),
+  role: z.string(),
+  name: z.string(),
+  nameTruncated: z.literal(true).optional(),
+});
+export type NearestTarget = z.infer<typeof NearestTargetSchema>;
 
 /** Result of the QUERY command / reticle_query tool. `hint` present ONLY on zero matches. */
 export interface QueryResult {

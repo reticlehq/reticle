@@ -8,6 +8,7 @@ import {
   type ElementQuery,
   type MatchResult,
   type PresentRegion,
+  type NearestTarget,
   type QueryEmptyHint,
   type QueryResult,
   TRANSPORT_LIMITS,
@@ -37,6 +38,7 @@ import {
 } from './text-match.js';
 import { pageRoute } from '@/security/page-location.js';
 import { elementsUnder, findIn, isNonRendered, queryByRoleAndName } from './query-finders.js';
+import { INTERACTIVE } from './snapshot.js';
 
 const MAX_PRESENT_TESTIDS = 12;
 /**
@@ -626,6 +628,123 @@ function nameNearMisses(container: HTMLElement, query: ElementQuery): string[] {
   return out;
 }
 
+/*
+ * The targets on the page that are nearest to a query that matched nothing.
+ *
+ * An action that names a missing element is refused, and the agent then reads the page in a loop to
+ * find what it meant. This list gives it the refs in the refusal, so the retry is one call. It is
+ * advice only: nothing here selects, acts on or passes anything.
+ */
+/** How many targets the list holds. More than a few is a snapshot, not a hint. */
+const MAX_NEAREST_TARGETS = 3;
+
+/** The longest name a target carries. A longer name is cut and flagged `nameTruncated`. */
+export const MAX_NEAREST_NAME = 60;
+
+/** The character pairs of a string, padded with a space at each end so a one-letter name has one. */
+function bigrams(value: string): Set<string> {
+  const padded = ` ${value} `;
+  const out = new Set<string>();
+  for (let i = 0; i < padded.length - 1; i += 1) {
+    out.add(padded.slice(i, i + 2));
+  }
+  return out;
+}
+
+/**
+ * The similarity of two names, from 0 (no character pair in common) to 1 (the same pairs).
+ *
+ * The measure is the Sorensen-Dice coefficient on the sets of character bigrams, after case
+ * folding. It scores a prefix ("Sav" to "Save"), a typo and a reordered word above an unrelated
+ * name, and it gives 0 when the two names share no pair of letters.
+ */
+export function nameSimilarity(a: string, b: string): number {
+  const left = bigrams(foldTypography(a).toLowerCase());
+  const right = bigrams(foldTypography(b).toLowerCase());
+  let shared = 0;
+  for (const gram of left) {
+    if (right.has(gram)) {
+      shared += 1;
+    }
+  }
+  return (2 * shared) / (left.size + right.size);
+}
+
+/** The role the query asked for, in either spelling. */
+function askedRole(query: ElementQuery): string | undefined {
+  return QueryBy.ROLE === query.by ? query.value : query.role;
+}
+
+/** The name or text the query asked for. For a role query, `value` is the role, so it is not a name. */
+function askedName(query: ElementQuery): string {
+  const value = QueryBy.ROLE === query.by ? undefined : query.value;
+  const asked =
+    query.name ??
+    value ??
+    query.text ??
+    query.label ??
+    query.placeholder ??
+    query.testid ??
+    query.alt;
+  return asked === undefined ? '' : normaliseVisibleText(asked);
+}
+
+interface Scored {
+  readonly el: Element;
+  readonly role: string;
+  readonly name: string;
+  readonly roleMatch: boolean;
+  readonly score: number;
+}
+
+/**
+ * Up to three visible targets nearest to the query, ranked: the asked role first, then name
+ * similarity, then document order. A target is a candidate when it has the asked role or a name
+ * that shares at least one character pair with the asked name. A page with nothing like that gives
+ * an empty list.
+ */
+export function nearestTargets(container: HTMLElement, query: ElementQuery): NearestTarget[] {
+  const role = askedRole(query);
+  const name = askedName(query);
+  if (role === undefined && 0 === name.length) {
+    return [];
+  }
+  const memo = new Map<Element, boolean>();
+  const scored: Scored[] = [];
+  for (const el of elementsUnder(container)) {
+    const elRole = getRole(el);
+    const roleMatch = role !== undefined && elRole === role;
+    if (!roleMatch && !INTERACTIVE.has(elRole)) {
+      continue;
+    }
+    if (isIgnored(el) || !isVisible(el, memo)) {
+      continue;
+    }
+    const elName = normaliseVisibleText(getAccessibleName(el));
+    if (0 === elName.length) {
+      continue;
+    }
+    const score = 0 === name.length ? 0 : nameSimilarity(name, elName);
+    if (!roleMatch && 0 === score) {
+      continue;
+    }
+    scored.push({ el, role: elRole, name: elName, roleMatch, score });
+  }
+  // Array.prototype.sort is stable, so equal scores keep document order.
+  scored.sort((a, b) => Number(b.roleMatch) - Number(a.roleMatch) || b.score - a.score);
+  return scored.slice(0, MAX_NEAREST_TARGETS).map((c) => {
+    const target: NearestTarget = {
+      ref: refs.refFor(c.el),
+      role: c.role,
+      name: c.name.slice(0, MAX_NEAREST_NAME),
+    };
+    if (c.name.length > MAX_NEAREST_NAME) {
+      target.nameTruncated = true;
+    }
+    return target;
+  });
+}
+
 /**
  * For a missed TESTID query: the other test-id attribute (`data-test-subj`, `data-cy`, ...) that
  * carries the wanted value, if one does. The locator reads exactly one attribute, so a project that
@@ -760,6 +879,11 @@ function buildEmptyHint(
   if (elsewhere !== undefined) {
     hint.testidFoundUnder = elsewhere;
   }
+  // Gated on `diagnose` like the aria-hidden scan: it reads the name of every target on the page.
+  const nearest = diagnose ? nearestTargets(container, query) : [];
+  if (nearest.length > 0) {
+    hint.nearest = nearest;
+  }
   return hint;
 }
 
@@ -782,7 +906,7 @@ export function runQuery(query: ElementQuery, limit?: number): QueryResult {
     return {
       elements: result.elements,
       count: result.count,
-      hint: buildEmptyHint(query),
+      hint: result.hint ?? buildEmptyHint(query),
       ...scopeFields,
     };
   }

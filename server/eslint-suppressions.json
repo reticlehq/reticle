@@ -3383,16 +3383,6 @@
       "count": 5
     }
   },
-  "src/surface/tools/act/resolve-target.test.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
-  "src/surface/tools/act/resolve-target.ts": {
-    "curly": {
-      "count": 6
-    }
-  },
   "src/surface/tools/act/screen-request.ts": {
     "curly": {
       "count": 9
@@ -3619,11 +3609,6 @@
   "src/surface/tools/error-recovery.test.ts": {
     "curly": {
       "count": 2
-    }
-  },
-  "src/surface/tools/error-recovery.ts": {
-    "curly": {
-      "count": 20
     }
   },
   "src/surface/tools/every-retired-name-redirects.test.ts": {
@@ -4075,11 +4060,6 @@
   "src/surface/tools/tools.query-attrs.test.ts": {
     "curly": {
       "count": 5
-    }
-  },
-  "src/surface/tools/tools.ts": {
-    "curly": {
-      "count": 9
     }
   },
   "src/surface/tools/unadvertised-help.ts": {

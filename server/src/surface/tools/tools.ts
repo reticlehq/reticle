@@ -5,7 +5,13 @@ import {
   emptySessionList,
   nextStepBesideLiveSessions,
 } from './empty-session-list.js';
-import { AttrNamesSchema, QueryBy, ReticleCommand, SnapshotMode } from '@reticlehq/core';
+import {
+  AttrNamesSchema,
+  NearestTargetSchema,
+  QueryBy,
+  ReticleCommand,
+  SnapshotMode,
+} from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { withSizeCost } from '@/portal/session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './read/snapshot-delta.js';
@@ -184,7 +190,9 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
         );
       const sessions = await list();
       // An empty list is a dead end on its own; see empty-session-list.ts for what it carries.
-      if (0 === sessions.length) return emptySessionList(deps, sessions);
+      if (0 === sessions.length) {
+        return emptySessionList(deps, sessions);
+      }
       // Another project's tab is up. This caller's project may still never have been wired.
       const nextStep = nextStepBesideLiveSessions(deps, sessions);
       return nextStep === undefined ? { sessions } : { sessions, next_step: nextStep };
@@ -510,6 +518,12 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
               'Present when a ROLE+NAME search missed and that role DOES carry a nearly-matching name — role+name is exact, so "Mesh" does not find "2 Mesh". Retry with one of these spellings; no snapshot needed.',
             ),
           testidFoundUnder: TESTID_FOUND_UNDER_SCHEMA,
+          nearest: z
+            .array(NearestTargetSchema)
+            .optional()
+            .describe(
+              'Present when a search missed and the page has visible targets like the one asked for: up to 3, the asked role first, then by name similarity. Each has a ref to retry with. nameTruncated is true when the name was cut. Advice only, never a match.',
+            ),
         })
         .optional()
         .describe(
@@ -540,7 +554,9 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
       // Accept the predicate's named-field spelling too — see query-shape.ts.
       const args = normalizeQueryArgs(rawArgs);
       const empty = emptyQueryRefusal(args);
-      if (empty !== undefined) return Promise.reject(empty);
+      if (empty !== undefined) {
+        return Promise.reject(empty);
+      }
       const session = deps.sessions.resolve(asString(args['sessionId']));
       return commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.QUERY, {
         by: args['by'],
@@ -728,11 +744,17 @@ export const RETIRED_FROM_SURFACE: string[] = [
  * The browser counts what leanness passed over, so the tool can say which of the two it is.
  */
 function noteEmptyLeanTree(result: unknown, mode: string): unknown {
-  if (SnapshotMode.INTERACTIVE !== mode) return result;
+  if (SnapshotMode.INTERACTIVE !== mode) {
+    return result;
+  }
   const row = asRecord(result);
-  if (0 !== asNumber(row['nodes'])) return result;
+  if (0 !== asNumber(row['nodes'])) {
+    return result;
+  }
   const skipped = asNumber(row['leanSkipped']) ?? 0;
-  if (0 === skipped) return result;
+  if (0 === skipped) {
+    return result;
+  }
   return {
     ...row,
     note:
@@ -759,14 +781,22 @@ function noteEmptyLeanTree(result: unknown, mode: string): unknown {
  * empty tree it replaces.
  */
 function noteHiddenPage(result: unknown, mode: string): unknown {
-  if (SnapshotMode.STATUS === mode) return result;
+  if (SnapshotMode.STATUS === mode) {
+    return result;
+  }
   const row = asRecord(result);
-  if (0 !== asNumber(row['nodes'])) return result;
+  if (0 !== asNumber(row['nodes'])) {
+    return result;
+  }
   // A note already there is the more specific one (leanness), and two explanations for one empty
   // tree is worse than the better of them alone.
-  if (row['note'] !== undefined) return result;
+  if (row['note'] !== undefined) {
+    return result;
+  }
   const skipped = asNumber(row['hiddenSkipped']) ?? 0;
-  if (0 === skipped) return result;
+  if (0 === skipped) {
+    return result;
+  }
   return {
     ...row,
     note:
