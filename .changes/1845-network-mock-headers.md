@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server` — `reticle_network_mock` sets response headers.** A rule took only `status` and `body`. So an app that reads `Retry-After`, `Content-Disposition` or a custom header could not be tested against a mocked response. A rule now takes `headers`, for example `{ urlContains: "/api/pay", status: 429, headers: { "Retry-After": "30" } }`, on a driven page and on a lease. A `Content-Type` in `headers` is kept when the rule has no `contentType`. When the rule has both, `contentType` wins. A header name that is not an HTTP token, or a value with a line break, is refused by name. Chromium does not send such a response, and the request then waits for ever. Closes [#1845](https://github.com/reticlehq/reticle/issues/1845).

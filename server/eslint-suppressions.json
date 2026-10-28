@@ -2551,16 +2551,6 @@
       "count": 6
     }
   },
-  "src/portal/input/network-mock-tools.ts": {
-    "curly": {
-      "count": 9
-    }
-  },
-  "src/portal/input/network-mock.ts": {
-    "curly": {
-      "count": 8
-    }
-  },
   "src/portal/input/network-mutation.ts": {
     "curly": {
       "count": 2

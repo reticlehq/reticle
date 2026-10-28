@@ -18,6 +18,19 @@ function mockProvider(deps: ToolDeps): MockCapable | undefined {
   return p !== undefined && 'function' === typeof p.setMocks ? (p as MockCapable) : undefined;
 }
 
+/**
+ * A header name is an HTTP token (RFC 9110), and a value has no line break.
+ *
+ * Chromium does not fulfill a response with any other header, and the request then waits for ever:
+ * the app shows a spinner and no error says why. Measured on a real lease. Refused here by name.
+ */
+const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+const HEADER_VALUE = /^[^\r\n\0]*$/;
+const headersShape = z.record(
+  z.string().regex(HEADER_NAME, 'is not a valid header name'),
+  z.string().regex(HEADER_VALUE, 'must not contain a line break'),
+);
+
 const ruleShape = z.object({
   urlContains: z
     .string()
@@ -27,6 +40,11 @@ const ruleShape = z.object({
   status: httpStatusSchema.optional().describe('Fulfill with this HTTP status (default 200).'),
   body: z.string().optional().describe('Response body to fulfill with.'),
   contentType: z.string().optional().describe('Response content type (default application/json).'),
+  headers: headersShape
+    .optional()
+    .describe(
+      'Response headers, e.g. { "Retry-After": "30" }. `contentType` wins over a Content-Type here.',
+    ),
   delayMs: delayMsSchema.optional().describe('Delay (ms) before fulfilling — simulate a slow API.'),
   abort: z
     .boolean()
@@ -52,7 +70,9 @@ const ruleShape = z.object({
  * to parse.
  */
 export function toRules(value: unknown): MockRule[] {
-  if (value === undefined) return [];
+  if (value === undefined) {
+    return [];
+  }
   const parsed = z.array(ruleShape).safeParse(value);
   if (!parsed.success) {
     const problem = parsed.error.issues
@@ -61,18 +81,33 @@ export function toRules(value: unknown): MockRule[] {
     throw new Error(
       `reticle_network_mock could not read \`mocks\` (${problem}). Nothing was applied and mocking ` +
         'was left unchanged — an unreadable rule is NOT treated as a request to clear. A rule is ' +
-        '{ urlContains, method?, status?, body?, contentType?, delayMs?, abort? }; pass `clear: true` ' +
+        '{ urlContains, method?, status?, body?, contentType?, headers?, delayMs?, abort? }; pass `clear: true` ' +
         'or an empty array if you meant to turn mocking off.',
     );
   }
   return parsed.data.map((r) => {
     const rule: MockRule = { urlContains: r.urlContains };
-    if (r.method !== undefined) rule.method = r.method;
-    if (r.status !== undefined) rule.status = r.status;
-    if (r.body !== undefined) rule.body = r.body;
-    if (r.contentType !== undefined) rule.contentType = r.contentType;
-    if (r.delayMs !== undefined) rule.delayMs = r.delayMs;
-    if (r.abort !== undefined) rule.abort = r.abort;
+    if (r.method !== undefined) {
+      rule.method = r.method;
+    }
+    if (r.status !== undefined) {
+      rule.status = r.status;
+    }
+    if (r.body !== undefined) {
+      rule.body = r.body;
+    }
+    if (r.contentType !== undefined) {
+      rule.contentType = r.contentType;
+    }
+    if (r.headers !== undefined) {
+      rule.headers = r.headers;
+    }
+    if (r.delayMs !== undefined) {
+      rule.delayMs = r.delayMs;
+    }
+    if (r.abort !== undefined) {
+      rule.abort = r.abort;
+    }
     return rule;
   });
 }
@@ -97,7 +132,7 @@ export const NETWORK_MOCK_TOOLS: ToolDef[] = [
     description:
       'Stub or intercept network requests on a driven page (`reticle drive` / RETICLE_CDP_URL) or a ' +
       'leased Playwright tab (`reticle_lease acquire`): return a 500, force offline (abort), or delay ' +
-      'a response — so you can deterministically test error and edge states without touching the ' +
+      'a response, or set response headers — so you can deterministically test error and edge states without touching the ' +
       'backend ("verify the app handles a failed payment"). Pass `mocks` (first matching rule wins); ' +
       'pass an empty array or `clear: true` to turn mocking off.',
     inputSchema: {
@@ -109,7 +144,7 @@ export const NETWORK_MOCK_TOOLS: ToolDef[] = [
         .array(ruleShape)
         .optional()
         .describe(
-          'Interception rules, first match wins: { urlContains, method?, status?, body?, contentType?, delayMs?, abort? }. Omit or pass [] to clear.',
+          'Interception rules, first match wins: { urlContains, method?, status?, body?, contentType?, headers?, delayMs?, abort? }. Omit or pass [] to clear.',
         ),
       clear: z.boolean().optional().describe('Clear all active mocks (same as mocks: []).'),
       ...sessionIdShape,
@@ -127,13 +162,17 @@ export const NETWORK_MOCK_TOOLS: ToolDef[] = [
       const provider = mockProvider(deps);
       if (provider !== undefined) {
         const applied = await provider.setMocks(session.url, rules);
-        if (applied) return mocksApplied(deps, session.id, rules.length);
+        if (applied) {
+          return mocksApplied(deps, session.id, rules.length);
+        }
       }
       // A lease is a Playwright-owned page — CDP intercept was always there, this tool just had no
       // route to it. Tried after the driven provider: when both exist, drive is the page the caller
       // means, and a lease is the fallback rather than a competitor.
       const leased = await deps.pool?.setMocksLease(session.id, rules);
-      if (true === leased) return mocksApplied(deps, session.id, rules.length);
+      if (true === leased) {
+        return mocksApplied(deps, session.id, rules.length);
+      }
       return {
         applied: false,
         count: 0,
