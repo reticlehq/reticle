@@ -107,6 +107,9 @@ function nearNamesClause(hint: unknown): string {
 
 const NearestTargetsSchema = z.array(NearestTargetSchema).min(1);
 
+/** The words before the nearest-target list in a no_match refusal. The repeat hint reads after it. */
+export const NEAREST_TARGETS_LEAD = ' The nearest targets on the page, most similar first: ';
+
 /**
  * The browser's `nearest` hint as a sentence: the targets most like the one asked for, with refs,
  * so the retry is one call and not a snapshot loop. Empty when there is no list. It is advice
@@ -121,7 +124,7 @@ function nearestClause(hint: unknown): string {
     .map((t) => `${t.ref} (${t.role} "${t.name}${true === t.nameTruncated ? '…' : ''}")`)
     .join(', ');
   return (
-    ` The nearest targets on the page, most similar first: ${listed}. If one of them is the ` +
+    `${NEAREST_TARGETS_LEAD}${listed}. If one of them is the ` +
     'element you meant, pass its ref as `ref`.'
   );
 }

@@ -13,6 +13,7 @@ import { runTool } from './invoke-tool.js';
 import { EnvelopeKey } from './tool-kit.js';
 import { buildErrorPayload } from './error-recovery.js';
 import { RepeatHint, resetRepeatHints, withRepeatHint } from './repeat-hint.js';
+import { resolveTargetRef } from './act/resolve-target.js';
 
 const NO_TAB: Partial<SessionManager> = {
   resolve: () => {
@@ -132,6 +133,51 @@ describe('the repeat hint at the dispatcher', () => {
       payloads.push(withRepeatHint({ ...buildErrorPayload(message) }, error));
     }
     expect(payloads.map((p) => p[EnvelopeKey.REPEAT_HINT])).toEqual([
+      undefined,
+      undefined,
+      RepeatHint.NO_MATCH,
+      undefined,
+    ]);
+  });
+
+  /** The repeat hints of four identical calls that each throw the no_match refusal for `hint`. */
+  async function noMatchHints(hint: unknown): Promise<unknown[]> {
+    const resolution = resolveTargetRef([], hint);
+    const message = 'error' === resolution.kind ? resolution.message : '';
+    const tool: ToolDef = {
+      name: ReticleTool.ACT,
+      description: '',
+      inputSchema: {},
+      handler: () => Promise.reject(new Error(message)),
+    };
+    const deps = depsFor('conn-1');
+    const hints: unknown[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const error: unknown = await runTool(tool, deps, { target: { text: 'Sav' } }).catch(
+        (thrown: unknown) => thrown,
+      );
+      const payload: Record<string, unknown> = withRepeatHint(
+        { ...buildErrorPayload(message) },
+        error,
+      );
+      hints.push(payload[EnvelopeKey.REPEAT_HINT]);
+    }
+    return hints;
+  }
+
+  it('names the first nearest ref when the no_match refusal listed nearest targets', async () => {
+    const nearest = [
+      { ref: 'e4', role: 'button', name: 'Save' },
+      { ref: 'e9', role: 'button', name: 'Cancel' },
+    ];
+    const hints = await noMatchHints({ nearest });
+    expect(hints).toEqual([undefined, undefined, RepeatHint.noMatchNearest('e4'), undefined]);
+    expect(hints[2]).toContain('"e4"');
+    expect(hints[2]).not.toContain('reticle_look');
+  });
+
+  it('keeps the look advice when the no_match refusal listed no nearest targets', async () => {
+    expect(await noMatchHints(undefined)).toEqual([
       undefined,
       undefined,
       RepeatHint.NO_MATCH,

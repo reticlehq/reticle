@@ -14,6 +14,7 @@ import { RefusalReason, ReticleTool, isPlainRecord } from '@reticlehq/core';
 import { resultIsError } from '@/surface/mcp/faults/mcp-is-error.js';
 import { buildErrorPayload, codedRefusalOf, refusalReasonFor } from './error-recovery.js';
 import { EnvelopeKey } from './tool-kit.js';
+import { NEAREST_TARGETS_LEAD } from './act/resolve-target.js';
 
 /** The call in a streak that gets the hint. Two calls can be a deliberate retry; three is a loop. */
 export const REPEAT_HINT_AT = 3;
@@ -24,6 +25,10 @@ export const RepeatHint = {
   NO_MATCH:
     `You made this call ${COUNT} times and each time no element matched. Do not send it again. ` +
     'Take one reticle_look { action: "find" } and use a ref from its answer.',
+  /** A no_match whose refusal listed the nearest targets: the retry is one of those refs. */
+  noMatchNearest: (ref: string): string =>
+    `You made this call ${COUNT} times and each time no element matched. Do not send it again. ` +
+    `The refusal lists the nearest targets. Pass one of their refs as \`ref\`, for example "${ref}".`,
   LOOK_SAME:
     `You made this look ${COUNT} times and each answer was the same, so the page did not change. ` +
     'Act on the page, or wait for a change with reticle_assert { action: "wait" }.',
@@ -77,10 +82,20 @@ function digest(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 16);
 }
 
-function refusal(reason: RefusalReason, recovery: unknown): RepeatOutcome {
+/** The first ref in a no_match refusal's nearest-target list, or undefined when it has no list. */
+function firstNearestRef(message: string): string | undefined {
+  const at = message.indexOf(NEAREST_TARGETS_LEAD);
+  if (-1 === at) {
+    return undefined;
+  }
+  return /^(\S+) \(/.exec(message.slice(at + NEAREST_TARGETS_LEAD.length))?.[1];
+}
+
+function refusal(reason: RefusalReason, recovery: unknown, message: string): RepeatOutcome {
   const id = `refused:${reason}`;
   if (RefusalReason.NO_MATCH === reason) {
-    return { id, hint: RepeatHint.NO_MATCH };
+    const ref = firstNearestRef(message);
+    return { id, hint: ref === undefined ? RepeatHint.NO_MATCH : RepeatHint.noMatchNearest(ref) };
   }
   return { id, hint: 'string' === typeof recovery ? RepeatHint.RECOVERY : RepeatHint.SAME };
 }
@@ -89,7 +104,11 @@ function refusal(reason: RefusalReason, recovery: unknown): RepeatOutcome {
 export function outcomeOfError(error: unknown): RepeatOutcome {
   const message = error instanceof Error ? error.message : String(error);
   const coded = codedRefusalOf(error);
-  return refusal(refusalReasonFor(message, coded), buildErrorPayload(message, coded).recovery);
+  return refusal(
+    refusalReasonFor(message, coded),
+    buildErrorPayload(message, coded).recovery,
+    message,
+  );
 }
 
 /** The outcome of a call that answered: its refusal reason, its verdict, or its whole answer. */
@@ -98,7 +117,8 @@ export function outcomeOfResult(tool: string, result: unknown): RepeatOutcome {
     return { id: `value:${digest(stableJson(result))}`, hint: RepeatHint.SAME };
   }
   if (resultIsError(result)) {
-    return refusal(refusalReasonFor(String(result['error'])), result['recovery']);
+    const message = String(result['error']);
+    return refusal(refusalReasonFor(message), result['recovery'], message);
   }
   if ('verified' in result) {
     const verified = String(result['verified']);
