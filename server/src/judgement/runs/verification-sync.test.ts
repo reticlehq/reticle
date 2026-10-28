@@ -156,6 +156,24 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
    * exactly as the path that boots its own daemon records it.
    */
   it('records the Reticle command line as the pipeline, not as a coding agent', async () => {
+    // Bare `CI` with no vendor variable: on a real runner (GitHub Actions sets GITHUB_ACTIONS) the
+    // hint is a CI runner and the trigger is `ci`, which is a different case, tested below.
+    for (const k of [
+      'GITHUB_ACTIONS',
+      'GITLAB_CI',
+      'BUILDKITE',
+      'CIRCLECI',
+      'JENKINS_URL',
+      'TF_BUILD',
+      'TEAMCITY_VERSION',
+      'BITBUCKET_BUILD_NUMBER',
+      'CODEBUILD_BUILD_ID',
+      'DRONE',
+      'TRAVIS',
+      'CLAUDE_CODE_REMOTE',
+    ]) {
+      vi.stubEnv(k, '');
+    }
     vi.stubEnv('CI', 'true');
     forgetAgents();
     noteAgentAttached('ci', CLI_CLIENT_NAME);
