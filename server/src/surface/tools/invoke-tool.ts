@@ -17,6 +17,7 @@ import { endsRun, noteToolResult, runReportField } from './run-report.js';
 import { runLedger } from '@/judgement/runs/run-ledger.js';
 import { readAppNotes } from './agent/app-notes.js';
 import { forTheAgent } from './agent/for-the-agent.js';
+import { inRepeatStreak, withHintOn } from './repeat-hint.js';
 import { type NoticeFold, feedbackAlreadyAsked, noteFeedbackAsked } from './agent/notices.js';
 import { SKEW_SHORT_WARNING, SKEW_VERDICT_WARNING } from '@/portal/session/session-health.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
@@ -330,7 +331,14 @@ export async function runTool<Ext>(
       // tab removes it, and an unreadable project lost an unlinked user's cloud line.
       const endedIn =
         agentCall && ends ? safeRoot(() => sessionRoot(deps, sessionIdFromArgs(args))) : undefined;
-      const raw = await loggedTool(tool, deps, args, call);
+      // `reticle_run` is counted once, as the tool it reached; never another agent's call (rule 8).
+      const owner = currentDrivenBy() === undefined && ReticleTool.RUN !== tool.name;
+      const { raw, hint } = await inRepeatStreak(
+        owner ? deps.attachId : undefined,
+        tool.name,
+        args,
+        () => loggedTool(tool, deps, args, call),
+      );
       const attach = currentDrivenBy() === undefined ? deps.attachId : undefined;
       const root =
         attach === undefined
@@ -338,14 +346,10 @@ export async function runTool<Ext>(
           : safeRoot(() => sessionRoot(deps, sessionIdFromArgs(args)));
       // The app notes before this call, so a note it learns counts as memory written.
       const notesBefore = agentCall && root !== undefined ? readAppNotes(root) : [];
-      const answer = forTheAgent({
-        name: tool.name,
-        args,
-        result: raw,
-        attach,
-        root,
-        fold: NOTICE_FOLD,
-      });
+      const answer = withHintOn(
+        forTheAgent({ name: tool.name, args, result: raw, attach, root, fold: NOTICE_FOLD }),
+        hint,
+      );
       if (!agentCall) {
         return answer;
       }

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { runTool } from './invoke-tool.js';
 import { buildErrorPayload, codedRefusalOf } from './error-recovery.js';
+import { withRepeatHint } from './repeat-hint.js';
 import { mergedNameRedirect, mergedNameMessage, retiredToolNames } from './merged-name-redirect.js';
 import { CATALOGUE_SUMMARY_LENGTH, firstSentence } from './first-sentence.js';
 import { takeVersionSkewOnto } from '@/command/version/version-nudge.js';
@@ -448,7 +449,7 @@ export function buildDynamicTools(
         // is reached through here: a stale ref, a paused session, a missing pairing token all came
         // back as the agent's arguments being wrong, which is advice that spends the retry.
         const message = error instanceof Error ? error.message : String(error);
-        const payload = buildErrorPayload(message, codedRefusalOf(error));
+        const payload = withRepeatHint(buildErrorPayload(message, codedRefusalOf(error)), error);
         return { ...takeVersionSkewOnto(payload, deps.peerSkew), tool: name };
       }
     },

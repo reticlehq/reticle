@@ -331,6 +331,8 @@ export const EnvelopeKey = {
   NOTICES: 'notices',
   /** The end-of-run report, on the call that ends an agent's run. See run-report.ts. */
   RUN_REPORT: RUN_REPORT_FIELD,
+  /** On the third identical call with the same result: what to try instead. See repeat-hint.ts. */
+  REPEAT_HINT: 'repeatHint',
 } as const;
 export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
 

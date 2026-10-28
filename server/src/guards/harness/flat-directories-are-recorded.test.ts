@@ -281,7 +281,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 53 with `map-tools.ts`: `reticle_map`, a tool definition like its neighbours. The fold it reads
   // with sits in `judgement/app-graph/` and imports no tool code, so the two never need each other.
   // +1: session-ports.ts, the suite and session ports split out of lease-tools.ts at the 1000-line cap (#1667).
-  'server/src/surface/tools': 54,
+  // 55 with `repeat-hint.ts`: the repeat streak `runTool` keeps. In `agent/` it reached into
+  // `tools` and `faults`, and made `agent <-> tools` one more pair.
+  'server/src/surface/tools': 55,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

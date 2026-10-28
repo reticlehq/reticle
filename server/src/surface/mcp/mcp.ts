@@ -19,6 +19,7 @@ import { buildDynamicTools, descriptionOf } from '@/surface/tools/dynamic-tools.
 import { runTool } from '@/surface/tools/invoke-tool.js';
 import { sessionEnvelopeShape, newSnapshotCache, type ToolCall } from '@/surface/tools/tool-kit.js';
 import { buildErrorPayload, codedRefusalOf } from '@/surface/tools/error-recovery.js';
+import { withRepeatHint } from '@/surface/tools/repeat-hint.js';
 import { connectionSkew, takeVersionSkewOnto } from '@/command/version/version-nudge.js';
 import { resultIsError } from './faults/mcp-is-error.js';
 import { consumerVerdictRefusal, reservedVerdictKeysIn } from './consumer-verdict-guard.js';
@@ -936,7 +937,7 @@ export function createMcpServer(
               text: JSON.stringify(
                 liveCallValues(
                   takeVersionSkewOnto(
-                    buildErrorPayload(message, codedRefusalOf(error)),
+                    withRepeatHint(buildErrorPayload(message, codedRefusalOf(error)), error),
                     deps.peerSkew,
                   ),
                   advertisedNames,
