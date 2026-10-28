@@ -208,7 +208,14 @@ describe('the dev server this process owns', () => {
     } finally {
       server.stop();
       await sleep(50);
-      rmSync(dir, { recursive: true, force: true });
+      // Best effort, as in the handover test below: Windows can still hold the stopped child's
+      // handle on this cwd, and a temp directory the OS has not released says nothing about the
+      // state home this test checks.
+      try {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 10 });
+      } catch {
+        /* EBUSY from a handle Windows has not released yet; the OS reclaims the temp dir */
+      }
     }
   });
 
