@@ -35,7 +35,8 @@ import { RunStore } from './artifact/run-store.js';
 import { cloudFetch, syncRunToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { log } from '@/log.js';
-import { isCiEnv } from '@/telemetry/automation-hint.js';
+import { currentAutomationHint, isCiEnv } from '@/telemetry/automation-hint.js';
+import { AutomationHint } from '@reticlehq/core/telemetry';
 import { rootForTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
@@ -54,21 +55,32 @@ export interface TimedReplay {
 export const CLI_CLIENT_NAME = 'reticle-cli';
 
 /**
- * Who ran the command line, and why. On a CI runner it is the pipeline; anywhere else it is the
- * person who holds the key, so the cloud credits them and the run does not read as CI.
+ * Who ran the command line, and why. Off CI it is the person who holds the key, so the cloud
+ * credits them. On CI the `automation` hint says which kind: a CI vendor runner is the pipeline,
+ * trigger `ci`; a coding-agent sandbox is a coding agent. A container, or `CI` with no vendor,
+ * keeps trigger `oem`, because the cloud has no value for either yet.
  */
 export function cliRunAuthor(
   env: NodeJS.ProcessEnv,
+  automation: AutomationHint | undefined = currentAutomationHint(env),
 ): Pick<VerificationRunInput, 'agent' | 'trigger'> {
-  return isCiEnv(env)
-    ? {
-        agent: { id: CLI_CLIENT_NAME, kind: RunAgentKind.OEM_PIPELINE },
-        trigger: { kind: RunTrigger.OEM },
-      }
-    : {
-        agent: { id: CLI_CLIENT_NAME, kind: RunAgentKind.HUMAN },
-        trigger: { kind: RunTrigger.MANUAL },
-      };
+  if (!isCiEnv(env)) {
+    return {
+      agent: { id: CLI_CLIENT_NAME, kind: RunAgentKind.HUMAN },
+      trigger: { kind: RunTrigger.MANUAL },
+    };
+  }
+  if (AutomationHint.AGENT_SANDBOX === automation) {
+    return {
+      agent: { id: CLI_CLIENT_NAME, kind: RunAgentKind.CODING_AGENT },
+      trigger: { kind: RunTrigger.MANUAL },
+    };
+  }
+  const trigger = AutomationHint.CI_RUNNER === automation ? RunTrigger.CI : RunTrigger.OEM;
+  return {
+    agent: { id: CLI_CLIENT_NAME, kind: RunAgentKind.OEM_PIPELINE },
+    trigger: { kind: trigger },
+  };
 }
 
 /** Who ran a suite, and why: the command line by `cliRunAuthor`, any other client as a coding agent. */

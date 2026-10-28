@@ -10,8 +10,10 @@ import {
   RunTrigger,
   type FlowReplayResult,
 } from '@reticlehq/core';
+import { AutomationHint } from '@reticlehq/core/telemetry';
 import {
   CLI_CLIENT_NAME,
+  cliRunAuthor,
   persistAndSyncVerificationRun,
   type TimedReplay,
 } from './verification-sync.js';
@@ -216,5 +218,52 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
   it('is a no-op for an empty suite (nothing to verify)', async () => {
     const runId = await persistAndSyncVerificationRun(deps, [], { projectId: asProjectId('shop') });
     expect(runId).toBeUndefined();
+  });
+});
+
+/*
+ * Every `reticle verify` with `CI` set was sent as trigger `oem`. A coding-agent sandbox sets `CI`
+ * too, so the cloud counted a remote agent session as a pipeline, and "OEM" said platform partner.
+ * The cloud accepts trigger `ci` and agent kind `coding-agent` today. It has no value for a
+ * container or for a bare `CI=1`, so those two keep `oem` until it does.
+ */
+describe('cliRunAuthor — what kind of automation ran the command line', () => {
+  const pipeline = { id: CLI_CLIENT_NAME, kind: RunAgentKind.OEM_PIPELINE };
+
+  it('sends trigger ci from a CI vendor runner', () => {
+    const env = { CI: 'true', GITHUB_ACTIONS: 'true' };
+    expect(cliRunAuthor(env, AutomationHint.CI_RUNNER)).toEqual({
+      agent: pipeline,
+      trigger: { kind: RunTrigger.CI },
+    });
+  });
+
+  it('sends a coding agent, trigger manual, from a coding-agent sandbox', () => {
+    const env = { CI: '1', CLAUDE_CODE_REMOTE: 'true' };
+    expect(cliRunAuthor(env, AutomationHint.AGENT_SANDBOX)).toEqual({
+      agent: { id: CLI_CLIENT_NAME, kind: RunAgentKind.CODING_AGENT },
+      trigger: { kind: RunTrigger.MANUAL },
+    });
+  });
+
+  it('keeps trigger oem in a container, because the cloud has no container value', () => {
+    expect(cliRunAuthor({ CI: '1' }, AutomationHint.CONTAINER)).toEqual({
+      agent: pipeline,
+      trigger: { kind: RunTrigger.OEM },
+    });
+  });
+
+  it('keeps trigger oem for CI=1 with no vendor, because the cloud has no sandbox value', () => {
+    expect(cliRunAuthor({ CI: '1' }, undefined)).toEqual({
+      agent: pipeline,
+      trigger: { kind: RunTrigger.OEM },
+    });
+  });
+
+  it('records a person at a terminal as human, trigger manual', () => {
+    expect(cliRunAuthor({}, undefined)).toEqual({
+      agent: { id: CLI_CLIENT_NAME, kind: RunAgentKind.HUMAN },
+      trigger: { kind: RunTrigger.MANUAL },
+    });
   });
 });
