@@ -1590,7 +1590,7 @@ jobs:
           dirs=$(git ls-files '*/package.json' | grep -v '^apps/' | xargs -n1 dirname)
           checked=0
           for dir in $dirs; do
-            name=$(node -p "try{require('./$dir/package.json').private?'':require('./$dir/package.json').name}catch(e){''}")
+            name=$(node -p "try{require('./$dir/package.json').private?'':(require('./$dir/package.json').name||'')}catch(e){''}")
             [ -z "$name" ] && continue
             checked=$((checked+1))
             echo "::group::publint $name"
@@ -1605,7 +1605,7 @@ jobs:
           dirs=$(git ls-files '*/package.json' | grep -v '^apps/' | xargs -n1 dirname)
           checked=0
           for dir in $dirs; do
-            name=$(node -p "try{require('./$dir/package.json').private?'':require('./$dir/package.json').name}catch(e){''}")
+            name=$(node -p "try{require('./$dir/package.json').private?'':(require('./$dir/package.json').name||'')}catch(e){''}")
             [ -z "$name" ] && continue
             checked=$((checked+1))
             echo "::group::attw $name"
