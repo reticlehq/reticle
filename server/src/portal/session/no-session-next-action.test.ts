@@ -317,6 +317,20 @@ describe('nextActionFor', () => {
     expect(next.reason).not.toMatch(/nothing is listening on the ports Reticle scans/i);
   });
 
+  it('a wired project whose only port is slow: open it, never start a second dev server', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [],
+      slowListeners: [3000],
+      dev: DEV,
+    });
+    expect(next.action).toBe(NoSessionAction.OPEN_APP);
+    expect(next.port).toBe(3000);
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:3000');
+    expect(next.reason).toMatch(/do not start a second/i);
+  });
+
   it('the departed port is slow, not gone: reopen it rather than start a second stack', () => {
     const next = nextActionFor({
       everConnected: true,

@@ -694,6 +694,17 @@ describe('a port that answered nothing is not a port with nothing on it', () => 
     const text = diagnoseNoSession({ ...base, slowListeners: [] });
     expect(text).not.toContain('ACCEPTED');
   });
+
+  // Reported from a wired Next.js app on 3000 compiling its first route: the message said nothing
+  // was listening and told the agent to start `npm run dev`, which would start a second server.
+  it('a wired project: says the port is up and compiling, and never says to start it', () => {
+    const text = diagnoseNoSession({ ...base, initialized: true, slowListeners: [3000] });
+    expect(text).toContain('3000');
+    expect(text).toContain('ACCEPTED');
+    expect(text).not.toContain('Nothing is listening');
+    expect(text.toLowerCase()).not.toContain('start it yourself');
+    expect(text).toMatch(/do not start a second/i);
+  });
 });
 
 /**

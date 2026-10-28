@@ -366,7 +366,7 @@ const INIT_CMD = '`npx @reticlehq/server init`';
  * against it, and it has to be read before the "nothing is listening" sentence rather than after —
  * the reader acts on the first claim.
  */
-function slowListenerClause(facts: NoSessionFacts): string {
+function slowListenerClause(facts: NoSessionFacts, after = ''): string {
   const slow = facts.slowListeners ?? [];
   if (0 === slow.length) return '';
   const ports = slow.join(', ');
@@ -374,7 +374,7 @@ function slowListenerClause(facts: NoSessionFacts): string {
   return (
     `${subject} a connection but did not answer in time, which is what a server-rendered dev ` +
     'server compiling its first route looks like — so something IS running there and you should ' +
-    'open it rather than start it. Setting that aside: '
+    `open it rather than start it.${after}`
   );
 }
 
@@ -743,7 +743,7 @@ export function explainNoSession(facts: NoSessionFacts): {
       return reason(
         NoSessionReason.NO_LISTENER_NO_CONFIG,
         'no browser session connected. Two things to weigh, and neither of them is proof. ' +
-          `(1) ${slowListenerClause(facts)}Nothing is listening on the ports Reticle scans, so the ` +
+          `(1) ${slowListenerClause(facts, ' Setting that aside: ')}Nothing is listening on the ports Reticle scans, so the ` +
           'dev server may not be running: START IT YOURSELF, in the background, using the command ' +
           'in `next_action`, and tell the human in one line that it is running. ' +
           `(2) There is no \`.reticle.json\` in ${where}, which is the file ${INIT_CMD} writes, so ` +
@@ -755,6 +755,17 @@ export function explainNoSession(facts: NoSessionFacts): {
           'daemon often runs at the root while the app lives in a subdirectory, and an app wired by ' +
           'the Vite or Babel plugin carries the SDK without that file at all.' +
           `${searchedClause(facts)}${siblingListenerClause(facts)} ${leaseAdvice(URL_THEN_LEASE, facts)}`,
+      );
+    }
+    // A wired project whose own port accepted a connection and answered nothing yet is compiling,
+    // not down. "Start it yourself" here starts a second dev server.
+    if ((facts.slowListeners ?? []).length > 0) {
+      return reason(
+        NoSessionReason.NO_LISTENER,
+        `${stallClause(facts)}no browser session connected, and this daemon has never seen one. ` +
+          `${slowListenerClause(facts)} Do not start a second dev server. ` +
+          `Wait for the first compile to finish, then open the app (the command is in \`next_action\`). ${RETRY}`,
+        `${leaseAdvice(URL_THEN_LEASE, facts)}${siblingListenerClause(facts)}`,
       );
     }
     return reason(

@@ -395,6 +395,21 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     };
   }
 
+  // A wired project whose only port accepted a connection and answered nothing yet: a dev server
+  // compiling its first route. It is up, so a start command would start a second one.
+  const compiling = facts.slowListeners?.[0];
+  if (true === facts.initialized && 0 === facts.listening.length && compiling !== undefined) {
+    return {
+      action: NoSessionAction.OPEN_APP,
+      command: `${OPEN_COMMAND} ${LOCALHOST}:${String(compiling)}`,
+      port: compiling,
+      reason:
+        `port ${String(compiling)} accepted a connection but did not answer in time, which is a dev ` +
+        'server compiling its first route. The app IS running. Do not start a second dev server. ' +
+        'Wait for the compile to finish, then open it.',
+    };
+  }
+
   if (0 === facts.listening.length || departedPortIsGone) {
     const dev = facts.dev;
     // The start advice below follows a departed session whose port is gone. Name it, so the restart
