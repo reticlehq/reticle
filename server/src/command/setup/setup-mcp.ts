@@ -16,6 +16,7 @@ import {
 import {
   OnboardingPhase,
   OnboardingStepStatus,
+  OnboardingStop,
   type OnboardingStep,
 } from '@reticlehq/core/telemetry';
 
@@ -91,7 +92,9 @@ function registerWithCodexCli(
     return undefined;
   }
   const probe = codexAvailableProbe();
-  if (!io.runCli(probe.command, probe.args)) return undefined;
+  if (!io.runCli(probe.command, probe.args)) {
+    return undefined;
+  }
   const cmd = codexAddCommand();
   return io.runCli(cmd.command, cmd.args);
 }
@@ -125,8 +128,11 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
       alreadyThere.push(McpClient.CLAUDE_CODE);
     } else {
       const cmd = claudeAddCommand();
-      if (io.runCli(cmd.command, cmd.args)) registered.push(McpClient.CLAUDE_CODE);
-      else failed.push(McpClient.CLAUDE_CODE);
+      if (io.runCli(cmd.command, cmd.args)) {
+        registered.push(McpClient.CLAUDE_CODE);
+      } else {
+        failed.push(McpClient.CLAUDE_CODE);
+      }
     }
   }
 
@@ -143,9 +149,13 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
     // sends somebody to an agent that has no Reticle tools in it.
     if (ClientMergeStatus.MANUAL === merged.status) {
       const viaCli = registerWithCodexCli(io, client, spec.serversKey);
-      if (true === viaCli) registered.push(client.id);
-      else if (false === viaCli) failed.push(client.id);
-      else manual.push({ id: client.id, configPath: client.configPath, docs: spec.docs });
+      if (true === viaCli) {
+        registered.push(client.id);
+      } else if (false === viaCli) {
+        failed.push(client.id);
+      } else {
+        manual.push({ id: client.id, configPath: client.configPath, docs: spec.docs });
+      }
       continue;
     }
     try {
@@ -168,6 +178,7 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
     step: 'agents_detected',
     status: OnboardingStepStatus.COMPLETED,
   });
+  const mcpStatus = mcpRegisteredStatus(detected.length, registered.length, alreadyThere.length);
   io.reportStep({
     phase: OnboardingPhase.INSTALL,
     step: 'mcp_registered',
@@ -182,17 +193,27 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
      * for. Registering some and not others is still COMPLETED: the agent they are using may well be
      * one that worked, and a partial win is not a failed step.
      */
-    status:
-      0 === detected.length
-        ? OnboardingStepStatus.SKIPPED
-        : 0 === registered.length && alreadyThere.length > 0
-          ? OnboardingStepStatus.SKIPPED
-          : 0 === registered.length && 0 === alreadyThere.length
-            ? OnboardingStepStatus.FAILED
-            : OnboardingStepStatus.COMPLETED,
+    status: mcpStatus,
+    ...(OnboardingStepStatus.FAILED === mcpStatus
+      ? { stop: OnboardingStop.MCP_NOT_REGISTERED }
+      : {}),
   });
 
   return { detected, registered, alreadyThere, failed, manual };
+}
+
+function mcpRegisteredStatus(
+  detected: number,
+  registered: number,
+  alreadyThere: number,
+): OnboardingStepStatus {
+  if (0 === detected || (0 === registered && 0 < alreadyThere)) {
+    return OnboardingStepStatus.SKIPPED;
+  }
+  if (0 === registered) {
+    return OnboardingStepStatus.FAILED;
+  }
+  return OnboardingStepStatus.COMPLETED;
 }
 
 /** Everything this machine could be asked about, for the report when nothing was found. */

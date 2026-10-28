@@ -113,6 +113,41 @@ export const NextStepOffered = {
 export type NextStepOffered = (typeof NextStepOffered)[keyof typeof NextStepOffered];
 
 /**
+ * Why the path to a first verdict stopped. One name for each stop, from a closed list.
+ *
+ * Each member has one detection point in the code. A stop that no code can detect is not on the
+ * list: a guessed reason is worse than no reason. `unclassified` is a stop that was seen and could
+ * not be named, so the unknown bucket can be measured.
+ */
+export const OnboardingStop = {
+  /** The installer found no `node`. */
+  NO_NODE: 'no_node',
+  /** The installer found a `node` older than the minimum. */
+  NODE_TOO_OLD: 'node_too_old',
+  /** The installer could not install the CLI or put it on PATH. */
+  CLI_INSTALL_FAILED: 'cli_install_failed',
+  /** No detected coding agent got the MCP server. */
+  MCP_NOT_REGISTERED: 'mcp_not_registered',
+  /** `init` found no `package.json`, so no web app. */
+  NO_WEB_APP: 'no_web_app',
+  /** `init` could not write the setup: a bad manifest, a preflight refusal, a failed install, a busy bridge port. */
+  SETUP_FAILED: 'setup_failed',
+  /** `init` could not start the dev server or get a URL from it. */
+  DEV_SERVER_FAILED: 'dev_server_failed',
+  /** The page was served and no session dialled the daemon. */
+  APP_NOT_CONNECTED: 'app_not_connected',
+  /** The person stopped `init` with Ctrl-C. */
+  INTERRUPTED: 'interrupted',
+  /** The agent that ran `init` must restart before it has the `reticle_*` tools. */
+  AGENT_NOT_RESTARTED: 'agent_not_restarted',
+  /** Reticle could not launch Chromium: the browser or Playwright is not installed. */
+  CHROMIUM_UNAVAILABLE: 'chromium_unavailable',
+  /** A stop was seen and no rule named it. */
+  UNCLASSIFIED: 'unclassified',
+} as const;
+export type OnboardingStop = (typeof OnboardingStop)[keyof typeof OnboardingStop];
+
+/**
  * ONE event for every step of every phase, rather than an event name per step.
  *
  * The kinds list is already at the size where a reader has to scan it, and a name per step would
@@ -175,5 +210,7 @@ export const OnboardingStepSchema = z.object({
   offered: z.nativeEnum(NextStepOffered).optional(),
   /** Only on a `completed` `next_step_offered`: the agent's next call did the offered step. */
   nextFollowed: z.boolean().optional(),
+  /** Only on a `failed` row: why the path to a first verdict stopped here. */
+  stop: z.nativeEnum(OnboardingStop).optional(),
 });
 export type OnboardingStep = z.infer<typeof OnboardingStepSchema>;

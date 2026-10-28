@@ -476,6 +476,13 @@ await settle(() => find('init_completed').length >= 1);
   check('  distinguishes a dependency failure from an MCP-registration one', i?.properties.init_reason === 'dependency_install');
   check('  carries the stack that failed to set up', i?.properties.init_stack === 'next');
 }
+// The same failed init is one named stop. Sent detached as well, so wait for it the same way.
+await settle(() => find('onboarding_step').some((e) => e.properties.onboarding_stop !== undefined));
+{
+  const stop = find('onboarding_step').find((e) => e.properties.onboarding_stop !== undefined);
+  check('onboarding_step names the stop of a failed init, from the closed list', stop?.properties.onboarding_stop === 'setup_failed', String(stop?.properties.onboarding_stop));
+  check('  on the step it blocked, as failed, with the init reason', stop?.properties.onboarding_step === 'instrumented' && stop?.properties.onboarding_status === 'failed' && stop?.properties.onboarding_reason === 'dependency_install', `${stop?.properties.onboarding_step}/${stop?.properties.onboarding_status}/${stop?.properties.onboarding_reason}`);
+}
 
 // ── 5. Crash analytics ────────────────────────────────────────────────────────
 // Drive a known tool immediately before the crash so the "trigger point" assertion is about the

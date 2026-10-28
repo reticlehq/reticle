@@ -6,6 +6,8 @@ import { LicenseWrite, writeLicenseKey } from '../license-key.js';
 import { SetupPhase } from '../run-setup.js';
 import { bridgeOccupied } from '../bringup/bridge-port.js';
 import { reportInitOutcome } from '@/telemetry/init-telemetry.js';
+import { reportOnboardingStop } from '@/telemetry/onboarding-funnel.js';
+import { OnboardingStop } from '@reticlehq/core/telemetry';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
 
@@ -19,6 +21,7 @@ vi.mock('@/command/daemon/binding/port-presence.js', async (importOriginal) => (
 }));
 vi.mock('../bringup/bridge-port.js', () => ({ bridgeOccupied: vi.fn(), freePortAfter: vi.fn() }));
 vi.mock('@/telemetry/init-telemetry.js', () => ({ reportInitOutcome: vi.fn() }));
+vi.mock('@/telemetry/onboarding-funnel.js', () => ({ reportOnboardingStop: vi.fn() }));
 vi.mock('@/command/daemon/binding/daemon-status-probe.js', () => ({ fetchStatus: vi.fn() }));
 vi.mock('../license-key.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../license-key.js')>()),
@@ -103,6 +106,10 @@ describe('init reports its deferred outcome once, after runtime setup', () => {
     await continueAfterInit(ARGS, RESULT, { print }, '/app');
     vi.unstubAllEnvs();
     expect(print.mock.calls.flat().join('\n')).toContain('Restart your coding agent now');
+    expect(reportOnboardingStop).toHaveBeenCalledWith(
+      expect.objectContaining({ stop: OnboardingStop.AGENT_NOT_RESTARTED }),
+      { detach: true },
+    );
   });
 
   it('does not tell an agent that has the tools to restart', async () => {
@@ -112,6 +119,7 @@ describe('init reports its deferred outcome once, after runtime setup', () => {
     await continueAfterInit(ARGS, RESULT, { print }, '/app');
     vi.unstubAllEnvs();
     expect(print.mock.calls.flat().join('\n')).not.toContain('Restart your coding agent');
+    expect(reportOnboardingStop).not.toHaveBeenCalled();
   });
 
   it('ends a connected setup with the community line', async () => {

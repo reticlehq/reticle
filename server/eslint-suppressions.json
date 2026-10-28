@@ -534,11 +534,6 @@
       "count": 7
     }
   },
-  "src/command/setup/init/init-runtime.ts": {
-    "curly": {
-      "count": 18
-    }
-  },
   "src/command/setup/install-launcher.test.ts": {
     "curly": {
       "count": 3
@@ -605,19 +600,6 @@
   "src/command/setup/setup-command.ts": {
     "curly": {
       "count": 11
-    }
-  },
-  "src/command/setup/setup-mcp.test.ts": {
-    "curly": {
-      "count": 4
-    }
-  },
-  "src/command/setup/setup-mcp.ts": {
-    "curly": {
-      "count": 6
-    },
-    "no-nested-ternary": {
-      "count": 2
     }
   },
   "src/command/setup/setup-options.ts": {
@@ -4186,11 +4168,6 @@
       "count": 3
     }
   },
-  "src/telemetry/install-trace.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/telemetry/license-activation.test.ts": {
     "curly": {
       "count": 1
@@ -4209,11 +4186,6 @@
   "src/telemetry/onboarding-firsts.ts": {
     "curly": {
       "count": 7
-    }
-  },
-  "src/telemetry/onboarding-funnel.ts": {
-    "curly": {
-      "count": 1
     }
   },
   "src/telemetry/platform-linked.ts": {
@@ -4239,11 +4211,6 @@
   "src/telemetry/session-metrics.test.ts": {
     "curly": {
       "count": 5
-    }
-  },
-  "src/telemetry/session-metrics.ts": {
-    "curly": {
-      "count": 25
     }
   },
   "src/telemetry/telemetry-integrity.test.ts": {

@@ -17,8 +17,10 @@
  */
 import {
   BrowserLaunchKind,
+  ConnectFailure,
+  OnboardingPhase,
+  OnboardingStop,
   type AgentNudgeKind,
-  type ConnectFailure,
   type ConnectionStats,
   type ErrorShape,
   type SessionSummary,
@@ -30,6 +32,7 @@ import { describeToolParams } from './argument-shape.js';
 import { machineSnapshot } from './machine-snapshot.js';
 import { classifyError } from './error-class.js';
 import { HudMetrics, type HudSignals } from './hud-metrics.js';
+import { reportOnboardingStop } from './onboarding-funnel.js';
 import { releaseVersionOf } from '@/command/update/version-seen.js';
 
 /** Cap the distinct error shapes held in memory — a pathological loop must not grow unbounded. */
@@ -70,6 +73,13 @@ const BREADCRUMB_LENGTH = 12;
  * never fires for the sessions that need it most.
  */
 const UNVERIFIED_ACTION_NUDGE_AT = 3;
+
+/** The launch failures that leave no browser to drive: a stop on the path to a first verdict. */
+const CHROMIUM_UNAVAILABLE: ReadonlySet<ConnectFailure> = new Set([
+  ConnectFailure.CHROMIUM_MISSING,
+  ConnectFailure.PLAYWRIGHT_MISSING,
+]);
+const DRIVEN_STEP = 'driven';
 
 /**
  * Mutable counters for one daemon lifetime. A plain class, not a store: it is process-local, it never
@@ -203,8 +213,11 @@ export class SessionMetrics {
 
   /** A tab went into the background (true) or came back (false): its HUD time pauses meanwhile. */
   setHudTabHidden(tab: string, hidden: boolean): void {
-    if (hidden) this.#hud.hide(tab);
-    else this.#hud.show(tab);
+    if (hidden) {
+      this.#hud.hide(tab);
+    } else {
+      this.#hud.show(tab);
+    }
   }
 
   /** A tab went away: its HUD stops accruing time. */
@@ -220,10 +233,14 @@ export class SessionMetrics {
   startToolCall(tool: string, args?: Record<string, unknown>): (durationMs: number) => void {
     this.recordToolCall(tool, args);
     this.#concurrent += 1;
-    if (this.#concurrent > this.#peakConcurrent) this.#peakConcurrent = this.#concurrent;
+    if (this.#concurrent > this.#peakConcurrent) {
+      this.#peakConcurrent = this.#concurrent;
+    }
     let settled = false;
     return (durationMs: number) => {
-      if (settled) return; // a double-settle would corrupt the concurrency count
+      if (settled) {
+        return;
+      } // a double-settle would corrupt the concurrency count
       settled = true;
       this.#concurrent = Math.max(0, this.#concurrent - 1);
       this.#busyMs += durationMs;
@@ -259,7 +276,9 @@ export class SessionMetrics {
    */
   recordUnknownTool(name?: string): void {
     this.#unknownToolCalls += 1;
-    if (name === undefined || 0 === name.length) return;
+    if (name === undefined || 0 === name.length) {
+      return;
+    }
     const key = name.slice(0, 64);
     const seen = this.#unknownTools.get(key);
     if (seen !== undefined) {
@@ -268,7 +287,9 @@ export class SessionMetrics {
     }
     // Stop growing once full: a pathological loop must not balloon the payload. The head is what
     // gets built; the tail is noise.
-    if (this.#unknownTools.size >= MAX_ERROR_KINDS) return;
+    if (this.#unknownTools.size >= MAX_ERROR_KINDS) {
+      return;
+    }
     this.#unknownTools.set(key, 1);
   }
 
@@ -286,8 +307,9 @@ export class SessionMetrics {
       if (
         this.#currentRun > best &&
         (this.#repeatRuns.has(tool) || this.#repeatRuns.size < MAX_REPEAT_TOOLS)
-      )
+      ) {
         this.#repeatRuns.set(tool, this.#currentRun);
+      }
     }
     this.#toolCalls += 1;
     this.#lifetimeToolCalls += 1;
@@ -297,19 +319,27 @@ export class SessionMetrics {
     bump(this.#toolCounts, tool);
     this.#inFlight = tool;
     this.#breadcrumb.push(tool);
-    if (this.#breadcrumb.length > BREADCRUMB_LENGTH) this.#breadcrumb.shift();
-    if (args === undefined) return;
+    if (this.#breadcrumb.length > BREADCRUMB_LENGTH) {
+      this.#breadcrumb.shift();
+    }
+    if (args === undefined) {
+      return;
+    }
     // Which PARAMETERS get used, per tool — names only (plus a short allowlist of our own enums).
     // Bounded by our own schemas: a tool has a fixed handful of declared parameters, so this map
     // cannot grow with traffic the way a value-carrying one would.
     let perTool = this.#toolParams.get(tool);
     if (perTool === undefined) {
-      if (this.#toolParams.size >= MAX_PARAM_TOOLS) return;
+      if (this.#toolParams.size >= MAX_PARAM_TOOLS) {
+        return;
+      }
       perTool = new Map<string, number>();
       this.#toolParams.set(tool, perTool);
     }
     for (const param of describeToolParams(args)) {
-      if (perTool.size < MAX_PARAMS_PER_TOOL || perTool.has(param)) bump(perTool, param);
+      if (perTool.size < MAX_PARAMS_PER_TOOL || perTool.has(param)) {
+        bump(perTool, param);
+      }
     }
   }
 
@@ -324,7 +354,9 @@ export class SessionMetrics {
     // indistinguishable from the rest inside one `toolErrors` count.
     bump(this.#errorClasses, classifyError(message));
     this.#currentCallErrored = true;
-    if (NO_SESSION_ERROR.test(message)) this.#noSessionErrors += 1;
+    if (NO_SESSION_ERROR.test(message)) {
+      this.#noSessionErrors += 1;
+    }
     const fingerprint = fingerprintError(message);
     const existing = this.#errorKinds.get(fingerprint);
     if (existing !== undefined) {
@@ -332,7 +364,9 @@ export class SessionMetrics {
       return;
     }
     // Stop growing once the cap is hit; the tail is noise and the head is what gets fixed.
-    if (this.#errorKinds.size >= MAX_ERROR_KINDS) return;
+    if (this.#errorKinds.size >= MAX_ERROR_KINDS) {
+      return;
+    }
     this.#errorKinds.set(fingerprint, {
       fingerprint,
       count: 1,
@@ -356,7 +390,9 @@ export class SessionMetrics {
       existing.count += 1;
       return;
     }
-    if (this.#sdkFailureKinds.size >= MAX_ERROR_KINDS) return;
+    if (this.#sdkFailureKinds.size >= MAX_ERROR_KINDS) {
+      return;
+    }
     this.#sdkFailureKinds.set(fingerprint, {
       fingerprint,
       count: 1,
@@ -450,7 +486,9 @@ export class SessionMetrics {
   /** The 1-based occurrence of this finding in the session, or undefined past the cap. */
   recordBugOccurrence(fingerprint: string): number | undefined {
     const seen = this.#bugOccurrences.get(fingerprint);
-    if (seen === undefined && this.#bugOccurrences.size >= MAX_BUG_FINGERPRINTS) return undefined;
+    if (seen === undefined && this.#bugOccurrences.size >= MAX_BUG_FINGERPRINTS) {
+      return undefined;
+    }
     const occurrence = (seen ?? 0) + 1;
     this.#bugOccurrences.set(fingerprint, occurrence);
     return occurrence;
@@ -459,8 +497,9 @@ export class SessionMetrics {
   recordBug(kind: string): boolean {
     this.#bugsFound += 1;
     this.#lifetimeBugsFound += 1;
-    if (this.#bugKinds.size < MAX_ERROR_KINDS || this.#bugKinds.has(kind))
+    if (this.#bugKinds.size < MAX_ERROR_KINDS || this.#bugKinds.has(kind)) {
       bump(this.#bugKinds, kind);
+    }
     const first = !this.#seenBugKinds.has(kind);
     this.#seenBugKinds.add(kind);
     return first;
@@ -480,7 +519,9 @@ export class SessionMetrics {
     this.#connections.set(kind, stats);
     let settled = false;
     return (failure?: ConnectFailure) => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
       settled = true;
       if (failure === undefined) {
         stats.successes += 1;
@@ -488,12 +529,22 @@ export class SessionMetrics {
       }
       stats.failures ??= {};
       stats.failures[failure] = (stats.failures[failure] ?? 0) + 1;
+      if (CHROMIUM_UNAVAILABLE.has(failure)) {
+        reportOnboardingStop({
+          phase: OnboardingPhase.FIRST_RUN,
+          step: DRIVEN_STEP,
+          reason: failure,
+          stop: OnboardingStop.CHROMIUM_UNAVAILABLE,
+        });
+      }
     };
   }
 
   recordClient(name: string, version?: string): void {
     const key = name.slice(0, 64);
-    if (this.#clients.size < MAX_CLIENTS) this.#clients.add(key);
+    if (this.#clients.size < MAX_CLIENTS) {
+      this.#clients.add(key);
+    }
     // The version was already in the handshake and was being dropped. A regression in agent
     // behaviour is usually a client version, and without this it is unattributable.
     if (version !== undefined && '' !== version && this.#clientVersions.size < MAX_CLIENTS) {
@@ -539,7 +590,9 @@ export class SessionMetrics {
   summarize(final: boolean, exit?: SessionSummary['exit']): SessionSummary {
     // The last call has no successor to resolve it, so resolve it here. Only on a FINAL summary:
     // a periodic flush is not the end of anything and would resolve a call still in flight.
-    if (final) this.#resolveRecovery();
+    if (final) {
+      this.#resolveRecovery();
+    }
     const machine = machineSnapshot();
     // EVERY event reports its own window, the final one included: summing a session's
     // `session_progress` + `daemon_stopped` rows is then its total. The final event used to swap in
@@ -642,8 +695,11 @@ export class SessionMetrics {
    */
   #resolveRecovery(): void {
     if (this.#priorCallErrored) {
-      if (this.#currentCallErrored) this.#errorsRepeated += 1;
-      else this.#errorsRecovered += 1;
+      if (this.#currentCallErrored) {
+        this.#errorsRepeated += 1;
+      } else {
+        this.#errorsRecovered += 1;
+      }
     }
     this.#priorCallErrored = this.#currentCallErrored;
     this.#currentCallErrored = false;
@@ -654,10 +710,18 @@ export class SessionMetrics {
    * that left explains everything after it, and a verdict settles whatever preceded it.
    */
   #endReason(): NonNullable<SessionSummary['endReason']> {
-    if (0 === this.#lifetimeToolCalls) return 'never_used';
-    if (this.#clientLeft) return 'client_left';
-    if (this.#unsettledActions > 0) return 'abandoned';
-    if (this.#lifetimeVerifications > 0) return 'verified';
+    if (0 === this.#lifetimeToolCalls) {
+      return 'never_used';
+    }
+    if (this.#clientLeft) {
+      return 'client_left';
+    }
+    if (this.#unsettledActions > 0) {
+      return 'abandoned';
+    }
+    if (this.#lifetimeVerifications > 0) {
+      return 'verified';
+    }
     return 'explored';
   }
 

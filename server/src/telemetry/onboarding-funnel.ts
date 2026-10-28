@@ -4,6 +4,7 @@ import {
   OnboardingStepStatus,
   TelemetryEventKind,
   type OnboardingStep,
+  type OnboardingStop,
 } from '@reticlehq/core/telemetry';
 import { getTelemetry } from './telemetry.js';
 
@@ -19,12 +20,44 @@ import { getTelemetry } from './telemetry.js';
  * arriving as a step name would be a rule-3 leak that no reader would ever notice, because a funnel
  * with one weird row still renders.
  */
-export async function reportOnboardingStep(step: OnboardingStep): Promise<boolean> {
+export async function reportOnboardingStep(
+  step: OnboardingStep,
+  opts: { detach?: boolean } = {},
+): Promise<boolean> {
   const parsed = OnboardingStepSchema.safeParse(step);
   // A malformed step is DROPPED rather than sent or thrown. Sending it would put unvalidated text on
   // the wire; throwing would let a metric change what the user's install does, which rule 5 forbids.
-  if (!parsed.success) return false;
-  return getTelemetry().emit(TelemetryEventKind.ONBOARDING_STEP, { onboarding: parsed.data });
+  if (!parsed.success) {
+    return false;
+  }
+  return getTelemetry().emit(TelemetryEventKind.ONBOARDING_STEP, {
+    onboarding: parsed.data,
+    ...(true === opts.detach ? { detach: true } : {}),
+  });
+}
+
+/** One stop: the rung it blocked and its name. The status is always `failed`. */
+export type StopRow = Omit<OnboardingStep, 'status' | 'stop'> & { stop: OnboardingStop };
+
+const stopsSent = new Set<OnboardingStop>();
+
+/**
+ * Report one stop on the path to a first verdict, once for each process and stop name.
+ *
+ * A daemon can fail to launch Chromium on every lease. One row says the stop happened here; more
+ * rows count retries, not people. Use `detach` from a CLI that exits next, or the row is lost.
+ */
+export function reportOnboardingStop(row: StopRow, opts: { detach?: boolean } = {}): void {
+  if (stopsSent.has(row.stop)) {
+    return;
+  }
+  stopsSent.add(row.stop);
+  void reportOnboardingStep({ ...row, status: OnboardingStepStatus.FAILED }, opts);
+}
+
+/** Tests only: forget the stops this process sent. */
+export function resetOnboardingStops(): void {
+  stopsSent.clear();
 }
 
 /**

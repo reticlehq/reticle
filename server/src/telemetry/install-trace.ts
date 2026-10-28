@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { OnboardingStepSchema } from '@reticlehq/core/telemetry';
+import { OnboardingStepSchema, OnboardingStop } from '@reticlehq/core/telemetry';
 import { reportOnboardingStep } from './onboarding-funnel.js';
 
 /**
@@ -31,6 +31,24 @@ const TRACE_FILE = 'install-trace.jsonl';
 const MAX_LINES = 32;
 
 /**
+ * The stop that each installer failure reason names. The keys are the reasons that `install.sh`
+ * and `install.ps1` write. A reason not in this table gets no stop.
+ */
+const INSTALLER_STOP: Readonly<Record<string, OnboardingStop>> = {
+  no_node: OnboardingStop.NO_NODE,
+  node_too_old: OnboardingStop.NODE_TOO_OLD,
+  no_npm: OnboardingStop.CLI_INSTALL_FAILED,
+  npm_install: OnboardingStop.CLI_INSTALL_FAILED,
+  not_on_path: OnboardingStop.CLI_INSTALL_FAILED,
+};
+
+function installerStop(reason: string | undefined): OnboardingStop | undefined {
+  return reason !== undefined && Object.hasOwn(INSTALLER_STOP, reason)
+    ? INSTALLER_STOP[reason]
+    : undefined;
+}
+
+/**
  * Drain the installer's breadcrumbs, once.
  *
  * Deleted whether or not every line parsed: a file that stays is a file that re-reports the same
@@ -39,7 +57,9 @@ const MAX_LINES = 32;
  */
 export function drainInstallTrace(stateDir: string): number {
   const path = join(stateDir, TRACE_FILE);
-  if (!existsSync(path)) return 0;
+  if (!existsSync(path)) {
+    return 0;
+  }
   let drained = 0;
   try {
     const lines = readFileSync(path, 'utf8')
@@ -56,8 +76,11 @@ export function drainInstallTrace(stateDir: string): number {
       // deliberate belt-and-braces: this is the one path where the payload is a file a person can
       // edit, and rule 3 is that unvalidated text never reaches the wire.
       const step = OnboardingStepSchema.safeParse(parsed);
-      if (!step.success) continue;
-      void reportOnboardingStep(step.data);
+      if (!step.success) {
+        continue;
+      }
+      const stop = installerStop(step.data.reason);
+      void reportOnboardingStep({ ...step.data, ...(stop === undefined ? {} : { stop }) });
       drained += 1;
     }
   } catch {

@@ -21,6 +21,7 @@ import {
   OnboardingStepSchema,
   OnboardingStepStatus,
   OnboardingSteps,
+  OnboardingStop,
   type OnboardingStep,
 } from './onboarding.js';
 
@@ -33,6 +34,7 @@ export {
   OnboardingPhase,
   OnboardingStepSchema,
   OnboardingStepStatus,
+  OnboardingStop,
   OnboardingSteps,
   type OnboardingStep,
 };

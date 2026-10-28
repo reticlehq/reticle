@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { setupMcp, type SetupMcpIo } from './setup-mcp.js';
-import type { OnboardingStep } from '@reticlehq/core/telemetry';
+import { OnboardingStop, type OnboardingStep } from '@reticlehq/core/telemetry';
 
 const CLAUDE = 'claude';
 const CODEX = 'codex';
@@ -65,11 +65,17 @@ function machine(m: Machine = {}): Recorded {
     runCli: (command, args) => {
       ran.push(`${command} ${args.join(' ')}`);
       if (CODEX === command) {
-        if (true !== m.codexInstalled) return false;
+        if (true !== m.codexInstalled) {
+          return false;
+        }
         return !(true === m.codexAddFails && 'add' === args[1]);
       }
-      if (CLAUDE !== command) return false;
-      if (true !== m.claudeInstalled) return false;
+      if (CLAUDE !== command) {
+        return false;
+      }
+      if (true !== m.claudeInstalled) {
+        return false;
+      }
       return true;
     },
     reportStep: (s) => void steps.push(s),
@@ -128,6 +134,9 @@ describe('the funnel reports what actually happened', () => {
     expect(result.registered).toEqual([]);
     expect(result).toMatchObject({ failed: ['claude-code'] });
     expect(stepStatus(steps, 'mcp_registered')).toBe('failed');
+    expect(steps.find((s) => 'mcp_registered' === s.step)?.stop).toBe(
+      OnboardingStop.MCP_NOT_REGISTERED,
+    );
   });
 
   it('continues registering other agents after a config write fails', () => {
@@ -136,7 +145,9 @@ describe('the funnel reports what actually happened', () => {
     });
     const write = io.writeFile.bind(io);
     io.writeFile = (path, content) => {
-      if (path.includes('.cursor')) throw new Error('permission denied');
+      if (path.includes('.cursor')) {
+        throw new Error('permission denied');
+      }
       write(path, content);
     };
     const result = setupMcp(io);

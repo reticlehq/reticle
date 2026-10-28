@@ -544,6 +544,7 @@ The failure side is a set difference: `daemon_started` minus `app_instrumented`,
 | `firstEver` | boolean, optional | The first time this machine and project passed this step. |
 | `offered` | `NextStepOffered`, optional | Only on `next_step_offered`: `lease` or `init_consent`. |
 | `nextFollowed` | boolean, optional | Only on a `completed` `next_step_offered`: the agent's next call did the offered step. |
+| `stop` | `OnboardingStop`, optional | Only on a `failed` row: why the path to a first verdict stopped. See [Stops](#stops). |
 
 | Phase | Steps, in order |
 | --- | --- |
@@ -552,6 +553,40 @@ The failure side is a set difference: `daemon_started` minus `app_instrumented`,
 | `first_run` | `project_detected`, `next_step_offered`, `instrumented`, `app_connected`, `driven`, `flow_recorded`, `verdict_produced` |
 
 > **Trap:** `first_verdict` and `verdict_produced` record the same fact from two phases. Use one of them.
+
+### Stops
+
+A stop is a `failed` row with `stop` set. `stop` comes from the closed `OnboardingStop` in `core/src/onboarding.ts`. Each name has one detection point. A stop that no code can detect, such as a sign-in wall, is not on the list. Count stops with `onboarding_stop IS NOT NULL`. Do not count them by `status`: a failed `init` can also send the older `instrumented` row with no `stop`.
+
+| `stop` | Step | Detection point |
+| --- | --- | --- |
+| `no_node` | `install/runtime_ready` | `check_node` in `install/install.sh` and `install/install.ps1`, drained by `drainInstallTrace` |
+| `node_too_old` | `install/runtime_ready` | the same, when the version is below the minimum |
+| `cli_install_failed` | `install/cli_installed` | `install_cli` in the installers: no npm, a failed `npm install`, or no `reticle` on PATH |
+| `mcp_not_registered` | `install/mcp_registered`, or `first_run/instrumented` from `init` | `setupMcp` in `server/src/command/setup/setup-mcp.ts`, when no detected agent got the server; or `init` reason `mcp_registration` |
+| `no_web_app` | `first_run/project_detected` | `init` reason `no_package_json` |
+| `setup_failed` | `project_detected`, `instrumented` or `app_connected` | `init` reason `malformed_package_json`, `preflight`, `dependency_install` or `bridge_occupied` |
+| `dev_server_failed` | `first_run/app_connected` | `init` reason `dev_server`. `init_completed.init_stop` names the step. |
+| `app_not_connected` | `first_run/app_connected` | `init` reason `app_connection`. `init_completed.init_stop` names the step. |
+| `interrupted` | `first_run/app_connected` | `init` reason `interrupted` (Ctrl-C) |
+| `agent_not_restarted` | `onboard/first_look` | `restartNotice` in `server/src/command/setup/init/init-runtime.ts`: the agent that ran `init` does not have the tools |
+| `chromium_unavailable` | `first_run/driven` | `recordConnectAttempt` in `server/src/telemetry/session-metrics.ts`, on `chromium_missing` or `playwright_missing`. `reason` holds which. |
+| `unclassified` | `instrumented` or `app_connected` | `init` reason `runtime_error`, `other`, or none. The unknown bucket. |
+
+Every `init` stop comes from `reportInitOutcome` in `server/src/telemetry/init-telemetry.ts`, with the `init` reason in `reason`. **Unit:** an installer stop is one installer run. Any other stop is sent once for each process and name.
+
+A stop says where the path was blocked when Reticle saw it. A later `completed` row on a later step means the person got past it. `agent_not_restarted` can come from an `init` that worked.
+
+### Eligibility
+
+Eligibility is on rows that exist. It needs no field of its own. Deduplicate on `anonymousId`.
+
+| Fact | Read it from |
+| --- | --- |
+| A web app was found | `project_profiled` with `project_stack` set |
+| No web app here | `project_profiled` with `project_stackUnknownReason` `no_app_found` or `workspace_root_no_apps`, or the stop `no_web_app` |
+| Not known | `project_stackUnknownReason` `manifest_unrecognised`, `workspace_apps_unrecognised` or `discovery_failed` |
+| CI or a container | `ci = true`, or `automation` set, on any row |
 
 ```json
 {

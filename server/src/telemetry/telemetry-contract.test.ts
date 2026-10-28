@@ -27,6 +27,8 @@ import {
   HarnessRunOutcome,
   HarnessRunSource,
   LaunchMethod,
+  OnboardingStepSchema,
+  OnboardingStop,
   PlatformLinkVia,
   SessionSummarySchema,
   TelemetryAccountState,
@@ -399,6 +401,22 @@ describe('nudges and Harness refusals are counted by closed names', () => {
 });
 
 describe('failure vocabularies stay closed', () => {
+  /**
+   * `onboarding.stop` is the one column that says why the path to a first verdict stopped. It is a
+   * closed list with an explicit unknown bucket, and free text never passes, because the reason is
+   * read by a GROUP BY that no person checks row by row.
+   */
+  it('onboarding stops are a closed list with an unknown bucket', () => {
+    const row = { phase: 'first_run', step: 'app_connected', status: 'failed' } as const;
+    expect(Object.values(OnboardingStop)).toContain(OnboardingStop.UNCLASSIFIED);
+    for (const stop of Object.values(OnboardingStop)) {
+      expect(OnboardingStepSchema.safeParse({ ...row, stop }).success).toBe(true);
+    }
+    expect(
+      OnboardingStepSchema.safeParse({ ...row, stop: 'dev server on /Users/ada' }).success,
+    ).toBe(false);
+  });
+
   /**
    * `OTHER` is the bucket that says the classifier has a blind spot. It must exist — a classifier
    * that cannot say "I do not know" lies instead — and every other member must be distinct from it.
