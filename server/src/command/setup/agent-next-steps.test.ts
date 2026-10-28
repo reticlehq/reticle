@@ -193,10 +193,14 @@ describe('the Claude Code plugin is read from its own install record', () => {
 
 describe('status rows come from the configs, read only', () => {
   const home = '/h';
+  // The product joins paths with `node:path`, so on Windows it asks for `\h\.claude.json`.
+  // The fake keys files by `/`, so it compares in that one form.
+  const slash = (p: string): string => p.replaceAll('\\', '/');
   function io(files: Record<string, string>) {
     return {
-      exists: (p: string) => Object.keys(files).some((f) => f === p || f.startsWith(`${p}/`)),
-      readFile: (p: string) => files[p] ?? null,
+      exists: (p: string) =>
+        Object.keys(files).some((f) => f === slash(p) || f.startsWith(`${slash(p)}/`)),
+      readFile: (p: string) => files[slash(p)] ?? null,
       homeDir: () => home,
     };
   }
