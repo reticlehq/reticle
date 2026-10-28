@@ -223,6 +223,27 @@ describe('stopWedgedDaemon', () => {
     expect(d.kills).toBe(0);
   });
 
+  /**
+   * On a busy machine a healthy daemon took more than the 1-second probe to answer `/status`, so
+   * `status` called it FOREIGN while `doctor` found it running seconds later. The second look must
+   * give it a generous limit, or the proxy stops a daemon that other agents use.
+   */
+  it('leaves a daemon that answers only after the short probe gives up, because it is busy', async () => {
+    const answersAfterMs = 3_000;
+    const timeouts: (number | undefined)[] = [];
+    const d = {
+      ...fakes([], true),
+      presence: (statusTimeoutMs?: number): Promise<PortPresence> => {
+        timeouts.push(statusTimeoutMs);
+        const answers = statusTimeoutMs !== undefined && statusTimeoutMs > answersAfterMs;
+        return Promise.resolve(answers ? PortPresence.DAEMON : PortPresence.FOREIGN);
+      },
+    };
+    expect(await stopWedgedDaemon(PORT, d)).toBe(false);
+    expect(d.kills).toBe(0);
+    expect(timeouts[0], 'the first look is the usual short probe').toBeUndefined();
+  });
+
   it('does nothing on a free port or a daemon that answers', async () => {
     for (const presence of [PortPresence.FREE, PortPresence.DAEMON]) {
       const d = fakes([presence], true);

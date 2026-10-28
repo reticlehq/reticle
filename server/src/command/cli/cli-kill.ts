@@ -205,6 +205,13 @@ const PROXY_SPARED_NOTE =
 const WEDGED_GRACE_MS = 2_000;
 
 /**
+ * How long the second look waits for `/status`. The usual probe gives up after 1 second, and on a
+ * busy machine a healthy daemon took longer than that. A daemon that answers slowly is busy, not
+ * stuck, and other agents can use it.
+ */
+export const WEDGED_STATUS_TIMEOUT_MS = 10_000;
+
+/**
  * Stop a Reticle daemon that holds `port` and does not answer. True when it stopped one (#1937).
  *
  * The MCP proxy used to move to another port when it found one. The app's SDK dials the old port,
@@ -214,12 +221,17 @@ const WEDGED_GRACE_MS = 2_000;
 export async function stopWedgedDaemon(
   port: number,
   deps: {
-    presence: () => Promise<PortPresence>;
+    /** `statusTimeoutMs`: how long to wait for `/status`. Absent: the usual short probe. */
+    presence: (statusTimeoutMs?: number) => Promise<PortPresence>;
     holder: () => PortHolder | null;
     kill: () => Promise<boolean>;
     wait: (ms: number) => Promise<void>;
   } = {
-    presence: () => probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }),
+    presence: (statusTimeoutMs) =>
+      probePresence(port, {
+        tcpOpen: probeDaemon,
+        status: (p) => fetchStatus(p, LOOPBACK_HOST, false, statusTimeoutMs),
+      }),
     holder: () => identifyPortHolder(port, captureLookup),
     kill: () => runKill(port, false),
     wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -233,7 +245,7 @@ export async function stopWedgedDaemon(
     return false;
   }
   await deps.wait(WEDGED_GRACE_MS);
-  if (PortPresence.FOREIGN !== (await deps.presence())) {
+  if (PortPresence.FOREIGN !== (await deps.presence(WEDGED_STATUS_TIMEOUT_MS))) {
     return false;
   }
   log('reticle_wedged_daemon_stopping', { port, pid: holder.pid });

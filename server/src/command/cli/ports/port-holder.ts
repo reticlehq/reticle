@@ -132,23 +132,25 @@ export function describeForeignHolder(
     const ours =
       ourPid !== null && ourPid !== undefined
         ? ` Reticle's own records show pid ${String(ourPid)} for this port — if that process is ` +
-          'still around it is a wedged Reticle daemon, and `reticle stop` clears it.'
+          'still around it is a Reticle daemon that did not answer in time. It may be busy. If it ' +
+          'stays silent, `reticle stop` clears it.'
         : '';
     return `port ${String(port)} is held by a process Reticle could not identify — ${tail}${ours}`;
   }
   if (true === holder.reticleDaemon && ourPid !== holder.pid) {
     // Not the pid we recorded, so `reticle stop` cannot find it. `restart` finds the listener.
+    // It did not answer a short probe. A busy daemon does that too, and other agents can use it.
     return (
-      `port ${String(port)} is held by a Reticle daemon (pid ${String(holder.pid)}) that does not ` +
-      'answer, so nothing can use the port and no other daemon can bind it. Run `reticle restart`: ' +
-      'it stops that process and starts a new daemon on this port.'
+      `port ${String(port)} is held by a Reticle daemon (pid ${String(holder.pid)}) that did not ` +
+      'answer in time. It may be busy. Run `reticle status` again in a few seconds. If it stays ' +
+      'silent, run `reticle restart`: it stops that process and starts a new daemon on this port.'
     );
   }
   if (ourPid !== null && ourPid !== undefined && ourPid === holder.pid) {
     return (
       `port ${String(port)} is held by YOUR Reticle daemon (pid ${String(holder.pid)}), and it is ` +
-      'not responding — running but wedged, so nothing can use it and nothing else can bind the ' +
-      'port. Stop it with `reticle stop`; the next tool call starts a fresh one.'
+      'not responding: it did not answer in time. It may be busy. Run `reticle status` again in a ' +
+      'few seconds. If it stays silent, run `reticle stop`; the next tool call starts a fresh one.'
     );
   }
   return (

@@ -49,6 +49,8 @@ export function fetchStatus(
   host: string = LOOPBACK_HOST,
   /** Also tell the daemon a setup run is waiting on it, so it does not idle out mid-wait. */
   hold = false,
+  /** A longer limit, for a caller that must not mistake a busy daemon for a stuck one. */
+  timeoutMs: number = STATUS_PROBE_TIMEOUT_MS,
 ): Promise<unknown> {
   return new Promise((resolve) => {
     const req = http.get(
@@ -56,7 +58,7 @@ export function fetchStatus(
         host,
         port,
         path: hold ? `${STATUS_PATH}?${STATUS_HOLD_QUERY}=1` : STATUS_PATH,
-        timeout: STATUS_PROBE_TIMEOUT_MS,
+        timeout: timeoutMs,
         // Shares the proxy's keep-alive agent: the proxy calls this on every reconnect, and a socket
         // per probe is the same churn the POST leg was fixed for.
         agent: loopbackAgent,

@@ -113,6 +113,25 @@ describe('a wedged daemon of our own', () => {
     expect(msg).not.toMatch(/-ti\b/);
   });
 
+  /**
+   * A daemon that did not answer the short probe can be busy, not stuck. On a busy machine one
+   * answered `doctor` seconds after `status` gave up on it. The sentence must not tell the agent
+   * to stop a daemon that other agents use.
+   */
+  it('says a silent Reticle daemon may be busy, and names restart only if it stays silent', () => {
+    for (const ourPid of [null, 65704]) {
+      const msg = describeForeignHolder(
+        4411,
+        { pid: 65704, command: 'node', reticleDaemon: true },
+        ourPid,
+      );
+      expect(msg).toContain('did not answer in time');
+      expect(msg).toContain('may be busy');
+      expect(msg).not.toMatch(/wedged|\bkill\b|Run `reticle restart`/);
+      expect(msg).toMatch(/If it stays silent, run `reticle (restart|stop)`/);
+    }
+  });
+
   it('keeps the old wording when we have no recorded pid to compare', () => {
     expect(describeForeignHolder(4411, { pid: 999, command: 'python' }, null)).toContain(
       'is not a Reticle daemon',
