@@ -48,6 +48,9 @@ import { machineUnsyncedRoots } from '@/memory/project/sync-status.js';
 import { attachState, describeAttachState } from '@/surface/mcp/attach-memory.js';
 import { agentLinkText } from './doctor/doctor-agent-link.js';
 import { launcherLine, registeredEntries } from './doctor/doctor-launcher-line.js';
+import { countNeeded, fixFooter, runDoctorFix } from './doctor/doctor-fix.js';
+import { machineRepairs, mcpRegistrationRow, readMcpRegistration } from './doctor-repairs.js';
+import type { StepReporter } from './setup-mcp-cli.js';
 import { findOccupiedSiblings, siblingListenerNote } from './ports/sibling-ports.js';
 import {
   daemonsServingProjectElsewhere,
@@ -106,9 +109,47 @@ function splitBrainLine(port: number, projectId: string | undefined): string | u
   return elsewhere ?? wrongDaemonNote(port, resolveDaemonForProject(projectId, home, isAlive));
 }
 
-export async function handleDoctor(port: number): Promise<void> {
+const writeLine = (s: string): void => {
+  process.stdout.write(`${s}\n`);
+};
+
+/**
+ * `reticle doctor`, and with `fix`, `reticle doctor --fix`. Without `fix` it changes nothing and
+ * ends with how many rows `--fix` can repair. With `fix` the exit code is 1 while any row fails.
+ */
+export async function handleDoctor(
+  port: number,
+  fix = false,
+  reportStep: StepReporter = () => {},
+): Promise<void> {
+  const repairs = machineRepairs(port, reportStep);
+  if (fix) {
+    const green = await runDoctorFix({
+      doctor: (show) => doctorLines(port, show),
+      repairs,
+      print: writeLine,
+    });
+    if (!green) {
+      process.exitCode = 1;
+    }
+    return;
+  }
+  await doctorLines(port, true);
+  const footer = fixFooter(await countNeeded(repairs));
+  if (footer !== undefined) {
+    writeLine('');
+    writeLine(footer);
+  }
+}
+
+/** Every doctor row, in order. Each row is printed as it is found when `show` is true. */
+async function doctorLines(port: number, show: boolean): Promise<string[]> {
+  const lines: string[] = [];
   const line = (s: string): void => {
-    process.stdout.write(`${s}\n`);
+    lines.push(s);
+    if (show) {
+      writeLine(s);
+    }
   };
   line('reticle doctor');
   line(doctorRow(DoctorRow.NODE, process.version));
@@ -117,6 +158,7 @@ export async function handleDoctor(port: number): Promise<void> {
   let sessions: SessionsLine | undefined;
   let daemonStatus: unknown;
   line(doctorRow(DoctorRow.CHROMIUM, chromiumHint(await probeChromiumWithFallback())));
+  line(mcpRegistrationRow(readMcpRegistration()));
   // Ask the PORT, not just the pid file. "not running on :4400" has been printed about a port that
   // was demonstrably occupied, which sends the reader to start a daemon that cannot bind. The three
   // states are genuinely different problems with different fixes, so doctor names which one it is.
@@ -362,6 +404,7 @@ export async function handleDoctor(port: number): Promise<void> {
   if (keychain !== undefined) {
     line(doctorRow(DoctorRow.DESKTOP, `⚠ ${keychain}`));
   }
+  return lines;
 }
 
 /**

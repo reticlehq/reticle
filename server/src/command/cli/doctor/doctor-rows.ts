@@ -71,6 +71,8 @@ export const DoctorRow = {
   PROMPTS: 'prompts',
   /** The daemon's background sync for this project: on or off, why, and the last push. */
   SYNC: 'sync',
+  /** Which coding agents found on this machine have Reticle's MCP server registered. */
+  MCP: 'mcp',
 } as const;
 
 type DoctorRowLabel = (typeof DoctorRow)[keyof typeof DoctorRow];

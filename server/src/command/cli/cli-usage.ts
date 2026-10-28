@@ -132,8 +132,9 @@ const COMMANDS: readonly CommandDoc[] = [
   },
   {
     name: 'doctor',
-    synopsis: 'doctor [--port N]',
+    synopsis: 'doctor [--fix] [--port N]',
     summary: 'Find what is wrong with the setup, and what is missing from coverage',
+    detail: '--fix repairs what Reticle can repair safely, and names the step for the rest.',
     group: HelpGroup.MACHINE,
   },
   {

@@ -173,6 +173,7 @@ export function knownCommand(arg: string | undefined): string {
 }
 
 const QUIET_FLAG = '--quiet';
+const FIX_FLAG = '--fix';
 const DRY_RUN_FLAG = '--dry-run';
 const YES_FLAG = '--yes';
 const NO_MCP_FLAG = '--no-mcp';
@@ -295,7 +296,7 @@ export type CliResult =
   | { kind: 'version' }
   | { kind: 'help'; topic?: string }
   | { kind: 'removed'; message: string }
-  | { kind: 'doctor'; port: number }
+  | { kind: 'doctor'; port: number; fix: boolean }
   | { kind: 'setup-mcp' }
   | { kind: 'setup-install'; runtimeSecs: number; installSecs: number; mcp: boolean }
   | { kind: 'open'; port: number; url?: string; navigate: boolean }
@@ -743,7 +744,7 @@ export function parseCliArgs(
     }
     case DOCTOR_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
-      return { kind: 'doctor', port };
+      return { kind: 'doctor', port, fix: rest.includes(FIX_FLAG) };
     }
     /*
      * `setup mcp` — register the MCP server with the coding agents on this machine.

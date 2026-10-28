@@ -824,7 +824,7 @@ export function main(): void {
       process.exit(1);
       break;
     case 'doctor':
-      void handleDoctor(parsed.port);
+      void handleDoctor(parsed.port, parsed.fix, reportStepFromCli);
       break;
     case 'setup-mcp':
       void writeFirstUseWarnings().then(() => {

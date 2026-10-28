@@ -7,13 +7,14 @@ icon: stethoscope
 `reticle doctor` collapses the setup failure modes into one command. It is the first thing to run when something is wrong.
 
 ```bash
-npx @reticlehq/server doctor [--port N]
+npx @reticlehq/server doctor [--fix] [--port N]
 ```
 
 ## Flags
 
 | Flag | Type | Default | What it does |
 | --- | --- | --- | --- |
+| `--fix` | boolean | off | Repair what Reticle can repair safely, then run the checks again. See [Repair with --fix](#repair-with---fix) |
 | `--port N` | number | `RETICLE_PORT`, else the port in `.reticle.json`, else the daemon already serving this project, else `4400` | Which bridge port to diagnose |
 
 ## What it prints
@@ -50,6 +51,7 @@ When nothing has connected, the `sessions` line fails and the daemon's own diagn
 | Line | What it checks |
 | --- | --- |
 | `node` | The Node version running the CLI |
+| `mcp` | Which coding agents found on this machine have Reticle's MCP server registered. Fails when an agent is found without it, and names the agent and `reticle setup mcp` |
 | `chromium` | Whether the exact Chromium revision the bundled Playwright wants is on disk. The most common silent failure |
 | `daemon` | Whether the port holds a Reticle daemon, a foreign process (named where possible), or nothing. Adds a `version` line when the daemon's version or contract fingerprint disagrees with the CLI's |
 | `sessions` | Whether any page has actually connected. Zero is a FAILING check rather than a neutral note, because it is the state the setup most often stalls in: wired correctly, daemon up, nothing dialled in. When it is zero the daemon's own no-session diagnosis prints below the checklist |
@@ -114,9 +116,43 @@ The wanted revision and the root are both read back off the path Playwright itse
   before. That loop is why the line names the version to pin to.
 </Warning>
 
+## Repair with --fix
+
+When a row has a safe repair, a plain `doctor` run ends with one more line:
+
+```
+Run `reticle doctor --fix` to repair 2 of these.
+```
+
+`reticle doctor --fix` prints the checks, applies the safe repairs in a fixed order, runs the checks again, and prints one line for each repair and one for each row that still fails. A repair changes only Reticle's own state:
+
+| Order | Row | Repair | Done only when |
+| --- | --- | --- | --- |
+| 1 | `daemon` | Delete the pid file of a daemon that is not running | The process that the file names does not exist |
+| 2 | `daemon` | Stop a Reticle daemon that holds the port and does not answer, as `reticle restart` does | The holder's command line is a Reticle daemon, and it is still silent after a grace period. A different program and the agent's own `reticle mcp` proxy are never stopped |
+| 3 | `chromium` | Install the pinned Chromium of the bundled Playwright (a download) | No Chrome or Edge can stand in, and `RETICLE_CHROMIUM_PATH` is not set |
+| 4 | `mcp` | Run `reticle setup mcp` | An agent on this machine does not have Reticle registered |
+
+Each repair checks again before it acts, so a second `--fix` finds nothing to do and changes nothing.
+
+`--fix` never repairs a row that needs a change to your app, a process that Reticle cannot prove is its own daemon, or an action only you can do. For those rows it prints the step that the row names: for example `reticle init` for `project`, starting your agent for a stopped `daemon`, `reticle hook install` for `prompts`, a CSP or desktop change, or a version skew (restart the daemon when no other agent uses it).
+
+```
+reticle doctor --fix
+  daemon       pid file of a stopped daemon: fixed
+  daemon       a Reticle daemon that does not answer: nothing to do
+  chromium     Playwright's own Chromium: nothing to do
+  mcp          agent registrations: fixed
+  still needs: sync         ✗ off: this project is not linked: run `reticle connect`; no push yet
+```
+
+A registration takes effect when the agent reads its config again, so restart your agent after `mcp` is fixed.
+
 ## Exit codes
 
-Always `0`. `doctor` reports; it does not gate.
+A plain `doctor` always exits `0`. It reports; it does not gate.
+
+`doctor --fix` exits `0` only when no row fails after the repairs, and `1` otherwise.
 
 ## Worked example
 
