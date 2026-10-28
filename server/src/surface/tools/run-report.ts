@@ -49,11 +49,15 @@ function headline(report: RunReport): string {
   const count = (v: Verified): number => all.filter((each) => v === each).length;
   const total = all.length;
   const word = `${HEAD}${WORD[report.verified]}**${SEP}`;
-  if (0 === total) return `${word}${Said.NOTHING_CHECKED}`;
-  if (Verified.NO === report.verified)
+  if (0 === total) {
+    return `${word}${Said.NOTHING_CHECKED}`;
+  }
+  if (Verified.NO === report.verified) {
     return `${word}${String(count(Verified.NO))} of ${plural(total, 'check')} did not hold`;
-  if (Verified.YES === report.verified)
+  }
+  if (Verified.YES === report.verified) {
     return `${word}${String(total)} of ${plural(total, 'check')} held`;
+  }
   return `${word}${String(total - count(Verified.YES) - count(Verified.NO))} of ${plural(total, 'check')} undecided`;
 }
 
@@ -122,40 +126,57 @@ export function noteToolResult(
   args: Record<string, unknown>,
   result: unknown,
 ): void {
-  if (!isRecord(result) || result['error'] !== undefined) return;
+  if (!isRecord(result) || result['error'] !== undefined) {
+    return;
+  }
   if (ReticleTool.FLOW_SAVE === tool || ReticleTool.FLOW_SAVE_RECORDED === tool) {
     const name = result['name'];
-    if ('string' === typeof name) ledger.flowSaved(name);
+    if ('string' === typeof name) {
+      ledger.flowSaved(name);
+    }
     return;
   }
   const action = asString(args['action']);
   if (ReticleTool.INTENT === tool) {
     // The intent ledger in `.reticle/intent/` is the memory an unlinked project has.
-    if (IntentWrite.RECORD === action) ledger.memoryWritten();
+    if (IntentWrite.RECORD === action) {
+      ledger.memoryWritten();
+    }
     const declared = args['intents'];
-    if (IntentWrite.DECLARE === action && Array.isArray(declared))
+    if (IntentWrite.DECLARE === action && Array.isArray(declared)) {
       ledger.memoryWritten(declared.length);
-    if (action !== undefined && INTENT_READS.has(action))
+    }
+    if (action !== undefined && INTENT_READS.has(action)) {
       ledger.memoryRead([JSON.stringify(result)]);
+    }
     return;
   }
-  if (ReticleTool.MEMORY !== tool) return;
-  if ('add' === action && result['added'] !== undefined) ledger.memoryWritten();
+  if (ReticleTool.MEMORY !== tool) {
+    return;
+  }
+  if ('add' === action && result['added'] !== undefined) {
+    ledger.memoryWritten();
+  }
   const known = result['known'];
-  if (Array.isArray(known)) ledger.memoryRead(known.map((entry) => JSON.stringify(entry)));
+  if (Array.isArray(known)) {
+    ledger.memoryRead(known.map((entry) => JSON.stringify(entry)));
+  }
 }
 
-/** The report as an answer field, or no field when the ledger holds no run. Empties the ledger. */
+/** The owner's report as an answer field, or no field when the owner has no run. Ends that run. */
 export function runReportField(
   ledger: RunLedger,
   root: string | undefined,
   env: Record<string, string | undefined>,
   now: number,
+  owner?: string,
 ): Partial<
   Record<typeof RUN_REPORT_FIELD, { report: RunReport; markdown: string; instruction: string }>
 > {
-  if (ledger.isEmpty()) return {};
-  const taken = ledger.take(now);
+  if (ledger.isEmpty(owner)) {
+    return {};
+  }
+  const taken = ledger.take(now, owner);
   const silenced = env[UPGRADE_HINT_SILENCE_ENV] !== undefined;
   const linked = root === undefined || linkedToPlatform(root, env);
   const report: RunReport = silenced || linked ? taken : { ...taken, cloud: CLOUD_VALUE_LINE };

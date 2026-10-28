@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { JOURNAL_FILE_VERSION, Verified, type JournalAction } from '@reticlehq/core';
 import { runAsAgent } from '@/hooks/coding-agents.js';
-import { RunLedger } from './run-ledger.js';
+import { RUN_IDLE_LIMIT_MS, RunLedger } from './run-ledger.js';
 
 const verdict = (
   claim: string,
@@ -66,6 +66,62 @@ describe('the run ledger', () => {
     const report = ledger.take(1_000);
     expect(report.claims.map((c) => c.claim)).toEqual(['a claim of my own']);
     expect(report.flows).toEqual({ saved: [], replayed: [] });
+  });
+
+  /*
+   * Two agents on two worktrees of one project, one daemon, calls that interleave. Each call from
+   * one agent restarted the run of the other, so agent A's released lease reported agent B's claims
+   * and none of its own.
+   */
+  it("gives each agent its own run when two agents call in turn, and takes only the caller's", async () => {
+    const ledger = new RunLedger();
+    const B = 'attach-2';
+    const call = async (owner: string, now: number, claim: string): Promise<void> => {
+      ledger.begin(now, owner);
+      await runAsAgent(owner, () => {
+        ledger.verdict(verdict(claim, Verified.YES));
+        ledger.flowSaved(`${claim} flow`);
+        return Promise.resolve();
+      });
+      ledger.after(now + 10, owner);
+    };
+    await call(AGENT, 0, 'A one');
+    await call(B, 100, 'B one');
+    await call(AGENT, 200, 'A two');
+    await call(B, 300, 'B two');
+    const mine = ledger.take(1_000, AGENT);
+    expect(mine.claims.map((c) => c.claim)).toEqual(['A one', 'A two']);
+    expect(mine.flows.saved).toEqual(['A one flow', 'A two flow']);
+    expect(mine.wallMs).toBe(1_000);
+    expect(ledger.isEmpty(AGENT)).toBe(true);
+    // A's take left B's run as it was.
+    expect(ledger.isEmpty(B)).toBe(false);
+    const theirs = ledger.take(2_000, B);
+    expect(theirs.claims.map((c) => c.claim)).toEqual(['B one', 'B two']);
+    expect(theirs.wallMs).toBe(1_900);
+  });
+
+  // A record from no MCP connection (the HUD, the CLI, a record that ends outside the call context)
+  // goes to the run of the agent that called last: the run that was "current" before runs were kept
+  // for each agent.
+  it('gives a record from no connection to the run of the agent that called last', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, AGENT);
+    ledger.begin(100, 'attach-2');
+    ledger.verdict(verdict('from no connection', Verified.YES));
+    expect(ledger.take(200, AGENT).claims).toEqual([]);
+    expect(ledger.take(200, 'attach-2').claims.map((c) => c.claim)).toEqual(['from no connection']);
+  });
+
+  it('drops the run of an agent that stopped calling, after the idle limit', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, AGENT);
+    ledger.verdict(verdict('never reported', Verified.NO));
+    ledger.begin(RUN_IDLE_LIMIT_MS - 1, 'attach-2');
+    expect(ledger.isEmpty(AGENT)).toBe(false);
+    ledger.begin(RUN_IDLE_LIMIT_MS + 1, 'attach-2');
+    expect(ledger.isEmpty(AGENT)).toBe(true);
+    expect(ledger.isEmpty('attach-2')).toBe(false);
   });
 
   it('keeps a verdict that came from no MCP connection, as before', () => {

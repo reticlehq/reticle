@@ -1452,11 +1452,6 @@
       "count": 1
     }
   },
-  "src/judgement/runs/run-ledger.ts": {
-    "curly": {
-      "count": 13
-    }
-  },
   "src/judgement/runs/run-tools.test.ts": {
     "curly": {
       "count": 8
@@ -4010,11 +4005,6 @@
   "src/surface/tools/run-report.test.ts": {
     "curly": {
       "count": 2
-    }
-  },
-  "src/surface/tools/run-report.ts": {
-    "curly": {
-      "count": 12
     }
   },
   "src/surface/tools/shipped-prose-drift.test.ts": {

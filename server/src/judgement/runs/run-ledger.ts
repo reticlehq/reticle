@@ -1,19 +1,19 @@
 /**
- * The run ledger: what one agent run checked, saved and read, kept until its report is taken.
+ * The run ledger: what each agent run checked, saved and read, kept until its report is taken.
  *
- * A run is the agent's calls from its first Reticle call to the call that ends it (a session end, a
+ * A run is one agent's calls from its first Reticle call to the call that ends it (a session end, a
  * yield, a released tab). The verdicts come from the journal records the agent's own calls wrote;
- * the Harness's are never counted. Taking the report empties the ledger, so the next run starts at
- * zero.
+ * the Harness's are never counted. Taking the report ends that run, so the agent's next run starts
+ * at zero.
  *
- * A call from another agent (another MCP attach id) starts a new run. An agent that stops without a
- * call that ends its run then does not leak its claims into the next agent's report. A record that
- * a call from another connection writes is not this run's either: when two agents' calls overlap,
- * the first agent's call can end after the second agent's run began, and its claim was listed in a
- * report that agent never made (#1900).
+ * The ledger keeps one run for each MCP attach id. Two agents on one daemon (two worktrees of one
+ * project) call in turn. When the ledger kept one run, each call restarted the other agent's run,
+ * and a released lease reported the other agent's claims and none of its own. A record goes to the
+ * run of the connection that wrote it, and a call that ends a run takes the caller's run (#1900).
  *
- * ponytail: one ledger for each daemon, not for each agent. Two agents that call at the same time
- * restart each other's run. Key the ledger by attach id when that happens.
+ * A record from no connection (the HUD, the CLI, an agent record that ends outside its call
+ * context) goes to the run of the agent that called last. An agent that stops without a call that
+ * ends its run leaves its run here. That run is dropped when it is idle for `RUN_IDLE_LIMIT_MS`.
  */
 import { supersededChecks } from '@reticlehq/engine/evidence/superseded-checks.js';
 import {
@@ -30,139 +30,181 @@ import { callingAttachId } from '@/hooks/coding-agents.js';
 const SAW = 'saw ';
 const FLOW = 'flow ';
 
+/** A run with no agent call for this long is dropped. A working agent calls much more often. */
+export const RUN_IDLE_LIMIT_MS = 6 * 60 * 60 * 1000;
+
 /** One piece of evidence for a claim: what the check saw, else the source line it drove. */
 function evidenceOf(effect: JournalVerdictEffect): string | undefined {
-  if (effect.observed !== undefined) return `${SAW}${effect.observed}`;
+  if (effect.observed !== undefined) {
+    return `${SAW}${effect.observed}`;
+  }
   return effect.source;
 }
 
 /** `no` when anything failed, `yes` only when something held and nothing was undecided. */
 function runVerified(all: readonly Verified[]): Verified {
-  if (all.includes(Verified.NO)) return Verified.NO;
-  if (0 === all.length || all.some((v) => Verified.YES !== v)) return Verified.UNKNOWN;
+  if (all.includes(Verified.NO)) {
+    return Verified.NO;
+  }
+  if (0 === all.length || all.some((v) => Verified.YES !== v)) {
+    return Verified.UNKNOWN;
+  }
   return Verified.YES;
 }
 
-export class RunLedger {
-  #owner: string | undefined;
-  #startedAt: number | undefined;
-  #firstVerdictAt: number | undefined;
-  #verdicts: JournalVerdictEffect[] = [];
-  #saved = new Set<string>();
-  #replayed = new Map<string, Verified>();
-  #written = 0;
-  #read = new Set<string>();
+/** One agent's open run. */
+interface Run {
+  startedAt: number;
+  lastAt: number;
+  firstVerdictAt: number | undefined;
+  verdicts: JournalVerdictEffect[];
+  saved: Set<string>;
+  replayed: Map<string, Verified>;
+  written: number;
+  read: Set<string>;
+}
 
-  /** An agent call starts. The first one starts the run, and a call from another agent starts a new one. */
+const openRun = (now: number): Run => ({
+  startedAt: now,
+  lastAt: now,
+  firstVerdictAt: undefined,
+  verdicts: [],
+  saved: new Set(),
+  replayed: new Map(),
+  written: 0,
+  read: new Set(),
+});
+
+export class RunLedger {
+  readonly #runs = new Map<string, Run>();
+  #last: string | undefined;
+
+  /** An agent call starts. The agent's first call starts its run. A run idle too long is dropped. */
   begin(now: number, owner: string): void {
-    if (this.#owner !== owner) this.#reset();
-    this.#owner = owner;
-    this.#startedAt ??= now;
+    for (const [id, run] of this.#runs) {
+      if (now - run.lastAt > RUN_IDLE_LIMIT_MS) {
+        this.#runs.delete(id);
+      }
+    }
+    const run = this.#runs.get(owner) ?? openRun(now);
+    run.lastAt = now;
+    this.#runs.set(owner, run);
+    this.#last = owner;
   }
 
   /** An agent call ended. The first one that left a verdict sets the time to the first verdict. */
-  after(now: number): void {
-    if (0 < this.#verdicts.length || 0 < this.#replayed.size) this.#firstVerdictAt ??= now;
+  after(now: number, owner?: string): void {
+    const run = this.#run(owner);
+    if (run === undefined) {
+      return;
+    }
+    run.lastAt = Math.max(run.lastAt, now);
+    if (0 < run.verdicts.length || 0 < run.replayed.size) {
+      run.firstVerdictAt ??= now;
+    }
   }
 
   /** A journal record from the agent's own call. A record with no verdict is not a claim. */
   verdict(action: JournalAction): void {
-    if (this.#idle() || this.#foreign() || action.drivenBy !== undefined) return;
+    const run = this.#run();
+    if (run === undefined || action.drivenBy !== undefined) {
+      return;
+    }
     // A replay is counted once, as a flow, decided as its run decides it (`replayed`). Its journal
     // record said `unknown` where the run said `no`, and one report gave both answers.
-    if (ReticleTool.FLOW_REPLAY === action.tool) return;
+    if (ReticleTool.FLOW_REPLAY === action.tool) {
+      return;
+    }
     const parsed = JournalVerdictEffectSchema.safeParse(action.effect);
-    if (parsed.success) this.#verdicts.push(parsed.data);
+    if (parsed.success) {
+      run.verdicts.push(parsed.data);
+    }
   }
 
   flowSaved(name: string): void {
-    if (!this.#idle() && !this.#foreign()) this.#saved.add(name);
+    this.#run()?.saved.add(name);
   }
 
   /** The last replay of a flow in this run is its verdict. */
   replayed(name: string, verified: Verified): void {
-    if (!this.#idle() && !this.#foreign()) this.#replayed.set(name, verified);
+    this.#run()?.replayed.set(name, verified);
   }
 
   memoryWritten(count = 1): void {
-    if (!this.#idle()) this.#written += count;
+    const run = this.#run();
+    if (run !== undefined) {
+      run.written += count;
+    }
   }
 
   /** Notes given to the agent. Each one counts once, however often it is shown. */
   memoryRead(notes: readonly string[]): void {
-    if (this.#idle()) return;
-    for (const note of notes) this.#read.add(note);
+    const run = this.#run();
+    if (run === undefined) {
+      return;
+    }
+    for (const note of notes) {
+      run.read.add(note);
+    }
   }
 
-  isEmpty(): boolean {
-    return this.#idle();
+  isEmpty(owner?: string): boolean {
+    return this.#run(owner) === undefined;
+  }
+
+  /** The named owner, else the calling connection, else the agent that called last. */
+  #owner(owner: string | undefined): string | undefined {
+    return owner ?? callingAttachId() ?? this.#last;
   }
 
   /**
-   * No agent run is open. A CLI `reticle verify` replays through the same code, and what it did is
-   * not the next agent's run, so nothing is kept until an agent call begins one.
+   * The run a record belongs to. None while no agent call has begun one: a CLI `reticle verify`
+   * replays through the same code, and what it did is not the next agent's run.
    */
-  #idle(): boolean {
-    return this.#startedAt === undefined;
+  #run(owner?: string): Run | undefined {
+    const id = this.#owner(owner);
+    return id === undefined ? undefined : this.#runs.get(id);
   }
 
-  /**
-   * The current call came over another MCP connection than the one that owns this run. A call with
-   * no connection (the HUD, the CLI) is not foreign: dropping it would also drop the agent's own
-   * records that end outside the call context.
-   */
-  #foreign(): boolean {
-    const caller = callingAttachId();
-    return caller !== undefined && caller !== this.#owner;
-  }
-
-  /** The report, without the cloud line (the caller knows the project). Empties the ledger. */
-  take(now: number): RunReport {
-    const started = this.#startedAt ?? now;
+  /** The owner's report, without the cloud line (the caller knows the project). Ends that run. */
+  take(now: number, owner?: string): RunReport {
+    const id = this.#owner(owner);
+    const run = this.#run(owner) ?? openRun(now);
+    if (id !== undefined) {
+      this.#runs.delete(id);
+    }
+    const started = run.startedAt;
     // A passive check that read too early is not counted: the rule every fold applies.
     const superseded = supersededChecks(
-      this.#verdicts.map((v) => ({
+      run.verdicts.map((v) => ({
         key: v.claim,
         passive: false === v.declaredBeforeActing,
         held: Verified.YES === v.verified,
         failed: Verified.NO === v.verified,
       })),
     );
-    const counted = this.#verdicts.filter((_, at) => !superseded.has(at));
+    const counted = run.verdicts.filter((_, at) => !superseded.has(at));
     const claims = counted.map((v): RunReportClaim => {
       const evidence = evidenceOf(v);
       return evidence === undefined
         ? { claim: v.claim, verified: v.verified }
         : { claim: v.claim, verified: v.verified, evidence };
     });
-    const replayed = [...this.#replayed].map(([name, verified]) => ({ name, verified }));
-    const report: RunReport = {
+    const replayed = [...run.replayed].map(([name, verified]) => ({ name, verified }));
+    return {
       verified: runVerified([...claims.map((c) => c.verified), ...replayed.map((r) => r.verified)]),
       claims,
       caught: [
         ...claims.filter((c) => Verified.NO === c.verified).map((c) => c.claim),
         ...replayed.filter((r) => Verified.NO === r.verified).map((r) => `${FLOW}${r.name}`),
       ],
-      flows: { saved: [...this.#saved], replayed },
-      memory: { written: this.#written, read: this.#read.size },
+      flows: { saved: [...run.saved], replayed },
+      memory: { written: run.written, read: run.read.size },
       wallMs: Math.max(0, now - started),
-      ...(this.#firstVerdictAt === undefined
+      ...(run.firstVerdictAt === undefined
         ? {}
-        : { firstVerdictMs: Math.max(0, this.#firstVerdictAt - started) }),
+        : { firstVerdictMs: Math.max(0, run.firstVerdictAt - started) }),
     };
-    this.#reset();
-    return report;
-  }
-
-  #reset(): void {
-    this.#owner = undefined;
-    this.#startedAt = undefined;
-    this.#firstVerdictAt = undefined;
-    this.#verdicts = [];
-    this.#saved = new Set();
-    this.#replayed = new Map();
-    this.#written = 0;
-    this.#read = new Set();
   }
 }
 

@@ -349,7 +349,7 @@ export async function runTool<Ext>(
       if (!agentCall) {
         return answer;
       }
-      runLedger.after(deps.now());
+      runLedger.after(deps.now(), deps.attachId);
       noteToolResult(runLedger, tool.name, args, raw);
       const notesAfter = root === undefined ? [] : readAppNotes(root);
       runLedger.memoryWritten(notesAfter.filter((note) => !notesBefore.includes(note)).length);
@@ -357,7 +357,10 @@ export async function runTool<Ext>(
       if (!ends || null === answer || 'object' !== typeof answer) {
         return answer;
       }
-      return { ...answer, ...runReportField(runLedger, endedIn ?? root, process.env, deps.now()) };
+      return {
+        ...answer,
+        ...runReportField(runLedger, endedIn ?? root, process.env, deps.now(), deps.attachId),
+      };
     }),
   );
 }

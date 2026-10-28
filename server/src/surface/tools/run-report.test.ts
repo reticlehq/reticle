@@ -109,6 +109,17 @@ describe('the end-of-run report', () => {
     expect(runReportField(ledger, project(false), {}, 0)).toEqual({});
   });
 
+  it("ends only the caller's run, so another agent's run on the daemon gets its own report", () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, 'attach-1');
+    ledger.begin(100, 'attach-2');
+    const mine = runReportField(ledger, project(true), {}, 1_000, 'attach-1')[RUN_REPORT_FIELD];
+    expect(mine?.report.wallMs).toBe(1_000);
+    expect(runReportField(ledger, project(true), {}, 1_000, 'attach-1')).toEqual({});
+    const theirs = runReportField(ledger, project(true), {}, 1_000, 'attach-2')[RUN_REPORT_FIELD];
+    expect(theirs?.report.wallMs).toBe(900);
+  });
+
   it('ends a run on a session end, a yield, or a released tab, however the call was spelled', () => {
     expect(endsRun(ReticleTool.END_SESSION, {})).toBe(true);
     expect(endsRun(ReticleTool.YIELD, {})).toBe(true);
