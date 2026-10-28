@@ -328,6 +328,8 @@ export interface PlanInput {
   promptHooks?: readonly PromptHookTarget[] | undefined;
   /** See `InitHost.hookBin`. */
   hookBin?: string | undefined;
+  /** See `InitHost.mcpLauncher`. Absent: the MCP registration uses the pinned npx command. */
+  mcpLauncher?: string | undefined;
   /**
    * Absolute directory the AGENT runs in, when that is not the app's directory.
    *

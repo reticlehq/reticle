@@ -346,16 +346,6 @@
       "count": 1
     }
   },
-  "src/register/mcp-clients.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
-  "src/register/mcp.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
   "src/register/windows-quote.test.ts": {
     "curly": {
       "count": 2

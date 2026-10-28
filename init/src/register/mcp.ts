@@ -5,7 +5,7 @@
  * hand-editing `~/.claude.json` (a large stateful file). When the `claude` CLI is absent we print a
  * manual instruction instead.
  *
- * The registration is intentionally PORTLESS — `npx @reticlehq/server mcp`, never `--port N`. A single
+ * The registration is intentionally PORTLESS — it never carries `--port N`. A single
  * global entry serves every project, so baking a port into it would pin every project to one port
  * and defeat per-project isolation. Instead `reticle mcp` resolves the port at runtime from the
  * project's `.reticle.json` in its CWD (see cli-port.ts). The port belongs to the project, not the
@@ -13,7 +13,7 @@
  */
 
 import { join } from 'node:path';
-import { RETICLE_NPM_PACKAGE } from '@/version.js';
+import { RETICLE_NPM_PACKAGE, RETICLE_VERSION } from '@/version.js';
 
 // The name is a wire identity and lives in the contract; re-exported here so the registration writers
 // below (and their tests) keep reading it from the module that USES it.
@@ -44,25 +44,44 @@ const CODEX_CLI = 'codex';
 const WINDOWS_SHELL = 'cmd';
 const WINDOWS_SHELL_C = '/c';
 
+const NODE = 'node';
+
 /**
- * Args after `npx` that launch the bridge: `@reticlehq/server mcp`. Portless — the port comes from
- * the project's `.reticle.json` at runtime, so one global entry works for every project.
+ * Args after `npx` that launch the bridge: `@reticlehq/server@<this version> mcp`. Portless — the
+ * port comes from the project's `.reticle.json` at runtime, so one global entry works for every
+ * project.
  *
- * DELIBERATELY UNPINNED, and the trade is worth stating. `reticle init` pins the SDK to the CLI's
- * exact version, so on release day the app can be on the new one while npx serves a cached older
- * build — a real skew, reported from the field. Pinning this entry would remove that window.
- *
- * It would also freeze the agent's MCP server at whatever version was installed the day `init` ran,
- * for as long as that entry survives — and `reticle update` upgrades the CLI, not a global agent
- * config. A permanent pin trades a window that lasts until the next npx cache miss for one that
- * lasts forever.
- *
- * So it stays unpinned, and the skew is handled where it actually shows up: the contract fingerprint
- * makes a real mismatch loud on the next tool result (see version-skew), and a stale entry of our own
- * shape is now repaired on re-run rather than reported "already registered" (see mcp-clients.ts).
+ * PINNED to one exact version. With a floating `@reticlehq/server`, npx asks the registry on every
+ * start. A fresh sandbox (an empty npm cache) downloaded about 131 MB before the MCP server
+ * answered: 3.9 s to 5.6 s on each boot, against 0.6 s warm. With an exact version, an image that
+ * ran it once uses its cache again. A re-run of `init` or `reticle setup mcp` writes the new
+ * version into a stale entry of our own shape (see mcp-clients.ts), and the contract fingerprint
+ * makes a real mismatch loud on the next tool result (see version-skew).
  */
 export function npxServerArgs(): string[] {
-  return [RETICLE_PACKAGE, MCP_SUBCOMMAND];
+  return [`${RETICLE_PACKAGE}@${RETICLE_VERSION}`, MCP_SUBCOMMAND];
+}
+
+/** `<…>/@reticlehq/server/bin/reticle.js`, with either separator. */
+const LAUNCHER_TAIL = /[\\/]@reticlehq[\\/]server[\\/]bin[\\/]reticle\.js$/;
+/** A copy that a runner can delete at any time: npx `_npx`, pnpm `dlx`, yarn `dlx-*`, `bunx-*`. */
+const RUN_ONCE_COPY = /[\\/](?:_npx|dlx(?:-[^\\/]*)?|bunx-[^\\/]*)[\\/]/;
+
+/** Is this string the bin of an installed `@reticlehq/server`? */
+export function isReticleLauncher(token: string): boolean {
+  return LAUNCHER_TAIL.test(token);
+}
+
+/**
+ * The bin to register, when the CLI that runs now is an install that stays on disk: a global
+ * install, or one in a project's `node_modules`. `undefined` for a run-once copy and for a source
+ * checkout. Registration then uses the pinned npx command.
+ */
+export function installedLauncher(bin: string | undefined): string | undefined {
+  if (bin === undefined || !isReticleLauncher(bin) || RUN_ONCE_COPY.test(bin)) {
+    return undefined;
+  }
+  return bin;
 }
 
 /** The npm scope every Reticle package shares — the marker of a registration we are entitled to fix. */
@@ -83,12 +102,21 @@ const RETICLE_SCOPE = '@reticlehq/';
  * @param tokens every string in the entry's command + args, in any of the client shapes.
  */
 export function isReticleRegistration(tokens: readonly string[]): boolean {
+  if (tokens.some(isReticleLauncher)) {
+    return true;
+  }
   return tokens.includes(NPX) && tokens.some((t) => t.includes(RETICLE_SCOPE));
 }
 
-/** The full `npx …` invocation — the tail after `claude mcp add … --`. */
-function serverInvocation(): string[] {
-  return [NPX, ...npxServerArgs()];
+/**
+ * The command that starts the MCP server: `node <launcher> mcp` for an installed copy, else the
+ * pinned npx command. `node` is a real executable on Windows too, so it needs no `cmd /c`.
+ */
+export function serverInvocation(launcher?: string): string[] {
+  if (launcher === undefined) {
+    return [NPX, ...npxServerArgs()];
+  }
+  return [NODE, launcher, MCP_SUBCOMMAND];
 }
 
 interface CliAddCommand {
@@ -99,8 +127,8 @@ interface CliAddCommand {
 }
 
 /** `claude mcp add reticle -s user -- npx @reticlehq/server mcp` — registers globally for all projects (portless). */
-export function claudeAddCommand(): CliAddCommand {
-  const tail = serverInvocation();
+export function claudeAddCommand(launcher?: string): CliAddCommand {
+  const tail = serverInvocation(launcher);
   const args = [MCP_SUBCOMMAND, 'add', MCP_SERVER_NAME, '-s', 'user', '--', ...tail];
   return { command: CLAUDE_CLI, args, display: `${CLAUDE_CLI} ${args.join(' ')}` };
 }
@@ -109,14 +137,21 @@ export function claudeAddCommand(): CliAddCommand {
 const CLAUDE_STATE_FILE = '.claude.json';
 
 /** `mcpServers` holds a `reticle` entry. */
-function namesReticle(scope: unknown): boolean {
-  if ('object' !== typeof scope || null === scope) return false;
+function reticleEntry(scope: unknown): unknown {
+  if ('object' !== typeof scope || null === scope) {
+    return undefined;
+  }
   const servers: unknown = (scope as { mcpServers?: unknown }).mcpServers;
-  return 'object' === typeof servers && null !== servers && MCP_SERVER_NAME in servers;
+  if ('object' !== typeof servers || null === servers) {
+    return undefined;
+  }
+  return (servers as Record<string, unknown>)[MCP_SERVER_NAME];
 }
 
 function parsed(source: string | null): unknown {
-  if (null === source) return undefined;
+  if (null === source) {
+    return undefined;
+  }
   try {
     return JSON.parse(source);
   } catch {
@@ -143,17 +178,28 @@ export function claudeHasReticle(
   projectDir: string | undefined,
   configDir: string | undefined = process.env['CLAUDE_CONFIG_DIR'],
 ): boolean {
+  return 0 < claudeReticleEntries(io, projectDir, configDir).length;
+}
+
+/** The `reticle` entries Claude Code has, in the scopes `claudeHasReticle` reads. */
+export function claudeReticleEntries(
+  io: { readFile(path: string): string | null; homeDir(): string },
+  projectDir: string | undefined,
+  configDir: string | undefined = process.env['CLAUDE_CONFIG_DIR'],
+): unknown[] {
   const state = parsed(io.readFile(join(configDir ?? io.homeDir(), CLAUDE_STATE_FILE)));
-  if (namesReticle(state)) return true;
-  if (projectDir === undefined) return false;
-  const projects: unknown =
-    'object' === typeof state && null !== state
-      ? (state as { projects?: unknown }).projects
-      : undefined;
-  if ('object' === typeof projects && null !== projects) {
-    if (namesReticle((projects as Record<string, unknown>)[projectDir])) return true;
+  const scopes = [state];
+  if (projectDir !== undefined) {
+    const projects: unknown =
+      'object' === typeof state && null !== state
+        ? (state as { projects?: unknown }).projects
+        : undefined;
+    if ('object' === typeof projects && null !== projects) {
+      scopes.push((projects as Record<string, unknown>)[projectDir]);
+    }
+    scopes.push(parsed(io.readFile(join(projectDir, CLAUDE_PROJECT_CONFIG))));
   }
-  return namesReticle(parsed(io.readFile(join(projectDir, CLAUDE_PROJECT_CONFIG))));
+  return scopes.map(reticleEntry).filter((entry) => entry !== undefined);
 }
 
 /** Probe args for whether the `claude` CLI is installed at all. */
@@ -168,8 +214,8 @@ export function claudeAvailableProbe(): { command: string; args: string[] } {
  * It REPLACES an existing entry of the same name and still exits 0, so callers run it only when the
  * config names no `reticle` server at all (see `codexNamesOurServer`).
  */
-export function codexAddCommand(): CliAddCommand {
-  const args = [MCP_SUBCOMMAND, 'add', MCP_SERVER_NAME, '--', ...serverInvocation()];
+export function codexAddCommand(launcher?: string): CliAddCommand {
+  const args = [MCP_SUBCOMMAND, 'add', MCP_SERVER_NAME, '--', ...serverInvocation(launcher)];
   return { command: CODEX_CLI, args, display: `${CODEX_CLI} ${args.join(' ')}` };
 }
 
@@ -188,7 +234,7 @@ export function mcpWindowsNote(): string {
 on this system" — a PowerShell execution policy), register it through cmd instead, which that policy
 does not gate:
 
-  "${MCP_SERVER_NAME}": { "command": "${WINDOWS_SHELL}", "args": ${JSON.stringify([WINDOWS_SHELL_C, NPX, ...serverInvocation().slice(1)])} }`;
+  "${MCP_SERVER_NAME}": { "command": "${WINDOWS_SHELL}", "args": ${JSON.stringify([WINDOWS_SHELL_C, NPX, ...npxServerArgs()])} }`;
 }
 
 /** Printed when the `claude` CLI isn't available — register Reticle globally once, by hand. */
@@ -199,24 +245,25 @@ does not gate:
  * session the `claude` binary is not on PATH, so every CLI-based route is shut and `.mcp.json` in
  * the project root is the one that still works.
  */
-export function claudeProjectMcpJson(): string {
-  const [command, ...args] = serverInvocation();
+export function claudeProjectMcpJson(launcher?: string): string {
+  const [command, ...args] = serverInvocation(launcher);
   return `${CLAUDE_PROJECT_CONFIG} (project root):
 
   { "mcpServers": { "${MCP_SERVER_NAME}": { "command": "${command ?? NPX}", "args": ${JSON.stringify(args)} } } }`;
 }
 
-export function mcpManual(): string {
-  const tail = serverInvocation().join(' ');
+export function mcpManual(launcher?: string): string {
+  const [command, ...args] = serverInvocation(launcher);
+  const tail = [command, ...args].join(' ');
   return `Register the Reticle MCP server ONCE, globally (so every project gets it):
 
   ${CLAUDE_CLI} ${MCP_SUBCOMMAND} add ${MCP_SERVER_NAME} -s user -- ${tail}
 
-Or, in Claude Code with no \`claude\` on PATH (a VS Code extension session), write ${claudeProjectMcpJson()}
+Or, in Claude Code with no \`claude\` on PATH (a VS Code extension session), write ${claudeProjectMcpJson(launcher)}
 
 Or, for another agent, add this to its global MCP config (e.g. Cursor's ~/.cursor/mcp.json):
 
-  "${MCP_SERVER_NAME}": { "command": "${NPX}", "args": ${JSON.stringify(serverInvocation().slice(1))} }
+  "${MCP_SERVER_NAME}": { "command": "${command ?? NPX}", "args": ${JSON.stringify(args)} }
 
 ${mcpWindowsNote()}`;
 }

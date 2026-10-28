@@ -92,12 +92,38 @@ describe('never clobbering somebody else', () => {
   });
 
   it('recognises our own entry as already done', () => {
+    const first = by(plan({}), 'warp');
+    const rows = plan({
+      [warp]: JSON.stringify({ mcpServers: { reticle: first?.entry } }),
+    });
+    expect(by(rows, 'warp')?.action).toBe(AgentAction.ALREADY);
+  });
+
+  // The floating `npx @reticlehq/server mcp` downloads the package on every sandbox boot. It is our
+  // own entry, so a re-run replaces it. Reported as MANUAL, it told the user to edit it by hand.
+  it('repairs an older entry of our own', () => {
     const rows = plan({
       [warp]: JSON.stringify({
         mcpServers: { reticle: { command: 'npx', args: ['@reticlehq/server', 'mcp'] } },
       }),
     });
-    expect(by(rows, 'warp')?.action).toBe(AgentAction.ALREADY);
+    expect(by(rows, 'warp')?.action).toBe(AgentAction.MERGE);
+  });
+});
+
+describe('an installed launcher', () => {
+  const LAUNCHER = '/usr/local/lib/node_modules/@reticlehq/server/bin/reticle.js';
+  const rows = planAgentConfigs({ home: HOME, platform: 'darwin', ...fs({}), launcher: LAUNCHER });
+
+  it('is the command in every JSON entry, and the client shape stays', () => {
+    expect(by(rows, 'warp')?.entry).toEqual({ command: 'node', args: [LAUNCHER, 'mcp'] });
+    expect(by(rows, 'zed')?.entry).toEqual({ command: 'node', args: [LAUNCHER, 'mcp'], env: {} });
+    expect(by(rows, 'continue')?.entry).toEqual({ command: 'node', args: [LAUNCHER, 'mcp'] });
+  });
+
+  it('without one, npx names one exact version', () => {
+    const args = by(plan({}), 'warp')?.entry?.['args'];
+    expect(args).toEqual([expect.stringMatching(/^@reticlehq\/server@\d+\.\d+\.\d+/), 'mcp']);
   });
 
   it('leaves a commented config for a human rather than stripping the comments', () => {

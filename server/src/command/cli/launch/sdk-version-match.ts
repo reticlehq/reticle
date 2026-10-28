@@ -1,8 +1,9 @@
 /**
  * Run the CLI whose major matches the SDK the project actually installed.
  *
- * The agent's MCP entry and every rule file `init` writes say `npx @reticlehq/server`, deliberately
- * unpinned (see `npxServerArgs` in init), which resolves the LATEST server — while the project's SDK
+ * Every rule file `init` writes says `npx @reticlehq/server`, unpinned, which resolves the LATEST
+ * server. The agent's MCP entry names one version or an installed copy (see `serverInvocation` in
+ * init), and that copy is a release older or newer than the SDK too — while the project's SDK
  * stays locked at whatever `init` installed. A project wired on the previous major therefore got a
  * daemon from the next one, and every verdict came back `version_skew`; a global install from an
  * older release shadows npx the same way in the other direction. Nothing the project could do fixed

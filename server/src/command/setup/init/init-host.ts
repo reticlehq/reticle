@@ -12,6 +12,7 @@ import type { InitOutcome, OnboardingStep } from '@reticlehq/core/telemetry';
 import { homedir } from 'node:os';
 import { spanSync } from '@/trace.js';
 import { hookBinFor } from '@/command/cli/hook/hook-fast.js';
+import { mcpLauncher } from '@/command/setup/mcp-launcher.js';
 import { reportInitOutcome } from '@/telemetry/init-telemetry.js';
 import { reportOnboardingStep } from '@/telemetry/onboarding-funnel.js';
 import {
@@ -60,6 +61,7 @@ export function serverInitHost(): InitHost {
     hookBin(): string | undefined {
       return hookBinFor(homedir(), process.platform);
     },
+    mcpLauncher,
     insideClaudeCode(): boolean {
       return CLAUDE_CODE_MARKER_VALUE === process.env[CLAUDE_CODE_MARKER_ENV];
     },

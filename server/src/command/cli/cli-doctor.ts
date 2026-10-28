@@ -47,6 +47,7 @@ import { describeUnsynced } from '@/memory/cloud/unsynced-roots.js';
 import { machineUnsyncedRoots } from '@/memory/project/sync-status.js';
 import { attachState, describeAttachState } from '@/surface/mcp/attach-memory.js';
 import { agentLinkText } from './doctor/doctor-agent-link.js';
+import { launcherLine, registeredEntries } from './doctor/doctor-launcher-line.js';
 import { findOccupiedSiblings, siblingListenerNote } from './ports/sibling-ports.js';
 import {
   daemonsServingProjectElsewhere,
@@ -218,6 +219,26 @@ export async function handleDoctor(port: number): Promise<void> {
   // would flip agent presence on a daemon with no agents attached.
   const foreign = presence === PortPresence.FOREIGN;
   line(doctorRow(DoctorRow.AGENT_LINK, agentLinkText({ split, attachAction, foreign })));
+  const launcher = launcherLine(
+    registeredEntries(
+      {
+        exists: existsSync,
+        homeDir: homedir,
+        readFile: (p) => {
+          try {
+            return readFileSync(p, 'utf8');
+          } catch {
+            return null;
+          }
+        },
+      },
+      process.cwd(),
+    ),
+    existsSync,
+  );
+  if (launcher !== undefined) {
+    line(doctorRow(DoctorRow.LAUNCHER, launcher));
+  }
   // Remaining half of #261. The SDK dialling a port we are not on is invisible as a refused inbound,
   // but a listener on a well-known Reticle port is visible. Report the observation; do not conclude
   // it is the daemon this app wants — somebody else's daemon looks the same from here.

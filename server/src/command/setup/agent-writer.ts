@@ -31,9 +31,12 @@ export interface AgentWriterIo {
 const INDENT = 2;
 const RETICLE_KEY = 'reticle';
 
-/** A fresh Continue config. YAML is only ever created, never edited. */
-const CONTINUE_YAML =
-  'mcpServers:\n  - name: reticle\n    type: stdio\n    command: npx\n    args: ["@reticlehq/server", "mcp"]\n';
+/**
+ * A fresh Continue config. YAML is only ever created, never edited. The args are a JSON array,
+ * which is valid YAML flow syntax and keeps a Windows path escaped.
+ */
+const continueYaml = (entry: Readonly<Record<string, unknown>>): string =>
+  `mcpServers:\n  - name: ${RETICLE_KEY}\n    type: stdio\n    command: ${String(entry['command'])}\n    args: ${JSON.stringify(entry['args'])}\n`;
 
 interface AgentWriteResult {
   readonly id: string;
@@ -66,8 +69,8 @@ export function applyAgentPlan(
     }
     try {
       io.mkdirp(parentOf(step.file));
-      if (AgentAction.CREATE_YAML === step.action) {
-        io.writeFile(step.file, CONTINUE_YAML);
+      if (AgentAction.CREATE_YAML === step.action && undefined !== step.entry) {
+        io.writeFile(step.file, continueYaml(step.entry));
         return { ...base, action: 'created' };
       }
       const key = step.key;
@@ -144,8 +147,12 @@ export function applyAgentSkills(
   const join = joinFor(where.platform);
   for (const client of AGENT_CLIENTS) {
     const dir = client.skillDir;
-    if (undefined === dir) continue;
-    if (!io.exists(join(where.home, client.marker[where.platform]))) continue;
+    if (undefined === dir) {
+      continue;
+    }
+    if (!io.exists(join(where.home, client.marker[where.platform]))) {
+      continue;
+    }
     try {
       const target = join(where.home, dir);
       io.mkdirp(target);

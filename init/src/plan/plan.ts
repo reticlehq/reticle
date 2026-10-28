@@ -106,7 +106,7 @@ function claudeMcpStep(input: PlanInput): Step | null {
       detail: 'reticle already registered (install once, used by every project)',
     };
   }
-  const cmd = claudeAddCommand();
+  const cmd = claudeAddCommand(input.mcpLauncher);
   return {
     title: CLAUDE_MCP_TITLE,
     target: MCP_TARGET,
@@ -128,7 +128,7 @@ function otherClientSteps(input: PlanInput): Step[] {
     const spec = clientSpec(detected.id);
     return (
       codexCliStep(spec, detected.configPath, detected.existing, input) ??
-      clientStep(spec, detected.configPath, detected.existing)
+      clientStep(spec, detected.configPath, detected.existing, input.mcpLauncher)
     );
   });
 }
@@ -154,7 +154,7 @@ function codexCliStep(
   if (codexNamesOurServer(existing, spec.serversKey)) {
     return null;
   }
-  const cmd = codexAddCommand();
+  const cmd = codexAddCommand(input.mcpLauncher);
   return {
     title: `MCP server (${spec.label})`,
     target: configPath,
@@ -165,8 +165,13 @@ function codexCliStep(
 }
 
 /** One client's step: already-correct is left alone, an unparseable file gets a paste-able block. */
-function clientStep(spec: ClientSpec, configPath: string, existing: string | null): Step {
-  const merged = mergeClientConfig(spec, existing);
+function clientStep(
+  spec: ClientSpec,
+  configPath: string,
+  existing: string | null,
+  launcher?: string,
+): Step {
+  const merged = mergeClientConfig(spec, existing, launcher);
   const title = `MCP server (${spec.label})`;
   if (merged.status === ClientMergeStatus.ALREADY) {
     return {
@@ -183,7 +188,7 @@ function clientStep(spec: ClientSpec, configPath: string, existing: string | nul
       title,
       target: configPath,
       status: StepStatus.MANUAL,
-      detail: `add this to ${configPath} by hand:\n${clientSnippet(spec)}`,
+      detail: `add this to ${configPath} by hand:\n${clientSnippet(spec, launcher)}`,
     };
   }
   return {
@@ -206,7 +211,12 @@ function claudeProjectStep(input: PlanInput): Step | null {
     return null;
   }
   const path = agentFile(input, CLAUDE_PROJECT_CONFIG);
-  return clientStep(CLAUDE_PROJECT_SPEC, path, input.claudeProjectConfig ?? null);
+  return clientStep(
+    CLAUDE_PROJECT_SPEC,
+    path,
+    input.claudeProjectConfig ?? null,
+    input.mcpLauncher,
+  );
 }
 
 /** One global registration per detected agent (Claude + Cursor). Falls back to a manual note. */
@@ -241,7 +251,7 @@ function mcpSteps(input: PlanInput): Step[] {
         title: 'MCP server (global)',
         target: MCP_TARGET,
         status: StepStatus.MANUAL,
-        detail: mcpManual(),
+        detail: mcpManual(input.mcpLauncher),
       },
     ];
   }
@@ -268,7 +278,7 @@ function mcpSteps(input: PlanInput): Step[] {
       // which would turn an informational line into a gate failure on any machine that happens to
       // have another agent's config. A notice prints in full exactly like a manual step.
       status: StepStatus.NOTICE,
-      detail: `no \`claude\` on PATH, so it could not be registered from here. Inside a Claude Code VS Code extension session the CLI is genuinely absent while the editor is not — add ${claudeProjectMcpJson()}`,
+      detail: `no \`claude\` on PATH, so it could not be registered from here. Inside a Claude Code VS Code extension session the CLI is genuinely absent while the editor is not — add ${claudeProjectMcpJson(input.mcpLauncher)}`,
     });
   }
   const windowsNote = windowsMcpNoteStep(input);

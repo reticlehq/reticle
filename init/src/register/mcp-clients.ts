@@ -18,7 +18,7 @@
  * an install that reports success and registers nothing, which is the exact failure class this
  * repo's install gate exists to catch.
  */
-import { NPX, MCP_SERVER_NAME, npxServerArgs, isReticleRegistration } from './mcp.js';
+import { MCP_SERVER_NAME, isReticleRegistration, serverInvocation } from './mcp.js';
 import { codexServerTokens } from './codex-toml.js';
 
 export const McpClient = {
@@ -58,23 +58,24 @@ export interface ClientSpec {
   format: ConfigFormat;
   /** The object key holding the server map — `mcpServers`, `servers`, or `mcp`. */
   serversKey: string;
-  /** Our entry, in THIS client's shape. */
-  entry: () => unknown;
+  /** Our entry, in THIS client's shape. `launcher`: see `serverInvocation`. */
+  entry: (launcher?: string) => unknown;
   /** Where the shape came from, so the next person can re-check it rather than trust this file. */
   docs: string;
 }
 
 /** The `{ command, args }` entry Cursor, Windsurf, Gemini and VS Code all take. */
-function commandArgsEntry(): Record<string, unknown> {
-  return { command: NPX, args: npxServerArgs() };
+function commandArgsEntry(launcher?: string): Record<string, unknown> {
+  const [command, ...args] = serverInvocation(launcher);
+  return { command, args };
 }
 
 /**
  * OpenCode's entry. `command` is a single ARRAY containing the executable and its arguments, and
  * `enabled` is explicit — a server registered but disabled is the quietest possible failure.
  */
-function openCodeEntry(): Record<string, unknown> {
-  return { type: 'local', command: [NPX, ...npxServerArgs()], enabled: true };
+function openCodeEntry(launcher?: string): Record<string, unknown> {
+  return { type: 'local', command: serverInvocation(launcher), enabled: true };
 }
 
 /**
@@ -216,7 +217,9 @@ export const MCP_CLIENTS: readonly ClientSpec[] = [
 
 export function clientSpec(id: McpClient): ClientSpec {
   const found = MCP_CLIENTS.find((spec) => spec.id === id);
-  if (found === undefined) throw new Error(`no MCP client spec for '${id}'`);
+  if (found === undefined) {
+    throw new Error(`no MCP client spec for '${id}'`);
+  }
   return found;
 }
 
@@ -237,14 +240,17 @@ type ConfigShape = Record<string, unknown>;
 type ParseResult = { ok: true; config: ConfigShape } | { ok: false };
 
 function parseConfig(existing: string | null): ParseResult {
-  if (null === existing || 0 === existing.trim().length) return { ok: true, config: {} };
+  if (null === existing || 0 === existing.trim().length) {
+    return { ok: true, config: {} };
+  }
   try {
     const parsed: unknown = JSON.parse(existing);
     // Valid JSON that is not a PLAIN OBJECT — `[]`, `3`, `"x"`, `null` — must not fall through to an
     // empty config, because the file then gets rewritten wholesale. Unparseable JSON was always
     // handled conservatively; this adjacent case destroyed the file instead.
-    if (typeof parsed !== 'object' || null === parsed || Array.isArray(parsed))
+    if (typeof parsed !== 'object' || null === parsed || Array.isArray(parsed)) {
       return { ok: false };
+    }
     return { ok: true, config: parsed as ConfigShape };
   } catch {
     return { ok: false };
@@ -265,9 +271,13 @@ function parseConfig(existing: string | null): ParseResult {
  * not repair the thing an upgrade exists to repair — and a WRONG one, naming a Reticle package that
  * has no MCP server in it (see isReticleRegistration).
  */
-function leaveEntryAlone(existing: unknown, spec: ClientSpec): boolean {
-  if (JSON.stringify(existing) === JSON.stringify(spec.entry())) return true;
-  if (typeof existing !== 'object' || null === existing) return true;
+function leaveEntryAlone(existing: unknown, spec: ClientSpec, launcher?: string): boolean {
+  if (JSON.stringify(existing) === JSON.stringify(spec.entry(launcher))) {
+    return true;
+  }
+  if (typeof existing !== 'object' || null === existing) {
+    return true;
+  }
   const record = existing as { command?: unknown; args?: unknown };
   // Both shapes carry the package name somewhere in a string; find it without assuming which field.
   const tokens = [record.command, record.args].flat().filter((v) => 'string' === typeof v);
@@ -282,12 +292,25 @@ function leaveEntryAlone(existing: unknown, spec: ClientSpec): boolean {
  * drifted from what we would write, and when the shape was not one the scanner reads — every one of
  * those keeps today's MANUAL answer, and the snippet is then the actionable thing to print.
  */
-function tomlEntryIsSettled(spec: ClientSpec, existing: string | null): boolean {
+/** `@reticlehq/server@3.8.2` → `@reticlehq/server`. Every other string is returned as it is. */
+const unpinned = (token: string): string => token.replace(/^(@reticlehq\/server)@.*$/, '$1');
+
+function tomlEntryIsSettled(spec: ClientSpec, existing: string | null, launcher?: string): boolean {
   const tokens = codexServerTokens(existing, spec.serversKey);
-  if (0 === tokens.length) return false;
-  const expected = [NPX, ...npxServerArgs()];
+  if (0 === tokens.length) {
+    return false;
+  }
   // Same strings, and no others: an entry carrying an extra flag is not the one we would write.
-  if (tokens.length === expected.length && expected.every((t) => tokens.includes(t))) return true;
+  const same = (a: readonly string[], b: readonly string[]): boolean =>
+    a.length === b.length && b.every((t) => a.includes(t));
+  if (same(tokens, serverInvocation(launcher))) {
+    return true;
+  }
+  // An npx entry of an older version still starts Reticle. TOML is never written by us, so asking
+  // for a hand edit at each release is a warning with no defect behind it.
+  if (same(tokens.map(unpinned), serverInvocation().map(unpinned))) {
+    return true;
+  }
   // Not ours to touch. Somebody pointing `reticle` at their own local build made a deliberate
   // choice, and telling them to hand-edit it back is the same wrong answer as overwriting it.
   return !isReticleRegistration(tokens);
@@ -304,15 +327,21 @@ function tomlEntryIsSettled(spec: ClientSpec, existing: string | null): boolean 
  * already has the table is a warning they must not act on, and the setup contract makes a `⚠`
  * blocking (#681). Detection is read-only and cannot corrupt anything.
  */
-export function mergeClientConfig(spec: ClientSpec, existing: string | null): ClientMergeResult {
+export function mergeClientConfig(
+  spec: ClientSpec,
+  existing: string | null,
+  launcher?: string,
+): ClientMergeResult {
   if (spec.format !== ConfigFormat.JSON) {
-    if (ConfigFormat.TOML === spec.format && tomlEntryIsSettled(spec, existing)) {
+    if (ConfigFormat.TOML === spec.format && tomlEntryIsSettled(spec, existing, launcher)) {
       return { status: ClientMergeStatus.ALREADY, content: existing ?? '' };
     }
     return { status: ClientMergeStatus.MANUAL, content: existing ?? '' };
   }
   const parsed = parseConfig(existing);
-  if (!parsed.ok) return { status: ClientMergeStatus.MANUAL, content: existing ?? '' };
+  if (!parsed.ok) {
+    return { status: ClientMergeStatus.MANUAL, content: existing ?? '' };
+  }
 
   const config = parsed.config;
   const current = config[spec.serversKey];
@@ -323,7 +352,7 @@ export function mergeClientConfig(spec: ClientSpec, existing: string | null): Cl
 
   if (
     Object.prototype.hasOwnProperty.call(servers, MCP_SERVER_NAME) &&
-    leaveEntryAlone(servers[MCP_SERVER_NAME], spec)
+    leaveEntryAlone(servers[MCP_SERVER_NAME], spec, launcher)
   ) {
     return { status: ClientMergeStatus.ALREADY, content: existing ?? '' };
   }
@@ -331,7 +360,7 @@ export function mergeClientConfig(spec: ClientSpec, existing: string | null): Cl
   // Only OUR key is replaced; every other server and top-level key is carried through untouched.
   const merged: ConfigShape = {
     ...config,
-    [spec.serversKey]: { ...servers, [MCP_SERVER_NAME]: spec.entry() },
+    [spec.serversKey]: { ...servers, [MCP_SERVER_NAME]: spec.entry(launcher) },
   };
   return { status: ClientMergeStatus.APPLY, content: `${JSON.stringify(merged, null, 2)}\n` };
 }
@@ -342,17 +371,17 @@ export function mergeClientConfig(spec: ClientSpec, existing: string | null): Cl
  * Every client gets one, including the ones we CAN write: when a merge comes back MANUAL because the
  * file could not be parsed, the snippet is the only actionable thing left to give.
  */
-export function clientSnippet(spec: ClientSpec): string {
+export function clientSnippet(spec: ClientSpec, launcher?: string): string {
+  const [command, ...rest] = serverInvocation(launcher);
   if (spec.format === ConfigFormat.TOML) {
-    const args = npxServerArgs()
-      .map((a) => `"${a}"`)
-      .join(', ');
-    return `[mcp_servers.${MCP_SERVER_NAME}]\ncommand = "${NPX}"\nargs = [${args}]\n`;
+    // JSON string escapes are valid TOML basic-string escapes, so a Windows path stays valid.
+    const args = rest.map((a) => JSON.stringify(a)).join(', ');
+    return `[mcp_servers.${MCP_SERVER_NAME}]\ncommand = ${JSON.stringify(command)}\nargs = [${args}]\n`;
   }
   if (spec.format === ConfigFormat.CLI) {
-    return `claude mcp add -s user ${MCP_SERVER_NAME} -- ${NPX} ${npxServerArgs().join(' ')}\n`;
+    return `claude mcp add -s user ${MCP_SERVER_NAME} -- ${[command, ...rest].join(' ')}\n`;
   }
-  return `${JSON.stringify({ [spec.serversKey]: { [MCP_SERVER_NAME]: spec.entry() } }, null, 2)}\n`;
+  return `${JSON.stringify({ [spec.serversKey]: { [MCP_SERVER_NAME]: spec.entry(launcher) } }, null, 2)}\n`;
 }
 
 /**
@@ -368,9 +397,13 @@ export function clientSnippet(spec: ClientSpec): string {
  * because a fresh Cursor profile has not written `~/.cursor` yet.
  */
 export function clientMarkerRelPath(spec: ClientSpec): string {
-  if (spec.scope === ConfigScope.CLI) return '';
+  if (spec.scope === ConfigScope.CLI) {
+    return '';
+  }
   // Antigravity also creates ~/.gemini. The shared parent is not evidence of Gemini CLI.
-  if (spec.id === McpClient.GEMINI) return spec.relPath;
+  if (spec.id === McpClient.GEMINI) {
+    return spec.relPath;
+  }
   const parts = spec.relPath.split('/');
   return parts.length > 1 ? parts.slice(0, -1).join('/') : spec.relPath;
 }

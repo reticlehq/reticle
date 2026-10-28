@@ -6,6 +6,7 @@ import { Framework, PackageManager, UiLibrary, type Detection } from '@/detect/d
 import { NodePlatform } from '@/detect/platform.js';
 import { cursorRuleFile } from '@/project/agent-rules.js';
 import { McpClient } from '@/register/mcp-clients.js';
+import { RETICLE_VERSION } from '@/version.js';
 
 const CLAUDE_STEP = 'MCP server (Claude, global)';
 const CURSOR_STEP = 'MCP server (Cursor)';
@@ -75,6 +76,7 @@ function input(partial: Partial<PlanInput>): PlanInput {
     ...(partial.pairingToken === undefined ? {} : { pairingToken: partial.pairingToken }),
     ...(partial.agentFileRoot === undefined ? {} : { agentFileRoot: partial.agentFileRoot }),
     agentRootConfigSource: partial.agentRootConfigSource,
+    mcpLauncher: partial.mcpLauncher,
     options: partial.options ?? { port: undefined, mcp: true, install: false },
   };
 }
@@ -237,9 +239,25 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
       'user',
       '--',
       'npx',
-      '@reticlehq/server',
+      `@reticlehq/server@${RETICLE_VERSION}`,
       'mcp',
     ]);
+  });
+
+  it('registers the installed launcher for Claude and Cursor, on Windows too', () => {
+    const launcher =
+      'C:\\Users\\u\\AppData\\Roaming\\npm\\node_modules\\@reticlehq\\server\\bin\\reticle.js';
+    const plan = buildPlan(
+      input({
+        claudeCli: true,
+        detectedClients: [cursorClient()],
+        platform: NodePlatform.WINDOWS,
+        mcpLauncher: launcher,
+      }),
+    );
+    const claude = step(plan, CLAUDE_STEP).exec?.args ?? [];
+    expect(claude.slice(claude.indexOf('--') + 1)).toEqual(['node', launcher, 'mcp']);
+    expect(step(plan, CURSOR_STEP).write?.content).toContain(JSON.stringify(launcher));
   });
 
   it('Claude step is ALREADY (idempotent) when reticle is already registered', () => {

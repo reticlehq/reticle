@@ -53,6 +53,27 @@ const step = (over: Partial<AgentPlanStep> = {}): AgentPlanStep => ({
   ...over,
 });
 
+describe('a new Continue config', () => {
+  it('starts the command the plan names', () => {
+    const io = disk();
+    const launcher = '/usr/local/lib/node_modules/@reticlehq/server/bin/reticle.js';
+    applyAgentPlan(
+      [
+        step({
+          id: 'continue',
+          file: '/home/u/.continue/config.yaml',
+          action: AgentAction.CREATE_YAML,
+          entry: { command: 'node', args: [launcher, 'mcp'] },
+        }),
+      ],
+      io,
+    );
+    expect(io.files['/home/u/.continue/config.yaml']).toBe(
+      `mcpServers:\n  - name: reticle\n    type: stdio\n    command: node\n    args: ["${launcher}","mcp"]\n`,
+    );
+  });
+});
+
 describe('writing an agent config', () => {
   it('creates one that did not exist', () => {
     const io = disk();

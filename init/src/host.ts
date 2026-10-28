@@ -56,6 +56,12 @@ export interface InitHost {
    * where a direct command is not wanted (Windows shells), and the hooks use npx alone.
    */
   hookBin?(): string | undefined;
+  /**
+   * The installed CLI's bin, as an absolute path, for the MCP registration (`node <bin> mcp`).
+   * Undefined when this CLI runs from a run-once copy such as npx's cache: the registration then
+   * names the pinned npx command. See `installedLauncher`.
+   */
+  mcpLauncher?(): string | undefined;
 }
 
 /**

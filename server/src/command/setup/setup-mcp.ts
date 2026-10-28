@@ -37,6 +37,8 @@ export interface SetupMcpIo {
   writeFile(path: string, contents: string): void;
   homeDir(): string;
   print(line: string): void;
+  /** The installed bin to register (`InitHost.mcpLauncher`). Absent: the pinned npx command. */
+  readonly launcher?: string | undefined;
   /** Register with a client that owns its own registration (Claude Code). Returns whether it took. */
   runCli(command: string, args: readonly string[]): boolean;
   /**
@@ -95,7 +97,7 @@ function registerWithCodexCli(
   if (!io.runCli(probe.command, probe.args)) {
     return undefined;
   }
-  const cmd = codexAddCommand();
+  const cmd = codexAddCommand(io.launcher);
   return io.runCli(cmd.command, cmd.args);
 }
 
@@ -127,7 +129,7 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
     if (claudeHasReticle(io, undefined)) {
       alreadyThere.push(McpClient.CLAUDE_CODE);
     } else {
-      const cmd = claudeAddCommand();
+      const cmd = claudeAddCommand(io.launcher);
       if (io.runCli(cmd.command, cmd.args)) {
         registered.push(McpClient.CLAUDE_CODE);
       } else {
@@ -139,7 +141,7 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
   for (const client of detectMcpClients(io)) {
     detected.push(client.id);
     const spec = clientSpec(client.id);
-    const merged = mergeClientConfig(spec, client.existing);
+    const merged = mergeClientConfig(spec, client.existing, io.launcher);
     if (ClientMergeStatus.ALREADY === merged.status) {
       alreadyThere.push(client.id);
       continue;

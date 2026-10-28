@@ -207,6 +207,48 @@ describe('idempotency, and the difference between "already right" and "not ours"
   });
 });
 
+/**
+ * The launcher an install leaves on disk. Every JSON client gets it in its own shape, and an entry
+ * whose file was removed later is still ours, so `reticle setup mcp` repairs it.
+ */
+describe('an installed launcher', () => {
+  const LAUNCHER = '/usr/local/lib/node_modules/@reticlehq/server/bin/reticle.js';
+  const GONE = '/old/prefix/lib/node_modules/@reticlehq/server/bin/reticle.js';
+
+  it('is written as node <launcher> mcp, in each client shape', () => {
+    const cursor = parse(mergeClientConfig(clientSpec(McpClient.CURSOR), null, LAUNCHER).content);
+    expect(cursor['mcpServers']).toEqual({
+      [MCP_SERVER_NAME]: { command: 'node', args: [LAUNCHER, 'mcp'] },
+    });
+    const opencode = parse(
+      mergeClientConfig(clientSpec(McpClient.OPENCODE), null, LAUNCHER).content,
+    );
+    expect(opencode['mcp']).toEqual({
+      [MCP_SERVER_NAME]: { type: 'local', command: ['node', LAUNCHER, 'mcp'], enabled: true },
+    });
+  });
+
+  it('replaces an npx entry, and an entry whose launcher is gone', () => {
+    const spec = clientSpec(McpClient.CURSOR);
+    for (const entry of [
+      { command: 'npx', args: ['@reticlehq/server', 'mcp'] },
+      { command: 'node', args: [GONE, 'mcp'] },
+    ]) {
+      const existing = JSON.stringify({ mcpServers: { [MCP_SERVER_NAME]: entry } });
+      const result = mergeClientConfig(spec, existing, LAUNCHER);
+      expect(result.status).toBe(ClientMergeStatus.APPLY);
+      expect(result.content).toContain(LAUNCHER);
+    }
+  });
+
+  it('is escaped in the Codex TOML snippet, so a Windows path stays valid', () => {
+    const windows = 'C:\\npm\\node_modules\\@reticlehq\\server\\bin\\reticle.js';
+    const snippet = clientSnippet(clientSpec(McpClient.CODEX), windows);
+    expect(snippet).toContain('command = "node"');
+    expect(snippet).toContain(JSON.stringify(windows));
+  });
+});
+
 describe('codex', () => {
   it('is TOML, so it is NOT auto-written', () => {
     // Merging into TOML without a parser is how a config file gets corrupted. Printing the exact

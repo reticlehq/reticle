@@ -20,6 +20,7 @@
  */
 
 import { posix, win32 } from 'node:path';
+import { isReticleRegistration, serverInvocation } from '@reticlehq/init';
 
 export const AgentConfidence = {
   /** Documented by the vendor. Safe to create before the agent exists. */
@@ -40,11 +41,17 @@ export const AgentAction = {
 export type AgentAction = (typeof AgentAction)[keyof typeof AgentAction];
 
 const NPX = 'npx';
-const SERVER_PACKAGE = '@reticlehq/server';
-const MCP_SUBCOMMAND = 'mcp';
+/** In every entry we write: the npx package name, or the installed launcher's path. */
+const RETICLE_SCOPE = '@reticlehq';
 const RETICLE_KEY = 'reticle';
-/** The stdio entry, in the shape most clients expect. */
-const STDIO = { command: NPX, args: [SERVER_PACKAGE, MCP_SUBCOMMAND] } as const;
+
+/** The stdio `{ command, args }` that starts the MCP server. One rule for init and setup. */
+function stdioFor(launcher?: string): { command: string; args: string[] } {
+  const [command = NPX, ...args] = serverInvocation(launcher);
+  return { command, args };
+}
+/** The stdio entry, in the shape most clients expect. `planAgentConfigs` sets its command. */
+const STDIO = stdioFor();
 
 /** Per-platform relative paths, from the user's home directory. */
 export interface PlatformPaths {
@@ -270,7 +277,7 @@ export const AGENT_CLIENTS: readonly AgentClient[] = [
  * mentions the word in a comment is not mistaken for a registration.
  */
 function yamlHasReticle(text: string): boolean {
-  return text.includes(`name: ${RETICLE_KEY}`) && text.includes(SERVER_PACKAGE);
+  return text.includes(`name: ${RETICLE_KEY}`) && text.includes(RETICLE_SCOPE);
 }
 
 /** What to do for one client, decided without touching the disk. */
@@ -289,6 +296,17 @@ interface AgentPlanInput {
   readonly platform: keyof PlatformPaths;
   readonly exists: (path: string) => boolean;
   readonly readFile: (path: string) => string;
+  /** The installed bin to register (`InitHost.mcpLauncher`). Absent: the pinned npx command. */
+  readonly launcher?: string | undefined;
+}
+
+/** Every string in an entry's `command` and `args`. */
+function entryStrings(entry: unknown): string[] {
+  if ('object' !== typeof entry || null === entry) {
+    return [];
+  }
+  const { command, args } = entry as { command?: unknown; args?: unknown };
+  return [command, args].flat().filter((v): v is string => 'string' === typeof v);
 }
 
 const forPlatform = (p: PlatformPaths, os: keyof PlatformPaths): string => p[os];
@@ -335,6 +353,8 @@ export function planAgentConfigs(input: AgentPlanInput): AgentPlanStep[] {
     const join = joinFor(platform);
     const file = join(home, forPlatform(c.paths, platform));
     const detected = exists(join(home, forPlatform(c.marker, platform)));
+    const stdio = stdioFor(input.launcher);
+    const entry = c.entry === undefined ? undefined : { ...c.entry, ...stdio };
 
     // A NEW yaml file has nobody's formatting to destroy. An existing one does: `mcpServers` there
     // is a list of named entries, and a naive rewrite loses comments, anchors and ordering.
@@ -359,6 +379,7 @@ export function planAgentConfigs(input: AgentPlanInput): AgentPlanStep[] {
             name: c.name,
             file,
             action: AgentAction.CREATE_YAML,
+            entry: stdio,
             why: 'no config yet, so a valid one can be written outright',
           };
     }
@@ -382,7 +403,7 @@ export function planAgentConfigs(input: AgentPlanInput): AgentPlanStep[] {
         file,
         action: AgentAction.CREATE,
         key: c.key,
-        entry: c.entry,
+        entry,
         why: detected
           ? 'installed, with no config yet'
           : 'a documented path, so a later install finds it already wired',
@@ -402,7 +423,7 @@ export function planAgentConfigs(input: AgentPlanInput): AgentPlanStep[] {
         file,
         action: AgentAction.MANUAL,
         key: c.key,
-        entry: c.entry,
+        entry,
         why: "the existing config is not plain JSON (comments or trailing commas), and rewriting it would reformat somebody else's file",
       };
     }
@@ -412,18 +433,28 @@ export function planAgentConfigs(input: AgentPlanInput): AgentPlanStep[] {
       'object' === typeof bucket && null !== bucket
         ? (bucket as Record<string, unknown>)[RETICLE_KEY]
         : undefined;
-    if (existing !== undefined) {
-      const ours = JSON.stringify(existing) === JSON.stringify(c.entry);
+    if (existing !== undefined && JSON.stringify(existing) === JSON.stringify(entry)) {
       return {
         id: c.id,
         name: c.name,
         file,
-        action: ours ? AgentAction.ALREADY : AgentAction.MANUAL,
+        action: AgentAction.ALREADY,
         key: c.key,
-        entry: c.entry,
-        why: ours
-          ? 'already registered'
-          : 'a different `reticle` entry is there, and it is not ours to replace',
+        entry,
+        why: 'already registered',
+      };
+    }
+    // An older entry of our own (a floating npx command, a launcher that moved) is replaced. Any
+    // other `reticle` entry is somebody's own choice.
+    if (existing !== undefined && !isReticleRegistration(entryStrings(existing))) {
+      return {
+        id: c.id,
+        name: c.name,
+        file,
+        action: AgentAction.MANUAL,
+        key: c.key,
+        entry,
+        why: 'a different `reticle` entry is there, and it is not ours to replace',
       };
     }
 
@@ -433,7 +464,7 @@ export function planAgentConfigs(input: AgentPlanInput): AgentPlanStep[] {
       file,
       action: AgentAction.MERGE,
       key: c.key,
-      entry: c.entry,
+      entry,
       why: 'adding our key beside the servers already there',
     };
   });

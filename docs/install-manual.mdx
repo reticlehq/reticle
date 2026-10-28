@@ -32,6 +32,21 @@ npx @reticlehq/server setup mcp
 
 `reticle setup mcp` is exactly the registration half of the installer, and it prints any client it could not write for you.
 
+### Sandbox and container images
+
+Install the CLI once, in the image:
+
+```bash
+npm install -g @reticlehq/server
+npx @reticlehq/server setup mcp
+```
+
+npx runs the installed copy. When the CLI is installed, `reticle init` and `reticle setup mcp` register its absolute path (`node <path>/bin/reticle.js mcp`). Each boot then starts the MCP server from the local copy, and your agent does not wait for a download.
+
+Without an install, the registration is `npx @reticlehq/server@<version> mcp`, with one exact version. npx uses its cache again only when that cache is in the image. A fresh sandbox with an empty npm cache downloads the package at each boot, and your agent waits for it before its first turn.
+
+If you remove the installed copy later, the agent shows the server as failed. `reticle doctor` then prints a `launcher` row with the missing path and the command to run.
+
 ## Part 1. Register the MCP server
 
 There is no config file that all agents share. Each harness has its own path and its own schema, so write only the one you actually use.

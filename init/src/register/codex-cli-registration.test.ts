@@ -23,7 +23,7 @@ import { codexAddCommand, codexAvailableProbe, NPX, npxServerArgs } from './mcp.
 const KEY = 'mcp_servers';
 const CODEX_CONFIG = '/home/u/.codex/config.toml';
 const CODEX_TITLE = 'MCP server (Codex CLI)';
-const ADD_COMMAND = 'codex mcp add reticle -- npx @reticlehq/server mcp';
+const ADD_COMMAND = `codex mcp add reticle -- npx ${npxServerArgs().join(' ')}`;
 
 const OTHER = '[mcp_servers.other]\ncommand = "foo"\n';
 const WIRED = `[mcp_servers.reticle]\ncommand = "${NPX}"\nargs = [${npxServerArgs()

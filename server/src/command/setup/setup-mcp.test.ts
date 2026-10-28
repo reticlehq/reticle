@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import { setupMcp, type SetupMcpIo } from './setup-mcp.js';
 import { OnboardingStop, type OnboardingStep } from '@reticlehq/core/telemetry';
+import { RETICLE_VERSION } from '@reticlehq/init';
 
 const CLAUDE = 'claude';
 const CODEX = 'codex';
@@ -279,7 +280,7 @@ describe('a config format we will not rewrite', () => {
  */
 describe('Codex with its CLI on PATH', () => {
   const CODEX_CONFIG = '.codex/config.toml';
-  const ADD = 'codex mcp add reticle -- npx @reticlehq/server mcp';
+  const ADD = `codex mcp add reticle -- npx @reticlehq/server@${RETICLE_VERSION} mcp`;
   const WIRED = '[mcp_servers.reticle]\ncommand = "npx"\nargs = ["@reticlehq/server", "mcp"]\n';
   const OWN_BUILD = '[mcp_servers.reticle]\ncommand = "node"\nargs = ["/opt/local/reticle.js"]\n';
   const URL_SHAPED = '[mcp_servers.reticle]\nurl = "https://example.test/mcp"\n';

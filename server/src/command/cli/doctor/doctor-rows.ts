@@ -41,6 +41,8 @@ export const DoctorRow = {
    * verification." Every row in this list checks a COMPONENT; none checked a LINK.
    */
   AGENT_LINK: 'agent link',
+  /** An agent config starts Reticle from an installed copy that is gone. Only then. */
+  LAUNCHER: 'launcher',
   /** Is the APP in this folder wired, not just the tools. Printed by `doctor-project-line.ts`. */
   PROJECT: 'project',
   /**

@@ -504,6 +504,7 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
       const bin = io.host.hookBin?.();
       return bin === undefined ? {} : { hookBin: bin };
     })(),
+    mcpLauncher: io.host.mcpLauncher?.(),
     ...(agentRoot === undefined
       ? {}
       : {
