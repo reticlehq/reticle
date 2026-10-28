@@ -12,7 +12,7 @@ export function requireVerdict(result, expected) {
 }
 
 /** Exercise the shipped MCP surface, with an independent oracle in the fixture's HTTP server. */
-export async function checkSmoke({ call, url, writes, check }) {
+export async function checkSmoke({ call, refusal, url, writes, check }) {
   const lease = await call('reticle_run', {
     tool: 'reticle_lease',
     args: { action: 'acquire', url },
@@ -78,6 +78,19 @@ export async function checkSmoke({ call, url, writes, check }) {
     );
     assert.equal(writes(), 1, 'the broken control must not perform a write');
     check('a broken action is refused, rather than producing a false green');
+
+    // One letter short of the real name: refused, and the refusal names the button with its ref.
+    const { error: missed } = JSON.parse(await refusal('reticle_act_and_wait', {
+      sessionId,
+      action: 'click',
+      target: { role: 'button', name: 'Incremen' },
+      until: { kind: 'text', contains: 'Count: 2' },
+      timeout_ms: 0,
+    }));
+    assert.match(missed, /target matched no element/);
+    assert.match(missed, /e\d+ \(button "Increment"\)/);
+    assert.equal(writes(), 1, 'a missed target must not act');
+    check('a missed target is refused and names the nearest targets with refs');
   } finally {
     await call('reticle_run', {
       tool: 'reticle_lease',

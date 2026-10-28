@@ -159,8 +159,20 @@ try {
     assertAlive();
     return parsed;
   };
+  // A refused call: the text an agent reads. Asserts the call WAS refused.
+  const refusal = async (name, args) => {
+    assertAlive();
+    const result = await client.request('tools/call', { name, arguments: args }, 20_000);
+    assert.equal(result?.isError, true, JSON.stringify(result));
+    calls.push({ name, args, result });
+    return (result?.content ?? [])
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n');
+  };
   await checkSmoke({
     call,
+    refusal,
     url: `http://127.0.0.1:${appPort}/`,
     writes: () => writes,
     check: (name) => {
