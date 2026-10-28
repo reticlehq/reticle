@@ -947,6 +947,14 @@ function removeScratch(dir) {
   }
 }
 
+// ── internal ──────────────────────────────────────────────────────────────────
+// `run-ci.sh` sets RETICLE_INTERNAL=1, so every event the battery captures must say so: the HUD's
+// own events and the in-process ones too, not only the daemon's.
+if ('1' === process.env.RETICLE_INTERNAL) {
+  const unmarked = captured.filter((e) => true !== e.properties.internal).map((e) => e.event);
+  check('every captured event carries internal: true under RETICLE_INTERNAL=1', captured.length > 0 && 0 === unmarked.length, unmarked.join(','));
+}
+
 // ── report ────────────────────────────────────────────────────────────────────
 console.log('');
 for (const r of results) console.log(`${r.ok ? ' PASS' : ' FAIL'}  ${r.name}${r.detail && !r.ok ? `  [${r.detail}]` : ''}`);

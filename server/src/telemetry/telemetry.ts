@@ -827,9 +827,16 @@ export const createTelemetry = (opts: {
 let invalidDropped = 0;
 export const droppedInvalidEvents = (): number => invalidDropped;
 
-/** `RETICLE_INTERNAL=1`, or the machine-wide marker file. Unreadable home → not internal. */
+/** The values of `RETICLE_INTERNAL` that mark a run, after trim and lower case. Anything else is not. */
+const INTERNAL_ON = new Set(['1', 'true', 'yes', 'on']);
+
+/**
+ * The one decision for the `internal` field on every event: `RETICLE_INTERNAL` set to an "on" value,
+ * or the machine-wide marker file. An explicit signal only, never read from a name, email or path.
+ * Unreadable home → not internal.
+ */
 const isInternal = (env: NodeJS.ProcessEnv, dir: string): boolean => {
-  if ('1' === env[Env.INTERNAL] || 'true' === env[Env.INTERNAL]) {
+  if (INTERNAL_ON.has((env[Env.INTERNAL] ?? '').trim().toLowerCase())) {
     return true;
   }
   try {

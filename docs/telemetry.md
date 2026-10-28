@@ -114,6 +114,7 @@ Every event carries the same few fields:
 | `version` | The Reticle version running | n/a |
 | `os` | The platform (`darwin` / `linux` / `win32`) | Not the OS version, hostname, or hardware |
 | `ci` | Whether the run is inside CI | n/a |
+| `internal` | `true`, only on the Reticle team's own machines and test runs, which set it on purpose | Not set for anybody else, and never guessed from a name, an email or a path |
 
 There are no IP-based profiles, no cookies, no fingerprinting, and no person profiles: events are processed in "personless" mode, so they are never joined into a person profile.
 

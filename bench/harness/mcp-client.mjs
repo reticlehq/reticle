@@ -32,7 +32,9 @@ export class McpStdioClient {
       ...(this.cwd === undefined ? {} : { cwd: this.cwd }),
       // Benches and batteries are not watched, and a shown browser shifts their timing: hidden unless
       // the caller asks otherwise. A person running a bench to watch it sets RETICLE_HEADLESS=0.
-      env: { RETICLE_HEADLESS: '1', ...process.env, ...this.env },
+      // A bench is the Reticle team's own run: mark its events `internal` on every machine, also
+      // when the bench gives the daemon a private HOME that has no `~/.reticle/telemetry-internal`.
+      env: { RETICLE_HEADLESS: '1', ...process.env, RETICLE_INTERNAL: '1', ...this.env },
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: this.command !== 'node' && 'win32' === process.platform,
     });

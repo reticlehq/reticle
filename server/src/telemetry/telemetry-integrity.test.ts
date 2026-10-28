@@ -68,6 +68,37 @@ describe('internal runs are marked, not counted as users', () => {
   it('is absent for everybody else', async () => {
     expect(await emitOne(TEST_ENV, freshDir())).not.toHaveProperty('internal');
   });
+
+  // `RETICLE_INTERNAL=TRUE` in a team member's shell profile was read as "not internal", so that
+  // machine was counted as a user with no sign of the mistake.
+  it.each(['1', 'true', 'TRUE', 'yes', 'on', ' 1 '])('reads %j as internal', async (value) => {
+    const p = await emitOne({ ...TEST_ENV, RETICLE_INTERNAL: value }, freshDir());
+    expect(p?.['internal']).toBe(true);
+  });
+
+  it.each(['0', 'false', 'off', 'no', '', 'banana', '2'])(
+    'reads %j as not internal',
+    async (value) => {
+      const p = await emitOne({ ...TEST_ENV, RETICLE_INTERNAL: value }, freshDir());
+      expect(p).not.toHaveProperty('internal');
+    },
+  );
+
+  it('stamps it on every event kind the emitter sends, not on one', async () => {
+    const { sent, fetchImpl } = capture();
+    const env = { ...TEST_ENV, RETICLE_INTERNAL: '1' };
+    const t = createTelemetry({
+      version: '1',
+      env,
+      cwd: USER_PROJECT,
+      fetchImpl,
+      reticleDir: freshDir(),
+    });
+    const kinds = Object.values(TelemetryEventKind);
+    await Promise.all(kinds.map((kind) => t.emit(kind)));
+    expect(sent.length).toBeGreaterThan(kinds.length / 2);
+    expect(sent.filter((p) => true !== p['internal'])).toEqual([]);
+  });
 });
 
 describe('an id that could not be persisted says so', () => {

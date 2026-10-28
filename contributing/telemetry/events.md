@@ -41,7 +41,7 @@
 | `actor` | `TelemetryActor` | some kinds | `human` or `agent`. |
 | `automation` | `AutomationHint` | when set | `agent_sandbox`, `ci_runner`, `container` or `hosted_workspace`. A hint, never a filter. |
 | `installSource` | `InstallSource` | always | The declared install route: `skill_file`, `npx_skill`, `plugin`, `install_script`, `docs_site`, `readme`, `blog`, `cli_direct` or `unknown`. Read once per process: `.reticle.json` first, then `RETICLE_INSTALL_SOURCE`, then `~/.reticle/install-source`. |
-| `internal` | `true` | team machines only | `RETICLE_INTERNAL=1`, or `~/.reticle/telemetry-internal` exists. Remove these rows from every user count. |
+| `internal` | `true` | team machines only | `RETICLE_INTERNAL` is `1`, `true`, `yes` or `on` (any case), or `~/.reticle/telemetry-internal` exists. Remove these rows from every user count. The e2e batteries and the bench MCP client set it. |
 | `idEphemeral` | `true` | when the id file cannot be written | `anonymousId` is new in each process. Do not count these rows as people. |
 | `accountState` | `TelemetryAccountState` | always | `signed_out`, `signed_in` or `linked`. |
 | `linked` | boolean | always | The project reports to a workspace. |
