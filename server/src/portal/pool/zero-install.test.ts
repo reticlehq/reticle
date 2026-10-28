@@ -110,6 +110,81 @@ describe('zeroInstallScript — on a document the parser has not built yet', () 
 });
 
 /*
+ * The reader connects at DOMContentLoaded, and the SDK installs its observers in `connect()`. A
+ * console error or an uncaught error from the app's start-up scripts came before that, so a page
+ * that crashed while it loaded gave a clean capture: a smoke check on it said "yes". The script now
+ * keeps what the page said before the observers existed and hands it to them once they do.
+ */
+describe('zeroInstallScript — what the page said before the observers were installed', () => {
+  /** A bundle whose `connect` patches console.error and listens for errors, as the SDK does. */
+  const RECORDING_BUNDLE =
+    'globalThis.__reticleInstance = { connect(a) {' +
+    ' const prior = globalThis.console.error;' +
+    ' globalThis.console.error = (...args) => { globalThis.__seen.push(["console", args.join(" ")]); prior(...args); };' +
+    ' globalThis.addEventListener("error", (e) => globalThis.__seen.push(["error", e.message]), true);' +
+    ' globalThis.addEventListener("unhandledrejection", (e) => globalThis.__seen.push(["rejection", String(e.reason)]));' +
+    ' } };';
+
+  class FakeErrorEvent extends Event {
+    readonly message: string;
+    constructor(type: string, init: { message?: string } = {}) {
+      super(type);
+      this.message = init.message ?? '';
+    }
+  }
+  class FakeRejectionEvent extends Event {
+    readonly reason: unknown;
+    readonly promise: unknown;
+    constructor(type: string, init: { reason?: unknown; promise?: unknown } = {}) {
+      super(type);
+      this.reason = init.reason;
+      this.promise = init.promise;
+    }
+  }
+
+  it('hands the start-up console errors and uncaught errors to the observers, and prints each once', () => {
+    let fire: (() => void) | undefined;
+    const printed: string[] = [];
+    const target = new EventTarget();
+    const page: Record<string, unknown> = {
+      __seen: [],
+      console: { error: (...args: unknown[]) => printed.push(args.join(' ')) },
+      addEventListener: target.addEventListener.bind(target),
+      removeEventListener: target.removeEventListener.bind(target),
+      dispatchEvent: target.dispatchEvent.bind(target),
+      ErrorEvent: FakeErrorEvent,
+      PromiseRejectionEvent: FakeRejectionEvent,
+      document: {
+        contentType: 'text/html',
+        readyState: 'loading',
+        addEventListener: (type: string, fn: () => void) => {
+          if ('DOMContentLoaded' === type) {
+            fire = fn;
+          }
+        },
+      },
+    };
+    page['globalThis'] = page;
+    runInNewContext(zeroInstallScript(RECORDING_BUNDLE, OPTS), page);
+    const appConsole = page['console'] as { error: (...a: unknown[]) => void };
+    // The app's start-up scripts, before the DOM is ready.
+    appConsole.error('start-up', 'failed');
+    target.dispatchEvent(new FakeErrorEvent('error', { message: 'Uncaught TypeError: x' }));
+    target.dispatchEvent(new FakeRejectionEvent('unhandledrejection', { reason: 'no data' }));
+    fire?.();
+    // After connect, the app's own errors reach the observers once, as before.
+    (page['console'] as { error: (...a: unknown[]) => void }).error('later');
+    expect(page['__seen']).toEqual([
+      ['console', 'start-up failed'],
+      ['error', 'Uncaught TypeError: x'],
+      ['rejection', 'no data'],
+      ['console', 'later'],
+    ]);
+    expect(printed).toEqual(['start-up failed', 'later']);
+  });
+});
+
+/*
  * The package ships ONE single-file build, and it has two readers: this daemon, which evaluates it
  * as a script, and webpack 4 (#680), which reads the `module` field and parses it as CommonJS. Each
  * reader used to get its own ~550KB copy, which is what took the SDK past its size budget.

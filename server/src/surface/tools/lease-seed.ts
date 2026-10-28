@@ -140,6 +140,10 @@ export function navFailureMessage(url: string, err: unknown, seed?: SeedStorage)
   return `could not open ${url} — ${NAV_TIMEOUT_LEAD} ${within} (${reason}). ${NAV_TIMEOUT_ADVICE}`;
 }
 
+/** Whether a path is a sign-in page, by its name: `/login`, `/signin`, `/auth/login` and similar. */
+export const isAuthPath = (pathname: string): boolean =>
+  /(?:^|\/)(?:login|signin|sign-in|auth\/login|auth\/signin|session\/new)(?:$|\/)/i.test(pathname);
+
 /**
  * Determine if a required seedStorage application precondition failed.
  *
@@ -179,11 +183,6 @@ export function evaluateSeedPrecondition(
   }
 
   // Clear redirect to an authentication/login endpoint when the requested URL was not a login page
-  const isAuthPath = (pathname: string): boolean =>
-    /(?:^|\/)(?:login|signin|sign-in|auth\/login|auth\/signin|session\/new)(?:$|\/)/i.test(
-      pathname,
-    );
-
   if (!isAuthPath(reqParsed.pathname) && isAuthPath(actParsed.pathname)) {
     return `seeded authentication precondition not established: redirected from ${reqParsed.pathname} to login page (${actParsed.pathname})`;
   }

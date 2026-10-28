@@ -841,11 +841,16 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
     else Reflect.deleteProperty(globalThis, 'PerformanceObserver');
   });
 
-  function fakeEntry(initiatorType: string, name: string, durationMs = 12): PerformanceEntry {
+  function fakeEntry(
+    initiatorType: string,
+    name: string,
+    durationMs = 12,
+    startTime = performance.now() + 1_000,
+  ): PerformanceEntry {
     return {
       name,
       entryType: 'resource',
-      startTime: 100,
+      startTime,
       duration: durationMs,
       initiatorType,
       transferSize: 2048,
@@ -882,6 +887,25 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
       expect(e.data['status']).toBe(200);
       expect(e.data['ok']).toBe(true);
     }
+  });
+
+  // A zero-install reader connects at DOMContentLoaded. A fetch the app made while the page loaded
+  // started before the patch existed, so the patch never saw it, and a failed one was lost: a page
+  // whose start-up request answered 404 passed a smoke check. The browser's own record is reported.
+  it('reports a fetch or XHR that started before the patch was installed', () => {
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    const early = {
+      ...fakeEntry('fetch', 'https://app.test/api/early', 12, 0),
+      responseStatus: 404,
+    };
+    FakePO.instances.at(0)?.callback({
+      getEntries: () => [early, fakeEntry('xmlhttprequest', 'https://app.test/api/late')],
+    });
+    const net = events.filter((e) => e.type === EventType.NET_REQUEST);
+    expect(net.map((e) => [e.data['url'], e.data['status'], e.data['initiator']])).toEqual([
+      ['https://app.test/api/early', 404, 'fetch'],
+    ]);
   });
 
   it('omits the status fields entirely when responseStatus is unreadable', () => {

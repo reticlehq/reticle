@@ -477,6 +477,8 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
   }
   const owner = {};
   pageSlots()[PAGE_CAPTURE] = owner;
+  // Requests that started before this are not seen by the patches below. See the resource observer.
+  const installedAt = performance.now();
   const captureBodies = true === opts.captureBodies;
   const bodyCapture = new AbortController();
   // Default TRUE, unlike `captureBodies`. The two answer different questions: the general flag is a
@@ -921,8 +923,12 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
             return;
           }
           const type = entry.initiatorType || 'other';
-          // Patched transports own their records; only document-initiated types are new here.
-          if ('fetch' === type || 'xmlhttprequest' === type) {
+          // Patched transports own their records, but only from the moment they were patched. A
+          // fetch the page made before that (a zero-install reader connects at DOMContentLoaded,
+          // after the app's start-up requests) has no other record, so the browser's is reported.
+          // Resource timing has no method, so it is reported as GET, like every entry here.
+          const patched = 'fetch' === type || 'xmlhttprequest' === type;
+          if (patched && entry.startTime >= installedAt) {
             continue;
           }
           const rawUrl = entry.name;

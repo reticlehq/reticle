@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { PlatformLinkVia } from '@reticlehq/core/telemetry';
+import { OnboardingPhase, PlatformLinkVia } from '@reticlehq/core/telemetry';
 import { hudSignIn } from './cli/cloud-login.js';
 import { handleSetupMcp, handleSetupInstall } from './cli/setup-mcp-cli.js';
 import { reportStepFromCli } from './cli-onboarding.js';
@@ -72,6 +72,9 @@ import { NAVIGATE_NO_SESSION_ID, navigateLeftTab, openCandidates } from './cli/o
 import { fetchStatus } from './daemon/binding/daemon-status-probe.js';
 import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
+import { FIRST_VERDICT_REASON, bareRunsFirstVerdict } from './cli/first-verdict.js';
+import { cmdFirstVerdict } from './cli/first-verdict-node.js';
+import { reportOnboardingStop } from '@/telemetry/onboarding-funnel.js';
 import { runKill } from './cli/cli-kill.js';
 import { runInit, buildNodeIo, InitFailure, type InitResult } from '@reticlehq/init';
 import { continueAfterInit } from './setup/init/init-runtime.js';
@@ -753,6 +756,29 @@ export function main(): void {
       void handleInit(parsed);
       break;
     case 'serve':
+      // Bare `reticle` in a folder Reticle has not wired: the first verdict, with no agent and no
+      // `init`. A wired project, and `reticle serve` itself, keep serving.
+      if (
+        bareRunsFirstVerdict(
+          argv,
+          myProjectId !== undefined || projectPort !== undefined || portConflict !== undefined,
+        )
+      ) {
+        void cmdFirstVerdict(parsed.port, !parsed.headless, (row) =>
+          reportOnboardingStop(
+            { phase: OnboardingPhase.FIRST_RUN, reason: FIRST_VERDICT_REASON, ...row },
+            { detach: true },
+          ),
+        )
+          .then((code) => process.exit(code))
+          .catch((cause: unknown) => {
+            process.stderr.write(
+              `reticle: ${cause instanceof Error ? cause.message : String(cause)}\n`,
+            );
+            process.exit(1);
+          });
+        break;
+      }
       handleServe(parsed);
       break;
     case 'stop':

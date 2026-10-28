@@ -243,7 +243,7 @@ function tryPort(cwd: string): number {
 }
 
 /** A daemon serving `port`: the one already there, or one started now. Undefined when ready. */
-async function ensureTryDaemon(port: number): Promise<string | undefined> {
+export async function ensureTryDaemon(port: number): Promise<string | undefined> {
   const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
   if (presenceIsUsable(presence)) return undefined;
   // A stranger on the port: a daemon spawned now could not bind, so say who holds it instead.

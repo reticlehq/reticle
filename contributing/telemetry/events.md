@@ -573,6 +573,8 @@ A stop is a `failed` row with `stop` set. `stop` comes from the closed `Onboardi
 | `chromium_unavailable` | `first_run/driven` | `recordConnectAttempt` in `server/src/telemetry/session-metrics.ts`, on `chromium_missing` or `playwright_missing`. `reason` holds which. |
 | `unclassified` | `instrumented` or `app_connected` | `init` reason `runtime_error`, `other`, or none. The unknown bucket. |
 
+Bare `reticle` in a folder that is not wired (`server/src/command/cli/first-verdict-node.ts`) sends three of these stops with `reason` `first_verdict`: `no_web_app` (no app here and no single dev server running), `dev_server_failed` (the dev script did not serve a page) and `app_not_connected` (the Reticle browser could not open the page). Tell them from an `init` stop by `reason`.
+
 Every `init` stop comes from `reportInitOutcome` in `server/src/telemetry/init-telemetry.ts`, with the `init` reason in `reason`. **Unit:** an installer stop is one installer run. Any other stop is sent once for each process and name.
 
 A stop says where the path was blocked when Reticle saw it. A later `completed` row on a later step means the person got past it. `agent_not_restarted` can come from an `init` that worked.

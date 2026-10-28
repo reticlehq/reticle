@@ -197,7 +197,7 @@ policy       https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md
 | `reticle drive <url>` | Foreground mode, for debugging |
 | `reticle mcp` | The MCP stdio proxy. Auto-starts the daemon if needed. This is what your agent runs |
 
-A bare `reticle` with no arguments is not help. It is `reticle serve`.
+A bare `reticle` with no arguments is not help. In a project that `init` wired, it is `reticle serve`. In a folder that Reticle has not wired, it gives a first verdict with no agent and no `init`. It finds the folder's web app (it starts the dev script when the app does not run), or the one dev server that runs on this computer. It opens the page in a Reticle browser and checks four things: the page loads, no console error, no failed request, and each same-origin link opens (8 at most). It prints `verified: yes` or `verified: no` with each fault, and exits 0 only for `yes`. A page that goes to a sign-in page is verified up to there. It stops the dev server it started.
 
 <Note>
   When the Reticle SDK installed in the project is a different **major** version from the CLI you ran,

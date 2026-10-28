@@ -304,7 +304,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.
-  'server/src/command/cli': 31, // + first-use-checks.ts: the first-use warnings of init, setup and verify, beside the commands that print them; + open-navigate.ts: `open --navigate`, beside adhoc-verdict.ts as review asked; + cloud-link.ts: `reticle link`, split from cloud-cli.ts at its line cap; + known-regression.ts: the gate's read of the platform, off the library path; + try-command.ts, verify-results.ts, cli-usage.ts: commands and their output beside their siblings; a subdirectory gave each a new reach the reach guard refuses; + tutorial.ts: one sequence, two audiences, ending at a verdict; + report-command.ts, a command beside its siblings; + cli-parse-serve.ts: serve/mcp/_daemon flags, split from cli-parse.ts at its line cap; + ci-hint.ts: the CI line of gate, verify and affected, which reads the update manifest; `answers` may not reach `update`
+  'server/src/command/cli': 33, // + first-verdict.ts, first-verdict-node.ts: bare `reticle` in an unwired folder, beside try-command.ts and adhoc-verdict.ts whose lease and daemon it reuses; a subdirectory would be a mutual pair with cli; + first-use-checks.ts: the first-use warnings of init, setup and verify, beside the commands that print them; + open-navigate.ts: `open --navigate`, beside adhoc-verdict.ts as review asked; + cloud-link.ts: `reticle link`, split from cloud-cli.ts at its line cap; + known-regression.ts: the gate's read of the platform, off the library path; + try-command.ts, verify-results.ts, cli-usage.ts: commands and their output beside their siblings; a subdirectory gave each a new reach the reach guard refuses; + tutorial.ts: one sequence, two audiences, ending at a verdict; + report-command.ts, a command beside its siblings; + cli-parse-serve.ts: serve/mcp/_daemon flags, split from cli-parse.ts at its line cap; + ci-hint.ts: the CI line of gate, verify and affected, which reads the update manifest; `answers` may not reach `update`
   // 17 since the installer's Node half: `setup-mcp.ts` (which agents are here, and merging into the
   // configs they already keep) and `setup-install.ts` (the three steps only the shell could time).
   // Both are pure — their telemetry reporter is INJECTED, because this directory does not own a
@@ -313,7 +313,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // connected app, and the stage that proves a flow runs a model inside the daemon rather than
   // spawning a second agent CLI. Lowered in the same commit, which is what locks the gain in.
   // 17 with tauri-signing.ts: setup starts the dev server, and signs a Tauri build as it does.
-  'server/src/command/setup': 17,
+  'server/src/command/setup': 18, // + start-dev-server.ts: start a dev script and wait for a page, for bare `reticle`; beside node-effects.ts, whose supervised server it reuses
   // Crossed the line with `drive-url-stamp.ts`: the mark that tells a page Reticle opened it for
   // itself. Its own leaf because the SDK reads the same constant to decide not to show a human a
   // first-run tour over a page nobody is looking at -- a rule split across two packages is worth
