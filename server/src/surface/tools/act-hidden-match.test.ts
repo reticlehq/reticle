@@ -41,7 +41,11 @@ interface Paragraph {
  * A page whose MATCH answers with `before` until the action runs and with `after` once it has, and
  * whose window holds `events` only after the action.
  */
-function page(before: Paragraph[], after: Paragraph[], events: ReticleEvent[] = []): ToolDeps {
+function page(
+  before: Paragraph[],
+  after: Paragraph[] | (() => Paragraph[]),
+  events: ReticleEvent[] = [],
+): ToolDeps {
   let acted = false;
   const described = (ps: Paragraph[]): unknown[] =>
     ps.map((p, i) => ({
@@ -53,7 +57,8 @@ function page(before: Paragraph[], after: Paragraph[], events: ReticleEvent[] = 
     }));
   const command = (name: string): Promise<CommandResult> => {
     if (ReticleCommand.MATCH === name) {
-      const ps = acted ? after : before;
+      const now = 'function' === typeof after ? after() : after;
+      const ps = acted ? now : before;
       return Promise.resolve({
         kind: 'command_result',
         id: 'm',
@@ -160,5 +165,24 @@ describe('a text check that matched only hidden nodes is not a clean yes', () =>
     const some = [{ visible: false }, { visible: true }, { visible: false }];
     const r = await actAndWait(page([], some), TEXT);
     expect(r['verifiedReason']).not.toBe(VerifiedReason.HIDDEN_MATCH);
+  });
+});
+
+/**
+ * An entrance animation or a mount-then-show transition paints opacity 0 for the first frame, and
+ * the wait first matched there. Measured in Chromium: a keyframe fade from 0 and a toast mounted at
+ * opacity 0 both read "0" for the first milliseconds. The verdict was taken on that frame and came
+ * back hidden_match, while one frame later the text was on screen.
+ */
+describe('a match hidden only for its first frame', () => {
+  it('is judged on the frame that shows it', async () => {
+    let reads = 0;
+    const revealing = (): Paragraph[] => {
+      reads += 1;
+      return [{ visible: reads > 3 }];
+    };
+    const r = await actAndWait(page([], revealing), TEXT);
+    expect(r['verifiedReason']).not.toBe(VerifiedReason.HIDDEN_MATCH);
+    expect(r['verified']).toBe(Verified.YES);
   });
 });

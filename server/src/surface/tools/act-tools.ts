@@ -52,7 +52,7 @@ import { declaresState } from '@reticlehq/engine/question/predicate/predicate-as
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
 import { hiddenMatchNote } from '@reticlehq/engine/evidence/already-true.js';
 import { inFlightRequestLabels, repeatedRequestLabels } from './act/settle-in-flight.js';
-import { finishAfterMatch } from './act/after-match.js';
+import { awaitShownMatch, finishAfterMatch } from './act/after-match.js';
 import { noteProved } from './act/proved-controls.js';
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { buildHonestyBlock, honestyForVerdict } from '@reticlehq/engine/evidence/honesty.js';
@@ -603,6 +603,7 @@ export const ACT_TOOLS: ToolDef[] = [
           const reverted = await finishAfterMatch(session, until, since, baselines, left);
           if (reverted !== undefined)
             verdict = { pass: false, failureReason: reverted, observed: reverted };
+          verdict = await awaitShownMatch(session, until, since, baselines, verdict, left);
         }
 
         const r = asRecord(actResult?.result);

@@ -10,6 +10,11 @@
  */
 
 import type { Predicate } from '@reticlehq/core';
+import { hiddenMatchNote } from '@reticlehq/engine/evidence/already-true.js';
+import {
+  evaluatePredicate,
+  type EvalResult,
+} from '@reticlehq/engine/question/predicate/predicate.js';
 import { waitForInFlight } from './settle-in-flight.js';
 import { waitForReaction } from './react-grace.js';
 import { revertedAfterMatch } from './durable.js';
@@ -38,4 +43,45 @@ export async function finishAfterMatch(
   await waitForReaction(session, since, remaining(), sleep);
   // 3. Then ask whether what held still holds — see revertedAfterMatch.
   return revertedAfterMatch(session, until, since, baselines);
+}
+
+/**
+ * How long a match that holds only on hidden nodes gets to show. An entrance fade or a toast mounted
+ * at opacity 0 reads hidden for its first frame, and the wait matched on that frame. A node hidden
+ * by design pays this once, on a verdict that is `unknown` either way.
+ */
+const SHOWN_GRACE_MS = 1000;
+
+/** Poll cadence — the same as the reaction grace. */
+const SHOWN_POLL_MS = 50;
+
+/**
+ * A green that rests only on hidden matches, read again until a match shows, for at most
+ * SHOWN_GRACE_MS. Returns the reading that shows one, or `verdict` unchanged. Nothing is predicted:
+ * the verdict is judged on what the page painted, and a node that stays hidden stays `hidden_match`.
+ */
+export async function awaitShownMatch(
+  session: Parameters<typeof evaluatePredicate>[0],
+  until: Predicate,
+  since: number,
+  baselines: Parameters<typeof evaluatePredicate>[4],
+  verdict: EvalResult,
+  remaining: () => number,
+): Promise<EvalResult> {
+  if (!verdict.pass || hiddenMatchNote(until, verdict.evidence) === undefined) {
+    return verdict;
+  }
+  // Counted in reads, not read off the session clock, so a clock that does not move still ends it.
+  const reads = Math.floor(Math.min(SHOWN_GRACE_MS, remaining()) / SHOWN_POLL_MS);
+  for (let read = 0; read < reads; read += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, SHOWN_POLL_MS));
+    const now = await evaluatePredicate(session, until, since, true, baselines);
+    if (!now.pass) {
+      return verdict;
+    }
+    if (hiddenMatchNote(until, now.evidence) === undefined) {
+      return now;
+    }
+  }
+  return verdict;
 }

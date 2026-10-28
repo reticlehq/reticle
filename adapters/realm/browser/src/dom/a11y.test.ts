@@ -1027,6 +1027,32 @@ describe('a page an open overlay hid from assistive tech', () => {
     expect(isVisible(button)).toBe(true);
   });
 
+  // MUI's ModalManager and react-modal hide the page behind an open menu or dialog with a bare
+  // `aria-hidden`, without the `data-aria-hidden` stamp. The page is on screen all the same.
+  it.each([
+    ['dialog', '<div role="dialog" aria-modal="true"><p>Confirm</p></div>'],
+    ['menu', '<div role="presentation"><ul role="menu"><li role="menuitem">Edit</li></ul></div>'],
+  ])('is still on screen behind an open %s with no stamp', (_kind, layer) => {
+    document.body.innerHTML =
+      '<div id="root" aria-hidden="true"><button id="m">Projects</button></div>' + layer;
+    const button = document.getElementById('m');
+    if (null === button) {
+      throw new Error('no button');
+    }
+    expect(isVisible(button)).toBe(true);
+  });
+
+  it('while the app’s own aria-hidden still hides beside an open dialog', () => {
+    document.body.innerHTML =
+      '<main><div aria-hidden="true"><button id="d">Drawer</button></div></main>' +
+      '<div role="dialog" aria-modal="true"><p>Confirm</p></div>';
+    const button = document.getElementById('d');
+    if (null === button) {
+      throw new Error('no button');
+    }
+    expect(isVisible(button)).toBe(false);
+  });
+
   it('while the app’s own aria-hidden still hides', () => {
     document.body.innerHTML = '<div aria-hidden="true"><button id="q">Hidden</button></div>';
     const button = document.getElementById('q');

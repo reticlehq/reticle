@@ -1,5 +1,6 @@
 import type { ElementQuery } from '@reticlehq/core';
 import { parentAcrossShadowBoundary } from './shadow-registry.js';
+import { stalledFade } from './visibility.js';
 
 /**
  * Match user-visible prose the way the public query API has always promised: trim and collapse
@@ -142,7 +143,8 @@ export function unreadableText(el: Element): string | undefined {
   let opaque = false;
   for (let node: Element | null = el; null !== node; node = parentAcrossShadowBoundary(node)) {
     const style = view.getComputedStyle(node);
-    const alpha = Number.parseFloat(style.opacity);
+    // A fade stalled by a hidden tab is not the app's opacity: visibility reads it as shown (#793).
+    const alpha = stalledFade(node) ? 1 : Number.parseFloat(style.opacity);
     opacity *= Number.isNaN(alpha) ? 1 : alpha;
     if (opaque) {
       continue;

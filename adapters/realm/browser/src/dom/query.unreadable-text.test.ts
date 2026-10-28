@@ -75,3 +75,39 @@ describe('a text match that a person cannot read', () => {
     expect(matchQuery({ testid: 'total' }).unreadable).toBeUndefined();
   });
 });
+
+/**
+ * A hidden tab stalls animations, so a fade-in sits at its first frame (#793). Visibility reads that
+ * as shown. The unreadable check read the same frame as "composed opacity 0.00" and the check came
+ * back unknown for the whole budget, on a page that shows the text as soon as the tab is in front.
+ */
+describe('a fade-in stalled by a hidden tab', () => {
+  const hide = (hidden: boolean): void => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+  };
+  const fading = (animating: boolean): void => {
+    document.body.innerHTML = '<div id="toast" style="opacity: 0"><p>Total: $50</p></div>';
+    const toast = document.getElementById('toast');
+    if (null === toast) {
+      throw new Error('no toast');
+    }
+    (
+      toast as unknown as { getAnimations: () => { playState: string; pending: boolean }[] }
+    ).getAnimations = () => (animating ? [{ playState: 'running', pending: false }] : []);
+  };
+  afterEach(() => {
+    hide(false);
+  });
+
+  it('is not unreadable while its animation is stalled', () => {
+    hide(true);
+    fading(true);
+    expect(matchQuery(TOTAL).unreadable).toBeUndefined();
+  });
+
+  it('is still unreadable at rest', () => {
+    hide(true);
+    fading(false);
+    expect(matchQuery(TOTAL).unreadable).toContain('opacity');
+  });
+});

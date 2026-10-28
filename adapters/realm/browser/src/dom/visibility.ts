@@ -1,3 +1,4 @@
+import { RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
 import { isHtmlElement } from './realm.js';
 import { parentAcrossShadowBoundary } from './shadow-registry.js';
 import {
@@ -45,9 +46,9 @@ function hiddenInsideClosedDetails(el: Element): boolean {
  * Opacity 0 because a fade-in is stalled, not because the app hides it. A hidden tab's animations do
  * not advance, so a fading element sits at its first frame and every "visible?" asked of it disagreed
  * with the element being rendered (#793). Only on a hidden tab, and only with an animation still live
- * on the element; at rest, opacity 0 is hidden.
+ * on the element; at rest, opacity 0 is hidden. `unreadableText` asks the same of opacity.
  */
-function stalledFade(el: Element): boolean {
+export function stalledFade(el: Element): boolean {
   if (!el.ownerDocument.hidden || !('getAnimations' in el)) {
     return false;
   }
@@ -62,8 +63,58 @@ function stalledFade(el: Element): boolean {
  */
 const OVERLAY_ARIA_HIDDEN = 'data-aria-hidden';
 
+/** An open menu, list or dialog, as overlay libraries and native dialogs mark one. */
+const OPEN_LAYER =
+  '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], dialog[open], [aria-modal="true"]';
+
+/** Children of `<body>` that paint nothing, which a modal manager never hides. */
+const UNPAINTED_TAGS = new Set(['script', 'style', 'template', 'noscript', 'link', 'meta']);
+
 function hiddenByAnOverlay(el: Element): boolean {
-  return el.hasAttribute(OVERLAY_ARIA_HIDDEN);
+  if (el.hasAttribute(OVERLAY_ARIA_HIDDEN)) {
+    return true;
+  }
+  return hiddenByAModalManager(el);
+}
+
+/**
+ * MUI's ModalManager and react-modal hide the page behind an open menu or dialog with a bare
+ * `aria-hidden`, without the stamp. Their signature: the open layer is a child of `<body>`, and every
+ * other painted child of `<body>` carries `aria-hidden`. An app's own `aria-hidden` (a closed drawer)
+ * leaves the app root unhidden, so it does not match, and it still hides.
+ */
+function hiddenByAModalManager(el: Element): boolean {
+  const body = el.ownerDocument.body;
+  if (el.parentElement !== body) {
+    return false;
+  }
+  const others = Array.from(body.children).filter(
+    (child) =>
+      child !== el &&
+      !UNPAINTED_TAGS.has(child.localName) &&
+      !child.matches(RETICLE_OVERLAY_SELECTOR),
+  );
+  const open = others.filter((child) => 'true' !== child.getAttribute('aria-hidden'));
+  const layer = open[0];
+  return 1 === open.length && layer !== undefined && holdsOpenLayer(layer);
+}
+
+/**
+ * Whether `portal` is, or holds, an open layer that its own styles do not hide. Own styles only, up
+ * to `portal`: an ancestor walk would ask isVisible, which asks this again.
+ */
+function holdsOpenLayer(portal: Element): boolean {
+  const layer = portal.matches(OPEN_LAYER) ? portal : portal.querySelector(OPEN_LAYER);
+  for (let node = layer; null !== node; node = node.parentElement) {
+    const style = node.ownerDocument.defaultView?.getComputedStyle(node) ?? null;
+    if (selfCssHidden(node, style)) {
+      return false;
+    }
+    if (node === portal) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
