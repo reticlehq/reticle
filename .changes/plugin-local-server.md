@@ -1,0 +1,3 @@
+### Changed
+
+- **Claude Code plugin — the MCP server starts from a local copy, not from `npx` on each start.** The plugin ran `npx -y @reticlehq/server@<version> mcp`. Each start asked npm for the package while the agent waited, and the first start downloaded all of it, so a slow registry could make the server miss the start timeout. The plugin now keeps one copy of its pinned server version in `${CLAUDE_PLUGIN_DATA}` and starts it with no network. When the copy is not there yet, the plugin runs the same `npx` command as before and installs the copy in the background for the next start. The version stays pinned to the plugin version.

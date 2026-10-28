@@ -53,6 +53,12 @@ describe('launchMethodOf', () => {
     expect(launchMethodOf('/repo/app/node_modules/@reticlehq/server/dist/cli.js')).toBe(
       LaunchMethod.PROJECT,
     );
+    // The Claude Code plugin's own pinned copy is not the user's project.
+    expect(
+      launchMethodOf(
+        '/Users/a/.claude/plugins/data/reticle-reticlehq/reticle-plugin-server/3.9.0/node_modules/@reticlehq/server/bin/reticle.js',
+      ),
+    ).toBe(LaunchMethod.OTHER);
     expect(launchMethodOf('/repo/reticle/server/dist/cli.js')).toBe(LaunchMethod.OTHER);
     expect(launchMethodOf(undefined)).toBe(LaunchMethod.OTHER);
   });

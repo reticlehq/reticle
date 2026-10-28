@@ -14,8 +14,8 @@
   "keywords": ["mcp", "ai-agents", "testing", "verification", "instrumentation"],
   "mcpServers": {
     "reticle": {
-      "command": "npx",
-      "args": ["-y", "@reticlehq/server@3.8.2", "mcp"],
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.mjs"],
       "env": { "RETICLE_INSTALL_SOURCE": "plugin" }
     }
   }

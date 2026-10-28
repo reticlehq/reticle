@@ -33,6 +33,13 @@ export function currentAgentClient(env: NodeJS.ProcessEnv): AgentClient | undefi
 }
 
 /**
+ * The folder in `${CLAUDE_PLUGIN_DATA}` that holds the Claude Code plugin's pinned server copies.
+ * `plugins/reticle/scripts/mcp-server.mjs` cannot import this file, so it keeps a copy of the name.
+ * `plugin-mcp-launch.test.ts` fails when the two differ.
+ */
+export const PLUGIN_SERVER_DIR = 'reticle-plugin-server';
+
+/**
  * Where a global install puts packages, by package manager. A path that matches none of these but
  * still sits in a `node_modules` is a project's own dependency.
  */
@@ -52,6 +59,10 @@ export function launchMethodOf(entry: string | undefined): LaunchMethod {
   if (entry === undefined) return LaunchMethod.OTHER;
   const path = entry.replace(/\\/g, '/').toLowerCase();
   if (path.includes('/_npx/') || path.includes('/dlx-')) return LaunchMethod.NPX;
+  // The Claude Code plugin's own pinned copy: in a `node_modules`, but not the user's project.
+  if (path.includes(`/${PLUGIN_SERVER_DIR}/`)) {
+    return LaunchMethod.OTHER;
+  }
   if (GLOBAL_DIRS.some((dir) => path.includes(dir))) return LaunchMethod.GLOBAL;
   if (path.includes('/node_modules/')) return LaunchMethod.PROJECT;
   return LaunchMethod.OTHER;
