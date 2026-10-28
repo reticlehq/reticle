@@ -52,6 +52,132 @@ function exampleFor(kind: string): string {
   return EXAMPLES[kind] ?? GENERIC_EXAMPLE;
 }
 
+/** The one example a refusal ends with: the agent's own predicate corrected, else the kind's sample. */
+function exampleSentence(kind: string, corrected: string | undefined): string {
+  return corrected === undefined
+    ? `A valid ${kind} predicate looks like: ${exampleFor(kind)}`
+    : `The corrected ${kind} predicate from your call: ${corrected}`;
+}
+
+/**
+ * The field that holds the value a kind checks. An unknown field's string value goes here when the
+ * agent left it empty. `element` holds it in `query.text`. Kinds not listed get no correction.
+ */
+const PRIMARY_FIELD: Readonly<Partial<Record<string, string>>> = {
+  [PredicateKind.TEXT]: 'contains',
+  [PredicateKind.ROUTE]: 'pathname',
+  [PredicateKind.NET]: 'urlContains',
+  [PredicateKind.SIGNAL]: 'name',
+  [PredicateKind.ANIMATION]: 'name',
+  [PredicateKind.CONSOLE]: 'contains',
+  [PredicateKind.STATE]: 'path',
+};
+
+/** `"200"` → 200 and `"true"` → true, the two type mistakes with one reading. */
+const NUMERIC = /^-?\d+(\.\d+)?$/;
+const BOOLEANS: Readonly<Record<string, boolean>> = { true: true, false: false };
+
+/** A string value as the number or boolean the schema wanted, or undefined when it is not one. */
+function readTyped(value: unknown, expected: unknown): unknown {
+  if ('string' !== typeof value) {
+    return undefined;
+  }
+  if ('number' === expected && NUMERIC.test(value)) {
+    return Number(value);
+  }
+  if ('boolean' === expected) {
+    return BOOLEANS[value];
+  }
+  return undefined;
+}
+
+/** The predicate with the kind's check value set to `text`, or undefined for a kind with none. */
+function withPrimary(
+  kind: string,
+  candidate: Record<string, unknown>,
+  text: string,
+): Record<string, unknown> | undefined {
+  if (PredicateKind.ELEMENT === kind) {
+    return candidate['query'] === undefined ? { ...candidate, query: { text } } : undefined;
+  }
+  const field = PRIMARY_FIELD[kind];
+  if (field === undefined || candidate[field] !== undefined) {
+    return undefined;
+  }
+  return { ...candidate, [field]: text };
+}
+
+/**
+ * One corrected predicate built from the agent's own values, as JSON, or undefined.
+ *
+ * Unknown fields are removed, and the first one that holds a string becomes the kind's check value.
+ * A number or boolean written as a string is read as one. Call arguments (`ref`, `action`) are never
+ * used as the check value. When any value the agent wrote would be lost, there is no correction:
+ * a predicate that checks less than the agent asked for is not a correction.
+ */
+function correctedFromCall(input: unknown, issues: readonly z.ZodIssue[]): string | undefined {
+  if ('object' !== typeof input || null === input || Array.isArray(input)) {
+    return undefined;
+  }
+  const kind = kindAsWritten(input);
+  if ('string' !== typeof kind || 0 === predicateFieldsFor(kind).length) {
+    return undefined;
+  }
+  // On `element` a `ref` is the target. Removed, the check would find any element, not that one.
+  if (PredicateKind.ELEMENT === kind && (input as Record<string, unknown>)['ref'] !== undefined) {
+    return undefined;
+  }
+  let candidate: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+  delete candidate[KIND_ALIAS];
+  candidate['kind'] = kind;
+  const donors: string[] = [];
+  for (const issue of issues) {
+    const field = issue.path[0];
+    if (z.ZodIssueCode.unrecognized_keys === issue.code && 0 === issue.path.length) {
+      for (const key of issue.keys) {
+        const value = candidate[key];
+        delete candidate[key];
+        if (CALL_LEVEL_FIELDS.includes(key)) {
+          continue;
+        }
+        if ('string' !== typeof value) {
+          return undefined;
+        }
+        donors.push(value);
+      }
+      continue;
+    }
+    // A refinement on the whole predicate, or a missing field: the parse at the end decides.
+    if (0 === issue.path.length || ('string' === typeof field && candidate[field] === undefined)) {
+      continue;
+    }
+    if (1 !== issue.path.length || 'string' !== typeof field) {
+      return undefined;
+    }
+    const typed = readTyped(candidate[field], 'expected' in issue ? issue.expected : undefined);
+    if (typed === undefined) {
+      return undefined;
+    }
+    candidate[field] = typed;
+  }
+  for (const field of CALL_LEVEL_FIELDS) {
+    delete candidate[field];
+  }
+  if (1 < donors.length) {
+    return undefined;
+  }
+  const [donor] = donors;
+  if (donor !== undefined) {
+    const filled = withPrimary(kind, candidate, donor);
+    if (filled === undefined) {
+      return undefined;
+    }
+    candidate = filled;
+  }
+  const parsed = PredicateSchema.safeParse(candidate);
+  return parsed.success ? JSON.stringify(parsed.data) : undefined;
+}
+
 /** `path: ["net","urlContains"]` → `net.urlContains`; an empty path means the object itself. */
 function pathOf(issue: z.ZodIssue): string {
   return 0 === issue.path.length ? 'the predicate' : issue.path.map(String).join('.');
@@ -128,6 +254,8 @@ function onlyChildBlamed(
   return undefined === value ? undefined : { path: head, value };
 }
 
+const NOTHING_RAN = 'Nothing ran — the predicate was not evaluated, so no verdict was produced.';
+
 export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> {
   const unfilled = placeholderValue(input);
   if (unfilled !== undefined) {
@@ -149,16 +277,21 @@ export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> 
       if (error instanceof Error) throw new Error(`${child.path}: ${error.message}`);
     }
   }
+  // A refused bare string carries its own readings, so nothing about kinds is added to it.
+  if ('string' === typeof input) {
+    const said = parsed.error.issues.map((issue) => issue.message).join('; ');
+    throw new Error(`that predicate did not parse: ${said}. ${NOTHING_RAN}`);
+  }
   const asWritten = kindAsWritten(input);
   const kind = 'string' === typeof asWritten ? asWritten : 'unknown';
   // Bounded on purpose: a union rejection can produce one issue per member, and pasting all of them
   // back is how the zod array became unreadable in the first place.
   const issues = parsed.error.issues.slice(0, 3).map(describeIssue).join('; ');
   throw new Error(
-    `that predicate did not parse (kind "${kind}"): ${issues}. Nothing ran — the predicate was ` +
-      `not evaluated, so no verdict was produced. ${accepted(kind, parsed.error.issues)}` +
+    `that predicate did not parse (kind "${kind}"): ${issues}. ${NOTHING_RAN} ` +
+      `${accepted(kind, parsed.error.issues)}` +
       `${misplacedCallFields(input)} ` +
-      `A valid ${kind} predicate looks like: ${exampleFor(kind)}`,
+      exampleSentence(kind, correctedFromCall(input, parsed.error.issues)),
   );
 }
 
@@ -348,5 +481,12 @@ function accepted(kind: string, issues: readonly z.ZodIssue[]): string {
       .join('');
     return `${kind} accepts: ${fields.join(', ')}.${nested}`;
   }
-  return `"${kind}" is not a predicate kind — use one of: ${Object.values(PredicateKind).join(', ')}.`;
+  const kinds = Object.values(PredicateKind);
+  // `absent` is listed beside the kinds in the grammar, but it is a field. Say where it goes.
+  const takenBy = kinds.filter((each) => predicateFieldsFor(each).includes(kind));
+  const asField =
+    0 === takenBy.length
+      ? ''
+      : ` "${kind}" is a field of ${takenBy.join(', ')}: { kind: "${takenBy[0] ?? ''}", ..., ${kind}: … }.`;
+  return `"${kind}" is not a predicate kind — use one of: ${kinds.join(', ')}.${asField}`;
 }

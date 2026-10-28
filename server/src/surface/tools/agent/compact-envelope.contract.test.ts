@@ -401,6 +401,17 @@ describe('forgiving parse, strict verdict: the result names the aliases it norma
     ) as Record<string, unknown>;
     expect(asFull['normalized']).toEqual(['route.pathContains → contains']);
   });
+  it('names a bare string `until` and a bare string `predicate` as the visible text they were read as', () => {
+    const result = { verified: 'no', because: 'b', verdict: { pass: false } };
+    const read = '"Saved" → { kind: "text", contains: "Saved", visible: true }';
+    for (const [tool, args] of [
+      [ReticleTool.ACT_AND_WAIT, { ref: 'e1', action: 'click', until: 'Saved' }],
+      [ReticleTool.ASSERT, { predicate: 'Saved' }],
+    ] as const) {
+      const out = shapeForAgent(tool, args, result, true) as Record<string, unknown>;
+      expect(out['normalized'], tool).toEqual([read]);
+    }
+  });
   it('names step expects by index', () => {
     const out = shapeForAgent(
       ReticleTool.ACT,

@@ -180,8 +180,9 @@ function leanZodShape(
   let hintSpent = predicateAnchor !== undefined;
   for (const [key, schema] of Object.entries(shape)) {
     if (isPredicateParam(schema)) {
-      // Every tool keeps the kinds; only the navigation hint is anchored.
-      const compact = z.record(z.string(), z.unknown());
+      // Every tool keeps the kinds; only the navigation hint is anchored. A bare string is visible
+      // text (core's `PredicateSchema`), so the SDK must let it through to that parse.
+      const compact = z.union([z.string(), z.record(z.string(), z.unknown())]);
       out[key] = (schema.isOptional() ? compact.optional() : compact).describe(
         hintSpent ? PREDICATE_KINDS : COMPACT_PREDICATE_DESCRIPTION,
       );

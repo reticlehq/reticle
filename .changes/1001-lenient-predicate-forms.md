@@ -1,0 +1,8 @@
+### Changed
+
+- **`@reticlehq/core`, `@reticlehq/server` — `act_and_wait` and `assert` accept three predicate forms that agents send, and a refusal shows the agent's own predicate, corrected.** Each form was a `bad_args` refusal with no verdict, and most agents retried. Reticle now reads each form only where it has one meaning:
+  - A bare string, such as `until: "Saved"`, is text that must be visible: `{ kind: "text", contains: "Saved", visible: true }`. A page without the text, or with the text hidden, fails the check. An empty string is refused. A string that reads as a description of the outcome (`"the receipt appears"`) is refused, because as text it fails on every page. A string that can also be a route (`/dashboard`), a selector (`#total`) or a signal (`todos:loaded`) is refused, and the refusal shows both readings.
+  - `{ text: { contains: "Saved" } }` is `{ kind: "text", contains: "Saved" }`, with `scope` and `visible` if given. With `absent` it is refused: a saved flow reads that form with a settle gate, so it has two readings.
+  - `{ kind: "absent", text: "Error" }` is `{ kind: "text", contains: "Error", absent: true }`, when the other keys name one kind that takes `absent`.
+
+  The result names each form it read in `normalized`, so the agent sees what was checked. When a predicate is refused, the refusal now ends with the corrected predicate built from the agent's values. For example, `{ kind: "text", label: "Order placed" }` gets `{"kind":"text","contains":"Order placed"}`. If a correction would drop a value the agent wrote, the refusal shows the sample for the kind instead. `{ kind: "absent" }` is refused with the kinds that take `absent` as a field. Refs [#1001](https://github.com/reticlehq/reticle/issues/1001).

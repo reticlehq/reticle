@@ -308,6 +308,141 @@ function withKind(given: Record<string, unknown>): Record<string, unknown> {
   return kind === undefined ? renamed : { ...renamed, kind };
 }
 
+/**
+ * Forms agents send for a predicate that have exactly one reading. See predicate-lenient.test.ts
+ * for where each was seen. A form with two readings is refused and names both. Nothing here makes
+ * a check weaker: each form becomes the predicate its explicit spelling gives.
+ */
+interface ShorthandRead {
+  /** The predicate to parse: the input itself when no form applied. */
+  value: unknown;
+  /** What was read, for `predicateAliasesUsed`. */
+  note?: string;
+  /** Why the form was refused. Set only when the form has two readings or none. */
+  refusal?: string;
+}
+
+/** The kind written as `absent`. `absent` is a field of `element`, `text` and `console`. */
+const ABSENT_FIELD = 'absent';
+
+/**
+ * Bare strings that can also be another kind's value. Each one is refused, with both readings.
+ * A text check on `/dashboard` fails on a page that does not show that text, so a guess here
+ * gives a false "no" and blames the app.
+ */
+const BARE_STRING_OTHER_READINGS: readonly {
+  test: RegExp;
+  example: (quoted: string) => string;
+}[] = [
+  { test: /:\/\//, example: (quoted) => `{ kind: "route", contains: ${quoted} }` },
+  { test: /^\//, example: (quoted) => `{ kind: "route", pathname: ${quoted} }` },
+  {
+    test: /^[#.[]/,
+    example: (quoted) => `{ kind: "element", query: { scope: ${quoted}, self: true } }`,
+  },
+  { test: /^[\w-]+:[\w:.-]+$/, example: (quoted) => `{ kind: "signal", name: ${quoted} }` },
+];
+
+/**
+ * Words that make a bare string read as a description of the outcome ("the receipt appears"), not
+ * as text on the page. Read as text, a description fails on every page and blames the app, so it
+ * is refused. A refusal costs one call. A false "no" sends the agent to fix code that works.
+ */
+const DESCRIPTION_WORDS =
+  /\b(should|must|appears?|shown|shows|displays|displayed|navigates|redirects|succeeds|expect(ed)?)\b/i;
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+  'object' === typeof value && null !== value && !Array.isArray(value);
+
+/** `"Saved"`: text that must be visible. Visible, so that a hidden copy does not pass. */
+function readBareString(written: string): ShorthandRead {
+  const quoted = JSON.stringify(written);
+  if (0 === written.trim().length) {
+    return {
+      value: written,
+      refusal:
+        'an empty string names no check: empty text is on every page. Write the text the page ' +
+        'must show: { kind: "text", contains: "Saved", visible: true }',
+    };
+  }
+  if (DESCRIPTION_WORDS.test(written)) {
+    return {
+      value: written,
+      refusal:
+        `the string ${quoted} reads as a description of the outcome, so it was not checked as ` +
+        'text. Write the exact text the page shows: { kind: "text", contains: "Saved" }, or ' +
+        'the consequence by its kind (signal, net, route, state)',
+    };
+  }
+  const other = BARE_STRING_OTHER_READINGS.find((reading) => reading.test.test(written));
+  if (other !== undefined) {
+    return {
+      value: written,
+      refusal:
+        `the string ${quoted} has two readings, so it was not guessed. Write the one you mean: ` +
+        `${other.example(quoted)} or { kind: "text", contains: ${quoted} }`,
+    };
+  }
+  return {
+    value: { kind: PredicateKind.TEXT, contains: written, visible: true },
+    note: `${quoted} → { kind: "text", contains: ${quoted}, visible: true }`,
+  };
+}
+
+/**
+ * Fields of `{ text: { ... } }` that mean the same in both places that form is read: here, and in
+ * the `text` part of a version 1 flow `expect` (`flowExpectToPredicate`). `absent` is not one of
+ * them: that format adds a settle gate to it, so `absent` has two readings and is refused.
+ */
+const TEXT_WRAPPER_FIELDS: ReadonlySet<string> = new Set(['contains', 'scope', 'visible']);
+
+/** `{ text: { contains } }`: the form agents send after reading a grammar keyed by kind. */
+function readTextWrapper(obj: Record<string, unknown>): ShorthandRead | undefined {
+  const keys = writtenKeys(obj);
+  const inner = obj[PredicateKind.TEXT];
+  if (1 !== keys.length || !isPlainRecord(inner)) {
+    return undefined;
+  }
+  const fields = writtenKeys(inner);
+  if (!fields.includes('contains') || !fields.every((field) => TEXT_WRAPPER_FIELDS.has(field))) {
+    return undefined;
+  }
+  return {
+    value: { ...inner, kind: PredicateKind.TEXT },
+    note: '{ text: { ... } } → { kind: "text", ... }',
+  };
+}
+
+/** `{ kind: "absent", text: "Error" }`: the absence of the one kind the other keys name. */
+function readAbsentKind(obj: Record<string, unknown>): ShorthandRead | undefined {
+  if (ABSENT_FIELD !== obj['kind'] || false === obj[ABSENT_FIELD]) {
+    return undefined;
+  }
+  const rest: Record<string, unknown> = { ...obj };
+  delete rest['kind'];
+  delete rest[ABSENT_FIELD];
+  const kind = inferKind(rest);
+  if (kind === undefined || true !== keysOfEachKind().get(kind)?.has(ABSENT_FIELD)) {
+    return undefined;
+  }
+  return {
+    value: { ...rest, kind, [ABSENT_FIELD]: true },
+    note: `kind: "${ABSENT_FIELD}" → kind: "${kind}", ${ABSENT_FIELD}: true`,
+  };
+}
+
+/** The one place a lenient form is read. The parse and the report both call it. */
+function readShorthand(input: unknown): ShorthandRead {
+  if ('string' === typeof input) {
+    return readBareString(input);
+  }
+  if (!isPlainRecord(input)) {
+    return { value: input };
+  }
+  const renamed = renameKindSpelling(input);
+  return readTextWrapper(renamed) ?? readAbsentKind(renamed) ?? { value: input };
+}
+
 /** Why a predicate with no `kind` was refused: the keys it had, and the kinds there are. */
 function noKindRefusal(obj: Record<string, unknown>): string {
   const keys = writtenKeys(obj).map((key) => `\`${key}\``);
@@ -327,9 +462,15 @@ function noKindRefusal(obj: Record<string, unknown>): string {
  * schema still refuses them.
  */
 export function predicateAliasesUsed(input: unknown, depth = 0): string[] {
-  if (depth > 8 || typeof input !== 'object' || null === input || Array.isArray(input)) return [];
-  const given = input as Record<string, unknown>;
-  const used: string[] = [];
+  if (depth > 8) {
+    return [];
+  }
+  const read = readShorthand(input);
+  const used: string[] = read.note === undefined ? [] : [read.note];
+  if (!isPlainRecord(read.value)) {
+    return used;
+  }
+  const given = read.value;
   if (given['kind'] === undefined && 'string' === typeof given[KIND_SPELLING]) {
     used.push(`${KIND_SPELLING} → kind`);
   }
@@ -358,8 +499,15 @@ export function predicateAliasesUsed(input: unknown, depth = 0): string[] {
 
 /** Rename known aliases before parse; an explicit canonical key always wins. */
 function applyPredicateAliases(input: unknown, ctx: z.RefinementCtx): unknown {
-  if (typeof input !== 'object' || null === input || Array.isArray(input)) return input;
-  const given = input as Record<string, unknown>;
+  const read = readShorthand(input);
+  if (read.refusal !== undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: read.refusal });
+    return input;
+  }
+  if (!isPlainRecord(read.value)) {
+    return read.value;
+  }
+  const given = read.value;
   const obj = withKind(given);
   if (obj['kind'] === undefined) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: noKindRefusal(obj) });

@@ -204,7 +204,7 @@
   },
   "src/verdict/predicate.ts": {
     "curly": {
-      "count": 13
+      "count": 11
     }
   },
   "src/verdict/run-context.ts": {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TOOLS } from './tools.js';
+import { isPredicateParam } from '@reticlehq/engine/question/predicate/predicate-eval.js';
 
 /**
  * A parameter that ADVERTISES a vocabulary must ENFORCE it.
@@ -26,6 +27,11 @@ describe('no tool parameter advertises a vocabulary it does not enforce', () => 
   const offenders = TOOLS.flatMap((tool) =>
     Object.entries(tool.inputSchema ?? {})
       .filter(([, schema]) => {
+        // A predicate's vocabulary is its `kind`, which the strict union enforces. A bare string is
+        // not out of that vocabulary: it is the visible-text form, and it is reported in `normalized`.
+        if (isPredicateParam(schema)) {
+          return false;
+        }
         const described = schema?.description ?? '';
         if (!ADVERTISES_VOCABULARY.test(described)) return false;
         return true === schema?.safeParse(OUT_OF_VOCABULARY).success;
