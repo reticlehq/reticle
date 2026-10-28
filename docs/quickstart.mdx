@@ -1,11 +1,11 @@
 ---
 title: 'Quickstart: proof in five minutes'
 sidebarTitle: Quickstart
-description: Install Reticle, connect your coding agent, and get a real verdict with evidence in about five minutes.
+description: Check your app with one command, connect your coding agent, and get a real verdict with evidence in about five minutes.
 icon: rocket
 ---
 
-**Run the installer once per machine, then `reticle init` once per project. The dashboard (`reticle connect`) is optional.** Skip `init` and your agent can still check the app with the zero-install lease, and it asks you before it wires the app. Reticle embeds a dev-only SDK in your running app and proves a browser session connected. No account needed for steps 1 and 2.
+**Start with one command in your app's folder: `npx @reticlehq/server`.** It checks the running app with nothing installed and prints a verdict. Then `npx @reticlehq/server init`, once per project, connects your coding agent. The dashboard (`reticle connect`) is optional. No account is needed for steps 1 and 2.
 
 By the end of this page your agent will click a button in your app and prove what happened: the request that fired, the state that changed, and the file to open if it didn't.
 
@@ -18,52 +18,47 @@ By the end of this page your agent will click a button in your app and prove wha
 
 - Node 20.11 or newer
 - A web app you can run locally, and its dev server
-- A coding agent that speaks MCP (Claude Code, Cursor, Codex, OpenCode, Windsurf, VS Code)
+- For step 2, a coding agent that speaks MCP (Claude Code, Cursor, Codex, OpenCode, Windsurf, VS Code)
 
-## Step 1. Install it on this machine
+## Step 1. Check your app, with nothing installed
 
-In a terminal, before you open your coding agent:
-
-<CodeGroup>
-
-```bash macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh
-```
-
-```powershell Windows
-irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex
-```
-
-</CodeGroup>
-
-This puts `reticle` on your PATH and registers the MCP server with every coding agent it can reach: Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue and Factory Droid. Nothing is asked. It does not wire your app, and says so: that is step 2. Want a verdict first? Signed in, `reticle try <url>` drives a URL once in a window you watch.
-
-Codex CLI keeps a TOML config. With the `codex` command installed, the installer registers Reticle through `codex mcp add`. Without it, the installer prints the lines to paste and the file to paste them into. Reticle then adds one line, `default_tools_approval_mode = "approve"`, under `[mcp_servers.reticle]` in `~/.codex/config.toml`. This line approves Reticle's own tools, so Codex does not ask before each call. Reticle changes no other line, and it keeps a mode that you set. To undo it, change that line to `default_tools_approval_mode = "prompt"`. Reticle does not change a mode that is already there.
-
-<Note>
-  **Run this before opening your agent, and there is nothing to restart.** A coding agent reads its
-  MCP server list once at startup. Install while it is closed and the tools are simply there when
-  you open it. If it was already open, quit and reopen it once.
-</Note>
-
-Prefer not to pipe a script into a shell? The same result by hand:
+In your app's folder:
 
 ```bash
-npm install -g @reticlehq/server
-npx @reticlehq/server setup mcp
+cd path/to/your-app
+npx @reticlehq/server
 ```
 
-## Step 2. Wire this project
+It finds your app's dev server. If the app does not run, it starts the dev script, and it stops that server at the end. It opens the app in a Reticle browser and installs nothing in your app. It checks that the page loads, that there is no console error and no failed request, and that each same-origin link opens (8 at most). On a small app with two links, it printed:
 
-In your project directory, before opening your coding agent:
+```text
+Starting your dev server: npm run dev
+Reticle is checking http://localhost:58440/. It installs nothing in your app.
+  ✓ The page loads.
+  ✓ No console error.
+  ✓ No failed request.
+  ✓ 2 of 2 link(s) opened with no fault.
+```
+
+Then the verdict line, `verified: yes` with the URL it checked, and the next step, `npx @reticlehq/server init`. A fault gives `verified: no`, and one `✗` line for each fault, for example `✗ Failed request on /broken: GET http://localhost:58473/api/missing: HTTP 404`. The command exits 0 only on `yes`. When the app sends the page to a sign-in page, Reticle verifies up to there and says so.
+
+<Note>
+  **Not in the app's folder?** It checks the one dev server that runs on this computer. When several
+  run, it names them and does not choose. In a folder that `init` already wired, the same command
+  starts the Reticle server (`reticle serve`) instead.
+</Note>
+
+## Step 2. Connect your coding agent
+
+In the same folder, before you open your coding agent, run the command that step 1 printed:
 
 ```bash
 RETICLE_INSTALL_SOURCE=docs_site npx @reticlehq/server init
 ```
 
-This installs the dev-only SDK, wires your build config, starts the dev server, and checks that a browser session connected. Nothing from your project leaves your machine. If your dev server was already running, restart it once and hard-reload the tab: it read your build config before `init` edited it. Open your coding agent once this command finishes; if it was already open during installation, restart it to load the new tools. The `RETICLE_INSTALL_SOURCE` prefix is optional and only tells us which page you installed from. It is idempotent: run it twice and the second run reports what was already done rather than doing it again.
+This installs the dev-only SDK, wires your build config, and registers Reticle with every coding agent it finds on this machine. Then it starts the dev server and checks that a browser session connected. Nothing from your project leaves your machine. If your dev server was already running, restart it once and hard-reload the tab: it read your build config before `init` edited it. Open your coding agent once this command finishes. If it was open while `init` ran, restart it once: a coding agent reads its MCP server list only when it starts. The `RETICLE_INSTALL_SOURCE` prefix is optional and only tells us which page you installed from. It is idempotent: run it twice and the second run reports what was already done rather than doing it again.
 
-Step 1 is once per machine. This step is once per project. **Skipping it is a common reason Reticle "does nothing":** the agent has the tools, but there is no app on the other end for them to see.
+This step is once per project. **Skipping it is a common reason Reticle "does nothing":** the agent has no tools, or no app on the other end for them to see.
 
 <Note>
   **Skipped this step?** Ask your agent to verify something in the app. Its first `reticle_session`
@@ -72,21 +67,6 @@ Step 1 is once per machine. This step is once per project. **Skipping it is a co
   before it runs `init`. This works in Claude Code, Codex, Cursor and other MCP agents, including a
   second project while Reticle is already running for another one.
 </Note>
-
-Prefer to install the skill and let the agent run setup itself? On Claude Code the plugin registers the MCP server and the skill in one step:
-
-```text
-/plugin marketplace add reticlehq/reticle
-/plugin install reticle@reticlehq
-```
-
-On Cursor, Codex, Copilot, Gemini and anything else the skills CLI supports:
-
-```bash
-npx skills add reticlehq/reticle --skill reticle
-```
-
-Then type `/reticle` and the agent runs the install from the skill.
 
 Useful flags for the local-only `reticle init` path:
 
@@ -109,6 +89,44 @@ Start with `reticle init --dry-run` if you want to see the app changes before an
 </Tip>
 
 Prefer to wire it yourself? See [Manual install](/install-manual). It is about ten lines, and worth reading once even if you let the agent do it, because it explains what the agent actually changed.
+
+### Other ways to connect your agent
+
+**On Claude Code, the plugin** registers the MCP server and the skill in one step. Type `/reload-plugins` after the install and the tools load in the open session:
+
+```text
+/plugin marketplace add reticlehq/reticle
+/plugin install reticle@reticlehq
+```
+
+**On Cursor, Codex, Copilot, Gemini** and anything else the skills CLI supports, add the skill, then type `/reticle` and the agent runs the setup from the skill:
+
+```bash
+npx skills add reticlehq/reticle --skill reticle
+```
+
+**The installer** puts `reticle` on your PATH once per machine and registers the MCP server with every coding agent it can reach: Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue and Factory Droid. It asks no questions and does not wire your app. Run it before you open your coding agent:
+
+<CodeGroup>
+
+```bash macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh
+```
+
+```powershell Windows
+irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex
+```
+
+</CodeGroup>
+
+Prefer not to pipe a script into a shell? The same result by hand:
+
+```bash
+npm install -g @reticlehq/server
+npx @reticlehq/server setup mcp
+```
+
+Codex CLI keeps a TOML config. With the `codex` command installed, the installer registers Reticle through `codex mcp add`. Without it, the installer prints the lines to paste and the file to paste them into. Reticle then adds one line, `default_tools_approval_mode = "approve"`, under `[mcp_servers.reticle]` in `~/.codex/config.toml`. This line approves Reticle's own tools, so Codex does not ask before each call. Reticle changes no other line, and it keeps a mode that you set. To undo it, change that line to `default_tools_approval_mode = "prompt"`. Reticle does not change a mode that is already there.
 
 ## Step 3. Connect the dashboard (optional)
 
@@ -272,10 +290,11 @@ That third state is the one that matters. Most tools have two outcomes and quiet
 
 <AccordionGroup>
   <Accordion title="How long does it actually take to install Reticle?">
-    Two commands, and no restart if you run them in order. The installer registers the MCP server
-    with every agent on the machine, so opening your agent afterwards is all that is needed. Then
-    `npx @reticlehq/server init` wires the project, starts your dev server and opens the app for you. The MCP
-    registration is global, so every later project starts with the tools already there.
+    Two commands in your app's folder. `npx @reticlehq/server` gives a first verdict with nothing
+    installed. Then `npx @reticlehq/server init` wires the project, registers Reticle with every
+    coding agent on the machine, starts your dev server and opens the app for you. Run them before
+    you open your agent, and it needs no restart. For most agents the MCP registration is global, so
+    a later project starts with the tools already there.
   </Accordion>
 
 <Accordion title="Do I need to write tests or learn a query syntax?">

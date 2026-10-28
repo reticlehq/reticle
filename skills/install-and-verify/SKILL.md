@@ -12,30 +12,31 @@ metadata:
 
 Reticle is the proof layer for AI coding agents. A dev-only SDK inside the user's running app gives you `reticle_*` MCP tools that read the DOM, network, routing, console and framework state. You act on the real app and get a verdict: `yes`, `no`, or `unknown` (could not tell), with evidence and the `file:line` to open. No screenshots: it drives the tab the user already has open.
 
-**Your first goal: one real verdict in the user's app.** Do the three steps in order. Do not stop to explain Reticle first.
+**Your first goal: one real verdict in the user's app.** Do the steps in order. Do not stop to explain Reticle first.
 
-## 1. Install (once per machine)
+## 1. Check the app, with nothing installed
 
-**`reticle_*` tools visible?** Go to step 2.
+**`reticle_*` tools visible?** Call `reticle_session { action: "list" }`. It changes no file. On a wired project, go to step 3. On a project that is not wired, its `next_step` names the zero-install lease and asks the consent question for `init`.
 
-**Not visible?** Hand the user one line for a terminal, outside this client, and stop:
+**No tools, or an app with no `.reticle.json`?** Run this in the app's folder. It changes no file:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh
-irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex   # Windows
+npx @reticlehq/server@latest
 ```
 
-It registers Reticle with every coding agent it finds and prints the next steps: restart the agent (a client loads MCP servers only at start, so a prompt cannot replace this command), then paste the prompt it printed. Do not register the server yourself and work around your client not having reloaded. If your client did register mid-session, `npx @reticlehq/server init --relaunch` prints the command that resumes this conversation with the tools.
+It starts the dev server if the app does not run, opens the app in a Reticle browser and checks it: the page loads, no console error, no failed request, and each same-origin link opens. It prints `verified: yes` or `verified: no` with each fault. Show the user that verdict, then offer `init`.
 
 ## 2. Wire this app (once per project)
 
-In the project, call `reticle_session { action: "list" }`. It changes no file. On a project that is not wired, its `next_step` asks the consent question for `init`. When an app is running, it also names the zero-install lease, which checks that app now with nothing installed. `init` changes files, so run it only when the user agrees. A request to set up Reticle is that agreement. Run it in the app's folder:
+`init` changes files, so run it only when the user agrees. A request to set up Reticle is that agreement. Run it in the app's folder:
 
 ```bash
 RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init
 ```
 
-A dev server that was running when `init` ran must be restarted once. If `init` cannot finish alone, read SETUP below.
+It registers Reticle with every coding agent it finds. A dev server that was running when `init` ran must be restarted once. If `init` cannot finish alone, read SETUP below.
+
+**Still no `reticle_*` tools?** A client loads MCP servers only at start, so a prompt cannot add them. `npx @reticlehq/server init --relaunch` prints the command that resumes this conversation with the tools. Else ask the user to restart the agent. Do not register the server yourself and work around your client not having reloaded.
 
 ## 3. Prove one flow
 

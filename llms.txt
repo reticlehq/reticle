@@ -141,33 +141,38 @@ Svelte stores, Pinia. Anything else works through the generic `pushStore`.
 
 ## How it's used (four ways)
 
-1. **Agent, on your own app (the default).** Four steps, in this order: install (once per machine), `reticle init` (once per project), then optionally `reticle connect` and `reticle sync`.
+1. **Agent, on your own app (the default).** Start with ONE command in the app's folder:
+   `npx @reticlehq/server` (no arguments). In a folder that Reticle has not wired, it finds the app's
+   dev server (it starts the dev script if the app does not run, and stops it at the end), opens the
+   app in a Reticle browser with nothing installed, and runs a smoke check: the page loads, no
+   console error, no failed request, and each same-origin link opens (8 at most). It prints
+   `verified: yes` or `verified: no` with each fault, exits 0 only on `yes`, and then prints the next
+   step: `npx @reticlehq/server init`. In a folder that `init` wired, the bare command is
+   `reticle serve`.
 
-   First, ONCE PER MACHINE, in a terminal before any coding agent is open:
-   `curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh`
-   (`irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex` on
-   Windows). That installs the CLI and registers the MCP server with every coding agent it can reach,
-   so the `reticle_*` tools are present the next time one starts. A coding agent reads its MCP server
-   list once at startup, so installing while it is closed is what removes the restart: registering
-   from inside a running agent cannot make the tools appear until it comes back, which strands the
-   setup half-done. Codex CLI keeps a TOML config Reticle will not rewrite, and the installer prints
-   the lines to paste instead of claiming it registered.
+   Then, ONCE PER PROJECT, in the same folder: `npx @reticlehq/server init`. It installs the
+   dev-only SDK, wires the build config, registers the MCP server with every coding agent it finds,
+   starts the dev server if none is running and opens the app to prove a session connected. A dev
+   server that was already running must be restarted once: it read the build config before `init`
+   edited it. A coding agent reads its MCP server list once at startup, so run `init` before you open
+   the agent, or restart the agent once after it. Skip `init` and the agent checks the app with the
+   zero-install lease, and asks before it runs `init`. A session listed means the SDK reached the
+   page. Setup is finished when the first run returns a verdict.
 
-   Then, ONCE PER PROJECT, in the repo: `npx @reticlehq/server init`. This is the per-project step in
-   the sense `npm init` is: it installs the dev-only SDK, wires the build config, starts the dev
-   server if none is running and opens the app to prove a session connected. A dev server that was
-   already running must be restarted once: it read the build config before `init` edited it. Skip
-   this step and the agent checks the app with the zero-install lease, and asks before it runs
-   `init`. A session listed
-   means the SDK reached the page. Setup is finished when the first run returns a verdict.
+   Other ways to connect the agent: on Claude Code the plugin registers the tools and the skill
+   (`/plugin marketplace add reticlehq/reticle`, then `/plugin install reticle@reticlehq`, then
+   `/reload-plugins`). For other agents the skills CLI works:
+   `npx skills add reticlehq/reticle --skill reticle`. The installer
+   (`curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh`,
+   or `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex` on
+   Windows) puts `reticle` on PATH once per machine and registers the MCP server with every coding
+   agent it can reach. Codex CLI keeps a TOML config, and without the `codex` command the installer
+   prints the lines to paste instead of claiming it registered.
 
    Optional, for the dashboard: `reticle connect` wires the app if needed, signs you in in the
    browser (or creates a free account), links the folder to a project (creating it if missing) and
    sends local history. `reticle sync` sends what has not synced yet.
 
-   On Claude Code the plugin does the machine step and the skill together:
-   `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq`.
-   For other agents the skills CLI works: `npx skills add reticlehq/reticle --skill reticle`.
 2. **One-shot CLI / CI.** `reticle verify <preview-url>` drives the app, replays the saved flows, prints
    the verdict, exits non-zero on fail. No MCP, no human — ideal for CI or an AI app-builder pipeline.
 3. **HTTP from a pipeline.** `reticle serve --http` exposes `POST /verify` returning the same artifact.
@@ -349,11 +354,13 @@ package that re-exports the others) ·
   state, network cardinality, signals, console — and re-runs a flow deterministically with no LLM, so
   a regression suite is flake-free and ~100–2500× cheaper per run. Use Playwright/DevTools for
   out-of-app browser automation; use Reticle to verify *your own* running app's program truth.
-- **Setup effort:** one line pasted to the agent; the agent wires it. Layer-1 value in ~15 minutes.
+- **Setup effort:** one command in the app's folder for a first verdict, then `init` to connect the
+  agent. Layer-1 value in ~15 minutes.
 - **Is my data safe?** Your app's data stays on your machine — dev-only and localhost-only by default, and nothing
   from the app under test is sent. Anonymous usage counts (no app data) are sent by default, and
   `reticle telemetry disable` turns them off for good.
 - **Can it do security / accessibility / performance / SEO checks?** Yes, for the behaviour inside your
   own running app — see "What people use Reticle for" above and https://docs.reticle.sh/use-cases. It
   complements a vulnerability scanner, a WCAG audit tool and an SEO crawler rather than replacing them.
-- **Get started:** paste the skill URL above to your agent, or `npx @reticlehq/server init`.
+- **Get started:** in the app's folder, `npx @reticlehq/server` gives a verdict with nothing
+  installed. Then `npx @reticlehq/server init` connects your coding agent.
