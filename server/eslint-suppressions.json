@@ -1062,11 +1062,6 @@
       "count": 8
     }
   },
-  "src/guards/docs/layout-map-is-real.test.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/guards/harness/bench-scenarios-live.test.ts": {
     "curly": {
       "count": 12

@@ -156,8 +156,17 @@ describe('the map at the top of AGENTS.md', () => {
     const missing: string[] = [];
     for (const manifest of trackedManifests()) {
       const dir = manifest.replace('/package.json', '');
-      if (dir.startsWith('apps/')) continue;
-      if (!mapped.has(dir)) missing.push(dir);
+      if (dir.startsWith('apps/')) {
+        continue;
+      }
+      // A manifest with no name only sets the module type of its folder (`server/bin`). It is
+      // not a package.
+      const named = (
+        JSON.parse(readFileSync(join(REPO_ROOT, manifest), 'utf8')) as { name?: unknown }
+      ).name;
+      if (named !== undefined && !mapped.has(dir)) {
+        missing.push(dir);
+      }
     }
     expect(
       missing.sort(),
