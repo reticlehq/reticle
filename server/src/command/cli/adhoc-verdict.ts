@@ -87,6 +87,15 @@ const LEASE_TIMEOUT_MS = 300_000;
 const leaseFailedLine = (url: string): string =>
   `could not open ${url} in a Reticle browser, so nothing was checked:`;
 
+/** Why a lease's tab is not ready: its `notReadyReason`, then its `hint`, when it gave them. */
+function notReadyLine(report: Record<string, unknown> | undefined): string {
+  const reason = asText(report?.['notReadyReason']);
+  const hint = asText(report?.['hint']);
+  const head =
+    reason === undefined ? 'the tab did not connect.' : `the tab did not connect (${reason}).`;
+  return hint === undefined ? head : `${head} ${hint}`;
+}
+
 /**
  * Open `url` in a Reticle-leased browser when the daemon has no tab on its origin.
  *
@@ -174,6 +183,12 @@ export async function acquireLease(
   );
   const report = verdictOf(acquired, 'sessionId');
   const sessionId = report?.['sessionId'];
+  // `ready: false` still carries a sessionId, but no session is registered under it. Driving it
+  // answered "names no session" and hid the cause the lease gave. Only an explicit false counts.
+  if ('string' === typeof sessionId && false === report?.['ready']) {
+    await releaseLease(caller, sessionId);
+    return { failed: [leaseFailedLine(url), notReadyLine(report)] };
+  }
   // `zeroInstall`: the page never dialled in, so the lease supplied Reticle's own reader.
   if ('string' === typeof sessionId) {
     return { leased: sessionId, zeroInstall: true === report?.['zeroInstall'] };

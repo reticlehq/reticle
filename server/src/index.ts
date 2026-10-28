@@ -260,6 +260,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     options,
     () => bridge.close(),
     routeNetworkDetail,
+    readerConnect(port, security.token),
   );
 
   let chatDrives: { stop: () => void } | undefined;
@@ -483,6 +484,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     options,
     () => shared.close(),
     makeNetworkDetailRouter(bridge, options.driveUrl),
+    readerConnect(port, security.token),
   );
 
   const fs = createNodeFileSystem();

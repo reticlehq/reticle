@@ -24,7 +24,7 @@
  * returned unchanged.
  */
 import { FlowStore } from './flows.js';
-import { sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
+import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import type { ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
@@ -32,19 +32,21 @@ export function flowsForSession(
   deps: ToolDeps,
   target: ProjectTarget,
 ): { flows: FlowStore; root: string } {
-  const resolved = deps.artifactRootFor?.(target.projectId, target.origin);
-  if (resolved === undefined || resolved.root === deps.reticleRoot) {
+  // Through `rootForTarget`, so the root a lease claimed wins here as it does for runs. Without
+  // it a lease from one folder replayed the flows of the folder the daemon was started in.
+  const root = rootForTarget(deps, target);
+  if (root === deps.reticleRoot) {
     return { flows: deps.flows, root: deps.reticleRoot };
   }
   const onWrote = deps.onRunPersisted;
   return {
     flows: new FlowStore(
       deps.fs,
-      resolved.root,
+      root,
       { now: deps.now },
       onWrote === undefined ? {} : { onWrote },
     ),
-    root: resolved.root,
+    root,
   };
 }
 

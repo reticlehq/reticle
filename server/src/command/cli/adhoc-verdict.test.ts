@@ -357,6 +357,63 @@ describe('a lease that had to supply its own reader', () => {
 });
 
 /*
+ * `reticle verify <url>` on an app whose tab never connected (a page CSP blocked the reader's
+ * socket) answered `sessionId 'lease-…' names no session`. The lease said `ready: false` with the
+ * cause, and the CLI ignored it and drove the dead id. A tab that is not ready is a failed open.
+ */
+describe('a lease whose tab is not ready', () => {
+  const acquiring = (report: Record<string, unknown>) => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const tool: ToolCaller = {
+      call: (name, args) => {
+        calls.push({ name, args });
+        return Promise.resolve({ structuredContent: report });
+      },
+      close: () => Promise.resolve(),
+    };
+    return { calls, tool };
+  };
+  const notReady = {
+    sessionId: 'lease-1',
+    ready: false,
+    notReadyReason: 'sdk-never-dialled',
+    hint: 'The page did not connect to the bridge.',
+  };
+
+  it('is a failed open that gives the reason and the hint, not a lease id', async () => {
+    const c = acquiring(notReady);
+    const got = await acquireLease(c.tool, 'http://localhost:5190/');
+    expect(got).toEqual({
+      failed: [
+        'could not open http://localhost:5190/ in a Reticle browser, so nothing was checked:',
+        'the tab did not connect (sdk-never-dialled). The page did not connect to the bridge.',
+      ],
+    });
+  });
+
+  it('releases the lease it opened', async () => {
+    const c = acquiring(notReady);
+    await acquireLease(c.tool, 'http://localhost:5190/');
+    const last = c.calls.at(-1)?.args;
+    expect((last?.['args'] as Record<string, unknown> | undefined)?.['action']).toBe('release');
+    expect((last?.['args'] as Record<string, unknown> | undefined)?.['sessionId']).toBe('lease-1');
+  });
+
+  it('stops a one-shot verdict before it asserts on a session that is not there', async () => {
+    const c = acquiring(notReady);
+    const result = await runAdhocVerdict({
+      port: 4400,
+      url: 'http://localhost:5190/',
+      predicate: { kind: 'text', contains: 'x' },
+      connect: () => Promise.resolve(c.tool),
+      sessions: () => Promise.resolve([]),
+    });
+    expect(result.code).toBe(1);
+    expect(c.calls.map((x) => x.name)).not.toContain(ReticleTool.ASSERT);
+  });
+});
+
+/*
  * `reticle try` and the ad-hoc suite want the finished report, and an explore now answers
  * `running` when its drive outlasts the call. Asking again by run id is the only way to get it
  * without paying for a second drive.

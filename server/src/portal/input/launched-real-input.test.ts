@@ -24,6 +24,8 @@ interface FakePageState {
   waitForFunctionThrows?: boolean;
   viewport?: { width: number; height: number };
   routes?: string[];
+  /** Scripts the provider asked to run on every later document of the page. */
+  initScripts?: string[];
   /** The human closed the window, or Chromium died. Playwright keeps answering `url()` either way. */
   closed?: boolean;
 }
@@ -57,6 +59,10 @@ function fakePage(state: FakePageState): unknown {
     evaluate: (arg: unknown) => {
       state.evalCalls.push(String(arg));
       return Promise.resolve(null);
+    },
+    addInitScript: (script: unknown) => {
+      state.initScripts = [...(state.initScripts ?? []), String(script)];
+      return Promise.resolve();
     },
     mouse: {
       move: (x: number, y: number) => {
@@ -148,6 +154,7 @@ function makeProvider(
     headless?: boolean;
     injectConnect?: { token: string; url: string };
     storageState?: string;
+    zeroInstallScript?: () => string | undefined;
   } = {},
 ): LaunchedRealInputProvider {
   return new LaunchedRealInputProvider({
@@ -157,6 +164,7 @@ function makeProvider(
     sleep: () => Promise.resolve(),
     ...(opts.injectConnect !== undefined ? { injectConnect: opts.injectConnect } : {}),
     ...(opts.storageState !== undefined ? { storageState: opts.storageState } : {}),
+    ...(opts.zeroInstallScript !== undefined ? { zeroInstallScript: opts.zeroInstallScript } : {}),
   });
 }
 
@@ -245,6 +253,50 @@ describe('LaunchedRealInputProvider', () => {
     });
     await expect(provider.navigate()).resolves.toBeUndefined();
     expect(spy.state.page.evalCalls).toEqual([]);
+  });
+
+  /*
+   * `reticle verify <url>` with no daemon on the port, on an app with no Reticle SDK, answered
+   * "No app connected": this provider opened the page and waited for an SDK that was not there.
+   * A leased tab gets Reticle's own reader in that case, and so does this page now.
+   */
+  describe('a page with no Reticle SDK', () => {
+    const READER = 'reader-script';
+    const noSdk = (): LaunchSpy =>
+      newSpy({
+        state: {
+          closeCalls: 0,
+          page: {
+            url: DRIVE_URL,
+            gotoCalls: [],
+            mouse: [],
+            evalCalls: [],
+            waitForFunctionCalls: 0,
+            waitForFunctionThrows: true,
+          },
+        },
+      });
+
+    it('gets the zero-install reader, now and on every later document', async () => {
+      const spy = noSdk();
+      await makeProvider(spy, { zeroInstallScript: () => READER }).navigate();
+      expect(spy.state.page.initScripts).toEqual([READER]);
+      expect(spy.state.page.evalCalls).toEqual([READER]);
+    });
+
+    it('is left alone when the page loads its own SDK', async () => {
+      const spy = newSpy();
+      await makeProvider(spy, { zeroInstallScript: () => READER }).navigate();
+      expect(spy.state.page.initScripts).toBeUndefined();
+      expect(spy.state.page.evalCalls).toEqual([]);
+    });
+
+    it('is left alone when this install has no reader', async () => {
+      const spy = noSdk();
+      await makeProvider(spy, { zeroInstallScript: () => undefined }).navigate();
+      expect(spy.state.page.initScripts).toBeUndefined();
+      expect(spy.state.page.waitForFunctionCalls).toBe(0);
+    });
   });
 
   it('isAvailableFor returns true for the launched page url', async () => {

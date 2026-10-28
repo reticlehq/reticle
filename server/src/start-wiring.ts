@@ -45,6 +45,21 @@ export function readerConnect(port: number, token: string | undefined): Injected
   return { url: bridgeWsUrl(port), ...(token === undefined ? {} : { token }) };
 }
 
+/**
+ * The zero-install script for pages that connect to `reader`, built on first use and kept: the
+ * page that needs it is one whose app never connected. Undefined when this install has no reader.
+ */
+export function zeroInstallLoader(reader: InjectedConnect): () => string | undefined {
+  let script: string | null | undefined;
+  return () => {
+    if (script === undefined) {
+      const bundle = readReaderBundle();
+      script = bundle === undefined ? null : zeroInstallScriptFor(bundle, reader);
+    }
+    return script ?? undefined;
+  };
+}
+
 export function createBrowserPool(headless: boolean, reader: InjectedConnect): BrowserPool {
   const maxContexts = resolveMaxContexts(process.env[ReticleEnv.MAX_CONTEXTS], cpus().length);
   const genSessionId = (): string =>
@@ -53,19 +68,10 @@ export function createBrowserPool(headless: boolean, reader: InjectedConnect): B
         ? globalThis.crypto.randomUUID()
         : String(Date.now())
     }`;
-  // Built on first use and kept: the page that needs it is one whose app never connected.
-  let script: string | null | undefined;
-  const zeroInstallScript = (): string | undefined => {
-    if (script === undefined) {
-      const bundle = readReaderBundle();
-      script = bundle === undefined ? null : zeroInstallScriptFor(bundle, reader);
-    }
-    return script ?? undefined;
-  };
   return new BrowserPool(playwrightLauncher({ headless }), {
     maxContexts,
     genSessionId,
-    zeroInstallScript,
+    zeroInstallScript: zeroInstallLoader(reader),
     launchHeaded: playwrightLauncher({ headless: false }),
   });
 }
@@ -121,6 +127,8 @@ export async function resolveRealInput(
   options: StartOptions,
   onNavigateError: () => Promise<void>,
   onNetworkDetail?: (detail: NetworkDetail) => void,
+  /** Where a driven page with no SDK connects the zero-install reader. Absent: it gets none. */
+  reader?: InjectedConnect,
 ): Promise<{ realInput?: RealInputProvider; owned?: { dispose: () => Promise<void> } }> {
   const driveUrl = options.driveUrl;
   if (driveUrl !== undefined && driveUrl.length > 0) {
@@ -139,6 +147,7 @@ export async function resolveRealInput(
           ...(injectConnect !== undefined ? { injectConnect } : {}),
           ...(storageState !== undefined ? { storageState } : {}),
           ...(onNetworkDetail !== undefined ? { onNetworkDetail } : {}),
+          ...(reader !== undefined ? { zeroInstallScript: zeroInstallLoader(reader) } : {}),
         }));
     const launched = factory({ driveUrl, headless });
     try {

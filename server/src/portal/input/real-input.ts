@@ -615,9 +615,16 @@ export interface LaunchedProviderOptions {
    * inside-app view never loses fidelity to the outside-in view. Omitted → no network detail captured.
    */
   onNetworkDetail?: (detail: NetworkDetail) => void;
+  /**
+   * Reticle's own reader for a page with no SDK, as the lease pool gives one (see zero-install.ts).
+   * Undefined, or a loader that answers undefined, leaves such a page with no session.
+   */
+  zeroInstallScript?: () => string | undefined;
 }
 
 const INJECT_CONNECT_WAIT_MS = 8_000;
+/** True on a page whose Reticle SDK has loaded. */
+const SDK_PRESENT = '!!globalThis.__reticleInstance';
 
 /** The only place the dynamic value import of Playwright lives for the launched (drive) path. */
 export const launchedChromium: LaunchFn = async (headless) => {
@@ -652,6 +659,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #injectConnect: InjectConnectOptions | undefined;
   readonly #storageState: string | undefined;
   readonly #onNetworkDetail: ((detail: NetworkDetail) => void) | undefined;
+  readonly #zeroInstallScript: (() => string | undefined) | undefined;
   #browser: Browser | undefined;
   #page: Page | undefined;
   /** Pages collecting V8 coverage — see js-coverage.ts. */
@@ -666,6 +674,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     this.#injectConnect = options.injectConnect;
     this.#storageState = options.storageState;
     this.#onNetworkDetail = options.onNetworkDetail;
+    this.#zeroInstallScript = options.zeroInstallScript;
   }
 
   async navigate(): Promise<void> {
@@ -693,7 +702,33 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
         e instanceof Error ? e.message : String(e),
       );
     }
+    await this.#supplyReader(page);
     await this.#tryInjectConnect(page);
+  }
+
+  /**
+   * Give a page with no Reticle SDK the zero-install reader, so `verify` on an app with no `init`
+   * still gets a session. The wait for the page's own SDK comes first, as on a leased tab, and the
+   * script checks the singleton, so a page with an SDK never gets a second one.
+   */
+  async #supplyReader(page: Page): Promise<void> {
+    const script = this.#zeroInstallScript?.();
+    if (script === undefined) {
+      return;
+    }
+    try {
+      await page.waitForFunction(SDK_PRESENT, { timeout: INJECT_CONNECT_WAIT_MS });
+      return;
+    } catch {
+      // No SDK on the page: supply the reader below.
+    }
+    try {
+      // Also on every later document, so a full navigation keeps the session.
+      await page.addInitScript(script);
+      await page.evaluate(script);
+    } catch {
+      // A page that refuses the reader has no session. verify's no-session guard reports it.
+    }
   }
 
   /**
@@ -707,7 +742,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
       return;
     }
     try {
-      await page.waitForFunction('!!globalThis.__reticleInstance', {
+      await page.waitForFunction(SDK_PRESENT, {
         timeout: INJECT_CONNECT_WAIT_MS,
       });
       const arg = JSON.stringify(injectedConnectArgs(opts));
