@@ -8,7 +8,14 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { claudeAvailableProbe, codexAvailableProbe, probeCli } from '@reticlehq/init';
+import {
+  claudeAvailableProbe,
+  claudeStaleEntryNote,
+  claudeUserEntryIsFloating,
+  codexAvailableProbe,
+  probeCli,
+} from '@reticlehq/init';
+import { mcpLauncher } from '@/command/setup/mcp-launcher.js';
 import { isAlive, readPid, removePid } from '@/command/daemon/daemon.js';
 import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
@@ -140,7 +147,7 @@ export function launcherRepair(deps: {
   let step = SETUP_MCP_COMMAND;
   return {
     row: DoctorRow.LAUNCHER,
-    what: 'a registered launcher that does not exist',
+    what: 'a registered launcher that does not exist or has no version',
     // The step is read after `needed`, which reads the row again.
     get step() {
       return step;
@@ -163,22 +170,21 @@ export function launcherRepair(deps: {
 
 /** The launcher row for the agent configs of this machine and folder. */
 export function readLauncherLine(cwd: string): string | undefined {
+  const io = {
+    exists: existsSync,
+    homeDir: homedir,
+    readFile: (p: string): string | null => {
+      try {
+        return readFileSync(p, 'utf8');
+      } catch {
+        return null;
+      }
+    },
+  };
   return launcherLine(
-    registeredEntries(
-      {
-        exists: existsSync,
-        homeDir: homedir,
-        readFile: (p) => {
-          try {
-            return readFileSync(p, 'utf8');
-          } catch {
-            return null;
-          }
-        },
-      },
-      cwd,
-    ),
+    registeredEntries(io, cwd),
     existsSync,
+    claudeUserEntryIsFloating(io) ? claudeStaleEntryNote(mcpLauncher()) : undefined,
   );
 }
 

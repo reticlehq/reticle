@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
+import { claudeAddCommand, claudeStaleEntryNote } from '@reticlehq/init';
 import { parseCliArgs } from '../cli-parse.js';
 import { PortPresence } from '@/command/daemon/binding/port-presence.js';
 import { DoctorRow, doctorRow } from './doctor-rows.js';
@@ -312,8 +313,22 @@ describe('launcherRepair', () => {
     expect(out).toContain(
       doctorRow(
         DoctorRow.LAUNCHER,
-        'a registered launcher that does not exist: still needs: claude mcp remove reticle -s user, then npx @reticlehq/server setup mcp',
+        'a registered launcher that does not exist or has no version: still needs: claude mcp remove reticle -s user, then npx @reticlehq/server setup mcp',
       ),
+    );
+  });
+
+  it('prints the remove-then-add step for a floating Claude Code entry, and removes nothing', async () => {
+    const out: string[] = [];
+    const stale = `✗ claude-code: ${claudeStaleEntryNote(undefined)}`;
+    const repair = launcherRepair({ line: () => stale, register: () => {} });
+    await runDoctorFix({
+      doctor: () => Promise.resolve([]),
+      repairs: [repair],
+      print: (text: string) => out.push(text),
+    });
+    expect(out.join('\n')).toContain(
+      `still needs: claude mcp remove reticle -s user, then ${claudeAddCommand(undefined).display}`,
     );
   });
 

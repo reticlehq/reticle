@@ -38,6 +38,7 @@ describe('MCP registration failures reach the user and caller', () => {
       failed: ['claude-code'],
       pluginActive: [],
       duplicates: [],
+      stale: [],
     });
     handleSetupMcp(vi.fn());
     const output = lines.join('');
@@ -56,6 +57,7 @@ describe('MCP registration failures reach the user and caller', () => {
       failed: [],
       pluginActive: [],
       duplicates: [],
+      stale: [],
     });
     handleSetupMcp(vi.fn());
     expect(process.exitCode).toBeUndefined();
@@ -72,6 +74,7 @@ describe('setup mcp names one next step per agent, and waits only for a person',
       failed: [],
       pluginActive: [],
       duplicates: [],
+      stale: [],
     });
     handleSetupMcp(vi.fn());
     const output = lines.join('');
@@ -99,6 +102,7 @@ describe('the Reticle plugin row', () => {
       failed: [],
       pluginActive: ['claude-code'],
       duplicates: [],
+      stale: [],
     });
     expect(handleSetupMcp(vi.fn())).toBe(1);
     const output = lines.join('');
@@ -115,6 +119,7 @@ describe('the Reticle plugin row', () => {
       failed: [],
       pluginActive: ['claude-code'],
       duplicates: ['claude-code'],
+      stale: [],
     });
     handleSetupMcp(vi.fn());
     expect(lines.join('')).toContain(
@@ -133,6 +138,7 @@ describe('setup install prints progress only', () => {
       failed: [],
       pluginActive: [],
       duplicates: [],
+      stale: [],
     });
     handleSetupInstall({ runtimeSecs: 1, installSecs: 1, mcp: true }, vi.fn());
     const output = lines.join('');
@@ -150,18 +156,19 @@ describe('setup install tells the launcher what it found, in one line it strips'
     failed: [],
     pluginActive: [],
     duplicates: [],
+    stale: [],
   });
 
   it('counts the coding agents that have the tools now', () => {
     vi.mocked(setupMcp).mockReturnValue(result(['claude-code'], ['cursor']));
     handleSetupInstall({ runtimeSecs: 1, installSecs: 1, mcp: true }, vi.fn());
-    expect(lines.join('')).toMatch(/^RETICLE_INSTALL agents=2 app=(here|none)$/m);
+    expect(lines.join('')).toMatch(/^RETICLE_INSTALL agents=2 app=(here|none) wait=yes$/m);
   });
 
   it('says zero when no coding agent is on this machine, so the next step is not "restart it"', () => {
     vi.mocked(setupMcp).mockReturnValue({ ...result([]), detected: [] });
     handleSetupInstall({ runtimeSecs: 1, installSecs: 1, mcp: true }, vi.fn());
-    expect(lines.join('')).toMatch(/^RETICLE_INSTALL agents=0 /m);
+    expect(lines.join('')).toMatch(/^RETICLE_INSTALL agents=0 app=(here|none)$/m);
   });
 
   it('says whether the folder it ran in is an app, so the launcher can say "here" or "cd"', () => {
@@ -178,8 +185,8 @@ describe('setup install tells the launcher what it found, in one line it strips'
     }
     const found = lines.join('').match(/^RETICLE_INSTALL .*$/gm);
     expect(found).toEqual([
-      'RETICLE_INSTALL agents=1 app=none',
-      'RETICLE_INSTALL agents=1 app=here',
+      'RETICLE_INSTALL agents=1 app=none wait=yes',
+      'RETICLE_INSTALL agents=1 app=here wait=yes',
     ]);
   });
 });

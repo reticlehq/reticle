@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { AgentClient } from '@reticlehq/core/telemetry';
+import { claudeStaleEntryNote } from '@reticlehq/init';
 import {
   AgentReg,
   agentLines,
@@ -20,7 +21,7 @@ import {
   waitForAgents,
 } from './agent-next-steps.js';
 
-const NO_PLUGIN = { pluginActive: [], duplicates: [] };
+const NO_PLUGIN = { pluginActive: [], duplicates: [], stale: [] };
 
 /** Claude Code through the plugin; Cursor and Codex added. */
 const result = {
@@ -31,6 +32,7 @@ const result = {
   manual: [],
   pluginActive: ['claude-code'],
   duplicates: [],
+  stale: [],
 };
 
 describe('detection becomes one line per agent, with its own next step', () => {
@@ -254,5 +256,57 @@ describe('status rows come from the configs, read only', () => {
       { id: 'claude-code', reg: AgentReg.PLUGIN },
     ]);
     expect(installedAgentRows(io({}), undefined, false)).toEqual([]);
+  });
+});
+
+/**
+ * A user who registered before the pinned entry keeps the floating `npx @reticlehq/server mcp`, and
+ * every run said "already set up". The block now names it as stale with the commands that replace
+ * it. Nothing removes it: a Claude Code entry is changed only by the person.
+ */
+describe('a floating npx entry for Claude Code is named as stale, with the commands that replace it', () => {
+  const LAUNCHER = '/usr/local/lib/node_modules/@reticlehq/server/bin/reticle.js';
+  const floating = JSON.stringify({
+    mcpServers: { reticle: { command: 'npx', args: ['@reticlehq/server', 'mcp'] } },
+  });
+  const io = (claude: string) => ({
+    exists: (p: string) => '/h/.claude.json' === p.replaceAll('\\', '/'),
+    readFile: (p: string) => ('/h/.claude.json' === p.replaceAll('\\', '/') ? claude : null),
+    homeDir: () => '/h',
+  });
+
+  it('prints the stale line under the Claude Code row of a setup run', () => {
+    const lines = agentLines(
+      agentRows(
+        {
+          ...result,
+          ...NO_PLUGIN,
+          detected: ['claude-code'],
+          registered: [],
+          alreadyThere: ['claude-code'],
+          stale: ['claude-code'],
+        },
+        LAUNCHER,
+      ),
+    );
+    const at = lines.indexOf('  Claude Code  already set up');
+    expect(at).toBeGreaterThan(0);
+    expect(lines[at + 1]).toBe(`    ⚠ ${claudeStaleEntryNote(LAUNCHER)}`);
+  });
+
+  it('reads it from the config for status and init', () => {
+    const rows = installedAgentRows(io(floating), undefined, false, '/h', LAUNCHER);
+    expect(rows).toEqual([
+      { id: 'claude-code', reg: AgentReg.ALREADY, stale: claudeStaleEntryNote(LAUNCHER) },
+    ]);
+  });
+
+  it('says nothing for a pinned entry', () => {
+    const pinned = JSON.stringify({
+      mcpServers: { reticle: { command: 'npx', args: ['@reticlehq/server@3.8.0', 'mcp'] } },
+    });
+    expect(installedAgentRows(io(pinned), undefined, false, '/h', LAUNCHER)).toEqual([
+      { id: 'claude-code', reg: AgentReg.ALREADY },
+    ]);
   });
 });

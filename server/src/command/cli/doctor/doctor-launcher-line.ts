@@ -66,10 +66,16 @@ export function registeredEntries(io: ConfigIo, cwd: string): RegisteredEntry[] 
   return [...claude, ...others].filter((e) => e.entry !== undefined);
 }
 
-/** The row text, or undefined when every registered launcher exists. */
+/**
+ * The row text, or undefined when every registered launcher exists and no entry is stale.
+ *
+ * @param floatingNote `claudeStaleEntryNote`, when Claude Code's user-scope entry is the floating
+ *   npx form. `setup mcp` keeps that entry, so the row names the remove-then-add step.
+ */
 export function launcherLine(
   entries: readonly RegisteredEntry[],
   exists: (path: string) => boolean,
+  floatingNote?: string,
 ): string | undefined {
   for (const { client, entry } of entries) {
     const missing = strings(entry).find((s) => isReticleLauncher(s) && !exists(s));
@@ -80,5 +86,5 @@ export function launcherLine(
       McpClient.CLAUDE_CODE === client ? `${CLAUDE_REMOVE}, then ${SETUP_MCP}` : SETUP_MCP;
     return `✗ ${client} starts Reticle from ${missing}, and that file does not exist. Run: ${fix}`;
   }
-  return undefined;
+  return floatingNote === undefined ? undefined : `✗ ${McpClient.CLAUDE_CODE}: ${floatingNote}`;
 }

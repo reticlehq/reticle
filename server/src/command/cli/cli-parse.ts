@@ -75,6 +75,7 @@ const TELEMETRY_COMMAND = 'telemetry';
 const FEEDBACK_COMMAND = 'feedback';
 const DOCTOR_COMMAND = 'doctor';
 const SETUP_COMMAND = 'setup';
+const SETUP_WAIT_AGENTS = 'wait-agents';
 /** `reticle hook`: the agent prompt hook. `cli.ts` runs it before this parser, and before telemetry. */
 export const HOOK_COMMAND = 'hook';
 /** The `reticle telemetry` sub-actions. Bare `reticle telemetry` means `status`. */
@@ -298,6 +299,7 @@ export type CliResult =
   | { kind: 'removed'; message: string }
   | { kind: 'doctor'; port: number; fix: boolean }
   | { kind: 'setup-mcp' }
+  | { kind: 'setup-wait-agents' }
   | { kind: 'setup-install'; runtimeSecs: number; installSecs: number; mcp: boolean }
   | { kind: 'open'; port: number; url?: string; navigate: boolean }
   | {
@@ -776,8 +778,11 @@ export function parseCliArgs(
           mcp: !rest.includes('--no-mcp'),
         };
       }
-      // Only `mcp` today. A bare `reticle setup` falls to help rather than guessing, because the
-      // next subcommand here will not be a synonym for this one.
+      // `setup wait-agents` — the installer's last step: wait for the agents to connect.
+      if (SETUP_WAIT_AGENTS === what) {
+        return { kind: 'setup-wait-agents' };
+      }
+      // A bare `reticle setup` falls to help rather than guessing.
       if (what !== 'mcp') {
         return { kind: 'help', topic: SETUP_COMMAND };
       }

@@ -124,6 +124,8 @@ export interface PlanInput {
   claudePlugin?: boolean | undefined;
   /** A user-scope `reticle` entry exists too. Next to the plugin, that is a duplicate. */
   claudeUserEntry?: boolean | undefined;
+  /** The user-scope `reticle` entry is the floating npx form. Reported, never replaced. */
+  claudeUserEntryFloating?: boolean | undefined;
   /**
    * Whether `init` is running inside Claude Code itself, which is the one case where writing its
    * project-scope `.mcp.json` is known to be wanted. See `CLAUDE_PROJECT_SPEC`.

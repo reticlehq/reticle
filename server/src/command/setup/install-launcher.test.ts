@@ -32,6 +32,18 @@ interface Sandbox {
   shadow?: boolean;
   /** npm fails with this error code (a network or certificate failure). */
   npmError?: string;
+  /** Run under a pseudo-terminal, as a person at a terminal runs it. */
+  tty?: boolean;
+  /** Set `CI`, as a pipeline does. */
+  ci?: boolean;
+}
+
+/** `script` gives the launcher a terminal. The BSD (macOS) and util-linux forms differ. */
+function underTerminal(shell: string): { command: string; args: string[] } {
+  if ('darwin' === process.platform) {
+    return { command: 'script', args: ['-q', '/dev/null', shell, SCRIPT] };
+  }
+  return { command: 'script', args: ['-qec', `'${shell}' '${SCRIPT}'`, '/dev/null'] };
 }
 
 function runInstaller(box: Sandbox): { code: number | null; out: string; home: string } {
@@ -52,6 +64,7 @@ function runInstaller(box: Sandbox): { code: number | null; out: string; home: s
     reticle,
     [
       '#!/bin/sh',
+      'if [ "$1 $2" = "setup wait-agents" ]; then echo "WAIT-AGENTS-RAN"; exit 0; fi',
       'echo "  ✓ claude-code"',
       ...(box.result === undefined ? [] : [`echo "${box.result}"`]),
       'exit 0',
@@ -75,10 +88,14 @@ function runInstaller(box: Sandbox): { code: number | null; out: string; home: s
     true === box.shadow
       ? [bin, join(prefix, 'bin'), '/usr/bin', '/bin']
       : [...(false === box.onPath ? [] : [join(prefix, 'bin')]), bin, '/usr/bin', '/bin'];
-  const r = spawnSync(box.shell ?? '/bin/sh', [SCRIPT], {
+  const shell = box.shell ?? '/bin/sh';
+  const run = true === box.tty ? underTerminal(shell) : { command: shell, args: [SCRIPT] };
+  const r = spawnSync(run.command, run.args, {
     cwd,
     encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
     env: {
+      ...(true === box.ci ? { CI: 'true' } : {}),
       HOME: home,
       PATH: path.join(':'),
       SHELL: '/bin/zsh',
@@ -158,6 +175,26 @@ describe.skipIf('win32' === process.platform)('install.sh', () => {
     expect(older.code).toBe(0);
     expect(older.out).toContain('Restart it');
     expect(older.out).toContain('cd your-app');
+  });
+
+  it('waits for the agents to connect as its last step, at a terminal', () => {
+    const { code, out } = runInstaller({
+      tty: true,
+      result: 'RETICLE_INSTALL agents=1 app=none wait=yes',
+    });
+    expect(code).toBe(0);
+    expect(out).toContain('WAIT-AGENTS-RAN');
+    expect(out.indexOf('WAIT-AGENTS-RAN')).toBeGreaterThan(out.indexOf('Paste this into'));
+  });
+
+  it('does not wait without a terminal, in CI, or with a CLI that has no wait', () => {
+    const waits = (box: Sandbox): boolean => runInstaller(box).out.includes('WAIT-AGENTS-RAN');
+    expect(waits({ result: 'RETICLE_INSTALL agents=1 app=none wait=yes' })).toBe(false);
+    expect(
+      waits({ tty: true, ci: true, result: 'RETICLE_INSTALL agents=1 app=none wait=yes' }),
+    ).toBe(false);
+    expect(waits({ tty: true, result: 'RETICLE_INSTALL agents=1 app=none' })).toBe(false);
+    expect(waits({ tty: true, result: 'RETICLE_INSTALL agents=0 app=none' })).toBe(false);
   });
 
   it('parses and runs under dash, the /bin/sh of Debian and Ubuntu', () => {

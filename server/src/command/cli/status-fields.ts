@@ -1,5 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { statusNextAction } from './answers/status-next-action.js';
 import {
   daemonsServingProjectElsewhere,
@@ -13,16 +11,11 @@ import {
   hasProjectConnectedBefore,
 } from '@/memory/recall/prior/connection-memory.js';
 import { devServersForProject } from '@reticlehq/core';
-import { claudePluginInstalled } from '@reticlehq/init';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
 import { attachStatusFields } from '@/surface/mcp/attach-memory.js';
 import { connectedAgentClients } from '@/surface/mcp/peer/agents-connected.js';
-import {
-  agentStatuses,
-  claudeStateDir,
-  installedAgentRows,
-  type AgentStatus,
-} from '@/command/setup/agent-next-steps.js';
+import { agentStatuses, type AgentStatus } from '@/command/setup/agent-next-steps.js';
+import { readAgentRows } from './setup-mcp-cli.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { availableUpdate } from '@/command/update/update-nudge.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
@@ -105,18 +98,7 @@ export function reportStatus(fields: Record<string, unknown>, json: boolean): vo
  * prints after its wait. Absent when no agent is on this machine.
  */
 function agentStatusFields(): { agents?: AgentStatus[] } {
-  const io = {
-    exists: (p: string) => existsSync(p),
-    readFile: (p: string) => {
-      try {
-        return readFileSync(p, 'utf8');
-      } catch {
-        return null;
-      }
-    },
-    homeDir: () => homedir(),
-  };
-  const rows = installedAgentRows(io, process.cwd(), claudePluginInstalled(io), claudeStateDir());
+  const rows = readAgentRows(process.cwd());
   return 0 === rows.length
     ? {}
     : { agents: agentStatuses(rows, connectedAgentClients(reticleStateHome())) };

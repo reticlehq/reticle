@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { mcpLauncher } from '@/command/setup/mcp-launcher.js';
-import { probeCli, terminalWidth, wrapForTerminal } from '@reticlehq/init';
+import { claudePluginInstalled, probeCli, terminalWidth, wrapForTerminal } from '@reticlehq/init';
 import { tutorialShownSteps } from './tutorial.js';
 import { setupMcp, knownClientLabels, type SetupMcpIo } from '@/command/setup/setup-mcp.js';
 import { reportInstallSteps } from '@/command/setup/setup-install.js';
@@ -12,9 +12,12 @@ import {
   agentLines,
   agentRows,
   awaitedClients,
+  claudeStateDir,
   connectionLines,
+  installedAgentRows,
   waitForAgents,
   type AgentRow,
+  type WaitClock,
 } from '@/command/setup/agent-next-steps.js';
 import { connectedAgentClients } from '@/surface/mcp/peer/agents-connected.js';
 import { reticleStateHome } from '@/command/daemon/daemon.js';
@@ -125,46 +128,6 @@ export function handleSetupMcp(
   return result.registered.length + result.alreadyThere.length + result.pluginActive.length;
 }
 
-/** How long the installer waits for an agent to connect. Short: the person may not restart now. */
-const CONNECT_WAIT_MS = 60_000;
-const CONNECT_POLL_MS = 1000;
-
-/** Wait only where a person watches: a terminal, and not CI. */
-export function shouldWaitForAgents(isTty: boolean | undefined, isCi: boolean): boolean {
-  return true === isTty && !isCi;
-}
-
-/** Wait (bounded) for the registered agents to connect, then say which did and what is missing. */
-async function reportConnections(
-  rows: readonly AgentRow[],
-  print: (line: string) => void,
-): Promise<void> {
-  const want = awaitedClients(rows);
-  if (0 === want.length) {
-    return;
-  }
-  print('');
-  print(
-    `Waiting up to ${String(CONNECT_WAIT_MS / 1000)}s for your agents to connect. Press Ctrl+C to skip.`,
-  );
-  const seen = await waitForAgents(
-    want,
-    () => connectedAgentClients(reticleStateHome()),
-    {
-      now: () => Date.now(),
-      sleep: (ms) =>
-        new Promise((resolve) => {
-          setTimeout(resolve, ms);
-        }),
-    },
-    CONNECT_WAIT_MS,
-    CONNECT_POLL_MS,
-  );
-  for (const line of connectionLines(rows, seen)) {
-    print(line);
-  }
-}
-
 /**
  * The one line the launchers read and strip: what they cannot know and the next steps depend on.
  *
@@ -178,11 +141,19 @@ const APP_MARKERS = ['package.json', 'index.html'] as const;
 /** Whether the folder the installer ran in is an app: `init` runs here, or after a `cd`. */
 export const InstallAppHere = { HERE: 'here', NONE: 'none' } as const;
 
+/**
+ * `wait=yes`: this CLI has `reticle setup wait-agents`, and an agent has Reticle to wait for. A
+ * launcher runs the wait only when it reads this, so a launcher served from main never runs a
+ * subcommand that an older CLI does not have.
+ */
+const INSTALL_WAIT = ' wait=yes';
+
 export function installResultLine(agents: number, cwd: string): string {
   const app = APP_MARKERS.some((file) => existsSync(join(cwd, file)))
     ? InstallAppHere.HERE
     : InstallAppHere.NONE;
-  return `${INSTALL_RESULT_PREFIX} agents=${String(agents)} app=${app}`;
+  const wait = 0 < agents ? INSTALL_WAIT : '';
+  return `${INSTALL_RESULT_PREFIX} agents=${String(agents)} app=${app}${wait}`;
 }
 
 /**
@@ -210,4 +181,97 @@ export function handleSetupInstall(
     reportStep(step);
   }
   process.stdout.write(`${installResultLine(agents, process.cwd())}\n`);
+}
+
+/** How long to wait for an agent to connect. Short: the person may not restart now. */
+const CONNECT_WAIT_MS = 60_000;
+const CONNECT_POLL_MS = 1000;
+
+/** Wait only where a person watches: a terminal, and not CI. */
+export function shouldWaitForAgents(isTty: boolean | undefined, isCi: boolean): boolean {
+  return true === isTty && !isCi;
+}
+
+/** What the wait reads, and the clock it runs on. Injected, so a test does not wait. */
+export interface ConnectionWait {
+  readonly read: () => ReadonlySet<string>;
+  readonly clock: WaitClock;
+}
+
+const nodeWait: ConnectionWait = {
+  read: () => connectedAgentClients(reticleStateHome()),
+  clock: {
+    now: () => Date.now(),
+    sleep: (ms) =>
+      new Promise((resolve) => {
+        setTimeout(resolve, ms);
+      }),
+  },
+};
+
+/** Wait (bounded) for the registered agents to connect, then say which did and what is missing. */
+export async function reportConnections(
+  rows: readonly AgentRow[],
+  print: (line: string) => void,
+  wait: ConnectionWait = nodeWait,
+): Promise<void> {
+  const want = awaitedClients(rows);
+  if (0 === want.length) {
+    return;
+  }
+  print('');
+  print(
+    `Waiting up to ${String(CONNECT_WAIT_MS / 1000)}s for your agents to connect. Press Ctrl+C to skip.`,
+  );
+  const seen = await waitForAgents(want, wait.read, wait.clock, CONNECT_WAIT_MS, CONNECT_POLL_MS);
+  for (const line of connectionLines(rows, seen)) {
+    print(line);
+  }
+}
+
+/**
+ * `reticle init`: the same block and wait as `reticle setup mcp`, after its restart notice. Print the
+ * "Your agents:" block now. Returns the wait, for the caller to run last: a no-op when
+ * nobody watches.
+ */
+export function agentsBlock(
+  rows: readonly AgentRow[],
+  print: (line: string) => void,
+  interactive: boolean,
+  wait: ConnectionWait = nodeWait,
+): () => Promise<void> {
+  for (const line of agentLines(rows)) {
+    print(line);
+  }
+  return interactive ? () => reportConnections(rows, print, wait) : () => Promise.resolve();
+}
+
+/** The agents on this machine and whether Reticle is in each config. Read only. */
+export function readAgentRows(cwd: string): AgentRow[] {
+  const io = {
+    exists: (p: string) => existsSync(p),
+    readFile: (p: string) => {
+      try {
+        return readFileSync(p, 'utf8');
+      } catch {
+        return null;
+      }
+    },
+    homeDir: () => homedir(),
+  };
+  return installedAgentRows(io, cwd, claudePluginInstalled(io), claudeStateDir(), mcpLauncher());
+}
+
+/**
+ * `reticle setup wait-agents`: the installer's last step. The installer sends `setup install` output
+ * to a file, so that run cannot wait; this one runs with the terminal attached. Waits only where a
+ * person watches.
+ */
+export async function handleSetupWaitAgents(interactive: boolean): Promise<void> {
+  if (!interactive) {
+    return;
+  }
+  await reportConnections(readAgentRows(process.cwd()), (line) => {
+    process.stdout.write(`${line}\n`);
+  });
 }

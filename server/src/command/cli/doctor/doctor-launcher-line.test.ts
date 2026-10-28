@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { claudeAddCommand, claudeStaleEntryNote } from '@reticlehq/init';
 import { launcherLine } from './doctor-launcher-line.js';
 
 /**
@@ -50,5 +51,26 @@ describe('the launcher row', () => {
         exists,
       ),
     ).toBeUndefined();
+  });
+});
+
+/**
+ * A Claude Code user-scope entry from before the pinned registration runs the floating npx form.
+ * Doctor said nothing about it. The row now names it, with the remove-then-add step.
+ */
+describe('the launcher row for a floating Claude Code entry', () => {
+  const HERE = '/usr/local/lib/node_modules/@reticlehq/server/bin/reticle.js';
+  const note = claudeStaleEntryNote(HERE);
+
+  it('fails and names the remove-then-add step', () => {
+    const line = launcherLine([], () => true, note);
+    expect(line).toBe(`✗ claude-code: ${note}`);
+    expect(line).toContain(
+      `Run: claude mcp remove reticle -s user, then ${claudeAddCommand(HERE).display}`,
+    );
+  });
+
+  it('prints nothing without a floating entry', () => {
+    expect(launcherLine([], () => true, undefined)).toBeUndefined();
   });
 });

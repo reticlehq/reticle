@@ -98,6 +98,8 @@ export {
   claudePluginInstalled,
   claudeRemoveUserCommand,
   claudeReticleEntries,
+  claudeStaleEntryNote,
+  claudeUserEntryIsFloating,
   // Codex keeps its registration behind `codex mcp add`, like Claude. `reticle setup mcp` needs the
   // command, the probe and the "is the entry already there, in any shape" check to do the same.
   codexAddCommand,

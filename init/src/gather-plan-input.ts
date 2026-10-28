@@ -47,6 +47,7 @@ import { RETICLE_CONFIG_FILE, type PlanInput } from './plan/plan.js';
 import {
   claudeAvailableProbe,
   claudeHasReticle,
+  claudeUserEntryIsFloating,
   claudePluginInstalled,
   codexAvailableProbe,
 } from './register/mcp.js';
@@ -325,6 +326,7 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
   // The plugin brings its own server; a user-scope entry next to it is a duplicate.
   const claudePlugin = options.mcp ? claudePluginInstalled(io) : false;
   const claudeUserEntry = claudePlugin ? claudeHasReticle(io, undefined) : false;
+  const claudeUserEntryFloating = mcpExists && !claudePlugin && claudeUserEntryIsFloating(io);
 
   // Every MCP client this machine shows evidence of. Conservative and one-directional: we write
   // into a config a client ALREADY has, and never create ~/.gemini or ~/.codeium for somebody who
@@ -399,6 +401,7 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
     mcpExists,
     claudePlugin,
     claudeUserEntry,
+    claudeUserEntryFloating,
     insideClaudeCode: io.host.insideClaudeCode(),
     claudeProjectConfig: options.mcp ? io.readFile(agentFile(CLAUDE_PROJECT_CONFIG)) : undefined,
     platform: process.platform,

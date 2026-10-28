@@ -7,7 +7,11 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlan, StepStatus, MCP_TARGET, type PlanInput } from './plan.js';
 import { Framework } from '@/detect/detect.js';
-import { claudePluginInstalled, claudeRemoveUserCommand } from '@/register/mcp.js';
+import {
+  claudePluginInstalled,
+  claudeRemoveUserCommand,
+  claudeStaleEntryNote,
+} from '@/register/mcp.js';
 
 const base = (partial: Partial<PlanInput>): PlanInput =>
   ({
@@ -79,5 +83,23 @@ describe('the Claude Code MCP step with the Reticle plugin', () => {
     const steps = claudeSteps(base({}));
     expect(steps.map((s) => s.status)).toEqual([StepStatus.APPLY]);
     expect(steps[0]?.exec?.args).toContain('add');
+  });
+});
+
+describe('the Claude Code MCP step with the floating npx entry', () => {
+  const LAUNCHER = '/usr/local/lib/node_modules/@reticlehq/server/bin/reticle.js';
+
+  it('keeps the entry and adds a notice with the commands that replace it', () => {
+    const steps = claudeSteps(
+      base({ mcpExists: true, claudeUserEntryFloating: true, mcpLauncher: LAUNCHER }),
+    );
+    expect(steps.map((s) => s.status)).toEqual([StepStatus.ALREADY, StepStatus.NOTICE]);
+    expect(steps[1]?.detail).toContain(claudeStaleEntryNote(LAUNCHER));
+    expect(steps.some((s) => s.exec !== undefined)).toBe(false);
+  });
+
+  it('adds no notice for an entry that is not floating', () => {
+    const steps = claudeSteps(base({ mcpExists: true }));
+    expect(steps.map((s) => s.status)).toEqual([StepStatus.ALREADY]);
   });
 });

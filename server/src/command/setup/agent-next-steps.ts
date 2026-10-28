@@ -15,6 +15,8 @@ import {
   claudeAddCommand,
   claudeHasReticle,
   claudeRemoveUserCommand,
+  claudeStaleEntryNote,
+  claudeUserEntryIsFloating,
   clientSpec,
   codexNamesOurServer,
   ConfigFormat,
@@ -48,6 +50,8 @@ export interface AgentRow {
   readonly retry?: string;
   /** The plugin AND a user-scope `reticle` entry: the client has two servers. */
   readonly duplicate?: boolean;
+  /** The entry is the floating npx form: the note that names the commands that replace it. */
+  readonly stale?: string;
 }
 
 interface AgentStep {
@@ -120,6 +124,7 @@ const NextStepCopy = {
   NOT_CONNECTED: ' not connected yet: ',
   DUPLICATE:
     '    ⚠ a user-scope reticle server is registered too, so Claude Code has two. Remove it: ',
+  STALE: '    ⚠ ',
 } as const;
 
 const NAME_COLUMN = Math.max(...Object.values(AGENT_STEPS).map((s) => s.name.length)) + 2;
@@ -151,12 +156,18 @@ export function agentRows(result: SetupMcpResult, launcher?: string): AgentRow[]
           : { id, reg: AgentReg.FAILED },
       );
     } else if (result.alreadyThere.includes(id)) {
-      rows.push({ id, reg: AgentReg.ALREADY });
+      rows.push(alreadyRow(id, result.stale.includes(id), launcher));
     } else if (result.registered.includes(id)) {
       rows.push({ id, reg: AgentReg.ADDED });
     }
   }
   return rows;
+}
+
+function alreadyRow(id: McpClient, stale: boolean, launcher?: string): AgentRow {
+  return stale
+    ? { id, reg: AgentReg.ALREADY, stale: claudeStaleEntryNote(launcher) }
+    : { id, reg: AgentReg.ALREADY };
 }
 
 function pluginRow(id: McpClient, duplicate: boolean): AgentRow {
@@ -194,10 +205,14 @@ export function agentLines(rows: readonly AgentRow[]): string[] {
   return [
     NextStepCopy.HEADING,
     ...rows.flatMap((row) => {
-      const line = `  ${AGENT_STEPS[row.id].name.padEnd(NAME_COLUMN)}${registrationText(row)}`;
-      return true === row.duplicate
-        ? [line, `${NextStepCopy.DUPLICATE}${claudeRemoveUserCommand()}`]
-        : [line];
+      const lines = [`  ${AGENT_STEPS[row.id].name.padEnd(NAME_COLUMN)}${registrationText(row)}`];
+      if (true === row.duplicate) {
+        lines.push(`${NextStepCopy.DUPLICATE}${claudeRemoveUserCommand()}`);
+      }
+      if (row.stale !== undefined) {
+        lines.push(`${NextStepCopy.STALE}${row.stale}`);
+      }
+      return lines;
     }),
   ];
 }
@@ -335,19 +350,23 @@ function configNamesReticle(spec: ClientSpec, existing: string | null): boolean 
  * which must not register anything and must not spawn a client CLI.
  *
  * @param claudeStateDir the directory that holds `.claude.json`: `$CLAUDE_CONFIG_DIR`, else home.
+ * @param launcher the installed bin a new registration would use, for the stale-entry fix.
  */
 export function installedAgentRows(
   io: AgentProbe,
   projectDir: string | undefined,
   pluginActive: boolean,
   claudeStateDir: string = io.homeDir(),
+  launcher?: string,
 ): AgentRow[] {
   const rows: AgentRow[] = [];
   if (pluginActive) {
     // A user-scope entry next to the plugin is a second server.
     rows.push(pluginRow(McpClient.CLAUDE_CODE, claudeHasReticle(io, undefined, claudeStateDir)));
   } else if (claudeHasReticle(io, projectDir, claudeStateDir)) {
-    rows.push({ id: McpClient.CLAUDE_CODE, reg: AgentReg.ALREADY });
+    rows.push(
+      alreadyRow(McpClient.CLAUDE_CODE, claudeUserEntryIsFloating(io, claudeStateDir), launcher),
+    );
   } else if (io.exists(join(claudeStateDir, CLAUDE_STATE_FILE))) {
     rows.push({ id: McpClient.CLAUDE_CODE, reg: AgentReg.MISSING });
   }

@@ -359,8 +359,10 @@ function Main {
   # folder is an app. Absent from an older CLI, which keeps the generic wording.
   $agents = ''
   $appHere = ''
+  $waitAgents = $false
   foreach ($line in $out) {
     if ("$line" -match '^RETICLE_INSTALL agents=(\d+) app=([a-z]+)') { $agents = $Matches[1]; $appHere = $Matches[2] }
+    if ("$line" -match '^RETICLE_INSTALL .* wait=yes') { $waitAgents = $true }
   }
   if (-not $mcp) {
     Ok 'Skipped registering with coding agents (--no-mcp)'
@@ -374,6 +376,13 @@ function Main {
   }
   # No demo here, for the reason install.sh gives: a demo verdict read as "Reticle is in my app".
   Next-Step $mcp $agents $appHere
+  # The last step, only for a person at a terminal (see install.sh): wait (bounded) for the agents
+  # to connect. wait=yes says the CLI has the subcommand, so an older CLI never gets it.
+  if ($waitAgents -and -not [Console]::IsOutputRedirected -and -not $env:CI) {
+    $ErrorActionPreference = 'Continue'
+    & $cli setup wait-agents
+    $ErrorActionPreference = 'Stop'
+  }
   Quit 0
 }
 

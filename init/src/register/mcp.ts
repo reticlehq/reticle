@@ -234,6 +234,52 @@ export function claudeRemoveUserCommand(): string {
   return `${CLAUDE_CLI} ${MCP_SUBCOMMAND} remove ${MCP_SERVER_NAME} -s user`;
 }
 
+/** `x.y.z`, or `x.y.z-pre`: one exact version. `latest`, a range or nothing is not one. */
+const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const PACKAGE_AT = `${RETICLE_PACKAGE}@`;
+
+/** Every string in an entry's `command` and `args`. */
+function entryTokens(entry: unknown): string[] {
+  if ('object' !== typeof entry || null === entry) {
+    return [];
+  }
+  const { command, args } = entry as { command?: unknown; args?: unknown };
+  return [command, args].flat().filter((v): v is string => 'string' === typeof v);
+}
+
+/** The npx form of `@reticlehq/server` with no exact version: npx starts whatever its cache holds. */
+function isFloatingNpx(tokens: readonly string[]): boolean {
+  if (!tokens.includes(NPX) || tokens.some(isReticleLauncher)) {
+    return false;
+  }
+  return tokens.some(
+    (t) =>
+      RETICLE_PACKAGE === t ||
+      (t.startsWith(PACKAGE_AT) && !EXACT_VERSION.test(t.slice(PACKAGE_AT.length))),
+  );
+}
+
+/**
+ * Claude Code's user-scope `reticle` entry is the floating npx form that registration wrote before
+ * it pinned a version or used the installed launcher. `claudeHasReticle` reads it as registered, so
+ * nothing replaced it. Reported only: a Claude Code entry is changed only by the person.
+ */
+export function claudeUserEntryIsFloating(
+  io: { readFile(path: string): string | null; homeDir(): string },
+  configDir: string | undefined = process.env['CLAUDE_CONFIG_DIR'],
+): boolean {
+  return claudeReticleEntries(io, undefined, configDir).some((e) => isFloatingNpx(entryTokens(e)));
+}
+
+/** The one sentence about a floating entry, and the commands that replace it. */
+export function claudeStaleEntryNote(launcher?: string): string {
+  return (
+    `the user-scope reticle entry runs \`${NPX} ${RETICLE_PACKAGE}\` with no version, so it can ` +
+    `start a different Reticle version. Run: ${claudeRemoveUserCommand()}, then ` +
+    claudeAddCommand(launcher).display
+  );
+}
+
 /** Probe args for whether the `claude` CLI is installed at all. */
 export function claudeAvailableProbe(): { command: string; args: string[] } {
   return { command: CLAUDE_CLI, args: ['--version'] };

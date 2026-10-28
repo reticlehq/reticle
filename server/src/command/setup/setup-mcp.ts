@@ -5,6 +5,7 @@ import {
   claudeAvailableProbe,
   claudeHasReticle,
   claudePluginInstalled,
+  claudeUserEntryIsFloating,
   codexAddCommand,
   codexAvailableProbe,
   codexNamesOurServer,
@@ -74,6 +75,8 @@ export interface SetupMcpResult {
   readonly pluginActive: readonly string[];
   /** Clients with the plugin AND a user-scope `reticle` entry: two servers. Named, never removed. */
   readonly duplicates: readonly string[];
+  /** Clients whose `reticle` entry is the floating npx form. Named with the fix, never replaced. */
+  readonly stale: readonly string[];
 }
 
 /** A client the caller has to tell somebody about, with the two facts they need to act. */
@@ -114,6 +117,7 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
   const manual: ManualClient[] = [];
   const pluginActive: string[] = [];
   const duplicates: string[] = [];
+  const stale: string[] = [];
 
   /*
    * Claude Code first, because nothing else can find it.
@@ -142,6 +146,9 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
       }
     } else if (hasEntry) {
       alreadyThere.push(McpClient.CLAUDE_CODE);
+      if (claudeUserEntryIsFloating(io)) {
+        stale.push(McpClient.CLAUDE_CODE);
+      }
     } else {
       const cmd = claudeAddCommand(io.launcher);
       if (io.runCli(cmd.command, cmd.args)) {
@@ -219,7 +226,7 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
       : {}),
   });
 
-  return { detected, registered, alreadyThere, failed, manual, pluginActive, duplicates };
+  return { detected, registered, alreadyThere, failed, manual, pluginActive, duplicates, stale };
 }
 
 function mcpRegisteredStatus(

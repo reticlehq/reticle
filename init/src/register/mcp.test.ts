@@ -5,6 +5,8 @@ import { RETICLE_VERSION } from '@/version.js';
 import {
   claudeAddCommand,
   claudeHasReticle,
+  claudeStaleEntryNote,
+  claudeUserEntryIsFloating,
   installedLauncher,
   isReticleRegistration,
   mcpManual,
@@ -231,5 +233,122 @@ describe('mcpWindowsNote', () => {
     expect(n).toContain('/c');
     expect(n).toContain('npx');
     expect(n).toContain('@reticlehq/server');
+  });
+});
+
+/**
+ * A user who registered before the pinned entry keeps `npx @reticlehq/server mcp` for ever:
+ * `claudeHasReticle` reads any `reticle` entry as registered. npx then starts whatever version its
+ * cache holds. Only the floating npx form is stale; a pinned version and an installed launcher are not.
+ */
+describe('claudeUserEntryIsFloating', () => {
+  const HOME = '/home/u';
+  const user = (
+    entry: unknown,
+  ): { readFile: (p: string) => string | null; homeDir: () => string } => ({
+    readFile: (p) =>
+      `${HOME}/.claude.json` === p.replace(/\\/g, '/')
+        ? JSON.stringify({ mcpServers: { reticle: entry } })
+        : null,
+    homeDir: () => HOME,
+  });
+  const LAUNCHER = '/usr/local/lib/node_modules/@reticlehq/server/bin/reticle.js';
+
+  it('finds the floating npx form, with or without -y or @latest, and on Windows', () => {
+    for (const args of [
+      ['@reticlehq/server', 'mcp'],
+      ['-y', '@reticlehq/server', 'mcp'],
+      ['@reticlehq/server@latest', 'mcp'],
+    ]) {
+      expect(claudeUserEntryIsFloating(user({ command: 'npx', args }), undefined)).toBe(true);
+    }
+    expect(
+      claudeUserEntryIsFloating(
+        user({ command: 'cmd', args: ['/c', 'npx', '@reticlehq/server', 'mcp'] }),
+        undefined,
+      ),
+    ).toBe(true);
+  });
+
+  it('leaves a pinned version, an installed launcher and an entry that is not ours alone', () => {
+    for (const entry of [
+      { command: 'npx', args: [PINNED, 'mcp'] },
+      { command: 'npx', args: ['@reticlehq/server@3.7.0', 'mcp'] },
+      { command: 'node', args: [LAUNCHER, 'mcp'] },
+      { command: 'node', args: ['/my/build/cli.js', 'mcp'] },
+    ]) {
+      expect(claudeUserEntryIsFloating(user(entry), undefined)).toBe(false);
+    }
+    expect(
+      claudeUserEntryIsFloating({ readFile: () => null, homeDir: () => HOME }, undefined),
+    ).toBe(false);
+  });
+
+  it('reads only the user scope', () => {
+    const io = {
+      readFile: (p: string) =>
+        `${HOME}/.claude.json` === p.replace(/\\/g, '/')
+          ? JSON.stringify({
+              projects: {
+                '/app': {
+                  mcpServers: { reticle: { command: 'npx', args: ['@reticlehq/server', 'mcp'] } },
+                },
+              },
+            })
+          : null,
+      homeDir: () => HOME,
+    };
+    expect(claudeUserEntryIsFloating(io, undefined)).toBe(false);
+  });
+
+  it('names the two commands that replace it, and removes nothing itself', () => {
+    const note = claudeStaleEntryNote(LAUNCHER);
+    expect(note).toContain('claude mcp remove reticle -s user');
+    expect(note).toContain(claudeAddCommand(LAUNCHER).display);
+  });
+});
+
+describe('init on a machine with the floating Claude Code entry', () => {
+  const app = {
+    'package.json': JSON.stringify({
+      name: 'a',
+      dependencies: { react: '^19.0.0' },
+      devDependencies: { vite: '^7.0.0' },
+    }),
+    'vite.config.ts': "import { defineConfig } from 'vite';\nexport default defineConfig({});\n",
+  };
+  const run = (entry: unknown): { lines: string[]; ran: string[] } => {
+    const ran: string[] = [];
+    const io = memoryIo({
+      ...app,
+      '/home/u/.claude.json': JSON.stringify({ mcpServers: { reticle: entry } }),
+    });
+    runInit(
+      { cwd: '/project', port: undefined, mcp: true, install: false, dryRun: false },
+      {
+        ...io,
+        exec: (command: string, args: readonly string[]) => {
+          ran.push(`${command} ${args.join(' ')}`);
+          return true;
+        },
+      },
+    );
+    return { lines: io.lines, ran };
+  };
+
+  it('reports it as stale with the two commands, and runs neither', () => {
+    const { lines, ran } = run({ command: 'npx', args: ['@reticlehq/server', 'mcp'] });
+    const text = lines.join('\n');
+    expect(text).toContain('claude mcp remove reticle -s user');
+    expect(text).toContain('claude mcp add reticle -s user');
+    expect(
+      ran.filter((c) => /^claude mcp (add|remove)/.test(c)),
+      ran.join(' | '),
+    ).toEqual([]);
+  });
+
+  it('says nothing about a pinned entry', () => {
+    const { lines } = run({ command: 'npx', args: [PINNED, 'mcp'] });
+    expect(lines.join('\n')).not.toContain('claude mcp remove');
   });
 });

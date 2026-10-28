@@ -338,6 +338,16 @@ next_step() {
   printf '\n%s%s%s\n' "$HEAD_ON" "$rule" "$OUT_OFF"
 }
 
+# The last step, only for a person at a terminal: wait (bounded) for the agents to connect, then say
+# which did. `wait=yes` in the CLI's machine line says the CLI has the subcommand and an agent has
+# Reticle to wait for, so an older CLI never gets a command it does not know.
+wait_agents() {
+  case " $1 " in *" wait=yes "*) ;; *) return 0 ;; esac
+  [ -t 1 ] || return 0
+  [ -z "${CI:-}" ] || return 0
+  "$RETICLE_BIN" setup wait-agents || true
+}
+
 main() {
   case "${1:-}" in
     -h | --help)
@@ -394,6 +404,7 @@ main() {
   fi
   rm -f "$out"
   next_step "$mcp" "$agents" "$app"
+  wait_agents "$result"
 }
 
 main "$@"

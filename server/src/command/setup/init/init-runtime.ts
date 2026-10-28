@@ -156,6 +156,15 @@ function printRelaunch(parsed: InitRuntimeArgs, io: RuntimePrintIo, cwd: string)
   io.print('');
 }
 
+/**
+ * Print the "Your agents:" block, and return the bounded wait for the agents to connect. `mayWait`
+ * false: the wait is a no-op. The caller adds the terminal check. See `agentsBlock`.
+ */
+export type AgentsBlockPort = (
+  print: (line: string) => void,
+  mayWait: boolean,
+) => () => Promise<void>;
+
 export async function continueAfterInit(
   parsed: InitRuntimeArgs,
   result: InitResult,
@@ -163,6 +172,7 @@ export async function continueAfterInit(
   cwd: string,
   /** init's ending once the connection is proved: coverage and the agent prompt. See `FirstFlowPort`. */
   firstFlow?: FirstFlowPort,
+  agentsBlock?: AgentsBlockPort,
 ): Promise<void> {
   const port = parsed.port ?? RETICLE_DEFAULT_PORT;
   const stop = (): void => {
@@ -290,6 +300,9 @@ export async function continueAfterInit(
   // A Ctrl-C during the wait ends the process with no `finally`, so the outcome is reported from the
   // signal itself. The send is detached, so it survives the exit that follows.
   const releaseInterrupt = reportOnInterrupt(() => reportFailure(InitFailure.INTERRUPTED));
+  // The wait for the agents runs last, after the interrupt handler is gone: a Ctrl+C that skips the
+  // wait is not a failed init.
+  let waitForAgents = (): Promise<void> => Promise.resolve();
   return runSetupCommand(
     {
       appDir: context.appDir,
@@ -387,6 +400,11 @@ export async function continueAfterInit(
         });
         if (undefined !== restart) {
           io.print(restart);
+          // The same block and wait as `reticle setup mcp`. No wait for a failed setup, or inside
+          // `reticle connect`, which signs in next.
+          if (agentsBlock !== undefined) {
+            waitForAgents = agentsBlock(io.print, outcome.ok && true !== parsed.keepGoing);
+          }
           io.print('');
           // The agent cannot take its first look until it restarts. Detached: init exits soon.
           reportOnboardingStop(
@@ -435,7 +453,8 @@ export async function continueAfterInit(
         throw error;
       },
     )
-    .finally(releaseInterrupt);
+    .finally(releaseInterrupt)
+    .then(() => waitForAgents());
 }
 
 const INTERRUPT_SIGNALS = ['SIGINT', 'SIGTERM'] as const;

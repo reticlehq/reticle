@@ -8,6 +8,7 @@ import {
   claudeAddCommand,
   claudeProjectMcpJson,
   claudeRemoveUserCommand,
+  claudeStaleEntryNote,
   codexAddCommand,
   mcpManual,
 } from '@/register/mcp.js';
@@ -115,6 +116,24 @@ function claudePluginStep(input: PlanInput): Step {
     detail:
       'the Reticle plugin is active and gives Claude Code its server; no user-scope entry added',
   };
+}
+
+/**
+ * The floating npx entry, kept and named. A NOTICE after the Claude Code step, so the step that
+ * decides the closing hint still reads ALREADY.
+ */
+function claudeFloatingSteps(input: PlanInput): Step[] {
+  if (true !== input.claudeUserEntryFloating) {
+    return [];
+  }
+  return [
+    {
+      title: 'Old MCP entry (Claude, global)',
+      target: MCP_TARGET,
+      status: StepStatus.NOTICE,
+      detail: claudeStaleEntryNote(input.mcpLauncher),
+    },
+  ];
 }
 
 function claudeMcpStep(input: PlanInput): Step | null {
@@ -267,6 +286,7 @@ function mcpSteps(input: PlanInput): Step[] {
   const claudeProject = claudeProjectStep(input);
   const steps = [
     ...stepsForAgents(input, (a) => a.mcpStep),
+    ...claudeFloatingSteps(input),
     ...(null === claudeProject ? [] : [claudeProject]),
     ...otherClientSteps(input),
   ];

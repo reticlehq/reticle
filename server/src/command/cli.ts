@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 import { OnboardingPhase, PlatformLinkVia } from '@reticlehq/core/telemetry';
 import { hudSignIn } from './cli/cloud-login.js';
-import { handleSetupMcp, handleSetupInstall, shouldWaitForAgents } from './cli/setup-mcp-cli.js';
+import {
+  agentsBlock,
+  handleSetupMcp,
+  handleSetupInstall,
+  handleSetupWaitAgents,
+  readAgentRows,
+  shouldWaitForAgents,
+} from './cli/setup-mcp-cli.js';
 import { reportStepFromCli } from './cli-onboarding.js';
 import { pathToFileURL } from 'node:url';
 import { openFailureNote, openLaunchFailureNote } from './cli/answers/open-note.js';
@@ -236,7 +243,13 @@ async function handleInit(parsed: {
     },
     io,
   );
-  await continueAfterInit({ ...parsed, port }, result, io, cwd, initFirstFlow);
+  await continueAfterInit({ ...parsed, port }, result, io, cwd, initFirstFlow, (print, mayWait) =>
+    agentsBlock(
+      readAgentRows(cwd),
+      print,
+      mayWait && shouldWaitForAgents(process.stdout.isTTY, isCiEnv(process.env)),
+    ),
+  );
   return result;
 }
 
@@ -834,6 +847,9 @@ export function main(): void {
           shouldWaitForAgents(process.stdout.isTTY, isCiEnv(process.env)),
         );
       });
+      break;
+    case 'setup-wait-agents':
+      void handleSetupWaitAgents(shouldWaitForAgents(process.stdout.isTTY, isCiEnv(process.env)));
       break;
     case 'setup-install':
       void writeFirstUseWarnings().then(() => {

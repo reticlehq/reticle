@@ -439,3 +439,30 @@ describe('what the funnel is told about registration', () => {
     expect(statusOf(steps), 'no agent here is not our failure').toBe('skipped');
   });
 });
+
+describe('the floating npx entry from before the pinned registration', () => {
+  const floating = JSON.stringify({
+    mcpServers: { reticle: { command: 'npx', args: ['@reticlehq/server', 'mcp'] } },
+  });
+
+  it('is reported as stale, and nothing removes or replaces it', () => {
+    const { io, ran } = machine({ claudeInstalled: true, files: { '.claude.json': floating } });
+    const result = setupMcp(io);
+    expect(result.alreadyThere).toContain('claude-code');
+    expect(result.stale).toEqual(['claude-code']);
+    expect(
+      ran.some((c) => /mcp (add|remove)/.test(c)),
+      `commands run: ${ran.join(' | ')}`,
+    ).toBe(false);
+  });
+
+  it('is not reported for a pinned entry', () => {
+    const pinned = JSON.stringify({
+      mcpServers: {
+        reticle: { command: 'npx', args: [`@reticlehq/server@${RETICLE_VERSION}`, 'mcp'] },
+      },
+    });
+    const { io } = machine({ claudeInstalled: true, files: { '.claude.json': pinned } });
+    expect(setupMcp(io).stale).toEqual([]);
+  });
+});
