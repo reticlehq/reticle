@@ -20,7 +20,12 @@ import {
   hasOriginLock,
   scrubSeedFromError,
 } from './lease-tools.js';
-import { connectOrInject, waitForLeasedSession } from './lease-readiness.js';
+import {
+  LEASE_READY_TIMEOUT_MS,
+  awaitLeaseAnswering,
+  connectOrInject,
+  waitForLeasedSession,
+} from './lease-readiness.js';
 import { assertVerdict } from './assert/assert-verdict.js';
 import {
   evaluatePredicate,
@@ -169,9 +174,12 @@ function fakePool(): {
 
 // A sessions stub where the leased tab is already "connected", so acquire's wait-for-ready resolves
 // immediately (no real polling) in the happy path.
+// The clock moves one second at each read, so a wait that does not end early ends after a few polls.
+let fakeTime = 0;
 const baseDeps = {
   sessions: { get: () => ({ id: 'live' }) },
   attachId: 'agent-1',
+  now: () => (fakeTime += 1_000),
 } as unknown as ToolDeps;
 
 describe('appendReticleParams', () => {
@@ -387,6 +395,161 @@ describe('waitForLeasedSession', () => {
   it('resolves false after exhausting attempts (app has no SDK)', async () => {
     const noWait = (): Promise<void> => Promise.resolve();
     await expect(waitForLeasedSession(() => false, noWait, 5, 0)).resolves.toBe(false);
+  });
+});
+
+describe('awaitLeaseAnswering', () => {
+  /** A clock that moves only when the wait sleeps, so the test reads polls, not wall time. */
+  function steppedClock(): {
+    now: () => number;
+    sleep: (ms: number) => Promise<void>;
+    slept: () => number;
+  } {
+    let t = 0;
+    let sleeps = 0;
+    return {
+      now: () => t,
+      sleep: (ms: number) => {
+        t += ms;
+        sleeps += 1;
+        return Promise.resolve();
+      },
+      slept: () => sleeps,
+    };
+  }
+
+  it('waits until the tab registers and answers, then says it is ready', async () => {
+    const clock = steppedClock();
+    let looks = 0;
+    const tab = { command: () => Promise.resolve({ ok: true }) };
+    const reason = await awaitLeaseAnswering(
+      () => (++looks >= 4 ? tab : undefined),
+      clock.now() + 10_000,
+      clock.now,
+      clock.sleep,
+    );
+    expect(reason).toBeUndefined();
+    expect(clock.slept()).toBe(3);
+  });
+
+  it('waits for a tab that registered but does not answer yet', async () => {
+    const clock = steppedClock();
+    let probes = 0;
+    const tab = {
+      command: () =>
+        ++probes >= 3 ? Promise.resolve({ ok: true }) : Promise.reject(new Error('timed out')),
+    };
+    const reason = await awaitLeaseAnswering(
+      () => tab,
+      clock.now() + 10_000,
+      clock.now,
+      clock.sleep,
+    );
+    expect(reason).toBeUndefined();
+    expect(probes).toBe(3);
+  });
+
+  it('gives the reason at the deadline when the tab never answers', async () => {
+    const clock = steppedClock();
+    const tab = { command: () => Promise.reject(new Error('timed out')) };
+    const reason = await awaitLeaseAnswering(
+      () => tab,
+      clock.now() + 1_000,
+      clock.now,
+      clock.sleep,
+    );
+    expect(reason).toBe(LeaseNotReadyReason.SDK_STOPPED_ANSWERING);
+    // Bounded: it stops at the deadline, it does not poll for ever.
+    expect(clock.now()).toBeGreaterThanOrEqual(1_000);
+    expect(clock.slept()).toBeLessThanOrEqual(11);
+  });
+
+  it('looks once and does not sleep when the deadline has already passed', async () => {
+    const clock = steppedClock();
+    const reason = await awaitLeaseAnswering(() => undefined, clock.now(), clock.now, clock.sleep);
+    expect(reason).toBe(LeaseNotReadyReason.SDK_STOPPED_ANSWERING);
+    expect(clock.slept()).toBe(0);
+  });
+});
+
+describe('reticle_lease_acquire waits until the lease is ready (#1650)', () => {
+  /** A tab that registers on the given look of the sessions map, and answers from the given probe. */
+  function lateTab(
+    registersOnLook: number,
+    answersOnProbe: number,
+  ): {
+    sessions: { get: (id: string) => unknown; all: () => { id: string; url?: string }[] };
+    probes: () => number;
+  } {
+    let looks = 0;
+    let probes = 0;
+    const tab = {
+      id: 'late',
+      command: () =>
+        ++probes >= answersOnProbe
+          ? Promise.resolve({ ok: true })
+          : Promise.reject(new Error("command 'capabilities' timed out after 1500ms")),
+    };
+    return {
+      sessions: {
+        get: () => (++looks >= registersOnLook ? tab : undefined),
+        all: () => [],
+        lastClosure: () => undefined,
+      } as never,
+      probes: () => probes,
+    };
+  }
+
+  it('answers ready: true once a tab that connects late registers and answers', async () => {
+    const { pool } = fakePool();
+    const { sessions, probes } = lateTab(4, 1);
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { ready: boolean; notReadyReason?: string };
+    expect(result.ready).toBe(true);
+    expect(result.notReadyReason).toBeUndefined();
+    expect(probes()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('never answers ready: true for a tab that registered and does not answer', async () => {
+    // The #1650 shape: `ready: true`, then the next read timed out. Registered is not answering.
+    const { pool } = fakePool();
+    const { sessions } = lateTab(1, Number.POSITIVE_INFINITY);
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/', timeout_ms: 3_000 },
+    )) as { ready: boolean; notReadyReason?: string };
+    expect(result.ready).toBe(false);
+    expect(result.notReadyReason).toBe(LeaseNotReadyReason.SDK_STOPPED_ANSWERING);
+  });
+
+  it('keeps waiting for a registered tab whose first probes fail, then answers ready: true', async () => {
+    const { pool } = fakePool();
+    const { sessions, probes } = lateTab(1, 3);
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { ready: boolean };
+    expect(result.ready).toBe(true);
+    expect(probes()).toBe(3);
+  });
+
+  it('takes timeout_ms as the bound: 0 looks once and answers why it is not ready', async () => {
+    const { pool } = fakePool();
+    const { sessions } = lateTab(Number.POSITIVE_INFINITY, 1);
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/', timeout_ms: 0 },
+    )) as { ready: boolean; notReadyReason?: string };
+    expect(result.ready).toBe(false);
+    expect(result.notReadyReason).toBe(LeaseNotReadyReason.SDK_NEVER_DIALLED);
+  });
+
+  it('accepts timeout_ms on its input schema, and has a named default', () => {
+    const def = LEASE_TOOLS.find((t) => t.name === ReticleTool.LEASE_ACQUIRE);
+    expect(Object.keys(def?.inputSchema ?? {})).toContain('timeout_ms');
+    expect(LEASE_READY_TIMEOUT_MS).toBeGreaterThan(0);
   });
 });
 
@@ -791,9 +954,9 @@ describe('reticle_lease_acquire', () => {
     expect(second.notReadyReason).toBeUndefined();
   });
 
-  it('does not probe on the mint path, where the wait that just resolved is the evidence', async () => {
-    // Cost control, and the reason it is free: on a mint the readiness wait resolved moments ago, so
-    // a probe would re-ask a question just answered. On reuse the last evidence may be minutes old.
+  it('probes on the mint path too, because a registered tab is not proof that it answers (#1650)', async () => {
+    // The connect wait sees only that a row is in the sessions map. A lease answered `ready: true`
+    // from that row, and the next read timed out. One probe is the proof that the next call works.
     const { pool } = fakePool();
     const { deps: sessions, probes } = sessionsThatAnswer('any', 'ok');
 
@@ -801,7 +964,7 @@ describe('reticle_lease_acquire', () => {
       url: 'http://localhost:3000/',
     });
 
-    expect(probes).toEqual([]);
+    expect(probes).toEqual([ReticleCommand.CAPABILITIES]);
   });
 
   it('names the other reason when no SDK ever dialled in', async () => {
@@ -902,7 +1065,7 @@ describe('reticle_lease_acquire', () => {
       all: () => [],
     };
     const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
-      { sessions, pool } as unknown as ToolDeps,
+      { sessions, pool, now: () => Date.now() } as unknown as ToolDeps,
       { url: 'http://localhost:3000/' },
     )) as { ready: boolean; versionSkew?: string };
     expect(result.ready).toBe(true);
@@ -1006,6 +1169,7 @@ describe('telling the human that the agent went somewhere invisible', () => {
     const leased = make('lease-1', 'acme');
     const { pool } = fakePool();
     const deps = {
+      now: () => Date.now(),
       sessions: {
         all: () => [watcher, leased],
         get: (id: string) => ('s-human' === id ? watcher : leased),
@@ -1039,6 +1203,7 @@ describe('telling the human that the agent went somewhere invisible', () => {
     // A courtesy to a person must never turn a working lease into a reported failure.
     const { pool } = fakePool();
     const deps = {
+      now: () => Date.now(),
       sessions: {
         all: () => [{ id: 's-human', projectId: 'acme' }],
         get: () => ({
@@ -1072,6 +1237,7 @@ describe('prioritising a tab that is already open', () => {
     };
     const { pool } = fakePool();
     const deps = {
+      now: () => Date.now(),
       sessions: { all: () => [watcher], get: () => watcher },
       pool,
     } as unknown as ToolDeps;
@@ -1089,6 +1255,7 @@ describe('prioritising a tab that is already open', () => {
   it('stays silent when no tab was open — a lease is simply correct then', async () => {
     const { pool } = fakePool();
     const deps = {
+      now: () => Date.now(),
       sessions: { all: () => [], get: () => ({ id: 'live' }) },
       pool,
     } as unknown as ToolDeps;
@@ -1117,6 +1284,7 @@ describe('prioritising a tab that is already open', () => {
     };
     const { pool } = fakePool();
     const deps = {
+      now: () => Date.now(),
       sessions: { all: () => [other], get: () => other },
       pool,
     } as unknown as ToolDeps;
@@ -1139,6 +1307,7 @@ describe('prioritising a tab that is already open', () => {
     };
     const { pool } = fakePool();
     const deps = {
+      now: () => Date.now(),
       sessions: { all: () => [same], get: () => same },
       pool,
     } as unknown as ToolDeps;
@@ -1165,6 +1334,7 @@ describe('prioritising a tab that is already open', () => {
     };
     const { pool } = fakePool();
     const deps = {
+      now: () => Date.now(),
       sessions: { all: () => [frozen], get: () => frozen },
       pool,
     } as unknown as ToolDeps;
@@ -1181,6 +1351,7 @@ describe('prioritising a tab that is already open', () => {
     const watcher = { id: 's-human', projectId: 'acme', pushNarration: () => undefined };
     const { pool } = fakePool();
     const deps = {
+      now: () => Date.now(),
       sessions: { all: () => [watcher], get: () => watcher },
       pool,
     } as unknown as ToolDeps;
@@ -1720,6 +1891,7 @@ describe('reticle_lease with seedStorage', () => {
 
       const { pool } = fakePool();
       const deps = {
+        now: () => Date.now(),
         sessions: {
           get: () => fakeSession,
         },

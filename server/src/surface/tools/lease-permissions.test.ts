@@ -61,7 +61,11 @@ function fakePool(opts: { reading?: string; acquireError?: Error } = {}): Record
 
 /** Every leased tab reads as connected, so acquire's readiness wait resolves at once. */
 const depsWith = (pool: BrowserPool): ToolDeps =>
-  ({ sessions: { get: () => ({ id: 'live' }), all: () => [] }, pool }) as unknown as ToolDeps;
+  ({
+    sessions: { get: () => ({ id: 'live' }), all: () => [] },
+    pool,
+    now: () => Date.now(),
+  }) as unknown as ToolDeps;
 
 describe('reticle_lease acquire with permissions', () => {
   it('hands the list to the pool on a fresh lease', async () => {

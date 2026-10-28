@@ -7,6 +7,7 @@
 
 import { LeaseNotReadyReason, ReticleCommand, RETICLE_URL_PARAM } from '@reticlehq/core';
 import { NotHtmlDocumentError } from '@/portal/pool/zero-install.js';
+import { waitForReconnect } from '@/portal/session/session-reconnect.js';
 
 /**
  * How long a liveness probe waits for the tab to say anything at all.
@@ -94,6 +95,68 @@ const LEASE_READY_POLL_MS = 100;
 const LEASE_LOADING_GRACE_ROUNDS = 3;
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** One connect wait: how long a tab gets to dial in before the zero-install reader goes in. */
+const LEASE_CONNECT_WAIT_MS = LEASE_READY_ATTEMPTS * LEASE_READY_POLL_MS;
+
+/**
+ * The longest `reticle_lease { action: "acquire" }` waits for its tab to be ready, when the caller
+ * gives no `timeout_ms`. It is the longest wait before this bound existed: the connect wait, the
+ * wait after the reader, and the loading grace rounds. So no acquire that was ready before is now
+ * refused.
+ */
+export const LEASE_READY_TIMEOUT_MS = LEASE_CONNECT_WAIT_MS * (2 + LEASE_LOADING_GRACE_ROUNDS);
+
+/** `waitForReconnect` waits for `current` to differ from `previous`: these two always differ. */
+const NOT_REGISTERED = {};
+const REGISTERED = {};
+
+/**
+ * A connect wait for `connectOrInject` that ends at the deadline. Each wait is one connect wait at
+ * most, so the reader still goes in at the same time. A wait that starts after the deadline looks
+ * once and does not sleep.
+ */
+export function connectWaitUntil(
+  deadline: number,
+  now: () => number,
+  sleeper: (ms: number) => Promise<void> = sleep,
+): (isConnected: () => boolean) => Promise<boolean> {
+  return (isConnected) =>
+    waitForReconnect({
+      current: () => (isConnected() ? REGISTERED : undefined),
+      previous: NOT_REGISTERED,
+      timeoutMs: Math.min(LEASE_CONNECT_WAIT_MS, Math.max(0, deadline - now())),
+      now,
+      sleep: sleeper,
+      pollMs: LEASE_READY_POLL_MS,
+    });
+}
+
+/**
+ * Wait until the leased tab is registered, answers a probe and is visible, or the deadline passes.
+ *
+ * A row in the sessions map is not proof that the next call works (#1650): the tab can be attached
+ * and answer nothing. So `ready` waits for a reply. Returns the reason at the deadline, or
+ * `undefined` when the tab is ready. It always looks once, also when the deadline has passed.
+ */
+export async function awaitLeaseAnswering(
+  registered: () => ProbeableSession | undefined,
+  deadline: number,
+  now: () => number,
+  sleeper: (ms: number) => Promise<void> = sleep,
+): Promise<LeaseNotReadyReason | undefined> {
+  for (;;) {
+    const session = registered();
+    const reason =
+      session === undefined
+        ? LeaseNotReadyReason.SDK_STOPPED_ANSWERING
+        : notReadyReason(await probeLeaseAlive(session), session);
+    if (reason === undefined || now() >= deadline) {
+      return reason;
+    }
+    await sleeper(LEASE_READY_POLL_MS);
+  }
+}
 
 /**
  * Poll until the leased tab's SDK has actually registered on the bridge, so the sessionId we return

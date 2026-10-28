@@ -77,6 +77,7 @@ const depsWith = (pool: BrowserPool, nonces: SessionNonces): ToolDeps =>
   ({
     sessions: { get: () => ({ id: 'live' }), all: () => [] },
     pool,
+    now: () => Date.now(),
     nonces,
     bridgePort: 4400,
     linkedCloud: () => Promise.resolve({ url: 'https://cloud.example.com', apiKey: 'rk_test' }),

@@ -19,7 +19,10 @@ import {
   type LeaseEvidence,
 } from './lease-hint.js';
 import {
+  LEASE_READY_TIMEOUT_MS,
+  awaitLeaseAnswering,
   connectOrInject,
+  connectWaitUntil,
   moveReusedLease,
   notReadyReason,
   probeLeaseAlive,
@@ -47,7 +50,8 @@ import {
 import { HudVisibility, ReticleTool, SESSION_HEALTH } from '@reticlehq/core';
 import { HOST_STUB_NOTE, type ToolDef, type ToolDeps } from './tool-kit.js';
 import { type BrowserPool, PoolAtCapacityError } from '@/portal/pool/browser-pool.js';
-import { asString } from '@reticlehq/core';
+import { asNumber, asString } from '@reticlehq/core';
+import { timeoutMsSchema } from './args/numeric-bounds.js';
 import { chromiumPreflightRefusal } from '@/command/cli/doctor/browser/chromium-hint.js';
 import {
   LEASE_PERMISSIONS_ARG,
@@ -399,6 +403,11 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     permissions: LEASE_PERMISSIONS_ARG,
     emulate: LEASE_EMULATE_ARG,
     production: production.PRODUCTION_LEASE_ARG,
+    timeout_ms: timeoutMsSchema
+      .optional()
+      .describe(
+        `How long to wait for the leased tab to connect and answer before answering ready:false with notReadyReason. Default ${String(LEASE_READY_TIMEOUT_MS)}. 0 looks once without waiting.`,
+      ),
     root: z
       .string()
       .optional()
@@ -412,7 +421,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     ready: z
       .boolean()
       .describe(
-        'Whether the leased tab is connected AND answering. It is NOT a claim that the app has hydrated, so an act can miss: make the first act reticle_act_and_wait with an `until`, or reticle_assert { action: "wait" }. Empty reads may mean not hydrated. False ⇒ read notReadyReason.',
+        'Whether the leased tab is connected AND answered a probe under sessionId, so the next call finds it. acquire waits for this, up to timeout_ms. It is NOT a claim that the app has hydrated, so an act can miss: make the first act reticle_act_and_wait with an `until`, or reticle_assert { action: "wait" }. Empty reads may mean not hydrated. False ⇒ read notReadyReason.',
       ),
     zeroInstall: z
       .boolean()
@@ -689,15 +698,27 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       // Resolved rather than assumed: an app that names its own session registers under that name,
       // and the id we hand back has to be the one the agent can actually drive.
       let registeredId: string | undefined;
-      const waitStartedAt = Date.now();
+      const isRegistered = (): boolean => {
+        registeredId = resolveLeasedSessionId(deps.sessions, lease.sessionId);
+        return registeredId !== undefined;
+      };
+      const waitStartedAt = deps.now();
+      const deadline = waitStartedAt + (asNumber(args['timeout_ms']) ?? LEASE_READY_TIMEOUT_MS);
       const waited = await production.guardedForProduction(pool, lease, activated);
-      const { ready, zeroInstall, stillLoading, readerFailure } = await connectOrInject(
-        waited,
-        () => {
-          registeredId = resolveLeasedSessionId(deps.sessions, lease.sessionId);
-          return registeredId !== undefined;
-        },
-      );
+      const {
+        ready: connected,
+        zeroInstall,
+        stillLoading,
+        readerFailure,
+      } = await connectOrInject(waited, isRegistered, connectWaitUntil(deadline, deps.now));
+      // Connected is a row in the sessions map. Ready is a reply from it, so the next call works.
+      const answerReason = connected
+        ? await awaitLeaseAnswering(
+            () => (isRegistered() ? deps.sessions.get(registeredId ?? lease.sessionId) : undefined),
+            deadline,
+            deps.now,
+          )
+        : undefined;
       // Tell the pool the other name this lease answers to. Every later touch and release arrives
       // under the id we are about to hand back, and the pool is keyed by the id it navigated with;
       // without this the touches miss, the lease ages out despite continuous activity, and the
@@ -707,6 +728,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       }
       const effectiveSessionId = registeredId ?? lease.sessionId;
       const session = deps.sessions.get(effectiveSessionId);
+      const ready = connected && answerReason === undefined;
       if (validatedSeed !== undefined && session !== undefined) {
         const failureReason = evaluateSeedPrecondition(
           url,
@@ -723,19 +745,18 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       if (readerFailure === undefined) {
         tellWatchers(deps, projectId, AGENT_DRIVING_ELSEWHERE);
       }
-      // ready means the SDK dialled in — not that contracts match. Carry the skew warning on acquire
+      // ready means the SDK answers — not that contracts match. Carry the skew warning on acquire
       // so the agent does not learn it only after a CDP tool invents a closed page (#688).
       const mintReason =
-        readerFailure?.reason ??
-        notReadyReason(ready, session, LeaseNotReadyReason.SDK_NEVER_DIALLED);
+        readerFailure?.reason ?? (connected ? answerReason : LeaseNotReadyReason.SDK_NEVER_DIALLED);
       const versionSkew =
         registeredId === undefined ? undefined : deps.sessions.get(registeredId)?.versionSkew;
       let notReadyHint: string | undefined;
-      if (!ready) {
+      if (!connected) {
         if (readerFailure !== undefined) {
           notReadyHint = leaseReaderFailedHint(url, readerFailure);
         } else if (true === stillLoading) {
-          notReadyHint = leaseStillLoadingHint(url, Date.now() - waitStartedAt);
+          notReadyHint = leaseStillLoadingHint(url, deps.now() - waitStartedAt);
         } else if (activated !== undefined) {
           notReadyHint = production.notActivatedHint(url);
         } else {
