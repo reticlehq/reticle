@@ -1,11 +1,8 @@
 import {
-  ANIMATION_TARGET_ARG,
   ElementState,
   EventType,
   MUTATING_METHODS,
   PredicateKind,
-  ReticleCommand,
-  SESSION_REF,
   THROTTLED_STARVED_NOTE,
   isSameDocument,
   type ReticleEvent,
@@ -33,12 +30,7 @@ import {
   type Predicate,
   type EvalResult,
 } from './predicate-eval.js';
-import {
-  animationSnapshotFrom,
-  evalAnimation,
-  type AnimationEvent,
-  type AnimationSnapshot,
-} from './predicate-animation.js';
+import { evalAnimationPredicate } from './predicate-animation.js';
 
 export { PredicateSchema, PredicateKind };
 export type { Predicate, EvalResult };
@@ -332,61 +324,6 @@ function failureRestsOnSeeing(predicate: Predicate): boolean {
   }
   // `count: 0` is absence written as arithmetic, and fails the same way: by matching something.
   return 'count' in predicate && 0 === predicate.count;
-}
-
-function animationEvents(events: readonly ReticleEvent[]): AnimationEvent[] {
-  return events.flatMap((event): AnimationEvent[] => {
-    if (EventType.ANIM_START === event.type) {
-      return [
-        {
-          completed: false,
-          data: event.data,
-          ...(event.ref === undefined ? {} : { ref: event.ref }),
-        },
-      ];
-    }
-    if (EventType.ANIM_END === event.type) {
-      return [
-        {
-          completed: true,
-          data: event.data,
-          ...(event.ref === undefined ? {} : { ref: event.ref }),
-        },
-      ];
-    }
-    return [];
-  });
-}
-
-async function readAnimationSnapshot(
-  session: PredicateSession,
-  predicate: Extract<Predicate, { kind: typeof PredicateKind.ANIMATION }>,
-): Promise<AnimationSnapshot | undefined> {
-  const result = await session.command(
-    ReticleCommand.ANIMATIONS,
-    predicate.target === undefined ? {} : { [ANIMATION_TARGET_ARG]: predicate.target },
-  );
-  return result.ok ? animationSnapshotFrom(result.result) : undefined;
-}
-
-async function evalAnimationPredicate(
-  session: PredicateSession,
-  events: ReticleEvent[],
-  predicate: Extract<Predicate, { kind: typeof PredicateKind.ANIMATION }>,
-  floor: number,
-): Promise<EvalResult> {
-  const useLiveAnimations = 0 === floor;
-  let snapshot =
-    predicate.target !== undefined && !SESSION_REF.test(predicate.target)
-      ? await readAnimationSnapshot(session, predicate)
-      : undefined;
-  const observed = animationEvents(events);
-  const eventSnapshot =
-    useLiveAnimations || snapshot === undefined ? snapshot : { ...snapshot, animations: [] };
-  const eventResult = evalAnimation(observed, predicate, eventSnapshot);
-  if (eventResult.pass || !useLiveAnimations) return eventResult;
-  if (snapshot === undefined) snapshot = await readAnimationSnapshot(session, predicate);
-  return evalAnimation(observed, predicate, snapshot);
 }
 
 export async function evaluatePredicate(

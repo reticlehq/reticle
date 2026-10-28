@@ -23,7 +23,7 @@ const spinner = {
 };
 
 class AnimationSession implements PredicateSession {
-  readonly commands: { name: string; args: Record<string, unknown> }[] = [];
+  readonly commandCalls: { name: string; args: Record<string, unknown> }[] = [];
 
   constructor(
     private readonly events: ReticleEvent[],
@@ -35,7 +35,7 @@ class AnimationSession implements PredicateSession {
   }
 
   command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
-    this.commands.push({ name, args });
+    this.commandCalls.push({ name, args });
     if (ReticleCommand.ANIMATIONS === name) {
       return Promise.resolve({
         kind: 'command_result',
@@ -70,10 +70,20 @@ describe('animation predicate', () => {
     });
 
     expect(result.pass).toBe(true);
-    expect(session.commands).toContainEqual({
+    expect(session.commandCalls).toContainEqual({
       name: ReticleCommand.ANIMATIONS,
       args: { [ANIMATION_TARGET_ARG]: '.spinner' },
     });
+  });
+
+  it('ignores Reticle-owned animation events when no name is requested', async () => {
+    const session = new AnimationSession([ev(EventType.ANIM_START, { name: 'reticle:busy' })], {
+      animations: [],
+    });
+
+    const result = await evaluatePredicate(session, { kind: 'animation' });
+
+    expect(result.pass).toBe(false);
   });
 
   it('matches an already-running animation when the start event is not in the window', async () => {
@@ -90,6 +100,16 @@ describe('animation predicate', () => {
 
     expect(result.pass).toBe(true);
     expect(result.evidence).toMatchObject({ playState: 'running' });
+  });
+
+  it('ignores Reticle-owned live animations when no name is requested', async () => {
+    const session = new AnimationSession([], {
+      animations: [{ name: '__reticle-panel', playState: 'running', target: spinner }],
+    });
+
+    const result = await evaluatePredicate(session, { kind: 'animation' });
+
+    expect(result.pass).toBe(false);
   });
 
   it('matches a completed animation from a finished live animation when no end event arrived', async () => {
@@ -120,7 +140,7 @@ describe('animation predicate', () => {
     });
 
     expect(result.pass).toBe(false);
-    expect(session.commands).toHaveLength(0);
+    expect(session.commandCalls).toHaveLength(0);
   });
 
   it('does not satisfy a caller-bounded predicate from current live animation state', async () => {
@@ -131,7 +151,7 @@ describe('animation predicate', () => {
     const result = await evaluatePredicate(session, { kind: 'animation', name: 'spin' }, 10);
 
     expect(result.pass).toBe(false);
-    expect(session.commands).toHaveLength(0);
+    expect(session.commandCalls).toHaveLength(0);
   });
 
   it('names the animations seen on a miss instead of reporting an empty window', async () => {

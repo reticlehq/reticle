@@ -304,7 +304,9 @@ function readState(
 function animationName(animation: Animation): string | undefined {
   const fields = animation as { animationName?: unknown; transitionProperty?: unknown };
   const name = str(fields.animationName);
-  if (name !== undefined && name.length > 0) return name;
+  if (name !== undefined && name.length > 0) {
+    return name;
+  }
   const transition = str(fields.transitionProperty);
   return transition !== undefined && transition.length > 0 ? transition : undefined;
 }
@@ -322,7 +324,9 @@ interface AnimationTargetFilter {
 }
 
 function resolveAnimationTarget(target: string | undefined): AnimationTargetFilter | undefined {
-  if (target === undefined) return undefined;
+  if (target === undefined) {
+    return undefined;
+  }
   const byRef = refs.resolve(target);
   if (byRef !== null) {
     const ref = refs.refFor(byRef);
@@ -342,12 +346,16 @@ function resolveAnimationTarget(target: string | undefined): AnimationTargetFilt
   try {
     const roots: ParentNode[] = [document];
     const container = document.body ?? document.documentElement;
-    if (container !== null) roots.push(...embeddedRootsUnder(container));
+    if (container !== null) {
+      roots.push(...embeddedRootsUnder(container));
+    }
     const seen = new Set<Element>();
     elements = [];
     for (const root of roots) {
       for (const el of root.querySelectorAll<Element>(target)) {
-        if (seen.has(el)) continue;
+        if (seen.has(el)) {
+          continue;
+        }
         seen.add(el);
         elements.push(el);
       }
