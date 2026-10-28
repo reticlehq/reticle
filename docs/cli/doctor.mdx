@@ -131,7 +131,8 @@ Run `reticle doctor --fix` to repair 2 of these.
 | 1 | `daemon` | Delete the pid file of a daemon that is not running | The process that the file names does not exist |
 | 2 | `daemon` | Stop a Reticle daemon that holds the port and does not answer, as `reticle restart` does | The holder's command line is a Reticle daemon, and it is still silent after a grace period. A different program and the agent's own `reticle mcp` proxy are never stopped |
 | 3 | `chromium` | Install the pinned Chromium of the bundled Playwright (a download) | No Chrome or Edge can stand in, and `RETICLE_CHROMIUM_PATH` is not set |
-| 4 | `mcp` | Run `reticle setup mcp` | An agent on this machine does not have Reticle registered |
+| 4 | `launcher` | Run `reticle setup mcp`, which replaces Reticle's own entry | An agent config starts Reticle from an installed copy that does not exist. `setup mcp` keeps an existing Claude Code entry, so for Claude Code the step stays `claude mcp remove reticle -s user`, then `setup mcp` |
+| 5 | `mcp` | Run `reticle setup mcp` | An agent on this machine does not have Reticle registered |
 
 Each repair checks again before it acts, so a second `--fix` finds nothing to do and changes nothing.
 
@@ -142,6 +143,7 @@ reticle doctor --fix
   daemon       pid file of a stopped daemon: fixed
   daemon       a Reticle daemon that does not answer: nothing to do
   chromium     Playwright's own Chromium: nothing to do
+  launcher     a registered launcher that does not exist: nothing to do
   mcp          agent registrations: fixed
   still needs: sync         ✗ off: this project is not linked: run `reticle connect`; no push yet
 ```

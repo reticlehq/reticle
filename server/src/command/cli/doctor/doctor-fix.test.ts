@@ -13,6 +13,7 @@ import { fixFooter, runDoctorFix, type DoctorRepair } from './doctor-fix.js';
 import {
   chromiumRepair,
   mcpRegistrationRow,
+  launcherRepair,
   mcpRepair,
   stalePidRepair,
   wedgedDaemonRepair,
@@ -275,6 +276,50 @@ describe('mcpRepair', () => {
     expect(registered).toBe(1);
     expect(await repair.needed()).toBe(false);
     expect(repair.step).toContain('reticle setup mcp');
+  });
+});
+
+describe('launcherRepair', () => {
+  const GONE =
+    '✗ cursor starts Reticle from /old/bin/reticle.js, and that file does not exist. Run: npx @reticlehq/server setup mcp';
+  const CLAUDE_GONE =
+    '✗ claude-code starts Reticle from /old/bin/reticle.js, and that file does not exist. Run: claude mcp remove reticle -s user, then npx @reticlehq/server setup mcp';
+
+  it('re-runs setup mcp when a registered launcher no longer exists', async () => {
+    let line: string | undefined = GONE;
+    let registered = 0;
+    const repair = launcherRepair({
+      line: () => line,
+      register: () => {
+        registered++;
+        line = undefined;
+      },
+    });
+    expect(await repair.needed()).toBe(true);
+    await repair.apply();
+    expect(registered).toBe(1);
+    expect(await repair.needed()).toBe(false);
+  });
+
+  it('prints the remove-then-add step when setup mcp cannot replace a Claude Code entry', async () => {
+    const out: string[] = [];
+    const repair = launcherRepair({ line: () => CLAUDE_GONE, register: () => {} });
+    await runDoctorFix({
+      doctor: () => Promise.resolve([]),
+      repairs: [repair],
+      print: (text: string) => out.push(text),
+    });
+    expect(out).toContain(
+      doctorRow(
+        DoctorRow.LAUNCHER,
+        'a registered launcher that does not exist: still needs: claude mcp remove reticle -s user, then npx @reticlehq/server setup mcp',
+      ),
+    );
+  });
+
+  it('has nothing to do when every registered launcher exists', async () => {
+    const repair = launcherRepair({ line: () => undefined, register: () => {} });
+    expect(await repair.needed()).toBe(false);
   });
 });
 

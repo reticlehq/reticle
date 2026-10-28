@@ -26,6 +26,7 @@ import {
 } from './doctor/browser/chromium-hint.js';
 import { DoctorRow, doctorRow } from './doctor/doctor-rows.js';
 import type { DoctorRepair } from './doctor/doctor-fix.js';
+import { launcherLine, registeredEntries } from './doctor/doctor-launcher-line.js';
 
 const SETUP_MCP_COMMAND = 'reticle setup mcp';
 
@@ -123,6 +124,64 @@ export function mcpRepair(deps: {
   };
 }
 
+/** How the launcher row starts its command, as `doctor-launcher-line.ts` writes it. */
+const LAUNCHER_RUN = 'Run: ';
+
+/**
+ * An agent config starts Reticle from an installed copy that no longer exists. `setup mcp`
+ * replaces Reticle's own entry in the JSON clients. It keeps an existing Claude Code entry, so for
+ * Claude Code the row still fails after the repair, and the step is the row's remove-then-add.
+ */
+export function launcherRepair(deps: {
+  /** The launcher row, or undefined when every registered launcher exists. */
+  line: () => string | undefined;
+  register: () => void;
+}): DoctorRepair {
+  let step = SETUP_MCP_COMMAND;
+  return {
+    row: DoctorRow.LAUNCHER,
+    what: 'a registered launcher that does not exist',
+    // The step is read after `needed`, which reads the row again.
+    get step() {
+      return step;
+    },
+    needed: () => {
+      const line = deps.line();
+      if (line === undefined) {
+        return Promise.resolve(false);
+      }
+      const at = line.indexOf(LAUNCHER_RUN);
+      step = at < 0 ? SETUP_MCP_COMMAND : line.slice(at + LAUNCHER_RUN.length);
+      return Promise.resolve(true);
+    },
+    apply: () => {
+      deps.register();
+      return Promise.resolve();
+    },
+  };
+}
+
+/** The launcher row for the agent configs of this machine and folder. */
+export function readLauncherLine(cwd: string): string | undefined {
+  return launcherLine(
+    registeredEntries(
+      {
+        exists: existsSync,
+        homeDir: homedir,
+        readFile: (p) => {
+          try {
+            return readFileSync(p, 'utf8');
+          } catch {
+            return null;
+          }
+        },
+      },
+      cwd,
+    ),
+    existsSync,
+  );
+}
+
 /** Which agents found here have Reticle, and which do not. */
 export interface McpRegistration {
   readonly missing: readonly string[];
@@ -194,6 +253,13 @@ export function machineRepairs(port: number, reportStep: StepReporter): DoctorRe
       probe: () => probeChromiumWithFallback(),
       install: () => probeLaunchableChromium(),
       playwrightVersion: bundledPlaywrightVersion(),
+    }),
+    // Before `mcp`: its `setup mcp` also replaces a stale launcher, and this one says so.
+    launcherRepair({
+      line: () => readLauncherLine(process.cwd()),
+      register: () => {
+        handleSetupMcp(reportStep, false);
+      },
     }),
     mcpRepair({
       gaps: () => readMcpRegistration().missing,

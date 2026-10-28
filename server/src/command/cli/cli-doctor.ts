@@ -47,9 +47,13 @@ import { describeUnsynced } from '@/memory/cloud/unsynced-roots.js';
 import { machineUnsyncedRoots } from '@/memory/project/sync-status.js';
 import { attachState, describeAttachState } from '@/surface/mcp/attach-memory.js';
 import { agentLinkText } from './doctor/doctor-agent-link.js';
-import { launcherLine, registeredEntries } from './doctor/doctor-launcher-line.js';
 import { countNeeded, fixFooter, runDoctorFix } from './doctor/doctor-fix.js';
-import { machineRepairs, mcpRegistrationRow, readMcpRegistration } from './doctor-repairs.js';
+import {
+  machineRepairs,
+  mcpRegistrationRow,
+  readLauncherLine,
+  readMcpRegistration,
+} from './doctor-repairs.js';
 import type { StepReporter } from './setup-mcp-cli.js';
 import { findOccupiedSiblings, siblingListenerNote } from './ports/sibling-ports.js';
 import {
@@ -261,23 +265,7 @@ async function doctorLines(port: number, show: boolean): Promise<string[]> {
   // would flip agent presence on a daemon with no agents attached.
   const foreign = presence === PortPresence.FOREIGN;
   line(doctorRow(DoctorRow.AGENT_LINK, agentLinkText({ split, attachAction, foreign })));
-  const launcher = launcherLine(
-    registeredEntries(
-      {
-        exists: existsSync,
-        homeDir: homedir,
-        readFile: (p) => {
-          try {
-            return readFileSync(p, 'utf8');
-          } catch {
-            return null;
-          }
-        },
-      },
-      process.cwd(),
-    ),
-    existsSync,
-  );
+  const launcher = readLauncherLine(process.cwd());
   if (launcher !== undefined) {
     line(doctorRow(DoctorRow.LAUNCHER, launcher));
   }
