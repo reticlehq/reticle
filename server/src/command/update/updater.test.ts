@@ -22,6 +22,21 @@ describe('classifyExecutionKind — global installs are not misread as local', (
     ).toBe('global');
   });
 
+  it('treats the Claude Code plugin copy as pinned, never as the project it runs in', () => {
+    // The plugin pins its server. An update that npm-installs into the project would edit the
+    // user's package.json.
+    expect(
+      classifyExecutionKind(
+        '/Users/x/.claude/plugins/data/reticle-reticlehq/reticle-plugin-server/3.9.0/node_modules/@reticlehq/server/bin/reticle.js',
+      ),
+    ).toBe('npx');
+    expect(
+      classifyExecutionKind(
+        'C:\\Users\\x\\.claude\\plugins\\data\\reticle-reticlehq\\reticle-plugin-server\\3.9.0\\node_modules\\@reticlehq\\server\\bin\\reticle.js',
+      ),
+    ).toBe('npx');
+  });
+
   it('detects a genuine local project install', () => {
     expect(
       classifyExecutionKind('/Users/x/my-app/node_modules/@reticlehq/server/dist/cli.js'),
