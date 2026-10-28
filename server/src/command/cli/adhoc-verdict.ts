@@ -5,6 +5,7 @@ import { DEFAULT_ASSERT_TIMEOUT_MS, LOOPBACK_HOST, MCP_SSE_PATH } from '@reticle
 import { TOKEN_QUERY_PARAM } from '@/portal/bridge/token-auth.js';
 import { ReticleTool, asString as asText } from '@reticlehq/core';
 import { decideOpen } from '@/command/cli/launch/cli-launch.js';
+import { LEASE_KEPT_SENTENCE, LEASE_RELEASED_SENTENCE } from '@/surface/tools/lease-hint.js';
 
 /**
  * A verdict from the CLI, against the daemon that is already running.
@@ -87,10 +88,13 @@ const LEASE_TIMEOUT_MS = 300_000;
 const leaseFailedLine = (url: string): string =>
   `could not open ${url} in a Reticle browser, so nothing was checked:`;
 
-/** Why a lease's tab is not ready: its `notReadyReason`, then its `hint`, when it gave them. */
+/**
+ * Why a lease's tab is not ready: its `notReadyReason`, then its `hint`, when it gave them. The CLI
+ * released the lease, so the hint's kept-lease sentence becomes the released-lease sentence.
+ */
 function notReadyLine(report: Record<string, unknown> | undefined): string {
   const reason = asText(report?.['notReadyReason']);
-  const hint = asText(report?.['hint']);
+  const hint = asText(report?.['hint'])?.replace(LEASE_KEPT_SENTENCE, LEASE_RELEASED_SENTENCE);
   const head =
     reason === undefined ? 'the tab did not connect.' : `the tab did not connect (${reason}).`;
   return hint === undefined ? head : `${head} ${hint}`;

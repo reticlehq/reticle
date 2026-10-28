@@ -83,8 +83,16 @@ const NUXT_FIRST =
   'Reticle plugin, because Nuxt does NOT register a newly added plugin on HMR. Restart `nuxt dev` ' +
   'and re-acquire before investigating anything else.';
 
-const RELEASE =
-  'The tab stays leased either way — release it with reticle_lease{action:"release"}.';
+/**
+ * The last sentence of every not-connected hint. It is true for an MCP caller, which keeps the
+ * lease. The CLI releases the lease itself, and puts `LEASE_RELEASED_SENTENCE` in its place.
+ */
+export const LEASE_KEPT_SENTENCE =
+  'The tab stays leased. Release it with reticle_lease{action:"release"}.';
+const RELEASE = LEASE_KEPT_SENTENCE;
+
+/** The sentence for a lease that is already released. */
+export const LEASE_RELEASED_SENTENCE = 'The lease is released.';
 
 const PRODUCTION_STUB =
   ' If this is a production build (`vite build`, `next build`, `next start`, or a deployed site), it strips ' +
@@ -241,8 +249,8 @@ export function leaseStillLoadingHint(url: string, waitedMs: number): string {
 /** The hint for a lease whose zero-install reader did not run (#1701). The lease is already released. */
 export function leaseReaderFailedHint(url: string, failure: LeaseReaderFailure): string {
   return failure.reason === LeaseNotReadyReason.NOT_HTML_DOCUMENT
-    ? `${url} is not an HTML page, so no SDK can connect to it. The lease is released. ` +
+    ? `${url} is not an HTML page, so no SDK can connect to it. ${LEASE_RELEASED_SENTENCE} ` +
         'Acquire an HTML page of the app instead.'
-    : `The zero-install reader failed on ${url}: ${failure.cause}. The lease is released. ` +
+    : `The zero-install reader failed on ${url}: ${failure.cause}. ${LEASE_RELEASED_SENTENCE} ` +
         'If the tab closed during setup, acquire again.';
 }

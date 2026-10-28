@@ -21,7 +21,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { LeaseNotReadyReason } from '@reticlehq/core';
-import { leaseNotConnectedHint, leaseReaderFailedHint } from './lease-hint.js';
+import { LEASE_KEPT_SENTENCE, leaseNotConnectedHint, leaseReaderFailedHint } from './lease-hint.js';
 
 describe('leaseNotConnectedHint', () => {
   const hint = leaseNotConnectedHint('http://localhost:5173/', 4400);
@@ -219,5 +219,25 @@ describe('leaseReaderFailedHint', () => {
     });
     expect(hint).toContain('Target page, context or browser has been closed');
     expect(hint).toContain('The lease is released.');
+  });
+});
+
+/*
+ * The MCP caller keeps the lease, so every not-connected hint tells it to release the tab. The CLI
+ * releases the lease itself and says so instead: see adhoc-verdict.test.ts.
+ */
+describe('the release sentence on the MCP path', () => {
+  const branches: [string, Parameters<typeof leaseNotConnectedHint>[2]][] = [
+    ['nothing known', {}],
+    ['a dial to another port', { dialledUrl: 'ws://localhost:4455/' }],
+    ['a page policy that blocks the dial', { cspBlock: { problem: 'p', fix: 'f' } }],
+    ['a recorded refusal', { refusal: 'bad token.' }],
+    ['a port that connected before', { previouslyConnected: true }],
+    ['a project that ran init', { initialized: true }],
+  ];
+  it.each(branches)('ends with the kept-lease sentence: %s', (_name, evidence) => {
+    const hint = leaseNotConnectedHint('http://localhost:5173/', 4400, evidence);
+    expect(hint.endsWith(LEASE_KEPT_SENTENCE)).toBe(true);
+    expect(hint).not.toContain('either way');
   });
 });

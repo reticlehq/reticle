@@ -22,6 +22,11 @@ import {
 } from './adhoc-verdict.js';
 import { MAX_BLOCKING_WAIT_MS } from '@/surface/tools/args/numeric-bounds.js';
 import { ReticleTool } from '@reticlehq/core';
+import {
+  LEASE_KEPT_SENTENCE,
+  LEASE_RELEASED_SENTENCE,
+  leaseNotConnectedHint,
+} from '@/surface/tools/lease-hint.js';
 
 /** A fake daemon: records what was asked, answers with the verdict it was given. */
 function caller(verdict: unknown): { tool: ToolCaller; calls: { name: string; args: unknown }[] } {
@@ -410,6 +415,20 @@ describe('a lease whose tab is not ready', () => {
     });
     expect(result.code).toBe(1);
     expect(c.calls.map((x) => x.name)).not.toContain(ReticleTool.ASSERT);
+  });
+
+  // The daemon's hint tells an MCP caller that the tab stays leased. The CLI released it, so it
+  // says that instead.
+  it('says the lease is released, not that the tab stays leased', async () => {
+    const c = acquiring({
+      ...notReady,
+      hint: leaseNotConnectedHint('http://localhost:5190/', 4400),
+    });
+    const got = await acquireLease(c.tool, 'http://localhost:5190/');
+    const said = 'failed' in got ? got.failed.join(' ') : '';
+    expect(said).not.toContain(LEASE_KEPT_SENTENCE);
+    expect(said).not.toMatch(/stays leased/);
+    expect(said.endsWith(LEASE_RELEASED_SENTENCE)).toBe(true);
   });
 });
 
