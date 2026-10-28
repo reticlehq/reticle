@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   EMPTY_SESSION_LIST_OUTPUT,
   emptySessionList,
+  NEXT_STEP_FIELD,
   nextStepBesideLiveSessions,
 } from './empty-session-list.js';
 import { AttrNamesSchema, QueryBy, ReticleCommand, SnapshotMode } from '@reticlehq/core';
@@ -187,7 +188,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
       if (0 === sessions.length) return emptySessionList(deps, sessions);
       // Another project's tab is up. This caller's project may still never have been wired.
       const nextStep = nextStepBesideLiveSessions(deps, sessions);
-      return nextStep === undefined ? { sessions } : { sessions, next_step: nextStep };
+      return nextStep === undefined ? { sessions } : { sessions, [NEXT_STEP_FIELD]: nextStep };
     },
   },
   {

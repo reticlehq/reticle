@@ -188,6 +188,20 @@ export function wiringConsent(init: string = INIT_COMMAND): string {
   );
 }
 
+/**
+ * The offer for the first session in an unwired web app: check it now with the lease, then ask
+ * before `init`. The one text for the plugin's SessionStart hook and the first tool call of each
+ * agent connection. The hook cannot import this, so it keeps a copy, and
+ * `plugin-init-nudge.test.ts` fails when the two are not the same.
+ */
+export function firstSessionOffer(init: string = INIT_COMMAND): string {
+  return (
+    `This web app can be checked now with no install: \`${zeroInstallLease(undefined)}\` opens ` +
+    "the running app in Reticle's own browser and changes no file. To keep Reticle wired to this " +
+    `app: ${wiringConsent(init)}`
+  );
+}
+
 const OPEN_COMMAND = `${CLI} open`;
 const LOCALHOST = 'http://localhost';
 

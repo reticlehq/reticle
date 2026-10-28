@@ -21,8 +21,11 @@ import { DEV_SERVER_PORTS } from '@/command/cli/ports/resolve/cli-port.js';
 import { callingClientDirectory } from '@/hooks/client-directory.js';
 import { detectDevCommandInProject, initCommandIn } from './dev-server/dev-command.js';
 import { probeDevServerStates } from './dev-server/dev-server-probe.js';
+import { NextStepOffered } from '@reticlehq/core';
+import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
+import { noteNextStepOffered } from '@/telemetry/onboarding-firsts.js';
 import { firstRunWiring, type FirstRunWiring } from './first-run-wiring.js';
-import { wiringConsent } from './no-session-next-action.js';
+import { firstSessionOffer, wiringConsent } from './no-session-next-action.js';
 import { servingDirectoryOf } from './serving-directory.js';
 
 const LOCALHOST = 'http://localhost';
@@ -118,9 +121,50 @@ export function firstCallOpener(io: FirstCallIo): () => Promise<FirstCallOpened 
 }
 
 /**
+ * The first-session offer, on the first tool call of each agent connection.
+ *
+ * The plugin's SessionStart hook says it when a session starts. A plugin installed in an open
+ * session and loaded with `/reload-plugins` fires no SessionStart, so the server says it too. Only
+ * the first call of a connection looks: an offer on a later call reads as noise.
+ */
+export interface FirstSessionOfferIo {
+  /** The unwired web app this call is about; undefined when wired, not a web app, or no project. */
+  project: () => string | undefined;
+  /** Whether an app is attached now. */
+  connected: () => boolean;
+  /** Called once for each offer that goes out, with its project. */
+  offered: (dir: string) => void;
+}
+
+/** The offer for this connection's first call, or undefined. Each attach id gets one look. */
+export function firstSessionOfferGate(
+  io: FirstSessionOfferIo,
+): (attachId: string) => string | undefined {
+  // ponytail: one short id per MCP connection for the daemon's life; bound it if a daemon ever
+  // serves connections by the million.
+  const looked = new Set<string>();
+  return (attachId) => {
+    if (looked.has(attachId)) {
+      return undefined;
+    }
+    looked.add(attachId);
+    if (io.connected()) {
+      return undefined;
+    }
+    const dir = io.project();
+    if (dir === undefined) {
+      return undefined;
+    }
+    io.offered(dir);
+    return firstSessionOffer(initCommandIn(dir));
+  };
+}
+
+/**
  * The daemon's two answers to an app nobody wired, built together because both ask the same
  * question first — which unwired web app is this caller in. `firstRun` names it when the agent
- * lists sessions; `openUnwiredApp` opens it zero-install on a page-needing call.
+ * lists sessions; `openUnwiredApp` opens it zero-install on a page-needing call;
+ * `firstSessionOffer` says the offer on the first call of each agent connection.
  */
 export function agentWiring(
   sessions: { list(): readonly unknown[] },
@@ -129,6 +173,7 @@ export function agentWiring(
   firstRun: FirstRunWiring;
   openUnwiredApp: () => Promise<FirstCallOpened | undefined>;
   projectAppUrl: () => Promise<string | undefined>;
+  firstSessionOffer: (attachId: string) => string | undefined;
 } {
   const firstRun = firstRunWiring();
   const io: FirstCallIo = {
@@ -144,5 +189,12 @@ export function agentWiring(
     firstRun,
     openUnwiredApp: firstCallOpener(io),
     projectAppUrl: projectAppUrlFinder({ ...io, project: callerFolder }),
+    firstSessionOffer: firstSessionOfferGate({
+      ...io,
+      // The offer leads with the lease, so it is counted as a lease offer.
+      offered: (dir) => {
+        noteNextStepOffered(NextStepOffered.LEASE, () => readProjectId(dir) !== undefined);
+      },
+    }),
   };
 }

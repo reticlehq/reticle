@@ -23,6 +23,7 @@ import { runTool } from './invoke-tool.js';
 
 const ROOT = '/tmp/reticle-dispatch-opens-unwired/.reticle';
 const NOTICE = 'opened http://localhost:5173 zero-install';
+const OFFER = 'This web app can be checked now with no install.';
 
 function leased(): Session {
   return createFakeSession(
@@ -100,6 +101,45 @@ describe('a page-needing call on an unwired app', () => {
     const { deps, opens } = unwired();
     await runTool(tool(ReticleTool.TOOLS, []), deps, {});
     expect(opens()).toBe(0);
+  });
+
+  it('says the first-session offer on the first call of a connection, once, and changes no verdict', async () => {
+    const { deps } = unwired();
+    const asked: string[] = [];
+    const offerDeps: ToolDeps = {
+      ...deps,
+      attachId: 'attach-1',
+      firstSessionOffer: (attachId) => {
+        const first = !asked.includes(attachId);
+        asked.push(attachId);
+        return first ? OFFER : undefined;
+      },
+    };
+    const verdict: ToolDef = {
+      name: ReticleTool.TOOLS,
+      description: '',
+      inputSchema: {},
+      handler: () => Promise.resolve({ verified: 'yes', because: 'b' }),
+    };
+    const first = (await runTool(verdict, offerDeps, {})) as Record<string, unknown>;
+    expect(first[EnvelopeKey.FIRST_SESSION_OFFER]).toBe(OFFER);
+    expect(first['verified']).toBe('yes');
+    expect(first['because']).toBe('b');
+    const second = (await runTool(verdict, offerDeps, {})) as Record<string, unknown>;
+    expect(second[EnvelopeKey.FIRST_SESSION_OFFER]).toBeUndefined();
+    expect(asked).toEqual(['attach-1', 'attach-1']);
+  });
+
+  it('does not say the offer twice when the call opened the app and said so', async () => {
+    const { deps } = unwired();
+    const offerDeps: ToolDeps = { ...deps, attachId: 'attach-1', firstSessionOffer: () => OFFER };
+    const result = (await runTool(tool(ReticleTool.LOOK, []), offerDeps, {})) as Record<
+      string,
+      unknown
+    >;
+    // An agent's own call folds the notice into `notices`; it is still said.
+    expect(JSON.stringify(result)).toContain(NOTICE);
+    expect(result[EnvelopeKey.FIRST_SESSION_OFFER]).toBeUndefined();
   });
 
   it('leaves a call that named its own session alone', async () => {

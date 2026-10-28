@@ -6,11 +6,12 @@
  * the same wording as the MCP instructions.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@/machine/repo-root.js';
+import { firstSessionOffer } from '@/portal/session/no-session-next-action.js';
 import { wiringConsent } from '@/surface/tools/empty-session-list.js';
 
 const HOOK = join(REPO_ROOT, 'plugins', 'reticle', 'hooks', 'init-nudge.mjs');
@@ -48,6 +49,28 @@ describe('the plugin SessionStart hook in an unwired web app', () => {
     expect(text).toContain(wiringConsent(init));
     expect(text.indexOf('reticle_lease')).toBeLessThan(text.indexOf('`init`'));
     expect(text).not.toContain('\n');
+  });
+
+  it('says the same offer as the MCP server, word for word', () => {
+    // The hook cannot import the server, so it keeps a copy. This keeps the copy the same.
+    const text = context(runHook(app, mkdtempSync(join(tmpdir(), 'reticle-nudge-state-'))));
+    const init = /run `([^`]+)` in the app's folder/.exec(text)?.[1] ?? '';
+    expect(text).toBe(firstSessionOffer(init));
+  });
+
+  it('runs on each SessionStart after an in-session install, not only on startup', () => {
+    // `/reload-plugins` fires no SessionStart. The next `/clear` or compaction does, and the
+    // once-per-project record keeps that from repeating the offer.
+    const config = JSON.parse(
+      readFileSync(join(REPO_ROOT, 'plugins', 'reticle', 'hooks', 'hooks.json'), 'utf8'),
+    ) as { hooks: { SessionStart: { matcher: string }[] } };
+    const matchers = config.hooks.SessionStart.map((entry) => new RegExp(`^(${entry.matcher})$`));
+    for (const source of ['startup', 'resume', 'clear', 'compact']) {
+      expect(
+        matchers.some((m) => m.test(source)),
+        source,
+      ).toBe(true);
+    }
   });
 
   it('says it once per project', () => {

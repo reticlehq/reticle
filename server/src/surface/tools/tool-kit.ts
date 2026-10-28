@@ -99,6 +99,11 @@ export interface ToolDeps<Ext = unknown> {
   openUnwiredApp?: () => Promise<{ url: string; notice: string } | undefined>;
   /** The one dev server running in the caller's project folder, for a lease that names no url. */
   projectAppUrl?: () => Promise<string | undefined>;
+  /**
+   * The first-session offer for this attach id's first call, when no app is attached and the
+   * project is not wired (see zero-install-first-call.ts). Absent: no offer.
+   */
+  firstSessionOffer?: (attachId: string) => string | undefined;
   /** cross-run outcome memory (.reticle/project.json). */
   project: ProjectStore;
   /** optional native-input provider. undefined ⇒ everything stays synthetic. */
@@ -327,6 +332,11 @@ export const EnvelopeKey = {
    * what it cannot see, and the command that wires the app for good. See zero-install-first-call.ts.
    */
   ZERO_INSTALL: 'zero_install',
+  /**
+   * Once per agent connection, on its first call: this unwired web app can be checked now with the
+   * lease, and `init` needs the user's consent. See zero-install-first-call.ts.
+   */
+  FIRST_SESSION_OFFER: 'first_session_offer',
   /** Once-per-session advisory lines an agent's own call carries. See agent/notices.ts. */
   NOTICES: 'notices',
   /** The end-of-run report, on the call that ends an agent's run. See run-report.ts. */

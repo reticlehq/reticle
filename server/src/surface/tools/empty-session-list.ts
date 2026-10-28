@@ -41,6 +41,9 @@ const LEASABLE_ACTIONS: ReadonlySet<string> = new Set([
 ]);
 const LOCALHOST = 'http://localhost';
 
+/** The field that carries the next step for an unwired project. */
+export const NEXT_STEP_FIELD = 'next_step';
+
 /** The fields only an empty list carries, declared so a schema-aware client does not strip them. */
 export const EMPTY_SESSION_LIST_OUTPUT = {
   why: z
@@ -66,7 +69,7 @@ export const EMPTY_SESSION_LIST_OUTPUT = {
     .describe(
       'Present ONLY when `sessions` is empty: a call with the founder for the person you are working with. Offer it; never act on it.',
     ),
-  next_step: z
+  [NEXT_STEP_FIELD]: z
     .object({
       offered: z.nativeEnum(NextStepOffered),
       lease: z.string().optional(),
@@ -175,7 +178,7 @@ export function emptySessionList(deps: ToolDeps, sessions: unknown[]): Record<st
     sessions,
     ...(why === undefined ? {} : { why }),
     ...(next === undefined ? {} : { next_action: next }),
-    ...(nextStep === undefined ? {} : { next_step: nextStep }),
+    ...(nextStep === undefined ? {} : { [NEXT_STEP_FIELD]: nextStep }),
     ...(undefined === lastKnown ? {} : { lastKnown }),
     // Setup that never connects is where most people give up; it is the talk worth having.
     talk_to_us: DiscoveryInvite.AGENT,

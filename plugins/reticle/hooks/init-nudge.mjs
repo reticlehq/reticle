@@ -2,12 +2,18 @@
  * SessionStart: tell the agent, once per project, that this web app has Reticle's tools but was
  * never wired to them.
  *
+ * It runs on every SessionStart source except `fork`. `/reload-plugins` after an in-session install
+ * fires no SessionStart, so the next `/clear`, compaction or resume says it, and the MCP server
+ * says the same offer on the first tool call of each connection. The record of projects already
+ * told keeps it to once per project.
+ *
  * The plugin registers the MCP server and stops. An agent never reads the MCP server's own
  * instructions until it calls a Reticle tool, so this puts the first step in front of it at the
  * start of the session. The first step is the lease: it checks the running app now and changes no
  * file. `init` keeps Reticle wired, and it changes the user's files, so the agent runs it only when
  * the user agrees. The consent sentences are the same as the MCP instructions
- * (`wiringConsent` in server/src/portal/session/no-session-next-action.ts).
+ * (`firstSessionOffer` in server/src/portal/session/no-session-next-action.ts). This text is a
+ * copy of it, and server/src/surface/mcp/plugin-init-nudge.test.ts fails when the two differ.
  *
  * Never fails the session: any error, or any doubt about the project, prints nothing and exits 0.
  */
@@ -38,7 +44,7 @@ const WEB_DEPS = [
   '@tanstack/react-start',
 ];
 const LEASE_CALL =
-  'reticle_run({ tool: "reticle_lease", args: { action: "acquire", url: "<the running app\'s URL>" } })';
+  'reticle_run { tool: "reticle_lease", args: { action: "acquire", url: "<the app\'s URL>" } }';
 const STATE_DIR = process.env['RETICLE_STATE_DIR'] ?? join(homedir(), '.reticle');
 const NUDGED_FILE = join(STATE_DIR, 'plugin-init-nudged.json');
 

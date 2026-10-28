@@ -75,6 +75,7 @@ import {
 import { FrictionKind, frictionOf, inviteFor } from './feedback-invite.js';
 import { VACUOUS_BECAUSE } from '@reticlehq/engine/evidence/verified.js';
 import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
+import { NEXT_STEP_FIELD } from './empty-session-list.js';
 
 /**
  * Emit `verification_completed` when a verification tool produced a verdict.
@@ -777,6 +778,13 @@ async function dispatchTool<Ext>(
       : undefined;
   const platformLine =
     platform === undefined ? nudge : nudge === undefined ? platform : `${platform}\n${nudge}`;
+  // The first call of this connection, in an unwired app with nothing attached: the offer the
+  // plugin's SessionStart hook makes, which `/reload-plugins` never fires. Always taken, so a call
+  // that already said it (the opened tab's notice, an empty list's `next_step`) still uses the once.
+  const firstOffer =
+    agentCall && deps.attachId !== undefined ? deps.firstSessionOffer?.(deps.attachId) : undefined;
+  const offer =
+    opened === undefined && !(NEXT_STEP_FIELD in (answer ?? {})) ? firstOffer : undefined;
   const drives = agentCall
     ? takeDriveNotes('string' === typeof answer?.['runId'] ? answer['runId'] : undefined)
     : [];
@@ -796,7 +804,8 @@ async function dispatchTool<Ext>(
     undelivered === undefined &&
     friction === undefined &&
     platformLine === undefined &&
-    next === undefined
+    next === undefined &&
+    offer === undefined
       ? raw
       : {
           // First, so a model that truncates a long result still reads it.
@@ -817,6 +826,7 @@ async function dispatchTool<Ext>(
           ...(update !== undefined ? { [EnvelopeKey.UPDATE_AVAILABLE]: update } : {}),
           ...(skew !== undefined ? { [EnvelopeKey.VERSION_SKEW]: skew } : {}),
           ...(platformLine !== undefined ? { [EnvelopeKey.PLATFORM]: platformLine } : {}),
+          ...(offer === undefined ? {} : { [EnvelopeKey.FIRST_SESSION_OFFER]: offer }),
           ...(0 === drives.length ? {} : { [EnvelopeKey.HARNESS]: drives.join('\n') }),
           ...(notes === undefined ? {} : { [EnvelopeKey.CONTROL]: notes }),
           ...(undelivered !== undefined
