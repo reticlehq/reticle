@@ -344,10 +344,13 @@ The payload never carries a selector, a URL or a description of the app.
 | `tool` | string | The tool that refused. |
 | `reason` | `RefusalReason` | `no_session`, `no_match`, `unsupported`, `bad_args`, `not_ready` or `other`. |
 | `noSessionReason` | `NoSessionReason`, optional | For `no_session` only: which situation. |
+| `detail` | `RefusalDetail`, optional | The cause inside `reason`, from the recovery table: `no_session`, `multiple_sessions`, `unknown_session`, `scope_mismatch`, `session_gone`, `throttled`, `command_timeout`, `pool_unavailable`, `pool_shut_down`, `chromium_missing`, `chromium_path`, `token_required`, `missing_baseline`, `missing_recording`, `stale_ref`, `stale_ref_after_edit`, `unissued_ref`, `no_such_option`, `target_missed`, `ambiguous_target`, `flow_step_missing`, `unsupported_surface`, `hover_needs_pointer`, `not_editable`, `confirm_dangerous`, `wrong_target`, `production_policy`, `bad_arguments`, `invalid_name`, `harness_off`, `harness_locked`. Absent when no recovery rule matched the message, and on a refusal that diagnosed itself. |
 | `retried` | boolean | The call before this one was the same tool, also refused. |
 | `params` | string[], optional | The names of the arguments the refused call passed (at most 16). An argument whose value is one of our own enums carries it, as `action:list`, or `action:other` for a value not on the list. Never any other value. Absent when the call passed none. |
 
 > **Trap:** `noSessionReason` is absent on many `no_session` rows. Absent means the refusal named no situation, not that the cause was simple.
+>
+> **Trap:** `detail` arrives from this version on. Older rows have no `detail`, so segment by version before you split `not_ready` by cause.
 
 ```json
 {
@@ -355,6 +358,7 @@ The payload never carries a selector, a URL or a description of the app.
   "refusal_tool": "reticle_assert",
   "refusal_reason": "no_session",
   "refusal_noSessionReason": "tab_gone",
+  "refusal_detail": "session_gone",
   "refusal_retried": false
 }
 ```

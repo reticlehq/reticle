@@ -387,6 +387,8 @@ await settle();
   check('  the same tool called straight after IS flagged as a retry', rs[1]?.properties.refusal_retried === true);
   check('  a refusal RETURNED rather than thrown is counted too', rs[2]?.properties.refusal_tool === 'reticle_baseline', String(rs[2]?.properties.refusal_tool));
   check('  and classified by what was missing, not lumped in with no_session', rs[2]?.properties.refusal_reason === 'no_match', String(rs[2]?.properties.refusal_reason));
+  // The bucket alone does not say which cause it was. The detail is a closed name, never the message.
+  check('  names the cause inside the bucket', rs[2]?.properties.refusal_detail === 'missing_baseline', String(rs[2]?.properties.refusal_detail));
   // The refusal message interpolates whatever the caller asked for — a baseline name, a selector, a
   // testid. Only the tool NAME and the bucket may leave; the message itself never does.
   check('  leaks no argument from the refused call', !JSON.stringify(rs).includes('checkout-v3') && !JSON.stringify(rs).includes('submit'));

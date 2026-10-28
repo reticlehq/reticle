@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RefusalReason, TelemetryEventKind } from '@reticlehq/core/telemetry';
+import {
+  RefusalDetail,
+  RefusalReason,
+  TelemetryEventKind,
+  ToolRefusalSchema,
+} from '@reticlehq/core/telemetry';
 import { noteToolServed, reportToolRefused, resetToolRefusals } from './tool-refused.js';
 import * as telemetry from './telemetry.js';
 
@@ -72,7 +77,9 @@ describe('tool_refused', () => {
    */
   it('stops sending past the session cap', () => {
     const sent = captureEmits();
-    for (let i = 0; i < 60; i += 1) reportToolRefused('reticle_act', RefusalReason.NO_MATCH);
+    for (let i = 0; i < 60; i += 1) {
+      reportToolRefused('reticle_act', RefusalReason.NO_MATCH);
+    }
     expect(sent.length).toBe(50);
   });
 });
@@ -100,5 +107,68 @@ describe('tool_refused carries the shape of the call', () => {
     const sent = captureEmits();
     reportToolRefused('reticle_session', RefusalReason.BAD_ARGS, {});
     expect((sent[0]?.refusal as { params?: string[] } | undefined)?.params).toBeUndefined();
+  });
+});
+
+/*
+ * `not_ready` on reticle_lease was one bucket over several causes, so the data could not say which
+ * cause stopped a user. The refusal now carries the cause as a closed name, never the message.
+ */
+describe('tool_refused carries the cause inside the bucket', () => {
+  it('reports the detail it is given', () => {
+    const sent = captureEmits();
+    reportToolRefused('reticle_lease', RefusalReason.NOT_READY, {}, RefusalDetail.CHROMIUM_MISSING);
+    expect((sent[0]?.refusal as { detail?: string } | undefined)?.detail).toBe('chromium_missing');
+  });
+
+  it('sends no detail field when there is none', () => {
+    const sent = captureEmits();
+    reportToolRefused('reticle_lease', RefusalReason.OTHER);
+    expect(sent[0]?.refusal).not.toHaveProperty('detail');
+  });
+
+  it('accepts exactly the closed list of details on the wire', () => {
+    expect(Object.values(RefusalDetail).sort()).toEqual(
+      [
+        'ambiguous_target',
+        'bad_arguments',
+        'chromium_missing',
+        'chromium_path',
+        'command_timeout',
+        'confirm_dangerous',
+        'flow_step_missing',
+        'harness_locked',
+        'harness_off',
+        'hover_needs_pointer',
+        'invalid_name',
+        'missing_baseline',
+        'missing_recording',
+        'multiple_sessions',
+        'no_session',
+        'no_such_option',
+        'not_editable',
+        'pool_shut_down',
+        'pool_unavailable',
+        'production_policy',
+        'scope_mismatch',
+        'session_gone',
+        'stale_ref',
+        'stale_ref_after_edit',
+        'target_missed',
+        'throttled',
+        'token_required',
+        'unissued_ref',
+        'unknown_session',
+        'unsupported_surface',
+        'wrong_target',
+      ].sort(),
+    );
+    const base = { tool: 'reticle_lease', reason: RefusalReason.NOT_READY, retried: false };
+    for (const detail of Object.values(RefusalDetail)) {
+      expect(ToolRefusalSchema.safeParse({ ...base, detail }).success).toBe(true);
+    }
+    expect(
+      ToolRefusalSchema.safeParse({ ...base, detail: 'browser pool unavailable' }).success,
+    ).toBe(false);
   });
 });

@@ -37,7 +37,7 @@ import { rewriteClosedAsSkew } from '@/command/version/version-skew.js';
 import { noteToolCall } from '@/command/daemon/lifetime/daemon-usefulness.js';
 import { bugsInResult, routeOf } from '@/telemetry/bug-found.js';
 import { noteToolServed, reportToolRefused } from '@/telemetry/tool-refused.js';
-import { buildErrorPayload, codedRefusalOf, refusalReasonFor } from './error-recovery.js';
+import { buildErrorPayload, classifyRefusal, codedRefusalOf } from './error-recovery.js';
 import { resultIsError } from '@/surface/mcp/faults/mcp-is-error.js';
 import { verificationOf } from '@/telemetry/verification-of.js';
 import { emitBugFoundHook, emitVerdictHook } from '@/hooks/hook-emit.js';
@@ -196,7 +196,8 @@ function reportRefusal(
   if (toolName === ReticleTool.RUN) {
     return;
   }
-  reportToolRefused(toolName, refusalReasonFor(message, codedRefusalOf(error)), args);
+  const { reason, detail } = classifyRefusal(message, codedRefusalOf(error));
+  reportToolRefused(toolName, reason, args, detail);
 }
 
 /**

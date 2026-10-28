@@ -276,6 +276,7 @@ The refusal path computes a precise diagnosis, hands it to the agent as prose, a
 - `refusal_tool`: which tool, from our own fixed namespace. Never app data.
 - `refusal_reason`: the closed `RefusalReason`: `no_session` | `no_match` | `unsupported` | `bad_args` | `not_ready` | `other`. Four different owners, and one undifferentiated "they stopped" number is actionable by none of them.
 - `refusal_retried`: the call immediately before this one was the same tool, also refused.
+- `refusal_detail`: the closed `RefusalDetail`, which names the cause inside `refusal_reason`. A bucket such as `not_ready` on `reticle_lease` covers a missing pool, a pool that is shut down, no Chromium, a bad `RETICLE_CHROMIUM_PATH`, a throttled tab, a timeout and a missing pairing token. Each needs a different fix. `DETAIL_OF` in `error-recovery.ts` is a `Record` over the recovery keys, so a recovery added without a detail does not compile. A rule can name a narrower detail than its recovery, as the three `NO_POOL` rules do. Absent when no rule matched, and on a refusal that diagnosed itself.
 
 Two things about it are deliberate and easy to get wrong later.
 

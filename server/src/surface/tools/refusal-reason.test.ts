@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { RefusalReason } from '@reticlehq/core/telemetry';
+import { RefusalDetail, RefusalReason } from '@reticlehq/core/telemetry';
 import { SELF_RECOVERING_MARKER } from '@/portal/session/no-session-diagnosis.js';
-import { RECOVERY, recoveryFor, refusalReasonFor } from './error-recovery.js';
+import { CHROMIUM_PATH_REFUSAL_PREFIX } from '@/command/cli/doctor/browser/chromium-hint.js';
+import { RECOVERY, classifyRefusal, recoveryFor, refusalReasonFor } from './error-recovery.js';
 
 /**
  * `tool_refused` is only worth sending if the reason on it is the same fact the agent was told.
@@ -66,5 +67,53 @@ describe('why a tool refused', () => {
   it('keeps every recovery hint distinct, so the reason lookup cannot collide', () => {
     const hints = Object.values(RECOVERY);
     expect(new Set(hints).size).toBe(hints.length);
+  });
+});
+
+/*
+ * `not_ready` on reticle_lease is one bucket over several causes: no pool, no Chromium, a bad
+ * RETICLE_CHROMIUM_PATH, a throttled tab, a timeout, a missing pairing token. Each needs a
+ * different fix, and the bucket alone did not say which one stopped the user.
+ */
+describe('which cause inside the bucket', () => {
+  it.each([
+    [
+      'browser pool unavailable — the lease tools need the daemon-managed pool',
+      RefusalDetail.POOL_UNAVAILABLE,
+    ],
+    ['browser pool is shut down', RefusalDetail.POOL_SHUT_DOWN],
+    [
+      'Chromium is not installed for Playwright. Run: npx playwright install chromium',
+      RefusalDetail.CHROMIUM_MISSING,
+    ],
+    [`${CHROMIUM_PATH_REFUSAL_PREFIX}/nowhere, which does not exist`, RefusalDetail.CHROMIUM_PATH],
+    ['the target tab is throttled', RefusalDetail.THROTTLED],
+    ["command 'snapshot' timed out after 8000ms", RefusalDetail.COMMAND_TIMEOUT],
+    [
+      'a pairing token is required when the Reticle bridge binds beyond localhost',
+      RefusalDetail.TOKEN_REQUIRED,
+    ],
+  ])('names the not_ready cause of %s', (message, detail) => {
+    expect(classifyRefusal(message)).toEqual({ reason: RefusalReason.NOT_READY, detail });
+  });
+
+  it.each([
+    ['multiple sessions connected', RefusalReason.NO_SESSION, RefusalDetail.MULTIPLE_SESSIONS],
+    ["ref 'e12' no longer resolves to an element", RefusalReason.NO_MATCH, RefusalDetail.STALE_REF],
+    ['cannot fill a disabled <input>', RefusalReason.UNSUPPORTED, RefusalDetail.NOT_EDITABLE],
+    ["unknown action 'clik'", RefusalReason.BAD_ARGS, RefusalDetail.BAD_ARGUMENTS],
+  ])('names the cause in the other buckets too: %s', (message, reason, detail) => {
+    expect(classifyRefusal(message)).toEqual({ reason, detail });
+  });
+
+  it('sends no detail for a message nothing recognises', () => {
+    expect(classifyRefusal('the flux capacitor desynchronised')).toEqual({
+      reason: RefusalReason.OTHER,
+    });
+  });
+
+  it('sends no detail for a message that diagnosed itself', () => {
+    const diagnosed = `nothing is listening on any dev-server port. ${SELF_RECOVERING_MARKER}`;
+    expect(classifyRefusal(diagnosed)).toEqual({ reason: RefusalReason.NO_SESSION });
   });
 });

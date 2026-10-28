@@ -4251,16 +4251,6 @@
       "count": 1
     }
   },
-  "src/telemetry/tool-refused.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
-  "src/telemetry/tool-refused.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/telemetry/verification-of.ts": {
     "curly": {
       "count": 10

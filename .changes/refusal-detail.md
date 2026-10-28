@@ -1,0 +1,3 @@
+### Changed
+
+- **`@reticlehq/core` + `@reticlehq/server` — `tool_refused` names the cause inside its bucket.** A refusal reported only a bucket, such as `not_ready`. On `reticle_lease`, that bucket covers a missing browser pool, a pool that is shut down, no Chromium for Playwright, a bad `RETICLE_CHROMIUM_PATH`, a throttled tab, a timeout and a missing pairing token. Each needs a different fix. The event now has an optional `detail` from the closed `RefusalDetail` list, set by the same recovery rule that gives the agent its advice. It is never the message. The field is absent when no rule matches.

@@ -13,6 +13,7 @@ import {
   CodedRefusalSchema,
   PRODUCTION_REFUSAL_PREFIX,
   RefusalCode,
+  RefusalDetail,
   RefusalReason,
   ReticleEnv,
   TRANSPORT_LIMITS,
@@ -382,6 +383,48 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   HARNESS_LOCKED: RefusalReason.UNSUPPORTED,
 };
 
+/**
+ * Which CAUSE each recovery names, for `tool_refused`. A `Record` for the same reason as `REASON_OF`:
+ * a recovery added without a detail does not compile. A rule can name a narrower detail than its
+ * recovery (`NO_POOL` covers three causes with one hint).
+ */
+const DETAIL_OF: Record<keyof typeof RECOVERY, RefusalDetail> = {
+  NO_SESSION: RefusalDetail.NO_SESSION,
+  MULTIPLE_SESSIONS: RefusalDetail.MULTIPLE_SESSIONS,
+  UNKNOWN_SESSION: RefusalDetail.UNKNOWN_SESSION,
+  SCOPE_MISMATCH: RefusalDetail.SCOPE_MISMATCH,
+  SESSION_GONE: RefusalDetail.SESSION_GONE,
+  THROTTLED: RefusalDetail.THROTTLED,
+  COMMAND_TIMEOUT: RefusalDetail.COMMAND_TIMEOUT,
+  NO_POOL: RefusalDetail.POOL_UNAVAILABLE,
+  CHROMIUM_PATH: RefusalDetail.CHROMIUM_PATH,
+  TOKEN_REQUIRED: RefusalDetail.TOKEN_REQUIRED,
+  MISSING_BASELINE: RefusalDetail.MISSING_BASELINE,
+  MISSING_RECORDING: RefusalDetail.MISSING_RECORDING,
+  STALE_REF: RefusalDetail.STALE_REF,
+  STALE_REF_AFTER_EDIT: RefusalDetail.STALE_REF_AFTER_EDIT,
+  UNISSUED_REF: RefusalDetail.UNISSUED_REF,
+  NO_SUCH_OPTION: RefusalDetail.NO_SUCH_OPTION,
+  TARGET_MISSED: RefusalDetail.TARGET_MISSED,
+  AMBIGUOUS_TARGET: RefusalDetail.AMBIGUOUS_TARGET,
+  FLOW_STEP_MISSING: RefusalDetail.FLOW_STEP_MISSING,
+  UNSUPPORTED_SURFACE: RefusalDetail.UNSUPPORTED_SURFACE,
+  HOVER_NEEDS_POINTER: RefusalDetail.HOVER_NEEDS_POINTER,
+  NOT_EDITABLE: RefusalDetail.NOT_EDITABLE,
+  CONFIRM_DANGEROUS: RefusalDetail.CONFIRM_DANGEROUS,
+  WRONG_TARGET: RefusalDetail.WRONG_TARGET,
+  PRODUCTION_POLICY: RefusalDetail.PRODUCTION_POLICY,
+  BAD_ARGUMENTS: RefusalDetail.BAD_ARGUMENTS,
+  INVALID_NAME: RefusalDetail.INVALID_NAME,
+  HARNESS_OFF: RefusalDetail.HARNESS_OFF,
+  HARNESS_LOCKED: RefusalDetail.HARNESS_LOCKED,
+};
+
+/** Hint text back to its detail, as `REASON_BY_HINT` does for the reason. */
+const DETAIL_BY_HINT: ReadonlyMap<string, RefusalDetail> = new Map(
+  Object.entries(RECOVERY).map(([key, hint]) => [hint, DETAIL_OF[key as keyof typeof RECOVERY]]),
+);
+
 /** Hint text back to its reason. The hints are distinct strings, so this inverts cleanly. */
 const REASON_BY_HINT: ReadonlyMap<string, RefusalReason> = new Map(
   Object.entries(RECOVERY).map(([key, hint]) => [hint, REASON_OF[key as keyof typeof RECOVERY]]),
@@ -393,7 +436,14 @@ const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/
 const startsWithAny = (sentences: readonly string[]): RegExp =>
   new RegExp(`^(?:${sentences.map((s) => escapeRegExp(s.split('. ')[0] ?? s)).join('|')})`);
 
-const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
+interface RecoveryRule {
+  readonly match: RegExp;
+  readonly hint: string;
+  /** A narrower cause than the hint's own `DETAIL_OF` entry, where one hint covers several. */
+  readonly detail?: RefusalDetail;
+}
+
+const RULES: readonly RecoveryRule[] = [
   // First, because the message carries a path the user chose, and a path can hold any word a later
   // rule keys on. Without it the variable's name read as a `reticle_*` tool and the agent was told
   // its call failed the schema. Not anchored, so a launch error that wraps it is still caught. The
@@ -438,9 +488,17 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
   { match: /^command '[^']*' timed out after/i, hint: RECOVERY.COMMAND_TIMEOUT },
   // Flow replay: the recorded anchor is gone. Ordinary drift, and the tool that fixes it exists.
   { match: /did not resolve in current page/i, hint: RECOVERY.FLOW_STEP_MISSING },
+  // One hint for three causes: the agent's next step is the same, the fix for the user is not.
+  { match: /browser pool unavailable/i, hint: RECOVERY.NO_POOL },
   {
-    match: /browser pool (?:unavailable|is shut down)|Chromium is not installed/i,
+    match: /browser pool is shut down/i,
     hint: RECOVERY.NO_POOL,
+    detail: RefusalDetail.POOL_SHUT_DOWN,
+  },
+  {
+    match: /Chromium is not installed/i,
+    hint: RECOVERY.NO_POOL,
+    detail: RefusalDetail.CHROMIUM_MISSING,
   },
   // The commonest post-action condition there is. Unmatched, it fell through to FEEDBACK_ASK and
   // told the agent a successful click's aftermath might be a bug in Reticle.
@@ -537,12 +595,18 @@ export function recoveryFor(message: string): string | undefined {
   if (isSelfRecovering(message)) {
     return undefined;
   }
-  for (const rule of RULES) {
-    if (rule.match.test(message)) {
-      return rule.hint;
-    }
-  }
-  return undefined;
+  return firstRule(message)?.hint;
+}
+
+/** The first rule that matches the message. The order of `RULES` decides. */
+function firstRule(message: string): RecoveryRule | undefined {
+  return RULES.find((rule) => rule.match.test(message));
+}
+
+/** A refusal's bucket, and the cause inside it when the recovery table can tell. */
+export interface RefusalClass {
+  readonly reason: RefusalReason;
+  readonly detail?: RefusalDetail;
 }
 
 /**
@@ -554,33 +618,47 @@ export function recoveryFor(message: string): string | undefined {
  * this table rather than about anybody's app.
  */
 export function refusalReasonFor(rawMessage: string, coded?: CodedRefusal): RefusalReason {
+  return classifyRefusal(rawMessage, coded).reason;
+}
+
+/**
+ * The bucket and, when the recovery table names one, the cause inside it. The cause comes from the
+ * same rule that chose the agent's advice, so the two cannot disagree. No detail means no rule
+ * matched, or the message diagnosed itself (`noSessionReason` carries that cause).
+ */
+export function classifyRefusal(rawMessage: string, coded?: CodedRefusal): RefusalClass {
   if (coded !== undefined) {
-    return REASON_OF_CODE[coded.code];
+    return { reason: REASON_OF_CODE[coded.code] };
   }
   const message = zodArrayAsSentence(rawMessage);
   if (isUnissuedRefRefusal(message)) {
-    return RefusalReason.BAD_ARGS;
+    return { reason: RefusalReason.BAD_ARGS, detail: RefusalDetail.UNISSUED_REF };
   }
   // The no-session diagnosis inspected the machine and named the cause itself, so it never reaches
   // the recovery table. It is the single largest refusal there is; missing it would gut the metric.
   if (message.includes(SELF_RECOVERING_MARKER)) {
-    return RefusalReason.NO_SESSION;
+    return { reason: RefusalReason.NO_SESSION };
   }
   for (const rule of SELF_RECOVERING) {
     if (rule.match.test(message)) {
-      return rule.reason;
+      return { reason: rule.reason };
     }
   }
   // Same order as buildErrorPayload: a schema rejection is the agent's own call, whatever else in
   // the message might also match.
   if (ARGUMENT_REJECTION.test(message)) {
-    return RefusalReason.BAD_ARGS;
+    return { reason: RefusalReason.BAD_ARGS };
   }
   if (INVALID_NAME_REJECTION.test(message)) {
-    return RefusalReason.BAD_ARGS;
+    return { reason: RefusalReason.BAD_ARGS, detail: RefusalDetail.INVALID_NAME };
   }
-  const hint = recoveryFor(message);
-  return (hint === undefined ? undefined : REASON_BY_HINT.get(hint)) ?? RefusalReason.OTHER;
+  const rule = firstRule(message);
+  if (rule === undefined) {
+    return { reason: RefusalReason.OTHER };
+  }
+  const reason = REASON_BY_HINT.get(rule.hint) ?? RefusalReason.OTHER;
+  const detail = rule.detail ?? DETAIL_BY_HINT.get(rule.hint);
+  return detail === undefined ? { reason } : { reason, detail };
 }
 
 /**

@@ -15,6 +15,7 @@ import {
   TelemetryActor,
   TelemetryEventKind,
   type NoSessionReason,
+  type RefusalDetail,
 } from '@reticlehq/core/telemetry';
 import { describeToolParams } from './argument-shape.js';
 import { getTelemetry } from './telemetry.js';
@@ -69,11 +70,15 @@ export function noteToolServed(): void {
 /** How many argument names one refusal carries. A call with more is malformed in its own way. */
 const MAX_REFUSAL_PARAMS = 16;
 
-/** One refused call, reported with its cause, whether it was a retry, and the names of its arguments. */
+/**
+ * One refused call, reported with its cause, whether it was a retry, and the names of its arguments.
+ * `detail` is the cause inside `reason`, when the recovery table names one.
+ */
 export function reportToolRefused(
   tool: string,
   reason: RefusalReason,
   args: Record<string, unknown> = {},
+  detail?: RefusalDetail,
 ): void {
   const retried = lastRefusedTool === tool;
   lastRefusedTool = tool;
@@ -81,7 +86,9 @@ export function reportToolRefused(
   // sitting would attach itself to an unrelated refusal later in the session.
   const noSessionReason = pendingNoSessionReason;
   pendingNoSessionReason = undefined;
-  if (sent >= MAX_REFUSALS_PER_SESSION) return;
+  if (sent >= MAX_REFUSALS_PER_SESSION) {
+    return;
+  }
   sent += 1;
   void getTelemetry().emit(TelemetryEventKind.TOOL_REFUSED, {
     actor: TelemetryActor.AGENT,
@@ -98,6 +105,7 @@ export function reportToolRefused(
       ...(RefusalReason.NO_SESSION === reason && noSessionReason !== undefined
         ? { noSessionReason }
         : {}),
+      ...(detail === undefined ? {} : { detail }),
     },
   });
 }

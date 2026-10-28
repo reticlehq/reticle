@@ -38,6 +38,52 @@ export const RefusalReason = {
 } as const;
 export type RefusalReason = (typeof RefusalReason)[keyof typeof RefusalReason];
 
+/**
+ * WHICH cause inside a `RefusalReason` bucket, when the server can tell.
+ *
+ * One member for each entry of `error-recovery.ts`'s recovery table. A missing browser pool has
+ * three: no pool, a pool that is shut down, and no Chromium for Playwright. They need different
+ * fixes, and `not_ready` alone could not say which one stopped a user. Never the message.
+ */
+export const RefusalDetail = {
+  NO_SESSION: 'no_session',
+  MULTIPLE_SESSIONS: 'multiple_sessions',
+  UNKNOWN_SESSION: 'unknown_session',
+  SCOPE_MISMATCH: 'scope_mismatch',
+  SESSION_GONE: 'session_gone',
+  THROTTLED: 'throttled',
+  COMMAND_TIMEOUT: 'command_timeout',
+  /** The daemon has no browser pool: Reticle did not start through `reticle mcp`. */
+  POOL_UNAVAILABLE: 'pool_unavailable',
+  /** The browser pool stopped, because the daemon is shutting down. */
+  POOL_SHUT_DOWN: 'pool_shut_down',
+  /** Playwright has no Chromium installed. */
+  CHROMIUM_MISSING: 'chromium_missing',
+  /** RETICLE_CHROMIUM_PATH names a browser the daemon cannot launch. */
+  CHROMIUM_PATH: 'chromium_path',
+  TOKEN_REQUIRED: 'token_required',
+  MISSING_BASELINE: 'missing_baseline',
+  MISSING_RECORDING: 'missing_recording',
+  STALE_REF: 'stale_ref',
+  STALE_REF_AFTER_EDIT: 'stale_ref_after_edit',
+  UNISSUED_REF: 'unissued_ref',
+  NO_SUCH_OPTION: 'no_such_option',
+  TARGET_MISSED: 'target_missed',
+  AMBIGUOUS_TARGET: 'ambiguous_target',
+  FLOW_STEP_MISSING: 'flow_step_missing',
+  UNSUPPORTED_SURFACE: 'unsupported_surface',
+  HOVER_NEEDS_POINTER: 'hover_needs_pointer',
+  NOT_EDITABLE: 'not_editable',
+  CONFIRM_DANGEROUS: 'confirm_dangerous',
+  WRONG_TARGET: 'wrong_target',
+  PRODUCTION_POLICY: 'production_policy',
+  BAD_ARGUMENTS: 'bad_arguments',
+  INVALID_NAME: 'invalid_name',
+  HARNESS_OFF: 'harness_off',
+  HARNESS_LOCKED: 'harness_locked',
+} as const;
+export type RefusalDetail = (typeof RefusalDetail)[keyof typeof RefusalDetail];
+
 /** One tool call that could not be served. */
 export const ToolRefusalSchema = z.object({
   /** Which tool. A name from our own fixed namespace, never app data. */
@@ -51,6 +97,11 @@ export const ToolRefusalSchema = z.object({
    * it cannot carry a reason that does not exist yet. Absent on every other refusal reason.
    */
   noSessionReason: z.nativeEnum(NoSessionReason).optional(),
+  /**
+   * WHICH cause inside `reason`, from core's closed `RefusalDetail`. Absent when the recovery table
+   * did not recognise the message, and on a refusal that diagnosed itself.
+   */
+  detail: z.nativeEnum(RefusalDetail).optional(),
   /**
    * TRUE when the call immediately before this one was the SAME tool, also refused.
    *
