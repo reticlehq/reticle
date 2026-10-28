@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ReticleCommand, ScreenshotSource } from '@reticlehq/core';
+import { PNG } from 'pngjs';
+import { RETICLE_CAPTURE_FILE_PREFIX, ReticleCommand, ScreenshotSource } from '@reticlehq/core';
 import { removeTempDir } from '@/machine/temp-dir.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { withShotRun } from '@/judgement/runs/default-run-id.js';
@@ -46,6 +47,13 @@ function fakeJpeg(width: number, height: number, tag = 0): Uint8Array {
   ]);
 }
 
+/** A complete PNG of one colour, as a desktop shell writes it. */
+function solidPng(width: number, height: number): Uint8Array {
+  const png = new PNG({ width, height });
+  png.data.fill(255);
+  return new Uint8Array(PNG.sync.write(png));
+}
+
 const dirs: string[] = [];
 let tabs = 0;
 afterEach(async () => {
@@ -59,20 +67,32 @@ interface Fakes {
   sdkVersion?: string;
   /** What a leased-tab capture failed with, when this daemon drives the tab. */
   leaseError?: string;
+  /** The commands the page declared when it connected. Absent: an SDK too old to say. */
+  commands?: string[];
+  /** The PNG file a desktop shell's `capture` answers with. */
+  capturePath?: string;
 }
 
-async function setup(fakes: Fakes): Promise<{ deps: ToolDeps; root: string; sessionId: string }> {
+async function setup(
+  fakes: Fakes,
+): Promise<{ deps: ToolDeps; root: string; sessionId: string; sent: string[] }> {
   const root = await mkdtemp(join(tmpdir(), 'step-shots-'));
   dirs.push(root);
   tabs += 1;
   const sessionId = `s${String(tabs)}`;
+  const sent: string[] = [];
   const session = {
     id: sessionId,
     url: 'http://localhost:5173/',
     artifactRoot: root,
     isEnded: () => false,
     ...(fakes.sdkVersion === undefined ? {} : { sdkVersion: fakes.sdkVersion }),
+    ...(fakes.commands === undefined ? {} : { commands: fakes.commands }),
     command: (name: string) => {
+      sent.push(name);
+      if (name === ReticleCommand.CAPTURE && fakes.capturePath !== undefined) {
+        return Promise.resolve({ ok: true, result: { ok: true, path: fakes.capturePath } });
+      }
       if (name !== ReticleCommand.RENDER) return Promise.resolve({ ok: false, error: 'no' });
       const result = fakes.render?.();
       return Promise.resolve(
@@ -104,7 +124,7 @@ async function setup(fakes: Fakes): Promise<{ deps: ToolDeps; root: string; sess
           },
         }),
   } as unknown as ToolDeps;
-  return { deps, root, sessionId };
+  return { deps, root, sessionId, sent };
 }
 
 const rendered = (bytes: Uint8Array) => () => ({
@@ -219,6 +239,60 @@ describe('takeStepShot', () => {
     expect(error).toContain('3.6.2');
     expect(error).toContain('reticle update');
     expect(error).toContain('renderer busy');
+  });
+
+  it('asks for render when the page declares it', async () => {
+    const image = fakeJpeg(8, 6);
+    const { deps, sessionId, sent } = await setup({
+      render: rendered(image),
+      commands: [ReticleCommand.SNAPSHOT, ReticleCommand.CAPTURE, ReticleCommand.RENDER],
+    });
+
+    const shot = await takeStepShot(deps, sessionId, 'reticle_act');
+
+    expect(shot).toMatchObject({ source: ScreenshotSource.RENDERED });
+    expect(sent).toEqual([ReticleCommand.RENDER]);
+  });
+
+  it('asks an older page for its capture command when it declares no render', async () => {
+    // An SDK before 3.7 has no `render`. It declares `capture`, which a desktop shell answers with
+    // a PNG of its own window.
+    const dir = await mkdtemp(join(tmpdir(), RETICLE_CAPTURE_FILE_PREFIX));
+    dirs.push(dir);
+    const capturePath = join(dir, `${RETICLE_CAPTURE_FILE_PREFIX}shot.png`);
+    const png = solidPng(7, 5);
+    await writeFile(capturePath, png);
+    const { deps, root, sessionId, sent } = await setup({
+      sdkVersion: '3.6.0',
+      commands: [ReticleCommand.SNAPSHOT, ReticleCommand.CAPTURE],
+      capturePath,
+    });
+
+    const shot = await takeStepShot(deps, sessionId, 'reticle_assert');
+
+    expect(sent).toEqual([ReticleCommand.CAPTURE]);
+    expect(shot).toEqual({
+      path: join(root, 'visual', 'runs', driveRunId(sessionId), '0001-assert.png'),
+      source: ScreenshotSource.BROWSER,
+    });
+    expect(new Uint8Array(await readFile('path' in shot ? shot.path : ''))).toEqual(png);
+    expect(await readStepShots(deps.fs, root, driveRunId(sessionId))).toMatchObject([
+      { file: '0001-assert.png', width: 7, height: 5 },
+    ]);
+  });
+
+  it('names the update at once, and sends nothing, when the page declares no capture command', async () => {
+    const { deps, sessionId, sent } = await setup({
+      sdkVersion: '3.0.0',
+      commands: [ReticleCommand.SNAPSHOT, ReticleCommand.MATCH],
+    });
+
+    const shot = await takeStepShot(deps, sessionId, 'reticle_assert');
+    const error = 'error' in shot ? shot.error : '';
+
+    expect(sent).toEqual([]);
+    expect(error).toContain('3.0.0');
+    expect(error).toContain('reticle update');
   });
 
   it('says why when no picture could be taken, rather than leaving the field out', async () => {

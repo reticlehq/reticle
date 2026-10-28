@@ -92,6 +92,27 @@ describe('syncScreenshots', () => {
     expect(tooBig.posted).toHaveLength(2);
   });
 
+  it('keeps a picture that is not a JPEG on this machine, and sends the next one', async () => {
+    // The platform takes only JPEG. An older page SDK gives a desktop capture as a PNG, and a
+    // refused PNG must not stop every later screenshot of the run.
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const pngShot = {
+      ...shot(1),
+      file: '0001-act.png',
+      sha256: createHash('sha256').update(png).digest('hex'),
+    };
+    const { deps: d, posted } = deps(() => 201, {
+      runs: [{ runId: 'run-1', payload: { runId: 'run-1', screenshots: [pngShot, shot(2)] } }],
+      readImage: (_run, file) => (file.endsWith('.png') ? png : IMAGE),
+    });
+
+    const first = await syncScreenshots(d);
+
+    expect(first.error).toBeUndefined();
+    expect(first.sent).toBe(1);
+    expect(posted.map((p) => (p.body as { seq: number }).seq)).toEqual([2]);
+  });
+
   it('sends nothing for an image that is gone or changed since the run recorded it', async () => {
     const { deps: d, posted } = deps(() => 201, {
       readImage: (_run, file) => (file.startsWith('0001') ? undefined : new Uint8Array([9])),

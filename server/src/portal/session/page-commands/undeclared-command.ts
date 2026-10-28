@@ -20,18 +20,30 @@
 
 import { MessageKind, type CommandResult } from '@reticlehq/core';
 
-/** Why nothing was sent, in a sentence, or undefined when the command should go. */
+/**
+ * Why nothing was sent, in a sentence, or undefined when the command should go.
+ *
+ * `behind` is the caller's sentence for a page SDK older than this daemon. A newer command
+ * (`render`, `match`) is then missing because of the version, and the list of commands alone
+ * does not say that.
+ */
 export function refusalForUndeclared(
   name: string,
   declared: readonly string[] | undefined,
+  behind?: string,
 ): string | undefined {
   // Too old to say. Unknown, never "nothing".
-  if (declared === undefined) return undefined;
-  if (declared.includes(name)) return undefined;
+  if (declared === undefined) {
+    return undefined;
+  }
+  if (declared.includes(name)) {
+    return undefined;
+  }
   return (
     `this page does not serve "${name}". It declared ${String(declared.length)} command(s) when ` +
     `it connected, and this is not one of them: ${declared.join(', ')}. Nothing was sent, so ` +
-    'nothing happened -- this is a refusal, not a failure of the app.'
+    'nothing happened -- this is a refusal, not a failure of the app.' +
+    (behind === undefined ? '' : ` ${behind}`)
   );
 }
 
@@ -46,8 +58,9 @@ export function refusedResult(
   name: string,
   declared: readonly string[] | undefined,
   id: string,
+  behind?: string,
 ): CommandResult | undefined {
-  const error = refusalForUndeclared(name, declared);
+  const error = refusalForUndeclared(name, declared, behind);
   return error === undefined
     ? undefined
     : { kind: MessageKind.COMMAND_RESULT, id, ok: false, error };

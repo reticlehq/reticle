@@ -25,6 +25,12 @@ const NOT_THERE = new Set([404, 405]);
 /** Refused for good: too large (413), too many for one run (409). Retrying cannot change it. */
 const REFUSED_FOR_GOOD = new Set([409, 413]);
 
+/**
+ * The platform takes only JPEG and answers 400 to anything else, which stops the cycle. A desktop
+ * capture from a page SDK before 3.7 is a PNG, so it stays on this machine.
+ */
+const isJpeg = (image: Uint8Array): boolean => 0xff === image[0] && 0xd8 === image[1];
+
 /** This machine's record of what went up, kept in `.reticle/cloud-state.json`. */
 export interface ScreenshotSyncState {
   /** Per run, `seq:sha256` of every screenshot the platform holds or refused for good. */
@@ -111,7 +117,7 @@ export async function syncScreenshots(deps: ScreenshotSyncDeps): Promise<Screens
           done.add(keyOf(shot));
           sent[run.runId] = [...done];
         };
-        if (image.byteLength > STEP_SCREENSHOT.MAX_BYTES) {
+        if (image.byteLength > STEP_SCREENSHOT.MAX_BYTES || !isJpeg(image)) {
           markDone();
           continue;
         }

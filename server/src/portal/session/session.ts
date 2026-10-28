@@ -3,6 +3,7 @@ import { noteOwnReload, notePageLoaded } from '@/features/harness/drive-runs.js'
 import { asProjectId, type ChannelId, type ImpactSnapshot, type ProjectId } from '@reticlehq/core';
 import { narrationArgs, type NarrationBy } from './narration-args.js';
 import type { HandshakeFacts } from './facts/handshake-facts.js';
+import { sdkBehindNote } from '@/command/version/version-skew.js';
 import { refusedResult } from './page-commands/undeclared-command.js';
 import type { ProductionDrive } from '@/portal/production/production-drive.js';
 import { impactSnapshot, recordImpact } from '@/memory/impact/impact-recorder.js';
@@ -675,9 +676,9 @@ export class Session implements HandshakeFacts {
     const ref = args['ref'];
     if (name === ReticleCommand.ACT && 'string' === typeof ref) this.recordActedRef(ref);
     if (name === ReticleCommand.REFRESH) noteOwnReload(this.id, this.#clock());
-    // Refused before it is sent, when the page said it does not serve this. The rule, and why
-    // an absent declaration is not an empty list, live in `undeclared-command.ts`.
-    const refused = refusedResult(name, this.commands, `${COMMAND_ID_PREFIX}refused`);
+    // Refused before it is sent when the page did not declare it. See `undeclared-command.ts`.
+    const behind = sdkBehindNote(this.sdkVersion);
+    const refused = refusedResult(name, this.commands, `${COMMAND_ID_PREFIX}refused`, behind);
     if (refused !== undefined) return Promise.resolve(refused);
     // The page already re-dialled under this same id. Nothing has been sent yet, so handing the
     // command to the live connection cannot perform anything twice — it is the call the agent would

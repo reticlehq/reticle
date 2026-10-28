@@ -54,6 +54,15 @@ describe('a page is only asked for what it said it serves', () => {
     await expect(pending).rejects.toThrow();
   });
 
+  it('names the update when a page SDK is too old to serve the command', async () => {
+    // A page on an older SDK does not serve a newer command such as `match` or `render`. The
+    // refusal must say what fixes it, not only list the commands the page has.
+    const session = createFakeSession({ commands: [ReticleCommand.SNAPSHOT], sdkVersion: '3.0.0' });
+    const result = await session.command(ReticleCommand.MATCH);
+    expect(result.error).toContain('3.0.0');
+    expect(result.error).toContain('reticle update');
+  });
+
   it('lets a declared command through', async () => {
     const session = createFakeSession({ commands: [ReticleCommand.SNAPSHOT] });
     const pending = session.command(ReticleCommand.SNAPSHOT, {}, 20);

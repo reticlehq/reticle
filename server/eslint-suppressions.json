@@ -986,7 +986,7 @@
   },
   "src/features/visual/visual-tools.ts": {
     "curly": {
-      "count": 22
+      "count": 15
     }
   },
   "src/gate-coverage.test.ts": {
@@ -2830,11 +2830,6 @@
   "src/portal/session/page-commands/pending-commands.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/portal/session/page-commands/undeclared-command.ts": {
-    "curly": {
-      "count": 2
     }
   },
   "src/portal/session/presence/attachment-history.ts": {

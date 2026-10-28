@@ -14,9 +14,10 @@
  * nothing at all, the next one is awaited, so the agent is told `{ error }` instead of a path to a
  * file that will never exist.
  *
- * ponytail: the desktop shell's own window capture is not a source here. It returns a device-pixel
- * PNG, and the daemon ships no JPEG encoder to shrink it to the step format; an Electron renderer
- * draws itself fine in-page. Add it when the shells can hand back a JPEG.
+ * A page SDK before 3.7 has no `render`. When such a page declares the desktop shell's `capture`,
+ * that command is asked instead. Its answer is a device-pixel PNG, and the daemon ships no JPEG
+ * encoder, so that picture is kept as a `.png` and stays on this machine (the platform takes only
+ * JPEG). A page that declares neither command is not asked: the result says to update its SDK.
  */
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -36,6 +37,7 @@ import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { UPLOAD_TEXT_MAX } from '@reticlehq/core/artifacts';
 import { sdkBehindNote } from '@/command/version/version-skew.js';
+import { desktopCapture } from './desktop-capture.js';
 
 /** The connected tab, as the tool layer hands it out. */
 type Session = ReturnType<ToolDeps['sessions']['resolve']>;
@@ -54,6 +56,10 @@ export type ScreenshotField =
   { path: string; source: ScreenshotSource; pending?: true } | { error: string };
 
 const JPEG_EXT = '.jpg';
+const PNG_EXT = '.png';
+/** Why a page that declared neither `render` nor `capture` was not asked for a picture. */
+const NO_PAGE_CAPTURE =
+  'this page declared no command that draws it (neither "render" nor "capture"), so nothing was sent';
 const TOOL_PREFIX = /^reticle_/;
 const SEQ_WIDTH = 4;
 /** A prior capture on this tab produced nothing — see the header. */
@@ -63,6 +69,13 @@ const CDP_QUALITY = Math.round(STEP_SCREENSHOT.JPEG_QUALITY * 100);
 
 /** What worked last on each tab: the next result names that source. */
 const lastSource = new Map<string, ScreenshotSource | typeof NOTHING>();
+/**
+ * The file type of the last picture of each tab: the next path is named with it.
+ *
+ * ponytail: a tab that changes type between two steps gets one predicted path with the old type;
+ * the run record names the real file. Wait for the capture if that ever matters.
+ */
+const lastExt = new Map<string, string>();
 /** The next sequence number per run directory, read from its record the first time. */
 const nextSeq = new Map<string, Promise<{ n: number }>>();
 
@@ -71,6 +84,41 @@ interface Pixels {
   source: ScreenshotSource;
   width: number;
   height: number;
+  /** `.jpg`, or `.png` for the desktop capture of an older page SDK. */
+  ext: string;
+}
+
+/** The PNG signature's first four bytes, and where the IHDR chunk keeps the width and height. */
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47];
+const PNG_WIDTH_AT = 16;
+const PNG_HEIGHT_AT = 20;
+
+/** Width and height from a PNG's header, or undefined when the bytes are not a PNG. */
+function pngSize(bytes: Uint8Array): { width: number; height: number } | undefined {
+  if (bytes.length < PNG_HEIGHT_AT + 4 || PNG_MAGIC.some((b, i) => b !== bytes[i])) {
+    return undefined;
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(PNG_WIDTH_AT);
+  const height = view.getUint32(PNG_HEIGHT_AT);
+  return width > 0 && height > 0 ? { width, height } : undefined;
+}
+
+/**
+ * The command that asks this page for its own picture, or undefined when it declared none.
+ *
+ * `render` came in SDK 3.7. An older SDK declares only the desktop shell's `capture`. A page that
+ * declared nothing is too old to say, so it is asked for `render` as before.
+ */
+function pageCaptureCommand(session: Session): ReticleCommand | undefined {
+  const declared = session.commands;
+  if (declared === undefined || declared.includes(ReticleCommand.RENDER)) {
+    return ReticleCommand.RENDER;
+  }
+  if (declared.includes(ReticleCommand.CAPTURE)) {
+    return ReticleCommand.CAPTURE;
+  }
+  return undefined;
 }
 
 /**
@@ -143,10 +191,30 @@ async function capture(deps: ToolDeps, session: Session): Promise<Pixels | strin
     const real = await browserPixels(deps, session);
     const size = real === undefined ? undefined : jpegSize(real);
     if (real !== undefined && size !== undefined) {
-      return { bytes: real, source: ScreenshotSource.BROWSER, ...size };
+      return { bytes: real, source: ScreenshotSource.BROWSER, ext: JPEG_EXT, ...size };
     }
   } catch (error) {
     reasons.push(error instanceof Error ? error.message : String(error));
+  }
+  const command = pageCaptureCommand(session);
+  if (command === undefined) {
+    // Nothing is sent: the page said it has no command for this.
+    reasons.push(NO_PAGE_CAPTURE);
+  }
+  if (command !== ReticleCommand.RENDER) {
+    if (command === ReticleCommand.CAPTURE) {
+      const png = (await desktopCapture(deps, session.id, false).catch(() => undefined))?.png;
+      const size = png === undefined ? undefined : pngSize(png);
+      if (png !== undefined && size !== undefined) {
+        return { bytes: png, source: ScreenshotSource.BROWSER, ext: PNG_EXT, ...size };
+      }
+      reasons.push('the desktop shell did not capture its window');
+    }
+    const behind = sdkBehindNote(session.sdkVersion);
+    if (behind !== undefined) {
+      reasons.push(behind);
+    }
+    return `no screenshot: ${reasons.join('; ')}`;
   }
   try {
     const drawn = await renderedPixels(session);
@@ -159,7 +227,7 @@ async function capture(deps: ToolDeps, session: Session): Promise<Pixels | strin
     } else {
       const size = jpegSize(drawn);
       if (size !== undefined) {
-        return { bytes: drawn, source: ScreenshotSource.RENDERED, ...size };
+        return { bytes: drawn, source: ScreenshotSource.RENDERED, ext: JPEG_EXT, ...size };
       }
       reasons.push('the page drew something that is not a JPEG');
     }
@@ -262,14 +330,18 @@ async function shoot(
     fresh && 'string' === typeof pixels ? capture(deps, session) : pixels,
   );
   const predicted = fresh ? undefined : await predict(deps, session);
-  const file = `${String(seq).padStart(SEQ_WIDTH, '0')}-${tool.replace(TOOL_PREFIX, '')}${JPEG_EXT}`;
-  const path = join(dir, file);
+  const name = (ext: string): string =>
+    `${String(seq).padStart(SEQ_WIDTH, '0')}-${tool.replace(TOOL_PREFIX, '')}${ext}`;
+  const predictedPath = join(dir, name(lastExt.get(session.id) ?? JPEG_EXT));
   const land = taken.then(async (pixels) => {
     if ('string' === typeof pixels) {
       lastSource.set(session.id, NOTHING);
       return;
     }
     lastSource.set(session.id, pixels.source);
+    lastExt.set(session.id, pixels.ext);
+    const file = name(pixels.ext);
+    const path = join(dir, file);
     try {
       await deps.fs.mkdir(dir);
       await deps.fs.writeFileBytes(path, pixels.bytes);
@@ -295,12 +367,14 @@ async function shoot(
   });
   noteLanding(dir, land);
   if (predicted !== undefined) {
-    return { path, source: predicted, pending: true };
+    return { path: predictedPath, source: predicted, pending: true };
   }
   // Nothing worked last time: wait, and tell the truth either way.
   const pixels = await taken;
   await land;
-  return 'string' === typeof pixels ? { error: pixels } : { path, source: pixels.source };
+  return 'string' === typeof pixels
+    ? { error: pixels }
+    : { path: join(dir, name(pixels.ext)), source: pixels.source };
 }
 
 /** The replay hook that gives every reported flow step its screenshot, filed as `<flow>#<step>`. */

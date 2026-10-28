@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RETICLE_CAPTURE_FILE_PREFIX } from '@reticlehq/core';
-import { isCapturePath } from './visual-tools.js';
+import { isCapturePath } from './desktop-capture.js';
 
 /**
  * The daemon reads a path that arrived from the PAGE, so this predicate is a trust boundary: it
