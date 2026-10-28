@@ -139,7 +139,7 @@ irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1
 npx skills add reticlehq/reticle --skill reticle
 ```
 
-**On Claude Code, the plugin does both steps:** `/plugin marketplace add reticlehq/reticle`, then `/plugin install reticle@reticlehq`. Restart Claude Code in your app's folder. At the start of the first session in an app that is not wired, Claude offers two things: a check of the running app now, with nothing installed, and `reticle init` to keep Reticle wired. Claude runs `init` only when you agree, because `init` changes your files.
+**On Claude Code, the plugin does both steps:** `/plugin marketplace add reticlehq/reticle`, then `/plugin install reticle@reticlehq`. You do not need to restart Claude Code: type `/reload-plugins` and the Reticle tools load in the open session. When a new session starts in an app that is not wired, Claude offers two things: a check of the running app now, with nothing installed, and `reticle init` to keep Reticle wired. Claude runs `init` only when you agree, because `init` changes your files.
 
 To avoid piping a script into your shell, run:
 
