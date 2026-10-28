@@ -43,7 +43,12 @@ function underTerminal(shell: string): { command: string; args: string[] } {
   if ('darwin' === process.platform) {
     return { command: 'script', args: ['-q', '/dev/null', shell, SCRIPT] };
   }
-  return { command: 'script', args: ['-qec', `'${shell}' '${SCRIPT}'`, '/dev/null'] };
+  // util-linux `script -c` runs the command through $SHELL, and the sandbox's SHELL (zsh) is not
+  // on every Linux runner. The installer still sees SHELL=/bin/zsh.
+  return {
+    command: 'env',
+    args: ['SHELL=/bin/sh', 'script', '-qec', `SHELL=/bin/zsh '${shell}' '${SCRIPT}'`, '/dev/null'],
+  };
 }
 
 function runInstaller(box: Sandbox): { code: number | null; out: string; home: string } {
