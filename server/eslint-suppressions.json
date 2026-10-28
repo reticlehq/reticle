@@ -272,19 +272,6 @@
       "count": 15
     }
   },
-  "src/command/cli/status/status-lines.test.ts": {
-    "curly": {
-      "count": 4
-    }
-  },
-  "src/command/cli/status/status-lines.ts": {
-    "curly": {
-      "count": 12
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/command/cli/suggested-commands-exist.test.ts": {
     "curly": {
       "count": 6

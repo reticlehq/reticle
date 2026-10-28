@@ -83,8 +83,10 @@ export {
   ConfigScope,
   MCP_CLIENTS,
   ClientMergeStatus,
+  ConfigFormat,
   clientSpec,
   mergeClientConfig,
+  type ClientSpec,
 } from './register/mcp-clients.js';
 export {
   claudeAddCommand,

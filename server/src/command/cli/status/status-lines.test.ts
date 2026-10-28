@@ -93,7 +93,9 @@ describe('statusLines', () => {
 
   it('every line after the heading is indented, so the block reads as one answer', () => {
     const out = statusLines({ port: 4400, running: true, pid: 7, sessionCount: 0 });
-    for (const line of out.slice(1)) expect(line.startsWith('  ')).toBe(true);
+    for (const line of out.slice(1)) {
+      expect(line.startsWith('  ')).toBe(true);
+    }
   });
 
   it('narrows a payload it does not recognise instead of throwing', () => {
@@ -139,10 +141,15 @@ describe('the agent link row', () => {
   /** The status fields for a port whose record is in `state`, as the daemon reads them. */
   function attachFields(state: AttachState): Record<string, unknown> {
     const dir = mkdtempSync(join(tmpdir(), 'reticle-attach-'));
-    if (AttachState.NEVER_ATTACHED !== state) rememberProxyStarted(dir, 4400);
-    if (AttachState.NEVER_ATTACHED !== state && AttachState.NEVER_ENUMERATED !== state)
+    if (AttachState.NEVER_ATTACHED !== state) {
+      rememberProxyStarted(dir, 4400);
+    }
+    if (AttachState.NEVER_ATTACHED !== state && AttachState.NEVER_ENUMERATED !== state) {
       rememberEnumerated(dir, 4400);
-    if (AttachState.ENUMERATED === state) rememberToolCalled(dir, 4400);
+    }
+    if (AttachState.ENUMERATED === state) {
+      rememberToolCalled(dir, 4400);
+    }
     return { ...attachStatusFields(dir, 4400) };
   }
   const out = (state: AttachState): string =>
@@ -156,5 +163,31 @@ describe('the agent link row', () => {
     const said = out(AttachState.NEVER_ENUMERATED);
     expect(said).not.toContain(AttachState.NEVER_ENUMERATED);
     expect(said).toContain('restart your MCP client');
+  });
+});
+
+describe('the agents row', () => {
+  it('prints each agent as the installer does: ✓, or the step still missing', () => {
+    const said = statusLines({
+      port: 4400,
+      running: true,
+      agents: [
+        { name: 'Claude Code', connected: true, said: 'Connected: Claude Code ✓' },
+        {
+          name: 'Cursor',
+          connected: false,
+          next: 'restart Cursor',
+          said: 'Cursor not connected yet: restart Cursor',
+        },
+      ],
+    });
+    expect(
+      said.some((l) => l.includes(StatusLabel.AGENTS) && l.endsWith('Connected: Claude Code ✓')),
+    ).toBe(true);
+    expect(said.join('\n')).toContain('Cursor not connected yet: restart Cursor');
+  });
+
+  it('prints no agents row when the field is absent', () => {
+    expect(statusLines({ port: 4400, running: true }).join('\n')).not.toContain('Connected:');
   });
 });

@@ -360,6 +360,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'dir',
     'mcp',
     'outcome',
+    // `status` and `setup mcp` read which agents connected, by name, from the record the proxy writes.
+    'peer',
     'ports',
     'prior',
     'project',
@@ -524,6 +526,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'daemon',
     'faults',
     'identity',
+    // The proxy records which agent connected, from the `initialize` request it forwards.
+    'peer',
     'prior',
     'proxy',
     'resolve',

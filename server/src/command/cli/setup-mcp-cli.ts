@@ -2,18 +2,24 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { mcpLauncher } from '@/command/setup/mcp-launcher.js';
-import {
-  claudeAddCommand,
-  McpClient,
-  probeCli,
-  terminalWidth,
-  wrapForTerminal,
-} from '@reticlehq/init';
+import { probeCli, terminalWidth, wrapForTerminal } from '@reticlehq/init';
 import { tutorialShownSteps } from './tutorial.js';
 import { setupMcp, knownClientLabels, type SetupMcpIo } from '@/command/setup/setup-mcp.js';
 import { reportInstallSteps } from '@/command/setup/setup-install.js';
 import { registerOtherAgents } from '@/command/setup/setup-command.js';
 import type { OnboardingStep } from '@reticlehq/core/telemetry';
+import {
+  agentLines,
+  agentRows,
+  awaitedClients,
+  claudeConfigDir,
+  claudePluginActive,
+  connectionLines,
+  waitForAgents,
+  type AgentRow,
+} from '@/command/setup/agent-next-steps.js';
+import { connectedAgentClients } from '@/surface/mcp/peer/agents-connected.js';
+import { reticleStateHome } from '@/command/daemon/daemon.js';
 
 /**
  * The terminal half of `reticle setup mcp`.
@@ -32,7 +38,12 @@ import type { OnboardingStep } from '@reticlehq/core/telemetry';
 export type StepReporter = (step: OnboardingStep) => void;
 
 /** How many coding agents on this machine have Reticle's tools after this run. */
-export function handleSetupMcp(reportStep: StepReporter, standalone = true): number {
+export function handleSetupMcp(
+  reportStep: StepReporter,
+  standalone = true,
+  /** Wait for the agents to connect. The caller decides: a terminal, and not CI. */
+  waitForConnect = false,
+): number {
   const io: SetupMcpIo = {
     launcher: mcpLauncher(),
     exists: (p) => existsSync(p),
@@ -77,31 +88,12 @@ export function handleSetupMcp(reportStep: StepReporter, standalone = true): num
     );
     return 0;
   }
-  for (const id of result.registered) {
-    io.print(`  ✓ ${id}`);
-  }
-  for (const id of result.alreadyThere) {
-    io.print(`  ✓ ${id} (already set up)`);
-  }
-  for (const id of result.failed) {
-    io.print(`  ⚠ ${id}: Reticle registration failed; this agent may not have the tools.`);
-    io.print(
-      id === McpClient.CLAUDE_CODE
-        ? `    Run this command to see the error and retry: ${claudeAddCommand(io.launcher).display}`
-        : '    Check your agent config file permissions, then retry: reticle setup mcp',
-    );
+  const rows = agentRows(result, claudePluginActive(claudeConfigDir()), io.launcher);
+  for (const line of agentLines(rows)) {
+    io.print(line);
   }
   if (result.failed.length > 0) {
     process.exitCode = 1;
-  }
-  // Said, not skipped. These are the clients whose format we will not rewrite, and they used to be
-  // counted as registered: the line below is the difference between a user who adds four lines to
-  // one file and a user who believes they are set up and has no tools.
-  for (const client of result.manual) {
-    io.print(`  ⚠ ${client.id}: add the reticle entry to ${client.configPath} by hand`);
-    if (client.docs !== undefined) {
-      io.print(`    see ${client.docs}`);
-    }
   }
   /*
    * The OTHER agents, which `init` already reaches and this did not.
@@ -125,10 +117,54 @@ export function handleSetupMcp(reportStep: StepReporter, standalone = true): num
   // closing's Next list, where it belongs with the other things to do, not between the stages.
   if (standalone) {
     io.print('');
-    io.print('Restart your agent for it to pick up the new server.');
     io.print('Then: cd <your project> && reticle init');
+    if (waitForConnect) {
+      void reportConnections(rows, (line) => {
+        io.print(line);
+      });
+    }
   }
   return result.registered.length + result.alreadyThere.length;
+}
+
+/** How long the installer waits for an agent to connect. Short: the person may not restart now. */
+const CONNECT_WAIT_MS = 60_000;
+const CONNECT_POLL_MS = 1000;
+
+/** Wait only where a person watches: a terminal, and not CI. */
+export function shouldWaitForAgents(isTty: boolean | undefined, isCi: boolean): boolean {
+  return true === isTty && !isCi;
+}
+
+/** Wait (bounded) for the registered agents to connect, then say which did and what is missing. */
+async function reportConnections(
+  rows: readonly AgentRow[],
+  print: (line: string) => void,
+): Promise<void> {
+  const want = awaitedClients(rows);
+  if (0 === want.length) {
+    return;
+  }
+  print('');
+  print(
+    `Waiting up to ${String(CONNECT_WAIT_MS / 1000)}s for your agents to connect. Press Ctrl+C to skip.`,
+  );
+  const seen = await waitForAgents(
+    want,
+    () => connectedAgentClients(reticleStateHome()),
+    {
+      now: () => Date.now(),
+      sleep: (ms) =>
+        new Promise((resolve) => {
+          setTimeout(resolve, ms);
+        }),
+    },
+    CONNECT_WAIT_MS,
+    CONNECT_POLL_MS,
+  );
+  for (const line of connectionLines(rows, seen)) {
+    print(line);
+  }
 }
 
 /**

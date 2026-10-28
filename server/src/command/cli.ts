@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import { OnboardingPhase, PlatformLinkVia } from '@reticlehq/core/telemetry';
 import { hudSignIn } from './cli/cloud-login.js';
-import { handleSetupMcp, handleSetupInstall } from './cli/setup-mcp-cli.js';
+import { handleSetupMcp, handleSetupInstall, shouldWaitForAgents } from './cli/setup-mcp-cli.js';
 import { reportStepFromCli } from './cli-onboarding.js';
 import { pathToFileURL } from 'node:url';
 import { openFailureNote, openLaunchFailureNote } from './cli/answers/open-note.js';
 import { writeCiHint } from './cli/ci-hint.js';
-import { currentAutomationHint } from '@/telemetry/automation-hint.js';
+import { currentAutomationHint, isCiEnv } from '@/telemetry/automation-hint.js';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { installCrashGuard } from './setup/setup-command.js';
@@ -828,7 +828,11 @@ export function main(): void {
       break;
     case 'setup-mcp':
       void writeFirstUseWarnings().then(() => {
-        handleSetupMcp(reportStepFromCli);
+        handleSetupMcp(
+          reportStepFromCli,
+          true,
+          shouldWaitForAgents(process.stdout.isTTY, isCiEnv(process.env)),
+        );
       });
       break;
     case 'setup-install':

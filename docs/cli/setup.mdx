@@ -14,10 +14,21 @@ No flags, and nothing is asked. It works for your user account, not for one proj
 
 ## What it prints
 
-One line per agent: `✓ <agent>` for a new registration, `✓ <agent> (already set up)` when Reticle was there already, `⚠ <agent>: Reticle registration failed…` when a registration failed (the command then exits `1`), and `⚠ <agent>: add the reticle entry to <path> by hand` for a config it will not rewrite. If it finds no agent, it names every agent it looked for.
+A `Your agents:` block, with one line for each agent and the one next step for that agent:
+
+```text
+Your agents:
+  Claude Code  plugin active: type /reload-plugins if it is open
+  Cursor       added: restart Cursor, then turn Reticle on in Settings › MCP
+  Codex        added: restart Codex, then /mcp shows reticle
+```
+
+`already set up` means that Reticle was there already. `registration failed` gives the command to retry, and the command then exits `1`. `not added: add the reticle entry to <path> by hand` is for a config that it does not rewrite. If it finds no agent, it names every agent it looked for.
+
+In a terminal, and not in CI, it then waits up to 60 seconds for each agent to connect. Then it prints `Connected: <agent> ✓`, or the step that is still missing for that agent. Press Ctrl+C to stop the wait. [`reticle status`](/cli/status) shows the same lines later.
 
 ## How you know it worked
 
-Restart your coding agent. An agent reads its server list only when it starts. After the restart, the `reticle_*` tools are listed.
+Do the next step for your agent. Most agents read their server list only when they start. The Claude Code plugin loads with `/reload-plugins`. Then the `reticle_*` tools are listed, and `reticle status` shows `Connected: <agent> ✓`.
 
 Codex CLI keeps a TOML config. When the `codex` binary is on your PATH, Reticle registers through `codex mcp add`. Otherwise it prints the hand-edit lines above. Reticle then adds one line, `default_tools_approval_mode = "approve"`, under `[mcp_servers.reticle]` in `~/.codex/config.toml`. This line approves Reticle's own tools, so Codex does not ask before each call. Reticle changes no other line, and it keeps a mode that you set. To undo it, change that line to `default_tools_approval_mode = "prompt"`. Reticle does not change a mode that is already there.

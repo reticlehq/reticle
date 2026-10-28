@@ -35,7 +35,11 @@ reticle status
                http://localhost:5173/  (throttled, hidden)
                http://localhost:7699/  (throttled, hidden)
   agent link   ✓ your agent has read and used Reticle's tools
+  agents       Connected: Claude Code ✓
+               Cursor not connected yet: restart Cursor, then turn Reticle on in Settings › MCP
 ```
+
+The `agents` row has one line for each coding agent on this machine. A line shows `✓` when that agent connected to Reticle at least one time. Otherwise it shows the step that is still missing. `reticle setup mcp` prints the same lines.
 
 And with no daemon on the port:
 

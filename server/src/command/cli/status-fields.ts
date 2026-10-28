@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { statusNextAction } from './answers/status-next-action.js';
 import {
   daemonsServingProjectElsewhere,
@@ -13,6 +15,15 @@ import {
 import { devServersForProject } from '@reticlehq/core';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
 import { attachStatusFields } from '@/surface/mcp/attach-memory.js';
+import { connectedAgentClients } from '@/surface/mcp/peer/agents-connected.js';
+import {
+  agentStatuses,
+  claudeConfigDir,
+  claudePluginActive,
+  claudeStateDir,
+  installedAgentRows,
+  type AgentStatus,
+} from '@/command/setup/agent-next-steps.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { availableUpdate } from '@/command/update/update-nudge.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
@@ -90,6 +101,32 @@ export function reportStatus(fields: Record<string, unknown>, json: boolean): vo
   process.stdout.write(`${statusLines(fields).join('\n')}\n`);
 }
 
+/**
+ * Each agent on this machine: connected, or the step still missing. The same lines the installer
+ * prints after its wait. Absent when no agent is on this machine.
+ */
+function agentStatusFields(): { agents?: AgentStatus[] } {
+  const rows = installedAgentRows(
+    {
+      exists: (p) => existsSync(p),
+      readFile: (p) => {
+        try {
+          return readFileSync(p, 'utf8');
+        } catch {
+          return null;
+        }
+      },
+      homeDir: () => homedir(),
+    },
+    process.cwd(),
+    claudePluginActive(claudeConfigDir()),
+    claudeStateDir(),
+  );
+  return 0 === rows.length
+    ? {}
+    : { agents: agentStatuses(rows, connectedAgentClients(reticleStateHome())) };
+}
+
 export async function handleStatus(port: number, json = false): Promise<void> {
   // A broken session file must not cost the reader the rest of the status.
   const account = await accountStatusFields().catch(() => ({}));
@@ -116,7 +153,7 @@ export async function handleStatus(port: number, json = false): Promise<void> {
   // The OTHER half of the install, and the half this command could not see. A host that registers
   // Reticle and never lists its tools looks exactly like an abandoned install from here — same idle
   // daemon, same zero sessions — and the user sees a tool that does nothing. See attach-memory.ts.
-  const client = attachStatusFields(reticleStateHome(), port);
+  const client = { ...attachStatusFields(reticleStateHome(), port), ...agentStatusFields() };
   // What the dev servers themselves said. The reason this command could previously only guess at
   // whether the app was running is that it had no way to see one; now the ones carrying Reticle
   // announce, and the advice below stops contradicting the terminal the reader is looking at.

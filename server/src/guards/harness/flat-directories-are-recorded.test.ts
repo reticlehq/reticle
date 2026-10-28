@@ -313,7 +313,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // connected app, and the stage that proves a flow runs a model inside the daemon rather than
   // spawning a second agent CLI. Lowered in the same commit, which is what locks the gain in.
   // 17 with tauri-signing.ts: setup starts the dev server, and signs a Tauri build as it does.
-  'server/src/command/setup': 19, // + mcp-launcher.ts: the installed bin that agent configs start, beside the setup code that writes them. + start-dev-server.ts: start a dev script and wait for a page, for bare `reticle`; beside node-effects.ts, whose supervised server it reuses
+  'server/src/command/setup': 20, // + mcp-launcher.ts: the installed bin that agent configs start, beside the setup code that writes them. + start-dev-server.ts: start a dev script and wait for a page, for bare `reticle`; beside node-effects.ts, whose supervised server it reuses. + agent-next-steps.ts: the next step per agent after setup-mcp.ts registers it
   // Crossed the line with `drive-url-stamp.ts`: the mark that tells a page Reticle opened it for
   // itself. Its own leaf because the SDK reads the same constant to decide not to show a human a
   // first-run tour over a page nobody is looking at -- a rule split across two packages is worth

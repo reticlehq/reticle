@@ -13,6 +13,8 @@ import {
 export { HandshakeReplay, RECONNECT_INITIALIZE_ID } from './proxy/proxy-handshake.js';
 import { isToolCallRequest, isToolsListRequest, ToolCatalogCache } from './tool-catalog-cache.js';
 import { rememberEnumerated, rememberProxyStarted, rememberToolCalled } from './attach-memory.js';
+import { initializeClientName, rememberAgentConnected } from './peer/agents-connected.js';
+import { agentClientOf } from '@/hooks/coding-agents.js';
 import { toolsChangedNotification } from './proxy/proxy-handshake.js';
 import {
   LOOPBACK_HOST,
@@ -882,6 +884,11 @@ export function startMcpProxy(
         // that never asks look identical to one that asked and was refused.
         if (isToolsListRequest(trimmed)) {
           rememberEnumerated(reticleStateHome(), port);
+        }
+        // WHICH agent connected, so the installer and `status` can say "Connected: Cursor ✓".
+        const client = agentClientOf(initializeClientName(trimmed));
+        if (client !== undefined) {
+          rememberAgentConnected(reticleStateHome(), client);
         }
         // The hop every other check misses. Recorded on the REQUEST rather than a reply, because
         // the question is whether anything ever left the agent — a call that leaves and gets no

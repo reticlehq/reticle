@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { handleSetupInstall, handleSetupMcp } from './setup-mcp-cli.js';
+import { handleSetupInstall, handleSetupMcp, shouldWaitForAgents } from './setup-mcp-cli.js';
 import { setupMcp } from '@/command/setup/setup-mcp.js';
 import { registerOtherAgents } from '@/command/setup/setup-command.js';
 
@@ -55,6 +55,31 @@ describe('MCP registration failures reach the user and caller', () => {
     });
     handleSetupMcp(vi.fn());
     expect(process.exitCode).toBeUndefined();
+  });
+});
+
+describe('setup mcp names one next step per agent, and waits only for a person', () => {
+  it('prints the agents block and does not wait when nobody watches', () => {
+    vi.mocked(setupMcp).mockReturnValue({
+      detected: ['cursor', 'codex'],
+      registered: ['cursor', 'codex'],
+      alreadyThere: [],
+      manual: [],
+      failed: [],
+    });
+    handleSetupMcp(vi.fn());
+    const output = lines.join('');
+    expect(output).toContain('Your agents:');
+    expect(output).toContain('Cursor       added: restart Cursor');
+    expect(output).toContain('Codex        added: restart Codex, then /mcp shows reticle');
+    expect(output).not.toContain('Waiting');
+  });
+
+  it('waits in a terminal, and never in CI or with no terminal', () => {
+    expect(shouldWaitForAgents(true, false)).toBe(true);
+    expect(shouldWaitForAgents(true, true)).toBe(false);
+    expect(shouldWaitForAgents(false, false)).toBe(false);
+    expect(shouldWaitForAgents(undefined, false)).toBe(false);
   });
 });
 

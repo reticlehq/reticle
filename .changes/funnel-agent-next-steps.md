@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server` — `reticle setup mcp` names one next step for each coding agent, and then says which agents connected.** Before, it printed `✓ cursor` for each agent and one "Restart your agent" line for all of them. That line was wrong for the Claude Code plugin, which loads with `/reload-plugins`, and it did not say which agent still needed a step. Now a `Your agents:` block gives each agent its own step. In a terminal, and not in CI, the command waits up to 60 seconds and prints `Connected: Claude Code ✓`, or the step that is still missing. `reticle status` shows the same lines in a new `agents` row (`agents` in `--json`). The MCP server records the agent name from the MCP handshake in `~/.reticle/agents-connected.json`.

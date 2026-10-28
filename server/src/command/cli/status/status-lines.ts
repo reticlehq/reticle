@@ -20,6 +20,7 @@ export const StatusLabel = {
   DAEMON: 'daemon',
   SESSIONS: 'sessions',
   AGENT_LINK: 'agent link',
+  AGENTS: 'agents',
   ACCOUNT: 'account',
   NEXT: 'next',
   SPLIT_BRAIN: 'split brain',
@@ -65,9 +66,13 @@ interface SessionView {
 
 function sessionViews(fields: Record<string, unknown>): SessionView[] {
   const raw = fields['sessions'];
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   return raw.flatMap((s): SessionView[] => {
-    if ('object' !== typeof s || null === s) return [];
+    if ('object' !== typeof s || null === s) {
+      return [];
+    }
     const r = s as Record<string, unknown>;
     // Each of these explains something a reader would otherwise call a bug: a throttled or hidden
     // tab answers slowly, a stale one answers about a page that has moved on, and an unresponsive
@@ -103,11 +108,15 @@ export function statusLines(fields: Record<string, unknown>): string[] {
   // and "nothing is here" were the same output once, and the true sentence was said by nothing a
   // person sees — so the word belongs in the prose, not only in the event.
   const presence = str(fields, 'presence');
-  if (presence !== undefined) lines.push(continuation(`port presence: ${presence}`));
+  if (presence !== undefined) {
+    lines.push(continuation(`port presence: ${presence}`));
+  }
   // The refusal a FOREIGN port produces. It is the whole answer when it is present, so it rides the
   // daemon row rather than waiting for a `next` that is not built in that branch.
   const reason = str(fields, 'reason');
-  if (reason !== undefined) lines.push(continuation(reason));
+  if (reason !== undefined) {
+    lines.push(continuation(reason));
+  }
 
   if (running) {
     const count = num(fields, 'sessionCount') ?? 0;
@@ -127,7 +136,9 @@ export function statusLines(fields: Record<string, unknown>): string[] {
     // The daemon's own explanation for an empty session list, which outranks anything this command
     // could infer — it is the one holding the connection.
     const why = str(fields, 'why');
-    if (why !== undefined) lines.push(continuation(why));
+    if (why !== undefined) {
+      lines.push(continuation(why));
+    }
   }
 
   // Who is signed in, and whether this repo is linked: what `whoami` used to answer. Only when the
@@ -140,19 +151,10 @@ export function statusLines(fields: Record<string, unknown>): string[] {
     // A key the platform refused at the last sync is the answer, not "not signed in": a member
     // removed from the workspace was told to connect while the key was set, and refused.
     const refused = str(fields, 'keyRefused');
-    lines.push(
-      row(
-        StatusLabel.ACCOUNT,
-        refused !== undefined
-          ? `${NOT_OK} refused at the last sync: ${refused}`
-          : who === undefined
-            ? `${NOT_OK} not signed in`
-            : `${OK} signed in as ${who}`,
-      ),
-    );
+    lines.push(row(StatusLabel.ACCOUNT, accountText(refused, who)));
     const apps = appLinks(fields['workspaceApps']);
-    if (project === undefined && 0 < apps.length)
-      for (const { app, project: linked } of apps)
+    if (project === undefined && 0 < apps.length) {
+      for (const { app, project: linked } of apps) {
         lines.push(
           continuation(
             null === linked
@@ -160,7 +162,8 @@ export function statusLines(fields: Record<string, unknown>): string[] {
               : `${app} is linked to ${linked}`,
           ),
         );
-    else
+      }
+    } else {
       lines.push(
         continuation(
           project === undefined
@@ -168,6 +171,7 @@ export function statusLines(fields: Record<string, unknown>): string[] {
             : `this repo is linked to ${project}${workspace === undefined ? '' : ` in workspace "${workspace}"`}`,
         ),
       );
+    }
   }
 
   const client = str(fields, 'mcpClient');
@@ -175,7 +179,14 @@ export function statusLines(fields: Record<string, unknown>): string[] {
     // The state in words (`mcpClientSaid`), never the record's own name for it.
     lines.push(row(StatusLabel.AGENT_LINK, str(fields, 'mcpClientSaid') ?? client));
     const action = str(fields, 'mcpClientAction');
-    if (action !== undefined) lines.push(continuation(action));
+    if (action !== undefined) {
+      lines.push(continuation(action));
+    }
+  }
+
+  // Per agent: connected, or the step still missing. The installer prints the same lines.
+  for (const [i, line] of agentLinesOf(fields['agents']).entries()) {
+    lines.push(0 === i ? row(StatusLabel.AGENTS, line) : continuation(line));
   }
 
   for (const [label, key] of [
@@ -184,17 +195,45 @@ export function statusLines(fields: Record<string, unknown>): string[] {
     [StatusLabel.UPDATE, 'updateAvailable'],
   ] as const) {
     const value = str(fields, key);
-    if (value !== undefined) lines.push(row(label, value));
+    if (value !== undefined) {
+      lines.push(row(label, value));
+    }
   }
 
   return lines;
 }
 
+/** The account row: refused at the last sync, not signed in, or signed in. */
+function accountText(refused: string | undefined, who: string | undefined): string {
+  if (refused !== undefined) {
+    return `${NOT_OK} refused at the last sync: ${refused}`;
+  }
+  return who === undefined ? `${NOT_OK} not signed in` : `${OK} signed in as ${who}`;
+}
+
+/** The `agents` field as lines, read defensively: it is the status object, not a typed value. */
+function agentLinesOf(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((raw: unknown) => {
+    if ('object' !== typeof raw || null === raw) {
+      return [];
+    }
+    const { said } = raw as Record<string, unknown>;
+    return 'string' === typeof said ? [said] : [];
+  });
+}
+
 /** A workspace root's apps and their links, read defensively off the status fields. */
 function appLinks(value: unknown): { app: string; project: string | null }[] {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) {
+    return [];
+  }
   return value.flatMap((raw: unknown) => {
-    if ('object' !== typeof raw || null === raw) return [];
+    if ('object' !== typeof raw || null === raw) {
+      return [];
+    }
     const { app, project } = raw as Record<string, unknown>;
     return 'string' === typeof app
       ? [{ app, project: 'string' === typeof project ? project : null }]
