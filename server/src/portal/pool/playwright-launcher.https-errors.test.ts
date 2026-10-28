@@ -34,6 +34,7 @@ describe('playwrightLauncher and certificates', () => {
     await browser.newContext({ ignoreHTTPSErrors: false });
     await browser.newContext({ ignoreHTTPSErrors: true });
 
-    expect(contextOptions).toEqual([undefined, undefined, { ignoreHTTPSErrors: true }]);
+    const size = { viewport: { width: 1440, height: 900 } };
+    expect(contextOptions).toEqual([size, size, { ...size, ignoreHTTPSErrors: true }]);
   });
 });

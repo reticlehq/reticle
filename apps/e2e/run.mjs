@@ -115,6 +115,9 @@ const ORDER = [
   // tests prove install order against a fake page; only a real browser can prove the page saw it.
   // Serves its own fixture page, like the permissions spec above.
   'lease-init-script-test',
+  // The size a leased page takes, read from inside a real Chromium: headless at the default size,
+  // a requested size kept. Serves its own page, like the specs above.
+  'lease-page-size-test',
   // A refused request stopped in a real Chromium before it leaves, under the production policy.
   // Serves its own page, like the two specs above.
   'lease-production-guard-test',

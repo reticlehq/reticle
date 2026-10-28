@@ -22,6 +22,41 @@ export const CHROMIUM_ANTI_THROTTLING_ARGS = [
   '--disable-renderer-backgrounding',
 ] as const;
 
+/**
+ * The Chromium switch that opens a headed window at the size of the screen. With `viewport: null`
+ * the page then takes that window's size and the screen's real pixel ratio.
+ */
+export const HEADED_WINDOW_ARGS = ['--start-maximized'] as const;
+
+/** The page size of a headless page, which has no window and no screen to take a size from. */
+export const HEADLESS_VIEWPORT = { width: 1440, height: 900 } as const;
+
+/** A page size in CSS pixels. */
+export interface ViewportSize {
+  width: number;
+  height: number;
+}
+
+/** The viewport option for a context or a page; null is the window's real size. */
+export interface PageViewportOptions {
+  viewport: ViewportSize | null;
+}
+
+/**
+ * The viewport option for every page Reticle opens, at every launch site. Without it, Playwright
+ * gives each page a fixed 1280x720 at pixel ratio 1, whatever the window is. A size that a lease
+ * asks for always wins; only the default changes.
+ */
+export function pageViewportOptions(
+  headless: boolean,
+  requested?: ViewportSize,
+): PageViewportOptions {
+  if (requested !== undefined) {
+    return { viewport: requested };
+  }
+  return { viewport: headless ? { ...HEADLESS_VIEWPORT } : null };
+}
+
 /** The options object handed to `chromium.launch` at both launch sites. */
 export interface ChromiumLaunchOptions {
   headless: boolean;
@@ -43,7 +78,9 @@ export function chromiumLaunchOptions(
 ): ChromiumLaunchOptions {
   return {
     headless,
-    args: [...CHROMIUM_ANTI_THROTTLING_ARGS],
+    args: headless
+      ? [...CHROMIUM_ANTI_THROTTLING_ARGS]
+      : [...CHROMIUM_ANTI_THROTTLING_ARGS, ...HEADED_WINDOW_ARGS],
     ...(channel === undefined ? {} : { channel }),
     ...(executablePath === undefined ? {} : { executablePath }),
   };

@@ -1,0 +1,3 @@
+### Changed
+
+- **`@reticlehq/server` — a page that Reticle opens now has a real size.** Before, every launched or leased page had Playwright's fixed 1280x720 at pixel ratio 1. On a Retina screen in a larger window, a headed page rendered small and soft, and a window resize changed nothing. Now a headed page takes the size of its window and the pixel ratio of the screen, and the window opens to fit the screen. A headless page opens at 1440x900. A size or media that a lease asks for stays the same. A visual baseline that you saved from a headless page at the old size now reports `dimension-mismatch`. Save it again.

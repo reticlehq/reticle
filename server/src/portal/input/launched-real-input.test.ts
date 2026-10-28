@@ -184,13 +184,23 @@ describe('LaunchedRealInputProvider', () => {
   it('opens the page with storageState when provided (starts authenticated)', async () => {
     const spy = newSpy();
     await makeProvider(spy, { storageState: 'auth.json' }).navigate();
-    expect(spy.state.newPageOpts).toEqual({ storageState: 'auth.json' });
+    expect(spy.state.newPageOpts).toEqual({
+      viewport: { width: 1440, height: 900 },
+      storageState: 'auth.json',
+    });
   });
 
-  it('opens the page with no options when storageState is unset', async () => {
+  it('opens a headless page at the explicit default size when storageState is unset', async () => {
     const spy = newSpy();
     await makeProvider(spy).navigate();
-    expect(spy.state.newPageOpts).toBeUndefined();
+    expect(spy.state.newPageOpts).toEqual({ viewport: { width: 1440, height: 900 } });
+  });
+
+  // Playwright's default is a fixed 1280x720 at pixel ratio 1, whatever the window is.
+  it('opens a headed page with no viewport, so it takes the real window size', async () => {
+    const spy = newSpy();
+    await makeProvider(spy, { headless: false }).navigate();
+    expect(spy.state.newPageOpts).toEqual({ viewport: null });
   });
 
   it('does not inject a connect when injectConnect is unset', async () => {

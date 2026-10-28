@@ -10,6 +10,7 @@ import type { Browser } from 'playwright';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { ActionType, HIDE_RETICLE_CHROME_CSS, RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
 import { launchChromium } from '@/launch-chromium.js';
+import { pageViewportOptions } from '@/chromium-launch-options.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
 import {
@@ -125,19 +126,17 @@ export function gotoOptions(timeoutMs: number | undefined): {
   };
 }
 
-function wrapBrowser(browser: Browser): PooledBrowser {
+function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
   return {
     isConnected: () => browser.isConnected(),
     newContext: async (opts): Promise<PooledContext> => {
       // Media and viewport ride on the context, so the first paint of the first page has them.
       const { ignoreHTTPSErrors, ...emulate } = opts ?? {};
-      const contextOpts = {
+      const context = await browser.newContext({
         ...(true === ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
         ...emulate,
-      };
-      const context = await browser.newContext(
-        0 < Object.keys(contextOpts).length ? contextOpts : undefined,
-      );
+        ...pageViewportOptions(headless, emulate.viewport),
+      });
       return {
         newPage: async (): Promise<PooledPage> => {
           const page = await context.newPage();
@@ -278,7 +277,7 @@ export function playwrightLauncher(opts: { headless?: boolean } = {}): Launcher 
     // number that actually costs memory and the one that explains a slow machine.
     const settle = getSessionMetrics().recordConnectAttempt(BrowserLaunchKind.POOLED);
     try {
-      const browser = wrapBrowser(await launchChromium(chromium, headless));
+      const browser = wrapBrowser(await launchChromium(chromium, headless), headless);
       settle();
       return browser;
     } catch (err) {

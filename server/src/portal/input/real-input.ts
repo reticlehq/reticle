@@ -15,6 +15,7 @@ import { DriveError } from './drive-error.js';
 import { pressViaKeyboard } from './real-input-press.js';
 import { stampedDriveUrl } from './drive-url-stamp.js';
 import { launchChromium } from '@/launch-chromium.js';
+import { pageViewportOptions } from '@/chromium-launch-options.js';
 import {
   chromiumLaunchHint,
   gotoOptions,
@@ -669,9 +670,10 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
 
   async navigate(): Promise<void> {
     this.#browser = await this.#launch(this.#headless);
-    const page = await this.#browser.newPage(
-      this.#storageState !== undefined ? { storageState: this.#storageState } : undefined,
-    );
+    const page = await this.#browser.newPage({
+      ...pageViewportOptions(this.#headless),
+      ...(this.#storageState !== undefined ? { storageState: this.#storageState } : {}),
+    });
     this.#page = page;
     // Capture CDP-authoritative response detail into the driven session's journal (best-effort).
     if (this.#onNetworkDetail !== undefined) {
