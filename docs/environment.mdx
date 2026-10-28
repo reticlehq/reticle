@@ -53,6 +53,7 @@ Reticle works with none of these set. Each one changes a single behaviour, and m
 | Variable | Read by | What it does |
 | --- | --- | --- |
 | `RETICLE_SKIP_GATE` | `reticle gate --hook` | Lets an agent's stop hook proceed past a failing gate. The skip is printed and recorded, never silent. It does not affect `reticle gate` without `--hook`, which is what CI runs. |
+| `RETICLE_NO_CI_HINT` | `reticle gate`, `reticle verify`, `reticle affected` | `1` stops the one line these commands write to stderr at the end of a run in a CI runner or a container. The line names the pull request check and `https://reticle.sh/ci`. It never prints in an interactive terminal or for `gate --hook`, and it makes no network call. |
 | `RETICLE_VERIFY_TOKEN` | `reticle serve --http` | The bearer token the optional HTTP verify endpoint requires. |
 | `RETICLE_SECRET_<FIELD>` | replay, verify, crawl | The value typed into a password or secret field at replay. A recorded flow never stores it. See [what is recorded](/what-is-recorded). |
 

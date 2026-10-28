@@ -12,6 +12,8 @@ That makes the non-developer story complete: the SDK is auto-injected by the bui
 
 > **Recipe A works today; Recipe B does not exist yet.** `reticle verify` exits 0/1 and persists a run artifact right now. What is _not_ built is a hosted Reticle app that registers itself as a Vercel or Netlify check provider. Until it exists, use the CI recipe.
 
+Using Reticle in CI or in a pipeline? Talk to a founder: [book a call](https://calendar.app.google/h9NRDbBBQetyTzWM6) or write to [hey@reticle.sh](mailto:hey@reticle.sh).
+
 ## The shape
 
 ```

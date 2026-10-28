@@ -5,6 +5,8 @@ import { handleSetupMcp, handleSetupInstall } from './cli/setup-mcp-cli.js';
 import { reportStepFromCli } from './cli-onboarding.js';
 import { pathToFileURL } from 'node:url';
 import { openFailureNote, openLaunchFailureNote } from './cli/answers/open-note.js';
+import { writeCiHint } from './cli/ci-hint.js';
+import { currentAutomationHint } from '@/telemetry/automation-hint.js';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { installCrashGuard } from './setup/setup-command.js';
@@ -811,10 +813,14 @@ export function main(): void {
       handleDrive(parsed, readProjectId(process.cwd()));
       break;
     case 'verify':
-      handleVerify(parsed);
+      handleVerify(parsed, () => {
+        writeCiHint({ automation: currentAutomationHint(process.env), machineOutput: false });
+      });
       break;
     case 'affected':
-      void handleAffected(parsed.files, parsed.since);
+      void handleAffected(parsed.files, parsed.since).then(() => {
+        writeCiHint({ automation: currentAutomationHint(process.env), machineOutput: false });
+      });
       break;
     case 'gate':
       void handleGate(
@@ -823,7 +829,13 @@ export function main(): void {
         parsed.hook,
         parsed.acceptCoverage,
         reportGateCompleted,
-      );
+      ).then(() => {
+        // A stop hook's output is read by the agent, so it is a machine output mode.
+        writeCiHint({
+          automation: currentAutomationHint(process.env),
+          machineOutput: true === parsed.hook,
+        });
+      });
       break;
     case 'report':
       void handleReport(parsed.session, parsed.hook);

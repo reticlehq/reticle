@@ -559,6 +559,7 @@ We build Reticle in the open, and its users decide what we build next. Come say 
 - **Contribute.** Start with a [good first issue](https://github.com/reticlehq/reticle/labels/good%20first%20issue) or [help wanted](https://github.com/reticlehq/reticle/labels/help%20wanted), and read [CONTRIBUTING.md](CONTRIBUTING.md). In CI, every PR runs the gates that its diff needs.
 - **Ideas and questions:** [GitHub Discussions](https://github.com/reticlehq/reticle/discussions). **Bugs:** [issues](https://github.com/reticlehq/reticle/issues), or `reticle feedback "what happened"` from your terminal.
 - **Talk to us:** stuck on setup, or want to discuss your use case? [Book a call with the founders](https://calendar.app.google/h9NRDbBBQetyTzWM6).
+- **CI and pipelines:** Using Reticle in CI or in a pipeline? Talk to a founder: [book a call](https://calendar.app.google/h9NRDbBBQetyTzWM6) or write to [hey@reticle.sh](mailto:hey@reticle.sh).
 - **Security issue?** Follow [SECURITY.md](SECURITY.md). Do not open a public issue.
 
 Everyone here follows the [Code of Conduct](CODE_OF_CONDUCT.md).
