@@ -50,6 +50,8 @@ function fakeDeps(arrivesOnLook: number): { deps: ToolDeps; looks: () => number 
   let look = 0;
   const sessions: Partial<SessionManager> = {
     resolve: () => before,
+    // One tab is connected, so navigate drives it rather than starting a session of its own.
+    count: () => 1,
     // The reload branch asks whether a DIFFERENT object holds the id now. Same object: not back.
     get: () => before,
     all: () => {

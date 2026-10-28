@@ -217,3 +217,22 @@ export const NoSessionAction = {
   DAEMON_SPLIT: 'daemon_split',
 } as const;
 export type NoSessionAction = (typeof NoSessionAction)[keyof typeof NoSessionAction];
+
+/** How a tool call started a session that did not exist before the call. */
+export const SessionStartedVia = {
+  /** The daemon opened a lease on the URL that the call named. */
+  LEASE: 'lease',
+} as const;
+export type SessionStartedVia = (typeof SessionStartedVia)[keyof typeof SessionStartedVia];
+
+/**
+ * `sessionStarted` on a `reticle_navigate` result. Present only when the call found no session and
+ * opened one, so the agent knows that the tab it now drives is new. The zod schema is in the tool's
+ * output schema: zod in this file goes into the first load of every page that loads the SDK.
+ */
+export interface SessionStarted {
+  sessionId: string;
+  via: SessionStartedVia;
+  /** The page has no Reticle SDK, so the lease supplied one: no component state, no source line. */
+  zeroInstall?: boolean;
+}

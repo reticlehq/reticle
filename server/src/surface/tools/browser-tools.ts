@@ -1,4 +1,4 @@
-import { carryReticleIdentity } from './lease-tools.js';
+import { carryReticleIdentity, LEASE_ACQUIRE_TOOL } from './lease-tools.js';
 import { z } from 'zod';
 import { navigateResult } from './act/navigation/navigate-result.js';
 import {
@@ -12,7 +12,14 @@ import {
   waitForReconnect,
   RELOAD_RECONNECT_TIMEOUT_MS,
 } from '@/portal/session/session-reconnect.js';
-import { ReticleCommand } from '@reticlehq/core';
+import {
+  NO_SESSION_CONNECTED_ERROR,
+  ReticleCommand,
+  SESSION_STARTED_NOTE,
+  SessionStartedVia,
+  relativeUrlNoSession,
+  type SessionStarted,
+} from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
@@ -34,7 +41,9 @@ async function navigateLease(
 ): Promise<Record<string, unknown>> {
   const timeoutMs = asNumber(args['timeout_ms']) ?? ARRIVAL_TIMEOUT_MS;
   const went = (await deps.pool?.gotoLease(sessionId, url, timeoutMs)) ?? false;
-  if (!went) return { ok: false, url, reason: 'the leased page did not navigate' };
+  if (!went) {
+    return { ok: false, url, reason: 'the leased page did not navigate' };
+  }
   const back = await waitForSession(deps, sessionId, timeoutMs);
   return back
     ? { ok: true, url, confirmed: true, sessionId }
@@ -49,20 +58,86 @@ async function waitForSession(
 ): Promise<boolean> {
   const start = deps.now();
   for (;;) {
-    if (deps.sessions.get(sessionId) !== undefined) return true;
-    if (deps.now() - start >= timeoutMs) return false;
+    if (deps.sessions.get(sessionId) !== undefined) {
+      return true;
+    }
+    if (deps.now() - start >= timeoutMs) {
+      return false;
+    }
     await new Promise((resolve) => setTimeout(resolve, LEASE_POLL_MS));
   }
 }
 
 const LEASE_POLL_MS = 100;
 
+/** `sessionStarted` on the result. See `SessionStarted` in core. */
+const SessionStartedSchema = z.object({
+  sessionId: z.string(),
+  via: z.nativeEnum(SessionStartedVia),
+  zeroInstall: z.boolean().optional(),
+});
+
+/** The origin a relative-URL refusal names when the project app cannot be found. */
+const EXAMPLE_ORIGIN = 'http://localhost:3000';
+
+function isHttpUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url);
+    return 'http:' === protocol || 'https:' === protocol;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * No session, and an absolute URL: open a lease on it through the lease tool itself, so the same
+ * owner, browser preflight and production rules apply as on an explicit `reticle_lease` acquire.
+ */
+async function startSessionOn(deps: ToolDeps, url: string): Promise<Record<string, unknown>> {
+  const leased = (await LEASE_ACQUIRE_TOOL.handler(deps, { url })) as {
+    sessionId: string;
+    ready: boolean;
+    zeroInstall?: boolean;
+    hint?: string;
+  };
+  const sessionStarted: SessionStarted = {
+    sessionId: leased.sessionId,
+    via: SessionStartedVia.LEASE,
+    ...(true === leased.zeroInstall ? { zeroInstall: true } : {}),
+  };
+  const note =
+    leased.hint === undefined ? SESSION_STARTED_NOTE : `${SESSION_STARTED_NOTE} ${leased.hint}`;
+  return {
+    ok: true,
+    url,
+    confirmed: leased.ready,
+    sessionId: leased.sessionId,
+    sessionStarted,
+    note,
+  };
+}
+
+/**
+ * No session, and a relative URL: nothing names the app. Keep the no-session refusal (and its
+ * diagnosis), and add the absolute form of the same path.
+ */
+async function refuseRelativeWithoutSession(deps: ToolDeps, path: string): Promise<never> {
+  let message = NO_SESSION_CONNECTED_ERROR;
+  try {
+    deps.sessions.resolve();
+  } catch (err) {
+    message = err instanceof Error ? err.message : String(err);
+  }
+  const origin = (await deps.projectAppUrl?.().catch(() => undefined)) ?? EXAMPLE_ORIGIN;
+  throw new Error(`${message}${relativeUrlNoSession(path, origin)}`);
+}
+
 export const BROWSER_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.NAVIGATE,
     example: { url: '/settings' },
     description:
-      'Navigate the connected browser tab to a URL, or reload it in place with { reload: true } (add { hard: true } to bypass the cache). `ok` means the navigation was DISPATCHED — the SDK is torn down by the navigation, so the old page cannot report on it. The daemon then waits up to `timeout_ms` (default 5000) for the SDK to reconnect. `confirmed:true` with a `sessionId` means the requested page arrived and you can act immediately. `confirmed:false` with `landedOn` means the navigation arrived but the app landed at another URL, such as an authentication or route-guard redirect; use `landedOn` to understand where the browser actually ended up. `confirmed:false` without `landedOn` means the target was not observed within the wait window; a slow app may still be on its way, so increase `timeout_ms` when appropriate.',
+      'Navigate the connected browser tab to a URL, or reload it in place with { reload: true } (add { hard: true } to bypass the cache). `ok` means the navigation was DISPATCHED — the SDK is torn down by the navigation, so the old page cannot report on it. The daemon then waits up to `timeout_ms` (default 5000) for the SDK to reconnect. `confirmed:true` with a `sessionId` means the requested page arrived and you can act immediately. `confirmed:false` with `landedOn` means the navigation arrived but the app landed at another URL, such as an authentication or route-guard redirect; use `landedOn` to understand where the browser actually ended up. `confirmed:false` without `landedOn` means the target was not observed within the wait window; a slow app may still be on its way, so increase `timeout_ms` when appropriate. With no session connected, an absolute URL opens a leased tab on it and the result carries `sessionStarted`.',
     inputSchema: {
       url: z.string().optional().describe('The URL to navigate to. Omit when using reload.'),
       reload: z
@@ -100,6 +175,8 @@ export const BROWSER_TOOLS: ToolDef[] = [
        * of "Reticle stopped waiting" and "the page never came back" you are looking at.
        */
       waitedMs: z.number().optional(),
+      /** Present only when no session was connected and this call opened one on the URL. */
+      sessionStarted: SessionStartedSchema.optional(),
       note: z.string().optional(),
     },
     handler: async (deps, args) => {
@@ -136,8 +213,9 @@ export const BROWSER_TOOLS: ToolDef[] = [
         return reloadResult(back, timeoutMs);
       }
       const requested = asString(args['url']);
-      if (requested === undefined || 0 === requested.length)
+      if (requested === undefined || 0 === requested.length) {
         return { ok: false, reason: 'url required' };
+      }
       assertNotPaymentNavigation(requested);
       const named = asString(args['sessionId']);
       // A lease whose page has no SDK right now (it was navigated to an image, a PDF, another site):
@@ -148,6 +226,15 @@ export const BROWSER_TOOLS: ToolDef[] = [
         if (leaseUrl !== undefined) {
           return navigateLease(deps, named, carryReticleIdentity(leaseUrl, requested), args);
         }
+      }
+      // Nothing is connected at all, and the call named no tab. An absolute URL names the app, so
+      // open a lease on it instead of refusing. Several sessions, or one in another project, keep
+      // the refusal that resolve gives below: a lease there would guess.
+      if (named === undefined && 0 === deps.sessions.count()) {
+        if (isHttpUrl(requested)) {
+          return startSessionOn(deps, requested);
+        }
+        return refuseRelativeWithoutSession(deps, requested);
       }
       // Record navigate as an action. Its window is usually empty (the page unloads and the SDK
       // reconnects), but the action record itself — "navigated to X" — is the causal fact worth keeping.

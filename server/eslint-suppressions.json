@@ -2957,9 +2957,6 @@
     }
   },
   "src/portal/session/session-manager.ts": {
-    "curly": {
-      "count": 19
-    },
     "no-nested-ternary": {
       "count": 4
     }
@@ -3549,11 +3546,6 @@
   "src/surface/tools/body-clause-refusal-envelope.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/surface/tools/browser-tools.ts": {
-    "curly": {
-      "count": 4
     }
   },
   "src/surface/tools/chat-drives.ts": {

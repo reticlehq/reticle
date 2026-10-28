@@ -44,6 +44,8 @@ function samePageDeps(): ToolDeps {
   } as unknown as Session;
   const sessions: Partial<SessionManager> = {
     resolve: () => session,
+    // One tab is connected, so navigate drives it rather than starting a session of its own.
+    count: () => 1,
     get: () => session,
     all: () => [session],
   };

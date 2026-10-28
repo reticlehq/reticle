@@ -1,4 +1,10 @@
-import { NO_SESSION_CONNECTED_ERROR, originOf, samePath, type Checkout } from '@reticlehq/core';
+import {
+  NO_SESSION_CONNECTED_ERROR,
+  NO_SESSION_NAVIGATE_FIX,
+  originOf,
+  samePath,
+  type Checkout,
+} from '@reticlehq/core';
 import { notePendingNoSessionReason } from '@/telemetry/tool-refused.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import {
@@ -44,7 +50,9 @@ export { originOf };
  * no scope, return the list unchanged (legacy single-/multi-session behavior).
  */
 function scopeSessions(sessions: Session[], scope?: ResolveScope): Session[] {
-  if (scope === undefined) return sessions;
+  if (scope === undefined) {
+    return sessions;
+  }
   if (scope.projectId !== undefined) {
     return sessions.filter((s) => s.projectId === scope.projectId);
   }
@@ -183,7 +191,9 @@ export class SessionManager {
 
   add(session: Session): Session | undefined {
     this.#everConnected = true;
-    if (session.projectId !== undefined) this.#connectedProjects.add(session.projectId);
+    if (session.projectId !== undefined) {
+      this.#connectedProjects.add(session.projectId);
+    }
     // Ordering, not lifetime: this is what makes a remembered refusal distinguishable from a live
     // one. Here for the same reason `#everConnected` is — `add` is the one method every path that
     // registers a session goes through.
@@ -241,7 +251,9 @@ export class SessionManager {
   readonly #parked = new Set<string>();
 
   remove(session: Session): boolean {
-    if (this.#sessions.get(session.id) !== session) return false;
+    if (this.#sessions.get(session.id) !== session) {
+      return false;
+    }
     session.rejectAll(SESSION_DISCONNECTED_REASON);
     forgetDrivenRedactionKeys(session.id);
     // Recorded, not forgotten: a session that comes back needs its gap measured, and a listing after
@@ -253,8 +265,12 @@ export class SessionManager {
 
   #rememberTombstone(session: Session): void {
     const origin = originOf(session.url);
-    if (origin === undefined) return;
-    if (this.#tombstones.has(session.id)) this.#tombstones.delete(session.id);
+    if (origin === undefined) {
+      return;
+    }
+    if (this.#tombstones.has(session.id)) {
+      this.#tombstones.delete(session.id);
+    }
     this.#siblingsAtDeparture.set(
       session.id,
       new Set(
@@ -273,7 +289,9 @@ export class SessionManager {
     });
     while (this.#tombstones.size > MAX_TOMBSTONES) {
       const oldest = this.#tombstones.keys().next().value;
-      if (oldest === undefined) break;
+      if (oldest === undefined) {
+        break;
+      }
       this.#tombstones.delete(oldest);
       this.#siblingsAtDeparture.delete(oldest);
     }
@@ -281,7 +299,9 @@ export class SessionManager {
 
   #successorOf(sessionId: string): Session | undefined {
     const departed = this.#tombstones.get(sessionId);
-    if (departed === undefined) return undefined;
+    if (departed === undefined) {
+      return undefined;
+    }
     const siblings = this.#siblingsAtDeparture.get(sessionId);
     const picked = pickDocumentSuccessor(
       this.all()
@@ -293,7 +313,9 @@ export class SessionManager {
         })),
       departed,
     );
-    if (picked === undefined) return undefined;
+    if (picked === undefined) {
+      return undefined;
+    }
     return this.#sessions.get(picked.id);
   }
 
@@ -487,7 +509,9 @@ export class SessionManager {
    */
   noteClosure(reason: string, at: number, page?: RefusedPage): void {
     this.#recentClosures.push({ at, reason, ...(page === undefined ? {} : { page }) });
-    if (this.#recentClosures.length > MAX_REMEMBERED_CLOSURES) this.#recentClosures.shift();
+    if (this.#recentClosures.length > MAX_REMEMBERED_CLOSURES) {
+      this.#recentClosures.shift();
+    }
     this.#connectedSinceLastClosure = false;
   }
 
@@ -538,7 +562,9 @@ export class SessionManager {
    */
   lastKnown(): SessionIdentity | undefined {
     let last: SessionIdentity | undefined;
-    for (const record of this.#tombstones.values()) last = record;
+    for (const record of this.#tombstones.values()) {
+      last = record;
+    }
     return last;
   }
 
@@ -551,7 +577,9 @@ export class SessionManager {
   lastKnownFor(projectId: string): SessionIdentity | undefined {
     let last: SessionIdentity | undefined;
     for (const record of this.#tombstones.values()) {
-      if (record.projectId === projectId) last = record;
+      if (record.projectId === projectId) {
+        last = record;
+      }
     }
     return last;
   }
@@ -594,11 +622,12 @@ export class SessionManager {
     const ended = sessionId.startsWith(LEASE_ID_PREFIX)
       ? ` Lease '${sessionId}' has ended (it expired or was released); lease a new tab to go on.`
       : '';
-    if (0 === own.length)
+    if (0 === own.length) {
       return (
         `no connected session with id '${sessionId}'.${ended} ` +
         'Omit sessionId to let Reticle scope to your project, or lease a tab of your own.'
       );
+    }
     const named = own.map((s) => `'${s.id}' (${s.url})`).join(', ');
     return (
       `no connected session with id '${sessionId}'.${ended} Your app's tabs: ${named}. ` +
@@ -632,7 +661,7 @@ export class SessionManager {
       // diagnosis is computed HERE and the refusal is classified from the message downstream, so
       // without this every no-session refusal lands in one undifferentiated bucket (#615).
       notePendingNoSessionReason(this.#noSessionReason?.());
-      throw new Error(`${hint ?? NO_SESSION_CONNECTED_ERROR}${refusal}`);
+      throw new Error(`${hint ?? NO_SESSION_CONNECTED_ERROR}${refusal}${NO_SESSION_NAVIGATE_FIX}`);
     }
     // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a
     // leftover dashboard on a different port) is structurally unselectable — it never enters the
@@ -646,7 +675,9 @@ export class SessionManager {
       this.#checkoutScope === undefined
         ? { sessions: inProject }
         : scopeToCallerCheckout(inProject, this.#checkoutScope.caller(), this.#checkoutScope.ofTab);
-    if (byCheckout.refusal !== undefined) throw new Error(byCheckout.refusal);
+    if (byCheckout.refusal !== undefined) {
+      throw new Error(byCheckout.refusal);
+    }
     const all = byCheckout.sessions;
     if (0 === all.length) {
       // Sessions exist, but none belong to the scoped project — never fall back to a foreign tab.
@@ -657,7 +688,9 @@ export class SessionManager {
     }
     if (1 === all.length) {
       const [only] = all;
-      if (only === undefined) throw new Error('session lookup failed');
+      if (only === undefined) {
+        throw new Error('session lookup failed');
+      }
       only.markAgentActivity();
       return only;
     }
@@ -710,7 +743,9 @@ export class SessionManager {
     candidates.sort((a, b) => a.ms - b.ms);
     const [best, runnerUp] = candidates;
 
-    if (best === undefined) throw new Error('session lookup failed');
+    if (best === undefined) {
+      throw new Error('session lookup failed');
+    }
 
     // Only auto-select if there is a clear winner.
     //
@@ -780,15 +815,21 @@ export function scopeToCallerCheckout<S extends Tab>(
   caller: Checkout | undefined,
   checkoutOfTab: (tab: S) => Checkout | undefined,
 ): CheckoutScope<S> {
-  if (caller === undefined) return { sessions: [...sessions] };
+  if (caller === undefined) {
+    return { sessions: [...sessions] };
+  }
   const placed = sessions.map((session) => ({ session, checkout: checkoutOfTab(session) }));
   const mine = placed.filter((p) => isSame(p.checkout?.root, caller.root)).map((p) => p.session);
-  if (mine.length > 0) return { sessions: mine };
+  if (mine.length > 0) {
+    return { sessions: mine };
+  }
   const siblings = placed.filter((p) => isSame(p.checkout?.commonDir, caller.commonDir));
   if (siblings.length !== placed.length) {
     return { sessions: placed.filter((p) => !siblings.includes(p)).map((p) => p.session) };
   }
-  if (0 === siblings.length) return { sessions: [] };
+  if (0 === siblings.length) {
+    return { sessions: [] };
+  }
   const listed = siblings
     .map((p) => `${describeCheckout(p.checkout)} (sessionId '${p.session.id}', ${p.session.url})`)
     .join(', ');
@@ -806,7 +847,9 @@ const isSame = (a: string | undefined, b: string): boolean => a !== undefined &&
 
 /** `/wt/a (branch feat/a)`, or the folder alone on a detached HEAD. */
 export function describeCheckout(checkout: Checkout | undefined): string {
-  if (checkout === undefined) return 'an unknown folder';
+  if (checkout === undefined) {
+    return 'an unknown folder';
+  }
   return checkout.branch === undefined
     ? checkout.root
     : `${checkout.root} (branch ${checkout.branch})`;

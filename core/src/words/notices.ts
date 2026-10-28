@@ -57,6 +57,32 @@ export const NO_SESSION_CONNECTED_ERROR =
   "no browser session connected. Two things to check: (1) your app is running with @reticlehq/browser enabled, and (2) it points at THIS daemon's port — a mismatch between the port the app dials (the build plugin's reticle({ port }), or RETICLE_PORT when the dev server started) and the daemon's port is the usual cause. Call reticle_session { action: \"list\" } for the diagnosis — it names which of these it is, and what to do next — rather than retrying this call.";
 
 /**
+ * The one call that starts a session, added to every no-session refusal. `reticle_navigate` with an
+ * absolute URL opens a lease on the app when nothing is connected, so the agent does not stop at
+ * the diagnosis.
+ */
+export const NO_SESSION_NAVIGATE_FIX =
+  ' To start a session now, call reticle_navigate with the absolute URL of the app, for example ' +
+  '{ url: "http://localhost:3000/" }. Reticle opens the app in its own browser tab. Nothing in ' +
+  'the project changes.';
+
+/** Said on a `reticle_navigate` result that opened a lease because no session was connected. */
+export const SESSION_STARTED_NOTE =
+  'No session was connected, so Reticle opened this URL in a new leased browser tab. Use the ' +
+  'sessionId of this result. Release the lease with reticle_lease { action: "release" } when you ' +
+  'are done.';
+
+/** A relative URL with no session: nothing names the app, so the refusal names the absolute form. */
+export function relativeUrlNoSession(path: string, origin: string): string {
+  const absolute = new URL(path, origin).toString();
+  return (
+    ` The URL "${path}" is relative, and no tab is open to resolve it against. Call ` +
+    `reticle_navigate with the absolute URL, for example { url: "${absolute}" }, and Reticle ` +
+    'opens a session on it.'
+  );
+}
+
+/**
  * Explains an unconfirmed navigation that did reconnect, but at a different URL.
  *
  * The URL itself is supplied by the navigation result as `landedOn`; this constant keeps the

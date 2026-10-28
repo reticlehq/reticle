@@ -56,6 +56,11 @@ const DECLARED_BYPASSES: Readonly<Record<string, string>> = {
     'outer call is recorded; the inner suite run is not counted as its own tool call. Deliberate — ' +
     'counting it would double-count one agent action — but it means flow_verify usage is ' +
     'understated by however often verify_change is the caller.',
+  'surface/tools/browser-tools.ts':
+    'reticle_navigate with an absolute URL and no session opens a lease through the lease acquire ' +
+    'handler, so it gets the same owner, preflight and production rules. The outer navigate call ' +
+    'is recorded, and the leased tab is counted when its session connects. The inner acquire is ' +
+    'not counted as a reticle_lease call, so lease usage is understated by these starts.',
   'portal/bridge/bridge.test-harness.ts':
     'A test harness, not a product path. It exists precisely to call handlers without the daemon ' +
     'around them.',
