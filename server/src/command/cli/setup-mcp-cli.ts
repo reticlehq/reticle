@@ -12,8 +12,6 @@ import {
   agentLines,
   agentRows,
   awaitedClients,
-  claudeConfigDir,
-  claudePluginActive,
   connectionLines,
   waitForAgents,
   type AgentRow,
@@ -88,7 +86,7 @@ export function handleSetupMcp(
     );
     return 0;
   }
-  const rows = agentRows(result, claudePluginActive(claudeConfigDir()), io.launcher);
+  const rows = agentRows(result, io.launcher);
   for (const line of agentLines(rows)) {
     io.print(line);
   }
@@ -124,7 +122,7 @@ export function handleSetupMcp(
       });
     }
   }
-  return result.registered.length + result.alreadyThere.length;
+  return result.registered.length + result.alreadyThere.length + result.pluginActive.length;
 }
 
 /** How long the installer waits for an agent to connect. Short: the person may not restart now. */

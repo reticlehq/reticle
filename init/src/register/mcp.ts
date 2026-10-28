@@ -202,6 +202,38 @@ export function claudeReticleEntries(
   return scopes.map(reticleEntry).filter((entry) => entry !== undefined);
 }
 
+/** Claude Code's plugin install record, under `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */
+const CLAUDE_PLUGINS_FILE = join('plugins', 'installed_plugins.json');
+const CLAUDE_CONFIG_HOME = '.claude';
+/** A plugin key is `<name>@<marketplace>`. */
+const RETICLE_PLUGIN_PREFIX = `${MCP_SERVER_NAME}@`;
+
+/**
+ * Is the Reticle Claude Code plugin installed? The plugin brings its own `reticle` MCP server, so a
+ * `claude mcp add` next to it gives Claude Code two servers with the same tools. An unreadable
+ * record reads as "not installed".
+ */
+export function claudePluginInstalled(
+  io: { readFile(path: string): string | null; homeDir(): string },
+  configDir: string | undefined = process.env['CLAUDE_CONFIG_DIR'],
+): boolean {
+  const dir = configDir ?? join(io.homeDir(), CLAUDE_CONFIG_HOME);
+  const record = parsed(io.readFile(join(dir, CLAUDE_PLUGINS_FILE)));
+  const plugins: unknown =
+    'object' === typeof record && null !== record
+      ? (record as { plugins?: unknown }).plugins
+      : undefined;
+  if ('object' !== typeof plugins || null === plugins) {
+    return false;
+  }
+  return Object.keys(plugins).some((key) => key.startsWith(RETICLE_PLUGIN_PREFIX));
+}
+
+/** The one command that removes a user-scope `reticle` entry left next to the plugin. */
+export function claudeRemoveUserCommand(): string {
+  return `${CLAUDE_CLI} ${MCP_SUBCOMMAND} remove ${MCP_SERVER_NAME} -s user`;
+}
+
 /** Probe args for whether the `claude` CLI is installed at all. */
 export function claudeAvailableProbe(): { command: string; args: string[] } {
   return { command: CLAUDE_CLI, args: ['--version'] };

@@ -13,13 +13,12 @@ import {
   hasProjectConnectedBefore,
 } from '@/memory/recall/prior/connection-memory.js';
 import { devServersForProject } from '@reticlehq/core';
+import { claudePluginInstalled } from '@reticlehq/init';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
 import { attachStatusFields } from '@/surface/mcp/attach-memory.js';
 import { connectedAgentClients } from '@/surface/mcp/peer/agents-connected.js';
 import {
   agentStatuses,
-  claudeConfigDir,
-  claudePluginActive,
   claudeStateDir,
   installedAgentRows,
   type AgentStatus,
@@ -106,22 +105,18 @@ export function reportStatus(fields: Record<string, unknown>, json: boolean): vo
  * prints after its wait. Absent when no agent is on this machine.
  */
 function agentStatusFields(): { agents?: AgentStatus[] } {
-  const rows = installedAgentRows(
-    {
-      exists: (p) => existsSync(p),
-      readFile: (p) => {
-        try {
-          return readFileSync(p, 'utf8');
-        } catch {
-          return null;
-        }
-      },
-      homeDir: () => homedir(),
+  const io = {
+    exists: (p: string) => existsSync(p),
+    readFile: (p: string) => {
+      try {
+        return readFileSync(p, 'utf8');
+      } catch {
+        return null;
+      }
     },
-    process.cwd(),
-    claudePluginActive(claudeConfigDir()),
-    claudeStateDir(),
-  );
+    homeDir: () => homedir(),
+  };
+  const rows = installedAgentRows(io, process.cwd(), claudePluginInstalled(io), claudeStateDir());
   return 0 === rows.length
     ? {}
     : { agents: agentStatuses(rows, connectedAgentClients(reticleStateHome())) };

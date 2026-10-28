@@ -7,6 +7,7 @@
 import {
   claudeAddCommand,
   claudeProjectMcpJson,
+  claudeRemoveUserCommand,
   codexAddCommand,
   mcpManual,
 } from '@/register/mcp.js';
@@ -94,7 +95,32 @@ function agentFile(input: PlanInput, relPath: string): string {
 
 const CLAUDE_MCP_TITLE = 'MCP server (Claude, global)';
 
+/**
+ * The Reticle plugin brings its own `reticle` server. A user-scope entry next to it gives Claude
+ * Code two servers with the same tools, so none is added. An old one is named, not removed.
+ */
+function claudePluginStep(input: PlanInput): Step {
+  if (true === input.claudeUserEntry) {
+    return {
+      title: CLAUDE_MCP_TITLE,
+      target: MCP_TARGET,
+      status: StepStatus.MANUAL,
+      detail: `the Reticle plugin is active and a user-scope reticle server is registered too, so Claude Code has two. Remove the user-scope one: ${claudeRemoveUserCommand()}`,
+    };
+  }
+  return {
+    title: CLAUDE_MCP_TITLE,
+    target: MCP_TARGET,
+    status: StepStatus.ALREADY,
+    detail:
+      'the Reticle plugin is active and gives Claude Code its server; no user-scope entry added',
+  };
+}
+
 function claudeMcpStep(input: PlanInput): Step | null {
+  if (true === input.claudePlugin) {
+    return claudePluginStep(input);
+  }
   if (!input.claudeCli) {
     return null;
   }
@@ -207,7 +233,7 @@ function clientStep(
  * they get the notice instead.
  */
 function claudeProjectStep(input: PlanInput): Step | null {
-  if (input.claudeCli || true !== input.insideClaudeCode) {
+  if (input.claudeCli || true !== input.insideClaudeCode || true === input.claudePlugin) {
     return null;
   }
   const path = agentFile(input, CLAUDE_PROJECT_CONFIG);
@@ -269,7 +295,12 @@ function mcpSteps(input: PlanInput): Step[] {
    * to register, so nothing has silently vanished — and leaving that path untouched keeps every
    * pristine scaffold in the install baseline reading exactly as it did.
    */
-  if (!input.claudeCli && null === claudeProject && steps.length > 0) {
+  if (
+    !input.claudeCli &&
+    true !== input.claudePlugin &&
+    null === claudeProject &&
+    steps.length > 0
+  ) {
     steps.push({
       title: CLAUDE_MCP_TITLE,
       target: MCP_TARGET,

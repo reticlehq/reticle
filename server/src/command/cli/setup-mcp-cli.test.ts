@@ -36,6 +36,8 @@ describe('MCP registration failures reach the user and caller', () => {
       alreadyThere: [],
       manual: [],
       failed: ['claude-code'],
+      pluginActive: [],
+      duplicates: [],
     });
     handleSetupMcp(vi.fn());
     const output = lines.join('');
@@ -52,6 +54,8 @@ describe('MCP registration failures reach the user and caller', () => {
       alreadyThere: [],
       manual: [],
       failed: [],
+      pluginActive: [],
+      duplicates: [],
     });
     handleSetupMcp(vi.fn());
     expect(process.exitCode).toBeUndefined();
@@ -66,6 +70,8 @@ describe('setup mcp names one next step per agent, and waits only for a person',
       alreadyThere: [],
       manual: [],
       failed: [],
+      pluginActive: [],
+      duplicates: [],
     });
     handleSetupMcp(vi.fn());
     const output = lines.join('');
@@ -83,6 +89,40 @@ describe('setup mcp names one next step per agent, and waits only for a person',
   });
 });
 
+describe('the Reticle plugin row', () => {
+  it('says the plugin is active and counts Claude Code', () => {
+    vi.mocked(setupMcp).mockReturnValue({
+      detected: ['claude-code'],
+      registered: [],
+      alreadyThere: [],
+      manual: [],
+      failed: [],
+      pluginActive: ['claude-code'],
+      duplicates: [],
+    });
+    expect(handleSetupMcp(vi.fn())).toBe(1);
+    const output = lines.join('');
+    expect(output).toContain('Claude Code  plugin active: type /reload-plugins if it is open');
+    expect(output).not.toContain('claude mcp remove');
+  });
+
+  it('prints the one command that removes a duplicate user-scope entry', () => {
+    vi.mocked(setupMcp).mockReturnValue({
+      detected: ['claude-code'],
+      registered: [],
+      alreadyThere: [],
+      manual: [],
+      failed: [],
+      pluginActive: ['claude-code'],
+      duplicates: ['claude-code'],
+    });
+    handleSetupMcp(vi.fn());
+    expect(lines.join('')).toContain(
+      'Claude Code  plugin active: type /reload-plugins if it is open\n    ⚠ a user-scope reticle server is registered too, so Claude Code has two. Remove it: claude mcp remove reticle -s user',
+    );
+  });
+});
+
 describe('setup install prints progress only', () => {
   it('leaves the next step and the agent prompt to the installer', () => {
     vi.mocked(setupMcp).mockReturnValue({
@@ -91,6 +131,8 @@ describe('setup install prints progress only', () => {
       alreadyThere: [],
       manual: [],
       failed: [],
+      pluginActive: [],
+      duplicates: [],
     });
     handleSetupInstall({ runtimeSecs: 1, installSecs: 1, mcp: true }, vi.fn());
     const output = lines.join('');
@@ -106,6 +148,8 @@ describe('setup install tells the launcher what it found, in one line it strips'
     alreadyThere,
     manual: [],
     failed: [],
+    pluginActive: [],
+    duplicates: [],
   });
 
   it('counts the coding agents that have the tools now', () => {

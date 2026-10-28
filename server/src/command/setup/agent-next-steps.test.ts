@@ -7,9 +7,6 @@
  * nothing per client. A person with three agents did not know which one still needed a step. And
  * nothing said whether any agent connected after the step, so "it did not work" had no evidence.
  */
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { AgentClient } from '@reticlehq/core/telemetry';
 import {
@@ -18,23 +15,27 @@ import {
   agentRows,
   agentStatuses,
   awaitedClients,
-  claudePluginActive,
   connectionLines,
   installedAgentRows,
   waitForAgents,
 } from './agent-next-steps.js';
 
+const NO_PLUGIN = { pluginActive: [], duplicates: [] };
+
+/** Claude Code through the plugin; Cursor and Codex added. */
 const result = {
   detected: ['claude-code', 'cursor', 'codex'],
   registered: ['cursor', 'codex'],
-  alreadyThere: ['claude-code'],
+  alreadyThere: [],
   failed: [],
   manual: [],
+  pluginActive: ['claude-code'],
+  duplicates: [],
 };
 
 describe('detection becomes one line per agent, with its own next step', () => {
   it('names the plugin reload for Claude Code and a restart for the others', () => {
-    const lines = agentLines(agentRows(result, true));
+    const lines = agentLines(agentRows(result));
     expect(lines[0]).toBe('Your agents:');
     expect(lines).toContain('  Claude Code  plugin active: type /reload-plugins if it is open');
     expect(lines).toContain(
@@ -44,9 +45,7 @@ describe('detection becomes one line per agent, with its own next step', () => {
   });
 
   it('never claims a reload is enough for a `claude mcp add` registration', () => {
-    const lines = agentLines(
-      agentRows({ ...result, registered: ['claude-code'], alreadyThere: [] }, false),
-    );
+    const lines = agentLines(agentRows({ ...result, ...NO_PLUGIN, registered: ['claude-code'] }));
     const claude = lines.find((l) => l.includes('Claude Code')) ?? '';
     expect(claude).toContain('restart Claude Code');
     expect(claude).not.toContain('/reload-plugins');
@@ -61,8 +60,8 @@ describe('detection becomes one line per agent, with its own next step', () => {
           alreadyThere: [],
           failed: ['claude-code'],
           manual: [],
+          ...NO_PLUGIN,
         },
-        false,
         '/opt/reticle/bin/reticle',
       ),
     );
@@ -73,16 +72,14 @@ describe('detection becomes one line per agent, with its own next step', () => {
 
   it('names the step still missing for a failed or hand-edit client', () => {
     const lines = agentLines(
-      agentRows(
-        {
-          detected: ['claude-code', 'codex'],
-          registered: [],
-          alreadyThere: [],
-          failed: ['claude-code'],
-          manual: [{ id: 'codex', configPath: '/h/.codex/config.toml', docs: undefined }],
-        },
-        false,
-      ),
+      agentRows({
+        detected: ['claude-code', 'codex'],
+        registered: [],
+        alreadyThere: [],
+        failed: ['claude-code'],
+        manual: [{ id: 'codex', configPath: '/h/.codex/config.toml', docs: undefined }],
+        ...NO_PLUGIN,
+      }),
     );
     expect(lines.join('\n')).toContain(
       'Claude Code  registration failed: run `claude mcp add reticle',
@@ -94,7 +91,7 @@ describe('detection becomes one line per agent, with its own next step', () => {
 });
 
 describe('a connected client reads ✓, any other names its missing step', () => {
-  const rows = agentRows(result, true);
+  const rows = agentRows(result);
 
   it('reads ✓ for a client the record holds, and the step for the others', () => {
     const lines = connectionLines(rows, new Set([AgentClient.CLAUDE_CODE]));
@@ -121,10 +118,14 @@ describe('a connected client reads ✓, any other names its missing step', () =>
   });
 
   it('waits only for clients that have Reticle registered', () => {
-    const failed = agentRows(
-      { detected: ['cursor'], registered: [], alreadyThere: [], failed: ['cursor'], manual: [] },
-      false,
-    );
+    const failed = agentRows({
+      detected: ['cursor'],
+      registered: [],
+      alreadyThere: [],
+      failed: ['cursor'],
+      manual: [],
+      ...NO_PLUGIN,
+    });
     expect(awaitedClients(failed)).toEqual([]);
     expect(awaitedClients(rows)).toEqual([
       AgentClient.CLAUDE_CODE,
@@ -168,26 +169,18 @@ describe('the wait is bounded by an injected clock', () => {
   });
 });
 
-describe('the Claude Code plugin is read from its own install record', () => {
-  it('is active when installed_plugins.json names reticle', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'plugin-'));
-    mkdirSync(join(dir, 'plugins'));
-    writeFileSync(
-      join(dir, 'plugins', 'installed_plugins.json'),
-      JSON.stringify({ version: 2, plugins: { 'reticle@reticlehq': [{ scope: 'user' }] } }),
+describe('a user-scope entry next to the plugin is named in the block, with its remove command', () => {
+  it('prints the warning under the Claude Code row', () => {
+    const lines = agentLines(agentRows({ ...result, duplicates: ['claude-code'] }));
+    const at = lines.indexOf('  Claude Code  plugin active: type /reload-plugins if it is open');
+    expect(at).toBeGreaterThan(0);
+    expect(lines[at + 1]).toBe(
+      '    ⚠ a user-scope reticle server is registered too, so Claude Code has two. Remove it: claude mcp remove reticle -s user',
     );
-    expect(claudePluginActive(dir)).toBe(true);
   });
 
-  it('is not active when the file is absent or names another plugin', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'plugin-'));
-    expect(claudePluginActive(dir)).toBe(false);
-    mkdirSync(join(dir, 'plugins'));
-    writeFileSync(
-      join(dir, 'plugins', 'installed_plugins.json'),
-      JSON.stringify({ plugins: { 'other@x': [] } }),
-    );
-    expect(claudePluginActive(dir)).toBe(false);
+  it('prints no warning for the plugin alone', () => {
+    expect(agentLines(agentRows(result)).join('\n')).not.toContain('claude mcp remove');
   });
 });
 
@@ -245,6 +238,15 @@ describe('status rows come from the configs, read only', () => {
       false,
     );
     expect(rows).toEqual([{ id: 'cursor', reg: AgentReg.ALREADY }]);
+  });
+
+  it('reads a user-scope entry next to the plugin as a duplicate', () => {
+    const rows = installedAgentRows(
+      io({ '/h/.claude.json': JSON.stringify({ mcpServers: { reticle: { command: 'npx' } } }) }),
+      undefined,
+      true,
+    );
+    expect(rows).toEqual([{ id: 'claude-code', reg: AgentReg.PLUGIN, duplicate: true }]);
   });
 
   it('reads the plugin as set up, and lists no client that is not on the machine', () => {

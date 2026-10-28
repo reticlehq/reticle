@@ -120,6 +120,10 @@ export interface PlanInput {
   claudeCli: boolean;
   /** Whether an `reticle` MCP server is already registered with Claude (any scope) — idempotency. */
   mcpExists: boolean;
+  /** The Reticle Claude Code plugin is installed, and it brings its own `reticle` server. */
+  claudePlugin?: boolean | undefined;
+  /** A user-scope `reticle` entry exists too. Next to the plugin, that is a duplicate. */
+  claudeUserEntry?: boolean | undefined;
   /**
    * Whether `init` is running inside Claude Code itself, which is the one case where writing its
    * project-scope `.mcp.json` is known to be wanted. See `CLAUDE_PROJECT_SPEC`.

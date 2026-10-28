@@ -44,7 +44,12 @@ import { tanstackStartConnectPath } from './patch/tanstack-start.js';
 import { installedViteMajor } from './patch/vite-owning-config.js';
 import { PRETTIERIGNORE_PATH } from './patch/prettier-ignore.js';
 import { RETICLE_CONFIG_FILE, type PlanInput } from './plan/plan.js';
-import { claudeAvailableProbe, claudeHasReticle, codexAvailableProbe } from './register/mcp.js';
+import {
+  claudeAvailableProbe,
+  claudeHasReticle,
+  claudePluginInstalled,
+  codexAvailableProbe,
+} from './register/mcp.js';
 import { nextUsesTypeScript, reticleDevLocation } from './patch/next-patch.js';
 import { scanTestids, storeHints, scanStores } from './detect/capabilities.js';
 import { CLAUDE_PROJECT_CONFIG, CURSOR_PROJECT_MARKER, McpClient } from './register/mcp-clients.js';
@@ -317,6 +322,9 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
   const claudeCli = options.mcp ? io.probe(availableProbe.command, availableProbe.args) : false;
   // Read from Claude's config, never `claude mcp get`: that launches the server — see claudeHasReticle.
   const mcpExists = claudeCli ? claudeHasReticle(io, io.cwd()) : false;
+  // The plugin brings its own server; a user-scope entry next to it is a duplicate.
+  const claudePlugin = options.mcp ? claudePluginInstalled(io) : false;
+  const claudeUserEntry = claudePlugin ? claudeHasReticle(io, undefined) : false;
 
   // Every MCP client this machine shows evidence of. Conservative and one-directional: we write
   // into a config a client ALREADY has, and never create ~/.gemini or ~/.codeium for somebody who
@@ -389,6 +397,8 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
     prettierIgnoreSource: io.readFile(PRETTIERIGNORE_PATH),
     claudeCli,
     mcpExists,
+    claudePlugin,
+    claudeUserEntry,
     insideClaudeCode: io.host.insideClaudeCode(),
     claudeProjectConfig: options.mcp ? io.readFile(agentFile(CLAUDE_PROJECT_CONFIG)) : undefined,
     platform: process.platform,

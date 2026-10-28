@@ -9,12 +9,12 @@
  * other client the step is the conservative one: their docs do not say a running session picks up a
  * new server.
  */
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import {
   claudeAddCommand,
   claudeHasReticle,
+  claudeRemoveUserCommand,
   clientSpec,
   codexNamesOurServer,
   ConfigFormat,
@@ -46,6 +46,8 @@ export interface AgentRow {
   readonly path?: string;
   /** The command to retry a failed CLI registration, with the launcher that run used. */
   readonly retry?: string;
+  /** The plugin AND a user-scope `reticle` entry: the client has two servers. */
+  readonly duplicate?: boolean;
 }
 
 interface AgentStep {
@@ -116,6 +118,8 @@ const NextStepCopy = {
   CONNECTED_HEAD: 'Connected: ',
   CONNECTED_TAIL: ' ✓',
   NOT_CONNECTED: ' not connected yet: ',
+  DUPLICATE:
+    '    ⚠ a user-scope reticle server is registered too, so Claude Code has two. Remove it: ',
 } as const;
 
 const NAME_COLUMN = Math.max(...Object.values(AGENT_STEPS).map((s) => s.name.length)) + 2;
@@ -126,19 +130,15 @@ const NAME_COLUMN = Math.max(...Object.values(AGENT_STEPS).map((s) => s.name.len
  * @param launcher the installed bin that run registered (`SetupMcpIo.launcher`), so a retry line
  *   names the same command.
  */
-export function agentRows(
-  result: SetupMcpResult,
-  pluginActive: boolean,
-  launcher?: string,
-): AgentRow[] {
+export function agentRows(result: SetupMcpResult, launcher?: string): AgentRow[] {
   const known = (id: string): id is McpClient => id in AGENT_STEPS;
   const rows: AgentRow[] = [];
   for (const id of result.detected) {
     if (!known(id)) {
       continue;
     }
-    if (McpClient.CLAUDE_CODE === id && pluginActive) {
-      rows.push({ id, reg: AgentReg.PLUGIN });
+    if (result.pluginActive.includes(id)) {
+      rows.push(pluginRow(id, result.duplicates.includes(id)));
       continue;
     }
     const manual = result.manual.find((m) => m.id === id);
@@ -157,6 +157,10 @@ export function agentRows(
     }
   }
   return rows;
+}
+
+function pluginRow(id: McpClient, duplicate: boolean): AgentRow {
+  return duplicate ? { id, reg: AgentReg.PLUGIN, duplicate } : { id, reg: AgentReg.PLUGIN };
 }
 
 function failedStep(row: AgentRow): string {
@@ -189,9 +193,12 @@ export function agentLines(rows: readonly AgentRow[]): string[] {
   }
   return [
     NextStepCopy.HEADING,
-    ...rows.map(
-      (row) => `  ${AGENT_STEPS[row.id].name.padEnd(NAME_COLUMN)}${registrationText(row)}`,
-    ),
+    ...rows.flatMap((row) => {
+      const line = `  ${AGENT_STEPS[row.id].name.padEnd(NAME_COLUMN)}${registrationText(row)}`;
+      return true === row.duplicate
+        ? [line, `${NextStepCopy.DUPLICATE}${claudeRemoveUserCommand()}`]
+        : [line];
+    }),
   ];
 }
 
@@ -281,38 +288,11 @@ export async function waitForAgents(
   return seen;
 }
 
-const PLUGINS_FILE = join('plugins', 'installed_plugins.json');
 const CLAUDE_CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR';
-
-/** `$CLAUDE_CONFIG_DIR`, else `~/.claude`: where Claude Code keeps its plugin record. */
-export function claudeConfigDir(): string {
-  return process.env[CLAUDE_CONFIG_DIR_ENV] ?? join(homedir(), '.claude');
-}
 
 /** `$CLAUDE_CONFIG_DIR`, else home: where Claude Code keeps `.claude.json`. */
 export function claudeStateDir(): string {
   return process.env[CLAUDE_CONFIG_DIR_ENV] ?? homedir();
-}
-const RETICLE_PLUGIN_PREFIX = 'reticle@';
-
-/**
- * Is the Reticle plugin installed in Claude Code? Read from Claude Code's own install record in
- * `claudeDir` (`$CLAUDE_CONFIG_DIR`, else `~/.claude`). Any failure reads as "not installed".
- */
-export function claudePluginActive(claudeDir: string): boolean {
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(join(claudeDir, PLUGINS_FILE), 'utf8'));
-    const plugins =
-      'object' === typeof parsed && null !== parsed
-        ? (parsed as { plugins?: unknown }).plugins
-        : undefined;
-    if ('object' !== typeof plugins || null === plugins) {
-      return false;
-    }
-    return Object.keys(plugins).some((key) => key.startsWith(RETICLE_PLUGIN_PREFIX));
-  } catch {
-    return false;
-  }
 }
 
 /** What `installedAgentRows` reads. It never writes. */
@@ -364,7 +344,8 @@ export function installedAgentRows(
 ): AgentRow[] {
   const rows: AgentRow[] = [];
   if (pluginActive) {
-    rows.push({ id: McpClient.CLAUDE_CODE, reg: AgentReg.PLUGIN });
+    // A user-scope entry next to the plugin is a second server.
+    rows.push(pluginRow(McpClient.CLAUDE_CODE, claudeHasReticle(io, undefined, claudeStateDir)));
   } else if (claudeHasReticle(io, projectDir, claudeStateDir)) {
     rows.push({ id: McpClient.CLAUDE_CODE, reg: AgentReg.ALREADY });
   } else if (io.exists(join(claudeStateDir, CLAUDE_STATE_FILE))) {

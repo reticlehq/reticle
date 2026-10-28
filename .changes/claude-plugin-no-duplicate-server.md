@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/init`, `@reticlehq/server` — with the Reticle Claude Code plugin installed, `reticle init` and `reticle setup mcp` registered a second `reticle` server.** The plugin brings its own MCP server, and both commands still ran `claude mcp add reticle -s user`. Claude Code then had two `reticle` servers, duplicate tools and two proxies. Now both commands see the plugin, add no user-scope entry, and report Claude Code as "plugin active". If a user-scope entry is already there next to the plugin, they say so and print the command that removes it: `claude mcp remove reticle -s user`. They do not remove it.

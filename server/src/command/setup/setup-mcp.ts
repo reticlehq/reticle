@@ -4,6 +4,7 @@ import {
   claudeAddCommand,
   claudeAvailableProbe,
   claudeHasReticle,
+  claudePluginInstalled,
   codexAddCommand,
   codexAvailableProbe,
   codexNamesOurServer,
@@ -69,6 +70,10 @@ export interface SetupMcpResult {
    * and a pre-seeded `~/.codex/config.toml`; the file came back byte-identical both times.
    */
   readonly manual: readonly ManualClient[];
+  /** Clients whose Reticle plugin brings the server, so nothing was registered for them. */
+  readonly pluginActive: readonly string[];
+  /** Clients with the plugin AND a user-scope `reticle` entry: two servers. Named, never removed. */
+  readonly duplicates: readonly string[];
 }
 
 /** A client the caller has to tell somebody about, with the two facts they need to act. */
@@ -107,6 +112,8 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
   const alreadyThere: string[] = [];
   const failed: string[] = [];
   const manual: ManualClient[] = [];
+  const pluginActive: string[] = [];
+  const duplicates: string[] = [];
 
   /*
    * Claude Code first, because nothing else can find it.
@@ -126,7 +133,14 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
   if (io.runCli(available.command, available.args)) {
     detected.push(McpClient.CLAUDE_CODE);
     // Read from Claude's config: `claude mcp get` health-checks by launching the server.
-    if (claudeHasReticle(io, undefined)) {
+    const hasEntry = claudeHasReticle(io, undefined);
+    if (claudePluginInstalled(io)) {
+      // The plugin brings its own server. A user-scope entry next to it is a second one.
+      pluginActive.push(McpClient.CLAUDE_CODE);
+      if (hasEntry) {
+        duplicates.push(McpClient.CLAUDE_CODE);
+      }
+    } else if (hasEntry) {
       alreadyThere.push(McpClient.CLAUDE_CODE);
     } else {
       const cmd = claudeAddCommand(io.launcher);
@@ -180,7 +194,11 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
     step: 'agents_detected',
     status: OnboardingStepStatus.COMPLETED,
   });
-  const mcpStatus = mcpRegisteredStatus(detected.length, registered.length, alreadyThere.length);
+  const mcpStatus = mcpRegisteredStatus(
+    detected.length,
+    registered.length,
+    alreadyThere.length + pluginActive.length,
+  );
   io.reportStep({
     phase: OnboardingPhase.INSTALL,
     step: 'mcp_registered',
@@ -201,7 +219,7 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
       : {}),
   });
 
-  return { detected, registered, alreadyThere, failed, manual };
+  return { detected, registered, alreadyThere, failed, manual, pluginActive, duplicates };
 }
 
 function mcpRegisteredStatus(

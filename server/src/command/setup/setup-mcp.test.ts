@@ -25,6 +25,8 @@ interface Machine {
   claudeInstalled?: boolean;
   /** Does it already hold a `reticle` server entry? */
   claudeAlreadyRegistered?: boolean;
+  /** Is the Reticle Claude Code plugin installed? */
+  claudePlugin?: boolean;
   /** Config files this machine keeps, by path suffix. */
   files?: Record<string, string>;
   /** Is the `codex` CLI installed here? */
@@ -47,6 +49,13 @@ function machine(m: Machine = {}): Recorded {
   const files: Record<string, string> = {
     ...(true === m.claudeAlreadyRegistered
       ? { '.claude.json': JSON.stringify({ mcpServers: { reticle: { command: 'npx' } } }) }
+      : {}),
+    ...(true === m.claudePlugin
+      ? {
+          '.claude/plugins/installed_plugins.json': JSON.stringify({
+            plugins: { 'reticle@reticlehq': [{ scope: 'user' }] },
+          }),
+        }
       : {}),
     ...(m.files ?? {}),
   };
@@ -124,6 +133,46 @@ describe('a client that owns its own registration is still a client', () => {
 
     expect(result.detected).not.toContain('claude-code');
     expect(result.registered).toEqual([]);
+  });
+});
+
+describe('the Reticle plugin already gives Claude Code its server', () => {
+  it('runs no `claude mcp add` and reports the plugin', () => {
+    const { io, ran, steps } = machine({ claudeInstalled: true, claudePlugin: true });
+    const result = setupMcp(io);
+
+    expect(
+      ran.some((c) => c.includes('mcp add')),
+      `commands run: ${ran.join(' | ')}`,
+    ).toBe(false);
+    expect(result.pluginActive).toEqual(['claude-code']);
+    expect(result.registered).not.toContain('claude-code');
+    expect(result.duplicates).toEqual([]);
+    expect(stepStatus(steps, 'mcp_registered')).toBe('skipped');
+  });
+
+  it('names an old user-scope entry as a duplicate and removes nothing', () => {
+    const { io, ran } = machine({
+      claudeInstalled: true,
+      claudePlugin: true,
+      claudeAlreadyRegistered: true,
+    });
+    const result = setupMcp(io);
+
+    expect(result.pluginActive).toEqual(['claude-code']);
+    expect(result.duplicates).toEqual(['claude-code']);
+    expect(result.alreadyThere).not.toContain('claude-code');
+    expect(
+      ran.some((c) => /mcp (add|remove)/.test(c)),
+      `commands run: ${ran.join(' | ')}`,
+    ).toBe(false);
+  });
+
+  it('registers as before without the plugin', () => {
+    const { io } = machine({ claudeInstalled: true });
+    const result = setupMcp(io);
+    expect(result.registered).toContain('claude-code');
+    expect(result.pluginActive).toEqual([]);
   });
 });
 
