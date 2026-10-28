@@ -477,9 +477,12 @@ await settle(() => find('init_completed').length >= 1);
   check('  carries the stack that failed to set up', i?.properties.init_stack === 'next');
 }
 // The same failed init is one named stop. Sent detached as well, so wait for it the same way.
-await settle(() => find('onboarding_step').some((e) => e.properties.onboarding_stop !== undefined));
+// The failed init's own row. Other stops can reach the wire first in the same run (a CI runner with
+// no Chromium sends `chromium_unavailable` from a failed connect), so pick the row by its step.
+const isInitStop = (e) => e.properties.onboarding_stop !== undefined && e.properties.onboarding_step === 'instrumented';
+await settle(() => find('onboarding_step').some(isInitStop));
 {
-  const stop = find('onboarding_step').find((e) => e.properties.onboarding_stop !== undefined);
+  const stop = find('onboarding_step').find(isInitStop);
   check('onboarding_step names the stop of a failed init, from the closed list', stop?.properties.onboarding_stop === 'setup_failed', String(stop?.properties.onboarding_stop));
   check('  on the step it blocked, as failed, with the init reason', stop?.properties.onboarding_step === 'instrumented' && stop?.properties.onboarding_status === 'failed' && stop?.properties.onboarding_reason === 'dependency_install', `${stop?.properties.onboarding_step}/${stop?.properties.onboarding_status}/${stop?.properties.onboarding_reason}`);
 }
