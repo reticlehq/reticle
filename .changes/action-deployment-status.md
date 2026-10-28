@@ -1,0 +1,3 @@
+### Added
+
+- **GitHub Action: verify each preview with no URL to type.** Run the Action on `deployment_status`. It reads the preview URL from the Vercel or Netlify event, and verifies only a deployment that succeeded. The `url` input stays, and it wins when you set it. A new `vercel-bypass-secret` input opens a Vercel preview behind Deployment Protection: the Action gets a bypass cookie, and the replay's browser starts with it. A preview that answers 401 or 403 fails the job with the name of the secret to set. `@reticlehq/core` exports `RETICLE_ACTION_USES`, the one Action tag that the docs and the platform print.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { RETICLE_ACTION_USES, RETICLE_ACTION_VERSION } from '@reticlehq/core';
 import { RETICLE_NPM_PACKAGE, RETICLE_VERSION } from '@reticlehq/init';
 import { SERVER_VERSION } from './identity/server-version.js';
 import { REPO_ROOT } from '@/machine/repo-root.js';
@@ -72,5 +73,20 @@ describe('the action README pins the release it ships with', () => {
       new Set(pins),
       'action/README.md pins another release. `node scripts/set-version.mjs <v>` writes it.',
     ).toEqual(new Set([manifest('server').version]));
+  });
+
+  // The cloud's setup card prints RETICLE_ACTION_USES. The docs print the same line, so a user who
+  // copies either one runs the same Action.
+  it('has one source for the tag: the core constant, which every doc pin matches', () => {
+    expect(RETICLE_ACTION_VERSION).toBe(manifest('server').version);
+    expect(RETICLE_ACTION_USES).toBe(`reticlehq/reticle/action@v${RETICLE_ACTION_VERSION}`);
+    for (const doc of [join('action', 'README.md'), join('docs', 'deploy-checks.md')]) {
+      const text = readFileSync(join(REPO, doc), 'utf8');
+      const pins = [...text.matchAll(/reticlehq\/reticle\/action@[\w.-]+/g)].map((m) => m[0]);
+      expect(pins.length, `${doc} shows no Action pin`).toBeGreaterThan(0);
+      expect(new Set(pins), `${doc} pins another tag than RETICLE_ACTION_USES`).toEqual(
+        new Set([RETICLE_ACTION_USES]),
+      );
+    }
   });
 });

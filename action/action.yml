@@ -1,5 +1,5 @@
 name: Reticle verify
-description: Replay your saved Reticle journeys against a URL and report one check per pull request.
+description: Replay your saved Reticle journeys against a preview URL and report one check per commit.
 author: Reticle
 branding:
   icon: check-circle
@@ -7,11 +7,16 @@ branding:
 
 inputs:
   url:
-    description: The running app to verify, such as your preview deployment.
-    required: true
+    description: The running app to verify. When set, it wins over the preview URL in a deployment_status event.
+    required: false
+    default: ''
   api-key:
     description: A Reticle workspace API key. Store it as a secret.
     required: true
+  vercel-bypass-secret:
+    description: A Vercel Protection Bypass for Automation secret, for a preview behind Deployment Protection. Store it as a secret.
+    required: false
+    default: ''
   project:
     description: The Reticle project id. Used to pull the suite when the repository has no .reticle/flows.
     required: false
@@ -48,6 +53,7 @@ runs:
       env:
         RETICLE_ACTION_URL: ${{ inputs.url }}
         RETICLE_API_KEY: ${{ inputs.api-key }}
+        RETICLE_BYPASS_SECRET: ${{ inputs.vercel-bypass-secret }}
         RETICLE_PROJECT: ${{ inputs.project }}
         RETICLE_CLOUD_URL: ${{ inputs.cloud-url }}
         RETICLE_BIN: ${{ runner.temp }}/reticle/node_modules/.bin/reticle

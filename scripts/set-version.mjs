@@ -132,13 +132,19 @@ const RULES = [
       text.split(`**${from}**`).join(`**${to}**`).split(`is ${from}.`).join(`is ${to}.`),
   },
   {
-    what: 'GitHub Action pin in its README',
+    what: 'GitHub Action pin in its README and docs',
     // The README pins the action at a release tag. It did not hold the current version when it
     // drifted, so the containment check above cannot find it: match any version.
-    files: () => ['action/README.md'],
+    files: () => ['action/README.md', 'docs/deploy-checks.md'],
     matchesAnyVersion: true,
     edit: (text, _from, to) =>
       text.replace(/reticlehq\/reticle\/action@v\d+\.\d+\.\d+/g, `reticlehq/reticle/action@v${to}`),
+  },
+  {
+    what: 'GitHub Action tag constant (the cloud setup card prints it)',
+    files: () => ['core/src/identity/github-action.ts'],
+    edit: (text, from, to) =>
+      text.replace(`RETICLE_ACTION_VERSION = '${from}'`, `RETICLE_ACTION_VERSION = '${to}'`),
   },
   {
     what: 'crate pin in docs (major.minor, Cargo caret semantics)',

@@ -30,6 +30,7 @@ export * from './wire/constants/constants.js'; // EventType, ActionType, wire co
 export * from './wire/constants/response-body-reason.js'; // why a NET_REQUEST carries no response body (#1520)
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
 export * from './identity/testid-attribute.js'; // DEFAULT_TESTID_ATTR, ALTERNATIVE_TESTID_ATTRS
+export * from './identity/github-action.js'; // RETICLE_ACTION_USES — the Action tag docs and cloud print
 export * from './wire/event-classification.js'; // CHURN_TYPES — shared eviction priority for buffer/queue
 export * from './wire/click-input.js'; // which button and modifiers a click may carry
 export * from './wire/global-press.js'; // which press is a document key (Escape / Tab / a shortcut)

@@ -56,6 +56,29 @@ The job's own pass/fail becomes the PR check. Nothing else is required.
 
 **Non-loopback previews need pairing.** For a real preview URL (not `localhost`), Reticle injects `reticle.connect()` with a one-time token and allow-lists the preview origin, so the app does not need to be rebuilt per environment. Confirm the SDK actually runs on the deployed build: a production build that tree-shakes the dev-only SDK will connect to nothing, and `verify` will (correctly) fail with _"no app connected."_
 
+## The Reticle GitHub Action
+
+The Action replays your saved flows on each preview and posts one check with a verdict for each flow. On `deployment_status`, it reads the preview URL from the event, so you type no URL.
+
+```yaml
+# .github/workflows/reticle.yml
+name: reticle
+on: [deployment_status]
+jobs:
+  verify:
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reticlehq/reticle/action@v3.8.2
+        with:
+          api-key: ${{ secrets.RETICLE_API_KEY }}
+          # Only for a Vercel preview behind Deployment Protection.
+          vercel-bypass-secret: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+```
+
+A Vercel preview behind Deployment Protection needs a [Protection Bypass for Automation](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation) secret. Netlify has no bypass secret for its password protection, so turn off protection for deploy previews. The [Action README](https://github.com/reticlehq/reticle/tree/main/action) gives each input.
+
 ## Recipe B: the Checks API pattern (what a hosted Reticle would do)
 
 Both providers expose the same shape, which is why this is one integration rather than two:
