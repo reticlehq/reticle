@@ -29,11 +29,6 @@
       "count": 10
     }
   },
-  "src/command/cli/answers/gate-exit.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/command/cli/answers/gate-hook-message.ts": {
     "curly": {
       "count": 9
@@ -58,14 +53,6 @@
     }
   },
   "src/command/cli/auth/device-flow.ts": {
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
-  "src/command/cli/cli-flow-commands.ts": {
-    "curly": {
-      "count": 10
-    },
     "no-nested-ternary": {
       "count": 1
     }
@@ -4127,11 +4114,6 @@
       "count": 1
     }
   },
-  "src/telemetry/argument-shape.ts": {
-    "curly": {
-      "count": 6
-    }
-  },
   "src/telemetry/automation-hint.ts": {
     "curly": {
       "count": 4
@@ -4297,22 +4279,9 @@
       "count": 25
     }
   },
-  "src/telemetry/telemetry-contract.test.ts": {
-    "curly": {
-      "count": 8
-    }
-  },
   "src/telemetry/telemetry-integrity.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/telemetry/telemetry.ts": {
-    "curly": {
-      "count": 16
-    },
-    "no-nested-ternary": {
-      "count": 2
     }
   },
   "src/telemetry/tool-refused.test.ts": {

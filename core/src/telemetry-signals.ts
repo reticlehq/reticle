@@ -162,6 +162,28 @@ export const HarnessRunSchema = z.object({
 export type HarnessRun = z.infer<typeof HarnessRunSchema>;
 
 /**
+ * How `reticle gate` ended. One value for each exit code the gate can give, and `error` for a gate
+ * that broke before it gave a judgement. `error` exits 1 like `fail`, and it is a different fact:
+ * a `fail` is about the change, an `error` is about Reticle.
+ */
+export const GateOutcome = {
+  PASS: 'pass',
+  FAIL: 'fail',
+  NOTHING_TO_CHECK: 'nothing_to_check',
+  REGRESSION: 'regression',
+  ERROR: 'error',
+} as const;
+export type GateOutcome = (typeof GateOutcome)[keyof typeof GateOutcome];
+
+/** `gate_completed`: one per `reticle gate` run. No flow name and no file path. */
+export const GateCompletedSchema = z.object({
+  outcome: z.nativeEnum(GateOutcome),
+  /** The saved flows that the change affects, which the gate judged. Absent on `error`. */
+  flowsChecked: z.number().int().nonnegative().optional(),
+});
+export type GateCompleted = z.infer<typeof GateCompletedSchema>;
+
+/**
  * The envelope fields and blocks this file adds to `TelemetryEventSchema`, spread into it there.
  * Every one optional: an older sender has none of them.
  */
@@ -185,6 +207,8 @@ export const SIGNAL_FIELDS = {
   link: PlatformLinkSchema.optional(),
   /** Only on `harness_run`. */
   harness: HarnessRunSchema.optional(),
+  /** Only on `gate_completed`. */
+  gate: GateCompletedSchema.optional(),
 };
 
 // ── Transport: what happens to the MCP proxy and its daemon when the link fails ──

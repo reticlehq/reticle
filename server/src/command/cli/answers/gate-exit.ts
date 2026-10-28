@@ -1,3 +1,5 @@
+import { GateOutcome } from '@reticlehq/core/telemetry';
+
 /**
  * What `reticle gate` means by its exit code.
  *
@@ -21,6 +23,15 @@ export const GateExit = {
   /** The platform knows a flow that passed before and is broken now: `reticle runs regression`'s code. */
   REGRESSION: 3,
 } as const;
+export type GateExit = (typeof GateExit)[keyof typeof GateExit];
+
+/** The `gate_completed` outcome for each exit code. A gate that throws reports `error` instead. */
+export const GATE_OUTCOME: Readonly<Record<GateExit, GateOutcome>> = {
+  [GateExit.PASS]: GateOutcome.PASS,
+  [GateExit.FAIL]: GateOutcome.FAIL,
+  [GateExit.NOTHING_TO_CHECK]: GateOutcome.NOTHING_TO_CHECK,
+  [GateExit.REGRESSION]: GateOutcome.REGRESSION,
+};
 
 /**
  * The gate's code once the platform has been asked about regressions: a known one fails the build
@@ -28,12 +39,14 @@ export const GateExit = {
  * command CI needs. `undefined` (not linked, or the platform did not answer) changes nothing.
  */
 export function gateExitWith(
-  local: number,
+  local: GateExit,
   regressed: number | undefined,
   /** The platform the project is linked to refused its credential: the gate fails closed. */
   refused = false,
-): number {
-  if (regressed !== undefined && 0 < regressed) return GateExit.REGRESSION;
+): GateExit {
+  if (regressed !== undefined && 0 < regressed) {
+    return GateExit.REGRESSION;
+  }
   return refused && GateExit.PASS === local ? GateExit.FAIL : local;
 }
 
@@ -61,7 +74,9 @@ export const MSG_GATE_NO_FLOWS =
  */
 export function msgGateRegression(broken: readonly unknown[]): string {
   const names = broken.map((entry) => {
-    if ('string' === typeof entry) return entry;
+    if ('string' === typeof entry) {
+      return entry;
+    }
     const record =
       'object' === typeof entry && null !== entry ? (entry as Record<string, unknown>) : {};
     const name = record['flowName'] ?? record['name'];

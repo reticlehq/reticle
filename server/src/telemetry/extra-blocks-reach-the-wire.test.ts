@@ -17,6 +17,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   AgentClient,
   DaemonSpawnMethod,
@@ -86,13 +87,13 @@ function recordingFetch(): {
 const WIRE_PREFIX: Readonly<Record<string, string>> = { versionChange: 'version' };
 
 function declaredObjectBlocks(): string[] {
-  const shape = TelemetryEventSchema.shape as Record<string, { _def?: { typeName?: string } }>;
+  const shape = TelemetryEventSchema.shape as Record<string, unknown>;
   return Object.entries(shape)
     .filter(([, field]) => {
       // Unwrap ZodOptional to see what it wraps; only object blocks go through the `blocks` map.
-      const inner = (field as { _def?: { innerType?: { _def?: { typeName?: string } } } })._def
-        ?.innerType;
-      return 'ZodObject' === inner?._def?.typeName;
+      // zod 4 dropped `_def.typeName`. A check on it found no block, so the completeness test
+      // passed over an empty list and a block with no sample went unseen.
+      return field instanceof z.ZodOptional && field.unwrap() instanceof z.ZodObject;
     })
     .map(([name]) => name);
 }
@@ -148,6 +149,7 @@ const SAMPLES: Record<string, Record<string, unknown>> = {
   proxyExit: { reason: 'stdin_end', uptimeMs: 1, drops: 0, toolCalls: 0 },
   daemonDeath: { ageMs: 1 },
   wakeRefusal: { presence: 'foreign' },
+  gate: { outcome: 'pass', flowsChecked: 2 },
 };
 
 async function propertiesFor(extra: TelemetryExtra): Promise<Record<string, unknown>> {
@@ -163,6 +165,10 @@ async function propertiesFor(extra: TelemetryExtra): Promise<Record<string, unkn
 }
 
 describe('every declared block survives to the wire', () => {
+  it('finds the object blocks at all, so the check below is not a pass over nothing', () => {
+    expect(declaredObjectBlocks().length).toBeGreaterThan(10);
+  });
+
   it('has a sample for EVERY object block the wire schema declares', () => {
     const missing = declaredObjectBlocks().filter((b) => SAMPLES[b] === undefined);
     expect(

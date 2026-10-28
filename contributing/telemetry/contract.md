@@ -113,6 +113,7 @@ The single exception is `daemon_stopped`, which is **awaited**, because the proc
 | `hud_signin_prompted` | the HUD showed a sign-in / link ask, once per surface per daemon | the top of the signup funnel: who SAW an ask, beside `hudControls` for who pressed it |
 | `platform_linked` | a project on this machine was bound to a workspace (a new binding, not a re-run) | the OSS to platform join; see below |
 | `harness_run` | a Harness run started, and again when it ended | the Harness funnel by source; see below |
+| `gate_completed` | `reticle gate` ended, on every path: once per run | does the gate pass. `outcome` is one value per exit code, plus `error` when the gate threw before it judged. `error` exits 1 like `fail`, but a fail is about the change and an error is about Reticle, so the two have different owners. A process that is killed sends nothing |
 
 ## The install has two halves: `app_instrumented`
 

@@ -4,9 +4,9 @@
  * Lives in its own module so `cli.ts` stays a dispatcher, and so the `_daemon` exclusion below sits
  * next to the explanation of why it exists rather than buried in a startup function.
  */
-import { TelemetryActor, TelemetryEventKind } from '@reticlehq/core/telemetry';
+import { TelemetryActor, TelemetryEventKind, type GateCompleted } from '@reticlehq/core/telemetry';
 import { DAEMON_INNER_COMMAND, PROBE_COMMANDS, knownCommand } from '@/command/cli/cli-parse.js';
-import { getTelemetry } from './telemetry.js';
+import { getTelemetry, type Telemetry } from './telemetry.js';
 import { drainInstallTrace } from './install-trace.js';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -166,4 +166,22 @@ export function reportCliRun(argv: readonly string[]): void {
     // rule absolute rather than case-by-case; `--drive` and `--storage-state` carry a URL and a path.
     flags: describeCliFlags(argv),
   });
+}
+
+/**
+ * `gate_completed`: how one `reticle gate` run ended.
+ *
+ * `cli_command_run` says that the gate ran. Only this event says whether it passed. The gate is a
+ * one-shot command that exits immediately, so the send is DETACHED, like `init_completed`.
+ * Best-effort: a metric never changes what the gate decides.
+ */
+export function reportGateCompleted(
+  gate: GateCompleted,
+  telemetry: Pick<Telemetry, 'emit'> = getTelemetry(),
+): void {
+  try {
+    void telemetry.emit(TelemetryEventKind.GATE_COMPLETED, { gate, detach: true });
+  } catch {
+    /* a metric never fails the gate */
+  }
 }

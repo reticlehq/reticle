@@ -23,6 +23,7 @@ import {
   AgentNudgeKind,
   CountBucket,
   CoverageBucket,
+  GateOutcome,
   HarnessRunOutcome,
   HarnessRunSource,
   LaunchMethod,
@@ -32,7 +33,7 @@ import {
 } from '@reticlehq/core/telemetry';
 import { HudPanel, HudPromptSurface } from '@reticlehq/core';
 import { SessionMetrics } from './session-metrics.js';
-import { TOOLS } from '@/surface/tools/tools.js';
+import { MERGED_TOOLS, TOOLS } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { VERDICT_TOOLS } from '@/surface/tools/feedback-tools.js';
 import { bugsInResult, type BugCandidate } from './bug-found.js';
@@ -345,6 +346,24 @@ describe('no vocabulary is hand-copied', () => {
     }
   });
 
+  /**
+   * `reticle_run { tool }` reaches every tool in the table. Its `tool` value is reported from core's
+   * `ReticleTool`, so a tool whose name is not in that enum reports as `other` on every call.
+   */
+  it('reports every tool reticle_run can reach by name, not as `other`', () => {
+    const reachable = new Set([
+      ...TOOLS.map((tool) => tool.name),
+      ...MERGED_TOOLS.map((tool) => tool.name),
+      ReticleTool.TOOLS,
+      ReticleTool.RUN,
+    ]);
+    const unnamed = [...reachable].filter((name) => describeParam('tool', name) !== `tool:${name}`);
+    expect(
+      unnamed,
+      'reticle_run reports these inner tools as `other`. Add the name to ReticleTool in core.',
+    ).toEqual([]);
+  });
+
   it('does not claim values its enum never defined', () => {
     // A stale entry is the same drift in the other direction: it reports a value core does not have.
     expect(describeParam('mode', 'lean')).toBe('mode:other');
@@ -483,23 +502,40 @@ describe('the product signals stay closed', () => {
     TelemetryEventSchema.safeParse({ ...BASE, ...extra }).success;
 
   it('accepts every member of every vocabulary', () => {
-    for (const accountState of Object.values(TelemetryAccountState))
+    for (const accountState of Object.values(TelemetryAccountState)) {
       expect(ok({ accountState, linked: true })).toBe(true);
-    for (const client of Object.values(AgentClient)) expect(ok({ client })).toBe(true);
-    for (const launch of Object.values(LaunchMethod)) expect(ok({ launch })).toBe(true);
-    for (const view of Object.values(HudPanel))
+    }
+    for (const client of Object.values(AgentClient)) {
+      expect(ok({ client })).toBe(true);
+    }
+    for (const launch of Object.values(LaunchMethod)) {
+      expect(ok({ launch })).toBe(true);
+    }
+    for (const view of Object.values(HudPanel)) {
       expect(ok({ hud: { view, tabs: CountBucket.ONE } })).toBe(true);
-    for (const surface of Object.values(HudPromptSurface))
+    }
+    for (const surface of Object.values(HudPromptSurface)) {
       expect(ok({ hud: { surface } })).toBe(true);
-    for (const via of Object.values(PlatformLinkVia)) expect(ok({ link: { via } })).toBe(true);
-    for (const source of Object.values(HarnessRunSource))
-      for (const outcome of Object.values(HarnessRunOutcome))
+    }
+    for (const via of Object.values(PlatformLinkVia)) {
+      expect(ok({ link: { via } })).toBe(true);
+    }
+    for (const source of Object.values(HarnessRunSource)) {
+      for (const outcome of Object.values(HarnessRunOutcome)) {
         expect(
           ok({ harness: { phase: 'completed', source, outcome, hosted: true, journeys: '1' } }),
         ).toBe(true);
+      }
+    }
+    for (const outcome of Object.values(GateOutcome)) {
+      expect(ok({ gate: { outcome, flowsChecked: 0 } })).toBe(true);
+    }
+    expect(ok({ gate: { outcome: GateOutcome.ERROR } })).toBe(true);
   });
 
   it('refuses free text where a closed value belongs', () => {
+    expect(ok({ gate: { outcome: 'checkout-flow broke', flowsChecked: 1 } })).toBe(false);
+    expect(ok({ gate: { outcome: GateOutcome.PASS, flowsChecked: -1 } })).toBe(false);
     expect(ok({ client: 'Claude Code 2.1 (ada@acme)' })).toBe(false);
     expect(ok({ accountState: 'ada@acme.com' })).toBe(false);
     expect(ok({ hud: { view: 'My Checkout Page' } })).toBe(false);

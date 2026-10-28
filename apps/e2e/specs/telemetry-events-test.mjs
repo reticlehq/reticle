@@ -839,6 +839,18 @@ await waitUntil(() => find('project_profiled').length > 0);
   check('  leaks NO workspace name', !blob.includes('Acme Secret Corp'));
 }
 
+// ── 11b. gate_completed: how `reticle gate` ended, sent detached like init_completed ──
+{
+  const { reportGateCompleted } = await import(`${DIST}/telemetry/cli-telemetry.js`);
+  reportGateCompleted({ outcome: 'fail', flowsChecked: 3 });
+  await settle(() => find('gate_completed').length >= 1);
+  const gate = find('gate_completed')[0]?.properties;
+  check('gate_completed fires', gate !== undefined);
+  check('  carries the outcome and the flow count', gate?.gate_outcome === 'fail' && gate?.gate_flowsChecked === 3);
+  check('  carries version and ci on the envelope', typeof gate?.version === 'string' && typeof gate?.ci === 'boolean');
+  check('  is not session-scoped: a one-shot command has no daemon run', gate?.sessionId === undefined);
+}
+
 // ── 12. The first session call in an unwired project offers a step, and writes nothing ──
 {
   const { existsSync, readdirSync, statSync } = await import('node:fs');

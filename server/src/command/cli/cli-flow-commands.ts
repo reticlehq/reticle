@@ -7,6 +7,7 @@
  */
 
 import {
+  GATE_OUTCOME,
   GateExit,
   MSG_GATE_NO_FLOWS,
   msgGateRegression,
@@ -45,6 +46,7 @@ import { detectDowngrades } from '@/judgement/outcome/assertion-integrity.js';
 import { computeCoverage, flowCoverageReport } from '@/language/flows/suite/coverage.js';
 import { readFileSync, statSync } from 'node:fs';
 import { log } from '@/log.js';
+import { GateOutcome, type GateCompleted } from '@reticlehq/core/telemetry';
 /** Load the {name, steps} of every saved flow for the active project. */
 /** Explicit files plus, when --since is given, the git-changed files since that ref. */
 /**
@@ -58,7 +60,9 @@ export async function resolveChangedFiles(
   cwd: string,
 ): Promise<ChangedFiles> {
   // No ref means no question was asked of git, which is not a failure to answer one.
-  if (since === undefined) return { files, failed: false };
+  if (since === undefined) {
+    return { files, failed: false };
+  }
   const changed = await changedFilesSince(since, cwd);
   return {
     files: [...new Set([...files, ...changed.files])],
@@ -84,7 +88,9 @@ export async function loadNamedFlows(
   const flows: NamedFlow[] = [];
   for (const name of await store.list(projectId)) {
     const loaded = await store.load(name, projectId);
-    if (loaded.ok) flows.push({ name: loaded.value.name, steps: loaded.value.steps });
+    if (loaded.ok) {
+      flows.push({ name: loaded.value.name, steps: loaded.value.steps });
+    }
   }
   return flows;
 }
@@ -108,7 +114,9 @@ function atChangedPath<T>(cwd: string, file: string, read: (path: string) => T):
       return undefined;
     }
   };
-  if (isAbsolute(file)) return attempt(file);
+  if (isAbsolute(file)) {
+    return attempt(file);
+  }
   const parts = file.split('/');
   const cwdParts = cwd.split(sep);
   for (let i = 0; i < parts.length; i += 1) {
@@ -119,7 +127,9 @@ function atChangedPath<T>(cwd: string, file: string, read: (path: string) => T):
       continue;
     }
     const found = attempt(join(cwd, ...parts.slice(i)));
-    if (found !== undefined) return found;
+    if (found !== undefined) {
+      return found;
+    }
   }
   return undefined;
 }
@@ -160,7 +170,9 @@ async function currentPassing(
     const stale =
       affected.includes(name) &&
       own.some((f) => !((changedFileModifiedAt(cwd, f) ?? Infinity) < at));
-    if (!stale) passing.push(name);
+    if (!stale) {
+      passing.push(name);
+    }
   }
   return passing;
 }
@@ -172,6 +184,11 @@ export async function handleGate(
   hook = false,
   /** Accept today's coverage levels as the best before judging, for a drop that was intended. */
   acceptCoverage = false,
+  /**
+   * Called once with how the gate ended, on every path. `cli.ts` passes the `gate_completed`
+   * sender: telemetry already reaches this directory, so this directory does not reach back.
+   */
+  reportGateCompleted: (gate: GateCompleted) => void = () => undefined,
 ): Promise<void> {
   try {
     const fs = createNodeFileSystem();
@@ -257,13 +274,16 @@ export async function handleGate(
     // once the exit code is: it said "pass": true over an exit of 1 or 3.
     const known = await knownRegression(reticleRoot);
     const regressed = known.broken;
-    const local = pass
-      ? GateExit.PASS
-      : result.pass && flowCoverage.outcome !== undefined
-        ? GateExit.NOTHING_TO_CHECK
-        : GateExit.FAIL;
+    let local: GateExit = GateExit.FAIL;
+    if (pass) {
+      local = GateExit.PASS;
+    } else if (result.pass && flowCoverage.outcome !== undefined) {
+      local = GateExit.NOTHING_TO_CHECK;
+    }
     // Fails closed in CI, not in an agent's stop hook, where it would block over a key, not a change.
     const code = gateExitWith(local, regressed?.length, !hook && known.refused !== undefined);
+    // What the gate judged, sent before a hook's skip can turn the exit code into a pass.
+    reportGateCompleted({ outcome: GATE_OUTCOME[code], flowsChecked: affected.length });
     log('reticle_gate', {
       pass: GateExit.PASS === code,
       uncovered: result.uncovered,
@@ -287,12 +307,18 @@ export async function handleGate(
     // A regression the platform already knows fails the build here too, with `reticle runs
     // regression`'s code, so the gate is the one command CI needs. Best-effort: unlinked or offline
     // changes nothing.
-    if (regressed !== undefined && 0 < regressed.length)
+    if (regressed !== undefined && 0 < regressed.length) {
       log('reticle_gate_regression', { broken: regressed });
-    if (known.refused !== undefined) process.stderr.write(`${msgGateRefused(known.refused)}\n`);
-    if (GateExit.NOTHING_TO_CHECK === code && !hook) process.stderr.write(`${MSG_GATE_NO_FLOWS}\n`);
-    if (GateExit.REGRESSION === code && !hook && regressed !== undefined)
+    }
+    if (known.refused !== undefined) {
+      process.stderr.write(`${msgGateRefused(known.refused)}\n`);
+    }
+    if (GateExit.NOTHING_TO_CHECK === code && !hook) {
+      process.stderr.write(`${MSG_GATE_NO_FLOWS}\n`);
+    }
+    if (GateExit.REGRESSION === code && !hook && regressed !== undefined) {
       process.stderr.write(`${msgGateRegression(regressed)}\n`);
+    }
     if (GateExit.PASS !== code) {
       process.exitCode = code;
       if (hook) {
@@ -319,11 +345,15 @@ export async function handleGate(
           unexecuted: result.unexecuted,
           regressed: regressed?.length ?? 0,
         });
-        if (message !== undefined) process.stderr.write(`${message}\n`);
+        if (message !== undefined) {
+          process.stderr.write(`${message}\n`);
+        }
       }
     }
   } catch (error) {
     log('reticle_gate_failed', { error: error instanceof Error ? error.message : String(error) });
+    // No flow count: the gate broke before it judged, so a count would describe nothing.
+    reportGateCompleted({ outcome: GateOutcome.ERROR });
     process.exitCode = GateExit.FAIL;
   }
 }

@@ -222,6 +222,8 @@ export const TelemetryEventKind = {
   PLATFORM_LINKED: 'platform_linked',
   /** A Harness run started, or ended: one of each per run. */
   HARNESS_RUN: 'harness_run',
+  /** `reticle gate` ended: how, and over how many flows. A one-shot CLI event. */
+  GATE_COMPLETED: 'gate_completed',
 } as const;
 export type TelemetryEventKind = (typeof TelemetryEventKind)[keyof typeof TelemetryEventKind];
 

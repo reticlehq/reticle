@@ -11,7 +11,7 @@
 | `core/src/telemetry.ts` | `TelemetryEventKind`, the envelope, and most payload blocks |
 | `core/src/telemetry-session.ts` | `SessionSummarySchema`, `ProjectProfileSchema`, `MachineSnapshotSchema` |
 | `core/src/telemetry-feedback.ts` | `FeedbackSchema`, `IdentitySchema` |
-| `core/src/telemetry-signals.ts` | the `hud`, `link`, `harness`, `proxyExit`, `daemonDeath` and `wakeRefusal` blocks, the `spawnMethod` scalar, and the account and client fields |
+| `core/src/telemetry-signals.ts` | the `hud`, `link`, `harness`, `gate`, `proxyExit`, `daemonDeath` and `wakeRefusal` blocks, the `spawnMethod` scalar, and the account and client fields |
 | `core/src/telemetry-bug.ts` | `BugFoundSchema` |
 | `server/src/telemetry/telemetry.ts` | `emit()`, which builds every event and flattens its block |
 
@@ -56,7 +56,7 @@
 | `$session_id` | string | session-scoped kinds | A copy of `sessionId`, for the PostHog session views. |
 | `$groups` | object | licensed builds | `{ "organization": <licenseId> }`. |
 
-Each event then carries at most one payload block: `feedback`, `command` and `flags`, `session`, `project`, `verification`, `versionChange`, `crash`, `identity`, `connection`, `init`, `onboarding`, `bug`, `refusal`, `outage`, `instrumentation`, `hud`, `link`, `harness`, `proxyExit`, `daemonDeath` or `wakeRefusal`.
+Each event then carries at most one payload block: `feedback`, `command` and `flags`, `session`, `project`, `verification`, `versionChange`, `crash`, `identity`, `connection`, `init`, `onboarding`, `bug`, `refusal`, `outage`, `instrumentation`, `hud`, `link`, `harness`, `proxyExit`, `daemonDeath`, `wakeRefusal` or `gate`.
 
 > `emit()` builds its event from a list of keys that it names. A block that is not on that list is dropped with no error. The contract says which lists to change when you add a block.
 
@@ -219,7 +219,7 @@ The block is `session`, a `SessionSummary`. Every count is windowed: it counts o
 | `postSocketFailures`, `postRetriesSaved` | int, optional | Proxy POSTs that failed at the socket, and how many a retry saved. |
 | `consecutiveRepeats` | map, optional | The longest run of back-to-back calls of each tool. |
 | `abandonedActions` | int, optional | Actions with no verdict after them. |
-| `toolParams` | map, optional | Which parameters each tool received, by name. |
+| `toolParams` | map, optional | Which parameters each tool received, by name. A parameter whose values are our own enum carries the value: `action:click`. On `reticle_run`, `tool:<name>` is the tool it called, from `ReticleTool`, else `tool:other`. Before 3.9.0 it was a bare `tool`. |
 | `connections` | map, optional | Browser and lease connection attempts, successes and failures. |
 | `toolTiming` | map, optional | `totalMs` and `maxMs` for each tool. |
 | `busyMs`, `browserMs`, `browserCommands`, `peakConcurrentTools` | int | Time in tools, time waiting on the browser, browser commands, most calls in flight. |
@@ -610,6 +610,28 @@ The failure side is a set difference: `daemon_started` minus `app_instrumented`,
   "harness_hosted": true,
   "harness_outcome": "blocked",
   "harness_reason": "no_credits"
+}
+```
+
+## gate_completed
+
+**When:** `reticle gate` ends, once for each run, on every path. Sent from `handleGate` in `server/src/command/cli/cli-flow-commands.ts` through `reportGateCompleted` in `server/src/telemetry/cli-telemetry.ts`. **Why:** `cli_command_run` says that the gate ran, and only this event says how it ended. **Unit:** one gate run. Not session-scoped: the gate is a one-shot command.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `outcome` | `GateOutcome` | `pass`, `fail`, `nothing_to_check` or `regression`, one for each exit code (0, 1, 2, 3). `error` when the gate threw before it judged; that run exits 1. |
+| `flowsChecked` | int, optional | The saved flows that the change affects, which the gate judged. Absent on `error`. |
+
+`version` and `ci` are on the envelope of every event, so the block does not repeat them.
+
+> **Trap:** in a Stop hook, `RETICLE_SKIP_GATE` turns a failed gate into exit 0. The event reports what the gate judged, so it still says `fail`. A process that is killed sends nothing.
+
+```json
+{
+  "version": "3.9.0",
+  "ci": true,
+  "gate_outcome": "pass",
+  "gate_flowsChecked": 3
 }
 ```
 

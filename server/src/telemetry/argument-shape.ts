@@ -19,7 +19,7 @@
  * never quietly start forwarding free text.
  */
 
-import { ActionType, FeedbackKind, QueryBy, SnapshotMode } from '@reticlehq/core';
+import { ActionType, FeedbackKind, QueryBy, ReticleTool, SnapshotMode } from '@reticlehq/core';
 
 /**
  * Parameters whose values are enums WE define, and the exact values allowed on the wire. An
@@ -37,6 +37,9 @@ const SAFE_ENUM_PARAMS: ReadonlyMap<string, Set<string>> = new Map([
   ['by', new Set<string>(Object.values(QueryBy))],
   ['mode', new Set<string>(Object.values(SnapshotMode))],
   ['kind', new Set<string>(Object.values(FeedbackKind))],
+  // `reticle_run { tool }` names the tool it calls. Our own tool names, so the session summary can
+  // say which tools agents reach through it. A name that is not a Reticle tool reports `other`.
+  ['tool', new Set<string>(Object.values(ReticleTool))],
   // `level` has no core enum — console levels come from the DOM console API, not from us. Listed
   // literally BECAUSE there is nothing to derive from, which is a different situation from the four
   // above and the reason it is called out rather than left looking like an oversight.
@@ -53,8 +56,12 @@ export const OTHER_VALUE = 'other';
  */
 export function allowParamValues(name: string, values: Iterable<string>): void {
   const allowed = SAFE_ENUM_PARAMS.get(name);
-  if (allowed === undefined) return;
-  for (const value of values) allowed.add(value);
+  if (allowed === undefined) {
+    return;
+  }
+  for (const value of values) {
+    allowed.add(value);
+  }
 }
 
 /**
@@ -63,8 +70,12 @@ export function allowParamValues(name: string, values: Iterable<string>): void {
  */
 export function describeParam(name: string, value: unknown): string {
   const allowed = SAFE_ENUM_PARAMS.get(name);
-  if (allowed === undefined) return name;
-  if (typeof value !== 'string') return name;
+  if (allowed === undefined) {
+    return name;
+  }
+  if (typeof value !== 'string') {
+    return name;
+  }
   return `${name}:${allowed.has(value) ? value : OTHER_VALUE}`;
 }
 
@@ -100,8 +111,12 @@ export function describeCliFlags(argv: readonly string[]): string[] {
   const flags = new Set<string>();
   for (const arg of argv) {
     // A bare `--` ends the options: everything after it is passed through to something else.
-    if (END_OF_OPTIONS === arg) break;
-    if (!arg.startsWith('--')) continue;
+    if (END_OF_OPTIONS === arg) {
+      break;
+    }
+    if (!arg.startsWith('--')) {
+      continue;
+    }
     // `--port=9000` — split so the NAME is reported and the value is discarded with everything else.
     const name = arg.split('=')[0] ?? arg;
     flags.add(KNOWN_CLI_FLAGS.has(name) ? name : OTHER_VALUE);

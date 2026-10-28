@@ -6,6 +6,7 @@ import {
   describeToolParams,
 } from './argument-shape.js';
 import { SessionMetrics } from './session-metrics.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * This is the highest-risk data Reticle collects, so every test here is a leak that must not happen.
@@ -73,6 +74,32 @@ describe('grouped tools — their sub-actions are our enum too', () => {
 
   it('still reports a value that is not one of ours as other', () => {
     expect(describeParam('action', 'Jane Smith')).toBe(`action:${OTHER_VALUE}`);
+  });
+});
+
+/**
+ * `reticle_run` calls a tool by name. With `tool` reported as a bare name, every call through it read
+ * the same, so the session summary could not say which tools agents reach through it.
+ */
+describe('reticle_run — the inner tool name is our own vocabulary', () => {
+  it('reports the inner tool by name', () => {
+    expect(describeToolParams({ tool: ReticleTool.TOOLS, args: { names: ['x'] } })).toEqual([
+      'args',
+      `tool:${ReticleTool.TOOLS}`,
+    ]);
+  });
+
+  it('reports a name that is not a Reticle tool as other, never by its own spelling', () => {
+    expect(describeParam('tool', 'acme_billing_export')).toBe(`tool:${OTHER_VALUE}`);
+  });
+
+  it('counts the inner tool on reticle_run in the session summary', () => {
+    const m = new SessionMetrics(() => 0);
+    m.recordToolCall(ReticleTool.RUN, { tool: ReticleTool.TOOLS, args: {} });
+    expect(m.summarize(true).toolParams?.[ReticleTool.RUN]).toEqual({
+      args: 1,
+      [`tool:${ReticleTool.TOOLS}`]: 1,
+    });
   });
 });
 

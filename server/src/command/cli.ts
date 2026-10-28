@@ -107,7 +107,7 @@ import { renderHelp } from './cli/cli-usage.js';
 import { RENAMED_COMMANDS, renamedCommandFor, renamedNote } from './cli/cli-parse-grammar.js';
 import { handleFeedback, handleTelemetry } from '@/telemetry/feedback-cli.js';
 import { installDaemonTelemetry } from '@/telemetry/daemon-telemetry.js';
-import { reportCliRun } from '@/telemetry/cli-telemetry.js';
+import { reportCliRun, reportGateCompleted } from '@/telemetry/cli-telemetry.js';
 
 // Re-exported so existing imports (and the CLI tests) keep resolving from '@/cli.js'.
 export { parseCliArgs, CLI_USAGE };
@@ -817,7 +817,13 @@ export function main(): void {
       void handleAffected(parsed.files, parsed.since);
       break;
     case 'gate':
-      void handleGate(parsed.files, parsed.since, parsed.hook, parsed.acceptCoverage);
+      void handleGate(
+        parsed.files,
+        parsed.since,
+        parsed.hook,
+        parsed.acceptCoverage,
+        reportGateCompleted,
+      );
       break;
     case 'report':
       void handleReport(parsed.session, parsed.hook);
