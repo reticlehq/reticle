@@ -43,15 +43,14 @@ describe('RecordingStore', () => {
     expect(rec?.steps[0]?.expect).toBeUndefined();
   });
 
-  it('takes a refuted expectation off the ambient tape, and leaves a deliberate recording alone', () => {
+  it('keeps a refuted expectation off the ambient tape, and leaves a deliberate recording alone', () => {
     const store = new RecordingStore();
     store.start('mine', 0);
     const refuted = {
       ...step('reticle_act'),
       expect: { kind: 'route', pathname: '/nowhere' },
     } as RecordedStep;
-    store.capture(refuted);
-    store.unassertLast();
+    store.capture(refuted, undefined, undefined, step('reticle_act'));
     expect(store.stop(AMBIENT_RECORDING)?.steps.at(-1)?.expect).toBeUndefined();
     expect(store.stop('mine')?.steps.at(-1)?.expect).toEqual({
       kind: 'route',

@@ -542,9 +542,10 @@ export const ACT_TOOLS: ToolDef[] = [
         await readAlreadyTrue(session, until, since);
       // Same as the ACT handler: the route this step RAN on, before the action can move the app.
       const routeBeforeWait = pathOf(session.url);
-      // Recorded in `finally`, once the verdict is known — see captureVerdictedAct.
+      // Recorded in `finally`, once the verdict is known — see captureVerdictedAct. `held`: the
+      // action made the declared claim hold.
       let dispatched: { result: unknown } | undefined;
-      let recordedVerdict: string | undefined;
+      let held = false;
       try {
         // actCommand is the single interception point for upload+path rewrite.
         //
@@ -706,9 +707,9 @@ export const ACT_TOOLS: ToolDef[] = [
           ...(0 === impeachingNotes.length ? {} : { blindSpots: impeachingNotes }),
           losses,
         });
-        // A refuted expectation must not ride into a regression flow cut from the ambient tape; it is
-        // kept as the capsule below instead. See RecordingStore.unassertLast.
-        if (!verdict.pass && actResult !== null) deps.recordings.unassertLast();
+        // A refuted or already-true claim stays off the ambient tape (the capsule below keeps a
+        // refuted one). See captureVerdictedAct.
+        held = verdict.pass && !alreadyTrue;
         const capsuleSaved = await saveFailedAssertCapsule({
           deps,
           verdict,
@@ -821,8 +822,7 @@ export const ACT_TOOLS: ToolDef[] = [
           }),
           (part) => reloadAndRecheck(deps, session, part, timeout),
         );
-        recordedVerdict = String(decision.verified);
-        noteProved(session, recordedVerdict, actResult?.result);
+        noteProved(session, String(decision.verified), actResult?.result);
         // Computed once: the verdict block reports it, and the instrumentation gaps are a second
         // reading of the same evidence rather than a new observation.
         const actionSummary = causalSummary(windowEvents, {
@@ -983,7 +983,7 @@ export const ACT_TOOLS: ToolDef[] = [
             args,
             dispatched.result,
             routeBeforeWait,
-            recordedVerdict,
+            held,
             session.id,
             wroteSince(acted, actedSince),
           );

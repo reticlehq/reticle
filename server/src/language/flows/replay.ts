@@ -8,7 +8,6 @@ import {
   EventType,
   FlowPredicateSchema,
   MUTATING_METHODS,
-  Verified,
   isDevToolingUrl,
   pathOf,
   type Predicate,
@@ -48,7 +47,9 @@ function ambiguousRoleNote(role: string, name: string): string {
  * resolution — can't drift between them.
  */
 export function queryRefs(result: CommandResult): string[] {
-  if (!result.ok) return [];
+  if (!result.ok) {
+    return [];
+  }
   const payload = asRecord(result.result);
   const elements = Array.isArray(payload['elements']) ? payload['elements'] : [];
   return elements.map((e) => asString(asRecord(e)['ref']) ?? '').filter((r) => r.length > 0);
@@ -77,10 +78,14 @@ export function replayActionArgs(
   const key = field === undefined ? undefined : secretKeyForFill(args, field);
   delete args[SECRET_NAME_ARG];
   delete args[SECRET_FIELD_ARG];
-  if (confirmDangerous) args[DANGEROUS_ACTION_CONFIRM_ARG] = true;
+  if (confirmDangerous) {
+    args[DANGEROUS_ACTION_CONFIRM_ARG] = true;
+  }
   if (key !== undefined) {
     const supplied = secretValue(key, process.env);
-    if (supplied !== undefined && supplied.length > 0) args['value'] = supplied;
+    if (supplied !== undefined && supplied.length > 0) {
+      args['value'] = supplied;
+    }
   }
   return args;
 }
@@ -91,17 +96,25 @@ export function replayActionArgs(
  */
 function recordedFieldName(step: Record<string, unknown>): string | undefined {
   const by = asString(step['by']);
-  if (QueryBy.TESTID === by) return asString(step['value']);
-  if (QueryBy.ROLE === by) return asString(step['name']);
+  if (QueryBy.TESTID === by) {
+    return asString(step['value']);
+  }
+  if (QueryBy.ROLE === by) {
+    return asString(step['name']);
+  }
   return undefined;
 }
 
 /** The element's source location from an action result, when the framework stamped one. */
 function sourceFromResult(res: Record<string, unknown>): Record<string, unknown> | undefined {
   const source = asRecord(res['source']);
-  if (typeof source['file'] !== 'string' || typeof source['line'] !== 'number') return undefined;
+  if (typeof source['file'] !== 'string' || typeof source['line'] !== 'number') {
+    return undefined;
+  }
   const out: Record<string, unknown> = { file: source['file'], line: source['line'] };
-  if ('number' === typeof source['column']) out['column'] = source['column'];
+  if ('number' === typeof source['column']) {
+    out['column'] = source['column'];
+  }
   return out;
 }
 
@@ -119,7 +132,9 @@ export { pathOf };
  */
 export function wroteIn(events: readonly ReticleEvent[]): boolean {
   return events.some((event) => {
-    if (EventType.NET_REQUEST !== event.type) return false;
+    if (EventType.NET_REQUEST !== event.type) {
+      return false;
+    }
     const method = asString(event.data['method'])?.toUpperCase() ?? '';
     return MUTATING_METHODS.includes(method) && !isDevToolingUrl(asString(event.data['url']));
   });
@@ -152,7 +167,12 @@ export const UNKEPT_EXPECT =
 export function captureAct(
   recordings: {
     active: () => string[];
-    capture: (step: RecordedStep, route?: string, session?: string) => void;
+    capture: (
+      step: RecordedStep,
+      route?: string,
+      session?: string,
+      forAmbient?: RecordedStep,
+    ) => void;
   },
   args: Record<string, unknown>,
   res: unknown,
@@ -162,6 +182,8 @@ export function captureAct(
   session?: string,
   /** The act's window sent a write request; see `wroteIn`. */
   wrote = false,
+  /** The act as the ambient tape keeps it, when that differs. See RecordingStore.capture. */
+  ambientArgs?: Record<string, unknown>,
 ): void {
   // NO `active()` gate. `RecordingStore.capture` opens the AMBIENT tape on its first step, and that
   // branch was unreachable from here: this returned early whenever nothing was open, and the only
@@ -174,7 +196,22 @@ export function captureAct(
   // recorded cannot contribute to either.
   // A click on Reticle's own panel (the HUD exposed) is not a step of the app's journey: saved, the
   // app's flow pressed Run Harness on replay, a paid drive, under an intent that never named it.
-  if (true === asRecord(res)['reticleUi']) return;
+  if (true === asRecord(res)['reticleUi']) {
+    return;
+  }
+  const step = capturedStep(args, res, route, wrote);
+  const ambient =
+    ambientArgs === undefined ? undefined : capturedStep(ambientArgs, res, route, wrote);
+  recordings.capture(step, route, session, ambient);
+}
+
+/** One act as a recorded step, with the claim the agent declared on it. */
+function capturedStep(
+  args: Record<string, unknown>,
+  res: unknown,
+  route: string | undefined,
+  wrote: boolean,
+): RecordedStep {
   const step = compileActStep(args, res);
   // Keep the assertion the agent actually made. `act_and_wait { until }` IS the agent saying what
   // success means — the large majority of calls carry one — and dropping it produced a flow graded
@@ -182,33 +219,50 @@ export function captureAct(
   // story failing at its last step. See enforceableExpect below.
   const declared = args['until'] ?? args['predicate'];
   const expect = enforceableExpect(declared);
-  if (expect !== undefined) step.expect = expect;
-  else if (declared !== undefined) step.unkeptExpect = UNKEPT_EXPECT;
-  if (route !== undefined) step.page = route;
+  if (expect !== undefined) {
+    step.expect = expect;
+  } else if (declared !== undefined) {
+    step.unkeptExpect = UNKEPT_EXPECT;
+  }
+  if (route !== undefined) {
+    step.page = route;
+  }
   const intent = asString(args['intent'])?.trim();
-  if (intent !== undefined && intent.length > 0) step.intent = intent;
-  if (wrote) step.writes = true;
-  recordings.capture(step, route, session);
+  if (intent !== undefined && intent.length > 0) {
+    step.intent = intent;
+  }
+  if (wrote) {
+    step.writes = true;
+  }
+  return step;
 }
 
 /**
- * Capture an act_and_wait once its verdict is known, keeping `until` as the step's expectation only
- * on a yes. Recorded before the verdict, a step kept an `until` that came back `no` or `no-fault` —
- * a regression test asserting something never once observed to hold because of the action. The
- * action itself is always recorded: it happened, and replay needs it to reach the next step.
+ * Capture an act_and_wait once its verdict is known.
+ *
+ * The rule act_sequence keeps (#988). A recording somebody opened keeps every claim the agent
+ * declared, held or not: dropping a refuted one saved a flow that replayed green on the defect it
+ * had caught. The ambient tape keeps a claim only if the action made it hold (`held`), so a flow cut
+ * from it never replays a claim that was never once true because of the action. The action is
+ * always recorded: replay needs it to reach the next step.
+ *
+ * Keyed on `held`, not on `verified: yes`. A claim the action made hold under an `unknown` or a
+ * contradicted verdict is still what the agent proved about the page, and dropping it left the
+ * replay with no check at all. One function decides both tapes: a second rule that took the claim off the tape
+ * after the fact ran before this capture, so it took the PREVIOUS step's claim, which had passed.
  */
 export function captureVerdictedAct(
   recordings: Parameters<typeof captureAct>[0],
   args: Record<string, unknown>,
   res: unknown,
   route: string | undefined,
-  verified: string | undefined,
+  held: boolean,
   session?: string,
   /** The act's window sent a write request; see `wroteIn`. */
   wrote = false,
 ): void {
   const { until: _until, predicate: _predicate, ...unproved } = args;
-  captureAct(recordings, Verified.YES === verified ? args : unproved, res, route, session, wrote);
+  captureAct(recordings, args, res, route, session, wrote, held ? undefined : unproved);
 }
 
 /** Fold a PASSING standalone assertion into the step it proved. See RecordingStore.attachExpect. */
@@ -218,7 +272,9 @@ export function captureAssertion(
   session?: string,
 ): void {
   const expect = enforceableExpect(raw);
-  if (expect !== undefined) recordings.attachExpect(expect, session);
+  if (expect !== undefined) {
+    recordings.attachExpect(expect, session);
+  }
 }
 
 /**
@@ -233,7 +289,9 @@ export function captureAssertion(
  * Every one of those was a claim the agent made and the file did not keep.
  */
 function enforceableExpect(raw: unknown): Predicate | undefined {
-  if (raw === undefined) return undefined;
+  if (raw === undefined) {
+    return undefined;
+  }
   // The flow file's own schema, so capture keeps exactly what a load would accept — a predicate
   // holding a session ref is refused by both, rather than recorded here and rejected on read.
   const parsed = FlowPredicateSchema.safeParse(raw);
@@ -291,7 +349,9 @@ function compileAnchorArgs(
   const compiled = anchorArgs(r, ref, action, actArgs);
   // The SDK says the target holds a secret (a password input, whatever its label). Carried beside
   // the anchor so the saved flow redacts the fill by what the field IS, not by what it is called.
-  if (true === r['secret']) compiled.args[SECRET_FIELD_ARG] = true;
+  if (true === r['secret']) {
+    compiled.args[SECRET_FIELD_ARG] = true;
+  }
   return compiled;
 }
 
@@ -327,8 +387,12 @@ function anchorArgs(
       action,
       args: actArgs,
     };
-    if (source !== undefined) testidArgs['source'] = source;
-    if (testidOf !== undefined) testidArgs['of'] = testidOf;
+    if (source !== undefined) {
+      testidArgs['source'] = source;
+    }
+    if (testidOf !== undefined) {
+      testidArgs['of'] = testidOf;
+    }
     return { args: testidArgs, stable: true };
   }
   // Role + NAME before component: a component/source anchor names the JSX site, so every row's copy
@@ -345,7 +409,9 @@ function anchorArgs(
       action,
       args: actArgs,
     };
-    if (source !== undefined) roleArgs['source'] = source;
+    if (source !== undefined) {
+      roleArgs['source'] = source;
+    }
     if ('number' === typeof r['nth'] && 'number' === typeof r['of']) {
       roleArgs['nth'] = r['nth'];
       roleArgs['of'] = r['of'];
@@ -355,8 +421,12 @@ function anchorArgs(
   const component = asString(r['component']);
   if (component !== undefined || source !== undefined) {
     const componentArgs: Record<string, unknown> = { by: QueryBy.COMPONENT, action, args: actArgs };
-    if (component !== undefined) componentArgs['component'] = component;
-    if (source !== undefined) componentArgs['source'] = source;
+    if (component !== undefined) {
+      componentArgs['component'] = component;
+    }
+    if (source !== undefined) {
+      componentArgs['source'] = source;
+    }
     return { args: componentArgs, stable: true };
   }
   return { args: { ref, action, args: actArgs }, stable: false };
@@ -375,7 +445,9 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
   let stable = inputSteps.length > 0;
   const subSteps = inputSteps.flatMap((raw, i) => {
     // A step on Reticle's own panel is not a step of the app's journey, as for a single act.
-    if (true === asRecord(resolved[i])['reticleUi']) return [];
+    if (true === asRecord(resolved[i])['reticleUi']) {
+      return [];
+    }
     const step = asRecord(raw);
     const compiled = compileAnchorArgs(
       asRecord(resolved[i]),
@@ -383,7 +455,9 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
       asString(step['action']) ?? '',
       replayActionArgs(step['args']),
     );
-    if (!compiled.stable) stable = false;
+    if (!compiled.stable) {
+      stable = false;
+    }
     // Each sub-step keeps its OWN declared consequence. A sequence records one step and replays as
     // one batch, but what each step CLAIMED is per step -- folding them together would let one
     // signal answer for every click in the journey.
@@ -425,15 +499,21 @@ async function resolveRef(
   },
 ): Promise<{ ref: string; note?: string }> {
   // Dispatched the way it ran live: at the document, with no ref. See compileAnchorArgs.
-  if (isDocumentPress(step)) return { ref: '' };
+  if (isDocumentPress(step)) {
+    return { ref: '' };
+  }
   const by = asString(step.by);
   const value = asString(step.value);
   if (by === QueryBy.TESTID && value !== undefined) {
     const result = await session.command(ReticleCommand.QUERY, { by, value });
-    if (!result.ok) throw new Error(result.error ?? 'query failed');
+    if (!result.ok) {
+      throw new Error(result.error ?? 'query failed');
+    }
     const refs = queryRefs(result);
     const ref = refs[0];
-    if (ref === undefined) throw new Error(`testid '${value}' did not resolve in current page`);
+    if (ref === undefined) {
+      throw new Error(`testid '${value}' did not resolve in current page`);
+    }
     return refs.length > 1 ? { ref, note: ambiguousTestidNote(value) } : { ref };
   }
   // Role + accessible NAME: the anchor that distinguishes one row's control from another's, which
@@ -442,7 +522,9 @@ async function resolveRef(
     const name = asString(step.name);
     const query: Record<string, unknown> = { by, value, ...(name === undefined ? {} : { name }) };
     const result = await session.command(ReticleCommand.QUERY, query);
-    if (!result.ok) throw new Error(result.error ?? 'query failed');
+    if (!result.ok) {
+      throw new Error(result.error ?? 'query failed');
+    }
     const refs = queryRefs(result);
     const meant = refFor(step, refs);
     const ref = meant ?? refs[0];
@@ -460,7 +542,9 @@ async function resolveRef(
       ...(source === undefined ? {} : { source }),
     };
     const result = await session.command(ReticleCommand.QUERY, query);
-    if (!result.ok) throw new Error(result.error ?? 'query failed');
+    if (!result.ok) {
+      throw new Error(result.error ?? 'query failed');
+    }
     const refs = queryRefs(result);
     const ref = refs[0];
     if (ref === undefined) {
@@ -564,7 +648,9 @@ export async function replayProgram(
         ...via,
       ]);
       results.push(...nested);
-      if (nested.some((r) => !r.ok)) break;
+      if (nested.some((r) => !r.ok)) {
+        break;
+      }
       continue;
     }
     try {
@@ -575,7 +661,9 @@ export async function replayProgram(
         for (const raw of subs) {
           const sub = asRecord(raw);
           const { ref, note } = await resolveRef(session, sub);
-          if (note !== undefined) notes.push(note);
+          if (note !== undefined) {
+            notes.push(note);
+          }
           liveSteps.push({
             ref,
             action: asString(sub['action']) ?? '',
@@ -595,7 +683,9 @@ export async function replayProgram(
           session.finishAction();
         }
         results.push(buildResult(step.tool, r.ok, r.error, notes));
-        if (!r.ok) break;
+        if (!r.ok) {
+          break;
+        }
       } else {
         const { ref, note } = await resolveRef(session, step.args);
         session.beginAction(ReticleTool.REPLAY, { ref });
@@ -614,7 +704,9 @@ export async function replayProgram(
           session.finishAction();
         }
         results.push(buildResult(step.tool, r.ok, r.error, note !== undefined ? [note] : []));
-        if (!r.ok) break;
+        if (!r.ok) {
+          break;
+        }
       }
     } catch (e) {
       results.push({
@@ -635,7 +727,11 @@ function buildResult(
   notes: string[],
 ): ReplayStepResult {
   const base: ReplayStepResult = { tool, ok };
-  if (!ok) base.error = error ?? 'command failed';
-  if (notes.length > 0) base.note = notes.join('; ');
+  if (!ok) {
+    base.error = error ?? 'command failed';
+  }
+  if (notes.length > 0) {
+    base.note = notes.join('; ');
+  }
   return base;
 }

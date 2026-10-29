@@ -1758,14 +1758,6 @@
       "count": 3
     }
   },
-  "src/language/flows/recording/tape/recordings.ts": {
-    "curly": {
-      "count": 16
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/language/flows/regression-reaches-the-caller.test.ts": {
     "curly": {
       "count": 1
@@ -1784,11 +1776,6 @@
   "src/language/flows/replay-window.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/language/flows/replay.ts": {
-    "curly": {
-      "count": 35
     }
   },
   "src/language/flows/role-anchor-nearest.ts": {
@@ -3215,7 +3202,7 @@
   },
   "src/surface/tools/act-tools.ts": {
     "curly": {
-      "count": 14
+      "count": 13
     },
     "no-nested-ternary": {
       "count": 1

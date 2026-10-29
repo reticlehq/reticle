@@ -159,8 +159,6 @@ const AMBIENT_STEP_CAP = 400;
 export class RecordingStore {
   readonly #active = new Map<string, ActiveRecording>();
   readonly #compiled = new Map<string, CompiledProgram>();
-  /** The ambient tape the last step went on: the one a refuted claim is taken off. */
-  #lastAmbient: string | undefined;
   /** A navigation came after the last captured step — see markNavigated. */
   #navigatedSinceStep = false;
   /** Tabs with network mocks installed now, keyed by session ('' for none named). See markMocked. */
@@ -177,7 +175,9 @@ export class RecordingStore {
     document?: string,
   ): void {
     const openedOver = new Map<string, number>();
-    for (const [outer, rec] of this.#targets(session)) openedOver.set(outer, rec.steps.length);
+    for (const [outer, rec] of this.#targets(session)) {
+      openedOver.set(outer, rec.steps.length);
+    }
     this.#active.set(name, {
       cursor,
       steps: [],
@@ -226,14 +226,17 @@ export class RecordingStore {
    * they are, so the journey it belongs to is not auto-saved as a flow (#1459).
    */
   markMocked(session: string | undefined, active: boolean): void {
-    if (active) this.#mocked.add(session ?? '');
-    else this.#mocked.delete(session ?? '');
+    if (active) {
+      this.#mocked.add(session ?? '');
+    } else {
+      this.#mocked.delete(session ?? '');
+    }
   }
 
   /**
    * `forAmbient` is the step as the ambient tape keeps it, when that differs: a journey's refuted
-   * claims come off the ambient tape (see `unassertLast`), and a recording somebody opened keeps
-   * every claim they declared, held or not.
+   * claims stay off the ambient tape, and a recording somebody opened keeps every claim they
+   * declared, held or not. See captureVerdictedAct.
    */
   capture(step: RecordedStep, route?: string, session?: string, forAmbient?: RecordedStep): void {
     this.#navigatedSinceStep = false;
@@ -247,20 +250,25 @@ export class RecordingStore {
         ...(session === undefined ? {} : { session }),
       });
     }
-    this.#lastAmbient = ambient;
     for (const [name, rec] of this.#targets(session)) {
       // Another tab's tape is that tab's journey, whatever else this step belongs to.
-      if (isAmbient(name) && name !== ambient) continue;
+      if (isAmbient(name) && name !== ambient) {
+        continue;
+      }
       // The ambient tape is opened by the system and closed by nobody, so it is the one recording
       // with no human deciding when it has seen enough. Bounded here rather than left to grow for
       // the length of a daemon's life. Appending STOPS at the cap instead of dropping the oldest: a
       // flow replays from its FIRST step, so a tape missing its beginning is not a shorter journey,
       // it is a different one that starts in a state nothing established. A recording somebody
       // opened on purpose is not capped — they said when it starts and they say when it stops.
-      if (isAmbient(name) && rec.steps.length >= AMBIENT_STEP_CAP) continue;
+      if (isAmbient(name) && rec.steps.length >= AMBIENT_STEP_CAP) {
+        continue;
+      }
       // The Harness saves its own recordings. Taping its steps too saved every drive twice: once as
       // the Harness's flow and again, at session end, as a `drive-*` copy with a guessed name.
-      if (isAmbient(name) && this.byHarness()) continue;
+      if (isAmbient(name) && this.byHarness()) {
+        continue;
+      }
       // A step nobody marked ended where the next one began.
       const previous = rec.steps.at(-1);
       if (previous !== undefined && previous.endPage === undefined && step.page !== undefined) {
@@ -290,22 +298,31 @@ export class RecordingStore {
    * the proof. What the step already declared is kept; the new check joins it under `allOf`.
    */
   attachExpect(expect: Predicate, session?: string): void {
-    if (this.#navigatedSinceStep) return;
+    if (this.#navigatedSinceStep) {
+      return;
+    }
     const mocked = this.#mocked.has(session ?? '');
     for (const [name, rec] of this.#targets(session)) {
-      if (isAmbient(name) && name !== ambientRecordingOf(session)) continue;
+      if (isAmbient(name) && name !== ambientRecordingOf(session)) {
+        continue;
+      }
       const last = rec.steps.at(-1);
-      if (last === undefined) continue;
+      if (last === undefined) {
+        continue;
+      }
       // A proof read while mocks are active rests on mocked responses even when the act before it
       // ran unmocked, so the ambient step it joins is marked too (#1459).
-      if (mocked && isAmbient(name)) last.mocked = true;
+      if (mocked && isAmbient(name)) {
+        last.mocked = true;
+      }
       const held = last.expect;
-      last.expect =
-        held === undefined
-          ? expect
-          : PredicateKind.ALL_OF === held.kind
-            ? { ...held, predicates: [...held.predicates, expect] }
-            : { kind: PredicateKind.ALL_OF, predicates: [held, expect] };
+      if (held === undefined) {
+        last.expect = expect;
+      } else if (PredicateKind.ALL_OF === held.kind) {
+        last.expect = { ...held, predicates: [...held.predicates, expect] };
+      } else {
+        last.expect = { kind: PredicateKind.ALL_OF, predicates: [held, expect] };
+      }
     }
   }
 
@@ -319,35 +336,23 @@ export class RecordingStore {
   }
 
   /**
-   * Take the expectation off the ambient tape's last step, because the verdict on it came back no.
-   *
-   * A step is captured at dispatch, before anything is judged, so a claim that turned out false is
-   * already on the tape as that step's `expect`. Cut into a journey it becomes a flow that is red for
-   * ever, on an expectation nobody but the agent's wrong guess made. The failure is not lost: it is
-   * filed as a capsule, the artifact built for "this should hold and does not". The ACTION stays,
-   * since the steps after it ran on the page it produced. A recording somebody opened deliberately
-   * is left as they drove it.
-   */
-  unassertLast(): void {
-    const tape = this.#lastAmbient === undefined ? undefined : this.#active.get(this.#lastAmbient);
-    const last = tape?.steps.at(-1);
-    if (tape === undefined || last === undefined || last.expect === undefined) return;
-    const { expect: _dropped, ...kept } = last;
-    tape.steps[tape.steps.length - 1] = kept;
-  }
-
-  /**
    * The page the step just captured ended on, once its action settled.
    *
    * Fills only a step that has none, so calling it after an action that captured nothing leaves the
    * previous step's own answer alone.
    */
   markEnded(page: string | undefined, session?: string): void {
-    if (page === undefined) return;
+    if (page === undefined) {
+      return;
+    }
     for (const [name, rec] of this.#targets(session)) {
-      if (isAmbient(name) && name !== ambientRecordingOf(session)) continue;
+      if (isAmbient(name) && name !== ambientRecordingOf(session)) {
+        continue;
+      }
       const last = rec.steps.at(-1);
-      if (last !== undefined && last.endPage === undefined) last.endPage = page;
+      if (last !== undefined && last.endPage === undefined) {
+        last.endPage = page;
+      }
     }
   }
 
@@ -366,12 +371,16 @@ export class RecordingStore {
   stop(name: string): ActiveRecording | undefined {
     const rec = this.#active.get(name);
     this.#active.delete(name);
-    if (rec === undefined) return undefined;
+    if (rec === undefined) {
+      return undefined;
+    }
     for (const [outer, mark] of rec.openedOver) {
       const parent = this.#active.get(outer);
       // Gone already, or somehow shorter than when we started: leave it exactly as it is rather
       // than splice a range that no longer means what it meant.
-      if (parent === undefined || parent.steps.length < mark) continue;
+      if (parent === undefined || parent.steps.length < mark) {
+        continue;
+      }
       parent.steps.splice(mark, parent.steps.length - mark, {
         tool: INVOKE_TOOL,
         args: { flow: name },

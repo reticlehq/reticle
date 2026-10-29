@@ -20,8 +20,8 @@ describe('recording an act_and_wait once its verdict is known', () => {
 
   it('keeps a passing step’s proof when the next step fails', () => {
     const store = new RecordingStore();
-    captureVerdictedAct(store, act('save', 'saved'), { ok: true }, undefined, 'yes');
-    captureVerdictedAct(store, act('publish', 'published'), { ok: true }, undefined, 'no');
+    captureVerdictedAct(store, act('save', 'saved'), { ok: true }, undefined, true);
+    captureVerdictedAct(store, act('publish', 'published'), { ok: true }, undefined, false);
     const steps = store.stop(AMBIENT_RECORDING)?.steps ?? [];
     expect(steps).toHaveLength(2);
     expect(steps[0]?.expect).toEqual({ kind: 'signal', name: 'saved' });
