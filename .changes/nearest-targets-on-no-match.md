@@ -1,3 +1,0 @@
-### Added
-
-- **`@reticlehq/server`, `@reticlehq/browser` — an action whose target matches nothing now names the nearest targets.** Before, `act_and_wait` refused with "target matched no element", and the agent had to read the page again, often in a loop, to find what it meant. Now the refusal lists up to 3 visible targets like the one asked for, each with its ref, role and name. The asked role comes first, then the most similar name. The retry is one call. The list is advice only: the action stays refused, and Reticle never acts on a target that you did not name. `reticle_query` gives the same list as `hint.nearest` on a zero-match result. A name longer than 60 characters is cut, and `nameTruncated: true` says so.

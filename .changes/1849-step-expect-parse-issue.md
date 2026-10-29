@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — a step `expect` that did not parse was refused without the field that failed.** The refusal was one fixed sentence with three generic examples. So `expect: { kind: "element", query: { css: ".total" } }` did not say that `css` is not a `query` field, or which fields are. The caller had to guess again. The refusal now gives the same reason as `reticle_assert` for the same predicate: the field that failed, the fields that work, and an example of that kind. The steps that are refused do not change. Closes [#1849](https://github.com/reticlehq/reticle/issues/1849).

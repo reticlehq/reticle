@@ -10,7 +10,7 @@
       "name": "reticle",
       "source": "./plugins/reticle",
       "description": "Verify a running web app from the inside. Installs the Reticle skill and registers the Reticle MCP server.",
-      "version": "3.8.2",
+      "version": "3.9.0",
       "category": "testing",
       "tags": ["mcp", "verification", "testing", "web"]
     }

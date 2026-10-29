@@ -1,3 +1,0 @@
-### Fixed
-
-- **A step screenshot of an older page SDK asked for a command the page does not have.** Reticle asked every page for `render`, which came in SDK 3.7. Now a page that declares no `render` but declares the desktop shell's `capture` is asked for `capture`, and that picture is kept as a `.png` on this machine. A page that declares neither is not asked: the result gives the page's SDK version, this daemon's version, and `reticle update`. A command such as `match` that the page does not declare gets the same sentence at once, without a wait. A failed browser capture keeps its reason in the error. See [#1850](https://github.com/reticlehq/reticle/issues/1850).

@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — `reticle_assert` answered `unknown` when the page timed out on `match`, and said nothing about why.** The bare `command 'match' timed out after 2679ms` could not tell a page whose SDK predates the command from one that was merely busy, so the reader had no next move. An old page SDK is now named with both versions and `reticle update`; a current one is told the assertion's budget ran out and how to widen it with `timeout_ms`. A match the page declared it does not serve is refused before the round-trip instead of being read as "zero matches". See [#1990](https://github.com/reticlehq/reticle/issues/1990).

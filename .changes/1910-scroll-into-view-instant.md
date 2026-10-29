@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser`: a page with `scroll-behavior: smooth` made Reticle judge a scrolled-in button as outside the viewport.** The `scroll_into_view` action, the scroll that a click makes to reach an off-viewport target, and `inspect` with `reveal` called `scrollIntoView()` with no behavior. On a page with smooth scrolling, the call returned while the element was still moving, so the next reading (`inViewport`, the click point, the box for a real pointer) saw the old position. A replayed step then reported its consequence as already true and gave no verdict. These three scrolls are now instant. Closes [#1910](https://github.com/reticlehq/reticle/issues/1910)

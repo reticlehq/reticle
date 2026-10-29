@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/server",
-  "version": "3.8.2",
+  "version": "3.9.0",
   "mcpName": "io.github.reticlehq/reticle",
   "description": "Reticle CLI, bridge and MCP server: a coding agent drives your running web app from the inside and gets a verdict with evidence, for change verification, access control, accessibility, performance and SEO checks.",
   "type": "module",
@@ -75,8 +75,11 @@
     "cli"
   ],
   "reticle": {
-    "changelog": "3.8.1 could not record a verdict: every run it built or read failed with an Invalid element at key subject error. 3.8.2 fixes it. Update the CLI and the SDK in your app.",
-    "breakingChanges": []
+    "changelog": "3.9.0 gets more installs to a first verdict. The one-line installer and reticle init now check your app and wait for your agent to connect. A lease reads a deployed preview with no SDK installed. Several false verdicts are fixed: a click that hit Reticle's own panel, a recorded flow that lost its assertion, and an iframe that took over a page's session. Every package is now Apache-2.0. Update the CLI and the SDK in your app.",
+    "breakingChanges": [
+      "A headless page now opens at 1440x900, not 1280x720. Record your headless screenshot baselines again, or they report dimension-mismatch.",
+      "The JSON line of `reticle license` no longer has the `gated` and `coversNothingHere` fields."
+    ]
   },
   "publishConfig": {
     "access": "public"

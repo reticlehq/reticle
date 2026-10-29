@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`: a folder with no package.json picked the first child app, or named none.** In a task folder that holds the app one level down, the dev-command search took the first child with a dev script, in the order the disk listed them. With two child apps it could start the wrong one. It now finds the child when exactly one direct child folder is an app (a package.json with a dev script), and uses that child's own lockfile for the package manager. When more than one child is an app, it chooses none and the session list names them all, so the agent can pick one. `node_modules`, hidden folders and folders that are not apps are skipped. Closes [#1925](https://github.com/reticlehq/reticle/issues/1925)

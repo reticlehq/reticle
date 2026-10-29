@@ -1,3 +1,0 @@
-### Changed
-
-- **`@reticlehq/server` — `reticle_navigate` with a URL starts a session when none is connected.** Before, the first `navigate` of an agent with no connected app answered "no browser session connected", and the agent often stopped there. Now an absolute `http(s)` URL opens a leased browser tab on that URL, owned by the calling agent, the same as `reticle_lease { action: "acquire" }`. The result carries `sessionStarted: { sessionId, via: "lease" }` and a note, so the agent knows that it drives a new tab. A relative URL still refuses, and the refusal names the absolute URL to use. With several sessions, the refusal does not change. Every other tool that finds no session now names the `reticle_navigate` call that starts one.

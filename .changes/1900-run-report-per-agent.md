@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — the run report on lease release listed another agent's claims and none of the agent's own.** Two agents that work at the same time on one daemon (for example, on two worktrees of one project) shared one run. Each call from one agent started the run again for the other agent, and the agent that released its lease got the report of the other agent's run. The daemon now keeps one run for each MCP connection. A call that ends a run reports only the claims, flows and memory of the caller's run, and leaves the other agent's run as it is. A run with no call for 6 hours is dropped. Refs [#1900](https://github.com/reticlehq/reticle/issues/1900).

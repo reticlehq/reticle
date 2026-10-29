@@ -1,5 +1,0 @@
-### Added
-
-- **`@reticlehq/server` — bare `reticle` gives a first verdict in a folder that is not wired.** It finds the web app (it starts the dev script when the app does not run), or the one dev server that runs. It opens the page in a Reticle browser with no install and checks that the page loads, that there is no console error and no failed request, and that each same-origin link opens. It prints `verified: yes` or `verified: no` with each fault, then the command that connects a coding agent. A wired project and every explicit command work as before.
-
-- **`@reticlehq/server`, `@reticlehq/browser` — a zero-install lease sees what the page did while it loaded.** The reader connects when the DOM is ready, so a console error, an uncaught error or a failed fetch from the app's start-up scripts was not seen, and a page that crashed while it loaded gave a clean capture. The reader now keeps those errors and hands them to the SDK when it connects, and the network observer reports a fetch or XHR that started before it was installed.

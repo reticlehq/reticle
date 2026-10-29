@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: reticlehq/reticle/action@v3.8.2
+      - uses: reticlehq/reticle/action@v3.9.0
         with:
           api-key: ${{ secrets.RETICLE_API_KEY }}
           # Only for a Vercel preview behind Deployment Protection.
