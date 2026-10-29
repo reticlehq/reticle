@@ -110,6 +110,22 @@ const CONNECT_WHEN_DOM_READY = (args: string): string =>
   `globalThis.document.addEventListener('DOMContentLoaded', connect, { once: true });\n` +
   `else connect();`;
 
+/** Where every zod copy in a page keeps its shared settings (`z.config`). */
+const ZOD_CONFIG = 'globalThis.__zod_globalConfig';
+
+/*
+ * Turn zod `jitless` on for the page, unless the page set it itself.
+ *
+ * The reader is evaluated over CDP, where `new Function` works even on a page whose CSP forbids
+ * `unsafe-eval`. Zod's eval probe then answered true and cached it, and later parses compiled a fast
+ * path with `new Function` in the page: CSP threw, and the session stopped answering (#2016,
+ * nextjs.org). Zod reads `jitless` when a schema is made, and the SDK makes some schemas later, also
+ * inside a CDP evaluate. So the setting stays on.
+ * ponytail: the page's own zod then parses without its compiled fast path. Results are the same;
+ * only parse speed changes. Scope it to the bundle's own zod copy if that speed is ever seen.
+ */
+const ZOD_JITLESS = `(${ZOD_CONFIG} ??= {}).jitless ??= true;`;
+
 /**
  * The script for a page: install the SDK if the page has none, then connect it to this daemon.
  *
@@ -120,7 +136,7 @@ const CONNECT_WHEN_DOM_READY = (args: string): string =>
  */
 export function zeroInstallScript(bundle: string, opts: InjectedConnect): string {
   const args = JSON.stringify(injectedConnectArgs(opts));
-  return `(() => {\n${NOT_HTML_GUARD}\nif (!globalThis.__reticleInstance) {\n${EARLY_KEEP}\n${bundle}\n}\n${CONNECT_WHEN_DOM_READY(args)}\n})();`;
+  return `(() => {\n${NOT_HTML_GUARD}\nif (!globalThis.__reticleInstance) {\n${EARLY_KEEP}\n${ZOD_JITLESS}\n${bundle}\n}\n${CONNECT_WHEN_DOM_READY(args)}\n})();`;
 }
 
 /** The page is not an HTML document, so the lease did not give it the zero-install reader. */

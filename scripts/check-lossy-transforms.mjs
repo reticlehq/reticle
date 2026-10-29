@@ -201,6 +201,23 @@ export const READ_PATH = Object.freeze({
       'a response whose headers() rejects is dropped with nothing said. It rejects when the page or CDP session is closing, which is exactly when responses race teardown, and the alternative on the stdio start() path is an unhandled rejection that takes down the MCP server. A real gap: a drive that navigates away mid-flight loses those details and the window does not say so',
     ],
   },
+  'server/src/portal/pool/csp-widen.ts': {
+    CspRewrite: [Declaration.NONE, 'the rewrite result type'],
+    CspRoute: [Declaration.NONE, 'type: the Playwright Route surface the rewrite uses'],
+    CspResponse: [Declaration.NONE, 'type: the Playwright APIResponse surface the rewrite uses'],
+    allowDaemonInCsp: [
+      Declaration.REPORT,
+      "adds the daemon origin to connect-src, which widens the page's policy; returns changed beside the policy",
+    ],
+    allowDaemonInHtml: [
+      Declaration.REPORT,
+      'the same widening on CSP meta tags; returns changed beside the html',
+    ],
+    widenDocumentCsp: [
+      Declaration.REPORT,
+      'calls onWidened for each top document it changed, which the pool keeps and the lease result reports as cspWidenedFor',
+    ],
+  },
   'core/src/wire/toon.ts': {
     ToonElement: [Declaration.NONE, 'type'],
     toToon: [
@@ -233,6 +250,7 @@ export const CONFORMANCE_TESTS = Object.freeze([
   'engine/src/window/ring-buffer.test.ts',
   'server/src/memory/journal/session-journal.lossy-conformance.test.ts',
   'server/src/portal/input/network-detail.lossy-conformance.test.ts',
+  'server/src/portal/pool/csp-widen.test.ts',
 ]);
 
 const IDENTIFIER = '[A-Za-z_$][\\w$]*';

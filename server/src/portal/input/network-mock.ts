@@ -92,9 +92,10 @@ export async function applyOutcome(
 ): Promise<void> {
   if ('continue' === outcome.kind) {
     // Sleep FIRST, then let it through: the delay is the whole perturbation, and the response that
-    // comes back is the server's own.
+    // comes back is the server's own. Fallback, not continue: a lease's context route (the CSP
+    // widening, #2016) must still see the request.
     if (outcome.delayMs !== undefined && outcome.delayMs > 0) await sleep(outcome.delayMs);
-    await route.continue();
+    await route.fallback();
     return;
   }
   if ('abort' === outcome.kind) {

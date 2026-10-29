@@ -119,3 +119,21 @@ export async function readNotificationPermission(page: PooledPage): Promise<stri
     clearTimeout(timer);
   }
 }
+
+/**
+ * On a lease off loopback, add `daemonOrigin` to the page CSP `connect-src` (#2016). The returned
+ * record gets `widenedFor` once a response was really widened, so the lease can say so.
+ */
+export async function widenLeaseCsp(
+  context: PooledContext,
+  url: string,
+  daemonOrigin: string | undefined,
+): Promise<{ widenedFor?: string }> {
+  const widening: { widenedFor?: string } = {};
+  if (daemonOrigin !== undefined && offLoopbackOrigin(url) !== undefined) {
+    await context.widenCsp?.(daemonOrigin, () => {
+      widening.widenedFor = daemonOrigin;
+    });
+  }
+  return widening;
+}

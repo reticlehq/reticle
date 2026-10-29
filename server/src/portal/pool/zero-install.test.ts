@@ -77,6 +77,38 @@ describe('zeroInstallScript — the reader a page with no SDK is given', () => {
  * new document as an init script, before the parser makes <head> and <body>. `connect()` mounts
  * page UI before it dials the bridge, threw on the null <head>, and never dialled.
  */
+/*
+ * nextjs.org forbids `unsafe-eval` (#2016). The reader is evaluated over CDP, where `new Function`
+ * works, so zod's eval probe answered true and cached it. Each later parse then compiled a fast path
+ * with `new Function` in the page, CSP threw, and the session stopped answering. Zod reads `jitless`
+ * when a schema is made, so the reader turns it on before the bundle runs, and leaves it on.
+ */
+describe('zeroInstallScript — on a page whose CSP forbids eval', () => {
+  const SEEING_BUNDLE = `globalThis.__jitlessSeen = globalThis.__zod_globalConfig?.jitless; ${FAKE_BUNDLE}`;
+  const runWith = (page: Record<string, unknown>): Record<string, unknown> => {
+    page['globalThis'] = page;
+    runInNewContext(zeroInstallScript(SEEING_BUNDLE, OPTS), page);
+    return page;
+  };
+
+  it('makes the bundle schemas with zod jitless on, so no parse needs eval', () => {
+    expect(runWith({})['__jitlessSeen']).toBe(true);
+  });
+
+  it('keeps jitless on after the bundle ran, because the SDK makes schemas later too', () => {
+    expect(runWith({})['__zod_globalConfig']).toEqual({ jitless: true });
+  });
+
+  it('keeps the other zod settings of the page, and a jitless setting the page made itself', () => {
+    const own = { customError: 'kept' };
+    expect(runWith({ __zod_globalConfig: own })['__zod_globalConfig']).toBe(own);
+    expect(own).toEqual({ customError: 'kept', jitless: true });
+    const explicit = { jitless: false };
+    runWith({ __zod_globalConfig: explicit });
+    expect(explicit).toEqual({ jitless: false });
+  });
+});
+
 describe('zeroInstallScript — on a document the parser has not built yet', () => {
   function loadingPage(): { page: Record<string, unknown>; fire: () => void } {
     let handler: (() => void) | undefined;

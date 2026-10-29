@@ -435,6 +435,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .describe(
         'Present when this leased tab runs an init script stubbing the bindings a desktop shell injects. Verdicts on this lease are about the app with that stub, not about the real shell.',
       ),
+    cspWidenedFor: z
+      .string()
+      .optional()
+      .describe(
+        "Present when the lease added this origin (the daemon's WebSocket) to the page CSP connect-src, so the zero-install reader can connect. The rest of the page CSP applies as the server sent it.",
+      ),
     notReadyReason: z
       .enum([
         LeaseNotReadyReason.SDK_NEVER_DIALLED,
@@ -648,6 +654,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
             // Asked of the pool, not remembered here: the stub was installed when THIS lease was
             // minted, and the caller reusing it now may be seeing it for the first time.
             ...(true === pool.stubInstalled?.(existing) ? { hostStub: HOST_STUB_NOTE } : {}),
+            ...cspWidenedOf(pool, existing),
             ...(alreadyOpen === undefined
               ? {}
               : { preferExisting: { sessionId: alreadyOpen, note: PREFER_EXISTING_NOTE } }),
@@ -787,6 +794,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         ...(versionSkew === undefined ? {} : { versionSkew }),
         ...production.summary(activated),
         ...(initScript === undefined ? {} : { hostStub: HOST_STUB_NOTE }),
+        ...cspWidenedOf(pool, lease.sessionId),
         ...hintOf(
           notReadyHint,
           ready ? await notificationReadBack(pool, lease.sessionId, permissions) : undefined,
@@ -800,6 +808,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     }
   },
 };
+
+/** `cspWidenedFor` when the lease changed its page CSP: a change to the page is declared (#2016). */
+function cspWidenedOf(pool: BrowserPool, leaseId: string): { cspWidenedFor?: string } {
+  const origin = pool.cspWidenedFor?.(leaseId);
+  return origin === undefined ? {} : { cspWidenedFor: origin };
+}
 
 /** The whole not-connected diagnosis, gathered and worded. Split out so the acquire path stays flat. */
 async function notConnectedHint(

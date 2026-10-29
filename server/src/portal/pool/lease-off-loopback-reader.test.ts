@@ -8,15 +8,25 @@
  *  2. The bridge's origin gate. A dial that did leave (example.com has no CSP) came back 403,
  *     because the bridge admits only loopback origins and origins with a live nonce.
  *
- * The lease now opens a non-loopback page with page CSP bypassed, and gives the reader a nonce
- * minted for the page's origin, not the machine's pairing token.
+ * The lease keeps the page's CSP and adds only the daemon's WebSocket origin to `connect-src`, and
+ * says so in `cspWidenedFor`. It gives the reader a nonce minted for the page's origin, not the
+ * machine's pairing token.
  */
 import { describe, expect, it } from 'vitest';
 import { BrowserPool } from './browser-pool.js';
 import type { Launcher, PooledPage } from './browser-pool.js';
 import { zeroInstallLoader } from '@/start-wiring.js';
 
-function recordingLauncher(seen: unknown[], evaluated: string[]): Launcher {
+interface Widening {
+  origin: string;
+  onWidened: () => void;
+}
+
+function recordingLauncher(
+  seen: unknown[],
+  evaluated: string[],
+  widened: Widening[] = [],
+): Launcher {
   const page = {
     goto: () => Promise.resolve(),
     close: () => Promise.resolve(),
@@ -34,6 +44,10 @@ function recordingLauncher(seen: unknown[], evaluated: string[]): Launcher {
         return Promise.resolve({
           newPage: () => Promise.resolve(page),
           close: () => Promise.resolve(),
+          widenCsp: (origin: string, onWidened: () => void) => {
+            widened.push({ origin, onWidened });
+            return Promise.resolve();
+          },
         });
       },
       close: () => Promise.resolve(),
@@ -42,19 +56,44 @@ function recordingLauncher(seen: unknown[], evaluated: string[]): Launcher {
     });
 }
 
+const DAEMON = 'ws://localhost:14466';
+
 describe('a lease on a page that is not on loopback', () => {
-  it('bypasses page CSP there, and only there', async () => {
+  it('keeps page CSP on, and widens connect-src for the daemon there, and only there', async () => {
     const seen: unknown[] = [];
+    const widened: Widening[] = [];
     let n = 0;
-    const pool = new BrowserPool(recordingLauncher(seen, []), {
+    const pool = new BrowserPool(recordingLauncher(seen, [], widened), {
       maxContexts: 2,
       genSessionId: () => `lease-${String((n += 1))}`,
+      daemonOrigin: DAEMON,
     });
 
     await pool.acquire('http://localhost:5173/');
     await pool.acquire('https://preview.example.com/');
 
-    expect(seen).toEqual([undefined, { bypassCSP: true }]);
+    // No context bypasses CSP: a bypass hides the CSP block a real user hits.
+    expect(seen).toEqual([undefined, undefined]);
+    expect(widened.map((w) => w.origin)).toEqual([DAEMON]);
+    await pool.shutdown();
+  });
+
+  it('says cspWidenedFor only once a response was really widened', async () => {
+    const widened: Widening[] = [];
+    let n = 0;
+    const pool = new BrowserPool(recordingLauncher([], [], widened), {
+      maxContexts: 2,
+      genSessionId: () => `lease-${String((n += 1))}`,
+      daemonOrigin: DAEMON,
+    });
+
+    await pool.acquire('https://preview.example.com/');
+    await pool.acquire('http://localhost:5173/');
+    expect(pool.cspWidenedFor('lease-1')).toBeUndefined();
+
+    widened[0]?.onWidened();
+    expect(pool.cspWidenedFor('lease-1')).toBe(DAEMON);
+    expect(pool.cspWidenedFor('lease-2')).toBeUndefined();
     await pool.shutdown();
   });
 

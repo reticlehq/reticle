@@ -153,21 +153,19 @@ export interface PooledContext {
   grantPermissions?(permissions: string[], opts?: { origin?: string }): Promise<void>;
   /** Drop every permission granted on this context. OPTIONAL, for the same reason. */
   clearPermissions?(): Promise<void>;
+  /**
+   * Add `origin` to the `connect-src` of each top document's CSP, and call `onWidened` when that
+   * changed a response (see `csp-widen.ts`). OPTIONAL: without it a deployed page with a strict CSP
+   * blocks the reader, and the lease says `sdk_never_dialled`, which is true.
+   */
+  widenCsp?(origin: string, onWidened: () => void): Promise<void>;
 }
 
 /** The launched browser. Real Playwright `Browser` satisfies this. */
 export interface PooledBrowser {
   isConnected(): boolean;
-  /**
-   * `ignoreHTTPSErrors` accepts a self-signed or local-CA certificate for this context only.
-   * `bypassCSP` lets the zero-install reader dial the bridge from a page whose CSP `connect-src`
-   * does not list loopback (#2016). The pool sets it only for a page that is not on loopback.
-   * ponytail: the app's own CSP violations are then not seen on that lease. A reader that talks
-   * over a CDP binding (`Runtime.addBinding`) would keep page CSP on.
-   */
-  newContext(
-    opts?: { ignoreHTTPSErrors?: boolean; bypassCSP?: boolean } & LeaseEmulation,
-  ): Promise<PooledContext>;
+  /** `ignoreHTTPSErrors` accepts a self-signed or local-CA certificate for this context only. */
+  newContext(opts?: { ignoreHTTPSErrors?: boolean } & LeaseEmulation): Promise<PooledContext>;
   close(): Promise<void>;
   /** Fires when the browser process dies/crashes so the pool can relaunch on the next acquire. */
   onDisconnected(handler: () => void): void;
