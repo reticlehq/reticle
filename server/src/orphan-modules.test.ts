@@ -45,11 +45,6 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'a pretend app the exploratory Harness tests replay recorded persona misses against.',
   'workspace-packages.ts': 'reads the workspace layout; used by the cross-package guards.',
   'import-graph.ts': 'builds the import graph the boundary guards assert over.',
-
-  // ── product code with no production caller ──────────────────────────────────────────────────
-  'features/ee/audit-log.ts':
-    'deliberately unwired, and says so in its own header: an example enterprise feature whose ' +
-    'body is a stub, existing to prove the licence gate rather than to be called.',
 };
 
 describe('no undeclared orphan modules', () => {

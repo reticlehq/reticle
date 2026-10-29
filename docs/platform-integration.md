@@ -154,4 +154,4 @@ A service that drives apps it did not build uses these seams.
 
 ## Licensing for embedding
 
-The embeddable SDK is **Apache-2.0** (ship it in your customers' apps). The server/CLI is **FSL** (free, no competing resale). Enterprise features + the premium-access flow: [`enterprise.md`](./enterprise.md). OEM terms: **[hey@reticle.sh](mailto:hey@reticle.sh)**.
+Every Reticle package is **Apache-2.0**, so you can ship the SDK in your customers' apps. Hosted and team features: [`enterprise.md`](./enterprise.md). OEM terms: **[hey@reticle.sh](mailto:hey@reticle.sh)**.

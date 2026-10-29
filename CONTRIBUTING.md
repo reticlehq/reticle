@@ -111,4 +111,4 @@ Welcome, on one condition: **the tests must fail without your change.** Revert y
 
 ## License of contributions
 
-Reticle uses one license for each package: Apache-2.0 for `open-verification`, `@reticlehq/core`, `@reticlehq/engine` and every npm adapter; MIT for the `reticle-tauri` crate; FSL-1.1-ALv2 for `@reticlehq/server`, `@reticlehq/init` and `@reticlehq/test`; and the Reticle Enterprise License for `server/src/features/ee/`. By contributing, you agree that your contribution is licensed under the license of the package(s) you're modifying. See the root [LICENSE](LICENSE) and each package's own `LICENSE` file.
+Reticle uses Apache-2.0 for every npm package, and MIT for the `reticle-tauri` crate. By contributing, you agree that your contribution is licensed under the license of the package(s) you're modifying. See the root [LICENSE](LICENSE) and each package's own `LICENSE` file.

@@ -12,8 +12,8 @@ import { REPO_ROOT } from '@/machine/repo-root.js';
  * there to include. Measured across every publishable package by running `npm pack --dry-run`
  * and reading the file list: ten carry one and `@reticlehq/engine` carries nothing.
  *
- * Nothing checked this. The other tests with "license" in the name are about the enterprise
- * licence-KEY feature, which is a different thing entirely.
+ * Nothing checked this. The other tests with "license" in the name are about the licence-KEY
+ * feature, which is a different thing entirely.
  */
 
 interface Manifest {
@@ -86,8 +86,7 @@ function readPublishable(): { dir: string; manifest: Manifest }[] {
  *   - `git log -- engine/src` has exactly ONE author, the copyright holder. The contributor-
  *     consent question I had recorded against this entry was about five non-owner contributors
  *     who turn out to have no commits in these files at all.
- *   - The server it was carved out of is FSL-1.1-**ALv2**, which converts to Apache-2.0 by its
- *     own terms. Granting it now is the same licence earlier, never a narrower one.
+ *   - The server it was carved out of is Apache-2.0 as well.
  *
  * If a package ever appears in this list, something has gone wrong with how packages are created
  * here -- and an entry is a reminder to resolve, not a state to live in.

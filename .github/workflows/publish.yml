@@ -20,8 +20,8 @@ name: Publish to npm
 # NPM_TOKEN (an npm "Automation" token) lives in the "Production" GitHub Environment, so
 # the job declares `environment: Production` below to bring that secret into scope. The same
 # Environment holds RETICLE_ISSUER_PUBLIC_KEY, which the stamp step bakes into the built server so
-# enterprise license keys verify against a release. Without it a published release has no issuer key,
-# so every enterprise feature denies in production and every customer key activates nothing.
+# license keys verify against a release. Without it a published release has no issuer key, so every
+# customer key activates nothing.
 #
 # Provenance (the verified "published from GitHub Actions" badge) requires a PUBLIC repo +
 # the id-token permission below. If the repo is still private, drop the NPM_CONFIG_PROVENANCE

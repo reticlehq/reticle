@@ -75,12 +75,11 @@ export function importsOf(sourceRoot: string, file: string): string[] {
 export function reachableFrom(sourceRoot: string, entry: string): Map<string, string> {
   /*
    * The entry is normalised the same way `resolveImport` normalises everything this walker
-   * DISCOVERS, because callers build it with `join()` and on Windows that yields `features\ee\x.ts`
-   * while every other key in the map is `features/ee/x.ts`. A caller then filters the result with
-   * `startsWith('features/ee/')` and the seed — the one path it did not walk to — silently drops
-   * out. That is how `ee-boundary`, the guard that says the free build cannot reach the
-   * separately-licensed code, passed on Windows while checking nothing at all: both of its real
-   * assertions expect an EMPTY list, so a walker that finds nothing agrees with them. Only its
+   * DISCOVERS, because callers build it with `join()` and on Windows that yields `features\x\y.ts`
+   * while every other key in the map is `features/x/y.ts`. A caller then filters the result with
+   * `startsWith('features/x/')` and the seed — the one path it did not walk to — silently drops
+   * out. That is how a boundary guard passed on Windows while checking nothing at all: its real
+   * assertions expected an EMPTY list, so a walker that finds nothing agrees with them. Only its
    * negative control could see it, and that is the whole reason the negative control exists.
    *
    * Both separators, not `sep`: on a POSIX machine `sep` is `/`, so splitting on it leaves a

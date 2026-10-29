@@ -5,18 +5,13 @@ import { z } from 'zod';
 import { join } from 'node:path';
 import { REPO_ROOT } from '@/machine/repo-root.js';
 import {
-  assertEnterprise,
-  EnterpriseFeature,
   LICENSE_CONTACT,
-  assertEnterpriseFromEnv,
   describeLicense,
-  EnterpriseLicenseError,
   LICENSE_KEY_ENV,
   LICENSE_PUBLIC_KEY_ENV,
   LicenseStatus,
   signLicenseKey,
   verifyLicenseKey,
-  type GateContext,
   type LicensePayload,
 } from './license.js';
 
@@ -38,7 +33,9 @@ describe('verifyLicenseKey', () => {
   it('accepts a well-formed, unexpired, correctly-signed key', () => {
     const check = verifyLicenseKey(key(), publicKey, NOW);
     expect(check.status).toBe(LicenseStatus.VALID);
-    if (check.status === LicenseStatus.VALID) expect(check.payload.org).toBe('acme');
+    if (check.status === LicenseStatus.VALID) {
+      expect(check.payload.org).toBe('acme');
+    }
   });
 
   it('reports missing / malformed / expired distinctly', () => {
@@ -70,34 +67,7 @@ describe('verifyLicenseKey', () => {
   });
 });
 
-describe('assertEnterprise', () => {
-  const ctx = (over: Partial<GateContext> = {}): GateContext => ({
-    requireLicense: true,
-    now: () => NOW,
-    publicKey,
-    ...over,
-  });
-
-  it('is a no-op in dev/eval (requireLicense:false), even with no key', () => {
-    expect(() => assertEnterprise('audit-log', ctx({ requireLicense: false }))).not.toThrow();
-  });
-
-  it('passes in production with a valid key', () => {
-    expect(() => assertEnterprise('audit-log', ctx({ key: key() }))).not.toThrow();
-  });
-
-  it('throws in production with no key', () => {
-    expect(() => assertEnterprise('audit-log', ctx())).toThrow(EnterpriseLicenseError);
-  });
-
-  it('throws when the key does not cover the requested feature', () => {
-    expect(() => assertEnterprise('audit-log', ctx({ key: key({ features: ['sso'] }) }))).toThrow(
-      /feature-not-licensed/,
-    );
-  });
-});
-
-describe('env-resolved activation (describeLicense / assertEnterpriseFromEnv)', () => {
+describe('env-resolved activation (describeLicense)', () => {
   const PUBKEY_PEM = publicKey.export({ type: 'spki', format: 'pem' }).toString();
   const withPubKey = (over: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
     [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM,
@@ -130,29 +100,6 @@ describe('env-resolved activation (describeLicense / assertEnterpriseFromEnv)', 
     );
   });
 
-  it('assertEnterpriseFromEnv: free in eval, enforced once an issuer key is configured', () => {
-    expect(() => assertEnterpriseFromEnv('audit-log', NOW, {})).not.toThrow();
-    expect(() =>
-      assertEnterpriseFromEnv('audit-log', NOW, withPubKey({ [LICENSE_KEY_ENV]: key() })),
-    ).not.toThrow();
-    expect(() => assertEnterpriseFromEnv('audit-log', NOW, withPubKey())).toThrow(
-      EnterpriseLicenseError,
-    );
-  });
-
-  it('FAILS CLOSED in production when no issuer key resolves (a mis-built release must not run free)', () => {
-    // dev/eval with no key is still free — a contributor/CI is never blocked.
-    expect(() => assertEnterpriseFromEnv('audit-log', NOW, {})).not.toThrow();
-    // But NODE_ENV=production with no baked key AND no env key is a broken release: DENY, don't unlock.
-    expect(() => assertEnterpriseFromEnv('audit-log', NOW, { NODE_ENV: 'production' })).toThrow(
-      /enterprise-gate-unconfigured/,
-    );
-    // A correctly-built production release (issuer key present) still enforces normally.
-    expect(() =>
-      assertEnterpriseFromEnv('audit-log', NOW, withPubKey({ NODE_ENV: 'production' })),
-    ).toThrow(EnterpriseLicenseError); // no license key → still denied, but for 'missing', not misconfig
-  });
-
   it('describeLicense flags a production eval-mode build as MISCONFIGURED, not benign eval', () => {
     expect(describeLicense(NOW, {}).status).toBe('eval'); // dev: benign
     const prod = describeLicense(NOW, { NODE_ENV: 'production' });
@@ -160,16 +107,8 @@ describe('env-resolved activation (describeLicense / assertEnterpriseFromEnv)', 
     expect(prod.detail).toContain('MISCONFIGURED');
   });
 
-  it('the enterprise error points at the current contact address', () => {
-    expect(new EnterpriseLicenseError('x', 'y').message).toContain('hey@reticle.sh');
-  });
-
-  it('a baked-in issuer key fails closed: enforcement cannot be disabled by unsetting env', () => {
+  it('a baked-in issuer key applies when the env var is unset', () => {
     // Simulates a release build (baked key present) with an operator who never sets the env var.
-    // Old behavior: eval mode, features free. New behavior: enforced, throws without a valid key.
-    expect(() => assertEnterpriseFromEnv('audit-log', NOW, {}, PUBKEY_PEM)).toThrow(
-      EnterpriseLicenseError,
-    );
     expect(describeLicense(NOW, {}, PUBKEY_PEM).status).toBe('missing');
     // A valid customer key still activates against the baked issuer key.
     expect(describeLicense(NOW, { [LICENSE_KEY_ENV]: key() }, PUBKEY_PEM).status).toBe('active');
@@ -217,7 +156,7 @@ describe('reticle license is not a dead end for somebody who has no key', () => 
   // how to get one: it told an interested reader to set an environment variable and stopped there.
   const PUBKEY_PEM = publicKey.export({ type: 'spki', format: 'pem' }).toString();
 
-  it('every branch says where to get a key, and every UNLICENSED one says what is gated', () => {
+  it('every branch says where to get a key', () => {
     // The branch an unlicensed reader lands on is exactly the branch that gets forgotten, so all of
     // them are checked rather than the happy path.
     const branches = [
@@ -235,30 +174,6 @@ describe('reticle license is not a dead end for somebody who has no key', () => 
     for (const report of branches) {
       // Contact is unconditional: whatever went wrong, the reader needs somebody to write to.
       expect(report.contact, `${report.status} names no contact`).toBe(LICENSE_CONTACT);
-      // The feature list is for a reader who has NOT bought. See the active-licence tests below.
-      if ('active' === report.status) continue;
-      expect(report.gated?.length, `${report.status} lists nothing as gated`).toBeGreaterThan(0);
-    }
-  });
-
-  it('reports what this build actually gates, not a roadmap', () => {
-    // Derived from the same registry the gate reads, so a feature that stops being gated stops being
-    // advertised. Printing a roadmap as though it shipped is how a buyer finds out on day two.
-    expect(describeLicense(NOW, {}).gated).toEqual(Object.values(EnterpriseFeature));
-  });
-
-  it('the gate and the CLI cannot name different features', () => {
-    // assertEnterprise is called with a member, so an ee feature added without one is refused by a key
-    // that lists it and never appears in what `reticle license` says is gated.
-    for (const feature of Object.values(EnterpriseFeature)) {
-      expect(() =>
-        assertEnterprise(feature, {
-          requireLicense: true,
-          now: () => NOW,
-          publicKey,
-          key: key({ features: [feature] }),
-        }),
-      ).not.toThrow();
     }
   });
 });
@@ -288,92 +203,5 @@ describe('what the fleet rehearsal caught', () => {
     const report = describeLicense(NOW, env({ [LICENSE_KEY_ENV]: forged }));
     expect(report.status).toBe('invalid');
     expect(report.licenseId).toBeUndefined();
-  });
-
-  it('says so when a valid key covers nothing this build gates', () => {
-    // Also from the rehearsal: a customer who bought `sso` read `active` while every gated feature
-    // refused them. Both facts were on screen (`features` vs `gated`) and nothing joined them, so
-    // the one word they actually read said they were fine.
-    const report = describeLicense(NOW, env({ [LICENSE_KEY_ENV]: key({ features: ['sso'] }) }));
-    expect(report.status).toBe('active');
-    expect(report.coversNothingHere).toBe(true);
-    expect(report.detail).toMatch(/sso/);
-  });
-
-  it('stays quiet when the key does cover something, or covers everything', () => {
-    const scoped = describeLicense(
-      NOW,
-      env({ [LICENSE_KEY_ENV]: key({ features: ['audit-log'] }) }),
-    );
-    expect(scoped.coversNothingHere).toBeUndefined();
-    // No `features` at all means every gated feature is included, which is the common case.
-    const unscoped = describeLicense(NOW, env({ [LICENSE_KEY_ENV]: key() }));
-    expect(unscoped.coversNothingHere).toBeUndefined();
-  });
-});
-
-describe('the two gate entry points must agree', () => {
-  const PUBKEY_PEM = publicKey.export({ type: 'spki', format: 'pem' }).toString();
-
-  it('assertEnterprise honours a BAKED issuer key, exactly as the env-resolved gate does', () => {
-    // Found on a published package: same build, same valid key, opposite answers.
-    // assertEnterpriseFromEnv ALLOWED and assertEnterprise(ctx) DENIED with `no-issuer-key`,
-    // because the ctx path read only the environment and never the key baked at release. The only
-    // gated feature calls the ctx path, so on a real release it refused every valid licence, and
-    // whatever real feature got gated next would have been dead on arrival for the same reason.
-    expect(() =>
-      assertEnterprise(
-        'audit-log',
-        { requireLicense: true, now: () => NOW, key: key() },
-        // No env public key: the baked one is the only thing that can resolve here.
-        { ...process.env, [LICENSE_PUBLIC_KEY_ENV]: undefined },
-        PUBKEY_PEM,
-      ),
-    ).not.toThrow();
-  });
-
-  it('still denies when nothing resolves an issuer key at all', () => {
-    expect(() =>
-      assertEnterprise(
-        'audit-log',
-        { requireLicense: true, now: () => NOW, key: key() },
-        { ...process.env, [LICENSE_PUBLIC_KEY_ENV]: undefined },
-        '',
-      ),
-    ).toThrow(/no-issuer-key/);
-  });
-});
-
-describe('what an ACTIVE licence is told about gating', () => {
-  const PUBKEY_PEM = publicKey.export({ type: 'spki', format: 'pem' }).toString();
-  const env = (over: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
-    [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM,
-    ...over,
-  });
-
-  it('does not list gated features when the licence already works', () => {
-    // `gated` exists so an UNLICENSED reader is not told to set a variable with no idea what it
-    // unlocks. Once active, the reader already has it.
-    const report = describeLicense(NOW, env({ [LICENSE_KEY_ENV]: key() }));
-    expect(report.status).toBe('active');
-    expect(report.gated).toBeUndefined();
-    expect(report.contact).toBe(LICENSE_CONTACT);
-  });
-
-  it('still lists them when the key covers nothing this build gates, because that needs explaining', () => {
-    const report = describeLicense(NOW, env({ [LICENSE_KEY_ENV]: key({ features: ['sso'] }) }));
-    expect(report.coversNothingHere).toBe(true);
-    expect(report.gated).toEqual(Object.values(EnterpriseFeature));
-  });
-
-  it('still lists them on every branch a prospective customer lands on', () => {
-    for (const report of [
-      describeLicense(NOW, {}),
-      describeLicense(NOW, env()),
-      describeLicense(NOW, env({ [LICENSE_KEY_ENV]: key({ exp: PAST }) })),
-      describeLicense(NOW, env({ [LICENSE_KEY_ENV]: 'garbage' })),
-    ]) {
-      expect(report.gated, `${report.status} lists nothing as gated`).toBeDefined();
-    }
   });
 });

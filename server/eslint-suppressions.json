@@ -949,16 +949,6 @@
       "count": 13
     }
   },
-  "src/features/license/license.test.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
-  "src/features/license/license.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
   "src/features/visual/drive-frame.test.ts": {
     "curly": {
       "count": 1

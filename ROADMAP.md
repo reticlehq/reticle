@@ -22,9 +22,9 @@ Reticle's edge is seeing the **program**, not the pixels — app state, signals,
 - **OSS health.** Externally-verifiable security posture, clean packaging, and docs that get a new user to first success fast.
 - **A gate that can see its own drift.** Every check compares against a pinned reference as well as the previous run, because a cost that lands once and then holds is invisible to a gate that only looks one step back.
 
-## Enterprise (source-available)
+## Enterprise
 
-SSO/SAML, SCIM, RBAC, audit logs, and verify-before-merge policy gates live under `server/src/features/ee/`, source-available and free for development/evaluation, unlocked in production by a license key. The core verification engine stays free forever.
+SSO/SAML, SCIM, RBAC, audit logs, and verify-before-merge policy gates are planned for the hosted Reticle platform, not for this repository. Every package in this repository is Apache-2.0, and the verification engine stays free.
 
 ## Beyond the browser: mobile and native
 

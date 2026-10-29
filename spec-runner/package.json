@@ -31,7 +31,7 @@
       "optional": true
     }
   },
-  "license": "FSL-1.1-ALv2",
+  "license": "Apache-2.0",
   "author": "Reticle contributors",
   "repository": {
     "type": "git",
@@ -42,7 +42,9 @@
   "bugs": "https://github.com/reticlehq/reticle/issues",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "sideEffects": false,
   "keywords": [

@@ -8,7 +8,7 @@ import { REPO_ROOT } from '@/machine/repo-root.js';
 /**
  * The one release step nothing could see fail until release day.
  *
- * `stamp-issuer-key.mjs` writes the enterprise issuer's public key into the built server. It
+ * `stamp-issuer-key.mjs` writes the licence issuer's public key into the built server. It
  * runs from `server`'s `prepack`, so every `npm pack` and every publish goes through it, and
  * `.github/workflows/publish.yml` has a comment about its ordering.
  *
@@ -83,7 +83,7 @@ describe('the issuer key can actually be stamped into the built server', () => {
   });
 
   it('REFUSES a real publish with no key, and says what the artifact would have been', () => {
-    // The tarball would look normal and ship with enterprise enforcement off: every customer key
+    // The tarball would look normal and ship in eval mode: every customer key
     // activates nothing, and neither the runtime nor any gate reports it. A laptop `pnpm -r publish`
     // produced exactly that, silently, and RELEASING.md never mentioned the variable.
     const before = readFileSync(TARGET, 'utf8');

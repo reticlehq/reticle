@@ -17,7 +17,7 @@ It drives your real, running app and reads what happened. Then it returns a verd
 
 <br/>
 
-[![npm](https://img.shields.io/npm/v/@reticlehq/server?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticlehq/server) [![downloads](https://img.shields.io/npm/dm/@reticlehq/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/core) [![stars](https://img.shields.io/github/stars/reticlehq/reticle?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/stargazers) [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE) [![OpenSSF](https://api.securityscorecards.dev/projects/github.com/reticlehq/reticle/badge)](https://securityscorecards.dev/viewer/?uri=github.com/reticlehq/reticle) [![Discord members](https://dcbadge.limes.pink/api/server/BwAbzv9ZRz?style=flat)](https://discord.gg/BwAbzv9ZRz)
+[![npm](https://img.shields.io/npm/v/@reticlehq/server?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticlehq/server) [![downloads](https://img.shields.io/npm/dm/@reticlehq/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/core) [![stars](https://img.shields.io/github/stars/reticlehq/reticle?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/stargazers) [![license](https://img.shields.io/badge/license-Apache--2.0-46d6a0?labelColor=15131f)](LICENSE) [![OpenSSF](https://api.securityscorecards.dev/projects/github.com/reticlehq/reticle/badge)](https://securityscorecards.dev/viewer/?uri=github.com/reticlehq/reticle) [![Discord members](https://dcbadge.limes.pink/api/server/BwAbzv9ZRz?style=flat)](https://discord.gg/BwAbzv9ZRz)
 
 [The problem](#the-problem) · [Demo](#demo) · [What Reticle does](#what-reticle-does) · [**Install**](#install) · [Use it](#use-it) · [Community](#community) · [vs Playwright](#why-not-playwright) · [Benchmarks](#benchmarks) · [Safe to install](#safe-to-install-what-you-or-your-agent-can-check) · [Docs](https://docs.reticle.sh)
 
@@ -83,7 +83,7 @@ Whether you are a person or an agent, check a new dependency before you run it. 
 
 **Where it comes from**
 
-- **Open source, public history.** Every line that runs is in this repository. The SDK, adapters, core and engine are Apache-2.0. The server and CLI are [FSL-1.1-ALv2](LICENSE) (source-available, Apache-2.0 after two years).
+- **Open source, public history.** Every line that runs is in this repository. Every package is [Apache-2.0](LICENSE).
 - **Signed builds from CI.** GitHub Actions publishes every `@reticlehq/*` package with npm's SLSA provenance. Check: `npm view @reticlehq/server dist.attestations`, or `npm audit signatures` after install.
 - **No install scripts.** No package runs a `preinstall`, `install` or `postinstall` hook, so `npm install` runs none of our code. Check: `npm view @reticlehq/server scripts`.
 - **Scored by OpenSSF.** [OpenSSF Scorecard](https://securityscorecards.dev/viewer/?uri=github.com/reticlehq/reticle) rates the repo's security practices (signed releases, fuzzing, least-privilege CI tokens, a [security policy](SECURITY.md)). The badge at the top is live.
@@ -778,9 +778,7 @@ The open-source tool never needs the dashboard. The dashboard shows a team what 
 
 ## License
 
-- **The SDK, adapters, core and engine are Apache-2.0.** Ship them inside your own apps.
-- **The server, CLI, `init` and the spec runner (`@reticlehq/test`) are FSL-1.1-ALv2.** Any use is free, except offering Reticle itself as a competing product or service. Each version becomes Apache-2.0 two years after release.
-- **Enterprise features need a license key** in production. They are free for development and evaluation.
+Every npm package is Apache-2.0: the SDK, the adapters, core, engine, the server and CLI, `init` and the spec runner (`@reticlehq/test`). Use them anywhere, including inside the apps that you ship. The `reticle-tauri` crate is MIT.
 
 [LICENSE](LICENSE) has the details.
 

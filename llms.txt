@@ -256,16 +256,13 @@ Reticle's source pointer: fix rate was 6/6 in both conditions, and tool calls fe
 it removed the search. What Reticle is designed to improve is the verdict itself: a verdict that does
 not lie, with proof attached. In the 88-bug head-to-head that is 1 false green against 29.
 
-## Free vs enterprise (open-core licensing)
+## Licensing
 
-- **Embeddable SDK** (`browser`, `core`, `react`, `babel-plugin`, `next`, `vite-plugin`,
-  `eslint-plugin`): **Apache-2.0** — safe to ship inside apps.
-- **Server / CLI / MCP** (`server`, `init`, `test`): **FSL-1.1-ALv2** — free for any
-  use except reselling Reticle itself; converts to Apache after two years.
-- **Enterprise features** (`server/src/features/ee/`): **Reticle Enterprise License** — source-available,
-  free for dev/eval, a license key required in production.
-- **Licensing is offline.** Keys are signed with Ed25519 and verified locally (`reticle license`); license
-  checks **never phone home**. The core verification engine stays free forever.
+- **Every npm package is Apache-2.0**: the SDK (`browser`, `core`, `react`, `babel-plugin`, `next`,
+  `vite-plugin`, `eslint-plugin`) and the server, CLI and MCP (`server`, `init`, `test`). Safe to ship
+  inside apps.
+- **License keys are offline.** Keys are signed with Ed25519 and verified locally (`reticle license`);
+  license checks **never phone home**. The core verification engine stays free.
 
 ## Built to be safe to install
 
@@ -299,7 +296,7 @@ not lie, with proof attached. In the 88-bug head-to-head that is 1 false green a
   pass/fail/unknown, defects caught, tokens returned, time driving, sessions, streak — and they power
   the HUD's impact report. They are never uploaded and are unrelated to the anonymous usage telemetry
   above; disabling telemetry does not disable them, and they carry nothing about your app's data.
-- **Source-available** — read the tree-shaking, the bind, and the offline license verify yourself.
+- **Open source** — read the tree-shaking, the bind, and the offline license verify yourself.
 
 ## Packages
 

@@ -23,7 +23,7 @@
   "dependencies": {
     "@reticlehq/core": "workspace:*"
   },
-  "license": "FSL-1.1-ALv2",
+  "license": "Apache-2.0",
   "author": "Reticle contributors",
   "repository": {
     "type": "git",
@@ -35,7 +35,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "sideEffects": false,
   "keywords": [

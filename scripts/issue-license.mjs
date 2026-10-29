@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Reticle Enterprise license issuer — the ISSUER (Reticle) side. Mints offline Ed25519 license keys that
- * `reticle license` / assertEnterprise verify locally on a customer's machine. Keep the PRIVATE key secret;
+ * Reticle license issuer — the ISSUER (Reticle) side. Mints offline Ed25519 license keys that
+ * `reticle license` verifies locally on a customer's machine. Keep the PRIVATE key secret;
  * never commit or ship it. The PUBLIC key is what gets baked into a release (RETICLE_LICENSE_PUBLIC_KEY).
  *
  *   node scripts/issue-license.mjs keygen

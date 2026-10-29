@@ -26,4 +26,4 @@ const result = runInit(
 
 ## License
 
-FSL-1.1-ALv2 — free for any Permitted Purpose, converts to Apache-2.0 two years after release. See [LICENSE](./LICENSE).
+Apache-2.0. See [LICENSE](./LICENSE).

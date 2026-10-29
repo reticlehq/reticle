@@ -442,7 +442,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // same thing about a daemon that holds it and does not answer (#1937).
   daemon: ['lifetime', 'binding', 'ports', 'telemetry'],
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
-  ee: ['license'],
   flows: [
     'machine',
     'navigation',

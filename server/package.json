@@ -49,7 +49,7 @@
     "playwright": "^1.63.0",
     "pngjs": "^7.0.0"
   },
-  "license": "FSL-1.1-ALv2",
+  "license": "Apache-2.0",
   "author": "Reticle contributors",
   "repository": {
     "type": "git",
@@ -62,7 +62,8 @@
     "bin",
     "dist",
     "README.md",
-    "LICENSE-ENTERPRISE",
+    "LICENSE",
+    "NOTICE",
     "SKILL.md",
     "docs"
   ],

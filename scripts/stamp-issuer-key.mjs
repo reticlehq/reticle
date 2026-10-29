@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 /**
- * Stamp the enterprise issuer PUBLIC key into the built server. Runs from `@reticlehq/server`'s
+ * Stamp the license issuer PUBLIC key into the built server. Runs from `@reticlehq/server`'s
  * `prepack`, which is the ONLY safe place for it: prepack does `rm -rf dist && tsc -b --force`, so a
  * stamp applied any earlier in the release job is deleted and rebuilt away, and the artifact that
  * reaches npm has an empty key with nothing having failed. That is not hypothetical — the first version
  * of this script ran as a separate step before `pnpm publish` and packed an unstamped tarball.
  *
- * The gate reads `BAKED_ISSUER_PUBLIC_KEY_PEM` in preference to the environment precisely so a
- * self-hosted operator cannot switch enforcement off by never setting an env var. That only works if a
- * release actually has the key baked. A release that ships with the literal still empty resolves no
- * issuer key at all, so in production `assertEnterpriseFromEnv` denies every enterprise feature with
- * `enterprise-gate-unconfigured` and every customer key activates NOTHING. This script is the step that
- * makes the shipped artifact different from the source tree.
+ * `describeLicense` reads `BAKED_ISSUER_PUBLIC_KEY_PEM` in preference to the environment, so an
+ * operator cannot swap in an issuer key of their own. That only works if a release actually has the
+ * key baked. A release that ships with the literal still empty resolves no issuer key at all, so in
+ * production `reticle license` reports the build as MISCONFIGURED and every customer key activates
+ * NOTHING. This script is the step that makes the shipped artifact different from the source tree.
  *
  *   RETICLE_ISSUER_PUBLIC_KEY="$(cat issuer-public.pem)" node scripts/stamp-issuer-key.mjs
  *
@@ -86,18 +85,18 @@ if (pem === undefined || pem.length === 0) {
    *
    * Eval mode is correct for a contributor's build and for CI, and that is what keeps this script
    * from simply requiring the variable. It is not correct for a tarball going to the registry: the
-   * artifact looks normal, every gate is green, and enterprise keys activate nothing for anyone who
+   * artifact looks normal, every gate is green, and licence keys activate nothing for anyone who
    * installs it. The release workflow sets the variable; a laptop `pnpm -r publish` does not, and
    * nothing anywhere said so — RELEASING.md names `pnpm -r publish --dry-run` as an authority and
    * never mentions the key.
    *
    * `RETICLE_ALLOW_EVAL_PUBLISH=1` is the deliberate override, for a release that is meant to ship
-   * without enterprise enforcement. It has to be typed, which is the whole point.
+   * without a baked issuer key. It has to be typed, which is the whole point.
    */
   if (isRealPublish && process.env.RETICLE_ALLOW_EVAL_PUBLISH !== '1') {
     process.stderr.write(
       'stamp-issuer-key: refusing to publish without RETICLE_ISSUER_PUBLIC_KEY.\n' +
-        '  The tarball would ship in eval mode: enterprise licence keys would activate nothing,\n' +
+        '  The tarball would ship in eval mode: licence keys would activate nothing,\n' +
         '  and nothing at runtime or in any gate would report it. Publish through the release\n' +
         '  workflow, which supplies the key, or set RETICLE_ALLOW_EVAL_PUBLISH=1 to mean it.\n',
     );
@@ -111,8 +110,8 @@ if (pem === undefined || pem.length === 0) {
 }
 
 // Reject anything that is not a real spki public key BEFORE it reaches a published artifact. A typo, a
-// truncated secret, or a private key pasted by mistake all fail identically at runtime (eval mode, gate
-// off) and are invisible until a customer reports their key does nothing.
+// truncated secret, or a private key pasted by mistake all fail identically at runtime (eval mode, no
+// issuer key) and are invisible until a customer reports their key does nothing.
 try {
   const parsed = createPublicKey(pem);
   if (parsed.asymmetricKeyType !== 'ed25519') {
@@ -137,7 +136,7 @@ if (!source.includes(EMPTY_DECLARATION)) {
     `stamp-issuer-key: ${TARGET} does not contain the expected declaration\n` +
       `  looked for: ${EMPTY_DECLARATION}\n` +
       '  The literal was renamed, already stamped, or the build did not run. Refusing to publish a\n' +
-      '  release whose enterprise gate would be silently off.\n',
+      '  release whose licence keys would silently activate nothing.\n',
   );
   process.exit(1);
 }
@@ -149,8 +148,8 @@ const stamped = source.replace(
 writeFileSync(TARGET, stamped);
 
 // Prove the stamp took, against the real module rather than the string we just wrote. With a key baked
-// and no customer key present, activation must read `missing` (enforcement ON). If it still reads
-// `eval`, the gate is off and this release must not ship.
+// and no customer key present, activation must read `missing`. If it still reads `eval`, no issuer
+// key resolves and this release must not ship.
 // `pathToFileURL`, not the bare path: ESM `import()` takes a URL, and an absolute Windows path
 // (`D:\a\…\license.js`) is not one — the drive letter reads as a protocol and the loader throws
 // before the check can run. The release gate then fails as "the stamp could not be verified" on a
@@ -163,4 +162,4 @@ if (report.status !== 'missing') {
   );
   process.exit(1);
 }
-process.stdout.write('stamp-issuer-key: issuer key baked, enterprise gate enforcing\n');
+process.stdout.write('stamp-issuer-key: issuer key baked\n');

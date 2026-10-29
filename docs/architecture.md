@@ -115,14 +115,11 @@ This is plain, reviewable, version-controllable data, not a black box.
 
 ---
 
-## Open-core licensing (what's free, what's protected)
+## Licensing
 
-- The **protocol and the rules** (`open-verification`, `@reticlehq/core`, `@reticlehq/engine`) are **Apache-2.0**. The part that decides a verdict is the part a sceptical reader most wants to audit, so it is the part with no licence in the way.
-- The embeddable **SDK** (`@reticlehq/browser`, `@reticlehq/react` and the build adapters) is **Apache-2.0**, safe to ship inside your own app.
-- The **server / CLI** is under the **Functional Source License (FSL-1.1, Apache-2.0 future)**: source-available, converts to Apache-2.0 over time.
-- Enterprise-only features live behind a license gate and are clearly separated.
+Every npm package is **Apache-2.0**: the protocol and the rules (`open-verification`, `@reticlehq/core`, `@reticlehq/engine`), the embeddable SDK and its adapters, and the server, CLI, `init` and spec runner. The `reticle-tauri` crate is MIT.
 
-See [LICENSE](https://github.com/reticlehq/reticle/blob/main/LICENSE) and each package's own `LICENSE` file. The licensing _mechanism_ is open and inspectable; activation is offline (no phone-home).
+See [LICENSE](https://github.com/reticlehq/reticle/blob/main/LICENSE) and each package's own `LICENSE` file.
 
 ---
 

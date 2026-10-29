@@ -70,4 +70,4 @@ process.exit(summary.failed === 0 ? 0 : 1);
 
 ## License
 
-FSL-1.1-ALv2 — free for any use except reselling Reticle itself; converts to Apache-2.0 after two years. See [LICENSE](./LICENSE).
+Apache-2.0. See [LICENSE](./LICENSE).
