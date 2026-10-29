@@ -21,7 +21,11 @@ import {
 import type { Launcher, PooledBrowser, PooledContext, PooledPage } from './browser-pool.js';
 import type { ScreenshotOptions } from './pool-contract.js';
 import { installNetworkMocks } from '@/portal/input/network-mock.js';
-import { performGesture, type ElementBox } from '@/portal/input/real-input.js';
+import {
+  performGesture,
+  withChromePassThrough,
+  type ElementBox,
+} from '@/portal/input/real-input.js';
 
 /** A key addresses focus, not a point; the gesture driver takes a box for every action. */
 const NO_BOX: ElementBox = { x: 0, y: 0, width: 0, height: 0 };
@@ -157,11 +161,13 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
             },
             // Three moves, same as performGesture: a single move to the center can be a no-op if
             // the pointer was already there, and CSS :hover needs a native hit-test to apply.
-            hover: async (x, y) => {
-              await page.mouse.move(x, y);
-              await page.mouse.move(x + 1, y);
-              await page.mouse.move(x, y);
-            },
+            // Through Reticle's own UI, like every other real gesture (#992).
+            hover: (x, y) =>
+              withChromePassThrough(page, async () => {
+                await page.mouse.move(x, y);
+                await page.mouse.move(x + 1, y);
+                await page.mouse.move(x, y);
+              }),
             // The same driver `reticle drive` presses with, so a held key and a chord read alike.
             emulateMedia: (media) => page.emulateMedia(media),
             press: (args) => performGesture(page, ActionType.PRESS, NO_BOX, args, sleepFor),

@@ -33,6 +33,8 @@ import {
   clickButtonFromArgs,
   InputMode,
   pressModifiersFromArgs,
+  RETICLE_CHROME_PASS_THROUGH_SCRIPT,
+  RETICLE_CHROME_RESTORE_POINTER_SCRIPT,
 } from '@reticlehq/core';
 import { installNetworkMocks, type MockRule } from './network-mock.js';
 import { attachNetworkDetail, type NetworkDetail } from './network-detail.js';
@@ -265,6 +267,37 @@ export async function performGesture(
     };
   }
 
+  return withChromePassThrough(page, () => pointerGesture(page, action, box, args, sleep));
+}
+
+/**
+ * Run a real pointer gesture with Reticle's own UI out of the hit test, and put it back after.
+ *
+ * A real pointer goes to the topmost element under it. When the HUD sat over the app's control, a
+ * driven click went to the HUD and the verdict said the app did nothing; a drag ended short (#992).
+ * The restore runs whatever the gesture did, so the HUD does not stay unclickable for a person.
+ */
+export async function withChromePassThrough<T>(
+  page: { evaluate: (script: string) => Promise<unknown> },
+  gesture: () => Promise<T>,
+): Promise<T> {
+  await page.evaluate(RETICLE_CHROME_PASS_THROUGH_SCRIPT);
+  try {
+    return await gesture();
+  } finally {
+    // A click that navigated takes the old page and its held values with it.
+    await page.evaluate(RETICLE_CHROME_RESTORE_POINTER_SCRIPT).catch(() => undefined);
+  }
+}
+
+/** The pointer half of `performGesture`: every action that lands at a point. */
+async function pointerGesture(
+  page: Page,
+  action: ActionType,
+  box: ElementBox,
+  args: RealInputArgs,
+  sleep: SleepFn,
+): Promise<RealInputResult> {
   const center = boxCenter(box);
   const { cx, cy } = center;
   const real = (performed: boolean): RealInputResult => ({

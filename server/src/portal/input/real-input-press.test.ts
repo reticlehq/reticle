@@ -455,6 +455,7 @@ describe('performGesture drives press through the real keyboard', () => {
   it('keeps mouse actions reporting real mode too, so the field is not press-only', async () => {
     const moves: string[] = [];
     const page = {
+      evaluate: () => Promise.resolve(),
       mouse: {
         move: (x: number, y: number) => {
           moves.push(`${String(x)},${String(y)}`);
