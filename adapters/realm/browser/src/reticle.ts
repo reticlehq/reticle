@@ -35,7 +35,7 @@ import {
   type RedactionConfig,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { rememberSessionLabel } from './session-continuity.js';
+import { rememberSessionLabel, tabSessionStore } from './session-continuity.js';
 import { editEpoch } from './edit-epoch.js';
 import {
   createCommandRegistry,
@@ -416,7 +416,7 @@ export class Reticle {
     const explicitSession = resolveSessionLabel(identity.session, () => '');
     this.#session = rememberSessionLabel(
       explicitSession.length > 0 ? explicitSession : undefined,
-      'undefined' === typeof globalThis.sessionStorage ? undefined : globalThis.sessionStorage,
+      tabSessionStore(window),
       () =>
         'function' === typeof globalThis.crypto?.randomUUID
           ? `s${globalThis.crypto.randomUUID()}`

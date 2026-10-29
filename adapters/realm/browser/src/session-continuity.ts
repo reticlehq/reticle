@@ -46,3 +46,29 @@ export function rememberSessionLabel(
   write(chosen);
   return chosen;
 }
+
+/**
+ * The store the tab's session id lives in, or undefined in a sub-frame.
+ *
+ * A same-origin iframe (an `about:srcdoc` preview, an embedded view of the same app) shares the
+ * tab's `sessionStorage`. An SDK inside it read the top page's id, registered under it and replaced
+ * the page's connection, so a lease went on to drive and grade the iframe (#2009). A sub-frame gets
+ * no store and therefore an id of its own. A parent on another origin makes `top` throw; that is a
+ * sub-frame too.
+ */
+export function tabSessionStore(win: Window & typeof globalThis): Storage | undefined {
+  let topFrame: boolean;
+  try {
+    topFrame = win.top === win;
+  } catch {
+    topFrame = false;
+  }
+  if (!topFrame) {
+    return undefined;
+  }
+  try {
+    return win.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}

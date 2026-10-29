@@ -19,7 +19,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { rememberSessionLabel } from './session-continuity.js';
+import { ReticleStorageKey } from '@/storage-keys.js';
+import { rememberSessionLabel, tabSessionStore } from './session-continuity.js';
+
+const STORAGE_KEY_FOR_TEST = ReticleStorageKey.SESSION;
 
 /** A sessionStorage stand-in; the real one is per-tab and survives reloads. */
 function fakeStore(seed: Record<string, string> = {}): Storage {
@@ -78,5 +81,37 @@ describe('a session id that survives a reload', () => {
     // resolveSessionLabel yields '' for "none given", and `??` would have accepted that as an id.
     const store = fakeStore({ __reticle_session: 's-existing' });
     expect(rememberSessionLabel('', store, () => 's-new')).toBe('s-existing');
+  });
+});
+
+/**
+ * A same-origin sub-frame shares the tab's `sessionStorage`. An SDK inside an `about:srcdoc` iframe
+ * therefore read the top page's remembered id and registered under it, replacing the page's
+ * connection: a lease then drove and graded the iframe (field report, 3.8.2; #2009).
+ */
+describe('tabSessionStore', () => {
+  it('gives the top frame its sessionStorage', () => {
+    const store = fakeStore();
+    const win = { sessionStorage: store } as unknown as Window & typeof globalThis;
+    (win as { top: unknown }).top = win;
+    expect(tabSessionStore(win)).toBe(store);
+  });
+
+  it('gives a sub-frame no store, so it cannot take the tab id', () => {
+    const store = fakeStore({ [STORAGE_KEY_FOR_TEST]: 's-top' });
+    const win = { sessionStorage: store, top: {} } as unknown as Window & typeof globalThis;
+    expect(tabSessionStore(win)).toBeUndefined();
+    expect(rememberSessionLabel(undefined, tabSessionStore(win), () => 's-frame')).toBe('s-frame');
+    expect(store.getItem(STORAGE_KEY_FOR_TEST)).toBe('s-top');
+  });
+
+  it('treats a cross-origin parent (top throws) as a sub-frame', () => {
+    const win = {
+      sessionStorage: fakeStore(),
+      get top(): never {
+        throw new Error('SecurityError');
+      },
+    } as unknown as Window & typeof globalThis;
+    expect(tabSessionStore(win)).toBeUndefined();
   });
 });
