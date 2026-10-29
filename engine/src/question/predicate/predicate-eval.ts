@@ -541,36 +541,6 @@ export function evalNet(
       };
 }
 
-export function evalAnimation(
-  events: ReticleEvent[],
-  p: Extract<Predicate, { kind: typeof PredicateKind.ANIMATION }>,
-): EvalResult {
-  const wantType = true === p.completed ? EventType.ANIM_END : EventType.ANIM_START;
-  const hit = events.find((e) => {
-    if (e.type !== wantType) {
-      return false;
-    }
-    const name = str(e.data['name']);
-    // A check with no name asks about the app, so Reticle's own bookkeeping signals do not count.
-    if (p.name === undefined ? isReticleVoice(name ?? '') : name !== p.name) {
-      return false;
-    }
-    if (p.target !== undefined && e.ref !== p.target) {
-      return false;
-    }
-    return true;
-  });
-  return hit !== undefined
-    ? { pass: true, evidence: hit.data }
-    : {
-        pass: false,
-        failureReason: `no animation matched ${JSON.stringify(p)}`,
-        observed: 'no matching animation in the window',
-        expected: `an animation matching ${JSON.stringify(p)}`,
-        assertion: 'animation.present',
-      };
-}
-
 export function evalSignal(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.SIGNAL }>,

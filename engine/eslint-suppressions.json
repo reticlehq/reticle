@@ -303,11 +303,6 @@
       "count": 9
     }
   },
-  "src/question/predicate/predicate.ts": {
-    "curly": {
-      "count": 31
-    }
-  },
   "src/question/predicate/property.ts": {
     "curly": {
       "count": 16

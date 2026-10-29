@@ -27,6 +27,7 @@ export * from './artifacts/flow-unreached.js'; // unreachedRoutes — known rout
 export * from './artifacts/flow-mutation-target.js'; // what a flow says it depends on: mutationTargetsFor + perturbationFor
 export * from './graph/app-graph.js'; // the App Graph: an app as screens, actions, requests; one fold for cloud and daemon
 export * from './wire/constants/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
+export * from './wire/constants/animation-command.js'; // reticle_animations argument names
 export * from './wire/constants/response-body-reason.js'; // why a NET_REQUEST carries no response body (#1520)
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
 export * from './identity/testid-attribute.js'; // DEFAULT_TESTID_ATTR, ALTERNATIVE_TESTID_ATTRS

@@ -1,4 +1,4 @@
-import type { ReticleEvent } from '@reticlehq/core';
+import { SESSION_REF, type ReticleEvent } from '@reticlehq/core';
 
 /**
  * Ambient-region learning. On a real-time app (chat, tickers, presence) whole DOM regions churn with
@@ -38,14 +38,6 @@ export function ambientKeyOf(event: {
 export const DEFAULT_AMBIENT_THRESHOLD = 20;
 
 /**
- * An element ref: the letter `e` and a sequence number, minted per session by the SDK's ref table.
- *
- * It is an address within ONE session's numbering, not an identity. `e404` is whatever that session
- * happened to hand out 404th.
- */
-const REF_SHAPED = /^e\d+$/;
-
-/**
  * Is this ambient key meaningful in a DIFFERENT session?
  *
  * `regionKeyOf` prefers the nearest `data-testid` — a name the app chose, stable across every run —
@@ -66,7 +58,7 @@ const REF_SHAPED = /^e\d+$/;
  * not mint it.
  */
 export function isStableAmbientKey(key: string): boolean {
-  return !REF_SHAPED.test(key);
+  return !SESSION_REF.test(key);
 }
 
 /** The counts worth carrying between sessions — the stable keys, and nothing else. */

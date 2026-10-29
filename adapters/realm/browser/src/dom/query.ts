@@ -156,7 +156,7 @@ const FRAME_DEPTH_MAX = 3;
  * worst combination, an absent-element answer for content that is right there. Cross-origin frames
  * are a genuinely different case and stay unread; they are declared instead.
  */
-function embeddedRootsUnder(root: HTMLElement): HTMLElement[] {
+export function embeddedRootsUnder(root: HTMLElement): HTMLElement[] {
   const found: HTMLElement[] = [];
   const walk = (node: ParentNode, depth: number): void => {
     for (const el of node.querySelectorAll<HTMLElement>('*')) {

@@ -138,7 +138,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // (`fullText`). It is one small group with a reader on each side of the wire, and nothing else in
   // `constants.ts` depends on it, so that file is the wrong place for it. Recorded rather than
   // grouped: every file here is a flat set of wire constants, and this one has no sibling to join.
-  'core/src/wire/constants': 11,
+  // 12 with `animation-command.ts`: the `reticle_animations` target argument lives outside
+  // `constants.ts`, because that file is already the monorepo's broad wire vocabulary. The split is
+  // deliberate even though it makes this shallow directory cross the line.
+  'core/src/wire/constants': 12,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not
@@ -199,7 +202,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // explains, and a filename here is published API (see public-subpaths-are-pinned.test.ts).
   // 23 with `net-blind-spots.ts`: what the net channel cannot see, split from `predicate-eval.ts` at
   // its line cap, and free of the core contract so the coupling ceiling does not move.
-  'engine/src/question/predicate': 23,
+  // 24 with `predicate-animation.ts`, split from `predicate.ts` so the live-animation snapshot
+  // fallback can stay beside the other predicate evaluators without growing the dispatcher.
+  'engine/src/question/predicate': 24,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:
