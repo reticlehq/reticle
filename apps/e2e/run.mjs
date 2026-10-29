@@ -111,6 +111,8 @@ const ORDER = [
   // Permissions on a leased context, read from inside a real page. Serves its own page.
   'lease-permissions-test',
   'lease-zero-install-navigation-test',
+  // An SPA that drops the lease query on load with history.replaceState. Serves its own page.
+  'lease-spa-redirect-test',
   // Bare `reticle` in an unwired app folder: one smoke verdict, a pass and a fail. Writes its own app.
   'first-verdict-test',
   // A script-defined global, read by the app's OWN first module — the done-when of #1427. The unit
@@ -193,7 +195,7 @@ if (specs.length === 0) {
 // So the size is recorded, and shrinking the battery costs a deliberate edit to a number a
 // reviewer can see. Growing it costs the same edit, which is the point: both directions are a
 // decision. Measured 2026-09-11.
-const EXPECTED_SPECS = desktop ? 3 : 48;
+const EXPECTED_SPECS = desktop ? 3 : 49;
 // The WHOLE battery is counted, not this shard's slice of it: a shard is a third of the list by
 // design, and the question here is whether the list itself shrank.
 if (listed.length !== EXPECTED_SPECS) {

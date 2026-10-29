@@ -4,18 +4,28 @@
  * the document inside the leased page, before the SDK reads it.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { RETICLE_URL_PARAM } from '@reticlehq/core';
+import { RETICLE_SESSION_STORAGE_KEY, RETICLE_URL_PARAM } from '@reticlehq/core';
 import { BrowserPool } from './browser-pool.js';
 import type { PooledBrowser, PooledPage } from './pool-contract.js';
-import { stampLeaseMarker } from './lease-marker-stamp.js';
+import { installLeaseMarker, stampLeaseMarker } from './lease-marker-stamp.js';
 import { resolveLeasedSessionId } from '../../surface/tools/lease-tools.js';
 
 const SESSION = RETICLE_URL_PARAM.SESSION;
 const ORIGIN = 'http://localhost:3000';
 
 /** A document the init script can run in: location + history.replaceState, like a real window. */
-function fakeDocument(href: string, framed = false): { href: () => string } {
+function fakeDocument(
+  href: string,
+  framed = false,
+  stored = new Map<string, string>(),
+): { href: () => string; stored: Map<string, string> } {
   const win: Record<string, unknown> = {};
+  win['sessionStorage'] = {
+    getItem: (k: string) => stored.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      stored.set(k, v);
+    },
+  };
   const loc = new URL(href);
   win['location'] = {
     get href() {
@@ -30,7 +40,7 @@ function fakeDocument(href: string, framed = false): { href: () => string } {
   };
   win['top'] = framed ? {} : win;
   (globalThis as unknown as { window: unknown }).window = win;
-  return { href: () => loc.toString() };
+  return { href: () => loc.toString(), stored };
 }
 
 const arg = (session: string, targetOrigin = ORIGIN) => ({
@@ -38,6 +48,7 @@ const arg = (session: string, targetOrigin = ORIGIN) => ({
   targetOrigin,
   sessionParam: SESSION,
   projectParam: RETICLE_URL_PARAM.PROJECT,
+  sessionStorageKey: RETICLE_SESSION_STORAGE_KEY,
 });
 
 afterEach(() => {
@@ -95,6 +106,62 @@ describe('the lease marker survives a server redirect', () => {
     expect(resolveLeasedSessionId(store, 'lease-a')).toBeUndefined();
   });
 });
+
+/**
+ * #2026: an SPA that calls `history.replaceState` on load drops the query after the init script ran
+ * and before the SDK connects. The SDK falls back to the tab's session store, so the init script
+ * writes the lease id there too.
+ */
+describe('the lease id is in the tab session store before page scripts run', () => {
+  it('writes the lease id in the top frame on the target origin', () => {
+    const doc = fakeDocument(`${ORIGIN}/`);
+    stampLeaseMarker(arg('lease-a'));
+    expect(doc.stored.get(RETICLE_SESSION_STORAGE_KEY)).toBe('lease-a');
+  });
+
+  it('writes it also when the URL already has the marker', () => {
+    const doc = fakeDocument(`${ORIGIN}/x?${SESSION}=lease-a`);
+    stampLeaseMarker(arg('lease-a'));
+    expect(doc.stored.get(RETICLE_SESSION_STORAGE_KEY)).toBe('lease-a');
+  });
+
+  it('does not write in a sub-frame or on another origin', () => {
+    const framed = fakeDocument(`${ORIGIN}/embed`, true);
+    stampLeaseMarker(arg('lease-a'));
+    expect(framed.stored.size).toBe(0);
+    const idp = fakeDocument('https://idp.example.com/sso');
+    stampLeaseMarker(arg('lease-a'));
+    expect(idp.stored.size).toBe(0);
+  });
+
+  it('keeps a value the tab already holds', () => {
+    // A reload in the lease tab holds the lease id already. A different value is one the SDK wrote
+    // for an explicit `connect({ session })`, and the init script must not replace it.
+    const held = new Map([[RETICLE_SESSION_STORAGE_KEY, 'app-chosen']]);
+    fakeDocument(`${ORIGIN}/`, false, held);
+    stampLeaseMarker(arg('lease-a'));
+    expect(held.get(RETICLE_SESSION_STORAGE_KEY)).toBe('app-chosen');
+  });
+
+  it('the pool passes the storage key to the init script', async () => {
+    scriptsSeen.length = 0;
+    const page: PooledPage = {
+      goto: () => Promise.resolve(undefined),
+      close: () => Promise.resolve(),
+      onCrash: () => undefined,
+      addInitScript: (_s: unknown, a?: unknown) => {
+        scriptsSeen.push(a);
+        return Promise.resolve({ dispose: () => Promise.resolve() });
+      },
+    };
+    await installLeaseMarker(page, 'lease-a', ORIGIN, undefined);
+    expect((scriptsSeen[0] as { sessionStorageKey: string }).sessionStorageKey).toBe(
+      RETICLE_SESSION_STORAGE_KEY,
+    );
+  });
+});
+
+const scriptsSeen: unknown[] = [];
 
 describe('the pool installs the stamp on the leased page only', () => {
   const scripts: Array<{ page: number; arg: unknown }> = [];

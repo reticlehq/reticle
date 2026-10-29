@@ -119,6 +119,13 @@ export const RETICLE_URL_PARAM = {
 } as const;
 
 /**
+ * The `sessionStorage` key that holds a tab's session id. The SDK reads it on `connect()` when no
+ * explicit id is given. A lease writes the lease id to it at document start, so a page that drops
+ * `__reticle_session` from its URL before `connect()` still registers under the lease id (#2026).
+ */
+export const RETICLE_SESSION_STORAGE_KEY = '__reticle_session';
+
+/**
  * Payload fields and `kind` values on console/error events that the AGENT reads back through
  * `reticle_console`. The console payload is passthrough rather than closed, so these are named
  * here instead of schema-enforced: a wire string a server writes inline is one a rename

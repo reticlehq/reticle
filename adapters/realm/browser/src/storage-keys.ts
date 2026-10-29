@@ -8,10 +8,13 @@
  * Exact keys, not a `reticle` prefix: apps (our own bench among them) keep keys of their own under
  * `reticle.`, and hiding those would hide the app's real writes.
  *
- * Kept free of imports, so the observer can read it without pulling the HUD into the first load.
+ * It imports only a constant from core, so the observer can read it without pulling the HUD into the
+ * first load. The session key is in core because a lease writes it from the server (#2026).
  */
+import { RETICLE_SESSION_STORAGE_KEY } from '@reticlehq/core';
+
 export const ReticleStorageKey = {
-  SESSION: '__reticle_session',
+  SESSION: RETICLE_SESSION_STORAGE_KEY,
   REF_BASE: '__reticle_ref_base',
   PRESENTER_LOG: 'reticle-presenter-log',
   PRESENTER_LOG_OWNER: 'reticle-presenter-log-owner',

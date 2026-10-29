@@ -1,4 +1,4 @@
-import { RETICLE_URL_PARAM } from '@reticlehq/core';
+import { RETICLE_SESSION_STORAGE_KEY, RETICLE_URL_PARAM } from '@reticlehq/core';
 import type { PooledPage } from './pool-contract.js';
 
 interface LeaseMarkerArg {
@@ -7,12 +7,14 @@ interface LeaseMarkerArg {
   targetOrigin: string;
   sessionParam: string;
   projectParam: string;
+  sessionStorageKey: string;
 }
 
 interface W {
   top: unknown;
   location: URL;
   history: { replaceState(...a: unknown[]): void };
+  sessionStorage: { getItem(k: string): string | null; setItem(k: string, v: string): void };
 }
 
 /**
@@ -22,10 +24,22 @@ interface W {
  * target origin (never an identity provider's or any third party's URL), and the pool installs it
  * only when the navigated URL's marker matches this lease's id. Must stay self-contained: Playwright
  * serialises the function source into the page.
+ *
+ * It also writes the lease id to the tab session store before page scripts run. An SPA that calls
+ * `history.replaceState` on load drops the URL marker before `connect()`, and the SDK then reads
+ * the id from that store (#2026). A value the tab holds already stays: a reload holds the lease id,
+ * and a different value is one the SDK stored for an explicit `connect({ session })`.
  */
 export function stampLeaseMarker(arg: LeaseMarkerArg): void {
   const win = (globalThis as unknown as { window?: W }).window;
   if (win === undefined || win.top !== win || win.location.origin !== arg.targetOrigin) return;
+  try {
+    if (null === win.sessionStorage.getItem(arg.sessionStorageKey)) {
+      win.sessionStorage.setItem(arg.sessionStorageKey, arg.session);
+    }
+  } catch {
+    // A page with storage blocked still gets the URL marker below.
+  }
   try {
     const url = new URL(win.location.href);
     if (url.searchParams.has(arg.sessionParam)) return;
@@ -52,6 +66,7 @@ export async function installLeaseMarker(
     targetOrigin,
     sessionParam: RETICLE_URL_PARAM.SESSION,
     projectParam: RETICLE_URL_PARAM.PROJECT,
+    sessionStorageKey: RETICLE_SESSION_STORAGE_KEY,
   });
 }
 
