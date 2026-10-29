@@ -3,7 +3,7 @@
 #   docker run -p 8080:8080 atlas-demo
 # apps/atlas/Dockerfile.dockerignore trims the context (BuildKit picks it up for this -f path).
 
-FROM node:24-slim AS build
+FROM node:24-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS build
 RUN corepack enable
 WORKDIR /repo
 COPY . .
@@ -18,7 +18,7 @@ RUN pnpm install --frozen-lockfile --filter "@reticlehq/atlas..." --filter . \
  && pnpm --filter "@reticlehq/atlas^..." run build \
  && pnpm --filter @reticlehq/atlas run build:demo
 
-FROM node:24-alpine
+FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85
 ENV NODE_ENV=production PORT=8080
 WORKDIR /app
 COPY --from=build /repo/apps/atlas/dist ./dist
