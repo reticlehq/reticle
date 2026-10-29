@@ -1,40 +1,39 @@
 # Who reviews what.
 #
-# There is one maintainer: `git shortlog -sn` puts @divshekhar at ~2000 of the ~2200 commits, and
-# every other name is a contributor rather than a reviewer. This file does not change who that is —
-# it changes whether GitHub knows. Without it a PR opens with NO requested reviewer, so 24 of the
-# 42 open PRs were green, mergeable, and waiting on a review nobody had been asked for.
+# Two maintainers own every path. `main` requires one approving review from a code owner who is
+# not the author, so each maintainer reviews the other's changes, and either one can review a
+# contributor's. Without this file a PR opens with no requested reviewer.
 #
 # Last matching pattern wins, so the catch-all is FIRST and the per-area lines below it are the
 # ones GitHub actually reports. They are spelled out per package and per app on purpose: the day a
 # second maintainer takes one area, the change is one owner on one line, not a new file.
 
-*                          @divshekhar
+*                          @divshekhar @imheadrick
 
 # Packages — the shipped product.
-/core/                     @divshekhar
-/open-verification/              @divshekhar
-/engine/                   @divshekhar
-/server/                   @divshekhar
-/init/                     @divshekhar
-/spec-runner/              @divshekhar
-/conformance/              @divshekhar
-/adapters/                 @divshekhar
+/core/                     @divshekhar @imheadrick
+/open-verification/              @divshekhar @imheadrick
+/engine/                   @divshekhar @imheadrick
+/server/                   @divshekhar @imheadrick
+/init/                     @divshekhar @imheadrick
+/spec-runner/              @divshekhar @imheadrick
+/conformance/              @divshekhar @imheadrick
+/adapters/                 @divshekhar @imheadrick
 
 # Apps — fixtures, smoke apps and the harnesses that drive them.
-/apps/api/                 @divshekhar
-/apps/atlas/               @divshekhar
-/apps/bench-app/           @divshekhar
-/apps/e2e/                 @divshekhar
-/apps/electron-smoke/      @divshekhar
-/apps/electron-vue-pinia/  @divshekhar
-/apps/examples/            @divshekhar
-/apps/large-dom-bench/     @divshekhar
-/apps/next-smoke/          @divshekhar
-/apps/tauri-smoke/         @divshekhar
+/apps/api/                 @divshekhar @imheadrick
+/apps/atlas/               @divshekhar @imheadrick
+/apps/bench-app/           @divshekhar @imheadrick
+/apps/e2e/                 @divshekhar @imheadrick
+/apps/electron-smoke/      @divshekhar @imheadrick
+/apps/electron-vue-pinia/  @divshekhar @imheadrick
+/apps/examples/            @divshekhar @imheadrick
+/apps/large-dom-bench/     @divshekhar @imheadrick
+/apps/next-smoke/          @divshekhar @imheadrick
+/apps/tauri-smoke/         @divshekhar @imheadrick
 
 # Everything a change here can break without a test noticing.
-/.github/                  @divshekhar
-/bench/                    @divshekhar
-/docs/                     @divshekhar
-/scripts/                  @divshekhar
+/.github/                  @divshekhar @imheadrick
+/bench/                    @divshekhar @imheadrick
+/docs/                     @divshekhar @imheadrick
+/scripts/                  @divshekhar @imheadrick
