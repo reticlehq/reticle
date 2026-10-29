@@ -59,8 +59,9 @@ export interface BrowserPoolOptions {
   /**
    * The zero-install reader, built where the daemon knows its own port and pairing token. A thunk so
    * the ~450KB build is only read if some page ever needs it; undefined when there is none to give.
+   * Called with the lease url, because a page off loopback gets its own nonce, not the token.
    */
-  zeroInstallScript?: () => string | undefined;
+  zeroInstallScript?: (url: string) => string | undefined;
   /**
    * Sink for uncaught page errors — an import-time throw the SDK was never installed in time to
    * see (#1966). Called with the lease id, so the wiring can reach the session that connects for

@@ -63,6 +63,15 @@ export async function grantLeasePermissions(
   }
 }
 
+/** The origin of `url` when the page is not on loopback, else undefined (also for no url). */
+export function offLoopbackOrigin(url: string | undefined): string | undefined {
+  if (url === undefined || !URL.canParse(url)) {
+    return undefined;
+  }
+  const target = new URL(url);
+  return isLoopbackHostname(target.hostname) ? undefined : target.origin;
+}
+
 /** Playwright's name for Chrome's Local Network Access grant (local + loopback network). */
 export const LOCAL_NETWORK_ACCESS = 'local-network-access';
 
@@ -75,15 +84,12 @@ export const LOCAL_NETWORK_ACCESS = 'local-network-access';
  * opens as before, and a page that cannot dial still reports `sdk_never_dialled`.
  */
 export async function grantLocalNetworkAccess(context: PooledContext, url: string): Promise<void> {
-  if (context.grantPermissions === undefined || !URL.canParse(url)) {
-    return;
-  }
-  const target = new URL(url);
-  if (isLoopbackHostname(target.hostname)) {
+  const origin = offLoopbackOrigin(url);
+  if (context.grantPermissions === undefined || origin === undefined) {
     return;
   }
   try {
-    await context.grantPermissions([LOCAL_NETWORK_ACCESS], { origin: target.origin });
+    await context.grantPermissions([LOCAL_NETWORK_ACCESS], { origin });
   } catch {
     // An unknown permission name on an older Playwright: open the lease without it.
   }

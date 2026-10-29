@@ -135,9 +135,10 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
     isConnected: () => browser.isConnected(),
     newContext: async (opts): Promise<PooledContext> => {
       // Media and viewport ride on the context, so the first paint of the first page has them.
-      const { ignoreHTTPSErrors, ...emulate } = opts ?? {};
+      const { ignoreHTTPSErrors, bypassCSP, ...emulate } = opts ?? {};
       const context = await browser.newContext({
         ...(true === ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+        ...(true === bypassCSP ? { bypassCSP: true } : {}),
         ...emulate,
         ...pageViewportOptions(headless, emulate.viewport),
       });

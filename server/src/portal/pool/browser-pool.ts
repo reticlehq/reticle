@@ -18,6 +18,7 @@ import { installLeaseMarker, leaseMarkerOf } from './lease-marker-stamp.js';
 import {
   grantLeasePermissions,
   grantLocalNetworkAccess,
+  offLoopbackOrigin,
   readNotificationPermission,
 } from './context-permissions.js';
 import type {
@@ -80,7 +81,7 @@ export class BrowserPool {
   readonly #genId: () => string;
   readonly #now: () => number;
   readonly #ttl: number;
-  readonly #zeroInstall: (() => string | undefined) | undefined;
+  readonly #zeroInstall: ((url: string) => string | undefined) | undefined;
   readonly #pageErrorHooks: LeasePageErrorHooks | undefined;
   readonly #navTimeout: number;
 
@@ -636,6 +637,8 @@ export class BrowserPool {
       const browser = await this.#ensureBrowser(slot);
       const contextOpts = {
         ...(true === opts.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+        // A deployed page's CSP never lets the reader dial loopback (#2016). See pool-contract.
+        ...(offLoopbackOrigin(url) === undefined ? {} : { bypassCSP: true }),
         ...opts.emulate,
       };
       context = await browser.newContext(
@@ -743,7 +746,7 @@ export class BrowserPool {
         ...(navStatus !== undefined ? { navStatus } : {}),
         release: () => this.#release(sessionId),
         injectReader: async (): Promise<boolean> => {
-          const script = this.#zeroInstall?.();
+          const script = this.#zeroInstall?.(url);
           if (script === undefined || page.evaluate === undefined) {
             return false;
           }

@@ -38,6 +38,8 @@ import {
   zeroInstallScript as zeroInstallScriptFor,
   type InjectedConnect,
 } from './portal/pool/zero-install.js';
+import { offLoopbackOrigin } from './portal/pool/context-permissions.js';
+import type { NonceMinter } from './portal/production/production-activation.js';
 
 /**
  * Build the shared browser pool (one headless Chromium, N capped isolated leased contexts). Lazy —
@@ -51,10 +53,32 @@ export function readerConnect(port: number, token: string | undefined): Injected
 /**
  * The zero-install script for pages that connect to `reader`, built on first use and kept: the
  * page that needs it is one whose app never connected. Undefined when this install has no reader.
+ *
+ * A page that is not on loopback gets a nonce minted for its origin in place of the pairing token.
+ * The bridge admits a WebSocket from an origin only while a nonce names it, so the reader on a
+ * deployed page was refused with a 403 (#2016). The nonce also keeps the machine's pairing token
+ * out of a page that somebody else serves.
+ *
+ * ponytail: the nonce lives for one drive (SESSION_NONCE_TTL_MS). A lease reloaded after that
+ * dials with a dead nonce; mint per navigation if that is ever seen.
  */
-export function zeroInstallLoader(reader: InjectedConnect): () => string | undefined {
+export function zeroInstallLoader(
+  reader: InjectedConnect,
+  nonces?: Pick<NonceMinter, 'mint'>,
+): (url?: string) => string | undefined {
   let script: string | null | undefined;
-  return () => {
+  return (url) => {
+    const origin = offLoopbackOrigin(url);
+    if (origin !== undefined && nonces !== undefined) {
+      const bundle = readReaderBundle();
+      if (bundle === undefined) {
+        return undefined;
+      }
+      return zeroInstallScriptFor(bundle, {
+        url: reader.url,
+        token: nonces.mint({ origin }).nonce,
+      });
+    }
     if (script === undefined) {
       const bundle = readReaderBundle();
       script = bundle === undefined ? null : zeroInstallScriptFor(bundle, reader);
@@ -68,6 +92,7 @@ export function createBrowserPool(
   reader: InjectedConnect,
   onPageError?: (leaseId: string, error: PooledPageError) => void,
   onLeaseClosed?: (leaseId: string) => void,
+  nonces?: Pick<NonceMinter, 'mint'>,
 ): BrowserPool {
   const maxContexts = resolveMaxContexts(process.env[ReticleEnv.MAX_CONTEXTS], cpus().length);
   const genSessionId = (): string =>
@@ -79,7 +104,7 @@ export function createBrowserPool(
   return new BrowserPool(playwrightLauncher({ headless }), {
     maxContexts,
     genSessionId,
-    zeroInstallScript: zeroInstallLoader(reader),
+    zeroInstallScript: zeroInstallLoader(reader, nonces),
     launchHeaded: playwrightLauncher({ headless: false }),
     ...(onPageError === undefined ? {} : { onPageError }),
     ...(onLeaseClosed === undefined ? {} : { onLeaseClosed }),

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a lease on a deployed page with no SDK ended `sdk_never_dialled`.** The zero-install reader could not connect from a page that is not on loopback, so a lease on a deployed build or a production preview could not drive or read the page. Two things stopped it. The page's Content-Security-Policy blocked the dial to the daemon, and the daemon refused the page's origin. The lease now opens such a page with page CSP bypassed. It also gives the reader a single-use nonce for the page's origin in place of the machine's pairing token, so the pairing token no longer goes into a page that somebody else serves. Closes [#2016](https://github.com/reticlehq/reticle/issues/2016).

@@ -137,7 +137,8 @@ describe('emulating media on a lease', () => {
       },
       { maxContexts: 1, genSessionId: ids },
     );
-    await pool.acquire('http://app.test/', {
+    // Loopback, so the context carries only what was asked for: no CSP bypass (#2016).
+    await pool.acquire('http://localhost:5173/', {
       emulate: {
         reducedMotion: 'reduce',
         colorScheme: 'dark',
