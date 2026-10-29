@@ -12,7 +12,7 @@ By participating you agree to our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Prerequisites
 
-- **Node.js `>=22.12`** (see `engines` in the root `package.json`).
+- **Node.js `>=22.15`** (see `engines` in the root `package.json`).
 - **pnpm `10.x`** — the repo pins `pnpm@10.33.2` via `packageManager`. The easiest way to get the right version is [Corepack](https://nodejs.org/api/corepack.html):
 
   ```bash

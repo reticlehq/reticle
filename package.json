@@ -5,7 +5,7 @@
   "description": "Reticle \u2014 the proof layer for AI agents. Observe and verify a running web app over MCP, no screenshots.",
   "packageManager": "pnpm@10.33.2",
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.15"
   },
   "scripts": {
     "build": "turbo run build",

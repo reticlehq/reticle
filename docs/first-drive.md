@@ -12,7 +12,7 @@ Everything here is written from a run of these exact steps, including the places
 ## Before you start
 
 ```bash
-node --version   # 22.12 or newer
+node --version   # 22.15 or newer
 pnpm --version   # this is a pnpm workspace; npm will not resolve it
 ```
 
