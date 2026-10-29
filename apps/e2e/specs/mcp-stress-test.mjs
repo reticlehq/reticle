@@ -84,20 +84,23 @@ function listenOn(server, port, host = '127.0.0.1') {
 }
 
 /**
- * Bind as soon as the port frees. A SIGKILLed daemon does not release its socket instantly, and the
- * old code waited a flat 200 ms and hoped — a timing assumption about the machine, which is the one
- * thing this repo's own rules forbid. It also let a daemon leaked by attempt 1 fail attempt 2 on
- * EADDRINUSE, so the retry could never succeed.
+ * Take the port from whatever daemon holds it, the way a squatter does: kill the holder and bind
+ * in the same breath.
+ *
+ * Killing once and then waiting for the port to free lost a race the product is built to win. The
+ * MCP proxy restarts a killed daemon on the SAME port (#1957), so the port could stay held for the
+ * whole wait and the bind failed with EADDRINUSE (#1994). Each retry kills the current holder again,
+ * so a restarted daemon cannot keep the port.
  */
-async function listenWhenFree(server, port, host = '127.0.0.1', budgetMs = 15_000) {
-  const deadline = Date.now() + budgetMs;
-  for (;;) {
+async function stealPort(server, port, host = '127.0.0.1', attempts = 100) {
+  for (let i = 1; ; i += 1) {
+    killDaemon(port);
     try {
       await listenOn(server, port, host);
       return;
     } catch (err) {
-      if (err?.code !== 'EADDRINUSE' || Date.now() >= deadline) throw err;
-      await sleep(100);
+      if (err?.code !== 'EADDRINUSE' || i >= attempts) throw err;
+      await sleep(50);
     }
   }
 }
@@ -203,10 +206,8 @@ chk('  and answered every call in between', 10 === answered, `${answered}/10 ans
 // ── 5. A foreign process steals the bridge port ───────────────────────────────────────────────
 // The documented real-world case: another project's daemon, or a half-dead process, holding 4400.
 {
-  killDaemon();
-  await sleep(200);
   const squatter = net.createServer((s) => s.destroy());
-  await listenWhenFree(squatter, PORT);
+  await stealPort(squatter, PORT);
   const r = await settled(client.request('tools/call', { name: 'reticle_session', arguments: {} }, 30_000));
   chk('a squatter on the port does not hang the client', r.answered, r.how);
   chk('  server still alive with the port stolen', alive(client));
