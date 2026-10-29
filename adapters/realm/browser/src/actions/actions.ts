@@ -723,9 +723,22 @@ export async function executeAction(
   // A refless press reports no anchor: minting a testid/component of whatever is focused would
   // invent a target the caller did not name.
   const anchor = named ? anchorOf(el) : {};
+  const prevFocus = activeRef(el);
+  if ((ActionType.CLICK === action || ActionType.DBLCLICK === action) && !enabledOf(el)) {
+    const active = el.ownerDocument.activeElement;
+    if (
+      active !== null &&
+      active !== el &&
+      active !== el.ownerDocument.body &&
+      isActionTarget(active)
+    ) {
+      // A real pointer moves focus before the browser decides whether the target accepts the click.
+      active.blur();
+      await Promise.resolve();
+    }
+  }
   const visible = isVisible(el);
   const enabled = enabledOf(el);
-  const prevFocus = activeRef(el);
   const valueBefore = valueOf(el);
   // Before dispatch, so a click that toggles `checked` during the event cannot erase the pre-action
   // reading, and so a script write during the action is seen. Published after settle, once React

@@ -55,6 +55,27 @@ describe('click: full pointer/mouse event sequence', () => {
     const r = await executeAction(refs.refFor(a), 'click');
     expect(r.effect.defaultPrevented).toBe(true);
   });
+
+  it('blurs the focused input before reading a button that blur enables', async () => {
+    document.body.innerHTML = '<input><button disabled>Save</button>';
+    const input = document.querySelector('input') as HTMLInputElement;
+    const button = document.querySelector('button') as HTMLButtonElement;
+    const seen: string[] = [];
+    input.addEventListener('blur', () => {
+      seen.push('blur');
+      queueMicrotask(() => {
+        button.disabled = false;
+        seen.push('enabled');
+      });
+    });
+    button.addEventListener('click', () => seen.push('click'));
+    input.focus();
+
+    const result = await executeAction(refs.refFor(button), 'click');
+
+    expect(seen).toEqual(['blur', 'enabled', 'click']);
+    expect(result.effect.enabled).toBe(true);
+  });
 });
 
 describe('click: hit-test occlusion honesty', () => {
