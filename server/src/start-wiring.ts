@@ -105,6 +105,8 @@ export function createBrowserPool(
     maxContexts,
     genSessionId,
     zeroInstallScript: zeroInstallLoader(reader, nonces),
+    // The reader dials this origin; a lease off loopback adds it to the page CSP (#2016).
+    daemonOrigin: new URL(reader.url).origin,
     launchHeaded: playwrightLauncher({ headless: false }),
     ...(onPageError === undefined ? {} : { onPageError }),
     ...(onLeaseClosed === undefined ? {} : { onLeaseClosed }),

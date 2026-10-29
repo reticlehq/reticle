@@ -65,6 +65,10 @@ function recordingRoute(
       calls.push({ fn: 'continue' });
       return Promise.resolve();
     },
+    fallback: () => {
+      calls.push({ fn: 'fallback' });
+      return Promise.resolve();
+    },
     abort: (arg: string) => {
       calls.push({ fn: 'abort', arg });
       return Promise.resolve();
@@ -101,10 +105,12 @@ describe('applyOutcome — drives a Route from an outcome', () => {
     expect(calls).toEqual([{ fn: 'abort', arg: 'failed' }]);
   });
 
-  it('continues on a continue outcome', async () => {
+  it('falls back on a continue outcome, so a context route still sees the request', async () => {
+    // A lease off loopback widens the page CSP in a context route (#2016). `route.continue()` skips
+    // it, so a reload after a mock lost the reader's way to the daemon.
     const { route, calls } = recordingRoute('/x', 'GET');
     await applyOutcome(route, { kind: 'continue' }, () => Promise.resolve());
-    expect(calls).toEqual([{ fn: 'continue' }]);
+    expect(calls).toEqual([{ fn: 'fallback' }]);
   });
 });
 

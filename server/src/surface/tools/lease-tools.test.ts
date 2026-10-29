@@ -1523,6 +1523,45 @@ describe('reticle_lease with an initScript stub', () => {
   });
 });
 
+describe('reticle_lease on a page whose CSP the lease widened (#2016)', () => {
+  const DAEMON = 'ws://localhost:14466';
+  function widenedPool(widened: string | undefined): BrowserPool {
+    const { pool } = fakePool();
+    Object.assign(pool, { cspWidenedFor: () => widened });
+    return pool;
+  }
+
+  it('says cspWidenedFor on a new lease and on a reused one', async () => {
+    const deps = { ...baseDeps, pool: widenedPool(DAEMON) } as unknown as ToolDeps;
+
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'https://nextjs.org/',
+    })) as { cspWidenedFor?: string };
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'https://nextjs.org/docs',
+    })) as { cspWidenedFor?: string; reused?: boolean };
+
+    expect(first.cspWidenedFor).toBe(DAEMON);
+    expect(second.reused).toBe(true);
+    expect(second.cspWidenedFor).toBe(DAEMON);
+  });
+
+  it('says nothing when no page CSP was changed', async () => {
+    const deps = { ...baseDeps, pool: widenedPool(undefined) } as unknown as ToolDeps;
+
+    const out = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'https://example.com/',
+    })) as Record<string, unknown>;
+
+    expect('cspWidenedFor' in out).toBe(false);
+  });
+
+  it('describes cspWidenedFor in the output schema', () => {
+    const definition = LEASE_TOOLS.find((entry) => entry.name === ReticleTool.LEASE_ACQUIRE);
+    expect(definition?.outputSchema?.['cspWidenedFor']).toBeDefined();
+  });
+});
+
 describe('reticle_lease with seedStorage', () => {
   it('describes the accepted seedStorage keys and an example', () => {
     const definition = LEASE_TOOLS.find((entry) => entry.name === ReticleTool.LEASE_ACQUIRE);

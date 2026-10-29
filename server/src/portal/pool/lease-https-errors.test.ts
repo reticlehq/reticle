@@ -43,8 +43,7 @@ describe('a lease context and certificates', () => {
     await pool.acquire('https://app.test:5173/', { sessionId: 'plain' });
     await pool.acquire('https://app.test:5173/', { sessionId: 'opted', ignoreHTTPSErrors: true });
 
-    // app.test is not loopback, so both contexts also bypass page CSP (#2016).
-    expect(seen).toEqual([{ bypassCSP: true }, { ignoreHTTPSErrors: true, bypassCSP: true }]);
+    expect(seen).toEqual([undefined, { ignoreHTTPSErrors: true }]);
     await pool.shutdown();
   });
 });
