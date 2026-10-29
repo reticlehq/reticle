@@ -205,6 +205,8 @@ Three packages now declare a real SPDX identifier where they used to declare a p
 
 If you run a licence allowlist in CI, add `FSL-1.1-ALv2`. A tool that previously passed these packages as "unknown, needs review" may now fail them as "not on the allowlist" — the packages did not change, your scanner can just finally read them.
 
+From 3.9.0, these three packages are `Apache-2.0`, like every other Reticle package. An allowlist that already accepts `Apache-2.0` needs no `FSL-1.1-ALv2` entry for 3.9.0 or later.
+
 ---
 
 ## 7. Two new packages appear in your dependency tree
