@@ -8,7 +8,6 @@
  * here, and a registry is the right place to collect a definition from.
  */
 import { checkWords, runIdOfCall } from '@/judgement/runs/drive-run.js';
-import type { Session } from '@/portal/session/session.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
 import { resolveSessionWithin } from '@/portal/session/timing/resolve-within.js';
@@ -95,14 +94,19 @@ import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
 import { confirmedByDeclaration } from './act/act-danger.js';
 import { dispatchAct, preflightAct } from './act/act-preflight.js';
-import { actInconclusive, checkNet, followLostObservation } from './act/act-observation.js';
-import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';
+import {
+  actInconclusive,
+  checkNet,
+  followLostObservation,
+  NAVIGATION_FOLLOW_GRACE_MS,
+} from './act/act-observation.js';
+import { type ToolDef, intentArg, sessionIdShape } from './tool-kit.js';
+import { actCommand } from './act-command.js';
+import { tryRealInput } from './real-input-attempt.js';
 import { verdictIntentGap } from '@reticlehq/engine/evidence/verdict-intent-gap.js';
 import { asActionType, gradeOf } from './act/act-helpers.js';
 import { resolveActTarget } from './act/act-target.js';
 import { screenRequestFindings, withAdvisories } from './act/screen-request.js';
-import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
-import { sessionRoot } from '@/memory/project/session-root.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrue } from './act/already-true.js';
 import { engineBlindSpotsField, noteSourceSeen } from '@/portal/session/recorded-gaps.js';
@@ -113,47 +117,6 @@ import { engineBlindSpotsField, noteSourceSeen } from '@/portal/session/recorded
  */
 const ACTION_TYPE_VALUES = Object.values(ActionType);
 const actionTypeEnum = z.enum(ACTION_TYPE_VALUES as [string, ...string[]]);
-
-/**
- * Single dispatch point for every ACT and ACT_SEQUENCE command.
- *
- * reticle_act, act_and_wait and act_sequence rewrite uploads here, once. The path resolves against
- * the session's project, not the daemon's folder, so a worktree uploads its own fixture (#1769).
- *
- * captureAct is called AFTER this, so the flow-recording captures the pre-rewrite args (the path
- * the agent actually wrote) rather than the base64 blob — replay would otherwise send 750 KiB of
- * base64 to the browser as if it were an inline content call.
- */
-export async function actCommand(
-  deps: ToolDeps,
-  session: Session,
-  actArgs: Record<string, unknown>,
-  timeoutMs?: number,
-  realTried = false, // the caller (reticle_act) already tried real input: do not press twice
-): Promise<import('@reticlehq/core').CommandResult> {
-  const rewritten = await rewriteUploadArgs(
-    { fs: deps.fs, reticleRoot: sessionRoot(deps, session.id) },
-    'string' === typeof actArgs['action'] ? actArgs['action'] : '',
-    asRecord(actArgs['args']),
-  );
-  // Sequence and act_and_wait come here without the ACT handler's tryRealInput. A hover needs a real
-  // pointer or a refusal; a press takes the real keyboard: a synthetic Enter submits no form.
-  const hover = ActionType.HOVER === actArgs['action'];
-  if (!realTried && (hover || ActionType.PRESS === actArgs['action'])) {
-    const ref = asString(actArgs['ref']);
-    if (hover && ref === undefined) throw new Error(HOVER_NEEDS_POINTER_MSG);
-    const action = hover ? ActionType.HOVER : ActionType.PRESS;
-    const real = await tryRealInput(deps, session, ref ?? '', action, actArgs);
-    if (hover && real.result === undefined) throw new Error(HOVER_NEEDS_POINTER_MSG);
-    if (real.result !== undefined) {
-      const result = { dispatched: true, settled: real.settled, ...asRecord(real.result) };
-      return { kind: 'command_result', id: action, ok: true, result };
-    }
-  }
-  const bridgeArgs: Record<string, unknown> = { ...actArgs, args: rewritten };
-  // What the acted element shows (test id, source) is noted in `Session.command`, Harness acts too.
-  return session.command(ReticleCommand.ACT, bridgeArgs, timeoutMs);
-}
 
 export const ACT_TOOLS: ToolDef[] = [
   {
@@ -274,7 +237,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // actCommand is the single interception point: it rewrites upload+path args to real bytes
         // before any ACT command crosses the bridge, covering this call site and all others.
         const plain = { ref: targetRef.ref, action: args['action'], args: args['args'] ?? {} };
-        const result = await actCommand(deps, session, plain, undefined, true);
+        const result = await actCommand(deps, session, ReticleCommand.ACT, plain, undefined, true);
         if (!result.ok) throw new Error(result.error ?? 'act failed');
         captureAct(deps.recordings, args, result.result, routeBefore, session.id);
         // lift dispatch/settle status to the envelope (a settle timeout is NOT a failure).
@@ -555,7 +518,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // successor block below then asks whether the consequence held on the NEW document — a
         // green if it did, an honest observation_lost if it did not.
         const actResult = await dispatchAct(() =>
-          actCommand(deps, session, {
+          actCommand(deps, session, ReticleCommand.ACT, {
             ref: resolved.ref,
             action: args['action'],
             args: confirmedByDeclaration(asRecord(args['args']), args['target'], untilNamed),
@@ -591,6 +554,8 @@ export const ACT_TOOLS: ToolDef[] = [
           verdict,
           timeout,
           predicateStarted,
+          since,
+          failedFollowGraceMs: NAVIGATION_FOLLOW_GRACE_MS,
           reevaluate: (next, budget) => waitForPredicate(next, until, budget, 0, baselines),
         });
         if (followed.followed) since = 0;
