@@ -256,6 +256,19 @@ export const ContradictionKind = {
    * "you changed the code and then looked only at what happened before you did".
    */
   EVIDENCE_PREDATES_EDIT: 'evidence-predates-edit',
+  /**
+   * A read of the app's own failed with a server error (5xx) inside the action window, and no later
+   * call to the same url recovered it.
+   *
+   * A GET is skipped by the write rules because the DOM shows its payload. A FAILED GET breaks that
+   * premise: the page can keep stale or placeholder content, and a route, a label or a visible
+   * control still holds over it. Found in the field: a replayed flow passed over a 500 and a 502 from
+   * the app's own API, and the app had a real serialization bug.
+   *
+   * Absence-derived, so it makes a verdict unknown, never no. The screen may show data that an
+   * earlier load put there, which is correct. What is absent is proof that it is this action's data.
+   */
+  READ_SERVER_FAULT: 'read-server-fault',
 } as const;
 export type ContradictionKind = (typeof ContradictionKind)[keyof typeof ContradictionKind];
 
@@ -307,6 +320,8 @@ export const ABSENCE_DERIVED_CONTRADICTIONS: ReadonlySet<ContradictionKind> = ne
   ContradictionKind.EVIDENCE_SUPERSEDED,
   // Nothing here says the app is wrong either — only that the window predates the edit under test.
   ContradictionKind.EVIDENCE_PREDATES_EDIT,
+  // The 5xx is observed. What is absent is proof that the screen shows this action's data.
+  ContradictionKind.READ_SERVER_FAULT,
 ]);
 
 /** True when this kind was inferred from absence rather than positively observed. */
@@ -447,6 +462,8 @@ export const CONTRADICTION_CHANNELS: Record<ContradictionKind, readonly [Channel
   // side. Recorded rather than exempted: an exemption is a hole somebody later widens.
   [ContradictionKind.EVIDENCE_SUPERSEDED]: [ChannelId.TIME, ChannelId.UI],
   [ContradictionKind.EVIDENCE_PREDATES_EDIT]: [ChannelId.TIME, ChannelId.UI],
+  // What the screen shows against the status of the read that should have filled it.
+  [ContradictionKind.READ_SERVER_FAULT]: [ChannelId.UI, ChannelId.NET],
 };
 
 /**

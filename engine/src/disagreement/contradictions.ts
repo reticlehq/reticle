@@ -237,8 +237,9 @@ export function findContradictions(
   // classified absence-derived — the one place that already knows which findings rest on silence.
   // Hiding can only manufacture ABSENCE: a failed request or a contradicting channel is something
   // that WAS seen, so evidence-derived findings are untouched and still report.
+  // A failed read is the exception: hiding cannot make a server return a 5xx.
   const found = pageWasHidden(allEvents, options)
-    ? all.filter((c) => !isAbsenceDerived(c.kind))
+    ? all.filter((c) => !isAbsenceDerived(c.kind) || c.kind === ContradictionKind.READ_SERVER_FAULT)
     : all;
   const predates =
     allEvents.length > 0 &&
@@ -540,6 +541,41 @@ function findWindowContradictions(
         detail: `${unexpectedWrites.map(describe).join('; ')}${declareFailureHint(unexpectedWrites)}`,
       });
     }
+  }
+
+  // ── A read of the app's own failed with a server error ──────────────────────────────────────
+  // The rules above skip a GET because the DOM shows its payload. A 5xx breaks that premise: the
+  // page keeps stale or placeholder content, and a route or a label still holds over it. Field
+  // report: a replayed flow passed over a 500 and a 502 from the app's own API.
+  //
+  // `unexpected` already excludes foreign and dev-tooling traffic, traffic before the action, a
+  // failure a later retry recovered, and a failure the caller declared. A 4xx is left alone: a 401
+  // or a 404 probe is often the intended path. Writes are left to the write rules above.
+  //
+  // A read that failed the same way BEFORE the action is ambient: a poll or a bootstrap that the
+  // action did not cause, and that the screen already lived with. The observation benchmark grades
+  // a first-party poll that fails during an action as a false positive. The ceiling: a caller that
+  // passes no `prior` (flow replay, through `stepEffect`) reports a poll inside the window. That
+  // is `unknown`, not `no`. Giving replay its `prior` also changes `appIsSilent`, so it needs its
+  // own measurement.
+  const failedBefore = (options.prior ?? [])
+    .filter((e) => e.type === EventType.NET_REQUEST)
+    .map(netCall)
+    .filter((c) => c.status !== undefined && c.status >= SERVER_FAULT_MIN);
+  const failedReads = unexpected.filter(
+    (c) =>
+      !isMutating(c) &&
+      c.status !== undefined &&
+      c.status >= SERVER_FAULT_MIN &&
+      !failedBefore.some((p) => p.method === c.method && p.matchUrl === c.matchUrl),
+  );
+  if (floor !== undefined && failedReads.length > 0 && !failureAcknowledged(events)) {
+    found.push({
+      kind: ContradictionKind.READ_SERVER_FAULT,
+      claim: 'the page shows what the assertion read',
+      counter: `${String(failedReads.length)} read(s) of the app's own in the same window failed with a server error`,
+      detail: failedReads.map(describe).join('; '),
+    });
   }
 
   // ── A write succeeded and nothing on the client moved ───────────────────────────────────────

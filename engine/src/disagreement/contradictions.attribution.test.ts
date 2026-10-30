@@ -203,7 +203,10 @@ describe('contradictions — a failed read is not a failed action', () => {
     );
 
   it('does not let a first-party background poll contradict a UI that moved', () => {
-    expect(kinds([domChanged(), failedRead('/api/notifications/poll')])).toEqual([]);
+    // A poll failed before the action too. Without that history, a 5xx read in the window is
+    // `read-server-fault` (contradictions.read-server-fault.test.ts).
+    const prior = [failedRead('/api/notifications/poll')];
+    expect(kinds([domChanged(), failedRead('/api/notifications/poll')], { prior })).toEqual([]);
   });
 
   it('still contradicts when the failure was a WRITE, which is the product', () => {

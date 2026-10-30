@@ -102,7 +102,7 @@ interface VerifiedInputs {
    */
   alreadyTrueHiddenMatch?: boolean;
   /** Cross-channel disagreements found in the action's window. */
-  contradictions?: readonly { kind: string }[];
+  contradictions?: readonly { kind: string; detail?: string }[];
   /** Did a real frame flush before the wait gave up? */
   settled?: boolean;
   /**
@@ -450,6 +450,19 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   // catch, and its outcome genuinely does not exist yet. A poll or a prefetch left hanging says
   // nothing about the action; an unfinished mutation says the answer is not in yet. Read off the
   // labels the window already carries — and when there are no labels to read, nothing is softened.
+  // A failed read gets its own sentence, and it names each request: the generic one below blames a
+  // window that closed early, and a 500 is not a timing fact. Ahead of the other absence clauses,
+  // because a server fault is the most actionable fact among them.
+  const failedReads = deciding.filter((c) => c.kind === ContradictionKind.READ_SERVER_FAULT);
+  if (failedReads.length > 0) {
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.EVIDENCE_INCOMPLETE,
+      because:
+        `the assertion held, but a read of the app's own failed with a server error in this window (${failedReads.map((c) => c.detail ?? c.kind).join('; ')}), ` +
+        'so the page can show stale or placeholder content that still matches. Read the response with reticle_observe, fix the server fault, then verify again',
+    };
+  }
   const openWrite = (inputs.unsettled?.stillInFlight ?? []).some(isWriteLabel);
   const settlementOnly =
     declaredHeld &&
