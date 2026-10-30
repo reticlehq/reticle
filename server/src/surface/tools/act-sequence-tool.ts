@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import { compileSequenceStep, pathOf, wroteSince } from '@/language/flows/replay.js';
+import { compileSequenceStep, pageOf, wroteSince } from '@/language/flows/replay.js';
 import { DEFAULT_SEQUENCE_STEP_TIMEOUT_MS } from '@/language/flows/flow-step-runners.js';
 import { sequenceStepArgs } from './act/act-preflight.js';
 import {
@@ -254,7 +254,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
     const paused = pausedShortCircuit(session);
     if (paused !== undefined) return paused;
     const since = session.elapsed();
-    const pageBefore = pathOf(session.url);
+    const pageBefore = pageOf(session.url);
     session.beginAction(ReticleTool.ACT_SEQUENCE, asRecord(args));
     try {
       const inputSteps = Array.isArray(args['steps']) ? args['steps'] : [];
@@ -525,7 +525,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
         const onApp = asRecord(recorded.args)['steps'];
         if (Array.isArray(onApp) && 0 < onApp.length)
           deps.recordings.capture(onPage(compiled(ran)), undefined, session.id, onPage(recorded));
-        deps.recordings.markEnded(pathOf(session.url), session.id);
+        deps.recordings.markEnded(pageOf(session.url), session.id);
       }
       /*
        * The grade, and the coverage it is never allowed to hide.

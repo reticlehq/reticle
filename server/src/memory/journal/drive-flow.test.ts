@@ -3,6 +3,7 @@ import { driveFlowsFrom, driveFlowName, carriesAnAssertion, type TapeStep } from
 import type { Predicate } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import type { RecordedStep } from '@/language/flows/recording/tape/recordings.js';
+import { isValidFlowName } from '@/memory/project/dir/reticle-dir.js';
 
 const step = (expectIt: boolean, route?: string): RecordedStep => ({
   tool: ReticleTool.ACT,
@@ -178,11 +179,20 @@ describe('a drive flow is named after what it proved, in words', () => {
     expect(programs[0]?.intentDerived).toBe(true);
   });
 
-  it('keeps the name bounded', () => {
+  // A sentence and a route together made a name over the 64-character limit. The save refused it,
+  // and session end dropped the flow with nothing said.
+  it('keeps the name a valid flow name, with a long sentence and a long route', () => {
     const long = 'x'.repeat(200);
     expect(
-      driveFlowName(undefined, [proving({ kind: 'text', contains: long })]).length,
-    ).toBeLessThan(80);
+      isValidFlowName(driveFlowName(undefined, [proving({ kind: 'text', contains: long })])),
+    ).toBe(true);
+    expect(
+      isValidFlowName(
+        driveFlowName('/admin/settings/billing?tab=invoices', [
+          proving({ kind: 'state', path: 'modal.open', equals: false }),
+        ]),
+      ),
+    ).toBe(true);
   });
 
   it('still carries the route, so two journeys in one session stay apart', () => {

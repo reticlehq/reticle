@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: an auto-saved flow lost the query of the page it started on.** A tab leased on `/?showModal=login` that pressed Escape saved a flow with `startPath: "/"` and a route `requires` of `/`. The replay started on `/`, where the modal never opens, so a check that the modal is absent passed without the modal ever being there. Every page that `reticle_act`, `reticle_act_and_wait` and `reticle_act_sequence` record now keeps the app's query and hash, and drops only Reticle's own params, the same as `reticle_record`. The name of an auto-saved flow also stays inside the 64-character limit: a long sentence and a long route made a name that the save refused, and session end dropped the flow with no message.

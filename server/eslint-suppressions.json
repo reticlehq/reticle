@@ -3760,7 +3760,7 @@
   },
   "src/surface/tools/read-tools.ts": {
     "curly": {
-      "count": 5
+      "count": 4
     },
     "no-nested-ternary": {
       "count": 1

@@ -82,6 +82,9 @@ function provedSentence(steps: readonly TapeStep[]): string | undefined {
 /** Every auto-saved flow's name starts here, which is what lets a merge tell them from hand-named ones. */
 export const DRIVE_FLOW_PREFIX = 'drive-';
 
+/** The most characters one segment of core's FLOW_NAME_PATTERN holds. */
+const FLOW_NAME_MAX_LENGTH = 64;
+
 /**
  * A readable name for a journey, led by WHY it was driven.
  *
@@ -102,7 +105,10 @@ export function driveFlowName(route?: string, steps: readonly TapeStep[] = []): 
   // Minted here: every character has just been forced through `segment`, so this IS the validated
   // boundary the brand is meant to be created at.
   const parts = [lead, ...('' !== why || 0 === leg.length ? [] : [leg])].filter((p) => '' !== p);
-  return asFlowName(`${DRIVE_FLOW_PREFIX}${0 === parts.length ? 'journey' : parts.join('-')}`);
+  // Cut to the flow-name limit: a sentence and a route together went over it, the save refused
+  // the name, and session end dropped the flow with nothing said.
+  const body = segment(parts.join('-'), FLOW_NAME_MAX_LENGTH - DRIVE_FLOW_PREFIX.length);
+  return asFlowName(`${DRIVE_FLOW_PREFIX}${'' === body ? 'journey' : body}`);
 }
 
 /** Why session end saved no flow, as reported on the `flow_recorded` step. */

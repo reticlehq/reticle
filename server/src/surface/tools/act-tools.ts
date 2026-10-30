@@ -14,7 +14,7 @@ import { aliasParam } from './args/alias-args.js';
 import { resolveSessionWithin } from '@/portal/session/timing/resolve-within.js';
 import { WALL_CLOCK } from '@/portal/session/timing/wall-clock.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import { captureAct, captureVerdictedAct, pathOf, wroteSince } from '@/language/flows/replay.js';
+import { captureAct, captureVerdictedAct, pageOf, wroteSince } from '@/language/flows/replay.js';
 import { durableArg, durableOutput, reloadAndRecheck, withDurability } from './act/durable.js';
 
 import {
@@ -231,7 +231,7 @@ export const ACT_TOOLS: ToolDef[] = [
       // ambient tape cuts journeys on this value, and stamping the destination put the sign-in click
       // at the head of the page it navigated TO: 4 of 11 auto-captured flows began with
       // `login-submit` on `/deployments`, which is the exact flow the segmentation exists to prevent.
-      const routeBefore = pathOf(session.url);
+      const routeBefore = pageOf(session.url);
       // Resolve `target` to a ref BEFORE the action window opens, so the lookup is not attributed to
       // the act and cannot be mistaken for something the action caused.
       const targetRef = await resolveActTarget(session, args);
@@ -300,7 +300,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ...healthEnvelope(session),
         });
       } finally {
-        deps.recordings.markEnded(pathOf(session.url), session.id);
+        deps.recordings.markEnded(pageOf(session.url), session.id);
         // Close the window on every exit (settle or throw), recording the action + settle outcome.
         session.finishAction(
           undefined,
@@ -543,7 +543,7 @@ export const ACT_TOOLS: ToolDef[] = [
       const { alreadyTrue, alreadyTrueHiddenMatch, alreadyTrueEvidence, baselines } =
         await readAlreadyTrue(session, until, since);
       // Same as the ACT handler: the route this step RAN on, before the action can move the app.
-      const routeBeforeWait = pathOf(session.url);
+      const routeBeforeWait = pageOf(session.url);
       // Recorded in `finally`, once the verdict is known — see captureVerdictedAct. `held`: the
       // action made the declared claim hold.
       let dispatched: { result: unknown } | undefined;
@@ -987,7 +987,7 @@ export const ACT_TOOLS: ToolDef[] = [
             session.id,
             wroteSince(acted, actedSince),
           );
-        deps.recordings.markEnded(pathOf(currentOf(deps.sessions, session).url), session.id);
+        deps.recordings.markEnded(pageOf(currentOf(deps.sessions, session).url), session.id);
         acted.finishAction(
           verdictEffect,
           settledOutcome,

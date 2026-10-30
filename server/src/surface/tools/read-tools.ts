@@ -2,7 +2,7 @@
  * Read / record / replay tools — baselines + diff, recordings + replay, narrate, clock, state,
  * explore. Split out of tools.ts; assembled back via...READ_TOOLS.
  */
-import { UNKEPT_EXPECT } from '@/language/flows/replay.js';
+import { UNKEPT_EXPECT, pageOf } from '@/language/flows/replay.js';
 import { resolveAnnotateTarget } from '@/language/flows/annotate-notes/annotate-target.js';
 import { z } from 'zod';
 import {
@@ -34,25 +34,6 @@ import { asNumber, asString, parseInteractive } from '@reticlehq/core';
 
 import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './tool-kit.js';
 import { bufferEnvelope } from '@/portal/session/session-health.js';
-import { navigablePath, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
-
-/** The route part of a session URL. A host belongs to the machine, not to the journey. */
-/**
- * The page a recording started on, as a NAVIGABLE path: pathname + query + hash.
- *
- * The hash matters and the pathname alone is not enough. Under a hash router every page has the
- * document pathname `/`, so a recording made on `#/posts/12` stored `/`, the replay's start-path
- * comparison saw `/` on both sides and never warned about drift, and the navigate it suggests
- * pointed at the default route rather than the recorded one.
- */
-function pathnameOf(url: string | undefined): string | undefined {
-  if (url === undefined) return undefined;
-  const parts = routeOfUrl(url);
-  // The query too, minus Reticle's own params: `/products?scope=TOPWEAR` and `/products` are different
-  // pages, and replay compares the query when the flow recorded one (#1059), so dropping it here
-  // started the replay on the unfiltered page (#1411).
-  return parts === undefined ? undefined : navigablePath(parts);
-}
 
 /** What record-stop says when the span crossed a full-page load (#1411). */
 const RECORDING_CROSSED_RELOAD =
@@ -206,12 +187,12 @@ export const READ_TOOLS: ToolDef[] = [
         asString(aliasParam(args, 'recordingName', ['name'])['recordingName']) ?? 'default';
       const cursor = session.elapsed();
       // Where the journey begins, so a saved flow can navigate here before step 1 instead of
-      // replaying from wherever the page happens to be. Pathname only: a host or port belongs to
-      // the machine that recorded it, not to the journey.
+      // replaying from wherever the page happens to be. No host or port: they belong to the machine
+      // that recorded it, not to the journey. The app's query and hash stay (see pageOf).
       deps.recordings.start(
         name,
         cursor,
-        pathnameOf(session.url),
+        pageOf(session.url),
         session.id,
         session.currentDocumentId,
       );

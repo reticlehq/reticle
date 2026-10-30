@@ -9,7 +9,6 @@ import {
   FlowPredicateSchema,
   MUTATING_METHODS,
   isDevToolingUrl,
-  pathOf,
   type Predicate,
   type ReticleEvent,
 } from '@reticlehq/core';
@@ -24,6 +23,7 @@ import {
 import { ReticleTool, invokedFlowMissing } from '@reticlehq/core';
 import { formatStepAddress } from 'open-verification';
 import { refFor } from './flow-anchor.js';
+import { navigablePath, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import type { RecordedStep, CompiledProgram } from './recording/tape/recordings.js';
 import type { Session } from '@/portal/session/session.js';
 import { asRecord, asString } from '@reticlehq/core';
@@ -119,12 +119,22 @@ function sourceFromResult(res: Record<string, unknown>): Record<string, unknown>
 }
 
 /**
- * The pathname of a session's live url, or undefined when it has none yet.
+ * The page a session's live url is on, as a NAVIGABLE path: pathname + query + hash, with
+ * Reticle's own params dropped. Undefined when the session has no url yet.
  *
- * Pathname rather than the whole url, because that is what `startPath` is compared against and what
- * a hash-routed app makes meaningless in the document location — see routeOfEvent.
+ * Every recorded page comes from here: a step's page, the route a tape is cut on, and the
+ * `startPath` and route `requires` of a saved flow. The pathname alone dropped the query, so a
+ * journey leased on `/?showModal=login` saved `startPath: "/"`, and its replay asserted "the modal
+ * is absent" on a page where the modal never opens. Under a hash router it dropped the hash too,
+ * which made every page `/` (#1411).
  */
-export { pathOf };
+export function pageOf(url: string | undefined): string | undefined {
+  if (url === undefined) {
+    return undefined;
+  }
+  const parts = routeOfUrl(url);
+  return parts === undefined ? undefined : navigablePath(parts);
+}
 
 /**
  * Did the app send a write request in this window? A step that did is saved `writes: true`, so a
