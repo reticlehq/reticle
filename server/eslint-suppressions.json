@@ -1491,11 +1491,6 @@
       "count": 1
     }
   },
-  "src/language/flows/fields/flow-secret-field.ts": {
-    "curly": {
-      "count": 14
-    }
-  },
   "src/language/flows/fields/flow-upload-resolve.ts": {
     "curly": {
       "count": 1
@@ -1703,11 +1698,6 @@
   "src/language/flows/flows.test.ts": {
     "curly": {
       "count": 8
-    }
-  },
-  "src/language/flows/flows.ts": {
-    "curly": {
-      "count": 52
     }
   },
   "src/language/flows/heal-precondition.test.ts": {
@@ -2138,11 +2128,6 @@
   "src/memory/journal/drive-flow.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/memory/journal/drive-flow.ts": {
-    "curly": {
-      "count": 4
     }
   },
   "src/memory/journal/drive-run-flush.test.ts": {
@@ -3236,11 +3221,6 @@
   "src/surface/tools/act/act-observation.ts": {
     "curly": {
       "count": 11
-    }
-  },
-  "src/surface/tools/act/act-sequence-retry.ts": {
-    "curly": {
-      "count": 2
     }
   },
   "src/surface/tools/act/act-target.test.ts": {

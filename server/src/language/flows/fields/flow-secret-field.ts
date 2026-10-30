@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { AnchorKind, type FlowAnchor, type FlowFile, type FlowStep } from '@reticlehq/core';
 import { CALL_SECRETS_ARG, callSecrets } from '@/surface/tools/tool-kit.js';
@@ -15,9 +16,15 @@ import { CALL_SECRETS_ARG, callSecrets } from '@/surface/tools/tool-kit.js';
  * to find the env var because the runner passed a role or a label instead.
  */
 export function anchorFieldName(anchor: FlowAnchor): string | undefined {
-  if (AnchorKind.TESTID === anchor.kind) return anchor.value;
-  if (AnchorKind.ROLE === anchor.kind) return anchor.name;
-  if (AnchorKind.SIGNAL === anchor.kind) return anchor.name;
+  if (AnchorKind.TESTID === anchor.kind) {
+    return anchor.value;
+  }
+  if (AnchorKind.ROLE === anchor.kind) {
+    return anchor.name;
+  }
+  if (AnchorKind.SIGNAL === anchor.kind) {
+    return anchor.name;
+  }
   return undefined;
 }
 
@@ -42,6 +49,19 @@ export const SECRET_FIELD_ARG = 'secretField';
 /** The prefix every secret's variable carries. */
 const SECRET_ENV_PREFIX = 'RETICLE_SECRET_';
 
+/** Any character outside ASCII. */
+const NON_ASCII = /[^\p{ASCII}]/u;
+/** The word in the variable of a field whose name is not ASCII. */
+const NON_ASCII_FIELD = 'FIELD';
+const NON_ASCII_DIGEST_LENGTH = 8;
+
+/**
+ * The variable name an ASCII field gets. Up to 3.9.0 a non-ASCII field got this name too, and a
+ * flow saved then still names it.
+ */
+const asciiSecretEnvKey = (field: string): string =>
+  `${SECRET_ENV_PREFIX}${field.replace(/[^a-zA-Z0-9]+/g, '_').toUpperCase()}`;
+
 /**
  * The environment variable that supplies one redacted field.
  *
@@ -54,8 +74,16 @@ const SECRET_ENV_PREFIX = 'RETICLE_SECRET_';
  * rules must not be able to drift. It used to sit in `replay.ts`, one import away from the sentence
  * saying it had to stay together.
  */
-export const secretEnvKey = (field: string): string =>
-  `${SECRET_ENV_PREFIX}${field.replace(/[^a-zA-Z0-9]+/g, '_').toUpperCase()}`;
+export function secretEnvKey(field: string): string {
+  if (!NON_ASCII.test(field)) {
+    return asciiSecretEnvKey(field);
+  }
+  // A name in another script has no ASCII letters to keep: "Пароль" and "Гасло" both became
+  // `RETICLE_SECRET__`, so one field's value was typed into the other. A short hash of the name
+  // keeps each field's variable distinct and the same on every machine.
+  const digest = createHash('sha256').update(field.normalize('NFC').toLowerCase()).digest('hex');
+  return `${SECRET_ENV_PREFIX}${NON_ASCII_FIELD}_${digest.slice(0, NON_ASCII_DIGEST_LENGTH).toUpperCase()}`;
+}
 
 /** The schema of that argument, shared by every tool that replays a flow. */
 export { CALL_SECRETS_ARG };
@@ -74,7 +102,9 @@ export function secretValue(
   env: Record<string, string | undefined>,
 ): string | undefined {
   for (const [key, value] of Object.entries(callSecrets() ?? {})) {
-    if (envKey === (key.startsWith(SECRET_ENV_PREFIX) ? key : secretEnvKey(key))) return value;
+    if (envKey === (key.startsWith(SECRET_ENV_PREFIX) ? key : secretEnvKey(key))) {
+      return value;
+    }
   }
   return env[envKey];
 }
@@ -86,21 +116,28 @@ export function secretKeyForFill(
   args: Record<string, unknown> | undefined,
   field: string,
 ): string | undefined {
-  if (args?.['value'] !== REDACTED_FILL) return undefined;
+  if (args?.['value'] !== REDACTED_FILL) {
+    return undefined;
+  }
   const named = args[SECRET_NAME_ARG];
   const base = secretEnvKey(field);
-  // A flow can supply this field's occurrence, never an unrelated environment variable.
-  return 'string' === typeof named &&
-    named.startsWith(`${base}_`) &&
-    SECRET_OCCURRENCE.test(named.slice(base.length + 1))
-    ? named
-    : base;
+  // A flow can supply this field's occurrence, never an unrelated environment variable. The name
+  // an earlier version gave a non-ASCII field is still this field's.
+  if ('string' !== typeof named) {
+    return base;
+  }
+  const own = (key: string): boolean =>
+    named === key ||
+    (named.startsWith(`${key}_`) && SECRET_OCCURRENCE.test(named.slice(key.length + 1)));
+  return own(base) || own(asciiSecretEnvKey(field)) ? named : base;
 }
 
 function* secretSteps(steps: readonly FlowStep[]): Generator<FlowStep> {
   for (const step of steps) {
     yield step;
-    if (step.steps !== undefined) yield* secretSteps(step.steps);
+    if (step.steps !== undefined) {
+      yield* secretSteps(step.steps);
+    }
   }
 }
 
@@ -110,11 +147,17 @@ export function withDistinctSecretKeys(flow: FlowFile): FlowFile {
   const used = new Set<string>();
   for (const step of secretSteps(flow.steps)) {
     const field = anchorFieldName(step.anchor);
-    if (field === undefined) continue;
+    if (field === undefined) {
+      continue;
+    }
     const key = secretKeyForFill(step.args, field);
-    if (key === undefined) continue;
+    if (key === undefined) {
+      continue;
+    }
     reserved.add(key);
-    if (key !== secretEnvKey(field) || step.args?.[SECRET_NAME_ARG] === undefined) used.add(key);
+    if (key !== secretEnvKey(field) || step.args?.[SECRET_NAME_ARG] === undefined) {
+      used.add(key);
+    }
   }
   const assign = (step: FlowStep): FlowStep => {
     let out = step;
@@ -132,7 +175,9 @@ export function withDistinctSecretKeys(flow: FlowFile): FlowFile {
         occurrence += 1;
       }
       used.add(key);
-      if (key !== base) out = { ...step, args: { ...step.args, [SECRET_NAME_ARG]: key } };
+      if (key !== base) {
+        out = { ...step, args: { ...step.args, [SECRET_NAME_ARG]: key } };
+      }
     }
     return step.steps === undefined ? out : { ...out, steps: step.steps.map(assign) };
   };
@@ -165,12 +210,20 @@ export function unsuppliedSecrets(
   const seen = new Set<string>();
   for (const step of secretSteps(flow.steps ?? [])) {
     const field = anchorFieldName(step.anchor);
-    if (field === undefined) continue;
+    if (field === undefined) {
+      continue;
+    }
     const envKey = secretKeyForFill(step.args, field);
-    if (envKey === undefined) continue;
+    if (envKey === undefined) {
+      continue;
+    }
     const supplied = secretValue(envKey, env);
-    if (supplied !== undefined && supplied.length > 0) continue;
-    if (seen.has(envKey)) continue;
+    if (supplied !== undefined && supplied.length > 0) {
+      continue;
+    }
+    if (seen.has(envKey)) {
+      continue;
+    }
     seen.add(envKey);
     out.push({ field, envKey });
   }

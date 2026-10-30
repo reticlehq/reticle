@@ -47,6 +47,87 @@ export function defaultIsSensitiveKey(key: string): boolean {
 }
 
 /**
+ * The word for a password, a PIN or a one-time code in other languages.
+ *
+ * The key rule above is English. A field's accessible name is in the language of the app, so a
+ * password field called "Пароль" was not recognised by its name. An SDK before 3.8.0 sends no
+ * secret mark, so the name is the only signal the server has for that fill.
+ *
+ * This list is for field names of recorded fills only. It is not part of the network key rule:
+ * `код` and `código` are also ordinary words in a request body ("código postal").
+ */
+export const CREDENTIAL_FIELD_WORDS = [
+  'пароль',
+  'гасло',
+  'contraseña',
+  'contrasena',
+  'mot de passe',
+  'passwort',
+  'kennwort',
+  'senha',
+  'palavra-passe',
+  'wachtwoord',
+  'hasło',
+  'haslo',
+  'heslo',
+  'jelszó',
+  'şifre',
+  'sifre',
+  'parola',
+  'lösenord',
+  'losenord',
+  'adgangskode',
+  'passord',
+  'salasana',
+  'κωδικός',
+  'סיסמה',
+  'كلمة المرور',
+  'कूटशब्द',
+  'पासवर्ड',
+  'পাসওয়ার্ড',
+  'パスワード',
+  '密码',
+  '密碼',
+  '비밀번호',
+  'mật khẩu',
+  'kata sandi',
+  'katalaluan',
+  'รหัสผ่าน',
+  'pin',
+  'otp',
+  'код',
+  'código',
+] as const;
+
+/**
+ * Scripts that do not put spaces between words, or that join a prefix to the word (Hebrew). A word
+ * in them also matches inside a longer label: "パスワードを入力".
+ */
+const NO_WORD_SPACES =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Hebrew}]/u;
+const WORD_CHAR = '[\\p{L}\\p{M}\\p{N}]';
+
+function credentialWordPattern(word: string): string {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[\s-]+/g, '[\\s_-]+');
+  return NO_WORD_SPACES.test(word) ? escaped : `(?<!${WORD_CHAR})${escaped}(?!${WORD_CHAR})`;
+}
+
+const CREDENTIAL_FIELD_WORD = new RegExp(
+  CREDENTIAL_FIELD_WORDS.map(credentialWordPattern).join('|'),
+  'iu',
+);
+
+/**
+ * Whether a field's name says that the field holds a credential, in English or another language.
+ *
+ * Use it for the name of a field that a recorded fill typed into. The network key rule stays
+ * `defaultIsSensitiveKey`.
+ */
+export function isCredentialFieldName(name: string): boolean {
+  return defaultIsSensitiveKey(name) || CREDENTIAL_FIELD_WORD.test(name.normalize('NFC'));
+}
+
+/**
  * An app's additions to (and subtractions from) the default rule.
  *
  * Additive by construction: `keys` can only ever redact MORE, and `allow` only exempts from the

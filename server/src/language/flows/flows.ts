@@ -28,7 +28,8 @@ import {
   FlowFileSchema,
   FlowStepTool,
   QueryBy,
-  defaultIsSensitiveKey,
+  REDACTED_VALUE,
+  isCredentialFieldName,
   isGlobalPressCall,
 } from '@reticlehq/core';
 import type {
@@ -91,21 +92,31 @@ function sourceArg(
   const source = asRecord(src['source']);
   const file = source['file'];
   const line = source['line'];
-  if (typeof file !== 'string' || 0 === file.length || typeof line !== 'number') return undefined;
+  if (typeof file !== 'string' || 0 === file.length || typeof line !== 'number') {
+    return undefined;
+  }
   const out: { file: string; line: number; column?: number } = { file, line };
-  if ('number' === typeof source['column']) out.column = source['column'];
+  if ('number' === typeof source['column']) {
+    out.column = source['column'];
+  }
   return out;
 }
 
 function componentAnchor(src: Record<string, unknown>): FlowAnchor | null {
   const component = asString(src['component']);
   const source = sourceArg(src);
-  if (component === undefined && source === undefined) return null;
+  if (component === undefined && source === undefined) {
+    return null;
+  }
   const anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.COMPONENT }> = {
     kind: AnchorKind.COMPONENT,
   };
-  if (component !== undefined) anchor.component = component;
-  if (source !== undefined) anchor.source = source;
+  if (component !== undefined) {
+    anchor.component = component;
+  }
+  if (source !== undefined) {
+    anchor.source = source;
+  }
   return anchor;
 }
 
@@ -122,9 +133,13 @@ export function anchorForStep(args: Record<string, unknown>): {
       value,
     };
     const source = sourceArg(args);
-    if (source !== undefined) anchor.source = source;
+    if (source !== undefined) {
+      anchor.source = source;
+    }
     const of = args['of'];
-    if ('number' === typeof of && 1 < of) anchor.of = of;
+    if ('number' === typeof of && 1 < of) {
+      anchor.of = of;
+    }
     return { anchor, degraded: false };
   }
   // Role + NAME is a real anchor, not a degraded placeholder.
@@ -156,7 +171,9 @@ export function anchorForStep(args: Record<string, unknown>): {
   }
   if (by === QueryBy.COMPONENT) {
     const anchor = componentAnchor(args);
-    if (anchor !== null) return { anchor, degraded: false };
+    if (anchor !== null) {
+      return { anchor, degraded: false };
+    }
   }
   return { anchor: degradedAnchor(), degraded: true };
 }
@@ -178,7 +195,9 @@ function subStepToFlowStep(raw: unknown): FlowStep {
    * exactly this, so dropping it here made the grader count assertions that were never saved.
    */
   const expect = sub['expect'] as NonNullable<FlowStep['expect']> | undefined;
-  if (expect !== undefined) step.expect = expect;
+  if (expect !== undefined) {
+    step.expect = expect;
+  }
   return step;
 }
 
@@ -193,8 +212,8 @@ function subStepToFlowStep(raw: unknown): FlowStep {
  * WHERE it was typed rather than by guessing whether the characters look secret — a guess that both
  * over-redacts a search box and misses a password that happens to be a dictionary word.
  *
- * `defaultIsSensitiveKey` is the same rule the network channel redacts by, so a field considered
- * sensitive on the wire cannot be considered safe on disk.
+ * `isCredentialFieldName` is the network key rule plus the word for a password in other
+ * languages. An SDK before 3.8.0 sends no secret mark, and then the name is the only signal.
  */
 function redactSecretFill(
   anchor: FlowAnchor,
@@ -202,14 +221,51 @@ function redactSecretFill(
   /** The SDK said the target holds a secret: redact whatever the field is called. */
   secret = false,
 ): Record<string, unknown> {
-  if (typeof args['value'] !== 'string') return args;
+  if (typeof args['value'] !== 'string') {
+    return args;
+  }
   const field = anchorFieldName(anchor);
-  const sensitive = secret || (field !== undefined && defaultIsSensitiveKey(field));
-  if (!sensitive) return args;
+  const sensitive = secret || (field !== undefined && isCredentialFieldName(field));
+  if (!sensitive) {
+    return args;
+  }
   // ponytail: a secret field with no name (a component anchor) gets no variable; replay then refuses it.
-  if (field === undefined) return { ...args, value: REDACTED_FILL };
+  if (field === undefined) {
+    return { ...args, value: REDACTED_FILL };
+  }
   // The variable that supplies it, beside the placeholder: the file alone says what to set.
   return { ...args, value: REDACTED_FILL, [SECRET_NAME_ARG]: secretEnvKey(field) };
+}
+
+/**
+ * An anchored flow with each credential fill redacted by its field name.
+ *
+ * An in-page recorder of an older SDK redacts by an English rule only, and its flow arrives here
+ * already anchored. A value that is already a placeholder is left as it is, with its variable name.
+ */
+function redactSavedFills(flow: FlowFile): FlowFile {
+  let redacted = false;
+  const redact = (step: FlowStep): FlowStep => {
+    const value = step.args?.['value'];
+    let out = step;
+    if (
+      step.args !== undefined &&
+      'string' === typeof value &&
+      REDACTED_FILL !== value &&
+      REDACTED_VALUE !== value
+    ) {
+      const args = redactSecretFill(step.anchor, step.args);
+      if (args !== step.args) {
+        redacted = true;
+        out = { ...step, args };
+      }
+    }
+    return step.steps === undefined ? out : { ...out, steps: step.steps.map(redact) };
+  };
+  const steps = flow.steps.map(redact);
+  // Only a fill redacted here needs a variable name. A flow that already names its variables keeps
+  // them: two fills that share one older name must not be renamed.
+  return redacted ? withDistinctSecretKeys({ ...flow, steps }) : flow;
 }
 
 /** Whether a recorded step's args carry the SDK's secret mark. */
@@ -235,7 +291,9 @@ export function redactRecordedSteps(steps: readonly RecordedStep[]): RecordedSte
 /** One normalized act's args with its inner fill `args` redacted by the anchor it would save as. */
 function redactNormalizedArgs(normalized: Record<string, unknown>): Record<string, unknown> {
   const inner = normalized['args'];
-  if ('object' !== typeof inner || null === inner) return normalized;
+  if ('object' !== typeof inner || null === inner) {
+    return normalized;
+  }
   const redacted = redactSecretFill(
     anchorForStep(normalized).anchor,
     asRecord(inner),
@@ -258,9 +316,15 @@ function redactNormalizedArgs(normalized: Record<string, unknown>): Record<strin
  * the placeholder into the form. One function decides it for both sides, or the two drift again.
  */
 export function anchorFieldName(anchor: FlowAnchor): string | undefined {
-  if (AnchorKind.TESTID === anchor.kind) return anchor.value;
-  if (AnchorKind.ROLE === anchor.kind) return anchor.name;
-  if (AnchorKind.SIGNAL === anchor.kind) return anchor.name;
+  if (AnchorKind.TESTID === anchor.kind) {
+    return anchor.value;
+  }
+  if (AnchorKind.ROLE === anchor.kind) {
+    return anchor.name;
+  }
+  if (AnchorKind.SIGNAL === anchor.kind) {
+    return anchor.name;
+  }
   return undefined;
 }
 
@@ -285,8 +349,12 @@ function buildStep(
   secret = false,
 ): FlowStep {
   const step: FlowStep = { tool, anchor, args: redactSecretFill(anchor, args, secret) };
-  if (action !== undefined) step.action = action;
-  if (degraded) step.degraded = true;
+  if (action !== undefined) {
+    step.action = action;
+  }
+  if (degraded) {
+    step.degraded = true;
+  }
   return step;
 }
 
@@ -297,10 +365,18 @@ function buildStep(
  */
 export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
   const out = anchoredStep(step);
-  if (step.timeoutMs !== undefined) out.timeoutMs = step.timeoutMs;
-  if (step.page !== undefined) out.page = step.page;
-  if (step.endPage !== undefined && step.endPage !== step.page) out.endPage = step.endPage;
-  if (true === step.writes) out.writes = true;
+  if (step.timeoutMs !== undefined) {
+    out.timeoutMs = step.timeoutMs;
+  }
+  if (step.page !== undefined) {
+    out.page = step.page;
+  }
+  if (step.endPage !== undefined && step.endPage !== step.page) {
+    out.endPage = step.endPage;
+  }
+  if (true === step.writes) {
+    out.writes = true;
+  }
   return out;
 }
 
@@ -314,7 +390,9 @@ function anchoredStep(step: RecordedStep): FlowStep {
       anchor: { kind: AnchorKind.TESTID, value: step.invoke },
       invoke: step.invoke,
     };
-    if (step.expect !== undefined) out.expect = step.expect;
+    if (step.expect !== undefined) {
+      out.expect = step.expect;
+    }
     return out;
   }
   if (step.tool === ReticleTool.ACT_SEQUENCE) {
@@ -328,8 +406,12 @@ function anchoredStep(step: RecordedStep): FlowStep {
     const anchor: FlowAnchor =
       subs.find((s) => s.degraded !== true)?.anchor ?? subs[0]?.anchor ?? degradedAnchor();
     const out: FlowStep = { tool: ReticleTool.ACT_SEQUENCE, anchor, steps: subs };
-    if (degraded) out.degraded = true;
-    if (step.expect !== undefined) out.expect = step.expect;
+    if (degraded) {
+      out.degraded = true;
+    }
+    if (step.expect !== undefined) {
+      out.expect = step.expect;
+    }
     return out;
   }
 
@@ -338,7 +420,9 @@ function anchoredStep(step: RecordedStep): FlowStep {
   const { anchor, degraded } = anchorForStep(step.args);
   const out = buildStep(step.tool, anchor, action, args, degraded, markedSecret(step.args));
   keepRoleSource(out, step.args);
-  if (step.expect !== undefined) out.expect = step.expect;
+  if (step.expect !== undefined) {
+    out.expect = step.expect;
+  }
   return out;
 }
 
@@ -372,7 +456,9 @@ export interface FlowAnnotations {
 
 /** Apply folded annotations onto an anchored flow (pure): per-step expect, dynamic[], success, intent. */
 function withAnnotations(flow: FlowFile, ann: FlowAnnotations | undefined): FlowFile {
-  if (ann === undefined) return flow;
+  if (ann === undefined) {
+    return flow;
+  }
   const steps = flow.steps.map((step, i) => {
     const expect = ann.stepExpect.get(i);
     return expect === undefined ? step : { ...step, expect };
@@ -381,8 +467,12 @@ function withAnnotations(flow: FlowFile, ann: FlowAnnotations | undefined): Flow
   if (ann.dynamic.length > 0) {
     out.dynamic = ann.dynamic.map((value) => ({ kind: AnchorKind.TESTID, value }));
   }
-  if (ann.success !== undefined) out.success = ann.success;
-  if (ann.intent !== undefined) out.intent = ann.intent;
+  if (ann.success !== undefined) {
+    out.success = ann.success;
+  }
+  if (ann.intent !== undefined) {
+    out.intent = ann.intent;
+  }
   return out;
 }
 
@@ -542,15 +632,21 @@ export class FlowStore {
     projectId: ProjectId | undefined,
     prefix: string,
   ): Promise<FlowResult<SaveSummary>> {
-    if (!isValidFlowName(program.name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    if (!isValidFlowName(program.name)) {
+      return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    }
     const pid = safeProjectId(projectId);
     const fresh = this.#build(program, undefined, pid);
     const saved: FlowFile[] = [];
     const freshPrint = journeyFingerprint(fresh);
     for (const name of await this.list(pid)) {
       const loaded = await this.load(name, pid);
-      if (!loaded.ok) continue;
-      if (name.startsWith(prefix)) saved.push(loaded.value);
+      if (!loaded.ok) {
+        continue;
+      }
+      if (name.startsWith(prefix)) {
+        saved.push(loaded.value);
+      }
       // The agent already saved this journey under its own name: one journey, one flow. A web drive
       // saved its named flow and an automatic `drive-saved-<email>` beside it, every time.
       else if (journeyFingerprint(loaded.value) === freshPrint) {
@@ -566,10 +662,13 @@ export class FlowStore {
     const taken = new Map(saved.map((flow) => [flow.name, journeyFingerprint(flow)]));
     // The same name holding this journey driven with a step more or less: one file, the fuller drive.
     const same = saved.find((flow) => flow.name === fresh.name && taken.get(flow.name) !== print);
-    if (same !== undefined && withinJourney(same, fresh))
+    if (same !== undefined && withinJourney(same, fresh)) {
       return { ok: true, value: this.#summary(same) };
+    }
     const extended = same !== undefined && withinJourney(fresh, same);
-    if (extended) taken.delete(fresh.name);
+    if (extended) {
+      taken.delete(fresh.name);
+    }
     const named = {
       ...fresh,
       ...(extended && fresh.intent === undefined && same.intent !== undefined
@@ -580,15 +679,23 @@ export class FlowStore {
     byPrint.set(print, [...(byPrint.get(print) ?? []), named]);
     let result: FlowFile = named;
     for (const [groupPrint, group] of byPrint) {
-      if (group.length < 2 && groupPrint !== print) continue;
+      if (group.length < 2 && groupPrint !== print) {
+        continue;
+      }
       const [kept, ...rest] = [...group].sort((a, b) => a.createdAt - b.createdAt);
-      if (kept === undefined) continue;
+      if (kept === undefined) {
+        continue;
+      }
       const merged = await this.#linkIntent(rest.reduce(mergeJourney, kept));
       await this.#writeInPlace(merged, pid);
       for (const dropped of rest) {
-        if (dropped.name !== merged.name && dropped !== named) await this.remove(dropped.name, pid);
+        if (dropped.name !== merged.name && dropped !== named) {
+          await this.remove(dropped.name, pid);
+        }
       }
-      if (groupPrint === print) result = merged;
+      if (groupPrint === print) {
+        result = merged;
+      }
     }
     this.#onWrote?.();
     return { ok: true, value: this.#summary(result) };
@@ -608,7 +715,9 @@ export class FlowStore {
    * re-run FlowFileSchema before writing. save is left untouched.
    */
   async saveFlow(flow: FlowFile, projectId?: ProjectId): Promise<FlowResult<SaveSummary>> {
-    if (!isValidFlowName(flow.name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    if (!isValidFlowName(flow.name)) {
+      return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    }
     const pid = safeProjectId(projectId);
     // Stamp the project INTO the file (so a flow carries its own scope) and route it to the matching
     // per-project subdir. Both come from the same `pid`, so on-disk location and content always agree.
@@ -623,7 +732,7 @@ export class FlowStore {
         detail: describeFlowZodFailure(parsed.error),
       };
     }
-    const valid = await this.#linkIntent(readyForReplay(parsed.data));
+    const valid = await this.#linkIntent(readyForReplay(redactSavedFills(parsed.data)));
     await this.#fs.mkdir(flowParentDir(this.#root, asFlowName(valid.name), pid));
     await this.#fs.writeFile(
       flowPath(this.#root, asFlowName(valid.name), pid),
@@ -714,7 +823,9 @@ export class FlowStore {
 
   /** The `.json` basenames (no extension) directly inside `dir`. [] if the dir is absent/unreadable. */
   async #namesIn(dir: string): Promise<string[]> {
-    if (!(await this.#fs.exists(dir))) return [];
+    if (!(await this.#fs.exists(dir))) {
+      return [];
+    }
     let entries: string[];
     try {
       entries = await this.#fs.readdir(dir);
@@ -738,7 +849,9 @@ export class FlowStore {
    */
   async list(projectId?: ProjectId): Promise<string[]> {
     const own = await this.#listOwn(projectId);
-    if (this.#main === undefined) return own;
+    if (this.#main === undefined) {
+      return own;
+    }
     return [...new Set([...own, ...(await this.#main.list(projectId))])].sort();
   }
 
@@ -750,7 +863,9 @@ export class FlowStore {
       const own = await this.#namesIn(flowDir(this.#root, pid));
       return [...new Set([...own, ...legacy])].sort();
     }
-    if (!(await this.#fs.exists(flowsDir))) return [];
+    if (!(await this.#fs.exists(flowsDir))) {
+      return [];
+    }
     let entries: string[];
     try {
       entries = await this.#fs.readdir(flowsDir);
@@ -771,21 +886,29 @@ export class FlowStore {
   async #resolveReadPath(name: FlowName, pid: ProjectId | undefined): Promise<string | null> {
     if (pid !== undefined) {
       const nested = flowPath(this.#root, name, pid);
-      if (await this.#fs.exists(nested)) return nested;
+      if (await this.#fs.exists(nested)) {
+        return nested;
+      }
     }
     const flat = flowPath(this.#root, name);
-    if (await this.#fs.exists(flat)) return flat;
+    if (await this.#fs.exists(flat)) {
+      return flat;
+    }
     // No projectId (CLI/CI/contract callers, e.g. reticle_domain): mirror list's subdir union on
     // the read side too — a flow saved under .reticle/flows/<projectId>/ must still load, else it is
     // listed and then silently dropped by `if (loaded.ok)` (reticle_domain reports flowCount:0).
-    if (pid === undefined) return this.#resolveNestedPath(name);
+    if (pid === undefined) {
+      return this.#resolveNestedPath(name);
+    }
     return null;
   }
 
   /** Scan the per-project subdirs for a flow by name — the read-side of list's no-pid union. */
   async #resolveNestedPath(name: FlowName): Promise<string | null> {
     const flowsDir = reticleDirPaths(this.#root).flows;
-    if (!(await this.#fs.exists(flowsDir))) return null;
+    if (!(await this.#fs.exists(flowsDir))) {
+      return null;
+    }
     let entries: string[];
     try {
       entries = await this.#fs.readdir(flowsDir);
@@ -795,7 +918,9 @@ export class FlowStore {
     // Same provenance as `#namesIn`'s scan above: a subdir of `.reticle/flows/` is a projectId.
     for (const dir of entries.filter((e) => !e.endsWith(FLOW_SUFFIX))) {
       const nested = flowPath(this.#root, name, asProjectId(dir));
-      if (await this.#fs.exists(nested)) return nested;
+      if (await this.#fs.exists(nested)) {
+        return nested;
+      }
     }
     return null;
   }
@@ -806,14 +931,20 @@ export class FlowStore {
    */
   async load(name: string, projectId?: ProjectId): Promise<FlowResult<FlowFile>> {
     const own = await this.#loadOwn(name, projectId);
-    if (own.ok || own.code !== FlowErrorCode.NOT_FOUND || this.#main === undefined) return own;
+    if (own.ok || own.code !== FlowErrorCode.NOT_FOUND || this.#main === undefined) {
+      return own;
+    }
     return this.#main.load(name, projectId);
   }
 
   async #loadOwn(name: string, projectId?: ProjectId): Promise<FlowResult<FlowFile>> {
-    if (!isValidFlowName(name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    if (!isValidFlowName(name)) {
+      return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    }
     const path = await this.#resolveReadPath(name, safeProjectId(projectId));
-    if (null === path) return { ok: false, code: FlowErrorCode.NOT_FOUND };
+    if (null === path) {
+      return { ok: false, code: FlowErrorCode.NOT_FOUND };
+    }
 
     let text: string;
     try {
@@ -835,9 +966,13 @@ export class FlowStore {
    * not a silent no-op, so a typo doesn't read as success.
    */
   async remove(name: string, projectId?: ProjectId): Promise<FlowResult<void>> {
-    if (!isValidFlowName(name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    if (!isValidFlowName(name)) {
+      return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    }
     const path = await this.#resolveReadPath(name, safeProjectId(projectId));
-    if (null === path) return { ok: false, code: FlowErrorCode.NOT_FOUND };
+    if (null === path) {
+      return { ok: false, code: FlowErrorCode.NOT_FOUND };
+    }
     await this.#fs.rm(path);
     return { ok: true, value: undefined };
   }
