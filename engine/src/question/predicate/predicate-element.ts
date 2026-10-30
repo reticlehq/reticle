@@ -213,7 +213,12 @@ async function matchOnce(
   if (!res.ok) {
     throw new Error(`the page could not answer 'match': ${res.error ?? 'no error given'}`);
   }
-  return (res.result ?? { matched: false, count: 0, elements: [] }) as MatchResult;
+  // An ok reply with no result said nothing about the page either. Defaulting it to zero matches
+  // was the same false `no`.
+  if (undefined === res.result || null === res.result) {
+    throw new Error(`the page could not answer 'match': the reply carried no result`);
+  }
+  return res.result as MatchResult;
 }
 
 /**

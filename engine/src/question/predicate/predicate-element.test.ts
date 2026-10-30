@@ -434,6 +434,25 @@ it('reads a match the page answered with an error as unknown, never as no match'
   expect(waited.failureReason).not.toContain('no element matched');
 });
 
+/** An ok reply that carries no result also never said what the page holds. It is not "zero matches". */
+it('reads an ok match reply with no result as unknown, never as no match', async () => {
+  const empty: PredicateSession = {
+    ...session,
+    command: () => Promise.resolve({ kind: 'command_result', ok: true, id: 'stub' }),
+  };
+  await expect(
+    evalElement(empty, { text: 'problems to fix' }, ElementState.VISIBLE, false, true),
+  ).rejects.toThrow("could not answer 'match'");
+  const waited = await waitForPredicate(
+    empty,
+    { kind: PredicateKind.TEXT, contains: 'problems to fix', visible: true },
+    0,
+  );
+  expect(waited.pass).toBe(false);
+  expect(waited.inconclusive).toBeDefined();
+  expect(waited.failureReason ?? '').not.toContain('no element matched');
+});
+
 /**
  * One name rule, whichever locator carries the check (#1839).
  *
