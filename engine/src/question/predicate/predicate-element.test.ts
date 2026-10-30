@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest';
-import { ElementState, type ElementDescriptor, type Ref } from '@reticlehq/core';
+import { ElementState, PredicateKind, type ElementDescriptor, type Ref } from '@reticlehq/core';
 
 import { ARIA_HIDDEN_NOTE, evalElement, HTML_TAG_TO_ARIA_ROLE } from './predicate-element.js';
+import { waitForPredicate } from './predicate.js';
 import { residualQueryChecks, satisfiesResiduals } from './predicate-schema.js';
 import type { PredicateSession } from './predicate-session.js';
 
@@ -57,13 +58,10 @@ it('asks the page when its SDK knows the state, or when no version was reported'
         return Promise.resolve({ kind: 'command_result', ok: false, id: 'stub', error: 'stub' });
       },
     };
-    await evalElement(
-      current,
-      { role: 'button', name: 'Bold' },
-      ElementState.PRESSED,
-      false,
-      false,
-    );
+    // The stub page answers with an error, which rejects; only the question being asked matters here.
+    await expect(
+      evalElement(current, { role: 'button', name: 'Bold' }, ElementState.PRESSED, false, false),
+    ).rejects.toThrow('stub');
     expect(asked).toBe(true);
   }
 });
@@ -398,8 +396,42 @@ it('refuses a match the page does not serve, without asking the page', async () 
   expect(asked).toBe(false);
   // An SDK too old to declare anything says nothing: silence is unknown, never "serves nothing".
   const silent: PredicateSession = { ...old, commands: undefined };
-  await evalElement(silent, { role: 'button', name: 'Save' }, undefined, false, false);
+  await expect(
+    evalElement(silent, { role: 'button', name: 'Save' }, undefined, false, false),
+  ).rejects.toThrow('stub');
   expect(asked).toBe(true);
+});
+
+/**
+ * A match the page answered with an error never looked at the page. It is not "zero matches".
+ *
+ * Reported on 3.9.0: `{ kind: "text", contains: "problems to fix", visible: true }` came back
+ * `no`, "no element matched", while `reticle_look` showed that text. The same markup matches in
+ * the page's own matcher. The engine read a failed `match` reply as an empty match, so any page
+ * error (a query the page's schema refuses, a matcher that threw) became a false `no`.
+ */
+it('reads a match the page answered with an error as unknown, never as no match', async () => {
+  const PAGE_ERROR = "Unrecognized key(s) in object: 'matchCase'";
+  const failing: PredicateSession = {
+    ...session,
+    command: () =>
+      Promise.resolve({ kind: 'command_result', ok: false, id: 'stub', error: PAGE_ERROR }),
+  };
+  const query = { text: 'problems to fix', matchCase: true };
+  await expect(evalElement(failing, query, ElementState.VISIBLE, false, true)).rejects.toThrow(
+    PAGE_ERROR,
+  );
+  const scoped = { ...query, scope: '[data-testid=fixes-summary]' };
+  await expect(evalElement(failing, scoped, undefined, false, false)).rejects.toThrow(PAGE_ERROR);
+  // The verdict path turns a read that threw into `inconclusive`, so the answer is unknown.
+  const waited = await waitForPredicate(
+    failing,
+    { kind: PredicateKind.TEXT, contains: 'problems to fix', visible: true },
+    0,
+  );
+  expect(waited.pass).toBe(false);
+  expect(waited.inconclusive).toContain(PAGE_ERROR);
+  expect(waited.failureReason).not.toContain('no element matched');
 });
 
 /**

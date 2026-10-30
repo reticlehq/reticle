@@ -208,8 +208,10 @@ async function matchOnce(
     ...(true === diagnose ? { diagnose: true } : {}),
     ...(fullText ? { [MatchArg.FULL_TEXT]: true } : {}),
   });
+  // A reply with an error never looked at the page. Read as zero matches, a query the page's schema
+  // refused or a matcher that threw became a false `no`. Thrown, the verdict reads it as unknown.
   if (!res.ok) {
-    return { matched: false, count: 0, elements: [] };
+    throw new Error(`the page could not answer 'match': ${res.error ?? 'no error given'}`);
   }
   return (res.result ?? { matched: false, count: 0, elements: [] }) as MatchResult;
 }
