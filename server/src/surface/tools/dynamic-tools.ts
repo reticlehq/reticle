@@ -376,11 +376,18 @@ export function buildDynamicTools(
           hint: `pass them inside args: reticle_run { tool, args: { ${strayTop.join(', ')}: … } } if the target tool declares them`,
         };
       }
-      const name = 'string' === typeof args['tool'] ? args['tool'] : '';
-      const given =
+      const asked = 'string' === typeof args['tool'] ? args['tool'] : '';
+      const passed =
         'object' === typeof args['args'] && args['args'] !== null
           ? (args['args'] as Record<string, unknown>)
           : {};
+      // A merged name is CALLED, as the MCP layer does (mcp.ts). Explaining it here left
+      // `reticle verify --expect` unable to wait, so it could never give a verdict. The old name is
+      // the action, so it wins over an `action` in the arguments.
+      const moved = byName.has(asked) ? undefined : mergedNameRedirect(asked);
+      const routed = moved?.action !== undefined && byName.has(moved.tool);
+      const name = routed ? moved.tool : asked;
+      const given = routed ? { ...passed, action: moved.action } : passed;
       const aimed = args['sessionId'];
       const target = byName.get(name);
       if (target === undefined) {

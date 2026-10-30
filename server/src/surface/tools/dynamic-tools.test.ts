@@ -373,3 +373,39 @@ describe('reticle_tools shows the values an enum parameter accepts', () => {
     expect(params.find((p) => 'label' === p.name)?.values).toBeUndefined();
   });
 });
+
+/**
+ * `reticle_run` with a merged name CALLS the tool it moved into.
+ *
+ * The defect: `reticle verify <url> --expect … --timeout 60000` waits through
+ * `reticle_run { tool: "reticle_wait_for" }`. After the merge that call answered "reticle_wait_for
+ * was merged into reticle_assert", so the CLI printed `verified: unknown` and could never give a
+ * verdict. The MCP layer already routes a merged name; this door only described it.
+ */
+describe('reticle_run — a merged name', () => {
+  it('routes reticle_wait_for to reticle_assert { action: "wait" } with the same arguments', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const assertTool: ToolDef = {
+      name: ReticleTool.ASSERT,
+      description: 'Assert.',
+      inputSchema: {
+        action: z.enum(['now', 'wait']).optional(),
+        predicate: z.unknown().optional(),
+        timeout_ms: z.number().optional(),
+      },
+      handler: (_deps, args) => {
+        seen.push(args);
+        return Promise.resolve({ pass: true });
+      },
+    };
+    const run = buildDynamicTools([assertTool]).find((t) => t.name === ReticleTool.RUN);
+    const predicate = { kind: 'text', contains: 'More tools' };
+    const out = (await run?.handler(NO_DEPS, {
+      tool: ReticleTool.WAIT_FOR,
+      args: { predicate, timeout_ms: 5000 },
+    })) as { pass?: boolean; error?: string };
+    expect(out.error).toBeUndefined();
+    expect(out.pass).toBe(true);
+    expect(seen).toEqual([{ action: 'wait', predicate, timeout_ms: 5000 }]);
+  });
+});
