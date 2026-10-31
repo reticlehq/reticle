@@ -2474,11 +2474,6 @@
       "count": 2
     }
   },
-  "src/portal/input/real-input.ts": {
-    "no-nested-ternary": {
-      "count": 2
-    }
-  },
   "src/portal/input/scroll-find.ts": {
     "curly": {
       "count": 10

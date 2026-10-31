@@ -38,6 +38,7 @@ import {
 } from '@reticlehq/core';
 import { installNetworkMocks, type MockRule } from './network-mock.js';
 import { attachNetworkDetail, type NetworkDetail } from './network-detail.js';
+import { attachDownloadCapture, type CdpLike } from './download-capture.js';
 import { injectedConnectArgs } from '@/portal/pool/zero-install.js';
 import { EARLY_CAPTURE_ARG, queueEarlyConsole } from '@/portal/pool/lease-page-error.js';
 
@@ -380,20 +381,26 @@ export async function capturePage(page: Page, opts: ScreenshotOpts): Promise<Uin
   return shoot(page, opts);
 }
 
+/** Playwright screenshot options for one capture: a JPEG, a clip, the full page, or the viewport. */
+function screenshotOptions(opts: ScreenshotOpts): Parameters<Page['screenshot']>[0] {
+  if (opts.jpegQuality !== undefined) {
+    return {
+      type: 'jpeg',
+      quality: opts.jpegQuality,
+      ...(true === opts.cssScale ? { scale: 'css' as const } : {}),
+    };
+  }
+  if (opts.clip !== undefined) {
+    return { ...SCREENSHOT_DETERMINISM, clip: opts.clip };
+  }
+  if (true === opts.fullPage) {
+    return { ...SCREENSHOT_DETERMINISM, fullPage: true };
+  }
+  return { ...SCREENSHOT_DETERMINISM };
+}
+
 async function shoot(page: Page, opts: ScreenshotOpts): Promise<Uint8Array> {
-  const buf = await page.screenshot(
-    opts.jpegQuality !== undefined
-      ? {
-          type: 'jpeg',
-          quality: opts.jpegQuality,
-          ...(true === opts.cssScale ? { scale: 'css' as const } : {}),
-        }
-      : opts.clip !== undefined
-        ? { ...SCREENSHOT_DETERMINISM, clip: opts.clip }
-        : true === opts.fullPage
-          ? { ...SCREENSHOT_DETERMINISM, fullPage: true }
-          : { ...SCREENSHOT_DETERMINISM },
-  );
+  const buf = await page.screenshot(screenshotOptions(opts));
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
@@ -729,8 +736,16 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     // Before goto: a console error the page logs while it loads comes before its SDK connects.
     await page.addInitScript(queueEarlyConsole, EARLY_CAPTURE_ARG);
     // Capture CDP-authoritative response detail into the driven session's journal (best-effort).
-    if (this.#onNetworkDetail !== undefined) {
-      attachNetworkDetail(page, this.#onNetworkDetail);
+    const sink = this.#onNetworkDetail;
+    if (sink !== undefined) {
+      attachNetworkDetail(page, sink);
+      // A server-sent download never reaches the page's network events; CDP request interception
+      // does see it (download-capture.ts). Attached before the first navigation, best-effort.
+      await page
+        .context()
+        .newCDPSession(page)
+        .then((cdp) => attachDownloadCapture(cdp as unknown as CdpLike, sink, () => page.url()))
+        .catch(() => undefined);
     }
     try {
       // Same navigation rule as the pool, and for the same measured reason: Playwright's default
