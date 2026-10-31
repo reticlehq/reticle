@@ -31,7 +31,14 @@ export interface StepCounts {
   swept?: { passed: number; failed: number };
 }
 
+/**
+ * The shape of the `--results-json` file. 1 had only `verdict` and `results`; 2 adds `steps` per
+ * journey and the gated `score`. A consumer checks this before it reads a field that 1 did not have.
+ */
+export const RESULTS_SCHEMA_VERSION = 2;
+
 export interface VerifyResults {
+  schemaVersion: number;
   verdict: JourneyVerdict;
   /** `runId` is the run the journey came from, set only when that run reached the platform. */
   results: {
@@ -87,9 +94,13 @@ function stepCounts(flow: ReticleVerificationRun['flows'][number], planned?: num
 }
 
 function journeyVerdict(status: RunFlowStatus): JourneyVerdict {
-  if (RunFlowStatus.FAIL === status) return Verified.NO;
+  if (RunFlowStatus.FAIL === status) {
+    return Verified.NO;
+  }
   // A heal is consequence-verified before it is reported, so it proves as much as a pass.
-  if (RunFlowStatus.PASS === status || RunFlowStatus.HEALED === status) return Verified.YES;
+  if (RunFlowStatus.PASS === status || RunFlowStatus.HEALED === status) {
+    return Verified.YES;
+  }
   return Verified.UNKNOWN;
 }
 
@@ -125,5 +136,5 @@ export function verifyResults(
     : VerdictStatus.PASS === run.verdict.status && results.every((r) => Verified.YES === r.verdict)
       ? Verified.YES
       : Verified.UNKNOWN;
-  return { verdict, results, score };
+  return { schemaVersion: RESULTS_SCHEMA_VERSION, verdict, results, score };
 }

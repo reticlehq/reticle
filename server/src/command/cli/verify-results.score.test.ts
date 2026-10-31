@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { RunFlowStatus, VerdictStatus, type ReticleVerificationRun } from '@reticlehq/core';
-import { verifyResults } from './verify-results.js';
+import { RESULTS_SCHEMA_VERSION, verifyResults } from './verify-results.js';
 
 type Flow = ReticleVerificationRun['flows'][number];
 
@@ -168,5 +168,17 @@ describe('the score after a failed step', () => {
     expect(verifyResults(run(swept), false, plan).score).toEqual(
       verifyResults(run(stopped), false, plan).score,
     );
+  });
+});
+
+/*
+ * The file says which shape it is. A CI step that parses it cannot tell the shape with `score` and
+ * `steps` from the one before it, and an absent field looks the same as an old file.
+ */
+describe('the results file version', () => {
+  it('names its schema version', () => {
+    const r = verifyResults(run([]));
+    expect(r.schemaVersion).toBe(RESULTS_SCHEMA_VERSION);
+    expect(RESULTS_SCHEMA_VERSION).toBe(2);
   });
 });

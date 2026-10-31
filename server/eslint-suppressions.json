@@ -286,9 +286,6 @@
     }
   },
   "src/command/cli/verify-results.ts": {
-    "curly": {
-      "count": 2
-    },
     "no-nested-ternary": {
       "count": 1
     }

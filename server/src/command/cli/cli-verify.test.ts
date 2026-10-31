@@ -453,6 +453,7 @@ describe('runVerify --results-json', () => {
     expect(rec.exit).toEqual([1]);
     expect(written.map((w) => w.path)).toEqual(['out.json']);
     expect(JSON.parse(written[0]?.text ?? '{}')).toEqual({
+      schemaVersion: 2,
       verdict: 'no',
       results: [
         {
@@ -521,6 +522,7 @@ describe('runVerify --results-json', () => {
   it('reads a skipped journey as unknown, and the run as unknown rather than yes', () => {
     const run = makeRun(RunFlowStatus.SKIPPED);
     expect(verifyResults(run)).toEqual({
+      schemaVersion: 2,
       verdict: 'unknown',
       results: [
         { journey: 'checkout', verdict: 'unknown', steps: { passed: 0, failed: 0, unknown: 3 } },
