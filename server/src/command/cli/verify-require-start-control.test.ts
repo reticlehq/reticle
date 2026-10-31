@@ -4,6 +4,7 @@
  * case fail; without it the rule is unchanged.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { parseCliArgs } from './cli-parse.js';
 import { parseVerifySuffix } from './cli-parse-verify.js';
 import { createRunnerPort } from '@/judgement/runs/runner-port.js';
 import { replayAndLearn } from '@/language/flows/flow-learning.js';
@@ -19,6 +20,13 @@ describe('reticle verify --require-start-control', () => {
     expect(given).toMatchObject({ kind: 'ok', requireStartControl: true });
     const plain = parseVerifySuffix(['http://localhost:3000'], 4400);
     expect(plain).not.toHaveProperty('requireStartControl');
+  });
+
+  it('survives the whole command line, not only the verify suffix', () => {
+    // The suffix parser read the flag and the CLI parser then dropped it, so verify ran without it.
+    expect(
+      parseCliArgs(['verify', 'http://localhost:3000', '--require-start-control'], 4400),
+    ).toMatchObject({ requireStartControl: true });
   });
 
   it('reaches every flow the run replays, and only when asked', async () => {

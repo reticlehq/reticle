@@ -5,7 +5,7 @@
  */
 import { parseFeedbackArgs, type ParsedFeedback } from './cli-parse-feedback.js';
 import { HEADLESS_FLAG, parseServeFlags } from './cli-parse-serve.js';
-import { parseVerifySuffix } from './cli-parse-verify.js';
+import { parseVerifySuffix, type VerifySuffix } from './cli-parse-verify.js';
 import { DAEMON_INNER_COMMAND } from '@/command/daemon/daemon-argv.js';
 import {
   HEADED_FLAG,
@@ -312,22 +312,8 @@ export type CliResult =
       httpToken?: string;
     }
   | { kind: 'drive'; port: number; driveUrl: string; headless: boolean }
-  | {
-      kind: 'verify';
-      url: string;
-      headless: boolean;
-      port: number;
-      timeoutMs?: number;
-      storageState?: string;
-      sessionId?: string;
-      expect?: unknown;
-      expectFile?: string;
-      explore?: boolean;
-      persona?: string;
-      select?: string[];
-      resultsJson?: string;
-      confirmDangerous?: boolean;
-    }
+  // The verify fields are the suffix parser's, by type: a copied list dropped a new flag (#2061).
+  | ({ kind: 'verify' } & Omit<Extract<VerifySuffix, { kind: 'ok' }>, 'kind'>)
   | { kind: 'affected'; files: string[]; since?: string }
   | { kind: 'gate'; files: string[]; since?: string; hook?: boolean; acceptCoverage?: boolean }
   | { kind: 'report'; session?: string; hook: boolean }
@@ -839,22 +825,9 @@ export function parseCliArgs(
       if ('error' === r.kind) {
         return r;
       }
-      return {
-        kind: 'verify',
-        url: r.url,
-        headless: r.headless,
-        port: r.port,
-        ...(r.timeoutMs !== undefined ? { timeoutMs: r.timeoutMs } : {}),
-        ...(r.storageState !== undefined ? { storageState: r.storageState } : {}),
-        ...(r.sessionId !== undefined ? { sessionId: r.sessionId } : {}),
-        ...(r.expect !== undefined ? { expect: r.expect } : {}),
-        ...(r.expectFile !== undefined ? { expectFile: r.expectFile } : {}),
-        ...(true === r.explore ? { explore: true } : {}),
-        ...(r.persona !== undefined ? { persona: r.persona } : {}),
-        ...(r.select !== undefined ? { select: r.select } : {}),
-        ...(r.resultsJson !== undefined ? { resultsJson: r.resultsJson } : {}),
-        ...(true === r.confirmDangerous ? { confirmDangerous: true } : {}),
-      };
+      // Every parsed field, so a flag the suffix parser reads cannot be lost here.
+      const { kind: _ok, ...fields } = r;
+      return { kind: 'verify', ...fields };
     }
     case AFFECTED_COMMAND: {
       const t = parseTargetArgs(rest);
