@@ -56,3 +56,37 @@ describe('the driven provider can save and restore what the subject holds', () =
     expect(await fixturePortFor(halfProvider as never, 'http://x/')).toBeUndefined();
   });
 });
+
+/*
+ * A flow that opens another tab (a modifier-click on a link) leaves that tab in the driven context.
+ * Its page connects as a second session, and every later step that asks for "the" session refuses.
+ */
+describe('the driven provider closes the tabs a flow opened', () => {
+  it('closes every other page of its context and keeps its own', async () => {
+    const closed: string[] = [];
+    const tab = (name: string) => ({
+      url: () => `http://localhost:4312/${name}`,
+      isClosed: () => false,
+      close: () => {
+        closed.push(name);
+        return Promise.resolve();
+      },
+    });
+    const others = [tab('logout'), tab('help')];
+    const own = {
+      ...tab('own'),
+      addInitScript: () => Promise.resolve(),
+      goto: () => Promise.resolve(null),
+      context: () => ({ pages: () => [own, ...others] }),
+    };
+    const p = new LaunchedRealInputProvider({
+      driveUrl: 'http://localhost:4312/',
+      headless: true,
+      launch: () =>
+        Promise.resolve({ newPage: () => Promise.resolve(own), close: () => Promise.resolve() }),
+    } as never);
+    await p.navigate();
+    expect(await p.closeOtherPages()).toBe(2);
+    expect(closed).toEqual(['logout', 'help']);
+  });
+});

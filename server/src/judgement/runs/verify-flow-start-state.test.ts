@@ -102,3 +102,29 @@ describe('a flow that moved the page to another address', () => {
     expect(calls).toContain('replay:b');
   });
 });
+
+describe('a flow that opened another tab', () => {
+  it('has the tab closed before the next flow, so one page stays connected', async () => {
+    // Seen on the bench: a recorded flow signed out by opening "Log out" in a new tab. The tab
+    // stayed, its session stayed connected, and every later flow stopped at "multiple sessions
+    // connected". Starting where the run started means the same tabs too.
+    const { deps, calls } = depsWith(true);
+    (
+      deps as unknown as { realInput: { closeOtherPages: () => Promise<number> } }
+    ).realInput.closeOtherPages = () => {
+      calls.push('close-other-pages');
+      return Promise.resolve(1);
+    };
+    const port = createRunnerPort(deps);
+    await port.replayFlow('a');
+    await port.replayFlow('b');
+    const state = JSON.stringify({ cookies: [{ name: 'token' }] });
+    expect(calls).toEqual([
+      'capture',
+      'replay:a',
+      'close-other-pages',
+      `apply:${state}`,
+      'replay:b',
+    ]);
+  });
+});

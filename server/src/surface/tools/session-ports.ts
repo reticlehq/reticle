@@ -169,6 +169,8 @@ export function flowStartState(
       // session's recorded address with the page's, and a flow that reloaded or signed out leaves
       // the two different while the page is the same. The provider still refuses a page it does
       // not drive (it answers false), so nothing is restored into a stranger's page.
+      // Tabs first: a tab the previous flow opened is a second connected session otherwise.
+      await provider.closeOtherPages?.();
       const restored = await provider.applyStorageState?.(url ?? saved.url, saved.state);
       return true === restored
         ? undefined

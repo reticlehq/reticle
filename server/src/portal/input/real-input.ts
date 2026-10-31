@@ -153,6 +153,14 @@ export interface RealInputProvider {
   storageState?(sessionUrl: string): Promise<unknown>;
   applyStorageState?(sessionUrl: string, state: unknown): Promise<boolean>;
   /**
+   * Close every page of the driven context except the one this provider drives, and say how many.
+   *
+   * A flow that opens another tab (a modifier-click on a link) leaves it behind; its page connects
+   * as a second session, and everything after that asks for "the" session and is refused. Optional:
+   * only a provider that owns its context can know which pages are its own.
+   */
+  closeOtherPages?(): Promise<number>;
+  /**
    * Install (or replace, or with [] clear) network-mock rules on the correlated page — stub a 500,
    * force offline, delay a response — for deterministic error/edge-state testing. Returns true when
    * a page matched and the rules were applied, false when no driven page matches this session.
@@ -829,6 +837,19 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
    * driven session had no fixture port at all, and every suite seeded nothing while reading as if it
    * seeded everything. Same two methods, same contract, one page instead of a page lookup.
    */
+  async closeOtherPages(): Promise<number> {
+    const page = this.#livePage();
+    if (page === undefined) {
+      return 0;
+    }
+    const others = page
+      .context()
+      .pages()
+      .filter((other) => other !== page && !other.isClosed());
+    await Promise.all(others.map((other) => other.close()));
+    return others.length;
+  }
+
   async storageState(_sessionUrl: string): Promise<unknown> {
     const page = this.#livePage();
     if (page === undefined) {
