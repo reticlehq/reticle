@@ -18,6 +18,10 @@ import {
   type FlowFile,
 } from '@reticlehq/core';
 import { replayFlow, type FlowReplaySession, type WaitForSignal } from './flow-replay.js';
+import { navigateAndAwait } from './flow-start-path.js';
+import { SESSION_DISCONNECTED_REASON } from '@/portal/session/facts/session-replaced.js';
+import type { SessionManager } from '@/portal/session/session-manager.js';
+import type { Session } from '@/portal/session/session.js';
 
 /** A page that shows one text. */
 function page(text: string): FlowReplaySession {
@@ -89,5 +93,35 @@ describe('a navigate step', () => {
     const results = await replayFlow(page('start'), flow, waitForSignal, 60);
     expect(results[0]?.ok).toBe(false);
     expect(results[0]?.error).toBeDefined();
+  });
+});
+
+/*
+ * A navigate step opens `/u07`, and the server answers with a redirect to `/404`. The page that
+ * connects is the destination: a server redirect lands once. The start-page arrival waits out its
+ * whole budget before it accepts another path, which cost every such step 5 s for nothing.
+ */
+describe('navigateAndAwait for a navigate step', () => {
+  it('accepts the first new page at once, on whatever path the server sent it to', async () => {
+    const dying = {
+      id: 'old',
+      url: 'http://localhost:3000/',
+      command: () => Promise.reject(new Error(SESSION_DISCONNECTED_REASON)),
+    };
+    const landed = { id: 'new', url: 'http://localhost:3000/404', eventsSince: () => [] };
+    const sessions = { resolve: () => landed as unknown as Session } as unknown as SessionManager;
+    let t = 0;
+    const clock = {
+      now: () => t,
+      sleep: () => {
+        t += 100;
+        return Promise.resolve();
+      },
+    };
+    const outcome = await navigateAndAwait(sessions, dying, '/u07', '/u07', 5_000, clock, {
+      acceptRedirect: true,
+    });
+    expect(outcome.kind).toBe('redirected');
+    expect(t).toBeLessThan(5_000);
   });
 });

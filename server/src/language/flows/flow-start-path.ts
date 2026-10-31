@@ -275,17 +275,11 @@ export async function arriveAtStartPath(
   // gone after is the reload's doing, not the flow file's. Without this, an app holding its session
   // in memory comes back signed out and step 1 blames a component that is completely fine.
   const resolvedBefore = here && (await firstStepResolvesHere(session, flow));
-  const outcome = await navigateAndAwait(
-    sessions,
-    session,
-    destination,
-    target,
-    timeoutMs,
-    clock,
-    here,
-    stillLoading,
+  const outcome = await navigateAndAwait(sessions, session, destination, target, timeoutMs, clock, {
+    isReload: here,
+    ...(stillLoading === undefined ? {} : { stillLoading }),
     loadingCapMs,
-  );
+  });
   if ('lost' === outcome.kind) {
     const why = outcome.stillLoading
       ? 'The page was still loading when replay stopped waiting: check that the app finishes loading, then replay'
@@ -372,12 +366,22 @@ export async function navigateAndAwait(
   expectedPath: string,
   timeoutMs: number,
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
-  /** True when the destination is the page we are already on — see `arrivedSuccessor`. */
-  isReload: boolean = false,
-  /** Whether the navigated page is still loading; absent when it cannot be asked. */
-  stillLoading?: () => Promise<boolean>,
-  loadingCapMs: number = START_PATH_LOADING_CAP_MS,
+  options: {
+    /** True when the destination is the page we are already on — see `arrivedSuccessor`. */
+    isReload?: boolean;
+    /** Whether the navigated page is still loading; absent when it cannot be asked. */
+    stillLoading?: () => Promise<boolean>;
+    loadingCapMs?: number;
+    /**
+     * Accept the first NEW page at once, on any path. A flow's `navigate` step opens a URL the
+     * server may redirect (a paused short link goes to `/404`), and the page that connects is the
+     * destination. Start-page arrival leaves this off: it waits for its own path first.
+     */
+    acceptRedirect?: boolean;
+  } = {},
 ): Promise<NavigateOutcome> {
+  const { isReload = false, stillLoading, acceptRedirect = false } = options;
+  const loadingCapMs = options.loadingCapMs ?? START_PATH_LOADING_CAP_MS;
   // A leased tab is addressed by URL params, so navigating without them would strand the lease.
   const url = carryReticleIdentity(session.url, destination);
   try {
@@ -407,6 +411,9 @@ export async function navigateAndAwait(
     const arrived = arrivedSuccessor(sessions, session.id, expectedPath, session, isReload);
     if (true === arrived?.matches) {
       return { kind: 'arrived', session: arrived.session, ...extendedWait() };
+    }
+    if (acceptRedirect && arrived !== undefined) {
+      return { kind: 'redirected', session: arrived.session, ...extendedWait() };
     }
     if (clock.now() >= deadline) {
       // A live redirect is a different result from no SDK reconnection at all.

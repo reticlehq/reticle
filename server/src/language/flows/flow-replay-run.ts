@@ -429,6 +429,8 @@ export async function replayNamedFlow(
       url,
       pathOfUrl(url),
       startPathBudgetMs(loaded.value),
+      undefined,
+      { acceptRedirect: true },
     );
     if ('arrived' === outcome.kind || 'redirected' === outcome.kind) {
       live = outcome.session;
