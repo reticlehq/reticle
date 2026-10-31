@@ -5,7 +5,7 @@ description: Which frameworks Reticle supports, which are wired but unverified, 
 icon: layer-group
 ---
 
-**React + Vite, Next.js, Remix and Astro are fully supported, each with an example app in CI: React + Vite and Next.js are driven to a verdict by the e2e battery, and the Remix and Astro examples are booted and must register a session. SvelteKit, Nuxt, React Router framework mode, Create React App, Vue and Angular have their INSTALL gated: the install gate scaffolds each from scratch whenever the install path changes and requires a real session, but no gate drives them to a verdict. TanStack Start, Preact and plain HTML are wired by `init` and documented but not gated at all, so treat them as plausible rather than proven.** The exact wiring for each is below.
+**Reticle works on React, Next.js, Remix, Astro, Vue, SvelteKit and Angular. React + Vite, Next.js, Remix and Astro each have an example app in CI: React + Vite and Next.js are driven to a verdict by the e2e battery, and the Remix and Astro examples are booted and must register a session. Vue, SvelteKit and Angular are supported with the framework-neutral sensor; their install is gated (scaffolded from scratch whenever the install path changes, and a real session is required), and no CI gate drives them to a verdict yet. The `file:line` source pointer works on React and Svelte, not on Vue or Angular. Nuxt, React Router framework mode and Create React App have their install gated the same way. TanStack Start, Preact and plain HTML are wired by `init` and documented but not gated at all, so treat them as plausible rather than proven.** The exact wiring for each is below.
 
 Reticle is a verification layer that embeds a dev-only SDK in your running web app so an AI coding agent can prove a change works. Its core is framework-neutral: DOM, network, console, routing, animations and source mapping work anywhere JavaScript runs.
 
@@ -15,7 +15,7 @@ What varies is two things: how `connect()` gets into your app, and whether you g
 
 ## Where each framework stands
 
-We separate "we tested this" from "this should work". Four frameworks have an example app and a CI gate. The rest are wired and documented but nothing proves they still work.
+We separate "supported" from "what CI proves". Four frameworks have an example app and a CI gate. Vue, SvelteKit and Angular are supported and install gated. The rest are wired and documented, and nothing in CI proves they still work.
 
 Two columns say different things and it is worth keeping them apart. **CI gate** `yes` means an example app runs in CI: React + Vite and Next.js are driven to a verdict, Remix and Astro are booted and must register a session. **install only** means the install gate scaffolds that stack from scratch, runs `init`, boots it and waits for a session, so the setup is proven and the drive is not. Vue is there because a release once nearly shipped an installer that left a Vue app connecting 0% of the time, and the gate that exists for exactly that had only React scaffolds.
 
@@ -27,14 +27,14 @@ Two columns say different things and it is worth keeping them apart. **CI gate**
 | **Next.js** | yes | yes | yes | yes | Supported |
 | **Remix** | yes | yes | yes | yes | Supported |
 | **Astro** | yes | yes | yes | yes | Supported |
-| **SvelteKit** | yes | no | install only | unproven | Install gated, drive unverified |
+| **SvelteKit** | yes | no | install only | yes | Supported |
 | **TanStack Start** | yes | no | no | unproven | Wired, unverified |
 | **Nuxt** | yes | no | install only | no | Install gated, drive unverified |
 | **React Router (framework mode)** | yes | no | install only | yes | Install gated, drive unverified |
 | **Create React App** | yes | no | install only | unproven | Install gated, drive unverified |
-| **Angular 17+** | yes | no | install only | no | Install gated, drive unverified |
+| **Angular 17+** | yes | no | install only | no | Supported (no `file:line`) |
 | **Plain HTML** | yes | no | no | no | Wired, unverified |
-| **Vue (non-Nuxt)** | as Vite | no | install only | no | Install gated, drive unverified |
+| **Vue (non-Nuxt)** | as Vite | no | install only | no | Supported (no `file:line`) |
 | **Preact** | as Vite | no | no | transform-tested; drive unproven | Sensor, React adapter via `preact/compat` |
 | **Server-rendered (Django, Flask, FastAPI, Streamlit, Rails)** | yes | no | no | no | Wired, unverified |
 
@@ -392,10 +392,10 @@ Solid appears in dependency detection but has no wiring, no adapter and no gate.
   </Accordion>
 
 <Accordion title="Does Reticle work with Vue?">
-  Partly, and the limit is specific. Install `@reticlehq/browser` rather than the React kit, and you
-  get DOM, network, console, routing, actions and Pinia state. What you do not get is a `source`
-  field: source stamping covers JSX and Svelte components, and a Vue single-file component is
-  neither. The install path is covered by a gate; the drive is not.
+  Yes. Install `@reticlehq/browser` rather than the React kit, and you get DOM, network, console,
+  routing, actions, verdicts and Pinia state. The one thing you do not get is a `source` field:
+  source stamping covers JSX and Svelte components, and a Vue single-file component is neither. The
+  install path is gated in CI; no example app is driven to a verdict there yet.
 </Accordion>
 
 <Accordion title="Which framework should I pick if I want the strongest verdicts?">

@@ -122,9 +122,10 @@ framework-agnostic and needs no adapter. What varies per framework is (a) whethe
 wires it unattended and (b) whether a DOM node maps back to the component and source line.
 
 The one authoritative list is https://docs.reticle.sh/frameworks. In short: React + Vite, Next.js,
-Remix and Astro are driven to a verdict in CI; SvelteKit, Nuxt, React Router framework mode, Create
-React App, Vue and Angular 17+ have their install gated (scaffolded from scratch and connected on every change) but
-no verdict gate; TanStack Start, Preact, plain HTML and server-rendered apps are wired and documented
+Remix and Astro have example apps in CI; Vue, SvelteKit and Angular 17+ are supported, with their
+install gated (scaffolded from scratch and connected on every change) and `file:line` source pointers on
+Svelte but not Vue or Angular; Nuxt, React Router framework mode and Create React App have their install
+gated too; TanStack Start, Preact, plain HTML and server-rendered apps are wired and documented
 but not gated. Anything else works via a manual `connect()` call. The driven browser is Chromium.
 
 **Desktop is fully supported, not experimental.** `@reticlehq/electron` observes the Electron
