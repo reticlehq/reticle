@@ -8,18 +8,22 @@
  * starts `npm run dev`, and the rest of setup (wait, open, prove the connect) runs unchanged.
  *
  * It is run as its own process (`node static-page-server.js --dir <app>`), not inside init, because it
- * has to outlive init exactly like any handed-over dev server. It imports nothing but Node, so the
- * built file runs on its own.
+ * has to outlive init exactly like any handed-over dev server. It imports only Node and
+ * `@reticlehq/init`, so the built file runs on its own.
+ *
+ * It adds the connect snippet to each HTML page it serves, so init does not edit the file the user
+ * hands over (#1544). The file on disk stays byte-identical.
  *
  * Loopback only, on both families: a page served to the LAN would publish the pairing token the
  * snippet carries.
  */
 
-import { existsSync, readFile, statSync } from 'node:fs';
+import { existsSync, readFile, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { connectArg, projectIdOf, withStaticSnippet } from '@reticlehq/init';
 
 export const STATIC_PAGE_INDEX = 'index.html';
 /** Where the search for a free port starts when none is given — clear of Vite's 5173 run. */
@@ -27,6 +31,9 @@ export const STATIC_PAGE_FIRST_PORT = 5500;
 const PORT_SEARCH_SPAN = 50;
 const DIR_FLAG = '--dir';
 const PORT_FLAG = '--port';
+const BRIDGE_PORT_FLAG = '--bridge-port';
+const PROJECT_CONFIG = '.reticle.json';
+const HTML_EXTENSION = '.html';
 const LOOPBACK_V4 = '127.0.0.1';
 const LOOPBACK_V6 = '::1';
 const ANNOUNCED_HOST = 'localhost';
@@ -63,13 +70,37 @@ function fileFor(root: string, rawUrl: string): string | null {
     return null;
   }
   const target = resolve(root, `.${path}`);
-  if (target !== root && !target.startsWith(`${root}${sep}`)) return null;
+  if (target !== root && !target.startsWith(`${root}${sep}`)) {
+    return null;
+  }
   const file = path.endsWith('/') ? join(target, STATIC_PAGE_INDEX) : target;
   try {
     return statSync(file).isFile() ? file : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * The connect literal for the page in `root`: the bridge port, and the project id its `.reticle.json`
+ * names. The same literal init wrote into the page before #1544.
+ */
+export function staticPageConnect(root: string, bridgePort: number): string {
+  let config: string | null;
+  try {
+    config = readFileSync(join(root, PROJECT_CONFIG), 'utf8');
+  } catch {
+    config = null;
+  }
+  return connectArg(bridgePort, projectIdOf(config));
+}
+
+/** The body to send: an HTML page gets the connect snippet, unless it already connects. */
+function servedBody(file: string, body: Buffer, connect: string | undefined): Buffer | string {
+  if (undefined === connect || HTML_EXTENSION !== extname(file).toLowerCase()) {
+    return body;
+  }
+  return withStaticSnippet(body.toString('utf8'), connect) ?? body;
 }
 
 function listen(server: Server, port: number, host: string): Promise<void> {
@@ -89,6 +120,8 @@ function closeServer(server: Server): Promise<void> {
 export async function startStaticPageServer(opts: {
   root: string;
   port: number;
+  /** The connect literal to add to each HTML page. Absent: pages are served as written. */
+  connect?: string | undefined;
 }): Promise<StaticPageServer> {
   const root = resolve(opts.root);
   const handler = (req: IncomingMessage, res: ServerResponse): void => {
@@ -106,7 +139,7 @@ export async function startStaticPageServer(opts: {
         'content-type': CONTENT_TYPES[extname(file).toLowerCase()] ?? FALLBACK_TYPE,
         'cache-control': 'no-store',
       });
-      res.end(body);
+      res.end(servedBody(file, body, opts.connect));
     });
   };
   const v4 = createServer(handler);
@@ -137,7 +170,9 @@ export async function startStaticPageServer(opts: {
     url: `http://${ANNOUNCED_HOST}:${String(bound)}/`,
     close: async () => {
       await closeServer(v4);
-      if (hasV6) await closeServer(v6);
+      if (hasV6) {
+        await closeServer(v6);
+      }
     },
   };
 }
@@ -149,10 +184,16 @@ export async function startStaticPageServer(opts: {
 export function staticPageDevCommand(opts: {
   appDir: string;
   isStaticPage: boolean;
+  /** The daemon port the added snippet dials. Absent: the page is served as written. */
+  bridgePort?: number | undefined;
 }): string | undefined {
-  if (!opts.isStaticPage || !existsSync(join(opts.appDir, STATIC_PAGE_INDEX))) return undefined;
+  if (!opts.isStaticPage || !existsSync(join(opts.appDir, STATIC_PAGE_INDEX))) {
+    return undefined;
+  }
   const script = fileURLToPath(import.meta.url).replace(/\.ts$/, '.js');
-  return `"${process.execPath}" "${script}" ${DIR_FLAG} "${opts.appDir}"`;
+  const bridge =
+    undefined === opts.bridgePort ? '' : ` ${BRIDGE_PORT_FLAG} ${String(opts.bridgePort)}`;
+  return `"${process.execPath}" "${script}" ${DIR_FLAG} "${opts.appDir}"${bridge}`;
 }
 
 function flag(argv: readonly string[], name: string): string | undefined {
@@ -164,7 +205,9 @@ function flag(argv: readonly string[], name: string): string | undefined {
 if (undefined !== process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const dir = flag(process.argv, DIR_FLAG) ?? process.cwd();
   const port = Number(flag(process.argv, PORT_FLAG) ?? STATIC_PAGE_FIRST_PORT);
-  startStaticPageServer({ root: dir, port }).then(
+  const bridgePort = flag(process.argv, BRIDGE_PORT_FLAG);
+  const connect = undefined === bridgePort ? undefined : staticPageConnect(dir, Number(bridgePort));
+  startStaticPageServer({ root: dir, port, connect }).then(
     (server) => process.stdout.write(`serving ${dir}\n  Local: ${server.url}\n`),
     (err: unknown) => {
       process.stderr.write(`static page server: ${String(err)}\n`);

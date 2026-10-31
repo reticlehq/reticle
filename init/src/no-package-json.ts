@@ -8,6 +8,7 @@
  */
 
 import { dirname, join } from 'node:path';
+import { ReticleTool } from '@reticlehq/core';
 import { PackageManager, Framework } from './detect/detect.js';
 import { PACKAGE_JSON } from './detect/workspace-apps.js';
 import {
@@ -21,6 +22,7 @@ import {
 import { InitFailure } from './diagnose/init-failure.js';
 import {
   HTML_INDEX_PATH,
+  hasStaticSnippet,
   STATIC_TOKEN_MODULE,
   staticTokenFiles,
   withStaticSnippet,
@@ -50,6 +52,15 @@ const TOKEN_MODULE_WRITTEN =
   `This machine’s pairing token is in ${STATIC_TOKEN_MODULE}, which is gitignored. Serve it beside ` +
   'the page: the snippet imports it. Keep it out of anything you publish.';
 const SNIPPET_ALREADY = `${HTML_INDEX_PATH} already loads the Reticle SDK — nothing to change.`;
+/**
+ * Said when Reticle's static server serves the page, so the file stays as the user wrote it (#1544).
+ * The lease route is named first because it changes no file at all.
+ */
+const SNIPPET_SERVED =
+  `${HTML_INDEX_PATH} is unchanged. Reticle's static server adds the dev-only connect snippet to ` +
+  `the page that it serves. This machine's pairing token is in ${STATIC_TOKEN_MODULE}, which is ` +
+  'gitignored. To serve the folder another way, change no file: serve it, then call ' +
+  `\`${ReticleTool.LEASE} { action: "acquire", url }\`.`;
 /** How far up `init` looks for the app it was run inside. The same bound as the workspace walk. */
 const MAX_ANCESTOR_DEPTH = 8;
 const HOME_FOLDER =
@@ -69,11 +80,17 @@ const insideApp = (dir: string): string =>
 function namedDirectory(io: InitIo): string | undefined {
   const home = io.homeDir();
   let dir = io.cwd();
-  if (dir === home) return HOME_FOLDER;
+  if (dir === home) {
+    return HOME_FOLDER;
+  }
   for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
     const parent = dirname(dir);
-    if (parent === dir || parent === home) return undefined;
-    if (null !== io.readFile(join(parent, PACKAGE_JSON))) return insideApp(parent);
+    if (parent === dir || parent === home) {
+      return undefined;
+    }
+    if (null !== io.readFile(join(parent, PACKAGE_JSON))) {
+      return insideApp(parent);
+    }
     dir = parent;
   }
   return undefined;
@@ -106,24 +123,53 @@ function printedSnippet(streamlit: boolean, django: boolean, connect: string): s
   return staticPageSnippetWithLocalToken(connect);
 }
 
+/** The line `wireStaticPage` prints, in the order of its cases. */
+function staticPageLine(
+  written: string | null,
+  moved: { from: number } | null,
+  port: number | undefined,
+  served: boolean,
+): string {
+  if (null !== written) {
+    return SNIPPET_WRITTEN;
+  }
+  if (null !== moved && port !== undefined) {
+    return `Updated ${HTML_INDEX_PATH}: ${portMoveDetail(moved.from, port)}.`;
+  }
+  return served ? SNIPPET_SERVED : SNIPPET_ALREADY;
+}
+
+/** What to say for this kind of project before its snippet. */
+function setupMessage(streamlit: boolean, django: boolean, otherwise: string): string {
+  if (streamlit) {
+    return streamlitSetupMessage();
+  }
+  if (django) {
+    return djangoSetupMessage();
+  }
+  return otherwise;
+}
+
 function wireStaticPage(options: InitOptions, io: InitIo, connect: string): InitResult {
   writeTokenModule(io);
   const html = io.readFile(HTML_INDEX_PATH) ?? '';
+  // Setup serves the page with Reticle's static server when the user names no url of their own.
+  // That server adds the snippet to the page it serves, so the file the user hands over is not
+  // edited (#1544). With `--url` or `--files-only`, nothing of ours serves it, so the file gets it.
+  const served = true === options.continuesToRuntime && undefined === options.url;
   // A page that already connects still has its port compared: the snippet bakes the daemon URL, and
   // a re-run with a new `--port` that answered "already" left the page dialling the old daemon.
-  const written = withStaticSnippet(html, connect);
+  const written = served ? null : withStaticSnippet(html, connect);
   const moved = null === written ? retargetPort(html, options.port) : null;
   const patched = written ?? moved?.code ?? null;
-  if (null !== patched) io.writeFile(HTML_INDEX_PATH, patched);
-  io.print(
-    null !== written
-      ? SNIPPET_WRITTEN
-      : null !== moved && options.port !== undefined
-        ? `Updated ${HTML_INDEX_PATH}: ${portMoveDetail(moved.from, options.port)}.`
-        : SNIPPET_ALREADY,
-  );
+  if (null !== patched) {
+    io.writeFile(HTML_INDEX_PATH, patched);
+  }
+  io.print(staticPageLine(written, moved, options.port, served && !hasStaticSnippet(html)));
   const outcome = { ok: true, stack: Framework.HTML };
-  if (true !== options.deferOutcome) io.host.reportOutcome(outcome);
+  if (true !== options.deferOutcome) {
+    io.host.reportOutcome(outcome);
+  }
   return {
     ok: true,
     applied: null === patched ? 0 : 1,
@@ -149,7 +195,9 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
   const answer = noPackageJsonAnswer(existsHere, io.rootFiles());
   if (!streamlit && !django && answer.kind === NoPackageJsonCase.WRONG_DIRECTORY) {
     io.print(namedDirectory(io) ?? answer.message);
-    if (!options.dryRun) io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
+    if (!options.dryRun) {
+      io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
+    }
     return { ok: false, applied: 0, manual: 0 };
   }
   // Scope the project on disk before anything else, so the daemon can serve this page.
@@ -176,7 +224,9 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
       io.writeFile(RETICLE_CONFIG_FILE, moved.code);
       io.print(`Updated ${RETICLE_CONFIG_FILE}: ${portMoveDetail(moved.from, options.port)}.`);
     }
-    if (io.exists(RETICLE_CONFIG_FILE)) return;
+    if (io.exists(RETICLE_CONFIG_FILE)) {
+      return;
+    }
     io.writeFile(
       RETICLE_CONFIG_FILE,
       reticleConfigContent(Framework.HTML, options.port, nonJsProjectId, io.host.installSource()),
@@ -202,7 +252,7 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
     // a path problem and goes looking for a directory that cannot exist — reported from a
     // Streamlit app, where the search continued into hunting for a browser bundle to inject by
     // hand before the real answer surfaced.
-    streamlit ? streamlitSetupMessage() : django ? djangoSetupMessage() : answer.message,
+    setupMessage(streamlit, django, answer.message),
   );
   writeConfig();
   // The message says "add the snippet below". Print the snippet, or the message is the same broken
@@ -215,6 +265,8 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
   }
   // The onboarding funnel had NO instrumentation, so a setup that died here was indistinguishable
   // from someone who never ran the command — the two failure modes with the most different fixes.
-  if (!options.dryRun) io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
+  if (!options.dryRun) {
+    io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
+  }
   return { ok: false, applied: 0, manual: 0 };
 }

@@ -481,11 +481,6 @@
       "count": 12
     }
   },
-  "src/command/setup/bringup/static-page-server.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
   "src/command/setup/desktop-shape.ts": {
     "curly": {
       "count": 4

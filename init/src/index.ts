@@ -68,7 +68,9 @@ export {
   type ObservedWebDocument,
 } from './diagnose/csp-doctor.js';
 export { webCspOptionsFor } from './diagnose/csp-step.js';
-export { reticleConfigContent } from './patch/snippets.js';
+export { connectArg, reticleConfigContent } from './patch/snippets.js';
+/** For Reticle's static server, which adds the snippet to the page it serves (#1544). */
+export { withStaticSnippet } from './patch/static-page.js';
 
 /**
  * MCP registration, for a caller that has no project.

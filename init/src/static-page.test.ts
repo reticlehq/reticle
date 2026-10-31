@@ -117,6 +117,38 @@ describe('init on a page with no package.json', () => {
   });
 });
 
+/**
+ * #1544: init wrote the connect block into index.html, the file the user hands over, even when
+ * Reticle's own static server was about to serve it. That server now adds the block to the page
+ * it serves, so the file on disk stays byte-identical.
+ */
+describe('init on a page that Reticle serves itself', () => {
+  const SERVED: InitOptions = { ...OPTS, continuesToRuntime: true };
+
+  it('leaves index.html unchanged and still hands over to setup', () => {
+    const io = memoryIo({ 'index.html': PAGE });
+    const result = runInit(SERVED, io);
+    expect(result.ok).toBe(true);
+    expect(result.context?.framework).toBe(Framework.HTML);
+    expect(io.written['index.html']).toBeUndefined();
+    expect(io.written[STATIC_TOKEN_MODULE]).toContain(TEST_PAIRING_TOKEN);
+  });
+
+  it('says the file is unchanged and names the lease route', () => {
+    const io = memoryIo({ 'index.html': PAGE });
+    runInit(SERVED, io);
+    const out = io.lines.join('\n');
+    expect(out).toContain('index.html is unchanged');
+    expect(out).toContain('reticle_lease');
+  });
+
+  it('still writes the page when the user serves it with --url', () => {
+    const io = memoryIo({ 'index.html': PAGE });
+    runInit({ ...SERVED, url: 'http://localhost:8000/' }, io);
+    expect(io.written['index.html']).toContain(STATIC_SNIPPET_MARKER);
+  });
+});
+
 describe('a package.json with no UI library', () => {
   it('installs the framework-neutral sensor, not the React adapter and react', () => {
     expect(frameworkPackages(Framework.HTML, UiLibrary.UNKNOWN)).toEqual(['@reticlehq/browser']);

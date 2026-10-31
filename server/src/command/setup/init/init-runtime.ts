@@ -345,6 +345,8 @@ export async function continueAfterInit(
         const devCommand = staticPageDevCommand({
           appDir: context.appDir,
           isStaticPage: Framework.HTML === context.framework,
+          // The server adds the connect snippet to the page, so init left the file alone (#1544).
+          bridgePort: port,
         });
         return undefined === devCommand ? {} : { devCommand, devCommandIsStaticPage: true };
       })(),

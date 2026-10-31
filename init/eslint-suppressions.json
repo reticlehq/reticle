@@ -39,11 +39,6 @@
       "count": 3
     }
   },
-  "src/detect/non-js-project.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
   "src/detect/prettier-config.ts": {
     "curly": {
       "count": 2
@@ -115,14 +110,6 @@
   "src/memory-io.test-helpers.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/no-package-json.ts": {
-    "curly": {
-      "count": 8
-    },
-    "no-nested-ternary": {
-      "count": 2
     }
   },
   "src/node-io.ts": {

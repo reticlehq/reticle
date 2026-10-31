@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   STATIC_PAGE_INDEX,
+  staticPageConnect,
   staticPageDevCommand,
   startStaticPageServer,
   type StaticPageServer,
@@ -61,5 +62,58 @@ describe('when init serves the page itself', () => {
     expect(staticPageDevCommand({ appDir: root, isStaticPage: false })).toBeUndefined();
     const empty = mkdtempSync(join(tmpdir(), 'reticle-static-empty-'));
     expect(staticPageDevCommand({ appDir: empty, isStaticPage: true })).toBeUndefined();
+  });
+});
+
+/**
+ * #1544: init wrote the connect block into index.html, the file the user hands over. The server
+ * now adds the block to the HTML it serves, so the file on disk stays byte-identical.
+ */
+describe('the connect block the static server adds to the page it serves', () => {
+  const CONNECT = "{ projectId: 'site' }";
+  const MARKER = 'reticle:connect';
+  let running: StaticPageServer | undefined;
+  afterEach(async () => {
+    await running?.close();
+    running = undefined;
+  });
+
+  it('is in the served page and not in the file on disk', async () => {
+    const root = site();
+    const before = readFileSync(join(root, STATIC_PAGE_INDEX));
+    running = await startStaticPageServer({ root, port: 0, connect: CONNECT });
+    const page = await (await fetch(running.url)).text();
+    expect(page).toContain(MARKER);
+    expect(page).toContain(`reticle.connect({ ...${CONNECT}, token: local.token })`);
+    expect(page).toContain('home');
+    expect(readFileSync(join(root, STATIC_PAGE_INDEX)).equals(before)).toBe(true);
+  });
+
+  it('is not added to a script, or twice to a page that already connects', async () => {
+    const root = site();
+    running = await startStaticPageServer({ root, port: 0, connect: CONNECT });
+    expect(await (await fetch(`${running.url}js/app.js`)).text()).toBe('window.loaded = 1;');
+    const once = await (await fetch(running.url)).text();
+    writeFileSync(join(root, STATIC_PAGE_INDEX), once);
+    expect(await (await fetch(running.url)).text()).toBe(once);
+  });
+
+  it('is not added when the server has no connect', async () => {
+    running = await startStaticPageServer({ root: site(), port: 0 });
+    expect(await (await fetch(running.url)).text()).toBe('<html><body>home</body></html>');
+  });
+
+  it('reads the project id from .reticle.json and names a bridge port that is not the default', () => {
+    const root = site();
+    writeFileSync(join(root, '.reticle.json'), '{ "projectId": "site-1" }');
+    expect(staticPageConnect(root, 14544)).toBe(
+      "{ url: 'ws://localhost:14544/reticle', projectId: 'site-1' }",
+    );
+  });
+
+  it('is asked for by the command init runs, with the bridge port', () => {
+    expect(
+      staticPageDevCommand({ appDir: site(), isStaticPage: true, bridgePort: 14544 }),
+    ).toContain('--bridge-port 14544');
   });
 });

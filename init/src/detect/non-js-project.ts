@@ -16,6 +16,8 @@
  * found anywhere.
  */
 
+import { ReticleTool } from '@reticlehq/core';
+
 /** Marker files that identify an ecosystem, and what to call it. */
 const ECOSYSTEM_MARKERS: readonly (readonly [string, string])[] = [
   ['requirements.txt', 'Python'],
@@ -51,11 +53,15 @@ export function detectStreamlitProject(
 ): boolean {
   for (const file of STREAMLIT_DEPENDENCY_FILES) {
     const source = readFile(file);
-    if (null !== source && STREAMLIT_DEPENDENCY.test(source)) return true;
+    if (null !== source && STREAMLIT_DEPENDENCY.test(source)) {
+      return true;
+    }
   }
   for (const file of rootFiles.filter((name) => name.endsWith('.py'))) {
     const source = readFile(file);
-    if (null !== source && STREAMLIT_IMPORT.test(source)) return true;
+    if (null !== source && STREAMLIT_IMPORT.test(source)) {
+      return true;
+    }
   }
   return false;
 }
@@ -84,8 +90,12 @@ export function detectDjangoProject(
   exists: (file: string) => boolean,
   rootDirectories: readonly string[] = [],
 ): boolean {
-  if (!exists('manage.py')) return false;
-  if (exists('settings.py')) return true;
+  if (!exists('manage.py')) {
+    return false;
+  }
+  if (exists('settings.py')) {
+    return true;
+  }
   return rootDirectories.some((dir) => exists(`${dir}/settings.py`));
 }
 
@@ -107,7 +117,9 @@ export function djangoSetupMessage(): string {
 /** The ecosystem this directory looks like, or undefined when nothing says. */
 export function detectNonJsEcosystem(exists: (file: string) => boolean): string | undefined {
   for (const [marker, name] of ECOSYSTEM_MARKERS) {
-    if (exists(marker)) return name;
+    if (exists(marker)) {
+      return name;
+    }
   }
   return undefined;
 }
@@ -161,8 +173,12 @@ export function noPackageJsonAnswer(
         kind: NoPackageJsonCase.STATIC_PAGE,
         message:
           'This is a static page with no build step, so there is nothing for `reticle init` to wire. ' +
-          'Add the script-tag snippet below to the page while you develop, then reload it. Remove the ' +
-          'snippet before publishing: a static file has no development build to keep it out of production.',
+          // Named first because it changes no file: the page is often the file the user hands over (#1544).
+          'To verify the page without a change to it, serve the folder, then call ' +
+          `\`${ReticleTool.LEASE} { action: "acquire", url }\`. It supplies the SDK to a page that has none. ` +
+          'To connect your own browser, add the script-tag snippet below to the page while you develop, ' +
+          'then reload it. Remove the snippet before publishing: a static file has no development ' +
+          'build to keep it out of production.',
       };
     }
     return {

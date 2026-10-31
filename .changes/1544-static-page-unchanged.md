@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`, `@reticlehq/init`: `reticle init` on a static HTML page edited the file you hand over.** Init wrote the connect snippet into `index.html` and told you to remove it before you publish. A forgotten snippet shipped with the page. Init now leaves `index.html` byte-identical when it serves the folder with Reticle's static server. That server adds the dev-only snippet to the page that it serves. With `--url` or `--files-only`, nothing of Reticle's serves the page, so init still writes the snippet into the file. The static-page message now names the route that changes no file first: serve the folder, then call `reticle_lease { action: "acquire", url }`. Closes [#1544](https://github.com/reticlehq/reticle/issues/1544).

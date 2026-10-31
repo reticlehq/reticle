@@ -136,6 +136,15 @@ describe('which case it picked', () => {
   });
 });
 
+describe('a static page', () => {
+  // #1544: the message only said "add the snippet to the page", the file the user hands over.
+  it('offers the lease route first, which changes no file', () => {
+    const message = noPackageJsonMessage(withFiles(), ['about.html']);
+    expect(message).toContain('reticle_lease { action: "acquire", url }');
+    expect(message.indexOf('reticle_lease')).toBeLessThan(message.indexOf('snippet'));
+  });
+});
+
 describe('Flutter, which cannot be helped by any directory', () => {
   it('is recognised by its pubspec', () => {
     expect(detectNonJsEcosystem(withFiles('pubspec.yaml'))).toBe('Flutter');

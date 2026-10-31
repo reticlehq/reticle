@@ -287,7 +287,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 Change the `./reticle.local.js` path so that it points to the project root from your entry module. Do not commit `reticle.local.js`: the token is for this machine only. A teammate runs `reticle init` to get their own.
 
-Plain HTML with no build step: run `npx @reticlehq/server init` in the folder that holds `index.html`. It adds a dev-only snippet that connects only on localhost, and puts this machine's pairing token in a gitignored `reticle.local.js` beside the page, so the token never lands in anything you publish. A hand-written script tag without that token is refused by the bridge.
+Plain HTML with no build step: run `npx @reticlehq/server init` in the folder that holds `index.html`. Init does not change `index.html`. It serves the folder with Reticle's static server, which adds a dev-only connect snippet to the page that it serves. With `--url` or `--files-only`, nothing of Reticle's serves the page, so init writes the snippet into `index.html`. That snippet connects only on localhost. Init puts this machine's pairing token in a gitignored `reticle.local.js` beside the page, so the token never lands in anything you publish. A hand-written script tag without that token is refused by the bridge.
 
 > **Want to watch the agent work?** Add `present: true` to `reticle.connect()` for a glowing border, a synthetic cursor that flies to targets, click/hover effects, and a narration HUD. See [usage §16](usage.md#16-presenter-mode-narration-&-fake-clock-watch-+-control).
 
