@@ -10,9 +10,9 @@
 // other half, and it is the half the issue is actually about — a real Chromium, a real keyboard, and
 // `document.activeElement` read before and after.
 //
-// The control at the end matters as much as the assertion: the SAME key aimed at a named element
-// stays synthetic, and a synthetic Tab does NOT move focus. Without it, "focus moved" could pass for
-// a reason unrelated to the routing.
+// The second half pins the aimed key: the same key WITH a ref focuses that element first and then
+// presses the real key, so focus ends past the named control, not on the control that held focus
+// before. (It used to stay synthetic, and a synthetic Enter submitted no form.)
 //
 // Needs the next-smoke app on :3100 — it has a known tab order (ping-button, add-task, edit-field).
 import net from 'node:net';
@@ -128,33 +128,35 @@ try {
   chk('the real keyboard MOVED focus', afterReal !== beforeReal, `${beforeReal} -> ${afterReal}`);
   chk('  to the next control in tab order', 'edit-field' === afterReal, afterReal);
 
-  // The control. The same key WITH a ref stays synthetic — a real keyboard cannot aim at an element
-  // — and a synthetic key event does not move focus. If this passed with focus moving, the assertion
-  // above would be measuring something other than the routing.
+  // A key WITH a ref is aimed at that element: Reticle focuses it, confirms it holds focus, then
+  // presses the real key, as a person clicks into a field before typing. It used to stay synthetic
+  // ("a real keyboard cannot aim at an element"), and a synthetic key gets no default action, so a
+  // recorded Enter in a text field submitted nothing. Aimed at a control OTHER than the focused one,
+  // a real Tab from that control proves both halves: it focused the target, then moved on from it.
   await page.evaluate(() => {
     document.querySelector('[data-testid="add-task"]')?.focus();
   });
-  const beforeSynthetic = await activeControl();
-  const synthetic = await T('reticle_act', {
-    ref: await refOf('testid', 'add-task'),
+  const beforeAimed = await activeControl();
+  const aimed = await T('reticle_act', {
+    ref: await refOf('testid', 'edit-field'),
     action: 'press',
     args: { text: 'Tab' },
   });
   chk(
-    'the same key WITH a ref stays synthetic',
-    'synthetic' === synthetic.inputMode,
-    `inputMode=${String(synthetic.inputMode)}`,
+    'a key WITH a ref also runs through the real keyboard',
+    'real' === aimed.inputMode,
+    `inputMode=${String(aimed.inputMode)}`,
   );
   chk(
-    '  and names why',
-    'synthetic-element-press-preferred' === synthetic.inputModeReason,
-    String(synthetic.inputModeReason),
+    '  and carries no inputModeReason, because it was not a fallback',
+    undefined === aimed.inputModeReason,
+    String(aimed.inputModeReason),
   );
-  const afterSynthetic = await activeControl();
+  const afterAimed = await activeControl();
   chk(
-    '  and a synthetic Tab does NOT move focus, so the difference above is the routing',
-    afterSynthetic === beforeSynthetic,
-    `${beforeSynthetic} -> ${afterSynthetic}`,
+    '  and it focused the named control first, then the real Tab moved on from it',
+    afterAimed !== beforeAimed && afterAimed !== 'edit-field',
+    `${beforeAimed} -> (focus edit-field) -> ${afterAimed}`,
   );
 } finally {
   await browser.close();
