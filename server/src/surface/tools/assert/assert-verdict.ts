@@ -46,35 +46,7 @@ import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource, stampedSourceIn } from './assert-source.js';
 import { VerdictAttribution, verdictAttributionOf } from '@reticlehq/core';
 import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
-import { sdkBehindNote } from '@/portal/session/session-info.js';
-
-// Unanchored: the engine prefixes the reason with "the page did not answer:".
-const COMMAND_TIMEOUT = /command '[^']*' timed out after (\d+)ms/;
-
-/**
- * The cause and the one fix for a read that came back `unknown`, in place of a bare fact (#1990).
- * A page whose SDK is behind this daemon may not serve `match` at all, so the fix is the same
- * SDK-behind sentence the listing shows. On a current page the read ran out of the assertion's own
- * budget, and the fix is more of it.
- */
-function diagnoseTimeout(
-  reason: string,
-  session: { readonly sdkVersion?: string | undefined },
-): string {
-  const behind = sdkBehindNote(session);
-  if (behind !== undefined) {
-    return `${reason} ${behind}`;
-  }
-  const granted = COMMAND_TIMEOUT.exec(reason)?.[1];
-  if (granted === undefined) {
-    return reason;
-  }
-  return (
-    `${reason} This read was bounded by what the assertion's budget had left ` +
-    `(${granted}ms): the budget ran out while the page was still working. ` +
-    'Give the assertion more time with `timeout_ms`.'
-  );
-}
+import { diagnoseTimeout } from '@/surface/tools/act/act-observation.js';
 
 /**
  * The honesty verdict for a plain `reticle_assert`.
@@ -218,10 +190,7 @@ export async function assertVerdict(
   const stillInFlight = inFlightRequestLabels(windowEvents, session.url, session.background);
   const rawInconclusive = inconclusive ?? (!pass ? session.preconditionFailure?.() : undefined);
   // A timed-out page read is the one `unknown` whose cause and fix are knowable here (#1990).
-  let effectiveInconclusive: string | undefined = rawInconclusive;
-  if (rawInconclusive !== undefined && COMMAND_TIMEOUT.test(rawInconclusive)) {
-    effectiveInconclusive = diagnoseTimeout(rawInconclusive, session);
-  }
+  const effectiveInconclusive = diagnoseTimeout(rawInconclusive, session);
   /**
    * Does a green here rest on the window having been COMPLETE?
    *

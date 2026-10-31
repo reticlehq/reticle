@@ -13,6 +13,7 @@
 
 import { EventType, asRecord, asString, isDevToolingUrl, type ReticleEvent } from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
+import { sdkBehindNote } from '@/portal/session/session-info.js';
 import {
   awaitDocumentSuccessor,
   type SuccessorRegistry,
@@ -113,6 +114,42 @@ export function unreachableTargetNote(actResult: unknown): string | undefined {
 export function actTargetNote(pass: boolean, actResult: unknown): string | undefined {
   return unreachableTargetNote(actResult) ?? disabledTargetNote(pass, actResult);
 }
+
+// Unanchored: the engine prefixes the reason with "the page did not answer:".
+const COMMAND_TIMEOUT = /command '[^']*' timed out after (\d+)ms/;
+
+/**
+ * The cause and the one fix for a read that came back `unknown`, in place of a bare fact (#1990).
+ * A page whose SDK is behind this daemon may not serve `match` at all, so the fix is the same
+ * SDK-behind sentence the listing shows. On a current page the read ran out of the assertion's own
+ * budget, and the fix is more of it. Any reason that is not a command timeout is returned as it came.
+ */
+export function diagnoseTimeout(
+  reason: string | undefined,
+  session: { readonly sdkVersion?: string | undefined },
+): string | undefined {
+  const granted = reason === undefined ? undefined : COMMAND_TIMEOUT.exec(reason)?.[1];
+  if (reason === undefined || granted === undefined) {
+    return reason;
+  }
+  const behind = sdkBehindNote(session);
+  if (behind !== undefined) {
+    return `${reason} ${behind}`;
+  }
+  return (
+    `${reason} This read was bounded by what the assertion's budget had left ` +
+    `(${granted}ms): the budget ran out while the page was still working. ` +
+    'Give the assertion more time with `timeout_ms`.'
+  );
+}
+
+/** Why an act's verdict is `unknown`: a read that timed out, else an unreachable or disabled target. */
+export const actInconclusive = (
+  verdict: { pass: boolean; inconclusive?: string | undefined },
+  actResult: unknown,
+  session: Session,
+): string | undefined =>
+  diagnoseTimeout(verdict.inconclusive, session) ?? actTargetNote(verdict.pass, actResult);
 
 /** Calls quoted on a failed check, and how much of each response body. */
 const MAX_NET_CALLS = 5;
