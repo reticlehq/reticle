@@ -239,6 +239,19 @@ function hasNoSize(el: ActionTarget): boolean {
   return rects.length > 0 && rects.every((r) => 0 === r.width || 0 === r.height);
 }
 
+/** The first label of a form control that has a box a pointer can land on, or null. */
+function sizedLabelOf(el: ActionTarget): HTMLLabelElement | null {
+  // Every labelable element (input, select, textarea, button, meter, output, progress) has `labels`.
+  const labels = 'labels' in el ? (el as HTMLInputElement).labels : null;
+  for (const label of labels ?? []) {
+    const box = label.getBoundingClientRect();
+    if (0 < box.width && 0 < box.height) {
+      return label;
+    }
+  }
+  return null;
+}
+
 /**
  * Click-like geometry honesty: scroll an off-viewport target into view, then hit-test the click
  * point. Synthetic dispatch always reaches the target regardless — this is purely so the agent
@@ -249,8 +262,20 @@ export function clickGeometry(el: ActionTarget): ClickGeometry {
     return NO_GEOMETRY;
   }
   let rect = el.getBoundingClientRect();
+  // With layout, a box with no width OR no height has nowhere for a pointer to land (a table cell
+  // collapsed a row checkbox to 0×16). Without layout every box reads 0×0 and says nothing.
+  const sizeless = isMeasurable(rect) ? 0 === rect.width || 0 === rect.height : hasNoSize(el);
+  if (sizeless) {
+    // A hidden input under a styled label is the common custom-checkbox pattern: a person clicks
+    // the label, and the label toggles the input. Measure what the person clicks.
+    const label = sizedLabelOf(el);
+    if (label !== null) {
+      return clickGeometry(label);
+    }
+    return { ...NO_GEOMETRY, noSize: true };
+  }
   if (!isMeasurable(rect)) {
-    return hasNoSize(el) ? { ...NO_GEOMETRY, noSize: true } : NO_GEOMETRY;
+    return NO_GEOMETRY;
   }
   let scrolledIntoView = false;
   if (isOffViewport(el, rect) && 'function' === typeof el.scrollIntoView) {

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — a click on a control with no width (or no height) counted as a click a person could make.** A table cell collapsed a row checkbox to 0×16. The act result did not say the target had no size, because the old rule asked whether the box had width OR height. A flow that checked every row passed on a page where no user could select a row. Now a box with either side at zero reports `noSize`, so replay and `act_and_wait` say no person could have made the click. A hidden input under a visible, sized label is measured through its label, because a person clicks the label: the common custom-checkbox pattern stays reachable. Refs [#1518](https://github.com/reticlehq/reticle/issues/1518).

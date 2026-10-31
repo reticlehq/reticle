@@ -42,6 +42,51 @@ describe('a click a person could not make', () => {
     expect(r.effect.noSize).toBe(true);
   });
 
+  /*
+   * A table cell collapsed a row checkbox to 0×16: no box to click, nothing on screen. The old rule
+   * asked only whether the box had width OR height, so 0×16 counted as clickable and a flow that
+   * checked every row "passed" on a page where no user could select a row.
+   */
+  it('says the target has no size when only one side of its box is zero', async () => {
+    document.body.innerHTML = '<input type="checkbox" aria-label="Select u25" />';
+    const box = document.querySelector('input') as HTMLElement;
+    const thin = new DOMRect(40, 100, 0, 16);
+    box.getBoundingClientRect = () => thin;
+    box.getClientRects = () => [thin] as unknown as DOMRectList;
+    Object.defineProperty(document, 'elementFromPoint', {
+      value: () => box,
+      configurable: true,
+      writable: true,
+    });
+    const r = await executeAction(refs.refFor(box), 'check');
+    expect(r.effect.noSize).toBe(true);
+  });
+
+  /*
+   * Many apps hide the real checkbox and draw a styled label. A person clicks the label, and the
+   * label toggles the input, so the control IS reachable: it must not be reported as sizeless.
+   */
+  it('treats a sizeless input with a visible label as reachable through the label', async () => {
+    document.body.innerHTML =
+      '<label id="lbl"><input type="checkbox" id="cb" /> Show advanced options</label>';
+    const box = document.querySelector('#cb') as HTMLElement;
+    const label = document.querySelector('#lbl') as HTMLElement;
+    const none = new DOMRect(10, 10, 0, 0);
+    box.getBoundingClientRect = () => none;
+    box.getClientRects = () => [none] as unknown as DOMRectList;
+    const shown = new DOMRect(10, 10, 160, 20);
+    label.getBoundingClientRect = () => shown;
+    label.getClientRects = () => [shown] as unknown as DOMRectList;
+    Object.defineProperty(document, 'elementFromPoint', {
+      value: () => label,
+      configurable: true,
+      writable: true,
+    });
+    const r = await executeAction(refs.refFor(box), 'check');
+    expect(r.effect.noSize).toBeUndefined();
+    expect(r.effect.occluded).toBeFalsy();
+  });
+
   it('says nothing about size when there is no layout at all', async () => {
     document.body.innerHTML = '<button>Sign in</button>';
     const button = document.querySelector('button') as HTMLElement;
