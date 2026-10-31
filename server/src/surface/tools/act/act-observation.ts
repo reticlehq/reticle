@@ -84,7 +84,7 @@ const UNREACHABLE = {
     `a person could not have clicked the target: it is covered by ${by}. Dismiss or move what ` +
     'covers it, then act again',
   NO_SIZE:
-    'a person could not have clicked the target: it has no size (0×0). Give it a size, or act on ' +
+    'a person could not have clicked the target: it has no size (zero width or zero height). Give it a size, or act on ' +
     'the control a person actually clicks',
   OFF_VIEWPORT:
     'a person could not have clicked the target: it is outside the viewport even after scrolling ' +

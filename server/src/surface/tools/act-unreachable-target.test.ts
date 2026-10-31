@@ -139,6 +139,9 @@ describe('act_and_wait on a target a person could not reach', () => {
     const r = await actAndWait(appearsAfter({ noSize: true, visible: false }));
     expect(r['verified']).toBe(Verified.UNKNOWN);
     expect(String(r['because'])).toContain('has no size');
+    // noSize covers a box with EITHER side at zero (a 0×16 checkbox), so it must not claim 0×0.
+    expect(String(r['because'])).not.toContain('0×0');
+    expect(String(r['because'])).toContain('zero width or zero height');
   });
 
   it('is unknown when the target stayed off screen after scrolling', async () => {
