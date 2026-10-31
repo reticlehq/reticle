@@ -26,7 +26,27 @@ const FIELD_TO_STRATEGY: readonly (readonly [string, string])[] = [
   ['role', 'role'],
 ];
 
-export function normalizeQueryArgs(args: Record<string, unknown>): Record<string, unknown> {
+/** Every query field whose value the engine reads as a string. */
+const STRING_QUERY_FIELDS = [
+  'name',
+  'role',
+  'testid',
+  'text',
+  'label',
+  'placeholder',
+  'alt',
+] as const;
+
+export function normalizeQueryArgs(args: Record<string, unknown>): Error | Record<string, unknown> {
+  // Every field the query engine reads as a string must be a string when present. A non-string
+  // value is silently dropped further down, so the query matches more elements than asked for —
+  // the wrong element may be acted on, or an ambiguity refusal fires with a misleading reason (#1777).
+  for (const field of STRING_QUERY_FIELDS) {
+    const v = args[field];
+    if (v !== undefined && 'string' !== typeof v) {
+      return new Error(`target.${field} must be a string, got ${typeof v}`);
+    }
+  }
   // An explicit pair is the contract; never second-guess it.
   if ('string' === typeof args['by'] && 'string' === typeof args['value']) return args;
   for (const [field, strategy] of FIELD_TO_STRATEGY) {

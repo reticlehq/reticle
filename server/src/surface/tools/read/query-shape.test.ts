@@ -57,8 +57,15 @@ describe('normalizeQueryArgs', () => {
   it('leaves a call with neither shape alone, so the schema error still explains itself', () => {
     // Inventing a query here would turn "you forgot the arguments" into a confident wrong answer.
     const out = normalizeQueryArgs({ limit: 5 });
+    if (out instanceof Error) { throw out; }
     expect(out['by']).toBeUndefined();
     expect(out['value']).toBeUndefined();
+  });
+
+  it('returns an Error when a string field is given a non-string value', () => {
+    const out = normalizeQueryArgs({ role: 'button', name: {} });
+    expect(out).toBeInstanceOf(Error);
+    expect((out as Error).message).toMatch(/target\.name must be a string/);
   });
 
   it('carries the untouched params through', () => {

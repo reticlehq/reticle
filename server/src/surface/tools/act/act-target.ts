@@ -84,6 +84,9 @@ export async function resolveActTarget(
     return { kind: 'ref', ref: target };
   }
   const q = normalizeQueryArgs(asRecord(target));
+  if (q instanceof Error) {
+    return { kind: 'error', message: q.message };
+  }
   // A target that names nothing (a CSS string, an empty object) is not sent to the page: there it
   // read as "matched no element", which says the element is gone when nothing was searched.
   const empty = emptyQueryRefusal(q);
