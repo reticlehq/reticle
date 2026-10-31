@@ -1,4 +1,5 @@
 import {
+  NetInitiator,
   ContradictionKind,
   EventType,
   isAbsenceDerived,
@@ -141,7 +142,9 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
             : undefined;
     return value !== undefined && errors.some((text) => value.includes(text));
   });
-  if (echoesAnError) return true;
+  if (echoesAnError) {
+    return true;
+  }
   // So does the accessible way of telling a user something went wrong: an alert appearing, or a
   // field marked invalid. A rejected write that is the behaviour under test (a 409 on a duplicate
   // email) is acknowledged exactly this way, and was contradicted for it (#984).
@@ -152,14 +155,19 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
         ARIA_INVALID === e.data['attr'] &&
         'true' === e.data['value']),
   );
-  if (shownAsError) return true;
+  if (shownAsError) {
+    return true;
+  }
 
   return events.some((e) => {
     // A failure-shaped SIGNAL is an acknowledgement too. An app that fires `auth:denied` has plainly
     // not proceeded as if it succeeded, whatever its state paths happen to be named.
-    if (e.type === EventType.SIGNAL)
+    if (e.type === EventType.SIGNAL) {
       return signalAcknowledgesFailure(asString(e.data['name']) ?? '');
-    if (e.type !== EventType.STATE_CHANGE) return false;
+    }
+    if (e.type !== EventType.STATE_CHANGE) {
+      return false;
+    }
     const path = asString(e.data['path']) ?? '';
     const value = e.data['value'];
     return ACKNOWLEDGED.test(path) || ('string' === typeof value && ACKNOWLEDGED.test(value));
@@ -192,8 +200,12 @@ function didNothing(
   requests: readonly NetCall[],
   mutatedWithin: number | undefined,
 ): boolean {
-  if (mutatedWithin === undefined) return 0 === events.length;
-  if (mutatedWithin > 0 || requests.length > 0) return false;
+  if (mutatedWithin === undefined) {
+    return 0 === events.length;
+  }
+  if (mutatedWithin > 0 || requests.length > 0) {
+    return false;
+  }
   return !events.some(
     (e) => e.type === EventType.ROUTE_CHANGE || e.type === EventType.VISIBLE_SHOWN,
   );
@@ -218,7 +230,9 @@ function didNothing(
 function pageWasHidden(events: readonly ReticleEvent[], options: ContradictionOptions): boolean {
   // The caller states it when it knows. A heartbeat landing inside the window is the fallback, not
   // the mechanism — see the option doc for why the window alone cannot be trusted to carry one.
-  if (options.pageHidden !== undefined) return options.pageHidden;
+  if (options.pageHidden !== undefined) {
+    return options.pageHidden;
+  }
   return events.some(
     (e) =>
       e.type === EventType.PAGE_HEALTH &&
@@ -244,7 +258,9 @@ export function findContradictions(
   const predates =
     allEvents.length > 0 &&
     allEvents.every((e) => !isSameEditEpoch(e.editEpoch, options.currentEditEpoch));
-  if (!predates) return found;
+  if (!predates) {
+    return found;
+  }
   // Prepended, not appended: the caveat governs how everything under it should be read, and it has
   // to survive the rules that return early with a single finding of their own.
   return [
@@ -727,12 +743,20 @@ function findWindowContradictions(
       { t: number; landed: boolean; identity: WriteIdentity | undefined }[]
     >();
     for (const event of events) {
-      if (event.type !== EventType.NET_REQUEST || event.t < actionSince) continue;
-      if (navigatedAt !== undefined && event.t >= navigatedAt) continue;
+      if (event.type !== EventType.NET_REQUEST || event.t < actionSince) {
+        continue;
+      }
+      if (navigatedAt !== undefined && event.t >= navigatedAt) {
+        continue;
+      }
       const call = netCall(event);
-      if (!isMutating(call)) continue;
+      if (!isMutating(call)) {
+        continue;
+      }
       // Declared a read by the assertion itself (#1353): a repeat is the app reading twice.
-      if (isDeclaredRead(call, options.repeatableNetUrls)) continue;
+      if (isDeclaredRead(call, options.repeatableNetUrls)) {
+        continue;
+      }
       const label = `${call.method} ${call.url}`;
       const calls = writes.get(label) ?? [];
       // `landed` is tracked per call rather than counted here, because the claim is about what
@@ -760,7 +784,9 @@ function findWindowContradictions(
       for (const group of groups) {
         const times = group.map((c) => c.t);
         const landed = group.filter((c) => c.landed).length;
-        if (times.length < 2) continue;
+        if (times.length < 2) {
+          continue;
+        }
         // The identity also has to say WHICH PAYLOAD, not only which action ran. A group held
         // together by an action id over bodies the record could not read keeps the uncertainty in
         // its wording: two runs of one action can carry different form data.
@@ -771,12 +797,16 @@ function findWindowContradictions(
         // failed are not a double submit either — nothing applied even once, so the claim "one user
         // action was performed" is not contradicted by them. A call with no verdict at all still
         // counts, because absence of a status is not evidence the write was rejected.
-        if (landed < 2) continue;
+        if (landed < 2) {
+          continue;
+        }
         // A steady cadence is a POLL, and a poll is not a double submit. An app that polls could not
         // produce a verdict at all: a camera scan loop POSTing until it acquires a lock had every
         // assertion that had already seen its consequence come back `unknown` behind writes that
         // were the app working correctly (#673).
-        if (isSteadyCadence(times)) continue;
+        if (isSteadyCadence(times)) {
+          continue;
+        }
         // A burst the assertion never mentioned is still worth telling the caller about -- a retry
         // loop or a bursty beacon is a real finding -- but it is not evidence about the consequence
         // they declared, so it is reported and decides nothing. The named case keeps its downgrade:
@@ -814,7 +844,11 @@ function findWindowContradictions(
         .filter((id): id is string => id !== undefined),
     );
     const inFlight = events
-      .filter((e) => e.type === EventType.NET_PENDING)
+      // A departure never completes by construction (NetInitiator.NAVIGATION): the browser leaves,
+      // or turns it into a download and stays. The settle oracle already excludes it; so does this.
+      .filter(
+        (e) => e.type === EventType.NET_PENDING && e.data['initiator'] !== NetInitiator.NAVIGATION,
+      )
       .map((e) => ({ id: asString(e.data['id']), call: netCall(e) }))
       .filter((p) => p.id === undefined || !settledIds.has(p.id));
     if (inFlight.length > 0) {
@@ -864,29 +898,37 @@ export function findStalledPagination(
   prior: readonly ReticleEvent[] = [],
 ): OwnContradiction[] {
   const moved = events.flatMap((event) => {
-    if (event.type !== EventType.DOM_TEXT) return [];
+    if (event.type !== EventType.DOM_TEXT) {
+      return [];
+    }
     const now = pageNumber(event.data['text']);
     const before = pageNumber(event.data['old']);
     return now !== undefined && before !== undefined && now !== before ? [{ before, now }] : [];
   });
   const label = moved[0];
-  if (label === undefined) return [];
+  if (label === undefined) {
+    return [];
+  }
 
   const last = new Map<string, { param: string; value: string; query: string }>();
   for (const event of prior) {
     const request = pageRequest(event);
-    if (request !== undefined) last.set(request.path, request);
+    if (request !== undefined) {
+      last.set(request.path, request);
+    }
   }
   for (const event of events) {
     const request = pageRequest(event);
-    if (request === undefined) continue;
+    if (request === undefined) {
+      continue;
+    }
     const previous = last.get(request.path);
     if (
       previous !== undefined &&
       previous.param === request.param &&
       previous.value === request.value &&
       previous.query === request.query
-    )
+    ) {
       return [
         {
           kind: ContradictionKind.PAGINATION_NOT_FETCHED,
@@ -895,6 +937,7 @@ export function findStalledPagination(
           detail: `${String(event.data['url'])} — the rows shown are still the earlier page, so everything past it cannot be reached`,
         },
       ];
+    }
     last.set(request.path, request);
   }
   return [];

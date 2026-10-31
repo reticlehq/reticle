@@ -38,9 +38,6 @@
     }
   },
   "src/disagreement/contradictions.ts": {
-    "curly": {
-      "count": 20
-    },
     "no-nested-ternary": {
       "count": 2
     }

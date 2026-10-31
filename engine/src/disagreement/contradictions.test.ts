@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ContradictionKind,
+  NetInitiator,
   EventType,
   FieldChangeField,
   FieldChangeKind,
@@ -267,6 +268,21 @@ describe('findContradictions — cross-channel disagreement', () => {
   it('catches the UI advancing over a request that never settled', () => {
     const pending = ev(EventType.NET_PENDING, { id: 'n99', method: 'POST', url: '/api/slow' });
     expect(causedKinds([pending, domChanged()])).toEqual([ContradictionKind.REQUEST_NEVER_SETTLED]);
+  });
+
+  /*
+   * A departure (`initiator: navigation`) is the browser leaving for a URL, recorded as a pending that
+   * by construction never completes. A click on an export link that becomes a download leaves one
+   * behind while the page stays, so every working export read `request-never-settled`.
+   */
+  it('does not count a departure as a request that never settled', () => {
+    const departure = ev(EventType.NET_PENDING, {
+      id: 'n97',
+      method: 'GET',
+      url: '/api/links/export?search=u0',
+      initiator: NetInitiator.NAVIGATION,
+    });
+    expect(causedKinds([departure, domChanged()])).toEqual([]);
   });
 
   it('does not flag an in-flight request when the UI did not move (the app is still waiting)', () => {
