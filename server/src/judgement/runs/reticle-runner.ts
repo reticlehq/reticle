@@ -15,6 +15,7 @@ import {
   boundFlowName,
   RunFlowStatus,
   VerifyPhase,
+  ReplayStatus,
   type FlowReplayResult,
   type ReticleVerificationRun,
   type RunId,
@@ -73,6 +74,20 @@ export interface VerifyOptions {
   onProgress?: VerifyProgressListener;
 }
 
+/**
+ * A flow whose replay threw (its browser session was lost, the app stopped answering) proves
+ * nothing, and it must not take the other flows of the suite down with it. It is graded as a replay
+ * that could not be completed: skipped, never a pass, with the error as the reason.
+ */
+function replayThatCouldNotRun(name: string, error: unknown): FlowReplayResult {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    name,
+    status: ReplayStatus.UNVERIFIABLE,
+    steps: [],
+    unverifiable: { reason: `the replay stopped before it could be graded: ${message}` },
+  };
+}
 export class ReticleRunner {
   readonly #port: RunnerPort;
 
@@ -117,7 +132,9 @@ export class ReticleRunner {
         name: boundFlowName(name),
         at: start,
       });
-      const replay = await withShotRun(runId, () => this.#port.replayFlow(name));
+      const replay = await withShotRun(runId, () => this.#port.replayFlow(name)).catch(
+        (error: unknown) => replayThatCouldNotRun(name, error),
+      );
       replays.push(replay);
       const mapped = mapReplayToFlowResult(replay, this.#port.now() - start);
       flows.push(mapped);

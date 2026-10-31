@@ -56,6 +56,39 @@ const opts: Omit<VerifyOptions, 'names'> = {
   profile: RunProfile.DEV,
 };
 
+/*
+ * A suite of saved flows lost its browser session in one flow (a flow went to a page that did not
+ * reconnect). The replay threw, `verify` rejected, and the CLI printed one "no browser session
+ * connected" line: no flow got a verdict and no results file was written, so the flows that had
+ * passed were thrown away with the one that broke.
+ */
+describe('a flow whose replay throws', () => {
+  const suite = (): RunnerPort =>
+    port(
+      {
+        first: replay('first', ReplayStatus.OK),
+        // 'lost' is absent from the map, so its replay rejects like a lost session does.
+        last: replay('last', ReplayStatus.OK),
+      },
+      ['first', 'lost', 'last'],
+    );
+
+  it('does not take the other flows down with it', async () => {
+    const run = await new ReticleRunner(suite()).verify(opts);
+    expect(run.flows.map((f) => f.name)).toEqual(['first', 'lost', 'last']);
+    expect(run.flows[0]?.status).toBe('pass');
+    expect(run.flows[2]?.status).toBe('pass');
+  });
+
+  it('is not proved, says why, and keeps the run from passing', async () => {
+    const run = await new ReticleRunner(suite()).verify(opts);
+    const lost = run.flows[1];
+    expect(lost?.status).toBe('skipped');
+    expect(lost?.failureReason).toContain('unreachable: lost');
+    expect(run.verdict.status).not.toBe(VerdictStatus.PASS);
+  });
+});
+
 describe('false-green guarantee', () => {
   it('a healthy flow is the ONLY thing that yields PASS', async () => {
     const run = await new ReticleRunner(

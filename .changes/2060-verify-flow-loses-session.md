@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle verify` gave no result for any flow when one flow lost its session.** A suite of saved flows where one flow went to a page that did not reconnect ended with one `verify failed: no browser session connected` line: no flow got a verdict, and `--results-json` wrote nothing. Now a flow whose replay throws is graded on its own as not proved (skipped, never a pass), with the error as its reason. The other flows keep their verdicts, and the results file is written. If the session does not come back, the later flows are also reported as not proved; re-opening the app's tab between flows is not part of this change. Refs [#2060](https://github.com/reticlehq/reticle/issues/2060).
