@@ -754,6 +754,9 @@ export const ACT_TOOLS: ToolDef[] = [
           // not evidence the destination rendered either — `alreadyTrue` decides that, once.
           renderProved: verdict.pass && !alreadyTrue && declared.rendersContent,
           ...session.lastAct.effect(),
+          // The store paths and signals `until` named tie their changes to this action (#1531).
+          namedStatePaths: declared.statePaths,
+          namedSignals: declared.signalNames,
           currentDocumentId: session.currentDocumentId,
           currentEditEpoch: session.currentEditEpoch,
           appOrigin: session.url,
