@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   devServerLogName,
+  handedOverToOtherPort,
   handedOverUrl,
   recordHandOver,
   stopHandedOver,
@@ -46,6 +47,33 @@ describe('finding the server init handed over', () => {
     recordHandOver(dir, { pid: 4242, url: URL, appDir: APP });
     const live = { alive: () => true, answers: () => Promise.resolve(true) };
     expect(await handedOverUrl(dir, '/work/other-app', live)).toBeUndefined();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+/**
+ * A second `init --port B`, after the daemon on A had stopped, attached to the static server the
+ * first init started. That server adds a snippet that dials A, so the page never reached B. No daemon
+ * on A was left to retire, so nothing restarted the server. The record now keeps the daemon port.
+ */
+describe('a handed-over server that dials another daemon port', () => {
+  const live = { alive: (pid: number) => 4242 === pid };
+
+  it('is stale when the record names another daemon port', () => {
+    const dir = temp();
+    recordHandOver(dir, { pid: 4242, url: URL, appDir: APP, bridgePort: 24601 });
+    expect(handedOverToOtherPort(dir, APP, 24602, live)).toBe(true);
+    expect(handedOverToOtherPort(dir, APP, 24601, live)).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('is not stale when the process is gone, the app is another, or no port was recorded', () => {
+    const dir = temp();
+    recordHandOver(dir, { pid: 4242, url: URL, appDir: APP, bridgePort: 24601 });
+    expect(handedOverToOtherPort(dir, APP, 24602, { alive: () => false })).toBe(false);
+    expect(handedOverToOtherPort(dir, '/work/other-app', 24602, live)).toBe(false);
+    recordHandOver(dir, { pid: 4242, url: URL, appDir: APP });
+    expect(handedOverToOtherPort(dir, APP, 24602, live)).toBe(false);
     rmSync(dir, { recursive: true, force: true });
   });
 });

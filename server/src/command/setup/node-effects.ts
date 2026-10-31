@@ -209,14 +209,20 @@ export class OwnedDevServer {
    *
    * Only `unref` is needed: the output is the supervisor's, so no pipe of ours holds the event loop
    * (`init` once printed "setup complete" and hung on one). `url` is recorded beside the log, so the
-   * next `init` attaches to this server rather than starting a second one beside it.
+   * next `init` attaches to this server rather than starting a second one beside it. `bridgePort`
+   * is recorded too, so the next `init` on another port restarts this server instead.
    */
-  handOver(url?: string): void {
+  handOver(url?: string, bridgePort?: number): void {
     this.handedOver = true;
     this.child?.unref();
     const pid = this.child?.pid;
     if (undefined !== url && undefined !== pid && undefined !== this.cwd) {
-      recordHandOver(this.logDir, { pid, url, appDir: this.cwd });
+      recordHandOver(this.logDir, {
+        pid,
+        url,
+        appDir: this.cwd,
+        ...(undefined === bridgePort ? {} : { bridgePort }),
+      });
     }
   }
 

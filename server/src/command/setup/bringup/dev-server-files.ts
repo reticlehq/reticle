@@ -41,6 +41,11 @@ const HandedOverSchema = z.object({
   pid: z.number().int().positive(),
   url: z.string().min(1),
   appDir: z.string().min(1),
+  /**
+   * The daemon port the server was started for. Absent in a record from an older build. Reticle's
+   * static server adds a snippet that dials this port, so it cannot follow a port move.
+   */
+  bridgePort: z.number().int().positive().optional(),
 });
 export type HandedOver = z.infer<typeof HandedOverSchema>;
 
@@ -81,6 +86,24 @@ export async function handedOverUrl(
   const record = readRecord(join(dir, recordName(appDir)));
   if (undefined === record || record.appDir !== appDir || !deps.alive(record.pid)) return undefined;
   return (await deps.answers(record.url)) ? record.url : undefined;
+}
+
+/**
+ * True when the live server `init` handed over for `appDir` was started for a daemon port other than
+ * `bridgePort`. Attaching to it leaves the page dialling the old port, even when no daemon on that
+ * port is left to retire. A record with no port gives false, as before.
+ */
+export function handedOverToOtherPort(
+  dir: string,
+  appDir: string,
+  bridgePort: number,
+  deps: { alive: (pid: number) => boolean },
+): boolean {
+  const record = readRecord(join(dir, recordName(appDir)));
+  if (undefined === record || record.appDir !== appDir || !deps.alive(record.pid)) {
+    return false;
+  }
+  return undefined !== record.bridgePort && record.bridgePort !== bridgePort;
 }
 
 /**

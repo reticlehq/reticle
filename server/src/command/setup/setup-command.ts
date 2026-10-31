@@ -39,7 +39,11 @@ import { spawnSync } from 'node:child_process';
 import { isAlive, reticleStateHome } from '@/command/daemon/daemon.js';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
 import { connectedAppUrl, urlOfExistingApp } from './probe/existing-app.js';
-import { handedOverUrl, stopHandedOver } from './bringup/dev-server-files.js';
+import {
+  handedOverToOtherPort,
+  handedOverUrl,
+  stopHandedOver,
+} from './bringup/dev-server-files.js';
 import { listSessions, OwnedDevServer, probePage } from './node-effects.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { daemonSkew, summarizeStatus } from '@/command/cli/launch/cli-launch.js';
@@ -313,7 +317,11 @@ export async function runSetupCommand(
   }
   // And the dev server a previous init left running, which may have read the old port once at
   // startup (Next does) — so the attach below would keep a page dialling the daemon just stopped.
-  if (0 < retired.length && (await restartHandedOverServer(input.appDir))) {
+  // Its record names the port it was started for, so this works when the old daemon is gone too.
+  const movedUnderServer =
+    0 < retired.length ||
+    handedOverToOtherPort(reticleStateHome(), input.appDir, input.bridgePort, { alive: isAlive });
+  if (movedUnderServer && (await restartHandedOverServer(input.appDir))) {
     print(
       `stopped the dev server a previous init started, so it restarts on port ${String(input.bridgePort)}.`,
     );
@@ -484,7 +492,7 @@ export async function runSetupCommand(
     );
     // The app stays up only when there is something worth watching.
     if (outcome.ok) {
-      server.handOver(outcome.url);
+      server.handOver(outcome.url, input.bridgePort);
       // Its output is on a file now, not this terminal, so say where: a compile error that used to
       // scroll past here is the first thing somebody will look for.
       const log = server.logPath();
