@@ -473,6 +473,8 @@ interface LiveOpts {
   sessionId?: string;
   /** `--confirm-dangerous`: acknowledge the replay guard's destructive steps for this run. */
   confirmDangerous?: boolean;
+  /** `--require-start-control`: a missing step 1 control on a fresh start page fails the flow. */
+  requireStartControl?: boolean;
 }
 
 /** Split a drive URL into its origin + whether it's loopback — decides token/injection pairing. */
@@ -522,7 +524,10 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
   const deps = buildVerifyDeps(running, opts.reticleRoot, opts.now);
   const harnessEnv = await withLinkedCredential(deps, process.env);
   const runner = new ReticleRunner(
-    createRunnerPort(deps, opts.sessionId, { confirmDangerous: true === opts.confirmDangerous }),
+    createRunnerPort(deps, opts.sessionId, {
+      confirmDangerous: true === opts.confirmDangerous,
+      requireStartControl: true === opts.requireStartControl,
+    }),
   );
   return {
     sessionReady: (timeoutMs) => waitForSession(deps.sessions, timeoutMs, opts.now),
@@ -695,8 +700,8 @@ export function routeVerify(args: {
   hasPredicate: boolean;
   /**
    * True when the caller asked for something only a browser of OUR OWN can do: `--headed` or
-   * `--storage-state`. The running daemon's tab can honour neither, so replaying there would
-   * silently ignore the request.
+   * `--storage-state`, or a rule its replay tool does not take (`--require-start-control`). The
+   * running daemon's tab can honour none of them, so replaying there would silently ignore the request.
    */
   wantsOwnBrowser?: boolean;
   /**
@@ -754,6 +759,8 @@ export function handleVerify(
     resultsJson?: string;
     /** Acknowledge the replay guard's destructive steps ("Place order") for this run only. */
     confirmDangerous?: boolean;
+    /** Fail a flow whose step 1 control is missing on its freshly loaded start page. */
+    requireStartControl?: boolean;
   },
   /**
    * Called once, after the last verdict line and before the exit. `cli.ts` passes the CI line:
@@ -810,6 +817,7 @@ export function handleVerify(
         ...(parsed.storageState !== undefined ? { storageState: parsed.storageState } : {}),
         ...(parsed.sessionId !== undefined ? { sessionId: parsed.sessionId } : {}),
         ...(true === parsed.confirmDangerous ? { confirmDangerous: true } : {}),
+        ...(true === parsed.requireStartControl ? { requireStartControl: true } : {}),
       }),
     out: (line) => process.stdout.write(`${line}\n`),
     fail: (line) => process.stderr.write(`${line}\n`),
@@ -838,7 +846,11 @@ export function handleVerify(
     const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
     const plan = routeVerify({
       hasPredicate: expectation !== undefined,
-      wantsOwnBrowser: !parsed.headless || parsed.storageState !== undefined,
+      // `--require-start-control` too: the daemon's replay tool does not take that rule.
+      wantsOwnBrowser:
+        !parsed.headless ||
+        parsed.storageState !== undefined ||
+        true === parsed.requireStartControl,
       explore: true === parsed.explore || parsed.persona !== undefined,
       hasSavedFlows:
         0 <

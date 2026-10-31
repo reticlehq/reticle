@@ -570,9 +570,17 @@ function staleSubStep(
 export function staleTargetResult(
   name: string,
   steps: readonly FlowStepResult[],
+  /**
+   * `startControlRequired`: replay loaded the start page itself, with no redirect, and the caller
+   * asked that a missing step 1 control fail. Then the miss means the app does not offer the control
+   * the journey starts with (#2061), so it stays drift. Without it, the miss is not proved.
+   */
+  options: { startControlRequired?: boolean } = {},
 ): FlowReplayResult | undefined {
   // A target no person could reach is the same kind of answer: nothing about the app was decided.
-  const unreachable = unreachableTargetResult(name, steps) ?? unreachedStepResult(name, steps);
+  const unreached =
+    true === options.startControlRequired ? undefined : unreachedStepResult(name, steps);
+  const unreachable = unreachableTargetResult(name, steps) ?? unreached;
   if (unreachable !== undefined) {
     return unreachable;
   }

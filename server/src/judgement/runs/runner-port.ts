@@ -18,7 +18,7 @@ export function createRunnerPort(
   deps: ToolDeps,
   sessionId?: string,
   /** `reticle verify --confirm-dangerous`: this run acknowledges the steps held as destructive. */
-  opts: { confirmDangerous?: boolean } = {},
+  opts: { confirmDangerous?: boolean; requireStartControl?: boolean } = {},
 ): RunnerPort {
   return {
     // Resolved as replay resolves it, so every listed name is one replay can load.
@@ -31,6 +31,7 @@ export function createRunnerPort(
         flowName: name,
         ...(sessionId === undefined ? {} : { sessionId }),
         ...(true === opts.confirmDangerous ? { confirmDangerous: true } : {}),
+        ...(true === opts.requireStartControl ? { requireStartControl: true } : {}),
       }),
     now: () => deps.now(),
     newRunId: defaultRunId,

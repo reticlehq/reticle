@@ -62,6 +62,7 @@ const VERIFY_DETAIL = `Drives the URL and verifies the saved flows. Exit 0 means
   --select <label>              repeatable: verify only flows carrying these labels
   --results-json <file>         also write one verdict per journey as JSON, for CI
   --confirm-dangerous           this run may press what the replay guard holds as destructive
+  --require-start-control       fail a flow whose first control is not on its freshly loaded start page
   --storage-state <file>        start signed in
   --session-id <id>, --timeout N, --headed, --port N
   --expect '<json predicate>' | --expect-file <path>

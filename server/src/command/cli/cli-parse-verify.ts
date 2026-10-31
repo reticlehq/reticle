@@ -50,6 +50,8 @@ const SELECT_FLAG = '--select';
 const RESULTS_JSON_FLAG = '--results-json';
 /** Acknowledge, for this run only, the steps the replay guard holds as destructive ("Place order"). */
 const CONFIRM_DANGEROUS_FLAG = '--confirm-dangerous';
+/** A missing step 1 control on a freshly loaded start page fails the flow (#2061). */
+export const REQUIRE_START_CONTROL_FLAG = '--require-start-control';
 
 export type VerifySuffix =
   | {
@@ -68,6 +70,7 @@ export type VerifySuffix =
       select?: string[];
       resultsJson?: string;
       confirmDangerous?: boolean;
+      requireStartControl?: boolean;
     }
   | { kind: 'error'; message: string };
 
@@ -136,6 +139,7 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
   const select: string[] = [];
   let resultsJson: string | undefined;
   let confirmDangerous = false;
+  let requireStartControl = false;
   let port = defaultPort;
   let i = 0;
   while (i < args.length) {
@@ -183,6 +187,8 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
       explore = true;
     } else if (arg === CONFIRM_DANGEROUS_FLAG) {
       confirmDangerous = true;
+    } else if (arg === REQUIRE_START_CONTROL_FLAG) {
+      requireStartControl = true;
     } else if (arg === PERSONA_FLAG) {
       i++;
       const v = args[i];
@@ -242,5 +248,6 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
     ...(select.length > 0 ? { select } : {}),
     ...(resultsJson !== undefined ? { resultsJson } : {}),
     ...(confirmDangerous ? { confirmDangerous } : {}),
+    ...(requireStartControl ? { requireStartControl } : {}),
   };
 }

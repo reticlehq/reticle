@@ -145,3 +145,21 @@ describe('a control that is missing after earlier steps acted', () => {
     expect(staleTargetResult(twoSteps.name, steps)).toBeUndefined();
   });
 });
+
+/*
+ * The other reading of the same miss (#2061): the replay loaded the start page itself, nothing
+ * redirected, and the control the journey starts with is not there. That is an app without the
+ * feature, which a caller can ask to see as a failure. Without the request it stays not proved.
+ */
+describe('a missing step 1 control when the caller requires the start control', () => {
+  it('stays drift, so the flow fails', async () => {
+    const steps = await replayFlow(page([]), FLOW, waitForPredicate, 60);
+    expect(staleTargetResult(FLOW.name, steps, { startControlRequired: true })).toBeUndefined();
+    expect(steps[0]?.drift?.reasonKind).toBe(DriftReason.TESTID_NOT_FOUND);
+  });
+
+  it('is still not proved when the caller did not ask', async () => {
+    const steps = await replayFlow(page([]), FLOW, waitForPredicate, 60);
+    expect(staleTargetResult(FLOW.name, steps, {})?.status).toBe(ReplayStatus.UNVERIFIABLE);
+  });
+});

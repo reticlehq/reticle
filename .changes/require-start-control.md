@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server` — `reticle verify --require-start-control`.** When the first control of a flow is not on the page, replay grades the flow `unknown`, because the page can lack state that the recording had. But when a change removes the entry control of a feature, `unknown` lets the change through a gate that blocks only on a failure. With this flag, the flow fails when replay loaded the start page itself, no redirect occurred, and the first control is not there. Without the flag, the rule does not change. When a daemon already owns the port, verify refuses the flag and does not ignore it.

@@ -561,7 +561,13 @@ export async function replayNamedFlow(
     };
     steps.push(row);
   }
-  const staleTarget = staleTargetResult(name, steps);
+  // The caller's request counts only when replay itself loaded the start page and stayed there.
+  const startControlRequired =
+    true === args['requireStartControl'] &&
+    arrival.session !== undefined &&
+    arrival.redirected === undefined &&
+    arrival.resetCost === undefined;
+  const staleTarget = staleTargetResult(name, steps, { startControlRequired });
   if (staleTarget !== undefined) {
     return withStartPageWait(staleTarget, arrival);
   }
