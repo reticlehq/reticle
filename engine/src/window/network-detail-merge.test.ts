@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EventType, ResponseBodyReason, type ReticleEvent } from '@reticlehq/core';
+import { EventType, PredicateKind, ResponseBodyReason, type ReticleEvent } from '@reticlehq/core';
 import { evalNet } from '../question/predicate/predicate-eval.js';
 import { mergeNetworkDetail } from './network-detail-merge.js';
 
@@ -129,5 +129,62 @@ describe('SSE bodies enrich the completed request without duplicating it (#1848)
     } else {
       expect(missed.failureReason).toBeDefined();
     }
+  });
+});
+
+/*
+ * A file the server sends as a download (`Content-Disposition: attachment`) leaves the page as a
+ * navigation, not a fetch, so the in-page observer never records it. The driven browser does see the
+ * response. Before, that detail survived as a NET_DETAIL that no `net` check reads, and a check on a
+ * working CSV export answered "no network call matched".
+ */
+describe('a download the driven browser saw, with no in-page request', () => {
+  function wire(headers: Record<string, string>): ReticleEvent {
+    return {
+      type: EventType.NET_DETAIL,
+      sessionId: 's',
+      t: 5,
+      data: { method: 'GET', url: '/api/links/export?search=u0', status: 200, headers },
+    };
+  }
+
+  it('becomes an observed request that a net check can match', () => {
+    const merged = mergeNetworkDetail([
+      wire({
+        'content-type': 'text/csv',
+        'content-disposition': 'attachment; filename="links.csv"',
+      }),
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.type).toBe(EventType.NET_REQUEST);
+    expect(merged[0]?.data['status']).toBe(200);
+    const verdict = evalNet(merged, {
+      kind: PredicateKind.NET,
+      method: 'GET',
+      urlContains: '/api/links/export',
+      status: 200,
+    });
+    expect(verdict.pass).toBe(true);
+  });
+
+  it('carries the download initiator, so a reader can tell the page never saw it', () => {
+    const merged = mergeNetworkDetail([wire({ 'content-disposition': 'attachment' })]);
+    expect(merged[0]?.data['initiator']).toBe('download');
+  });
+
+  it('leaves any other unmatched detail as a detail', () => {
+    const merged = mergeNetworkDetail([wire({ 'content-type': 'text/html' })]);
+    expect(merged[0]?.type).toBe(EventType.NET_DETAIL);
+  });
+
+  it('does not add a second request when the page did record the call', () => {
+    const page: ReticleEvent = {
+      type: EventType.NET_REQUEST,
+      sessionId: 's',
+      t: 4,
+      data: { method: 'GET', url: '/api/links/export?search=u0', status: 200 },
+    };
+    const merged = mergeNetworkDetail([page, wire({ 'content-disposition': 'attachment' })]);
+    expect(merged.filter((e) => e.type === EventType.NET_REQUEST)).toHaveLength(1);
   });
 });

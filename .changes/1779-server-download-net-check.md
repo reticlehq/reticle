@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine`, `@reticlehq/core` — a `net` check could not see a file the server sent as a download.** A click on an export link that the server answers with `Content-Disposition: attachment` leaves the page as a navigation, so the in-page observer never records the response, and a `net` check on a working export missed. When Reticle drives the browser, its network stack does see the response. That detail is now recorded as a request with the new initiator `download`, so a `net` check on its URL, method and status can pass. Its body is not captured, and its duration reads 0 because nothing timed it. Refs [#1779](https://github.com/reticlehq/reticle/issues/1779).

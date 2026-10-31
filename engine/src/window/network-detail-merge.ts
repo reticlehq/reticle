@@ -1,4 +1,4 @@
-import { EventType, urlForMatch, type ReticleEvent } from '@reticlehq/core';
+import { EventType, NetInitiator, urlForMatch, type ReticleEvent } from '@reticlehq/core';
 
 /**
  * Folding the browser's own view of a network request together with the daemon's.
@@ -28,6 +28,37 @@ function keyOf(data: Record<string, unknown>): string {
   const method = data['method'];
   const m = 'string' === typeof method ? method.toUpperCase() : '';
   return `${m} ${urlForMatch(data)}`;
+}
+
+/** True when a response is a file the server sent to be saved, not shown. */
+function isAttachment(headers: unknown): boolean {
+  if ('object' !== typeof headers || null === headers) {
+    return false;
+  }
+  const disposition = (headers as Record<string, unknown>)['content-disposition'];
+  return 'string' === typeof disposition && /^\s*attachment\b/i.test(disposition);
+}
+
+/**
+ * A wire detail for a server-sent download, as the request it was; undefined for any other detail.
+ * Its duration was not measured (the page never timed it), so it carries 0.
+ */
+function downloadRequest(e: ReticleEvent): ReticleEvent | undefined {
+  if (!isAttachment(e.data['headers'])) {
+    return undefined;
+  }
+  const status = 'number' === typeof e.data['status'] ? e.data['status'] : 0;
+  return {
+    ...e,
+    type: EventType.NET_REQUEST,
+    data: {
+      ...e.data,
+      id: `download:${String(e.t)}:${urlForMatch(e.data)}`,
+      ok: 200 <= status && status < 400,
+      durationMs: 0,
+      initiator: NetInitiator.DOWNLOAD,
+    },
+  };
 }
 
 /**
@@ -64,7 +95,10 @@ export function mergeNetworkDetail(events: readonly ReticleEvent[]): ReticleEven
         match = requestByKey.get(keyOf(e.data));
       }
       if (match === undefined || keyOf(match.data) !== keyOf(e.data)) {
-        out.push(e); // unmatched detail survives on its own
+        // A server-sent download has no in-page request to merge onto: it left the page as a
+        // navigation. The driven browser saw it, so it is recorded as the request it was. Any other
+        // unmatched detail survives on its own, as before.
+        out.push(sdkBody ? e : (downloadRequest(e) ?? e));
         continue;
       }
       const base = enriched.get(match) ?? match;

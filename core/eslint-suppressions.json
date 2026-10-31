@@ -232,11 +232,6 @@
       "count": 2
     }
   },
-  "src/wire/net.ts": {
-    "curly": {
-      "count": 8
-    }
-  },
   "src/wire/platform-link.test.ts": {
     "curly": {
       "count": 1

@@ -30,6 +30,16 @@ export const NetInitiator = {
    */
   DOCUMENT: 'document',
   /**
+   * A file the SERVER sent as a download (`Content-Disposition: attachment`), seen by the driven
+   * browser's network stack.
+   *
+   * The click leaves the page as a navigation the browser turns into a download, so no patched
+   * transport in the page ever sees the response. Only a driven browser (CDP) does, and its detail
+   * had no in-page request to merge onto, so a `net` check on a working export missed. The engine
+   * records such a detail as a request with this initiator.
+   */
+  DOWNLOAD: 'download',
+  /**
    * The browser is LEAVING for this URL, recorded at the moment of departure.
    *
    * Emitted as a NET_PENDING that can never be matched, because that is exactly what it is: a
@@ -126,7 +136,9 @@ const DEV_TOOLING_PATTERNS: readonly string[] = Object.values(DevToolingChannel)
  * exclusion is disclosed alongside the verdict.
  */
 export function isDevToolingUrl(url: string | undefined): boolean {
-  if (url === undefined) return false;
+  if (url === undefined) {
+    return false;
+  }
   return DEV_TOOLING_PATTERNS.some((pattern) => url.includes(pattern));
 }
 
@@ -144,7 +156,9 @@ const REGISTRABLE_LABELS = 2;
 function hostOf(url: string, base: string): string | undefined {
   try {
     const parsed = new URL(url, base);
-    if (!FIRST_PARTY_PROTOCOLS.includes(parsed.protocol)) return undefined;
+    if (!FIRST_PARTY_PROTOCOLS.includes(parsed.protocol)) {
+      return undefined;
+    }
     return parsed.hostname.toLowerCase();
   } catch {
     return undefined;
@@ -162,9 +176,13 @@ function hostOf(url: string, base: string): string | undefined {
  */
 function registrableDomain(host: string): string {
   const labels = host.split('.');
-  if (labels.length <= REGISTRABLE_LABELS) return host;
+  if (labels.length <= REGISTRABLE_LABELS) {
+    return host;
+  }
   // An IPv4 literal has four labels and no registrable domain — compare it whole.
-  if (/^[0-9.]+$/.test(host)) return host;
+  if (/^[0-9.]+$/.test(host)) {
+    return host;
+  }
   return labels.slice(-REGISTRABLE_LABELS).join('.');
 }
 
@@ -187,10 +205,14 @@ function registrableDomain(host: string): string {
  * caller who cannot say which page is under test gets exactly the behaviour it had before this.
  */
 export function isThirdPartyUrl(url: string | undefined, appUrl: string | undefined): boolean {
-  if (url === undefined || appUrl === undefined) return false;
+  if (url === undefined || appUrl === undefined) {
+    return false;
+  }
   const target = hostOf(url, appUrl);
   const app = hostOf(appUrl, appUrl);
-  if (target === undefined || app === undefined) return false;
+  if (target === undefined || app === undefined) {
+    return false;
+  }
   return registrableDomain(target) !== registrableDomain(app);
 }
 
@@ -207,7 +229,9 @@ export function isOwnBackgroundTraffic(
   url: string | undefined,
   declared: readonly string[],
 ): boolean {
-  if (url === undefined) return false;
+  if (url === undefined) {
+    return false;
+  }
   return declared.some((pattern) => url.includes(pattern));
 }
 
@@ -243,7 +267,9 @@ export const URL_RAW = 'urlRaw';
  */
 export function urlForMatch(data: Record<string, unknown>): string {
   const raw = data[URL_RAW];
-  if ('string' === typeof raw && 0 < raw.length) return raw;
+  if ('string' === typeof raw && 0 < raw.length) {
+    return raw;
+  }
   const url = data['url'];
   return 'string' === typeof url ? url : '';
 }
