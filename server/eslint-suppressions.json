@@ -285,11 +285,6 @@
       "count": 2
     }
   },
-  "src/command/cli/verify-results.ts": {
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/command/daemon/binding/daemon-status-probe.test.ts": {
     "curly": {
       "count": 2

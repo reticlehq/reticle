@@ -131,10 +131,14 @@ export function verifyResults(
     total,
     ...(0 === total ? {} : { value: passed / total }),
   };
-  const verdict = results.some((r) => Verified.NO === r.verdict)
-    ? Verified.NO
-    : VerdictStatus.PASS === run.verdict.status && results.every((r) => Verified.YES === r.verdict)
-      ? Verified.YES
-      : Verified.UNKNOWN;
+  let verdict: JourneyVerdict = Verified.UNKNOWN;
+  if (results.some((r) => Verified.NO === r.verdict)) {
+    verdict = Verified.NO;
+  } else if (
+    VerdictStatus.PASS === run.verdict.status &&
+    results.every((r) => Verified.YES === r.verdict)
+  ) {
+    verdict = Verified.YES;
+  }
   return { schemaVersion: RESULTS_SCHEMA_VERSION, verdict, results, score };
 }
