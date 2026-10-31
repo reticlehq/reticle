@@ -486,3 +486,47 @@ export function componentQueryArgs(
   }
   return args;
 }
+
+/** Query args for a NAMED role anchor — the handle that identifies an instance, not a JSX site. */
+export function roleQueryArgs(
+  anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.ROLE }>,
+): Record<string, unknown> {
+  return {
+    by: QueryBy.ROLE,
+    value: anchor.role,
+    ...(anchor.name === undefined ? {} : { name: anchor.name }),
+  };
+}
+
+/** One query for each role the anchor accepts: its own role, then `alsoRoles`. */
+function roleQueries(
+  anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.ROLE }>,
+): Record<string, unknown>[] {
+  return [anchor.role, ...(anchor.alsoRoles ?? [])].map((role) =>
+    roleQueryArgs({ ...anchor, role }),
+  );
+}
+
+/**
+ * Resolve a role anchor. ONE function for the first look and the re-resolve after a stale ref: the
+ * re-resolve used to count every control of the role, so a nameless anchor's position came back
+ * ambiguous on a working page.
+ *
+ * A nameless anchor's position counts only the nameless controls of its role (an icon-only edit
+ * button is the 2nd nameless button of its row, not the 5th button), so it reads only those.
+ */
+export function resolveRoleAnchor(
+  session: FlowReplaySession,
+  anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.ROLE }>,
+  sleep: Sleep,
+): Promise<{ refs: string[] }> {
+  // Every role the anchor accepts (`alsoRoles`), pooled in one settle loop; a nameless anchor keeps
+  // only the matches with no accessible name.
+  return resolveAnyQuery(
+    session,
+    roleQueries(anchor),
+    sleep,
+    Date.now,
+    anchor.name === undefined ? readNamelessQuery : undefined,
+  );
+}
