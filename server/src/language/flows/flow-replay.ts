@@ -79,6 +79,19 @@ export class DocumentLostDuringReplay extends Error {
 
 const realSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/*
+ * How replay paces itself between steps. A person does not act on a screen that is still changing,
+ * and replay did: it acted the moment the last step's consequence held. An htmx row swap puts a new
+ * button in the page and binds it a moment later, so a click in between did nothing, and a correct
+ * build failed. A busy machine makes that moment longer, so the false fail came under parallel load.
+ *
+ * Quiet means no network, DOM or animation activity for `STEP_QUIET_MS`, which is shorter than any
+ * person takes to act on a changed screen. A page that never goes quiet (a poll, a spinner) gets
+ * `STEP_QUIET_BUDGET_MS` and then the step runs anyway: the wait paces replay and decides nothing.
+ */
+const STEP_QUIET_MS = 250;
+const STEP_QUIET_BUDGET_MS = 2_000;
+
 /**
  * The route (pathname) currently in effect — the page a step runs on. Reads the latest ROUTE_CHANGE
  * from the whole event buffer; mirrors the predicate engine's route field order (pathname → to).
@@ -697,6 +710,13 @@ export async function replayFlow(
       if (options.at !== undefined && index < options.at) {
         index += 1;
         continue;
+      }
+      if (index > (options.at ?? 0)) {
+        await waitForSignal(
+          session,
+          { kind: PredicateKind.SETTLED, quietMs: STEP_QUIET_MS },
+          STEP_QUIET_BUDGET_MS,
+        );
       }
       if (step.invoke !== undefined) {
         results.push(

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — replay waits for the page to go quiet before each step.** Replay acted the moment the last step's consequence held. A page that re-renders a control and makes it active a moment later (an htmx row swap, for example) ignored the click, and a correct app failed. A busy machine makes that moment longer, so the false fail came most often when many replays ran at once. Before each step after the first, replay now waits until the page has had no network, DOM or animation activity for 250 ms. If the page does not go quiet in 2 s, the step runs anyway, so a page that polls or animates is never failed by the wait. A control that stays inactive for longer than 250 ms with no activity on the page can still ignore a replayed click.
