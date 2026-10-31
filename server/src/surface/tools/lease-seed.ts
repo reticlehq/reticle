@@ -120,7 +120,7 @@ export const NAV_COMPILING_ADVICE =
   'route: wait a few seconds, then acquire the lease again. Do not start another dev server.';
 
 /** Lead of the timeout sentence, before the budget ("within 30 s", or "in time" when unknown). */
-const NAV_TIMEOUT_LEAD = 'the page did not finish loading';
+export const NAV_TIMEOUT_LEAD = 'the page did not finish loading';
 const NAV_TIMEOUT_UNKNOWN_BUDGET = 'in time';
 
 /** Playwright's own wording for a navigation that ran out of time, with the budget it used. */

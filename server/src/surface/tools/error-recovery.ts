@@ -36,6 +36,7 @@ import {
   chromiumInstallCommand,
   bundledPlaywrightVersion,
 } from '@/command/cli/doctor/browser/chromium-hint.js';
+import { NAV_CERT_REFUSED, NAV_FAILED_QUESTION, NAV_TIMEOUT_LEAD } from './lease-seed.js';
 
 /** Marks where an over-long message had its middle removed. Named so tests assert it by value. */
 const ELISION = '… [elided] …';
@@ -96,6 +97,11 @@ const SELF_RECOVERING: readonly { readonly match: RegExp; readonly reason: Refus
   // Both are the caller's to fix, and the defect ask on top told an agent to file a bug about them.
   { match: literally(EMPTY_FIND_OPENING), reason: RefusalReason.BAD_ARGS },
   { match: literally(UNKNOWN_FLOW_OPENING), reason: RefusalReason.NO_MATCH },
+  // A lease navigation that timed out already names both causes and the fix (retry the acquire, or
+  // start the dev server); a cert refusal names the exact acquire flag. Neither needs an extra hint,
+  // and the feedback ask on top told the agent to file a bug about a server that answered normally.
+  { match: literally(NAV_TIMEOUT_LEAD), reason: RefusalReason.NOT_READY },
+  { match: literally(NAV_CERT_REFUSED), reason: RefusalReason.NOT_READY },
 ];
 
 /**
@@ -331,9 +337,16 @@ export const RECOVERY = {
    * agent's malformed call: it was then told to fix arguments that were never wrong.
    */
   HARNESS_LOCKED:
-    'An older Reticle platform locked the Harness on its setup score. Nothing to report: drive the ' +
-    'journey yourself with reticle_act_and_wait and an `until` on its last step. Every tool works ' +
-    'at any coverage.',
+    'The Harness unlocks once Reticle sees enough of this app; the refusal names what is missing ' +
+    'and how to close each gap. Nothing to report: close them, or drive the journey yourself with ' +
+    'reticle_act_and_wait and an `until` on its last step. Every other tool works at any coverage.',
+  /**
+   * A lease navigation to a URL where nothing is listening. "Is the app running?" is a question,
+   * not a next step — the recovery names the fix: start the app, then acquire again.
+   */
+  LEASE_NAV:
+    'Nothing is serving at that URL. Start the app (run the project dev script), then call ' +
+    'reticle_lease { action: "acquire", url } again.',
 } as const;
 
 /**
@@ -381,6 +394,8 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   HARNESS_OFF: RefusalReason.UNSUPPORTED,
   // The call is valid; the app is not instrumented enough for the Harness yet.
   HARNESS_LOCKED: RefusalReason.UNSUPPORTED,
+  // The app was not up when the lease tried to navigate: start the app, then retry.
+  LEASE_NAV: RefusalReason.NOT_READY,
 };
 
 /**
@@ -543,6 +558,10 @@ const RULES: readonly RecoveryRule[] = [
     match: /target matched \d+ elements and an action must not guess/i,
     hint: RECOVERY.AMBIGUOUS_TARGET,
   },
+  // A lease navigation to a URL where nothing is listening. The message asks "is the app running?"
+  // but leaves the agent to guess the next move; the recovery names the fix concretely. Before the
+  // catch-all so it never reaches the FEEDBACK_ASK.
+  { match: literally(NAV_FAILED_QUESTION), hint: RECOVERY.LEASE_NAV },
   // Before the catch-all: every refusal names `reticle_lease`, and the call was valid.
   { match: new RegExp(`^${PRODUCTION_REFUSAL_PREFIX}`), hint: RECOVERY.PRODUCTION_POLICY },
   // Authored by Reticle, about the caller's arguments: the message already names the valid answers.
