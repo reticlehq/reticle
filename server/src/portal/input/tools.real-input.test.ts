@@ -711,9 +711,26 @@ describe('reticle_act routes a document press through real input', () => {
     expect(state.actCalls).toBe(0);
   });
 
-  it('keeps a press WITH a ref on the synthetic path — a real keyboard cannot address an element', async () => {
+  // A real keyboard cannot aim at an element, but focus can: a press WITH a ref focuses the element
+  // first, as a lease does, and the real key then lands there with the browser's default actions
+  // (an Enter in a text field submits its form). It used to stay synthetic, which submits nothing.
+  it('focuses the element of a press WITH a ref, then presses the real key', async () => {
     const provider = makeProvider(true);
-    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [], actActions: [], focused: 'e1' };
+    const res = await runAct(fakeDeps(provider, state), {
+      ref: 'e1',
+      action: 'press',
+      args: { text: 'Enter' },
+    });
+
+    expect(res.inputMode).toBe(InputMode.REAL);
+    expect(provider.calls).toHaveLength(1);
+    expect(state.actActions).toEqual(['focus']);
+  });
+
+  it('keeps a press WITH a ref synthetic when the element does not take focus', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [], actActions: [] };
     const res = await runAct(fakeDeps(provider, state), {
       ref: 'e1',
       action: 'press',
@@ -722,7 +739,7 @@ describe('reticle_act routes a document press through real input', () => {
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
     expect(provider.calls).toHaveLength(0);
-    expect(state.actCalls).toBe(1);
+    expect(state.actActions).toEqual(['focus', 'press']);
   });
 
   it('falls back to synthetic when no provider is configured', async () => {

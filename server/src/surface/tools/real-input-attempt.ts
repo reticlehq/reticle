@@ -378,6 +378,40 @@ const ANCHOR_FIELDS = [
  * keeps the in-page press, with the reason: a person's keyboard could not reach it either.
  * ponytail: lease only; the drive provider keeps its documented element-press rule.
  */
+/**
+ * Put focus on a press's target, as a person does before they press a key in a field.
+ *
+ * A real keyboard cannot aim at an element, but focus can: focus the element, confirm it holds
+ * focus, and the real key then lands there, with every default action a browser gives a trusted
+ * key (an Enter in a text field submits its form). Returns what the focused element is called, so
+ * the saved step can find it again (the real keyboard reports no element of its own), or
+ * `undefined` when the element did not take focus. No ref: nothing to focus, nothing to name.
+ */
+async function focusForPress(
+  deps: ToolDeps,
+  session: Session,
+  ref: string,
+): Promise<Record<string, unknown> | undefined> {
+  if (0 === ref.length) {
+    return {};
+  }
+  const focus = asRecord(
+    await commandOrThrow(deps, session.id, ReticleCommand.ACT, {
+      ref,
+      action: ActionType.FOCUS,
+      args: {},
+    }),
+  );
+  const inspected = asRecord(
+    await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, { ref }),
+  );
+  const states = Array.isArray(inspected['states']) ? inspected['states'] : [];
+  if (!states.includes(ElementState.FOCUSED)) {
+    return undefined;
+  }
+  return Object.fromEntries(ANCHOR_FIELDS.flatMap((k) => (k in focus ? [[k, focus[k]]] : [])));
+}
+
 async function pressOnLease(
   deps: ToolDeps,
   session: Session,
@@ -392,25 +426,9 @@ async function pressOnLease(
   if (unspellable !== undefined) {
     return synthetic(unspellable);
   }
-  // What the focused element is called, from the focus act's own report, so the saved step can
-  // find it again: the real keyboard reports no element of its own.
-  let anchor: Record<string, unknown> = {};
-  if (0 < ref.length) {
-    const focus = asRecord(
-      await commandOrThrow(deps, session.id, ReticleCommand.ACT, {
-        ref,
-        action: ActionType.FOCUS,
-        args: {},
-      }),
-    );
-    anchor = Object.fromEntries(ANCHOR_FIELDS.flatMap((k) => (k in focus ? [[k, focus[k]]] : [])));
-    const inspected = asRecord(
-      await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, { ref }),
-    );
-    const states = Array.isArray(inspected['states']) ? inspected['states'] : [];
-    if (!states.includes(ElementState.FOCUSED)) {
-      return synthetic(InputModeReason.TARGET_NOT_FOCUSABLE);
-    }
+  const anchor = await focusForPress(deps, session, ref);
+  if (anchor === undefined) {
+    return synthetic(InputModeReason.TARGET_NOT_FOCUSABLE);
   }
   const performed = await pool.pressLease(session.id, performArgsOf(inner));
   if (performed?.performed !== true) {
@@ -585,8 +603,10 @@ export async function tryRealInput(
   }
   // Two `press`es this module will NOT drive, and neither is a fallback — the reason says which
   // one was asked for, instead of a different gesture being sent. See `unspellablePressReason`.
+  // A press aimed at an element is focused first (focusForPress), as on a lease; only a chord and
+  // an explicit key code stay in the page.
   if (action === ActionType.PRESS) {
-    const unspellable = unspellablePressReason(ref, inner);
+    const unspellable = unspellablePressReason('', inner);
     if (unspellable !== undefined) {
       return synthetic(unspellable);
     }
@@ -631,8 +651,12 @@ export async function tryRealInput(
 
   const performArgs = performArgsOf(inner);
 
-  // A document key has no element of its own: skip INSPECT and the box entirely.
+  // A key addresses focus, not a point: focus the target (if any), then skip INSPECT and the box.
   if (action === ActionType.PRESS) {
+    const anchor = await focusForPress(deps, session, ref);
+    if (anchor === undefined) {
+      return synthetic(InputModeReason.TARGET_NOT_FOCUSABLE);
+    }
     try {
       const performed = await provider.perform(session.url, action, PRESS_HAS_NO_BOX, performArgs);
       if (!performed.performed) {
@@ -647,6 +671,7 @@ export async function tryRealInput(
       // `holdMs` to — an agent checking for an armed hold-to-confirm control read `undefined`.
       return {
         result: {
+          ...anchor,
           performed: true,
           action,
           inputMode: performed.inputMode,
@@ -748,15 +773,18 @@ export async function tryRealInput(
 }
 
 /**
- * The session a flow replay runs on, with a press sent to the lease's real keyboard.
+ * The session a flow replay runs on, with a press sent to the real keyboard, as `reticle_act` does.
  *
  * Replay dispatches its steps itself, not through `reticle_act`, so a recorded Tab replayed as a
  * synthetic keydown that moves no focus, and a keyboard flow that passed live drifted on replay.
- * Every other command, and a press this lease cannot drive for real, goes to the page as before.
- * A Proxy, not a copy: the session keeps private state its own methods read.
+ * The real keyboard is a lease's, or the driven browser's when a real-input provider is configured:
+ * that is `reticle verify`'s own page, where a synthetic Enter submitted no form, so a recorded
+ * "fill, press Enter" journey failed on a working app. Every other command, and a press that cannot
+ * be driven for real, goes to the page as before. A Proxy, not a copy: the session keeps private
+ * state its own methods read.
  */
 export function withLeaseKeyboard(deps: ToolDeps, session: Session): Session {
-  if (deps.realInput !== undefined || deps.pool?.hasKeyboard(session.id) !== true) {
+  if (deps.realInput === undefined && deps.pool?.hasKeyboard(session.id) !== true) {
     return session;
   }
   const command: Session['command'] = async (name, args = {}, timeoutMs) => {

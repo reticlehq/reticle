@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a recorded "fill a field, press Enter" journey failed in `reticle verify` on a working app.** When Reticle drives the browser itself, a press now goes to the real keyboard in every case. Before, a press aimed at a field stayed a synthetic key event, because a real keyboard cannot aim at an element, and a browser submits no form for a synthetic Enter. Now Reticle first focuses the field, checks that it has focus, and then presses the real key, as a leased tab already did. Replayed flows also use the real keyboard on that browser. A field that does not take focus keeps the synthetic press, and the result says why.
