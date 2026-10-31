@@ -124,3 +124,49 @@ describe('a sequence step in the score', () => {
     });
   });
 });
+
+/*
+ * Gated partial credit. Under `--sweep` the replay goes on after a failed step, so later steps get a
+ * verdict too. A step that passes AFTER an earlier step failed is not progress on the journey: a page
+ * can fail "save" and still show the next screen. Counted as passed, those steps made a broken app
+ * score higher than a stopped replay of the same app, and a score that pays a step without its
+ * prerequisites is one a trainer can satisfy without the journey. They are reported apart, as
+ * `swept`, and stay `unknown` in the score.
+ */
+describe('the score after a failed step', () => {
+  const swept = [
+    {
+      name: 'a',
+      status: RunFlowStatus.FAIL,
+      steps: 4,
+      durationMs: 1,
+      stepResults: [
+        step(0, true),
+        step(1, false, 'signal_not_observed'),
+        step(2, true),
+        step(3, false, 'signal_not_observed'),
+      ],
+    },
+  ] as unknown as Flow[];
+
+  it('pays no step after the first failure, and reports those verdicts apart', () => {
+    const r = verifyResults(run(swept), false, new Map([['a', 4]]));
+    expect(r.results[0]?.steps).toEqual({
+      passed: 1,
+      failed: 1,
+      unknown: 2,
+      swept: { passed: 1, failed: 1 },
+    });
+    expect(r.score).toEqual({ passed: 1, failed: 1, unknown: 2, total: 4, value: 0.25 });
+  });
+
+  it('scores a swept replay the same as a stopped one', () => {
+    const stopped = [
+      { ...swept[0], stepResults: swept[0]?.stepResults?.slice(0, 2) },
+    ] as unknown as Flow[];
+    const plan = new Map([['a', 4]]);
+    expect(verifyResults(run(swept), false, plan).score).toEqual(
+      verifyResults(run(stopped), false, plan).score,
+    );
+  });
+});

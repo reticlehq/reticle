@@ -23,6 +23,12 @@ export interface StepCounts {
   passed: number;
   failed: number;
   unknown: number;
+  /**
+   * Verdicts reached AFTER the journey's first failed step (`--sweep` goes on past it). They are not
+   * in `passed` or `failed`, and they count as `unknown` in the score: a step is paid only when every
+   * step before it passed. Absent when no step ran after a failure.
+   */
+  swept?: { passed: number; failed: number };
 }
 
 export interface VerifyResults {
@@ -48,19 +54,36 @@ function stepCounts(flow: ReticleVerificationRun['flows'][number], planned?: num
   let passed = 0;
   let failed = 0;
   let judgedUnits = 0;
+  let swept: { passed: number; failed: number } | undefined;
   for (const step of (flow.stepResults ?? []) as ScoredRunStep[]) {
     // A sequence counts its sub-steps; any other step counts once.
     const units = step.subSteps?.total ?? 1;
     judgedUnits += units;
-    if (step.ok && step.drift === undefined) {
+    const ok = step.ok && step.drift === undefined;
+    // Gated: once a step failed, later verdicts are reported apart and never paid.
+    if (swept !== undefined) {
+      if (ok) {
+        swept.passed += units;
+      } else {
+        swept.passed += step.subSteps?.passed ?? 0;
+        swept.failed += 1;
+      }
+      continue;
+    }
+    if (ok) {
       passed += units;
     } else {
       passed += step.subSteps?.passed ?? 0;
       failed += 1;
+      swept = { passed: 0, failed: 0 };
     }
   }
   const total = Math.max(planned ?? flow.steps, judgedUnits);
-  return { passed, failed, unknown: total - passed - failed };
+  const counts: StepCounts = { passed, failed, unknown: total - passed - failed };
+  if (swept !== undefined && swept.passed + swept.failed > 0) {
+    counts.swept = swept;
+  }
+  return counts;
 }
 
 function journeyVerdict(status: RunFlowStatus): JourneyVerdict {
@@ -86,7 +109,8 @@ export function verifyResults(
     ...(pushed ? { runId: run.runId } : {}),
     steps: stepCounts(flow, planned.get(flow.name)),
   }));
-  const sum = (key: keyof StepCounts): number => results.reduce((n, r) => n + r.steps[key], 0);
+  const sum = (key: 'passed' | 'failed' | 'unknown'): number =>
+    results.reduce((n, r) => n + r.steps[key], 0);
   const passed = sum('passed');
   const total = passed + sum('failed') + sum('unknown');
   const score = {
