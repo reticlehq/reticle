@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — in `reticle verify`, a flow that signed out failed every flow after it.** `verify` replays all saved flows in one browser page. When one flow ended signed out, for example a saved journey that clicks "Log out", every later flow started signed out and failed for a reason it did not name. Now `verify` saves the browser state before the first flow and puts it back before each later flow, as the suite tool already did with a separate context for each flow. When the state cannot be put back, that flow is reported as not proved, with the reason, and it does not run.
