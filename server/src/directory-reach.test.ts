@@ -443,6 +443,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   daemon: ['lifetime', 'binding', 'ports', 'telemetry'],
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   flows: [
+    // Steps that reach past the page (open a page, send a request). The folder imports nothing back.
+    'steps',
     'machine',
     'navigation',
     'suite',

@@ -69,7 +69,7 @@ import {
   startPathMismatchHint,
   withStartPageWait,
 } from './flow-start-path.js';
-import type { OpenPage } from './flow-replay-types.js';
+import { requestSender, type OpenPage } from './steps/page-steps.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -422,7 +422,7 @@ export async function replayNamedFlow(
    */
   let live = session;
   let liveFloor = replayFloor;
-  const openPage: OpenPage = async (url) => {
+  const openPage: OpenPage<FlowReplaySession> = async (url) => {
     const outcome = await navigateAndAwait(
       deps.sessions,
       live,
@@ -543,6 +543,7 @@ export async function replayNamedFlow(
         // not hold, so one flow reports one verdict per step instead of stopping at the first defect.
         sweep: true === args['sweep'],
         navigate: openPage,
+        request: requestSender(() => live.url, deps.realInput),
         ...(from === undefined ? {} : { from }),
         ...(to === undefined ? {} : { to }),
         ...(continueAt === undefined ? {} : { at: continueAt }),

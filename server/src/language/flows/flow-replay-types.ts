@@ -53,10 +53,3 @@ export type WaitForSignal = (
 
 /** Injected sleeper so tests drive replay with a no-op clock; production waits on a real timer. */
 export type Sleep = (ms: number) => Promise<void>;
-
-/**
- * Opens the page a `navigate` step names (`FlowStepTool.NAVIGATE`) and returns the session of the
- * page that loaded, or why no page of the app answered. A full page load ends the session that asked
- * for it, so only the caller that owns the sessions can do this.
- */
-export type OpenPage = (url: string) => Promise<{ session: FlowReplaySession } | { error: string }>;

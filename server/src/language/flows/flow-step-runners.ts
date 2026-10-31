@@ -19,7 +19,6 @@ import {
   type Drift,
   type FlowAnchor,
   type FlowReplayResult,
-  FlowStepTool,
   type FlowStep,
   type FlowStepResult,
   type Predicate,
@@ -30,7 +29,7 @@ import { isStaleRefError } from '@/surface/tools/act/act-sequence-retry.js';
 import { waitForReaction } from '@/surface/tools/act/react-grace.js';
 import { unreachableTargetNote } from '@/surface/tools/act/act-observation.js';
 import { anchorFieldName } from './flows.js';
-import type { FlowReplaySession, OpenPage, Sleep } from './flow-replay-types.js';
+import type { FlowReplaySession, Sleep } from './flow-replay-types.js';
 import {
   ambiguityDrift,
   refFor,
@@ -999,34 +998,4 @@ export async function runSequenceStep(
     next = end;
   }
   return finish(result);
-}
-
-/*
- * A step that opens a page in the middle of a journey. The replay goes on with the page that loaded,
- * and the step's `expect` is judged there (see `OpenPage`).
- */
-/** The step's result before its `expect` is judged, and the session to go on with. */
-export async function openStepPage(
-  step: FlowStep,
-  index: number,
-  open: OpenPage | undefined,
-): Promise<{ result: FlowStepResult; session?: FlowReplaySession }> {
-  const url = step.navigate ?? '';
-  const base = { step: index, tool: FlowStepTool.NAVIGATE, anchor: url };
-  // Never skipped: a journey that reports green without the page it was meant to check is a false
-  // green arriving through the step meant to make the check stronger.
-  if (open === undefined) {
-    return {
-      result: {
-        ...base,
-        ok: false,
-        error: `this replay cannot open a page, so the step that opens ${url} did not run`,
-      },
-    };
-  }
-  const opened = await open(url);
-  if ('error' in opened) {
-    return { result: { ...base, ok: false, error: opened.error } };
-  }
-  return { result: { ...base, ok: true }, session: opened.session };
 }

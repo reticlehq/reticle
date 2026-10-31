@@ -10,7 +10,7 @@ import {
   testidDrift,
 } from './flow-anchor.js';
 export { nearestIsAmbiguous, nearestTestid, resolveQuery } from './flow-anchor.js';
-import type { FlowReplaySession, OpenPage, WaitForSignal, Sleep } from './flow-replay-types.js';
+import type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 export type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import { evalConsole } from '@reticlehq/engine/question/predicate/predicate-console.js';
@@ -51,7 +51,8 @@ import {
   isDocumentGoneError,
   SESSION_DISCONNECTED_REASON,
 } from '@/portal/session/facts/session-replaced.js';
-import { actOnResolvedRef, openStepPage } from './flow-step-runners.js';
+import { actOnResolvedRef } from './flow-step-runners.js';
+import { isPageStep, runPageStep, type OpenPage, type SendRequest } from './steps/page-steps.js';
 
 /**
  * The document this replay was driving went away mid-run.
@@ -473,7 +474,9 @@ export interface ReplayFromOptions {
    * Opens the page a `navigate` step names and returns the session of the page that loaded. Supplied
    * by the caller that owns the sessions. Absent: a `navigate` step fails, never skips.
    */
-  navigate?: OpenPage;
+  navigate?: OpenPage<FlowReplaySession>;
+  /** Sends the request a `request` step names. Absent: a `request` step fails, never skips. */
+  request?: SendRequest;
   /**
    * Told after every step it reports: how many are done, of how many, and whether this one held.
    * The HUD's replay chip draws its progress from this; it must never throw into the replay.
@@ -751,25 +754,20 @@ export async function replayFlow(
         index += 1;
         continue;
       }
-      if (step.navigate !== undefined) {
-        const opened = await openStepPage(step, index, options.navigate);
-        const result = opened.result;
-        if (opened.session !== undefined) {
+      if (isPageStep(step)) {
+        const ran = await runPageStep(step, index, {
+          open: options.navigate,
+          send: options.request,
+          checked: index >= from,
+          // A navigated page's clock starts at its own connect, so its whole life is the window.
+          judge: (on, expectation) =>
+            assertStepExpect(on, expectation, waitForSignal, waitFor(step), 0),
+          route: currentRoute,
+        });
+        const result = ran.result;
+        if (ran.session !== undefined) {
           // The page that asked for the load is gone; every later step runs on the one that loaded.
-          session = opened.session;
-          const page = currentRoute(session);
-          if (page !== undefined) {
-            result.page = page;
-          }
-          // The new page's clock starts at its own connect, so its whole life is this step's window.
-          const drift =
-            step.expect === undefined || index < from
-              ? undefined
-              : await assertStepExpect(session, step.expect, waitForSignal, waitFor(step), 0);
-          if (drift !== undefined) {
-            result.ok = false;
-            result.drift = drift;
-          }
+          session = ran.session;
         }
         if (index < from && result.ok && result.drift === undefined) {
           index += 1;

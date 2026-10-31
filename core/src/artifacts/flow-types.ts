@@ -216,6 +216,31 @@ export interface FlowStep {
    * the step's `expect` there.
    */
   navigate?: string;
+  /**
+   * The request this step sends, when `tool` is `FlowStepTool.REQUEST`. `url` is a path on the app
+   * or a full URL on its origin. It goes with the page's cookies, so as the signed-in user, unless
+   * `anonymous` is true. `body` is sent as it is, with `contentType` (JSON when absent).
+   */
+  request?: FlowRequest;
+  /** What the answer to `request` must be. Every field given must hold. */
+  response?: FlowResponse;
+}
+
+export interface FlowRequest {
+  method: string;
+  url: string;
+  body?: string;
+  contentType?: string;
+  anonymous?: boolean;
+}
+
+export interface FlowResponse {
+  /** The status code, or one of several. */
+  status?: number | number[];
+  /** A text the body must contain. */
+  contains?: string;
+  /** A text the body must not contain. */
+  absent?: string;
 }
 
 const baseFlowStep = z.object({
@@ -258,6 +283,22 @@ const baseFlowStep = z.object({
   timeoutMs: z.number().int().nonnegative().optional(),
   invoke: z.string().min(1).optional(),
   navigate: z.string().min(1).optional(),
+  request: z
+    .object({
+      method: z.string().min(1),
+      url: z.string().min(1),
+      body: z.string().optional(),
+      contentType: z.string().optional(),
+      anonymous: z.boolean().optional(),
+    })
+    .optional(),
+  response: z
+    .object({
+      status: z.union([z.number().int(), z.array(z.number().int()).min(1)]).optional(),
+      contains: z.string().optional(),
+      absent: z.string().optional(),
+    })
+    .optional(),
   /** See FlowStep.page / FlowStep.endPage. */
   page: z.string().optional(),
   endPage: z.string().optional(),

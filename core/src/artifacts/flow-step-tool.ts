@@ -42,6 +42,12 @@ export const FlowStepTool = {
    * could reach it.
    */
   NAVIGATE: 'reticle_navigate',
+  /**
+   * Send one request to the app and judge the answer; `request` and `response` describe it. Some
+   * rules live only on the server (a bad value is refused with 400, a signed-out caller is refused),
+   * and a page that behaves can hide a server that does not.
+   */
+  REQUEST: 'reticle_request',
 } as const;
 
 /** The companion type. It lives beside the const, so naming either one reaches only this leaf. */
