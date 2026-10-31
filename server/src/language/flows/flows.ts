@@ -159,15 +159,19 @@ export function anchorForStep(args: Record<string, unknown>): {
   ) {
     return { anchor: { kind: AnchorKind.ROLE, role: DOCUMENT_ANCHOR_ROLE }, degraded: false };
   }
-  if (by === QueryBy.ROLE && value !== undefined) {
+  if (by === QueryBy.ROLE && value !== undefined && value !== DEGRADED_ANCHOR_ROLE) {
     const name = asString(args['name']);
+    // Provenance lives on the step, not the anchor; the position among namesakes is identity.
+    const nth = args['nth'];
+    const of = args['of'];
+    const among = 'number' === typeof nth && 'number' === typeof of ? { nth, of } : {};
     if (name !== undefined && name.length > 0) {
-      // Provenance lives on the step, not the anchor; the position among namesakes is identity.
-      const nth = args['nth'];
-      const of = args['of'];
-      const among = 'number' === typeof nth && 'number' === typeof of ? { nth, of } : {};
       return { anchor: { kind: AnchorKind.ROLE, role: value, name, ...among }, degraded: false };
     }
+    // A control with a role and no accessible name (an icon-only button) is addressed by its
+    // position among the nameless controls of its role. Saving it as the degraded placeholder made
+    // every step on an icon-only button unreplayable.
+    return { anchor: { kind: AnchorKind.ROLE, role: value, ...among }, degraded: false };
   }
   if (by === QueryBy.COMPONENT) {
     const anchor = componentAnchor(args);

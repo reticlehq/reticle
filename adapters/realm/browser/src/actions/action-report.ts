@@ -190,6 +190,27 @@ export interface CapturedAnchor {
  * defined? — and is the most useful thing to hand an agent that has to fix what it just broke. Acts
  * are agent-initiated and rare, so the walk's cost is not on any hot path.
  */
+/**
+ * Where `el` sits among the controls that share its role and accessible name, or null when it is
+ * the only one. A sidebar link and a card link both named "Transactions" were ambiguous on every
+ * replay without it. A control with NO name (an icon-only edit button in a table row) is counted
+ * among the NAMELESS controls of its role, which is how replay finds it again.
+ */
+export function positionAmongNamesakes(
+  el: Element,
+  role: string,
+  name: string,
+): { nth: number; of: number } | null {
+  const same =
+    name.length > 0
+      ? elementsMatching({ by: QueryBy.ROLE, value: role, name })
+      : elementsMatching({ by: QueryBy.ROLE, value: role }).filter(
+          (candidate) => 0 === getAccessibleName(candidate).length,
+        );
+  const at = same.indexOf(el as HTMLElement);
+  return 1 < same.length && 0 <= at ? { nth: at, of: same.length } : null;
+}
+
 export function anchorOf(el: Element): CapturedAnchor {
   const testid = readTestId(el) ?? undefined;
   const info = identifyComponent(el);
@@ -228,14 +249,11 @@ export function anchorOf(el: Element): CapturedAnchor {
   if (isSensitiveField(el)) {
     out.secret = true;
   }
-  if (role.length > 0 && name.length > 0) {
-    // A sidebar link and a card link both named "Transactions": without the position, the recorded
-    // step was ambiguous on every replay.
-    const same = elementsMatching({ by: QueryBy.ROLE, value: role, name });
-    const at = same.indexOf(el as HTMLElement);
-    if (1 < same.length && 0 <= at) {
-      out.nth = at;
-      out.of = same.length;
+  if (role.length > 0) {
+    const position = positionAmongNamesakes(el, role, name);
+    if (position !== null) {
+      out.nth = position.nth;
+      out.of = position.of;
     }
   }
   return out;

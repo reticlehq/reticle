@@ -46,6 +46,33 @@ function ambiguousRoleNote(role: string, name: string): string {
  * replay engines (replayProgram + flow-replay's step runner) so element extraction — the core of anchor
  * resolution — can't drift between them.
  */
+/**
+ * The refs of a role query's matches that have NO accessible name, in page order.
+ *
+ * A role query without a name returns every control of the role, named ones included. A nameless
+ * anchor's recorded position (`nth` of `of`) counts only the nameless ones — an icon-only edit
+ * button is the 2nd nameless button of its row, not the 5th button — so the named ones are dropped
+ * before the position is read.
+ */
+export function namelessRefs(result: CommandResult): string[] {
+  if (!result.ok) {
+    return [];
+  }
+  const elements = asRecord(result.result)['elements'];
+  if (!Array.isArray(elements)) {
+    return [];
+  }
+  const refs: string[] = [];
+  for (const element of elements) {
+    const e = asRecord(element);
+    const ref = asString(e['ref']);
+    if (0 === (asString(e['name']) ?? '').trim().length && ref !== undefined) {
+      refs.push(ref);
+    }
+  }
+  return refs;
+}
+
 export function queryRefs(result: CommandResult): string[] {
   if (!result.ok) {
     return [];
@@ -428,6 +455,30 @@ function anchorArgs(
     }
     return { args: roleArgs, stable: true };
   }
+  // A role and NO accessible name (an icon-only button): the role plus the control's position among
+  // the nameless controls of that role. Without this branch the step fell to a component anchor or
+  // to the stale ref, and a replay on a fresh page could not find the control again.
+  if (
+    role !== undefined &&
+    role !== 'generic' &&
+    name === undefined &&
+    asString(r['component']) === undefined
+  ) {
+    const namelessArgs: Record<string, unknown> = {
+      by: QueryBy.ROLE,
+      value: role,
+      action,
+      args: actArgs,
+    };
+    if (source !== undefined) {
+      namelessArgs['source'] = source;
+    }
+    if ('number' === typeof r['nth'] && 'number' === typeof r['of']) {
+      namelessArgs['nth'] = r['nth'];
+      namelessArgs['of'] = r['of'];
+    }
+    return { args: namelessArgs, stable: true };
+  }
   const component = asString(r['component']);
   if (component !== undefined || source !== undefined) {
     const componentArgs: Record<string, unknown> = { by: QueryBy.COMPONENT, action, args: actArgs };
@@ -535,11 +586,15 @@ async function resolveRef(
     if (!result.ok) {
       throw new Error(result.error ?? 'query failed');
     }
-    const refs = queryRefs(result);
+    const refs = name === undefined ? namelessRefs(result) : queryRefs(result);
     const meant = refFor(step, refs);
     const ref = meant ?? refs[0];
     if (ref === undefined) {
-      throw new Error(`${value} named '${String(name)}' did not resolve in current page`);
+      throw new Error(
+        name === undefined
+          ? `no ${value} with no accessible name resolved in current page`
+          : `${value} named '${String(name)}' did not resolve in current page`,
+      );
     }
     return meant === undefined ? { ref, note: ambiguousRoleNote(value, String(name)) } : { ref };
   }

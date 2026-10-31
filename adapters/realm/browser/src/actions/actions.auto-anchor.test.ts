@@ -20,7 +20,9 @@ describe('act result — auto-anchor fallback (component/source when no testid)'
       identify: (el: Element): ComponentInfo | null => {
         const owner = el.closest('[data-component]');
         const name = owner?.getAttribute('data-component');
-        if (null === name || name === undefined) return null;
+        if (null === name || name === undefined) {
+          return null;
+        }
         const src = owner?.getAttribute('data-src');
         const info: ComponentInfo = { componentStack: [name] };
         if (src !== null && src !== undefined) {
@@ -38,7 +40,9 @@ describe('act result — auto-anchor fallback (component/source when no testid)'
     const res = await executeAction(refs.refFor(btn), 'click', {});
 
     expect(res.ok).toBe(true);
-    if (!res.ok) throw new Error('expected ok');
+    if (!res.ok) {
+      throw new Error('expected ok');
+    }
     expect(res.testid).toBeUndefined();
     expect(res.component).toBe('NewDeployButton');
     expect(res.source).toEqual({ file: 'src/Deployments.tsx', line: 107 });
@@ -62,7 +66,9 @@ describe('act result — auto-anchor fallback (component/source when no testid)'
       identify: (el: Element): ComponentInfo | null => {
         const owner = el.closest('[data-component]');
         const name = owner?.getAttribute('data-component');
-        if (null === name || name === undefined) return null;
+        if (null === name || name === undefined) {
+          return null;
+        }
         return { componentStack: [name], source: { file: 'src/Topbar.tsx', line: 31 } };
       },
     });
@@ -73,7 +79,9 @@ describe('act result — auto-anchor fallback (component/source when no testid)'
     const res = await executeAction(refs.refFor(btn), 'click', {});
 
     expect(res.ok).toBe(true);
-    if (!res.ok) throw new Error('expected ok');
+    if (!res.ok) {
+      throw new Error('expected ok');
+    }
     expect(res.testid).toBe('new-deploy');
     expect(res.source).toEqual({ file: 'src/Topbar.tsx', line: 31 });
     expect(res.component).toBe('Topbar');
@@ -86,7 +94,9 @@ describe('act result — auto-anchor fallback (component/source when no testid)'
     const res = await executeAction(refs.refFor(btn), 'click', {});
 
     expect(res.ok).toBe(true);
-    if (!res.ok) throw new Error('expected ok');
+    if (!res.ok) {
+      throw new Error('expected ok');
+    }
     expect(res.testid).toBe('new-deploy');
     expect(res.source).toBeUndefined();
   });
@@ -111,17 +121,52 @@ describe('anchor identity when there is no accessible name', () => {
   it('reports the role even when the name is empty', async () => {
     document.body.innerHTML = '<button id="icon"><svg></svg></button>';
     const el = document.querySelector('#icon');
-    if (null === el) throw new Error('fixture missing');
+    if (null === el) {
+      throw new Error('fixture missing');
+    }
     const ref = refs.refFor(el);
     const out = await executeAction(ref, 'click', {});
     expect(out.role).toBe('button');
     expect(out.name).toBeUndefined();
   });
 
+  /*
+   * A table row of icon-only buttons (QR, edit, delete) between named ones. Without a position the
+   * saved step could not tell the edit button from the delete button, so it could not replay.
+   */
+  it('reports the position among the NAMELESS controls of the role', async () => {
+    document.body.innerHTML =
+      '<button>Copy</button><button id="qr"><svg></svg></button><button id="edit"><svg></svg></button><button>Close</button><button id="del"><svg></svg></button>';
+    const edit = document.querySelector('#edit');
+    if (null === edit) {
+      throw new Error('fixture missing');
+    }
+    const out = await executeAction(refs.refFor(edit), 'click', {});
+    if (!out.ok) {
+      throw new Error('expected ok');
+    }
+    expect([out.nth, out.of]).toEqual([1, 3]);
+  });
+
+  it('reports no position for the only nameless control of its role', async () => {
+    document.body.innerHTML = '<button>Copy</button><button id="icon"><svg></svg></button>';
+    const el = document.querySelector('#icon');
+    if (null === el) {
+      throw new Error('fixture missing');
+    }
+    const out = await executeAction(refs.refFor(el), 'click', {});
+    if (!out.ok) {
+      throw new Error('expected ok');
+    }
+    expect([out.nth, out.of]).toEqual([undefined, undefined]);
+  });
+
   it('still reports both when both exist', async () => {
     document.body.innerHTML = '<button id="named">Details</button>';
     const el = document.querySelector('#named');
-    if (null === el) throw new Error('fixture missing');
+    if (null === el) {
+      throw new Error('fixture missing');
+    }
     const out = await executeAction(refs.refFor(el), 'click', {});
     expect(out.role).toBe('button');
     expect(out.name).toBe('Details');
@@ -135,10 +180,14 @@ describe('act result — which of several same-named controls', () => {
       '<nav><a href="#/t">Transactions</a></nav><main><a href="#/t">Transactions</a><a href="#/s">Settings</a></main>';
     const links = document.querySelectorAll('a');
     const second = await executeAction(refs.refFor(links[1] as HTMLElement), 'click', {});
-    if (!second.ok) throw new Error('expected ok');
+    if (!second.ok) {
+      throw new Error('expected ok');
+    }
     expect([second.nth, second.of]).toEqual([1, 2]);
     const unique = await executeAction(refs.refFor(links[2] as HTMLElement), 'click', {});
-    if (!unique.ok) throw new Error('expected ok');
+    if (!unique.ok) {
+      throw new Error('expected ok');
+    }
     expect([unique.nth, unique.of]).toEqual([undefined, undefined]);
   });
 
@@ -150,10 +199,14 @@ describe('act result — which of several same-named controls', () => {
     document.body.innerHTML =
       '<label>Mot de passe <input type="password"></label><label>Nom <input type="text"></label>';
     const [pw, plain] = Array.from(document.querySelectorAll('input'));
-    if (pw === undefined || plain === undefined) throw new Error('no inputs');
+    if (pw === undefined || plain === undefined) {
+      throw new Error('no inputs');
+    }
     const secret = await executeAction(refs.refFor(pw), 'fill', { value: 'x' });
     const open = await executeAction(refs.refFor(plain), 'fill', { value: 'x' });
-    if (!secret.ok || !open.ok) throw new Error('expected ok');
+    if (!secret.ok || !open.ok) {
+      throw new Error('expected ok');
+    }
     expect(secret.secret).toBe(true);
     expect(open.secret).toBeUndefined();
   });
@@ -170,7 +223,9 @@ describe('act result — a shared test id is counted', () => {
       '<button data-testid="runs-result">Run 1</button><button data-testid="runs-result">Run 2</button>';
     const second = document.querySelectorAll('button')[1] as HTMLButtonElement;
     const res = await executeAction(refs.refFor(second), 'click', {});
-    if (!res.ok) throw new Error('expected ok');
+    if (!res.ok) {
+      throw new Error('expected ok');
+    }
     expect(res.testid).toBe('runs-result');
     expect(res.testidOf).toBe(2);
   });
@@ -179,7 +234,9 @@ describe('act result — a shared test id is counted', () => {
     document.body.innerHTML = '<button data-testid="save">Save</button>';
     const btn = document.querySelector('button') as HTMLButtonElement;
     const res = await executeAction(refs.refFor(btn), 'click', {});
-    if (!res.ok) throw new Error('expected ok');
+    if (!res.ok) {
+      throw new Error('expected ok');
+    }
     expect(res.testidOf).toBeUndefined();
   });
 });

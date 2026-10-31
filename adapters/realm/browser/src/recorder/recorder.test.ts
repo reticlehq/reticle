@@ -47,7 +47,9 @@ function toolbarButton(action: string): HTMLElement {
   const btn = document.querySelector<HTMLElement>(
     `[data-reticle-overlay] [data-reticle-action="${action}"]`,
   );
-  if (null === btn) throw new Error(`no toolbar button ${action}`);
+  if (null === btn) {
+    throw new Error(`no toolbar button ${action}`);
+  }
   return btn;
 }
 
@@ -221,7 +223,9 @@ describe('recorder capture — semantic anchored steps', () => {
     expect(recorded).toHaveLength(1);
     const parsed = RecordedFlowSchema.safeParse(recorded[0]?.data);
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.flow.steps).toHaveLength(0);
+    if (parsed.success) {
+      expect(parsed.data.flow.steps).toHaveLength(0);
+    }
     const status = document.querySelector('[data-reticle-overlay] [data-reticle-status]');
     expect(status?.textContent).toBe(RECORDER_EMPTY_MSG);
   });
@@ -274,7 +278,9 @@ describe('recorder capture — semantic anchored steps', () => {
 
     const step = handle?.steps()[0] as FlowStep;
     expect(step.anchor.kind).toBe(AnchorKind.ROLE);
-    if (step.anchor.kind === AnchorKind.ROLE) expect(step.anchor.role).toBe(DEGRADED_ANCHOR_ROLE);
+    if (step.anchor.kind === AnchorKind.ROLE) {
+      expect(step.anchor.role).toBe(DEGRADED_ANCHOR_ROLE);
+    }
     expect(step.degraded).toBe(true);
     expect(JSON.stringify(step)).not.toMatch(/\be\d+\b/);
   });
@@ -285,7 +291,9 @@ describe('recorder capture — semantic anchored steps', () => {
     mount(emit);
     // Every toolbar node is an Reticle overlay node.
     const toolbar = document.querySelector('[data-reticle-overlay]') as Element;
-    for (const node of toolbar.querySelectorAll('*')) expect(isReticleOverlay(node)).toBe(true);
+    for (const node of toolbar.querySelectorAll('*')) {
+      expect(isReticleOverlay(node)).toBe(true);
+    }
     expect(isReticleOverlay(toolbar)).toBe(true);
     // The snapshot does not leak any toolbar text or the name input.
     const snap = buildSnapshot();
@@ -352,6 +360,19 @@ describe('anchorFor — testid wins, else role+name, else degraded', () => {
     expect(anchor).toEqual({ kind: AnchorKind.TESTID, value: 'save' });
     expect(degraded).toBe(false);
   });
+
+  it('records a nameless control with its position among the nameless controls of its role', () => {
+    document.body.innerHTML = `<button>Copy</button><button id="qr"><svg></svg></button><button id="edit"><svg></svg></button>`;
+    const { anchor, degraded } = anchorFor(document.querySelector('#edit') as Element);
+    expect(anchor).toEqual({ kind: AnchorKind.ROLE, role: 'button', nth: 1, of: 2 });
+    expect(degraded).toBe(false);
+  });
+
+  it('records the position among namesakes for a named control', () => {
+    document.body.innerHTML = `<a href="#a">Open</a><a href="#b">Open</a>`;
+    const { anchor } = anchorFor(document.querySelectorAll('a')[1] as Element);
+    expect(anchor).toEqual({ kind: AnchorKind.ROLE, role: 'link', name: 'Open', nth: 1, of: 2 });
+  });
 });
 
 describe('recorder annotate flow (interactive)', () => {
@@ -376,7 +397,9 @@ describe('recorder annotate flow (interactive)', () => {
       '[data-reticle-overlay] [data-reticle-signal]',
     );
     expect(select).not.toBeNull();
-    if (select !== null) select.value = 'diff:shown';
+    if (select !== null) {
+      select.value = 'diff:shown';
+    }
     // the annotation target is the most-recent step (annotate-on-prior); confirm.
     toolbarButton('annotate-confirm').click();
     clickStop();

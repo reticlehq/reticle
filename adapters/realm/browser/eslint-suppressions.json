@@ -9,11 +9,6 @@
       "count": 23
     }
   },
-  "src/actions/actions.auto-anchor.test.ts": {
-    "curly": {
-      "count": 13
-    }
-  },
   "src/actions/actions.click.test.ts": {
     "curly": {
       "count": 1
@@ -728,16 +723,6 @@
     },
     "no-nested-ternary": {
       "count": 1
-    }
-  },
-  "src/recorder/recorder.test.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
-  "src/recorder/recorder.ts": {
-    "curly": {
-      "count": 36
     }
   },
   "src/registry/adapter-guide.test.ts": {

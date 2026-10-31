@@ -1491,11 +1491,6 @@
       "count": 1
     }
   },
-  "src/language/flows/flow-anchor.ts": {
-    "curly": {
-      "count": 15
-    }
-  },
   "src/language/flows/flow-author.ts": {
     "curly": {
       "count": 1
@@ -1592,9 +1587,6 @@
     }
   },
   "src/language/flows/flow-replay.ts": {
-    "curly": {
-      "count": 31
-    },
     "no-nested-ternary": {
       "count": 1
     }
@@ -1645,11 +1637,6 @@
       "count": 1
     }
   },
-  "src/language/flows/flow-step-runners.ts": {
-    "curly": {
-      "count": 31
-    }
-  },
   "src/language/flows/flow-success.ts": {
     "curly": {
       "count": 7
@@ -1688,11 +1675,6 @@
   "src/language/flows/flows.recorded.test.ts": {
     "curly": {
       "count": 3
-    }
-  },
-  "src/language/flows/flows.test.ts": {
-    "curly": {
-      "count": 8
     }
   },
   "src/language/flows/heal-precondition.test.ts": {

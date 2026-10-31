@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`, `@reticlehq/browser` — a saved flow could not click a control with no accessible name.** An icon-only button (edit, delete, QR code) has a role and no name. Replay sent such a step down the testid path, which queried the role as a testid and failed with `testid "button" not found` on a working page. The recorder and the act result now store the control's position among the nameless controls of its role, and replay finds it again by that position. When the count on the page does not match, replay reports an ambiguous anchor and does not act. A failure now says that the control has no accessible name, not that a testid is missing. Closes [#2056](https://github.com/reticlehq/reticle/issues/2056).

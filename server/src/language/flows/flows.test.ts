@@ -71,7 +71,9 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
     });
     const loaded = await store.load('f');
     expect(loaded.ok).toBe(true);
-    if (!loaded.ok) throw new Error('expected ok');
+    if (!loaded.ok) {
+      throw new Error('expected ok');
+    }
     expect(loaded.value.version).toBe(FLOW_FILE_VERSION);
     expect(loaded.value.createdAt).toBe(FROZEN);
     expect(loaded.value.steps[0]?.anchor).toEqual({
@@ -91,7 +93,9 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
     ]);
     await store.save(p);
     const loaded = await store.load('f');
-    if (!loaded.ok) throw new Error('expected ok');
+    if (!loaded.ok) {
+      throw new Error('expected ok');
+    }
     expect(loaded.value.steps[0]?.action).toBe(ActionType.FILL);
     expect(loaded.value.steps[0]?.args).toEqual({ value: 'x' });
   });
@@ -117,7 +121,9 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
       value: { name: 'f', stepCount: 1, degraded: 0, empty: false },
     });
     const loaded = await store.load('f');
-    if (!loaded.ok) throw new Error('expected ok');
+    if (!loaded.ok) {
+      throw new Error('expected ok');
+    }
     const top = loaded.value.steps[0];
     expect(top?.tool).toBe('reticle_act_sequence');
     expect(top?.steps).toHaveLength(2);
@@ -140,7 +146,9 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
     const store999 = new FlowStore(fs, root, { now: () => 999 });
     await store999.save(program('f', []));
     const loaded = await store999.load('f');
-    if (!loaded.ok) throw new Error('expected ok');
+    if (!loaded.ok) {
+      throw new Error('expected ok');
+    }
     expect(loaded.value.createdAt).toBe(999);
   });
 
@@ -162,7 +170,9 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
       value: { name: 'f', stepCount: 1, degraded: 1, empty: false },
     });
     const loaded = await store.load('f');
-    if (!loaded.ok) throw new Error('expected ok');
+    if (!loaded.ok) {
+      throw new Error('expected ok');
+    }
     expect(loaded.value.steps).toHaveLength(1);
     expect(loaded.value.steps[0]?.degraded).toBe(true);
     expect(loaded.value.steps[0]?.anchor).toBeDefined();
@@ -183,7 +193,9 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
     expect(saved.ok).toBe(true);
     const loaded = await store.load('f');
     expect(loaded.ok).toBe(true);
-    if (!loaded.ok) throw new Error('expected ok');
+    if (!loaded.ok) {
+      throw new Error('expected ok');
+    }
     expect(loaded.value.steps[0]?.degraded).toBe(true);
   });
 
@@ -202,7 +214,9 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
     ]);
     await store.save(p);
     const loaded = await store.load('f');
-    if (!loaded.ok) throw new Error('expected ok');
+    if (!loaded.ok) {
+      throw new Error('expected ok');
+    }
     const top = loaded.value.steps[0];
     expect(top?.degraded).toBe(true);
     expect(top?.steps).toHaveLength(2);
@@ -219,7 +233,9 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
       value: { name: 'f', stepCount: 0, degraded: 0, empty: true },
     });
     const loaded = await store.load('f');
-    if (!loaded.ok) throw new Error('expected ok');
+    if (!loaded.ok) {
+      throw new Error('expected ok');
+    }
     expect(loaded.value.steps).toEqual([]);
     expect(() => FlowFileSchema.parse(loaded.value)).not.toThrow();
   });
@@ -405,8 +421,20 @@ describe('a role+name anchor is a real anchor, not a degraded placeholder', () =
     expect(anchor).toEqual({ kind: AnchorKind.ROLE, role: 'checkbox', name: 'select ATL-100001' });
   });
 
-  it('still degrades a NAMELESS role — it addresses nothing on its own', () => {
-    const { anchor, degraded } = anchorForStep({ by: 'role', value: 'button' });
+  /*
+   * A nameless role (an icon-only button) used to compile to the degraded placeholder, so every step
+   * on an icon-only control was unreplayable. It now compiles to a role anchor that replay resolves
+   * among the NAMELESS controls of that role — by its position when it had namesakes, and only when
+   * the count still matches (replay-nameless-role-anchor.test.ts), so it never guesses.
+   */
+  it('compiles a NAMELESS role to a role anchor that replay resolves by position', () => {
+    const { anchor, degraded } = anchorForStep({ by: 'role', value: 'button', nth: 2, of: 3 });
+    expect(degraded).toBe(false);
+    expect(anchor).toEqual({ kind: AnchorKind.ROLE, role: 'button', nth: 2, of: 3 });
+  });
+
+  it('still degrades the placeholder role itself', () => {
+    const { anchor, degraded } = anchorForStep({ by: 'role', value: DEGRADED_ANCHOR_ROLE });
     expect(degraded).toBe(true);
     expect(anchor).toEqual({ kind: AnchorKind.ROLE, role: DEGRADED_ANCHOR_ROLE });
   });

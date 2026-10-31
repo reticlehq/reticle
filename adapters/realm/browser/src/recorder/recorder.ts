@@ -17,6 +17,7 @@ import {
 import { REDACTED_VALUE } from '@reticlehq/core';
 import { sourceFromDom } from '@/dom/addressing/source.js';
 import { getAccessibleName, getRole, isSensitiveField } from '@/dom/a11y.js';
+import { positionAmongNamesakes } from '@/actions/action-report.js';
 import { isReticleOverlay } from '@/dom/dom-ignore.js';
 import { getCapabilities } from '@/registry/capabilities.js';
 import { TOOLBAR_CSS, BTN_CSS, NAME_CSS, STATUS_CSS, MENU_CSS } from './recorder-styles.js';
@@ -104,8 +105,15 @@ export function anchorFor(el: Element): { anchor: FlowAnchor; degraded: boolean 
   const role = getRole(el);
   const name = getAccessibleName(el);
   if (role !== 'generic' && (role.length > 0 || name.length > 0)) {
-    const anchor: FlowAnchor =
-      name.length > 0 ? { kind: AnchorKind.ROLE, role, name } : { kind: AnchorKind.ROLE, role };
+    // The position among namesakes (or among nameless controls of the role) is what lets replay find
+    // this exact control again when a row or a page repeats it.
+    const position = positionAmongNamesakes(el, role, name);
+    const anchor: FlowAnchor = {
+      kind: AnchorKind.ROLE,
+      role,
+      ...(name.length > 0 ? { name } : {}),
+      ...(null === position ? {} : position),
+    };
     return { anchor, degraded: false };
   }
   // No resolvable testid/role/name — keep the step with a legible placeholder, never a ref.
@@ -113,23 +121,35 @@ export function anchorFor(el: Element): { anchor: FlowAnchor; degraded: boolean 
 }
 
 function isTextbox(el: Element): el is HTMLInputElement | HTMLTextAreaElement {
-  if (el instanceof HTMLTextAreaElement) return true;
+  if (el instanceof HTMLTextAreaElement) {
+    return true;
+  }
   return el instanceof HTMLInputElement && 'textbox' === inputRole(el);
 }
 
 function inputRole(el: HTMLInputElement): 'textbox' | 'checkbox' | 'radio' | 'other' {
   const type = el.type.toLowerCase();
-  if ('checkbox' === type) return 'checkbox';
-  if ('radio' === type) return 'radio';
-  if (['text', 'email', 'tel', 'url', 'search', 'password', ''].includes(type)) return 'textbox';
+  if ('checkbox' === type) {
+    return 'checkbox';
+  }
+  if ('radio' === type) {
+    return 'radio';
+  }
+  if (['text', 'email', 'tel', 'url', 'search', 'password', ''].includes(type)) {
+    return 'textbox';
+  }
   return 'other';
 }
 
 function buildStep(el: Element, action: ActionType, args?: Record<string, unknown>): FlowStep {
   const { anchor, degraded } = anchorFor(el);
   const step: FlowStep = { tool: TOOL, anchor, action };
-  if (args !== undefined) step.args = args;
-  if (degraded) step.degraded = true;
+  if (args !== undefined) {
+    step.args = args;
+  }
+  if (degraded) {
+    step.degraded = true;
+  }
   /*
    * Record WHERE this element came from, when the build stamped it.
    *
@@ -176,11 +196,15 @@ export function compileRecording(
       continue;
     }
     if (ann.kind === AnnotationKind.SUCCESS_STATE) {
-      if (ann.signal !== undefined) success = { kind: PredicateKind.SIGNAL, name: ann.signal };
+      if (ann.signal !== undefined) {
+        success = { kind: PredicateKind.SIGNAL, name: ann.signal };
+      }
       continue;
     }
     const target = out.at(-1);
-    if (target === undefined) continue;
+    if (target === undefined) {
+      continue;
+    }
     if (ann.kind === AnnotationKind.ASSERT_SIGNAL && ann.signal !== undefined) {
       target.expect = alsoAssert(target.expect, { kind: PredicateKind.SIGNAL, name: ann.signal });
     } else if (ann.kind === AnnotationKind.ASSERT_VISIBLE) {
@@ -192,9 +216,15 @@ export function compileRecording(
   }
 
   const flow: FlowFile = { version: FLOW_FILE_VERSION, name, createdAt, steps: out };
-  if (startPath !== undefined && startPath.length > 0) flow.startPath = startPath;
-  if (dynamic.length > 0) flow.dynamic = dynamic;
-  if (success !== undefined) flow.success = success;
+  if (startPath !== undefined && startPath.length > 0) {
+    flow.startPath = startPath;
+  }
+  if (dynamic.length > 0) {
+    flow.dynamic = dynamic;
+  }
+  if (success !== undefined) {
+    flow.success = success;
+  }
   return flow;
 }
 
@@ -207,7 +237,9 @@ export function compileRecording(
  * the last one.
  */
 function alsoAssert(existing: Predicate | undefined, clause: Predicate): Predicate {
-  if (existing === undefined) return clause;
+  if (existing === undefined) {
+    return clause;
+  }
   if (existing.kind === PredicateKind.ALL_OF) {
     return { kind: PredicateKind.ALL_OF, predicates: [...existing.predicates, clause] };
   }
@@ -215,7 +247,9 @@ function alsoAssert(existing: Predicate | undefined, clause: Predicate): Predica
 }
 
 function anchorToElement(anchor: FlowAnchor): { testid?: string; role?: string; name?: string } {
-  if (anchor.kind === AnchorKind.TESTID) return { testid: anchor.value };
+  if (anchor.kind === AnchorKind.TESTID) {
+    return { testid: anchor.value };
+  }
   if (anchor.kind === AnchorKind.ROLE) {
     return anchor.name !== undefined
       ? { role: anchor.role, name: anchor.name }
@@ -258,8 +292,12 @@ class Recorder implements RecorderHandle {
   }
 
   mount(): void {
-    if (this.#root !== undefined) return;
-    if ('undefined' === typeof document) return;
+    if (this.#root !== undefined) {
+      return;
+    }
+    if ('undefined' === typeof document) {
+      return;
+    }
     this.#buildToolbar();
     this.#installCapture();
   }
@@ -293,19 +331,27 @@ class Recorder implements RecorderHandle {
   /** True if the event should be ignored (toolbar self-click or non-element target). */
   #ignore(ev: Event): Element | undefined {
     const target = ev.target;
-    if (!(target instanceof Element)) return undefined;
-    if (isReticleOverlay(target)) return undefined;
+    if (!(target instanceof Element)) {
+      return undefined;
+    }
+    if (isReticleOverlay(target)) {
+      return undefined;
+    }
     return target;
   }
 
   #onClick(ev: Event): void {
     const target = this.#ignore(ev);
-    if (target === undefined) return;
+    if (target === undefined) {
+      return;
+    }
     if (this.#phase === RecorderPhase.ANNOTATING) {
       this.#captureAnnotationTarget(target);
       return;
     }
-    if (this.#phase !== RecorderPhase.RECORDING) return;
+    if (this.#phase !== RecorderPhase.RECORDING) {
+      return;
+    }
     // Controls that emit `change` (checkbox, radio, select) are recorded by #onChange as their
     // semantic step (CHECK/UNCHECK/SELECT). Recording a CLICK here too would replay any onChange
     // side effect twice (analytics, dependent-field resets), so skip the duplicate.
@@ -321,17 +367,25 @@ class Recorder implements RecorderHandle {
   }
 
   #onInput(ev: Event): void {
-    if (this.#phase !== RecorderPhase.RECORDING) return;
+    if (this.#phase !== RecorderPhase.RECORDING) {
+      return;
+    }
     const target = this.#ignore(ev);
-    if (target === undefined || !isTextbox(target)) return;
+    if (target === undefined || !isTextbox(target)) {
+      return;
+    }
     // Debounce per-keystroke input: keep the latest value, flush on change/blur/next-act.
     this.#pendingFill = { el: target, value: target.value };
   }
 
   #onChange(ev: Event): void {
-    if (this.#phase !== RecorderPhase.RECORDING) return;
+    if (this.#phase !== RecorderPhase.RECORDING) {
+      return;
+    }
     const target = this.#ignore(ev);
-    if (target === undefined) return;
+    if (target === undefined) {
+      return;
+    }
     if (target instanceof HTMLInputElement && 'checkbox' === inputRole(target)) {
       this.#flushPendingFill();
       this.#steps.push(buildStep(target, target.checked ? ActionType.CHECK : ActionType.UNCHECK));
@@ -354,16 +408,22 @@ class Recorder implements RecorderHandle {
   }
 
   #onSubmit(ev: Event): void {
-    if (this.#phase !== RecorderPhase.RECORDING) return;
+    if (this.#phase !== RecorderPhase.RECORDING) {
+      return;
+    }
     const target = this.#ignore(ev);
-    if (target === undefined) return;
+    if (target === undefined) {
+      return;
+    }
     this.#flushPendingFill();
     this.#steps.push(buildStep(target, ActionType.SUBMIT));
   }
 
   #flushPendingFill(): void {
     const pending = this.#pendingFill;
-    if (pending === undefined) return;
+    if (pending === undefined) {
+      return;
+    }
     this.#pendingFill = undefined;
     // Never persist a typed secret into a git-checked flow file: password/OTP/cc/sensitive-keyed
     // fields record REDACTED_VALUE, the same redaction live snapshots apply (dom/a11y.ts getValue).
@@ -375,11 +435,15 @@ class Recorder implements RecorderHandle {
 
   #captureAnnotationTarget(target: Element): void {
     const draft = this.#draft;
-    if (draft === undefined) return;
+    if (draft === undefined) {
+      return;
+    }
     const { anchor } = anchorFor(target);
     const ann: Annotation = { kind: draft.kind, anchor };
     const signal = this.#selectedSignal();
-    if (signal !== undefined) ann.signal = signal;
+    if (signal !== undefined) {
+      ann.signal = signal;
+    }
     this.#annotations.push(ann);
     this.#draft = undefined;
     this.#setPhase(RecorderPhase.RECORDING);
@@ -389,7 +453,9 @@ class Recorder implements RecorderHandle {
   /** Annotate-on-prior: confirm the most-recent step as the target (no extra click needed). */
   #confirmAnnotationOnPrior(): void {
     const draft = this.#draft;
-    if (draft === undefined) return;
+    if (draft === undefined) {
+      return;
+    }
     const last = this.#steps.at(-1);
     if (last === undefined) {
       this.#draft = undefined;
@@ -399,7 +465,9 @@ class Recorder implements RecorderHandle {
     }
     const ann: Annotation = { kind: draft.kind, anchor: last.anchor };
     const signal = this.#selectedSignal();
-    if (signal !== undefined) ann.signal = signal;
+    if (signal !== undefined) {
+      ann.signal = signal;
+    }
     this.#annotations.push(ann);
     this.#draft = undefined;
     this.#setPhase(RecorderPhase.RECORDING);
@@ -442,7 +510,9 @@ class Recorder implements RecorderHandle {
   }
 
   #openAnnotateMenu(): void {
-    if (this.#phase !== RecorderPhase.RECORDING) return;
+    if (this.#phase !== RecorderPhase.RECORDING) {
+      return;
+    }
     this.#setPhase(RecorderPhase.ANNOTATING);
     this.#setStatus(STATUS_ANNOTATE);
     this.#renderMenu();
@@ -499,13 +569,17 @@ class Recorder implements RecorderHandle {
 
   #renderMenu(): void {
     const menu = this.#menuEl;
-    if (menu === undefined) return;
+    if (menu === undefined) {
+      return;
+    }
     menu.textContent = '';
     for (const kind of Object.values(AnnotationKind)) {
       // INTENT is free-text (the business goal), not a signal/testid pick — authored via
       // reticle_annotate { kind:'intent', text }. The human toolbar's name field is signal/testid only,
       // so intent is omitted from this menu rather than shipped as a control that can't capture text.
-      if (kind === AnnotationKind.INTENT) continue;
+      if (kind === AnnotationKind.INTENT) {
+        continue;
+      }
       const item = document.createElement('button');
       item.setAttribute('data-reticle-annkind', kind);
       item.textContent = ANNOTATION_LABEL[kind];
@@ -518,7 +592,9 @@ class Recorder implements RecorderHandle {
   #chooseKind(kind: AnnotationKind): void {
     this.#draft = { kind };
     const menu = this.#menuEl;
-    if (menu === undefined) return;
+    if (menu === undefined) {
+      return;
+    }
     if (NEEDS_SIGNAL.has(kind)) {
       const select = document.createElement('select');
       select.setAttribute('data-reticle-signal', '');
@@ -541,11 +617,15 @@ class Recorder implements RecorderHandle {
   }
 
   #closeMenu(): void {
-    if (this.#menuEl !== undefined) this.#menuEl.textContent = '';
+    if (this.#menuEl !== undefined) {
+      this.#menuEl.textContent = '';
+    }
   }
 
   #setStatus(text: string): void {
-    if (this.#statusEl !== undefined) this.#statusEl.textContent = text;
+    if (this.#statusEl !== undefined) {
+      this.#statusEl.textContent = text;
+    }
   }
 
   #nameField(): string | undefined {

@@ -95,7 +95,9 @@ function currentRoute(session: FlowReplaySession): string | undefined {
   // pathname is `/` on every page of a hash-routed app — so a whole desktop replay reported `/` for
   // every step. Sixth place the same reading was wrong; see routeOfEvent.
   const parts = routeOfEvent(last);
-  if (parts === undefined || 0 === parts.docPath.length) return undefined;
+  if (parts === undefined || 0 === parts.docPath.length) {
+    return undefined;
+  }
   return parts.routePath.length > 0 ? parts.routePath : undefined;
 }
 
@@ -118,15 +120,23 @@ function summarizeConsequence(events: ReticleEvent[]): string | undefined {
   const lastRoute = events.filter((e) => e.type === EventType.ROUTE_CHANGE).at(-1);
   if (lastRoute !== undefined) {
     const routed = routeOfEvent(lastRoute);
-    if (routed !== undefined && routed.routePath.length > 0) parts.push(`→ ${routed.routePath}`);
+    if (routed !== undefined && routed.routePath.length > 0) {
+      parts.push(`→ ${routed.routePath}`);
+    }
   }
   const signals = new Set<string>();
   for (const e of events) {
-    if (e.type !== EventType.SIGNAL) continue;
+    if (e.type !== EventType.SIGNAL) {
+      continue;
+    }
     const name = asString((e.data ?? {})['name']);
-    if (name !== undefined) signals.add(name);
+    if (name !== undefined) {
+      signals.add(name);
+    }
   }
-  for (const name of [...signals].slice(0, 2)) parts.push(`signal ${name}`);
+  for (const name of [...signals].slice(0, 2)) {
+    parts.push(`signal ${name}`);
+  }
   for (const n of events.filter((e) => e.type === EventType.NET_REQUEST).slice(0, 2)) {
     const data = n.data ?? {};
     const method = asString(data['method']) ?? 'GET';
@@ -135,7 +145,9 @@ function summarizeConsequence(events: ReticleEvent[]): string | undefined {
     parts.push(`${method} ${path}${status}`.trim());
   }
   const errors = events.filter(isConsoleError).length;
-  if (errors > 0) parts.push(`${errors} console error${errors > 1 ? 's' : ''}`);
+  if (errors > 0) {
+    parts.push(`${errors} console error${errors > 1 ? 's' : ''}`);
+  }
   return parts.length > 0 ? parts.join('; ') : undefined;
 }
 
@@ -159,8 +171,9 @@ type ConsoleClause = Extract<StepExpect, { kind: typeof PredicateKind.CONSOLE }>
 
 /** The console-absent clauses an expect cannot pass without: itself, or any `allOf` member. */
 function requiredConsoleAbsences(expect: StepExpect): ConsoleClause[] {
-  if (PredicateKind.ALL_OF === expect.kind)
+  if (PredicateKind.ALL_OF === expect.kind) {
     return expect.predicates.flatMap(requiredConsoleAbsences);
+  }
   return PredicateKind.CONSOLE === expect.kind && true === expect.absent ? [expect] : [];
 }
 
@@ -173,7 +186,9 @@ function requiredConsoleAbsences(expect: StepExpect): ConsoleClause[] {
 function lateConsoleDrift(expect: StepExpect, events: ReticleEvent[]): Drift | undefined {
   for (const clause of requiredConsoleAbsences(expect)) {
     const read = evalConsole(events, clause);
-    if (read.pass) continue;
+    if (read.pass) {
+      continue;
+    }
     return {
       reasonKind: DriftReason.SIGNAL_NOT_OBSERVED,
       reason: read.failureReason ?? "the step's declared consequence did not hold",
@@ -243,7 +258,9 @@ export async function runTestidStep(
     anchorFieldName(step.anchor),
     async () => reresolved(step.anchor, (await resolveTestid(session, value, sleep)).refs),
   );
-  if (!result.ok) return result;
+  if (!result.ok) {
+    return result;
+  }
   // assert the step's expect.element testid is present AFTER the action —
   // unless that testid was marked DYNAMIC (the LLM-output case), in which case its presence/content
   // is NOT asserted (only the action ran). The skip is scoped strictly to the dynamic set.
@@ -320,13 +337,19 @@ export async function assertStepExpect(
       clause.query.testid !== undefined &&
       true !== clause.absent,
   );
-  if (predicate === undefined) return undefined;
+  if (predicate === undefined) {
+    return undefined;
+  }
   const verdict = await waitForSignal(session, predicate, timeoutMs, since);
-  if (verdict.pass) return undefined;
+  if (verdict.pass) {
+    return undefined;
+  }
   // The wait ended because the page stopped being observable, not because the consequence failed:
   // the same fact as a command the dying socket rejected, so it takes the same path (the replay loop
   // reports a lost document). As a drift, a socket that blinked for 26ms read as the app's defect.
-  if (true === verdict.observationLost) throw new Error(SESSION_DISCONNECTED_REASON);
+  if (true === verdict.observationLost) {
+    throw new Error(SESSION_DISCONNECTED_REASON);
+  }
   // A request the step NAMED that had not come back yet is a blind spot, not an assertion the app
   // failed. The live verdict path already draws this line (namedNetIsInFlight); replay read the
   // same window and never asked, so a slow endpoint was reported as a consequence that never fired.
@@ -363,7 +386,9 @@ export function withCaseOnly(
   reason: string,
   verdict: { caseOnlyMiss?: boolean; wouldHold?: string },
 ): string {
-  if (true !== verdict.caseOnlyMiss) return reason;
+  if (true !== verdict.caseOnlyMiss) {
+    return reason;
+  }
   const shown = verdict.wouldHold === undefined ? '' : ` ("${verdict.wouldHold}")`;
   return `${reason} — the page shows it in another case${shown}. Text checks match case exactly: if any case is meant, add ignoreCase: true to this check, or re-record the flow.`;
 }
@@ -393,7 +418,9 @@ async function runSignalStep(
     signalTimeoutMs,
     since,
   );
-  if (verdict.pass) return { step: index, tool: step.tool, anchor: name, ok: true };
+  if (verdict.pass) {
+    return { step: index, tool: step.tool, anchor: name, ok: true };
+  }
   return {
     step: index,
     tool: step.tool,
@@ -485,9 +512,13 @@ export function resumeIndex(
   from: number | string | undefined,
   steps: readonly FlowStep[],
 ): number | undefined {
-  if (from === undefined) return 0;
+  if (from === undefined) {
+    return 0;
+  }
   const at = 'number' === typeof from ? from : steps.findIndex((step) => step.id === from);
-  if (at < 0 || at >= steps.length || !Number.isInteger(at)) return undefined;
+  if (at < 0 || at >= steps.length || !Number.isInteger(at)) {
+    return undefined;
+  }
   return steps.slice(0, at).some((step) => StepEffect.COMMITS === step.effect) ? 0 : at;
 }
 
@@ -505,7 +536,9 @@ export function replayWindow(args: Record<string, unknown>): { to?: number; at?:
 
 /** A part-way replay's status, from the steps it drove. */
 export function partialStatus(steps: readonly FlowStepResult[]): ReplayStatus {
-  if (steps.some((step) => step.drift !== undefined)) return ReplayStatus.DRIFT;
+  if (steps.some((step) => step.drift !== undefined)) {
+    return ReplayStatus.DRIFT;
+  }
   return steps.every((step) => step.ok) ? ReplayStatus.OK : ReplayStatus.ERROR;
 }
 
@@ -519,7 +552,9 @@ export function unresolvedResume(
   from: number | string | undefined,
   steps: readonly FlowStep[],
 ): string | undefined {
-  if (resumeIndex(from, steps) !== undefined) return undefined;
+  if (resumeIndex(from, steps) !== undefined) {
+    return undefined;
+  }
   return `cannot resume at ${JSON.stringify(from)}: this flow has ${String(steps.length)} step(s) and no step by that id`;
 }
 
@@ -638,7 +673,9 @@ export async function replayFlow(
   };
   try {
     for (const step of flow.steps) {
-      if (options.to !== undefined && index >= options.to) break;
+      if (options.to !== undefined && index >= options.to) {
+        break;
+      }
       if (options.at !== undefined && index < options.at) {
         index += 1;
         continue;
@@ -659,9 +696,13 @@ export async function replayFlow(
           ),
         );
         const last = results[results.length - 1];
-        if (last !== undefined && index < from && last.ok) results.pop();
+        if (last !== undefined && index < from && last.ok) {
+          results.pop();
+        }
         tell(last);
-        if (last !== undefined && false === last.ok) break;
+        if (last !== undefined && false === last.ok) {
+          break;
+        }
         index += 1;
         continue;
       }
@@ -719,9 +760,12 @@ export async function replayFlow(
           if (step.anchor.kind === AnchorKind.COMPONENT) {
             return runComponentStep(session, step, index, step.anchor, confirmDangerous, sleep);
           }
-          if (step.anchor.kind === AnchorKind.ROLE && step.anchor.name !== undefined) {
-            // A NAMED role anchor addresses one element. The nameless one is the degraded placeholder
-            // and keeps its old path, where it fails legibly rather than querying a role as a testid.
+          if (step.anchor.kind === AnchorKind.ROLE) {
+            // Named or nameless, a role anchor resolves by role. The degraded placeholder and the
+            // document-key press were handled above, so what reaches here addresses a real control:
+            // a nameless one (an icon-only button) by its position among nameless controls of its
+            // role. It used to fall through to the testid path, which queried the ROLE as a testid
+            // and answered `testid "button" not found` on a working page.
             return runRoleStep(session, step, index, step.anchor, confirmDangerous, sleep);
           }
           return runTestidStep(session, step, index, label, dynamic, confirmDangerous, sleep);
@@ -745,7 +789,9 @@ export async function replayFlow(
       // A setup step's consequence is not checked: it is re-driven to get somewhere, not to prove it.
       const checked = index < from ? [] : own;
       for (const expectation of checked) {
-        if (!result.ok || result.drift !== undefined) break;
+        if (!result.ok || result.drift !== undefined) {
+          break;
+        }
         const expectDrift = await assertStepExpect(
           session,
           expectation,
@@ -758,16 +804,26 @@ export async function replayFlow(
           result.drift = expectDrift;
         }
       }
-      if (page !== undefined) result.page = page;
+      if (page !== undefined) {
+        result.page = page;
+      }
       const endPage = currentRoute(session);
-      if (endPage !== undefined && endPage !== page) result.endPage = endPage;
+      if (endPage !== undefined && endPage !== page) {
+        result.endPage = endPage;
+      }
       const windowEvents = session.eventsSince(cursorBefore).filter((e) => e.t >= cursorBefore);
       const consequence = summarizeConsequence(windowEvents);
-      if (consequence !== undefined) result.consequence = consequence;
+      if (consequence !== undefined) {
+        result.consequence = consequence;
+      }
       const consoleErrors = consoleErrorsIn(windowEvents);
-      if (consoleErrors !== undefined) result.consoleErrors = consoleErrors;
+      if (consoleErrors !== undefined) {
+        result.consoleErrors = consoleErrors;
+      }
       for (const expectation of checked) {
-        if (!result.ok || result.drift !== undefined) break;
+        if (!result.ok || result.drift !== undefined) {
+          break;
+        }
         const late = lateConsoleDrift(expectation, windowEvents);
         if (late !== undefined) {
           result.ok = false;
@@ -798,12 +854,16 @@ export async function replayFlow(
        */
       // `tool` is dropped HERE rather than at the ten places that set it, so a new step runner cannot
       // forget the rule and quietly re-introduce the cost. Spelled out only when it is NOT the default.
-      if (FlowStepTool.ACT === result.tool) delete result.tool;
+      if (FlowStepTool.ACT === result.tool) {
+        delete result.tool;
+      }
       if (index < from && result.ok && result.drift === undefined) {
         index += 1;
         continue;
       }
-      if (index < from) result.note = `setup step for resuming at step ${String(from)} failed`;
+      if (index < from) {
+        result.note = `setup step for resuming at step ${String(from)} failed`;
+      }
       await options.onStepResult?.(result, flow.name).catch(() => undefined);
       results.push(result);
       tell(result);
@@ -813,11 +873,15 @@ export async function replayFlow(
         true === options.sweep &&
         result.drift !== undefined &&
         isConsequenceDrift(result.drift.reasonKind);
-      if (!sweepPast && (result.drift !== undefined || !result.ok)) break;
+      if (!sweepPast && (result.drift !== undefined || !result.ok)) {
+        break;
+      }
       index += 1;
     }
   } catch (error: unknown) {
-    if (!isDocumentGoneError(error)) throw error;
+    if (!isDocumentGoneError(error)) {
+      throw error;
+    }
     throw new DocumentLostDuringReplay(results, index, error);
   }
   return results;
