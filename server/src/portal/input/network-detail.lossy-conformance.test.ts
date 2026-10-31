@@ -1,7 +1,10 @@
-import { EventType, type ReticleEvent } from '@reticlehq/core';
+import { EventType, NetInitiator, type ReticleEvent } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
 import { buildNetworkDetail } from './network-detail.js';
-import { mergeNetworkDetail } from '@reticlehq/engine/window/network-detail-merge.js';
+import {
+  mergeNetworkDetail,
+  withDownloadRequests,
+} from '@reticlehq/engine/window/network-detail-merge.js';
 
 /**
  * Conformance for the lossy-transform rule on the driven network capture.
@@ -83,5 +86,27 @@ describe('mergeNetworkDetail: the truncation flag follows the body that won', ()
     ]);
     expect(merged[0]?.data['requestBody']).toBe(SMALL);
     expect('requestBodyTruncated' in (merged[0]?.data ?? {})).toBe(false);
+  });
+});
+
+describe('withDownloadRequests: a download the page never saw says so', () => {
+  it('marks the re-typed request with the download initiator and an unmeasured duration', () => {
+    const [out] = withDownloadRequests([
+      {
+        type: EventType.NET_DETAIL,
+        sessionId: 's',
+        t: 9,
+        data: {
+          method: 'GET',
+          url: '/api/links/export',
+          status: 200,
+          headers: { 'content-disposition': 'attachment; filename="links.csv"' },
+        },
+      },
+    ]);
+    expect(out?.type).toBe(EventType.NET_REQUEST);
+    // The declaration: the page never saw this call, and nothing timed it.
+    expect(out?.data['initiator']).toBe(NetInitiator.DOWNLOAD);
+    expect(out?.data['durationMs']).toBe(0);
   });
 });

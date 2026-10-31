@@ -188,3 +188,32 @@ describe('a download the driven browser saw, with no in-page request', () => {
     expect(merged.filter((e) => e.type === EventType.NET_REQUEST)).toHaveLength(1);
   });
 });
+
+/*
+ * The download had to be visible to a plain `net` check too. evalNet merged details only for a
+ * body clause, so `{ method, urlContains, status }` on a working export still read "no call matched".
+ */
+describe('a net check with no body clause, over a server-sent download', () => {
+  it('matches the download', () => {
+    const events: ReticleEvent[] = [
+      {
+        type: EventType.NET_DETAIL,
+        sessionId: 's',
+        t: 5,
+        data: {
+          method: 'GET',
+          url: '/api/links/export',
+          status: 200,
+          headers: { 'content-disposition': 'attachment; filename="links.csv"' },
+        },
+      },
+    ];
+    const verdict = evalNet(events, {
+      kind: PredicateKind.NET,
+      method: 'GET',
+      urlContains: '/api/links/export',
+      status: 200,
+    });
+    expect(verdict.pass).toBe(true);
+  });
+});

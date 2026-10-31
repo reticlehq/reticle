@@ -187,6 +187,10 @@ export const READ_PATH = Object.freeze({
       Declaration.REPORT,
       'the wire body is the one field that REPLACES the in-page one rather than filling a gap, so both caveats ride with it: requestBodyTruncated follows the body that won, and requestBodyDivergedFromPage states that the two disagreed',
     ],
+    withDownloadRequests: [
+      Declaration.REPORT,
+      're-types an unmatched attachment detail as a request and drops nothing; what it cannot know it states: initiator is "download" (the page never saw it), and durationMs reads 0 because nothing timed it',
+    ],
   },
   'server/src/portal/input/network-detail.ts': {
     NetworkDetail: [Declaration.NONE, 'the payload type'],

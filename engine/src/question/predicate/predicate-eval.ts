@@ -15,7 +15,7 @@ import { isReticleVoice } from '../../state-bookkeeping.js';
 import { describeObserved } from './observed-in-window.js';
 import { netEvidence } from './net-evidence.js';
 import { truncatedBodyAdvice } from './truncated-body-advice.js';
-import { mergeNetworkDetail } from '@/window/network-detail-merge.js';
+import { mergeNetworkDetail, withDownloadRequests } from '@/window/network-detail-merge.js';
 import { departedInWindow } from '@/window/event-filters.js';
 import {
   checkRequestBody,
@@ -259,6 +259,9 @@ export function evalNet(
   // SSE headers close the request immediately. A later detail supplies its captured body without another call.
   if (p.bodyContains !== undefined || p.bodyMatches !== undefined) {
     events = mergeNetworkDetail(events);
+  } else {
+    // A server-sent download is a request even when nothing asks for its body.
+    events = withDownloadRequests(events);
   }
   const since = p.since ?? 0;
   /**

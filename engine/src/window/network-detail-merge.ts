@@ -62,6 +62,20 @@ function downloadRequest(e: ReticleEvent): ReticleEvent | undefined {
 }
 
 /**
+ * Record every server-sent download the driven browser saw, and that the page never recorded, as a
+ * request — and change nothing else. A `net` check with no body clause runs on events that the full
+ * merge below never touches, so without this a plain status check on a working export missed.
+ */
+export function withDownloadRequests(events: readonly ReticleEvent[]): ReticleEvent[] {
+  const recorded = new Set(
+    events.filter((e) => e.type === EventType.NET_REQUEST).map((e) => keyOf(e.data)),
+  );
+  return events.map((e) =>
+    e.type === EventType.NET_DETAIL && !recorded.has(keyOf(e.data)) ? (downloadRequest(e) ?? e) : e,
+  );
+}
+
+/**
  * Fold wire details by method+url, and SDK response bodies by request id plus method+url.
  * SDK body details finish background capture without adding another request to counts or settle.
  * Keep unmatched details rather than attaching them to another request. Pure over the event list.
