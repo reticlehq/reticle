@@ -1,4 +1,5 @@
-import { isReticleUi } from './dom-ignore.js';
+import { isIgnored, isReticleUi } from './dom-ignore.js';
+import { capturedRootOf } from './shadow-registry.js';
 
 /**
  * Where to look. The centre, plus four points inset from the corners.
@@ -30,15 +31,19 @@ const BLOCKED_MAJORITY = 3;
 
 /**
  * Multi-point hit-test, shared by click-geometry (actions) and occlusion detection (commands) so the
- * two can't drift. Returns the NON-Reticle element covering most of `el`, or null when nothing
- * foreign is on top — i.e. `el` itself, an ancestor wrapping it, or a descendant is on top (all "not
+ * two can't drift. Returns the covering element of a NON-Reticle blocker that wins a majority of
+ * samples, or null when `el` itself, an ancestor wrapping it, or a descendant is on top (all "not
  * occluded"). A zero-area or unlayouted box (jsdom / detached node) returns null: we cannot tell, so
  * we never false-positive an occlusion. Reticle's own HUD is never treated as an occluder.
  */
 export function hitTestOccluder(el: Element, rect: DOMRect): Element | null {
-  if (0 === rect.width || 0 === rect.height) return null;
+  if (0 === rect.width || 0 === rect.height) {
+    return null;
+  }
   const doc = el.ownerDocument;
-  if (typeof doc.elementFromPoint !== 'function') return null;
+  if (typeof doc.elementFromPoint !== 'function') {
+    return null;
+  }
 
   /*
    * `elementsFromPoint` when the browser has it, so Reticle's own chrome cannot hide what is under it.
@@ -62,27 +67,52 @@ export function hitTestOccluder(el: Element, rect: DOMRect): Element | null {
     candidate !== el &&
     !el.contains(candidate) &&
     !candidate.contains(el);
-  const topAt = (x: number, y: number): Element | null => {
+  const topAt = (x: number, y: number): { blocker: Element; resolved: Element } | null => {
     const found = withStack.elementsFromPoint?.(x, y) ?? [doc.elementFromPoint(x, y)];
-    return found.find((c): c is Element => null !== c && !isOursButNotTheTarget(c)) ?? null;
+    const top = found.find((c): c is Element => null !== c && !isOursButNotTheTarget(c)) ?? null;
+    if (null === top) {
+      return null;
+    }
+    if (top === el || top.contains(el) || !isIgnored(top)) {
+      return { blocker: top, resolved: top };
+    }
+    // Snapshot exclusion does not make a dev overlay pointer-transparent. The document retargets
+    // a shadow hit to its host, whose box can be 0x0. Keep the blocker, but resolve its real box.
+    let hit: Element = top;
+    for (;;) {
+      const root: ShadowRoot | null = hit.shadowRoot ?? capturedRootOf(hit);
+      const inner: Element | null | undefined = root?.elementFromPoint?.(x, y);
+      if (inner === undefined || null === inner || inner === hit) {
+        return { blocker: top, resolved: hit };
+      }
+      hit = inner;
+    }
   };
 
-  // Counted by element, so the answer names the thing actually covering the control rather than
-  // whichever blocked point happened to be sampled first. Two different overlays each covering two
-  // points is not an occlusion by either of them, and this counts it as neither.
-  const blockers = new Map<Element, number>();
+  // Count votes by the hit-stack element, so different shadow children cannot split one overlay's
+  // vote. Keep its first resolved hit to name and measure. Separate hosts keep separate votes.
+  const blockers = new Map<Element, { count: number; resolved: Element }>();
   for (const [fx, fy] of SAMPLE_POINTS) {
     const top = topAt(rect.left + rect.width * fx, rect.top + rect.height * fy);
-    if (null === top) continue;
-    if (top === el || el.contains(top) || top.contains(el)) continue;
-    blockers.set(top, (blockers.get(top) ?? 0) + 1);
+    if (null === top) {
+      continue;
+    }
+    const { blocker, resolved } = top;
+    if (resolved === el || el.contains(resolved) || resolved.contains(el)) {
+      continue;
+    }
+    const previous = blockers.get(blocker);
+    blockers.set(blocker, {
+      count: (previous?.count ?? 0) + 1,
+      resolved: previous?.resolved ?? resolved,
+    });
   }
 
   let worst: Element | null = null;
   let worstCount = 0;
-  for (const [element, count] of blockers) {
+  for (const { resolved, count } of blockers.values()) {
     if (count > worstCount) {
-      worst = element;
+      worst = resolved;
       worstCount = count;
     }
   }

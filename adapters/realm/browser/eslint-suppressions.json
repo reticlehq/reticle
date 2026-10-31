@@ -184,11 +184,6 @@
       "count": 1
     }
   },
-  "src/dom/occlusion.ts": {
-    "curly": {
-      "count": 4
-    }
-  },
   "src/dom/paint-context.test.ts": {
     "curly": {
       "count": 1
