@@ -40,6 +40,7 @@ import {
   queryOnce,
   reresolved,
   readNamelessQuery,
+  resolveAnyQuery,
   resolveQuery,
   roleAnchorLabel,
   testidDrift,
@@ -60,6 +61,15 @@ function roleQueryArgs(
     value: anchor.role,
     ...(anchor.name === undefined ? {} : { name: anchor.name }),
   };
+}
+
+/** One query for each role the anchor accepts: its own role, then `alsoRoles`. */
+function roleQueries(
+  anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.ROLE }>,
+): Record<string, unknown>[] {
+  return [anchor.role, ...(anchor.alsoRoles ?? [])].map((role) =>
+    roleQueryArgs({ ...anchor, role }),
+  );
 }
 
 /** Run one role+name-anchored step: re-resolve via QUERY by:'role', ACT on the live ref, else drift. */
@@ -119,9 +129,15 @@ function resolveRoleAnchor(
   anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.ROLE }>,
   sleep: Sleep,
 ): Promise<{ refs: string[] }> {
-  return anchor.name === undefined
-    ? resolveQuery(session, roleQueryArgs(anchor), sleep, Date.now, readNamelessQuery)
-    : resolveQuery(session, roleQueryArgs(anchor), sleep);
+  // Every role the anchor accepts (`alsoRoles`), pooled in one settle loop; a nameless anchor keeps
+  // only the matches with no accessible name.
+  return resolveAnyQuery(
+    session,
+    roleQueries(anchor),
+    sleep,
+    Date.now,
+    anchor.name === undefined ? readNamelessQuery : undefined,
+  );
 }
 
 export async function runRoleStep(

@@ -398,7 +398,29 @@ export async function resolveQuery(
   now: () => number = Date.now,
   read: (result: CommandResult) => { refs: string[]; hint?: QueryEmptyHint } = readQuery,
 ): Promise<{ refs: string[]; hint?: QueryEmptyHint }> {
-  let last = read(await session.command(ReticleCommand.QUERY, queryArgs));
+  return await resolveAnyQuery(session, [queryArgs], sleep, now, read);
+}
+
+/**
+ * Several queries for one control, pooled: each attempt runs every query and joins the refs, so
+ * the settle budget is spent once, not once for each query. A role anchor with `alsoRoles` uses it.
+ */
+export async function resolveAnyQuery(
+  session: FlowReplaySession,
+  queries: readonly Record<string, unknown>[],
+  sleep: Sleep,
+  now: () => number = Date.now,
+  read: (result: CommandResult) => { refs: string[]; hint?: QueryEmptyHint } = readQuery,
+): Promise<{ refs: string[]; hint?: QueryEmptyHint }> {
+  const look = async (): Promise<{ refs: string[]; hint?: QueryEmptyHint }> => {
+    const reads = [];
+    for (const queryArgs of queries) {
+      reads.push(read(await session.command(ReticleCommand.QUERY, queryArgs)));
+    }
+    const hint = reads.find((read) => read.hint !== undefined)?.hint;
+    return { refs: reads.flatMap((read) => read.refs), ...(hint === undefined ? {} : { hint }) };
+  };
+  let last = await look();
   const deadline = now() + ANCHOR_SETTLE_BUDGET_MS;
   for (
     let attempt = 1;
@@ -406,7 +428,7 @@ export async function resolveQuery(
     attempt += 1
   ) {
     await settleTick(session, sleep);
-    last = read(await session.command(ReticleCommand.QUERY, queryArgs));
+    last = await look();
   }
   return last;
 }

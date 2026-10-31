@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/core`, `@reticlehq/server` — a role anchor can accept more than one role.** A flow step anchored by role named exactly one role. When a spec allows "a link or a button", some builds use a link and others a button, and one flow then failed every build that chose the other. Add `alsoRoles` to the anchor (for example `{ "kind": "role", "role": "link", "name": "Export CSV", "alsoRoles": ["button"] }`) and replay accepts the control under any of those roles. The usual rule applies when more than one control matches: the step is ambiguous. `alsoRoles` cannot be used with `nth`, because a position counts the controls of one role only.

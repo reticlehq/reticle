@@ -49,15 +49,23 @@ export const FlowAnchorSchema = z.discriminatedUnion('kind', [
       .object({ file: z.string(), line: z.number(), column: z.number().optional() })
       .optional(),
   }),
-  z.object({
-    kind: z.literal(AnchorKind.ROLE),
-    role: z.string().min(1),
-    name: z.string().optional(),
-    // Which of several same-named controls was recorded, in page order, and how many there were.
-    // Honoured only while the page still has exactly `of` of them; otherwise the step is ambiguous.
-    nth: z.number().int().min(0).optional(),
-    of: z.number().int().min(2).optional(),
-  }),
+  z
+    .object({
+      kind: z.literal(AnchorKind.ROLE),
+      role: z.string().min(1),
+      name: z.string().optional(),
+      // Which of several same-named controls was recorded, in page order, and how many there were.
+      // Honoured only while the page still has exactly `of` of them; otherwise the step is ambiguous.
+      nth: z.number().int().min(0).optional(),
+      of: z.number().int().min(2).optional(),
+      // Other roles that count as the same control: a spec that allows "a link or a button" is built
+      // either way, and one flow grades every build. A position counts in one role, so not with nth.
+      alsoRoles: z.array(z.string().min(1)).min(1).optional(),
+    })
+    .refine((anchor) => anchor.alsoRoles === undefined || anchor.nth === undefined, {
+      error:
+        '`alsoRoles` cannot be used with `nth`: a position counts the controls of one role only.',
+    }),
   z.object({ kind: z.literal(AnchorKind.SIGNAL), name: z.string().min(1) }),
   // Auto-anchor: re-find an element by component identity / source location when it has no testid.
   // component or source carries the durable signal; role/name are disambiguating extras.
