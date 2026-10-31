@@ -481,3 +481,117 @@ it('compares a dropped name under the same whitespace rule the browser applies (
   expect(satisfiesResiduals(named('Save All'), checks)).toBe(false);
   expect(satisfiesResiduals(named('Save Draft Now'), checks)).toBe(false);
 });
+
+/**
+ * A page that reports no SDK version is sent `matchCase`, and an SDK older than 3.7.0 refuses the
+ * whole query for that key. Since #2041 that refusal grades unknown, so a text the page shows
+ * verbatim never got a verdict. The engine now asks once more without `matchCase` and checks the
+ * case on the text the page returns.
+ */
+const MATCH_CASE_REFUSAL = "Unrecognized key(s) in object: 'matchCase'";
+
+function caseBlindPage(
+  texts: readonly string[],
+  refusal = MATCH_CASE_REFUSAL,
+): { page: PredicateSession; sent: Record<string, unknown>[] } {
+  const sent: Record<string, unknown>[] = [];
+  const page: PredicateSession = {
+    ...session,
+    command(_name, args) {
+      const query = (args as { query: Record<string, unknown> }).query;
+      sent.push(query);
+      if ('matchCase' in query) {
+        return Promise.resolve({ kind: 'command_result', ok: false, id: 'stub', error: refusal });
+      }
+      const needle = String(query.text).toLowerCase();
+      const elements = texts
+        .filter((text) => text.toLowerCase().includes(needle))
+        .map((text, i) => ({
+          ref: `e${String(i)}`,
+          role: 'paragraph',
+          name: '',
+          text,
+          states: [],
+          visible: true,
+        }));
+      return Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'stub',
+        result: { matched: elements.length > 0, count: elements.length, elements },
+      });
+    },
+  };
+  return { page, sent };
+}
+
+it('grades a text predicate on an unversioned SDK that refuses matchCase', async () => {
+  const { page, sent } = caseBlindPage(['You have 3 problems to fix']);
+  const waited = await waitForPredicate(
+    page,
+    { kind: PredicateKind.TEXT, contains: 'problems to fix', visible: true },
+    0,
+  );
+  expect(waited.inconclusive).toBeUndefined();
+  expect(waited.pass).toBe(true);
+  expect(sent).toHaveLength(2);
+  expect(sent[1]).not.toHaveProperty('matchCase');
+});
+
+it('keeps the check case-exact when the SDK refuses matchCase', async () => {
+  const { page } = caseBlindPage(['Saved priya']);
+  const waited = await waitForPredicate(
+    page,
+    { kind: PredicateKind.TEXT, contains: 'Saved Priya', visible: true },
+    0,
+  );
+  expect(waited.inconclusive).toBeUndefined();
+  expect(waited.pass).toBe(false);
+  // ignoreCase still matches the same page.
+  const blind = await waitForPredicate(
+    page,
+    { kind: PredicateKind.TEXT, contains: 'Saved Priya', ignoreCase: true },
+    0,
+  );
+  expect(blind.pass).toBe(true);
+});
+
+it('does not retry a refusal that is not about matchCase', async () => {
+  const OTHER = 'the matcher threw: boom';
+  const { page, sent } = caseBlindPage(['problems to fix'], OTHER);
+  const waited = await waitForPredicate(
+    page,
+    { kind: PredicateKind.TEXT, contains: 'problems to fix', visible: true },
+    0,
+  );
+  expect(waited.pass).toBe(false);
+  expect(waited.inconclusive).toContain(OTHER);
+  expect(sent).toHaveLength(1);
+});
+
+it('sends matchCase once to a modern SDK and does not retry', async () => {
+  const sent: Record<string, unknown>[] = [];
+  const modern: PredicateSession = {
+    ...session,
+    sdkVersion: '3.9.0',
+    command(_name, args) {
+      sent.push((args as { query: Record<string, unknown> }).query);
+      const elements = [
+        { ref: 'e0', role: 'paragraph', name: '', text: 'Saved Priya', states: [], visible: true },
+      ];
+      return Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'stub',
+        result: { matched: true, count: 1, elements },
+      });
+    },
+  };
+  const waited = await waitForPredicate(
+    modern,
+    { kind: PredicateKind.TEXT, contains: 'Saved Priya' },
+    0,
+  );
+  expect(waited.pass).toBe(true);
+  expect(sent).toEqual([{ text: 'Saved Priya', matchCase: true }]);
+});

@@ -211,7 +211,13 @@ async function matchOnce(
   // A reply with an error never looked at the page. Read as zero matches, a query the page's schema
   // refused or a matcher that threw became a false `no`. Thrown, the verdict reads it as unknown.
   if (!res.ok) {
-    throw new Error(`the page could not answer 'match': ${res.error ?? 'no error given'}`);
+    const error = res.error ?? 'no error given';
+    // An SDK older than MATCH_CASE_SINCE refuses the whole query for this one key, and a page that
+    // reports no version is still sent it. Ask once more without it and check the case here.
+    if (true === query.matchCase && error.includes(MATCH_CASE_FIELD)) {
+      return matchCaseOnThisSide(session, query, state, diagnose, fullText);
+    }
+    throw new Error(`the page could not answer 'match': ${error}`);
   }
   // An ok reply with no result said nothing about the page either. Defaulting it to zero matches
   // was the same false `no`.
@@ -219,6 +225,45 @@ async function matchOnce(
     throw new Error(`the page could not answer 'match': the reply carried no result`);
   }
   return res.result as MatchResult;
+}
+
+/** The query key an SDK older than MATCH_CASE_SINCE does not know. Its refusal names the key. */
+const MATCH_CASE_FIELD = 'matchCase' satisfies keyof ElementQuery;
+
+/**
+ * Match without `matchCase`, then keep only the elements whose text holds the exact case.
+ *
+ * The case is checked on the text the page describes. When that text cannot show the match (a
+ * truncated description, or more matches than the page described), the result is not decided: the
+ * error makes the verdict unknown, never a false `no`.
+ */
+async function matchCaseOnThisSide(
+  session: PredicateSession,
+  query: ElementQuery,
+  state: ElementState | undefined,
+  diagnose: boolean | undefined,
+  fullText: boolean,
+): Promise<MatchResult> {
+  const caseBlind: ElementQuery = { ...query };
+  delete caseBlind.matchCase;
+  const match = await matchOnce(session, caseBlind, state, diagnose, fullText);
+  const want = query.text;
+  if (undefined === want) {
+    return match;
+  }
+  const undecided =
+    match.count > match.elements.length ||
+    match.elements.some(
+      (element) => !(element.text ?? element.name).toLowerCase().includes(want.toLowerCase()),
+    );
+  if (undecided) {
+    throw new Error(
+      `the page's SDK cannot match case, and its description of the matches does not show ` +
+        `${JSON.stringify(want)}, so the case was not checked. Update the page's @reticlehq packages`,
+    );
+  }
+  const kept = match.elements.filter((element) => satisfiesResiduals(element, [['text', want]]));
+  return { ...match, matched: kept.length > 0, count: kept.length, elements: kept };
 }
 
 /**
