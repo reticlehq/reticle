@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a write repeated once per flow step read as a double submit.** A flow that clicks Pause and then Resume sends the same POST to a toggle endpoint in each step. After the replay, Reticle checked the whole journey as one action, so it reported `duplicate-request ×2` and the flow graded `unknown` on a working toggle. `reticle_verify { action: "change" }` did the same. A duplicate request is a claim about one action's window, and each step already checks its own window, so the whole-replay checks no longer report it. Closes [#2013](https://github.com/reticlehq/reticle/issues/2013).

@@ -13,6 +13,7 @@ import { affectedSavedFlows } from './change/flow-sources.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { RESULT_FIELD, changeResult } from '@/surface/tools/reticle-result.js';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
+import { isOneActionOnly } from './flow-cross-step.js';
 import { parseControls } from '@/surface/tools/coverage-tools.js';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
 
@@ -181,7 +182,9 @@ const VERIFY_CHANGE: ToolDef = {
     const cursor = cursorBeforeReplay(deps, args);
 
     const verify = FLOW_TOOLS.find((tool) => tool.name === ReticleTool.FLOW_VERIFY);
-    if (verify === undefined) throw new Error('the whole-suite replay tool is not registered');
+    if (verify === undefined) {
+      throw new Error('the whole-suite replay tool is not registered');
+    }
     const suite = asRecord(
       await verify.handler(deps, {
         names: affected,
@@ -336,9 +339,10 @@ async function inspectAfterReplay(
       appOrigin: session.url,
       background: session.background,
       namedNetUrls: [],
-      // The replay is the action, and the cursor is where it started.
+      // The cursor is where the replay started. The replay is many user actions, not one, so a
+      // finding that only means something inside one action's window is left to the steps (#2013).
       actionSince: cursor,
-    }) as { kind: string }[];
+    }).filter((found) => !isOneActionOnly(found)) as { kind: string }[];
     const snapshot = await session.command(ReticleCommand.SNAPSHOT, {
       mode: SnapshotMode.INTERACTIVE,
     });

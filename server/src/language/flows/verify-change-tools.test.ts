@@ -255,7 +255,12 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
     contradictionSpy.mockRestore();
   });
 
-  it('reports an unrelated duplicate POST without failing a passing replay', async () => {
+  /*
+   * Two POSTs during a replay are two flow steps' writes far more often than one double submit, and
+   * the replay is many user actions, not one. Each step checks its own window for a duplicate, so the
+   * whole-replay sweep no longer claims one (#2013).
+   */
+  it('does not report a write repeated across the replay as a duplicate request', async () => {
     const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
     if (verify === undefined) {
       throw new Error('flow_verify missing');
@@ -283,7 +288,7 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
 
     expect(result['verified']).toBe(Verified.YES);
     expect(result['measured']).toContain('contradictions');
-    expect(result['contradictions']).toEqual(
+    expect(result['contradictions'] ?? []).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: ContradictionKind.DUPLICATE_REQUEST_UNRELATED }),
       ]),

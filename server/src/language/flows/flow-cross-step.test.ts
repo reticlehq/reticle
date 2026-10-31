@@ -80,3 +80,36 @@ describe('what the whole-span pass is told the flow expected', () => {
     expect(declaredIn(steps)).toEqual([shown, refused]);
   });
 });
+
+/*
+ * A flow that clicks Pause and then Resume sends the same POST to a toggle endpoint once per step.
+ * The whole-span pass judged the replay as ONE action, so it read the two as `duplicate-request ×2`
+ * and the flow graded unknown on a working toggle (#2013). "One user action wrote twice" is only a
+ * claim about one step's window, and each step already checks its own.
+ */
+describe('a write repeated across steps', () => {
+  const twice = (kind: Contradiction['kind']): Contradiction => ({
+    kind,
+    claim: 'one user action was performed',
+    counter: 'the same write fired 2 times',
+    detail: 'POST /api/links/abc/pause ×2',
+  });
+
+  it('is not a duplicate request in the whole-span pass', () => {
+    expect(crossStepOnly([twice(ContradictionKind.DUPLICATE_REQUEST)], [step(0), step(1)])).toEqual(
+      [],
+    );
+  });
+
+  it('is not an unrelated duplicate request either', () => {
+    expect(
+      crossStepOnly([twice(ContradictionKind.DUPLICATE_REQUEST_UNRELATED)], [step(0), step(1)]),
+    ).toEqual([]);
+  });
+
+  it('still keeps every other whole-span finding', () => {
+    expect(crossStepOnly([twice(ContradictionKind.DUPLICATE_REQUEST), orphan], [step(0)])).toEqual([
+      orphan,
+    ]);
+  });
+});

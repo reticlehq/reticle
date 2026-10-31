@@ -1,9 +1,30 @@
-import type { Contradiction, FlowStep, FlowStepResult, Predicate } from '@reticlehq/core';
+import {
+  ContradictionKind,
+  type Contradiction,
+  type FlowStep,
+  type FlowStepResult,
+  type Predicate,
+} from '@reticlehq/core';
 import { flattenSteps } from './flow-classify.js';
 
 /** A contradiction's identity for de-duplication: the rule that fired, and the evidence it fired on. */
 function contradictionId(found: Contradiction): string {
   return `${found.kind}|${found.detail}`;
+}
+
+/**
+ * Kinds that only mean something inside ONE action's window. A duplicate request claims "one user
+ * action was performed"; across a whole flow there are many actions, so a toggle hit once per step
+ * (Pause, then Resume) read as a double submit (#2013). Each step already checks its own window.
+ */
+const ONE_ACTION_ONLY: ReadonlySet<string> = new Set([
+  ContradictionKind.DUPLICATE_REQUEST,
+  ContradictionKind.DUPLICATE_REQUEST_UNRELATED,
+]);
+
+/** True for a finding that only means something inside one action's window (see ONE_ACTION_ONLY). */
+export function isOneActionOnly(found: { kind: string }): boolean {
+  return ONE_ACTION_ONLY.has(found.kind);
 }
 
 /** Cross-step findings belong to no single step; -1 is the address the suite verdict already uses. */
@@ -25,7 +46,7 @@ export function crossStepOnly(
   steps: readonly FlowStepResult[],
 ): Contradiction[] {
   const seen = new Set(steps.flatMap((step) => (step.contradictions ?? []).map(contradictionId)));
-  return whole.filter((found) => !seen.has(contradictionId(found)));
+  return whole.filter((found) => !seen.has(contradictionId(found)) && !isOneActionOnly(found));
 }
 
 /**

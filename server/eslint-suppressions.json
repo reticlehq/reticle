@@ -1851,9 +1851,6 @@
     }
   },
   "src/language/flows/verify-change-tools.ts": {
-    "curly": {
-      "count": 1
-    },
     "no-nested-ternary": {
       "count": 1
     }
