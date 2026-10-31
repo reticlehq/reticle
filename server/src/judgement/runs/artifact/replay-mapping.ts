@@ -31,7 +31,16 @@ const clip = (text: string): string =>
   text.length > RUN_TEXT_MAX ? `${text.slice(0, RUN_TEXT_MAX - 1)}…` : text;
 
 /** One step as synced: what it did, where, and whether it held. */
-function stepResultOf(step: FlowStepResult): RunStepResult {
+/**
+ * A run step with how far a sequence got. Kept out of the shared run schema on purpose: that schema
+ * ships in the page SDK, where every byte counts, and only the CLI score in this same process reads
+ * the field. A schema reader strips it, which loses nothing it needs.
+ */
+export interface ScoredRunStep extends RunStepResult {
+  subSteps?: { passed: number; total: number };
+}
+
+function stepResultOf(step: FlowStepResult): ScoredRunStep {
   return {
     step: step.step,
     anchor: clip(step.anchor),
@@ -41,6 +50,7 @@ function stepResultOf(step: FlowStepResult): RunStepResult {
     ...(step.consequence === undefined ? {} : { consequence: clip(step.consequence) }),
     ...(step.error === undefined ? {} : { error: clip(step.error) }),
     ...(step.drift === undefined ? {} : { drift: step.drift.reasonKind }),
+    ...(step.subSteps === undefined ? {} : { subSteps: step.subSteps }),
   };
 }
 

@@ -34,7 +34,7 @@ describe('the score in verify results', () => {
         durationMs: 1,
         stepResults: [step(0, true), step(1, false, 'signal_not_observed')],
       },
-    ] as Flow[];
+    ] as unknown as Flow[];
     const r = verifyResults(run(flows), false, new Map([['a', 4]]));
     expect(r.results[0]?.steps).toEqual({ passed: 1, failed: 1, unknown: 2 });
     expect(r.score).toEqual({ passed: 1, failed: 1, unknown: 2, total: 4, value: 0.25 });
@@ -50,7 +50,7 @@ describe('the score in verify results', () => {
         stepResults: [step(0, true), step(1, true)],
       },
       { name: 'b', status: RunFlowStatus.SKIPPED, steps: 0, durationMs: 1 },
-    ] as Flow[];
+    ] as unknown as Flow[];
     const r = verifyResults(
       run(flows),
       false,
@@ -72,12 +72,54 @@ describe('the score in verify results', () => {
         durationMs: 1,
         stepResults: [step(0, true), step(1, true)],
       },
-    ] as Flow[];
+    ] as unknown as Flow[];
     expect(verifyResults(run(flows)).score).toEqual({
       passed: 2,
       failed: 0,
       unknown: 0,
       total: 2,
+      value: 1,
+    });
+  });
+});
+
+/*
+ * A recorded journey is often ONE sequence step of many sub-steps (fill, fill, press Enter, check).
+ * Counted as one step, it scored all or nothing, so a change that got 7 of 9 sub-steps right scored
+ * the same as one that got none. A sequence counts its sub-steps.
+ */
+describe('a sequence step in the score', () => {
+  it('counts the sub-steps it completed, the one that failed, and the ones it never reached', () => {
+    const flows = [
+      {
+        name: 'a',
+        status: RunFlowStatus.FAIL,
+        steps: 1,
+        durationMs: 1,
+        stepResults: [
+          { ...step(0, false, 'signal_not_observed'), subSteps: { passed: 3, total: 6 } },
+        ],
+      },
+    ] as unknown as Flow[];
+    const r = verifyResults(run(flows), false, new Map([['a', 6]]));
+    expect(r.results[0]?.steps).toEqual({ passed: 3, failed: 1, unknown: 2 });
+  });
+
+  it('counts every sub-step of a passed sequence as passed', () => {
+    const flows = [
+      {
+        name: 'a',
+        status: RunFlowStatus.PASS,
+        steps: 1,
+        durationMs: 1,
+        stepResults: [{ ...step(0, true), subSteps: { passed: 4, total: 4 } }],
+      },
+    ] as unknown as Flow[];
+    expect(verifyResults(run(flows), false, new Map([['a', 4]])).score).toEqual({
+      passed: 4,
+      failed: 0,
+      unknown: 0,
+      total: 4,
       value: 1,
     });
   });

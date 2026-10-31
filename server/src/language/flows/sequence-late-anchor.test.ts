@@ -129,3 +129,25 @@ describe('drift is reported at the sub-step that really could not be found', () 
     expect(result.anchor).toContain('sub-step 0');
   });
 });
+
+/*
+ * A sequence is often a whole recorded journey, so the score needs to know how far it got: the
+ * sub-steps whose action ran and whose check held, of how many.
+ */
+describe('a sequence reports how many sub-steps it completed', () => {
+  it('all of them when it passes', async () => {
+    const { session } = revealingPage(['edit'], { edit: ['form', 'cancel'] });
+    const result = await run([sub('edit', 'form'), sub('cancel')], session);
+    expect(result.subSteps).toEqual({ passed: 2, total: 2 });
+  });
+
+  it('the ones before the sub-step whose check failed', async () => {
+    const { session } = revealingPage(['open'], { open: ['edit'], edit: ['cancel'] });
+    const result = await run(
+      [sub('open', 'edit'), sub('edit', 'never-shown'), sub('cancel')],
+      session,
+    );
+    expect(result.ok).toBe(false);
+    expect(result.subSteps).toEqual({ passed: 1, total: 3 });
+  });
+});

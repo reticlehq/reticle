@@ -552,7 +552,11 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
       for (const name of names) {
         const loaded = await deps.flows.load(name).catch(() => undefined);
         if (true === loaded?.ok) {
-          planned.set(name, loaded.value.steps.length);
+          // A sequence counts its sub-steps, as the score does.
+          planned.set(
+            name,
+            loaded.value.steps.reduce((n, step) => n + (step.steps?.length ?? 1), 0),
+          );
         }
       }
       return planned;

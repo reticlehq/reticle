@@ -11,6 +11,7 @@ import {
   Verified,
   type ReticleVerificationRun,
 } from '@reticlehq/core';
+import type { ScoredRunStep } from '@/judgement/runs/artifact/replay-mapping.js';
 
 type JourneyVerdict = typeof Verified.YES | typeof Verified.NO | typeof Verified.UNKNOWN;
 
@@ -44,11 +45,22 @@ export interface VerifyResults {
  * `success` step for a flow with a success oracle, so the total is the larger of the two.
  */
 function stepCounts(flow: ReticleVerificationRun['flows'][number], planned?: number): StepCounts {
-  const judged = flow.stepResults ?? [];
-  const passed = judged.filter((s) => s.ok && s.drift === undefined).length;
-  const failed = judged.length - passed;
-  const total = Math.max(planned ?? flow.steps, judged.length);
-  return { passed, failed, unknown: total - judged.length };
+  let passed = 0;
+  let failed = 0;
+  let judgedUnits = 0;
+  for (const step of (flow.stepResults ?? []) as ScoredRunStep[]) {
+    // A sequence counts its sub-steps; any other step counts once.
+    const units = step.subSteps?.total ?? 1;
+    judgedUnits += units;
+    if (step.ok && step.drift === undefined) {
+      passed += units;
+    } else {
+      passed += step.subSteps?.passed ?? 0;
+      failed += 1;
+    }
+  }
+  const total = Math.max(planned ?? flow.steps, judgedUnits);
+  return { passed, failed, unknown: total - passed - failed };
 }
 
 function journeyVerdict(status: RunFlowStatus): JourneyVerdict {

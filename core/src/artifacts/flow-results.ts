@@ -74,6 +74,11 @@ export interface ReactionDigest {
 }
 
 export interface FlowStepResult {
+  /**
+   * For a sequence step: how many of its sub-steps completed with their checks held, of how many.
+   * A sequence is often a whole journey, so without this it scored all or nothing.
+   */
+  subSteps?: { passed: number; total: number };
   /** 0-based index of this step in the flow. */
   step: number;
   /**

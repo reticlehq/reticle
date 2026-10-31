@@ -946,16 +946,27 @@ export async function runSequenceStep(
    */
   const judged = (sub: FlowStep): boolean => judge !== undefined && sub.expect !== undefined;
   const declaring = subs.some((sub) => declaredBy(sub) !== undefined || judged(sub));
+  // How many sub-steps completed with their checks held, for the score: a sequence is often a
+  // whole journey. A stretch sent together that failed leaves its sub-steps uncounted (unknown).
+  let completed = 0;
+  const finish = (r: FlowStepResult): FlowStepResult => ({
+    ...r,
+    subSteps: {
+      passed: r.ok && r.drift === undefined ? subs.length : completed,
+      total: subs.length,
+    },
+  });
   for (let next = 0; next < subs.length;) {
     const stretch = await resolveFrom(next);
     if ('stop' in stretch) {
-      return stretch.stop;
+      return finish(stretch.stop);
     }
     const { end } = stretch;
     if (!declaring) {
       if (!(await dispatchFrom(next, end))) {
-        return result;
+        return finish(result);
       }
+      completed = end;
     } else {
       for (let at = next; at < end; at += 1) {
         const sub = subs[at];
@@ -964,11 +975,11 @@ export async function runSequenceStep(
         }
         const since = session.elapsed();
         if (!(await dispatchFrom(at, at + 1))) {
-          return result;
+          return finish(result);
         }
         const testid = declaredBy(sub);
         if (testid !== undefined && !(await assertDeclared(testid))) {
-          return result;
+          return finish(result);
         }
         // The claim is about THIS sub-step: a later one has not run, and an earlier one is before
         // `since`. Judged at the end, a middle route expect failed and a late claim passed early.
@@ -979,11 +990,12 @@ export async function runSequenceStep(
         if (drift !== undefined) {
           result.ok = false;
           result.drift = drift;
-          return result;
+          return finish(result);
         }
+        completed = at + 1;
       }
     }
     next = end;
   }
-  return result;
+  return finish(result);
 }
