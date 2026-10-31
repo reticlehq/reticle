@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { storeNames, registerStore, unregisterStore } from '@reticlehq/browser';
+import { storeNames, registerStore, unregisterStore, readStores } from '@reticlehq/browser';
 import {
   autoRegisterStores,
   classifyProviderValue,
@@ -188,6 +188,26 @@ describe('autoRegisterStores', () => {
 
     expect(autoRegisterStores(document)).toEqual([AUTO_STORE_KEY.REDUX]);
     expect(autoRegisterStores(document)).toEqual([]);
+  });
+
+  it('skips an auto-detected store whose getState throws, instead of registering it as broken', () => {
+    const provider = providerFiber({
+      store: {
+        getState: () => {
+          throw new Error('x');
+        },
+        subscribe: () => () => {},
+      },
+    });
+    const host: FakeFiber = { return: provider, type: 'div' };
+    provider.child = host;
+    const el = document.createElement('div');
+    (el as unknown as Record<string, unknown>)['__reactFiber$auto'] = host;
+    document.body.appendChild(el);
+
+    expect(autoRegisterStores(document)).toEqual([]);
+    expect(storeNames()).not.toContain(AUTO_STORE_KEY.REDUX);
+    expect(readStores()[AUTO_STORE_KEY.REDUX]).toBeUndefined();
   });
 
   it('never throws on a hostile fiber tree', () => {

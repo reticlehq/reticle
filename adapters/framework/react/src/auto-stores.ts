@@ -248,9 +248,11 @@ export function autoRegisterStores(doc: Document): string[] {
     if (sourceOwner(source) !== undefined) continue;
     if (taken.has(key) || registered.has(key)) continue;
     try {
+      // Skip a store-shaped value whose getState throws. The next commit tries it again.
+      store.getState();
       registerStore(key, store);
     } catch {
-      continue; // a store whose getState throws on registration is not worth taking the app down for
+      continue;
     }
     registered.set(key, source);
     added.push(key);
