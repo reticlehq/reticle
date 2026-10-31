@@ -322,7 +322,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // one file that names it.
   // +1: js-coverage.ts, the browser engine's code coverage beside the other driven-page capabilities.
   // +1: download-capture.ts, the driven-page capture for server-sent downloads, beside network-detail.ts.
-  'server/src/portal/input': 15,
+  // +1: page-capture.ts, the screenshot capture split out of real-input.ts at its 1,000-line cap.
+  'server/src/portal/input': 16,
   // 11 with `pool-lease.ts`: the lease types and the pool's limits, split out of browser-pool.ts at
   // the 1000-line cap (#1705).
   // 12 with `page-error-journal.ts` (#1966): the uncaught page errors the SDK is never installed in

@@ -37,11 +37,6 @@
       "count": 1
     }
   },
-  "src/disagreement/contradictions.ts": {
-    "no-nested-ternary": {
-      "count": 2
-    }
-  },
   "src/disagreement/echo-mismatch.ts": {
     "curly": {
       "count": 30

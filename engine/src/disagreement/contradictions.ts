@@ -129,17 +129,17 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
     .filter((e) => e.type === EventType.NET_REQUEST && e.data['ok'] !== true)
     .map((e) => asString(e.data['error']))
     .filter((text): text is string => text !== undefined && text.length >= MIN_ECHOED_ERROR_LENGTH);
+  // Where each event kind carries the text a user would read.
+  const ECHO_FIELD: Partial<Record<string, string>> = {
+    [EventType.STATE_CHANGE]: 'value',
+    [EventType.DOM_TEXT]: 'text',
+    [EventType.DOM_ADDED]: 'name',
+  };
   const echoesAnError = events.some((e) => {
     // On screen counts as much as in state: the user reading the server's message is the app
     // acknowledging the failure, not hiding it (#984).
-    const value =
-      e.type === EventType.STATE_CHANGE
-        ? asString(e.data['value'])
-        : e.type === EventType.DOM_TEXT
-          ? asString(e.data['text'])
-          : e.type === EventType.DOM_ADDED
-            ? asString(e.data['name'])
-            : undefined;
+    const field = ECHO_FIELD[e.type];
+    const value = field === undefined ? undefined : asString(e.data[field]);
     return value !== undefined && errors.some((text) => value.includes(text));
   });
   if (echoesAnError) {
