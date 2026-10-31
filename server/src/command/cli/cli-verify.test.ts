@@ -82,6 +82,7 @@ function harness(conn: Partial<VerifyConnection>): { ports: VerifyPorts; rec: Re
     // Absent unless the case under test supplies one — which is exactly how the live connection
     // behaves on a machine with no model configured.
     ...(conn.explore === undefined ? {} : { explore: conn.explore }),
+    ...(conn.plannedSteps === undefined ? {} : { plannedSteps: conn.plannedSteps }),
   };
   const ports: VerifyPorts = {
     connect: () => Promise.resolve(connection),
@@ -453,7 +454,15 @@ describe('runVerify --results-json', () => {
     expect(written.map((w) => w.path)).toEqual(['out.json']);
     expect(JSON.parse(written[0]?.text ?? '{}')).toEqual({
       verdict: 'no',
-      results: [{ journey: 'checkout', verdict: 'no', reason: 'order never saved' }],
+      results: [
+        {
+          journey: 'checkout',
+          verdict: 'no',
+          reason: 'order never saved',
+          steps: { passed: 0, failed: 0, unknown: 3 },
+        },
+      ],
+      score: { passed: 0, failed: 0, unknown: 3, total: 3, value: 0 },
     });
   });
 
@@ -481,16 +490,42 @@ describe('runVerify --results-json', () => {
     vi.unstubAllGlobals();
     const [pushed, refused] = written.map((t) => JSON.parse(t) as VerifyResults);
     expect(pushed?.results).toEqual([
-      { journey: 'checkout', verdict: 'no', reason: 'order never saved', runId: run.runId },
+      {
+        journey: 'checkout',
+        verdict: 'no',
+        reason: 'order never saved',
+        runId: run.runId,
+        steps: { passed: 0, failed: 0, unknown: 3 },
+      },
     ]);
     expect(refused?.results[0]).not.toHaveProperty('runId');
+  });
+
+  it('scores against the saved flow, so steps a stopped replay never reached count as unknown', async () => {
+    // The fixture's replay ran 3 steps of a flow file that has 5: the 2 it never reached are unknown.
+    const { ports } = harness({
+      verify: () => Promise.resolve(makeRun(RunFlowStatus.FAIL)),
+      plannedSteps: () => Promise.resolve(new Map([['checkout', 5]])),
+    });
+    const written: string[] = [];
+    ports.writeResults = (_path, text) => {
+      written.push(text);
+      return Promise.resolve();
+    };
+    await runVerify({ ...ARGS, resultsJson: 'out.json' }, ports);
+    const results = JSON.parse(written[0] ?? '{}') as VerifyResults;
+    expect(results.results[0]?.steps).toEqual({ passed: 0, failed: 0, unknown: 5 });
+    expect(results.score.total).toBe(5);
   });
 
   it('reads a skipped journey as unknown, and the run as unknown rather than yes', () => {
     const run = makeRun(RunFlowStatus.SKIPPED);
     expect(verifyResults(run)).toEqual({
       verdict: 'unknown',
-      results: [{ journey: 'checkout', verdict: 'unknown' }],
+      results: [
+        { journey: 'checkout', verdict: 'unknown', steps: { passed: 0, failed: 0, unknown: 3 } },
+      ],
+      score: { passed: 0, failed: 0, unknown: 3, total: 3, value: 0 },
     });
     expect(verifyResults(makeRun(RunFlowStatus.PASS)).verdict).toBe('yes');
   });

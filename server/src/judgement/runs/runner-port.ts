@@ -21,7 +21,7 @@ export function createRunnerPort(
   deps: ToolDeps,
   sessionId?: string,
   /** `reticle verify --confirm-dangerous`: this run acknowledges the steps held as destructive. */
-  opts: { confirmDangerous?: boolean; requireStartControl?: boolean } = {},
+  opts: { confirmDangerous?: boolean; requireStartControl?: boolean; sweep?: boolean } = {},
 ): RunnerPort {
   // Each flow starts from the state the run started in, so one that signs out cannot fail the rest.
   const startState = flowStartState(deps.realInput, () => sessionUrlOf(deps, sessionId));
@@ -46,6 +46,7 @@ export function createRunnerPort(
         ...(sessionId === undefined ? {} : { sessionId }),
         ...(true === opts.confirmDangerous ? { confirmDangerous: true } : {}),
         ...(true === opts.requireStartControl ? { requireStartControl: true } : {}),
+        ...(true === opts.sweep ? { sweep: true } : {}),
       });
     },
     now: () => deps.now(),

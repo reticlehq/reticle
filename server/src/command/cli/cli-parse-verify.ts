@@ -52,6 +52,8 @@ const RESULTS_JSON_FLAG = '--results-json';
 const CONFIRM_DANGEROUS_FLAG = '--confirm-dangerous';
 /** A missing step 1 control on a freshly loaded start page fails the flow (#2061). */
 export const REQUIRE_START_CONTROL_FLAG = '--require-start-control';
+/** Keep judging after a step whose consequence failed, so every step gets a verdict (the score). */
+export const SWEEP_FLAG = '--sweep';
 
 export type VerifySuffix =
   | {
@@ -71,6 +73,7 @@ export type VerifySuffix =
       resultsJson?: string;
       confirmDangerous?: boolean;
       requireStartControl?: boolean;
+      sweep?: boolean;
     }
   | { kind: 'error'; message: string };
 
@@ -140,6 +143,7 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
   let resultsJson: string | undefined;
   let confirmDangerous = false;
   let requireStartControl = false;
+  let sweep = false;
   let port = defaultPort;
   let i = 0;
   while (i < args.length) {
@@ -189,6 +193,8 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
       confirmDangerous = true;
     } else if (arg === REQUIRE_START_CONTROL_FLAG) {
       requireStartControl = true;
+    } else if (arg === SWEEP_FLAG) {
+      sweep = true;
     } else if (arg === PERSONA_FLAG) {
       i++;
       const v = args[i];
@@ -249,5 +255,6 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
     ...(resultsJson !== undefined ? { resultsJson } : {}),
     ...(confirmDangerous ? { confirmDangerous } : {}),
     ...(requireStartControl ? { requireStartControl } : {}),
+    ...(sweep ? { sweep } : {}),
   };
 }
