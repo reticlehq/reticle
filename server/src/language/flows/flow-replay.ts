@@ -15,6 +15,7 @@ export type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-type
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import { evalConsole } from '@reticlehq/engine/question/predicate/predicate-console.js';
 import { appScope, stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
+import { stepContradictions } from './flow-cross-step.js';
 import {
   AnchorKind,
   DriftReason,
@@ -836,15 +837,16 @@ export async function replayFlow(
       const cursorAfter = session.elapsed();
       // ONE builder, shared with the live act path, so a driven step and a replayed one describe what
       // happened in identical words rather than in two vocabularies that agree by coincidence.
-      Object.assign(
-        result,
-        stepEffect(
-          windowEvents,
-          { since: cursorBefore, until: cursorAfter },
-          // A failure the step declared is its expected result, as it is on the live path.
-          { ...appScope(session), declared },
-        ),
+      const effect = stepEffect(
+        windowEvents,
+        { since: cursorBefore, until: cursorAfter },
+        // A failure the step declared is its expected result, as it is on the live path.
+        { ...appScope(session), declared },
       );
+      // "Never settled" is decided once the replay is over, by the whole-span pass (flow-cross-step).
+      const stepOwn = stepContradictions(effect.contradictions ?? []);
+      delete effect.contradictions;
+      Object.assign(result, effect, 0 === stepOwn.length ? {} : { contradictions: stepOwn });
       /*
        * A prefix step is setup and is not reported -- UNLESS it failed.
        *

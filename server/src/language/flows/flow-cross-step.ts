@@ -27,6 +27,18 @@ export function isOneActionOnly(found: { kind: string }): boolean {
   return ONE_ACTION_ONLY.has(found.kind);
 }
 
+/**
+ * Kinds a step window cannot decide. "Never settled" means never, and a step's window closes while
+ * the replay still runs: a request a step's predecessor started late can finish a moment after this
+ * window ends. The whole-span pass, run when the replay is over, sees whether it ever came back.
+ */
+const DECIDED_AT_THE_END: ReadonlySet<string> = new Set([ContradictionKind.REQUEST_NEVER_SETTLED]);
+
+/** A step's own findings, without the ones only the end of the replay can decide. */
+export function stepContradictions(found: readonly Contradiction[]): Contradiction[] {
+  return found.filter((c) => !DECIDED_AT_THE_END.has(c.kind));
+}
+
 /** Cross-step findings belong to no single step; -1 is the address the suite verdict already uses. */
 export const CROSS_STEP_INDEX = -1;
 

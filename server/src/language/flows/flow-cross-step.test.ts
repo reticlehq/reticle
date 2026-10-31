@@ -7,7 +7,7 @@ import {
   type FlowStep,
   type FlowStepResult,
 } from '@reticlehq/core';
-import { crossStepOnly, declaredIn } from './flow-cross-step.js';
+import { crossStepOnly, declaredIn, stepContradictions } from './flow-cross-step.js';
 
 /**
  * The contradictions no per-step window can see, by construction.
@@ -111,5 +111,28 @@ describe('a write repeated across steps', () => {
     expect(crossStepOnly([twice(ContradictionKind.DUPLICATE_REQUEST), orphan], [step(0)])).toEqual([
       orphan,
     ]);
+  });
+});
+
+/*
+ * A step with no expectation returned before its request was sent; the request started inside the
+ * NEXT step's window and finished after that window closed. The next step read it as
+ * `request-never-settled` and graded unknown on a working sort (f-sort). "Never" can only be judged
+ * when the replay is over, so a step defers it and the whole-span pass decides it.
+ */
+describe('a request still running when a step ends', () => {
+  const inFlight: Contradiction = {
+    kind: ContradictionKind.REQUEST_NEVER_SETTLED,
+    claim: 'the UI moved forward and the action reported done',
+    counter: '1 request(s) were still in flight',
+    detail: 'GET /api/links?sort=-views',
+  };
+
+  it('is not decided by the step window', () => {
+    expect(stepContradictions([inFlight, failed])).toEqual([failed]);
+  });
+
+  it('is still reported by the whole-span pass when it never came back', () => {
+    expect(crossStepOnly([inFlight], [step(0, []), step(1, [])])).toEqual([inFlight]);
   });
 });
