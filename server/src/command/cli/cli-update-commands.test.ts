@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { checkForUpdate, exec } = vi.hoisted(() => ({
+const { checkForUpdate, exec, refreshAgentRules } = vi.hoisted(() => ({
   checkForUpdate: vi.fn(),
   exec: vi.fn(() => true),
+  refreshAgentRules: vi.fn<typeof import('@reticlehq/init').refreshAgentRules>(() => ({
+    updated: [],
+    unchanged: [],
+  })),
 }));
 
 vi.mock('@/command/update/update-checker.js', () => ({ checkForUpdate }));
@@ -12,7 +16,7 @@ vi.mock('@reticlehq/init', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@reticlehq/init')>();
   return {
     ...actual,
-    refreshAgentRules: vi.fn(() => ({ updated: [] })),
+    refreshAgentRules,
     buildNodeIo: (cwd: string, host: Parameters<typeof actual.buildNodeIo>[1]) => ({
       ...actual.buildNodeIo(cwd, host),
       exec,
@@ -21,7 +25,7 @@ vi.mock('@reticlehq/init', async (importOriginal) => {
   };
 });
 
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
@@ -137,6 +141,42 @@ describe('handleUpdate', () => {
 
     expect(exec).not.toHaveBeenCalled();
     expect(out.mock.calls.flat().join('')).toContain("app's folder");
+  });
+
+  // #1948: this branch returned "already on the latest version" before the rules refresh, so a
+  // project on the latest CLI kept the managed block that its first `init` wrote.
+  it('refreshes a stale managed block even when the CLI itself is current', async () => {
+    const actual = await vi.importActual<typeof import('@reticlehq/init')>('@reticlehq/init');
+    refreshAgentRules.mockImplementationOnce(actual.refreshAgentRules);
+    checkForUpdate.mockResolvedValueOnce({ latestVersion: SERVER_VERSION });
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const dir = appWithSdk(SERVER_VERSION);
+    const stale = [
+      '# My project',
+      '',
+      'Some notes I wrote myself.',
+      '',
+      '<!-- reticle:begin (managed by `reticle init` — edit outside these markers) -->',
+      '## Verifying with Reticle',
+      'An old rule from a previous release.',
+      '<!-- reticle:end -->',
+      '',
+      'More of my own notes, after the block.',
+    ].join('\n');
+    const unmanaged = '# Agents\n\nNo Reticle block here.\n';
+    writeFileSync(join(dir, 'CLAUDE.md'), stale);
+    writeFileSync(join(dir, 'AGENTS.md'), unmanaged);
+
+    await handleUpdate(dir);
+
+    const refreshed = readFileSync(join(dir, 'CLAUDE.md'), 'utf8');
+    expect(refreshed).not.toContain('An old rule from a previous release.');
+    expect(refreshed).toContain('do not stop until a verdict exists');
+    expect(refreshed.startsWith('# My project\n\nSome notes I wrote myself.\n')).toBe(true);
+    expect(refreshed.endsWith('\n\nMore of my own notes, after the block.')).toBe(true);
+    expect(readFileSync(join(dir, 'AGENTS.md'), 'utf8')).toBe(unmanaged);
+    expect(exec).not.toHaveBeenCalled();
   });
 
   it('prints a manual recovery command when the old Windows updater cannot spawn npm', async () => {

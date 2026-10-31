@@ -110,6 +110,30 @@ function syncProjectSdk(target: string, cwd: string): void {
   say(MSG_SDK_SYNCED(target));
 }
 
+/**
+ * Bring this project's agent rules up with the version.
+ *
+ * The managed block has always been updatable — marker-delimited, idempotent by comparing content —
+ * and nothing called it after the first install. `mergeMarkedInstruction` is reachable from
+ * `buildPlan` alone, so a project set up on an older release kept that release's instructions
+ * forever and every improvement to them reached new projects only.
+ *
+ * That is backwards: the people who most need better instructions are the ones already installed
+ * and not getting value, and this is the moment they are touching the install anyway. Only files
+ * that ALREADY carry the block are touched, and only inside the markers.
+ */
+function refreshProjectRules(cwd: string, version: string): void {
+  const refreshed = refreshAgentRules(cwd, {
+    read: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : null),
+    write: (path, content) => {
+      writeFileSync(path, content, 'utf8');
+    },
+  });
+  if (0 !== refreshed.updated.length) {
+    log('reticle_rules_refreshed', { files: refreshed.updated, to: version });
+  }
+}
+
 /** `reticle update` — install the latest server version, sync the app's SDK, and restart. */
 export async function handleUpdate(cwd: string = process.cwd()): Promise<void> {
   try {
@@ -122,6 +146,9 @@ export async function handleUpdate(cwd: string = process.cwd()): Promise<void> {
       // is on the latest release while the app keeps the SDK `init` pinned months ago, and this
       // branch used to return before the sync — so the one command that should fix that pair
       // answered "already on the latest version" and left the old overlay in the page.
+      // The same holds for the agent rules: a project on the latest CLI kept the block that its
+      // first `init` wrote, because this branch returned before the refresh (#1948).
+      refreshProjectRules(cwd, SERVER_VERSION);
       const installed = installedSdkVersion(cwd, readTextFile);
       if (installed === undefined) say(MSG_NO_SDK_HERE);
       // Only UP. A CLI that could not reach the registry also lands here, and an older one must
@@ -135,24 +162,7 @@ export async function handleUpdate(cwd: string = process.cwd()): Promise<void> {
       return;
     }
     log('reticle_update', { ok: true, from: SERVER_VERSION, to: target });
-    // Bring this project's agent rules up with the version.
-    //
-    // The managed block has always been updatable — marker-delimited, idempotent by comparing
-    // content — and nothing called it after the first install. `mergeMarkedInstruction` is reachable
-    // from `buildPlan` alone, so a project set up on an older release kept that release's
-    // instructions forever and every improvement to them reached new projects only.
-    //
-    // That is backwards: the people who most need better instructions are the ones already
-    // installed and not getting value, and this is the moment they are touching the install anyway.
-    // Only files that ALREADY carry the block are touched, and only inside the markers.
-    const refreshed = refreshAgentRules(cwd, {
-      read: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : null),
-      write: (path, content) => {
-        writeFileSync(path, content, 'utf8');
-      },
-    });
-    if (0 !== refreshed.updated.length)
-      log('reticle_rules_refreshed', { files: refreshed.updated, to: target });
+    refreshProjectRules(cwd, target);
     // The app's SDK FIRST, then the CLI. `reticle update` used to swap only the CLI, so the command
     // whose job is keeping an install current was itself a way to produce a version-skewed pair —
     // and the skew message told people to run it to fix an outdated SDK, which it could not do.

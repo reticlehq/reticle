@@ -74,7 +74,7 @@
   },
   "src/command/cli/cli-update-commands.ts": {
     "curly": {
-      "count": 5
+      "count": 4
     }
   },
   "src/command/cli/cloud-cli-verbs.test.ts": {
