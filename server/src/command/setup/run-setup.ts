@@ -41,7 +41,7 @@ import {
   PageFinding,
   type PageProbe,
 } from './probe/page-probe.js';
-import { remainingSteps, type Progress } from './remaining-steps.js';
+import { pendingViteConfigCause, remainingSteps, type Progress } from './remaining-steps.js';
 import { splitDevPortNote } from './probe/dev-port.js';
 import { AppShape, isDesktop, policyFor } from './desktop-shape.js';
 import { InitStop } from '@reticlehq/core/telemetry';
@@ -225,6 +225,8 @@ export interface SetupInput {
   readonly suppliedUrl?: string | undefined;
   /** The port the dev command will take, when it is known. See probe/dev-port.ts. */
   readonly devPort?: number | undefined;
+  /** The Vite config init left for a manual step. A dev-server stop names it (#1263). */
+  readonly pendingViteConfig?: string | undefined;
   /**
    * The caller's own budget for the connect wait, when they named one.
    *
@@ -259,6 +261,7 @@ const asProgress = (input: SetupInput, o: Partial<SetupOutcome>): Progress => ({
   urlSuppliedByCaller: undefined !== input.suppliedUrl,
   ...(undefined === o.url ? {} : { url: o.url }),
   ...(undefined === input.devCommand ? {} : { devCommand: input.devCommand }),
+  ...(undefined === input.pendingViteConfig ? {} : { pendingViteConfig: input.pendingViteConfig }),
 });
 
 /** The connect step a web page stopped at. A bundle-connect page's HTML never shows the SDK. */
@@ -398,6 +401,10 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
         if (WaitVerdict.DEAD === verdict) {
           const busy = portBusyMessage(fx.devServerOutput());
           note(busy ?? devServerDiedMessage(fx.devServerOutput()));
+          // A busy port is its own cause. Any other exit can come from the config init left alone.
+          if (undefined === busy && undefined !== input.pendingViteConfig) {
+            note(pendingViteConfigCause(input.pendingViteConfig));
+          }
           const step = undefined === busy ? InitStop.DEV_SERVER_EXITED : InitStop.PORT_BUSY;
           return stop(input, SetupPhase.DEV_SERVER, { stop: step }, notes);
         }
@@ -417,6 +424,9 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
                 : `The dev server stopped making progress before ${watching} became ready. `) +
               'Check its log, increase --timeout for a slow build, or pass --url with the address it serves.',
           );
+          if (undefined !== input.pendingViteConfig) {
+            note(pendingViteConfigCause(input.pendingViteConfig));
+          }
           const step = undefined === watching ? InitStop.NO_URL : InitStop.NOT_READY;
           return stop(input, SetupPhase.DEV_SERVER, { stop: step }, notes);
         }

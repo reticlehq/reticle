@@ -17,7 +17,18 @@ export interface Progress {
   readonly urlSuppliedByCaller: boolean;
   readonly url?: string | undefined;
   readonly devCommand?: string | undefined;
+  /** The Vite config that init could not patch and left as a manual step. */
+  readonly pendingViteConfig?: string | undefined;
 }
+
+/**
+ * Said when the dev server stops after init left the Vite config unpatched (#1263).
+ *
+ * The dev server loads that config, so the step init already reported is the first cause to check.
+ */
+export const pendingViteConfigCause = (config: string): string =>
+  `init could not patch ${config}, and its ⚠ Vite plugin step is not done. ` +
+  'The dev server loads that config, so that step is the likely cause. Do it first.';
 
 const DOCS_INDEX = 'https://docs.reticle.sh/llms.txt';
 /**
@@ -34,6 +45,11 @@ export function remainingSteps(p: Progress): string[] {
   const steps: string[] = [];
   if (!p.initDone) {
     steps.push('Run `npx @reticlehq/server@latest init` here, and fix every ⚠ it reports.');
+  }
+  if (undefined !== p.pendingViteConfig) {
+    steps.push(
+      `Do the ⚠ Vite plugin step that init printed: add \`reticle()\` to the plugins in ${p.pendingViteConfig}, or to the config that the dev server loads.`,
+    );
   }
   if (!p.devServerUp && !p.urlSuppliedByCaller) {
     steps.push(

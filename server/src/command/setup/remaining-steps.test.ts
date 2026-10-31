@@ -39,6 +39,21 @@ describe('picking up where setup stopped', () => {
     expect(steps.join(' ')).not.toContain('Start the dev server');
   });
 
+  // init already knows the Vite config is not patched (#1263). The reader must do that step first.
+  it('names the Vite config that init left for a manual step, before the dev server', () => {
+    const steps = remainingSteps(
+      at({ initDone: true, devCommand: 'npm run dev', pendingViteConfig: 'vite.config.ts' }),
+    );
+    expect(steps[0]).toContain('vite.config.ts');
+    expect(steps[0]).toContain('Vite plugin');
+    expect(steps[1]).toContain('npm run dev');
+  });
+
+  it('names no Vite step when init patched the config', () => {
+    const steps = remainingSteps(at({ initDone: true, devCommand: 'npm run dev' }));
+    expect(steps.join(' ')).not.toContain('Vite plugin');
+  });
+
   it('names the url in the session step when there is one', () => {
     expect(
       remainingSteps(at({ initDone: true, devServerUp: true, url: 'http://localhost:5173/' })).join(

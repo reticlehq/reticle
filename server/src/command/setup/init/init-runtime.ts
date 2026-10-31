@@ -351,6 +351,10 @@ export async function continueAfterInit(
       ...(undefined === parsed.url ? {} : { suppliedUrl: parsed.url }),
       // So setup can tell which port the dev server will take, before it starts one (#1377).
       framework: context.framework,
+      // So a dev-server stop names the Vite step init could not do (#1263).
+      ...(undefined === context.pendingViteConfig
+        ? {}
+        : { pendingViteConfig: context.pendingViteConfig }),
     },
     (line) => io.print(line),
   )

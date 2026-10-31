@@ -741,6 +741,58 @@ describe('the dev-server diagnoses name their cause', () => {
     expect(out).toContain('neither printed a URL nor bound a port');
     expect(out).toContain('3000ms');
   });
+
+  // init could not patch the Vite config and said so. A dev-server stop after that names the
+  // pending step as the likely cause, not only "it hung" (#1263).
+  const hung = {
+    devServerOutput: () => 'starting...',
+    observedPorts: () => [],
+    devServerQuietForMs: () => 60_000,
+  };
+
+  it('names the pending Vite step when the dev server hangs', async () => {
+    const out = await notesFrom(hung, { pendingViteConfig: 'vite.config.ts' });
+    expect(out).toContain('neither printed a URL nor bound a port');
+    expect(out).toContain('Vite plugin');
+    expect(out).toContain('vite.config.ts');
+    expect(out).toContain('likely cause');
+  });
+
+  it('names the pending Vite step when the dev server exits', async () => {
+    const out = await notesFrom(
+      { devServerExited: () => true, devServerOutput: () => '' },
+      { pendingViteConfig: 'vite.config.ts' },
+    );
+    expect(out).toContain('dev server exited');
+    expect(out).toContain('vite.config.ts');
+    expect(out).toContain('likely cause');
+  });
+
+  it('puts the pending Vite step in the fallback of a dev-server stop', async () => {
+    const result = await runSetupPhases(
+      { ...INPUT, pendingViteConfig: 'vite.config.ts' },
+      world(hung),
+    );
+    expect(result.reachedPhase).toBe(SetupPhase.DEV_SERVER);
+    expect(result.fallback[0]).toContain('vite.config.ts');
+  });
+
+  it('does not blame the Vite step for a busy port', async () => {
+    const out = await notesFrom(
+      {
+        devServerExited: () => true,
+        devServerOutput: () => 'Error: listen EADDRINUSE: address already in use :::5173',
+      },
+      { pendingViteConfig: 'vite.config.ts' },
+    );
+    expect(out).toContain('already in use');
+    expect(out).not.toContain('likely cause');
+  });
+
+  it('names no Vite step when nothing is pending', async () => {
+    const out = await notesFrom(hung);
+    expect(out).not.toContain('Vite plugin');
+  });
 });
 
 /**

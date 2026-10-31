@@ -17,7 +17,7 @@ import { wasMcpRegistered } from './register/mcp-registered.js';
 import { PACKAGE_JSON } from './detect/workspace-apps.js';
 import { redirectToWorkspaceApp } from './detect/workspace-redirect.js';
 import { appsAt, enclosingWorkspaceRoot } from './detect/workspace-apps.js';
-import { isConnectStep } from './plan/connect-steps.js';
+import { isConnectStep, isViteConfigStep } from './plan/connect-steps.js';
 import { formatGeneratedSource } from './patch/format-generated.js';
 import {
   DEPS_TARGET,
@@ -481,12 +481,19 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
     // The step's REAL final status, not the absence of a failure — see mcp-registered.
     mcpRegistered: wasMcpRegistered(resolvedStatus(plan, MCP_TARGET, failed, skipped)),
   };
+  // A Vite config left for the reader. The dev server loads it, so setup names it on a stop (#1263).
+  const pendingViteConfig = plan.steps.find(
+    (s) =>
+      isViteConfigStep(s.title) &&
+      (StepStatus.MANUAL === s.status || failed.has(s.target) || skipped.has(s.target)),
+  )?.target;
   const context: InitContext = {
     appDir: options.cwd,
     framework: plan.framework,
     packageManager: planInput.detection.packageManager,
     ...(undefined === devCommand ? {} : { devCommand }),
     ...(true === options.redirected ? { redirectedTo: options.cwd } : {}),
+    ...(undefined === pendingViteConfig ? {} : { pendingViteConfig }),
   };
   /*
    * The two INSTALL steps `init` is the only thing that can answer.

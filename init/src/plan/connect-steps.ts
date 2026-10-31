@@ -121,3 +121,14 @@ export const CONNECT_STEP_TITLES: ReadonlySet<StepTitle> = new Set<StepTitle>([
 export function isConnectStep(title: string): boolean {
   return (CONNECT_STEP_TITLES as ReadonlySet<string>).has(title);
 }
+
+/** The steps that patch the Vite config the dev server loads. */
+const VITE_CONFIG_STEP_TITLES: ReadonlySet<StepTitle> = new Set<StepTitle>([
+  StepTitle.VITE_PLUGIN,
+  StepTitle.ELECTRON_VITE_PLUGIN,
+]);
+
+/** True when this step patches the Vite config. */
+export function isViteConfigStep(title: string): boolean {
+  return (VITE_CONFIG_STEP_TITLES as ReadonlySet<string>).has(title);
+}

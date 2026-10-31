@@ -423,6 +423,25 @@ describe('runInit', () => {
     expect(r.context?.packageManager).toBeTruthy();
   });
 
+  // The dev server reads the Vite config, so a later dev-server stop has to name the step that
+  // left it unpatched (#1263). The caller can only do that if init says which config it was.
+  it('tells the caller which Vite config it left for a manual step', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { vite: '^5' },
+        scripts: { dev: 'vite' },
+      }),
+      'vite.config.ts': `import { makeConfig } from './config/factory';\nexport default makeConfig();\n`,
+    });
+    const r = runInit(OPTS, io);
+    expect(r.context?.pendingViteConfig).toBe('vite.config.ts');
+  });
+
+  it('names no pending Vite config when it patched the config', () => {
+    const r = runInit(OPTS, memoryIo(VITE_FILES));
+    expect(r.context?.pendingViteConfig).toBeUndefined();
+  });
+
   it('honours --app when the root has no package.json', () => {
     const io = memoryIo({
       'frontend/package.json': JSON.stringify({ dependencies: { next: '16', react: '^19' } }),

@@ -125,6 +125,11 @@ export interface InitContext {
   readonly devCommand?: string | undefined;
   /** Set when init redirected into a workspace app, naming the one it chose. */
   readonly redirectedTo?: string | undefined;
+  /**
+   * The Vite config that init could not patch and left as a manual step. The dev server loads it,
+   * so a later dev-server stop names this step as the likely cause (#1263).
+   */
+  readonly pendingViteConfig?: string | undefined;
 }
 
 export interface InitResult {
