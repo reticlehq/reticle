@@ -6,13 +6,17 @@ import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
 
 function step(expect?: Predicate): FlowStep {
   const s: FlowStep = { tool: ReticleTool.ACT, anchor: { kind: AnchorKind.TESTID, value: 'x' } };
-  if (expect !== undefined) s.expect = expect;
+  if (expect !== undefined) {
+    s.expect = expect;
+  }
   return s;
 }
 
 function flow(steps: FlowStep[], success?: Predicate): FlowFile {
   const f: FlowFile = { version: FLOW_FILE_VERSION, name: 'f', createdAt: 0, steps };
-  if (success !== undefined) f.success = success;
+  if (success !== undefined) {
+    f.success = success;
+  }
   return f;
 }
 
@@ -129,5 +133,37 @@ describe('classifyFlowAssertions — business intent + outcome oracle', () => {
     );
     expect(c.intentVerified).toBe(false);
     expect(c.warning).toContain('declares a business intent but asserts no observable outcome');
+  });
+});
+
+/*
+ * A `request` step judges what the server answered: its status and its body. That is a consequence,
+ * as much as a network expect on a click. Counted as nothing, a flow of request steps with a stated
+ * intent was graded "asserts no observable outcome" and replayed `unknown` on a correct app.
+ */
+describe('classifyFlowAssertions — request steps', () => {
+  const requestFlow = (response?: FlowStep['response']): FlowFile => ({
+    version: FLOW_FILE_VERSION,
+    name: 'api-rules',
+    createdAt: 0,
+    intent: 'The API refuses an unknown sort',
+    steps: [
+      {
+        tool: 'reticle_request',
+        anchor: { kind: AnchorKind.TESTID, value: 'GET /api/links?sort=bogus' },
+        request: { method: 'GET', url: '/api/links?sort=bogus' },
+        ...(response === undefined ? {} : { response }),
+      },
+    ],
+  });
+
+  it('counts a request step with a declared response as a consequence', () => {
+    const c = classifyFlowAssertions(requestFlow({ status: 400 }));
+    expect(c.grade).toBe(FlowAssertionGrade.ASSERTED);
+    expect(c.intentVerified).toBe(true);
+  });
+
+  it('does not count a request step that declares no response', () => {
+    expect(classifyFlowAssertions(requestFlow()).hasConsequenceAssertion).toBe(false);
   });
 });

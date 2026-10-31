@@ -93,3 +93,23 @@ describe('replay pacing between steps', () => {
     expect(results[1]?.drift).toBeDefined();
   });
 });
+
+/*
+ * After the last step, too. A sort header updates its `aria-sort` at once and fetches the rows after,
+ * so the last step's expect held while that fetch was still in flight. Replay ended there, and the
+ * whole-journey check called the request "never settled": a correct app replayed `unknown`.
+ */
+describe('replay pacing after the last step', () => {
+  it('waits for the page to go quiet once more before the journey is judged', async () => {
+    const { session, waitForSignal } = row(true);
+    const asked: string[] = [];
+    const counting: WaitForSignal = (s, predicate, ms, since) => {
+      asked.push(predicate.kind);
+      return waitForSignal(s, predicate, ms, since);
+    };
+    await replayFlow(session, flow, counting, 60);
+    // Before step 2, and after step 2.
+    expect(asked.filter((k) => PredicateKind.SETTLED === k)).toHaveLength(2);
+    expect(asked.at(-1)).toBe(PredicateKind.SETTLED);
+  });
+});

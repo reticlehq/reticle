@@ -21,10 +21,7 @@ import {
   replayFlow,
   type FlowReplaySession,
 } from './flow-replay.js';
-import {
-  waitForPredicate,
-  type Predicate,
-} from '@reticlehq/engine/question/predicate/predicate.js';
+import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { asRecord, asString } from '@reticlehq/core';
 import { PredicateKind, ReticleTool } from '@reticlehq/core';
 import type { WaitForSignal } from './flow-replay-types.js';
@@ -117,7 +114,9 @@ class FakeSession implements FlowReplaySession {
   }
 
   elapsed(): number {
-    if (this.elapsedReadings === undefined) return 0;
+    if (this.elapsedReadings === undefined) {
+      return 0;
+    }
     const value = this.elapsedReadings[this.#elapsedCall] ?? this.elapsedReadings.at(-1) ?? 0;
     this.#elapsedCall += 1;
     return value;
@@ -376,7 +375,9 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     // The element appears on the 3rd query — an async route swap / list paint, not a regression.
     let calls = 0;
     const script = (testid: string): QueryScript => {
-      if (testid !== 'late-button') return { elements: [el(`e-${testid}`, testid)] };
+      if (testid !== 'late-button') {
+        return { elements: [el(`e-${testid}`, testid)] };
+      }
       calls += 1;
       return calls < 3
         ? { elements: [], hint: present(['other']) }
@@ -430,10 +431,12 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
 
     expect(steps[0]?.ok).toBe(true);
     expect(steps[0]?.drift).toBeUndefined();
-    // Proves predicate reuse: the injected wait fn was invoked with a {signal} predicate.
-    expect(waitSpy).toHaveBeenCalledTimes(1);
-    const predicate = waitSpy.mock.calls[0]?.[1] as Predicate;
-    expect(predicate).toEqual({ kind: 'signal', name: 'order-placed' });
+    // Proves predicate reuse: the injected wait fn was invoked with a {signal} predicate. The other
+    // call is replay's quiet wait after the last step (`settled`), which is not this step's check.
+    const asked = waitSpy.mock.calls.map((call) => call[1]);
+    expect(asked.filter((p) => 'settled' !== p.kind)).toEqual([
+      { kind: 'signal', name: 'order-placed' },
+    ]);
   });
 
   it('6b: a signal step is scoped to the REPLAY floor, not the whole buffer', async () => {

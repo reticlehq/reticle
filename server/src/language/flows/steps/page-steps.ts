@@ -89,11 +89,19 @@ function responseMismatch(
  * A step that sends one request and judges the answer. It never skips: a rule the flow says it
  * checks and did not is a false green.
  */
+/** Methods that only read. Any other method changes data and needs the run's confirmation. */
+const READ_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
+
 export async function runRequestStep(
   step: FlowStep,
   index: number,
   send: SendRequest | undefined,
   judged: boolean,
+  /**
+   * The run's own yes to steps that change data, never the flow file's: flow files are shared, and a
+   * saved `DELETE` would otherwise run with the user's cookies on any app the flow is pointed at.
+   */
+  confirmDangerous: boolean,
 ): Promise<FlowStepResult> {
   const request = step.request;
   const label = request === undefined ? '' : `${request.method} ${request.url}`;
@@ -103,6 +111,16 @@ export async function runRequestStep(
       ...base,
       ok: false,
       error: `this replay cannot send a request, so ${label} did not run`,
+    };
+  }
+  if (!READ_METHODS.has(request.method.toUpperCase()) && !confirmDangerous) {
+    return {
+      ...base,
+      ok: false,
+      error:
+        `potentially destructive request blocked: ${label} changes data, so it was not sent. ` +
+        'Confirm it for this run: reticle_verify{action:"flows", confirmDangerous: true}, or ' +
+        '`reticle verify <url> --confirm-dangerous`. It cannot be confirmed in the flow file.',
     };
   }
   const answer = await send(request);
@@ -131,12 +149,15 @@ export async function runPageStep<S>(
     open?: OpenPage<S> | undefined;
     send?: SendRequest | undefined;
     checked: boolean;
+    confirmDangerous: boolean;
     judge: (session: S, expect: NonNullable<FlowStep['expect']>) => Promise<Drift | undefined>;
     route: (session: S) => string | undefined;
   },
 ): Promise<{ result: FlowStepResult; session?: S }> {
   if (step.request !== undefined) {
-    return { result: await runRequestStep(step, index, ctx.send, ctx.checked) };
+    return {
+      result: await runRequestStep(step, index, ctx.send, ctx.checked, ctx.confirmDangerous),
+    };
   }
   const opened = await openStepPage(step, index, ctx.open);
   if (opened.session === undefined) {

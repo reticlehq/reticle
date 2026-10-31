@@ -1496,16 +1496,6 @@
       "count": 1
     }
   },
-  "src/language/flows/flow-classify.test.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
-  "src/language/flows/flow-classify.ts": {
-    "curly": {
-      "count": 8
-    }
-  },
   "src/language/flows/flow-expect-grammar.test.ts": {
     "curly": {
       "count": 6
@@ -1574,11 +1564,6 @@
   "src/language/flows/flow-replay.step-timeout.test.ts": {
     "curly": {
       "count": 3
-    }
-  },
-  "src/language/flows/flow-replay.test.ts": {
-    "curly": {
-      "count": 2
     }
   },
   "src/language/flows/flow-replay.unreachable.test.ts": {

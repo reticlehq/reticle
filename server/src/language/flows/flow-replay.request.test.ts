@@ -100,3 +100,57 @@ describe('a request step', () => {
     expect(results[0]?.error).toBeDefined();
   });
 });
+
+/*
+ * A request that changes data goes behind the same guard as a destructive click. A saved flow with
+ * `DELETE /api/links/...` replayed against any app the flow is pointed at, with the signed-in user's
+ * cookies, and nothing asked first. Flow files are shared, so the run must say yes, not the file.
+ */
+describe('a request step that changes data', () => {
+  const del: FlowStep = {
+    tool: FlowStepTool.REQUEST,
+    anchor: { kind: AnchorKind.TESTID, value: 'DELETE /api/links/1' },
+    request: { method: 'DELETE', url: '/api/links/1' },
+    response: { status: 200 },
+  };
+
+  it('is refused, and sends nothing, unless the run confirms dangerous steps', async () => {
+    const sent: unknown[] = [];
+    const results = await replayFlow(page, flow(del), waitForSignal, 60, false, undefined, {
+      request: (req) => {
+        sent.push(req);
+        return Promise.resolve({ status: 200, body: '' });
+      },
+    });
+    expect(sent).toHaveLength(0);
+    expect(results[0]?.ok).toBe(false);
+    expect(results[0]?.error).toContain('confirmDangerous');
+  });
+
+  it('is sent when the run confirms dangerous steps', async () => {
+    const sent: unknown[] = [];
+    const results = await replayFlow(page, flow(del), waitForSignal, 60, true, undefined, {
+      request: (req) => {
+        sent.push(req);
+        return Promise.resolve({ status: 200, body: '' });
+      },
+    });
+    expect(sent).toHaveLength(1);
+    expect(results[0]?.ok).toBe(true);
+  });
+
+  it('lets a read through without confirmation', async () => {
+    const results = await replayFlow(
+      page,
+      flow(step({ status: 400 })),
+      waitForSignal,
+      60,
+      false,
+      undefined,
+      {
+        request: () => Promise.resolve({ status: 400, body: '' }),
+      },
+    );
+    expect(results[0]?.ok).toBe(true);
+  });
+});

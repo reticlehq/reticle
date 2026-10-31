@@ -759,6 +759,7 @@ export async function replayFlow(
           open: options.navigate,
           send: options.request,
           checked: index >= from,
+          confirmDangerous,
           // A navigated page's clock starts at its own connect, so its whole life is the window.
           judge: (on, expectation) =>
             assertStepExpect(on, expectation, waitForSignal, waitFor(step), 0),
@@ -963,6 +964,15 @@ export async function replayFlow(
         break;
       }
       index += 1;
+    }
+    // And once after the last step: a page can satisfy the last expect at once and finish its own
+    // work after (a sort header marks itself, then fetches the rows). The journey is judged next.
+    if (results.length > 0) {
+      await waitForSignal(
+        session,
+        { kind: PredicateKind.SETTLED, quietMs: STEP_QUIET_MS },
+        STEP_QUIET_BUDGET_MS,
+      );
     }
   } catch (error: unknown) {
     if (!isDocumentGoneError(error)) {

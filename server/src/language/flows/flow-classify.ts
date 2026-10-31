@@ -81,7 +81,9 @@ export function flattenSteps(steps: readonly FlowStep[]): FlowStep[] {
   const out: FlowStep[] = [];
   for (const s of steps) {
     out.push(s);
-    if (s.steps !== undefined) out.push(...flattenSteps(s.steps));
+    if (s.steps !== undefined) {
+      out.push(...flattenSteps(s.steps));
+    }
   }
   return out;
 }
@@ -107,19 +109,35 @@ function invokedAssertsConsequence(
   invoked: ReadonlyMap<string, FlowFile>,
   seen: ReadonlySet<string>,
 ): boolean {
-  if (seen.has(flow.name)) return false;
+  if (seen.has(flow.name)) {
+    return false;
+  }
   const deeper = new Set([...seen, flow.name]);
   for (const step of flattenSteps(flow.steps)) {
-    if (step.invoke === undefined) continue;
+    if (step.invoke === undefined) {
+      continue;
+    }
     const sub = invoked.get(step.invoke);
-    if (sub === undefined) continue;
+    if (sub === undefined) {
+      continue;
+    }
     const subSteps = flattenSteps(sub.steps);
     if (subSteps.some((s) => expectIsConsequence(s.expect)) || expectIsConsequence(sub.success)) {
       return true;
     }
-    if (invokedAssertsConsequence(sub, invoked, deeper)) return true;
+    if (invokedAssertsConsequence(sub, invoked, deeper)) {
+      return true;
+    }
   }
   return false;
+}
+
+function responseIsDeclared(step: FlowStep): boolean {
+  const r = step.response;
+  return (
+    r !== undefined &&
+    (r.status !== undefined || r.contains !== undefined || r.absent !== undefined)
+  );
 }
 
 export function classifyFlowAssertions(
@@ -137,8 +155,12 @@ export function classifyFlowAssertions(
   let consequenceSteps = 0;
   let weakSteps = 0;
   for (const s of all) {
-    if (expectIsConsequence(s.expect)) consequenceSteps++;
-    else if (expectIsWeak(s.expect)) weakSteps++;
+    // A request step's declared response judges what the server answered: a consequence.
+    if (expectIsConsequence(s.expect) || responseIsDeclared(s)) {
+      consequenceSteps++;
+    } else if (expectIsWeak(s.expect)) {
+      weakSteps++;
+    }
   }
   const invokedAsserts = invokedAssertsConsequence(flow, invoked, new Set());
   const successIsConsequence = expectIsConsequence(flow.success);
@@ -162,7 +184,9 @@ export function classifyFlowAssertions(
   }
   // A declared-but-unverifiable business goal is the sharper failure: surface it over the generic
   // assertion warning, since the flow actively claims to check something it cannot.
-  if (intent !== undefined && !hasConsequenceAssertion) warning = INTENT_WITHOUT_OUTCOME_WARNING;
+  if (intent !== undefined && !hasConsequenceAssertion) {
+    warning = INTENT_WITHOUT_OUTCOME_WARNING;
+  }
 
   return {
     grade,
