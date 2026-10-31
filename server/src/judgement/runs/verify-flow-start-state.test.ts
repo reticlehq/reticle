@@ -84,3 +84,21 @@ describe('each flow of a verify run starts from the state the run started with',
     expect(calls).toEqual(['replay:a', 'replay:b']);
   });
 });
+
+describe('a flow that moved the page to another address', () => {
+  it('still gets the start state back: the page is the same driven page', async () => {
+    // Seen on the bench: after a flow that signed out and reloaded, the session's recorded address
+    // no longer equalled the page's, the address check refused, and every later flow read
+    // "could not put the page back" on a working app.
+    const { deps, calls } = depsWith(true);
+    let looks = 0;
+    (
+      deps as unknown as { realInput: { isAvailableFor: () => Promise<boolean> } }
+    ).realInput.isAvailableFor = () => Promise.resolve(0 === looks++);
+    const port = createRunnerPort(deps);
+    await port.replayFlow('a');
+    const second = await port.replayFlow('b');
+    expect(second.status).toBe(ReplayStatus.OK);
+    expect(calls).toContain('replay:b');
+  });
+});

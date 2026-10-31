@@ -145,7 +145,7 @@ export function flowStartState(
   currentUrl: () => string | undefined,
 ): () => Promise<string | undefined> {
   let first = true;
-  let saved: { state: unknown } | undefined;
+  let saved: { state: unknown; url: string } | undefined;
   return async () => {
     const url = currentUrl();
     if (first) {
@@ -155,7 +155,7 @@ export function flowStartState(
       }
       try {
         const port = await fixturePortFor(provider, url);
-        saved = port === undefined ? undefined : { state: await port.capture() };
+        saved = port === undefined ? undefined : { state: await port.capture(), url };
       } catch {
         saved = undefined;
       }
@@ -165,13 +165,14 @@ export function flowStartState(
       return undefined;
     }
     try {
-      // A port for the page as it is NOW: the previous flow moved it, and a port matches by URL.
-      const port = url === undefined ? undefined : await fixturePortFor(provider, url);
-      if (port === undefined) {
-        return 'could not put the page back in the state the run started with: no driven page matched';
-      }
-      await port.apply(saved.state);
-      return undefined;
+      // Straight to the provider, not through `fixturePortFor`: its address check compares the
+      // session's recorded address with the page's, and a flow that reloaded or signed out leaves
+      // the two different while the page is the same. The provider still refuses a page it does
+      // not drive (it answers false), so nothing is restored into a stranger's page.
+      const restored = await provider.applyStorageState?.(url ?? saved.url, saved.state);
+      return true === restored
+        ? undefined
+        : 'could not put the page back in the state the run started with: no driven page matched';
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return `could not put the page back in the state the run started with: ${message}`;
