@@ -25,6 +25,7 @@ import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
 import { anchorPrecondition, anchorQueryArgs } from './flow-step-runners.js';
 import { queryRefs } from './replay.js';
+import { refFor } from './flow-anchor.js';
 import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js';
 
 /** The slice of a session the start-path logic reads: the live URL plus the event buffer. */
@@ -174,7 +175,13 @@ async function firstStepResolvesHere(
     return false;
   }
   try {
-    return 0 < queryRefs(await session.command(ReticleCommand.QUERY, args)).length;
+    // THE control the recording meant, by the same rule replay applies to the step: one match, or
+    // the recorded position among exactly as many namesakes. A name that also appears elsewhere
+    // (30 "Edit" links on another page, 10 where the flow was recorded) is not "step 1 starts here".
+    return (
+      refFor(first.anchor, queryRefs(await session.command(ReticleCommand.QUERY, args))) !==
+      undefined
+    );
   } catch {
     return false;
   }

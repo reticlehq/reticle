@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — replay goes to a flow's start page when the current page only has controls of the same name.** Before step 1, replay stays on the current page when the first step can already start there. It decided that when the step's control name matched anything, so a flow recorded on a tags page ("Edit", 1 of 10) stayed on a bookmarks page with 30 links named "Edit", and then stopped as ambiguous: a working app replayed `unknown`. Replay now stays only when the control resolves to the one the recording meant, by the same rule as the step itself (one match, or the recorded position among exactly as many controls of that name). Otherwise it goes to the start page.

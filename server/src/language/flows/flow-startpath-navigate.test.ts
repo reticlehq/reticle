@@ -48,9 +48,17 @@ interface NavCall {
  * the flow's first anchor is not on it, so the navigation is the thing that helps. The true case has
  * its own test below, because it is the one that used to navigate and must no longer.
  */
+/** What a QUERY on this fake page finds: `matches` elements, or one when `stepOnPage`. */
+function elementsOnPage(options: { stepOnPage?: boolean; matches?: number }): { ref: string }[] {
+  if (options.matches !== undefined) {
+    return Array.from({ length: options.matches }, (_, i) => ({ ref: `e${String(i)}` }));
+  }
+  return true === options.stepOnPage ? [{ ref: 'e1' }] : [];
+}
+
 function tab(
   url: string | undefined,
-  options: { accepted?: boolean; stepOnPage?: boolean; id?: string } = {},
+  options: { accepted?: boolean; stepOnPage?: boolean; matches?: number; id?: string } = {},
 ): {
   calls: NavCall[];
   session: {
@@ -74,7 +82,7 @@ function tab(
             kind: 'command_result',
             id: 'q',
             ok: true,
-            result: { elements: true === options.stepOnPage ? [{ ref: 'e1' }] : [] },
+            result: { elements: elementsOnPage(options) },
           } as CommandResult);
         }
         return Promise.resolve({
@@ -564,5 +572,42 @@ describe('withStartPageWait', () => {
 
   it('leaves the result alone when the wait stayed inside the budget', () => {
     expect(withStartPageWait(result, {})).toBe(result);
+  });
+
+  /*
+   * "Can step 1 start here" means the anchor finds THE control the recording meant, not just one of
+   * that name. A flow recorded on a tags page clicks "Edit" 1 of 10; a bookmarks page has 30 links
+   * named "Edit". Replay stayed on the bookmarks page because the name matched, then refused the
+   * step as ambiguous: a correct app replayed `unknown`.
+   */
+  const editOnTags = (): FlowFile => ({
+    ...flow('/tags'),
+    steps: [
+      {
+        tool: 'reticle_act',
+        anchor: { kind: AnchorKind.ROLE, role: 'link', name: 'Edit', nth: 0, of: 10 },
+      },
+    ],
+  });
+
+  it('navigates when this page has the name but not the recorded number of them', async () => {
+    const { calls, session } = tab('http://localhost:3000/bookmarks', { matches: 30 });
+    const fresh = successor('http://localhost:3000/tags');
+    const arrived = await arriveAtStartPath(
+      manager([session, fresh]),
+      session,
+      editOnTags(),
+      5_000,
+      instantClock(100),
+    );
+    expect(arrived.session).toBe(fresh);
+    expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toHaveLength(1);
+  });
+
+  it('stays when this page has exactly the recorded number of them', async () => {
+    const { calls, session } = tab('http://localhost:3000/other', { matches: 10 });
+    const arrived = await arriveAtStartPath(manager([]), session, editOnTags());
+    expect(arrived.session).toBeUndefined();
+    expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([]);
   });
 });
