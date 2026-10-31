@@ -1,5 +1,7 @@
 import {
   HelloInstrumentation,
+  HudVisibility,
+  RETICLE_URL_PARAM,
   type HelloEnv,
   type HelloScope,
   type RedactionConfig,
@@ -230,4 +232,53 @@ export function leaseToken(
     return undefined;
   }
   return token;
+}
+
+/** `raw` when it is one of `values`, else undefined. */
+export function oneOf<T extends Record<string, string>>(
+  values: T,
+  raw: unknown,
+): T[keyof T] | undefined {
+  return (Object.values(values) as unknown[]).includes(raw) ? (raw as T[keyof T]) : undefined;
+}
+
+/**
+ * Extract Reticle identity overrides from a `location.search` string. Pure (takes the string, not the
+ * window) so it's testable without a DOM. Explicit connect options still win over these.
+ */
+export function reticleParamsFromSearch(search: string): {
+  session?: string;
+  projectId?: string;
+  hud?: HudVisibility;
+} {
+  const params = new URLSearchParams(search);
+  const out: { session?: string; projectId?: string; hud?: HudVisibility } = {};
+  const session = params.get(RETICLE_URL_PARAM.SESSION);
+  const projectId = params.get(RETICLE_URL_PARAM.PROJECT);
+  const hud = oneOf(HudVisibility, params.get(RETICLE_URL_PARAM.HUD));
+  if (session !== null && session.length > 0) {
+    out.session = session;
+  }
+  if (projectId !== null && projectId.length > 0) {
+    out.projectId = projectId;
+  }
+  if (hud !== undefined) {
+    out.hud = hud;
+  }
+  return out;
+}
+
+/**
+ * A HUD asked for while no panel is mounted. Hidden and removed already hold, so they are answered
+ * as placed; shown is not true until the panel mounts. Each is remembered and applied on mount, so a
+ * request that arrives first is not lost (a drive's daemon asks as soon as the page connects).
+ */
+export function hudWithoutPanel(hud: HudVisibility | undefined): {
+  remember?: HudVisibility;
+  placed: HudVisibility[];
+} {
+  if (hud === undefined) {
+    return { placed: [] };
+  }
+  return { remember: hud, placed: HudVisibility.SHOWN === hud ? [] : [hud] };
 }

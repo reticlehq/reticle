@@ -274,11 +274,6 @@
       "count": 4
     }
   },
-  "src/first-load-size.test.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
   "src/observers/blind-spots.test.ts": {
     "curly": {
       "count": 2
@@ -803,11 +798,6 @@
   "src/reticle.late-project-id.test.ts": {
     "curly": {
       "count": 2
-    }
-  },
-  "src/reticle.ts": {
-    "curly": {
-      "count": 35
     }
   },
   "src/review/annotator.test.ts": {

@@ -14,10 +14,7 @@ import {
   MessageKind,
   SESSION_AUTO,
   SessionState,
-  TRANSPORT_LIMITS,
   buildRedactionPolicy,
-  isLoopbackHostname,
-  isLocalPage,
   setActiveRedactionPolicy,
   wireRedactionKeys,
   RETICLE_ROOT_GLOBAL,
@@ -74,83 +71,31 @@ import { actionVerb } from './presenter/chrome/presenter-verbs.js';
 import { str, refLabel, modeForCommand, presentStatus } from './reticle-presenter-helpers.js';
 import { resetClock } from './timers/clock.js';
 import { nativeWarn } from './timers/console/native-console.js';
-import { installRecorder, type RecorderHandle } from './recorder/recorder.js';
+import type { RecorderHandle } from './recorder/recorder.js';
 import { Annotator } from './review/annotator.js';
 import type { Teardown } from './observers/types.js';
 import {
   helloMode,
+  hudWithoutPanel,
   leaseToken,
+  oneOf,
+  reticleParamsFromSearch,
   shouldBlockProduction,
   type ReticleConnectOptions,
 } from './connect-options.js';
-export { helloMode, shouldBlockProduction } from './connect-options.js';
+export {
+  helloMode,
+  hudWithoutPanel,
+  reticleParamsFromSearch,
+  shouldBlockProduction,
+} from './connect-options.js';
 
 // Re-exported so every existing importer of the options type is unaffected by the file split.
 export type { ReticleConnectOptions };
 
-/**
- * The daemon only upgrades WebSocket connections on `RETICLE_WS_PATH`, so a hand-written bridge URL
- * with no path (`ws://localhost:4400`) would be answered with a silent 400. Give a pathless ws(s)
- * URL the bridge path; anything with an explicit path (a reverse proxy mount) is left alone.
- */
-export function withBridgePath(bridgeUrl: string): { url: string; adjusted: boolean } {
-  let parsed: URL;
-  try {
-    parsed = new URL(bridgeUrl);
-  } catch {
-    return { url: bridgeUrl, adjusted: false };
-  }
-  if (
-    (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') ||
-    (parsed.pathname !== '' && parsed.pathname !== '/')
-  ) {
-    return { url: bridgeUrl, adjusted: false };
-  }
-  parsed.pathname = RETICLE_WS_PATH;
-  return { url: parsed.toString(), adjusted: true };
-}
-
-export function connectionPolicy(
-  pageHostname: string,
-  bridgeUrl: string,
-  allowNonLocalhost: boolean,
-  token: string | undefined,
-  /** The page's protocol. Desktop webviews (file:, app:, tauri:) are local despite a non-loopback host. */
-  pageProtocol = 'http:',
-): { allowed: boolean; reason?: string } {
-  let bridge: URL;
-  try {
-    bridge = new URL(bridgeUrl);
-  } catch {
-    return { allowed: false, reason: 'invalid Reticle bridge URL' };
-  }
-  if (bridge.protocol !== 'ws:' && bridge.protocol !== 'wss:') {
-    return { allowed: false, reason: 'Reticle bridge URL must use ws:// or wss://' };
-  }
-  if ((token?.length ?? 0) > TRANSPORT_LIMITS.MAX_TOKEN_LENGTH) {
-    return {
-      allowed: false,
-      reason: `Reticle pairing token exceeds ${String(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH)} characters`,
-    };
-  }
-  const remoteBridge = !isLoopbackHostname(bridge.hostname);
-  if (remoteBridge && bridge.protocol !== 'wss:') {
-    return { allowed: false, reason: 'a non-local Reticle bridge must use wss://' };
-  }
-  const remote = !isLocalPage(pageProtocol, pageHostname) || remoteBridge;
-  if (!remote) return { allowed: true };
-  if (!allowNonLocalhost) {
-    return {
-      allowed: false,
-      reason:
-        'Reticle is disabled outside localhost unless allowNonLocalhost is explicitly enabled',
-    };
-  }
-  if (token === undefined || 0 === token.length) {
-    return { allowed: false, reason: 'a pairing token is required outside localhost' };
-  }
-  return { allowed: true };
-}
+// The bridge URL rules live with the transport; re-exported so existing importers are unaffected.
+export { connectionPolicy, withBridgePath } from './transport/bridge-url.js';
+import { connectionPolicy, withBridgePath } from './transport/bridge-url.js';
 
 /** Console line after the HUD's Kill Reticle, so the way back is written down somewhere. */
 /** Narration rows held for a panel that has not arrived yet. */
@@ -179,45 +124,14 @@ export { RETICLE_URL_PARAM };
 function stripReloadCacheBustParam(): void {
   try {
     const current = new URL(window.location.href);
-    if (!current.searchParams.has(RELOAD_CACHE_BUST_PARAM)) return;
+    if (!current.searchParams.has(RELOAD_CACHE_BUST_PARAM)) {
+      return;
+    }
     current.searchParams.delete(RELOAD_CACHE_BUST_PARAM);
     window.history.replaceState(window.history.state, '', current.toString());
   } catch {
     /* best-effort URL hygiene - never block connect() on it */
   }
-}
-
-/**
- * Extract Reticle identity overrides from a `location.search` string. Pure (takes the string, not the
- * window) so it's testable without a DOM. Explicit connect options still win over these.
- */
-export function reticleParamsFromSearch(search: string): {
-  session?: string;
-  projectId?: string;
-  hud?: HudVisibility;
-} {
-  const params = new URLSearchParams(search);
-  const out: { session?: string; projectId?: string; hud?: HudVisibility } = {};
-  const session = params.get(RETICLE_URL_PARAM.SESSION);
-  const projectId = params.get(RETICLE_URL_PARAM.PROJECT);
-  const hud = oneOf(HudVisibility, params.get(RETICLE_URL_PARAM.HUD));
-  if (session !== null && session.length > 0) out.session = session;
-  if (projectId !== null && projectId.length > 0) out.projectId = projectId;
-  if (hud !== undefined) out.hud = hud;
-  return out;
-}
-
-/**
- * A HUD asked for while no panel is mounted. Hidden and removed already hold, so they are answered
- * as placed; shown is not true until the panel mounts. Each is remembered and applied on mount, so a
- * request that arrives first is not lost (a drive's daemon asks as soon as the page connects).
- */
-export function hudWithoutPanel(hud: HudVisibility | undefined): {
-  remember?: HudVisibility;
-  placed: HudVisibility[];
-} {
-  if (hud === undefined) return { placed: [] };
-  return { remember: hud, placed: HudVisibility.SHOWN === hud ? [] : [hud] };
 }
 
 /**
@@ -355,7 +269,9 @@ export class Reticle {
       this.#adoptLateProjectId(options);
       return;
     }
-    if ('undefined' === typeof window || 'undefined' === typeof document) return;
+    if ('undefined' === typeof window || 'undefined' === typeof document) {
+      return;
+    }
 
     // Dev-only backstop: refuse to activate in a production build (SSR healthcheck, prod bundle opened
     // on localhost). `process` may not exist in a raw browser, so read NODE_ENV off globalThis.
@@ -504,12 +420,22 @@ export class Reticle {
 
     // A page Reticle opened for a drive may say the HUD starts hidden, or not at all.
     this.#pendingHud = reticleParamsFromSearch(window.location.search).hud;
-    if (options.present !== false && HudVisibility.REMOVED !== this.#pendingHud)
+    if (options.present !== false && HudVisibility.REMOVED !== this.#pendingHud) {
       this.#fetchAndShowPanel(options);
+    }
 
     if (true === options.recorder) {
-      this.#recorder = installRecorder({ emit, now: () => Date.now() });
-      this.#recorder.mount();
+      // Loaded on demand: the recorder is for a page that asked to record, and every other page
+      // would download it on load for nothing.
+      void import('./recorder/recorder.js')
+        .then(({ installRecorder }) => {
+          if (!this.#connected || this.#recorder !== undefined) {
+            return;
+          }
+          this.#recorder = installRecorder({ emit, now: () => Date.now() });
+          this.#recorder.mount();
+        })
+        .catch(() => undefined);
     }
 
     // The page annotator rides with the presenter (the human surface) unless explicitly off.
@@ -553,7 +479,9 @@ export class Reticle {
    * happening is bad; losing the session because the picture would not load is worse.
    */
   #fetchAndShowPanel(options: ReticleConnectOptions): void {
-    if (this.#panelRequested) return;
+    if (this.#panelRequested) {
+      return;
+    }
     this.#panelRequested = true;
     void import('./presenter/presenter.js')
       .then(({ Presenter }) =>
@@ -562,19 +490,33 @@ export class Reticle {
       .then(({ Presenter, settings }) => {
         // The page may have disconnected while this was in flight. Mounting a panel for a session
         // that is over would leave it on screen with nothing behind it.
-        if (!this.#connected) return;
+        if (!this.#connected) {
+          return;
+        }
         this.#readPanelSettings = settings.getPresenterSettings;
         const panelOptions: PresenterOptions = {};
-        if (options.pace !== undefined) panelOptions.paceMs = options.pace;
+        if (options.pace !== undefined) {
+          panelOptions.paceMs = options.pace;
+        }
         if (options.narrationDwellMs !== undefined) {
           panelOptions.narrationDwellMs = options.narrationDwellMs;
         }
-        if (options.border !== undefined) panelOptions.border = options.border;
-        if (options.logMax !== undefined) panelOptions.logMax = options.logMax;
-        if (options.endedFadeMs !== undefined) panelOptions.endedFadeMs = options.endedFadeMs;
-        if (options.idleEndMs !== undefined) panelOptions.idleEndMs = options.idleEndMs;
+        if (options.border !== undefined) {
+          panelOptions.border = options.border;
+        }
+        if (options.logMax !== undefined) {
+          panelOptions.logMax = options.logMax;
+        }
+        if (options.endedFadeMs !== undefined) {
+          panelOptions.endedFadeMs = options.endedFadeMs;
+        }
+        if (options.idleEndMs !== undefined) {
+          panelOptions.idleEndMs = options.idleEndMs;
+        }
         panelOptions.sessionId = this.#session;
-        if (this.#projectId !== undefined) panelOptions.projectId = this.#projectId;
+        if (this.#projectId !== undefined) {
+          panelOptions.projectId = this.#projectId;
+        }
         // The panel calls this when the human pauses, resumes, ends, or sends a message. We emit a
         // HUMAN_CONTROL event over the existing transport; #emit stamps `t` from the elapsed clock.
         panelOptions.onControl = (intent: ControlIntent) =>
@@ -599,12 +541,19 @@ export class Reticle {
         panel.showSdkVersion(this.#sdkVersion);
         // Drain pushes that arrived before this existed. After mount(), so the DOM they paint into is
         // there; the presenter's own painters no-op on a missing element rather than throwing.
-        for (const buffered of this.#pendingPushes.values()) panel.handlePush(buffered);
+        for (const buffered of this.#pendingPushes.values()) {
+          panel.handlePush(buffered);
+        }
         this.#pendingPushes.clear();
-        if (0 < this.#pendingNarrations.length) panel.sessionStart();
-        for (const early of this.#pendingNarrations.splice(0))
+        if (0 < this.#pendingNarrations.length) {
+          panel.sessionStart();
+        }
+        for (const early of this.#pendingNarrations.splice(0)) {
           panel.narrate(early.text, early.level, early.actor, early.summary);
-        if (this.#pendingHud !== undefined) panel.placeHud(this.#pendingHud, undefined);
+        }
+        if (this.#pendingHud !== undefined) {
+          panel.placeHud(this.#pendingHud, undefined);
+        }
         this.#pendingHud = undefined;
         /*
          * The first-run tour, once, over the app the person just wired up.
@@ -621,7 +570,9 @@ export class Reticle {
           // The page may have disconnected while this was in flight -- the same race the panel
           // guards against one screen up, and here it strands an overlay nothing can ever close:
           // `disconnect()` has already emptied the teardown list this would be pushing onto.
-          if (!this.#connected) return;
+          if (!this.#connected) {
+            return;
+          }
           const shown = tour.mountTour({
             document,
             storage: tour.safeLocalStorage(),
@@ -646,7 +597,9 @@ export class Reticle {
               ) ?? false,
             select: (element) => {
               const selection = window.getSelection();
-              if (null === selection) return;
+              if (null === selection) {
+                return;
+              }
               const range = document.createRange();
               range.selectNodeContents(element);
               selection.removeAllRanges();
@@ -657,11 +610,17 @@ export class Reticle {
           // in this package that covers the WHOLE viewport was also the only one `disconnect()`
           // could not take with it: it outlived the session, the daemon and everything else the
           // SDK owns, and the only way left to remove it was a reload.
-          if (shown !== undefined) this.#teardowns.push(shown.destroy);
+          if (shown !== undefined) {
+            this.#teardowns.push(shown.destroy);
+          }
         });
         // The glow and panel wake on bridge connect, so if the bridge got there first, say so now.
-        if (this.#bridgeConnected) panel.sessionStart();
-        if (this.#annotator !== undefined) panel.bindAnnotator(this.#annotator);
+        if (this.#bridgeConnected) {
+          panel.sessionStart();
+        }
+        if (this.#annotator !== undefined) {
+          panel.bindAnnotator(this.#annotator);
+        }
       })
       .catch(() => {
         // Deliberately silent. There is nowhere useful to report this from inside a page, and a
@@ -703,7 +662,9 @@ export class Reticle {
    * per-render flood. Dev-only, like the whole SDK.
    */
   renderCommit(commits: number): void {
-    if (commits > 0) this.#emit(EventType.RENDER_COMMIT, { commits });
+    if (commits > 0) {
+      this.#emit(EventType.RENDER_COMMIT, { commits });
+    }
   }
 
   /** Advertise the app's testable surface so the agent learns it without reading source. */
@@ -730,7 +691,9 @@ export class Reticle {
   }
 
   disconnect(): void {
-    if (!this.#connected) return;
+    if (!this.#connected) {
+      return;
+    }
     runTeardowns(this.#emit, this.#teardowns);
     this.#teardowns = [];
     this.#transport?.close();
@@ -769,7 +732,9 @@ export class Reticle {
       this.#eventCount += 1;
       this.#overlay?.update({ connected: true, events: this.#eventCount });
       // On a route change, re-scope the HUD's replay-flow chips to the page we're now on.
-      if (type === EventType.ROUTE_CHANGE) this.#presenter?.refilterFlows();
+      if (type === EventType.ROUTE_CHANGE) {
+        this.#presenter?.refilterFlows();
+      }
     } catch {
       /* observation is best-effort; the host app's control flow is not */
     }
@@ -794,9 +759,13 @@ export class Reticle {
    * to move a live session's evidence.
    */
   #adoptLateProjectId(options: ReticleConnectOptions): void {
-    if (this.#projectId !== undefined) return;
+    if (this.#projectId !== undefined) {
+      return;
+    }
     const late = resolveConnectIdentity(options, window.location.search).projectId;
-    if (late === undefined) return;
+    if (late === undefined) {
+      return;
+    }
     this.#projectId = late;
     this.#transport?.reannounce();
   }
@@ -856,13 +825,14 @@ export class Reticle {
     if (command.name === ReticleCommand.NARRATE) {
       if (this.#presenter === undefined && this.#panelRequested) {
         // ponytail: bounded, the oldest kept; a page that never gets its panel drops the rest.
-        if (this.#pendingNarrations.length < MAX_PENDING_NARRATIONS)
+        if (this.#pendingNarrations.length < MAX_PENDING_NARRATIONS) {
           this.#pendingNarrations.push({
             text: str(command.args['text']),
             level: str(command.args['level'], 'info'),
             actor: narrationActor(command.args),
             summary: true === command.args['summary'],
           });
+        }
         return { ok: true, result: { shown: false, buffered: true } };
       }
       this.#presenter?.sessionStart(); // first agent activity → reveal the glow + panel
@@ -878,15 +848,20 @@ export class Reticle {
     // SESSION_CONFIG: the agent tunes the session for the app (currently the idle-end window).
     if (command.name === ReticleCommand.SESSION_CONFIG) {
       const idleEndMs = command.args['idleEndMs'];
-      if ('number' === typeof idleEndMs) this.#presenter?.setIdleEndMs(idleEndMs);
+      if ('number' === typeof idleEndMs) {
+        this.#presenter?.setIdleEndMs(idleEndMs);
+      }
       const hud = oneOf(HudVisibility, command.args['hud']);
       const corner = oneOf(HudCorner, command.args['corner']);
       const presenter = this.#presenter;
       let placed: string[];
-      if (presenter !== undefined) placed = presenter.placeHud(hud, corner);
-      else {
+      if (presenter !== undefined) {
+        placed = presenter.placeHud(hud, corner);
+      } else {
         const early = hudWithoutPanel(hud);
-        if (early.remember !== undefined) this.#pendingHud = early.remember;
+        if (early.remember !== undefined) {
+          this.#pendingHud = early.remember;
+        }
         placed = early.placed;
       }
       return {
@@ -950,7 +925,9 @@ export class Reticle {
   /** Drive the presenter (cursor/effects/status) before the real action runs. */
   async #presentBefore(command: CommandMessage): Promise<void> {
     const p = this.#presenter;
-    if (p === undefined) return;
+    if (p === undefined) {
+      return;
+    }
     p.setMode(modeForCommand(command.name)); // paint reading vs acting intent first
     this.#actHandle = undefined;
     const actor = CommandActor.HARNESS === command.by ? LOG_ACTOR.HARNESS : LOG_ACTOR.AGENT;
@@ -990,9 +967,4 @@ export class Reticle {
 /** Who a narration line is from: the Harness when the daemon says so, else the connected agent. */
 function narrationActor(args: Record<string, unknown>): LogActor {
   return CommandActor.HARNESS === args['actor'] ? LOG_ACTOR.HARNESS : LOG_ACTOR.AGENT;
-}
-
-/** The value when it is one of the enum's, else undefined: a page never trusts a free string. */
-function oneOf<T extends Record<string, string>>(values: T, raw: unknown): T[keyof T] | undefined {
-  return (Object.values(values) as unknown[]).includes(raw) ? (raw as T[keyof T]) : undefined;
 }

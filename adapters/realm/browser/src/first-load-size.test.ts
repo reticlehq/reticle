@@ -561,6 +561,12 @@ const MAX_PANEL_BYTES_IN_FIRST_LOAD = 2_000;
 const PANEL_DIR = '/presenter/';
 
 /**
+ * The recorder installs only when a page connects with `recorder: true`. Every other page used to
+ * download it on load anyway (about 7.5 KB with its styles), for a feature it never turns on.
+ */
+const RECORDER_DIR = '/recorder/';
+
+/**
  * The panel is tens of KB wherever it sits, so this floor is far below the truth and far above zero.
  * It exists to separate "almost none of the panel loads eagerly" — the thing being asserted — from
  * "PANEL_DIR matches nothing any more", which produces the identical 0 and the identical green tick.
@@ -590,6 +596,8 @@ function firstLoad(): {
   panelBytes: number;
   panelBytesAnywhere: number;
   deferredBytes: number;
+  recorderBytes: number;
+  recorderBytesAnywhere: number;
 } {
   const meta = buildSync({
     entryPoints: [DIST_ENTRY],
@@ -608,20 +616,30 @@ function firstLoad(): {
   // Only the imports that happen on the way in. A dynamic import is by definition not one of those.
   const onTheWayIn = new Set<string>();
   const walk = (name: string): void => {
-    if (onTheWayIn.has(name)) return;
+    if (onTheWayIn.has(name)) {
+      return;
+    }
     onTheWayIn.add(name);
     for (const dependency of chunks[name]?.imports ?? []) {
-      if ('dynamic-import' !== dependency.kind) walk(dependency.path);
+      if ('dynamic-import' !== dependency.kind) {
+        walk(dependency.path);
+      }
     }
   };
   walk(entry);
 
   let bytes = 0;
   let panelBytes = 0;
+  let recorderBytes = 0;
   for (const name of onTheWayIn) {
     bytes += chunks[name]?.bytes ?? 0;
     for (const [source, piece] of Object.entries(chunks[name]?.inputs ?? {})) {
-      if (source.includes(PANEL_DIR)) panelBytes += piece.bytesInOutput;
+      if (source.includes(PANEL_DIR)) {
+        panelBytes += piece.bytesInOutput;
+      }
+      if (source.includes(RECORDER_DIR)) {
+        recorderBytes += piece.bytesInOutput;
+      }
     }
   }
   let deferredBytes = 0;
@@ -629,13 +647,28 @@ function firstLoad(): {
   // the panel loads eagerly" from "the substring stopped matching", and 0 is the passing answer to
   // both — see the companion assertion below.
   let panelBytesAnywhere = 0;
+  let recorderBytesAnywhere = 0;
   for (const [name, chunk] of Object.entries(chunks)) {
-    if (!onTheWayIn.has(name) && name.endsWith('.js')) deferredBytes += chunk.bytes;
+    if (!onTheWayIn.has(name) && name.endsWith('.js')) {
+      deferredBytes += chunk.bytes;
+    }
     for (const [source, piece] of Object.entries(chunk.inputs ?? {})) {
-      if (source.includes(PANEL_DIR)) panelBytesAnywhere += piece.bytesInOutput;
+      if (source.includes(PANEL_DIR)) {
+        panelBytesAnywhere += piece.bytesInOutput;
+      }
+      if (source.includes(RECORDER_DIR)) {
+        recorderBytesAnywhere += piece.bytesInOutput;
+      }
     }
   }
-  return { bytes, panelBytes, panelBytesAnywhere, deferredBytes };
+  return {
+    bytes,
+    panelBytes,
+    panelBytesAnywhere,
+    deferredBytes,
+    recorderBytes,
+    recorderBytesAnywhere,
+  };
 }
 
 describe('what a page downloads just for loading the SDK', () => {
@@ -683,5 +716,18 @@ describe('what a page downloads just for loading the SDK', () => {
         'everything that value’s file imports. Put the value in a leaf file of its own instead, ' +
         'the way log-kinds.ts and layers.ts do.',
     ).toBeLessThanOrEqual(MAX_PANEL_BYTES_IN_FIRST_LOAD);
+  });
+
+  it('loads the recorder only for a page that asks to record', () => {
+    const { recorderBytes, recorderBytesAnywhere } = firstLoad();
+    // Found somewhere first, so a renamed directory cannot pass by measuring nothing.
+    expect(recorderBytesAnywhere, `no source under ${RECORDER_DIR} in the bundle`).toBeGreaterThan(
+      0,
+    );
+    expect(
+      recorderBytes,
+      `${String(recorderBytes)} B of the recorder is downloaded on load by every page, although it ` +
+        'installs only with `connect({ recorder: true })`. Keep it behind its dynamic import.',
+    ).toBe(0);
   });
 });

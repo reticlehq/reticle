@@ -30,11 +30,23 @@ afterEach(() => {
 });
 
 describe('reticle.ts recorder wiring', () => {
-  it('recorder:true mounts the toolbar; disconnect tears it down', () => {
+  // The recorder is loaded on demand, so it mounts just after connect.
+  it('recorder:true mounts the toolbar; disconnect tears it down', async () => {
     const reticle = new Reticle();
     reticle.connect({ recorder: true });
-    expect(recorderRoot()).not.toBeNull();
+    await vi.waitFor(() => {
+      expect(recorderRoot()).not.toBeNull();
+    });
     reticle.disconnect();
+    expect(recorderRoot()).toBeNull();
+  });
+
+  it('a page that disconnects before the recorder arrives never mounts it', async () => {
+    const reticle = new Reticle();
+    reticle.connect({ recorder: true });
+    reticle.disconnect();
+    await import('./recorder.js');
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(recorderRoot()).toBeNull();
   });
 
