@@ -39,6 +39,7 @@ import {
 import { installNetworkMocks, type MockRule } from './network-mock.js';
 import { attachNetworkDetail, type NetworkDetail } from './network-detail.js';
 import { injectedConnectArgs } from '@/portal/pool/zero-install.js';
+import { EARLY_CAPTURE_ARG, queueEarlyConsole } from '@/portal/pool/lease-page-error.js';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */
 export interface ElementBox {
@@ -717,6 +718,8 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
       ...(this.#storageState !== undefined ? { storageState: this.#storageState } : {}),
     });
     this.#page = page;
+    // Before goto: a console error the page logs while it loads comes before its SDK connects.
+    await page.addInitScript(queueEarlyConsole, EARLY_CAPTURE_ARG);
     // Capture CDP-authoritative response detail into the driven session's journal (best-effort).
     if (this.#onNetworkDetail !== undefined) {
       attachNetworkDetail(page, this.#onNetworkDetail);

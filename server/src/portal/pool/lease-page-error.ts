@@ -32,10 +32,7 @@ export async function listenForPageErrors(
   page.onPageError?.((error) => {
     hooks?.onPageError?.(leaseId, error);
   });
-  await page.addInitScript?.(queueEarlyConsole, {
-    key: RETICLE_EARLY_CAPTURE,
-    limit: EARLY_CAPTURE_LIMIT,
-  });
+  await page.addInitScript?.(queueEarlyConsole, EARLY_CAPTURE_ARG);
 }
 
 /**
@@ -48,6 +45,9 @@ export function reportLeaseClosed(hooks: LeasePageErrorHooks | undefined, leaseI
 
 /** How many console calls and error events a page keeps for an SDK that has not installed yet. */
 export const EARLY_CAPTURE_LIMIT = 200;
+
+/** The argument for `queueEarlyConsole`. Every driven page gets the same one: a pool lease, and `verify`'s own page. */
+export const EARLY_CAPTURE_ARG = { key: RETICLE_EARLY_CAPTURE, limit: EARLY_CAPTURE_LIMIT };
 
 interface EarlyCaptureArg {
   key: string;

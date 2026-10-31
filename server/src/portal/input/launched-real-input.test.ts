@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DriveErrorCode, InputMode } from '@reticlehq/core';
 import { DriveError, LaunchedRealInputProvider, boxCenter, type ElementBox } from './real-input.js';
+import { queueEarlyConsole } from '@/portal/pool/lease-page-error.js';
 
 const DRIVE_URL = 'http://localhost:3000/app';
 const SOURCE_BOX: ElementBox = { x: 0, y: 0, width: 200, height: 100 };
@@ -61,6 +62,10 @@ function fakePage(state: FakePageState): unknown {
       return Promise.resolve(null);
     },
     addInitScript: (script: unknown) => {
+      // Every driven page gets the early console queue; these tests are about the reader.
+      if (script === queueEarlyConsole) {
+        return Promise.resolve();
+      }
       state.initScripts = [...(state.initScripts ?? []), String(script)];
       return Promise.resolve();
     },
