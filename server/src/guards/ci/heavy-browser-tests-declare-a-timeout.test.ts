@@ -246,7 +246,9 @@ function loopBody(text: string, headOpen: number): string | null {
 // 21: a source edit on a real Vite dev server, polled until the plain URL serves it.
 // 22: a run's frame budget, filmed tick by tick into a real run directory until it is full.
 // 23: the sync daemon walking a stream of changes, each cycle reading and writing a real root.
-const EXPECTED_IO_LOOP_FILES = 23;
+// 24: the gate's changed-files list, seeded as a real git repo so `git diff` has a base to diff
+// against. It declares GIT_REPO_TIMEOUT_MS.
+const EXPECTED_IO_LOOP_FILES = 24;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];

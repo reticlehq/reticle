@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { ReticleDir } from '@reticlehq/core';
 
 const run = promisify(execFile);
 
@@ -40,8 +41,22 @@ function refIsOptionLike(ref: string): boolean {
 }
 
 /**
+ * True when a diff path sits under Reticle's own project directory.
+ *
+ * A replay writes intent, impact and episode files into that directory. Those writes are
+ * Reticle's output, not a change to the app's code. A flow with no source stamps reads any
+ * change as "affected", so counting them marked flows the gate had just proved as uncovered
+ * (#2050). The directory can sit below the repo root, so any path segment counts. `git diff`
+ * prints paths with `/` on every platform.
+ */
+function isReticleOwnPath(path: string): boolean {
+  return path.split('/').includes(ReticleDir.ROOT);
+}
+
+/**
  * Files changed since a git ref (`git diff --name-only <ref>`), so `reticle gate --since main` works
- * from the real diff instead of hand-listed files.
+ * from the real diff instead of hand-listed files. Files under Reticle's own directory are left
+ * out: a replay writes them, and they are not a change to the app's code.
  *
  * Never throws, and never pretends. The CLI gate may still degrade to "no changes" and pass rather
  * than crash CI — that reasoning was right and is unchanged — but it now has to opt into doing so by
@@ -58,7 +73,10 @@ export async function changedFilesSince(ref: string, cwd: string): Promise<Chang
   }
   try {
     const { stdout } = await run('git', ['diff', '--name-only', ref], { cwd });
-    return { files: parseGitFiles(stdout), failed: false };
+    return {
+      files: parseGitFiles(stdout).filter((file) => !isReticleOwnPath(file)),
+      failed: false,
+    };
   } catch (error) {
     return {
       files: [],
