@@ -14,8 +14,16 @@ class FakeCdp implements CdpLike {
   readonly sent: Array<{ method: string; params?: Record<string, unknown> }> = [];
   #handler: ((event: unknown) => void) | undefined;
 
+  body = 'short_url,target\r\nhttp://x/u02,"Sale, 50% off"\r\n';
+
   send(method: string, params?: Record<string, unknown>): Promise<unknown> {
     this.sent.push(params === undefined ? { method } : { method, params });
+    if ('Fetch.getResponseBody' === method) {
+      return Promise.resolve({
+        body: Buffer.from(this.body).toString('base64'),
+        base64Encoded: true,
+      });
+    }
     return Promise.resolve({});
   }
 
@@ -97,5 +105,53 @@ describe('download capture on a driven page', () => {
     );
     cdp.pause(paused([{ name: 'content-disposition', value: 'attachment' }]));
     expect(cdp.sent.filter((s) => 'Fetch.continueRequest' === s.method)).toHaveLength(1);
+  });
+
+  it('records the body of a small text attachment, so a body check can run', async () => {
+    const { cdp, details } = await setUp();
+    cdp.pause(
+      paused([
+        { name: 'content-disposition', value: 'attachment; filename="links.csv"' },
+        { name: 'content-type', value: 'text/csv; charset=utf-8' },
+        { name: 'content-length', value: '60' },
+      ]),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(details[0]?.responseBody).toContain('"Sale, 50% off"');
+    expect(cdp.sent.filter((s) => 'Fetch.continueRequest' === s.method)).toHaveLength(1);
+  });
+
+  it('does not read the body of a large or binary attachment', async () => {
+    const { cdp, details } = await setUp();
+    cdp.pause(
+      paused([
+        { name: 'content-disposition', value: 'attachment; filename="big.zip"' },
+        { name: 'content-type', value: 'application/zip' },
+        { name: 'content-length', value: '50000000' },
+      ]),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(details[0]?.responseBody).toBeUndefined();
+    expect(cdp.sent.some((s) => 'Fetch.getResponseBody' === s.method)).toBe(false);
+  });
+
+  it('says when the recorded body was cut', async () => {
+    const cdp = new FakeCdp();
+    cdp.body = 'x'.repeat(20_000);
+    const details: NetworkDetail[] = [];
+    await attachDownloadCapture(
+      cdp,
+      (d) => details.push(d),
+      () => 'http://localhost:3500/',
+    );
+    cdp.pause(
+      paused([
+        { name: 'content-disposition', value: 'attachment' },
+        { name: 'content-type', value: 'text/plain' },
+        { name: 'content-length', value: '20000' },
+      ]),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(details[0]?.responseBodyTruncated).toBe(true);
   });
 });

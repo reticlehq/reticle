@@ -17,6 +17,38 @@ import { drivenRedactionPolicy } from './driven-redaction.js';
 
 const DOCUMENT_RESPONSES = { patterns: [{ resourceType: 'Document', requestStage: 'Response' }] };
 
+/**
+ * The body is read only for a text attachment of known, small size. Reading it holds the whole file
+ * in memory, so a large or binary download keeps its status and headers and gets no body: a body
+ * check on it stays undecidable rather than costing the run its memory.
+ */
+const MAX_BODY_READ_BYTES = 1024 * 1024;
+const TEXTUAL = /text\/|json|csv|xml/i;
+
+function readableBodySize(headers: Record<string, string>): boolean {
+  const length = Number(headers['content-length']);
+  return (
+    Number.isFinite(length) &&
+    length <= MAX_BODY_READ_BYTES &&
+    TEXTUAL.test(headers['content-type'] ?? '')
+  );
+}
+
+async function readBody(cdp: CdpLike, requestId: string): Promise<string | undefined> {
+  try {
+    const got = (await cdp.send('Fetch.getResponseBody', { requestId })) as {
+      body?: unknown;
+      base64Encoded?: unknown;
+    };
+    if ('string' !== typeof got.body) {
+      return undefined;
+    }
+    return true === got.base64Encoded ? Buffer.from(got.body, 'base64').toString('utf8') : got.body;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The part of a CDP session this needs, kept structural so it can be tested with a fake. */
 export interface CdpLike {
   send(method: string, params?: Record<string, unknown>): Promise<unknown>;
@@ -48,41 +80,53 @@ function isAttachment(headers: Record<string, string>): boolean {
   return /^\s*attachment\b/i.test(headers['content-disposition'] ?? '');
 }
 
+async function onPaused(
+  cdp: CdpLike,
+  paused: PausedResponse,
+  emit: (detail: NetworkDetail) => void,
+  pageUrl: () => string,
+): Promise<void> {
+  const requestId = 'string' === typeof paused.requestId ? paused.requestId : undefined;
+  try {
+    const headers = headersOf(paused.responseHeaders);
+    const url = paused.request?.url;
+    const status = paused.responseStatusCode;
+    if (isAttachment(headers) && 'string' === typeof url && 'number' === typeof status) {
+      const method = paused.request?.method;
+      const responseBody =
+        requestId !== undefined && readableBodySize(headers)
+          ? await readBody(cdp, requestId)
+          : undefined;
+      emit(
+        buildNetworkDetail(
+          {
+            url,
+            ...('string' === typeof method ? { method } : {}),
+            status,
+            headers,
+            resourceType: 'document',
+            ...(responseBody === undefined ? {} : { responseBody }),
+            pageUrl: pageUrl(),
+          },
+          drivenRedactionPolicy(),
+        ),
+      );
+    }
+  } catch {
+    // Recording is best-effort; letting the response through below is not.
+  }
+  if (requestId !== undefined) {
+    await cdp.send('Fetch.continueRequest', { requestId }).catch(() => undefined);
+  }
+}
+
 export async function attachDownloadCapture(
   cdp: CdpLike,
   emit: (detail: NetworkDetail) => void,
   pageUrl: () => string,
 ): Promise<void> {
   cdp.on('Fetch.requestPaused', (event) => {
-    const paused = (event ?? {}) as PausedResponse;
-    try {
-      const headers = headersOf(paused.responseHeaders);
-      const url = paused.request?.url;
-      const status = paused.responseStatusCode;
-      if (isAttachment(headers) && 'string' === typeof url && 'number' === typeof status) {
-        const method = paused.request?.method;
-        emit(
-          buildNetworkDetail(
-            {
-              url,
-              ...('string' === typeof method ? { method } : {}),
-              status,
-              headers,
-              resourceType: 'document',
-              pageUrl: pageUrl(),
-            },
-            drivenRedactionPolicy(),
-          ),
-        );
-      }
-    } catch {
-      // Recording is best-effort; letting the response through below is not.
-    }
-    if ('string' === typeof paused.requestId) {
-      void cdp
-        .send('Fetch.continueRequest', { requestId: paused.requestId })
-        .catch(() => undefined);
-    }
+    void onPaused(cdp, event ?? {}, emit, pageUrl);
   });
   await cdp.send('Fetch.enable', DOCUMENT_RESPONSES);
 }

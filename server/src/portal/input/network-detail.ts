@@ -59,6 +59,10 @@ export interface NetworkDetail {
    * Omitted when the whole body fits, so the caveat means something when it appears.
    */
   requestBodyTruncated?: boolean;
+  /** The response body, captured only where the page cannot (a server-sent download); capped. */
+  responseBody?: string;
+  /** True when `responseBody` was cut to the cap: a body check on the rest cannot be decided. */
+  responseBodyTruncated?: boolean;
   /**
    * The document that ISSUED the request, which is what identifies the session it belongs to.
    *
@@ -91,7 +95,9 @@ const DEFAULT_POLICY: RedactionPolicy = { isSensitiveKey: defaultIsSensitiveKey 
  * which is key-based over a parsed object — not string-shaped.
  */
 function redactByKey(value: unknown, policy: RedactionPolicy): unknown {
-  if (Array.isArray(value)) return value.map((v) => redactByKey(v, policy));
+  if (Array.isArray(value)) {
+    return value.map((v) => redactByKey(v, policy));
+  }
   if (value !== null && 'object' === typeof value) {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
@@ -176,10 +182,17 @@ export function buildNetworkDetail(
     headers: Record<string, string>;
     resourceType?: string;
     requestBody?: string;
+    /** The response body, when the capture could read it (a server-sent download). */
+    responseBody?: string;
     pageUrl?: string;
   },
   policy: RedactionPolicy = DEFAULT_POLICY,
 ): NetworkDetail {
+  // Capped and redacted exactly like the request body, and the cut is declared the same way.
+  const responseBody =
+    raw.responseBody === undefined || 0 === raw.responseBody.length
+      ? undefined
+      : projectWireBody(raw.responseBody, policy);
   const wireBody =
     raw.requestBody === undefined || 0 === raw.requestBody.length
       ? undefined
@@ -195,6 +208,12 @@ export function buildNetworkDetail(
       : {
           requestBody: wireBody.body,
           ...(wireBody.truncated ? { requestBodyTruncated: true } : {}),
+        }),
+    ...(responseBody === undefined
+      ? {}
+      : {
+          responseBody: responseBody.body,
+          ...(responseBody.truncated ? { responseBodyTruncated: true } : {}),
         }),
     ...(raw.pageUrl === undefined || 0 === raw.pageUrl.length ? {} : { pageUrl: raw.pageUrl }),
   };

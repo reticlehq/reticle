@@ -2444,11 +2444,6 @@
       "count": 1
     }
   },
-  "src/portal/input/network-detail.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/portal/input/network-mock-tools.test.ts": {
     "curly": {
       "count": 6
