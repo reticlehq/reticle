@@ -39,11 +39,6 @@
       "count": 3
     }
   },
-  "src/artifacts/flow-types.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
   "src/artifacts/flow-unreached.ts": {
     "curly": {
       "count": 2

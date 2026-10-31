@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/core`, `@reticlehq/server` — a flow step can open a page in the middle of a journey.** A step with `tool: "reticle_navigate"` and `navigate: "/path"` opens that page. The replay goes on with the page that loads, and the step's `expect` is judged on it. The outcome of a change often shows only on another page: for example, a paused short link must stop redirecting. Before this step, no flow could open that page, so no flow could check the outcome. A navigate step that cannot run fails and says why; it is never skipped. When no page of the app loads after the step (the page left the app), the step fails, because a flow cannot follow the page to another site.

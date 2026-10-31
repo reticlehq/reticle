@@ -86,7 +86,9 @@ export type FlowAnchor = z.infer<typeof FlowAnchorSchema>;
 // on the one schema both the save path and the load path go through.
 export const FlowPredicateSchema = PredicateSchema.superRefine((predicate, ctx) => {
   const field = sessionBoundField(predicate);
-  if (field === undefined) return;
+  if (field === undefined) {
+    return;
+  }
   ctx.addIssue({
     code: z.ZodIssueCode.custom,
     message: sessionRefRefusal(field),
@@ -208,6 +210,12 @@ export interface FlowStep {
    * repair would still have to happen in every copy, and the sub-journey could not be reused.
    */
   invoke?: string;
+  /**
+   * The page this step opens, when `tool` is `FlowStepTool.NAVIGATE`: a path on the app (`/u07`),
+   * or a full URL on the app's origin. Replay opens it, goes on with the page that loads, and judges
+   * the step's `expect` there.
+   */
+  navigate?: string;
 }
 
 const baseFlowStep = z.object({
@@ -249,6 +257,7 @@ const baseFlowStep = z.object({
   degraded: z.boolean().optional(),
   timeoutMs: z.number().int().nonnegative().optional(),
   invoke: z.string().min(1).optional(),
+  navigate: z.string().min(1).optional(),
   /** See FlowStep.page / FlowStep.endPage. */
   page: z.string().optional(),
   endPage: z.string().optional(),
@@ -481,7 +490,9 @@ export type FlowFile = z.infer<typeof FlowFileSchema>;
  * excludes nothing, so tidying a flow back into the suite is one field.
  */
 export function isQuarantined(flow: Pick<FlowFile, 'status' | 'quarantine'>): boolean {
-  if (flow.status !== FlowStatus.QUARANTINED) return false;
+  if (flow.status !== FlowStatus.QUARANTINED) {
+    return false;
+  }
   const q = flow.quarantine;
   return (
     q !== undefined &&
@@ -576,7 +587,9 @@ export function flowExpectHasConsequence(expect: Predicate | undefined): boolean
  * false-green question — can the route commit while the view does not render? — answered first.
  */
 export function flowExpectIsPresenceOnly(expect: Predicate | undefined): boolean {
-  if (expect === undefined || flowExpectHasConsequence(expect)) return false;
+  if (expect === undefined || flowExpectHasConsequence(expect)) {
+    return false;
+  }
   // A `compare` reaching here reads text on both sides, which is two readings of the same DOM.
   return expectClauses(expect).some(
     (clause) => PRESENCE_GRADED.has(clause.kind) || PredicateKind.COMPARE === clause.kind,
@@ -591,10 +604,14 @@ export function flowExpectIsPresenceOnly(expect: Predicate | undefined): boolean
  * probe a struct for one key per kind, and a predicate carries its kind on itself.
  */
 function expectClauses(expect: Predicate | undefined): readonly Predicate[] {
-  if (expect === undefined) return [];
+  if (expect === undefined) {
+    return [];
+  }
   if (PredicateKind.ALL_OF === expect.kind || PredicateKind.ANY_OF === expect.kind) {
     return expect.predicates.flatMap(expectClauses);
   }
-  if (PredicateKind.NOT === expect.kind) return expectClauses(expect.predicate);
+  if (PredicateKind.NOT === expect.kind) {
+    return expectClauses(expect.predicate);
+  }
   return [expect];
 }

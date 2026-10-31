@@ -6,7 +6,7 @@ import {
   DEGRADED_ANCHOR_ROLE,
   EventType,
   FLOW_FILE_VERSION,
-  FlowStepTool,
+  ACT_STEP_TOOL,
   RecorderPhase,
   type FlowAnchor,
   type FlowFile,
@@ -41,7 +41,7 @@ export const RECORDER_EMPTY_MSG = 'recorded 0 steps';
 const STATUS_RECORDING = 'recording…';
 const STATUS_IDLE = 'ready';
 const STATUS_ANNOTATE = 'pick an annotation';
-const TOOL = FlowStepTool.ACT;
+const TOOL = ACT_STEP_TOOL;
 
 const BUTTON_LABEL = {
   record: 'Record',

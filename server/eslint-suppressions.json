@@ -1581,11 +1581,6 @@
       "count": 2
     }
   },
-  "src/language/flows/flow-replay.ts": {
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/language/flows/flow-replay.unreachable.test.ts": {
     "no-nested-ternary": {
       "count": 1

@@ -10,7 +10,7 @@ import {
   testidDrift,
 } from './flow-anchor.js';
 export { nearestIsAmbiguous, nearestTestid, resolveQuery } from './flow-anchor.js';
-import type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
+import type { FlowReplaySession, OpenPage, WaitForSignal, Sleep } from './flow-replay-types.js';
 export type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import { evalConsole } from '@reticlehq/engine/question/predicate/predicate-console.js';
@@ -51,7 +51,7 @@ import {
   isDocumentGoneError,
   SESSION_DISCONNECTED_REASON,
 } from '@/portal/session/facts/session-replaced.js';
-import { actOnResolvedRef } from './flow-step-runners.js';
+import { actOnResolvedRef, openStepPage } from './flow-step-runners.js';
 
 /**
  * The document this replay was driving went away mid-run.
@@ -380,14 +380,16 @@ export async function assertStepExpect(
     ? []
     : inFlightRequestLabels(session.eventsSince(since), session.url, session.background);
   const namedInFlight = namedNetIsInFlight(predicate, openRequests);
+  // The store case keeps its own kind because heal and the run report branch on it; everything
+  // else is a consequence that did not hold, and the reason carries observed-vs-expected.
+  let reasonKind: DriftReason = DriftReason.SIGNAL_NOT_OBSERVED;
+  if (assertsState(expect)) {
+    reasonKind = DriftReason.STATE_MISMATCH;
+  } else if (namedInFlight) {
+    reasonKind = DriftReason.NET_STILL_IN_FLIGHT;
+  }
   return {
-    // The store case keeps its own kind because heal and the run report branch on it; everything
-    // else is a consequence that did not hold, and the reason carries observed-vs-expected.
-    reasonKind: assertsState(expect)
-      ? DriftReason.STATE_MISMATCH
-      : namedInFlight
-        ? DriftReason.NET_STILL_IN_FLIGHT
-        : DriftReason.SIGNAL_NOT_OBSERVED,
+    reasonKind,
     reason: namedInFlight
       ? `${IN_FLIGHT_AT_BUDGET_END} (${openRequests.join(', ')})`
       : withCaseOnly(
@@ -467,6 +469,11 @@ async function runSignalStep(
  * How a replay is loaded, where it starts reporting, and how far it goes.
  */
 export interface ReplayFromOptions {
+  /**
+   * Opens the page a `navigate` step names and returns the session of the page that loaded. Supplied
+   * by the caller that owns the sessions. Absent: a `navigate` step fails, never skips.
+   */
+  navigate?: OpenPage;
   /**
    * Told after every step it reports: how many are done, of how many, and whether this one held.
    * The HUD's replay chip draws its progress from this; it must never throw into the replay.
@@ -739,6 +746,42 @@ export async function replayFlow(
         }
         tell(last);
         if (last !== undefined && false === last.ok) {
+          break;
+        }
+        index += 1;
+        continue;
+      }
+      if (step.navigate !== undefined) {
+        const opened = await openStepPage(step, index, options.navigate);
+        const result = opened.result;
+        if (opened.session !== undefined) {
+          // The page that asked for the load is gone; every later step runs on the one that loaded.
+          session = opened.session;
+          const page = currentRoute(session);
+          if (page !== undefined) {
+            result.page = page;
+          }
+          // The new page's clock starts at its own connect, so its whole life is this step's window.
+          const drift =
+            step.expect === undefined || index < from
+              ? undefined
+              : await assertStepExpect(session, step.expect, waitForSignal, waitFor(step), 0);
+          if (drift !== undefined) {
+            result.ok = false;
+            result.drift = drift;
+          }
+        }
+        if (index < from && result.ok && result.drift === undefined) {
+          index += 1;
+          continue;
+        }
+        if (index < from) {
+          result.note = `setup step for resuming at step ${String(from)} failed`;
+        }
+        await options.onStepResult?.(result, flow.name).catch(() => undefined);
+        results.push(result);
+        tell(result);
+        if (!result.ok || result.drift !== undefined) {
           break;
         }
         index += 1;

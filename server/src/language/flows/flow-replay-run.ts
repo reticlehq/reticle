@@ -17,7 +17,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { haltedFrom } from './recording/replay-halt.js';
-import { establishedState } from './flow-journey.js';
+import { establishedState, startPathBudgetMs } from './flow-journey.js';
 import { asString } from '@reticlehq/core';
 import { partialStatus, replayFlow, replayWindow, type ReplayFromOptions } from './flow-replay.js';
 import { staleTargetResult } from './flow-step-runners.js';
@@ -63,7 +63,13 @@ import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import { CROSS_STEP_INDEX, crossStepOnly, declaredIn } from './flow-cross-step.js';
-import { arriveAtStartPath, startPathMismatchHint, withStartPageWait } from './flow-start-path.js';
+import {
+  arriveAtStartPath,
+  navigateAndAwait,
+  startPathMismatchHint,
+  withStartPageWait,
+} from './flow-start-path.js';
+import type { OpenPage } from './flow-replay-types.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -296,6 +302,15 @@ async function firstUnmetPrecondition(
  * transport failure by design, and a step in the middle of a journey has no budget to sit and poll
  * with. `navigateAndAwait` CAN wait, because it knows it asked for the navigation, and it does.
  */
+/** The path a `navigate` step expects to land on: `/u07` for `/u07?x=1` or `http://host/u07`. */
+function pathOfUrl(url: string): string {
+  try {
+    return new URL(url, 'http://localhost').pathname;
+  } catch {
+    return url;
+  }
+}
+
 export function lostDocumentResult(name: string, lost: DocumentLostDuringReplay): FlowReplayResult {
   return {
     name,
@@ -399,6 +414,36 @@ export async function replayNamedFlow(
   // Floor the success oracle at the start of THIS replay so a stale signal from a prior run
   // in the same session can't fake a pass.
   const replayFloor = session.elapsed();
+  /*
+   * A `navigate` step loads another page, and the page that asked for the load is gone. The journey
+   * goes on with the session of the page that loaded, and so does everything judged after the last
+   * step: the cross-step pass, the success oracle and the deviation report. That page's clock starts
+   * at its own connect, so its floor is 0.
+   */
+  let live = session;
+  let liveFloor = replayFloor;
+  const openPage: OpenPage = async (url) => {
+    const outcome = await navigateAndAwait(
+      deps.sessions,
+      live,
+      url,
+      pathOfUrl(url),
+      startPathBudgetMs(loaded.value),
+    );
+    if ('arrived' === outcome.kind || 'redirected' === outcome.kind) {
+      live = outcome.session;
+      liveFloor = 0;
+      return { session: observe(withLeaseKeyboard(deps, live)) };
+    }
+    if ('refused' === outcome.kind) {
+      return { error: `the page refused to open ${url}` };
+    }
+    return {
+      error:
+        `no page of this app answered in ${String(outcome.waitedMs)} ms after opening ${url}; ` +
+        'the page may have left the app, which a flow cannot follow',
+    };
+  };
   // An upload path becomes bytes once, before step 1, against the app's project (#1769).
   const uploadDeps = { fs: deps.fs, reticleRoot: replayRoot };
   const replayable = await resolveFlowUploads(uploadDeps, loaded.value);
@@ -495,6 +540,7 @@ export async function replayNamedFlow(
         // Bug-sweep mode: keep going past a step whose action ran and whose consequence merely did
         // not hold, so one flow reports one verdict per step instead of stopping at the first defect.
         sweep: true === args['sweep'],
+        navigate: openPage,
         ...(from === undefined ? {} : { from }),
         ...(to === undefined ? {} : { to }),
         ...(continueAt === undefined ? {} : { at: continueAt }),
@@ -528,9 +574,9 @@ export async function replayNamedFlow(
    */
   const crossStep = ((): Contradiction[] => {
     try {
-      const span = { since: replayFloor, until: session.elapsed() };
-      const events = session.eventsSince(replayFloor).filter((e) => e.t >= replayFloor);
-      const scope = { ...appScope(session), declared: declaredIn(loaded.value.steps) };
+      const span = { since: liveFloor, until: live.elapsed() };
+      const events = live.eventsSince(liveFloor).filter((e) => e.t >= liveFloor);
+      const scope = { ...appScope(live), declared: declaredIn(loaded.value.steps) };
       return crossStepOnly(stepEffect(events, span, scope).contradictions ?? [], steps);
     } catch {
       return [];
@@ -542,7 +588,7 @@ export async function replayNamedFlow(
   const stepsClean = steps.length > 0 && steps.every((s) => s.ok && s.drift === undefined);
   if (stepsClean && loaded.value.success !== undefined) {
     const verdict = await assertSuccess(
-      session,
+      live,
       loaded.value.success,
       dynamicTestids(loaded.value),
       waitForPredicate,
@@ -550,7 +596,7 @@ export async function replayNamedFlow(
       // step wait is slow enough that its OUTCOME lands late too, and greening every step only to
       // fail the success oracle at 4s is the same false red one layer down.
       loaded.value.signalTimeoutMs ?? FLOW_SIGNAL_TIMEOUT_MS,
-      replayFloor,
+      liveFloor,
     );
     const row: FlowStepResult = {
       step: steps.length,
@@ -616,7 +662,7 @@ export async function replayNamedFlow(
     }
   }
   // Push-default: the deviation report over this drive's segments, learned across runs. Best-effort.
-  const deviation = await computeReplayDeviation(deps, session, replayFloor, replayRoot);
+  const deviation = await computeReplayDeviation(deps, live, liveFloor, replayRoot);
   /*
    * What the team already knows about this flow, fetched on the agent's behalf.
    *

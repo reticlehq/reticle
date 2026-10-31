@@ -17,8 +17,14 @@
 /** The `step` address of a finding that belongs to the whole journey, not to one step in it. */
 export const CROSS_STEP_ADDRESS = -1;
 
+/**
+ * The one step name the browser SDK needs, on its own. A bundler keeps a whole object when one of its
+ * properties is read, so the SDK naming `FlowStepTool.ACT` loaded every step name into every page.
+ */
+export const ACT_STEP_TOOL = 'reticle_act';
+
 export const FlowStepTool = {
-  ACT: 'reticle_act',
+  ACT: ACT_STEP_TOOL,
   ACT_SEQUENCE: 'reticle_act_sequence',
   ACT_AND_WAIT: 'reticle_act_and_wait',
   /**
@@ -30,6 +36,12 @@ export const FlowStepTool = {
    * created to end, and a new one would have re-opened it.
    */
   INVOKE: 'reticle_invoke',
+  /**
+   * Open a page in the middle of a journey; `navigate` names it. The outcome of a change often shows
+   * only on another page (a paused short link must stop redirecting), and without this step no flow
+   * could reach it.
+   */
+  NAVIGATE: 'reticle_navigate',
 } as const;
 
 /** The companion type. It lives beside the const, so naming either one reaches only this leaf. */
