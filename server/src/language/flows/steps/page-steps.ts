@@ -209,6 +209,8 @@ function cookieHeader(state: unknown, host: string): string {
 export function requestSender(
   pageUrl: () => string | undefined,
   provider: CookieSource | undefined,
+  /** The `Cookie` header of the account a step names in `as`, or undefined when not supplied. */
+  accountCookie: (name: string) => string | undefined = () => undefined,
 ): SendRequest {
   return async (request) => {
     const url = pageUrl();
@@ -226,7 +228,17 @@ export function requestSender(
     if (request.body !== undefined) {
       headers['content-type'] = request.contentType ?? 'application/json';
     }
-    if (true !== request.anonymous) {
+    if (request.as !== undefined) {
+      const cookie = accountCookie(request.as);
+      if (cookie === undefined || '' === cookie) {
+        return {
+          error:
+            `the session of the account "${request.as}" was not supplied, so the request was not ` +
+            'sent. Supply its Cookie header as a secret for this run.',
+        };
+      }
+      headers['cookie'] = cookie;
+    } else if (true !== request.anonymous) {
       const state = await provider?.storageState?.(url);
       if (state === undefined) {
         return {

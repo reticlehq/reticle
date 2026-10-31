@@ -232,6 +232,12 @@ export interface FlowRequest {
   body?: string;
   contentType?: string;
   anonymous?: boolean;
+  /**
+   * Send as ANOTHER account: the name of a secret that holds that account's `Cookie` header,
+   * supplied at replay (`RETICLE_SECRET_<NAME>`, or the call's `secrets`), never kept in the flow.
+   * A rule about who may change what can only be checked as someone else.
+   */
+  as?: string;
 }
 
 export interface FlowResponse {
@@ -290,6 +296,7 @@ const baseFlowStep = z.object({
       body: z.string().optional(),
       contentType: z.string().optional(),
       anonymous: z.boolean().optional(),
+      as: z.string().min(1).optional(),
     })
     .optional(),
   response: z

@@ -23,7 +23,7 @@ import { partialStatus, replayFlow, replayWindow, type ReplayFromOptions } from 
 import { staleTargetResult } from './flow-step-runners.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
 import { buildDecision, unverifiableReason } from './decision.js';
-import { unsuppliedSecrets } from './fields/flow-secret-field.js';
+import { secretEnvKey, secretValue, unsuppliedSecrets } from './fields/flow-secret-field.js';
 import {
   assertStepExpect,
   DocumentLostDuringReplay,
@@ -543,7 +543,11 @@ export async function replayNamedFlow(
         // not hold, so one flow reports one verdict per step instead of stopping at the first defect.
         sweep: true === args['sweep'],
         navigate: openPage,
-        request: requestSender(() => live.url, deps.realInput),
+        request: requestSender(
+          () => live.url,
+          deps.realInput,
+          (account) => secretValue(secretEnvKey(account), process.env),
+        ),
         ...(from === undefined ? {} : { from }),
         ...(to === undefined ? {} : { to }),
         ...(continueAt === undefined ? {} : { at: continueAt }),

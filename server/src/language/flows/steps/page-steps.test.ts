@@ -79,3 +79,32 @@ describe('the request sender', () => {
     expect(seen.length).toBe(before);
   });
 });
+
+/*
+ * A rule about who may change what can only be checked as someone else: a check that acts as the
+ * owner cannot tell "only the owner may pause this link" from "anyone may". `as` names another
+ * account, and its session comes from a secret supplied at replay, never from the flow file.
+ */
+describe('the request sender, as another account', () => {
+  it("sends that account's session instead of the page's cookies", async () => {
+    const send = requestSender(
+      () => `${origin}/`,
+      provider,
+      (name) => ('SECOND_USER' === name ? 'token=other' : undefined),
+    );
+    await send({ method: 'GET', url: '/api/links', as: 'SECOND_USER' });
+    expect(seen.at(-1)?.cookie).toBe('token=other');
+  });
+
+  it('sends nothing when that session was not supplied', async () => {
+    const before = seen.length;
+    const send = requestSender(
+      () => `${origin}/`,
+      provider,
+      () => undefined,
+    );
+    const answer = await send({ method: 'GET', url: '/api/links', as: 'SECOND_USER' });
+    expect('error' in answer ? answer.error : '').toContain('SECOND_USER');
+    expect(seen.length).toBe(before);
+  });
+});

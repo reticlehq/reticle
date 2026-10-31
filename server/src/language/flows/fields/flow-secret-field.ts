@@ -202,6 +202,13 @@ export interface UnsuppliedSecret {
  * non-zero length, so an empty variable leaves the placeholder and must count as unsupplied here.
  * Two different answers to "is this supplied" is how the gate would pass and the replay still fail.
  */
+function* flattenAll(steps: readonly FlowStep[]): Generator<FlowStep> {
+  for (const step of steps) {
+    yield step;
+    yield* flattenAll(step.steps ?? []);
+  }
+}
+
 export function unsuppliedSecrets(
   flow: FlowFile,
   env: Record<string, string | undefined>,
@@ -226,6 +233,20 @@ export function unsuppliedSecrets(
     }
     seen.add(envKey);
     out.push({ field, envKey });
+  }
+  // A request step that acts as another account needs that account's session.
+  for (const step of flattenAll(flow.steps ?? [])) {
+    const account = step.request?.as;
+    if (account === undefined) {
+      continue;
+    }
+    const envKey = secretEnvKey(account);
+    const supplied = secretValue(envKey, env);
+    if ((supplied !== undefined && supplied.length > 0) || seen.has(envKey)) {
+      continue;
+    }
+    seen.add(envKey);
+    out.push({ field: account, envKey });
   }
   return out;
 }

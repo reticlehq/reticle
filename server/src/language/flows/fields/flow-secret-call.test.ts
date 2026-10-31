@@ -42,3 +42,33 @@ describe('a secret supplied with the call', () => {
     expect(secretValue('RETICLE_SECRET_AUTH_PASSWORD', {})).toBeUndefined();
   });
 });
+
+/*
+ * A request step that acts as another account needs that account's session at replay. Without it,
+ * nothing about the app was tested, so the flow is unverifiable; it must not run and fail on the app.
+ */
+describe('a request step as another account', () => {
+  const asOther: FlowFile = {
+    version: FLOW_FILE_VERSION,
+    name: 'only-the-owner-pauses',
+    createdAt: 0,
+    steps: [
+      {
+        tool: 'reticle_request',
+        anchor: { kind: AnchorKind.TESTID, value: 'POST /api/links/x/pause' },
+        request: { method: 'POST', url: '/api/links/x/pause', as: 'second user' },
+        response: { status: [403, 404] },
+      },
+    ],
+  };
+
+  it('names the secret it needs when nobody supplied it', () => {
+    expect(unsuppliedSecrets(asOther, {})).toEqual([
+      { field: 'second user', envKey: 'RETICLE_SECRET_SECOND_USER' },
+    ]);
+  });
+
+  it('needs nothing more once it is supplied', () => {
+    expect(unsuppliedSecrets(asOther, { RETICLE_SECRET_SECOND_USER: 'token=x' })).toEqual([]);
+  });
+});
