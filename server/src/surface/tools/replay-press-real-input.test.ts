@@ -93,7 +93,7 @@ describe('a replayed press aimed at an element on a driven page', () => {
 /*
  * The same Enter, recorded as one sub-step of a sequence (fill the field, press Enter, then check).
  * Replay sent the whole sequence to the page as one command, so the press stayed synthetic and the
- * form was never submitted: on the bench, every "fill, press Enter" sequence failed on the correct
+ * form was never submitted: measured, every "fill, press Enter" sequence failed on the correct
  * app. The page still runs the other sub-steps together; each press gets the real keyboard.
  */
 describe('a replayed sequence with a press in it', () => {

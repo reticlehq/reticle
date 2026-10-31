@@ -4,7 +4,7 @@
  * A pass/fail verdict per journey says nothing about a change that does nine of ten things right.
  * The score counts steps: passed, failed, and unknown. Unknown is every step that was never judged
  * (the replay stopped before it, or the journey could not run), and it stays in the total, so an
- * undecided step can never raise the score. Measured on a bench: a journey-pass fraction that left
+ * undecided step can never raise the score. Measured: a journey-pass fraction that left
  * `unknown` journeys out of the total scored two broken changes at 1.0.
  */
 import { describe, expect, it } from 'vitest';
@@ -130,7 +130,7 @@ describe('a sequence step in the score', () => {
  * verdict too. A step that passes AFTER an earlier step failed is not progress on the journey: a page
  * can fail "save" and still show the next screen. Counted as passed, those steps made a broken app
  * score higher than a stopped replay of the same app, and a score that pays a step without its
- * prerequisites is one a trainer can satisfy without the journey. They are reported apart, as
+ * prerequisites is one a broken change can satisfy without the journey. They are reported apart, as
  * `swept`, and stay `unknown` in the score.
  */
 describe('the score after a failed step', () => {

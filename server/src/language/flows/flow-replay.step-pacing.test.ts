@@ -4,7 +4,7 @@
  * An htmx app swapped a table row for a new one that held the "Resume" button, and bound that button
  * only in its settle task, a moment later. Replay clicked "Resume" as soon as the "Pause" request
  * came back, inside that moment, so the click did nothing and a correct build failed. On a busy
- * machine the moment is longer, so the false fail came under parallel grading and not alone.
+ * machine the moment is longer, so the false fail came when many replays ran at once and not alone.
  */
 import { describe, expect, it } from 'vitest';
 import {

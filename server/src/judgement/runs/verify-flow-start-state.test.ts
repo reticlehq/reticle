@@ -87,7 +87,7 @@ describe('each flow of a verify run starts from the state the run started with',
 
 describe('a flow that moved the page to another address', () => {
   it('still gets the start state back: the page is the same driven page', async () => {
-    // Seen on the bench: after a flow that signed out and reloaded, the session's recorded address
+    // Seen in use: after a flow that signed out and reloaded, the session's recorded address
     // no longer equalled the page's, the address check refused, and every later flow read
     // "could not put the page back" on a working app.
     const { deps, calls } = depsWith(true);
@@ -105,7 +105,7 @@ describe('a flow that moved the page to another address', () => {
 
 describe('a flow that opened another tab', () => {
   it('has the tab closed before the next flow, so one page stays connected', async () => {
-    // Seen on the bench: a recorded flow signed out by opening "Log out" in a new tab. The tab
+    // Seen in use: a recorded flow signed out by opening "Log out" in a new tab. The tab
     // stayed, its session stayed connected, and every later flow stopped at "multiple sessions
     // connected". Starting where the run started means the same tabs too.
     const { deps, calls } = depsWith(true);
