@@ -17,6 +17,7 @@ import { DEFAULT_SEQUENCE_STEP_TIMEOUT_MS } from '@/language/flows/flow-step-run
 import { sequenceStepArgs } from './act/act-preflight.js';
 import {
   REPLAY_PROGRAM_VERSION,
+  ReticleCommand,
   ReticleTool,
   Verified,
   VerifiedReason,
@@ -36,7 +37,7 @@ import { describeStepResult, runStepWithStaleRetry } from './act/act-sequence-re
 import { assertSequenceSteps } from './act/act-preflight.js';
 import { EnvelopeKey, type ToolDef, sessionIdShape } from './tool-kit.js';
 import { takeStepShot } from '@/features/visual/step-shots.js';
-import { actCommand } from './act-tools.js';
+import { actCommand } from './act-command.js';
 import {
   PredicateSchema,
   waitForPredicate,
@@ -308,6 +309,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
               return actCommand(
                 deps,
                 session,
+                ReticleCommand.ACT,
                 {
                   ref: resolved.ref,
                   action: step['action'],
@@ -509,6 +511,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           return true === expectations[i]?.held ? step : rest;
         });
         const compiled = (steps: Record<string, unknown>[]): RecordedStep => {
+          process.stdout.write(`[dbg-seq] stepResults[0]=${JSON.stringify(stepResults[0])}\n`);
           const step = compileSequenceStep(
             { ...args, steps },
             { count: completed, steps: stepResults.slice(0, completed) },

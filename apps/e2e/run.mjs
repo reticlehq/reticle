@@ -113,6 +113,10 @@ const ORDER = [
   'lease-zero-install-navigation-test',
   // An SPA that drops the lease query on load with history.replaceState. Serves its own page.
   'lease-spa-redirect-test',
+  // An INSTRUMENTED lease (the app ships its own SDK) whose sign-in is a slow full-page form POST:
+  // the act budget expires while the navigation is in flight, and the verdict used to read the
+  // pre-navigation route as a failure (#2009). Serves its own page, like the specs above.
+  'lease-instrumented-navigation-test',
   // Bare `reticle` in an unwired app folder: one smoke verdict, a pass and a fail. Writes its own app.
   'first-verdict-test',
   // A script-defined global, read by the app's OWN first module — the done-when of #1427. The unit

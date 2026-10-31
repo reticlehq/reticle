@@ -15,9 +15,18 @@ import { EventType, asRecord, asString, isDevToolingUrl, type ReticleEvent } fro
 import type { Session } from '@/portal/session/session.js';
 import {
   awaitDocumentSuccessor,
+  type SuccessorClock,
   type SuccessorRegistry,
 } from '@/portal/session/session-successor.js';
 import type { EvalResult } from '@reticlehq/engine/question/predicate/predicate-eval.js';
+
+/** How long an act whose page navigated away waits for the lease's successor to connect. */
+export const NAVIGATION_FOLLOW_GRACE_MS = 8_000;
+
+const REAL_CLOCK: SuccessorClock = {
+  now: () => Date.now(),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+};
 
 interface FollowSuccessor {
   sessions: SuccessorRegistry;
@@ -29,6 +38,17 @@ interface FollowSuccessor {
   predicateStarted: number;
   /** Re-ask the declared consequence on `next`, with whatever budget is left. */
   reevaluate: (next: Session, budgetMs: number) => Promise<EvalResult>;
+  /**
+   * Grace for the OTHER navigation shape (#2009): a FAILURE graded while the action's own form
+   * POST / link navigation was still in flight. The wait spent its budget on the document BEFORE
+   * it left, so nothing was "lost" and no successor was looked for — and the verdict then reads
+   * "still on /login" for a sign-in that worked. When set, a failed verdict waits this long for
+   * the document's successor and re-asks there; when it never connects, the verdict says the page
+   * navigated instead of leaving the failure standing. Undefined keeps the old behaviour.
+   */
+  failedFollowGraceMs?: number;
+  /** Injected so tests do not sleep; defaults to the real clock. */
+  clock?: SuccessorClock;
 }
 
 interface FollowedOutcome {
@@ -48,20 +68,58 @@ interface FollowedOutcome {
  */
 export async function followLostObservation(input: FollowSuccessor): Promise<FollowedOutcome> {
   const { sessions, session, verdict, timeout, predicateStarted, reevaluate } = input;
-  if (true !== verdict.observationLost || 0 >= timeout)
+  const clock = input.clock ?? REAL_CLOCK;
+  const spent = session.elapsed() - predicateStarted;
+  const remaining = timeout - spent;
+
+  // Phase 1 — the wait was CUT OFF mid-predicate. The page re-announces on the new document;
+  // re-ask there with whatever budget is left.
+  if (true === verdict.observationLost && remaining > 0) {
+    const next = await awaitDocumentSuccessor(sessions, session, remaining);
+    if (null !== next) {
+      // Computed on the DEPARTED session, before the caller points at the successor: the new
+      // session's elapsed() starts at 0 and would silently refund the whole budget the caller had
+      // already spent.
+      const leftover = timeout - (session.elapsed() - predicateStarted);
+      if (leftover <= 0) return { session: next, verdict, followed: true };
+      return { session: next, verdict: await reevaluate(next, leftover), followed: true };
+    }
+  }
+
+  // Phase 2 — (#2009) a FAILURE graded while the action's own navigation was still in flight. The
+  // wait spent its budget on the document BEFORE it left, so nothing was "lost" and no successor
+  // was ever looked for — and the verdict then reads "still on /login" for a sign-in that worked.
+  // When the caller grants a grace, wait it out for the document's successor and re-ask there;
+  // when the successor never connects, say exactly that instead of leaving the failure standing.
+  const grace = input.failedFollowGraceMs;
+  // The successor poll needs the registry contract (get/all). A session surface that cannot answer
+  // it keeps today's behaviour — read the same way the optional provider hooks elsewhere do.
+  const registryCapable = 'function' === typeof sessions.get && 'function' === typeof sessions.all;
+  if (
+    true === verdict.observationLost ||
+    true === verdict.pass ||
+    grace === undefined ||
+    !registryCapable
+  ) {
     return { session, verdict, followed: false };
-
-  const remaining = timeout - (session.elapsed() - predicateStarted);
-  const next = remaining > 0 ? await awaitDocumentSuccessor(sessions, session, remaining) : null;
-  if (null === next) return { session, verdict, followed: false };
-
-  // Computed on the DEPARTED session, before the caller points at the successor: the new session's
-  // elapsed() starts at 0 and would silently refund the whole budget the caller had already spent.
-  const leftover = timeout - (session.elapsed() - predicateStarted);
-  if (leftover <= 0) return { session: next, verdict, followed: true };
-  return { session: next, verdict: await reevaluate(next, leftover), followed: true };
+  }
+  const next = await awaitDocumentSuccessor(sessions, session, grace, clock);
+  if (null !== next) {
+    return { session: next, verdict: await reevaluate(next, grace), followed: true };
+  }
+  return {
+    session,
+    followed: false,
+    verdict: {
+      ...verdict,
+      observationLost: true,
+      failureReason:
+        `the act's page left its document and no successor session connected within ` +
+        `${String(grace)} ms. If this action navigated, the outcome after the navigation was ` +
+        'never observed — re-run reticle_session { action: "list" } and re-drive on the live session.',
+    },
+  };
 }
-
 /** Why a consequence that did not follow a click on a disabled control is not the app's failure. */
 export const DISABLED_TARGET_NOTE =
   'the control was disabled when it was acted on, so nothing a user could do there would have ' +

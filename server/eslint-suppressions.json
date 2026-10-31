@@ -3187,7 +3187,7 @@
   },
   "src/surface/tools/act-tools.ts": {
     "curly": {
-      "count": 13
+      "count": 11
     },
     "no-nested-ternary": {
       "count": 1
@@ -3220,7 +3220,7 @@
   },
   "src/surface/tools/act/act-observation.ts": {
     "curly": {
-      "count": 11
+      "count": 9
     }
   },
   "src/surface/tools/act/act-target.test.ts": {

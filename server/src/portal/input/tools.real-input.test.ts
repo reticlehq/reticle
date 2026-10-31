@@ -10,6 +10,7 @@ import {
   INSPECT_REVEAL_ARG,
   HelloScope,
   SessionState,
+  ReticleCommand,
 } from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
 import { asRecord } from '@reticlehq/core';
@@ -30,7 +31,7 @@ import {
   HOVER_OFF_VIEWPORT_MSG,
   withLeaseKeyboard,
 } from '@/surface/tools/real-input-attempt.js';
-import { actCommand } from '@/surface/tools/act-tools.js';
+import { actCommand } from '@/surface/tools/act-command.js';
 import { ProductionDrive } from '@/portal/production/production-drive.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
@@ -870,7 +871,10 @@ describe('keyboard on a lease', () => {
     const deps = fakeDeps(undefined, state);
     deps.pool = leasePool(pressed);
     const session = deps.sessions.resolve(undefined);
-    const res = await actCommand(deps, session, { action: 'press', args: { text: 'Tab' } });
+    const res = await actCommand(deps, session, ReticleCommand.ACT, {
+      action: 'press',
+      args: { text: 'Tab' },
+    });
 
     expect(res.ok).toBe(true);
     expect(res.result).toMatchObject({ inputMode: InputMode.REAL });
