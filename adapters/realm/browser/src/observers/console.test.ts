@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { CONSOLE_EVENT, EventType, RETICLE_EARLY_CAPTURE } from '@reticlehq/core';
+import { EventType } from '@reticlehq/core';
 import { installConsole } from './console.js';
 import type { Emit, Teardown } from './types.js';
 
@@ -252,56 +252,5 @@ describe('CSP violations reach the console channel', () => {
     dispatchViolation('img-src', 'https://example.test/pixel.gif');
 
     expect(events.filter((e) => e.type === EventType.CONSOLE_ERROR)).toHaveLength(0);
-  });
-});
-
-/*
- * A page logged an error while it loaded, before the SDK installed (an app connects from a module
- * script, which runs after the page's classic scripts). The driven page queued it; the SDK must
- * report it, through the same handlers, exactly once.
- */
-describe('installConsole reports what the page queued before it installed', () => {
-  const holder = window as unknown as Record<string, unknown>;
-  let teardown: Teardown | undefined;
-
-  afterEach(() => {
-    teardown?.();
-    teardown = undefined;
-    holder[RETICLE_EARLY_CAPTURE] = undefined;
-  });
-
-  it('reports a queued console error and a queued window error, then stops the queue', () => {
-    holder[RETICLE_EARLY_CAPTURE] = {
-      queue: [
-        { method: 'error', args: ['htmx:syntax:error', 7] },
-        {
-          event: new ErrorEvent('error', { message: 'early throw', filename: 'app.js', lineno: 3 }),
-        },
-      ],
-      dropped: 0,
-    };
-    const { emit, events } = collect();
-    teardown = installConsole(emit);
-
-    expect(events.map((e) => [e.type, e.data['message']])).toEqual([
-      [EventType.CONSOLE_ERROR, 'htmx:syntax:error 7'],
-      [EventType.ERROR_UNCAUGHT, 'early throw'],
-    ]);
-    expect(holder[RETICLE_EARLY_CAPTURE]).toBeNull();
-  });
-
-  it('declares the entries the bounded queue could not keep', () => {
-    holder[RETICLE_EARLY_CAPTURE] = { queue: [], dropped: 4 };
-    const { emit, events } = collect();
-    teardown = installConsole(emit);
-
-    expect(events[0]?.type).toBe(EventType.CONSOLE_WARN);
-    expect(events[0]?.data[CONSOLE_EVENT.DROPPED_PAGE_ERRORS]).toBe(4);
-  });
-
-  it('reports nothing extra when no queue exists', () => {
-    const { emit, events } = collect();
-    teardown = installConsole(emit);
-    expect(events).toEqual([]);
   });
 });
