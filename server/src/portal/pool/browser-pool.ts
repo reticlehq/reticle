@@ -687,7 +687,7 @@ export class BrowserPool {
         void dialog.dismiss();
       });
       // Listener on BEFORE goto — an import-time throw lands during it (#1966).
-      listenForPageErrors(page, sessionId, this.#pageErrorHooks);
+      await listenForPageErrors(page, sessionId, this.#pageErrorHooks);
       const marker = leaseMarkerOf(url);
       if (marker?.session === sessionId) {
         await installLeaseMarker(page, sessionId, targetOriginOf(url), marker.project);

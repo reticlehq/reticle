@@ -1,4 +1,4 @@
-import { EventType, TRANSPORT_LIMITS } from '@reticlehq/core';
+import { CONSOLE_EVENT, EventType, RETICLE_EARLY_CAPTURE, TRANSPORT_LIMITS } from '@reticlehq/core';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { safeStringify } from '@/security/serialization.js';
 import { requireCapturedMethod } from '@/util/captured-method.js';
@@ -47,9 +47,60 @@ function firstErrorStack(args: unknown[]): string | undefined {
   return undefined;
 }
 
+type EarlyItem = { method: ConsoleMethod; args: unknown[] } | { event: Event };
+
+/**
+ * Report what the page logged before this SDK installed, through the same handlers.
+ *
+ * A driven page queues its console calls and error events from the first script (see the pool's
+ * early-capture init script). Without this, an error logged while the page loaded was lost. The
+ * queue is bounded; `dropped` reports what it could not keep. Read once: `null` stops the queue.
+ */
+function replayEarlyCapture(
+  record: (method: ConsoleMethod, args: unknown[]) => void,
+  onError: (event: Event) => void,
+  onRejection: (event: PromiseRejectionEvent) => void,
+  emit: Emit,
+): void {
+  const holder = window as unknown as Record<
+    string,
+    { queue: EarlyItem[]; dropped: number } | null
+  >;
+  const early = holder[RETICLE_EARLY_CAPTURE];
+  if (!early) {
+    return;
+  }
+  holder[RETICLE_EARLY_CAPTURE] = null;
+  for (const item of early.queue) {
+    if (!('event' in item)) {
+      record(item.method, item.args);
+    } else if (item.event instanceof PromiseRejectionEvent) {
+      onRejection(item.event);
+    } else {
+      onError(item.event);
+    }
+  }
+  if (early.dropped) {
+    emit(EventType.CONSOLE_WARN, {
+      message: 'early console entries lost',
+      [CONSOLE_EVENT.DROPPED_PAGE_ERRORS]: early.dropped,
+    });
+  }
+}
+
 /** Patch console.{log,warn,error} and window error events. Reversible. */
 export function installConsole(emit: Emit): Teardown {
   const methods: ConsoleMethod[] = ['log', 'warn', 'error', 'info', 'debug'];
+  const record = (method: ConsoleMethod, args: unknown[]): void => {
+    observeSafely(() => {
+      // Only console.error carries a stack — the diagnosis case; log/warn stay lean.
+      const stack = 'error' === method ? firstErrorStack(args) : undefined;
+      emit(METHOD_EVENT[method], {
+        message: stringifyArgs(args),
+        ...(stack === undefined ? {} : { stack }),
+      });
+    });
+  };
   const originals = new Map<ConsoleMethod, (...args: unknown[]) => void>();
   const patched = new Map<ConsoleMethod, (...args: unknown[]) => void>();
 
@@ -65,14 +116,7 @@ export function installConsole(emit: Emit): Teardown {
       // same reason. `stringifyArgs` walks arbitrary app objects, so one hostile getter or revoked
       // proxy would otherwise throw out of the app's own `console.log` before it had logged anything.
       callOriginal(...args);
-      observeSafely(() => {
-        // Only console.error carries a stack — the diagnosis case; log/warn stay lean.
-        const stack = 'error' === method ? firstErrorStack(args) : undefined;
-        emit(METHOD_EVENT[method], {
-          message: stringifyArgs(args),
-          ...(stack === undefined ? {} : { stack }),
-        });
-      });
+      record(method, args);
     };
     patched.set(method, wrapper);
     console[method] = wrapper;
@@ -178,6 +222,7 @@ export function installConsole(emit: Emit): Teardown {
   // capture phase alongside the others so a page that stops propagation on `document` cannot hide
   // one from us.
   window.addEventListener(CSP_VIOLATION_EVENT, onViolation, { capture: true, signal });
+  replayEarlyCapture(record, onError, onRejection, emit);
 
   return () => {
     for (const [method, original] of originals) {

@@ -8,6 +8,7 @@ import { RETICLE_SESSION_STORAGE_KEY, RETICLE_URL_PARAM } from '@reticlehq/core'
 import { BrowserPool } from './browser-pool.js';
 import type { PooledBrowser, PooledPage } from './pool-contract.js';
 import { installLeaseMarker, stampLeaseMarker } from './lease-marker-stamp.js';
+import { queueEarlyConsole } from './lease-page-error.js';
 import { resolveLeasedSessionId } from '../../surface/tools/lease-tools.js';
 
 const SESSION = RETICLE_URL_PARAM.SESSION;
@@ -176,8 +177,11 @@ describe('the pool installs the stamp on the leased page only', () => {
               goto: () => Promise.resolve(undefined),
               close: () => Promise.resolve(),
               onCrash: () => undefined,
-              addInitScript: (_s: unknown, a?: unknown) => {
-                scripts.push({ page: id, arg: a });
+              addInitScript: (s: unknown, a?: unknown) => {
+                // Every page gets the early console queue; this test is about the marker.
+                if (s !== queueEarlyConsole) {
+                  scripts.push({ page: id, arg: a });
+                }
                 return Promise.resolve({ dispose: () => Promise.resolve() });
               },
             };

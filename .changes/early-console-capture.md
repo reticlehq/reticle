@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser`, `@reticlehq/server` — a console error that a page logged while it loaded was lost.** An app connects the SDK from a module script or a bundle, and those run after the page's own scripts. An error that such a script logged during the load came before the SDK, so "no console errors" passed on a page that logged an error on every load. A page that Reticle drives now keeps its console errors, warnings and error events from the first script, and the SDK reports them through its usual console handlers when it installs. The queue holds 200 entries. When it overflows, the SDK reports how many entries it did not keep.

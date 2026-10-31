@@ -584,6 +584,14 @@ export const RETICLE_RENDERS_STORE = '__reticle_renders';
 export const RETICLE_RENDER_PREHOOK = '__reticleRenderPreHook';
 
 /**
+ * Global where a driven page queues console calls and error events until the SDK installs.
+ *
+ * The pool adds an init script that fills it on every navigation. The SDK reads it once, through
+ * its own console handlers, then sets it to `null` so the queue stops. Holds `{ queue, dropped }`.
+ */
+export const RETICLE_EARLY_CAPTURE = '__reticleEarlyCapture';
+
+/**
  * Signal the React adapter fires when an error boundary catches (dev-only). Carried on the signal channel
  * (the SDK's public emit surface) so the server sees a boundary that swallowed — the purest "looks fine,
  * isn't", invisible to every other channel. `data: { message, stack?, componentStack? }`.

@@ -17,6 +17,7 @@ import {
   type PooledPage,
 } from './browser-pool.js';
 import { NotHtmlDocumentError, READER_NOT_HTML } from './zero-install.js';
+import { queueEarlyConsole } from './lease-page-error.js';
 
 class FakePage implements PooledPage {
   gotoUrls: string[] = [];
@@ -59,6 +60,10 @@ class FakePage implements PooledPage {
     script: ((arg: Arg) => void) | string,
     arg?: Arg,
   ): Promise<{ dispose: () => Promise<void> }> {
+    // Every page gets the early console queue; these tests are about the scripts a caller asked for.
+    if (script === queueEarlyConsole) {
+      return Promise.resolve({ dispose: () => Promise.resolve() });
+    }
     this.callOrder.push('addInitScript');
     this.initScripts.push({ script, arg });
     return Promise.resolve({
