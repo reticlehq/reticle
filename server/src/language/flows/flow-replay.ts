@@ -200,6 +200,14 @@ function lateConsoleDrift(expect: StepExpect, events: ReticleEvent[]): Drift | u
   return undefined;
 }
 
+/** A console-absent expect read over the start-page load, said as such. See `loadSince`. */
+function loadDrift(expect: StepExpect, loadEvents: ReticleEvent[]): Drift | undefined {
+  const drift = 0 === loadEvents.length ? undefined : lateConsoleDrift(expect, loadEvents);
+  return drift === undefined
+    ? undefined
+    : { ...drift, reason: `${drift.reason}, logged while replay loaded the start page` };
+}
+
 /** Run one testid-anchored step: re-resolve via QUERY, then ACT on the live ref, else drift. */
 export async function runTestidStep(
   session: FlowReplaySession,
@@ -486,6 +494,15 @@ export interface ReplayFromOptions {
    * replayer had honoured invocations for an hour by then. Two replay paths; one was wired.
    */
   resolveFlow?: (name: string) => Promise<FlowFile | undefined>;
+  /**
+   * Set when replay loaded the start page itself: the session time the load began.
+   *
+   * The load is then part of the journey. An error the page logged while it loaded lands before
+   * step 1 opens its window, so a "no console errors" on step 1 passed over it. Only console-absent
+   * clauses look back to here. A `net` or `text` clause that did so could be satisfied by the load
+   * and not by the step, which is a false pass.
+   */
+  loadSince?: number;
   /** The invocation chain that reached this flow, nearest caller first. Empty at the top. */
   via?: readonly { flow: string; step: number }[];
   /**
@@ -813,6 +830,11 @@ export async function replayFlow(
         result.endPage = endPage;
       }
       const windowEvents = session.eventsSince(cursorBefore).filter((e) => e.t >= cursorBefore);
+      const loadSince = 0 === index ? options.loadSince : undefined;
+      const loadEvents =
+        loadSince === undefined
+          ? []
+          : session.eventsSince(loadSince).filter((e) => e.t < cursorBefore);
       const consequence = summarizeConsequence(windowEvents);
       if (consequence !== undefined) {
         result.consequence = consequence;
@@ -825,7 +847,8 @@ export async function replayFlow(
         if (!result.ok || result.drift !== undefined) {
           break;
         }
-        const late = lateConsoleDrift(expectation, windowEvents);
+        const late =
+          lateConsoleDrift(expectation, windowEvents) ?? loadDrift(expectation, loadEvents);
         if (late !== undefined) {
           result.ok = false;
           result.drift = late;

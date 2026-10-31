@@ -48,7 +48,9 @@ class Page implements FlowReplaySession {
   push(type: EventType, data: Record<string, unknown>): void {
     const event = { type, t: this.elapsed(), data } as unknown as ReticleEvent;
     this.#events.push(event);
-    for (const listener of this.#listeners) listener(event);
+    for (const listener of this.#listeners) {
+      listener(event);
+    }
   }
   command(name: string): Promise<CommandResult> {
     if (ReticleCommand.QUERY === name) {
@@ -64,7 +66,9 @@ class Page implements FlowReplaySession {
         },
       });
     }
-    if (ReticleCommand.ACT === name) this.onClick(this);
+    if (ReticleCommand.ACT === name) {
+      this.onClick(this);
+    }
     return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
   }
   eventsSince(cursor = 0): ReticleEvent[] {
@@ -129,7 +133,9 @@ describe('a console-absent step replays the error its own action scheduled', () 
       console: { absent: true },
     };
     const compiled = compileAnnotation(annotation, 0).patch?.success;
-    if (compiled === undefined) throw new Error('expected a compiled console predicate');
+    if (compiled === undefined) {
+      throw new Error('expected a compiled console predicate');
+    }
 
     const warningPage = new Page((page) => {
       page.push(EventType.CONSOLE_WARN, { message: 'dev warning' });
@@ -159,5 +165,57 @@ describe('a console-absent step replays the error its own action scheduled', () 
     const [step] = await replayFlow(page, flow(), waitForPredicate, STEP_TIMEOUT_MS);
     expect(step?.ok).toBe(true);
     expect(step?.consoleErrors).toBeUndefined();
+  });
+});
+
+/*
+ * The start page logged an error while it loaded, before step 1 opened its window (a table whose
+ * markup the framework cannot parse). Replay loaded that page itself, so the load is part of the
+ * journey, and "no console errors" on step 1 must not pass over it.
+ */
+describe('a console-absent first step covers the start-page load that replay did', () => {
+  const loadedWithError = (): Page => {
+    const page = new Page(() => undefined);
+    page.push(EventType.CONSOLE_ERROR, { message: BOOM });
+    return page;
+  };
+
+  it('drifts when the page replay loaded logged an error before step 1', async () => {
+    const [step] = await replayFlow(
+      loadedWithError(),
+      flow(),
+      waitForPredicate,
+      STEP_TIMEOUT_MS,
+      false,
+      undefined,
+      { loadSince: 0 },
+    );
+    expect(step?.ok).toBe(false);
+    expect(step?.drift?.reason).toContain('while replay loaded the start page');
+  });
+
+  it('does not judge an error from before step 1 when replay did not load the page', async () => {
+    const [step] = await replayFlow(loadedWithError(), flow(), waitForPredicate, STEP_TIMEOUT_MS);
+    expect(step?.ok).toBe(true);
+  });
+
+  it('does not move a load-time error onto a later step', async () => {
+    const twoSteps = flow();
+    const first = twoSteps.steps[0];
+    if (first === undefined) {
+      throw new Error('expected a step');
+    }
+    const { expect: _unchecked, ...noExpect } = first;
+    twoSteps.steps = [noExpect, first];
+    const steps = await replayFlow(
+      loadedWithError(),
+      twoSteps,
+      waitForPredicate,
+      STEP_TIMEOUT_MS,
+      false,
+      undefined,
+      { loadSince: 0 },
+    );
+    expect(steps.map((s) => s.ok)).toEqual([true, true]);
   });
 });

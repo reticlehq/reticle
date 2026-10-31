@@ -498,6 +498,9 @@ export async function replayNamedFlow(
         ...(from === undefined ? {} : { from }),
         ...(to === undefined ? {} : { to }),
         ...(continueAt === undefined ? {} : { at: continueAt }),
+        // Replay loaded the start page, so the load is part of the journey. The successor session
+        // began with that load, at time 0.
+        ...(arrival.session === undefined ? {} : { loadSince: 0 }),
         // The HUD's replay chip, when the human pressed ▶. In-process only: an agent's arguments
         // arrive as JSON and can never carry a function.
         onStepResult: replayStepShooter(deps, session.id),
