@@ -41,7 +41,7 @@ import {
 } from '@/portal/input/real-input.js';
 import { assertDragNotDestructive, assertNotDestructive } from './act/act-danger.js';
 import { assertNativeAllowed } from '@/portal/production/production-drive.js';
-import { NATIVE_INPUT_ARG } from '@reticlehq/core';
+import { NATIVE_INPUT_ARG, type CommandResult } from '@reticlehq/core';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
 import { asBox } from './act/act-helpers.js';
@@ -783,11 +783,86 @@ export async function tryRealInput(
  * be driven for real, goes to the page as before. A Proxy, not a copy: the session keeps private
  * state its own methods read.
  */
+/**
+ * A sequence with a press in it, run as the page and the keyboard would run it.
+ *
+ * Replay sends a recorded sequence as one in-page command, so a press inside it stayed a synthetic
+ * key event: a recorded "fill, press Enter" sequence submitted no form and failed on a working app.
+ * The other sub-steps still go to the page together, in order; each press goes to the real keyboard
+ * (focus, then the key), and to the page as before when the real keyboard cannot take it. The
+ * first failure is returned as the page returned it, so a stale-ref retry still finds its step.
+ */
+async function sequenceWithRealPresses(
+  deps: ToolDeps,
+  session: Session,
+  steps: readonly unknown[],
+  timeoutMs: number | undefined,
+): Promise<CommandResult> {
+  const share = (n: number): number | undefined =>
+    timeoutMs === undefined ? undefined : Math.ceil((timeoutMs * n) / Math.max(1, steps.length));
+  let last: CommandResult = {
+    kind: 'command_result',
+    id: ReticleCommand.ACT_SEQUENCE,
+    ok: true,
+    result: {},
+  };
+  let chunk: unknown[] = [];
+  const flush = async (): Promise<boolean> => {
+    if (0 === chunk.length) {
+      return true;
+    }
+    last = await session.command(
+      ReticleCommand.ACT_SEQUENCE,
+      { steps: chunk },
+      share(chunk.length),
+    );
+    chunk = [];
+    return last.ok;
+  };
+  for (const sub of steps) {
+    const step = asRecord(sub);
+    if (ActionType.PRESS !== step['action']) {
+      chunk.push(sub);
+      continue;
+    }
+    if (!(await flush())) {
+      return last;
+    }
+    const real = await tryRealInput(
+      deps,
+      session,
+      asString(step['ref']) ?? '',
+      ActionType.PRESS,
+      step,
+    );
+    if (real.result === undefined) {
+      chunk.push(sub);
+      continue;
+    }
+    last = {
+      kind: 'command_result',
+      id: ActionType.PRESS,
+      ok: true,
+      result: { dispatched: true, settled: real.settled, ...asRecord(real.result) },
+    };
+  }
+  await flush();
+  return last;
+}
+
 export function withLeaseKeyboard(deps: ToolDeps, session: Session): Session {
   if (deps.realInput === undefined && deps.pool?.hasKeyboard(session.id) !== true) {
     return session;
   }
   const command: Session['command'] = async (name, args = {}, timeoutMs) => {
+    const steps = args['steps'];
+    if (
+      ReticleCommand.ACT_SEQUENCE === name &&
+      Array.isArray(steps) &&
+      steps.some((sub) => ActionType.PRESS === asRecord(sub)['action'])
+    ) {
+      return await sequenceWithRealPresses(deps, session, steps, timeoutMs);
+    }
     if (ReticleCommand.ACT === name && ActionType.PRESS === args['action']) {
       const ref = asString(args['ref']) ?? '';
       const real = await tryRealInput(deps, session, ref, ActionType.PRESS, args);

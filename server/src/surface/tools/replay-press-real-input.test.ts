@@ -16,7 +16,7 @@ const URL = 'http://localhost:3000/';
 
 function fixture() {
   const performed: unknown[] = [];
-  const toPage: unknown[] = [];
+  const toPage: { name: string; action?: unknown; count?: number | undefined }[] = [];
   const provider = {
     isAvailableFor: () => Promise.resolve(true),
     perform: (_url: string, action: string, _box: unknown, args: unknown) => {
@@ -28,7 +28,11 @@ function fixture() {
     id: 's1',
     url: URL,
     command: (name: string, args: Record<string, unknown>): Promise<CommandResult> => {
-      toPage.push({ name, action: args['action'] });
+      toPage.push({
+        name,
+        action: args['action'],
+        count: Array.isArray(args['steps']) ? args['steps'].length : undefined,
+      });
       const result =
         ReticleCommand.INSPECT === name ? { states: ['focused'] } : { dispatched: true };
       return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result });
@@ -83,5 +87,50 @@ describe('a replayed press aimed at an element on a driven page', () => {
     ]);
     expect(performed).toHaveLength(1);
     expect(r.ok).toBe(true);
+  });
+});
+
+/*
+ * The same Enter, recorded as one sub-step of a sequence (fill the field, press Enter, then check).
+ * Replay sent the whole sequence to the page as one command, so the press stayed synthetic and the
+ * form was never submitted: on the bench, every "fill, press Enter" sequence failed on the correct
+ * app. The page still runs the other sub-steps together; each press gets the real keyboard.
+ */
+describe('a replayed sequence with a press in it', () => {
+  it('runs the other sub-steps in the page and the press on the real keyboard, in order', async () => {
+    const { deps, session, performed, toPage } = fixture();
+    const wrapped = withLeaseKeyboard(deps, session);
+    const r = await wrapped.command(ReticleCommand.ACT_SEQUENCE, {
+      steps: [
+        { ref: 'e1', action: ActionType.FILL, args: { value: 'x' } },
+        { ref: 'e1', action: ActionType.PRESS, args: { key: 'Enter' } },
+        { ref: 'e2', action: ActionType.CLICK, args: {} },
+      ],
+    });
+    expect(r.ok).toBe(true);
+    expect(
+      toPage.map((c) => `${c.name}:${String(c.count ?? (c.action as string | undefined))}`),
+    ).toEqual([
+      `${ReticleCommand.ACT_SEQUENCE}:1`,
+      `${ReticleCommand.ACT}:${ActionType.FOCUS}`,
+      `${ReticleCommand.INSPECT}:undefined`,
+      `${ReticleCommand.ACT_SEQUENCE}:1`,
+    ]);
+    expect(performed).toHaveLength(1);
+  });
+
+  it('sends a sequence with no press to the page unchanged', async () => {
+    const { deps, session, performed, toPage } = fixture();
+    const wrapped = withLeaseKeyboard(deps, session);
+    await wrapped.command(ReticleCommand.ACT_SEQUENCE, {
+      steps: [
+        { ref: 'e1', action: ActionType.FILL, args: { value: 'x' } },
+        { ref: 'e2', action: ActionType.CLICK, args: {} },
+      ],
+    });
+    expect(toPage.map((c) => `${c.name}:${String(c.count)}`)).toEqual([
+      `${ReticleCommand.ACT_SEQUENCE}:2`,
+    ]);
+    expect(performed).toHaveLength(0);
   });
 });

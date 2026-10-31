@@ -894,6 +894,22 @@ describe('keyboard on a lease', () => {
     expect(pressed).toEqual([{ text: 'Tab' }]);
     expect(state.actCalls).toBe(0);
   });
+
+  // The same press inside act_and_wait or an act_sequence sub-step, on Reticle's OWN driven browser
+  // (a real-input provider, no lease). It stayed in the page, so a sequence's Enter submitted no
+  // form while the same press through reticle_act did.
+  it('presses with the real keyboard inside act_and_wait on a driven browser too', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const deps = fakeDeps(provider, state);
+    const session = deps.sessions.resolve(undefined);
+    const res = await actCommand(deps, session, { action: 'press', args: { text: 'Tab' } });
+
+    expect(res.ok).toBe(true);
+    expect(res.result).toMatchObject({ inputMode: InputMode.REAL });
+    expect(provider.calls).toHaveLength(1);
+    expect(state.actCalls).toBe(0);
+  });
 });
 
 /**

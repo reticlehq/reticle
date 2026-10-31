@@ -128,18 +128,17 @@ export async function actCommand(
   session: Session,
   actArgs: Record<string, unknown>,
   timeoutMs?: number,
+  realTried = false, // the caller (reticle_act) already tried real input: do not press twice
 ): Promise<import('@reticlehq/core').CommandResult> {
   const rewritten = await rewriteUploadArgs(
     { fs: deps.fs, reticleRoot: sessionRoot(deps, session.id) },
     'string' === typeof actArgs['action'] ? actArgs['action'] : '',
     asRecord(actArgs['args']),
   );
-  // Sequence and act_and_wait dispatch through here without the ACT handler's tryRealInput.
-  // A synthetic hover reports dispatched/settled while CSS :hover never applies — drive a real
-  // pointer when one is available, otherwise refuse rather than lie. A press on a lease takes its
-  // real keyboard, as reticle_act does: a synthetic Tab moves no focus.
+  // Sequence and act_and_wait come here without the ACT handler's tryRealInput. A hover needs a real
+  // pointer or a refusal; a press takes the real keyboard: a synthetic Enter submits no form.
   const hover = ActionType.HOVER === actArgs['action'];
-  if (hover || (ActionType.PRESS === actArgs['action'] && deps.realInput === undefined)) {
+  if (!realTried && (hover || ActionType.PRESS === actArgs['action'])) {
     const ref = asString(actArgs['ref']);
     if (hover && ref === undefined) throw new Error(HOVER_NEEDS_POINTER_MSG);
     const action = hover ? ActionType.HOVER : ActionType.PRESS;
@@ -273,11 +272,8 @@ export const ACT_TOOLS: ToolDef[] = [
 
         // actCommand is the single interception point: it rewrites upload+path args to real bytes
         // before any ACT command crosses the bridge, covering this call site and all others.
-        const result = await actCommand(deps, session, {
-          ref: targetRef.ref,
-          action: args['action'],
-          args: args['args'] ?? {},
-        });
+        const plain = { ref: targetRef.ref, action: args['action'], args: args['args'] ?? {} };
+        const result = await actCommand(deps, session, plain, undefined, true);
         if (!result.ok) throw new Error(result.error ?? 'act failed');
         captureAct(deps.recordings, args, result.result, routeBefore, session.id);
         // lift dispatch/settle status to the envelope (a settle timeout is NOT a failure).
