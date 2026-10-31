@@ -173,3 +173,37 @@ describe('compiling a step on a nameless control', () => {
     expect(anchor).toEqual({ kind: AnchorKind.ROLE, role: 'button' });
   });
 });
+
+/*
+ * The click re-rendered the row before it landed, so the first act met a stale ref and replay
+ * re-resolved the anchor. The re-resolve counted ALL buttons of the role (named ones too), found 4
+ * where the anchor recorded 2, and reported the step ambiguous on a working page.
+ */
+describe('a nameless role anchor whose ref went stale', () => {
+  it('re-resolves among the nameless controls only, and acts on the same position', async () => {
+    const session = new FakeRowSession(2);
+    let first = true;
+    const act = session.command.bind(session);
+    session.command = (name: string, args: Record<string, unknown> = {}) => {
+      if (name === ReticleCommand.ACT && first) {
+        first = false;
+        session.acts.push(asString(args['ref']) ?? '');
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'a',
+          ok: false,
+          error: `ref '${asString(args['ref']) ?? ''}' no longer resolves to an element`,
+        });
+      }
+      return act(name, args);
+    };
+    const result = await replayOne(session, {
+      kind: AnchorKind.ROLE,
+      role: 'button',
+      nth: 1,
+      of: 2,
+    });
+    expect(result?.ok).toBe(true);
+    expect(session.acts).toEqual(['icon-1', 'icon-1']);
+  });
+});

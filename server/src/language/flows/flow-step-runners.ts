@@ -106,6 +106,24 @@ async function nearestRoleNameOnPage(
   }
 }
 
+/**
+ * Resolve a role anchor. ONE function for the first look and the re-resolve after a stale ref: the
+ * re-resolve used to count every control of the role, so a nameless anchor's position came back
+ * ambiguous on a working page.
+ *
+ * A nameless anchor's position counts only the nameless controls of its role (an icon-only edit
+ * button is the 2nd nameless button of its row, not the 5th button), so it reads only those.
+ */
+function resolveRoleAnchor(
+  session: FlowReplaySession,
+  anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.ROLE }>,
+  sleep: Sleep,
+): Promise<{ refs: string[] }> {
+  return anchor.name === undefined
+    ? resolveQuery(session, roleQueryArgs(anchor), sleep, Date.now, readNamelessQuery)
+    : resolveQuery(session, roleQueryArgs(anchor), sleep);
+}
+
 export async function runRoleStep(
   session: FlowReplaySession,
   step: FlowStep,
@@ -115,12 +133,7 @@ export async function runRoleStep(
   sleep: Sleep,
 ): Promise<FlowStepResult> {
   const label = roleAnchorLabel(anchor);
-  // A nameless anchor's position counts only the nameless controls of its role (an icon-only edit
-  // button is the 2nd nameless button of its row, not the 5th button), so read only those.
-  const nameless = anchor.name === undefined;
-  const { refs } = nameless
-    ? await resolveQuery(session, roleQueryArgs(anchor), sleep, Date.now, readNamelessQuery)
-    : await resolveQuery(session, roleQueryArgs(anchor), sleep);
+  const { refs } = await resolveRoleAnchor(session, anchor, sleep);
   /*
    * More than one match is DRIFT, not a guess. This path took `refs[0]`, dispatched, and returned
    * `ok: true`, so a flow recorded against "View result" on row 3 of a table replayed by clicking row
@@ -140,7 +153,7 @@ export async function runRoleStep(
     return { step: index, tool: step.tool, anchor: label, ok: false, drift: ambiguous };
   }
   const ref = refFor(anchor, refs);
-  if (ref === undefined && nameless) {
+  if (ref === undefined && anchor.name === undefined) {
     // There is no name to suggest a nearest match from; say what was looked for and what was found.
     return {
       step: index,
@@ -192,8 +205,7 @@ export async function runRoleStep(
      * re-make the guess the check above exists to refuse — one layer deeper, where the caller cannot
      * see it. `reresolved` is the same rule as that check, so the two cannot disagree.
      */
-    async () =>
-      reresolved(anchor, (await resolveQuery(session, roleQueryArgs(anchor), sleep)).refs),
+    async () => reresolved(anchor, (await resolveRoleAnchor(session, anchor, sleep)).refs),
   );
 }
 
