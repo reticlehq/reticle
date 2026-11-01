@@ -19,22 +19,26 @@ const everClaimed = new Set<string>();
 
 /**
  * The `.reticle` folder a caller meant by `root`. Agents pass the project folder, the one they work
- * in, so a folder that holds a `.reticle` stands for it. Anything else is refused with the path to pass.
+ * in, so a folder that holds a `.reticle` stands for it — and so does any existing directory, since
+ * a fresh worktree has none until the first run writes one, the same way a `.reticle` path is
+ * accepted before it exists. A path nowhere on disk is the caller's to fix, and the refusals name
+ * the path to pass. Openings exported so error-recovery classifies both as the caller's mistake.
  */
+export const ARTIFACT_ROOT_ABSOLUTE_REFUSAL = `root must be an absolute path to a ${ReticleDir.ROOT} folder`;
+export const ARTIFACT_ROOT_MISSING_REFUSAL = `root must be an existing directory, or the ${ReticleDir.ROOT} folder inside one`;
+
 function resolveArtifactRoot(root: string): string {
   if (!isAbsolute(root)) {
-    throw new Error(`root must be an absolute path to a ${ReticleDir.ROOT} folder, got ${root}`);
+    throw new Error(`${ARTIFACT_ROOT_ABSOLUTE_REFUSAL}, got ${root}`);
   }
   if (ReticleDir.ROOT === basename(root)) {
     return root;
   }
   const inside = join(root, ReticleDir.ROOT);
-  if (isDirectory(inside)) {
+  if (isDirectory(inside) || isDirectory(root)) {
     return inside;
   }
-  throw new Error(
-    `root must be the ${ReticleDir.ROOT} folder, or a project folder that contains one, got ${root}. Pass ${inside}`,
-  );
+  throw new Error(`${ARTIFACT_ROOT_MISSING_REFUSAL}, got ${root}. Pass ${inside}`);
 }
 
 function isDirectory(path: string): boolean {

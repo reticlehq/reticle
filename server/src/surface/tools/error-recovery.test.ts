@@ -23,6 +23,10 @@ import { TOOLS } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { diagnoseNoSession } from '@/portal/session/no-session-diagnosis.js';
 import {
+  ARTIFACT_ROOT_ABSOLUTE_REFUSAL,
+  ARTIFACT_ROOT_MISSING_REFUSAL,
+} from '@/memory/project/root-claims.js';
+import {
   HarnessNotLinkedError,
   MSG_HARNESS_UNCLAIMED,
   MSG_HARNESS_UNCONFIRMED,
@@ -952,5 +956,26 @@ describe('a RETICLE_CHROMIUM_PATH the daemon cannot launch', () => {
   it('wins over a rule that a word in the path would otherwise match', () => {
     const message = refusal('/srv/throttled/reticle_lease/chrome', ChromiumPathProblem.MISSING);
     expect(buildErrorPayload(message).recovery).toBe(RECOVERY.CHROMIUM_PATH);
+  });
+});
+
+/**
+ * A lease `root` that names no directory on disk — relative, or absent — is the caller's to fix,
+ * and the refusal already carries the exact path to pass. Both sat under the feedback ask, which
+ * invited a bug report about a mistyped path (#2085).
+ */
+describe('a lease root that names no directory on disk', () => {
+  it.each([
+    ['a relative root', `${ARTIFACT_ROOT_ABSOLUTE_REFUSAL}, got relative/.reticle`],
+    [
+      'a root nowhere on disk',
+      `${ARTIFACT_ROOT_MISSING_REFUSAL}, got /tmp/worktree. Pass /tmp/worktree/.reticle`,
+    ],
+  ])("%s is the caller's to fix, not a Reticle defect", (_label, message) => {
+    const payload = buildErrorPayload(message);
+    expect(payload.error, message).toBe(message);
+    expect(payload.recovery, message).toBeUndefined();
+    expect(payload.feedback, message).toBeUndefined();
+    expect(refusalReasonFor(message)).toBe(RefusalReason.BAD_ARGS);
   });
 });
