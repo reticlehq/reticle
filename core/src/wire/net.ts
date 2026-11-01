@@ -283,10 +283,14 @@ export function urlForMatch(data: Record<string, unknown>): string {
  * and the body that could answer it is not on the record: capturing bodies by default would put
  * passwords, tokens and customer data on the wire for every request an app makes.
  *
- * So the page sends a fingerprint of the body's SHAPE instead: key names, value types and the total
- * length, hashed. It is equal for two identical payloads and different for two payloads that differ
- * in structure or size, which is all the rule needs, and it is not a projection of the payload —
- * no character of any value is ever read into it, so there is nothing in it to recover.
+ * So the page sends a fingerprint instead. Form bodies are fingerprinted by SHAPE: key names,
+ * value types and the total length, hashed, and no character of any value is read into it. A
+ * text body is fingerprinted by a salted hash of its canonical form, values included, because
+ * a shape cannot tell two commands apart (#1521). The salt is drawn per page load and never
+ * leaves the page, and the hash is a 32-bit fnv1a: many bodies map to one fingerprint, and a
+ * reader who guesses a short secret value cannot confirm the guess without the salt, so there
+ * is nothing in it to recover. Two identical payloads share a fingerprint; two payloads that
+ * differ in any value do not, not even in a timestamp or a request id field.
  */
 export const REQUEST_SHAPE_FIELD = 'requestShape';
 
