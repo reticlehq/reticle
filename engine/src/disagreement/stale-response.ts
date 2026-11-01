@@ -291,7 +291,20 @@ function appliedAfter(
   });
 }
 
-export function findStaleResponses(events: readonly ReticleEvent[]): OwnContradiction[] {
+/**
+ * `oneIntent`: the window was opened by one discrete action (a click, a select) and holds only what
+ * followed it. A superseding race needs a second intent issued while the first read is in flight, so
+ * such a window has none: two reads of one path are panels the action loaded, not a filter that
+ * changed. Known blind spot: one click whose effect fetches with a stale dependency and then the fresh
+ * one is also one intent, and is not reported.
+ */
+export function findStaleResponses(
+  events: readonly ReticleEvent[],
+  options: { oneIntent?: boolean } = {},
+): OwnContradiction[] {
+  if (true === options.oneIntent) {
+    return [];
+  }
   // Grouped by path first: two reads of DIFFERENT endpoints can never race, and comparing them was
   // the bulk of the work on any real page, which talks to many endpoints at once.
   const byPath = new Map<string, Flight[]>();
