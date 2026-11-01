@@ -16,6 +16,7 @@ import {
   DOCK_ATTR,
   FAB_ATTR,
   MIN_ATTR,
+  NARROW_VIEWPORT_PX,
   SETTINGS_ATTR,
   SETTINGS_BTN_ATTR,
   MINIMISED_STORAGE_KEY,
@@ -731,7 +732,7 @@ export function rememberLeftOpen(open: boolean): void {
  * there covered the app's own controls before any agent had done anything.
  */
 export function shouldReopenPanel(): boolean {
-  return wasLeftOpen() && !wasMinimised();
+  return !isNarrowViewport() && wasLeftOpen() && !wasMinimised();
 }
 
 /**
@@ -746,5 +747,13 @@ export function shouldReopenPanel(): boolean {
  * question until you say why they are not.
  */
 export function shouldAutoOpenChat(autoOpenChat: boolean): boolean {
-  return autoOpenChat && !wasMinimised();
+  return autoOpenChat && !isNarrowViewport() && !wasMinimised();
+}
+
+/**
+ * A phone-width page. The panel would cover most of it, so nothing opens it but a tap on the pill.
+ * `innerWidth` rather than `matchMedia`: it is the width the app itself lays out in.
+ */
+export function isNarrowViewport(): boolean {
+  return globalThis.innerWidth < NARROW_VIEWPORT_PX;
 }
