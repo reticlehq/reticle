@@ -260,6 +260,19 @@ app.post('/api/saved-items', async (req, res) => {
   return res.json({ id, label, savedAt: savedItems[savedItems.length - 1].savedAt });
 });
 
+// --- Stale responses: one path, read twice, answered out of order -----------
+//
+// The two shapes that the `stale-response-applied` rule must tell apart. The server picks the delay
+// from `type`, so the URLs stay the same shape as a real filter. `a` answers about 100ms after `b`
+// when `b` is read 20ms later (a fan-out). `all` answers long after `held` (a filter race).
+const STALE_RACE_DELAY_MS = { a: 220, b: 100, all: 700, held: 90 };
+
+app.get('/api/stale-race/items', async (req, res) => {
+  const type = String(req.query.type ?? '');
+  await new Promise((r) => setTimeout(r, STALE_RACE_DELAY_MS[type] ?? 0));
+  res.json({ type });
+});
+
 const server = createServer(app);
 
 // WS echo. `channel` is echoed back so a client can correlate a reply with what it asked for;

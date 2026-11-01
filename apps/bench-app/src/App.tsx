@@ -14,6 +14,7 @@ import { Enterprise } from './views/Enterprise.js';
 import { SavedItems } from './views/SavedItems.js';
 import { ExpiringAuth } from './views/ExpiringAuth.js';
 import { AwkwardControls } from './views/AwkwardControls.js';
+import { StaleRace } from './views/StaleRace.js';
 
 export function App(): React.ReactElement {
   const auth = useApp((s) => s.auth);
@@ -49,6 +50,7 @@ export function App(): React.ReactElement {
           {'saved-items' === view ? <SavedItems /> : null}
           {'expiring-auth' === view ? <ExpiringAuth /> : null}
           {'awkward' === view ? <AwkwardControls /> : null}
+          {'stale-race' === view ? <StaleRace /> : null}
         </div>
       </div>
       <Toasts />
