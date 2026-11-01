@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
-import { loadNamedFlows, resolveChangedFiles } from '@/command/cli/cli-flow-commands.js';
-import { projectDirFor } from '@/memory/project/session-root.js';
-import { sessionRoot, sessionProjectId } from '@/memory/project/session-root.js';
+import { resolveChangedFiles } from '@/command/cli/cli-flow-commands.js';
+import { namedFlowsForSession } from './flow-store-for-session.js';
 import { affectedSavedFlows } from './change/flow-sources.js';
 import { RECORD_A_FLOW } from './suite/coverage.js';
 
@@ -49,20 +48,15 @@ export const AFFECTED_TOOLS: ToolDef[] = [
         ? (args['files'] as unknown[]).filter((f): f is string => 'string' === typeof f)
         : [];
       const since = 'string' === typeof args['since'] ? args['since'] : undefined;
-      // Same address as verify_change, resolved the same way. `deps.reticleRoot` is NOT the project
-      // directory this line used to claim it was — it is the daemon's `.reticle` subdirectory, in
-      // whichever tree the MCP host was started in. `undefined` here resolves the single connected
-      // session, which is the same rule the flow lookup below already follows.
-      const changed = await resolveChangedFiles(files, since, projectDirFor(deps, undefined));
-      const changedFiles = changed.files;
       // No `sessionId` on this tool's surface, and it does not need one: passing `undefined`
       // resolves the single connected session, and falls back exactly as before when it cannot.
       // Adding an argument here would be a surface change to fix an addressing bug.
-      const flows = await loadNamedFlows(
-        deps.fs,
-        sessionRoot(deps, undefined),
-        sessionProjectId(deps, undefined),
-      );
+      //
+      // The flows come from the store `flows` replays from, so a flow named here can be replayed
+      // by that name (#1996). `git diff` runs in the project directory that holds that store.
+      const { flows, projectDir } = await namedFlowsForSession(deps, undefined);
+      const changed = await resolveChangedFiles(files, since, projectDir);
+      const changedFiles = changed.files;
       const result = affectedSavedFlows(flows, changedFiles);
       // Three different situations produced the same empty answer: no files changed, no flows saved,
       // and a git ref that resolved to nothing. Only the first means "nothing to re-verify"; the

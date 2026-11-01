@@ -21,6 +21,7 @@ import { changedFilesSince, type ChangedFiles } from '@/language/flows/change/gi
 import { isAbsolute, join, sep } from 'node:path';
 import { type ProjectId, ReticleDir } from '@reticlehq/core';
 import { FlowStore } from '@/language/flows/flows.js';
+import { namedFlowsIn } from '@/language/flows/flow-store-for-session.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import {
@@ -84,15 +85,7 @@ export async function loadNamedFlows(
   reticleRoot: string,
   projectId: ProjectId | undefined,
 ): Promise<NamedFlow[]> {
-  const store = new FlowStore(fs, reticleRoot, { now: () => Date.now() });
-  const flows: NamedFlow[] = [];
-  for (const name of await store.list(projectId)) {
-    const loaded = await store.load(name, projectId);
-    if (loaded.ok) {
-      flows.push({ name: loaded.value.name, steps: loaded.value.steps });
-    }
-  }
-  return flows;
+  return await namedFlowsIn(new FlowStore(fs, reticleRoot, { now: () => Date.now() }), projectId);
 }
 
 /**

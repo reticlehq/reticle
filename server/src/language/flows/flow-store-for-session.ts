@@ -23,7 +23,9 @@
  * allocates nothing: when no resolver is wired, or it names the root already in use, `deps.flows` is
  * returned unchanged.
  */
+import { dirname } from 'node:path';
 import { FlowStore } from './flows.js';
+import type { NamedFlow } from './change/flow-sources.js';
 import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import type { ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
@@ -57,4 +59,36 @@ export function flowsForSessionId(
 ): { flows: FlowStore; root: string; projectId: ProjectId | undefined } {
   const target = sessionTarget(deps, sessionId);
   return { ...flowsForSession(deps, target), projectId: target.projectId };
+}
+
+/** The {name, steps} of every flow in `store` that `projectId` can see. Unreadable flows are left out. */
+export async function namedFlowsIn(
+  store: FlowStore,
+  projectId: ProjectId | undefined,
+): Promise<NamedFlow[]> {
+  const flows: NamedFlow[] = [];
+  for (const name of await store.list(projectId)) {
+    const loaded = await store.load(name, projectId);
+    if (loaded.ok) {
+      flows.push({ name: loaded.value.name, steps: loaded.value.steps });
+    }
+  }
+  return flows;
+}
+
+/**
+ * The saved flows of a session, from the store `flowsForSessionId` resolves, and the project
+ * directory that holds that store.
+ *
+ * `affected` and `change` read flows through here, and `flows` replays from the same store. They
+ * used to build their own store from `sessionRoot`, which skips the root a lease claimed when no
+ * resolver is wired and no session is named. Then `affected` named a flow that `flows` could not
+ * find (#1996). The directory is returned too, so `git diff` runs in the tree the flows belong to.
+ */
+export async function namedFlowsForSession(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): Promise<{ flows: NamedFlow[]; projectDir: string }> {
+  const { flows: store, root, projectId } = flowsForSessionId(deps, sessionId);
+  return { flows: await namedFlowsIn(store, projectId), projectDir: dirname(root) };
 }
