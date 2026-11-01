@@ -138,6 +138,13 @@ export interface ActionResult {
    * degraded role one — addressing the element across replays with zero hand-added testids.
    */
   component?: string;
+  /**
+   * Which of the elements matching that component anchor this was, in the order a replay resolves
+   * them, and how many there were. A list renders every item from one JSX line, so without it a
+   * recorded click on one item could not be told from the others.
+   */
+  componentNth?: number;
+  componentOf?: number;
   /** Role + accessible name — the anchor that identifies an INSTANCE, not a JSX site. */
   role?: string;
   name?: string;
@@ -162,6 +169,8 @@ export interface CapturedAnchor {
   testidOf?: number;
   component?: string;
   source?: { file: string; line: number; column?: number };
+  componentNth?: number;
+  componentOf?: number;
   /**
    * Role + accessible name — the anchor that identifies an INSTANCE.
    *
@@ -211,6 +220,28 @@ export function positionAmongNamesakes(
   return 1 < same.length && 0 <= at ? { nth: at, of: same.length } : null;
 }
 
+/**
+ * Where `el` sits among the elements its component anchor matches, or null when it is the only one.
+ * Counted with the same query a replay resolves the anchor with, so the order is the replay's order.
+ */
+function positionInComponentAnchor(
+  el: Element,
+  component: string | undefined,
+  source: CapturedAnchor['source'],
+): { nth: number; of: number } | null {
+  if (component === undefined && source === undefined) {
+    return null;
+  }
+  const same = elementsMatching({
+    by: QueryBy.COMPONENT,
+    value: component ?? '',
+    ...(component === undefined ? {} : { component }),
+    ...(source === undefined ? {} : { source }),
+  });
+  const at = same.indexOf(el as HTMLElement);
+  return 1 < same.length && 0 <= at ? { nth: at, of: same.length } : null;
+}
+
 export function anchorOf(el: Element): CapturedAnchor {
   const testid = readTestId(el) ?? undefined;
   const info = identifyComponent(el);
@@ -229,6 +260,11 @@ export function anchorOf(el: Element): CapturedAnchor {
   }
   if (info?.source !== undefined) {
     out.source = info.source;
+  }
+  const position = positionInComponentAnchor(el, out.component, out.source);
+  if (position !== null) {
+    out.componentNth = position.nth;
+    out.componentOf = position.of;
   }
   // Reported INDEPENDENTLY, never all-or-nothing: otherwise an element with a role and no accessible
   // name — an icon button, a clickable div, a control labelled by an SVG — comes back with no identity
@@ -292,6 +328,12 @@ export const result = (
   }
   if (anchor.source !== undefined) {
     base.source = anchor.source;
+  }
+  if (anchor.componentNth !== undefined) {
+    base.componentNth = anchor.componentNth;
+  }
+  if (anchor.componentOf !== undefined) {
+    base.componentOf = anchor.componentOf;
   }
   if (anchor.role !== undefined) {
     base.role = anchor.role;

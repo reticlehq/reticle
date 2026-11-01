@@ -488,6 +488,11 @@ function anchorArgs(
     if (source !== undefined) {
       componentArgs['source'] = source;
     }
+    // Which of the elements this anchor matches was acted on: a list renders every item from one site.
+    if ('number' === typeof r['componentNth'] && 'number' === typeof r['componentOf']) {
+      componentArgs['nth'] = r['componentNth'];
+      componentArgs['of'] = r['componentOf'];
+    }
     return { args: componentArgs, stable: true };
   }
   return { args: { ref, action, args: actArgs }, stable: false };

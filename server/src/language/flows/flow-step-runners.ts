@@ -357,7 +357,9 @@ export async function runComponentStep(
   if (ambiguous !== null) {
     return { step: index, tool: step.tool, anchor: label, ok: false, drift: ambiguous };
   }
-  const ref = refs[0] ?? '';
+  // The only match, or the recorded position (`ambiguityDrift` has cleared every other case). It took
+  // `refs[0]`, so a recorded position that passed the check still acted on the first match.
+  const ref = refFor(anchor, refs) ?? '';
   // Shared with the role path so both get the same action window AND the same stale-ref retry —
   // this used to dispatch inline, which is how one anchor kind could gain a fix the other lacked.
   return await actOnResolvedRef(

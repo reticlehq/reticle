@@ -77,6 +77,10 @@ export const FlowAnchorSchema = z.discriminatedUnion('kind', [
       .optional(),
     role: z.string().optional(),
     name: z.string().optional(),
+    // Which of the elements this anchor matched was recorded, in page order, and how many there were.
+    // A list renders every item from one JSX site. Honoured only while the page has exactly `of`.
+    nth: z.number().int().min(0).optional(),
+    of: z.number().int().min(2).optional(),
   }),
 ]);
 export type FlowAnchor = z.infer<typeof FlowAnchorSchema>;
