@@ -611,7 +611,8 @@ const ANCHOR_MISSES: ReadonlySet<string> = new Set([
  * FAIL, and the dashboard showed a failure for a journey that was never tested.
  *
  * Only when no earlier step ran. A control that is missing after earlier steps acted is on a page
- * those steps made, so it stays drift, and heal reads it. A step that acted and whose expectation
+ * those steps made, so it stays drift, and heal reads it. An ambiguous control is the exception: it
+ * is on the page, and the replay cannot choose, so it is not proved after any number of steps. A step that acted and whose expectation
  * did not hold is a consequence drift and stays a failure. The failing step keeps its index and
  * its `drift.reasonKind`, which the synced run carries in `stepResults`.
  */
@@ -625,7 +626,22 @@ function unreachedStepResult(
   if (step === undefined || drift === undefined || !ANCHOR_MISSES.has(drift.reasonKind)) {
     return undefined;
   }
-  if (steps.slice(0, at).some((s) => s.ok)) {
+  const acted = steps.slice(0, at).some((s) => s.ok);
+  // An anchor that several live elements match is on the page, so the earlier steps did not lose it.
+  // The replay cannot choose one, so nothing about the app was decided, whatever ran before.
+  if (DriftReason.ANCHOR_AMBIGUOUS === drift.reasonKind && acted) {
+    return {
+      name,
+      status: ReplayStatus.UNVERIFIABLE,
+      steps: [...steps],
+      unverifiable: {
+        reason:
+          `step ${String(step.step + 1)}: ${drift.reason}. The replay stopped there, so this run ` +
+          `proved nothing about the app. Narrow the anchor on this step.`,
+      },
+    };
+  }
+  if (acted) {
     return undefined;
   }
   // ponytail: one close, unambiguous survivor reads as a rename (heal's case), so it stays drift. A
