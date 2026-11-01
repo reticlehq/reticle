@@ -20,7 +20,7 @@ import {
 } from '@reticlehq/core';
 import { compileActStep, compileSequenceStep } from './replay.js';
 import { recordedStepToFlowStep } from './flows.js';
-import { runComponentStep } from './flow-step-runners.js';
+import { runComponentStep, runSequenceStep } from './flow-step-runners.js';
 
 const SOURCE = { file: 'src/CountryList.tsx', line: 182, column: 14 };
 const GERMANY = {
@@ -131,5 +131,105 @@ describe('a single replayed step with a recorded position', () => {
     );
     expect(result.drift).toBeUndefined();
     expect(acts).toEqual(['e-1']);
+  });
+});
+
+/**
+ * The page answers a query with every match's count but refs for a bounded prefix only. Recorded on
+ * a phone input's country list: item 77 of 233, and a reply carrying 87 refs. Replay compared 233 with
+ * 87 and called the anchor ambiguous on a page that had not changed. It now asks for the recorded
+ * position when the count still matches and the prefix fell short.
+ */
+describe('a recorded position past the reply`s described prefix', () => {
+  function truncatingPage(total: number, prefix: number) {
+    const acts: string[] = [];
+    const queries: Record<string, unknown>[] = [];
+    const session = {
+      command: (name: string, args: Record<string, unknown> = {}) => {
+        if (ReticleCommand.QUERY === name) {
+          queries.push(args);
+          const nth = args['nth'];
+          // A query with nth describes that one match; without it, the first `prefix` matches.
+          let indices = Array.from({ length: Math.min(total, prefix) }, (_, i) => i);
+          if ('number' === typeof nth) {
+            indices = nth < total ? [nth] : [];
+          }
+          const elements = indices.map((i) => ({ ref: `e-${String(i)}` }));
+          return Promise.resolve({
+            kind: 'command_result',
+            id: 'q',
+            ok: true,
+            result: { elements, count: total },
+          } as unknown as CommandResult);
+        }
+        if (ReticleCommand.ACT === name) {
+          acts.push(String(args['ref']));
+        }
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'a',
+          ok: true,
+          result: {},
+        } as unknown as CommandResult);
+      },
+      eventsSince: () => [],
+      onEvent: () => () => undefined,
+      elapsed: () => 0,
+    };
+    return { session, acts, queries };
+  }
+  const recorded = {
+    kind: AnchorKind.COMPONENT,
+    component: 'PhoneInput',
+    source: SOURCE,
+    nth: 77,
+    of: 233,
+  } as const;
+  const run = async (page: ReturnType<typeof truncatingPage>) =>
+    await runComponentStep(
+      page.session,
+      { tool: FlowStepTool.ACT, anchor: recorded, action: ActionType.CLICK, args: {} },
+      0,
+      recorded,
+      false,
+      () => Promise.resolve(),
+    );
+
+  it('acts on the recorded item when the page still has as many matches', async () => {
+    const page = truncatingPage(233, 87);
+    const result = await run(page);
+    expect(result.drift).toBeUndefined();
+    expect(page.acts).toEqual(['e-77']);
+    expect(page.queries.some((q) => 77 === q['nth'])).toBe(true);
+  });
+
+  it('drifts, and dispatches nothing, when the page has a different number of matches', async () => {
+    const page = truncatingPage(232, 87);
+    const result = await run(page);
+    expect(result.ok).toBe(false);
+    expect(page.acts).toEqual([]);
+  });
+
+  it('acts on the recorded item inside a sequence, as the phone flows do', async () => {
+    const page = truncatingPage(233, 87);
+    const sub = { tool: FlowStepTool.ACT, anchor: recorded, action: ActionType.CLICK, args: {} };
+    const result = await runSequenceStep(
+      page.session,
+      { tool: FlowStepTool.ACT_SEQUENCE, anchor: recorded, args: {} },
+      0,
+      [sub],
+      false,
+      () => Promise.resolve(),
+    );
+    expect(result.drift).toBeUndefined();
+    expect(page.queries.some((q) => 77 === q['nth'])).toBe(true);
+  });
+
+  it('does not ask for a position when the reply already carries every match', async () => {
+    const page = truncatingPage(233, 500);
+    const result = await run(page);
+    expect(result.drift).toBeUndefined();
+    expect(page.acts).toEqual(['e-77']);
+    expect(page.queries.every((q) => undefined === q['nth'])).toBe(true);
   });
 });

@@ -395,7 +395,11 @@ export function matchQuery(
   const cap = fullText
     ? Math.min(MAX_DESCRIBED, TRANSPORT_LIMITS.MAX_FULL_TEXT_ELEMENTS)
     : MAX_DESCRIBED;
-  const described = filtered.slice(0, Math.max(0, Math.min(limit, cap)));
+  // `nth` asks for one match wherever it sits; the count below stays the count of every match.
+  const described =
+    query.nth === undefined
+      ? filtered.slice(0, Math.max(0, Math.min(limit, cap)))
+      : filtered.slice(query.nth, query.nth + 1);
   // Stamp `inViewport` when more than one match is described (ambiguity ranking, #886) OR when the
   // caller explicitly filtered by that state (so the evidence proves the verdict, #1279). Omitted
   // from unfiltered single-match and snapshot-wide describes to avoid bloat (#398).

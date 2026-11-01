@@ -90,6 +90,12 @@ export const ElementQuerySchema = z
      * text predicate sends this, so "Saved Priya" can fail against a page reading "Saved priya".
      */
     matchCase: z.boolean().optional(),
+    /**
+     * Describe only the match at this position, in page order; `count` stays the number of every
+     * match. A reply describes a bounded prefix of the matches, so a replay that must act on item
+     * 77 of 233 could not reach it otherwise. Sent only when the plain query's prefix fell short.
+     */
+    nth: z.number().int().min(0).optional(),
   })
   .strict();
 export type ElementQuery = z.infer<typeof ElementQuerySchema>;

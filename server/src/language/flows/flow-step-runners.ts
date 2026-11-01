@@ -39,6 +39,7 @@ import {
   componentQueryArgs,
   expectElementDrift,
   queryOnce,
+  reachRecordedPosition,
   reresolved,
   resolveRoleAnchor,
   roleQueryArgs,
@@ -105,7 +106,8 @@ export async function runRoleStep(
   sleep: Sleep,
 ): Promise<FlowStepResult> {
   const label = roleAnchorLabel(anchor);
-  const { refs } = await resolveRoleAnchor(session, anchor, sleep);
+  const { refs: found } = await resolveRoleAnchor(session, anchor, sleep);
+  const refs = await reachRecordedPosition(session, anchor, roleQueryArgs(anchor), found);
   /*
    * More than one match is DRIFT, not a guess. This path took `refs[0]`, dispatched, and returned
    * `ok: true`, so a flow recorded against "View result" on row 3 of a table replayed by clicking row
@@ -328,7 +330,8 @@ export async function runComponentStep(
   sleep: Sleep,
 ): Promise<FlowStepResult> {
   const label = componentLabel(anchor);
-  const { refs } = await resolveQuery(session, componentQueryArgs(anchor), sleep);
+  const { refs: found } = await resolveQuery(session, componentQueryArgs(anchor), sleep);
+  const refs = await reachRecordedPosition(session, anchor, componentQueryArgs(anchor), found);
   if (0 === refs.length) {
     return {
       step: index,
@@ -724,7 +727,11 @@ export async function runSequenceStep(
     // A role anchor is found as a single step finds it: a nameless one among the nameless controls
     // of its role, with its `alsoRoles`. Querying every control of the role sent a nameless file
     // input's upload to the first named button (#2084).
-    const { refs, hint } = await lookUpSub(sub.anchor, queryArgs, ahead);
+    const looked = await lookUpSub(sub.anchor, queryArgs, ahead);
+    const hint = looked.hint;
+    const refs = ahead
+      ? looked.refs
+      : await reachRecordedPosition(session, sub.anchor, queryArgs, looked.refs);
     // Several matches with no usable recorded position is drift on every look, as in the single-step
     // runners. The first look used to take `refs[0]`: a click recorded on one item of a list (every
     // item from one JSX line) replayed on another item and failed a correct app. A look ahead is not

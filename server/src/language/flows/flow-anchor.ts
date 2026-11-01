@@ -383,6 +383,38 @@ async function settleTick(session: FlowReplaySession, sleep: Sleep): Promise<voi
   }
 }
 
+/**
+ * The refs a positioned anchor's rule should see.
+ *
+ * A reply describes a bounded prefix of its matches and counts all of them. A position recorded on a
+ * long list (item 77 of 233) then never met the rule `of === refs.length`: replay saw 87 refs and
+ * called the anchor ambiguous on a page that had not changed. When a positioned anchor gets more than
+ * one ref and fewer than `of`, the reply may have been cut short, so this asks for the recorded
+ * position. A reply that counts exactly `of` matches and describes one gives that one ref, which the
+ * rule then takes as the only match. Otherwise the refs stand as they came: a page with a different
+ * number of matches stays ambiguous, and so does a page whose SDK refuses `nth`. A nameless role
+ * anchor is positioned among the nameless controls only, a filter applied after the query, so it is
+ * never asked this way.
+ */
+export async function reachRecordedPosition(
+  session: FlowReplaySession,
+  anchor: FlowAnchor,
+  queryArgs: Record<string, unknown>,
+  refs: string[],
+): Promise<string[]> {
+  const { nth, of, kind, name }: Record<string, unknown> = { ...anchor };
+  const positioned = 'number' === typeof nth && 'number' === typeof of;
+  const sameSetAsTheSdk =
+    kind === AnchorKind.COMPONENT || (kind === AnchorKind.ROLE && name !== undefined);
+  if (!positioned || !sameSetAsTheSdk || refs.length < 2 || refs.length >= of) {
+    return refs;
+  }
+  const result = await session.command(ReticleCommand.QUERY, { ...queryArgs, nth });
+  const one = queryRefs(result);
+  const count = result.ok ? asRecord(result.result)['count'] : undefined;
+  return count === of && 1 === one.length ? one : refs;
+}
+
 /** One look, no settling: for an anchor that may legitimately not be on the page yet. */
 export async function queryOnce(
   session: FlowReplaySession,

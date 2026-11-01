@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser`, `@reticlehq/core`, `@reticlehq/server` — a recorded click on an item of a long list replays on that item.** A query reply counts every match but describes only a bounded prefix of them, so a replay saw fewer elements than the recording counted (87 of 233 in a country picker) and reported the step as ambiguous on a page that had not changed. A query can now ask for one match by its position (`nth`), and replay does so only when the page still counts as many matches as the recording did and the reply fell short. A page with a different number of matches still makes the step ambiguous, and so does an app whose SDK is older than this change.
