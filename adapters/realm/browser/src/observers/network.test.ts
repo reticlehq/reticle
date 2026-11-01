@@ -6,6 +6,7 @@ import {
   REQUEST_SHAPE_NONE,
   RETICLE_WS_PATH,
   URL_RAW,
+  fnv1a,
 } from '@reticlehq/core';
 import {
   extractTiming,
@@ -991,6 +992,31 @@ describe('installNetwork (request-body shape fingerprint)', () => {
     expect(shape).not.toContain('a@b.com');
     expect(shape).not.toContain('password');
     expect(shape).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it('separates same-shape, same-length JSON bodies whose values differ (#1521)', async () => {
+    const accessSets = await shapeOfPost(JSON.stringify({ cmd: 'accessSets' }));
+    const currencies = await shapeOfPost(JSON.stringify({ cmd: 'currencies' }));
+    expect(accessSets).not.toBe(currencies);
+  });
+
+  it('gives a run of Tauri-style invoke calls distinct fingerprints (#1521)', async () => {
+    const names = ['get_balance', 'list_orders', 'fetch_users', 'sync_states'];
+    const shapes = new Set<unknown>();
+    for (const name of names) {
+      shapes.add(await shapeOfPost(JSON.stringify({ name })));
+    }
+    expect(shapes.size).toBe(names.length);
+  });
+
+  it('cannot be reproduced from the payload without the page salt (#1521)', async () => {
+    const secret = 'req-pass-abcdef123';
+    const shape = String(await shapeOfPost(JSON.stringify({ email: 'a@b.com', password: secret })));
+    // What a journal reader can compute from a guessed payload: the unsalted hash of its
+    // canonical form. It is not the fingerprint, so the guess cannot be confirmed.
+    const canonical = '{"email":"a@b.com","password":"req-pass-abcdef123"}';
+    expect(shape).not.toBe(fnv1a(`json:${canonical}`));
+    expect(shape).not.toBe(fnv1a(canonical));
   });
 
   it('reports a bodyless write as carrying no body, not as an unknown one', async () => {
