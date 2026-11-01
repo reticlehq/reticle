@@ -6,7 +6,12 @@
  * failed for any other reason must never be attempted twice.
  */
 import { describe, expect, it } from 'vitest';
-import { isStaleRefError, runStepWithStaleRetry, type StepOutcome } from './act-sequence-retry.js';
+import {
+  describeStepResult,
+  isStaleRefError,
+  runStepWithStaleRetry,
+  type StepOutcome,
+} from './act-sequence-retry.js';
 
 const STALE = "ref 'e127' no longer resolves to an element";
 
@@ -76,5 +81,20 @@ describe('one retry, and only for staleness', () => {
     const s = scripted({ ok: false, error: 'nope', result: { detail: 1 } });
     const out = await runStepWithStaleRetry(s.attempt, session, 0, 100, noSleep);
     expect(out.result).toEqual({ detail: 1 });
+  });
+});
+
+/*
+ * A sub-step keeps its position among same-role controls (#2084). The list of kept fields left out
+ * `nth` and `of`, so a nameless file input in a sequence was saved as "a button" and replay
+ * uploaded to the first button on the page, which is not a file input.
+ */
+describe('describeStepResult keeps the position', () => {
+  it('keeps nth, of and testidOf from the act result', () => {
+    const out = describeStepResult(
+      { ref: 'e9', action: 'upload' },
+      { ref: 'e9', role: 'button', nth: 3, of: 5, testidOf: 2 },
+    );
+    expect(out).toMatchObject({ nth: 3, of: 5, testidOf: 2 });
   });
 });

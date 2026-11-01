@@ -19,12 +19,13 @@ import {
   type Drift,
   type FlowAnchor,
   type FlowReplayResult,
+  type QueryEmptyHint,
   type FlowStep,
   type FlowStepResult,
   type Predicate,
 } from '@reticlehq/core';
 import { ReticleTool, isGlobalPressCall } from '@reticlehq/core';
-import { replayActionArgs } from './replay.js';
+import { namelessRefs, replayActionArgs } from './replay.js';
 import { isStaleRefError } from '@/surface/tools/act/act-sequence-retry.js';
 import { waitForReaction } from '@/surface/tools/act/react-grace.js';
 import { unreachableTargetNote } from '@/surface/tools/act/act-observation.js';
@@ -682,6 +683,23 @@ export async function runSequenceStep(
    * `ahead` is a look at a sub-step before its turn. It is one query with no settle. An anchor that is
    * not on the page yet is `pending`, not drift, because an earlier sub-step can render it.
    */
+  const lookUpSub = async (
+    anchor: FlowAnchor,
+    queryArgs: Record<string, unknown>,
+    ahead: boolean,
+  ): Promise<{ refs: string[]; hint?: QueryEmptyHint }> => {
+    const nameless = AnchorKind.ROLE === anchor.kind && anchor.name === undefined;
+    if (ahead) {
+      return nameless
+        ? { refs: namelessRefs(await session.command(ReticleCommand.QUERY, queryArgs)) }
+        : await queryOnce(session, queryArgs);
+    }
+    if (AnchorKind.ROLE === anchor.kind) {
+      return await resolveRoleAnchor(session, anchor, sleep);
+    }
+    return await resolveQuery(session, queryArgs, sleep);
+  };
+
   const resolveSub = async (
     sub: FlowStep,
     subIndex: number,
@@ -703,14 +721,17 @@ export async function runSequenceStep(
     if (null === queryArgs) {
       return { stop: degradedStepResult(step, index, label) };
     }
-    const { refs, hint } = ahead
-      ? await queryOnce(session, queryArgs)
-      : await resolveQuery(session, queryArgs, sleep);
+    // A role anchor is found as a single step finds it: a nameless one among the nameless controls
+    // of its role, with its `alsoRoles`. Querying every control of the role sent a nameless file
+    // input's upload to the first named button (#2084).
+    const { refs, hint } = await lookUpSub(sub.anchor, queryArgs, ahead);
     const ambiguous = afterRerender ? ambiguityDrift(sub.anchor, refs) : null;
     if (ambiguous !== null) {
       return { stop: { step: index, tool: step.tool, anchor: label, ok: false, drift: ambiguous } };
     }
-    const ref = afterRerender ? refFor(sub.anchor, refs) : refs[0];
+    // The first look takes the recorded position when the page has exactly as many namesakes, and
+    // the first match otherwise; after a re-render only an unambiguous match will do.
+    const ref = afterRerender ? refFor(sub.anchor, refs) : (refFor(sub.anchor, refs) ?? refs[0]);
     if (ref === undefined) {
       if (ahead) {
         return { pending: true };

@@ -45,6 +45,7 @@ import { NATIVE_INPUT_ARG, type CommandResult } from '@reticlehq/core';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
 import { asBox } from './act/act-helpers.js';
+import { isStaleRefError } from './act/act-sequence-retry.js';
 import { isAbsolute, join, relative, extname, basename, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { RETICLE_CONFIG_BASENAME } from '@/command/cli/ports/resolve/cli-port.js';
@@ -828,13 +829,18 @@ async function sequenceWithRealPresses(
     if (!(await flush())) {
       return last;
     }
-    const real = await tryRealInput(
-      deps,
-      session,
-      asString(step['ref']) ?? '',
-      ActionType.PRESS,
-      step,
-    );
+    // A click before this press can load a new page, and then the press's ref is stale. Answered as
+    // the page answers a stale ref, so the caller's retry finds the press again on the new page.
+    let real: Awaited<ReturnType<typeof tryRealInput>>;
+    try {
+      real = await tryRealInput(deps, session, asString(step['ref']) ?? '', ActionType.PRESS, step);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isStaleRefError(message)) {
+        throw error;
+      }
+      return { kind: 'command_result', id: ActionType.PRESS, ok: false, error: message };
+    }
     if (real.result === undefined) {
       chunk.push(sub);
       continue;

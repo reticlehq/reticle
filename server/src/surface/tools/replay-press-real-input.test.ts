@@ -134,3 +134,27 @@ describe('a replayed sequence with a press in it', () => {
     expect(performed).toHaveLength(0);
   });
 });
+
+/*
+ * A press after a page load inside one recorded sequence. The click before it loaded a new page, so
+ * the press's ref (found before the sequence ran) no longer resolved. Focusing it threw, and the throw
+ * stopped the whole replay before the stale-ref retry could find the press again on the new page:
+ * an upload journey was `unknown` on a working app.
+ */
+describe('a press with a stale ref inside a replayed sequence', () => {
+  it('answers a failed result that names the stale ref, so the retry can find the press again', async () => {
+    const { deps, session } = fixture();
+    const stale = "ref 'e151' no longer resolves to an element";
+    const command = session.command.bind(session);
+    (session as { command: Session['command'] }).command = (name, args = {}, timeoutMs) =>
+      ReticleCommand.ACT === name && ActionType.FOCUS === args['action']
+        ? Promise.resolve({ kind: 'command_result', id: 'f', ok: false, error: stale })
+        : command(name, args, timeoutMs);
+    const wrapped = withLeaseKeyboard(deps, session);
+    const r = await wrapped.command(ReticleCommand.ACT_SEQUENCE, {
+      steps: [{ ref: 'e151', action: ActionType.PRESS, args: { key: 'Enter' } }],
+    });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain(stale);
+  });
+});
