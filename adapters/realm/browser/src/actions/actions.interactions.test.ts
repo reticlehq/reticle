@@ -345,6 +345,182 @@ describe('a contenteditable target is refused legibly', () => {
 });
 
 /**
+ * Rich-text editors were UNSUPPORTED: `fill`, `type` and `press` all left a Tiptap/ProseMirror
+ * contenteditable empty (press dispatched a keydown and inserted nothing). issue #1814.
+ *
+ * `insertText` is the supported path. It announces `beforeinput` (an editor that owns its model
+ * cancels it and applies the text), then lets the browser insert it — `execCommand("insertText")`
+ * where it exists, else a write at the caret plus `input`. A command that exists and fails is
+ * REFUSED: writing `textContent` directly would update the DOM while the editor's model kept the
+ * old value, a false green on exactly the surfaces this exists for. The tests below pin each shape
+ * and the `valueChanged` evidence an agent reads.
+ *
+ * Measured in Chromium through Reticle: `execCommand("insertText")` fires `input` with
+ * `cancelable: false` and NO `beforeinput`. So announcing after it skipped every input-owning
+ * editor — the model stayed empty while the DOM held the text. These tests pin the order.
+ */
+describe('insertText inserts into a contenteditable through the editing pipeline', () => {
+  it('announces beforeinput before the native command, which inserts once', async () => {
+    document.body.innerHTML = '<div id="rt" contenteditable="true"></div>';
+    const el = document.getElementById('rt') as HTMLElement;
+    const seen: string[] = [];
+    const order: string[] = [];
+    el.addEventListener('beforeinput', (event) => {
+      order.push('beforeinput');
+      seen.push(`${event.inputType}:${event.data ?? ''}:${String(event.cancelable)}`);
+    });
+    // Chromium's execCommand: it applies the text and fires `input`, but never `beforeinput`.
+    // Recording the order is what makes this test fail if the command is tried first.
+    const execCommand = vi.fn((_command: string, _ui: boolean, value: string): boolean => {
+      order.push('execCommand');
+      el.textContent = `${el.textContent ?? ''}${value}`;
+      el.dispatchEvent(
+        new InputEvent('input', { inputType: 'insertText', data: value, bubbles: true }),
+      );
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+
+    try {
+      const result = await executeAction(refs.refFor(el), 'insertText', { text: 'hello' });
+
+      expect(seen, 'the editor is told before the DOM changes').toContain('insertText:hello:true');
+      expect(order, 'the announcement comes before the native command').toEqual([
+        'beforeinput',
+        'execCommand',
+      ]);
+      expect(execCommand).toHaveBeenCalledWith('insertText', false, 'hello');
+      expect(el.textContent, 'the native command applied the text once').toBe('hello');
+      expect(
+        result.effect.valueChanged,
+        'the editor content changed, so valueChanged is the proof',
+      ).toBe(true);
+      expect(result.effect.defaultPrevented, 'the editor accepted the text').toBe(false);
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
+  it('lets an editor that owns input apply the text once, and never writes it again', async () => {
+    document.body.innerHTML = '<div id="rt" contenteditable="true"></div>';
+    const el = document.getElementById('rt') as HTMLElement;
+    el.addEventListener('beforeinput', (event) => {
+      if ('insertText' !== event.inputType || 'string' !== typeof event.data) {
+        return;
+      }
+      event.preventDefault();
+      el.textContent = `${el.textContent ?? ''}${event.data}`;
+    });
+    // Chromium's execCommand returns true and fires no `beforeinput`. If the action runs it
+    // before announcing, this editor never sees the edit and the model stays empty.
+    const execCommand = vi.fn((): boolean => true);
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+
+    try {
+      const result = await executeAction(refs.refFor(el), 'insertText', { text: 'hello' });
+
+      expect(el.textContent, 'exactly one copy, because the editor took the edit').toBe('hello');
+      expect(
+        execCommand,
+        'a cancelled edit never reaches the native command',
+      ).not.toHaveBeenCalled();
+      expect(result.effect.defaultPrevented, 'the editor cancelled the native edit').toBe(true);
+      expect(result.effect.valueChanged, 'the editor model did change').toBe(true);
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
+  it('refuses when the native command fails, instead of writing DOM the model never saw', async () => {
+    document.body.innerHTML = '<div id="rt" contenteditable="true"></div>';
+    const el = document.getElementById('rt') as HTMLElement;
+    // A native command that exists and returns false: the surface was not editable at that moment.
+    const execCommand = vi.fn((): boolean => false);
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+
+    try {
+      await expect(executeAction(refs.refFor(el), 'insertText', { text: 'hello' })).rejects.toThrow(
+        /did not accept the text/,
+      );
+      expect(execCommand, 'the native command was the path that failed').toHaveBeenCalled();
+      expect(el.textContent, 'no DOM write the editor model never saw').toBe('');
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
+  it('writes at the caret where the engine has no native command', async () => {
+    document.body.innerHTML = '<div id="rt" contenteditable="true"></div>';
+    const el = document.getElementById('rt') as HTMLElement;
+    // jsdom has no execCommand. The fallback is for exactly this case, not for a failed command.
+    expect(typeof document.execCommand).toBe('undefined');
+
+    const result = await executeAction(refs.refFor(el), 'insertText', { text: 'hello' });
+
+    expect(el.textContent).toBe('hello');
+    expect(result.effect.valueChanged, 'the caret write changed the surface').toBe(true);
+    expect(result.effect.defaultPrevented, 'nothing refused the edit').toBe(false);
+  });
+
+  /**
+   * An EditContext surface is REFUSED, not written through its object.
+   *
+   * A scripted `EditContext.updateText()` fires no `textupdate` event, and CodeMirror 6 and Monaco
+   * feed their own model from that event. The call looks like an edit and leaves the editor's
+   * document on the old text — the exact false green this action exists to prevent. The mock-only
+   * test that stood here asserted the calls were made and could not see that, so it is gone; a real
+   * browser test is the way to add support later.
+   */
+  it('refuses an EditContext surface, whose model textupdate never reaches', async () => {
+    document.body.innerHTML = '<div id="monaco" role="textbox"></div>';
+    const el = document.getElementById('monaco') as HTMLElement & { editContext?: unknown };
+    const updateText = vi.fn();
+    const updateSelection = vi.fn();
+    el.editContext = { selectionStart: 3, selectionEnd: 3, updateText, updateSelection };
+
+    await expect(executeAction(refs.refFor(el), 'insertText', { text: 'abc' })).rejects.toThrow(
+      /textupdate/i,
+    );
+    expect(updateText, 'no model write the editor never hears about').not.toHaveBeenCalled();
+    expect(updateSelection).not.toHaveBeenCalled();
+  });
+
+  it('leaves the content untouched when the editor cancels beforeinput', async () => {
+    document.body.innerHTML = '<div id="rt" contenteditable="true">existing</div>';
+    const el = document.getElementById('rt') as HTMLElement;
+    el.addEventListener('beforeinput', (event) => event.preventDefault());
+
+    const result = await executeAction(refs.refFor(el), 'insertText', { text: 'x' });
+
+    expect(el.textContent, 'a cancelled edit must not be written through the DOM').toBe('existing');
+    expect(result.effect.defaultPrevented, 'the editor cancelled the edit').toBe(true);
+  });
+
+  it('refuses a surface that is not a rich-text editor', async () => {
+    document.body.innerHTML = '<div id="plain">keep</div>';
+    const el = document.getElementById('plain') as HTMLElement;
+    await expect(executeAction(refs.refFor(el), 'insertText', { text: 'x' })).rejects.toThrow(
+      /rich-text/i,
+    );
+    expect(el.textContent).toBe('keep');
+  });
+
+  it('requires a string text, and does not silently insert nothing', async () => {
+    document.body.innerHTML = '<div id="rt" contenteditable="true"></div>';
+    const el = document.getElementById('rt') as HTMLElement;
+    await expect(executeAction(refs.refFor(el), 'insertText', {})).rejects.toThrow(/string `text`/);
+  });
+
+  it('points a refused fill/type at insertText rather than at press', async () => {
+    document.body.innerHTML = '<div id="rt" contenteditable="true"></div>';
+    const el = document.getElementById('rt') as HTMLElement;
+    await expect(executeAction(refs.refFor(el), 'fill', { value: 'x' })).rejects.toThrow(
+      /insertText/,
+    );
+  });
+});
+
+/**
  * Hold-to-confirm controls were undriveable, and the agent's own workaround was to give up and ask
  * the human to click the button.
  *
@@ -377,7 +553,9 @@ describe('click holdMs — hold-to-confirm controls', () => {
       }, thresholdMs);
     });
     el.addEventListener('mouseup', () => {
-      if (timer !== undefined) clearTimeout(timer);
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
     });
     return { el, fired: () => confirmed };
   }

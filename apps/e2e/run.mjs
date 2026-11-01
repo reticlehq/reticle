@@ -51,6 +51,9 @@ const ORDER = [
   'blind-spot-reset-test',
   'next-smoke-test',
   'next-blur-clock-test',
+  // The other half of insertText: the unit tests drive a mock DOM, so only a real ProseMirror editor
+  // can show that the library's OWN document took the text rather than only its textContent.
+  'insert-text-rich-editor-test',
   'status-honesty-test',
   'drive-launch-test',
   // The other half of `press`: a document key through the REAL keyboard, asserting focus actually
@@ -219,7 +222,7 @@ if (specs.length === 0) {
 // So the size is recorded, and shrinking the battery costs a deliberate edit to a number a
 // reviewer can see. Growing it costs the same edit, which is the point: both directions are a
 // decision. Measured 2026-09-11.
-const EXPECTED_SPECS = desktop ? 3 : 57;
+const EXPECTED_SPECS = desktop ? 3 : 58;
 // The WHOLE battery is counted, not this shard's slice of it: a shard is a third of the list by
 // design, and the question here is whether the list itself shrank.
 if (listed.length !== EXPECTED_SPECS) {

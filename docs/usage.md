@@ -148,9 +148,9 @@ Perform one action / several in order.
 | `targetMatched` | the ref still resolved to a connected element |
 | `visible` | element was visible at the start of the action |
 | `enabled` | element was not disabled / aria-disabled at the start |
-| `defaultPrevented` | a handler called `preventDefault()` on the primary cancelable event. Only meaningful for `click`/`dblclick`/`hover`/`fill`/`type`/`clear`/`press`/`upload`/`drag`; always `false` for non-cancelable events (`focus`/`blur`/`select`/`check`/`uncheck`/`submit`/`scrollIntoView`) |
+| `defaultPrevented` | a handler called `preventDefault()` on the primary cancelable event. Only meaningful for `click`/`dblclick`/`hover`/`fill`/`type`/`insertText`/`clear`/`press`/`upload`/`drag`; always `false` for non-cancelable events (`focus`/`blur`/`select`/`check`/`uncheck`/`submit`/`scrollIntoView`). For `insertText`, `true` with `valueChanged: true` means an editor that owns its input took the text: that is success, not a refusal |
 | `focusMoved` | `"<prevRef>-><newRef>"` if `document.activeElement` changed, else `null` (body counts as `null`) |
-| `valueChanged` | `fill`/`type`/`clear` only: input value before !== after; otherwise `false` |
+| `valueChanged` | `fill`/`type`/`clear`, and `insertText`: the field value (or the editor's text) before !== after; otherwise `false` |
 | `domMutatedWithin` | count of MutationObserver records seen in the window |
 | `occluded` | `click`/`dblclick` only: the click point hit-tested to a _foreign_ element (an overlay is on top). Synthetic dispatch still delivered the event, but **a real user could not click it**, so treat the target as visually blocked. `false` when not click-like or not hit-testable |
 | `occludedBy` | the ref of the element actually on top at the click point when `occluded`, else `null` |
@@ -421,6 +421,7 @@ A `state` assertion is graded as a **consequence** (a wrong element or stale ren
 | `focus` / `blur` | n/a |  |
 | `fill` | `{ value }` | sets value via React-safe native setter + `input`/`change` |
 | `type` | `{ text }` | appends to current value |
+| `insertText` | `{ text }` | inserts plain text into a contenteditable/Tiptap/ProseMirror editor through the browser editing pipeline: it announces `beforeinput` first, then lets the browser insert, so the editor's own model updates. `fill` and `type` refuse these surfaces. It refuses an EditContext editor (Monaco, CodeMirror 6), where a scripted update fires no `textupdate` for the model, and it refuses when the native command exists and fails, rather than writing the DOM while the editor's model stays stale |
 | `clear` | n/a | empties an input |
 | `select` | `{ value }` | `<select>` option |
 | `check` / `uncheck` | n/a | checkbox/radio |

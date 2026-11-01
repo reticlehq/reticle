@@ -103,6 +103,7 @@ const SHIPPED: readonly string[] = [
   'drag',
   'tap',
   'zoom',
+  'insertText',
   'webmcp',
 ];
 

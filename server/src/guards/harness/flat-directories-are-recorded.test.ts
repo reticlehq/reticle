@@ -65,7 +65,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: query-finders.ts, the finder for each query field, split out of query.ts at the 1000-line cap (#1662).
   // +1: scope-roots.ts, scope resolution split out of query.ts at the 1000-line cap, when a scope
   // started to resolve to every element it matches (#1663).
-  'adapters/realm/browser/src/actions': 11,
+  // +1: insert-text.ts, the `insertText` action's whole path behind a dynamic import. The rich-text
+  // edit is most of that action's code, and a page that never inserts text should not download it.
+  'adapters/realm/browser/src/actions': 12,
   'adapters/realm/browser/src/dom': 20,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 27,
