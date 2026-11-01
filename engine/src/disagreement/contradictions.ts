@@ -182,6 +182,20 @@ const ARIA_INVALID = 'aria-invalid';
 const MUST_DO_SOMETHING = new Set(['click', 'dblclick', 'submit']);
 
 /**
+ * Actions that state ONE intent. Every read issued after one of them comes from that intent, so two
+ * reads of one path are a fan-out, not a filter that changed while the first was in flight. Text entry
+ * is not here: each keystroke of `type` can issue a read that replaces the last.
+ */
+const ONE_INTENT_ACTIONS: ReadonlySet<string> = new Set([
+  'click',
+  'dblclick',
+  'select',
+  'check',
+  'uncheck',
+  'submit',
+]);
+
+/**
  * Whether NOTHING in this window is attributable to the action.
  *
  * Ambient churn is deliberately not counted as evidence the action worked — a background event
@@ -326,7 +340,13 @@ function findWindowContradictions(
 
   // ── Overlapping reads that settled out of order ─────────────────────────────────────────────
   // Independent of any action, so it runs on every window: the race is a property of the timeline.
-  found.push(...findStaleResponses(events));
+  // A window that one discrete action opened holds no second intent, so it cannot hold a race.
+  found.push(
+    ...findStaleResponses(events, {
+      oneIntent:
+        floor !== undefined && ONE_INTENT_ACTIONS.has((options.action ?? '').toLowerCase()),
+    }),
+  );
 
   // ── A 2xx whose BODY says it failed ─────────────────────────────────────────────────────────
   // Needs body capture; silent without it, which is why the assert path also declares when bodies
