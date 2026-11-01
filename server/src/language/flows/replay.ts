@@ -489,6 +489,11 @@ function anchorArgs(
       componentArgs['source'] = source;
     }
     // Which of the elements this anchor matches was acted on: a list renders every item from one site.
+    // The element's own words, when it has no accessible name: they survive a change of layout.
+    const ownText = asString(r['ownText']);
+    if (ownText !== undefined && ownText.length > 0) {
+      componentArgs['text'] = ownText;
+    }
     if ('number' === typeof r['componentNth'] && 'number' === typeof r['componentOf']) {
       componentArgs['nth'] = r['componentNth'];
       componentArgs['of'] = r['componentOf'];

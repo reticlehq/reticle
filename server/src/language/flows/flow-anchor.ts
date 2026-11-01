@@ -484,6 +484,9 @@ export function componentQueryArgs(
   if (anchor.source !== undefined) {
     args['source'] = anchor.source;
   }
+  if (anchor.text !== undefined) {
+    args['text'] = anchor.text;
+  }
   return args;
 }
 

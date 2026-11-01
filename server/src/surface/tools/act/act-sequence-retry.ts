@@ -90,6 +90,7 @@ export function describeStepResult(
     'component',
     'componentNth',
     'componentOf',
+    'ownText',
     'role',
     'name',
     'source',
