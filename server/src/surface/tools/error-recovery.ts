@@ -32,6 +32,10 @@ import { BODY_CLAUSE_REFUSAL_OPENING } from '@reticlehq/engine/evidence/body-cap
 import { EMPTY_FIND_OPENING } from './read/query-shape.js';
 import { UNKNOWN_FLOW_OPENING } from '@/language/flows/suite-selection.js';
 import {
+  ARTIFACT_ROOT_ABSOLUTE_REFUSAL,
+  ARTIFACT_ROOT_MISSING_REFUSAL,
+} from '@/memory/project/root-claims.js';
+import {
   CHROMIUM_PATH_REFUSAL_PREFIX,
   chromiumInstallCommand,
   bundledPlaywrightVersion,
@@ -96,6 +100,11 @@ const SELF_RECOVERING: readonly { readonly match: RegExp; readonly reason: Refus
   // Both are the caller's to fix, and the defect ask on top told an agent to file a bug about them.
   { match: literally(EMPTY_FIND_OPENING), reason: RefusalReason.BAD_ARGS },
   { match: literally(UNKNOWN_FLOW_OPENING), reason: RefusalReason.NO_MATCH },
+  // A lease `root` naming no directory on disk — relative, or absent — is the caller's to fix, and
+  // the message carries the exact path to pass instead. Both sat under the feedback ask, which
+  // invited a bug report about a mistyped path (#2085).
+  { match: literally(ARTIFACT_ROOT_ABSOLUTE_REFUSAL), reason: RefusalReason.BAD_ARGS },
+  { match: literally(ARTIFACT_ROOT_MISSING_REFUSAL), reason: RefusalReason.BAD_ARGS },
 ];
 
 /**
