@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle serve` on Windows reported a daemon as failed while it was still starting.** The bind wait had a fixed 15s deadline, and a `--drive` Chromium launch runs before the daemon binds, so a slow start exited 1 with "the daemon did not come up" over a child that bound seconds later and kept running, unnamed. The wait now tracks the spawned child: it keeps waiting while the child is alive, up to a 60s ceiling, and stops at once when the child died, so its startup cause is reported. A child that is still starting when the ceiling passes is named by pid, with the commands to check it or stop it. Closes [#1541](https://github.com/reticlehq/reticle/issues/1541).

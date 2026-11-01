@@ -35,7 +35,7 @@ import {
   defaultPairingTokenDir,
   readOrCreatePairingTokenSync,
 } from '@/portal/bridge/pairing-token.js';
-import { spawnDaemon } from '@/command/daemon/daemon.js';
+import { isAlive, readPid, spawnDaemon } from '@/command/daemon/daemon.js';
 import {
   PortPresence,
   presenceIsUsable,
@@ -251,9 +251,11 @@ export async function ensureTryDaemon(port: number): Promise<string | undefined>
   const script = process.argv[1];
   if (script === undefined) return 'Cannot locate the reticle daemon script.';
   spawnDaemon(process.execPath, script, [DAEMON_INNER_COMMAND, PORT_FLAG, String(port)], port);
-  return (await waitForDaemonBind(port))
-    ? undefined
-    : `Could not start the Reticle daemon on port ${String(port)}.`;
+  const childPid = readPid(port);
+  const bound = await waitForDaemonBind(port, {
+    childAlive: () => childPid !== null && isAlive(childPid),
+  });
+  return bound ? undefined : `Could not start the Reticle daemon on port ${String(port)}.`;
 }
 
 /** The drive itself, through the daemon: a watched window, the zero-install reader, one explore. */

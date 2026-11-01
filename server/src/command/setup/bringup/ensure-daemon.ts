@@ -220,8 +220,15 @@ export function nodeEnsureDaemonDeps(skewed: (status: unknown) => boolean): Ensu
     starting: daemonProcessAlive,
     // The same wait `reticle restart` does: poll until `/status` answers as a daemon, bounded. A
     // cold daemon on a fresh HOME outlived the proxy's shorter reconnect budget this used to borrow.
+    // The wait tracks the spawned child (#1541): alive keeps it waiting, dead ends it at once.
     waitReady: async (port: number): Promise<unknown> => {
-      if (!(await waitForDaemonBind(port))) throw new Error(`no daemon bound :${String(port)}`);
+      const bound = await waitForDaemonBind(port, {
+        childAlive: () => {
+          const pid = readPid(port);
+          return null !== pid && isAlive(pid);
+        },
+      });
+      if (!bound) throw new Error(`no daemon bound :${String(port)}`);
       return undefined;
     },
     scriptPath: process.argv[1],
