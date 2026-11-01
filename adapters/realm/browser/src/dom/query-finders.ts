@@ -134,14 +134,20 @@ export function ownWords(el: Element): string {
 /**
  * Auto-anchor resolution: source (precise) first, then component name (coarse fallback).
  *
- * With `text`, only elements whose own words are that text count. A source line is the recorded
- * implementation's layout: a correct change that moves the line leaves no element there, and the
- * component name plus the element's words still find it. Without `text`, as before.
+ * With `text`, only elements whose own words are that text count. With `role`, only elements with
+ * that role count. A source line is the recorded implementation's layout: a correct change that moves
+ * the line leaves no such element there, and the component name plus the element's words or role
+ * still find it. Without either, as before.
  */
 function findByComponent(container: HTMLElement, query: ElementQuery): HTMLElement[] {
   const words = query.text === undefined ? undefined : query.text.replace(/\s+/g, ' ').trim();
+  const role = query.role;
   const keep = (els: HTMLElement[]): HTMLElement[] =>
-    words === undefined ? els : els.filter((el) => ownWords(el) === words);
+    els.filter(
+      (el) =>
+        (words === undefined || ownWords(el) === words) &&
+        (role === undefined || matchesRole(getRole(el), role)),
+    );
   if (query.source !== undefined) {
     const bySource = keep(findBySource(container, query.source));
     if (bySource.length > 0) {

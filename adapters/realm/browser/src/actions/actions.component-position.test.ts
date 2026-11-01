@@ -86,3 +86,26 @@ describe('act result — the own words of an element with no accessible name', (
     expect(res.ownText).toBeUndefined();
   });
 });
+
+/**
+ * The position is counted among the elements a replay will resolve, and a replay of a nameless
+ * element keeps only the elements with its role. Counted among every element of the component, the
+ * recorded count did not match the replayed count, and the replay could not choose.
+ */
+describe('act result — position among the elements of one component anchor with that role', () => {
+  it('counts only the elements with the same role', async () => {
+    document.body.innerHTML =
+      '<div data-component="PhoneInput">' +
+      '<span role="img" aria-label="flag"></span><div role="none"></div>' +
+      '<span role="img" aria-label="flag"></span><div role="none"></div>' +
+      '</div>';
+    const second = document.querySelectorAll('[role="none"]')[1] as HTMLElement;
+    const res = await executeAction(refs.refFor(second), 'click', {});
+    if (!res.ok) {
+      throw new Error('expected ok');
+    }
+    expect(res.role).toBe('none');
+    expect(res.componentNth).toBe(1);
+    expect(res.componentOf).toBe(2);
+  });
+});

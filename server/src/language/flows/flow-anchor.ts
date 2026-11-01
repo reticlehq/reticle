@@ -487,6 +487,10 @@ export function componentQueryArgs(
   if (anchor.text !== undefined) {
     args['text'] = anchor.text;
   }
+  // An older SDK ignores a role on a component query and answers as before.
+  if (anchor.role !== undefined) {
+    args['role'] = anchor.role;
+  }
   return args;
 }
 
