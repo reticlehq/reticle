@@ -122,9 +122,35 @@ export function daemonProcessAlive(port: number): boolean {
   return null !== pid && isAlive(pid);
 }
 
-/** How long a spawned daemon gets to bind before `serve`, `restart` or `init` gives up on it. */
-const BIND_TIMEOUT_MS = 15_000;
+/**
+ * How long a spawned daemon gets to bind before `serve`, `restart` or `init` gives up on it.
+ *
+ * 60 s, not the old 15 s. On Windows under load a cold daemon — above all a `--drive` one,
+ * whose Chromium launch runs inside `startDaemon` BEFORE it binds — can still be starting
+ * well past 15 s, and the old deadline made `serve` exit 1 over a child that bound seconds
+ * later and kept running (#1541). The ceiling still exists: a child that never binds is a
+ * failure, it just gets a budget sized for the slow case it actually hits.
+ */
+export const DAEMON_BIND_TIMEOUT_MS = 60_000;
 const BIND_POLL_MS = 150;
+
+export interface DaemonBindWaitOptions {
+  /** Ceiling for the whole wait. Defaults to {@link DAEMON_BIND_TIMEOUT_MS}. */
+  timeoutMs?: number;
+  /** Delay between probes. Defaults to the production poll interval; tests shrink it. */
+  pollMs?: number;
+  /**
+   * Whether the spawned child is still alive. A dead child will never bind, so the wait
+   * stops at once instead of riding out the ceiling; a live child keeps the wait going
+   * until it binds or the ceiling passes. Omit it when no child was spawned by the caller.
+   */
+  childAlive?: () => boolean;
+  /** The probe pair, injected by tests so the rule runs without a socket. */
+  probes?: {
+    tcpOpen: (port: number) => Promise<boolean>;
+    status: (port: number) => Promise<unknown>;
+  };
+}
 
 /**
  * Poll until `/status` on `port` answers as a Reticle daemon; false once the bound passes.
@@ -133,12 +159,21 @@ const BIND_POLL_MS = 150;
  * shorter reconnect budget, and on a cold fresh HOME it printed "could not start the Reticle
  * daemon" over a daemon that bound seconds later. Bounded polling, never a fixed sleep.
  */
-export async function waitForDaemonBind(port: number): Promise<boolean> {
-  const deadline = Date.now() + BIND_TIMEOUT_MS;
+export async function waitForDaemonBind(
+  port: number,
+  options: DaemonBindWaitOptions = {},
+): Promise<boolean> {
+  const timeoutMs = options.timeoutMs ?? DAEMON_BIND_TIMEOUT_MS;
+  const pollMs = options.pollMs ?? BIND_POLL_MS;
+  const probes = options.probes ?? { tcpOpen: probeDaemon, status: fetchStatus };
+  const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
+    const presence = await probePresence(port, probes);
     if (presence === PortPresence.DAEMON) return true;
+    // The child is gone, so no later probe can succeed. Fail now and let the caller read
+    // the startup cause from the daemon log, instead of reporting a timeout that is not one.
+    if (options.childAlive !== undefined && !options.childAlive()) return false;
     if (Date.now() >= deadline) return false;
-    await delay(BIND_POLL_MS);
+    await delay(pollMs);
   }
 }
