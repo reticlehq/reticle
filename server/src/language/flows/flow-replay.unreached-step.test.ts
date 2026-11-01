@@ -27,23 +27,26 @@ import { staleTargetResult } from './flow-step-runners.js';
 import { mapReplayToFlowResult } from '@/judgement/runs/artifact/replay-mapping.js';
 
 /** A page where only the testids in `present` exist; every act on them runs. */
-function page(present: readonly string[], survivors: readonly string[] = []): FlowReplaySession {
+function page(
+  present: readonly string[],
+  survivors: readonly string[] = [],
+  doubled: readonly string[] = [],
+): FlowReplaySession {
   return {
     command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
       const testid = asString(args['value']) ?? '';
+      const copies = doubled.includes(testid) ? [1, 2] : [1];
       const result =
         ReticleCommand.QUERY === name
           ? {
               elements: present.includes(testid)
-                ? [
-                    {
-                      ref: asRef(`e-${testid}`),
-                      role: 'button',
-                      name: testid,
-                      states: [],
-                      visible: true,
-                    },
-                  ]
+                ? copies.map((n) => ({
+                    ref: asRef(`e-${testid}-${String(n)}`),
+                    role: 'button',
+                    name: testid,
+                    states: [],
+                    visible: true,
+                  }))
                 : [],
               hint: {
                 route: '/',
@@ -126,23 +129,47 @@ describe('a replay whose step ran and whose expectation did not hold', () => {
   });
 });
 
+const TWO_STEPS: FlowFile = {
+  ...FLOW,
+  steps: [
+    {
+      tool: ReticleTool.ACT,
+      anchor: { kind: AnchorKind.TESTID, value: 'add-task' },
+      action: ActionType.CLICK,
+      args: {},
+    },
+    ...FLOW.steps,
+  ],
+};
+
 describe('a control that is missing after earlier steps acted', () => {
   it('stays drift, because the steps before it put the page there', async () => {
-    const twoSteps: FlowFile = {
-      ...FLOW,
-      steps: [
-        {
-          tool: ReticleTool.ACT,
-          anchor: { kind: AnchorKind.TESTID, value: 'add-task' },
-          action: ActionType.CLICK,
-          args: {},
-        },
-        ...FLOW.steps,
-      ],
-    };
+    const twoSteps = TWO_STEPS;
     const steps = await replayFlow(page(['add-task']), twoSteps, waitForPredicate, 60);
     expect(steps[1]?.drift?.reasonKind).toBe(DriftReason.TESTID_NOT_FOUND);
     expect(staleTargetResult(twoSteps.name, steps)).toBeUndefined();
+  });
+});
+
+/*
+ * A control that several elements now match is on the page: the replay cannot choose one, so it
+ * decided nothing about the app. Before, this read as a failed flow once any earlier step had acted.
+ * On a correct build whose layout differs from the recording, that was a false failure.
+ */
+describe('a control that is ambiguous after earlier steps acted', () => {
+  it('is not proved, naming the step and the ambiguity', async () => {
+    const steps = await replayFlow(
+      page(['add-task', 'toggle-3'], [], ['toggle-3']),
+      TWO_STEPS,
+      waitForPredicate,
+      60,
+    );
+    expect(steps[0]?.ok).toBe(true);
+    expect(steps[1]?.drift?.reasonKind).toBe(DriftReason.ANCHOR_AMBIGUOUS);
+    const result = staleTargetResult(TWO_STEPS.name, steps);
+    expect(result?.status).toBe(ReplayStatus.UNVERIFIABLE);
+    expect(result?.unverifiable?.reason).toContain('step 2');
+    expect(result?.unverifiable?.reason).toContain('matched 2 live elements');
   });
 });
 
