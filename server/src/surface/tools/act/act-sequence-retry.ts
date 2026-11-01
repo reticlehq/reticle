@@ -81,12 +81,15 @@ export function describeStepResult(
   // `reticleUi`: the step hit Reticle's own HUD, so the recorder leaves it out of the app's flow.
   // `secret`: the SDK says the target holds a secret. Without it a sequence saved a password in clear.
   // `nth`/`of`/`testidOf`: the control's position among namesakes, which the recorder anchors on.
+  // `componentNth`/`componentOf`: its position among the elements of its component anchor.
   for (const key of [
     'testid',
     'testidOf',
     'nth',
     'of',
     'component',
+    'componentNth',
+    'componentOf',
     'role',
     'name',
     'source',
