@@ -157,7 +157,7 @@ const PREDICATE_FIELD_GRAMMAR_HINT =
   'compare (page text vs server answer, no expected value: { left:{from:"text",scope}, ' +
   'right:{from:"net",urlContains,path}, as:"number" }), ' +
   'console.absent:true (action completed with a CLEAN ' +
-  'console), absent:true on element/text (it should be gone). Call reticle_tools for the full field ' +
+  'console), absent:true on element/text (gone from the DOM; add visible:true for "not shown"). Call reticle_tools for the full field ' +
   'grammar of a kind.';
 
 const COMPACT_PREDICATE_DESCRIPTION = `${PREDICATE_KINDS}${PREDICATE_FIELD_GRAMMAR_HINT}`;
