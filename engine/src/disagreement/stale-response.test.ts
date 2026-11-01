@@ -351,6 +351,20 @@ describe('parallel fan-out is not a race', () => {
     it('while a filter changed by a later action is still a race', () => {
       expect(race('type=a', 'type=b', 60)).toHaveLength(1);
     });
+
+    // One route, one parameter that picks the operation: two panels of a market page asked for
+    // candles and for news, and the page got a permanent `no`.
+    it('two operations of one route, picked by an action parameter', () => {
+      expect(race('action=candles&symbol=AAPL', 'action=news&symbol=AAPL', 60)).toEqual([]);
+    });
+
+    it('two operations picked by an op parameter', () => {
+      expect(race('op=list', 'op=summary', 60)).toEqual([]);
+    });
+
+    it('a filter that changed under the same operation is still a race', () => {
+      expect(race('action=search&q=a', 'action=search&q=ab', 60)).toHaveLength(1);
+    });
   });
 });
 
@@ -453,7 +467,9 @@ describe('projection-aware stale response detection', () => {
         settled(secondEnd, 'b'),
         settled(firstEnd, 'a'),
       ];
-      if (reaction !== undefined) events.push(applied(reaction));
+      if (reaction !== undefined) {
+        events.push(applied(reaction));
+      }
       expect(findStaleResponses(events)).toHaveLength(count);
     },
   );

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — two reads of one route that pick different operations no longer give a false `no`.** A page that loads separate panels from one route, such as `?action=candles` and `?action=news`, was reported as `stale-response-applied` when the first answer arrived last. The two reads call different handlers for different parts of the page, so neither can be stale for the other. A parameter that picks the operation (`action`, `op`, `operation`, `endpoint`, `resource`, `method`) now marks two reads as different, the same as an id parameter. A filter that changes under the same operation is still reported as a race.

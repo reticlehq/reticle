@@ -47,16 +47,6 @@
       "count": 20
     }
   },
-  "src/disagreement/stale-response.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
-  "src/disagreement/stale-response.ts": {
-    "curly": {
-      "count": 22
-    }
-  },
   "src/disagreement/unit-mismatch.ts": {
     "curly": {
       "count": 19

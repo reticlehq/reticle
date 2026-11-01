@@ -94,7 +94,9 @@ function enumerates(key: string, one: string | null, other: string | null): bool
   if (POSITION_PARAMS.has(name)) {
     return WHOLE_NUMBER.test(one ?? '') && WHOLE_NUMBER.test(other ?? '');
   }
-  if (CURSOR_PARAMS.has(name)) return !DATE.test(one ?? '') && !DATE.test(other ?? '');
+  if (CURSOR_PARAMS.has(name)) {
+    return !DATE.test(one ?? '') && !DATE.test(other ?? '');
+  }
   return false;
 }
 
@@ -105,8 +107,12 @@ function differsOnlyByEnumeration(first: string, second: string): boolean {
   const keys = new Set([...a.keys(), ...b.keys()]);
   let differed = false;
   for (const key of keys) {
-    if (a.get(key) === b.get(key)) continue;
-    if (!enumerates(key, a.get(key), b.get(key))) return false;
+    if (a.get(key) === b.get(key)) {
+      continue;
+    }
+    if (!enumerates(key, a.get(key), b.get(key))) {
+      return false;
+    }
     differed = true;
   }
   return differed;
@@ -120,6 +126,14 @@ const IDENTITY_PARAMS = new Set(['id', 'ids', 'uuid', 'slug', 'key']);
 
 /** Different projections ask for differently shaped answers, both of which the app may need. */
 const PROJECTION_PARAMS = new Set(['select', 'fields', 'columns', 'include', 'expand']);
+
+/**
+ * Parameters that pick the OPERATION on one route (`?action=candles`, `?action=news`). Two reads
+ * that differ in one of these call two handlers whose answers feed two parts of the page, so neither
+ * can be stale for the other. `type` and `kind` are not here: they are usually filters, and a filter
+ * change is the race this rule exists for.
+ */
+const OPERATION_PARAMS = new Set(['action', 'op', 'operation', 'endpoint', 'resource', 'method']);
 
 /**
  * Issued this close together, two requests came from one task (a `Promise.all`, two effects in one
@@ -139,9 +153,24 @@ function couldSupersede(first: string, second: string): boolean {
   const b = new URLSearchParams(second);
   const keysA = [...new Set(a.keys())].sort().join('&');
   const keysB = [...new Set(b.keys())].sort().join('&');
-  if (keysA !== keysB) return false;
-  for (const key of IDENTITY_PARAMS) if (a.get(key) !== b.get(key)) return false;
-  for (const key of PROJECTION_PARAMS) if (a.get(key) !== b.get(key)) return false;
+  if (keysA !== keysB) {
+    return false;
+  }
+  for (const key of IDENTITY_PARAMS) {
+    if (a.get(key) !== b.get(key)) {
+      return false;
+    }
+  }
+  for (const key of PROJECTION_PARAMS) {
+    if (a.get(key) !== b.get(key)) {
+      return false;
+    }
+  }
+  for (const key of OPERATION_PARAMS) {
+    if (a.get(key) !== b.get(key)) {
+      return false;
+    }
+  }
   return !differsOnlyByEnumeration(first, second);
 }
 
@@ -151,7 +180,9 @@ function flights(events: readonly ReticleEvent[]): Flight[] {
   const out: Flight[] = [];
   for (const event of events) {
     const id = 'string' === typeof event.data['id'] ? event.data['id'] : undefined;
-    if (id === undefined) continue;
+    if (id === undefined) {
+      continue;
+    }
     const at = 'number' === typeof event.t ? event.t : 0;
     if (event.type === EventType.NET_PENDING) {
       const url = 'string' === typeof event.data['url'] ? event.data['url'] : '';
@@ -159,9 +190,13 @@ function flights(events: readonly ReticleEvent[]): Flight[] {
       issued.set(id, { url, method, at });
       continue;
     }
-    if (event.type !== EventType.NET_REQUEST) continue;
+    if (event.type !== EventType.NET_REQUEST) {
+      continue;
+    }
     const start = issued.get(id);
-    if (start === undefined) continue; // started before this window — its ordering is unknowable
+    if (start === undefined) {
+      continue;
+    } // started before this window — its ordering is unknowable
     out.push({
       id,
       url: start.url,
@@ -228,7 +263,9 @@ function appliedAfter(
 ): boolean {
   const { settledAt } = loser;
   return events.some((event) => {
-    if (event.t < settledAt - APPLY_SLACK_MS || event.t > settledAt + APPLY_WINDOW_MS) return false;
+    if (event.t < settledAt - APPLY_SLACK_MS || event.t > settledAt + APPLY_WINDOW_MS) {
+      return false;
+    }
     const reacts =
       event.type === EventType.STATE_CHANGE ||
       event.type === EventType.SIGNAL ||
@@ -260,7 +297,9 @@ export function findStaleResponses(events: readonly ReticleEvent[]): OwnContradi
   const byPath = new Map<string, Flight[]>();
   const all = flights(events);
   for (const flight of all) {
-    if (flight.method !== 'GET') continue;
+    if (flight.method !== 'GET') {
+      continue;
+    }
     const path = pathOf(flight.url);
     const group = byPath.get(path) ?? [];
     group.push(flight);
@@ -269,7 +308,9 @@ export function findStaleResponses(events: readonly ReticleEvent[]): OwnContradi
   for (const group of byPath.values()) {
     const reads = group.slice(-MAX_FLIGHTS_PER_PATH);
     const found = raceIn(reads, events, all);
-    if (found !== undefined) return [found];
+    if (found !== undefined) {
+      return [found];
+    }
   }
   return [];
 }
@@ -281,16 +322,32 @@ function raceIn(
 ): OwnContradiction | undefined {
   for (const first of reads) {
     for (const second of reads) {
-      if (first.id === second.id) continue;
-      if (second.issuedAt <= first.issuedAt) continue; // `first` must be the earlier request
-      if (second.issuedAt >= first.settledAt) continue; // sequential, not overlapping
-      if (second.settledAt >= first.settledAt) continue; // settled in order — no race
-      if (queryOf(first.url) === queryOf(second.url)) continue; // a retry, not a superseding query
-      if (second.issuedAt - first.issuedAt < SAME_TASK_MS) continue; // one task's fan-out
-      if (!couldSupersede(queryOf(first.url), queryOf(second.url))) continue;
+      if (first.id === second.id) {
+        continue;
+      }
+      if (second.issuedAt <= first.issuedAt) {
+        continue;
+      } // `first` must be the earlier request
+      if (second.issuedAt >= first.settledAt) {
+        continue;
+      } // sequential, not overlapping
+      if (second.settledAt >= first.settledAt) {
+        continue;
+      } // settled in order — no race
+      if (queryOf(first.url) === queryOf(second.url)) {
+        continue;
+      } // a retry, not a superseding query
+      if (second.issuedAt - first.issuedAt < SAME_TASK_MS) {
+        continue;
+      } // one task's fan-out
+      if (!couldSupersede(queryOf(first.url), queryOf(second.url))) {
+        continue;
+      }
       // The race happened. Whether it MATTERS is whether the app acted on the loser — an app that
       // drops superseded responses races just as visibly and is not broken.
-      if (!appliedAfter(events, first, all)) continue;
+      if (!appliedAfter(events, first, all)) {
+        continue;
+      }
       return {
         kind: ContradictionKind.STALE_RESPONSE_APPLIED,
         claim: `both reads of ${pathOf(first.url)} returned successfully and the page settled`,
