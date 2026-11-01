@@ -117,6 +117,10 @@ function componentAnchor(src: Record<string, unknown>): FlowAnchor | null {
   if (source !== undefined) {
     anchor.source = source;
   }
+  const text = asString(src['text']);
+  if (text !== undefined && text.length > 0) {
+    anchor.text = text;
+  }
   const nth = src['nth'];
   const of = src['of'];
   if ('number' === typeof nth && 'number' === typeof of && 1 < of) {

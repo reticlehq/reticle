@@ -126,16 +126,30 @@ function findByComponentName(container: HTMLElement, component: string): HTMLEle
   return out;
 }
 
-/** Auto-anchor resolution: source (precise) first, then component name (coarse fallback). */
+/** Whitespace-collapsed text content, the way a reader sees one element's own words. */
+export function ownWords(el: Element): string {
+  return (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Auto-anchor resolution: source (precise) first, then component name (coarse fallback).
+ *
+ * With `text`, only elements whose own words are that text count. A source line is the recorded
+ * implementation's layout: a correct change that moves the line leaves no element there, and the
+ * component name plus the element's words still find it. Without `text`, as before.
+ */
 function findByComponent(container: HTMLElement, query: ElementQuery): HTMLElement[] {
+  const words = query.text === undefined ? undefined : query.text.replace(/\s+/g, ' ').trim();
+  const keep = (els: HTMLElement[]): HTMLElement[] =>
+    words === undefined ? els : els.filter((el) => ownWords(el) === words);
   if (query.source !== undefined) {
-    const bySource = findBySource(container, query.source);
+    const bySource = keep(findBySource(container, query.source));
     if (bySource.length > 0) {
       return bySource;
     }
   }
   if (query.component !== undefined && query.component.length > 0) {
-    return findByComponentName(container, query.component);
+    return keep(findByComponentName(container, query.component));
   }
   return [];
 }

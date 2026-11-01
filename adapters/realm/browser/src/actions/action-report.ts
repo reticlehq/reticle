@@ -7,6 +7,7 @@
 import { readTestId } from '@/dom/addressing/testid-attr.js';
 import { QueryBy, type SettleReason } from '@reticlehq/core';
 import { elementsMatching } from '@/dom/query.js';
+import { ownWords } from '@/dom/query-finders.js';
 import { getAccessibleName, getRole, isSensitiveField } from '@/dom/a11y.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';
 import { isReticleUi } from '@/dom/dom-ignore.js';
@@ -145,6 +146,11 @@ export interface ActionResult {
    */
   componentNth?: number;
   componentOf?: number;
+  /**
+   * The element's own words, when it has no accessible name: a list item rendered from one JSX line
+   * has no other identity, and a line number is the implementation's layout, not the element.
+   */
+  ownText?: string;
   /** Role + accessible name — the anchor that identifies an INSTANCE, not a JSX site. */
   role?: string;
   name?: string;
@@ -171,6 +177,7 @@ export interface CapturedAnchor {
   source?: { file: string; line: number; column?: number };
   componentNth?: number;
   componentOf?: number;
+  ownText?: string;
   /**
    * Role + accessible name — the anchor that identifies an INSTANCE.
    *
@@ -242,6 +249,9 @@ function positionInComponentAnchor(
   return 1 < same.length && 0 <= at ? { nth: at, of: same.length } : null;
 }
 
+/** Longest own text kept as an element's identity. */
+const OWN_TEXT_MAX = 80;
+
 export function anchorOf(el: Element): CapturedAnchor {
   const testid = readTestId(el) ?? undefined;
   const info = identifyComponent(el);
@@ -281,6 +291,12 @@ export function anchorOf(el: Element): CapturedAnchor {
   }
   if (name.length > 0) {
     out.name = name;
+  } else if (out.component !== undefined || out.source !== undefined) {
+    // Short words only: a container's whole text is no identity, and it would bloat every step.
+    const words = ownWords(el);
+    if (0 < words.length && words.length <= OWN_TEXT_MAX) {
+      out.ownText = words;
+    }
   }
   if (isSensitiveField(el)) {
     out.secret = true;
@@ -334,6 +350,9 @@ export const result = (
   }
   if (anchor.componentOf !== undefined) {
     base.componentOf = anchor.componentOf;
+  }
+  if (anchor.ownText !== undefined) {
+    base.ownText = anchor.ownText;
   }
   if (anchor.role !== undefined) {
     base.role = anchor.role;

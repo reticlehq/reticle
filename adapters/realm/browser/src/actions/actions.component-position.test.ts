@@ -54,3 +54,35 @@ describe('act result — position among the elements of one component anchor', (
     expect(res.componentOf).toBeUndefined();
   });
 });
+
+/**
+ * The words that identify a nameless item. A country item has no accessible name (role
+ * presentation), so the recorder anchored it by component and source line only, which is the
+ * reference implementation's layout. The act result now carries the item's own words, so the
+ * anchor can survive a correct change that moves the line.
+ */
+describe('act result — the own words of an element with no accessible name', () => {
+  it('reports them for a nameless list item', async () => {
+    document.body.innerHTML =
+      '<ul data-component="CountryList">' +
+      '<li role="presentation">(+93) Afghanistan</li>' +
+      '<li role="presentation">  (+49)   Germany (Deutschland) </li>' +
+      '</ul>';
+    const germany = document.querySelectorAll('li')[1] as HTMLElement;
+    const res = await executeAction(refs.refFor(germany), 'click', {});
+    if (!res.ok) {
+      throw new Error('expected ok');
+    }
+    expect(res.ownText).toBe('(+49) Germany (Deutschland)');
+  });
+
+  it('does not report them for a control that has an accessible name', async () => {
+    document.body.innerHTML = '<div data-component="Toolbar"><button>Save</button></div>';
+    const save = document.querySelector('button') as HTMLButtonElement;
+    const res = await executeAction(refs.refFor(save), 'click', {});
+    if (!res.ok) {
+      throw new Error('expected ok');
+    }
+    expect(res.ownText).toBeUndefined();
+  });
+});

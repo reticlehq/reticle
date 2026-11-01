@@ -366,6 +366,7 @@ const ANCHOR_FIELDS = [
   'of',
   'componentNth',
   'componentOf',
+  'ownText',
   'secret',
 ];
 
