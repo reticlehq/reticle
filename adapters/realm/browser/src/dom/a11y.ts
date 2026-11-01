@@ -65,6 +65,8 @@ const NAME_FROM_CONTENT = new Set([
 ]);
 
 const INPUT_TEXT_TYPES = new Set(['text', 'email', 'tel', 'url', 'password', '']);
+// A file or image input is pressed, not typed into: Chromium and Playwright call it a button.
+const INPUT_BUTTON_TYPES = new Set(['submit', 'button', 'reset', 'file', 'image']);
 
 function inputRole(input: HTMLInputElement): string {
   const type = input.type.toLowerCase();
@@ -86,7 +88,7 @@ function inputRole(input: HTMLInputElement): string {
   if ('number' === type) {
     return 'spinbutton';
   }
-  if ('submit' === type || 'button' === type || 'reset' === type) {
+  if (INPUT_BUTTON_TYPES.has(type)) {
     return 'button';
   }
   return 'textbox';

@@ -139,3 +139,16 @@ describe('conditional implicit roles', () => {
     expect(runQuery({ by: QueryBy.ROLE, value: 'link' }).count).toBe(0);
   });
 });
+
+/*
+ * A file input is a button, as Chromium and Playwright expose it (#2083). It was a `textbox`, so a
+ * saved upload step anchored as a text field, resolved to a real text field on replay, and the
+ * upload was refused on a working app.
+ */
+describe('implicit roles for inputs that are pressed, not typed into', () => {
+  it.each([['file'], ['image']])('input type=%s maps to button, not textbox', (type) => {
+    document.body.innerHTML = `<input type="text" name="title"><input type="${type}" name="x">`;
+    expect(getRole(byTag(`input[type="${type}"]`))).toBe('button');
+    expect(runQuery({ by: QueryBy.ROLE, value: 'textbox' }).count).toBe(1);
+  });
+});
