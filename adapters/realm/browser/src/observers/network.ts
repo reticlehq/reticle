@@ -10,6 +10,7 @@ import {
   StreamDirection,
   fnv1a,
 } from '@reticlehq/core';
+import { fingerprintTextBody } from './body-fingerprint.js';
 import { captureMethod } from '@/patching/capture-method.js';
 import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';
 import {
@@ -117,15 +118,6 @@ function fingerprintBody(shape: string, length: number): string {
   return fnv1a(`${shape}#${String(length)}`);
 }
 
-/** A JSON body's shape, or an opaque marker when the text is not JSON at all. */
-function jsonShape(text: string): string {
-  try {
-    return shapeOf(JSON.parse(text) as unknown);
-  } catch {
-    return ShapeToken.OTHER;
-  }
-}
-
 /** The largest byte body read as text for its fingerprint. */
 const MAX_DECODED_BODY_BYTES = 1 << 20;
 
@@ -216,7 +208,7 @@ function projectRequestBody(body: unknown, captureBodies: boolean): Record<strin
   if ('string' === typeof body || bytesText !== undefined) {
     text = bytesText ?? (body as string);
     if (text.length > 0) {
-      shape = fingerprintBody(jsonShape(text), text.length);
+      shape = fingerprintTextBody(text);
     }
   } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
     // Read synchronously and never kept: names and kinds only, so it separates distinct uploads to
