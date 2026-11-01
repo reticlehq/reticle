@@ -259,10 +259,10 @@ export const RECOVERY = {
     '`args: { confirmDangerous: true }` — it goes inside the `args` object, not beside it. This is ' +
     'a deliberate refusal, not a defect: there is nothing to report.',
   UNSUPPORTED_SURFACE:
-    'That surface is not supported yet, and Reticle refuses rather than pretending — a rich-text ' +
-    'editor keeps its own document model, so writing to the DOM would look right and submit the old ' +
-    'content. Drive the same outcome another way (a plain input, a command, a keyboard action) or ' +
-    'assert on the result instead of typing it. Known gap, already reported: no need to file it.',
+    'That surface is a rich-text editor: it keeps its own document model, so `fill` and `type` ' +
+    'refuse it rather than write the DOM and submit the old content. Use `insertText` with ' +
+    '`{ text }`: it goes through the browser editing pipeline, so the editor model updates. If the ' +
+    'ref points at a wrapper, act on the editor inside it instead.',
   HOVER_NEEDS_POINTER:
     'Hover needs a real pointer: a synthetic mouseover does not apply CSS :hover, and Reticle ' +
     'refuses rather than reporting the styles as applied. Acquire a tab with ' +

@@ -428,13 +428,15 @@ describe('browser-side action guards are recognized refusals, not unknown defect
     }
   });
 
-  it('an unsupported surface is named as unsupported, not as a possible bug', () => {
+  it('an unsupported surface names insertText, not a possible bug', () => {
     expect(
-      recoveryFor('cannot fill a contenteditable or EditContext editor; use press or an input'),
+      recoveryFor(
+        'cannot fill a contenteditable or EditContext editor; use the insertText action, or press for a key',
+      ),
     ).toBe(RECOVERY.UNSUPPORTED_SURFACE);
     expect(
       recoveryFor(
-        'cannot type into a contenteditable or EditContext editor; use press or an input',
+        'cannot type into a contenteditable or EditContext editor; use the insertText action, or press for a key',
       ),
     ).toBe(RECOVERY.UNSUPPORTED_SURFACE);
   });

@@ -787,6 +787,22 @@ export const ActionType = {
   SCROLL: 'scroll',
   DRAG: 'drag',
   /**
+   * Insert plain text into a contenteditable or EditContext rich-text surface (Tiptap, ProseMirror,
+   * Quill, Slate, Lexical, Monaco, CodeMirror).
+   *
+   * `fill` and `type` refuse rich-text surfaces because writing `textContent` or `value` would
+   * desynchronise the editor's own model and report a false green. This action goes through the
+   * browser editing pipeline instead. It announces `beforeinput` first — an editor that owns its
+   * input cancels it and applies the text to its model — then runs `execCommand("insertText")`
+   * (the in-page equivalent of CDP `Input.insertText`). If that command exists and fails, the
+   * action refuses instead of writing the DOM, for the same reason. Where the engine has no native
+   * command (jsdom), it writes at the caret and dispatches `input` with `inputType: "insertText"`.
+   * The app sees a real edit, and `valueChanged` reports the surface's text delta. On an editor
+   * that took the text, `defaultPrevented: true` with `valueChanged: true` is the success path.
+   * Pass args: { text }.
+   */
+  INSERT_TEXT: 'insertText',
+  /**
    * A TOUCH tap: pointerdown(touch) → touchstart → touchend → pointerup → click.
    *
    * Not a click with another name. A handler bound to `touchstart`, or one that branches on
