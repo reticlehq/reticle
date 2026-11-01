@@ -157,6 +157,11 @@ if (input === undefined || save === undefined) {
       `ok=${String(fast[0]?.ok)} drift=${JSON.stringify(fast[0]?.drift ?? {}).slice(0, 90)}`,
     );
 
+    // The first save is still in flight: the fixture disables the input and the Save button while a
+    // save runs (`'saving' === status`), and the server holds that POST for SERVER_DELAY_MS. A click
+    // made now lands on a disabled button and sends nothing, and the second replay then rightly sees
+    // no network call. Wait until the first save has answered before the second replay clicks.
+    await sleep(SERVER_DELAY_MS);
     await T('reticle_act', { ref: input, action: 'fill', args: { value: 'slow two' } });
 
     // GREEN: the same flow, same endpoint, with the step declaring how long it takes.
