@@ -4,9 +4,11 @@
  */
 
 import {
+  AnchorKind,
   EventType,
   ReticleCommand,
   type CommandResult,
+  type FlowAnchor,
   type FlowFile,
   type FlowReplayResult,
   type ReticleEvent,
@@ -187,6 +189,11 @@ async function firstStepResolvesHere(
   }
 }
 
+/** An anchor that is the app's own name for one control (a testid, a component): the same on every page. */
+function namesTheControl(anchor: FlowAnchor | undefined): boolean {
+  return AnchorKind.TESTID === anchor?.kind || AnchorKind.COMPONENT === anchor?.kind;
+}
+
 /** What replay learned on its way to step 0. Both fields absent = the tab was left exactly as it was. */
 export interface StartPathArrival {
   /** The successor session replay must continue on. Absent when nothing was navigated, or arrival timed out. */
@@ -212,6 +219,22 @@ export function withStartPageWait<R extends FlowReplayResult>(
 /** The `wait` an outcome carries, ready to spread into an arrival. */
 function waitOf(outcome: { wait?: StartPageWait }): { wait?: StartPageWait } {
   return outcome.wait === undefined ? {} : { wait: outcome.wait };
+}
+
+/*
+ * The page each tab was on when its last replay ended, by session id. A page load gives the tab a
+ * new id, so an entry still matches only when nothing loaded since: the query on that page is what
+ * the last flow left, not what the caller chose.
+ * ponytail: one entry per replayed tab, never pruned; prune on session close if tabs ever churn.
+ */
+const leftByReplay = new Map<string, string>();
+
+/** Record where a replay left the tab, so the next reset does not keep that flow's query. */
+export function noteReplayEnded(session: StartPathSession & { id: string }): void {
+  const path = currentPathOf(session);
+  if (path !== undefined) {
+    leftByReplay.set(session.id, path);
+  }
 }
 
 /**
@@ -264,7 +287,13 @@ export async function arriveAtStartPath(
   // A route mismatch that step 1 can start from anyway is not worth a page load: navigating away
   // from a persistent anchor could only hurt, and did. Arriving is the goal; resetting a tab that is
   // ALREADY here is a different decision, taken above, and this must not override it.
-  if (!here && (await firstStepResolvesHere(session, flow))) {
+  // Only for an anchor that names the control itself (a testid, a component): a role and a name
+  // found on another page can be that page's own control, and step 1 then acts on the wrong one.
+  if (
+    !here &&
+    namesTheControl(flow.steps?.[0]?.anchor) &&
+    (await firstStepResolvesHere(session, flow))
+  ) {
     return {};
   }
   let destination: string;
@@ -273,8 +302,10 @@ export async function arriveAtStartPath(
     // against the tab's own URL to get something the browser can be sent to. Already HERE, the
     // reset reloads the page the tab is on: `samePath` ignored a query the flow did not record, and
     // navigating to `target` would strip it, so the replay would test a different page than the one
-    // it just agreed it was on.
-    destination = new URL(here ? current : target, session.url).toString();
+    // it just agreed it was on. A query that the last replay left is not kept: it is the previous
+    // flow's state, and keeping it gave the next flow a filtered page that it never recorded.
+    const keepQuery = here && leftByReplay.get(session.id) !== current;
+    destination = new URL(keepQuery ? current : target, session.url).toString();
   } catch {
     return {}; // no usable base URL — nowhere to navigate from
   }

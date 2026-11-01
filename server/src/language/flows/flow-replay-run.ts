@@ -66,6 +66,7 @@ import { CROSS_STEP_INDEX, crossStepOnly, declaredIn } from './flow-cross-step.j
 import {
   arriveAtStartPath,
   navigateAndAwait,
+  noteReplayEnded,
   startPathMismatchHint,
   withStartPageWait,
 } from './flow-start-path.js';
@@ -333,6 +334,23 @@ export async function replayNamedFlow(
   args: Record<string, unknown>,
   /** Wraps the session the steps run on, so a caller can watch what they resolved. */
   observe: (session: FlowReplaySession) => FlowReplaySession = (s) => s,
+): Promise<FlowReplayResult> {
+  try {
+    return await replayOnce(deps, args, observe);
+  } finally {
+    // Where this flow left the tab, so the next flow's reset does not keep its query.
+    try {
+      noteReplayEnded(deps.sessions.resolve(asString(args['sessionId'])));
+    } catch {
+      /* no tab is left to note */
+    }
+  }
+}
+
+async function replayOnce(
+  deps: ToolDeps,
+  args: Record<string, unknown>,
+  observe: (session: FlowReplaySession) => FlowReplaySession,
 ): Promise<FlowReplayResult> {
   const startedAt = deps.now();
   const name = asString(args['flowName']) ?? '';

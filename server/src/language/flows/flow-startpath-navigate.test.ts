@@ -17,7 +17,7 @@ import {
   type CommandResult,
   type FlowFile,
 } from '@reticlehq/core';
-import { arriveAtStartPath, withStartPageWait } from './flow-start-path.js';
+import { arriveAtStartPath, noteReplayEnded, withStartPageWait } from './flow-start-path.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
 
@@ -197,6 +197,46 @@ describe('arriveAtStartPath — replay navigates to the flow start page before s
     );
     expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([
       { name: ReticleCommand.NAVIGATE, args: { url: 'http://localhost:3000/login?next=%2Fdash' } },
+    ]);
+  });
+
+  /*
+   * A query that the LAST replay left is not a query that the caller chose.
+   *
+   * A suite replays its flows one after the other in the same tab. One flow checked "Show only unused
+   * tags", so the tab was on `/tags?unused=true` when the next flow, recorded on `/tags`, started.
+   * The reset reloaded that URL with the filter, and the next flow searched a filtered list: a false
+   * fail on a correct app. The page that the replay left is reset to `startPath` itself.
+   */
+  it('drops a query that the previous replay left on the same tab', async () => {
+    const left = 'http://localhost:3000/tags?search=o&unused=true';
+    const { calls, session } = tab(left);
+    noteReplayEnded(session);
+    await arriveAtStartPath(
+      manager([session, successor('http://localhost:3000/tags')]),
+      session,
+      flow('/tags'),
+      5_000,
+      instantClock(100),
+    );
+    expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([
+      { name: ReticleCommand.NAVIGATE, args: { url: 'http://localhost:3000/tags' } },
+    ]);
+  });
+
+  it('keeps the query when a new page loaded after the previous replay', async () => {
+    const url = 'http://localhost:3000/login?next=%2Fdash';
+    noteReplayEnded(tab(url, { id: 'earlier' }).session);
+    const { calls, session } = tab(url, { id: 'loaded-since' });
+    await arriveAtStartPath(
+      manager([session, successor(url)]),
+      session,
+      flow('/login'),
+      5_000,
+      instantClock(100),
+    );
+    expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([
+      { name: ReticleCommand.NAVIGATE, args: { url } },
     ]);
   });
 
@@ -392,6 +432,34 @@ describe('arriveAtStartPath — replay navigates to the flow start page before s
     const arrived = await arriveAtStartPath(manager([]), session, flow('/'));
     expect(arrived.session).toBeUndefined();
     expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([]);
+  });
+
+  /*
+   * A role and a name on another page is a namesake, not the control the flow recorded.
+   *
+   * A flow recorded on `/tags` starts with a click on button "Search". The tab was on `/bookmarks`,
+   * which has its own button "Search". Replay did not navigate, clicked the bookmark search, and the
+   * flow failed on a correct app. A testid is the app's own name for a control, so the sidebar case
+   * above keeps its shortcut; a role and a name do not.
+   */
+  it('navigates when step 1 matches here only by role and name', async () => {
+    const { calls, session } = tab('http://localhost:3000/bookmarks', { stepOnPage: true });
+    const byName: FlowFile = {
+      ...flow('/tags'),
+      steps: [
+        { tool: 'reticle_act', anchor: { kind: AnchorKind.ROLE, role: 'button', name: 'Search' } },
+      ],
+    };
+    await arriveAtStartPath(
+      manager([session, successor('http://localhost:3000/tags')]),
+      session,
+      byName,
+      5_000,
+      instantClock(100),
+    );
+    expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([
+      { name: ReticleCommand.NAVIGATE, args: { url: 'http://localhost:3000/tags' } },
+    ]);
   });
 
   // The other half of the same rule: a query that cannot answer is not evidence the page is fine.
@@ -604,10 +672,19 @@ describe('withStartPageWait', () => {
     expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toHaveLength(1);
   });
 
-  it('stays when this page has exactly the recorded number of them', async () => {
+  // The same count on another page is still another page's links: a role and a name do not say
+  // which control they are. See 'navigates when step 1 matches here only by role and name'.
+  it('navigates even when another page has exactly the recorded number of them', async () => {
     const { calls, session } = tab('http://localhost:3000/other', { matches: 10 });
-    const arrived = await arriveAtStartPath(manager([]), session, editOnTags());
-    expect(arrived.session).toBeUndefined();
-    expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([]);
+    const fresh = successor('http://localhost:3000/tags');
+    const arrived = await arriveAtStartPath(
+      manager([session, fresh]),
+      session,
+      editOnTags(),
+      5_000,
+      instantClock(100),
+    );
+    expect(arrived.session).toBe(fresh);
+    expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toHaveLength(1);
   });
 });
