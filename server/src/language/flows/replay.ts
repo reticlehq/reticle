@@ -494,6 +494,11 @@ function anchorArgs(
     if (ownText !== undefined && ownText.length > 0) {
       componentArgs['text'] = ownText;
     }
+    // The role, too: a nameless control with no own words has no other identity a layout keeps.
+    const role = asString(r['role']);
+    if (role !== undefined && role.length > 0) {
+      componentArgs['role'] = role;
+    }
     if ('number' === typeof r['componentNth'] && 'number' === typeof r['componentOf']) {
       componentArgs['nth'] = r['componentNth'];
       componentArgs['of'] = r['componentOf'];

@@ -235,15 +235,18 @@ function positionInComponentAnchor(
   el: Element,
   component: string | undefined,
   source: CapturedAnchor['source'],
+  role: string,
 ): { nth: number; of: number } | null {
   if (component === undefined && source === undefined) {
     return null;
   }
+  // The same query a replay sends, role included, so the recorded count is the replayed count.
   const same = elementsMatching({
     by: QueryBy.COMPONENT,
     value: component ?? '',
     ...(component === undefined ? {} : { component }),
     ...(source === undefined ? {} : { source }),
+    ...(role.length > 0 ? { role } : {}),
   });
   const at = same.indexOf(el as HTMLElement);
   return 1 < same.length && 0 <= at ? { nth: at, of: same.length } : null;
@@ -271,11 +274,7 @@ export function anchorOf(el: Element): CapturedAnchor {
   if (info?.source !== undefined) {
     out.source = info.source;
   }
-  const position = positionInComponentAnchor(el, out.component, out.source);
-  if (position !== null) {
-    out.componentNth = position.nth;
-    out.componentOf = position.of;
-  }
+
   // Reported INDEPENDENTLY, never all-or-nothing: otherwise an element with a role and no accessible
   // name — an icon button, a clickable div, a control labelled by an SVG — comes back with no identity
   // at all once identifyComponent (React-specific) also finds nothing. Two features silently degrade
@@ -286,6 +285,11 @@ export function anchorOf(el: Element): CapturedAnchor {
   // will anchor a step that way. But it is real information, and reporting it beats reporting nothing.
   const role = getRole(el);
   const name = getAccessibleName(el);
+  const position = positionInComponentAnchor(el, out.component, out.source, role);
+  if (position !== null) {
+    out.componentNth = position.nth;
+    out.componentOf = position.of;
+  }
   if (role.length > 0) {
     out.role = role;
   }
