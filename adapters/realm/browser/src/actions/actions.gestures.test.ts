@@ -51,6 +51,23 @@ describe('tap is a TOUCH, not a click with another name', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it('puts the pointer at the element centre, where the touch lands', async () => {
+    // A handler that hit-tests from clientX/Y (a canvas, a map, a slider) reads the pointer
+    // events to locate the touch. They carried no coordinates, so every one read (0, 0): a
+    // touch in the top-left corner that never happened (#1851). The touch events already
+    // carry the centre; the pointer half of the same tap must agree with them.
+    const el = mount('<button>Save</button>');
+    el.getBoundingClientRect = () => new DOMRect(10, 20, 100, 40);
+    const seen: Array<[string, number, number]> = [];
+    el.addEventListener('pointerdown', (e) => seen.push(['down', e.clientX, e.clientY]));
+    el.addEventListener('pointerup', (e) => seen.push(['up', e.clientX, e.clientY]));
+    await act(el, ActionType.TAP);
+    expect(seen).toEqual([
+      ['down', 60, 40],
+      ['up', 60, 40],
+    ]);
+  });
+
   it('holds for a long press, and reports the hold it ACHIEVED', async () => {
     const el = mount('<button>Hold me</button>');
     const result = await act(el, ActionType.TAP, { holdMs: 30 });
