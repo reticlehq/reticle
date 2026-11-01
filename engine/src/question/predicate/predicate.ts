@@ -117,16 +117,28 @@ function annotateThrottledMiss(
   predicate: Predicate,
   result: EvalResult,
 ): EvalResult {
-  if (result.pass) return result;
-  if (result.inconclusive !== undefined) return result;
+  if (result.pass) {
+    return result;
+  }
+  if (result.inconclusive !== undefined) {
+    return result;
+  }
   const preconditionFailure = session.preconditionFailure?.();
   if (preconditionFailure !== undefined) {
     return { ...result, inconclusive: preconditionFailure };
   }
-  if (true !== session.throttled?.()) return result;
-  if (decidedByAnAlreadyAnnotatedClause(predicate)) return result;
-  if (failureRestsOnSeeing(predicate)) return result;
-  if (evidenceProvesPageRendered(result)) return result;
+  if (true !== session.throttled?.()) {
+    return result;
+  }
+  if (decidedByAnAlreadyAnnotatedClause(predicate)) {
+    return result;
+  }
+  if (failureRestsOnSeeing(predicate)) {
+    return result;
+  }
+  if (evidenceProvesPageRendered(result)) {
+    return result;
+  }
   return { ...result, inconclusive: THROTTLED_STARVED_NOTE };
 }
 
@@ -150,9 +162,15 @@ function annotateThrottledMiss(
  */
 function evidenceProvesPageRendered(result: EvalResult): boolean {
   const evidence = result.evidence;
-  if ('object' !== typeof evidence || null === evidence) return false;
-  if ('splitText' in evidence || 'caseMiss' in evidence) return true;
-  if ('nearMiss' in evidence && 'element.state' === result.assertion) return true;
+  if ('object' !== typeof evidence || null === evidence) {
+    return false;
+  }
+  if ('splitText' in evidence || 'caseMiss' in evidence) {
+    return true;
+  }
+  if ('nearMiss' in evidence && 'element.state' === result.assertion) {
+    return true;
+  }
   return false;
 }
 
@@ -188,8 +206,12 @@ function decidedByAnAlreadyAnnotatedClause(predicate: Predicate): boolean {
  * Composites recurse: a passing `allOf` proves a render if any of its own arms did.
  */
 function provesRender(predicate: Predicate, result: EvalResult): boolean {
-  if (!result.pass) return false;
-  if (PredicateKind.ELEMENT === predicate.kind) return true !== predicate.absent;
+  if (!result.pass) {
+    return false;
+  }
+  if (PredicateKind.ELEMENT === predicate.kind) {
+    return true !== predicate.absent;
+  }
   if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
     return predicate.predicates.some((p) => provesRender(p, result));
   }
@@ -220,7 +242,9 @@ function clearStarvedWhenSiblingsSaw(
     const p = predicates[i];
     return p !== undefined && provesRender(p, r);
   });
-  if (!rendered) return results;
+  if (!rendered) {
+    return results;
+  }
   return results.map((r, i) => {
     const p = predicates[i];
     return p === undefined ? r : clearStarved(p, r);
@@ -236,7 +260,9 @@ function clearStarvedWhenSiblingsSaw(
  * negates it again. Nested `not` recurses.
  */
 function clearStarved(predicate: Predicate, result: EvalResult): EvalResult {
-  if (THROTTLED_STARVED_NOTE !== result.inconclusive) return result;
+  if (THROTTLED_STARVED_NOTE !== result.inconclusive) {
+    return result;
+  }
   const child = result.evidence;
   if (PredicateKind.NOT === predicate.kind && isEvalResult(child)) {
     const inner = clearStarved(predicate.predicate, child);
@@ -288,11 +314,15 @@ function negate(negated: Predicate, inner: EvalResult): EvalResult {
  * missing one costs a wrong verdict.
  */
 function failureRestsOnSeeing(predicate: Predicate): boolean {
-  if (PredicateKind.NOT === predicate.kind) return !failureRestsOnSeeing(predicate.predicate);
+  if (PredicateKind.NOT === predicate.kind) {
+    return !failureRestsOnSeeing(predicate.predicate);
+  }
   if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
     return predicate.predicates.some(failureRestsOnSeeing);
   }
-  if ('absent' in predicate && true === predicate.absent) return true;
+  if ('absent' in predicate && true === predicate.absent) {
+    return true;
+  }
   // `count: 0` is absence written as arithmetic, and fails the same way: by matching something.
   return 'count' in predicate && 0 === predicate.count;
 }
@@ -384,11 +414,15 @@ async function evaluatePredicateRaw(
         true === predicate.visible ? ElementState.VISIBLE : undefined,
         predicate.absent ?? false,
         diagnose,
-        // A property is judged on the whole text. An absence check judges nothing, and a failed
-        // absence returns the matches as evidence, which would otherwise carry the full text out.
-        undefined !== predicate.satisfies && !(predicate.absent ?? false),
+        // A property is judged on the whole text, for an absence too: there only a match that
+        // satisfies it fails the check, and the matches come back re-bounded.
+        undefined !== predicate.satisfies,
+        true === predicate.absent ? predicate.satisfies : undefined,
       );
-      if (undefined === predicate.satisfies) return found;
+      // An absence judged its property above, on each match.
+      if (undefined === predicate.satisfies || true === predicate.absent) {
+        return found;
+      }
       return withTextProperty(
         found,
         predicate.satisfies,
@@ -398,7 +432,9 @@ async function evaluatePredicateRaw(
     }
     case PredicateKind.NET: {
       const result = evalNet(events, predicate, session.sdkVersion);
-      if (result.pass || keepsAnswers || result.inconclusive !== undefined) return result;
+      if (result.pass || keepsAnswers || result.inconclusive !== undefined) {
+        return result;
+      }
       // No floor, so a replaced page's answers were left out. If one would have satisfied the
       // predicate, nothing here can say whether it was this action's: unknown, never a plain no.
       const withAnswers = raw.filter((e) => onScreen(e) || isServerAnswer(e));
@@ -471,7 +507,9 @@ async function evaluatePredicateRaw(
         };
       }
       const unreadable = results.find((r) => r.inconclusive !== undefined);
-      if (unreadable !== undefined) return unreadableComposite(unreadable, results);
+      if (unreadable !== undefined) {
+        return unreadableComposite(unreadable, results);
+      }
       return { pass: true, evidence: results.map((r) => r.evidence) };
     }
     case PredicateKind.ANY_OF: {
@@ -484,11 +522,15 @@ async function evaluatePredicateRaw(
         ),
       );
       const passed = results.find((r) => r.pass);
-      if (passed !== undefined) return { pass: true, evidence: passed.evidence };
+      if (passed !== undefined) {
+        return { pass: true, evidence: passed.evidence };
+      }
       // "No sub-predicate matched" is a claim anyOf is not entitled to make while one of them was
       // never read: the unreadable clause might have been the one that would have matched.
       const unreadable = results.find((r) => r.inconclusive !== undefined);
-      if (unreadable !== undefined) return unreadableComposite(unreadable, results);
+      if (unreadable !== undefined) {
+        return unreadableComposite(unreadable, results);
+      }
       // A disjunction is decided when EVERY clause is permanently false: no branch can
       // ever become true, so waiting out the budget buys nothing. By this point every
       // result is a non-inconclusive failure (passing and inconclusive returned above).
@@ -512,7 +554,9 @@ async function evaluatePredicateRaw(
       // child's `pass: false` as "the inner predicate did not hold" and passed — so an assertion
       // nobody could evaluate became a verdict of verified, manufactured out of a missing reading.
       // You cannot negate an answer nobody had.
-      if (inner.inconclusive !== undefined) return unreadableComposite(inner, inner);
+      if (inner.inconclusive !== undefined) {
+        return unreadableComposite(inner, inner);
+      }
       return negate(predicate.predicate, inner);
     }
     default:
@@ -576,7 +620,9 @@ function assertsExactCount(predicate: Predicate): boolean {
   if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
     return predicate.predicates.some(assertsExactCount);
   }
-  if (PredicateKind.NOT === predicate.kind) return assertsExactCount(predicate.predicate);
+  if (PredicateKind.NOT === predicate.kind) {
+    return assertsExactCount(predicate.predicate);
+  }
   // `signal` carries `count` for the same reason `net` does, and for the same defect: its schema
   // calls the double-fire "the defect no state-only oracle can see", because a handler wired twice
   // leaves the store in the right shape and a presence check green on both. Reading `net` alone
@@ -597,7 +643,9 @@ function assertsExactCount(predicate: Predicate): boolean {
  * once the page ran slower. It holds until the page goes quiet; see ABSENCE_HOLD_MS.
  */
 function claimsAbsence(predicate: Predicate): boolean {
-  if (PredicateKind.NOT === predicate.kind) return true;
+  if (PredicateKind.NOT === predicate.kind) {
+    return true;
+  }
   if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
     return predicate.predicates.some(claimsAbsence);
   }
@@ -664,16 +712,24 @@ export function waitForPredicate(
       });
     };
     const finish = (result: EvalResult): void => {
-      if (done) return;
+      if (done) {
+        return;
+      }
       done = true;
       releaseWindow?.();
       unsub();
       unsubDisconnect?.();
       clearInterval(interval);
       clearTimeout(timer);
-      if (cooldownTimer !== undefined) clearTimeout(cooldownTimer);
-      if (hintTimer !== undefined) clearTimeout(hintTimer);
-      if (confirmTimer !== undefined) clearTimeout(confirmTimer);
+      if (cooldownTimer !== undefined) {
+        clearTimeout(cooldownTimer);
+      }
+      if (hintTimer !== undefined) {
+        clearTimeout(hintTimer);
+      }
+      if (confirmTimer !== undefined) {
+        clearTimeout(confirmTimer);
+      }
       resolve(result);
     };
     // Coalesce re-checks: at most ONE evaluatePredicate is ever in flight (each can be a browser
@@ -690,7 +746,9 @@ export function waitForPredicate(
     let cooling = false;
     let pendingRecheck = false;
     const check = (): void => {
-      if (done) return;
+      if (done) {
+        return;
+      }
       if (inFlight || cooling) {
         pendingRecheck = true;
         return;
@@ -728,7 +786,9 @@ export function waitForPredicate(
             finish(r);
             return;
           }
-          if (confirming) return;
+          if (confirming) {
+            return;
+          }
           confirming = true;
           const confirm = (): void => {
             void evaluatePredicate(reader, predicate, since, true, baselines)
@@ -746,7 +806,9 @@ export function waitForPredicate(
           const holdUntilQuiet = (): void => {
             void evaluatePredicate(reader, SETTLED_PROBE, since, false)
               .then((settled) => {
-                if (done) return;
+                if (done) {
+                  return;
+                }
                 if (settled.pass) {
                   confirm();
                   return;
@@ -762,7 +824,9 @@ export function waitForPredicate(
         })
         .finally(() => {
           inFlight = false;
-          if (done) return;
+          if (done) {
+            return;
+          }
           // Enter a short cooldown; process a coalesced recheck when it ends. The 150ms poll is the
           // backstop, so a missed trailing edge is caught within one interval regardless.
           cooling = true;

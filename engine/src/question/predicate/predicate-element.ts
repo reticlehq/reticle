@@ -345,6 +345,8 @@ export async function evalElement(
   diagnose: boolean,
   /** Describe the matches with their full text, for a caller that will JUDGE it (see `withTextProperty`). */
   fullText = false,
+  /** For an absence: only an element whose text satisfies this fails it. See `absentUnlessSatisfied`. */
+  unlessText?: PropertyAssertion,
 ): Promise<EvalResult> {
   const tooOld = stateTheSdkPredates(session.sdkVersion, state);
   if (tooOld !== undefined) {
@@ -439,6 +441,9 @@ export async function evalElement(
   if (absent) {
     if (true === match.scopeMissing) {
       return { pass: true, evidence: { absent: true, scopeMissing: true } };
+    }
+    if (match.matched && unlessText !== undefined) {
+      return absentUnlessSatisfied(match, unlessText, subject);
     }
     return match.matched
       ? {
@@ -678,6 +683,39 @@ function shownBounded(element: unknown): unknown {
   const max = TRANSPORT_LIMITS.MAX_DESCRIBED_TEXT;
   const text = textOf(element);
   return text.length > max ? { ...element, text: `${text.slice(0, max)}…` } : element;
+}
+
+/**
+ * An absence check that carries a property: "no element whose text satisfies it".
+ *
+ * The recorder writes "no 'bookmark 02'" as text containing 'bookmark' that matches /bookmark \d+/.
+ * Read as a plain absence, any other 'bookmark' on the page ("Add bookmark") failed it, and the
+ * property was then judged on an empty text. Only a match whose text satisfies the property fails
+ * it. A match that was not described, or not read in full, could be the one, so it is undecided.
+ */
+function absentUnlessSatisfied(
+  match: { count: number; elements: unknown[] },
+  assertion: PropertyAssertion,
+  subject: string,
+): EvalResult {
+  const hits = match.elements.filter((el) => satisfiesProperty(textOf(el), assertion).ok);
+  if (0 < hits.length) {
+    return {
+      pass: false,
+      failureReason: `expected no element matching ${subject} to satisfy ${assertion.property}, but found ${String(hits.length)}`,
+      observed: `${String(hits.length)} element(s) matching ${subject} satisfy ${assertion.property}`,
+      expected: `no element matching ${subject} that satisfies ${assertion.property}`,
+      assertion: 'element.absent',
+      evidence: hits.map(shownBounded),
+    };
+  }
+  if (match.count > match.elements.length || match.elements.some(wasCutAtFullBound)) {
+    const reason =
+      `${String(match.count)} element(s) match ${subject} and not all of their text was read, so ` +
+      `whether one satisfies ${assertion.property} was not decided. Scope the predicate to a smaller element`;
+    return { pass: false, failureReason: reason, inconclusive: reason };
+  }
+  return { pass: true, evidence: { absent: true, unsatisfiedMatches: match.count } };
 }
 
 /**

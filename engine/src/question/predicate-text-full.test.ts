@@ -195,7 +195,9 @@ describe('only the readers that judge text ask for all of it', () => {
     expect(page.asked.every((args) => args[MatchArg.FULL_TEXT] === undefined)).toBe(true);
   });
 
-  it('an absence check does not ask for full text, so a failed one cannot carry it out', async () => {
+  // An absence with a property reads the full text to judge each match, and the matches it returns
+  // are cut back to the display bound, so a failed one still cannot carry the full text out.
+  it('a failed absence with a property does not carry the full text out', async () => {
     const page = new BoundedBrowser(LEGEND);
     const result = await evaluatePredicate(
       page,
@@ -209,7 +211,7 @@ describe('only the readers that judge text ask for all of it', () => {
       0,
       false,
     );
-    expect(page.asked.every((args) => args[MatchArg.FULL_TEXT] === undefined)).toBe(true);
+    expect(result.pass).toBe(false);
     const shown = JSON.stringify(result.evidence ?? []);
     expect(shown).not.toContain('END-OF-LEGEND');
   });
@@ -321,5 +323,91 @@ describe('compare reads a text side whole, not the display-bounded form', () => 
     expect(result.failureReason?.length ?? 0).toBeLessThan(700);
     expect(result.observed?.length ?? 0).toBeLessThan(700);
     expect(JSON.stringify(result.evidence ?? {}).length).toBeLessThan(1000);
+  });
+});
+
+/** A page where no element has the text: every MATCH answers with nothing. */
+class EmptyPage implements PredicateSession {
+  elapsed = (): number => 0;
+  eventsSince = (): never[] => [];
+  onEvent = (): (() => void) => () => undefined;
+  command(): Promise<CommandResult> {
+    return Promise.resolve({
+      kind: 'command_result',
+      id: 'x',
+      ok: true,
+      result: { matched: false, count: 0, elements: [] },
+    } as CommandResult);
+  }
+}
+
+/*
+ * An absence check with a property: "no 'Later bookmark 02' on the page", saved with the number as a
+ * pattern. The text was absent, as the check asked, and the property was then judged on the empty
+ * text and failed it: a working import graded `no`. An absence that holds has nothing to judge.
+ */
+describe('text { absent, satisfies }', () => {
+  it('holds when no element has the text', async () => {
+    const result = await evaluatePredicate(
+      new EmptyPage(),
+      parsePredicate({
+        kind: 'text',
+        contains: 'Later bookmark',
+        absent: true,
+        satisfies: { property: 'matchesPattern', pattern: 'Later bookmark \\d+' },
+      }),
+      0,
+      false,
+    );
+    expect(result.pass).toBe(true);
+  });
+
+  // The recorder saved "no 'bookmark 02'" as "contains 'bookmark', matches /bookmark \\d+/". Other
+  // text on the page has 'bookmark' in it ("Add bookmark") and fails nothing the check meant.
+  it('holds when the elements with the text do not satisfy the property', async () => {
+    const result = await evaluatePredicate(
+      new BoundedBrowser('Add bookmark'),
+      parsePredicate({
+        kind: 'text',
+        contains: 'bookmark',
+        absent: true,
+        satisfies: { property: 'matchesPattern', pattern: 'bookmark \\d+' },
+      }),
+      0,
+      false,
+    );
+    expect(result.pass).toBe(true);
+  });
+
+  it('fails when an element with the text satisfies the property', async () => {
+    const result = await evaluatePredicate(
+      new BoundedBrowser('Later bookmark 02'),
+      parsePredicate({
+        kind: 'text',
+        contains: 'bookmark',
+        absent: true,
+        satisfies: { property: 'matchesPattern', pattern: 'bookmark \\d+' },
+      }),
+      0,
+      false,
+    );
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
+  });
+
+  it('is undecided when the page matched more elements than it described', async () => {
+    const result = await evaluatePredicate(
+      new BoundedBrowser('Add bookmark', { matchedTotal: 40 }),
+      parsePredicate({
+        kind: 'text',
+        contains: 'bookmark',
+        absent: true,
+        satisfies: { property: 'matchesPattern', pattern: 'bookmark \\d+' },
+      }),
+      0,
+      false,
+    );
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeDefined();
   });
 });

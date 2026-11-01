@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — a `text` check with `absent` and `satisfies` means "no element whose text satisfies it".** A recorded check that "Later bookmark 02" is gone is saved as text containing "Later bookmark" that matches `Later bookmark \d+`. The check failed when any other text contained the words, and then it judged the pattern on an empty text, so a working app failed it. It now fails only when a matching element's full text satisfies the property. When the page matched more elements than it described, or a text was too long to read in full, the result is undecided, not a pass.

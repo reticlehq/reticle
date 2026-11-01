@@ -266,14 +266,6 @@
       "count": 9
     }
   },
-  "src/question/predicate/predicate-route.ts": {
-    "curly": {
-      "count": 14
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/question/predicate/predicate-state.ts": {
     "curly": {
       "count": 4
@@ -282,11 +274,6 @@
   "src/question/predicate/predicate.test.ts": {
     "curly": {
       "count": 9
-    }
-  },
-  "src/question/predicate/predicate.ts": {
-    "curly": {
-      "count": 31
     }
   },
   "src/question/predicate/property.ts": {

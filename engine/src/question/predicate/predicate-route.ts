@@ -43,7 +43,9 @@ interface RouteReading {
  * about where the app is, which is the failure this predicate exists to prevent.
  */
 export function routePathOf(pathname: string, hash: string): string {
-  if (!hash.startsWith('#/')) return pathname;
+  if (!hash.startsWith('#/')) {
+    return pathname;
+  }
   const withoutHash = hash.slice(1);
   const query = withoutHash.indexOf('?');
   return -1 === query ? withoutHash : withoutHash.slice(0, query);
@@ -65,22 +67,30 @@ interface RouteParts {
 }
 
 function asPayload(value: unknown): Record<string, unknown> | undefined {
-  if (null === value || 'object' !== typeof value || Array.isArray(value)) return undefined;
+  if (null === value || 'object' !== typeof value || Array.isArray(value)) {
+    return undefined;
+  }
   return value as Record<string, unknown>;
 }
 
 function payloadOf(
   eventOrData: ReticleEvent | Record<string, unknown>,
 ): Record<string, unknown> | undefined {
-  if (eventOrData['type'] === EventType.ROUTE_CHANGE) return asPayload(eventOrData['data']);
+  if (eventOrData['type'] === EventType.ROUTE_CHANGE) {
+    return asPayload(eventOrData['data']);
+  }
   // A different event: refuse rather than read whatever happened to sit in `data`.
-  if (undefined !== eventOrData['type'] && undefined !== eventOrData['data']) return undefined;
+  if (undefined !== eventOrData['type'] && undefined !== eventOrData['data']) {
+    return undefined;
+  }
   return eventOrData;
 }
 
 function partsFromPayload(data: Record<string, unknown>): RouteParts | undefined {
   const docPath = str(data['pathname']) ?? str(data['to']);
-  if (docPath === undefined) return undefined;
+  if (docPath === undefined) {
+    return undefined;
+  }
   const hash = str(data['hash']) ?? '';
   const search = str(data['search']) ?? '';
   return {
@@ -114,17 +124,25 @@ export function routeOfEvent(
  * parse is returned untouched rather than lost.
  */
 function withoutIdentityParams(value: unknown): unknown {
-  if ('string' !== typeof value) return value;
+  if ('string' !== typeof value) {
+    return value;
+  }
   const isSearch = value.startsWith('?');
   if (isSearch) {
     const params = new URLSearchParams(value);
-    for (const name of Object.values(RETICLE_URL_PARAM)) params.delete(name);
+    for (const name of Object.values(RETICLE_URL_PARAM)) {
+      params.delete(name);
+    }
     const rest = params.toString();
     return 0 === rest.length ? '' : `?${rest}`;
   }
-  if (!URL.canParse(value)) return value;
+  if (!URL.canParse(value)) {
+    return value;
+  }
   const parsed = new URL(value);
-  for (const name of Object.values(RETICLE_URL_PARAM)) parsed.searchParams.delete(name);
+  for (const name of Object.values(RETICLE_URL_PARAM)) {
+    parsed.searchParams.delete(name);
+  }
   return parsed.toString();
 }
 
@@ -135,13 +153,49 @@ function withoutIdentityParams(value: unknown): unknown {
  */
 function searchWithoutIdentityParams(search: string): string {
   const query = search.startsWith('?') ? search.slice(1) : search;
-  if ('' === query) return '';
+  if ('' === query) {
+    return '';
+  }
   // Pair by pair, not through URLSearchParams: its round trip re-encodes what it keeps (`%20` comes
   // back as `+`), so a hand-written startPath `/search?q=red%20shirt` would stop matching a tab on
   // exactly that URL. Only Reticle's own pairs are removed; the rest keep their spelling.
   const ours = new Set<string>(Object.values(RETICLE_URL_PARAM));
-  const kept = query.split('&').filter((pair) => !ours.has(paramNameOf(pair)));
+  const kept = query
+    .split('&')
+    .filter((pair) => !ours.has(paramNameOf(pair)))
+    .map((pair) => withoutNestedIdentityParams(pair, ours));
   return 0 === kept.length ? '' : `?${kept.join('&')}`;
+}
+
+/**
+ * An app pair whose value is itself a path with a query (`redirect=%2F%3F__reticle_session%3D…`),
+ * with our params taken out of that inner query. A login redirect carries the page the tab came
+ * from, lease param and all, and a saved startPath sent the replay back to an old lease. A pair
+ * with none of our params keeps its spelling.
+ */
+function withoutNestedIdentityParams(pair: string, ours: ReadonlySet<string>): string {
+  const at = pair.indexOf('=');
+  if (at < 0) {
+    return pair;
+  }
+  let value: string;
+  try {
+    value = decodeURIComponent(pair.slice(at + 1).replaceAll('+', ' '));
+  } catch {
+    return pair;
+  }
+  const q = value.indexOf('?');
+  if (q < 0) {
+    return pair;
+  }
+  const inner = value.slice(q + 1).split('&');
+  const keptInner = inner.filter((p) => !ours.has(paramNameOf(p)));
+  if (keptInner.length === inner.length) {
+    return pair;
+  }
+  const path = value.slice(0, q);
+  const rebuilt = 0 === keptInner.length ? path : `${path}?${keptInner.join('&')}`;
+  return `${pair.slice(0, at)}=${encodeURIComponent(rebuilt)}`;
 }
 
 /** The decoded name of one `name=value` query pair, or the raw text when it does not decode. */
@@ -168,7 +222,9 @@ function routeEvidence(data: Record<string, unknown>): Record<string, unknown> {
 
 /** Same shape from a session URL (the fallback when the tab hard-loaded and emitted no route event). */
 export function routeOfUrl(url: string): RouteParts | undefined {
-  if (!URL.canParse(url)) return undefined;
+  if (!URL.canParse(url)) {
+    return undefined;
+  }
   const parsed = new URL(url);
   return partsFromPayload({
     pathname: parsed.pathname,
@@ -197,6 +253,27 @@ function readCurrentRoute(url: string): RouteReading {
   };
 }
 
+/** The route from the last route change in the window, else from the session's URL, else none. */
+function latestRouteReading(
+  last: ReticleEvent | undefined,
+  currentUrl: string | undefined,
+): RouteReading | undefined {
+  const changed = last === undefined ? undefined : routeOfEvent(last);
+  if (changed !== undefined && last !== undefined) {
+    return {
+      pathname: changed.docPath,
+      routePath: changed.routePath,
+      full: changed.full,
+      decidedBy: RouteDecidedBy.CHANGE,
+      data: routeEvidence({ ...last.data, decidedBy: RouteDecidedBy.CHANGE }),
+    };
+  }
+  if (currentUrl === undefined || 0 === currentUrl.length) {
+    return undefined;
+  }
+  return readCurrentRoute(currentUrl);
+}
+
 /** Name the source in the prose too — the structured `decidedBy` is for the agent, this is for a log. */
 function describeRouteSource(reading: RouteReading): string {
   return reading.decidedBy === RouteDecidedBy.CHANGE
@@ -222,19 +299,7 @@ export function evalRoute(
 ): EvalResult {
   const routes = events.filter((e) => e.type === EventType.ROUTE_CHANGE);
   const last = routes.at(-1);
-  const changed = last === undefined ? undefined : routeOfEvent(last);
-  const reading: RouteReading | undefined =
-    changed !== undefined && last !== undefined
-      ? {
-          pathname: changed.docPath,
-          routePath: changed.routePath,
-          full: changed.full,
-          decidedBy: RouteDecidedBy.CHANGE,
-          data: routeEvidence({ ...last.data, decidedBy: RouteDecidedBy.CHANGE }),
-        }
-      : currentUrl === undefined || 0 === currentUrl.length
-        ? undefined
-        : readCurrentRoute(currentUrl);
+  const reading = latestRouteReading(last, currentUrl);
   if (reading === undefined) {
     // A navigation the SERVER never answered reads exactly like one the APP prevented, and only one
     // of those is the user's bug. See unansweredIn.
@@ -354,12 +419,18 @@ function unansweredIn(
   since: number,
 ): { count: number; url: string; method: string } | undefined {
   const settled = new Set<unknown>();
-  for (const e of events) if (e.type === EventType.NET_REQUEST) settled.add(e.data['id']);
+  for (const e of events) {
+    if (e.type === EventType.NET_REQUEST) {
+      settled.add(e.data['id']);
+    }
+  }
   const open = events.filter(
     (e) => e.type === EventType.NET_PENDING && e.t >= since && !settled.has(e.data['id']),
   );
   const first = open[0];
-  if (first === undefined) return undefined;
+  if (first === undefined) {
+    return undefined;
+  }
   return {
     count: open.length,
     url: str(first.data['url']) ?? '(unknown url)',

@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { routeOfEvent, routeOfUrl } from './predicate/predicate-route.js';
+import { navigablePath, routeOfEvent, routeOfUrl } from './predicate/predicate-route.js';
 
 const change = (data: Record<string, unknown>): ReticleEvent => ({
   t: 1,
@@ -93,5 +93,29 @@ describe('routeOfUrl — session URL fallback', () => {
 
   it('is undefined on an unreadable URL', () => {
     expect(routeOfUrl('')).toBeUndefined();
+  });
+});
+
+/*
+ * A leased tab's own param can ride inside an app param, URL-encoded: an app that sends a signed-out
+ * tab to its login page puts the page it came from in `redirect`. A recording saved that as its
+ * startPath (`/auth?redirect=%2F%3F__reticle_session%3Dlease-…`), so a replay signed in and came
+ * back to a page that carried an old lease id. The app's param stays; only ours leaves it.
+ */
+describe('navigablePath — Reticle params inside an app param', () => {
+  it('drops a lease param nested in a redirect value and keeps the rest', () => {
+    const parts = routeOfUrl(
+      'http://localhost:3000/auth?redirect=%2F%3F__reticle_session%3Dlease-1%26tab%3Dx&lang=en',
+    );
+    expect(parts === undefined ? undefined : navigablePath(parts)).toBe(
+      '/auth?redirect=%2F%3Ftab%3Dx&lang=en',
+    );
+  });
+
+  it('leaves a value with no Reticle param exactly as written', () => {
+    const parts = routeOfUrl('http://localhost:3000/search?q=red%20shirt&next=%2Fa%3Fb%3D1');
+    expect(parts === undefined ? undefined : navigablePath(parts)).toBe(
+      '/search?q=red%20shirt&next=%2Fa%3Fb%3D1',
+    );
   });
 });
