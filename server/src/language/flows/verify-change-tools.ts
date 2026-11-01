@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { sessionRoot, sessionProjectId } from '@/memory/project/session-root.js';
+import { sessionRoot } from '@/memory/project/session-root.js';
 import { verdictForSuite } from '@/judgement/outcome/verify-change-verdict.js';
 import { attributedFailures } from '@/judgement/outcome/attributed-failure.js';
 import { Verified, isAdvisory } from '@reticlehq/core';
@@ -7,8 +7,8 @@ import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { workerCountSchema } from '@/surface/tools/args/numeric-bounds.js';
-import { loadNamedFlows, resolveChangedFiles } from '@/command/cli/cli-flow-commands.js';
-import { projectDirFor } from '@/memory/project/session-root.js';
+import { resolveChangedFiles } from '@/command/cli/cli-flow-commands.js';
+import { namedFlowsForSession } from './flow-store-for-session.js';
 import { affectedSavedFlows } from './change/flow-sources.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { RESULT_FIELD, changeResult } from '@/surface/tools/reticle-result.js';
@@ -110,24 +110,14 @@ const VERIFY_CHANGE: ToolDef = {
     // used to say it was: `deps.reticleRoot` is the daemon's `.reticle` SUBDIRECTORY, and the
     // daemon's cwd is wherever the MCP host started it — `/` or `$HOME` for a globally-registered
     // server. Both answer about the wrong repository while reporting a clean "nothing changed",
-    // which reads as a pass. `projectDirFor` is the directory holding the resolved root.
-    const changed = await resolveChangedFiles(
-      files,
-      since,
-      projectDirFor(deps, asString(args['sessionId'])),
-    );
+    // which reads as a pass. `projectDir` is the directory holding the resolved root.
+    //
+    // The flows come from the store `flows` replays from, and flow_save writes to. A read that
+    // resolved differently would report "no flows covered this change" over flows that exist,
+    // which reads as a clean result rather than an error (#1996).
+    const { flows, projectDir } = await namedFlowsForSession(deps, asString(args['sessionId']));
+    const changed = await resolveChangedFiles(files, since, projectDir);
     const changedFiles = changed.files;
-    // Same root flow_save wrote to. A read that resolved differently would report "no flows
-    // covered this change" over flows that exist, which reads as a clean result rather than
-    // an error, so the disagreement would be invisible.
-    // Both halves of the address from one place. The root was already resolved from the session;
-    // the id used to come from the daemon's cwd, so they named different projects.
-    const sid = asString(args['sessionId']);
-    const flows = await loadNamedFlows(
-      deps.fs,
-      sessionRoot(deps, sid),
-      sessionProjectId(deps, sid),
-    );
     const { affected, unknownProvenance } = affectedSavedFlows(flows, changedFiles);
 
     if (0 === changedFiles.length) {
