@@ -39,6 +39,10 @@ export function hitTestOccluder(el: Element, rect: DOMRect): Element | null {
   if (0 === rect.width || 0 === rect.height) return null;
   const doc = el.ownerDocument;
   if (typeof doc.elementFromPoint !== 'function') return null;
+  const passThrough = pointerPassesThrough(el, rect);
+  if (passThrough !== undefined) {
+    return passThrough;
+  }
 
   /*
    * `elementsFromPoint` when the browser has it, so Reticle's own chrome cannot hide what is under it.
@@ -87,4 +91,36 @@ export function hitTestOccluder(el: Element, rect: DOMRect): Element | null {
     }
   }
   return worstCount >= BLOCKED_MAJORITY ? worst : null;
+}
+
+/**
+ * A target that does not take pointer events (`pointer-events: none`, set on it or inherited): a
+ * person's pointer passes through it to whatever is under it. The ancestor-on-top rule below reads
+ * that as "not covered", and a synthetic click then ran a handler no person could reach. Measured on
+ * a modal's error alert whose dismiss button a stylesheet rule made unclickable.
+ *
+ * Returns the element the pointer lands on, null when the target is still reached (a descendant that
+ * takes pointer events is on top, or the target is a form control whose label is on top: a click on
+ * the label activates it), and undefined when the target takes pointer events (the normal rules apply).
+ */
+function pointerPassesThrough(el: Element, rect: DOMRect): Element | null | undefined {
+  const view = el.ownerDocument.defaultView;
+  if (null === view || 'none' !== view.getComputedStyle(el).pointerEvents) {
+    return undefined;
+  }
+  const top = el.ownerDocument.elementFromPoint(
+    rect.left + rect.width / 2,
+    rect.top + rect.height / 2,
+  );
+  // Reticle's own UI never counts as covering an app control (#783).
+  if (null === top || el.contains(top) || isReticleUi(top)) {
+    return null;
+  }
+  const labels = 'labels' in el ? (el as HTMLInputElement).labels : null;
+  for (const label of labels ?? []) {
+    if (label === top || label.contains(top)) {
+      return null;
+    }
+  }
+  return top;
 }
