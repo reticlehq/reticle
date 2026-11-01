@@ -142,6 +142,11 @@ export interface CrawlReport {
  */
 const ENDS_SESSION = /\b(?:sign ?out|log ?out|sign ?off|log ?off)\b/i;
 const ENDS_SESSION_NOT_PRESSED = 'not pressed: it ends the signed-in session the crawl is driving';
+const NO_ACCESSIBLE_NAME_NOT_PRESSED =
+  'not pressed: no accessible name, so the destructive-action guard cannot classify it (set confirmDangerous to include it)';
+// A snapshot line carries the accessible name, a value or an own text as a quoted string. A line
+// with no quote has no text at all, for example an icon-only button.
+const HAS_TEXT = /"/;
 
 /** Why a silent control on a throttled page is not reported as dead. */
 const BACKGROUND_TAB_NOT_JUDGED =
@@ -409,6 +414,10 @@ export async function crawl(
         notJudged.push({ ref: item.ref, desc: item.desc, reason: ENDS_SESSION_NOT_PRESSED });
         continue;
       }
+      if (!confirm && !HAS_TEXT.test(item.desc)) {
+        notJudged.push({ ref: item.ref, desc: item.desc, reason: NO_ACCESSIBLE_NAME_NOT_PRESSED });
+        continue;
+      }
       stepsRun += 1;
       visited.push(item.desc);
 
@@ -573,7 +582,9 @@ export async function crawl(
   // one would only muddy it.
   const revealed = coverageCapped ? 0 : (await revealedItems(session, opts, found)).length;
   // Left alone on purpose, so not a step the budget ran out before.
-  const leftAlone = notJudged.filter((n) => ENDS_SESSION_NOT_PRESSED === n.reason).length;
+  const leftAlone = notJudged.filter(
+    (n) => ENDS_SESSION_NOT_PRESSED === n.reason || NO_ACCESSIBLE_NAME_NOT_PRESSED === n.reason,
+  ).length;
 
   return {
     interactiveFound: found.length,
