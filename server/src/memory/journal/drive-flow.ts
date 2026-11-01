@@ -3,6 +3,7 @@ import {
   QueryBy,
   REPLAY_PROGRAM_VERSION,
   asFlowName,
+  asRecord,
   isCredentialFieldName,
 } from '@reticlehq/core';
 import { journeySentence } from '@reticlehq/core';
@@ -191,12 +192,21 @@ function segmentsByRoute(steps: readonly TapeStep[]): { route?: string; steps: T
  * Read off the recorder's anchor args: a testid names the field by `value`, a role by `name`.
  */
 function typesASecret(step: TapeStep): boolean {
-  const action = step.args['action'];
+  // A sign-in sent as one reticle_act sequence carries its fills as sub-steps.
+  const subs = step.args['steps'];
+  if (Array.isArray(subs)) {
+    return subs.some((sub) => fillsASecret(asRecord(sub)));
+  }
+  return fillsASecret(step.args);
+}
+
+function fillsASecret(args: Record<string, unknown>): boolean {
+  const action = args['action'];
   if (ActionType.FILL !== action && ActionType.TYPE !== action) {
     return false;
   }
-  const by = step.args['by'];
-  const field = QueryBy.TESTID === by ? step.args['value'] : step.args['name'];
+  const by = args['by'];
+  const field = QueryBy.TESTID === by ? args['value'] : args['name'];
   return 'string' === typeof field && isCredentialFieldName(field);
 }
 

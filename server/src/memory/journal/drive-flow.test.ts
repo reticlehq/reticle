@@ -285,6 +285,32 @@ describe('a journey that moves across pages stays one flow', () => {
     expect(programs.map((p) => p.startPath)).toEqual(['/login', '/app']);
   });
 
+  // A sign-in sent as one reticle_act sequence carries its fills as sub-steps. Only a top-level
+  // fill counted, so the journey after a sequence sign-in was saved behind the login form, and a
+  // signed-in replay found no Username field: `unknown` on a working app.
+  it('cuts after a sign-in made inside a sequence', () => {
+    const signIn: RecordedStep = {
+      ...step(true, '/auth'),
+      endPage: '/',
+      tool: 'reticle_act_sequence',
+      args: {
+        steps: [
+          {
+            by: 'role',
+            value: 'textbox',
+            name: 'Username',
+            action: 'fill',
+            args: { value: 'user' },
+          },
+          { by: 'role', value: 'textbox', name: 'Password', action: 'fill', args: { value: 'x' } },
+          { by: 'role', value: 'button', name: 'Sign in', action: 'click', args: {} },
+        ],
+      },
+    };
+    const { programs } = driveFlowsFrom({ steps: [signIn, at('/', '/', true)] });
+    expect(programs.map((p) => p.startPath)).toEqual(['/auth', '/']);
+  });
+
   it('cuts where the route changed without the previous action causing it', () => {
     const { programs } = driveFlowsFrom({
       steps: [at('/a', '/a', true), at('/b', '/b', true)],

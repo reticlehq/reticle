@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — an auto-saved flow keeps the steps before a form post.** On an app that renders pages on the server, a form post loads a new page. A fill on the first page and the checked submit on the next page were saved as two journeys: the fill had no check and was dropped, and the saved flow clicked Search on an empty field. Steps made with `reticle_act` also had no page on the tape, so they started a journey of their own. The steps of a page with no check now go on with the page that loaded, and every act records its page. A navigation that Reticle makes still starts a new journey.

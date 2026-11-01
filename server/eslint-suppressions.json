@@ -3103,14 +3103,6 @@
       "count": 1
     }
   },
-  "src/surface/tools/act-sequence-tool.ts": {
-    "curly": {
-      "count": 6
-    },
-    "no-nested-ternary": {
-      "count": 3
-    }
-  },
   "src/surface/tools/act-state-already-true.test.ts": {
     "curly": {
       "count": 1

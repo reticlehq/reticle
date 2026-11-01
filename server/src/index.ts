@@ -251,7 +251,10 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   // Then to the agent's own git worktree: every worktree declares the same projectId.
   bridge.sessions.setCheckoutScope(liveCheckoutSource());
   const baselines = new BaselineStore();
-  const recordings = new RecordingStore(() => currentDrivenBy() !== undefined);
+  const recordings = new RecordingStore(
+    () => currentDrivenBy() !== undefined,
+    (session) => bridge.sessions.successorId(session),
+  );
   // drive precedence: driveUrl (launch+own a browser) → CDP (attach) → none.
   let pool: BrowserPool | undefined;
   let leaseReaper: LeaseReaper | undefined;
@@ -515,7 +518,10 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const flows = new FlowStore(fs, reticleRoot, { now }, { onWrote: () => syncNudge.run?.() });
   // Built here rather than inside `deps` below, so teardown can save what a drive recorded. Both
   // paths pass the same pair — `daemon-parity.test.ts` is what keeps them from drifting apart.
-  const recordings = new RecordingStore(() => currentDrivenBy() !== undefined);
+  const recordings = new RecordingStore(
+    () => currentDrivenBy() !== undefined,
+    (session) => bridge.sessions.successorId(session),
+  );
   /*
    * Bound AFTER the sync daemon exists, read only when a run is actually written.
    *

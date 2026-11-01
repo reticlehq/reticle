@@ -323,6 +323,11 @@ export class SessionManager {
     return this.#sessions.get(sessionId);
   }
 
+  /** The id the same tab connected as after this session's page went away, if one has. */
+  successorId(sessionId: string): string | undefined {
+    return this.#successorOf(sessionId)?.id;
+  }
+
   /**
    * Did this id belong to a session that has since disconnected?
    *

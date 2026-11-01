@@ -111,21 +111,32 @@ interface StepCheck {
   readonly assertion?: string | undefined;
 }
 
+/** Why a step's check decided nothing, when the target was reachable. */
+function whyUndecided(verdict: { observationLost?: boolean; failureReason?: string }): string {
+  if (true === verdict.observationLost) {
+    return `${verdict.failureReason ?? 'the observation was lost'} (the page left)`;
+  }
+  return verdict.failureReason ?? 'the predicate could not be read';
+}
+
+/** One step's verdict and its reason. */
+function stepVerdict(check: StepCheck): { verified: Verified; reason: VerifiedReason | undefined } {
+  if (check.held) {
+    return 0 < check.contradicted.length
+      ? { verified: Verified.NO, reason: VerifiedReason.CONTRADICTED }
+      : { verified: Verified.YES, reason: undefined };
+  }
+  if (check.undecided) {
+    const reason =
+      true === check.unreachable ? VerifiedReason.INCONCLUSIVE : VerifiedReason.OBSERVATION_LOST;
+    return { verified: Verified.UNKNOWN, reason };
+  }
+  return { verified: Verified.NO, reason: VerifiedReason.ASSERTION_FAILED };
+}
+
 /** The verdict effect for one step: the same rules act_and_wait applies to one action. */
 function stepVerdictEffect(check: StepCheck): JournalVerdictEffect {
-  const { verified, reason } = check.held
-    ? 0 < check.contradicted.length
-      ? { verified: Verified.NO, reason: VerifiedReason.CONTRADICTED }
-      : { verified: Verified.YES, reason: undefined }
-    : check.undecided
-      ? {
-          verified: Verified.UNKNOWN,
-          reason:
-            true === check.unreachable
-              ? VerifiedReason.INCONCLUSIVE
-              : VerifiedReason.OBSERVATION_LOST,
-        }
-      : { verified: Verified.NO, reason: VerifiedReason.ASSERTION_FAILED };
+  const { verified, reason } = stepVerdict(check);
   const source = sourceOf(check.source);
   return {
     claim: describeWaitTarget(check.expect),
@@ -252,7 +263,9 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
   handler: async (deps, args) => {
     const session = deps.sessions.resolve(sessionIdFromArgs(args));
     const paused = pausedShortCircuit(session);
-    if (paused !== undefined) return paused;
+    if (paused !== undefined) {
+      return paused;
+    }
     const since = session.elapsed();
     const pageBefore = pageOf(session.url);
     session.beginAction(ReticleTool.ACT_SEQUENCE, asRecord(args));
@@ -302,7 +315,9 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           const outcome = await runStepWithStaleRetry(
             async () => {
               const resolved = await resolveActTarget(session, step, perStepTimeout);
-              if ('error' === resolved.kind) return { ok: false, error: resolved.message };
+              if ('error' === resolved.kind) {
+                return { ok: false, error: resolved.message };
+              }
               // In burst mode every step carries a zero settle budget, so step N+1 is dispatched
               // while step N is still in flight. That overlap IS the test — see `burst` above.
               return actCommand(
@@ -342,7 +357,9 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           if (burstGapMs !== undefined && i < inputSteps.length - 1) {
             const elapsed = session.elapsed() - stepSince;
             const remaining = burstGapMs - elapsed;
-            if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
+            if (remaining > 0) {
+              await new Promise((r) => setTimeout(r, remaining));
+            }
           }
           if (!outcome.ok) {
             stalledAt = i;
@@ -434,12 +451,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
               held,
               ...(undecided
                 ? {
-                    undecided:
-                      unreachable !== undefined
-                        ? unreachable
-                        : true === verdict.observationLost
-                          ? `${verdict.failureReason ?? 'the observation was lost'} (the page left)`
-                          : (verdict.failureReason ?? 'the predicate could not be read'),
+                    undecided: unreachable ?? whyUndecided(verdict),
                   }
                 : {}),
               ...disagreement,
@@ -458,7 +470,9 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             });
             if (!held) {
               stoppedAt ??= i;
-              if (DeviationMode.HALT === onDeviation) break;
+              if (DeviationMode.HALT === onDeviation) {
+                break;
+              }
             }
           }
         } catch (err: unknown) {
@@ -486,12 +500,8 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
        * The halted step counts: it WAS dispatched, and only the consequence it declared failed
        * afterwards. A stalled step never ran, which is why that index stays exclusive.
        */
-      const completed =
-        DeviationMode.CONTINUE === onDeviation
-          ? (stalledAt ?? inputSteps.length)
-          : stoppedAt !== undefined
-            ? stoppedAt + 1
-            : (stalledAt ?? inputSteps.length);
+      const halted = DeviationMode.CONTINUE === onDeviation ? undefined : stoppedAt;
+      const completed = halted === undefined ? (stalledAt ?? inputSteps.length) : halted + 1;
       if (completed > 0) {
         session.lastAct.markActed(since, undefined, undefined);
       }
@@ -514,7 +524,9 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             { count: completed, steps: stepResults.slice(0, completed) },
           );
           // The journey sent a write request: saved `writes`, so a replay does not repeat it unasked.
-          if (wroteSince(session, since)) step.writes = true;
+          if (wroteSince(session, since)) {
+            step.writes = true;
+          }
           return step;
         };
         const recorded = compiled(proved);
@@ -523,8 +535,11 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           pageBefore === undefined ? step : { ...step, page: pageBefore };
         // Every step was on Reticle's own panel: nothing of the app's journey to record.
         const onApp = asRecord(recorded.args)['steps'];
-        if (Array.isArray(onApp) && 0 < onApp.length)
-          deps.recordings.capture(onPage(compiled(ran)), undefined, session.id, onPage(recorded));
+        // The route as act_and_wait gives it: the ambient tape is cut into journeys by route, and a
+        // step with none started a journey of its own and lost the act that came after it.
+        if (Array.isArray(onApp) && 0 < onApp.length) {
+          deps.recordings.capture(onPage(compiled(ran)), pageBefore, session.id, onPage(recorded));
+        }
         deps.recordings.markEnded(pageOf(session.url), session.id);
       }
       /*

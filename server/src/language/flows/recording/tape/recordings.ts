@@ -156,6 +156,9 @@ export const isAmbient = (name: string): boolean =>
  */
 const AMBIENT_STEP_CAP = 400;
 
+/** How many ended pages keep their unchecked steps for a successor. See takeAmbient. */
+const CARRY_CAP = 32;
+
 export class RecordingStore {
   readonly #active = new Map<string, ActiveRecording>();
   readonly #compiled = new Map<string, CompiledProgram>();
@@ -164,8 +167,35 @@ export class RecordingStore {
   /** Tabs with network mocks installed now, keyed by session ('' for none named). See markMocked. */
   readonly #mocked = new Set<string>();
 
-  /** `byHarness`: whether the step being captured was driven by the Harness, which tapes its own. */
-  constructor(private readonly byHarness: () => boolean = () => false) {}
+  /**
+   * Steps a tab took after its last check, kept when the APP loaded a new page, by the session that
+   * ended. The page that loaded takes them when its own tape opens. See takeAmbient.
+   */
+  readonly #carried = new Map<string, RecordedStep[]>();
+
+  /**
+   * `byHarness`: whether the step being captured was driven by the Harness, which tapes its own.
+   * `successorOf`: the session that the same tab connected as after a page load, if any.
+   */
+  constructor(
+    private readonly byHarness: () => boolean = () => false,
+    private readonly successorOf: (session: string) => string | undefined = () => undefined,
+  ) {}
+
+  /** The carried steps that this session continues, taken. */
+  #takeCarried(session: string | undefined): RecordedStep[] {
+    if (session === undefined) {
+      return [];
+    }
+    for (const [ended, steps] of this.#carried) {
+      // A leased tab comes back from a page load with its own id; any other tab with a new one.
+      if (ended === session || this.successorOf(ended) === session) {
+        this.#carried.delete(ended);
+        return steps;
+      }
+    }
+    return [];
+  }
 
   start(
     name: string,
@@ -245,7 +275,7 @@ export class RecordingStore {
     if (!this.#active.has(ambient)) {
       this.#active.set(ambient, {
         cursor: 0,
-        steps: [],
+        steps: this.#takeCarried(session),
         openedOver: new Map(),
         ...(session === undefined ? {} : { session }),
       });
@@ -404,9 +434,39 @@ export class RecordingStore {
     return [...this.#active.keys()].filter((name) => !name.startsWith(`${AMBIENT_RECORDING}:`));
   }
 
-  /** The ambient tape of one tab (or of steps no tab named), taken: what its session end saves. */
+  /**
+   * The ambient tape of one tab (or of steps no tab named), taken: what its session end saves.
+   *
+   * A session also ends when the app itself loads a page (a form post on a server-rendered app), and
+   * the journey goes on in the page that loaded. A tape with no check is not saved, so the next
+   * page's tape starts with a copy of it: a fill and the submit that proves it are then one flow, not
+   * a fill that is dropped and a submit on an empty form. When Reticle navigated away, the agent
+   * started a new journey, and nothing is carried.
+   * ponytail: only a tape with NO check is carried; unchecked steps after a check stay behind.
+   * ponytail: kept for the last CARRY_CAP ended pages; a tab that never loads a successor drops them.
+   */
   takeAmbient(session: string | undefined): ActiveRecording | undefined {
-    return this.stop(ambientRecordingOf(session));
+    const tape = this.stop(ambientRecordingOf(session));
+    const unchecked = tape?.steps.every((step) => step.expect === undefined) ?? false;
+    if (tape === undefined || session === undefined || this.#navigatedSinceStep || !unchecked) {
+      return tape;
+    }
+    // The next page may already have a tape: its step was recorded before this session ended.
+    const next = this.successorOf(session);
+    const nextTape = next === undefined ? undefined : this.#active.get(ambientRecordingOf(next));
+    if (nextTape !== undefined) {
+      nextTape.steps.unshift(...tape.steps);
+      return tape;
+    }
+    this.#carried.set(session, [...tape.steps]);
+    while (this.#carried.size > CARRY_CAP) {
+      const oldest = this.#carried.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.#carried.delete(oldest);
+    }
+    return tape;
   }
 
   /**

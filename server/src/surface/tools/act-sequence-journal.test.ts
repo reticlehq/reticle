@@ -204,6 +204,23 @@ describe('the keep offer can be taken', () => {
     expect(expects(ambientRecordingOf('s-journal-5'))).toEqual([HELD.expect, undefined]);
   });
 
+  /*
+   * The ambient tape is cut into journeys by route. A sequence step went on the tape with no route,
+   * so a fill made with reticle_act and the checked click after it with act_and_wait were two
+   * journeys. The fill had no check and was dropped, and the saved flow clicked Search on an empty
+   * field: a false fail on a correct app.
+   */
+  it('puts its route on the ambient tape, so the next act on that page is the same journey', async () => {
+    const recordings = new RecordingStore();
+    const session = journalingSession('s-journal-6', []);
+    await tool(ReticleTool.ACT_SEQUENCE).handler(depsFor(session, recordings), {
+      steps: [HELD],
+      timeout_ms: 0,
+    });
+    const taped = recordings.takeAmbient('s-journal-6')?.steps[0] as { route?: string } | undefined;
+    expect(taped?.route).toBe('/shop');
+  });
+
   it('does not hold a journey that failed', async () => {
     const recordings = new RecordingStore();
     const session = journalingSession('s-journal-4', []);
