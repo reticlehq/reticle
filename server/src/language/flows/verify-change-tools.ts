@@ -16,6 +16,7 @@ import { findContradictions } from '@reticlehq/engine/disagreement/contradiction
 import { isOneActionOnly } from './flow-cross-step.js';
 import { parseControls } from '@/surface/tools/coverage-tools.js';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
+import { BUDGET_MS_ARG } from './suite/sequential-run.js';
 
 /**
  * `reticle_verify_change` — the regression loop in one call.
@@ -64,6 +65,7 @@ const VERIFY_CHANGE: ToolDef = {
       .describe(
         'Accept a self-signed or local-CA certificate for parallel flow leases. Omit to inherit the source lease setting; otherwise certificate checks stay on.',
       ),
+    budgetMs: BUDGET_MS_ARG,
     sessionId: z
       .string()
       .optional()
@@ -189,6 +191,7 @@ const VERIFY_CHANGE: ToolDef = {
       await verify.handler(deps, {
         names: affected,
         ...(asNumber(args['parallel']) === undefined ? {} : { parallel: args['parallel'] }),
+        ...(asNumber(args['budgetMs']) === undefined ? {} : { budgetMs: args['budgetMs'] }),
         ...('boolean' === typeof args['ignoreHTTPSErrors']
           ? { ignoreHTTPSErrors: args['ignoreHTTPSErrors'] }
           : {}),

@@ -236,7 +236,24 @@ export interface SuiteVerdict {
    * the regression suite — measured: a flow saved as `{steps: [], intent: "..."}`, which `flow_save`
    * had ALREADY graded assertion-free with a warning, came back "all 1 flow pass".
    */
-  status: 'pass' | 'fail' | 'unverifiable';
+  status: 'pass' | 'fail' | 'unverifiable' | 'partial';
+  /**
+   * Flows that were selected but NOT run because the suite stopped early (`stopped` says why).
+   * Present only on a `partial` suite. Named rather than subtracted, so the caller knows exactly
+   * which flows still need a run.
+   */
+  notRun?: string[];
+  /**
+   * Why a `partial` suite ended before every selected flow ran: the total time budget ran out, or
+   * the browser session was lost (the tab closed or a lease expired). For a lost session `flow`
+   * names the flow that was running when it went, and `nextAction` names one way to reconnect.
+   */
+  stopped?: {
+    reason: 'time_budget' | 'session_lost';
+    flow?: string;
+    budgetMs?: number;
+    nextAction: string;
+  };
   total: number;
   passed: number;
   failed: number;

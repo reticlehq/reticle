@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle_verify` with `action: "flows"` or `"change"` had no total time limit and kept going after the session was lost.** The sequential replay waited on every remaining flow for a page that never came, and the MCP client gave up (about 300 seconds) with no result, even for the flows that had already run. The call now takes `budgetMs` (default 240000). When the budget is spent, or the session is gone after a flow, it stops and returns `status: "partial"` with the results so far, the flows in `notRun`, and `stopped` (the reason, the flow that lost the session, and one next action). The parallel run is unchanged. Closes [#1658](https://github.com/reticlehq/reticle/issues/1658).

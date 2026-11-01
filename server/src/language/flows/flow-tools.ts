@@ -29,6 +29,7 @@ import { withShotRun } from '@/judgement/runs/default-run-id.js';
 import { defaultRunId } from '@/judgement/runs/default-run-id.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
+import * as Bounded from './suite/sequential-run.js';
 import { classifyFlowAssertions, flattenSteps } from './flow-classify.js';
 import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
 import { isValidFlowName, flowPath } from '@/memory/project/dir/reticle-dir.js';
@@ -578,6 +579,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         ),
       confirmDangerous: confirmDangerousArg('this run of the suite'),
       skipWrites: SKIP_WRITES_ARG,
+      budgetMs: Bounded.BUDGET_MS_ARG,
       sessionId: z
         .string()
         .optional()
@@ -586,7 +588,8 @@ export const FLOW_TOOLS: ToolDef[] = [
         ),
     },
     outputSchema: {
-      status: z.string().describe('pass | fail'),
+      status: z.string().describe('pass | fail | unverifiable | partial'),
+      ...Bounded.PARTIAL_OUTPUT,
       runId: z.string().optional().describe('The run this suite was written down as.'),
       total: z.number(),
       passed: z.number(),
@@ -786,20 +789,28 @@ export const FLOW_TOOLS: ToolDef[] = [
         // Sequential default: every flow replays against the same live session, so they must not overlap.
         //
         // Each starts where the last left the app; a reset was built and reverted (see the ledger's 9.2).
-        for (const flowName of requested) {
-          const start = deps.now();
-          const replay = await replayAndLearn(deps, { flowName, sessionId, ...confirmed });
-          const loaded = await flowsForSession(deps, target)
-            .flows.load(flowName, projectId)
-            .catch(() => null);
-          const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
-          runs.push(flow === undefined ? { replay } : { replay, flow });
-          timed.push({
-            replay,
-            durationMs: deps.now() - start,
-            ...(flow === undefined ? {} : { flow }),
-          });
-        }
+        //
+        // Bounded by a total time budget and by the session staying up: see Bounded.runSequentially.
+        const stoppedEarly = await Bounded.runSequentially(requested, {
+          now: deps.now,
+          budgetMs: asNumber(args['budgetMs']) ?? Bounded.DEFAULT_SUITE_BUDGET_MS,
+          sessionAlive: Bounded.sessionProbe(deps.sessions, sessionId),
+          run: async (flowName) => {
+            const start = deps.now();
+            const replay = await replayAndLearn(deps, { flowName, sessionId, ...confirmed });
+            // The flow FILE travels with the replay (see above).
+            const loaded = await flowsForSession(deps, target)
+              .flows.load(flowName, projectId)
+              .catch(() => null);
+            const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
+            runs.push(flow === undefined ? { replay } : { replay, flow });
+            timed.push({
+              replay,
+              durationMs: deps.now() - start,
+              ...(flow === undefined ? {} : { flow }),
+            });
+          },
+        });
         // The flake ledger the CLI gate already keeps — see FlakeStore. It was only ever written by
         // `reticle flow` on the command line, so an AGENT running this tool a hundred times learned
         // nothing about which flows are intermittent. Same product, same ledger, two surfaces, and the
@@ -807,10 +818,10 @@ export const FLOW_TOOLS: ToolDef[] = [
         const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), runs);
         // Emit the consolidated run artifact (Runs tab) + best-effort cloud push. Never blocks the verdict.
         const runId = await persistAndSyncVerificationRun(deps, timed, target);
-        const verdict = buildSuiteVerdict(
-          runs,
-          selected.knownRoutes,
-          SuiteIsolation.SHARED_SESSION,
+        const verdict = Bounded.withStop(
+          buildSuiteVerdict(runs, selected.knownRoutes, SuiteIsolation.SHARED_SESSION),
+          stoppedEarly.notRun,
+          stoppedEarly.stopped,
         );
         // A flow that has both passed and failed on UNCHANGED code is a different thing from a
         // regression, and an agent that cannot tell them apart either chases a ghost or ignores a real
