@@ -675,10 +675,9 @@ export async function runSequenceStep(
    * Find one sub-step's element as the page is NOW. Either the live step to dispatch, or the step
    * result that ends the run: a degraded anchor, or one that is no longer on the page.
    *
-   * `afterRerender` is the second look, taken because the page re-rendered under a sub-step. An anchor
-   * that now matches several elements is drift there, as it is for a single step's retry: the first of
-   * the new matches may be an element the recording did not mean, and acting on it would report a pass
-   * for a click nobody can attribute. The first look keeps taking the first match.
+   * An anchor that matches several elements is drift, on the first look and on the look after a
+   * re-render alike, as it is for a single step: the first match may be an element the recording did
+   * not mean, and acting on it reports a result for a click nobody can attribute.
    *
    * `ahead` is a look at a sub-step before its turn. It is one query with no settle. An anchor that is
    * not on the page yet is `pending`, not drift, because an earlier sub-step can render it.
@@ -703,7 +702,6 @@ export async function runSequenceStep(
   const resolveSub = async (
     sub: FlowStep,
     subIndex: number,
-    afterRerender = false,
     ahead = false,
   ): Promise<{ live: LiveSubStep } | { stop: FlowStepResult } | { pending: true }> => {
     const label = `${anchorLabel(sub.anchor)} (sub-step ${String(subIndex)})`;
@@ -725,13 +723,16 @@ export async function runSequenceStep(
     // of its role, with its `alsoRoles`. Querying every control of the role sent a nameless file
     // input's upload to the first named button (#2084).
     const { refs, hint } = await lookUpSub(sub.anchor, queryArgs, ahead);
-    const ambiguous = afterRerender ? ambiguityDrift(sub.anchor, refs) : null;
+    // Several matches with no usable recorded position is drift on every look, as in the single-step
+    // runners. The first look used to take `refs[0]`: a click recorded on one item of a list (every
+    // item from one JSX line) replayed on another item and failed a correct app. A look ahead is not
+    // a verdict, and an earlier sub-step can still change what is on the page.
+    const ambiguous = ahead ? null : ambiguityDrift(sub.anchor, refs);
     if (ambiguous !== null) {
       return { stop: { step: index, tool: step.tool, anchor: label, ok: false, drift: ambiguous } };
     }
-    // The first look takes the recorded position when the page has exactly as many namesakes, and
-    // the first match otherwise; after a re-render only an unambiguous match will do.
-    const ref = afterRerender ? refFor(sub.anchor, refs) : (refFor(sub.anchor, refs) ?? refs[0]);
+    // The only match, or the recorded position while the page has exactly as many namesakes.
+    const ref = refFor(sub.anchor, refs);
     if (ref === undefined) {
       if (ahead) {
         return { pending: true };
@@ -783,7 +784,7 @@ export async function runSequenceStep(
       if (sub === undefined) {
         continue;
       }
-      const resolved = await resolveSub(sub, at, false, at > from);
+      const resolved = await resolveSub(sub, at, at > from);
       if ('pending' in resolved) {
         return { end: at };
       }
@@ -868,7 +869,7 @@ export async function runSequenceStep(
         if (sub === undefined) {
           continue;
         }
-        const resolved = await resolveSub(sub, at, true);
+        const resolved = await resolveSub(sub, at);
         if ('stop' in resolved) {
           result.ok = false;
           result.anchor = resolved.stop.anchor;
