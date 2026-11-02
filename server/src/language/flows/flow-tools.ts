@@ -18,23 +18,19 @@ import {
 } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
 import { recordSuiteFlakes } from './suite/suite-flakes.js';
-import { ReticleTool } from '@reticlehq/core';
-import { asNumber, asString } from '@reticlehq/core';
+import { ReticleTool, asNumber, asString, type SuiteVerdict } from '@reticlehq/core';
 import { log } from '@/log.js';
 import { cloudFetch, syncFlowToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { mapWithConcurrency, resolveConcurrency } from './suite/parallel-suite.js';
 import { acquireLeasedSession, suiteFixtureSeed } from '@/surface/tools/lease-tools.js';
 import { homedir } from 'node:os';
-import { withShotRun } from '@/judgement/runs/default-run-id.js';
-import { defaultRunId } from '@/judgement/runs/default-run-id.js';
+import { withShotRun, defaultRunId } from '@/judgement/runs/default-run-id.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
 import * as Bounded from './suite/sequential-run.js';
-import { sessionProbe } from './session-probe.js';
 import { classifyFlowAssertions, flattenSteps } from './flow-classify.js';
 import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
 import { isValidFlowName, flowPath } from '@/memory/project/dir/reticle-dir.js';
-import type { SuiteVerdict } from '@reticlehq/core';
 import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession, flowsForSessionId } from './flow-store-for-session.js';
@@ -788,18 +784,23 @@ export const FLOW_TOOLS: ToolDef[] = [
         const runs: { replay: FlowReplayResult; flow?: FlowFile }[] = [];
         const timed: TimedReplay[] = [];
         // Sequential default: every flow replays against the same live session, so they must not overlap.
-        //
         // Each starts where the last left the app; a reset was built and reverted (see the ledger's 9.2).
-        //
-        // Bounded by a total time budget and by the session staying up: see Bounded.runSequentially.
+        // Bounded by a time budget and the session staying up; `resolve` follows a reload to its successor.
+        let driven = sessionId;
         const stoppedEarly = await Bounded.runSequentially(requested, {
           now: deps.now,
           budgetMs: asNumber(args['budgetMs']) ?? Bounded.DEFAULT_SUITE_BUDGET_MS,
-          sessionAlive: sessionProbe(deps.sessions, sessionId),
+          sessionAlive: () => {
+            try {
+              driven = deps.sessions.resolve(driven).id;
+              return true;
+            } catch {
+              return false;
+            }
+          },
           run: async (flowName) => {
             const start = deps.now();
             const replay = await replayAndLearn(deps, { flowName, sessionId, ...confirmed });
-            // The flow FILE travels with the replay (see above).
             const loaded = await flowsForSession(deps, target)
               .flows.load(flowName, projectId)
               .catch(() => null);
