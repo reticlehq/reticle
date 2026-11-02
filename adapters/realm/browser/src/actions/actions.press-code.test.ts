@@ -75,3 +75,56 @@ describe('press carries a physical key code', () => {
     expect(seen[0]?.code).toBe('');
   });
 });
+
+/**
+ * #2139: an app opens help on `Mod+/` and matches `event.code === 'Slash'`. `press { key: "Meta+/" }`
+ * dispatched ONE keydown whose key was the literal string "Meta+/", with no meta flag and no code, and
+ * reported dispatched; the dialog never opened on a correct build. A chord is split the way
+ * Playwright spells it, and punctuation carries the code a US-layout keyboard sends.
+ */
+describe('press reads a chord and the code of punctuation', () => {
+  it('splits a chord into its modifier flags and its key', async () => {
+    await press({ key: 'Meta+/' });
+    expect(seen[0]).toMatchObject({ key: '/', code: 'Slash', metaKey: true, ctrlKey: false });
+  });
+
+  it('accepts several modifiers and the aliases a person writes', async () => {
+    await press({ key: 'Ctrl+Shift+k' });
+    expect(seen[0]).toMatchObject({ key: 'k', code: 'KeyK', ctrlKey: true, shiftKey: true });
+  });
+
+  it('accepts a key named by its code', async () => {
+    await press({ key: 'Meta+Slash' });
+    expect(seen[0]).toMatchObject({ key: '/', code: 'Slash', metaKey: true });
+  });
+
+  it('gives punctuation and its shifted character the US-layout code', async () => {
+    const codes: Record<string, string> = {
+      '/': 'Slash',
+      '?': 'Slash',
+      '.': 'Period',
+      ',': 'Comma',
+      '[': 'BracketLeft',
+      '-': 'Minus',
+      '!': 'Digit1',
+    };
+    for (const [key, code] of Object.entries(codes)) {
+      seen = [];
+      await press({ key });
+      expect(seen[0]?.code, key).toBe(code);
+    }
+  });
+
+  it('presses a plus sign, alone or as the key of a chord', async () => {
+    await press({ key: '+' });
+    expect(seen[0]).toMatchObject({ key: '+', metaKey: false });
+    seen = [];
+    await press({ key: 'Control++' });
+    expect(seen[0]).toMatchObject({ key: '+', ctrlKey: true });
+  });
+
+  it('leaves a word with a plus that is not a chord as it is', async () => {
+    await press({ key: 'Foo+x' });
+    expect(seen[0]?.key).toBe('Foo+x');
+  });
+});

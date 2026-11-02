@@ -15,7 +15,29 @@ function asString(value: unknown, fallback = ''): string {
  * in-page dispatcher cannot disagree about `text` vs `key` vs the Enter default.
  */
 export function pressKey(args: Record<string, unknown>): string {
-  return pressKeyFromArgs(args);
+  return splitChord(pressKeyFromArgs(args)).key;
+}
+
+/**
+ * A Playwright-style chord, `Meta+/` or `Control+Shift+K`: the modifiers before the last `+`, and the
+ * key after it, with a key named by its code (`Slash`) turned into its character. Sent whole, the
+ * chord was ONE keydown whose key was the literal "Meta+/", with no flag and no code (#2139). A
+ * string whose prefix is not all modifier names is not a chord, and stays as it is.
+ */
+function splitChord(raw: string): { key: string; flags: (keyof ModifierFlags)[] } {
+  const at = raw.lastIndexOf('+', raw.length - 2);
+  const flags =
+    0 < at
+      ? raw
+          .slice(0, at)
+          .split('+')
+          .map((name) => MODIFIER_FLAG_ALIASES[name.toLowerCase()])
+      : [];
+  if (0 === flags.length || flags.some((flag) => flag === undefined)) {
+    return { key: CODE_KEYS[raw] ?? raw, flags: [] };
+  }
+  const key = raw.slice(at + 1);
+  return { key: CODE_KEYS[key] ?? key, flags: flags.filter((flag) => flag !== undefined) };
 }
 
 /** The four modifier flags a KeyboardEvent carries. */
@@ -74,6 +96,10 @@ export function pressModifiers(args: Record<string, unknown>): ModifierFlags {
     const flag = MODIFIER_FLAG_ALIASES[name];
     if (flag !== undefined) flags[flag] = true;
   }
+  // The modifiers a chord names in `key` (`Meta+/`) hold as well as the ones in `modifiers`.
+  for (const flag of splitChord(pressKeyFromArgs(args)).flags) {
+    flags[flag] = true;
+  }
   return flags;
 }
 
@@ -104,7 +130,9 @@ export function pressCode(args: Record<string, unknown>, key: string): string {
   if (1 === key.length) {
     if (/[a-z]/i.test(key)) return `Key${key.toUpperCase()}`;
     if (/[0-9]/.test(key)) return `Digit${key}`;
-    return '';
+    // Punctuation: the key a US-layout keyboard presses for it, as Playwright assumes (#2139). A
+    // handler that reads `code` matched nothing when it was empty. Another layout passes `code`.
+    return PUNCTUATION_CODES[key] ?? '';
   }
   // Named keys — 'Enter', 'Escape', 'Tab', 'ArrowDown' — already ARE their own code.
   return /^[A-Z][A-Za-z0-9]*$/.test(key) && KNOWN_NAMED_KEYS.has(key) ? key : '';
@@ -145,6 +173,57 @@ export function dispatchKeypress(
   }
   asSyntheticInput(() => el.dispatchEvent(event));
 }
+
+/** US-layout physical keys for punctuation, unshifted and shifted. */
+const PUNCTUATION_CODES: Readonly<Record<string, string>> = {
+  '/': 'Slash',
+  '?': 'Slash',
+  '.': 'Period',
+  '>': 'Period',
+  ',': 'Comma',
+  '<': 'Comma',
+  ';': 'Semicolon',
+  ':': 'Semicolon',
+  "'": 'Quote',
+  '"': 'Quote',
+  '[': 'BracketLeft',
+  '{': 'BracketLeft',
+  ']': 'BracketRight',
+  '}': 'BracketRight',
+  '\\': 'Backslash',
+  '|': 'Backslash',
+  '-': 'Minus',
+  _: 'Minus',
+  '=': 'Equal',
+  '+': 'Equal',
+  '`': 'Backquote',
+  '~': 'Backquote',
+  '!': 'Digit1',
+  '@': 'Digit2',
+  '#': 'Digit3',
+  $: 'Digit4',
+  '%': 'Digit5',
+  '^': 'Digit6',
+  '&': 'Digit7',
+  '*': 'Digit8',
+  '(': 'Digit9',
+  ')': 'Digit0',
+};
+
+/** A punctuation key named by its code (`Meta+Slash`): the character it types unshifted. */
+const CODE_KEYS: Readonly<Record<string, string>> = {
+  Slash: '/',
+  Period: '.',
+  Comma: ',',
+  Semicolon: ';',
+  Quote: "'",
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Minus: '-',
+  Equal: '=',
+  Backquote: '`',
+};
 
 const ENTER_KEY = 'Enter';
 /** The carriage return a browser reports as Enter's keypress code. */
