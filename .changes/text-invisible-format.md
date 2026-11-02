@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser`, `@reticlehq/engine` — a text check finds text that holds invisible format characters.** i18n formatters wrap a value in bidi isolates (U+2068 … U+2069), and some code inserts a zero-width space, a word joiner or a soft hyphen. None of these is painted, so a table footer cell showed "$4,449", but `{kind: "text", contains: "$4,449"}` failed "no element matched" and the verdict read `no`. Text and names are now compared without these characters, in the browser and in the engine's follow-up checks for a name sent with `testid`. Text that the page returns keeps its own characters, and a no-break space still counts as a space.

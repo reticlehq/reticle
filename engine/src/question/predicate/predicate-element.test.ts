@@ -497,6 +497,36 @@ it('compares a dropped name under the same whitespace rule the browser applies (
 });
 
 /**
+ * The same rule for invisible format characters. The browser now compares text without the
+ * characters a screen does not paint (bidi isolates from an i18n formatter, a zero-width space, a
+ * word joiner). A residual check here that kept them would miss a name or a text the browser
+ * matched, and the same check would flip with the locator again.
+ */
+it('compares a dropped name and text without invisible format characters', () => {
+  const { checks } = residualQueryChecks({
+    by: 'testid',
+    value: 'budget-total',
+    name: '$4,449',
+  });
+  const cell = (name: string, text?: string): ElementDescriptor => ({
+    ref: 'e1' as Ref,
+    role: 'cell',
+    name,
+    ...(text === undefined ? {} : { text }),
+    states: [],
+    visible: true,
+  });
+
+  expect(satisfiesResiduals(cell('$\u20684,449\u2069'), checks)).toBe(true);
+  expect(satisfiesResiduals(cell('$\u200b4,449'), checks)).toBe(true);
+  expect(satisfiesResiduals(cell('$4,450'), checks)).toBe(false);
+
+  const text: [string, string][] = [['text', '$4,449']];
+  expect(satisfiesResiduals(cell('Total', 'Total $\u20604,449'), text)).toBe(true);
+  expect(satisfiesResiduals(cell('Total', 'Total $4,450'), text)).toBe(false);
+});
+
+/**
  * A page that reports no SDK version is sent `matchCase`, and an SDK older than 3.7.0 refuses the
  * whole query for that key. Since #2041 that refusal grades unknown, so a text the page shows
  * verbatim never got a verdict. The engine now asks once more without `matchCase` and checks the

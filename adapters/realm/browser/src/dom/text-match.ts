@@ -26,11 +26,20 @@ export function foldTypography(value: string): string {
 }
 
 /**
+ * Format characters that the screen does not paint: the soft hyphen, zero-width space and joiners,
+ * direction marks and embeddings, the word joiner and invisible operators, bidi isolates, and the
+ * byte order mark. i18n formatters wrap a value in isolates, so "$4,449" on the screen was
+ * "$\u20684,449\u2069" in the text, and a check for "$4,449" read `no`. Named one by one, not as
+ * the whole `Cf` category, because that category also holds visible Arabic number signs.
+ */
+const INVISIBLE_FORMAT = /[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
+
+/**
  * Visible text in the form two texts are compared in. For comparison only: text that a caller
  * reads keeps the page's own characters (`normaliseVisibleText`).
  */
 export function comparableText(value: string): string {
-  return foldTypography(normaliseVisibleText(value));
+  return foldTypography(normaliseVisibleText(value.replace(INVISIBLE_FORMAT, '')));
 }
 
 export function fuzzyVisibleText(actual: string, expected: string): boolean {
