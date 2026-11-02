@@ -111,12 +111,16 @@ function isDenialRole(role: string): boolean {
 }
 
 function isDenialQuery(query: ElementQuery): boolean {
-  if (undefined !== query.role && isDenialRole(query.role)) return true;
+  if (undefined !== query.role && isDenialRole(query.role)) {
+    return true;
+  }
   if (QueryBy.ROLE === query.by && undefined !== query.value && isDenialRole(query.value)) {
     return true;
   }
   for (const field of [query.name, query.text, query.value, query.label]) {
-    if ('string' === typeof field && isDenialPhrase(field)) return true;
+    if ('string' === typeof field && isDenialPhrase(field)) {
+      return true;
+    }
   }
   return false;
 }
@@ -138,10 +142,14 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
   const walk = (p: Predicate): void => {
     switch (p.kind) {
       case PredicateKind.ALL_OF:
-        for (const child of p.predicates) walk(child);
+        for (const child of p.predicates) {
+          walk(child);
+        }
         return;
       case PredicateKind.COMPARE:
-        for (const child of compareSourceClauses(p)) walk(child);
+        for (const child of compareSourceClauses(p)) {
+          walk(child);
+        }
         return;
       case PredicateKind.NET: {
         netUrls.push(p.urlContains ?? '');
@@ -153,7 +161,9 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
         }
         const declaredFailure =
           false === p.ok || (p.status !== undefined && p.status >= FAILURE_STATUS_MIN);
-        if (!declaredFailure) return;
+        if (!declaredFailure) {
+          return;
+        }
         netFailures.push({
           ...(p.method === undefined ? {} : { method: p.method }),
           ...(p.urlContains === undefined ? {} : { urlContains: p.urlContains }),
@@ -164,7 +174,9 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
       case PredicateKind.ELEMENT:
         if (true !== p.absent) {
           rendersContent = true;
-          if (isDenialQuery(p.query)) pushAuthDenialStatuses(netFailures);
+          if (isDenialQuery(p.query)) {
+            pushAuthDenialStatuses(netFailures);
+          }
         }
         return;
       case PredicateKind.STATE:
@@ -188,7 +200,9 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
     }
   };
 
-  if (predicate !== undefined) walk(predicate);
+  if (predicate !== undefined) {
+    walk(predicate);
+  }
   return { netFailures, rendersContent, netUrls, repeatableNetUrls, statePaths, signalNames };
 }
 
@@ -208,7 +222,9 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
  * own.
  */
 export function declaresBodyIndependentChannel(predicate: Predicate | undefined): boolean {
-  if (predicate === undefined) return false;
+  if (predicate === undefined) {
+    return false;
+  }
 
   const walk = (p: Predicate): boolean => {
     switch (p.kind) {
@@ -255,11 +271,16 @@ export function matchesDeclaredFailure(
   declared: readonly DeclaredNetFailure[],
 ): boolean {
   return declared.some((d) => {
-    if (d.method !== undefined && d.method.toUpperCase() !== call.method.toUpperCase())
+    if (d.method !== undefined && d.method.toUpperCase() !== call.method.toUpperCase()) {
       return false;
+    }
     const haystack = call.matchUrl ?? call.url;
-    if (d.urlContains !== undefined && !haystack.includes(d.urlContains)) return false;
-    if (d.status !== undefined && d.status !== call.status) return false;
+    if (d.urlContains !== undefined && !haystack.includes(d.urlContains)) {
+      return false;
+    }
+    if (d.status !== undefined && d.status !== call.status) {
+      return false;
+    }
     return true;
   });
 }
@@ -273,7 +294,9 @@ export function isDeclaredRead(
   call: { method: string; url: string; matchUrl?: string },
   reads: readonly DeclaredRead[] | undefined,
 ): boolean {
-  if (reads === undefined) return false;
+  if (reads === undefined) {
+    return false;
+  }
   const haystack = call.matchUrl ?? call.url;
   return reads.some(
     (r) =>

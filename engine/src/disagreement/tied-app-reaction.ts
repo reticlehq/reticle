@@ -1,23 +1,9 @@
-import { asString, EventType, type ReticleEvent } from '@reticlehq/core';
-import type { ContradictionOptions } from './contradiction-types.js';
-
-/** Reticle's own instrumentation's signals (core's `RETICLE_HYDRATION_SIGNAL`); not imported: coupling only shrinks. */
-export const RETICLE_SIGNAL_NAMESPACE = 'reticle:';
-
-const STATE_KEY_PREFIX = 'state:';
-const SIGNAL_KEY_PREFIX = 'signal:';
-
-/** Which store path or signal an event moved, keyed the same way in the window and in `prior`. */
-function appReactionKey(e: ReticleEvent): string | undefined {
-  if (e.type === EventType.STATE_CHANGE) {
-    return `${STATE_KEY_PREFIX}${asString(e.data['name']) ?? ''}:${asString(e.data['path']) ?? ''}`;
-  }
-  if (e.type !== EventType.SIGNAL) {
-    return undefined;
-  }
-  const name = asString(e.data['name']) ?? '';
-  // Reticle's own instrumentation is not the app reacting.
-  return name.startsWith(RETICLE_SIGNAL_NAMESPACE) ? undefined : `${SIGNAL_KEY_PREFIX}${name}`;
+/** What the rule needs to know about an event. The caller supplies it, so this file reads no wire shape. */
+interface AppReaction<E> {
+  /** Which store path or signal the event moved, or undefined when it moved neither. */
+  keyOf: (event: E) => string | undefined;
+  /** Whether the caller's predicate named this change. */
+  isNamed: (event: E) => boolean;
 }
 
 /**
@@ -35,28 +21,22 @@ function appReactionKey(e: ReticleEvent): string | undefined {
  *  - it was quiet before the action: `prior` holds observations, and none of them moved this path
  *    or fired this signal. Churn that was already moving is the background, not this click.
  */
-export function tiedAppReaction(options: ContradictionOptions): (e: ReticleEvent) => boolean {
-  const named = new Set(options.namedStatePaths ?? []);
-  const namedSignals = new Set(options.namedSignals ?? []);
-  const prior = options.prior ?? [];
+export function tiedReaction<E>(
+  prior: readonly E[],
+  { keyOf, isNamed }: AppReaction<E>,
+): (event: E) => boolean {
   const movedBefore = new Set<string>();
-  for (const e of prior) {
-    const key = appReactionKey(e);
+  for (const event of prior) {
+    const key = keyOf(event);
     if (key !== undefined) {
       movedBefore.add(key);
     }
   }
-  return (e) => {
-    const key = appReactionKey(e);
+  return (event) => {
+    const key = keyOf(event);
     if (key === undefined) {
       return false;
     }
-    if (e.type === EventType.STATE_CHANGE && named.has(asString(e.data['path']) ?? '')) {
-      return true;
-    }
-    if (e.type === EventType.SIGNAL && namedSignals.has(asString(e.data['name']) ?? '')) {
-      return true;
-    }
-    return prior.length > 0 && !movedBefore.has(key);
+    return isNamed(event) || (prior.length > 0 && !movedBefore.has(key));
   };
 }

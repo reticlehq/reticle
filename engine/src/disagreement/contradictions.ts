@@ -33,7 +33,7 @@ import { findStaleResponses } from './stale-response.js';
 import { findBodyFailures } from './body-failures.js';
 import { findEchoMismatches } from './echo-mismatch.js';
 import { findUnitMismatches } from './unit-mismatch.js';
-import { RETICLE_SIGNAL_NAMESPACE, tiedAppReaction } from './tied-app-reaction.js';
+import { tiedReaction } from './tied-app-reaction.js';
 import { asString } from '@reticlehq/core';
 import { isDeclaredRead, matchesDeclaredFailure } from '@/question/declared.js';
 import { runRegisteredFolds } from './contradiction-folds.js';
@@ -176,6 +176,8 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
 }
 
 const ALERT_ROLE = 'alert';
+/** Reticle's own instrumentation's signals (core's `RETICLE_HYDRATION_SIGNAL`); not imported: coupling only shrinks. */
+const RETICLE_SIGNAL_NAMESPACE = 'reticle:';
 const ARIA_INVALID = 'aria-invalid';
 
 const MUST_DO_SOMETHING = new Set(['click', 'dblclick', 'submit']);
@@ -205,7 +207,7 @@ const ONE_INTENT_ACTIONS: ReadonlySet<string> = new Set([
  *  - a navigation, or a dialog/live region appearing — the two ways a real reaction legitimately
  *    lands OUTSIDE the target, e.g. a modal portalled to the body,
  *  - a store change or an app signal tied to the action (#1531): see
- *    `tiedAppReaction`.
+ *    `tiedReaction`.
  *
  * The last two clauses are what keep this from manufacturing noise: a button that opens a modal
  * mutates nothing within itself, and a Pause button whose store updates on the media `pause` event
@@ -227,6 +229,35 @@ function didNothing(
   return !events.some(
     (e) => e.type === EventType.ROUTE_CHANGE || e.type === EventType.VISIBLE_SHOWN || tied(e),
   );
+}
+
+const STATE_KEY_PREFIX = 'state:';
+const SIGNAL_KEY_PREFIX = 'signal:';
+
+/** Which store path or signal an event moved, keyed the same way in the window and in `prior`. */
+function appReactionKey(e: ReticleEvent): string | undefined {
+  if (e.type === EventType.STATE_CHANGE) {
+    return `${STATE_KEY_PREFIX}${asString(e.data['name']) ?? ''}:${asString(e.data['path']) ?? ''}`;
+  }
+  if (e.type !== EventType.SIGNAL) {
+    return undefined;
+  }
+  const name = asString(e.data['name']) ?? '';
+  // Reticle's own instrumentation is not the app reacting.
+  return name.startsWith(RETICLE_SIGNAL_NAMESPACE) ? undefined : `${SIGNAL_KEY_PREFIX}${name}`;
+}
+
+/** A store change or app signal tied to the action: see `tiedReaction` (#1531). */
+function tiedAppReaction(options: ContradictionOptions): (e: ReticleEvent) => boolean {
+  const namedPaths = new Set(options.namedStatePaths ?? []);
+  const namedSignals = new Set(options.namedSignals ?? []);
+  return tiedReaction(options.prior ?? [], {
+    keyOf: appReactionKey,
+    isNamed: (e) =>
+      e.type === EventType.STATE_CHANGE
+        ? namedPaths.has(asString(e.data['path']) ?? '')
+        : namedSignals.has(asString(e.data['name']) ?? ''),
+  });
 }
 
 /**
