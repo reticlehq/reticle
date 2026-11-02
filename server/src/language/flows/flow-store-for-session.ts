@@ -27,6 +27,7 @@ import { dirname } from 'node:path';
 import { FlowStore } from './flows.js';
 import type { NamedFlow } from './change/flow-sources.js';
 import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
+import { isUnmatchedRoot } from '@/memory/project/dir/reticle-dir.js';
 import type { ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
@@ -84,11 +85,29 @@ export async function namedFlowsIn(
  * used to build their own store from `sessionRoot`, which skips the root a lease claimed when no
  * resolver is wired and no session is named. Then `affected` named a flow that `flows` could not
  * find (#1996). The directory is returned too, so `git diff` runs in the tree the flows belong to.
+ *
+ * `sessionTarget` declines when several projects are connected and none is named, because a caller
+ * that needs no session must still work. These callers answer about ONE project, and that fallback
+ * is the daemon's own, so its flows read as the driven tab's (#1550). Here the refusal stands:
+ * `resolve` names the connected projects and asks for a `sessionId`. It throws nothing for several
+ * tabs of one project, or for no session at all.
+ *
+ * `unmatchedRoot` is set when the project has no folder: the root is an evidence bucket, not a
+ * tree, so there is no `git` to ask and no flows to find.
  */
 export async function namedFlowsForSession(
   deps: ToolDeps,
   sessionId: string | undefined,
-): Promise<{ flows: NamedFlow[]; projectDir: string }> {
+): Promise<{ flows: NamedFlow[]; projectDir: string; unmatchedRoot?: string }> {
+  // Older constructions of ToolDeps carry no session manager, as `sessionRoot` notes.
+  const sessions = deps.sessions as Partial<ToolDeps['sessions']> | undefined;
+  if (sessionId === undefined && 1 < (sessions?.count?.() ?? 0)) {
+    deps.sessions.resolve(undefined);
+  }
   const { flows: store, root, projectId } = flowsForSessionId(deps, sessionId);
-  return { flows: await namedFlowsIn(store, projectId), projectDir: dirname(root) };
+  return {
+    flows: await namedFlowsIn(store, projectId),
+    projectDir: dirname(root),
+    ...(isUnmatchedRoot(root) ? { unmatchedRoot: root } : {}),
+  };
 }
