@@ -148,6 +148,13 @@ export const STATE_ATTR = 'data-reticle-state';
  */
 export const UNREACHABLE_STATE = 'unreachable';
 
+/**
+ * Below this viewport width the HUD never opens the panel by itself. The 320 px panel plus its dock
+ * is most of a phone screen, and it covered the app's own controls (#2071). The pill stays; a tap
+ * on it opens the panel.
+ */
+export const NARROW_VIEWPORT_PX = 480;
+
 /** Overlay-root attribute toggled when the HUD is collapsed to the FAB. */
 export const MIN_ATTR = 'data-reticle-min';
 /** Overlay-root attribute toggled when the agent chat panel is open. */
