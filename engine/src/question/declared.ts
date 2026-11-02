@@ -66,6 +66,14 @@ interface DeclaredExpectations {
   signalNames: readonly string[];
 }
 
+/** The store paths and signals `until` named, which tie their changes to the action (#1531). */
+export function namedReactions(declared: DeclaredExpectations): {
+  namedStatePaths: readonly string[];
+  namedSignals: readonly string[];
+} {
+  return { namedStatePaths: declared.statePaths, namedSignals: declared.signalNames };
+}
+
 /** Below this, a status is a success or a redirect: not a declared failure. */
 const FAILURE_STATUS_MIN = 400;
 
@@ -163,7 +171,9 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
         statePaths.push(p.path);
         return;
       case PredicateKind.SIGNAL:
-        if (p.name !== undefined) signalNames.push(p.name);
+        if (p.name !== undefined) {
+          signalNames.push(p.name);
+        }
         return;
       case PredicateKind.TEXT:
         if (true !== p.absent) {
