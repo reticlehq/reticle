@@ -157,3 +157,50 @@ describe('what the rule leaves alone', () => {
     expect(kinds).not.toContain(ContradictionKind.READ_SERVER_FAULT);
   });
 });
+
+/*
+ * Flow replay calls `stepEffect` with the step's window only. A background poll that fails on every
+ * tick then failed "inside" each step, and every replayed step of a working journey read
+ * `unverifiable`. Replay hands each step the reads that failed earlier in the session, and the rule
+ * treats a read that already failed the same way as ambient, as it does for `prior`. No other rule
+ * reads these events, so the step's other findings do not move.
+ */
+describe('a replayed step whose background read already failed before the step', () => {
+  const poll = (t?: number): ReticleEvent => get('/api/status/poll', 503, t);
+
+  it('is not reported when the same read failed earlier in the session', () => {
+    const before = [poll(ACTION_AT - 5)];
+    const effect = stepEffect(
+      [label(), poll()],
+      { since: ACTION_AT, until: 100 },
+      { appOrigin: APP, before },
+    );
+    expect(effect.contradictions?.map((c) => c.kind) ?? []).not.toContain(
+      ContradictionKind.READ_SERVER_FAULT,
+    );
+  });
+
+  it('is still reported when this step is the first time the read failed', () => {
+    const before = [get('/api/status/poll', 200, ACTION_AT - 5)];
+    const effect = stepEffect(
+      [label(), poll()],
+      { since: ACTION_AT, until: 100 },
+      { appOrigin: APP, before },
+    );
+    expect(effect.contradictions?.map((c) => c.kind)).toContain(
+      ContradictionKind.READ_SERVER_FAULT,
+    );
+  });
+
+  it('is still reported when a different read failed earlier', () => {
+    const before = [get('/api/other', 500, ACTION_AT - 5)];
+    const effect = stepEffect(
+      [label(), poll()],
+      { since: ACTION_AT, until: 100 },
+      { appOrigin: APP, before },
+    );
+    expect(effect.contradictions?.map((c) => c.kind)).toContain(
+      ContradictionKind.READ_SERVER_FAULT,
+    );
+  });
+});

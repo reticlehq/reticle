@@ -115,11 +115,6 @@
       "count": 5
     }
   },
-  "src/evidence/step-effect.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/evidence/superseded-checks.ts": {
     "curly": {
       "count": 2
