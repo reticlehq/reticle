@@ -1,6 +1,6 @@
 /**
- * The two things a sequence step needs beyond a plain act: a retry when the ref goes stale under a
- * re-render, and a result shaped for the per-step report.
+ * The things a sequence step needs beyond a plain act: a retry when the ref goes stale under a
+ * re-render, a result shaped for the per-step report, and the `burst` pace (at the end).
  *
  * ── THE RETRY ─────────────────────────────────────────────────────────────────────────────────
  *
@@ -104,4 +104,51 @@ export function describeStepResult(
     }
   }
   return out;
+}
+
+// ── THE BURST PACE ── shared by the live tool and the replay of a saved sequence (#2130). ──────
+
+/**
+ * Ceiling for a burst gap. Past this it is not a burst, it is a paced walk.
+ *
+ * HOW TO PICK A GAP, because both edges are real and neither is guessable. It must outlast the
+ * handler committing and dispatching its request, and undercut the response it is racing.
+ * Measured against a superseded-filter race (the superseded query 700ms, the one replacing it 90ms):
+ * at 0ms the first request was never issued at all, and at the ordinary settle (~500ms in a
+ * throttled tab, where rAF never fires and the frame budget always times out) the two clicks
+ * serialised and never overlapped. 50ms sat in the window. A different app needs a different
+ * number: read its own slow endpoint.
+ */
+export const BURST_MAX_GAP_MS = 500;
+
+/** A recorded gap as the live tool would apply it: clamped, or absent. */
+export function burstGap(burstMs: number | undefined): number | undefined {
+  return burstMs === undefined ? undefined : Math.max(0, Math.min(burstMs, BURST_MAX_GAP_MS));
+}
+
+/** A burst step returns as soon as it is dispatched: the gap, not the settle, paces the sequence. */
+export function pacedArgs(
+  args: Record<string, unknown>,
+  gap: number | undefined,
+): Record<string, unknown> {
+  return gap === undefined ? args : { ...args, settleMs: 0 };
+}
+
+/**
+ * Wait out the rest of the gap that began when the previous step was dispatched, if there is one. The gap is between
+ * ACTIONS, as live, so time the previous step already took counts towards it.
+ */
+export async function holdGap(
+  elapsed: () => number,
+  since: number | undefined,
+  gap: number | undefined,
+  sleep: (ms: number) => Promise<void>,
+): Promise<void> {
+  if (since === undefined || gap === undefined) {
+    return;
+  }
+  const remaining = gap - (elapsed() - since);
+  if (remaining > 0) {
+    await sleep(remaining);
+  }
 }

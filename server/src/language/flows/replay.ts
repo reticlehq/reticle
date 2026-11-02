@@ -544,11 +544,16 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
     return [expect === undefined ? compiled.args : { ...compiled.args, expect }];
   });
   const timeoutMs = explicitTimeoutMs(args);
+  // The pace is part of what the sequence did: replay at the default settle answered differently (#2130).
+  const burst = args['burst'];
+  const burstMs =
+    'number' === typeof burst && Number.isFinite(burst) && 0 <= burst ? burst : undefined;
   return {
     tool: ReticleTool.ACT_SEQUENCE,
     stable,
     args: { steps: subSteps },
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    ...(burstMs === undefined ? {} : { burstMs }),
   };
 }
 

@@ -386,6 +386,9 @@ export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
   if (step.timeoutMs !== undefined) {
     out.timeoutMs = step.timeoutMs;
   }
+  if (step.burstMs !== undefined) {
+    out.burstMs = step.burstMs;
+  }
   if (step.page !== undefined) {
     out.page = step.page;
   }

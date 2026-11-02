@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`, `@reticlehq/core` — a replayed sequence lost the pace it was recorded at.** A `reticle_act_sequence` driven with `burst` dispatches each step with no settle and holds a fixed gap between them. The saved flow did not keep the gap, so its replay sent the steps as one batch at the default settle. On a page whose behaviour depends on timing (a slideshow, a debounce, a race), a flow that passed live failed on the same build. A flow step now keeps the gap as `burstMs`, and replay walks the sub-steps with that gap and no settle, as the live tool does. Closes [#2130](https://github.com/reticlehq/reticle/issues/2130).
