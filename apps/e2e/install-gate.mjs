@@ -662,6 +662,11 @@ const SCAFFOLDS = [
       ['--yes', 'nuxi@latest', 'init', 'app', '--template', 'minimal', '--packageManager', 'npm', '--no-gitInit', '--no-install'],
     ],
     files: PROBE_MARKUP.nuxt,
+    // nuxt 4.6.4 (2026-11-02) cannot start a dev server at all: `nuxi dev` on a fresh minimal app
+    // throws "options.hostname.toLowerCase is not a function" in @nuxt/cli's #syncAllowedHosts,
+    // with nothing of ours installed. Every nuxt cell went red on main within the hour. Pinned to
+    // the last release this gate passed on. Remove the pin when a newer nuxt serves the minimal app.
+    pins: { nuxt: '4.6.3' },
   },
   {
     id: 'react-router',
@@ -1193,6 +1198,22 @@ async function driveScaffold(scaffold, index) {
     for (const [rel, content] of Object.entries(scaffold.files ?? {})) {
       mkdirSync(dirname(join(workdir, rel)), { recursive: true });
       writeFileSync(join(workdir, rel), content);
+    }
+    // An upstream release that breaks the scaffold for a reason that is not about Reticle is pinned
+    // back to its last good version, so the cell keeps measuring Reticle. Each pin names its cause.
+    const pins = Object.entries(scaffold.pins ?? {});
+    if (pins.length > 0) {
+      const pinPath = join(app, 'package.json');
+      const pinned = JSON.parse(readFileSync(pinPath, 'utf8'));
+      for (const [name, version] of pins) {
+        for (const field of ['dependencies', 'devDependencies']) {
+          if (pinned[field]?.[name] !== undefined) {
+            pinned[field][name] = version;
+          }
+        }
+      }
+      writeFileSync(pinPath, `${JSON.stringify(pinned, null, 2)}\n`);
+      note(`pinned for an upstream break: ${pins.map(([n, v]) => `${n}@${v}`).join(', ')}`);
     }
     stampInstallProbe(app);
     // Seeded AFTER the create command, never before: `create-next-app` reads the surrounding
