@@ -232,6 +232,25 @@ export const ReplayStatus = {
 export type ReplayStatus = (typeof ReplayStatus)[keyof typeof ReplayStatus];
 
 /**
+ * The status of a replayed suite (`SuiteVerdict.status`). `partial` is a suite that stopped before
+ * every selected flow ran (see `SuiteStopReason`), so a green count over half a suite never reads as a pass.
+ */
+export const SuiteVerdictStatus = {
+  PASS: 'pass',
+  FAIL: 'fail',
+  UNVERIFIABLE: 'unverifiable',
+  PARTIAL: 'partial',
+} as const;
+export type SuiteVerdictStatus = (typeof SuiteVerdictStatus)[keyof typeof SuiteVerdictStatus];
+
+/** Why a suite ended before every selected flow ran (`SuiteVerdict.stopped.reason`). */
+export const SuiteStopReason = {
+  TIME_BUDGET: 'time_budget', // the total time budget was spent
+  SESSION_LOST: 'session_lost', // the tab closed or a lease expired
+} as const;
+export type SuiteStopReason = (typeof SuiteStopReason)[keyof typeof SuiteStopReason];
+
+/**
  * Why an anchor failed to resolve at replay time (the "whose fault is
  * it" reason kind). Drives the human `reason` sentence and whether a nearest-match is offered.
  */

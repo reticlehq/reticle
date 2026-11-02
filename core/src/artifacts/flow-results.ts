@@ -7,7 +7,14 @@
  * flow's types" still answers for both halves.
  */
 import type { Contradiction } from '@/verdict/findings.js';
-import type { DriftReason, HealStatus, ReplayStatus, SuiteIsolation } from './flow-constants.js';
+import type {
+  DriftReason,
+  HealStatus,
+  ReplayStatus,
+  SuiteIsolation,
+  SuiteStopReason,
+  SuiteVerdictStatus,
+} from './flow-constants.js';
 
 /**
  * A legible-drift record returned when an anchor misses at replay.
@@ -236,7 +243,7 @@ export interface SuiteVerdict {
    * the regression suite — measured: a flow saved as `{steps: [], intent: "..."}`, which `flow_save`
    * had ALREADY graded assertion-free with a warning, came back "all 1 flow pass".
    */
-  status: 'pass' | 'fail' | 'unverifiable' | 'partial';
+  status: SuiteVerdictStatus;
   /**
    * Flows that were selected but NOT run because the suite stopped early (`stopped` says why).
    * Present only on a `partial` suite. Named rather than subtracted, so the caller knows exactly
@@ -249,7 +256,7 @@ export interface SuiteVerdict {
    * names the flow that was running when it went, and `nextAction` names one way to reconnect.
    */
   stopped?: {
-    reason: 'time_budget' | 'session_lost';
+    reason: SuiteStopReason;
     flow?: string;
     budgetMs?: number;
     nextAction: string;

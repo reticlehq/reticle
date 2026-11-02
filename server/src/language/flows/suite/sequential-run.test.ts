@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_SUITE_BUDGET_MS,
-  SuiteStopReason,
-  runSequentially,
-  withStop,
-} from './sequential-run.js';
+import { SuiteStopReason, SuiteVerdictStatus } from '@reticlehq/core';
+import { DEFAULT_SUITE_BUDGET_MS, runSequentially, withStop } from './sequential-run.js';
 
 /** A clock that only moves when a flow "takes time". */
 function fakeClock(): { now: () => number; advance: (ms: number) => void } {
@@ -104,7 +100,7 @@ describe('runSequentially', () => {
 });
 
 describe('withStop', () => {
-  const base = { status: 'pass', summary: 'all 2 flows pass' };
+  const base = { status: SuiteVerdictStatus.PASS, summary: 'all 2 flows pass' };
 
   it('leaves a complete suite untouched', () => {
     expect(withStop(base, [], undefined)).toBe(base);

@@ -30,6 +30,7 @@ import { defaultRunId } from '@/judgement/runs/default-run-id.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
 import * as Bounded from './suite/sequential-run.js';
+import { sessionProbe } from './session-probe.js';
 import { classifyFlowAssertions, flattenSteps } from './flow-classify.js';
 import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
 import { isValidFlowName, flowPath } from '@/memory/project/dir/reticle-dir.js';
@@ -794,7 +795,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         const stoppedEarly = await Bounded.runSequentially(requested, {
           now: deps.now,
           budgetMs: asNumber(args['budgetMs']) ?? Bounded.DEFAULT_SUITE_BUDGET_MS,
-          sessionAlive: Bounded.sessionProbe(deps.sessions, sessionId),
+          sessionAlive: sessionProbe(deps.sessions, sessionId),
           run: async (flowName) => {
             const start = deps.now();
             const replay = await replayAndLearn(deps, { flowName, sessionId, ...confirmed });

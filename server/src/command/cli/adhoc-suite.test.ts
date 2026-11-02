@@ -55,7 +55,7 @@ describe('a saved-flow suite against the running daemon', () => {
   it('runs the flows and exits 0 on a pass', async () => {
     const { result, calls } = await run({ status: 'pass', total: 3, passed: 3 });
     expect(calls.map((c) => c.name)).toEqual([ReticleTool.VERIFY]);
-    expect(calls[0]?.args).toEqual({ action: 'flows' });
+    expect(calls[0]?.args).toEqual({ action: 'flows', budgetMs: 1_800_000 });
     expect(result.code).toBe(0);
   });
 
@@ -90,6 +90,7 @@ describe('a saved-flow suite against the running daemon', () => {
       const { calls } = await run({ status: 'pass' });
       expect(calls[0]?.args).toEqual({
         action: 'flows',
+        budgetMs: 1_800_000,
         secrets: { RETICLE_SECRET_PASSWORD: 'hunter2' },
       });
     } finally {
@@ -117,12 +118,12 @@ describe('a saved-flow suite against the running daemon', () => {
   // <url> --select <label>` was refused as an unknown parameter on every run and graded nothing.
   it('narrows the suite when labels were named, under the name the tool declares', async () => {
     const { calls } = await run({ status: 'pass', total: 1 }, { select: ['smoke'] });
-    expect(calls[0]?.args).toEqual({ action: 'flows', labels: ['smoke'] });
+    expect(calls[0]?.args).toEqual({ action: 'flows', budgetMs: 1_800_000, labels: ['smoke'] });
   });
 
   it('pins a tab when one was named, so a second open page is not graded instead', async () => {
     const { calls } = await run({ status: 'pass', total: 1 }, { sessionId: 's1' });
-    expect(calls[0]?.args).toEqual({ action: 'flows', sessionId: 's1' });
+    expect(calls[0]?.args).toEqual({ action: 'flows', budgetMs: 1_800_000, sessionId: 's1' });
   });
 
   /*

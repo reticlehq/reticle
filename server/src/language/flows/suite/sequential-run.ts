@@ -14,19 +14,13 @@
  */
 
 import { z } from 'zod';
-import type { SessionManager } from '@/portal/session/session-manager.js';
+import { SuiteStopReason, SuiteVerdictStatus } from '@reticlehq/core';
 
 /** Below the roughly 300 s at which common MCP clients stop waiting, so a result can still be returned. */
 export const DEFAULT_SUITE_BUDGET_MS = 240_000;
 
 /** An hour: more than that is not a budget, and a client will have given up long before. */
 export const MAX_SUITE_BUDGET_MS = 3_600_000;
-
-export const SuiteStopReason = {
-  TIME_BUDGET: 'time_budget',
-  SESSION_LOST: 'session_lost',
-} as const;
-export type SuiteStopReason = (typeof SuiteStopReason)[keyof typeof SuiteStopReason];
 
 export interface SuiteStop {
   reason: SuiteStopReason;
@@ -93,7 +87,7 @@ export async function runSequentially<R>(
  * failures; the summary leads with what did not run, because a green count over half a suite must
  * not read as a pass.
  */
-export function withStop<V extends { status: string; summary: string }>(
+export function withStop<V extends { status: SuiteVerdictStatus; summary: string }>(
   verdict: V,
   notRun: readonly string[],
   stopped: SuiteStop | undefined,
@@ -107,7 +101,7 @@ export function withStop<V extends { status: string; summary: string }>(
       : `the browser session was lost while "${stopped.flow ?? ''}" was running`;
   return {
     ...verdict,
-    status: 'partial',
+    status: SuiteVerdictStatus.PARTIAL,
     summary: `PARTIAL - ${why}; ${String(notRun.length)} flow(s) did not run (${notRun.join(', ')}). Of those that ran: ${verdict.summary}`,
     notRun: [...notRun],
     stopped,
@@ -136,7 +130,7 @@ export const PARTIAL_OUTPUT = {
     ),
   stopped: z
     .object({
-      reason: z.string(),
+      reason: z.enum([SuiteStopReason.TIME_BUDGET, SuiteStopReason.SESSION_LOST]),
       flow: z.string().optional(),
       budgetMs: z.number().optional(),
       nextAction: z.string(),
@@ -146,22 +140,3 @@ export const PARTIAL_OUTPUT = {
       'Present on a "partial" suite: why it ended early (time_budget | session_lost), the flow that lost the session, and one next action.',
     ),
 };
-
-/**
- * A probe for "is the session these flows drive still there". Followed across reloads: `resolve`
- * answers a departed id with its live successor, so a page that merely reloaded is not "lost".
- */
-export function sessionProbe(
-  sessions: SessionManager,
-  sessionId: string | undefined,
-): () => boolean {
-  let driven = sessionId;
-  return () => {
-    try {
-      driven = sessions.resolve(driven).id;
-      return true;
-    } catch {
-      return false;
-    }
-  };
-}
