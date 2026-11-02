@@ -368,6 +368,7 @@ const ANCHOR_FIELDS = [
   'componentOf',
   'ownText',
   'secret',
+  'within',
 ];
 
 /**

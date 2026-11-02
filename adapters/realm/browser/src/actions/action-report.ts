@@ -151,6 +151,11 @@ export interface ActionResult {
    * has no other identity, and a line number is the implementation's layout, not the element.
    */
   ownText?: string;
+  /**
+   * The roles of the control's nearest containers, innermost first (e.g. `alert` inside `dialog`). A
+   * replay finds the control by them when a correct build names it differently (#2109).
+   */
+  within?: string[];
   /** Role + accessible name — the anchor that identifies an INSTANCE, not a JSX site. */
   role?: string;
   name?: string;
@@ -191,6 +196,8 @@ export interface CapturedAnchor {
   name?: string;
   nth?: number;
   of?: number;
+  /** See ActionResult.within. */
+  within?: string[];
   /** See ActionResult.secret. */
   secret?: true;
 }
@@ -252,6 +259,46 @@ function positionInComponentAnchor(
   return 1 < same.length && 0 <= at ? { nth: at, of: same.length } : null;
 }
 
+/** Container roles a replay can find a renamed control inside (landmarks and widgets that group controls). */
+const CONTAINER_ROLES: ReadonlySet<string> = new Set([
+  'alert',
+  'alertdialog',
+  'dialog',
+  'form',
+  'region',
+  'navigation',
+  'menu',
+  'menubar',
+  'listbox',
+  'list',
+  'listitem',
+  'tabpanel',
+  'table',
+  'grid',
+  'row',
+  'group',
+  'toolbar',
+  'tree',
+  'search',
+]);
+/** How many nearest containers are kept: enough to place a control, few enough to survive a re-layout. */
+const WITHIN_MAX = 2;
+
+/** The roles of `el`'s nearest container ancestors, innermost first, or undefined when it has none. */
+function containerRoles(el: Element): string[] | undefined {
+  const out: string[] = [];
+  for (let a = el.parentElement; a !== null && out.length < WITHIN_MAX; a = a.parentElement) {
+    const role = getRole(a);
+    // A form or region is a landmark only when it has an accessible name (ARIA); an unnamed one is a
+    // wrapper a correct build may not have, so it is no place to look for the control.
+    const landmarkNeedsName = 'form' === role || 'region' === role;
+    if (CONTAINER_ROLES.has(role) && (!landmarkNeedsName || getAccessibleName(a).length > 0)) {
+      out.push(role);
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 /** Longest own text kept as an element's identity. */
 const OWN_TEXT_MAX = 80;
 
@@ -295,6 +342,10 @@ export function anchorOf(el: Element): CapturedAnchor {
   }
   if (name.length > 0) {
     out.name = name;
+    const within = containerRoles(el);
+    if (within !== undefined) {
+      out.within = within;
+    }
   } else if (out.component !== undefined || out.source !== undefined) {
     // Short words only: a container's whole text is no identity, and it would bloat every step.
     const words = ownWords(el);
@@ -357,6 +408,9 @@ export const result = (
   }
   if (anchor.ownText !== undefined) {
     base.ownText = anchor.ownText;
+  }
+  if (anchor.within !== undefined) {
+    base.within = anchor.within;
   }
   if (anchor.role !== undefined) {
     base.role = anchor.role;

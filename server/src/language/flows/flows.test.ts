@@ -421,6 +421,22 @@ describe('a role+name anchor is a real anchor, not a degraded placeholder', () =
     expect(anchor).toEqual({ kind: AnchorKind.ROLE, role: 'checkbox', name: 'select ATL-100001' });
   });
 
+  // A correct build may word the control differently (#2109); the containers say where to look.
+  it('keeps the roles of the nearest containers', () => {
+    const { anchor } = anchorForStep({
+      by: 'role',
+      value: 'button',
+      name: 'Dismiss error message',
+      within: ['alert', 'dialog'],
+    });
+    expect(anchor).toEqual({
+      kind: AnchorKind.ROLE,
+      role: 'button',
+      name: 'Dismiss error message',
+      within: ['alert', 'dialog'],
+    });
+  });
+
   /*
    * A nameless role (an icon-only button) used to compile to the degraded placeholder, so every step
    * on an icon-only control was unreplayable. It now compiles to a role anchor that replay resolves

@@ -61,6 +61,10 @@ export const FlowAnchorSchema = z.discriminatedUnion('kind', [
       // Other roles that count as the same control: a spec that allows "a link or a button" is built
       // either way, and one flow grades every build. A position counts in one role, so not with nth.
       alsoRoles: z.array(z.string().min(1)).min(1).optional(),
+      // The roles of the control's nearest named containers at record time, innermost first (a button
+      // in an alert in a dialog: ["alert", "dialog"]). When the name finds nothing, the replay takes
+      // the only control of the role inside that chain; several is ambiguous, never a guess.
+      within: z.array(z.string().min(1)).min(1).max(3).optional(),
     })
     .refine((anchor) => anchor.alsoRoles === undefined || anchor.nth === undefined, {
       error:

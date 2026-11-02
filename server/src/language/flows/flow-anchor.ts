@@ -522,18 +522,49 @@ function roleQueries(
  * A nameless anchor's position counts only the nameless controls of its role (an icon-only edit
  * button is the 2nd nameless button of its row, not the 5th button), so it reads only those.
  */
-export function resolveRoleAnchor(
+export async function resolveRoleAnchor(
   session: FlowReplaySession,
   anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.ROLE }>,
   sleep: Sleep,
 ): Promise<{ refs: string[] }> {
   // Every role the anchor accepts (`alsoRoles`), pooled in one settle loop; a nameless anchor keeps
   // only the matches with no accessible name.
-  return resolveAnyQuery(
+  const found = await resolveAnyQuery(
     session,
     roleQueries(anchor),
     sleep,
     Date.now,
     anchor.name === undefined ? readNamelessQuery : undefined,
   );
+  if (found.refs.length > 0 || anchor.name === undefined || anchor.within === undefined) {
+    return found;
+  }
+  const refs = await refsWithin(session, anchor.role, anchor.within);
+  return refs.length > 0 ? { refs } : found;
+}
+
+/**
+ * The controls of `role` inside the recorded container chain, for a named control whose name is
+ * gone (a correct build may word a button differently). The chain is walked outermost first, and
+ * each container must be the only one of its role in the one before. When a container is not
+ * unique, its matches come back, so the caller reports the step as ambiguous and does not act.
+ */
+async function refsWithin(
+  session: FlowReplaySession,
+  role: string,
+  within: readonly string[],
+): Promise<string[]> {
+  let scope: string | undefined;
+  for (const container of [...within].reverse()) {
+    const { refs } = await queryOnce(session, {
+      by: QueryBy.ROLE,
+      value: container,
+      ...(scope === undefined ? {} : { scope }),
+    });
+    if (1 !== refs.length) {
+      return refs;
+    }
+    scope = refs[0];
+  }
+  return (await queryOnce(session, { by: QueryBy.ROLE, value: role, scope })).refs;
 }

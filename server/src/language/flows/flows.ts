@@ -156,13 +156,8 @@ export function anchorForStep(args: Record<string, unknown>): {
     }
     return { anchor, degraded: false };
   }
-  // Role + NAME is a real anchor, not a degraded placeholder.
-  //
-  // The vocabulary has always described `{ kind:'role', role, name }` as an addressable anchor, and
-  // nothing ever produced one — the only ROLE anchor written to disk was the degraded placeholder
-  // that means "add a data-testid". So a step the recorder anchored by accessible name arrived here
-  // and had that name thrown away, which is precisely the anchor that distinguishes one row's
-  // control from another's when a shared JSX source location cannot.
+  // Role + NAME is a real anchor, not a degraded placeholder: the name separates one row's control
+  // from another's when a shared JSX source location cannot.
   // A document-key press compiled with no element (#1559): a real anchor, not a degraded one. It is
   // nameless on purpose, because it names no element; the press is what replay dispatches.
   if (
@@ -180,7 +175,12 @@ export function anchorForStep(args: Record<string, unknown>): {
     const of = args['of'];
     const among = 'number' === typeof nth && 'number' === typeof of ? { nth, of } : {};
     if (name !== undefined && name.length > 0) {
-      return { anchor: { kind: AnchorKind.ROLE, role: value, name, ...among }, degraded: false };
+      // The nearest containers' roles: where a replay looks when a correct build renamed it.
+      const within = Array.isArray(args['within']) ? { within: args['within'].map(String) } : {};
+      return {
+        anchor: { kind: AnchorKind.ROLE, role: value, name, ...among, ...within },
+        degraded: false,
+      };
     }
     // A control with a role and no accessible name (an icon-only button) is addressed by its
     // position among the nameless controls of its role. Saving it as the degraded placeholder made
