@@ -10,6 +10,8 @@ export interface RecordedStep {
   stable: boolean;
   /** The caller's per-step wait budget, when one was explicitly provided. */
   timeoutMs?: number;
+  /** The act_sequence `burst` gap, when the sequence was driven with one. See FlowStep.burstMs. */
+  burstMs?: number;
   /** Optional post-condition annotation carried into the on-disk flow's expect. */
   expect?: Predicate;
   /**

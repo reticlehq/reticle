@@ -207,6 +207,12 @@ export interface FlowStep {
    * `timeout_ms`, so a recorded step can carry one too.
    */
   timeoutMs?: number;
+  /**
+   * The gap in ms between the sub-steps of an act_sequence driven with `burst`, which dispatches each
+   * one with no settle. Replay keeps that pace: a timing-sensitive page answers differently at the
+   * default settle, and a flow that was green live then fails on the same build (#2130).
+   */
+  burstMs?: number;
   /** The page (route pathname) this step ran on, recorded at capture. */
   page?: string;
   /** The page it ended on once its action settled — where it led, when that differs from `page`. */
@@ -298,6 +304,7 @@ const baseFlowStep = z.object({
   expect: ExpectSchema.optional(),
   degraded: z.boolean().optional(),
   timeoutMs: z.number().int().nonnegative().optional(),
+  burstMs: z.number().nonnegative().optional(),
   invoke: z.string().min(1).optional(),
   navigate: z.string().min(1).optional(),
   request: z

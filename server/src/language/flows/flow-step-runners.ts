@@ -26,7 +26,12 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool, isGlobalPressCall } from '@reticlehq/core';
 import { namelessRefs, replayActionArgs } from './replay.js';
-import { isStaleRefError } from '@/surface/tools/act/act-sequence-retry.js';
+import {
+  burstGap,
+  holdGap,
+  isStaleRefError,
+  pacedArgs,
+} from '@/surface/tools/act/act-sequence-retry.js';
 import { waitForReaction } from '@/surface/tools/act/react-grace.js';
 import {
   unreachableSubStepDrift,
@@ -658,13 +663,7 @@ function unreachedStepResult(
 
 /**
  * Run an act_sequence step: resolve every sub-step's OWN anchor, then dispatch the whole thing as one
- * ACT_SEQUENCE — the same shape `replayProgram` already uses, so a recorded sequence and a saved one
- * execute identically.
- *
- * `replayFlow` had no sequence branch at all. It dispatches on `anchor.kind`, so a saved sequence fell
- * to the testid runner and ran ONE act with `action: ''` (a saved sequence carries no top-level
- * action) — sub-steps 2..n never executed. Fixing the anchor without this would have turned a visible
- * drift into a silent partial replay reporting ok.
+ * ACT_SEQUENCE, the shape `replayProgram` uses, so a recorded sequence and a saved one run the same.
  */
 export async function runSequenceStep(
   session: FlowReplaySession,
@@ -682,6 +681,8 @@ export async function runSequenceStep(
   judge?: (expectation: Predicate, since: number) => Promise<Drift | undefined>,
 ): Promise<FlowStepResult> {
   type LiveSubStep = { ref: string; action: string; args: Record<string, unknown> };
+  const gap = burstGap(step.burstMs);
+  let lastSent: number | undefined;
 
   /**
    * Find one sub-step's element as the page is NOW. Either the live step to dispatch, or the step
@@ -723,7 +724,7 @@ export async function runSequenceStep(
         live: {
           ref: '',
           action: sub.action ?? '',
-          args: replayActionArgs(sub.args, confirmDangerous, undefined),
+          args: pacedArgs(replayActionArgs(sub.args, confirmDangerous, undefined), gap),
         },
       };
     }
@@ -731,9 +732,8 @@ export async function runSequenceStep(
     if (null === queryArgs) {
       return { stop: degradedStepResult(step, index, label) };
     }
-    // A role anchor is found as a single step finds it: a nameless one among the nameless controls
-    // of its role, with its `alsoRoles`. Querying every control of the role sent a nameless file
-    // input's upload to the first named button (#2084).
+    // A role anchor is found as a single step finds it, a nameless one among the nameless controls
+    // of its role (#2084: querying every control sent a file upload to the first named button).
     const { refs, hint } = await lookUpSub(sub.anchor, queryArgs, ahead);
     // Several matches with no usable recorded position is drift on every look, as in the single-step
     // runners. The first look used to take `refs[0]`: a click recorded on one item of a list (every
@@ -771,9 +771,11 @@ export async function runSequenceStep(
       live: {
         ref,
         action: sub.action ?? '',
-        // Each sub-step carries its OWN anchor, so each gets its own field name. A sequence that ends
-        // in a login is the shape this was reported on, and the sub-step is where the fill lives.
-        args: replayActionArgs(sub.args, confirmDangerous, anchorFieldName(sub.anchor)),
+        // Each sub-step carries its OWN anchor, so each gets its own field name (a login's fill).
+        args: pacedArgs(
+          replayActionArgs(sub.args, confirmDangerous, anchorFieldName(sub.anchor)),
+          gap,
+        ),
       },
     };
   };
@@ -844,10 +846,8 @@ export async function runSequenceStep(
    *
    * The page names the ref it could not find, which says WHICH sub-step failed and so which ones
    * already ran, as long as no other sub-step holds the same ref. Only the rest is resolved again and
-   * sent, so nothing acts twice: starting over is what turns one click into two. A stale ref is the
-   * only failure retried, and the retry goes on only while it gets further. A sub-step that is stale
-   * again at the same point is a target that does not hold still, and the run says so, with how far
-   * it got.
+   * sent, so nothing acts twice. Only a stale ref is retried, and only while the retry gets further:
+   * stale again at the same point is a target that does not hold still, and the run says so.
    */
   const dispatchFrom = async (from: number, to: number): Promise<boolean> => {
     let start = from;
@@ -936,17 +936,15 @@ export async function runSequenceStep(
    * A sequence that declares nothing goes as ONE batch — the cheap path, and the common one.
    *
    * When a sub-step DOES declare, the sub-steps are walked and each expectation is checked right
-   * after its own action. Checking them all at the end, which is what replay used to do, let "click
-   * Pay, and the receipt appears" pass because a LATER sub-step produced the receipt: true by the
-   * time anybody looked, and no longer a claim about this action. The live act path never had that
-   * hole, because it asserts before moving on; this is replay catching up to it.
-   *
-   * The walk costs a round trip per sub-step, so only a flow that declared something pays for it.
+   * after its own action, as live: checked at the end, "click Pay, and the receipt appears" passed
+   * because a LATER sub-step produced the receipt. A sequence driven with `burst` is walked too, one
+   * gap between actions, as live: at the default settle a timing-sensitive page answered differently
+   * (#2130). The walk costs a round trip per sub-step, so only these sequences pay for it.
    */
   const judged = (sub: FlowStep): boolean => judge !== undefined && sub.expect !== undefined;
-  const declaring = subs.some((sub) => declaredBy(sub) !== undefined || judged(sub));
-  // How many sub-steps completed with their checks held, for the score: a sequence is often a
-  // whole journey. A stretch sent together that failed leaves its sub-steps uncounted (unknown).
+  const declaring =
+    gap !== undefined || subs.some((sub) => declaredBy(sub) !== undefined || judged(sub));
+  // Sub-steps completed with their checks held, for the score; a failed batch leaves its own unknown.
   let completed = 0;
   const finish = (r: FlowStepResult): FlowStepResult => ({
     ...r,
@@ -972,7 +970,9 @@ export async function runSequenceStep(
         if (sub === undefined) {
           continue;
         }
+        await holdGap(() => session.elapsed(), lastSent, gap, sleep);
         const since = session.elapsed();
+        lastSent = since;
         if (!(await dispatchFrom(at, at + 1))) {
           return finish(result);
         }

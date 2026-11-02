@@ -33,7 +33,11 @@ import {
 } from '@/portal/session/control-envelope.js';
 import { asRecord, isAbsenceDerived, isAdvisory } from '@reticlehq/core';
 import { sessionIdFromArgs } from './tools-helpers.js';
-import { describeStepResult, runStepWithStaleRetry } from './act/act-sequence-retry.js';
+import {
+  BURST_MAX_GAP_MS,
+  describeStepResult,
+  runStepWithStaleRetry,
+} from './act/act-sequence-retry.js';
 import { assertSequenceSteps } from './act/act-preflight.js';
 import { EnvelopeKey, type ToolDef, sessionIdShape } from './tool-kit.js';
 import { takeStepShot } from '@/features/visual/step-shots.js';
@@ -163,19 +167,6 @@ function journalStep(session: Session, args: Record<string, unknown>, effect: un
     // ponytail: a session without a journal (a test double, journaling off) keeps no check.
   }
 }
-
-/**
- * Ceiling for a burst gap. Past this it is not a burst, it is a paced walk.
- *
- * HOW TO PICK A GAP, because both edges are real and neither is guessable. It must outlast the
- * handler committing and dispatching its request, and undercut the response it is racing.
- * Measured against a superseded-filter race (the superseded query 700ms, the one replacing it 90ms):
- * at 0ms the first request was never issued at all, and at the ordinary settle (~500ms in a
- * throttled tab, where rAF never fires and the frame budget always times out) the two clicks
- * serialised and never overlapped. 50ms sat in the window. A different app needs a different
- * number: read its own slow endpoint.
- */
-const BURST_MAX_GAP_MS = 500;
 
 /** A step error that means nothing was acted on, or the page went away with the observation. */
 const UNJUDGED_STEP =
