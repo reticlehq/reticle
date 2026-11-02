@@ -173,6 +173,29 @@ function isContentDigestKey(key: string): boolean {
   return keyWords(key).some((word) => CONTENT_DIGEST_WORD.test(word));
 }
 
+/** An optional algorithm label, as in `sha256:ab12...`. */
+const DIGEST_ALGORITHM_PREFIX = /^[a-z]+\d*:/i;
+/** Hex digits, at least one a letter: a run of only digits is a number, not a digest. */
+const HEX_DIGEST = /^(?=[0-9a-f]*[a-f])[0-9a-f]{8,}$/i;
+/** Base64 or base64url. Long, and with a digit, because `everyday` is valid base64 too. */
+const BASE64_DIGEST = /^(?=[a-z+/_-]*\d)[a-z\d+/_-]{16,}={0,2}$/i;
+
+/**
+ * Does a value look computed from content? The key name alone does not say: `digest` and `hash` are
+ * also settings words (`weeklyDigest: true`, `email_digest: 'daily'`, `hashRouting: false`), and
+ * those are fields a server can ignore.
+ */
+function looksLikeDigest(value: string): boolean {
+  const body = value.replace(DIGEST_ALGORITHM_PREFIX, '');
+  return HEX_DIGEST.test(body) || BASE64_DIGEST.test(body);
+}
+
+/** A content hash: the key names one AND the requested value is one. */
+function isContentDigest(key: string, wanted: ReadonlySet<string>): boolean {
+  const [want] = [...wanted];
+  return want !== undefined && isContentDigestKey(key) && looksLikeDigest(want);
+}
+
 /**
  * How many compared keys must ALL disagree before the response can be read as a different record.
  *
@@ -199,12 +222,18 @@ function isNewRecord(
   asked: Map<string, Set<string>>,
   echoed: Map<string, Set<string>>,
 ): boolean {
-  if (addressed || UPDATE_METHODS.has(method.toUpperCase())) return false;
+  if (addressed || UPDATE_METHODS.has(method.toUpperCase())) {
+    return false;
+  }
   for (const [key, wanted] of asked) {
-    if (1 !== wanted.size || !(isIdentityKey(key) || isContentDigestKey(key))) continue;
+    if (1 !== wanted.size || !(isIdentityKey(key) || isContentDigest(key, wanted))) {
+      continue;
+    }
     const values = echoed.get(key);
     const [want] = [...wanted];
-    if (values !== undefined && want !== undefined && !values.has(want)) return true;
+    if (values !== undefined && want !== undefined && !values.has(want)) {
+      return true;
+    }
   }
   return false;
 }
@@ -398,7 +427,9 @@ export function findEchoMismatches(
       if (isIdentityKey(key)) continue;
       if (isVersionKey(key)) continue;
       if (isAuditTimestampKey(key)) continue;
-      if (isContentDigestKey(key)) continue;
+      if (isContentDigest(key, wanted)) {
+        continue;
+      }
       const values = echoed.get(key);
       // Not echoed at all = no evidence either way. Only a key the server chose to report back can
       // contradict the request, and silence is not a contradiction.

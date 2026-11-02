@@ -17,6 +17,9 @@ import { describe, expect, it } from 'vitest';
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
 import { findEchoMismatches } from './echo-mismatch.js';
 
+const DIGEST_A = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
+const DIGEST_B = '60303ae22b998861bce3b28f33eec1be758a213c86c93c076dbe9f558c11c752';
+
 let seq = 0;
 const write = (requestBody: unknown, responseBody: unknown, method = 'POST'): ReticleEvent =>
   ({
@@ -40,8 +43,20 @@ describe('a response that is a different record is not an echo', () => {
     expect(
       kinds(
         write(
-          { artifact: { producer: 'a', sha256: '111', kind: 'doc' } },
-          { artifact: { producer: 'b', sha256: '222', kind: 'summary' } },
+          {
+            artifact: {
+              producer: 'a',
+              sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+              kind: 'doc',
+            },
+          },
+          {
+            artifact: {
+              producer: 'b',
+              sha256: '60303ae22b998861bce3b28f33eec1be758a213c86c93c076dbe9f558c11c752',
+              kind: 'summary',
+            },
+          },
         ),
       ),
     ).toEqual([]);
@@ -100,7 +115,9 @@ describe('content-derived keys are exempt, like identity keys', () => {
     'etag',
   ])('a %s that changed is not a dropped field', (key) => {
     expect(
-      kinds(write({ name: 'report', [key]: '111' }, { saved: { name: 'report', [key]: '222' } })),
+      kinds(
+        write({ name: 'report', [key]: DIGEST_A }, { saved: { name: 'report', [key]: DIGEST_B } }),
+      ),
     ).toEqual([]);
   });
 
@@ -137,8 +154,16 @@ describe('a server that ignored the whole write still fires (#1627 review)', () 
     expect(
       kinds(
         write(
-          { title: 'New', kind: 'doc', sha256: '111' },
-          { title: 'Old', kind: 'memo', sha256: '222' },
+          {
+            title: 'New',
+            kind: 'doc',
+            sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+          },
+          {
+            title: 'Old',
+            kind: 'memo',
+            sha256: '60303ae22b998861bce3b28f33eec1be758a213c86c93c076dbe9f558c11c752',
+          },
           'PATCH',
         ),
       ),
@@ -154,5 +179,46 @@ describe('a server that ignored the whole write still fires (#1627 review)', () 
         ),
       ),
     ).toContain(ContradictionKind.WRITE_FIELD_IGNORED);
+  });
+});
+
+/** A key that says `digest` or `hash` is not a hash when its value is a setting. */
+describe('a settings field whose name contains a digest word', () => {
+  const patch = (asked: unknown, got: unknown): string[] => kinds(write(asked, got, 'PATCH'));
+
+  it('fires for a boolean the server ignored', () => {
+    expect(patch({ weeklyDigest: false }, { weeklyDigest: true })).toContain(
+      ContradictionKind.WRITE_FIELD_IGNORED,
+    );
+  });
+
+  it('fires for a short word the server ignored', () => {
+    expect(patch({ digest: 'daily' }, { digest: 'weekly' })).toContain(
+      ContradictionKind.WRITE_FIELD_IGNORED,
+    );
+  });
+
+  it('fires for a long dictionary word, which is valid base64 text', () => {
+    expect(patch({ digest: 'everyday' }, { digest: 'fortnightly' })).toContain(
+      ContradictionKind.WRITE_FIELD_IGNORED,
+    );
+  });
+
+  it('fires for a number, which is not a digest however long', () => {
+    expect(patch({ hashLimit: 12345678 }, { hashLimit: 87654321 })).toContain(
+      ContradictionKind.WRITE_FIELD_IGNORED,
+    );
+  });
+
+  it.each([
+    ['hex', DIGEST_A, DIGEST_B],
+    ['labelled hex', `sha256:${DIGEST_A.slice(0, 16)}`, `sha256:${DIGEST_B.slice(0, 16)}`],
+    [
+      'base64',
+      'n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg=',
+      'YDA64iuZiGG847KPM+7BvnWKITyGyTwHbb6fVYwRx1I=',
+    ],
+  ])('stays silent for a real %s digest answered with a different one', (_shape, asked, got) => {
+    expect(patch({ sha256: asked, name: 'report' }, { sha256: got, name: 'report' })).toEqual([]);
   });
 });
