@@ -177,6 +177,15 @@ describe('runVerify', () => {
     expect(rec.closed).toBe(1);
   });
 
+  it('says the timeout is in milliseconds when a short wait ends with no session', async () => {
+    const { ports, rec } = harness({ sessionReady: () => Promise.resolve(false) });
+    await runVerify({ ...ARGS, timeoutMs: 60 }, ports);
+    expect(rec.fail.join('\n')).toContain('the timeout is in milliseconds');
+    const long = harness({ sessionReady: () => Promise.resolve(false) });
+    await runVerify(ARGS, long.ports);
+    expect(long.rec.fail.join('\n')).not.toContain('milliseconds');
+  });
+
   it('refuses a pass and exits 1 when there are zero saved flows (no false green)', async () => {
     let verified = false;
     const { ports, rec } = harness({

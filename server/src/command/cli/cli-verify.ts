@@ -13,6 +13,7 @@
 import { cliRunAuthor } from '@/judgement/runs/verification-sync.js';
 import { join, basename } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { noSessionMessage } from './verify-no-session.js';
 import { runAdhocVerdict } from './adhoc-verdict.js';
 import { callerArtifactRoot } from '@/memory/project/link-directory.js';
 import { verifyResults } from './verify-results.js';
@@ -104,10 +105,6 @@ export function verifyProjectName(
   return linked ?? configured ?? (folder || DEFAULT_PROJECT_NAME);
 }
 
-const MSG_NO_SESSION =
-  'No app connected: Reticle drove the URL but no @reticlehq/browser session dialed back.\n' +
-  '  Make sure the SDK is in the build and reticle.connect() runs on the preview page' +
-  ' (for a non-localhost preview: allowNonLocalhost + a pairing token).';
 const MSG_NO_FLOWS =
   'No saved flows to verify (.reticle/flows is empty), so refusing to report a pass for verifying nothing.\n' +
   '  Flows are recorded interactively by an agent (reticle_record{action:"start"} → act → reticle_flow_save via the\n' +
@@ -223,7 +220,7 @@ export async function runVerify(args: VerifyArgs, outer: VerifyPorts): Promise<v
   try {
     const ready = await conn.sessionReady(args.timeoutMs);
     if (!ready) {
-      ports.fail(MSG_NO_SESSION);
+      ports.fail(noSessionMessage(args.timeoutMs));
       ports.exit(EXIT_FAIL);
       return;
     }
