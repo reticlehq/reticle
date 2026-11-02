@@ -14,7 +14,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { bodyCaptureRemedy, BODY_CAPTURE_MIN_VERSION } from './body-capture-remedy.js';
+import { CRAWL_DEFAULTS } from '@reticlehq/core';
+import {
+  bodyCaptureRemedy,
+  bodyClauseRefusal,
+  BODY_CAPTURE_MIN_VERSION,
+  BODY_CLAUSE_REFUSAL_OPENING,
+} from './body-capture-remedy.js';
 import {
   BODY_CAPTURE_DEFAULTS,
   REMEDY_BODY_CAPTURE,
@@ -80,5 +86,30 @@ describe('the body-capture remedy says what is kept by default', () => {
   it('gives the same sentence in the fallback remedy of a body clause', () => {
     expect(REMEDY_BODY_CAPTURE).toContain(BODY_CAPTURE_DEFAULTS);
     expect(REMEDY_BODY_CAPTURE).toContain('reticle.connect({ captureNetworkBodies: true })');
+  });
+});
+
+describe('bodyClauseRefusal allows response bodies on expected failures', () => {
+  const off = { captureBodies: false as const };
+
+  it('does not refuse bodyMatches with status 400 when capture is off', () => {
+    expect(
+      bodyClauseRefusal(
+        { kind: 'net', status: CRAWL_DEFAULTS.FAILED_STATUS, bodyMatches: { error: 'bad' } },
+        off,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('still refuses bodyMatches with status 200 when capture is off', () => {
+    expect(
+      bodyClauseRefusal({ kind: 'net', status: 200, bodyMatches: { ok: true } }, off),
+    ).toContain(BODY_CLAUSE_REFUSAL_OPENING);
+  });
+
+  it('still refuses a body clause with no status when capture is off', () => {
+    expect(bodyClauseRefusal({ kind: 'net', bodyContains: 'confirmed' }, off)).toContain(
+      BODY_CLAUSE_REFUSAL_OPENING,
+    );
   });
 });
