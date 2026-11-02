@@ -65,7 +65,7 @@ const VERIFY_DETAIL = `Drives the URL and verifies the saved flows. Exit 0 means
   --require-start-control       fail a flow whose first control is not on its freshly loaded start page
   --sweep                       judge every step, also after one fails (the results score counts them all)
   --storage-state <file>        start signed in
-  --session-id <id>, --timeout N, --headed, --port N
+  --session-id <id>, --timeout <ms>, --headed, --port N
   --expect '<json predicate>' | --expect-file <path>
                                 one verdict, no saved flows needed. Asks a running daemon,
                                 never starts one, and waits up to --timeout ms (default 4000)

@@ -115,7 +115,7 @@ it('points an absent check on a hidden-only match at state: "hidden", and still 
   );
   expect(one.pass).toBe(false);
   expect(one.failureReason).toBe(
-    'expected element to be absent but found 1, but it is hidden — `absent` means removed from ' +
+    'expected no element matching {"testid":"x"} but found 1, but it is hidden — `absent` means removed from ' +
       'the DOM; to assert it isn\'t shown, use `state: "hidden"`',
   );
 
@@ -131,7 +131,7 @@ it('points an absent check on a hidden-only match at state: "hidden", and still 
 });
 
 it('keeps the plain absent reason when a match is visible, a state is named, or not every match was described', async () => {
-  const plain = 'expected element to be absent but found 2';
+  const plain = 'expected no element matching {"testid":"x"} but found 2';
   const mixed = await evalElement(
     matching([{ visible: false }, { visible: true }]),
     { testid: 'x' },
@@ -608,4 +608,39 @@ it('sends matchCase once to a modern SDK and does not retry', async () => {
   );
   expect(waited.pass).toBe(true);
   expect(sent).toEqual([{ text: 'Saved Priya', matchCase: true }]);
+});
+
+it('a state miss names the query and the ref of the element it found', async () => {
+  const found = { ref: 'e9', role: 'button', name: 'Go', states: ['enabled'], visible: true };
+  const page: PredicateSession = {
+    ...session,
+    command(_name, args) {
+      const withState = undefined !== (args as { state?: unknown }).state;
+      const elements = withState ? [] : [found];
+      return Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'm',
+        result: { matched: elements.length > 0, count: elements.length, elements },
+      });
+    },
+  };
+  const result = await evalElement(
+    page,
+    { role: 'button', name: 'Go' },
+    ElementState.PRESSED,
+    false,
+    true,
+  );
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toBe(
+    `element matching {"role":"button","name":"Go"} exists (ref e9) but not in state 'pressed'`,
+  );
+});
+
+it('a role and name miss names the whole query', async () => {
+  const other = { ref: 'e2', role: 'button', name: 'Stop', states: [], visible: true };
+  const page = pageWith((query) => (undefined === query['name'] ? [other] : undefined));
+  const result = await evalElement(page, { role: 'button', name: 'Go' }, undefined, false, true);
+  expect(result.failureReason).toContain('(query {"role":"button","name":"Go"})');
 });

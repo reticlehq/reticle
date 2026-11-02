@@ -126,6 +126,11 @@ function describePresentTestidsCut(shown: number, total: number | undefined): st
   return ` (the present-testid list shows the first ${String(shown)} of ${String(total)} in document order — absence from it proves nothing)`;
 }
 
+/** ` (ref e3)` for a described element, or '' when there is none or it has no ref. */
+function describeRef(element: ElementDescriptor | undefined): string {
+  return element === undefined || '' === element.ref ? '' : ` (ref ${element.ref})`;
+}
+
 /**
  * Why an `absent` check failed. `absent` means removed from the DOM, so an element the app hid but
  * kept mounted still fails it, correctly. But "found 1" beside `visible: false` evidence reads as a
@@ -135,8 +140,12 @@ function describePresentTestidsCut(shown: number, total: number | undefined): st
  * check names no state: with `state: "hidden"` the advice would repeat the check itself, and with any
  * other state it would ask the caller to drop the condition they actually wrote.
  */
-function describeAbsentMiss(match: MatchResult, state: ElementState | undefined): string {
-  const found = `expected element to be absent but found ${String(match.count)}`;
+function describeAbsentMiss(
+  match: MatchResult,
+  state: ElementState | undefined,
+  subject: string,
+): string {
+  const found = `expected no element matching ${subject} but found ${String(match.count)}`;
   const allDescribedHidden =
     undefined === state &&
     match.elements.length > 0 &&
@@ -448,7 +457,7 @@ export async function evalElement(
     return match.matched
       ? {
           pass: false,
-          failureReason: describeAbsentMiss(match, state),
+          failureReason: describeAbsentMiss(match, state, subject),
           observed: `${String(match.count)} element(s) matching ${subject}`,
           expected: `no element matching ${subject}`,
           assertion: 'element.absent',
@@ -532,7 +541,7 @@ export async function evalElement(
     if (relaxed.matched) {
       return {
         pass: false,
-        failureReason: `element exists but not in state '${state}'`,
+        failureReason: `element matching ${subject} exists${describeRef(relaxed.elements[0])} but not in state '${state}'`,
         observed: `element matching ${subject} is present, states: ${
           relaxed.elements[0]?.states.join(', ') ?? 'unknown'
         }`,
@@ -547,7 +556,7 @@ export async function evalElement(
     if (roleOnly.matched) {
       return {
         pass: false,
-        failureReason: `no '${query.role}' named '${query.name}'; saw: ${roleOnly.elements
+        failureReason: `no '${query.role}' named '${query.name}' (query ${subject}); saw: ${roleOnly.elements
           .map((e) => e.name)
           .filter((n) => n.length > 0)
           .join(', ')}`,
@@ -572,7 +581,7 @@ export async function evalElement(
       );
       return {
         pass: false,
-        failureReason: `no '${query.role}' named '${query.name}'; that name is on: ${seen.join(', ')}`,
+        failureReason: `no '${query.role}' named '${query.name}' (query ${subject}); that name is on: ${seen.join(', ')}`,
         observed: `no element has role '${query.role}'; elements named '${query.name}': ${seen.join(', ')}`,
         expected: `a '${query.role}' named '${query.name}'`,
         assertion: 'element.role+name',
