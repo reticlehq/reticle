@@ -653,7 +653,7 @@ describe('a refusal is not silence', () => {
 
 /*
  * An unlinked root was skipped with a bare `continue`: a repo held 31 unsent runs and nothing said
- * so. Every root with unsent runs is now one log line and one entry in `unsyncedRoots()`.
+ * so. Every root with unsent runs is now one aggregate log line and one entry in `unsyncedRoots()`.
  */
 describe('a root nothing will send is said out loud', () => {
   it('logs an unlinked root with runs once, and lists it with its count', async () => {
@@ -679,8 +679,49 @@ describe('a root nothing will send is said out loud', () => {
     spy.mockRestore();
     const said = lines.filter((l) => l.includes('reticle_cloud_unsynced_root'));
     expect(said).toHaveLength(1);
-    expect(JSON.parse(String(said[0]))).toMatchObject({ root: sibling, runs: 3, linked: false });
+    expect(JSON.parse(String(said[0]))).toMatchObject({ count: 1, runs: 3, flows: 0 });
+    expect(JSON.parse(String(said[0]))).toMatchObject({ examples: [sibling] });
     expect(d.unsyncedRoots()).toEqual([{ root: sibling, runs: 3, flows: 0, linked: false }]);
+  });
+
+  it('aggregates many unlinked roots into one line with the total count', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'reticle-unsent-many-'));
+    const siblings = Array.from({ length: 50 }, (_, index) => {
+      const sibling = join(parent, `origin-${index}`, '.reticle');
+      mkdirSync(join(sibling, 'runs'), { recursive: true });
+      writeFileSync(
+        join(sibling, 'runs', `r${index}.json`),
+        JSON.stringify({ runId: `r${index}` }),
+      );
+      return sibling;
+    });
+    const lines: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown): boolean => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      otherRoots: () => Promise.resolve(siblings),
+      cloudFor: () => Promise.resolve(UNLINKED),
+      request: counting().request,
+      intervalMs: 1000,
+    });
+    await vi.advanceTimersByTimeAsync(20_000);
+    d.stop();
+    spy.mockRestore();
+    const said = lines.filter((l) => l.includes('reticle_cloud_unsynced_root'));
+    expect(said).toHaveLength(1);
+    const event = JSON.parse(String(said[0])) as {
+      count: number;
+      runs: number;
+      flows: number;
+      examples: unknown[];
+    };
+    expect(event).toMatchObject({ count: 50, runs: 50, flows: 0 });
+    expect(event.examples).toHaveLength(3);
+    expect(d.unsyncedRoots()).toHaveLength(50);
   });
 });
 
