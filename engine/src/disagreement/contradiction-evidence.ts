@@ -81,10 +81,14 @@ export function recoveredByRetry(settled: readonly NetCall[]): ReadonlySet<NetCa
   const out = new Set<NetCall>();
   for (let i = 0; i < settled.length; i += 1) {
     const call = settled[i];
-    if (call === undefined || false !== call.ok) continue;
+    if (call === undefined || false !== call.ok) {
+      continue;
+    }
     for (let j = i + 1; j < settled.length; j += 1) {
       const later = settled[j];
-      if (later === undefined) continue;
+      if (later === undefined) {
+        continue;
+      }
       if (true === later.ok && later.method === call.method && later.matchUrl === call.matchUrl) {
         out.add(call);
         break;
@@ -125,13 +129,17 @@ export const NET_TYPES: ReadonlySet<EventType> = new Set([
  * does not (`#main-content`, `#`, empty). The blank-destination rule must still see the former.
  */
 export function isInPageFragment(hash: string): boolean {
-  if ('' === hash || '#' === hash) return true;
+  if ('' === hash || '#' === hash) {
+    return true;
+  }
   const body = hash.startsWith('#') ? hash.slice(1) : hash;
   return !body.startsWith('/') && !body.startsWith('!');
 }
 
 export function hrefAsUrl(value: string | undefined): URL | undefined {
-  if (value === undefined || '' === value) return undefined;
+  if (value === undefined || '' === value) {
+    return undefined;
+  }
   try {
     return new URL(value);
   } catch {
@@ -145,14 +153,20 @@ export function hrefAsUrl(value: string | undefined): URL | undefined {
  * Returns false when `from`/`to` are missing, so older events without hrefs keep the existing rule.
  */
 export function isSameDocumentHashAnchor(event: ReticleEvent): boolean {
-  if (event.type !== EventType.ROUTE_CHANGE) return false;
+  if (event.type !== EventType.ROUTE_CHANGE) {
+    return false;
+  }
   const from = hrefAsUrl(asString(event.data['from']));
   const to = hrefAsUrl(asString(event.data['to']));
-  if (from === undefined || to === undefined) return false;
+  if (from === undefined || to === undefined) {
+    return false;
+  }
   if (from.origin !== to.origin || from.pathname !== to.pathname || from.search !== to.search) {
     return false;
   }
-  if (from.hash === to.hash) return false;
+  if (from.hash === to.hash) {
+    return false;
+  }
   return isInPageFragment(to.hash);
 }
 
@@ -164,13 +178,23 @@ export function isSameDocumentHashAnchor(event: ReticleEvent): boolean {
  * stay under the blank-destination rule: an event that cannot show the path stayed put is not exempt.
  */
 export function isSamePathnameReplace(event: ReticleEvent): boolean {
-  if (event.type !== EventType.ROUTE_CHANGE) return false;
-  if (asString(event.data[ROUTE_CHANGE_HOW_FIELD]) !== RouteChangeHow.REPLACE) return false;
+  if (event.type !== EventType.ROUTE_CHANGE) {
+    return false;
+  }
+  if (asString(event.data[ROUTE_CHANGE_HOW_FIELD]) !== RouteChangeHow.REPLACE) {
+    return false;
+  }
   const from = hrefAsUrl(asString(event.data['from']));
   const to = hrefAsUrl(asString(event.data['to']));
-  if (from === undefined || to === undefined) return false;
-  if (from.origin !== to.origin || from.pathname !== to.pathname) return false;
-  if (from.hash !== to.hash && !isInPageFragment(to.hash)) return false;
+  if (from === undefined || to === undefined) {
+    return false;
+  }
+  if (from.origin !== to.origin || from.pathname !== to.pathname) {
+    return false;
+  }
+  if (from.hash !== to.hash && !isInPageFragment(to.hash)) {
+    return false;
+  }
   return true;
 }
 
@@ -188,8 +212,12 @@ export function isSamePathnameReplace(event: ReticleEvent): boolean {
  * two readings differ.
  */
 export function settledFieldRendered(event: ReticleEvent): boolean {
-  if (event.type !== EventType.FIELD_CHANGE) return false;
-  if (event.data[FieldChangeField.KIND] !== FieldChangeKind.SETTLED) return false;
+  if (event.type !== EventType.FIELD_CHANGE) {
+    return false;
+  }
+  if (event.data[FieldChangeField.KIND] !== FieldChangeKind.SETTLED) {
+    return false;
+  }
   const checked = event.data[FieldChangeField.CHECKED];
   const previousChecked = event.data[FieldChangeField.PREVIOUS_CHECKED];
   if ('boolean' === typeof checked && 'boolean' === typeof previousChecked) {
@@ -244,14 +272,20 @@ export function splitForeignTraffic(
 } {
   const ignored: string[] = [];
   const app = events.filter((e) => {
-    if (!NET_TYPES.has(e.type)) return true;
+    if (!NET_TYPES.has(e.type)) {
+      return true;
+    }
     const matchUrl = urlForMatch(e.data);
     const shown = asString(e.data['url']);
     // Somebody else's code, twice over: the toolchain's own channel, and any site that is not the
     // app under test. Neither can answer the question every rule below asks.
     const match = 0 === matchUrl.length ? undefined : matchUrl;
-    if (!isDevToolingUrl(match) && !isForeignTraffic(match, appOrigin, background)) return true;
-    if (shown !== undefined && !ignored.includes(shown)) ignored.push(shown);
+    if (!isDevToolingUrl(match) && !isForeignTraffic(match, appOrigin, background)) {
+      return true;
+    }
+    if (shown !== undefined && !ignored.includes(shown)) {
+      ignored.push(shown);
+    }
     return false;
   });
   return { app, ignored };
@@ -299,13 +333,19 @@ export const POLL_JITTER_RATIO = 0.4;
  * apart they are, which is the classic double submit and every case this rule was written for.
  */
 export function isSteadyCadence(times: readonly number[]): boolean {
-  if (times.length < 3) return false;
+  if (times.length < 3) {
+    return false;
+  }
   const ordered = [...times].sort((a, b) => a - b);
   const gaps: number[] = [];
-  for (let i = 1; i < ordered.length; i += 1) gaps.push((ordered[i] ?? 0) - (ordered[i - 1] ?? 0));
+  for (let i = 1; i < ordered.length; i += 1) {
+    gaps.push((ordered[i] ?? 0) - (ordered[i - 1] ?? 0));
+  }
   const sorted = [...gaps].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
-  if (median < POLL_MIN_INTERVAL_MS) return false;
+  if (median < POLL_MIN_INTERVAL_MS) {
+    return false;
+  }
   return gaps.every((gap) => Math.abs(gap - median) <= median * POLL_JITTER_RATIO);
 }
 
@@ -383,7 +423,9 @@ export function declareFailureHint(
 ): string {
   const clauses = calls.flatMap((c) => {
     const urlContains = narrowPathOf(c);
-    if (urlContains === undefined) return [];
+    if (urlContains === undefined) {
+      return [];
+    }
     const clause = {
       kind: PredicateKind.NET,
       method: c.method.toUpperCase(),
@@ -392,7 +434,9 @@ export function declareFailureHint(
     };
     return [JSON.stringify(clause)];
   });
-  if (0 === clauses.length) return '';
+  if (0 === clauses.length) {
+    return '';
+  }
   const subject = 1 === clauses.length ? 'this failure is' : 'these failures are';
   return `. If ${subject} the outcome you expect, declare it in the predicate: ${clauses.join(', ')}`;
 }
@@ -413,8 +457,12 @@ function narrowPathOf(call: { url: string; matchUrl?: string }): string | undefi
   } catch {
     return undefined;
   }
-  if (0 === path.replace(/\/+$/, '').length) return undefined;
-  if (!call.url.includes(path) || !(call.matchUrl ?? call.url).includes(path)) return undefined;
+  if (0 === path.replace(/\/+$/, '').length) {
+    return undefined;
+  }
+  if (!call.url.includes(path) || !(call.matchUrl ?? call.url).includes(path)) {
+    return undefined;
+  }
   return path;
 }
 
@@ -426,23 +474,47 @@ const PAGE_LABEL = /\bpage\s+(\d+)\b|\b(\d+)\s*(?:of|\/)\s*\d+(?:,\d{3})*\b/i;
 const RECORD_RANGE_LABEL =
   /\b\d[\d,]*\s*(?:[-–—]|\bto\b)\s*\d[\d,]*\s+of\s+\d[\d,]*\b|\b\d[\d,]*\s+of\s+\d[\d,]*\s+(?:records|items|results)\b/i;
 
+/**
+ * The page number a label shows, or undefined when the text is not a page label.
+ *
+ * A bare "N of M" with N = 0 is a count, not a page: no pager shows page 0, and a progress label
+ * such as "0 of 4 generated" does. Reading it as a page made a list that refetched its first page
+ * look like stalled pagination, and the verdict read `no` with no paging action at all.
+ */
 export function pageNumber(text: unknown): number | undefined {
-  if ('string' !== typeof text) return undefined;
-  if (RECORD_RANGE_LABEL.test(text)) return undefined;
+  if ('string' !== typeof text) {
+    return undefined;
+  }
+  if (RECORD_RANGE_LABEL.test(text)) {
+    return undefined;
+  }
   const match = PAGE_LABEL.exec(text);
-  const raw = match?.[1] ?? match?.[2];
-  return raw === undefined ? undefined : Number(raw);
+  const explicit = match?.[1];
+  if (explicit !== undefined) {
+    return Number(explicit);
+  }
+  const bare = match?.[2];
+  if (bare === undefined || 0 === Number(bare)) {
+    return undefined;
+  }
+  return Number(bare);
 }
 
 /** The endpoint, page parameter and remaining query, for a GET that carries a page parameter. */
 export function pageRequest(
   event: ReticleEvent,
 ): { path: string; param: string; value: string; query: string } | undefined {
-  if (event.type !== EventType.NET_REQUEST) return undefined;
+  if (event.type !== EventType.NET_REQUEST) {
+    return undefined;
+  }
   const method = event.data['method'];
-  if ('string' !== typeof method || 'GET' !== method.toUpperCase()) return undefined;
+  if ('string' !== typeof method || 'GET' !== method.toUpperCase()) {
+    return undefined;
+  }
   const raw = event.data['url'];
-  if ('string' !== typeof raw) return undefined;
+  if ('string' !== typeof raw) {
+    return undefined;
+  }
   let url: URL;
   try {
     url = new URL(raw, 'http://app.invalid');
@@ -473,10 +545,16 @@ export function appIsSilent(
   events: readonly ReticleEvent[],
   prior: readonly ReticleEvent[] | undefined,
 ): boolean {
-  if (prior === undefined) return false;
+  if (prior === undefined) {
+    return false;
+  }
   const speaks = (e: ReticleEvent): boolean => {
-    if (e.type === EventType.SIGNAL) return !isReticleVoice(asString(e.data['name']) ?? '');
-    if (e.type !== EventType.STATE_CHANGE) return false;
+    if (e.type === EventType.SIGNAL) {
+      return !isReticleVoice(asString(e.data['name']) ?? '');
+    }
+    if (e.type !== EventType.STATE_CHANGE) {
+      return false;
+    }
     return !isReticleVoice(asString(e.data['store']) ?? asString(e.data['name']) ?? '');
   };
   return !prior.some(speaks) && !events.some(speaks);
@@ -529,7 +607,9 @@ interface Change {
 
 /** The attribute or text change this event made to `ref`, or undefined. No-op writes are skipped. */
 function changeOf(event: ReticleEvent, ref: string): Change | undefined {
-  if (event.ref !== ref) return undefined;
+  if (event.ref !== ref) {
+    return undefined;
+  }
   let key: string;
   let now: string;
   if (event.type === EventType.DOM_ATTR) {
@@ -550,20 +630,32 @@ export function targetFate(
   ref: string | undefined,
   failedAt: number,
 ): TargetFate | undefined {
-  if (ref === undefined) return undefined;
+  if (ref === undefined) {
+    return undefined;
+  }
   const before = new Map<string, string>();
   const atFailure = new Map<string, string>();
   const last = new Map<string, string>();
   for (const event of events) {
     const change = changeOf(event, ref);
-    if (change === undefined) continue;
-    if (!before.has(change.key)) before.set(change.key, change.old);
-    if (change.t <= failedAt) atFailure.set(change.key, change.now);
+    if (change === undefined) {
+      continue;
+    }
+    if (!before.has(change.key)) {
+      before.set(change.key, change.old);
+    }
+    if (change.t <= failedAt) {
+      atFailure.set(change.key, change.now);
+    }
     last.set(change.key, change.now);
   }
-  if (0 === atFailure.size) return undefined;
+  if (0 === atFailure.size) {
+    return undefined;
+  }
   const reverted = [...last].every(([key, value]) => before.get(key) === value);
-  if (reverted) return TargetFate.REVERTED;
+  if (reverted) {
+    return TargetFate.REVERTED;
+  }
   const movedAfter = [...last].some(
     ([key, value]) => (atFailure.get(key) ?? before.get(key)) !== value,
   );
