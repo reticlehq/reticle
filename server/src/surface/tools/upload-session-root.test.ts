@@ -9,12 +9,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ActionType, asRecord, type CommandResult } from '@reticlehq/core';
+import { ActionType, asRecord, type CommandResult, ReticleCommand } from '@reticlehq/core';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
-import { actCommand } from './act-tools.js';
+import { actCommand } from './act-command.js';
 import type { ToolDeps } from './tools.js';
 
 const FIXTURE = 'fixture.txt';
@@ -68,7 +68,10 @@ function harness(projectDir = worktreeDir): {
 describe('upload path resolves against the session project', () => {
   it('uploads a relative fixture that exists only in the session worktree', async () => {
     const { deps, session, sent } = harness();
-    await actCommand(deps, session, { action: ActionType.UPLOAD, args: { path: FIXTURE } });
+    await actCommand(deps, session, ReticleCommand.ACT, {
+      action: ActionType.UPLOAD,
+      args: { path: FIXTURE },
+    });
     const content = sent()['content'];
     expect(typeof content).toBe('string');
     expect(Buffer.from(String(content), 'base64').toString()).toBe(FIXTURE_TEXT);
@@ -78,7 +81,7 @@ describe('upload path resolves against the session project', () => {
     const { deps, session } = harness();
     writeFileSync(join(daemonDir, FIXTURE), 'daemon copy');
     await expect(
-      actCommand(deps, session, {
+      actCommand(deps, session, ReticleCommand.ACT, {
         action: ActionType.UPLOAD,
         args: { path: join(daemonDir, FIXTURE) },
       }),
@@ -92,7 +95,10 @@ describe('upload path resolves against the session project', () => {
     const link = join(base, 'link-to-b');
     symlinkSync(worktreeDir, link, 'dir');
     const { deps, session, sent } = harness(link);
-    await actCommand(deps, session, { action: ActionType.UPLOAD, args: { path: FIXTURE } });
+    await actCommand(deps, session, ReticleCommand.ACT, {
+      action: ActionType.UPLOAD,
+      args: { path: FIXTURE },
+    });
     expect(Buffer.from(String(sent()['content']), 'base64').toString()).toBe(FIXTURE_TEXT);
   });
 });
