@@ -307,19 +307,15 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
   let wasLinked: boolean | undefined;
   /** The project the last cycle synced to: a re-link to another one is announced too. */
   let wasProject: string | null | undefined;
-  /** The last count logged per root: a root is announced when its count changes, never per tick. */
-  const announced = new Map<string, number>();
+  /** The aggregate last logged: unlinked roots are announced as one line per change, never per tick. */
+  let announcedUnsynced: string | undefined;
   let unsynced: readonly UnsyncedRoot[] = [];
   /** Which roots pushed this cycle, and whether each is linked by its own link file. */
   let rootsLinked = new Map<string, boolean>();
   /** The linked roots that send flows: a link with `sync.flows` off keeps every flow local. */
   let rootsSendFlows = new Set<string>();
 
-  /**
-   * Count what every root still owes, and say once per change where runs sit that nothing sends.
-   * Linked roots are listed too (the platform report and `doctor` read them), but only an unlinked
-   * one earns a log line: a linked root's pending runs are the next cycle's job.
-   */
+  /** Count what every root owes; unlinked roots are one aggregate line per change, never per tick. */
   const refreshUnsynced = async (): Promise<void> => {
     const linked = rootsLinked;
     const sendsFlows = rootsSendFlows;
@@ -329,20 +325,25 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       (r) => Promise.resolve(true === linked.get(r)),
       (r) => Promise.resolve(sendsFlows.has(r)),
     );
-    for (const entry of unsynced) {
-      const held = entry.runs + entry.flows;
-      if (entry.linked || announced.get(entry.root) === held) {
-        continue;
-      }
-      announced.set(entry.root, held);
-      log('reticle_cloud_unsynced_root', {
-        root: entry.root,
-        runs: entry.runs,
-        flows: entry.flows,
-        linked: entry.linked,
-        fix: "run `reticle connect` in that folder's project: this work is on this machine only",
-      });
+    const unlinked = unsynced.filter((entry) => !entry.linked);
+    const runs = unlinked.reduce((total, entry) => total + entry.runs, 0);
+    const flows = unlinked.reduce((total, entry) => total + entry.flows, 0);
+    const signature = JSON.stringify([unlinked.map((e) => [e.root, e.runs, e.flows]), runs, flows]);
+    if (0 === unlinked.length) {
+      announcedUnsynced = undefined;
+      return;
     }
+    if (announcedUnsynced === signature) {
+      return;
+    }
+    announcedUnsynced = signature;
+    log('reticle_cloud_unsynced_root', {
+      count: unlinked.length,
+      runs,
+      flows,
+      examples: unlinked.slice(0, 3).map((entry) => entry.root),
+      fix: 'run `reticle connect` in each project that owns these folders: this work is on this machine only',
+    });
   };
 
   /**
