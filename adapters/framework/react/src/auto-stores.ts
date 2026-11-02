@@ -246,7 +246,11 @@ export function autoRegisterStores(doc: Document): string[] {
     // added `query` beside it — one cache listed twice in every state read. Comparing read values
     // cannot catch it either, because that adapter builds a fresh snapshot on every `getState`.
     if (sourceOwner(source) !== undefined) continue;
-    if (taken.has(key) || registered.has(key)) continue;
+    // A name we registered ourselves for a DIFFERENT source is stale: HMR re-ran the module that
+    // creates the store, so the page now holds a new instance under the same name. Replace it —
+    // registerStore swaps the getter and subscription — instead of reading the old instance forever.
+    const replacesOurs = registered.has(key) && registered.get(key) !== source;
+    if (!replacesOurs && (taken.has(key) || registered.has(key))) continue;
     try {
       registerStore(key, store);
     } catch {
