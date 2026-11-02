@@ -12,8 +12,12 @@
  * Same class as the version-skew remedy that named a React package on Vue projects: remedy text that
  * does not check whether it applies. A wrong remedy is worse than none, because it is followed.
  */
+import { CRAWL_DEFAULTS } from '@reticlehq/core';
 import { skippedBodyRemedy } from '@/question/predicate/predicate-eval.js';
 import { BODY_CAPTURE_DEFAULTS } from '@/question/predicate/predicate-request-body.js';
+
+/** Same bound the browser SDK uses in `shouldCaptureErrorBody` — do not duplicate the number. */
+const FAILED_RESPONSE_STATUS = CRAWL_DEFAULTS.FAILED_STATUS;
 
 /** The earliest SDK release whose observer can capture network bodies at all. */
 export const BODY_CAPTURE_MIN_VERSION = '2.4.0';
@@ -73,24 +77,55 @@ export function bodyCaptureRemedy(sdkVersion: string | undefined, skipReason?: u
   return ENABLE_IT;
 }
 
-/** Clause names that can only be answered from a recorded body. */
-const BODY_CLAUSE_FIELDS = [
-  'bodyContains',
-  'bodyMatches',
-  'requestBodyContains',
-  'requestBodyMatches',
-] as const;
+/** Response-body clauses — kept for HTTP ≥ FAILED_RESPONSE_STATUS even when capture is off. */
+const RESPONSE_BODY_CLAUSE_FIELDS = ['bodyContains', 'bodyMatches'] as const;
+
+/** Request-body clauses — always need `captureNetworkBodies`. */
+const REQUEST_BODY_CLAUSE_FIELDS = ['requestBodyContains', 'requestBodyMatches'] as const;
+
+const BODY_CLAUSE_FIELDS = [...RESPONSE_BODY_CLAUSE_FIELDS, ...REQUEST_BODY_CLAUSE_FIELDS] as const;
+
+/** Walk nested `allOf` / `predicate` shapes the same way `asksAboutBody` does. */
+function walkPredicateNodes(predicate: unknown, visit: (node: Record<string, unknown>) => boolean): boolean {
+  if (null === predicate || 'object' !== typeof predicate) return false;
+  const node = predicate as Record<string, unknown>;
+  if (visit(node)) return true;
+  const nested = node['predicates'] ?? node['predicate'];
+  if (Array.isArray(nested)) return nested.some((child) => walkPredicateNodes(child, visit));
+  return walkPredicateNodes(nested, visit);
+}
 
 /** Does this predicate, or anything nested in it, ask about a body? */
 function asksAboutBody(predicate: unknown): boolean {
-  if (null === predicate || 'object' !== typeof predicate) return false;
-  const node = predicate as Record<string, unknown>;
-  if (BODY_CLAUSE_FIELDS.some((f) => node[f] !== undefined)) return true;
-  // The reported shape is an `allOf` carrying route + console + the net clause that needs bodies.
-  // Checking only the top level would miss every realistic call.
-  const nested = node['predicates'] ?? node['predicate'];
-  if (Array.isArray(nested)) return nested.some(asksAboutBody);
-  return asksAboutBody(nested);
+  return walkPredicateNodes(predicate, (node) =>
+    BODY_CLAUSE_FIELDS.some((f) => node[f] !== undefined),
+  );
+}
+
+function asksAboutRequestBody(predicate: unknown): boolean {
+  return walkPredicateNodes(predicate, (node) =>
+    REQUEST_BODY_CLAUSE_FIELDS.some((f) => node[f] !== undefined),
+  );
+}
+
+/**
+ * True when the clause asserts a failed HTTP status (the SDK keeps those response bodies by
+ * default). A bare number ≥ FAILED_RESPONSE_STATUS, or a range whose lower bound is already in
+ * the failed band.
+ */
+function assertsFailedStatus(predicate: unknown): boolean {
+  return walkPredicateNodes(predicate, (node) => {
+    const status = node['status'];
+    if ('number' === typeof status) return status >= FAILED_RESPONSE_STATUS;
+    if (null !== status && 'object' === typeof status) {
+      const range = status as { min?: unknown; gte?: unknown; from?: unknown };
+      for (const key of ['min', 'gte', 'from'] as const) {
+        const bound = range[key];
+        if ('number' === typeof bound && bound >= FAILED_RESPONSE_STATUS) return true;
+      }
+    }
+    return false;
+  });
 }
 
 /**
@@ -125,6 +160,9 @@ export function bodyClauseRefusal(
 ): string | undefined {
   if (false !== session.captureBodies) return undefined;
   if (!asksAboutBody(predicate)) return undefined;
+  // Failed responses keep their body without captureNetworkBodies. A response-body clause that
+  // also asserts a failed status is therefore answerable; request-body clauses are not.
+  if (assertsFailedStatus(predicate) && !asksAboutRequestBody(predicate)) return undefined;
   return (
     `${BODY_CLAUSE_REFUSAL_OPENING} — it ` +
     `would fail whatever the app did. Nothing ran, so no action was spent. ${bodyCaptureRemedy(session.sdkVersion)}`
