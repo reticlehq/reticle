@@ -184,6 +184,35 @@ export function parseProcessCwd(stdout: string): string | null {
   return null;
 }
 
+/** Each port in `lsof -nP -iTCP -sTCP:LISTEN -Fn` output, once. A dual-stack bind prints two lines. */
+export function parseListeningPorts(stdout: string): number[] {
+  const ports = new Set<number>();
+  for (const line of stdout.split('\n')) {
+    const port = line.startsWith(NAME_FIELD) ? /:(\d+)$/.exec(line)?.[1] : undefined;
+    if (port !== undefined) {
+      ports.add(Number(port));
+    }
+  }
+  return [...ports];
+}
+
+/**
+ * Every TCP port on this machine with a listener, or nothing when the lookup cannot run.
+ *
+ * Off on Windows. A process there shows no working directory, so `findListenerCwd` starts PowerShell
+ * for each port, and the daemon blocks for each start.
+ */
+export function findListeningPorts(
+  exec: (command: string, args: readonly string[]) => string | null,
+  platform: NodeJS.Platform = process.platform,
+): number[] {
+  if ('win32' === platform) {
+    return [];
+  }
+  const out = exec('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Fn']);
+  return null === out ? [] : parseListeningPorts(out);
+}
+
 /** A Windows PowerShell cold start alone can take more than the lsof bound. */
 const WINDOWS_LOOKUP_TIMEOUT_MS = 8_000;
 

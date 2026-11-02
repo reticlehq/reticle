@@ -38,6 +38,15 @@ export interface NoSessionFacts {
    * lock. Named in the message so the reader can tell the two apart.
    */
   slowListeners?: readonly number[];
+  /**
+   * Ports that processes in this project's folder listen on, and the scan did not hear a page on.
+   *
+   * Never a place to send the agent, so never in `listening`: agent tools run in this folder and
+   * listen too, and one serves a page. An agent-browser viewer in `listening` produced "just open
+   * http://localhost:<port>" while the app was not running (reticle#1543). What these ports prove
+   * is less: the answer cannot say that nothing is listening.
+   */
+  folderListeners?: readonly number[];
   /** The port this daemon is on — half of the mismatch the old message asked about. */
   port: number;
   /**
@@ -227,7 +236,9 @@ const URL_THEN_LEASE =
  * diagnosed the problem.
  */
 function leaseAdvice(base: string, facts: NoSessionFacts): string {
-  if (true === facts.desktop) return DESKTOP_NO_BROWSER;
+  if (true === facts.desktop) {
+    return DESKTOP_NO_BROWSER;
+  }
   const caveat = leaseCaveat(facts.leaseBrowser);
   return caveat === undefined ? base : `${base} ${caveat}`;
 }
@@ -264,10 +275,14 @@ const TAB_GONE_WHAT = 'The tab was closed, navigated away, or hard-reloaded.';
  * page down is no longer the same dead end as "the human closed the tab".
  */
 function tabGoneWhat(url: string | undefined): string {
-  if (undefined === url || '' === url) return TAB_GONE_WHAT;
+  if (undefined === url || '' === url) {
+    return TAB_GONE_WHAT;
+  }
   const torn = pageTornDownWhileOn(url);
   const first = torn.charAt(0);
-  if ('' === first) return TAB_GONE_WHAT;
+  if ('' === first) {
+    return TAB_GONE_WHAT;
+  }
   return `${first.toUpperCase()}${torn.slice(1)}. ${TAB_GONE_WHAT}`;
 }
 
@@ -376,7 +391,9 @@ const INIT_CMD = '`npx @reticlehq/server init`';
  */
 function slowListenerClause(facts: NoSessionFacts, after = ''): string {
   const slow = facts.slowListeners ?? [];
-  if (0 === slow.length) return '';
+  if (0 === slow.length) {
+    return '';
+  }
   const ports = slow.join(', ');
   const subject = 1 === slow.length ? `Port ${ports} ACCEPTED` : `Ports ${ports} ACCEPTED`;
   return (
@@ -423,6 +440,25 @@ function orOpenCommand(facts: NoSessionFacts): string {
 }
 
 /**
+ * The start advice's lead when processes in this folder listen. Empty when none do.
+ *
+ * Names ports and no URL. It ends where the caller's "start it" begins, so an agent whose listeners
+ * are only its own tools still gets the app started.
+ */
+function folderListenerClause(facts: NoSessionFacts): string {
+  const ports = facts.folderListeners ?? [];
+  if (0 === ports.length) {
+    return '';
+  }
+  const named = ports.map((port) => `:${String(port)}`).join(', ');
+  return (
+    `No port Reticle scans serves a page, but processes in this folder listen on ${named}. ` +
+    'Reticle cannot tell if one is this app, because agent tools listen here too. ' +
+    'If one of them IS this app, open its URL. If none is, '
+  );
+}
+
+/**
  * What a machine-wide port scan can and cannot say.
  *
  * It finds listeners anywhere on localhost and knows nothing about who owns them. On a machine
@@ -430,7 +466,16 @@ function orOpenCommand(facts: NoSessionFacts): string {
  * is up and never dialled" is unsound: those ports can belong to anything, and the app's own port
  * may not be in the scanned set at all.
  */
-function unattributedListeners(listening: readonly number[]): string {
+function unattributedListeners(facts: NoSessionFacts): string {
+  const { listening } = facts;
+  const folder = facts.folderListeners ?? [];
+  if (0 < folder.length && 0 === listening.length) {
+    const named = folder.map((port) => `:${String(port)}`).join(', ');
+    return (
+      `No port the scan covers serves a page, but processes in this folder listen on ${named}. ` +
+      'Reticle cannot tell if one is this app, because agent tools listen here too.'
+    );
+  }
   if (0 === listening.length) {
     return (
       `No listener found that I can attribute to this project: the scan covers ${SCANNED_PORTS} ` +
@@ -453,7 +498,9 @@ function unattributedListeners(listening: readonly number[]): string {
  */
 function portMismatchClause(facts: NoSessionFacts): string {
   const configured = facts.projectPort;
-  if (configured === undefined || configured === facts.port) return '';
+  if (configured === undefined || configured === facts.port) {
+    return '';
+  }
   return (
     ` They already disagree: \`.reticle.json\` says port ${String(configured)} and this daemon is` +
     ` on ${String(facts.port)}, so the SDK is dialling ${String(configured)} and nothing is there.` +
@@ -471,7 +518,9 @@ function portMismatchClause(facts: NoSessionFacts): string {
  */
 function siblingListenerClause(facts: NoSessionFacts): string {
   const occupied = facts.siblingListeners ?? [];
-  if (0 === occupied.length) return '';
+  if (0 === occupied.length) {
+    return '';
+  }
   const mismatch = facts.projectPort;
   const extra =
     mismatch !== undefined && mismatch !== facts.port
@@ -508,7 +557,9 @@ function rankedCauses(facts: NoSessionFacts): string {
  */
 function configsElsewhereClause(facts: NoSessionFacts): string {
   const configs = facts.configsElsewhere ?? [];
-  if (0 === configs.length) return '';
+  if (0 === configs.length) {
+    return '';
+  }
   const named = configs
     .map((c) => (c.projectId === undefined ? c.directory : `${c.directory} ('${c.projectId}')`))
     .join(', ');
@@ -522,8 +573,12 @@ function configsElsewhereClause(facts: NoSessionFacts): string {
 /** Where we looked, when we found nothing. An absence nobody can check is not evidence. */
 function searchedClause(facts: NoSessionFacts): string {
   const searched = facts.searchedDirectories ?? [];
-  if (0 === searched.length) return '';
-  if ((facts.configsElsewhere ?? []).length > 0) return '';
+  if (0 === searched.length) {
+    return '';
+  }
+  if ((facts.configsElsewhere ?? []).length > 0) {
+    return '';
+  }
   return ` I looked in: ${searched.join(', ')}. If your app is not in that list, that is the answer — this daemon is standing somewhere else.`;
 }
 
@@ -536,9 +591,15 @@ function searchedClause(facts: NoSessionFacts): string {
  */
 function stallClause(facts: NoSessionFacts): string {
   const { daemonUpMs, initialized, everConnected } = facts;
-  if (everConnected) return '';
-  if (!initialized) return '';
-  if (daemonUpMs === undefined || daemonUpMs < STALL_AFTER_MS) return '';
+  if (everConnected) {
+    return '';
+  }
+  if (!initialized) {
+    return '';
+  }
+  if (daemonUpMs === undefined || daemonUpMs < STALL_AFTER_MS) {
+    return '';
+  }
   const minutes = Math.round(daemonUpMs / 60_000);
   return (
     `This daemon has been running for ${String(minutes)} minutes and no app has connected. ` +
@@ -548,7 +609,9 @@ function stallClause(facts: NoSessionFacts): string {
 }
 
 function alreadyListeningClause(listening: readonly number[]): string {
-  if (0 === listening.length) return '';
+  if (0 === listening.length) {
+    return '';
+  }
   if (1 === listening.length) {
     const port = listening[0];
     return (
@@ -708,9 +771,9 @@ export function explainNoSession(facts: NoSessionFacts): {
   if (true === facts.previouslyConnected) {
     const listeners =
       0 === listening.length
-        ? `${unattributedListeners(listening)} If the dev server is not running, start it first ` +
+        ? `${unattributedListeners(facts)} If the dev server is not running, start it first ` +
           '(the command is in `next_action`).'
-        : unattributedListeners(listening);
+        : unattributedListeners(facts);
     return reason(
       NoSessionReason.APP_NOT_REOPENED,
       `${RESTARTED_LEAD} ${openTheApp(facts)} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
@@ -727,7 +790,7 @@ export function explainNoSession(facts: NoSessionFacts): {
       'no browser session connected, and this daemon has never seen one. ' +
         `${configsElsewhereClause(facts)} ${openTheApp(facts)} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
       'This daemon was started somewhere that is not the project, which is the normal outcome when ' +
-        `an editor launches it from your home directory. ${unattributedListeners(listening)} ` +
+        `an editor launches it from your home directory. ${unattributedListeners(facts)} ` +
         `${rankedCauses(facts)}`,
     );
   }
@@ -751,8 +814,10 @@ export function explainNoSession(facts: NoSessionFacts): {
       return reason(
         NoSessionReason.NO_LISTENER_NO_CONFIG,
         'no browser session connected. Two things to weigh, and neither of them is proof. ' +
-          `(1) ${slowListenerClause(facts, ' Setting that aside: ')}Nothing is listening on the ports Reticle scans, so the ` +
-          'dev server may not be running: START IT YOURSELF, in the background, using the command ' +
+          `(1) ${slowListenerClause(facts, ' Setting that aside: ')}${
+            folderListenerClause(facts) ||
+            'Nothing is listening on the ports Reticle scans, so the dev server may not be running: '
+          }START IT YOURSELF, in the background, using the command ` +
           'in `next_action`, and tell the human in one line that it is running. ' +
           `(2) There is no \`.reticle.json\` in ${where}, which is the file ${INIT_CMD} writes, so ` +
           `the app may carry no Reticle SDK. Check the app's OWN directory before re-running it. ` +
@@ -779,8 +844,10 @@ export function explainNoSession(facts: NoSessionFacts): {
     return reason(
       NoSessionReason.NO_LISTENER,
       `${stallClause(facts)}no browser session connected, and this daemon has never seen one. ${openTheApp(facts)} ` +
-        'Nothing is listening on the ports Reticle scans either, and the usual reason is a dev ' +
-        'server that is not running: start it yourself in the background with the command in ' +
+        `${
+          folderListenerClause(facts) ||
+          'Nothing is listening on the ports Reticle scans either, and the usual reason is a dev server that is not running: '
+        }start it yourself in the background with the command in ` +
         '`next_action`, tell the human in one line that it is running, then open the app in a ' +
         `browser. ${RETRY}`,
       // The caveat is in the detail rather than omitted because the scan is NARROW: an empty result
@@ -809,7 +876,7 @@ export function explainNoSession(facts: NoSessionFacts): {
         `open — ${OPEN_CMD}. ${ZERO_INSTALL} ${RETRY}`,
       'That absence is not proof: the same one is expected in a monorepo whose daemon runs at the ' +
         'root while the app lives in a subdirectory, or in an app wired by the Vite or Babel ' +
-        `plugin. ${unattributedListeners(listening)}${searchedClause(facts)}${siblingListenerClause(facts)}`,
+        `plugin. ${unattributedListeners(facts)}${searchedClause(facts)}${siblingListenerClause(facts)}`,
     );
   }
 
@@ -818,7 +885,7 @@ export function explainNoSession(facts: NoSessionFacts): {
     `${stallClause(facts)}no browser session connected, and this daemon has never seen one for this project, which is ` +
       `wired for Reticle. ${openTheApp(facts)} If the page IS open and still does not appear, the SDK ` +
       `is not reaching this daemon (on ${String(port)}). ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
-    `${unattributedListeners(listening)} ${rankedCauses(facts)}`,
+    `${unattributedListeners(facts)} ${rankedCauses(facts)}`,
   );
 }
 

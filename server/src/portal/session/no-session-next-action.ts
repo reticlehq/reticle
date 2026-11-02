@@ -34,6 +34,8 @@ interface NextActionFacts {
   listening: readonly number[];
   /** Scanned ports that serve a page from a process that cannot be tied to this project. */
   otherListeners?: readonly number[];
+  /** Ports that processes in this folder listen on. See `NoSessionFacts.folderListeners`. */
+  folderListeners?: readonly number[];
   dev: DevCommand | undefined;
   /**
    * File-existence predicate for the project root, pure for testing.
@@ -228,7 +230,20 @@ function neverWired(facts: NextActionFacts): boolean {
  * The start advice's first claim when no port is this project's. A scan that heard a page it could
  * not tie to this project says so, because "nothing is listening" is then false.
  */
-function notThisProject(others: readonly number[] | undefined): string {
+function notThisProject(
+  others: readonly number[] | undefined,
+  folder: readonly number[] = [],
+): string {
+  // First: the folder is nearer to this app than a machine-wide scan. It is still no URL to hand
+  // over, because agent tools listen in this folder too (reticle#1543).
+  if (0 < folder.length) {
+    const ports = folder.map((port) => `:${String(port)}`).join(', ');
+    return (
+      `processes in this folder listen on ${ports}, and Reticle cannot tell if one is this app, ` +
+      'because agent tools listen here too — if one of them IS this app, open it instead of ' +
+      'starting a second one, '
+    );
+  }
   if (others === undefined || 0 === others.length) {
     return 'nothing is listening on the ports Reticle scans, so the app is probably not running — ';
   }
@@ -419,9 +434,11 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
       stopped === undefined
         ? ''
         : ` The session that was on ${redactUrl(stopped.url)} is gone and nothing listens there now.`;
-    const notRunning = departedPortIsGone
-      ? "nothing answers on the port this project's app was last on, so the app is probably not running — "
-      : notThisProject(facts.otherListeners);
+    const folder = facts.folderListeners ?? [];
+    const notRunning =
+      departedPortIsGone && 0 === folder.length
+        ? "nothing answers on the port this project's app was last on, so the app is probably not running — "
+        : notThisProject(facts.otherListeners, folder);
     if (dev === undefined) {
       const childApps = facts.childApps ?? [];
       if (1 < childApps.length) {

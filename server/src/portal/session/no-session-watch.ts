@@ -15,7 +15,7 @@ import { probeDevServerStates } from './dev-server/dev-server-probe.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, parse, resolve } from 'node:path';
 import { callingClientDirectory } from '@/hooks/client-directory.js';
 import { registeredElsewhere } from '@/memory/recall/registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
@@ -51,10 +51,11 @@ import { stallUptime } from './stall-clock.js';
 import type { SessionManager } from './session-manager.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { findOccupiedSiblings } from '@/command/cli/ports/sibling-ports.js';
+import { captureLookup, findListeningPorts } from '@/command/cli/ports/port-holder.js';
 import { isAuthRefusalReason } from '@/portal/bridge/auth-failure-reason.js';
 import { devServersForProject } from '@reticlehq/core';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
-import { servingDirectoryOf } from './serving-directory.js';
+import { listenerFolders, servingDirectoryOf } from './serving-directory.js';
 import { within } from './zero-install-first-call.js';
 
 /** Slow enough to be free, fast enough that a dev server started 15s ago is already reflected. */
@@ -147,6 +148,12 @@ interface NoSessionWatchOptions {
    */
   listenerDirectory?: (port: number) => string | undefined;
   /**
+   * Every TCP port on this machine with a listener (reticle#1543).
+   *
+   * Injected for tests; a test that injects `probe` and omits this observes no listener.
+   */
+  listeningPorts?: () => readonly number[];
+  /**
    * What the route the last session was on answers right now, as an HTTP status, or undefined
    * when there is no answer to report.
    *
@@ -188,6 +195,17 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     (options.probe === undefined
       ? (port: number): string | undefined => servingDirectoryOf(`${LOCALHOST}:${String(port)}`)
       : (): undefined => undefined);
+  const listeningPorts =
+    options.listeningPorts ??
+    (options.probe === undefined
+      ? (): readonly number[] => findListeningPorts(captureLookup)
+      : (): readonly number[] => []);
+  /**
+   * The folder of each listener outside `listening`, `slowListeners` and the Reticle daemons.
+   *
+   * Beside `listenerDirs` and never in `listening`: see `NoSessionFacts.folderListeners`.
+   */
+  let unscannedFolders: ReadonlyMap<number, string | undefined> = new Map();
   let siblingListeners: readonly number[] = [];
   /**
    * What the last-known route answered, cached beside the port scan for the same reason the scan
@@ -363,6 +381,22 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   };
 
   /**
+   * The ports that processes in `dir` listen on, without the ones in `shown`.
+   *
+   * Nothing for the home folder or a filesystem root. A daemon an editor starts there holds every
+   * process on the machine inside its "folder", so the answer would prove nothing.
+   */
+  const folderListeners = (dir: string, shown: readonly number[]): readonly number[] => {
+    const folder = resolve(dir);
+    if (folder === homedir() || folder === parse(folder).root) {
+      return [];
+    }
+    return [...unscannedFolders.entries()].flatMap(([port, cwd]) =>
+      within(cwd, folder) && !shown.includes(port) ? [port] : [],
+    );
+  };
+
+  /**
    * Is `port` demonstrably this project's app? Either its dev server announced it, or this
    * project's own last session was on it. Anything else is a guess, and a guess that opens a
    * browser is worse than the sentence the diagnosis already writes about the ports it saw.
@@ -446,6 +480,12 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
             : options.probe === undefined
               ? await findOccupiedSiblings(options.port, probeDaemon)
               : [];
+        const reported = new Set([options.port, ...siblingListeners, ...ports, ...slowListeners]);
+        unscannedFolders = listenerFolders(
+          listeningPorts().filter((port) => !reported.has(port)),
+          unscannedFolders,
+          listenerDirectory,
+        );
         // Asked once per departed URL, on the same background cadence as the port scan, and never
         // on the hint's own path. A url already answered is not asked again; a new departure is.
         const known = options.sessions.lastKnown?.();
@@ -610,6 +650,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
         : {}),
       listening: heard,
       slowListeners: slow,
+      folderListeners: folderListeners(dir, heard),
       port: options.port,
       directory: dir,
       previouslyConnected,
@@ -636,6 +677,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       listening: heard,
       ...(0 === others.length ? {} : { otherListeners: others }),
       slowListeners: slow,
+      folderListeners: folderListeners(dir, heard),
       ...(known === undefined
         ? {}
         : {
@@ -692,6 +734,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       ...(split === undefined ? {} : { splitBrain: split }),
       listening: observedListening(),
       slowListeners,
+      folderListeners: folderListeners(directory, observedListening()),
       // The url the departed tab was on — the same tombstone the prose diagnosis quotes, so the
       // command and the sentence beside it name the same page.
       ...(() => {
@@ -738,6 +781,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       ...scope,
       listening: observedListening(),
       slowListeners,
+      folderListeners: folderListeners(directory, observedListening()),
       port: options.port,
       // The directory `initialized` was decided in. Named in the message because "there is no
       // `.reticle.json`" is a claim about ONE directory, and a reader standing somewhere else

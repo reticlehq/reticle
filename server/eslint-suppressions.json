@@ -2680,11 +2680,6 @@
       "count": 1
     }
   },
-  "src/portal/session/no-session-diagnosis.ts": {
-    "curly": {
-      "count": 13
-    }
-  },
   "src/portal/session/no-session-next-action.ts": {
     "no-nested-ternary": {
       "count": 4
@@ -2743,11 +2738,6 @@
   "src/portal/session/second-project-first-call.test.ts": {
     "curly": {
       "count": 4
-    }
-  },
-  "src/portal/session/serving-directory.ts": {
-    "curly": {
-      "count": 8
     }
   },
   "src/portal/session/session-buffer-health.test.ts": {
