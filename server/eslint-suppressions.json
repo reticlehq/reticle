@@ -1395,11 +1395,6 @@
       "count": 4
     }
   },
-  "src/language/flows/affected-tools.ts": {
-    "no-nested-ternary": {
-      "count": 3
-    }
-  },
   "src/language/flows/anchor-settle.test.ts": {
     "curly": {
       "count": 1
