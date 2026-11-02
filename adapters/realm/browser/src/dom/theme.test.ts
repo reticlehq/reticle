@@ -29,6 +29,23 @@ describe('themeReport — design-token compliance', () => {
     expect(r.offTheme).toBe(false);
   });
 
+  it('a token redefined on an ancestor resolves to the scoped value inside the subtree', () => {
+    // #1682: the palette resolved every token against <body>, so this button was compared
+    // with the :root value of --primary and read offTheme though it wears the token exactly
+    // as the .admin scope redefines it.
+    document.head.innerHTML =
+      '<style>:root{--primary:rgb(17,17,17);} .admin{--primary:rgb(204,0,0);}</style>';
+    document.body.innerHTML =
+      '<div class="admin"><button style="color:rgb(204,0,0)">Save</button></div>';
+    const button = document.querySelector('button');
+    if (null === button) {
+      throw new Error('fixture did not render');
+    }
+    const r = themeReport(getComputedStyle(button));
+    expect(r.colorTokens).toEqual(['--primary']);
+    expect(r.offTheme).toBe(false);
+  });
+
   it('an off-palette color is flagged offTheme with no matching token', () => {
     const cs = setup(
       ':root{--accent:rgb(10,20,30);}',

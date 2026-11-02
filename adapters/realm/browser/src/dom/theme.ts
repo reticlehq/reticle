@@ -72,26 +72,30 @@ export function tokenNames(): Set<string> {
 }
 
 /**
- * The palette as the page renders it right now: canonical `rgb(...)` → every token with that color.
+ * The palette as one element renders it right now: canonical `rgb(...)` → every token with
+ * that color.
  *
- * Resolved against `document.body` rather than the raw declaration text, because custom properties
- * inherit: this picks up a theme scoped to `<html>` or to `<body>`, and picks up the value the
- * ACTIVE theme block won with rather than whichever block the stylesheet happened to list first.
+ * Resolved against the inspected element's computed style rather than the raw declaration
+ * text, because custom properties inherit: this picks up a theme scoped to `<html>` or to
+ * `<body>`, and picks up the value the ACTIVE theme block won with rather than whichever
+ * block the stylesheet happened to list first. Resolving on the element also picks up a
+ * token an ancestor REDEFINED for its subtree (`.admin { --primary: ... }`): the palette
+ * used to resolve against `document.body`, so an element inside such a scope was compared
+ * with the root values and read off-theme though it wore its scope's token (#1682).
  */
-function palette(): Map<string, string[]> {
+function palette(cs: CSSStyleDeclaration): Map<string, string[]> {
   const byColor = new Map<string, string[]>();
-  const root = document.body ?? document.documentElement;
-  if (null === root) return byColor;
-  const rootStyle = getComputedStyle(root);
+  const host = document.body ?? document.documentElement;
+  if (null === host) return byColor;
   // One shared probe for the whole build. There is no cache any more, so this runs per inspect, and
   // a span per token would be a few hundred appends on a real design system.
   const probe = document.createElement('span');
   probe.style.position = 'absolute';
   probe.style.pointerEvents = 'none';
-  document.body.appendChild(probe);
+  host.appendChild(probe);
   try {
     for (const name of tokenNames()) {
-      const rgb = toRgb(probe, rootStyle.getPropertyValue(name).trim());
+      const rgb = toRgb(probe, cs.getPropertyValue(name).trim());
       if (null === rgb) continue;
       const named = byColor.get(rgb);
       if (named === undefined) byColor.set(rgb, [name]);
@@ -164,7 +168,7 @@ function sole(names: string[]): string | null {
 
 /** Report an element's theme compliance from its computed style. */
 export function themeReport(cs: CSSStyleDeclaration): ThemeReport {
-  const byColor = palette();
+  const byColor = palette(cs);
   const colorTokens = byColor.get(cs.color) ?? [];
   const backgroundTokens = byColor.get(cs.backgroundColor) ?? [];
   const colorOff = !isTransparent(cs.color) && 0 === colorTokens.length;
