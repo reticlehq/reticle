@@ -33,11 +33,10 @@ import { findStaleResponses } from './stale-response.js';
 import { findBodyFailures } from './body-failures.js';
 import { findEchoMismatches } from './echo-mismatch.js';
 import { findUnitMismatches } from './unit-mismatch.js';
-import { tiedReaction } from './tied-app-reaction.js';
 import { asString } from '@reticlehq/core';
 import { isDeclaredRead, matchesDeclaredFailure } from '@/question/declared.js';
 import { runRegisteredFolds } from './contradiction-folds.js';
-import { isMeaningfulStateChange } from '../state-bookkeeping.js';
+import { isMeaningfulStateChange, tiedReaction } from '../state-bookkeeping.js';
 import type {
   Contradiction,
   OwnContradiction,
