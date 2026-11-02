@@ -15,9 +15,6 @@
     }
   },
   "src/disagreement/contradiction-evidence.ts": {
-    "curly": {
-      "count": 39
-    },
     "no-nested-ternary": {
       "count": 1
     }

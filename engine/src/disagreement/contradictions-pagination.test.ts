@@ -61,6 +61,32 @@ describe('a page label that moved while the request did not', () => {
     }
   });
 
+  it('is not found when a count starts at zero and a list refetches its first page', () => {
+    // Field report: "0 of 4 generated" became "1 of 4 generated" as an asset finished, and the
+    // members list refreshed offset=0. No paging action happened; the verdict read `no`.
+    const counts: readonly (readonly [string, string])[] = [
+      ['0 of 4 generated', '1 of 4 generated'],
+      ['0 / 4', '1 / 4'],
+      ['1 of 4', '0 of 4'],
+    ];
+    for (const [before, after] of counts) {
+      expect(
+        findStalledPagination(
+          [label(before, after), get('/api/v1/members?offset=0&limit=50')],
+          [get('/api/v1/members?offset=0&limit=50')],
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  it('is still found for a bare "N of M" page label that moved from page 1', () => {
+    const found = findStalledPagination(
+      [label('1 of 6', '2 of 6'), get('/api/v1/payments?page=1&status=all')],
+      [firstPage],
+    );
+    expect(found.map((f) => f.kind)).toEqual([ContradictionKind.PAGINATION_NOT_FETCHED]);
+  });
+
   it('is not found when a search starts a new result set at the same offset', () => {
     expect(
       findStalledPagination(
