@@ -176,7 +176,18 @@ function matchesRole(actual: string, queried: string): boolean {
  * adapter, and moving the rule into core would move the wire contract for two lines.
  */
 function normaliseName(value: string): string {
-  return value.replace(/\s+/g, ' ').trim().normalize('NFC');
+  return withoutInvisibleFormat(value).replace(/\s+/g, ' ').trim().normalize('NFC');
+}
+
+/**
+ * The format characters a screen does not paint, the same set as `INVISIBLE_FORMAT` in the
+ * browser's `text-match.ts`. Keep the two in step for the reason above: a name or text the browser
+ * matched without them must not miss here.
+ */
+const INVISIBLE_FORMAT = /[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
+
+function withoutInvisibleFormat(value: string): string {
+  return value.replace(INVISIBLE_FORMAT, '');
 }
 
 const RESIDUAL_CHECKS: Readonly<
@@ -185,7 +196,8 @@ const RESIDUAL_CHECKS: Readonly<
   value: (element, want) => (element.value ?? '').trim() === want.trim(),
   role: (element, want) => matchesRole(element.role, want),
   name: (element, want) => normaliseName(element.name) === normaliseName(want),
-  text: (element, want) => (element.text ?? element.name).includes(want),
+  text: (element, want) =>
+    withoutInvisibleFormat(element.text ?? element.name).includes(withoutInvisibleFormat(want)),
   [ALT_FIELD]: (element, want) => {
     const alt = element.attrs?.[ALT_FIELD];
     return isImage(element) && alt !== undefined && alt.trim() === want.trim();
