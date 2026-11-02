@@ -28,7 +28,10 @@ import { ReticleTool, isGlobalPressCall } from '@reticlehq/core';
 import { namelessRefs, replayActionArgs } from './replay.js';
 import { isStaleRefError } from '@/surface/tools/act/act-sequence-retry.js';
 import { waitForReaction } from '@/surface/tools/act/react-grace.js';
-import { unreachableTargetNote } from '@/surface/tools/act/act-observation.js';
+import {
+  unreachableSubStepDrift,
+  unreachableTargetNote,
+} from '@/surface/tools/act/act-observation.js';
 import { anchorFieldName } from './flows.js';
 import type { FlowReplaySession, Sleep } from './flow-replay-types.js';
 import {
@@ -107,18 +110,9 @@ export async function runRoleStep(
   const label = roleAnchorLabel(anchor);
   const { refs } = await resolveRoleAnchor(session, anchor, sleep);
   /*
-   * More than one match is DRIFT, not a guess. This path took `refs[0]`, dispatched, and returned
-   * `ok: true`, so a flow recorded against "View result" on row 3 of a table replayed by clicking row
-   * 1 and PASSED whenever every row shared the consequence (the same GET returning 200). The verdict
-   * reads `drift` and `ok` and nothing else, so a green here is indistinguishable from a replay that
-   * did what it did before.
-   *
-   * A role+name anchor is MORE likely to land here than a testid is: `button "View result"` is
-   * user-visible text, and a table repeats it by nature, so several matches is the expected shape of
-   * a recorded row action rather than an accident.
-   *
-   * The check itself lives in `ambiguityDrift`, shared with the testid and component runners: written
-   * per-runner, this rule got applied to two anchor kinds and forgotten for the third.
+   * More than one match is DRIFT, not a guess: taking `refs[0]` replayed a recorded row action on
+   * row 1 and passed whenever every row shared the consequence. `ambiguityDrift` holds the rule,
+   * shared with the testid and component runners.
    */
   const ambiguous = ambiguityDrift(anchor, refs);
   if (ambiguous !== null) {
@@ -861,7 +855,17 @@ export async function runSequenceStep(
     for (;;) {
       const act = await send(live.slice(start, to));
       if (act.ok) {
-        return true;
+        // A sub-step no person could have clicked decides nothing (#2113).
+        const drift = unreachableSubStepDrift(
+          act.result,
+          (at) =>
+            `${anchorLabel(subs[start + at]?.anchor ?? step.anchor)} (sub-step ${String(start + at)})`,
+        );
+        Object.assign(
+          result,
+          drift === undefined ? {} : { ok: false, anchor: drift.anchor, drift },
+        );
+        return drift === undefined;
       }
       const error = act.error ?? 'command failed';
       if (!isStaleRefError(error)) {

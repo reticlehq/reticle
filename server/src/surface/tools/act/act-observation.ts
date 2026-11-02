@@ -11,7 +11,15 @@
  * cut off mid-predicate.
  */
 
-import { EventType, asRecord, asString, isDevToolingUrl, type ReticleEvent } from '@reticlehq/core';
+import {
+  DriftReason,
+  EventType,
+  asRecord,
+  asString,
+  isDevToolingUrl,
+  type Drift,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import { sdkBehindNote } from '@/portal/session/session-info.js';
 import {
@@ -107,6 +115,32 @@ export function unreachableTargetNote(actResult: unknown): string | undefined {
   }
   if (true === effect['noSize']) return UNREACHABLE.NO_SIZE;
   if (true === effect['offViewport']) return UNREACHABLE.OFF_VIEWPORT;
+  return undefined;
+}
+
+/**
+ * The drift for the first sub-step of an `ACT_SEQUENCE` result whose target no person could have
+ * clicked, or undefined. The page reports one effect for each sub-step it ran, in order. Synthetic
+ * dispatch reaches an unreachable target all the same, so a sequence is read sub-step by sub-step, as
+ * a single act is. `labelOf` names the sub-step, by its index in this result.
+ */
+export function unreachableSubStepDrift(
+  sequenceResult: unknown,
+  labelOf: (at: number) => string,
+): Drift | undefined {
+  const effects = asRecord(sequenceResult)['effects'];
+  const list: unknown[] = Array.isArray(effects) ? effects : [];
+  for (let at = 0; at < list.length; at += 1) {
+    const reason = unreachableTargetNote({ effect: list[at] });
+    if (reason !== undefined) {
+      return {
+        reasonKind: DriftReason.TARGET_UNREACHABLE,
+        reason,
+        anchor: labelOf(at),
+        nearest: null,
+      };
+    }
+  }
   return undefined;
 }
 
