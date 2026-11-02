@@ -16,7 +16,7 @@ import { describeObserved } from './observed-in-window.js';
 import { netEvidence } from './net-evidence.js';
 import { truncatedBodyAdvice } from './truncated-body-advice.js';
 import { mergeNetworkDetail, withDownloadRequests } from '@/window/network-detail-merge.js';
-import { departedInWindow } from '@/window/event-filters.js';
+import { departedInWindow, mediaEntryBeforeWindow } from '@/window/event-filters.js';
 import {
   checkRequestBody,
   REMEDY_BODY_CAPTURE,
@@ -41,6 +41,7 @@ import { keyFragmentOnly } from './body-key-fragment.js';
 import { evalExactCount } from '@/exact-count.js';
 import {
   PRE_ATTACH_CAVEAT,
+  earlierMediaReason,
   mediaLoadReason,
   nativeDownloadReason,
   targetsMediaLoad,
@@ -139,22 +140,31 @@ function nativeDownloadMiss(
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
 ): EvalResult | undefined {
   const media = targetsMediaLoad(p.urlContains);
-  if (
-    !media &&
-    !targetsNativeDownload(p.urlContains) &&
-    !departedInWindow(events, p.since ?? 0, p.method, p.urlContains)
-  ) {
+  const download = targetsNativeDownload(p.urlContains);
+  const departed = departedInWindow(events, p.since ?? 0, p.method, p.urlContains);
+  const earlierMedia = mediaEntryBeforeWindow(events, p.since ?? 0, p.method, p.urlContains);
+  if (!media && !download && !departed && earlierMedia === undefined) {
     return undefined;
   }
   const filter = describeNetFilter(p);
-  const reason = media ? mediaLoadReason(filter) : nativeDownloadReason(filter);
+  let reason = nativeDownloadReason(filter);
+  let assertion = 'net.native-download';
+  if (media) {
+    reason = mediaLoadReason(filter);
+    assertion = 'net.media-load';
+  } else if (!download && !departed) {
+    // The load the filter names was recorded before this window, and the observer reports no
+    // second entry for its URL: the empty window cannot say the load did not repeat inside it.
+    reason = earlierMediaReason(filter);
+    assertion = 'net.media-before-window';
+  }
   return {
     pass: false,
     failureReason: reason,
     inconclusive: reason,
     observed: observedNetCalls(events, p.urlContains),
     expected: `a fetch or XHR matching ${filter}`,
-    assertion: media ? 'net.media-load' : 'net.native-download',
+    assertion,
   };
 }
 
