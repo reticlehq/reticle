@@ -140,11 +140,6 @@
       "count": 2
     }
   },
-  "src/question/declared.ts": {
-    "curly": {
-      "count": 12
-    }
-  },
   "src/question/document-navigation-is-not-resource-timing.test.ts": {
     "curly": {
       "count": 1

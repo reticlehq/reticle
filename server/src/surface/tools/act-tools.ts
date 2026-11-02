@@ -59,6 +59,7 @@ import { buildHonestyBlock, honestyForVerdict } from '@reticlehq/engine/evidence
 import {
   declaredExpectations,
   declaresBodyIndependentChannel,
+  namedReactions,
 } from '@reticlehq/engine/question/declared.js';
 import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
@@ -750,6 +751,7 @@ export const ACT_TOOLS: ToolDef[] = [
           // not evidence the destination rendered either — `alreadyTrue` decides that, once.
           renderProved: verdict.pass && !alreadyTrue && declared.rendersContent,
           ...session.lastAct.effect(),
+          ...namedReactions(declared),
           currentDocumentId: session.currentDocumentId,
           currentEditEpoch: session.currentEditEpoch,
           appOrigin: session.url,
