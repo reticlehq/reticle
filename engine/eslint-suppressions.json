@@ -37,11 +37,6 @@
       "count": 1
     }
   },
-  "src/disagreement/echo-mismatch.ts": {
-    "curly": {
-      "count": 30
-    }
-  },
   "src/disagreement/reconcile.ts": {
     "curly": {
       "count": 20
