@@ -61,6 +61,15 @@ export interface ContradictionOptions {
    */
   prior?: readonly ReticleEvent[] | undefined;
   /**
+   * Events from before the window that ONLY the read-server-fault rule reads, to tell a background
+   * read that already failed the same way from one this action caused.
+   *
+   * Flow replay passes this and not `prior`: `prior` also feeds the silent-app rule and the learning
+   * rules, and replay has no measurement for those. A poll that fails on every tick was reported
+   * inside every replayed step, and a working journey read `unverifiable`.
+   */
+  failedReadsBefore?: readonly ReticleEvent[] | undefined;
+  /**
    * Event time at which the action that opened this window was dispatched — the attribution floor.
    *
    * `duplicate-request` claims "one user action was performed", and that claim is only sound over ONE

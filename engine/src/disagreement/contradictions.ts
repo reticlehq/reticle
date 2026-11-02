@@ -592,9 +592,9 @@ function findWindowContradictions(
   // action did not cause, and that the screen already lived with. The observation benchmark grades
   // a first-party poll that fails during an action as a false positive. The ceiling: a caller that
   // passes no `prior` (flow replay, through `stepEffect`) reports a poll inside the window. That
-  // is `unknown`, not `no`. Giving replay its `prior` also changes `appIsSilent`, so it needs its
-  // own measurement.
-  const failedBefore = (options.prior ?? [])
+  // is `unknown`, not `no`. Replay passes `failedReadsBefore` instead of `prior`: this rule reads
+  // it and no other, because `prior` also changes `appIsSilent`, which needs its own measurement.
+  const failedBefore = [...(options.prior ?? []), ...(options.failedReadsBefore ?? [])]
     .filter((e) => e.type === EventType.NET_REQUEST)
     .map(netCall)
     .filter((c) => c.status !== undefined && c.status >= SERVER_FAULT_MIN);

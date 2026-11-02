@@ -925,8 +925,16 @@ export async function replayFlow(
       const effect = stepEffect(
         windowEvents,
         { since: cursorBefore, until: cursorAfter },
-        // A failure the step declared is its expected result, as it is on the live path.
-        { ...appScope(session), declared },
+        // A failure the step declared is its expected result, as it is on the live path. The reads
+        // that finished before the step let a background read that fails on every tick be left
+        // alone, instead of being blamed on each step it happens to fall inside.
+        {
+          ...appScope(session),
+          declared,
+          before: session
+            .eventsSince(0)
+            .filter((e) => e.t < cursorBefore && e.type === EventType.NET_REQUEST),
+        },
       );
       // "Never settled" is decided once the replay is over, by the whole-span pass (flow-cross-step).
       const stepOwn = stepContradictions(effect.contradictions ?? []);

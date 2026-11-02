@@ -146,3 +146,45 @@ describe('a replayed step that declared the failure', () => {
     );
   });
 });
+
+/*
+ * A background read that fails on every tick (a poll of a broken endpoint) used to land inside every
+ * replayed step's window, and every step of a working journey read `unverifiable`. Replay now hands
+ * each step the reads that finished before it, so a read that already failed the same way is
+ * ambient. A read that fails for the first time inside the step is still reported.
+ */
+describe('a replayed step and a background read that keeps failing', () => {
+  const poll = (t: number, seq: number): ReticleEvent => ({
+    t,
+    seq,
+    type: EventType.NET_REQUEST,
+    sessionId: 's',
+    data: { id: `p${String(seq)}`, method: 'GET', url: '/api/status/poll', status: 503 },
+  });
+  const label: ReticleEvent = {
+    t: 1000,
+    seq: 2,
+    type: EventType.DOM_TEXT,
+    sessionId: 's',
+    data: { text: 'Archived', old: '' },
+  };
+  const serverFault = async (events: ReticleEvent[]): Promise<boolean> => {
+    const results = await replayFlow(
+      new EventfulSession(new Set(['archive']), events),
+      flow('archive'),
+      waitForPredicate,
+      FAST,
+    );
+    return (results[0]?.contradictions ?? []).some(
+      (c) => c.kind === ContradictionKind.READ_SERVER_FAULT,
+    );
+  };
+
+  it('does not blame the step for a read that already failed before it', async () => {
+    expect(await serverFault([poll(-5, 1), label, poll(1001, 3)])).toBe(false);
+  });
+
+  it('still reports a read that fails for the first time inside the step', async () => {
+    expect(await serverFault([label, poll(1001, 3)])).toBe(true);
+  });
+});

@@ -69,10 +69,17 @@ export function stepEffect(
      * rule `act_and_wait` applies to its `until`. Omitted when the step declared nothing.
      */
     declared?: readonly Predicate[];
+    /**
+     * Events from before this step. Only the read-server-fault rule reads them, to leave alone a
+     * background read that already failed the same way. Omitted when the caller has none.
+     */
+    before?: readonly ReticleEvent[];
   } = {},
 ): StepEffect {
   const effect: StepEffect = {};
-  if (window.until > window.since) effect.window = { since: window.since, until: window.until };
+  if (window.until > window.since) {
+    effect.window = { since: window.since, until: window.until };
+  }
   effect.digest = summarizeReaction(buildReactionReport([...events], window.until - window.since));
   // `actionSince` is what tells the detectors which window belongs to THIS action. Without it the
   // headline rule cannot attribute a failed request to the click that moved the screen, and the
@@ -82,8 +89,11 @@ export function stepEffect(
     ...(scope.appOrigin === undefined ? {} : { appOrigin: scope.appOrigin }),
     ...(scope.background === undefined ? {} : { background: scope.background }),
     ...declaredOptions(scope.declared),
+    ...(scope.before === undefined ? {} : { failedReadsBefore: scope.before }),
   });
-  if (contradictions.length > 0) effect.contradictions = contradictions;
+  if (contradictions.length > 0) {
+    effect.contradictions = contradictions;
+  }
   return effect;
 }
 
