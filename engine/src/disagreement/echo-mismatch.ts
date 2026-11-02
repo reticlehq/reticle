@@ -62,7 +62,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * silently excluded every desktop write from this check — the exact platform the finding came from.
  */
 function parse(raw: unknown): unknown {
-  if (typeof raw !== 'string' || 0 === raw.length) return undefined;
+  if (typeof raw !== 'string' || 0 === raw.length) {
+    return undefined;
+  }
   try {
     return JSON.parse(raw) as unknown;
   } catch {
@@ -85,16 +87,24 @@ function normalizeString(value: string): string {
   const trimmed = value.trim();
   if (ISO_INSTANT.test(trimmed)) {
     const instant = Date.parse(trimmed);
-    if (Number.isFinite(instant)) return new Date(instant).toISOString().toLowerCase();
+    if (Number.isFinite(instant)) {
+      return new Date(instant).toISOString().toLowerCase();
+    }
   }
   return trimmed.toLowerCase();
 }
 
 /** Comparable form of a scalar. Non-scalars return undefined and are never compared. */
 function normalize(value: unknown): string | undefined {
-  if ('string' === typeof value) return normalizeString(value);
-  if ('number' === typeof value) return Number.isFinite(value) ? String(value) : undefined;
-  if ('boolean' === typeof value) return String(value);
+  if ('string' === typeof value) {
+    return normalizeString(value);
+  }
+  if ('number' === typeof value) {
+    return Number.isFinite(value) ? String(value) : undefined;
+  }
+  if ('boolean' === typeof value) {
+    return String(value);
+  }
   return undefined;
 }
 
@@ -153,6 +163,92 @@ function isAuditTimestampKey(key: string): boolean {
 }
 
 /**
+ * A word of a key that names a value computed FROM the record: a content hash, a digest, a checksum
+ * (#1522). A new record has a new one, so a different value is not a dropped write, the same way a
+ * create's assigned `id` is not. Matched on whole words of the key (`contentHash`, `content_sha256`),
+ * never as a substring, so `shape`, `shared` and `hashtag` are still compared.
+ */
+const CONTENT_DIGEST_WORD = /^(?:hash|sha\d*|md5|checksum|digest|crc\d*)$/;
+
+/** The lowercase words of a key: split at `_`, `-`, `.` and at a lower-to-upper camelCase step. */
+function keyWords(key: string): string[] {
+  return key
+    .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .split(/[^a-z\d]+/)
+    .filter((word) => 0 < word.length);
+}
+
+function isContentDigestKey(key: string): boolean {
+  return keyWords(key).some((word) => CONTENT_DIGEST_WORD.test(word));
+}
+
+/** An optional algorithm label, as in `sha256:ab12...`. */
+const DIGEST_ALGORITHM_PREFIX = /^[a-z]+\d*:/i;
+/** Hex digits, at least one a letter: a run of only digits is a number, not a digest. */
+const HEX_DIGEST = /^(?=[0-9a-f]*[a-f])[0-9a-f]{8,}$/i;
+/** Base64 or base64url. Long, and with a digit, because `everyday` is valid base64 too. */
+const BASE64_DIGEST = /^(?=[a-z+/_-]*\d)[a-z\d+/_-]{16,}={0,2}$/i;
+
+/**
+ * Does a value look computed from content? The key name alone does not say: `digest` and `hash` are
+ * also settings words (`weeklyDigest: true`, `email_digest: 'daily'`, `hashRouting: false`), and
+ * those are fields a server can ignore.
+ */
+function looksLikeDigest(value: string): boolean {
+  const body = value.replace(DIGEST_ALGORITHM_PREFIX, '');
+  return HEX_DIGEST.test(body) || BASE64_DIGEST.test(body);
+}
+
+/** A content hash: the key names one AND the requested value is one. */
+function isContentDigest(key: string, wanted: ReadonlySet<string>): boolean {
+  const [want] = [...wanted];
+  return want !== undefined && isContentDigestKey(key) && looksLikeDigest(want);
+}
+
+/**
+ * How many compared keys must ALL disagree before the response can be read as a different record.
+ *
+ * One disagreeing key alone stays a finding, because that is the archetype this kind exists for
+ * (`{qty: 5}` answered with `{qty: 3}`). See `isNewRecord` for the rest of the rule.
+ */
+const NEW_RECORD_MIN_KEYS = 2;
+
+/** Methods that change THE record named in the URL. Their answer is never a different record. */
+const UPDATE_METHODS: ReadonlySet<string> = new Set(['PUT', 'PATCH']);
+
+/**
+ * Is this response a DIFFERENT record of the same type, rather than an ignored write (#1522)?
+ *
+ * "Every compared key differs" alone is also the worst case of this finding: a server that ignored
+ * the whole write (`PATCH {name, email}` answered with the old name and the old email). So the
+ * response has to be clearly a new record. It is never one for an update (PUT, PATCH) or an
+ * addressed write, and it is one only when it carries an identity, an id or a content hash, that
+ * differs from the one the request sent: a derive endpoint answers with a new artifact's own hash.
+ */
+function isNewRecord(
+  method: string,
+  addressed: boolean,
+  asked: Map<string, Set<string>>,
+  echoed: Map<string, Set<string>>,
+): boolean {
+  if (addressed || UPDATE_METHODS.has(method.toUpperCase())) {
+    return false;
+  }
+  for (const [key, wanted] of asked) {
+    if (1 !== wanted.size || !(isIdentityKey(key) || isContentDigest(key, wanted))) {
+      continue;
+    }
+    const values = echoed.get(key);
+    const [want] = [...wanted];
+    if (values !== undefined && want !== undefined && !values.has(want)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Every scalar value the response carries for each key, at any depth.
  *
  * Depth matters because the echo is usually nested — `{ok:true, saved:{...}}`, `{data:{...}}`,
@@ -165,14 +261,22 @@ function scalarsByKey(
   depth = 0,
   omitSentinels = false,
 ): Map<string, Set<string>> {
-  if (depth > 6 || into.size > MAX_ECHO_KEYS) return into;
-  if (Array.isArray(body)) {
-    for (const item of body) scalarsByKey(item, into, depth + 1, omitSentinels);
+  if (depth > 6 || into.size > MAX_ECHO_KEYS) {
     return into;
   }
-  if (!isRecord(body)) return into;
+  if (Array.isArray(body)) {
+    for (const item of body) {
+      scalarsByKey(item, into, depth + 1, omitSentinels);
+    }
+    return into;
+  }
+  if (!isRecord(body)) {
+    return into;
+  }
   for (const [key, value] of Object.entries(body)) {
-    if (omitSentinels && isSentinelValue(value)) continue;
+    if (omitSentinels && isSentinelValue(value)) {
+      continue;
+    }
     const scalar = normalize(value);
     if (scalar === undefined) {
       scalarsByKey(value, into, depth + 1, omitSentinels);
@@ -238,8 +342,12 @@ function isAddressedWrite(asked: Map<string, Set<string>>): boolean {
   let container = false;
   for (const key of asked.keys()) {
     const lower = key.toLowerCase();
-    if (ADDRESSING_KEYS.has(lower)) addressed = true;
-    if (CONTAINER_KEYS.has(lower)) container = true;
+    if (ADDRESSING_KEYS.has(lower)) {
+      addressed = true;
+    }
+    if (CONTAINER_KEYS.has(lower)) {
+      container = true;
+    }
   }
   return addressed && container;
 }
@@ -262,22 +370,34 @@ function responseRestatesRequest(
 ): boolean {
   const comparable: string[] = [];
   for (const [key, wanted] of asked) {
-    if (1 === wanted.size) comparable.push(key);
+    if (1 === wanted.size) {
+      comparable.push(key);
+    }
   }
-  if (0 === comparable.length) return false;
+  if (0 === comparable.length) {
+    return false;
+  }
 
   let present = 0;
   for (const key of comparable) {
-    if (echoed.has(key)) present += 1;
+    if (echoed.has(key)) {
+      present += 1;
+    }
   }
 
   let requestHasDiscriminator = false;
   let responseHasDiscriminator = false;
   for (const key of Object.values(EchoDiscriminator)) {
-    if (asked.has(key)) requestHasDiscriminator = true;
-    if (echoed.has(key)) responseHasDiscriminator = true;
+    if (asked.has(key)) {
+      requestHasDiscriminator = true;
+    }
+    if (echoed.has(key)) {
+      responseHasDiscriminator = true;
+    }
   }
-  if (requestHasDiscriminator && !responseHasDiscriminator) return false;
+  if (requestHasDiscriminator && !responseHasDiscriminator) {
+    return false;
+  }
 
   if (echoed.size > comparable.length * SNAPSHOT_KEY_RATIO && present < MIN_SHARED_KEYS) {
     return false;
@@ -299,7 +419,9 @@ export function findEchoMismatches(
 ): OwnContradiction[] {
   const found: OwnContradiction[] = [];
   for (const event of events) {
-    if (event.type !== EventType.NET_REQUEST) continue;
+    if (event.type !== EventType.NET_REQUEST) {
+      continue;
+    }
     // `MUTATING_METHODS` is the one definition of "is this a write" in the codebase — the same list
     // `contradictions.ts`'s `isMutating` reads. A read has no fields to half-apply.
     //
@@ -313,42 +435,79 @@ export function findEchoMismatches(
     // real dropped write. A false negative here is a missed bug in someone's app, and that is not a
     // trade this file makes to quieten a false positive.
     const method = 'string' === typeof event.data['method'] ? event.data['method'] : '';
-    if (!MUTATING_METHODS.includes(method.toUpperCase())) continue;
+    if (!MUTATING_METHODS.includes(method.toUpperCase())) {
+      continue;
+    }
     // IPC reports `ok` rather than a status; HTTP reports a status. Either must say success — a write
     // that already failed is a different (and louder) finding than one that half-applied.
     const status = event.data['status'];
     const httpOk = 'number' === typeof status && status >= OK_MIN && status < OK_MAX;
-    if (!httpOk && event.data['ok'] !== true) continue;
+    if (!httpOk && event.data['ok'] !== true) {
+      continue;
+    }
 
     const request = parse(event.data['requestBody']);
     const response = parse(event.data['responseBody']);
-    if (request === undefined || response === undefined) continue;
+    if (request === undefined || response === undefined) {
+      continue;
+    }
 
     const echoed = scalarsByKey(response);
     const asked = scalarsByKey(request, new Map(), 0, true);
-    if (!responseRestatesRequest(asked, echoed)) continue;
+    if (!responseRestatesRequest(asked, echoed)) {
+      continue;
+    }
     // See ADDRESSING_KEYS: on an addressed write the container key names nothing on its own, so
     // comparing it by name across the two documents compares two different fields.
     const addressed = isAddressedWrite(asked);
     const dropped: string[] = [];
+    let compared = 0;
     for (const [key, wanted] of asked) {
-      if (addressed && CONTAINER_KEYS.has(key.toLowerCase())) continue;
+      if (addressed && CONTAINER_KEYS.has(key.toLowerCase())) {
+        continue;
+      }
       // More than one requested value for a key (a before/after pair, a list of items) makes "what
       // was asked for" ambiguous, and a guess here is exactly how this kind would earn a reputation
       // for crying wolf.
-      if (wanted.size !== 1) continue;
-      if (isIdentityKey(key)) continue;
-      if (isVersionKey(key)) continue;
-      if (isAuditTimestampKey(key)) continue;
+      if (wanted.size !== 1) {
+        continue;
+      }
+      if (isIdentityKey(key)) {
+        continue;
+      }
+      if (isVersionKey(key)) {
+        continue;
+      }
+      if (isAuditTimestampKey(key)) {
+        continue;
+      }
+      if (isContentDigest(key, wanted)) {
+        continue;
+      }
       const values = echoed.get(key);
       // Not echoed at all = no evidence either way. Only a key the server chose to report back can
       // contradict the request, and silence is not a contradiction.
-      if (values === undefined || 0 === values.size) continue;
+      if (values === undefined || 0 === values.size) {
+        continue;
+      }
+      compared += 1;
       const [want] = [...wanted];
-      if (want !== undefined && !values.has(want))
+      if (want !== undefined && !values.has(want)) {
         dropped.push(`${key}: asked ${want}, got ${[...values].join('/')}`);
+      }
     }
-    if (0 === dropped.length) continue;
+    if (0 === dropped.length) {
+      continue;
+    }
+    // Nothing the response shares with the request came back as sent, AND it names a different
+    // identity: a different record, not a half-applied write. See isNewRecord.
+    if (
+      compared >= NEW_RECORD_MIN_KEYS &&
+      dropped.length === compared &&
+      isNewRecord(method, addressed, asked, echoed)
+    ) {
+      continue;
+    }
 
     const url = 'string' === typeof event.data['url'] ? event.data['url'] : '';
     const attribution =
