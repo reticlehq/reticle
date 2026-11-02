@@ -323,6 +323,12 @@ export const ACT_TOOLS: ToolDef[] = [
     },
     outputSchema: {
       durable: durableOutput,
+      budgetExtendedMs: z
+        .number()
+        .optional()
+        .describe(
+          "The re-ask on the successor ran on the caller's grace: a budget extension ON PURPOSE, taken only when the departure evidence showed the page navigating. Absent for every verdict that needed no follow.",
+        ),
       effect: z
         .unknown()
         .optional()
@@ -935,6 +941,11 @@ export const ACT_TOOLS: ToolDef[] = [
           // Without its summary: it is byte-identical to `summary` two fields up. See wireCapsule.
           ...(capsule === undefined ? {} : { capsule: wireCapsule(capsule) }),
           ...(0 === greenRadius.length ? {} : { blastRadius: greenRadius }),
+          // The re-ask on the successor ran on the caller's grace — a budget extension on purpose,
+          // declared so the agent can see the extra time it was given (#2009).
+          ...(followed.budgetExtendedMs === undefined
+            ? {}
+            : { budgetExtendedMs: followed.budgetExtendedMs }),
           since,
           ...(session.id === actedSessionId ? {} : { sessionId: session.id }),
           ...healthEnvelope(currentOf(deps.sessions, session)),
