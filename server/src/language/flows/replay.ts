@@ -453,6 +453,9 @@ function anchorArgs(
       roleArgs['nth'] = r['nth'];
       roleArgs['of'] = r['of'];
     }
+    if (Array.isArray(r['within'])) {
+      roleArgs['within'] = r['within'];
+    }
     return { args: roleArgs, stable: true };
   }
   // A role and NO accessible name (an icon-only button): the role plus the control's position among
