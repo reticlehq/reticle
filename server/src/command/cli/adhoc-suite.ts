@@ -146,6 +146,8 @@ async function replaySuite(
       ...(options.select === undefined ? {} : { labels: options.select }),
       ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
       ...(true === options.confirmDangerous ? { confirmDangerous: true } : {}),
+      // The CLI waits as long as its own timeout, not the MCP default of 240 s, which is there for clients that give up at about 300 s.
+      budgetMs: SUITE_TIMEOUT_MS,
       // The running daemon's environment is not this command's: the secrets a CI step set for
       // `reticle verify` go with the call, for this call only.
       ...secretsArg(process.env),
