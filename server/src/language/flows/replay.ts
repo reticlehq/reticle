@@ -429,6 +429,9 @@ function anchorArgs(
     }
     if (testidOf !== undefined) {
       testidArgs['of'] = testidOf;
+      if ('number' === typeof r['testidNth'] && 0 <= r['testidNth']) {
+        testidArgs['nth'] = r['testidNth'];
+      }
     }
     return { args: testidArgs, stable: true };
   }

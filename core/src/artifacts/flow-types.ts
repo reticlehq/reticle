@@ -45,6 +45,9 @@ export const FlowAnchorSchema = z.discriminatedUnion('kind', [
     // How many elements carried this test id when the step was recorded, when more than one did.
     // A replay takes the first, so a shared test id is named at save instead of found as a drift.
     of: z.number().int().min(2).optional(),
+    // Which of them the step acted on, in page order. Honoured only while the page still has
+    // exactly `of` of them, as for a role anchor; otherwise the step is ambiguous (#2135).
+    nth: z.number().int().min(0).optional(),
     source: z
       .object({ file: z.string(), line: z.number(), column: z.number().optional() })
       .optional(),

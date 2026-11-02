@@ -133,6 +133,8 @@ export interface ActionResult {
   testid?: string;
   /** How many elements carry that test id, when more than one does: then it is no anchor. */
   testidOf?: number;
+  /** Which of those elements this is, in page order, so a replay can take the same one. */
+  testidNth?: number;
   /**
    * Auto-anchor fallback (attached ONLY when there is no testid): the element's nearest component
    * name + source location, so the server can compile a stable `component` anchor instead of a
@@ -178,6 +180,7 @@ export interface ActionResult {
 export interface CapturedAnchor {
   testid?: string;
   testidOf?: number;
+  testidNth?: number;
   component?: string;
   source?: { file: string; line: number; column?: number };
   componentNth?: number;
@@ -308,10 +311,11 @@ export function anchorOf(el: Element): CapturedAnchor {
   const out: CapturedAnchor = {};
   if (testid !== undefined) {
     out.testid = testid;
-    // A replay takes the first match, so a shared test id would land on another element.
-    const shared = elementsMatching({ by: QueryBy.TESTID, value: testid }).length;
-    if (1 < shared) {
-      out.testidOf = shared;
+    // A shared test id names no one element: say how many share it and which one this is (#2135).
+    const shared = elementsMatching({ by: QueryBy.TESTID, value: testid });
+    if (1 < shared.length) {
+      out.testidOf = shared.length;
+      out.testidNth = shared.findIndex((match) => match === el);
     }
   }
   const component = info?.componentStack[0];
@@ -393,6 +397,9 @@ export const result = (
   }
   if (anchor.testidOf !== undefined) {
     base.testidOf = anchor.testidOf;
+  }
+  if (anchor.testidNth !== undefined) {
+    base.testidNth = anchor.testidNth;
   }
   if (anchor.component !== undefined) {
     base.component = anchor.component;

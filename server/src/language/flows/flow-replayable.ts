@@ -181,7 +181,12 @@ export function replayability(flow: FlowFile): Replayability {
         (AnchorKind.ROLE === anchor?.kind && DEGRADED_ANCHOR_ROLE === anchor.role))
     ) {
       blocked.push(`step ${at} has no anchor a replay can find`);
-    } else if (own && AnchorKind.TESTID === anchor?.kind && anchor.of !== undefined) {
+    } else if (
+      own &&
+      AnchorKind.TESTID === anchor?.kind &&
+      anchor.of !== undefined &&
+      anchor.nth === undefined
+    ) {
       blocked.push(
         `step ${at} anchors on test id '${anchor.value}', which ${String(anchor.of)} elements share`,
       );

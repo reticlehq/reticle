@@ -153,6 +153,8 @@ export function anchorForStep(args: Record<string, unknown>): {
     const of = args['of'];
     if ('number' === typeof of && 1 < of) {
       anchor.of = of;
+      // Its place among them, as a role anchor keeps one (#2135).
+      Object.assign(anchor, 'number' === typeof args['nth'] ? { nth: args['nth'] } : {});
     }
     return { anchor, degraded: false };
   }
@@ -404,8 +406,7 @@ export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
 function anchoredStep(step: RecordedStep): FlowStep {
   if (step.invoke !== undefined) {
     // An invocation drives nothing: no action, no args, and an anchor only because every step
-    // carries one. Falling through to the action path below would give it an `action` and a
-    // replayer would try to dispatch a step whose whole meaning is "go and run that document".
+    // carries one. Below, it would get an `action` that a replayer would try to dispatch.
     const out: FlowStep = {
       tool: FlowStepTool.INVOKE,
       anchor: { kind: AnchorKind.TESTID, value: step.invoke },
@@ -420,10 +421,8 @@ function anchoredStep(step: RecordedStep): FlowStep {
     const rawSubs = Array.isArray(step.args['steps']) ? step.args['steps'] : [];
     const subs = rawSubs.map(subStepToFlowStep);
     const degraded = subs.some((s) => true === s.degraded);
-    // The first sub-step that HAS an anchor, not blindly the first. Taking subs[0] handed the whole
-    // sequence the degraded sentinel whenever sub-step 0 lacked a testid — even with every later
-    // sub-step perfectly anchored — and replay then queried the DOM for a testid literally named
-    // "unresolved", so the step drifted on all 5 apps, every replay.
+    // The first sub-step that HAS an anchor: subs[0] gave a sequence the degraded sentinel whenever
+    // sub-step 0 lacked a testid, and replay looked for a testid named "unresolved" on every app.
     const anchor: FlowAnchor =
       subs.find((s) => s.degraded !== true)?.anchor ?? subs[0]?.anchor ?? degradedAnchor();
     const out: FlowStep = { tool: ReticleTool.ACT_SEQUENCE, anchor, steps: subs };
