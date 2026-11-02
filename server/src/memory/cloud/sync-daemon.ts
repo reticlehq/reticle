@@ -342,7 +342,7 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       runs,
       flows,
       examples: unlinked.slice(0, 3).map((entry) => entry.root),
-      fix: "run `reticle connect` in that folder's project: this work is on this machine only",
+      fix: 'run `reticle connect` in each project that owns these folders: this work is on this machine only',
     });
   };
 
