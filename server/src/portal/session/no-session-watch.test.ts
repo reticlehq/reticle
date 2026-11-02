@@ -12,7 +12,7 @@
  */
 import { describe, expect, it, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NoSessionAction } from '@reticlehq/core';
 import { startNoSessionWatch } from './no-session-watch.js';
@@ -527,5 +527,121 @@ describe('a dev server already running in an unwired caller project', () => {
     expect(action?.action).toBe(NoSessionAction.START_DEV_SERVER);
     expect(action?.reason).not.toMatch(/nothing is listening on the ports Reticle scans/);
     expect(action?.reason).toMatch(/:5173/);
+  });
+});
+
+/**
+ * reticle#1543, and the review that took the first version out of #1639. An app on a port no file
+ * names is found only through the processes in its folder. Agent tools run in that folder too, and
+ * some serve a page: an agent-browser viewer read as the app, and the answer said "just open
+ * http://localhost:<port>" while the app was not running. So a listener ends "nothing is listening"
+ * and names a port, and it is never a place to send the agent. `probe` here answers for the tool's
+ * port the way the real one does: it serves a page, so a scan that asks about it hears one.
+ */
+describe('a process in the project folder listens on a port no file names', () => {
+  const TOOL_PORT = 59591;
+  const servesPage = (ports: readonly number[]): Promise<number[]> =>
+    Promise.resolve(ports.filter((port) => port === TOOL_PORT));
+
+  async function answerFor(
+    dir: string,
+    overrides: {
+      listenerDirectory?: (port: number) => string | undefined;
+      listeningPorts?: () => readonly number[];
+      occupiedSiblings?: () => Promise<readonly number[]>;
+      caller?: string;
+      everConnected?: boolean;
+    } = {},
+  ): Promise<{ hint: string; action: NoSessionNextAction | undefined }> {
+    const { manager, hint, next } = stubSessions();
+    manager.everConnected = (): boolean => true === overrides.everConnected;
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: servesPage,
+      occupiedSiblings: overrides.occupiedSiblings ?? (() => Promise.resolve([])),
+      ownDevServerPorts: () => [],
+      listenerDirectory: overrides.listenerDirectory ?? (() => dir),
+      listeningPorts: overrides.listeningPorts ?? (() => [TOOL_PORT]),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const read = (): { hint: string; action: NoSessionNextAction | undefined } => ({
+      hint: hint(),
+      action: next(),
+    });
+    const answer =
+      overrides.caller === undefined ? read() : runWithClientDirectory(overrides.caller, read);
+    stop();
+    return answer;
+  }
+
+  function wiredApp(): string {
+    const dir = projectDir('{"projectId":"p"}');
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { dev: 'vite' } }), 'utf8');
+    return dir;
+  }
+
+  it('does not send the agent to a listener that serves a page while the app is not running', async () => {
+    const { hint, action } = await answerFor(wiredApp());
+    expect(hint).not.toMatch(/just open/);
+    expect(hint).not.toContain(`localhost:${String(TOOL_PORT)}`);
+    expect(action?.port).not.toBe(TOOL_PORT);
+    expect(action?.command ?? '').not.toContain(String(TOOL_PORT));
+  });
+
+  it('does not say "just open" after a session has been here either', async () => {
+    const { hint, action } = await answerFor(wiredApp(), { everConnected: true });
+    expect(hint).not.toMatch(/just open/);
+    expect(action?.reason).not.toMatch(/just open/);
+    expect(action?.command ?? '').not.toContain(String(TOOL_PORT));
+  });
+
+  it('keeps the start command, for the agent whose listeners are only its own tools', async () => {
+    const { action } = await answerFor(wiredApp());
+    expect(action?.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(action?.command).toContain('dev');
+  });
+
+  it('names the port and stops saying that nothing is listening', async () => {
+    const { hint, action } = await answerFor(wiredApp());
+    expect(hint).toContain(`processes in this folder listen on :${String(TOOL_PORT)}`);
+    expect(hint).not.toMatch(/nothing is listening/i);
+    expect(action?.reason).toContain(`processes in this folder listen on :${String(TOOL_PORT)}`);
+    expect(action?.reason).not.toMatch(/probably not running/);
+  });
+
+  it('names the port to a caller standing in that folder', async () => {
+    const dir = wiredApp();
+    const { hint, action } = await answerFor(dir, { caller: dir });
+    expect(hint).toContain(`processes in this folder listen on :${String(TOOL_PORT)}`);
+    expect(hint).not.toContain(`localhost:${String(TOOL_PORT)}`);
+    expect(action?.reason).toContain(`:${String(TOOL_PORT)}`);
+  });
+
+  it('does not name a listener that runs in another folder', async () => {
+    const elsewhere = projectDir(undefined);
+    const { hint, action } = await answerFor(wiredApp(), { listenerDirectory: () => elsewhere });
+    expect(hint).not.toContain(String(TOOL_PORT));
+    expect(action?.reason).not.toContain(String(TOOL_PORT));
+    expect(hint).toMatch(/nothing is listening/i);
+  });
+
+  it("does not name the daemon's own port or a sibling daemon's", async () => {
+    const { hint } = await answerFor(wiredApp(), {
+      listeningPorts: () => [4400, 4401],
+      occupiedSiblings: () => Promise.resolve([4401]),
+    });
+    expect(hint).not.toContain('processes in this folder listen');
+  });
+
+  it('names nothing for the home folder, where every process on the machine runs', async () => {
+    const home = homedir();
+    const { hint } = await answerFor(wiredApp(), {
+      listenerDirectory: () => join(home, 'some-repo'),
+      caller: home,
+    });
+    expect(hint).not.toContain('processes in this folder listen');
   });
 });

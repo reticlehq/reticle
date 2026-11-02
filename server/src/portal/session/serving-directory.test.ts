@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { join, sep } from 'node:path';
 import type { Checkout, DevServerEntry } from '@reticlehq/core';
-import { liveCheckoutSource, servingDirectoryOf } from './serving-directory.js';
+import {
+  liveCheckoutSource,
+  listenerFolders,
+  MAX_FOLDER_LOOKUPS,
+  servingDirectoryOf,
+} from './serving-directory.js';
 
 const MAIN = join(sep, 'repo', 'main');
 const CLONE = join(sep, 'repo', 'clone');
@@ -156,5 +161,41 @@ describe('liveCheckoutSource', () => {
     expect(source.ofTab(first)?.root).toBe(MAIN);
     expect(source.ofTab({ id: 's', url: 'http://localhost:5173/' })?.root).toBe(CLONE);
     expect(lookups).toBe(2);
+  });
+});
+
+/**
+ * The folder of each listener. One lookup runs `lsof` twice and blocks the daemon, and this runs on
+ * every scan, so a port is asked about once while it stays open.
+ */
+describe('listenerFolders', () => {
+  it('asks about a port once while it stays open', () => {
+    const asked: number[] = [];
+    const lookup = (port: number): string | undefined => {
+      asked.push(port);
+      return 3000 === port ? MAIN : undefined;
+    };
+    const first = listenerFolders([3000, 3001], new Map(), lookup);
+    const second = listenerFolders([3000, 3001], first, lookup);
+    expect(asked).toEqual([3000, 3001]);
+    expect(second.get(3000)).toBe(MAIN);
+  });
+
+  it('forgets a port that closed, so the next process on it is asked about', () => {
+    const first = listenerFolders([3000], new Map(), () => MAIN);
+    const closed = listenerFolders([], first, () => MAIN);
+    expect(listenerFolders([3000], closed, () => CLONE).get(3000)).toBe(CLONE);
+  });
+
+  it('bounds one scan, and the next scan asks about the rest', () => {
+    const ports = Array.from({ length: MAX_FOLDER_LOOKUPS + 1 }, (_, index) => 3000 + index);
+    let asked = 0;
+    const lookup = (): string => {
+      asked += 1;
+      return MAIN;
+    };
+    const first = listenerFolders(ports, new Map(), lookup);
+    expect(asked).toBe(MAX_FOLDER_LOOKUPS);
+    expect(listenerFolders(ports, first, lookup).size).toBe(ports.length);
   });
 });

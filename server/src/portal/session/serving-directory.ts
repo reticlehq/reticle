@@ -67,13 +67,17 @@ function readOrUndefined(path: string): string | undefined {
 function readPortless(): DevProxy | undefined {
   const dir = process.env[PORTLESS_STATE_DIR_ENV] ?? join(homedir(), PORTLESS_STATE_DIR);
   const port = Number(readOrUndefined(join(dir, PORTLESS_PORT_FILE))?.trim());
-  if (!Number.isInteger(port)) return undefined;
+  if (!Number.isInteger(port)) {
+    return undefined;
+  }
   let routes: DevProxy['routes'] = [];
   try {
     const parsed = PortlessRoutesSchema.safeParse(
       JSON.parse(readOrUndefined(join(dir, PORTLESS_ROUTES_FILE)) ?? '[]'),
     );
-    if (parsed.success) routes = parsed.data;
+    if (parsed.success) {
+      routes = parsed.data;
+    }
   } catch {
     // A table being rewritten reads as empty: the page stays unplaced, never placed wrong.
   }
@@ -105,21 +109,59 @@ export function servingDirectoryOf(
   } catch {
     return undefined;
   }
-  if (!isLoopbackHostname(url.hostname) && !isLocalhostSubdomain(url.hostname)) return undefined;
+  if (!isLoopbackHostname(url.hostname) && !isLocalhostSubdomain(url.hostname)) {
+    return undefined;
+  }
   // Exact first: a dev proxy serves every worktree on one port, under the name it announced.
   const byUrl = io.devServers().find((entry) => originOf(entry.url) === url.origin);
-  if (byUrl !== undefined) return byUrl.root;
+  if (byUrl !== undefined) {
+    return byUrl.root;
+  }
   const pagePort = '' === url.port ? DEFAULT_PORT[url.protocol] : Number(url.port);
-  if (pagePort === undefined) return undefined;
+  if (pagePort === undefined) {
+    return undefined;
+  }
   // Behind a dev proxy the page's port is the proxy's, and `lsof` on it names the proxy's folder.
   // The proxy's route table names the dev server's own port.
   const proxy = isLocalhostSubdomain(url.hostname) ? io.devProxy?.() : undefined;
   const route = proxy?.routes.find((r) => r.hostname === url.hostname.toLowerCase());
-  if (route === undefined && true === proxy?.ports.includes(pagePort)) return undefined;
+  if (route === undefined && true === proxy?.ports.includes(pagePort)) {
+    return undefined;
+  }
   const port = route?.port ?? pagePort;
   const announced = io.devServers().find((entry) => entry.port === port);
-  if (announced !== undefined) return announced.root;
+  if (announced !== undefined) {
+    return announced.root;
+  }
   return io.listenerCwd(port) ?? undefined;
+}
+
+/** How many ports one scan asks about. Each lookup blocks the daemon for two `lsof` runs. */
+export const MAX_FOLDER_LOOKUPS = 16;
+
+/**
+ * The folder of each port in `ports`, or undefined when it cannot be read.
+ *
+ * `known` is the last scan's answer. A port that stays open keeps it, so a machine with many
+ * listeners pays once. A port past the bound waits for the next scan. A closed port leaves the map,
+ * so the next process on it is asked about.
+ */
+export function listenerFolders(
+  ports: readonly number[],
+  known: ReadonlyMap<number, string | undefined>,
+  directoryOf: (port: number) => string | undefined,
+): Map<number, string | undefined> {
+  const folders = new Map<number, string | undefined>();
+  let lookups = 0;
+  for (const port of ports) {
+    if (known.has(port)) {
+      folders.set(port, known.get(port));
+    } else if (lookups < MAX_FOLDER_LOOKUPS) {
+      lookups += 1;
+      folders.set(port, directoryOf(port));
+    }
+  }
+  return folders;
 }
 
 /** The checkout whose dev server serves `origin` right now, or undefined. */
@@ -151,7 +193,9 @@ export function liveCheckoutSource(
         : undefined;
     },
     ofTab: (tab) => {
-      if (placed.has(tab)) return placed.get(tab);
+      if (placed.has(tab)) {
+        return placed.get(tab);
+      }
       const origin = originOf(tab.url);
       const checkout = origin === undefined ? undefined : placeOrigin(origin);
       placed.set(tab, checkout);

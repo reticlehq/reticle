@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   describeForeignHolder,
   findListenerCwd,
+  findListeningPorts,
   parseCommandLineRoot,
   parsePortHolder,
+  parseListeningPorts,
   parseProcessCwd,
 } from './port-holder.js';
 import { isReticleDaemonCommand } from '@/command/daemon/daemon-argv.js';
@@ -253,5 +255,45 @@ describe('isReticleDaemonCommand', () => {
     expect(isReticleDaemonCommand('node /x/dist/cli.js mcp --port 4400')).toBe(false);
     expect(isReticleDaemonCommand('node /x/my_daemon.js --port 4400')).toBe(false);
     expect(isReticleDaemonCommand('python -m http.server 4400')).toBe(false);
+  });
+});
+
+/** Every port on the machine with a listener. Parsed from real `lsof -nP -iTCP -sTCP:LISTEN -Fn` output. */
+describe('parseListeningPorts', () => {
+  it('reads each port once, on every bind address', () => {
+    const output =
+      'p615\nf10\nn*:56264\nf11\nn*:56264\np680\nf10\nn127.0.0.1:7000\nf11\nn[::1]:5173\n';
+    expect(parseListeningPorts(output)).toEqual([56264, 7000, 5173]);
+  });
+
+  it('reads nothing from empty output', () => {
+    expect(parseListeningPorts('')).toEqual([]);
+  });
+});
+
+describe('findListeningPorts', () => {
+  it('lists only listeners', () => {
+    let asked: readonly string[] = [];
+    const ports = findListeningPorts((_command, args) => {
+      asked = args;
+      return 'p1\nf9\nn*:3020\n';
+    }, 'darwin');
+    expect(ports).toEqual([3020]);
+    expect(asked).toContain('-sTCP:LISTEN');
+  });
+
+  it('reads nothing when the lookup cannot run', () => {
+    expect(findListeningPorts(() => null, 'linux')).toEqual([]);
+  });
+
+  /** No lookup there names a working directory without a slow PowerShell start for each port. */
+  it('does not run on Windows', () => {
+    let ran = false;
+    const ports = findListeningPorts(() => {
+      ran = true;
+      return 'n*:3020\n';
+    }, 'win32');
+    expect(ports).toEqual([]);
+    expect(ran).toBe(false);
   });
 });
