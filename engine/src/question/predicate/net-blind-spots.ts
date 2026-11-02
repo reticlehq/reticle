@@ -205,3 +205,15 @@ export const PRE_ATTACH_CAVEAT =
   ' — note that this window starts where the SDK attached, and requests made before that are never ' +
   'captured, so a miss here cannot tell a call that was never made apart from one made before the ' +
   'page connected; if the call is expected during startup, assert on the state it produces instead';
+
+/** `filter` is the net clause as applied — `describeNetFilter` of it. */
+export function earlierMediaReason(filter: string): string {
+  return (
+    `no fetch or XHR matched ${filter}, and the one media load that did match it was recorded ` +
+    `before this window opened. The network observer reports only the first resource timing ` +
+    `entry for a URL, and a media element load leaves no other record, so a repeat load inside ` +
+    `this window is not reported either: the empty window cannot show the file did not load in ` +
+    `it. Assert something that proves playback instead, for example an element check on the ` +
+    `<video> or <audio>`
+  );
+}

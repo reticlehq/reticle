@@ -336,3 +336,45 @@ function newDocumentAfter(events: readonly ReticleEvent[], record: ReticleEvent)
   }
   return events.some((e) => e.t >= record.t && e.documentId !== undefined && e.documentId !== from);
 }
+
+/**
+ * Initiator types a media element load carries on its resource timing record.
+ *
+ * A `<video>`, `<audio>` or `<track>` load goes through neither `fetch` nor `XMLHttpRequest`, so
+ * the record the resource timing observer emits is the only one it ever leaves.
+ */
+const MEDIA_INITIATORS: ReadonlySet<string> = new Set(['video', 'audio', 'track']);
+
+/**
+ * The media entry that matches this filter and was recorded BEFORE the window opened, if any.
+ *
+ * The browser observer reports only the first resource timing entry for a URL: its seen-set
+ * (`reportedNetUrls` in adapters/realm/browser/src/observers/network.ts) drops every later entry
+ * for a URL it has already reported. For a media element load that first entry is also the only
+ * kind of record there is, so once it lands before `since`, a repeat load inside the window
+ * leaves no record at all and the window reads empty. The empty window is then not evidence the
+ * file did not load in it — a missing entry is not evidence there (#2069).
+ *
+ * A `fetch` or XHR record before the window impeaches nothing and is not returned here: the
+ * patched transports report every call, so a repeat would have been seen. Only the clauses that
+ * identify the request are read — `urlContains` and `method`. A status clause is not read: the
+ * entry's status is the unreadable thing this blind spot is about. Resource timing carries no
+ * method; the observer stamps `GET` for exactly that reason, so a record with no method counts
+ * as the `GET` a media element only ever issues.
+ */
+export function mediaEntryBeforeWindow(
+  events: readonly ReticleEvent[],
+  since: number,
+  method: string | undefined,
+  urlContains: string | undefined,
+): ReticleEvent | undefined {
+  return events.find(
+    (e) =>
+      e.type === EventType.NET_REQUEST &&
+      e.t < since &&
+      MEDIA_INITIATORS.has(asString(e.data['initiator']) ?? '') &&
+      (method === undefined ||
+        (asString(e.data['method']) ?? 'GET').toUpperCase() === method.toUpperCase()) &&
+      (urlContains === undefined || urlForMatch(e.data).includes(urlContains)),
+  );
+}
