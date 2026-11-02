@@ -22,7 +22,8 @@ export type ViewId =
   | 'enterprise'
   | 'saved-items'
   | 'expiring-auth'
-  | 'awkward';
+  | 'awkward'
+  | 'stale-race';
 export type EnvFilter = Env | 'all';
 
 export interface Toast {
