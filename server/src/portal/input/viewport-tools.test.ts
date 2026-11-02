@@ -6,6 +6,7 @@ import {
   VIEWPORT_NO_PROVIDER_RECOMMENDATION,
 } from '@reticlehq/core';
 import { VIEWPORT_TOOLS, leaseEmulationOf } from './viewport-tools.js';
+import { HEADLESS_VIEWPORT } from '@/chromium-launch-options.js';
 import { contextEmulationOf } from '@/portal/pool/lease-emulation.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
@@ -341,5 +342,18 @@ describe('a lease emulates a pointer', () => {
     expect(String(res['recommendation'])).toContain('emulate.pointer');
     // Nothing was applied on the way to the refusal: no resize, no media call.
     expect(calls).toEqual([]);
+  });
+});
+
+// ── A lease that names one side keeps the default for the other (#2052) ──
+
+describe('a lease that names only one side of the viewport', () => {
+  it('fills the other side from the headless default, not from 1280 by 720', () => {
+    expect(leaseEmulationOf({ width: 390 })).toEqual({
+      viewport: { width: 390, height: HEADLESS_VIEWPORT.height },
+    });
+    expect(leaseEmulationOf({ height: 600 })).toEqual({
+      viewport: { width: HEADLESS_VIEWPORT.width, height: 600 },
+    });
   });
 });

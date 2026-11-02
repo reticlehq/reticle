@@ -1490,7 +1490,7 @@ describe('reticle_lease with an initScript stub', () => {
     expect(acquired[0]?.emulate).toEqual({
       reducedMotion: 'reduce',
       colorScheme: 'dark',
-      viewport: { width: 390, height: 720 },
+      viewport: { width: 390, height: 900 },
     });
   });
 

@@ -8,6 +8,7 @@ import {
   viewportPxSchema,
 } from '@/surface/tools/args/numeric-bounds.js';
 import { asString } from '@reticlehq/core';
+import { HEADLESS_VIEWPORT } from '@/chromium-launch-options.js';
 import type { RealInputProvider } from './real-input.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import {
@@ -20,9 +21,9 @@ import {
 
 // ── Media and width, as a tool call names them (reticle_viewport here, reticle_lease acquire) ──
 
-/** Playwright's own default page size, used for the side a caller did not name. */
-const DEFAULT_WIDTH = 1280;
-const DEFAULT_HEIGHT = 720;
+/** The side a caller did not name is the page size a headless lease already opens with. */
+const DEFAULT_WIDTH = HEADLESS_VIEWPORT.width;
+const DEFAULT_HEIGHT = HEADLESS_VIEWPORT.height;
 
 export const COLOR_SCHEME_ARG = z
   .enum([ColorScheme.LIGHT, ColorScheme.DARK, ColorScheme.NO_PREFERENCE])
@@ -52,7 +53,7 @@ const EmulateSchema = z
 
 export const LEASE_EMULATE_ARG = EmulateSchema.optional().describe(
   'Open the lease with these set before the first paint: { colorScheme, reducedMotion, width, height, pointer }. ' +
-    'A side you leave out keeps its default (1280 by 720). Change the media and the size later with ' +
+    'A side you leave out keeps its default (1440 by 900). Change the media and the size later with ' +
     'reticle_viewport; `pointer` cannot change on an open lease, so a touch-only rule needs a lease ' +
     'acquired with pointer: "coarse".',
 );
