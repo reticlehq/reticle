@@ -5,6 +5,7 @@ import {
   ambiguityDrift,
   anchorLabel,
   expectElementDrift,
+  refFor,
   reresolved,
   resolveTestid,
   testidDrift,
@@ -257,7 +258,8 @@ export async function runTestidStep(
   if (ambiguous !== null) {
     return { step: index, tool: step.tool, anchor: value, ok: false, drift: ambiguous };
   }
-  const ref = refs[0] ?? '';
+  // The only match, or the recorded position among a shared test id (#2135).
+  const ref = refFor(step.anchor, refs) ?? '';
   /*
    * The same dispatch its siblings use, including the one re-resolve on a stale ref (2.3).
    *

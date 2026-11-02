@@ -85,6 +85,7 @@ export function describeStepResult(
   for (const key of [
     'testid',
     'testidOf',
+    'testidNth',
     'nth',
     'of',
     'component',

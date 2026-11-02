@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser`, `@reticlehq/server`, `@reticlehq/core` — a step on a shared test id could never replay.** When several elements carry the same `data-testid` (one component rendered several times) and the element has no role and name, the flow anchored the step on the test id with only the count (`of`). Every replay then stopped on that step as ambiguous, on the unchanged build. The browser now reports which of the shared elements was acted on, the flow keeps it as `nth`, and replay acts on that element while the page has the same number of matches. When the number changed, the step stays ambiguous. Closes [#2135](https://github.com/reticlehq/reticle/issues/2135).

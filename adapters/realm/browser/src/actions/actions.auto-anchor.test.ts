@@ -228,6 +228,8 @@ describe('act result — a shared test id is counted', () => {
     }
     expect(res.testid).toBe('runs-result');
     expect(res.testidOf).toBe(2);
+    // Which of them was acted on, in page order, so a replay can take the same one (#2135).
+    expect(res.testidNth).toBe(1);
   });
 
   it('says nothing for a test id only one element carries', async () => {
