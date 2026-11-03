@@ -16,6 +16,7 @@
 import { PredicateKind, ReticleCommand } from '@reticlehq/core';
 import type { Predicate } from '@/question/predicate/predicate.js';
 import type { Baseline } from '@/question/predicate/property.js';
+export type { Baselines } from '@/question/predicate/predicate.js';
 import type { PredicateSession } from '@/question/predicate/predicate-session.js';
 import { matchOnce, textPredicateQuery } from '@/question/predicate/predicate-element.js';
 

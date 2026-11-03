@@ -43,6 +43,7 @@ import {
 } from './flow-step-runners.js';
 import { inFlightRequestLabels } from '@/surface/tools/act/settle-in-flight.js';
 import { namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
+import { captureBaselines, type Baselines } from '@reticlehq/engine/evidence/baseline.js';
 
 /** What a still-open named request means, in the drift's own words. */
 const IN_FLIGHT_AT_BUDGET_END =
@@ -335,6 +336,7 @@ export async function assertStepExpect(
   waitForSignal: WaitForSignal,
   timeoutMs: number,
   since: number,
+  baselines?: Baselines,
 ): Promise<Drift | undefined> {
   // A testid is already asserted against the live DOM by the step runner. A role/name locator is
   // not that path — stripping every element made a recorded `until` by button name a no-op, so a
@@ -365,7 +367,7 @@ export async function assertStepExpect(
   if (predicate === undefined) {
     return undefined;
   }
-  const verdict = await waitForSignal(session, predicate, timeoutMs, since);
+  const verdict = await waitForSignal(session, predicate, timeoutMs, since, baselines);
   if (verdict.pass) {
     return undefined;
   }
@@ -790,16 +792,18 @@ export async function replayFlow(
       }
       const label = anchorLabel(step.anchor);
       /** One sub-step's expect, over the window that sub-step opened. See runSequenceStep. */
-      const judgeSubStep = async (expectation: StepExpect, since: number) =>
-        (await assertStepExpect(session, expectation, waitForSignal, waitFor(step), since)) ??
+      const budget = waitFor(step);
+      const judgeSubStep = async (expectation: StepExpect, since: number, before?: Baselines) =>
+        (await assertStepExpect(session, expectation, waitForSignal, budget, since, before)) ??
         lateConsoleDrift(
           expectation,
           session.eventsSince(since).filter((e) => e.t >= since),
         );
       // The page this step runs on (the journey's "which page") — captured before the action.
       const page = currentRoute(session);
-      // Event-time floor so the consequence reflects only THIS step's aftermath, not prior steps'.
+      // This step's event-time floor, and (as act_and_wait) what `unchanged` and kin compare with.
       const cursorBefore = session.elapsed();
+      const baselines = index < from ? undefined : await captureBaselines(session, step.expect);
       const subSteps = step.steps;
       // Traced per step, so a slow replay says WHICH step and which anchor kind spent the time. The
       // per-step `durationMs` below is what the agent gets back; this is what a developer profiling
@@ -880,6 +884,7 @@ export async function replayFlow(
           waitForSignal,
           waitFor(step),
           cursorBefore,
+          baselines,
         );
         if (expectDrift !== undefined) {
           result.ok = false;
