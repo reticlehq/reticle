@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — a hover that moves to another element leaves the first one.** A synthetic hover entered its target but never sent the previously hovered element `pointerout`, `mouseout`, `pointerleave` or `mouseleave`. Tooltip, menu and hover-card libraries close on those events. So a hover on a second Radix tooltip trigger left the first tooltip open, the second one never opened, and a correct app was verified `no`. The hover now leaves the previous element the way a real pointer does: `out` events bubble with the new element as `relatedTarget`, and `leave` events go up to the ancestor the two elements share. Moving into a child leaves nothing, and an element that has left the page gets nothing.

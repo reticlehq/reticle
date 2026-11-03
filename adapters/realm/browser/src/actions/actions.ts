@@ -248,6 +248,7 @@ import {
   clickGeometry,
   firePointer,
   firePointerNonBubbling,
+  leavePreviousHover,
   dragElement,
   mouseEventFor,
   assertNotLeaving,
@@ -377,9 +378,8 @@ async function dispatchOther(
       );
     }
     case ActionType.HOVER: {
-      const doc = el.ownerDocument;
-      // Best-effort "previous" node for relatedTarget so React's enter/leave synthesis has a "from".
-      const from: EventTarget = doc.activeElement ?? doc.body;
+      // Leave what the last hover entered, and come FROM it, so enter/leave pairs match a real pointer.
+      const from: EventTarget = leavePreviousHover(el);
       // Bubbling over/move with relatedTarget so React's delegated root can synthesize enter/leave.
       firePointer(el, 'pointerover', from);
       el.dispatchEvent(mouseEventFor(el, 'mouseover', { bubbles: true, relatedTarget: from }));
