@@ -101,6 +101,12 @@ export const VerifiedReason = {
    * forbid. See #669.
    */
   WINDOW_CLOSED_EARLY: 'window_closed_early',
+  /**
+   * The app opened a `confirm` or `prompt` during the action, and Reticle declined it so that the
+   * tab cannot wedge. The app then took the path for "no", so a consequence that needed "yes" was
+   * not judged. NEVER `"no"`: the answer that decided the path was Reticle's, not the app's.
+   */
+  DIALOG_DECLINED: 'dialog_declined',
   /** The declared consequence did not hold. */
   ASSERTION_FAILED: 'assertion_failed',
   /** Channels disagreed about the action — the false green this product exists to catch. */

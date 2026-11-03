@@ -11,6 +11,9 @@ import {
 import { HonestyGrade, type HonestyBlock } from './honesty.js';
 import { unsettledBecause, type UnsettledWindow } from './unsettled.js';
 import { pageTornDownWhileOn } from './page-teardown.js';
+import { declinedDialogIn, type DeclinedDialog } from '@/window/event-filters.js';
+import type { ReticleEvent } from '@reticlehq/core';
+import { clipBody } from '@/question/predicate/predicate-eval-kit.js';
 
 /**
  * The decision rule: eight trust dimensions in, one answer out.
@@ -138,6 +141,11 @@ interface VerifiedInputs {
    */
   bufferLostEvidence?: boolean;
   /**
+   * A `confirm` or `prompt` that Reticle declined during this window (see `declinedDialogIn`). Only
+   * a failing verdict reads it: the app took the path for "no" because Reticle answered "no".
+   */
+  declinedDialog?: DeclinedDialog;
+  /**
    * Writes in this window that answered `202 Accepted`, as "METHOD url" — the server took the
    * request and has NOT finished processing it.
    *
@@ -222,6 +230,14 @@ export const VACUOUS_BECAUSE =
 const isWriteLabel = (label: string): boolean =>
   MUTATING_METHODS.includes((label.split(' ')[0] ?? '').toUpperCase());
 
+/** The `declinedDialog` input for a window, or nothing. Shared so both verdict paths read it alike. */
+export function withDeclinedDialog(events: readonly ReticleEvent[]): {
+  declinedDialog?: DeclinedDialog;
+} {
+  const declinedDialog = declinedDialogIn(events);
+  return declinedDialog === undefined ? {} : { declinedDialog };
+}
+
 export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   const { pass, honesty, contradictions = [], settled, outcomePending, outcomeUnread } = inputs;
 
@@ -290,6 +306,23 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
         'seen — this says nothing about the app. Call reticle_sessions for the current session ' +
         '(a reloaded tab keeps its id; a closed one is gone) and repeat the action if it is safe ' +
         'to repeat',
+    };
+  }
+
+  // ABOVE the failure clause. The app asked a question and Reticle answered "no" so that the tab
+  // cannot wedge. A consequence that needed "yes" then did not happen, and that is Reticle's choice,
+  // not an app defect. A pass is untouched: the app reached the consequence without the "yes".
+  const dialog = inputs.declinedDialog;
+  if (false === pass && dialog !== undefined) {
+    const asked = dialog.message === undefined ? '' : ` ("${clipBody(dialog.message)}")`;
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.DIALOG_DECLINED,
+      because:
+        `the app opened a ${dialog.kind} dialog${asked} during this action, and Reticle declined ` +
+        'it so that the tab cannot wedge. The app took the path for "no", so the clause that ' +
+        'needed the answer "yes" was not judged. Assert what the app does on "no", or drive the ' +
+        'accepted path another way',
     };
   }
 

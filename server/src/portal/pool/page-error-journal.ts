@@ -25,7 +25,18 @@
  * only the redundant second copy is cost, not wrong evidence.
  */
 import { CONSOLE_EVENT, EventType, RETICLE_URL_PARAM, type ReticleEvent } from '@reticlehq/core';
-import type { PooledPageError } from './pool-contract.js';
+import type { PooledDialog, PooledPageError } from './pool-contract.js';
+
+/**
+ * What a dismissal answers, per dialog kind the wire knows. The same replies the SDK gives
+ * (`observers/dialogs.ts`): `confirm` is "no", `prompt` is no value, `alert` has no answer.
+ * A kind not in this map (`beforeunload`) is not a `dialog.opened` and is not reported.
+ */
+const DISMISSED_ANSWER: Readonly<Record<string, { answered?: boolean | null }>> = {
+  alert: {},
+  confirm: { answered: false },
+  prompt: { answered: null },
+};
 
 /** How many errors wait per lease for a session that may never connect. Older ones give way. */
 const MAX_BUFFERED_PER_LEASE = 8;
@@ -55,6 +66,12 @@ export interface PageErrorJournal {
   onLeaseClosed(leaseId: string): void;
   /** The bridge hook — register with `bridge.attachSessionEnd`. */
   onSessionEnd(sessionId: string): void;
+  /**
+   * The pool's dialog sink — hand it to `BrowserPoolOptions.onDialog`. Journals the dismissal as
+   * `dialog.opened` on the lease's session, so a verdict reads it as the SDK's own answer. A dialog
+   * before the session connects is dropped: no action window can hold it.
+   */
+  onPoolDialog(leaseId: string, dialog: Pick<PooledDialog, 'kind' | 'message'>): void;
 }
 
 /**
@@ -223,6 +240,25 @@ export function makePageErrorJournal(deps: {
     // otherwise suppress nothing real and grow for the life of the daemon.
     onSessionEnd(sessionId) {
       seen.delete(sessionId);
+    },
+
+    onPoolDialog(leaseId, dialog) {
+      // An own key only: an inherited name such as `toString` is not a dialog kind.
+      const kind = dialog.kind;
+      const answer =
+        kind !== undefined && Object.hasOwn(DISMISSED_ANSWER, kind)
+          ? DISMISSED_ANSWER[kind]
+          : undefined;
+      const session = deps.resolveSession(leaseId);
+      if (answer === undefined || session === undefined) {
+        return;
+      }
+      session.pushEvent({
+        t: 0, // pushEvent re-stamps with the session's own clock
+        type: EventType.DIALOG_OPENED,
+        sessionId: session.id,
+        data: { kind: dialog.kind, message: dialog.message, ...answer },
+      });
     },
   };
 }

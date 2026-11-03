@@ -17,10 +17,14 @@ import { useApp } from '../store/store.js';
  *    (report), and a `0 of 6 selected` count that moves with the same request (silent).
  *  - `partial-failure-in-ok-response`: a batch write that answers 200 with one failed item (report),
  *    and a read of a job list that holds old failed jobs (silent).
+ *  - `dialog_declined`: a publish behind `confirm()`, which Reticle declines, so its request never
+ *    goes (unknown). The dead button is the other direction: no dialog, no effect (no).
  */
 const API = 'http://localhost:8787/api/rule-pairs';
 const PROFILE = { id: 'profile-1', name: 'New name', plan: 'pro' };
 const TOTAL = 6;
+/** Not a delete: a destructive label is refused before the click, so no dialog would open. */
+const PUBLISH_QUESTION = 'Publish this profile?';
 /**
  * Counts every click on the page, as an analytics or "last interaction" store does. Earlier clicks
  * move this path before the dead click, and the dead click moves it inside its own window. So the
@@ -90,6 +94,16 @@ export function RulePairs(): React.ReactElement {
         <h3>Effect</h3>
         {/* The defect, on purpose: this button has no handler. */}
         <button data-testid="rule-pairs-dead">Archive</button>
+        <button
+          data-testid="rule-pairs-publish"
+          onClick={() => {
+            if (window.confirm(PUBLISH_QUESTION)) {
+              void fetch(`${API}/publish`, { method: 'POST' });
+            }
+          }}
+        >
+          Publish
+        </button>
         <button
           data-testid="rule-pairs-remember"
           onClick={() => useApp.setState({ rulePairsChoice: 'remembered' })}
