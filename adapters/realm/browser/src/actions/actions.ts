@@ -648,7 +648,7 @@ async function dispatchOther(
       const dy = asFiniteNumber(args['dy']);
       const dx = asFiniteNumber(args['dx']);
       const fraction = asFiniteNumber(args['fraction']);
-      scrollFrom(el, dy, fraction, dx);
+      scrollFrom(el, dy, fraction, dx, true === args['wheel']);
       return false;
     }
     case ActionType.UPLOAD: {

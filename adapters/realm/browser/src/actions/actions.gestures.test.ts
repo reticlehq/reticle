@@ -127,6 +127,43 @@ describe('scroll goes back, and sideways', () => {
     await act(el, ActionType.SCROLL, { dx: 250 });
     expect(el.scrollLeft).toBe(350);
   });
+
+  it('sends a cancelable wheel event and leaves the movement to the page', async () => {
+    const el = scroller();
+    el.scrollTop = 100;
+    el.scrollLeft = 100;
+    const seen: Array<{ deltaX: number; deltaY: number; cancelable: boolean }> = [];
+    el.addEventListener('wheel', (event) => {
+      seen.push({ deltaX: event.deltaX, deltaY: event.deltaY, cancelable: event.cancelable });
+    });
+
+    await act(el, ActionType.SCROLL, { dx: 250, dy: 600, wheel: true });
+
+    expect(seen).toEqual([{ deltaX: 250, deltaY: 600, cancelable: true }]);
+    expect(el.scrollTop, 'the page moves, not the action').toBe(100);
+    expect(el.scrollLeft, 'the page moves, not the action').toBe(100);
+  });
+
+  it('dispatches on the named element, so a listener under the scroller still sees it', async () => {
+    const el = scroller();
+    const child = document.createElement('span');
+    el.appendChild(child);
+    let seen = 0;
+    child.addEventListener('wheel', () => {
+      seen += 1;
+    });
+
+    await act(child, ActionType.SCROLL, { dy: 600, wheel: true });
+
+    expect(seen).toBe(1);
+  });
+
+  it('refuses wheel with fraction, because a wheel event cannot land on an exact fraction', async () => {
+    const el = scroller();
+    await expect(act(el, ActionType.SCROLL, { fraction: 0.5, wheel: true })).rejects.toThrow(
+      /cannot use fraction/,
+    );
+  });
 });
 
 describe('zoom refuses rather than faking it', () => {

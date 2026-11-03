@@ -22,6 +22,7 @@ interface ScrollResult {
 const FALLBACK_STEP_PX = 400;
 const VIEWPORT_FRACTION = 0.8;
 export const SCROLL_FRACTION_RANGE_ERROR_PREFIX = 'scroll fraction must be between 0 and 1, got ';
+const SCROLL_WHEEL_FRACTION_ERROR = 'scroll with wheel: true cannot use fraction; pass dy or dx';
 
 export function fractionOutOfRangeMessage(fraction: number): string {
   return `${SCROLL_FRACTION_RANGE_ERROR_PREFIX}${fraction}`;
@@ -77,6 +78,7 @@ export function scrollFrom(
   dy: number | undefined,
   fraction?: number,
   dx?: number,
+  wheel?: boolean,
 ): ScrollResult {
   if (fraction !== undefined && (fraction < 0 || fraction > 1 || Number.isNaN(fraction))) {
     throw new RangeError(fractionOutOfRangeMessage(fraction));
@@ -91,6 +93,31 @@ export function scrollFrom(
 
   const before = target.scrollTop;
   const beforeLeft = target.scrollLeft;
+  if (true === wheel) {
+    if (fraction !== undefined) {
+      throw new RangeError(SCROLL_WHEEL_FRACTION_ERROR);
+    }
+    const deltaY = dy ?? (Math.round(target.clientHeight * VIEWPORT_FRACTION) || FALLBACK_STEP_PX);
+    const deltaX = dx ?? 0;
+    // The event lands on the element the caller named, then bubbles to the scroll container and the
+    // window. Dispatching on the container alone would miss a page that listens on the element under
+    // the pointer, which is what a real wheel does.
+    const wheelTarget = base ?? target;
+    const rect = wheelTarget.getBoundingClientRect();
+    wheelTarget.dispatchEvent(
+      new WheelEvent('wheel', {
+        deltaX,
+        deltaY,
+        deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+        clientX: rect.width > 0 ? rect.left + rect.width / 2 : 0,
+        clientY: rect.height > 0 ? rect.top + rect.height / 2 : 0,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      }),
+    );
+    return scrollResult(target, before, beforeLeft);
+  }
   if (fraction !== undefined) {
     target.scrollTop = Math.round(target.scrollHeight * fraction);
   } else {
@@ -106,9 +133,12 @@ export function scrollFrom(
     }
   }
   target.dispatchEvent(new Event('scroll', { bubbles: false }));
+  return scrollResult(target, before, beforeLeft);
+}
+
+function scrollResult(target: Element, before: number, beforeLeft: number): ScrollResult {
   const after = target.scrollTop;
   const afterLeft = target.scrollLeft;
-
   return {
     scrolled: after !== before || afterLeft !== beforeLeft,
     scrollTop: after,
