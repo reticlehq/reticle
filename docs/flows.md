@@ -114,7 +114,9 @@ Every session's driving is saved as a flow at teardown when it declared a conseq
 
 A route claim in `requires` says which page the flow needs. Replay puts the tab there before step 1, so a suite does not run the flow on the page that the previous flow left open. It goes to `startPath` when that is on the route, else to the route itself.
 
-A route can name an entity id with a `:name` segment, for example `{ "kind": "route", "pathname": "/cases/:id/notes" }`. When the tab is already on a page that matches, replay keeps that page and its id. It does not open the id that was recorded, which can be a record that was deleted since.
+A route can name an entity id with a `:name` segment, for example `{ "kind": "route", "pathname": "/cases/:id/notes" }`. When the tab is already on a page that matches, replay keeps that page and its id. When the tab is on another page of the same record (`/cases/c-42/files`), replay opens the route with that id (`/cases/c-42/notes`). It opens the recorded address only when the tab has no id to give. The recorded id can be a record that was deleted since.
+
+Replay checks every route claim in `requires`, its `contains` too, on the page it arrives at. When the tab is already on the route, replay reloads it, the same reset a `startPath` gets. State that the previous flow left in memory is lost. A flow that needs that state declares it with a claim that is not a route.
 
 When replay cannot put the tab on the route (the page refuses, the app redirects to another page, or a pattern has no recorded address to open), the flow is `unverifiable` with a reason that names the route. No step runs.
 

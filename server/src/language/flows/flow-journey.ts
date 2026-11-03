@@ -122,9 +122,10 @@ export function routeClaims(
 /**
  * The preconditions only another flow can establish.
  *
- * A route claim is not one of them: replay navigates to a declared route itself (see
- * `declaredRoute`), so a route claim neither opts the flow out of the reset nor gates the run. The
- * claim on the page the flow starts on is the one a saved drive writes for the map (see
+ * A route claim with a `pathname` is not one of them: replay navigates to a declared route itself
+ * (see `declaredRoute`), and checks the claim, its `contains` too, once the tab is there (see
+ * `unmetRouteClaim`). So a route claim neither opts the flow out of the reset nor gates the run
+ * here. The claim on the page the flow starts on is the one a saved drive writes for the map (see
  * routeClaims) — reading it as "starts from leftover state" would stop every auto-saved flow from
  * ever being reset. A route claim on ANOTHER page was read that way, and a suite then ran the flow
  * on whatever page the previous flow left open (#2034).
@@ -135,15 +136,21 @@ export function establishedState(flow: FlowFile): readonly Predicate[] {
   );
 }
 
+/** A route claim that names a page, with its optional `contains`. */
+interface PageClaim {
+  pathname: string;
+  contains?: string;
+}
+
 /**
- * The route a flow declares in `requires` when that says more than its `startPath`.
+ * The route claims in `requires` that say more than the flow's `startPath`, in order.
  *
- * Undefined when the flow declares no route, or when its route claim is its own `startPath`: that
- * is the claim every saved drive writes, and replay already arrives there. Anything else is the
- * page the flow needs, and replay puts the tab there before step 1 (#2034).
+ * A claim on the `startPath` itself is left out: that is the claim every saved drive writes, and
+ * replay already arrives there. Every other claim names a page the flow needs (#2034).
  */
-export function declaredRoute(flow: FlowFile): string | undefined {
+function pageClaims(flow: FlowFile): PageClaim[] {
   const start = flow.startPath;
+  const claims: PageClaim[] = [];
   for (const claim of flow.requires ?? []) {
     if (PredicateKind.ROUTE !== claim.kind || claim.pathname === undefined) {
       continue;
@@ -152,9 +159,38 @@ export function declaredRoute(flow: FlowFile): string | undefined {
       continue;
     }
     if (start !== undefined && samePath(claim.pathname, start)) {
-      return undefined;
+      continue;
     }
-    return claim.pathname;
+    claims.push({
+      pathname: claim.pathname,
+      ...(claim.contains === undefined ? {} : { contains: claim.contains }),
+    });
+  }
+  return claims;
+}
+
+/**
+ * The route a flow declares in `requires` when that says more than its `startPath`: the first
+ * such claim, in any order of the claims. Undefined when there is none, and replay then arrives
+ * at `startPath` as before. Replay puts the tab on this route before step 1 (#2034).
+ */
+export function declaredRoute(flow: FlowFile): string | undefined {
+  return pageClaims(flow)[0]?.pathname;
+}
+
+/**
+ * The first declared route claim that the page `observed` does not satisfy, said for a reader.
+ * Undefined when they all hold. Each claim is checked whole: its `pathname` by `onRoute`, and its
+ * `contains` against the whole route, as the `route` predicate checks it.
+ */
+export function unmetRouteClaim(flow: FlowFile, observed: string): string | undefined {
+  for (const claim of pageClaims(flow)) {
+    if (!onRoute(observed, claim.pathname)) {
+      return `it is not on ${claim.pathname}`;
+    }
+    if (claim.contains !== undefined && !observed.includes(claim.contains)) {
+      return `its address does not contain "${claim.contains}"`;
+    }
   }
   return undefined;
 }
@@ -240,4 +276,43 @@ const START_PATH_ARRIVAL_TIMEOUT_MS = 5_000;
 export function startPathBudgetMs(flow: FlowFile): number {
   const first = flow.steps[0]?.timeoutMs ?? flow.signalTimeoutMs ?? 0;
   return Math.max(START_PATH_ARRIVAL_TIMEOUT_MS, first);
+}
+
+/**
+ * A pattern route with its `:name` segments filled from the page `observed`.
+ *
+ * A segment is taken only when every segment before it in the route agrees with the page: from
+ * `/cases/c-42/files`, the route `/cases/:id/notes` becomes `/cases/c-42/notes`. So another section
+ * of the same case keeps the case, and the recorded id, which can be a deleted record, is not used.
+ * Undefined when the page has no id to give (`/settings`), or the route has no `:name` segment.
+ */
+export function fillRouteParams(route: string, observed: string): string | undefined {
+  const wanted = routerSegments(route);
+  const here = routerSegments(observed);
+  if (wanted === undefined || here === undefined) {
+    return undefined;
+  }
+  const values: string[] = [];
+  for (const [i, segment] of wanted.entries()) {
+    if (!isRouteParam(segment)) {
+      continue;
+    }
+    const agrees = wanted
+      .slice(0, i)
+      .every((before, j) => isRouteParam(before) || before === here[j]);
+    const value = here[i] ?? '';
+    if (!agrees || 0 === value.length) {
+      return undefined;
+    }
+    values.push(value);
+  }
+  if (0 === values.length) {
+    return undefined;
+  }
+  let next = 0;
+  return route.replace(/(?<=\/):[^/?#]+/g, (param) => {
+    const value = values[next] ?? param;
+    next += 1;
+    return value;
+  });
 }

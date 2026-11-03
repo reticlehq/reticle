@@ -17,7 +17,12 @@ import {
   type CommandResult,
   type FlowFile,
 } from '@reticlehq/core';
-import { arriveAtStartPath, noteReplayEnded, withStartPageWait } from './flow-start-path.js';
+import {
+  arriveAtStartPath,
+  noteReplayEnded,
+  routeClaimsWhereTheTabIs,
+  withStartPageWait,
+} from './flow-start-path.js';
 import { onRoute } from './flow-journey.js';
 import { runSequentially } from './suite/sequential-run.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -849,6 +854,84 @@ describe('arriveAtStartPath — a flow that declares its route runs on that rout
     expect(await arriveAtStartPath(manager([]), session, both)).toEqual({});
     expect(calls).toEqual([]);
   });
+  // A saved drive writes the startPath claim first. A route added after it is still the route.
+  it('goes to the declared route when the startPath claim comes first', async () => {
+    const app = browser('http://localhost:3000/settings');
+    const arrived = await arriveAtStartPath(
+      app.sessions,
+      app.tab(),
+      {
+        ...flow('/settings'),
+        requires: [
+          { kind: PredicateKind.ROUTE, pathname: '/settings' },
+          { kind: PredicateKind.ROUTE, pathname: '/orders' },
+        ],
+      },
+      5_000,
+      instantClock(100),
+    );
+    expect(app.navigations).toEqual(['http://localhost:3000/orders']);
+    expect(arrived.unreached).toBeUndefined();
+  });
+
+  it('says the route was not reached when two declared routes cannot both hold', async () => {
+    const app = browser('http://localhost:3000/settings');
+    const arrived = await arriveAtStartPath(
+      app.sessions,
+      app.tab(),
+      {
+        ...flow(),
+        requires: [
+          { kind: PredicateKind.ROUTE, pathname: '/orders' },
+          { kind: PredicateKind.ROUTE, pathname: '/invoices' },
+        ],
+      },
+      5_000,
+      instantClock(100),
+    );
+    expect(app.navigations).toEqual(['http://localhost:3000/orders']);
+    expect(arrived.unreached).toContain('it is not on /invoices');
+  });
+
+  // `contains` is part of the claim: it is checked on the page replay arrives at.
+  it('checks the `contains` of a route claim once the tab is on the route', async () => {
+    const withContains = (): FlowFile => ({
+      ...flow(),
+      requires: [{ kind: PredicateKind.ROUTE, pathname: '/orders', contains: 'tab=open' }],
+    });
+    const missing = browser('http://localhost:3000/settings');
+    const unmet = await arriveAtStartPath(
+      missing.sessions,
+      missing.tab(),
+      withContains(),
+      5_000,
+      instantClock(100),
+    );
+    expect(unmet.unreached).toContain('does not contain "tab=open"');
+    const present = browser('http://localhost:3000/orders?tab=open');
+    const met = await arriveAtStartPath(
+      present.sessions,
+      present.tab(),
+      withContains(),
+      5_000,
+      instantClock(100),
+    );
+    expect(present.navigations).toEqual(['http://localhost:3000/orders?tab=open']);
+    expect(met.unreached).toBeUndefined();
+  });
+
+  it('checks the declared route where the tab is when replay continues mid-flow', () => {
+    expect(
+      routeClaimsWhereTheTabIs(needs('/orders'), tab('http://localhost:3000/settings').session)
+        .unreached,
+    ).toContain('it is not on /orders');
+    expect(
+      routeClaimsWhereTheTabIs(needs('/orders'), tab('http://localhost:3000/orders').session),
+    ).toEqual({});
+    expect(
+      routeClaimsWhereTheTabIs(flow('/settings'), tab('http://localhost:3000/elsewhere').session),
+    ).toEqual({});
+  });
 });
 
 /**
@@ -937,20 +1020,77 @@ describe('arriveAtStartPath — a route with an entity id', () => {
     expect(arrived.unreached).toContain('no address on that route');
   });
 
-  it('does not take another case page for the route', async () => {
+  // The field report: a generic section navigation inside a case stays on that case. From another
+  // section of case c-42, the deleted recorded case c-deleted is never opened.
+  it('takes the id from another section of the same case, not the recorded id', async () => {
     const { calls, session } = tab('http://localhost:3000/cases/c-42/files');
-    await arriveAtStartPath(
-      manager([session, successor('http://localhost:3000/cases/c-deleted/notes')]),
+    const arrived = await arriveAtStartPath(
+      manager([session, successor('http://localhost:3000/cases/c-42/notes')]),
       session,
       recordedOnDeletedCase(),
       5_000,
       instantClock(100),
     );
     expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([
+      { name: ReticleCommand.NAVIGATE, args: { url: 'http://localhost:3000/cases/c-42/notes' } },
+    ]);
+    expect(arrived.unreached).toBeUndefined();
+  });
+
+  it('takes every id the tab can give, and only while the segments before it agree', async () => {
+    const nested = (): FlowFile => ({
+      ...flow('/orgs/o-deleted/cases/c-deleted/notes'),
+      requires: [{ kind: PredicateKind.ROUTE, pathname: '/orgs/:org/cases/:id/notes' }],
+    });
+    const inCase = tab('http://localhost:3000/orgs/o-1/cases/c-42/files');
+    await arriveAtStartPath(
+      manager([inCase.session, successor('http://localhost:3000/orgs/o-1/cases/c-42/notes')]),
+      inCase.session,
+      nested(),
+      5_000,
+      instantClock(100),
+    );
+    expect(inCase.calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([
       {
         name: ReticleCommand.NAVIGATE,
-        args: { url: 'http://localhost:3000/cases/c-deleted/notes' },
+        args: { url: 'http://localhost:3000/orgs/o-1/cases/c-42/notes' },
       },
+    ]);
+    // `/orgs/o-1/settings` gives an org but no case, so replay falls back to the recorded address.
+    const inOrg = tab('http://localhost:3000/orgs/o-1/settings');
+    await arriveAtStartPath(
+      manager([
+        inOrg.session,
+        successor('http://localhost:3000/orgs/o-deleted/cases/c-deleted/notes'),
+      ]),
+      inOrg.session,
+      nested(),
+      5_000,
+      instantClock(100),
+    );
+    expect(inOrg.calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([
+      {
+        name: ReticleCommand.NAVIGATE,
+        args: { url: 'http://localhost:3000/orgs/o-deleted/cases/c-deleted/notes' },
+      },
+    ]);
+  });
+
+  it('takes the id from another section under a hash router', async () => {
+    const { calls, session } = tab('http://localhost:3000/#/cases/c-42/files');
+    await arriveAtStartPath(
+      manager([session, successor('http://localhost:3000/#/cases/c-42/notes')]),
+      session,
+      {
+        ...recordedOnDeletedCase(),
+        startPath: '/#/cases/c-deleted/notes',
+        requires: [{ kind: PredicateKind.ROUTE, pathname: '/#/cases/:id/notes' }],
+      },
+      5_000,
+      instantClock(100),
+    );
+    expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([
+      { name: ReticleCommand.NAVIGATE, args: { url: 'http://localhost:3000/#/cases/c-42/notes' } },
     ]);
   });
 });

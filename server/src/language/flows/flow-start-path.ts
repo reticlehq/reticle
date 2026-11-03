@@ -17,10 +17,12 @@ import {
 import {
   declaredRoute,
   establishedState,
+  fillRouteParams,
   isRoutePattern,
   onRoute,
   samePath,
   startPathBudgetMs,
+  unmetRouteClaim,
 } from './flow-journey.js';
 import { asRecord } from '@reticlehq/core';
 import {
@@ -413,6 +415,31 @@ async function moveTo(
 }
 
 /**
+ * The arrival for a replay that continues at a step and so does not move the tab. A declared route
+ * claim must still hold where the tab is, as it did when it was a precondition the run checked.
+ */
+export function routeClaimsWhereTheTabIs(
+  flow: FlowFile,
+  session: StartPathSession,
+): StartPathArrival {
+  const route = declaredRoute(flow);
+  if (route === undefined) {
+    return {};
+  }
+  const current = currentPathOf(session);
+  const unmet =
+    current === undefined
+      ? 'replay cannot see which page it is on'
+      : unmetRouteClaim(flow, current);
+  if (unmet === undefined) {
+    return {};
+  }
+  return {
+    unreached: unreachedReason(route, current, `replay continues mid-flow there, and ${unmet}`),
+  };
+}
+
+/**
  * Replay's arrival for a flow that declares the route it needs in `requires` (#2034).
  *
  * The tab goes to that route before step 1, the same way it goes to a `startPath`, and the same
@@ -440,7 +467,7 @@ async function arriveAtDeclaredRoute(
   const here = onRoute(current, route);
   // The opt-out keeps the tab as it is. It does not make another page the right one.
   if (0 < establishedState(flow).length) {
-    if (here) {
+    if (unmetRouteClaim(flow, current) === undefined) {
       return {};
     }
     return {
@@ -473,30 +500,28 @@ async function arriveAtDeclaredRoute(
   if (moved === undefined) {
     return { unreached: unreachedReason(route, current, `the page refused to open ${target}`) };
   }
-  if (moved.redirected === undefined || moved.session === undefined) {
+  const landed = moved.session === undefined ? current : currentPathOf(moved.session);
+  // Every declared route claim, its `contains` too, is checked on the page replay arrived at.
+  const unmet =
+    landed === undefined ? 'replay cannot see which page it is on' : unmetRouteClaim(flow, landed);
+  if (unmet === undefined) {
     return moved;
   }
-  const landed = currentPathOf(moved.session);
-  if (landed !== undefined && onRoute(landed, route)) {
-    return moved;
-  }
-  const { redirected: _redirected, ...rest } = moved;
-  return {
-    ...rest,
-    unreached: unreachedReason(
-      route,
-      landed,
-      `replay opened ${target}, and the app sent the tab to another page`,
-    ),
-  };
+  const { redirected, ...rest } = moved;
+  const why =
+    redirected === undefined
+      ? `replay opened ${target}, and ${unmet}`
+      : `replay opened ${target}, and the app sent the tab to another page`;
+  return { ...rest, unreached: unreachedReason(route, landed, why) };
 }
 
 /**
  * Where replay sends the tab for a declared route.
  *
- * A pattern that the tab already matches: the tab's own page, so its id is kept. Else the flow's
- * `startPath` when it is on the route, because it is the page the journey was recorded on. Else
- * the route itself when it is a plain path. A pattern with no address to open has no target.
+ * A pattern that the tab already matches: the tab's own page, so its id is kept. A pattern whose
+ * ids the tab can give (another section of the same case): the route with those ids. Else the
+ * flow's `startPath` when it is on the route, because it is the page the journey was recorded on.
+ * Else the route itself when it is a plain path. A pattern with no address to open has no target.
  */
 function routeTarget(
   flow: FlowFile,
@@ -508,6 +533,10 @@ function routeTarget(
   if (here && pattern) {
     // Without its query: `moveTo` keeps the query unless the previous replay left it.
     return current.replace(/\?[^#]*/, '');
+  }
+  const filled = pattern ? fillRouteParams(route, current) : undefined;
+  if (filled !== undefined) {
+    return filled;
   }
   const start = flow.startPath;
   if (start !== undefined && 0 < start.length && onRoute(start, route)) {

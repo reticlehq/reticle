@@ -67,6 +67,7 @@ import {
   arriveAtStartPath,
   navigateAndAwait,
   noteReplayEnded,
+  routeClaimsWhereTheTabIs,
   startPathMismatchHint,
   withStartPageWait,
 } from './flow-start-path.js';
@@ -410,7 +411,7 @@ async function replayOnce(
           undefined,
           stillLoading,
         )
-      : {};
+      : routeClaimsWhereTheTabIs(loaded.value, connected);
   // Continuing on `connected` after the tab left timed every step out on a dead handle (#1129).
   // A declared route that replay could not reach is the same: the steps would run on another page.
   const reason = arrival.lost ?? arrival.unreached;
