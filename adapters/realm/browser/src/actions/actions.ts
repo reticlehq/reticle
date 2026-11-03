@@ -9,7 +9,7 @@ import {
   SettleReason,
 } from '@reticlehq/core';
 import { isHiddenNativeOption } from '@/dom/query-finders.js';
-import { isReticleUi } from '@/dom/dom-ignore.js';
+import { isReticleUi, isUnobserved } from '@/dom/dom-ignore.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { echoRef, refs } from '@/dom/addressing/refs.js';
 import {
@@ -698,6 +698,17 @@ async function dispatchOther(
 }
 
 /**
+ * Whether a mutation is the page's, not Reticle's own UI. The HUD reacts to every act (`data-busy`, its
+ * chip, a log row), and counting that as the act's effect hid every dead click on a page with the HUD
+ * mounted (#2141). The same rule the DOM observer applies: see `isUnobserved`.
+ */
+function isPageMutation(record: MutationRecord): boolean {
+  const target = record.target;
+  const el = target instanceof Element ? target : target.parentElement;
+  return null === el || !isUnobserved(el);
+}
+
+/**
  * Execute a single action against a ref and probe for best-effort evidence of effect.
  * Always async: the MutationObserver read needs a microtask + rAF after dispatch.
  */
@@ -758,7 +769,7 @@ export async function executeAction(
   let mutated = 0;
   const said = new AppearedText();
   const obs = new MutationObserver((records) => {
-    mutated += records.length;
+    mutated += records.filter(isPageMutation).length;
     said.collect(records);
   });
   obs.observe(el.ownerDocument.documentElement, {

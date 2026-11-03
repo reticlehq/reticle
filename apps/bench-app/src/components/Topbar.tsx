@@ -15,6 +15,7 @@ const TITLES: Record<ViewId, { title: string; sub: string }> = {
   },
   awkward: { title: 'Awkward Controls', sub: 'file input · unnamed icon button · canvas' },
   'stale-race': { title: 'Stale Race', sub: 'fan-out · filter race' },
+  'rule-pairs': { title: 'Rule Pairs', sub: 'echo · no effect · pagination' },
 };
 
 export function Topbar(): React.ReactElement {

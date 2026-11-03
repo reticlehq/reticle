@@ -273,6 +273,24 @@ app.get('/api/stale-race/items', async (req, res) => {
   res.json({ type });
 });
 
+// --- Rule pairs: the shapes three narrowed rules must still tell apart ------
+//
+// `profile` keeps the record's id and returns the old values: an ignored write. `derive` returns a
+// new record with its own id: a copy, not an ignored write. `pages` and `rows` answer the page that
+// was asked for, so a client that asks for page 1 again gets page 1 again.
+app.post('/api/rule-pairs/profile', (req, res) => {
+  res.json({ id: String(req.body?.id ?? ''), name: 'Old name', plan: 'free' });
+});
+
+app.post('/api/rule-pairs/derive', (req, res) => {
+  const name = String(req.body?.name ?? '');
+  res.json({ id: 'profile-copy', name: `Copy of ${name}`, plan: 'trial' });
+});
+
+app.get('/api/rule-pairs/:list', (req, res) => {
+  res.json({ list: req.params.list, page: Number(req.query.page ?? 1) });
+});
+
 const server = createServer(app);
 
 // WS echo. `channel` is echoed back so a client can correlate a reply with what it asked for;

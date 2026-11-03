@@ -108,6 +108,9 @@ const ORDER = [
   // Both directions of `stale-response-applied`: a fan-out stays silent, a real race is reported.
   // Same bench-app, its own fixture view.
   'stale-response-both-directions-test',
+  // Both directions of three rules that report less often since #1627, #1629 and #2127 (#2141).
+  // Same bench-app, its own fixture view.
+  'narrowed-rules-both-directions-test',
   // A file input, an unnamed icon button and a canvas — three properties `apps/` had no fixture for.
   'awkward-controls-test',
   'multi-agent-lease-test',
@@ -205,7 +208,7 @@ if (specs.length === 0) {
 // So the size is recorded, and shrinking the battery costs a deliberate edit to a number a
 // reviewer can see. Growing it costs the same edit, which is the point: both directions are a
 // decision. Measured 2026-09-11.
-const EXPECTED_SPECS = desktop ? 3 : 52;
+const EXPECTED_SPECS = desktop ? 3 : 53;
 // The WHOLE battery is counted, not this shard's slice of it: a shard is a third of the list by
 // design, and the question here is whether the list itself shrank.
 if (listed.length !== EXPECTED_SPECS) {
