@@ -1,4 +1,4 @@
-import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
+import { ContradictionKind, EventType, MUTATING_METHODS, type ReticleEvent } from '@reticlehq/core';
 import type { OwnContradiction } from './contradiction-types.js';
 
 /**
@@ -72,6 +72,20 @@ function reportsFailure(item: unknown): boolean {
   return false;
 }
 
+/**
+ * Whether a call can carry per-item outcomes: a write, or a call whose method was not recorded.
+ *
+ * A read returns stored records, and an `error` field on one of them is history, not the outcome of
+ * this request. Field report: an assert whose predicate held came back `no`, citing three
+ * GETs of a job list that held old, deliberately failed jobs.
+ *
+ * KNOWN LIMIT: a batch whose per-item results are read back by polling a GET is no longer counted
+ * here. Its write is, when the write's own body carries the results.
+ */
+function canCarryItemOutcomes(method: string): boolean {
+  return 0 === method.length || MUTATING_METHODS.includes(method.toUpperCase());
+}
+
 /** Failed / total across the first item array found. Zero total when the body is not a batch. */
 function itemOutcomes(body: Record<string, unknown>): { failed: number; total: number } {
   for (const key of ITEM_KEYS) {
@@ -93,6 +107,8 @@ function parse(raw: unknown): Record<string, unknown> | undefined {
   }
 }
 
+const NO_ITEMS = { failed: 0, total: 0 } as const;
+
 const OK_MIN = 200;
 const OK_MAX = 300;
 
@@ -110,7 +126,7 @@ export function findBodyFailures(events: readonly ReticleEvent[]): OwnContradict
     const method = 'string' === typeof event.data['method'] ? event.data['method'] : '';
     const where = `${method} ${url} → ${String(status)}`;
 
-    const { failed, total } = itemOutcomes(body);
+    const { failed, total } = canCarryItemOutcomes(method) ? itemOutcomes(body) : NO_ITEMS;
     if (failed > 0) {
       found.push({
         kind: ContradictionKind.PARTIAL_FAILURE_IN_OK_RESPONSE,

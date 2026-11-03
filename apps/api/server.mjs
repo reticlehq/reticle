@@ -287,6 +287,27 @@ app.post('/api/rule-pairs/derive', (req, res) => {
   res.json({ id: 'profile-copy', name: `Copy of ${name}`, plan: 'trial' });
 });
 
+// `batch` answers 200 with one failed item: a partial failure. `jobs` lists stored jobs, two of them
+// failed long ago: history, not the outcome of the read.
+app.post('/api/rule-pairs/batch', (_req, res) => {
+  res.json({
+    results: [
+      { id: 'a', ok: true },
+      { id: 'b', ok: false, error: 'carrier_locked' },
+    ],
+  });
+});
+
+app.get('/api/rule-pairs/jobs', (_req, res) => {
+  res.json({
+    items: [
+      { id: 'j1', status: 'done' },
+      { id: 'j2', status: 'failed', error: 'encode failed' },
+      { id: 'j3', status: 'failed', error: 'source missing' },
+    ],
+  });
+});
+
 app.get('/api/rule-pairs/:list', (req, res) => {
   res.json({ list: req.params.list, page: Number(req.query.page ?? 1) });
 });

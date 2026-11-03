@@ -1,5 +1,5 @@
 import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
-// Three narrowed rules, in both directions, in a real browser (#2141).
+// Four narrowed rules, in both directions, in a real browser (#2141).
 //
 // #1627 (`write-field-ignored`), #1629 (`action-had-no-effect`) and #2127 (`pagination-not-fetched`)
 // each made a rule report less often. The merges took the merge queue's benchmark as the accuracy
@@ -39,6 +39,7 @@ const API = '/api/rule-pairs';
 const WRITE_IGNORED = 'write-field-ignored';
 const NO_EFFECT = 'action-had-no-effect';
 const PAGINATION = 'pagination-not-fetched';
+const PARTIAL_FAILURE = 'partial-failure-in-ok-response';
 
 const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const reticleRoot = path.join(os.tmpdir(), `reticle-rule-pairs-${process.pid}`, '.reticle');
@@ -206,6 +207,36 @@ if (select !== undefined) {
   chk(
     'the count moved from 0 to 1, otherwise this proves nothing',
     '1 of 6 selected' === (await p.textContent('[data-testid="rule-pairs-selected"]')),
+  );
+}
+
+console.log('\n=== partial-failure-in-ok-response: a batch write answers 200 with one failed item ===');
+const hold = await act('rule-pairs-batch', {
+  kind: 'net',
+  urlContains: `${API}/batch`,
+  method: 'POST',
+  status: 200,
+});
+if (hold !== undefined) {
+  chk('the partial failure is reported', kindsOf(hold).includes(PARTIAL_FAILURE), why(hold));
+  const body = await echoOf(hold.since, 'batch');
+  chk('the batch really answered one failed item', body.includes('carrier_locked'), body);
+}
+
+console.log('\n=== partial-failure-in-ok-response: a read of old failed jobs is not a batch ===');
+const jobs = await act('rule-pairs-jobs', {
+  kind: 'net',
+  urlContains: `${API}/jobs`,
+  method: 'GET',
+  status: 200,
+});
+if (jobs !== undefined) {
+  chk('the job history is not reported', !kindsOf(jobs).includes(PARTIAL_FAILURE), why(jobs));
+  const body = await echoOf(jobs.since, 'jobs');
+  chk(
+    'the list really held failed jobs, otherwise this proves nothing',
+    body.includes('encode failed') && body.includes('source missing'),
+    body,
   );
 }
 

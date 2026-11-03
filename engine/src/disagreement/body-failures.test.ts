@@ -15,6 +15,33 @@ const call = (status: number, responseBody: unknown, method = 'POST'): ReticleEv
   }) as unknown as ReticleEvent;
 
 describe('failures reported inside a 2xx body', () => {
+  // Field report: an assert whose predicate held came back `no`, citing three GETs of a
+  // job list that held old, deliberately failed media jobs. A read returns stored records. Their
+  // `error` fields are history, not the outcome of this request.
+  it('does not read the records a GET lists as the items of a batch', () => {
+    const jobs = {
+      items: [
+        { id: 'j1', status: 'done' },
+        { id: 'j2', status: 'failed', error: 'encode failed' },
+        { id: 'j3', status: 'failed', error: 'source missing' },
+      ],
+    };
+    expect(findBodyFailures([call(200, jobs, 'GET')])).toEqual([]);
+  });
+
+  it('still reports a GET whose own body says the read failed', () => {
+    expect(
+      findBodyFailures([call(200, { data: null, errors: [{ message: 'denied' }] }, 'GET')]),
+    ).toHaveLength(1);
+  });
+
+  it('still reports item failures in a write, and in a call whose method was not recorded', () => {
+    const batch = { results: [{ ok: true }, { ok: false, error: 'carrier_locked' }] };
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', '']) {
+      expect(findBodyFailures([call(200, batch, method)]), method).toHaveLength(1);
+    }
+  });
+
   it('reports per-item failures in a batch response', () => {
     const found = findBodyFailures([
       call(200, {

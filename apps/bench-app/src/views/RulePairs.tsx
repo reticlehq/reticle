@@ -14,6 +14,8 @@ import { useApp } from '../store/store.js';
  *    whose only effect is a store path that was quiet before (silent).
  *  - `pagination-not-fetched`: a bare `1 of 6` label that moves while the app asks for page 1 again
  *    (report), and a `0 of 6 selected` count that moves with the same request (silent).
+ *  - `partial-failure-in-ok-response`: a batch write that answers 200 with one failed item (report),
+ *    and a read of a job list that holds old failed jobs (silent).
  */
 const API = 'http://localhost:8787/api/rule-pairs';
 const PROFILE = { id: 'profile-1', name: 'New name', plan: 'pro' };
@@ -44,6 +46,7 @@ export function RulePairs(): React.ReactElement {
   const [saved, setSaved] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(0);
+  const [batch, setBatch] = useState('');
 
   useEffect(() => {
     void readPage('pages');
@@ -80,6 +83,25 @@ export function RulePairs(): React.ReactElement {
         >
           Remember
         </button>
+      </div>
+      <div className="panel panel-pad" style={{ maxWidth: 560 }}>
+        <h3>Batch</h3>
+        {/* The defect, on purpose: the app says done although one item failed. */}
+        <button
+          data-testid="rule-pairs-batch"
+          onClick={() =>
+            void fetch(`${API}/batch`, { method: 'POST' }).then(() => setBatch('All items held'))
+          }
+        >
+          Hold all
+        </button>
+        <button
+          data-testid="rule-pairs-jobs"
+          onClick={() => void fetch(`${API}/jobs`).then(() => setBatch('Jobs refreshed'))}
+        >
+          Refresh jobs
+        </button>
+        <output data-testid="rule-pairs-batch-status">{batch}</output>
       </div>
       <div className="panel panel-pad" style={{ maxWidth: 560 }}>
         <h3>Pagination</h3>
