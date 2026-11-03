@@ -21,10 +21,12 @@ function harness(
   spawnDaemon: ReturnType<typeof vi.fn>;
   onUsable: ReturnType<typeof vi.fn>;
 } {
-  const probe = vi.fn(async (port: number): Promise<PortPresence> => {
-    const presence = sequence[Math.min(probe.mock.calls.length - 1, sequence.length - 1)];
-    return presence ?? PortPresence.FOREIGN;
-  });
+  const probeImpl = (_port: number): Promise<PortPresence> => {
+    const presence =
+      sequence[Math.min(probe.mock.calls.length - 1, sequence.length - 1)] ?? PortPresence.FOREIGN;
+    return Promise.resolve(presence);
+  };
+  const probe = vi.fn(probeImpl);
   const spawnDaemon = vi.fn(async () => {});
   const onUsable = vi.fn(async () => {});
   return {
@@ -52,8 +54,10 @@ describe('ensureDaemon', () => {
 
     await expect(ensureDaemon(PORT, deps)).resolves.toBeUndefined();
 
-    expect(probe.mock.calls.map((c) => c[0])).toEqual([PORT, PORT]);
-    expect(await Promise.all(probe.mock.results.map((r) => r.value))).toEqual([
+    expect(probe.mock.calls.map((c: number[]) => c[0])).toEqual([PORT, PORT]);
+    expect(
+      await Promise.all(probe.mock.results.map((r: { value: Promise<PortPresence> }) => r.value)),
+    ).toEqual([
       PortPresence.FOREIGN,
       PortPresence.DAEMON,
     ]);
@@ -65,7 +69,7 @@ describe('ensureDaemon', () => {
     const { deps, probe, spawnDaemon } = harness([PortPresence.FOREIGN, PortPresence.FOREIGN]);
 
     await expect(ensureDaemon(PORT, deps)).rejects.toThrow(/4400/);
-    expect(probe.mock.calls.map((c) => c[0])).toEqual([PORT, PORT]);
+    expect(probe.mock.calls.map((c: number[]) => c[0])).toEqual([PORT, PORT]);
     expect(spawnDaemon).not.toHaveBeenCalled();
   });
 
