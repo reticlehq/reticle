@@ -76,15 +76,7 @@ import { fileURLToPath } from 'node:url';
  * constants below, and it reads events the way `evalNet` and `evalSignal` do, so it goes with the
  * rest when `Realm` arrives.
  */
-/*
- * 45 -> 46 for animation target diagnostics, and this is the same debt made explicit.
- *
- * The animation predicate has to tell "e12" from ".spinner" when it reports a target miss. That
- * shape is a session ref, which core already owns; a private /^e\d+$/ here would keep the metric
- * flat by spelling the protocol twice. This file is new to the count, but not a new browser
- * contract: it is borrowing the predicate vocabulary's ref spelling until the engine gets `Realm`.
- */
-const MAX_FILES_IMPORTING_CORE = 46;
+const MAX_FILES_IMPORTING_CORE = 45;
 /**
  * Raised by one, deliberately, and this is the argument for it.
  *
@@ -180,19 +172,8 @@ const MAX_FILES_IMPORTING_CORE = 46;
  * is the type alias the blind-spot check imports to walk the predicate tree. Both cross the
  * engine/core boundary. They join the import `blind-spots.ts` already has, so the file count is
  * unmoved.
- *
- * 71 -> 72 for `SESSION_REF`.
- *
- * A session ref crosses the wire in predicates, command targets and learned ambient keys. Reusing
- * core's spelling keeps those paths from growing independent regexes that disagree later. This is
- * still part of the protocol vocabulary the engine is borrowing back, not a new event noun.
- *
- * 72 -> 73 for `ANIMATION_TARGET_ARG`.
- *
- * The browser SDK and engine both pass the same reticle_animations argument across the bridge.
- * Naming it in core keeps that command contract from turning into two independent string literals.
  */
-const MAX_DISTINCT_SYMBOLS = 73;
+const MAX_DISTINCT_SYMBOLS = 71;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

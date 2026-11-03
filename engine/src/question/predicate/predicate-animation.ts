@@ -1,13 +1,19 @@
-import {
-  ANIMATION_TARGET_ARG,
-  EventType,
-  ReticleCommand,
-  SESSION_REF,
-  type ReticleEvent,
-} from '@reticlehq/core';
 import { isReticleVoice } from '../../state-bookkeeping.js';
 import { str, num, type EvalResult } from './predicate-eval-kit.js';
 import type { PredicateSession } from './predicate-session.js';
+
+export interface AnimationRuntime {
+  readonly startEventType: string;
+  readonly endEventType: string;
+  readonly animationsCommand: string;
+  readonly targetArg: string;
+}
+
+interface AnimationInputEvent {
+  type: string;
+  data: Record<string, unknown>;
+  ref?: string | undefined;
+}
 
 export interface AnimationEvent {
   completed: boolean;
@@ -253,7 +259,7 @@ function animationTargetMiss(
   const reason =
     true === target.invalid
       ? `animation target selector ${quoted} is not a valid CSS selector`
-      : `animation target ${SESSION_REF.test(p.target) ? 'ref' : 'selector'} ${quoted} matched no element`;
+      : `animation target ${quoted} matched no element`;
   return {
     pass: false,
     failureReason: reason,
@@ -313,9 +319,12 @@ export function evalAnimation(
   return liveHit !== undefined ? { pass: true, evidence: liveHit } : animationMiss(events, p, live);
 }
 
-function animationEvents(events: readonly ReticleEvent[]): AnimationEvent[] {
+function animationEvents(
+  events: readonly AnimationInputEvent[],
+  runtime: AnimationRuntime,
+): AnimationEvent[] {
   return events.flatMap((event): AnimationEvent[] => {
-    if (EventType.ANIM_START === event.type) {
+    if (runtime.startEventType === event.type) {
       return [
         {
           completed: false,
@@ -324,7 +333,7 @@ function animationEvents(events: readonly ReticleEvent[]): AnimationEvent[] {
         },
       ];
     }
-    if (EventType.ANIM_END === event.type) {
+    if (runtime.endEventType === event.type) {
       return [
         {
           completed: true,
@@ -340,26 +349,28 @@ function animationEvents(events: readonly ReticleEvent[]): AnimationEvent[] {
 async function readAnimationSnapshot(
   session: PredicateSession,
   predicate: AnimationPredicate,
+  runtime: AnimationRuntime,
 ): Promise<AnimationSnapshot | undefined> {
   const result = await session.command(
-    ReticleCommand.ANIMATIONS,
-    predicate.target === undefined ? {} : { [ANIMATION_TARGET_ARG]: predicate.target },
+    runtime.animationsCommand,
+    predicate.target === undefined ? {} : { [runtime.targetArg]: predicate.target },
   );
   return result.ok ? animationSnapshotFrom(result.result) : undefined;
 }
 
 export async function evalAnimationPredicate(
   session: PredicateSession,
-  events: ReticleEvent[],
+  events: AnimationInputEvent[],
   predicate: AnimationPredicate,
   floor: number,
+  runtime: AnimationRuntime,
 ): Promise<EvalResult> {
   const useLiveAnimations = 0 === floor;
   let snapshot =
-    predicate.target !== undefined && !SESSION_REF.test(predicate.target)
-      ? await readAnimationSnapshot(session, predicate)
+    predicate.target !== undefined
+      ? await readAnimationSnapshot(session, predicate, runtime)
       : undefined;
-  const observed = animationEvents(events);
+  const observed = animationEvents(events, runtime);
   const eventSnapshot =
     useLiveAnimations || snapshot === undefined ? snapshot : { ...snapshot, animations: [] };
   const eventResult = evalAnimation(observed, predicate, eventSnapshot);
@@ -367,7 +378,7 @@ export async function evalAnimationPredicate(
     return eventResult;
   }
   if (snapshot === undefined) {
-    snapshot = await readAnimationSnapshot(session, predicate);
+    snapshot = await readAnimationSnapshot(session, predicate, runtime);
   }
   return evalAnimation(observed, predicate, snapshot);
 }

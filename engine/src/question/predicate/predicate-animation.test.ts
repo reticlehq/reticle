@@ -179,7 +179,7 @@ describe('animation predicate', () => {
     });
 
     expect(result.pass).toBe(false);
-    expect(result.failureReason).toContain('target selector ".missing" matched no element');
+    expect(result.failureReason).toContain('target ".missing" matched no element');
     expect(result.assertion).toBe('animation.target');
   });
 });

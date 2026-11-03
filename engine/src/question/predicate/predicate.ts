@@ -3,6 +3,7 @@ import {
   EventType,
   MUTATING_METHODS,
   PredicateKind,
+  ReticleCommand,
   THROTTLED_STARVED_NOTE,
   isSameDocument,
   type ReticleEvent,
@@ -36,6 +37,13 @@ export { PredicateSchema, PredicateKind };
 export type { Predicate, EvalResult };
 import { withinBudget, type PredicateSession } from './predicate-session.js';
 export type { PredicateSession } from './predicate-session.js';
+
+const ANIMATION_RUNTIME = {
+  startEventType: EventType.ANIM_START,
+  endEventType: EventType.ANIM_END,
+  animationsCommand: ReticleCommand.ANIMATIONS,
+  targetArg: 'target',
+} as const;
 
 /**
  * A composite result that carries a child's "nobody could evaluate this" up to the verdict rule.
@@ -456,7 +464,7 @@ async function evaluatePredicateRaw(
     case PredicateKind.CONSOLE:
       return evalConsole(events, predicate);
     case PredicateKind.ANIMATION:
-      return evalAnimationPredicate(session, events, predicate, floor);
+      return evalAnimationPredicate(session, events, predicate, floor, ANIMATION_RUNTIME);
     case PredicateKind.SIGNAL:
       return evalSignal(events, predicate);
     case PredicateKind.STATE:
