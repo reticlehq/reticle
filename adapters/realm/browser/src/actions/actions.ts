@@ -10,6 +10,7 @@ import {
 } from '@reticlehq/core';
 import { isHiddenNativeOption } from '@/dom/query-finders.js';
 import { isReticleUi, isUnobserved } from '@/dom/dom-ignore.js';
+
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { echoRef, refs } from '@/dom/addressing/refs.js';
 import {
@@ -53,6 +54,9 @@ import {
   dispatchKeypress,
   closeModalOnEscape,
   keyboardEvent,
+  runKeydownDefault,
+  runKeyupDefault,
+  SPACE_KEY,
 } from './actions-press.js';
 import {
   anchorOf,
@@ -197,7 +201,8 @@ function assertActionAllowed(
     action === ActionType.SUBMIT ||
     // Read through the SAME resolver as the dispatch below. Reading a different argument here meant
     // the destructive-action guard classified the call by a key nobody had asked for.
-    (action === ActionType.PRESS && 'Enter' === pressKey(args));
+    // Space too: it clicks a button now (runKeyupDefault), so it must not skip the guard.
+    (action === ActionType.PRESS && ('Enter' === pressKey(args) || SPACE_KEY === pressKey(args)));
   // Same resolver as the dispatch below, so the destructive-action guard cannot classify a drag
   // by a target the dispatch will not use.
   const dragTarget = action === ActionType.DRAG ? refs.resolve(dragTargetRef(args)) : null;
@@ -598,6 +603,8 @@ async function dispatchOther(
       closeModalOnEscape(el, key, down); // on keydown, as a browser does, before any hold
       if (down) {
         dispatchKeypress(el, key, code, mods);
+        // After keypress, as a browser does: Enter activates or submits, Tab moves focus.
+        runKeydownDefault(el, key, mods);
       }
       // A HELD key, with the auto-repeat a browser sends while it is down.
       //
@@ -611,6 +618,9 @@ async function dispatchOther(
       asSyntheticInput(() =>
         el.dispatchEvent(keyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
       );
+      if (down) {
+        runKeyupDefault(el, key, mods);
+      }
       return !down;
     }
     case ActionType.SCROLL_INTO_VIEW:

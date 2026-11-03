@@ -491,3 +491,130 @@ export function closeModalOnEscape(el: ActionTarget, key: string, keydownProceed
     return;
   }
 }
+
+/**
+ * The default actions a browser takes for a key, done for a synthetic `press`.
+ *
+ * A synthetic key event has no default action. The browser does not activate a button on Enter,
+ * submit a form on Enter in a field, click a button on Space, or move focus on Tab. So `press`
+ * reached the app and nothing followed, and a correct app was verified `no` (#1519).
+ *
+ * Each default runs only where a browser runs it, and only when the app did not cancel the key, so
+ * the app sees what a person's keyboard gives it. A `role="button"` element gets no default, as in a
+ * browser: the app must handle that key itself.
+ */
+/** The space bar, as a browser reports it in `KeyboardEvent.key`. */
+export const SPACE_KEY = ' ';
+const ENTER = 'Enter';
+const TAB = 'Tab';
+
+/** Elements that a browser activates (clicks) on Enter. */
+const ENTER_ACTIVATES =
+  'button, a[href], area[href], summary, input[type="submit"], input[type="button"], input[type="reset"], input[type="image"]';
+/** Elements that a browser activates (clicks) on Space, on keyup. A link only scrolls the page. */
+const SPACE_ACTIVATES =
+  'button, summary, input[type="submit"], input[type="button"], input[type="reset"], input[type="image"], input[type="checkbox"], input[type="radio"]';
+/** Single-line fields in which Enter submits the form (implicit submission). */
+const IMPLICIT_SUBMIT_TYPES: ReadonlySet<string> = new Set([
+  'text',
+  'search',
+  'url',
+  'tel',
+  'email',
+  'password',
+  'date',
+  'month',
+  'week',
+  'time',
+  'datetime-local',
+  'number',
+]);
+/** Candidates for Tab order. Each is then filtered: disabled, `tabindex="-1"`, hidden, inert. */
+const FOCUSABLE =
+  'a[href], area[href], button, input, select, textarea, summary, iframe, [tabindex], [contenteditable=""], [contenteditable="true"]';
+
+/** Modifiers that make a key mean something else (a shortcut), so the plain default does not run. */
+interface Held {
+  metaKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+}
+
+const shortcut = (held: Held): boolean => held.metaKey || held.ctrlKey || held.altKey;
+
+/** The default of a keydown that the app did not cancel: Enter activates or submits, Tab moves. */
+export function runKeydownDefault(el: Element, key: string, held: Held): void {
+  if (shortcut(held)) {
+    return;
+  }
+  if (ENTER === key && !held.shiftKey) {
+    enterDefault(el);
+    return;
+  }
+  if (TAB === key) {
+    moveFocus(el, held.shiftKey ? -1 : 1);
+  }
+}
+
+/** The default of a Space keyup whose keydown the app did not cancel: it activates the control. */
+export function runKeyupDefault(el: Element, key: string, held: Held): void {
+  if (SPACE_KEY !== key || shortcut(held) || held.shiftKey) {
+    return;
+  }
+  if (el.matches(SPACE_ACTIVATES) && !isDisabled(el)) {
+    (el as HTMLElement).click();
+  }
+}
+
+function enterDefault(el: Element): void {
+  if (el.matches(ENTER_ACTIVATES)) {
+    if (!isDisabled(el)) {
+      (el as HTMLElement).click();
+    }
+    return;
+  }
+  const type = 'input' === el.localName ? (el.getAttribute('type') ?? 'text').toLowerCase() : '';
+  if (!IMPLICIT_SUBMIT_TYPES.has(type)) {
+    return;
+  }
+  const form = (el as HTMLInputElement).form;
+  // `requestSubmit` validates and fires `submit`, as an implicit submission does.
+  form?.requestSubmit();
+}
+
+function isDisabled(el: Element): boolean {
+  return el.matches(':disabled');
+}
+
+/** Whether Tab can land on this element. */
+function tabbable(el: Element): boolean {
+  if (isDisabled(el) || null !== el.closest('[inert], [hidden]')) {
+    return false;
+  }
+  const html = el as HTMLElement;
+  if (html.tabIndex < 0) {
+    return false;
+  }
+  return 'hidden' !== (el as HTMLInputElement).type;
+}
+
+/**
+ * Move focus to the next (or previous) element in Tab order: positive `tabindex` first, in order,
+ * then the rest in document order. From an element outside that order, the next one after it in
+ * the document. At either end, focus stays: the browser would leave the page.
+ */
+function moveFocus(from: Element, step: 1 | -1): void {
+  const doc = from.ownerDocument;
+  const all = [...doc.querySelectorAll(FOCUSABLE)].filter(tabbable) as HTMLElement[];
+  const positive = all.filter((el) => el.tabIndex > 0).sort((a, b) => a.tabIndex - b.tabIndex);
+  const order = [...positive, ...all.filter((el) => 0 === el.tabIndex)];
+  let at = order.indexOf(from as HTMLElement);
+  if (at < 0) {
+    at = order.findIndex(
+      (el) => from.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    at = at < 0 ? order.length : at - (1 === step ? 1 : 0);
+  }
+  order[at + step]?.focus();
+}
