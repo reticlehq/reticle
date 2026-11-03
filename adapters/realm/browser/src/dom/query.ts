@@ -482,7 +482,7 @@ function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scope
   // scopeMissing flag is what keeps "gone scope" distinct from "absent element".
   if (null === scoped) return { candidates: [], scopeMissing: true };
   // The default root is the whole DOCUMENT minus <head>, not just <body> (#1781 - see searchRoot).
-  const container = query.scope === undefined ? document.documentElement : scoped;
+  const container = scoped;
   // `self: true` asks for the container ITSELF, which every other path excludes by construction.
   // A layout element with no role, name, testid or own text is unreachable by any semantic locator,
   // and it is routinely the element carrying the handler - "click the empty space in this row" is a
