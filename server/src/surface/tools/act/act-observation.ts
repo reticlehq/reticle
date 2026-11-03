@@ -168,6 +168,9 @@ const UNREACHABLE = {
   covered: (by: string): string =>
     `a person could not have clicked the target: it is covered by ${by}. Dismiss or move what ` +
     'covers it, then act again',
+  HIDDEN:
+    'a person could not have clicked the target: it is not visible (for example, it is inside a ' +
+    'closed <details> or has visibility: hidden). Show it the way a person would, then act again',
   NO_SIZE:
     'a person could not have clicked the target: it has no size (zero width or zero height). Give it a size, or act on ' +
     'the control a person actually clicks',
@@ -187,6 +190,11 @@ const UNREACHABLE = {
 export function unreachableTargetNote(actResult: unknown): string | undefined {
   const effect = asRecord(asRecord(actResult)['effect']);
   if (true === effect['occluded']) {
+    // A hidden target keeps its box, so the hit test finds whatever is under it. That element
+    // covers nothing: the target is not shown.
+    if (false === effect['visible']) {
+      return UNREACHABLE.HIDDEN;
+    }
     const by = asString(effect['occluderName']) ?? asString(effect['occludedBy']);
     return UNREACHABLE.covered(by ?? 'another element');
   }

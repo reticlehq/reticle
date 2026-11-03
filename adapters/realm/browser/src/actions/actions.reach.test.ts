@@ -87,6 +87,22 @@ describe('a click a person could not make', () => {
     expect(r.effect.occluded).toBeFalsy();
   });
 
+  /*
+   * A switch inside a `display: none` panel has no box at all. A click on it fired its request,
+   * and the verdict said `yes` (#1518), because only a box of zero area counted as no size.
+   */
+  it('says the target has no size when it has no box at all on a page with layout', async () => {
+    document.body.innerHTML = '<div hidden><button role="switch">Stream archived</button></div>';
+    const button = document.querySelector('button') as HTMLElement;
+    document.documentElement.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
+    try {
+      const r = await executeAction(refs.refFor(button), 'click');
+      expect(r.effect.noSize).toBe(true);
+    } finally {
+      Reflect.deleteProperty(document.documentElement, 'getBoundingClientRect');
+    }
+  });
+
   it('says nothing about size when there is no layout at all', async () => {
     document.body.innerHTML = '<button>Sign in</button>';
     const button = document.querySelector('button') as HTMLElement;

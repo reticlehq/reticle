@@ -230,13 +230,19 @@ function nameOf(el: Element): string {
   return name.length > 0 ? `${getRole(el)} "${name.slice(0, 40)}"` : el.tagName.toLowerCase();
 }
 
-/** Laid out (the page has layout) with a box of no area: a pointer has nowhere to land. */
+/**
+ * Laid out (the page has layout) with a box of no area, or with no box at all (`display: none` on it
+ * or an ancestor): a pointer has nowhere to land.
+ */
 function hasNoSize(el: ActionTarget): boolean {
   if (typeof el.getClientRects !== 'function') {
     return false;
   }
   const rects = Array.from(el.getClientRects());
-  return rects.length > 0 && rects.every((r) => 0 === r.width || 0 === r.height);
+  if (0 === rects.length) {
+    return isMeasurable(el.ownerDocument.documentElement.getBoundingClientRect());
+  }
+  return rects.every((r) => 0 === r.width || 0 === r.height);
 }
 
 /** The first label of a form control that has a box a pointer can land on, or null. */

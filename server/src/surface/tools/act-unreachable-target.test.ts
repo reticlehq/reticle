@@ -135,6 +135,24 @@ describe('act_and_wait on a target a person could not reach', () => {
     expect(String(r['because'])).toContain('covered by [data-testid="sheet"]');
   });
 
+  /*
+   * A switch in a closed `<details>` still has a box, so the hit test at its centre found the next
+   * control. The verdict was unknown, but it blamed that control, which covers nothing (#1518).
+   */
+  it('says a hidden target is not visible, not that the element under it covers it', async () => {
+    const r = await actAndWait(
+      appearsAfter({
+        visible: false,
+        occluded: true,
+        occludedBy: 'e9',
+        occluderName: 'switch "Stream public"',
+      }),
+    );
+    expect(r['verified']).toBe(Verified.UNKNOWN);
+    expect(String(r['because'])).toContain('it is not visible');
+    expect(String(r['because'])).not.toContain('covered by');
+  });
+
   it('is unknown when the target has no size, saying so', async () => {
     const r = await actAndWait(appearsAfter({ noSize: true, visible: false }));
     expect(r['verified']).toBe(Verified.UNKNOWN);

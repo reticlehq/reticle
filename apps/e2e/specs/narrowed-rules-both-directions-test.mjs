@@ -11,6 +11,9 @@ import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // report is the defect closest to the shape the PR silenced, because that is where a narrowed rule
 // goes wrong. Each direction also reads the session's own events, so a fixture that stops producing
 // its shape fails here instead of passing for free.
+//
+// The reach cases at the end hold a fifth rule in the same way: a click that no person can make is
+// never `yes` (#1518).
 import { chromium } from 'playwright';
 import os from 'node:os';
 import path from 'node:path';
@@ -293,6 +296,92 @@ if (patched !== undefined) {
     1 === (await recordsOf(patched.since, NET_REQUEST, PING_PATCHED)) &&
       0 === (await recordsOf(patched.since, NET_UNPATCHED, PING_PATCHED)),
   );
+}
+
+// Reach: a click that no person can make must not give `yes` (#1518). Synthetic dispatch still
+// reaches the control, so its request fires and the declared consequence holds. The verdict must be
+// undecided, and its reason must name why. A control that a person can reach, with the same `until`,
+// must still give `yes`. Each case also counts the request, so a control that stops sending it fails
+// here instead of passing for free.
+const TOGGLE = { kind: 'net', method: 'POST', urlContains: `${API}/toggle`, status: 200 };
+const OVERLAY_ID = 'rule-pairs-overlay';
+const REACH = [
+  {
+    what: 'a switch inside a closed <details>',
+    target: { role: 'switch', name: 'Stream eligible' },
+    because: 'it is not visible',
+  },
+  {
+    what: 'a button under a full-screen overlay',
+    target: { role: 'button', name: 'Publish roster' },
+    because: 'covered by div',
+    covered: true,
+  },
+  {
+    what: 'a switch inside a display: none panel',
+    target: { role: 'switch', name: 'Stream archived' },
+    because: 'has no size',
+  },
+];
+const OPEN = { role: 'switch', name: 'Stream public' };
+
+const toggles = async (since) =>
+  (await events(since)).filter(
+    (e) => 'net.request' === e.type && String(e.data?.url ?? '').includes(`${API}/toggle`),
+  ).length;
+const verdictOf = (r) =>
+  `verified=${String(r?.verified)} reason=${String(r?.verifiedReason ?? '')} because=${String(r?.because ?? '').slice(0, 140)}`;
+/** Put an opaque full-screen layer over the page, or take it away. */
+const cover = (on) =>
+  p.evaluate(
+    ([id, show]) => {
+      document.getElementById(id)?.remove();
+      if (show) {
+        const div = document.createElement('div');
+        div.id = id;
+        div.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#fff;';
+        document.body.appendChild(div);
+      }
+    },
+    [OVERLAY_ID, on],
+  );
+const tools = [
+  {
+    tool: 'act_and_wait',
+    run: (target) =>
+      T('reticle_act_and_wait', { target, action: 'click', until: TOGGLE, timeout_ms: 8000 }),
+  },
+  {
+    tool: 'act { steps }',
+    run: (target) =>
+      T('reticle_act_sequence', { steps: [{ target, action: 'click', expect: TOGGLE }] }),
+  },
+];
+
+for (const c of REACH) {
+  for (const { tool, run } of tools) {
+    console.log(`\n=== reach (${tool}): ${c.what} ===`);
+    if (true === c.covered) {
+      await cover(true);
+    }
+    const r = await run(c.target);
+    if (true === c.covered) {
+      await cover(false);
+    }
+    chk('the click is not verified yes', VERIFIED_YES !== r?.verified, verdictOf(r));
+    chk('the reason says why a person could not click it', String(r?.because ?? '').includes(c.because));
+    chk(
+      'the click really sent its request, otherwise this proves nothing',
+      1 === (await toggles(r?.since ?? 0)),
+    );
+  }
+}
+
+for (const { tool, run } of tools) {
+  console.log(`\n=== reach (${tool}): a switch a person can reach, with the same until ===`);
+  const r = await run(OPEN);
+  chk('the click is verified yes', VERIFIED_YES === r?.verified, verdictOf(r));
+  chk('the click sent its request', 1 === (await toggles(r?.since ?? 0)));
 }
 
 await b.close();
