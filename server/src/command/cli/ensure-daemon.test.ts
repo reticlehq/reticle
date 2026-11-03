@@ -17,19 +17,18 @@ function harness(
   overrides: Partial<EnsureDaemonDeps> = {},
 ): {
   deps: EnsureDaemonDeps;
-  seen: PortPresence[];
+  probe: ReturnType<typeof vi.fn>;
   spawnDaemon: ReturnType<typeof vi.fn>;
   onUsable: ReturnType<typeof vi.fn>;
 } {
-  const seen: PortPresence[] = [];
-  const probe = (): Promise<PortPresence> =>
-      Promise.resolve(
-        sequence[Math.min(seen.length, sequence.length - 1)] ?? PortPresence.FOREIGN,
-      );
+  const probe = vi.fn(async (port: number): Promise<PortPresence> => {
+    const presence = sequence[Math.min(probe.mock.calls.length - 1, sequence.length - 1)];
+    return presence ?? PortPresence.FOREIGN;
+  });
   const spawnDaemon = vi.fn(async () => {});
   const onUsable = vi.fn(async () => {});
   return {
-    seen,
+    probe,
     spawnDaemon,
     onUsable,
     deps: {
@@ -46,53 +45,57 @@ function harness(
 
 describe('ensureDaemon', () => {
   it('retries once when FOREIGN matches a live recorded pid and finds the daemon', async () => {
-    const { deps, seen, spawnDaemon, onUsable } = harness([
+    const { deps, probe, spawnDaemon, onUsable } = harness([
       PortPresence.FOREIGN,
       PortPresence.DAEMON,
     ]);
 
     await expect(ensureDaemon(PORT, deps)).resolves.toBeUndefined();
 
-    expect(seen).toEqual([PortPresence.FOREIGN, PortPresence.DAEMON]);
+    expect(probe.mock.calls.map((c) => c[0])).toEqual([PORT, PORT]);
+    expect(await Promise.all(probe.mock.results.map((r) => r.value))).toEqual([
+      PortPresence.FOREIGN,
+      PortPresence.DAEMON,
+    ]);
     expect(onUsable).toHaveBeenCalledWith(PORT);
     expect(spawnDaemon).not.toHaveBeenCalled();
   });
 
   it('throws when the second probe still reads FOREIGN', async () => {
-    const { deps, seen, spawnDaemon } = harness([PortPresence.FOREIGN, PortPresence.FOREIGN]);
+    const { deps, probe, spawnDaemon } = harness([PortPresence.FOREIGN, PortPresence.FOREIGN]);
 
     await expect(ensureDaemon(PORT, deps)).rejects.toThrow(/4400/);
-    expect(seen).toEqual([PortPresence.FOREIGN, PortPresence.FOREIGN]);
+    expect(probe.mock.calls.map((c) => c[0])).toEqual([PORT, PORT]);
     expect(spawnDaemon).not.toHaveBeenCalled();
   });
 
   it('throws without a second probe when no pid is recorded', async () => {
-    const { deps, seen } = harness([PortPresence.FOREIGN], { readPid: () => null });
+    const { deps, probe } = harness([PortPresence.FOREIGN], { readPid: () => null });
 
     await expect(ensureDaemon(PORT, deps)).rejects.toThrow();
-    expect(seen).toEqual([PortPresence.FOREIGN]);
+    expect(probe.mock.calls).toHaveLength(1);
   });
 
   it('throws without a second probe when the recorded pid is dead', async () => {
-    const { deps, seen } = harness([PortPresence.FOREIGN], { isAlive: () => false });
+    const { deps, probe } = harness([PortPresence.FOREIGN], { isAlive: () => false });
 
     await expect(ensureDaemon(PORT, deps)).rejects.toThrow();
-    expect(seen).toEqual([PortPresence.FOREIGN]);
+    expect(probe.mock.calls).toHaveLength(1);
   });
 
   it('does not retry a DAEMON reading', async () => {
-    const { deps, seen, onUsable } = harness([PortPresence.DAEMON]);
+    const { deps, probe, onUsable } = harness([PortPresence.DAEMON]);
 
     await expect(ensureDaemon(PORT, deps)).resolves.toBeUndefined();
-    expect(seen).toEqual([PortPresence.DAEMON]);
+    expect(probe.mock.calls).toHaveLength(1);
     expect(onUsable).toHaveBeenCalledTimes(1);
   });
 
   it('spawns without retrying a FREE reading', async () => {
-    const { deps, seen, spawnDaemon } = harness([PortPresence.FREE]);
+    const { deps, probe, spawnDaemon } = harness([PortPresence.FREE]);
 
     await expect(ensureDaemon(PORT, deps)).resolves.toBeUndefined();
-    expect(seen).toEqual([PortPresence.FREE]);
+    expect(probe.mock.calls).toHaveLength(1);
     expect(spawnDaemon).toHaveBeenCalledWith(PORT);
   });
 });
