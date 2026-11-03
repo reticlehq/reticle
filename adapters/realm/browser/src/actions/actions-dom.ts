@@ -297,6 +297,41 @@ export function firePointer(
   );
 }
 
+/**
+ * The element the last synthetic hover entered, per document. This is state on purpose: a real
+ * pointer has a position, and it leaves that element when it moves on.
+ */
+const hoveredIn = new WeakMap<Document, Element>();
+
+/**
+ * Leave the element the previous hover entered, as a real pointer does on its way to `next`, and
+ * return the element it came from (the `relatedTarget` for the enter on `next`).
+ *
+ * Field report on 3.9.0: a hover on a second Radix tooltip trigger sent nothing to the first one.
+ * The first tooltip stayed open, the second never opened, and a correct app was verified `no`.
+ * `pointerout`/`mouseout` bubble from the old element (React synthesizes its leave handlers from
+ * them). `pointerleave`/`mouseleave` go to the old element and each ancestor up to the one it shares
+ * with `next`, so moving into a child leaves nothing.
+ */
+export function leavePreviousHover(next: Element): EventTarget {
+  const doc = next.ownerDocument;
+  const prev = hoveredIn.get(doc);
+  hoveredIn.set(doc, next);
+  if (prev === undefined || !prev.isConnected) {
+    return doc.activeElement ?? doc.body;
+  }
+  if (prev === next) {
+    return prev;
+  }
+  firePointer(prev, 'pointerout', next);
+  prev.dispatchEvent(mouseEventFor(prev, 'mouseout', { bubbles: true, relatedTarget: next }));
+  for (let el: Element | null = prev; el !== null && !el.contains(next); el = el.parentElement) {
+    firePointerNonBubbling(el, 'pointerleave', next);
+    el.dispatchEvent(mouseEventFor(el, 'mouseleave', { relatedTarget: next }));
+  }
+  return prev;
+}
+
 /** Enter/leave pointer events are non-bubbling per spec; keep them so to avoid double-firing. */
 export function firePointerNonBubbling(
   el: Element,
