@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, uptime } from 'node:os';
 import {
   mkdirSync,
   readFileSync,
@@ -189,6 +189,41 @@ export function discoverDaemonPort(): number | null {
 }
 
 /**
+ * When the machine last booted, in epoch ms. A pidfile written before it names no daemon: every
+ * process from before the boot is gone, and its pid may now belong to anything.
+ */
+function lastBootMs(): number {
+  // The clock is read at this I/O boundary, as the other timestamps in this file are.
+  return Date.now() - uptime() * 1000;
+}
+
+/**
+ * Does this pidfile name a daemon that is still running?
+ *
+ * The pid must be alive AND the file must be newer than the last boot. A pid alone is not enough:
+ * the OS reuses pids, and after a reboot a pidfile named an unrelated Bluetooth service on Windows.
+ * The port was free, but serve skipped the start because that pid was alive, and the daemon never
+ * came up. A file whose age cannot be read is judged by its pid alone, as before.
+ */
+export function pidFileIsLive(
+  path: string,
+  pid: number,
+  pidAlive: (pid: number) => boolean,
+  bootMs: () => number = lastBootMs,
+): boolean {
+  if (!pidAlive(pid)) {
+    return false;
+  }
+  let writtenMs: number;
+  try {
+    writtenMs = statSync(path).mtimeMs;
+  } catch {
+    return true;
+  }
+  return writtenMs >= bootMs();
+}
+
+/**
  * Sweep ~/.reticle for daemon-<port>.pid files whose process is no longer alive and delete them, so a
  * crashed daemon never leaves a stale pidfile that confuses discovery or makes a port look "taken".
  * Returns the ports reclaimed. `home` and `pidAlive` are injectable for testing (default to the real
@@ -197,6 +232,7 @@ export function discoverDaemonPort(): number | null {
 export function reclaimStaleDaemons(
   home: string = reticleStateHome(),
   pidAlive: (pid: number) => boolean = isAlive,
+  bootMs: () => number = lastBootMs,
 ): number[] {
   const reclaimed: number[] = [];
   let files: string[];
@@ -216,7 +252,7 @@ export function reclaimStaleDaemons(
     } catch {
       pid = null; // unreadable pidfile counts as stale
     }
-    if (null === pid || !pidAlive(pid)) {
+    if (null === pid || !pidFileIsLive(path, pid, pidAlive, bootMs)) {
       try {
         unlinkSync(path);
         removeDaemonRegistry(Number(match[1])); // drop the sidecar discovery entry too
@@ -254,6 +290,8 @@ export interface SpawnDaemonDeps {
     },
   ): SpawnedChild;
   pidAlive(pid: number): boolean;
+  /** When the machine last booted, epoch ms. Optional: the default reads `os.uptime()`. */
+  readonly bootTimeMs?: () => number;
   /** `process.platform`. Optional so a test that does not care runs the detached start. */
   readonly platform?: string;
   /** Windows only: start the daemon outside the Job Object of this process. See win32-escape.ts. */
@@ -366,7 +404,12 @@ export function spawnDaemon(
     lockFd = deps.openFile(pidFilePath, 'wx');
   } catch {
     const existing = readPid(port, deps.home);
-    if (existing !== null && deps.pidAlive(existing)) return false;
+    if (
+      existing !== null &&
+      pidFileIsLive(pidFilePath, existing, (pid) => deps.pidAlive(pid), deps.bootTimeMs)
+    ) {
+      return false;
+    }
     // This branch IS the crash detection — its own comment has always said so ("a stale pidfile from
     // a crashed daemon is reclaimed"), it just never said it out loud. Captured before the unlink,
     // because after it there is no trace left that the previous daemon died at all.

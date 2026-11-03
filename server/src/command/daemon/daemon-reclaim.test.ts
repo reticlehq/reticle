@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync, readdirSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { reclaimStaleDaemons, shouldRemovePid } from './daemon.js';
@@ -47,6 +47,23 @@ describe('reclaimStaleDaemons', () => {
     expect(existsSync(join(home, 'daemon-4400.pid'))).toBe(false);
     expect(existsSync(join(home, 'daemon-4401.pid'))).toBe(true);
     expect(existsSync(join(home, 'daemon-4402.pid'))).toBe(false);
+  });
+
+  // A pid the OS reused after a reboot is alive, and is not the daemon (field report, Windows).
+  it('removes a pidfile written before the last boot even when its pid is alive', () => {
+    writePidFile(4403, 444);
+    writePidFile(4404, 555);
+    const beforeBoot = (Date.now() - 3_600_000) / 1000;
+    utimesSync(join(home, 'daemon-4403.pid'), beforeBoot, beforeBoot);
+
+    const reclaimed = reclaimStaleDaemons(
+      home,
+      () => true,
+      () => Date.now() - 60_000,
+    );
+
+    expect(reclaimed).toEqual([4403]);
+    expect(existsSync(join(home, 'daemon-4404.pid'))).toBe(true);
   });
 
   it('treats an unreadable/garbage pidfile as stale', () => {
