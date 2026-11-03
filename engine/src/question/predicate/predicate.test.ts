@@ -2309,6 +2309,27 @@ describe('element failures carry observed/expected/assertion', () => {
     expect(r.failureReason).toContain('scope');
   });
 
+  it('a miss in a scope that matched several elements says how many it searched (#1663)', async () => {
+    const listScope: PredicateSession = {
+      eventsSince: () => [],
+      elapsed: () => 0,
+      onEvent: () => () => undefined,
+      command: () =>
+        Promise.resolve({
+          kind: 'command_result',
+          id: 'c',
+          ok: true,
+          result: { matched: false, count: 0, elements: [], scopeMatches: 3 },
+        }),
+    } as unknown as PredicateSession;
+    const r = await evaluatePredicate(listScope, {
+      kind: 'element',
+      query: { text: 'Done', scope: '[data-testid=message]' },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.failureReason).toContain('3 elements');
+  });
+
   it('a PASSING assertion carries no failure structure — it is not noise on the green path', async () => {
     const r = await evaluatePredicate(session([{}]), {
       kind: 'element',

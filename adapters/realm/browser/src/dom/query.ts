@@ -13,7 +13,7 @@ import {
   type QueryResult,
   TRANSPORT_LIMITS,
 } from '@reticlehq/core';
-import { isActionTarget, isElement, isFrame } from './realm.js';
+import { isElement, isFrame } from './realm.js';
 import { capturedRootOf } from './shadow-registry.js';
 import { getAccessibleName, getRole, describe, getStates } from './a11y.js';
 import {
@@ -28,6 +28,7 @@ import { hitTestOccluder } from './occlusion.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { declaredTestids } from '@/registry/capabilities.js';
 import { refs } from './addressing/refs.js';
+import { firstIn, firstListIn, hintRoots, resolveContainers } from './scope-roots.js';
 import { getTestIdAttr, readTestId, testIdSelector } from './addressing/testid-attr.js';
 import { stableSelectorFor } from './stable-selector.js';
 import {
@@ -96,39 +97,6 @@ function laysOutApart(el: Element): boolean {
 function ownBox(el: Element): boolean {
   const display = el.ownerDocument.defaultView?.getComputedStyle(el).display ?? 'inline';
   return !display.startsWith('inline') && 'contents' !== display;
-}
-
-/**
- * Resolve a scope to its container. A container of `null` means a scope was GIVEN but resolved to
- * nothing (unmounted, or a selector that matches no element) - the caller must NOT fall back to the
- * whole page, or a scoped query silently widens into a phantom match. `scope === undefined` (no scope)
- * legitimately searches the body.
- */
-function resolveContainer(scope: string | undefined): {
-  container: HTMLElement | null;
-  scopeMissing: boolean;
-} {
-  if (scope === undefined) {
-    return { container: document.body, scopeMissing: false };
-  }
-  // An SVG element is a scope too. `look` hands out refs for SVG links, and the action layer drives
-  // them, so refusing one here reported a scope the page plainly has as MISSING - a floor plan whose
-  // rooms are `<a href>` inside an `<svg>` could be clicked but never scoped to (#1122). The locators
-  // below read only what Element has (attributes, children, text), which is also why `elementsUnder`
-  // already walks SVG descendants.
-  const byRef = refs.resolve(scope);
-  if (isActionTarget(byRef)) {
-    return { container: byRef, scopeMissing: false };
-  }
-  try {
-    const found = document.querySelector(scope);
-    if (isActionTarget(found)) {
-      return { container: found, scopeMissing: false };
-    }
-  } catch {
-    // invalid selector - treat as a missing scope, never a whole-page search
-  }
-  return { container: null, scopeMissing: true };
 }
 
 /**
@@ -216,12 +184,17 @@ export function embeddedRootsUnder(root: HTMLElement): HTMLElement[] {
  * genuinely absent element. The snapshot has always pierced open roots; this makes `query` agree
  * with it.
  */
-function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scopeMissing: boolean } {
-  const { container, scopeMissing } = resolveContainer(query.scope);
+function findCandidates(query: ElementQuery): {
+  candidates: HTMLElement[];
+  scopeMissing: boolean;
+  scopeMatches: number;
+} {
+  const { containers, scopeMissing } = resolveContainers(query.scope);
+  const scopeMatches = containers.length;
   // A given-but-missing scope searches NOTHING - never the whole page. The empty result plus the
   // scopeMissing flag is what keeps "gone scope" distinct from "absent element".
-  if (null === container) {
-    return { candidates: [], scopeMissing: true };
+  if (0 === scopeMatches) {
+    return { candidates: [], scopeMissing: true, scopeMatches };
   }
   // `self: true` asks for the container ITSELF, which every other path excludes by construction.
   // A layout element with no role, name, testid or own text is unreachable by any semantic locator,
@@ -232,7 +205,7 @@ function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scope
   // answering `document.body` would be a wrong answer wearing the shape of one.
   if (true === query.self) {
     if (query.scope === undefined) {
-      return { candidates: [], scopeMissing };
+      return { candidates: [], scopeMissing, scopeMatches };
     }
     // The SAME visible-text rule the splitText hint uses, and it has to be: this path is the retry
     // that hint suggests. Read through `textContent`, the two agreed with each other and disagreed
@@ -240,13 +213,14 @@ function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scope
     // back as a match, and the assertion built on it returned a verdict of `yes` for text that had
     // already been destroyed. A recovery that can only be reached by following a claim of presence
     // must be decided by the same evidence as the claim.
-    if (
-      query.text !== undefined &&
-      !textMatches(visibleTextOf(container, new Map()), query, query.text)
-    ) {
-      return { candidates: [], scopeMissing };
-    }
-    return { candidates: isIgnored(container) ? [] : [container], scopeMissing };
+    const visibleMemo = new Map<Element, boolean>();
+    const selves = containers.filter(
+      (container) =>
+        !isIgnored(container) &&
+        (query.text === undefined ||
+          textMatches(visibleTextOf(container, visibleMemo), query, query.text)),
+    );
+    return { candidates: selves, scopeMissing, scopeMatches };
   }
   const seen = new Set<HTMLElement>();
   const out: HTMLElement[] = [];
@@ -271,11 +245,13 @@ function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scope
       out.push(el);
     }
   };
-  collect(findIn(container, query));
-  for (const embedded of embeddedRootsUnder(container)) {
-    collect(findIn(embedded, query));
+  for (const container of containers) {
+    collect(findIn(container, query));
+    for (const embedded of embeddedRootsUnder(container)) {
+      collect(findIn(embedded, query));
+    }
   }
-  return { candidates: out, scopeMissing };
+  return { candidates: out, scopeMissing, scopeMatches };
 }
 
 /** Longest attribute value returned; one enormous href must not blow the response budget. */
@@ -379,9 +355,11 @@ export function matchQuery(
   // A phrase a reader sees whole matches whole: with no element whose own text holds it, the
   // tightest element whose visible text does is the match — the same one the splitText hint names.
   const wanted = wholePhrase && textOnly(query) ? wantedTextOf(query) : undefined;
-  const scope = 0 === found.candidates.length ? resolveContainer(query.scope).container : null;
+  const scopes = 0 === found.candidates.length ? resolveContainers(query.scope).containers : [];
   const owner =
-    null === scope || wanted === undefined ? undefined : splitTextOwner(scope, wanted, query);
+    wanted === undefined
+      ? undefined
+      : firstIn(scopes, (scope) => splitTextOwner(scope, wanted, query));
   const elements: HTMLElement[] = owner === undefined ? found.candidates : [owner];
   // One visibility cache for the synchronous pass: styles and ancestor clipping metadata resolve
   // once per unique node. Unclipped chains short-circuit; clipped candidates still intersect their
@@ -423,6 +401,7 @@ export function matchQuery(
     elements: descriptors,
     ...(fullText ? { fullText: true as const } : {}),
     ...(scopeMissing ? { scopeMissing: true } : {}),
+    ...(found.scopeMatches > 1 ? { scopeMatches: found.scopeMatches } : {}),
     ...(covered === undefined ? {} : { coveredBy: covered }),
     ...(unreadable === undefined ? {} : { unreadable }),
     // On a MISS, carry the same diagnosis `runQuery` has always returned. MATCH is the command every
@@ -452,9 +431,7 @@ function resolveLabelledBy(el: Element): string | undefined {
 
 /** Structural clusters of the page - the successor to the raw testid list in zero-match hints. */
 function buildPresentRegions(query: ElementQuery): PresentRegion[] {
-  // For the diagnostic hint we WANT the page's orientation even when the scope is gone, so fall back
-  // to the body here (the match path above already reported scopeMissing, so this can't mask it).
-  const container = resolveContainer(query.scope).container ?? document.body;
+  const roots = hintRoots(query.scope);
   const regions: PresentRegion[] = [];
   const CONTAINER_ROLES = [
     'list',
@@ -475,7 +452,7 @@ function buildPresentRegions(query: ElementQuery): PresentRegion[] {
     'tablist',
   ] as const;
   for (const role of CONTAINER_ROLES) {
-    const containers = queryByRoleAndName(container, role, undefined);
+    const containers = roots.flatMap((root) => queryByRoleAndName(root, role, undefined));
     for (const el of containers) {
       // Reticle's HUD is not the app's modal layer — listing it here sent agents to dismiss a panel
       // that was never the problem (#783).
@@ -842,14 +819,14 @@ function buildEmptyHint(
   state?: ElementState,
   diagnose: boolean = true,
 ): QueryEmptyHint {
-  const container = resolveContainer(query.scope).container ?? document.body;
-  const all = container.querySelectorAll(testIdSelector());
+  const roots = hintRoots(query.scope);
+  const all = roots.flatMap((root) => Array.from(root.querySelectorAll(testIdSelector())));
   const present: string[] = [];
   // Counted past the cap rather than stopping at it. The list is capped so the hint stays a hint;
   // the COUNT is what stops a capped list being read as the whole page. `all` is already in hand,
   // so the walk costs nothing the query had not already paid for.
   const seen = new Set<string>();
-  for (const el of Array.from(all)) {
+  for (const el of all) {
     if (isIgnored(el)) {
       continue;
     } // the "what IS here" hint must not advertise Reticle's own UI either
@@ -880,13 +857,13 @@ function buildEmptyHint(
   // and the extra clause would lengthen every failure to say nothing.
   const wanted = wantedTextOf(query);
   if (wanted !== undefined) {
-    const owner = splitTextOwner(container, wanted, query);
+    const owner = firstIn(roots, (root) => splitTextOwner(root, wanted, query));
     if (owner !== undefined) {
       const described = describe(owner);
       const selector = stableSelectorFor(owner);
       hint.splitText = selector === undefined ? described : { ...described, selector };
     } else if (true === query.matchCase) {
-      const shown = caseOnlyMatch(container, wanted);
+      const shown = firstIn(roots, (root) => caseOnlyMatch(root, wanted));
       if (shown !== undefined) {
         hint.caseMiss = shown;
       }
@@ -902,20 +879,20 @@ function buildEmptyHint(
     hint.splitText === undefined &&
     (state === undefined || ElementState.VISIBLE === state || ElementState.IN_VIEWPORT === state)
   ) {
-    if (textInAriaHidden(container, wanted)) {
+    if (roots.some((root) => textInAriaHidden(root, wanted))) {
       hint.ariaHiddenMatch = true;
     }
   }
-  const near = nameNearMisses(container, query);
+  const near = firstListIn(roots, (root) => nameNearMisses(root, query));
   if (near.length > 0) {
     hint.nameNearMiss = near;
   }
-  const elsewhere = testidFoundUnder(container, query);
+  const elsewhere = firstIn(roots, (root) => testidFoundUnder(root, query));
   if (elsewhere !== undefined) {
     hint.testidFoundUnder = elsewhere;
   }
   // Gated on `diagnose` like the aria-hidden scan: it reads the name of every target on the page.
-  const nearest = diagnose ? nearestTargets(container, query) : [];
+  const nearest = diagnose ? firstListIn(roots, (root) => nearestTargets(root, query)) : [];
   if (nearest.length > 0) {
     hint.nearest = nearest;
   }
@@ -936,7 +913,10 @@ export function elementsMatching(query: ElementQuery): HTMLElement[] {
  */
 export function runQuery(query: ElementQuery, limit?: number): QueryResult {
   const result = matchQuery(query, undefined, limit, false);
-  const scopeFields = true === result.scopeMissing ? { scopeMissing: true as const } : {};
+  const scopeFields = {
+    ...(true === result.scopeMissing ? { scopeMissing: true as const } : {}),
+    ...(result.scopeMatches === undefined ? {} : { scopeMatches: result.scopeMatches }),
+  };
   if (0 === result.elements.length) {
     return {
       elements: result.elements,

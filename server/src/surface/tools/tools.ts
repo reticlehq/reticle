@@ -550,6 +550,12 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
         .describe(
           'True when a `scope` was given but resolved to nothing — zero matches then means the scope is gone, NOT that the element is absent. The search did not widen to the whole page. Re-check the scope before concluding anything.',
         ),
+      scopeMatches: z
+        .number()
+        .optional()
+        .describe(
+          'Present when a CSS `scope` matched more than one element: how many it matched. The search covered all of them. To read one item, scope to its ref.',
+        ),
     },
     handler: (deps, rawArgs) => {
       // Accept the predicate's named-field spelling too — see query-shape.ts.

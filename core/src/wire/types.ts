@@ -158,6 +158,12 @@ export interface MatchResult {
    */
   scopeMissing?: boolean;
   /**
+   * Present only when a CSS `scope` matched more than one element: how many it matched. The search
+   * covers every one of them. Without the count, a miss across a list of repeated items read like a
+   * miss in one item (#1663).
+   */
+  scopeMatches?: number;
+  /**
    * Present only when a framework error dialog (Next.js, Vite) is open over the page and a match is
    * under it: the name of that dialog. The match is in the DOM, but a user sees only the dialog, so a
    * presence check is not a plain pass (#1768).
@@ -288,6 +294,8 @@ export interface QueryResult {
   hint?: QueryEmptyHint;
   /** See MatchResult.scopeMissing — a provided scope resolved to nothing; the search did not widen. */
   scopeMissing?: boolean;
+  /** See MatchResult.scopeMatches — how many elements a CSS scope matched, when more than one. */
+  scopeMatches?: number;
 }
 
 /** One named flow advertised by the app (mirrors the browser CapabilityFlow). */
