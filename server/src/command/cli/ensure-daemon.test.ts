@@ -56,7 +56,7 @@ describe('ensureDaemon', () => {
 
     expect(probe.mock.calls.map((c: number[]) => c[0])).toEqual([PORT, PORT]);
     expect(
-      await Promise.all(probe.mock.results.map((r: { value: Promise<PortPresence> }) => r.value)),
+      await Promise.all(probe.mock.results.map((r: { value: unknown }) => r.value)),
     ).toEqual([
       PortPresence.FOREIGN,
       PortPresence.DAEMON,
