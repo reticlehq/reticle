@@ -342,7 +342,7 @@
   },
   "src/command/daemon/daemon.ts": {
     "curly": {
-      "count": 10
+      "count": 9
     }
   },
   "src/command/daemon/dev-servers.test.ts": {

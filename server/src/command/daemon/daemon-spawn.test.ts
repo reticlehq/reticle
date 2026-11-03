@@ -149,6 +149,24 @@ describe('spawnDaemon with injectable deps', () => {
     expect(existsSync(join(home, 'daemon-4005.pid'))).toBe(false);
   });
 
+  // Field report (Windows): a pidfile that survived a reboot named an unrelated Bluetooth service
+  // after the OS reused its pid. The port was free, but serve skipped the start because the pid was
+  // alive, and the daemon never came up. A pidfile written before the last boot names no daemon.
+  it('starts when the pidfile was written before the last boot, even though its pid is alive', () => {
+    const harness = makeDeps({
+      pidAlive: () => true,
+      bootTimeMs: () => Date.now() - 60_000,
+    });
+    const pidFile = join(home, 'daemon-4007.pid');
+    writeFileSync(pidFile, '424', 'utf8');
+    const beforeBoot = (Date.now() - 3_600_000) / 1000;
+    utimesSync(pidFile, beforeBoot, beforeBoot);
+
+    expect(spawnDaemon('node', 'script.mjs', [], 4007, harness.deps)).toBe(true);
+    expect(harness.wasSpawned()).toBe(true);
+    expect(readFileSync(pidFile, 'utf8').trim()).toBe('12345');
+  });
+
   it('returns false without spawning when a live daemon owns the port', () => {
     let spawned = false;
     const { deps } = makeDeps({
