@@ -57,6 +57,7 @@ import {
 } from './flow-anchor.js';
 import { nearestRoleName, type RoleCandidate } from './role-anchor-nearest.js';
 import { roleDriftReason } from '@/judgement/outcome/role-drift-reason.js';
+import { captureBaselines, type Baselines } from '@reticlehq/engine/evidence/baseline.js';
 
 /** The live act_sequence tool gives each step this transport budget when none was supplied. */
 export const DEFAULT_SEQUENCE_STEP_TIMEOUT_MS = 8_000;
@@ -674,11 +675,9 @@ export async function runSequenceStep(
   sleep: Sleep,
   /** Testids whose presence is deliberately NOT asserted — the LLM-output case. */
   dynamic: ReadonlySet<string> = new Set(),
-  /**
-   * Judge one sub-step's `expect` over the window from `since`, which opens just before that
-   * sub-step's dispatch. Omitted for a setup step, whose consequences are not checked.
-   */
-  judge?: (expectation: Predicate, since: number) => Promise<Drift | undefined>,
+  /** Judge a sub-step's `expect` from `since`, just before its dispatch, against the `before`
+   *  reading; omitted for a setup step, whose consequences are not checked. */
+  judge?: (expectation: Predicate, since: number, before?: Baselines) => Promise<Drift | undefined>,
 ): Promise<FlowStepResult> {
   type LiveSubStep = { ref: string; action: string; args: Record<string, unknown> };
   const gap = burstGap(step.burstMs);
@@ -971,6 +970,7 @@ export async function runSequenceStep(
           continue;
         }
         await holdGap(() => session.elapsed(), lastSent, gap, sleep);
+        const before = judged(sub) ? await captureBaselines(session, sub.expect) : undefined;
         const since = session.elapsed();
         lastSent = since;
         if (!(await dispatchFrom(at, at + 1))) {
@@ -984,7 +984,7 @@ export async function runSequenceStep(
         // `since`. Judged at the end, a middle route expect failed and a late claim passed early.
         const drift =
           judge !== undefined && sub.expect !== undefined
-            ? await judge(sub.expect, since)
+            ? await judge(sub.expect, since, before)
             : undefined;
         if (drift !== undefined) {
           result.ok = false;

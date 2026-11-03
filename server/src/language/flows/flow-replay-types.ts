@@ -1,6 +1,6 @@
 import type { CommandResult, ReticleEvent } from '@reticlehq/core';
 import type { Predicate } from '@reticlehq/engine/question/predicate/predicate-schema.js';
-import type { EvalResult } from '@reticlehq/engine/question/predicate/predicate.js';
+import type { Baselines, EvalResult } from '@reticlehq/engine/question/predicate/predicate.js';
 
 /**
  * The shapes a replay needs from whatever is driving it.
@@ -49,6 +49,8 @@ export type WaitForSignal = (
   predicate: Predicate,
   timeoutMs: number,
   since?: number,
+  /** Readings taken before the action, for `unchanged` and the other comparing properties. */
+  baselines?: Baselines,
 ) => Promise<EvalResult>;
 
 /** Injected sleeper so tests drive replay with a no-op clock; production waits on a real timer. */
