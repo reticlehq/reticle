@@ -12,6 +12,22 @@ import {
 } from '@/surface/mcp/attach-memory.js';
 
 describe('statusLines', () => {
+  it.each([4400, 5517])('shows the MCP connection URL on port %i (#1963)', (port) => {
+    const out = statusLines({ port, running: true, sessionCount: 0 }).join('\n');
+    expect(out).toContain(`http://127.0.0.1:${port}/mcp/sse`);
+    expect(out).toContain('If your agent has no reticle_* tools, connect over HTTP/SSE');
+  });
+
+  it.each(['free', 'foreign'])('does not offer MCP on a %s port', (presence) => {
+    const out = statusLines({ port: 5517, running: false, presence }).join('\n');
+    expect(out).not.toContain('/mcp/sse');
+  });
+
+  it('does not guess the MCP port when the payload has none', () => {
+    const out = statusLines({ running: true }).join('\n');
+    expect(out).not.toContain('/mcp/sse');
+  });
+
   it('renders a running daemon with a connected session', () => {
     const out = statusLines({
       port: 4400,

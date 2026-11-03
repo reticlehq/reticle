@@ -146,11 +146,6 @@
       "count": 2
     }
   },
-  "src/command/cli/doctor/doctor-daemon-line.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/command/cli/doctor/doctor-rows.test.ts": {
     "curly": {
       "count": 2
