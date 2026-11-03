@@ -13,13 +13,14 @@ import { refs } from './addressing/refs.js';
  * Resolve a scope to its container. A container of `null` means a scope was GIVEN but resolved to
  * nothing (unmounted, or a selector that matches no element) - the caller must NOT fall back to the
  * whole page, or a scoped query silently widens into a phantom match. `scope === undefined` (no scope)
- * legitimately searches the body.
+ * searches the whole DOCUMENT (rooted at `document.documentElement`), the same default `searchRoot`
+ * returns - content mounted outside `<body>` renders and must be reachable (#1781).
  */
 export function resolveContainer(scope: string | undefined): {
   container: HTMLElement | null;
   scopeMissing: boolean;
 } {
-  if (scope === undefined) return { container: document.body, scopeMissing: false };
+  if (scope === undefined) return { container: document.documentElement, scopeMissing: false };
   // An SVG element is a scope too. `look` hands out refs for SVG links, and the action layer drives
   // them, so refusing one here reported a scope the page plainly has as MISSING - a floor plan whose
   // rooms are `<a href>` inside an `<svg>` could be clicked but never scoped to (#1122). The locators
