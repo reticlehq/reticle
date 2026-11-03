@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — the first-run tour could take a key that a drive sent to the app.** The tour listens for ArrowLeft, ArrowRight and Escape on the whole page, and cancels them. It steps aside when a drive starts, but it learned that through a `MutationObserver` that runs after the current task. So a key sent in the same task still reached the tour, and the check then said that the expected request was absent. Without a HUD overlay it never stepped aside at all. The tour now checks for a drive when each key arrives, and steps aside before it handles the key. It still shows on the next plain load.
