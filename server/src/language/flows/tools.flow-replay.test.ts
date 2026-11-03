@@ -12,6 +12,7 @@ import {
   FLOW_FILE_VERSION,
   FlowErrorCode,
   IntentState,
+  PredicateKind,
   ReticleCommand,
   QueryBy,
   ReplayStatus,
@@ -556,6 +557,58 @@ describe('reticle_flow_replay — a green that cannot go red (#341)', () => {
     expect(res.steps).toHaveLength(0);
     expect(res.unverifiable?.reason).toBeDefined();
     expect(res.unverifiable?.reason).toContain('precondition of this flow does not hold');
+  });
+
+  /*
+   * #2034: a flow that declares the route it needs does not run on another page. When replay
+   * cannot put the tab there, the result says so, and no step runs.
+   */
+  it('a declared route that replay cannot reach returns status unverifiable before step 1', async () => {
+    const declaresOrders: FlowFile = {
+      version: 1,
+      name: 'declares-orders',
+      createdAt: clock.now(),
+      requires: [{ kind: PredicateKind.ROUTE, pathname: '/orders' }],
+      steps: [
+        {
+          tool: 'reticle_act',
+          anchor: { kind: AnchorKind.TESTID, value: 'export' },
+          action: ActionType.CLICK,
+        },
+      ],
+    };
+    await fs.mkdir(flowDir(root));
+    await fs.writeFile(
+      flowPath(root, asFlowName('declares-orders')),
+      JSON.stringify(declaresOrders),
+    );
+    let actions = 0;
+    const session: Partial<Session> = {
+      id: 'old',
+      url: 'http://localhost:3000/settings',
+      elapsed: () => 0,
+      eventsSince: () => [],
+      command: (name: string): Promise<CommandResult> => {
+        if (name === ReticleCommand.ACT) {
+          actions += 1;
+        }
+        // Every NAVIGATE is refused, so the tab stays on /settings.
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'c',
+          ok: true,
+          result: name === ReticleCommand.NAVIGATE ? { ok: false } : { elements: [{ ref: 'e1' }] },
+        });
+      },
+    };
+    const res = (await tool(ReticleTool.FLOW_REPLAY).handler(fakeDeps(fs, root, session), {
+      flowName: 'declares-orders',
+    })) as FlowReplayResult;
+    expect(res.status).toBe(ReplayStatus.UNVERIFIABLE);
+    expect(res.steps).toEqual([]);
+    expect(res.unverifiable?.reason).toContain('declares that it starts on /orders');
+    expect(res.unverifiable?.reason).toContain('the tab is on /settings');
+    expect(actions).toBe(0);
   });
 });
 
