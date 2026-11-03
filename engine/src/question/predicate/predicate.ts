@@ -3,6 +3,7 @@ import {
   EventType,
   MUTATING_METHODS,
   PredicateKind,
+  ReticleCommand,
   THROTTLED_STARVED_NOTE,
   isSameDocument,
   type ReticleEvent,
@@ -25,17 +26,24 @@ import {
   PredicateSchema,
   evalNet,
   evalConsole,
-  evalAnimation,
   evalSignal,
   evalSettled,
   type Predicate,
   type EvalResult,
 } from './predicate-eval.js';
+import { evalAnimationPredicate } from './predicate-animation.js';
 
 export { PredicateSchema, PredicateKind };
 export type { Predicate, EvalResult };
 import { withinBudget, type PredicateSession } from './predicate-session.js';
 export type { PredicateSession } from './predicate-session.js';
+
+const ANIMATION_RUNTIME = {
+  startEventType: EventType.ANIM_START,
+  endEventType: EventType.ANIM_END,
+  animationsCommand: ReticleCommand.ANIMATIONS,
+  targetArg: 'target',
+} as const;
 
 /**
  * A composite result that carries a child's "nobody could evaluate this" up to the verdict rule.
@@ -61,7 +69,6 @@ function unreadableComposite(child: EvalResult, evidence: unknown): EvalResult {
 const WINDOW_ONLY_KINDS: ReadonlySet<Predicate['kind']> = new Set([
   PredicateKind.NET,
   PredicateKind.CONSOLE,
-  PredicateKind.ANIMATION,
   PredicateKind.SIGNAL,
   PredicateKind.SETTLED,
 ]);
@@ -457,7 +464,7 @@ async function evaluatePredicateRaw(
     case PredicateKind.CONSOLE:
       return evalConsole(events, predicate);
     case PredicateKind.ANIMATION:
-      return evalAnimation(events, predicate);
+      return evalAnimationPredicate(session, events, predicate, floor, ANIMATION_RUNTIME);
     case PredicateKind.SIGNAL:
       return evalSignal(events, predicate);
     case PredicateKind.STATE:

@@ -1,12 +1,13 @@
 /**
  * Which predicates can be satisfied by something that was already true before the action.
  *
- * Event-based kinds (net, signal, console, animation, settled) are evaluated against the
+ * Event-based kinds (net, signal, console, settled) are evaluated against the
  * event buffer floored at the act's own cursor, so a stale event cannot satisfy them — that floor is
  * why `act_and_wait` can trust them at all.
  *
- * `element` and `text` read the LIVE DOM, `route` can fall back to the current route, and `state` reads
- * live store memory via STATE_READ — where no event floor applies. A condition that held before the
+ * `element` and `text` read the LIVE DOM, `route` can fall back to the current route, `animation`
+ * can fall back to the page's current `getAnimations()` state, and `state` reads live store memory
+ * via STATE_READ — where no event floor applies. A condition that held before the
  * click holds after it and passes instantly, whatever the action did. A click asserted with
  * `{ kind: 'text', contains: 'Parallel Routes' }` returns `verified: "yes"` against
  * `routeChanges: 0` when the predicate matches a nav link that was already on screen, while the real
@@ -20,7 +21,11 @@ import { PredicateKind, compareSourceClauses, type ElementDescriptor } from '@re
 import type { Predicate } from '@/question/predicate/predicate.js';
 import { asksForComparison } from './baseline.js';
 
-export function readsDomState(predicate: Predicate): boolean {
+function predicateSince(predicate: Predicate): number {
+  return 'since' in predicate && 'number' === typeof predicate.since ? predicate.since : 0;
+}
+
+export function readsDomState(predicate: Predicate, since = 0): boolean {
   switch (predicate.kind) {
     // ROUTE is here, and it did not used to be. It was purely event-based — satisfiable only by a
     // navigation inside the act's window, and therefore unable to be answered by the past — so it
@@ -52,15 +57,17 @@ export function readsDomState(predicate: Predicate): boolean {
     case PredicateKind.ELEMENT:
     case PredicateKind.ROUTE:
       return true;
+    case PredicateKind.ANIMATION:
+      return 0 === Math.max(since, predicateSince(predicate));
     case PredicateKind.ALL_OF:
     case PredicateKind.ANY_OF:
-      return predicate.predicates.some(readsDomState);
+      return predicate.predicates.some((p) => readsDomState(p, since));
     case PredicateKind.NOT:
-      return readsDomState(predicate.predicate);
+      return readsDomState(predicate.predicate, since);
     // A comparison between two LIVE readings (text, a store) can already agree before the click, and
     // then it proves nothing about the click. A `net` or `signal` side is floored like any other.
     case PredicateKind.COMPARE:
-      return compareSourceClauses(predicate).some(readsDomState);
+      return compareSourceClauses(predicate).some((p) => readsDomState(p, since));
     default:
       return false;
   }

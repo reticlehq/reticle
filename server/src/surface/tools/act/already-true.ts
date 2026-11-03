@@ -53,7 +53,7 @@ export async function readAlreadyTrue(
   // not taken the reading for.
   const baselines = await captureBaselines(session, until);
   const precheck =
-    until !== undefined && readsDomState(until)
+    until !== undefined && readsDomState(until, since)
       ? await evaluatePredicate(session, until, since, false, baselines)
       : undefined;
   const alreadyTrue = precheck?.pass ?? false;

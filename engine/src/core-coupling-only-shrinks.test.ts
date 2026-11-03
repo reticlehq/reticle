@@ -156,8 +156,7 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * not hold it open until it times out. The value is a predicate field, it crosses the wire in a saved
  * flow, so it lives in core. Spelling `'network'` here would keep this number flat by breaking the
  * rule it protects. It joins the import `predicate-eval.ts` already has, so the file count is unmoved.
- */
-/*
+ *
  * 68 -> 69 for the `match` command's `fullText` argument, the same case as the raises above it.
  *
  * A `text` predicate's `satisfies` was graded on the 80-character display form of the element's
