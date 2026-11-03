@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { EventType } from './constants/constants.js';
-import {
-  EVENT_PAYLOAD_SCHEMAS,
-  ROUTE_CHANGE_HOW_FIELD,
-  RouteChangeHow,
-  parseEventPayload,
-} from './event-payloads.js';
+import { EventType, ROUTE_CHANGE_HOW_FIELD, RouteChangeHow } from './constants/constants.js';
+import { EVENT_PAYLOAD_SCHEMAS, parseEventPayload } from './event-payloads.js';
 
 describe('EVENT_PAYLOAD_SCHEMAS', () => {
   it('defines a payload schema for every EventType (no untyped event on the wire)', () => {

@@ -168,3 +168,89 @@ export const CanvasTrigger = {
   ACT: 'act',
 } as const;
 export type CanvasTrigger = (typeof CanvasTrigger)[keyof typeof CanvasTrigger];
+
+/**
+ * Wire payload vocabularies. The browser observers EMIT these values and the schemas below VALIDATE
+ * them, so a browser-side typo (`'SSE'`) would pass tsc and fail only here, at runtime. Each is a const
+ * object — the browser imports the members, the schema derives its z.nativeEnum from the same object —
+ * so emitter and validator are one source. Kept here, not beside the schemas in `event-payloads.ts`:
+ * the browser imports only these, so a page does not download every payload schema.
+ */
+/**
+ * `FETCH` is a response whose BODY is still arriving after the request itself resolved.
+ *
+ * `fetch` settles at HEADERS, so a streamed response is reported complete while the server is still
+ * writing. Measured on a Next.js App Router page: the RSC payload's NET_REQUEST landed 16 ms in, the
+ * shell rendered, and the Suspense boundary's content arrived 889 ms later — a window in which
+ * nothing at all was observed, so `settled` passed while the fallback was still on screen.
+ */
+export const StreamTransport = { SSE: 'sse', WS: 'ws', FETCH: 'fetch' } as const;
+export type StreamTransport = (typeof StreamTransport)[keyof typeof StreamTransport];
+
+/** `CLOSE` pairs with `OPEN`: until it arrives, the body is still being written. */
+export const StreamDirection = { OPEN: 'open', IN: 'in', OUT: 'out', CLOSE: 'close' } as const;
+export type StreamDirection = (typeof StreamDirection)[keyof typeof StreamDirection];
+
+export const ScrollDirection = { UP: 'up', DOWN: 'down' } as const;
+export type ScrollDirection = (typeof ScrollDirection)[keyof typeof ScrollDirection];
+
+/**
+ * How a `route.change` happened.
+ *
+ * `push` is `history.pushState`, `replace` is `history.replaceState`, and `pop` is the session
+ * history moving under the page (`popstate`, or a `hashchange` the page did not push). A
+ * same-pathname replace records UI state in the URL; it is not a navigation to a new view.
+ */
+export const RouteChangeHow = {
+  PUSH: 'push',
+  REPLACE: 'replace',
+  POP: 'pop',
+} as const;
+export type RouteChangeHow = (typeof RouteChangeHow)[keyof typeof RouteChangeHow];
+
+/** Wire field on `route.change` carrying a `RouteChangeHow`. */
+export const ROUTE_CHANGE_HOW_FIELD = 'how';
+
+/**
+ * Why a `field.change` was emitted.
+ *
+ * `input` is a burst of keystrokes and `change` is the commit that ends one — both are the user's
+ * own event, fired before a controlled component restores its DOM property. `settled` is a read of
+ * that property on the frame after the handlers ran. Only a settled read that differs from the
+ * pre-action value is evidence the screen moved.
+ */
+export const FieldChangeKind = {
+  INPUT: 'input',
+  CHANGE: 'change',
+  SETTLED: 'settled',
+} as const;
+export type FieldChangeKind = (typeof FieldChangeKind)[keyof typeof FieldChangeKind];
+
+/**
+ * Wire fields on `field.change` beyond `field` / `kind` / `value` / `length`.
+ *
+ * `checked` is the property a checkbox or radio actually renders; `value` on those is the HTML
+ * value (`"on"`), which does not move when the box is toggled. `previous` and `previousChecked`
+ * are the same reading from before the action, present on a settled event so a consumer can tell
+ * a render from a restore.
+ */
+export const FieldChangeField = {
+  FIELD: 'field',
+  KIND: 'kind',
+  LENGTH: 'length',
+  VALUE: 'value',
+  REDACTED: 'redacted',
+  CHECKED: 'checked',
+  PREVIOUS: 'previous',
+  PREVIOUS_CHECKED: 'previousChecked',
+} as const;
+
+/**
+ * The three readable client-side storage areas.
+ *
+ * `cookies` is plural because that is what the storage tool accepts, what the browser returns and
+ * what the docs publish. This member read `cookie` for as long as it had no callers, which is
+ * exactly how long a name can disagree with every use of it for free.
+ */
+export const StorageArea = { LOCAL: 'local', SESSION: 'session', COOKIE: 'cookies' } as const;
+export type StorageArea = (typeof StorageArea)[keyof typeof StorageArea];
