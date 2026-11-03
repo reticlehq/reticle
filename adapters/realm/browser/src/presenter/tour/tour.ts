@@ -450,6 +450,16 @@ export function mountTour(deps: TourDeps): TourHandle | undefined {
   const onKey = (event: KeyboardEvent): void => {
     if (!open) return;
     /*
+     * A key sent by a drive belongs to the app. The watcher below takes the tour down when a drive
+     * starts, but a MutationObserver runs after the current task, so a key in the same task as the
+     * drive still landed here and was cancelled. Without a HUD overlay there is no watcher at all.
+     * Asking at the key itself closes both gaps. Not "seen", as in `yieldToDrive`.
+     */
+    if (deps.isDriving()) {
+      remove();
+      return;
+    }
+    /*
      * An app modal outranks our onboarding.
      *
      * Reported from the field as "Escape does not close a <dialog> opened with showModal()", with

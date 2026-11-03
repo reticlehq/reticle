@@ -95,6 +95,41 @@ describe('a page Reticle opened for itself', () => {
     expect(seen).toBe(false);
   });
 
+  // Field report on the first-run tour: it took the app's input after a browser restart, and the
+  // check only said that the expected request was absent. The tour yields to a drive through a
+  // MutationObserver, which runs after the current task, so a key sent in the same task as the
+  // drive started still reached the tour's own handler. With no HUD overlay there was no watcher.
+  it.each([false, true])(
+    'lets a key from a drive reach the app at once (HUD overlay present: %s)',
+    (withOverlay) => {
+      const doc = document.implementation.createHTMLDocument('t');
+      if (withOverlay) {
+        const overlay = doc.createElement('div');
+        overlay.setAttribute('data-reticle-overlay', '');
+        overlay.setAttribute('data-reticle-mode', 'idle');
+        doc.body.appendChild(overlay);
+      }
+      let driving = false;
+      const handle = mountTour({
+        document: doc,
+        storage: freshStorage(),
+        projectId: 'p1',
+        isDriving: () => driving,
+        search: '',
+      });
+      expect(handle).toBeDefined();
+      driving = true;
+      const key = new KeyboardEvent('keydown', {
+        key: 'ArrowRight',
+        bubbles: true,
+        cancelable: true,
+      });
+      doc.body.dispatchEvent(key);
+      expect(key.defaultPrevented).toBe(false);
+      expect(doc.querySelector('[data-reticle-tour]')).toBeNull();
+    },
+  );
+
   it('still shows the tour on a plain dev load, which is the load it exists for', () => {
     // No stamp, nobody driving, storage unavailable counts as seen -- so pass storage that says no.
     const doc = document.implementation.createHTMLDocument('t');
