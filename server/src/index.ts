@@ -306,6 +306,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       (leaseId, error) => pageErrorJournal.onPoolPageError(leaseId, error),
       (leaseId) => pageErrorJournal.onLeaseClosed(leaseId),
       bridge.nonces,
+      (leaseId, dialog) => pageErrorJournal.onPoolDialog(leaseId, dialog),
     );
     leaseReaper = new LeaseReaper(pool);
     leaseReaper.start();
@@ -550,6 +551,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     (leaseId, error) => pageErrorJournal.onPoolPageError(leaseId, error),
     (leaseId) => pageErrorJournal.onLeaseClosed(leaseId),
     bridge.nonces,
+    (leaseId, dialog) => pageErrorJournal.onPoolDialog(leaseId, dialog),
   );
   const leaseReaper = new LeaseReaper(pool);
   leaseReaper.start();

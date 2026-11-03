@@ -79,9 +79,10 @@ class FakePage implements PooledPage {
     this.#onCrash?.();
   }
   /** Test helper: simulate the page opening a native confirm()/alert()/prompt(). */
-  openDialog(message: string): void {
+  openDialog(message: string, kind?: string): void {
     this.#onDialog?.({
       message,
+      ...(kind === undefined ? {} : { kind }),
       dismiss: () => {
         this.dismissedMessages.push(message);
         return Promise.resolve();
@@ -809,6 +810,31 @@ describe('BrowserPool', () => {
 
     expect(page.dismissedMessages).toEqual(['Are you sure you want to leave?']);
     expect(pool.lastDialogMessage(lease.sessionId)).toBe('Are you sure you want to leave?');
+  });
+
+  it('reports each dismissed dialog with its lease id, so the dismissal leaves evidence', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const heard: Array<{ leaseId: string; kind?: string; message: string }> = [];
+    const pool = new BrowserPool(launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+      onDialog: (leaseId, dialog) => {
+        heard.push({
+          leaseId,
+          message: dialog.message,
+          ...(dialog.kind === undefined ? {} : { kind: dialog.kind }),
+        });
+      },
+    });
+
+    const lease = await pool.acquire('http://localhost:3000/items');
+    const page = browsers[0]?.contexts[0]?.pages[0] as FakePage;
+    page.openDialog('Delete this item?', 'confirm');
+
+    expect(page.dismissedMessages).toEqual(['Delete this item?']);
+    expect(heard).toEqual([
+      { leaseId: lease.sessionId, kind: 'confirm', message: 'Delete this item?' },
+    ]);
   });
 
   it('dismisses a dialog opened during the initial navigation, before the lease is registered', async () => {

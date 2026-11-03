@@ -204,7 +204,11 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
               ),
             onDialog: (handler) =>
               page.on('dialog', (dialog) =>
-                handler({ message: dialog.message(), dismiss: () => dialog.dismiss() }),
+                handler({
+                  message: dialog.message(),
+                  kind: dialog.type(),
+                  dismiss: () => dialog.dismiss(),
+                }),
               ),
             addInitScript: async (script, arg) => {
               const handle = (await page.addInitScript(script as never, arg)) as

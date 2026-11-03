@@ -378,3 +378,30 @@ export function mediaEntryBeforeWindow(
       (urlContains === undefined || urlForMatch(e.data).includes(urlContains)),
   );
 }
+
+/** A `confirm` or `prompt` that Reticle answered for the app, as the window recorded it. */
+export interface DeclinedDialog {
+  readonly kind: string;
+  readonly message?: string;
+}
+
+/**
+ * The first dialog in the window that Reticle answered on the app's behalf, or undefined.
+ *
+ * Only a dialog that carries `answered` counts. An `alert` has no answer, so it cannot change which
+ * path the app took. The SDK and the leased-tab pool both record the answer in this one event.
+ */
+export function declinedDialogIn(events: readonly ReticleEvent[]): DeclinedDialog | undefined {
+  const dialog = events.find(
+    (e) => e.type === EventType.DIALOG_OPENED && Object.hasOwn(e.data, 'answered'),
+  );
+  if (dialog === undefined) {
+    return undefined;
+  }
+  const message = asString(dialog.data['message']);
+  return {
+    // The schema requires `kind`, so this is never empty on a valid event.
+    kind: String(dialog.data['kind']),
+    ...(message === undefined ? {} : { message }),
+  };
+}

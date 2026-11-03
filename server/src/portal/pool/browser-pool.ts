@@ -130,7 +130,7 @@ export class BrowserPool {
     this.#navTimeout = opts.navTimeoutMs ?? DEFAULT_NAV_TIMEOUT_MS;
     this.#zeroInstall = opts.zeroInstallScript;
     this.#daemonOrigin = opts.daemonOrigin;
-    this.#pageErrorHooks = { onPageError: opts.onPageError, onLeaseClosed: opts.onLeaseClosed };
+    this.#pageErrorHooks = opts;
   }
 
   /** The TTL configured for leases — how long an untouched lease lives before the reaper reclaims it. */
@@ -674,9 +674,8 @@ export class BrowserPool {
           pending = dialled;
         } // logged during goto, before the lease is registered below
       });
-      // Same "listen before goto" reasoning as onConsole above: a dialog opened during the initial
-      // navigation (an app that confirms something in an onload handler) must still be dismissed, not
-      // just ones opened after the lease is registered.
+      // Listen before goto, as onConsole does: a dialog in an onload handler is dismissed too. The SDK
+      // answers a dialog from its own input first; the hook records this "no" for the verdict (#1350).
       page.onDialog?.((dialog) => {
         const active = this.#active.get(sessionId);
         if (active !== undefined) {
@@ -685,6 +684,7 @@ export class BrowserPool {
           pendingDialogMessage = dialog.message;
         }
         void dialog.dismiss();
+        this.#pageErrorHooks?.onDialog?.(sessionId, dialog);
       });
       // Listener on BEFORE goto — an import-time throw lands during it (#1966).
       await listenForPageErrors(page, sessionId, this.#pageErrorHooks);

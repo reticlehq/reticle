@@ -181,3 +181,28 @@ describe('page errors the SDK never sees', () => {
     expect(uncaughtIdentity('Uncaught TypeError: x is not a function')).toBe('x is not a function');
   });
 });
+
+describe('a native dialog the leased-tab pool dismissed', () => {
+  it('is journaled as dialog.opened with the declining answer, so the verdict can read it', () => {
+    const session = fakeSession('lease-1');
+    const journal = makePageErrorJournal({ resolveSession: () => session, sleep: immediate });
+
+    journal.onPoolDialog('lease-1', { kind: 'confirm', message: 'Delete?' });
+    journal.onPoolDialog('lease-1', { kind: 'prompt', message: 'Name?' });
+    journal.onPoolDialog('lease-1', { kind: 'alert', message: 'Saved' });
+    journal.onPoolDialog('lease-1', { kind: 'beforeunload', message: '' });
+    journal.onPoolDialog('lease-1', { kind: 'toString', message: '' });
+
+    const dialogs = session.eventsSince(0).filter((e) => e.type === EventType.DIALOG_OPENED);
+    expect(dialogs.map((e) => e.data)).toEqual([
+      { kind: 'confirm', message: 'Delete?', answered: false },
+      { kind: 'prompt', message: 'Name?', answered: null },
+      { kind: 'alert', message: 'Saved' },
+    ]);
+  });
+
+  it('is dropped when no session is connected for the lease yet: no window can hold it', () => {
+    const journal = makePageErrorJournal({ resolveSession: () => undefined, sleep: immediate });
+    expect(() => journal.onPoolDialog('lease-1', { kind: 'confirm', message: 'x' })).not.toThrow();
+  });
+});

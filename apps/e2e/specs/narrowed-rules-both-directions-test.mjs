@@ -24,6 +24,7 @@ import {
   AnnotationStore,
   createNodeFileSystem,
 } from '@reticlehq/server';
+import { EventType, Verified, VerifiedReason } from '@reticlehq/core';
 import { waitForSession } from '../wait-for-session.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -40,6 +41,7 @@ const WRITE_IGNORED = 'write-field-ignored';
 const NO_EFFECT = 'action-had-no-effect';
 const PAGINATION = 'pagination-not-fetched';
 const PARTIAL_FAILURE = 'partial-failure-in-ok-response';
+const PUBLISH_QUESTION = 'Publish this profile?';
 
 const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const reticleRoot = path.join(os.tmpdir(), `reticle-rule-pairs-${process.pid}`, '.reticle');
@@ -185,6 +187,36 @@ if (remember !== undefined) {
     'the click moved its quiet store path once, otherwise this proves nothing',
     1 === (await storeMoves(remember.since, 'rulePairsChoice')),
   );
+}
+
+console.log('\n=== dialog_declined: a publish behind confirm() that Reticle declined ===');
+const publishUntil = { kind: 'net', urlContains: `${API}/publish`, method: 'POST', status: 200 };
+const declined = await act('rule-pairs-publish', publishUntil);
+if (declined !== undefined) {
+  chk(
+    'the verdict is unknown, not no',
+    Verified.UNKNOWN === declined.verified &&
+      VerifiedReason.DIALOG_DECLINED === declined.verifiedReason,
+    `${why(declined)} reason=${String(declined.verifiedReason)}`,
+  );
+  chk('the reason quotes the question', String(declined.because).includes(PUBLISH_QUESTION));
+  const dialogs = (await events(declined.since)).filter(
+    (e) => EventType.DIALOG_OPENED === e.type && false === e.data?.answered,
+  );
+  chk('the page recorded the declined confirm, otherwise this proves nothing', 1 === dialogs.length);
+}
+
+console.log('\n=== dialog_declined: a dead click with no dialog is still no ===');
+const deadPublish = await act('rule-pairs-dead', publishUntil);
+if (deadPublish !== undefined) {
+  chk(
+    'the verdict is no',
+    Verified.NO === deadPublish.verified &&
+      VerifiedReason.ASSERTION_FAILED === deadPublish.verifiedReason,
+    `${why(deadPublish)} reason=${String(deadPublish.verifiedReason)}`,
+  );
+  const dialogs = (await events(deadPublish.since)).filter((e) => EventType.DIALOG_OPENED === e.type);
+  chk('no dialog opened, otherwise this proves nothing', 0 === dialogs.length);
 }
 
 /** How many GETs asked `list` for page 1 in the window. */

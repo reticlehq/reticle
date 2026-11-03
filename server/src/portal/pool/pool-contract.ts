@@ -98,6 +98,8 @@ export interface PooledPage {
 export interface PooledDialog {
   /** The dialog's message text — kept for diagnostics (`BrowserPool#lastDialogMessage`). */
   readonly message: string;
+  /** `alert`, `confirm`, `prompt` or `beforeunload`, as the engine names it. Absent: not known. */
+  readonly kind?: string;
   dismiss(): Promise<void>;
 }
 

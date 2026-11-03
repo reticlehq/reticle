@@ -282,6 +282,11 @@ app.post('/api/rule-pairs/profile', (req, res) => {
   res.json({ id: String(req.body?.id ?? ''), name: 'Old name', plan: 'free' });
 });
 
+// `publish` is reached only when the user accepts the `confirm()` in front of it.
+app.post('/api/rule-pairs/publish', (_req, res) => {
+  res.json({ published: true });
+});
+
 app.post('/api/rule-pairs/derive', (req, res) => {
   const name = String(req.body?.name ?? '');
   res.json({ id: 'profile-copy', name: `Copy of ${name}`, plan: 'trial' });

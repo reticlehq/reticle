@@ -36,7 +36,7 @@ import {
   hasAcceptedWrite,
 } from '@reticlehq/engine/evidence/accepted-write.js';
 import { unreadWriteLabels, unreadWriteReason } from '@reticlehq/engine/evidence/unread-outcome.js';
-import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
+import { decideVerified, withDeclinedDialog } from '@reticlehq/engine/evidence/verified.js';
 import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 import {
   inFlightRequestLabels,
@@ -236,6 +236,7 @@ export async function assertVerdict(
     ...(hiddenMatch === undefined ? {} : { hiddenMatch }),
     ...(namedNetIsInFlight(predicate, stillInFlight) ? { namedRequestInFlight: true } : {}),
     ...(bufferLost && false === pass ? { bufferLostEvidence: true } : {}),
+    ...withDeclinedDialog(windowEvents),
     honesty: buildHonestyBlock({
       grade: gradeOfPredicate(predicate),
       attribution: 'window',
