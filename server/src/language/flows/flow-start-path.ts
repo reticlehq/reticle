@@ -384,7 +384,9 @@ async function moveTo(
   if ('lost' === outcome.kind) {
     const why = outcome.stillLoading
       ? 'The page was still loading when replay stopped waiting: check that the app finishes loading, then replay'
-      : 'A slow or backgrounded tab can take longer to come back: bring it to the front and replay';
+      : 'A dev server that compiles on the first load can take longer than that: raise the wait with ' +
+        '`timeoutMs` on step 1 or `signalTimeoutMs` in the flow file, then replay. A backgrounded tab ' +
+        'can also be slow: bring it to the front';
     return {
       lost:
         `replay ${here ? 'reloaded' : 'navigated to'} ${target} before step 1 and no page was connected ` +
