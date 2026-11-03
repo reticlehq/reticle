@@ -126,6 +126,17 @@ function describePresentTestidsCut(shown: number, total: number | undefined): st
   return ` (the present-testid list shows the first ${String(shown)} of ${String(total)} in document order — absence from it proves nothing)`;
 }
 
+/**
+ * How many elements a CSS scope matched, when it matched more than one, or nothing. The search covers
+ * all of them, and without the count a miss across a list of items read like a miss in one (#1663).
+ */
+function describeScopeMatches(scopeMatches: number | undefined): string {
+  if (scopeMatches === undefined || scopeMatches <= 1) {
+    return '';
+  }
+  return ` (searched all ${String(scopeMatches)} elements the scope matched)`;
+}
+
 /** ` (ref e3)` for a described element, or '' when there is none or it has no ref. */
 function describeRef(element: ElementDescriptor | undefined): string {
   return element === undefined || '' === element.ref ? '' : ` (ref ${element.ref})`;
@@ -528,7 +539,7 @@ export async function evalElement(
   if (!diagnose) {
     return {
       pass: false,
-      failureReason: `no element matched ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
+      failureReason: `no element matched ${subject}${state === undefined ? '' : ` in state '${state}'`}${describeScopeMatches(match.scopeMatches)}`,
       observed: 'no matching element on the page',
       expected: `an element matching ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
       assertion: 'element.present',
@@ -632,7 +643,7 @@ export async function evalElement(
           caseOnlyMiss: true,
           wouldHold: `the same check with ignoreCase: true (the page shows "${match.hint?.caseMiss ?? ''}")`,
         }),
-    failureReason: `no element matched ${subject}${state === undefined ? '' : ` in state '${state}'`}${suffix}${cut}`,
+    failureReason: `no element matched ${subject}${state === undefined ? '' : ` in state '${state}'`}${describeScopeMatches(match.scopeMatches)}${suffix}${cut}`,
     observed: `no matching element on the page${suffix}`,
     expected: `an element matching ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
     assertion: 'element.present',

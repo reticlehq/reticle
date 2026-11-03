@@ -443,7 +443,7 @@ A `state` assertion is graded as a **consequence** (a wrong element or stale ren
 - **`interactive`** (~100 tokens): only actionable elements (buttons, inputs, tabs…). "What can I click?" Non-interactive content (e.g. 1,000 list rows) is skipped.
 - **`full`**: the whole semantic tree. Use only when you truly need everything.
 
-**`scope`** narrows any snapshot or query to a subtree, either a CSS selector (`scope: "[data-testid=item-list]"`) or a ref. This is the main lever for keeping payloads small and queries unambiguous on big pages.
+**`scope`** narrows any snapshot or query to a subtree, either a CSS selector (`scope: "[data-testid=item-list]"`) or a ref. This is the main lever for keeping payloads small and queries unambiguous on big pages. In a query or a check, a CSS selector that matches several elements searches all of them, and the result reports how many it matched in `scopeMatches`. A ref names one element.
 
 ---
 
