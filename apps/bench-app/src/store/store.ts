@@ -23,7 +23,8 @@ export type ViewId =
   | 'saved-items'
   | 'expiring-auth'
   | 'awkward'
-  | 'stale-race';
+  | 'stale-race'
+  | 'rule-pairs';
 export type EnvFilter = Env | 'all';
 
 export interface Toast {
@@ -59,6 +60,10 @@ interface AppState {
   compose: { title: string; prompt: string; result: string; generating: boolean };
   savedItems: { id: number; label: string; savedAt: string }[];
   savedItemsStatus: 'idle' | 'saving' | 'error';
+  /** Every click on the Rule Pairs view, counted by a page-wide listener. Nothing renders it. */
+  rulePairsClicks: number;
+  /** The one store path the Rule Pairs "Remember" button moves. */
+  rulePairsChoice: string;
   saveItem: (label: string, renderDelayMs?: number, serverDelayMs?: number) => Promise<void>;
 
   setView: (v: ViewId) => void;
@@ -102,6 +107,8 @@ export const useApp = create<AppState>((set, get) => ({
   compose: { title: '', prompt: '', result: '', generating: false },
   savedItems: [],
   savedItemsStatus: 'idle',
+  rulePairsClicks: 0,
+  rulePairsChoice: '',
   saveItem: async (label, renderDelayMs = 0, serverDelayMs = 0) => {
     // Do NOT set savedItemsStatus:'saving' here — that STATE_CHANGE fires before the response
     // lands and makes uiAdvanced()=true, which suppresses response-ignored in both polarities.
