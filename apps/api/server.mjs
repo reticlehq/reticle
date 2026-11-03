@@ -289,6 +289,12 @@ app.post('/api/rule-pairs/derive', (req, res) => {
 
 // `batch` answers 200 with one failed item: a partial failure. `jobs` lists stored jobs, two of them
 // failed long ago: history, not the outcome of the read.
+// `price` stores the decimal in a fixed-point column and echoes it in that spelling: `18.5` comes
+// back as `18.500`, the same value.
+app.post('/api/rule-pairs/price', (req, res) => {
+  res.json({ id: String(req.body?.id ?? ''), price: Number(req.body?.price ?? 0).toFixed(3) });
+});
+
 app.post('/api/rule-pairs/batch', (_req, res) => {
   res.json({
     results: [

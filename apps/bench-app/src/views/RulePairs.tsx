@@ -9,7 +9,8 @@ import { useApp } from '../store/store.js';
  * rule a gate in both directions: one control the rule must report, and one it must not.
  *
  *  - `write-field-ignored`: a save that echoes the same id with the old values (report), and a
- *    duplicate that answers a new record with its own id (silent).
+ *    duplicate that answers a new record with its own id, or a price echoed as `18.500` for `18.5`
+ *    (silent).
  *  - `action-had-no-effect`: a dead button while a click counter moves its store path (report), and a button
  *    whose only effect is a store path that was quiet before (silent).
  *  - `pagination-not-fetched`: a bare `1 of 6` label that moves while the app asks for page 1 again
@@ -70,6 +71,18 @@ export function RulePairs(): React.ReactElement {
           onClick={() => void post('derive').then(() => setSaved('Duplicated'))}
         >
           Duplicate profile
+        </button>
+        <button
+          data-testid="rule-pairs-price"
+          onClick={() =>
+            void fetch(`${API}/price`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: 'item-1', price: '18.5' }),
+            }).then(() => setSaved('Price saved'))
+          }
+        >
+          Save price
         </button>
         <output data-testid="rule-pairs-saved">{saved}</output>
       </div>

@@ -147,6 +147,19 @@ if (duplicate !== undefined) {
   );
 }
 
+console.log('\n=== write-field-ignored: a decimal echoed in its stored spelling is not ignored ===');
+const price = await act('rule-pairs-price', {
+  kind: 'net',
+  urlContains: `${API}/price`,
+  method: 'POST',
+  status: 200,
+});
+if (price !== undefined) {
+  chk('the stored spelling is not reported', !kindsOf(price).includes(WRITE_IGNORED), why(price));
+  const body = await echoOf(price.since, 'price');
+  chk('the echo really spelled 18.5 as 18.500, otherwise this proves nothing', body.includes('"18.500"'), body);
+}
+
 /** How many store changes moved `path` in the window. */
 const storeMoves = async (since, pathName) =>
   (await events(since)).filter(

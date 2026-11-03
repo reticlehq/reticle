@@ -91,8 +91,36 @@ function normalizeString(value: string): string {
       return new Date(instant).toISOString().toLowerCase();
     }
   }
+  if (PLAIN_DECIMAL.test(trimmed)) {
+    return canonicalDecimal(trimmed);
+  }
+  if (PHONE_LIKE.test(trimmed) && MIN_PHONE_DIGITS <= trimmed.replace(/\D/g, '').length) {
+    return trimmed.replace(PHONE_SEPARATORS, '');
+  }
   return trimmed.toLowerCase();
 }
+
+/** A decimal written in plain digits: `18.5`, `-0.50`, `2`. No exponent and no thousands separator. */
+const PLAIN_DECIMAL = /^-?\d+(?:\.\d+)?$/;
+
+/**
+ * The same decimal in one spelling: trailing zeros of the fraction go, so a fixed-point column that
+ * echoes `18.500` for `18.5` is the same value (#1646). Done on the text, never through `Number`,
+ * so two long ids that differ past the 15th digit stay different. Leading zeros stay: a ZIP code
+ * `02134` stored as `2134` lost data.
+ */
+function canonicalDecimal(text: string): string {
+  if (!text.includes('.')) {
+    return text;
+  }
+  return text.replace(/0+$/, '').replace(/\.$/, '');
+}
+
+/** Digits with the separators a phone number is written with, and an optional leading `+`. */
+const PHONE_LIKE = /^\+?[\d\s().-]+$/;
+const PHONE_SEPARATORS = /[\s().-]/g;
+/** Fewer digits than this is a short code (`12-34`), where a separator can carry meaning. */
+const MIN_PHONE_DIGITS = 7;
 
 /** Comparable form of a scalar. Non-scalars return undefined and are never compared. */
 function normalize(value: unknown): string | undefined {
@@ -100,7 +128,7 @@ function normalize(value: unknown): string | undefined {
     return normalizeString(value);
   }
   if ('number' === typeof value) {
-    return Number.isFinite(value) ? String(value) : undefined;
+    return Number.isFinite(value) ? canonicalDecimal(String(value)) : undefined;
   }
   if ('boolean' === typeof value) {
     return String(value);
