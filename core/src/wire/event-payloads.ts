@@ -227,6 +227,14 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     initiator: z.string(),
     urlRaw: z.string().optional(),
   }),
+  [EventType.NET_UNPATCHED]: z
+    .object({
+      url: z.string(),
+      urlRaw: z.string().optional(),
+      initiator: z.string(),
+      status: z.number().optional(),
+    })
+    .passthrough(),
   [EventType.NET_STREAM]: netStreamSchema,
   [EventType.DOWNLOAD]: downloadSchema,
   [EventType.PERF]: z.object({

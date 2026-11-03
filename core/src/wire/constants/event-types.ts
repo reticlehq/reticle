@@ -15,6 +15,16 @@ export const EventType = {
   DOM_TEXT: 'dom.text',
   NET_REQUEST: 'net.request',
   NET_PENDING: 'net.pending',
+  /**
+   * A fetch or XHR that the browser recorded in resource timing, and that no patched transport saw.
+   *
+   * The app sent it through a `fetch` reference it saved before Reticle patched `fetch`. It is NOT a
+   * `net.request`: it has no method, and its status is only a hint (0 cross-origin without
+   * `Timing-Allow-Origin`). A second record for one call would also raise a false duplicate. It
+   * exists so a `net` miss over its URL reads `unknown`, not `no`.
+   * `data: { url, urlRaw?, initiator, status? }`.
+   */
+  NET_UNPATCHED: 'net.unpatched',
   /** An SSE (EventSource) or WebSocket frame — a message on a long-lived streaming connection. */
   NET_STREAM: 'net.stream',
   /** A web-perf metric a screenshot can't verify: LCP, cumulative layout shift, or a long task. */

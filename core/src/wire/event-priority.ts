@@ -17,6 +17,7 @@ import { EventType } from './constants/constants.js';
 export const HIGH_VALUE_EVENT_TYPES: ReadonlySet<string> = new Set([
   EventType.NET_REQUEST,
   EventType.NET_PENDING,
+  EventType.NET_UNPATCHED,
   EventType.NET_STREAM,
   EventType.NET_DETAIL,
   EventType.NET_RESPONSE_BODY,

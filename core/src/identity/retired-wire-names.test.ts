@@ -82,6 +82,7 @@ const SHIPPED: readonly string[] = [
   'hud.used',
   'media.state',
   'canvas.digest',
+  'net.unpatched',
   // actions
   'click',
   'dblclick',

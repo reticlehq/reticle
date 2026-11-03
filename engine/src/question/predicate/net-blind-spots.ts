@@ -217,3 +217,24 @@ export function earlierMediaReason(filter: string): string {
     `<video> or <audio>`
   );
 }
+
+/** The oracle that reports a miss over a request sent through an unpatched `fetch`. */
+export const UNPATCHED_FETCH_ASSERTION = 'net.unpatched-fetch';
+
+/**
+ * Why a `net` miss is unknown when the browser recorded a matching request that no patched
+ * transport saw. `filter` is the net clause as applied — `describeNetFilter` of it.
+ *
+ * A client library can store `window.fetch` when its module loads, before Reticle patches it. A
+ * call through the stored function makes no `net.request`, so "no call matched" is false: the
+ * server got the request (#1660).
+ */
+export function unpatchedFetchReason(filter: string): string {
+  return (
+    `no recorded call matched ${filter}, but the browser recorded a request to a matching URL ` +
+    `that Reticle did not see. The request went through a fetch saved before Reticle connected ` +
+    `(a client library that stores window.fetch when it loads does this). Its method, status and ` +
+    `body are not known, so this clause cannot be judged. Connect Reticle earlier: add the build ` +
+    `plugin (@reticlehq/vite-plugin or @reticlehq/next), which runs connect() before the app code`
+  );
+}
