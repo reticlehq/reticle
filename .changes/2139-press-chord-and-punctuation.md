@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — a press of a shortcut such as `Meta+/` did nothing, and said it was dispatched.** The synthetic press sent the chord as one keydown whose key was the literal text `Meta+/`, with no modifier flag and no `code`. A punctuation key also had no `code`. A handler that matches the shortcut, or reads `event.code` (`Slash`), never ran, so a correct shortcut read as broken. A press now splits a chord the way Playwright spells it (`Control+Shift+K`, `Meta+/`, `Meta+Slash`), and punctuation carries the code a US-layout keyboard sends (`/` and `?` are `Slash`). An explicit `code` still wins, for other layouts. Closes [#2139](https://github.com/reticlehq/reticle/issues/2139).
