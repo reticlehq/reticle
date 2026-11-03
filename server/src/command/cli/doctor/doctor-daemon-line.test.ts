@@ -19,6 +19,12 @@ import { daemonLine } from './doctor-daemon-line.js';
 const SELF = { version: '2.6.0', contract: 'abc123' };
 
 describe('the daemon line names which daemon, not just that there is one', () => {
+  it.each([4400, 5517])('shows the MCP connection URL on port %i (#1963)', (port) => {
+    const out = daemonLine(port, null, {}, SELF);
+    expect(out.text).toContain(`http://127.0.0.1:${port}/mcp/sse`);
+    expect(out.text).toContain('If your agent has no reticle_* tools, connect over HTTP/SSE');
+  });
+
   it('reports the running version', () => {
     const out = daemonLine(4400, 90210, { version: '2.6.0', contract: 'abc123' }, SELF);
     expect(out.text).toContain('4400');

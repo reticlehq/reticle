@@ -151,7 +151,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // `doctor`: an agent session's first answer carries doctor's keychain note for a differently
   // signed macOS build, read by the same function doctor prints it with (a leaf; no pair).
   agent: ['doctor'],
-  doctor: ['session', 'version'],
+  // Both commands use the same MCP connection hint from `answers` (#1963).
+  doctor: ['answers', 'session', 'version'],
+  status: ['answers'],
   /**
    * Getting something running and waiting for it: the bridge port, the daemon, the dev server,
    * the relaunch. Everything `reticle init` does between writing files and having a session.

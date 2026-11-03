@@ -15,6 +15,7 @@
  */
 
 import { describeSkew } from '@/command/version/version-skew.js';
+import { mcpConnectionHint } from '../answers/mcp-connection-hint.js';
 import { DoctorRow, doctorRow } from './doctor-rows.js';
 
 /** The fields of `/status` this line cares about. Both optional — an old daemon reports neither. */
@@ -56,15 +57,22 @@ export function daemonLine(
   self: { version: string; contract: string },
 ): DaemonLine {
   const parts: string[] = [];
-  if (null !== pid) parts.push(`pid ${String(pid)}`);
-  if (peer.version !== undefined) parts.push(`v${peer.version}`);
+  if (null !== pid) {
+    parts.push(`pid ${String(pid)}`);
+  }
+  if (peer.version !== undefined) {
+    parts.push(`v${peer.version}`);
+  }
   const detail = 0 === parts.length ? '' : ` (${parts.join(', ')})`;
   const skew = describeSkew(
     { what: 'the daemon on this port', version: peer.version, contract: peer.contract, fix: FIX },
     self,
   );
   const line: DaemonLine = {
-    text: doctorRow(DoctorRow.DAEMON, `✓ running on :${String(port)}${detail}`),
+    text: doctorRow(
+      DoctorRow.DAEMON,
+      `✓ running on :${String(port)}${detail}. ${mcpConnectionHint(port)}`,
+    ),
   };
   return skew === undefined ? line : { ...line, skew };
 }

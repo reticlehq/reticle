@@ -15,6 +15,8 @@
  * logged, so nothing here may throw.
  */
 
+import { mcpConnectionHint } from '../answers/mcp-connection-hint.js';
+
 /** Every row label this block can print. The one spelling; nothing writes a label inline. */
 export const StatusLabel = {
   DAEMON: 'daemon',
@@ -104,6 +106,9 @@ export function statusLines(fields: Record<string, unknown>): string[] {
         : `${NOT_OK} not running${at}`,
     ),
   );
+  if (running && port !== undefined) {
+    lines.push(continuation(mcpConnectionHint(port)));
+  }
   // What was actually ON the port, when the pid file said nothing useful. "A stranger holds this"
   // and "nothing is here" were the same output once, and the true sentence was said by nothing a
   // person sees — so the word belongs in the prose, not only in the event.
