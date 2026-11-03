@@ -24,7 +24,7 @@ Every action Reticle can perform takes the same shape: an element, an `action` n
 | `submit` | none | Submits the element's `<form>` |
 | `press` | `{ text, modifiers?, holdMs?, keys?, code? }` | `text` is the key **name**: `Escape`, `Tab`, `Enter`. `key` is an accepted alias. `modifiers` is an array of `Meta`, `Control`, `Shift`, `Alt`. `holdMs` holds the key down; `keys` holds several together; `code` names the physical key |
 | `scrollIntoView` | none |  |
-| `scroll` | `{ dy?, dx?, fraction? }` | Scrolls the nearest scrollable container (or the page, with no `ref`) by `dy`/`dx` pixels, either direction. `fraction` (0 to 1) jumps to that point of the height. No args steps down most of a screen |
+| `scroll` | `{ dy?, dx?, fraction?, wheel? }` | Scrolls the nearest scrollable container (or the page, with no `ref`) by `dy`/`dx` pixels, either direction. `fraction` (0 to 1) jumps to that point of the height. `wheel: true` sends a cancelable `wheel` event and leaves the movement to the page, for apps that scroll from a wheel listener. No args steps down most of a screen |
 | `tap` | `{ holdMs? }` | A touch tap: pointer and touch events, then `click`. `holdMs` makes it a long press |
 | `zoom` | none | Page zoom. Refused inside the page, because CSS zoom changes how a page looks without changing its layout, and a passing check on it would be false |
 | `upload` | `{ content?, name?, type?, path? }` | Sets a file on `<input type="file">`. Inline bytes default to `"reticle test file"` / `"file.txt"` / `"text/plain"`. `path` reads a file from disk, scoped to the project root plus any opt-in directories listed in `.reticle.json` as `"uploadRoots": ["~/Downloads", "/Volumes/fixtures"]`. A refusal names every allowed root. |
