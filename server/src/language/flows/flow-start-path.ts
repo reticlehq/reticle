@@ -595,6 +595,29 @@ export type NavigateOutcome =
   | { kind: 'refused' }
   | { kind: 'lost'; waitedMs: number; stillLoading: boolean; wait?: StartPageWait };
 
+/**
+ * Whether assigning `to` from `from` is a jump within the same document. That is the case when the
+ * URLs differ at most in the fragment and `to` has a fragment; a browser then loads no page. Without
+ * a fragment, the same URL reloads by itself. Undefined or unparsable URLs are not a jump.
+ */
+export function isFragmentJump(from: string | undefined, to: string): boolean {
+  if (from === undefined) {
+    return false;
+  }
+  try {
+    const a = new URL(from);
+    const b = new URL(to);
+    if (0 === b.hash.length) {
+      return false;
+    }
+    a.hash = '';
+    b.hash = '';
+    return a.href === b.href;
+  } catch {
+    return false;
+  }
+}
+
 export async function navigateAndAwait(
   sessions: SessionManager,
   session: {
@@ -629,6 +652,11 @@ export async function navigateAndAwait(
     const outcome = await session.command(ReticleCommand.NAVIGATE, { url });
     if (!outcome.ok || true !== asRecord(outcome.result)['ok']) {
       return { kind: 'refused' };
+    }
+    // A same-document URL with a fragment loads no page: the browser only jumps within it. Ask for
+    // the load this function waits for. A hash-routed app's replay never started without it.
+    if (isFragmentJump(session.url, url)) {
+      await session.command(ReticleCommand.REFRESH, {});
     }
   } catch (error: unknown) {
     // A navigation that unloads the page rejects the very command that asked for it — the transport
