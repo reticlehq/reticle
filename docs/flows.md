@@ -110,6 +110,14 @@ Every session's driving is saved as a flow at teardown when it declared a conseq
 - declare `requires` (the start page) and `ensures` (the end page) as route claims, so `canFollow` can tell which flows chain. Replay treats a required start page as met by navigating there;
 - carry `author: { agent, person }`: the MCP client that drove it and the email of whoever signed in with `reticle connect` on that machine. Either is left out when it is not known.
 
+### A route in `requires`
+
+A route claim in `requires` says which page the flow needs. Replay puts the tab there before step 1, so a suite does not run the flow on the page that the previous flow left open. It goes to `startPath` when that is on the route, else to the route itself.
+
+A route can name an entity id with a `:name` segment, for example `{ "kind": "route", "pathname": "/cases/:id/notes" }`. When the tab is already on a page that matches, replay keeps that page and its id. It does not open the id that was recorded, which can be a record that was deleted since.
+
+When replay cannot put the tab on the route (the page refuses, the app redirects to another page, or a pattern has no recorded address to open), the flow is `unverifiable` with a reason that names the route. No step runs.
+
 ## Delete a flow
 
 ```jsonc
