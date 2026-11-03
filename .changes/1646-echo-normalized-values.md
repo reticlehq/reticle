@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — a value the server stored in its own spelling gave a false `no`.** `write-field-ignored` compared the request and the echo as text. A decimal sent as `"18.5"` and echoed by a fixed-point column as `"18.500"`, or a phone number sent as `"+1 555 010 0199"` and echoed as `"+15550100199"`, was reported as an ignored write. Plain decimals now compare without trailing fraction zeros, and a phone-like string with at least 7 digits compares by its digits. A changed value is still reported, and so is a lost leading zero (`02134` stored as `2134`). Closes [#1646](https://github.com/reticlehq/reticle/issues/1646).
