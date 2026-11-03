@@ -210,6 +210,22 @@ describe('autoRegisterStores', () => {
     expect(readStores(AUTO_STORE_KEY.REDUX)).toEqual({ [AUTO_STORE_KEY.REDUX]: { n: 2 } });
   });
 
+  it('does no writes on repeat passes over the same unchanged stores', () => {
+    // A QueryClient is wrapped in a NEW adapter store on every discovery pass, so the comparison that
+    // decides "replace" must look at the client itself, not at what discovery builds around it.
+    const client = queryClient();
+    const provider = providerFiber(client);
+    const host: FakeFiber = { return: provider, type: 'div' };
+    provider.child = host;
+    const el = document.createElement('div');
+    (el as unknown as Record<string, unknown>)['__reactFiber$auto'] = host;
+    document.body.appendChild(el);
+
+    expect(autoRegisterStores(document)).toEqual([AUTO_STORE_KEY.QUERY]);
+    expect(autoRegisterStores(document)).toEqual([]);
+    expect(autoRegisterStores(document)).toEqual([]);
+  });
+
   it('never throws on a hostile fiber tree', () => {
     const el = document.createElement('div');
     const hostile = {
