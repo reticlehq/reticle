@@ -153,8 +153,12 @@ const BRIDGE_PORT_BASE = Number(process.env.INSTALL_GATE_PORT ?? '4788');
  * How long init's handed-over dev server gets to answer once init has exited. Short, because init
  * only reports success after a session connected through that very server: it was answering a
  * moment ago, and a bound here is a bound, not a measurement of how fast a server boots.
+ *
+ * Windows gets a longer bound. There the first render after init exits can take more than 15 s on a
+ * loaded runner. The check then failed with `TimeoutError` on a server that was up, and every rerun
+ * passed (#1988). A server that is really gone fails the same way, only later.
  */
-const HANDOVER_ANSWER_MS = 15_000;
+const HANDOVER_ANSWER_MS = 'win32' === process.platform ? 60_000 : 15_000;
 /**
  * How long to wait for the dev server to WRITE something after the gate edits a source file. The
  * write is the point: a server whose output went to a pipe nobody reads dies on it. A bound, not a
