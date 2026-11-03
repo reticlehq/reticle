@@ -368,6 +368,24 @@ describe('arriveAtStartPath — replay navigates to the flow start page before s
     expect(arrived.lost).toContain('no page was connected after 500ms');
   });
 
+  // Field report (#2155): a Vite dev server that compiles for 10 s on first load lost every start
+  // page, and the hint said only to bring the tab to the front. The wait it ran out of is a flow
+  // setting, so the answer names it.
+  it('names the setting that gives a slow start page more time', async () => {
+    const { session } = tab('http://localhost:3000/reset-password');
+    const arrived = await arriveAtStartPath(
+      manager([session]),
+      session,
+      flow('/login'),
+      500,
+      instantClock(100),
+    );
+    expect(arrived.lost).toContain('signalTimeoutMs');
+    expect(arrived.lost).toContain('timeoutMs');
+    expect(arrived.lost).toContain('compiles');
+    expect(arrived.lost).toContain('backgrounded');
+  });
+
   it('uses a live successor on an auth redirect instead of calling the page lost', async () => {
     const { session } = tab('http://localhost:3000/home');
     const login = successor('http://localhost:3000/auth');
