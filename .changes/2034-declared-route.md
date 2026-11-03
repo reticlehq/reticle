@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a flow that declared the route it needs ran on the page the previous flow left open.** In a sequential `reticle_verify` run, a flow with a `requires` route claim kept the current route. Its anchors then failed, or matched ambiguously, on an unrelated page, and the verdict depended on the order of the suite. Replay now goes to that route before step 1. A route with an entity id, such as `/cases/:id/notes`, keeps the id of the page the tab is on when that page matches, so replay no longer opens a recorded record that was deleted since. When replay cannot reach the route, the flow is `unverifiable` with a reason that names the route, and no step runs. Closes [#2034](https://github.com/reticlehq/reticle/issues/2034).

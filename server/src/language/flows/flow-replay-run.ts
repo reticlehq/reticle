@@ -412,8 +412,9 @@ async function replayOnce(
         )
       : {};
   // Continuing on `connected` after the tab left timed every step out on a dead handle (#1129).
-  if (arrival.lost !== undefined) {
-    const reason = arrival.lost;
+  // A declared route that replay could not reach is the same: the steps would run on another page.
+  const reason = arrival.lost ?? arrival.unreached;
+  if (reason !== undefined) {
     return withStartPageWait(
       {
         name: loaded.value.name,

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { PredicateKind, type FlowFile, type FlowStep, type Predicate } from '@reticlehq/core';
+import { routePathOf } from '@reticlehq/engine/question/predicate/predicate-route.js';
 
 /**
  * One journey, however many times it was driven.
@@ -121,22 +122,87 @@ export function routeClaims(
 /**
  * The preconditions only another flow can establish.
  *
- * A route claim on the page the flow starts on is not one of them: replay navigates there itself, so
- * it neither opts the flow out of the reset nor gates the run. That is the claim a saved drive writes
- * for the map (see routeClaims) — reading it as "starts from leftover state" would stop every
- * auto-saved flow from ever being reset.
+ * A route claim is not one of them: replay navigates to a declared route itself (see
+ * `declaredRoute`), so a route claim neither opts the flow out of the reset nor gates the run. The
+ * claim on the page the flow starts on is the one a saved drive writes for the map (see
+ * routeClaims) — reading it as "starts from leftover state" would stop every auto-saved flow from
+ * ever being reset. A route claim on ANOTHER page was read that way, and a suite then ran the flow
+ * on whatever page the previous flow left open (#2034).
  */
 export function establishedState(flow: FlowFile): readonly Predicate[] {
-  const start = flow.startPath;
   return (flow.requires ?? []).filter(
-    (claim) =>
-      !(
-        start !== undefined &&
-        PredicateKind.ROUTE === claim.kind &&
-        claim.pathname !== undefined &&
-        samePath(claim.pathname, start)
-      ),
+    (claim) => !(PredicateKind.ROUTE === claim.kind && claim.pathname !== undefined),
   );
+}
+
+/**
+ * The route a flow declares in `requires` when that says more than its `startPath`.
+ *
+ * Undefined when the flow declares no route, or when its route claim is its own `startPath`: that
+ * is the claim every saved drive writes, and replay already arrives there. Anything else is the
+ * page the flow needs, and replay puts the tab there before step 1 (#2034).
+ */
+export function declaredRoute(flow: FlowFile): string | undefined {
+  const start = flow.startPath;
+  for (const claim of flow.requires ?? []) {
+    if (PredicateKind.ROUTE !== claim.kind || claim.pathname === undefined) {
+      continue;
+    }
+    if (0 === claim.pathname.length) {
+      continue;
+    }
+    if (start !== undefined && samePath(claim.pathname, start)) {
+      return undefined;
+    }
+    return claim.pathname;
+  }
+  return undefined;
+}
+
+/** The mark of a route segment that stands for any one entity id: `:id` in `/cases/:id/notes`. */
+const ROUTE_PARAM_MARK = ':';
+
+/** Whether a route segment is a placeholder such as `:id`. */
+function isRouteParam(segment: string): boolean {
+  return segment.startsWith(ROUTE_PARAM_MARK) && ROUTE_PARAM_MARK.length < segment.length;
+}
+
+/** The segments of the path the router is on, without a query or a trailing slash. */
+function routerSegments(path: string): string[] | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(path, 'http://localhost');
+  } catch {
+    return undefined;
+  }
+  return routePathOf(parsed.pathname, parsed.hash).replace(/\/$/, '').split('/');
+}
+
+/** Whether a declared route names an entity id with a `:name` segment, for example `/cases/:id/notes`. */
+export function isRoutePattern(route: string): boolean {
+  return (routerSegments(route) ?? []).some(isRouteParam);
+}
+
+/**
+ * Is the tab on a declared route?
+ *
+ * A plain route is compared as `samePath` compares a `startPath`. A pattern is compared segment by
+ * segment on the router's path, and a `:name` segment matches any one non-empty segment. The query
+ * is not compared for a pattern: the pattern says which page, and the id says which record.
+ */
+export function onRoute(observed: string, route: string): boolean {
+  if (!isRoutePattern(route)) {
+    return samePath(observed, route);
+  }
+  const here = routerSegments(observed);
+  const wanted = routerSegments(route);
+  if (here === undefined || wanted === undefined || here.length !== wanted.length) {
+    return false;
+  }
+  return wanted.every((segment, i) => {
+    const at = here[i] ?? '';
+    return isRouteParam(segment) ? 0 < at.length : segment === at;
+  });
 }
 
 /**

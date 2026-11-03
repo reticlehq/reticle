@@ -14,7 +14,14 @@ import {
   type ReticleEvent,
   type StartPageWait,
 } from '@reticlehq/core';
-import { establishedState, samePath, startPathBudgetMs } from './flow-journey.js';
+import {
+  declaredRoute,
+  establishedState,
+  isRoutePattern,
+  onRoute,
+  samePath,
+  startPathBudgetMs,
+} from './flow-journey.js';
 import { asRecord } from '@reticlehq/core';
 import {
   navigablePath,
@@ -206,6 +213,8 @@ export interface StartPathArrival {
   redirected?: string;
   /** Set when the page's loading kept replay waiting past the step budget. */
   wait?: StartPageWait;
+  /** Set when the flow declares a route and replay could not put the tab on it: nothing may run (#2034). */
+  unreached?: string;
 }
 
 /** The replay result, with how long replay waited for its start page when that went past the budget. */
@@ -251,6 +260,10 @@ export function noteReplayEnded(session: StartPathSession & { id: string }): voi
  * or from the wrong page. Silence is not an opt-out: a flow that depends on leftovers without
  * saying so is a flow whose green means nothing on a fresh machine, and CI is a fresh machine.
  *
+ * A route in `requires` is not an opt-out. It is the page the flow needs, and replay goes there:
+ * see `arriveAtDeclaredRoute`. A suite ran such a flow on the page the previous flow left open,
+ * and its anchors then failed, or matched ambiguously, on an unrelated page (#2034).
+ *
  * A full-page load tears down the session socket, so the navigation must happen here — before any
  * step runs — and the replay continues on the session the SDK reconnects as (found via the same
  * tombstone rebind that lets `resolve(oldId)` answer after any navigation). Best-effort by design:
@@ -271,6 +284,16 @@ export async function arriveAtStartPath(
   stillLoading?: () => Promise<boolean>,
   loadingCapMs: number = START_PATH_LOADING_CAP_MS,
 ): Promise<StartPathArrival> {
+  const move: MoveOptions = {
+    timeoutMs,
+    clock,
+    loadingCapMs,
+    ...(stillLoading === undefined ? {} : { stillLoading }),
+  };
+  const route = declaredRoute(flow);
+  if (route !== undefined) {
+    return arriveAtDeclaredRoute(sessions, session, flow, route, move);
+  }
   const target = flow.startPath;
   if (target === undefined || 0 === target.length) {
     return {};
@@ -296,6 +319,36 @@ export async function arriveAtStartPath(
   ) {
     return {};
   }
+  // A refused navigation left the tab untouched, and replay goes on with the connected session.
+  return (await moveTo(sessions, session, flow, target, here, current, move)) ?? {};
+}
+
+/** How long and how replay waits for the page it navigates to. */
+interface MoveOptions {
+  timeoutMs: number;
+  clock: ArrivalClock;
+  stillLoading?: () => Promise<boolean>;
+  loadingCapMs: number;
+}
+
+type StartPathSessionWithCommands = StartPathSession & {
+  id: string;
+  command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
+};
+
+/**
+ * Navigate (or reload, when `here`) to `target` and say what came back. Undefined when the tab was
+ * not moved at all: no usable base URL, or the browser refused the navigation.
+ */
+async function moveTo(
+  sessions: SessionManager,
+  session: StartPathSessionWithCommands,
+  flow: FlowFile,
+  target: string,
+  here: boolean,
+  current: string,
+  move: MoveOptions,
+): Promise<StartPathArrival | undefined> {
   let destination: string;
   try {
     // startPath is a pathname (a host belongs to the machine, not the journey) — resolve it
@@ -307,17 +360,25 @@ export async function arriveAtStartPath(
     const keepQuery = here && leftByReplay.get(session.id) !== current;
     destination = new URL(keepQuery ? current : target, session.url).toString();
   } catch {
-    return {}; // no usable base URL — nowhere to navigate from
+    return undefined; // no usable base URL — nowhere to navigate from
   }
   // Measured either side of the reset, and only when the reset is a reload: reachable before and
   // gone after is the reload's doing, not the flow file's. Without this, an app holding its session
   // in memory comes back signed out and step 1 blames a component that is completely fine.
   const resolvedBefore = here && (await firstStepResolvesHere(session, flow));
-  const outcome = await navigateAndAwait(sessions, session, destination, target, timeoutMs, clock, {
-    isReload: here,
-    ...(stillLoading === undefined ? {} : { stillLoading }),
-    loadingCapMs,
-  });
+  const outcome = await navigateAndAwait(
+    sessions,
+    session,
+    destination,
+    target,
+    move.timeoutMs,
+    move.clock,
+    {
+      isReload: here,
+      ...(move.stillLoading === undefined ? {} : { stillLoading: move.stillLoading }),
+      loadingCapMs: move.loadingCapMs,
+    },
+  );
   if ('lost' === outcome.kind) {
     const why = outcome.stillLoading
       ? 'The page was still loading when replay stopped waiting: check that the app finishes loading, then replay'
@@ -330,7 +391,7 @@ export async function arriveAtStartPath(
     };
   }
   if ('refused' === outcome.kind) {
-    return {};
+    return undefined;
   }
   if ('redirected' === outcome.kind) {
     const path = currentPathOf(outcome.session) ?? 'another route';
@@ -349,6 +410,119 @@ export async function arriveAtStartPath(
     resetCost: resetCostHint(flow, target),
     ...waitOf(outcome),
   };
+}
+
+/**
+ * Replay's arrival for a flow that declares the route it needs in `requires` (#2034).
+ *
+ * The tab goes to that route before step 1, the same way it goes to a `startPath`, and the same
+ * reset applies once it is there. Two differences, both because the flow SAID where it must be:
+ *
+ * - A route with an entity id (`/cases/:id/notes`) keeps the id of the page the tab is on when that
+ *   page matches. The recorded address names one record, and that record can be deleted since: a
+ *   replay sent there ran a generic flow on a fixture that no longer existed and answered `unknown`.
+ * - When replay cannot put the tab on the route, it says so and nothing runs. Running anyway gave a
+ *   verdict about another page, reported as a missing or ambiguous anchor.
+ */
+async function arriveAtDeclaredRoute(
+  sessions: SessionManager,
+  session: StartPathSessionWithCommands,
+  flow: FlowFile,
+  route: string,
+  move: MoveOptions,
+): Promise<StartPathArrival> {
+  const current = currentPathOf(session);
+  if (current === undefined) {
+    return {
+      unreached: unreachedReason(route, undefined, 'replay cannot see which page it is on'),
+    };
+  }
+  const here = onRoute(current, route);
+  // The opt-out keeps the tab as it is. It does not make another page the right one.
+  if (0 < establishedState(flow).length) {
+    if (here) {
+      return {};
+    }
+    return {
+      unreached: unreachedReason(
+        route,
+        current,
+        'the flow also declares state that a page load would discard, so replay does not move the tab',
+      ),
+    };
+  }
+  const target = routeTarget(flow, route, current, here);
+  if (target === undefined) {
+    return {
+      unreached: unreachedReason(
+        route,
+        current,
+        'the route names an entity id, and the flow records no address on that route to open',
+      ),
+    };
+  }
+  const moved = await moveTo(
+    sessions,
+    session,
+    flow,
+    target,
+    samePath(current, target),
+    current,
+    move,
+  );
+  if (moved === undefined) {
+    return { unreached: unreachedReason(route, current, `the page refused to open ${target}`) };
+  }
+  if (moved.redirected === undefined || moved.session === undefined) {
+    return moved;
+  }
+  const landed = currentPathOf(moved.session);
+  if (landed !== undefined && onRoute(landed, route)) {
+    return moved;
+  }
+  const { redirected: _redirected, ...rest } = moved;
+  return {
+    ...rest,
+    unreached: unreachedReason(
+      route,
+      landed,
+      `replay opened ${target}, and the app sent the tab to another page`,
+    ),
+  };
+}
+
+/**
+ * Where replay sends the tab for a declared route.
+ *
+ * A pattern that the tab already matches: the tab's own page, so its id is kept. Else the flow's
+ * `startPath` when it is on the route, because it is the page the journey was recorded on. Else
+ * the route itself when it is a plain path. A pattern with no address to open has no target.
+ */
+function routeTarget(
+  flow: FlowFile,
+  route: string,
+  current: string,
+  here: boolean,
+): string | undefined {
+  const pattern = isRoutePattern(route);
+  if (here && pattern) {
+    // Without its query: `moveTo` keeps the query unless the previous replay left it.
+    return current.replace(/\?[^#]*/, '');
+  }
+  const start = flow.startPath;
+  if (start !== undefined && 0 < start.length && onRoute(start, route)) {
+    return start;
+  }
+  return pattern ? undefined : route;
+}
+
+/** Why a flow with a declared route did not run, and the one move that lets it. */
+function unreachedReason(route: string, current: string | undefined, why: string): string {
+  const where = current ?? 'a page replay cannot see';
+  return (
+    `this flow declares that it starts on ${route}, but the tab is on ${where}: ${why}. ` +
+    `Nothing ran and nothing was proved. Open a page on ${route} (reticle_navigate), then replay`
+  );
 }
 
 /**
