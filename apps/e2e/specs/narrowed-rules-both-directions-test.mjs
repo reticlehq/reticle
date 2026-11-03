@@ -40,6 +40,15 @@ const WRITE_IGNORED = 'write-field-ignored';
 const NO_EFFECT = 'action-had-no-effect';
 const PAGINATION = 'pagination-not-fetched';
 const PARTIAL_FAILURE = 'partial-failure-in-ok-response';
+const PING_SAVED = `${API}/ping/saved`;
+const PING_PATCHED = `${API}/ping/patched`;
+const NET_REQUEST = 'net.request';
+const NET_UNPATCHED = 'net.unpatched';
+const VERIFIED_YES = 'yes';
+const VERIFIED_UNKNOWN = 'unknown';
+/** The words the engine's reason uses for a request sent through a `fetch` saved before connect. */
+const SAVED_FETCH_REASON = 'saved before Reticle connected';
+const BUILD_PLUGIN = 'build plugin';
 
 const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const reticleRoot = path.join(os.tmpdir(), `reticle-rule-pairs-${process.pid}`, '.reticle');
@@ -250,6 +259,39 @@ if (jobs !== undefined) {
     'the list really held failed jobs, otherwise this proves nothing',
     body.includes('encode failed') && body.includes('source missing'),
     body,
+  );
+}
+
+/** How many events of `type` named `url` the session recorded in the window. */
+const recordsOf = async (since, type, url) =>
+  (await events(since)).filter((e) => type === e.type && String(e.data?.url ?? '').includes(url))
+    .length;
+
+console.log('\n=== net miss over a fetch saved before connect: unknown, not no ===');
+const saved = await act('rule-pairs-ping-saved', { kind: 'net', urlContains: PING_SAVED });
+if (saved !== undefined) {
+  const text = JSON.stringify(saved);
+  chk('the miss is unknown', VERIFIED_UNKNOWN === saved.verified, why(saved));
+  chk(
+    'the reason names the saved fetch and the build plugin',
+    text.includes(SAVED_FETCH_REASON) && text.includes(BUILD_PLUGIN),
+    text.slice(0, 400),
+  );
+  chk(
+    'the browser recorded the call and the patch did not, otherwise this proves nothing',
+    1 <= (await recordsOf(saved.since, NET_UNPATCHED, PING_SAVED)) &&
+      0 === (await recordsOf(saved.since, NET_REQUEST, PING_SAVED)),
+  );
+}
+
+console.log('\n=== the same ping through window.fetch: yes, one record ===');
+const patched = await act('rule-pairs-ping-patched', { kind: 'net', urlContains: PING_PATCHED });
+if (patched !== undefined) {
+  chk('the patched call is yes', VERIFIED_YES === patched.verified, why(patched));
+  chk(
+    'it has one request record and no marker, otherwise this proves nothing',
+    1 === (await recordsOf(patched.since, NET_REQUEST, PING_PATCHED)) &&
+      0 === (await recordsOf(patched.since, NET_UNPATCHED, PING_PATCHED)),
   );
 }
 

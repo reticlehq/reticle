@@ -24,6 +24,7 @@ import { redactUrl, netUrlFields } from './net-detail/network-redact.js';
 import { watchStreamedBody } from './network-stream.js';
 import { frameFields, isBridgeSocket } from './net-detail/network-frames.js';
 import { requireCapturedMethod } from '@/util/captured-method.js';
+import { absoluteUrl, observeResourceTiming } from './net-detail/resource-timing.js';
 
 // Redaction lives in its own module; re-exported so callers keep importing it from here.
 export { redactUrl, netUrlFields };
@@ -512,9 +513,14 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
   // completion-only emit saw nothing).
   let seq = 0;
   const nextId = (): string => `n${++seq}`;
+  // URLs some record reported, so resource timing does not report them again.
+  const reportedNetUrls = new Set<string>();
+  // Absolute URLs a patched transport saw start. Filled before the request leaves; see resource-timing.
+  const patchedNetUrls = new Set<string>();
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const rawUrl = urlOf(input);
+    patchedNetUrls.add(absoluteUrl(rawUrl));
     // Reticle's own call: pass it straight through, observed by nobody. Emitting even the PENDING
     // half would be wrong twice over — it lands in the agent's network evidence, and `settle` would
     // wait on the SDK's own screenshot as if the app had a request in flight.
@@ -666,6 +672,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
         rawUrl: String(url),
         start: 0,
       });
+      patchedNetUrls.add(absoluteUrl(String(url)));
     });
     callOpen.call(this, method, url, ...rest);
   };
@@ -900,68 +907,14 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     navProto.sendBeacon = patchedBeacon;
   }
 
-  // Document-initiated subresources (link/css/img/script/manifest): fetch and XHR patches never see
-  // these, so without this a `{net}` predicate over a favicon or manifest reads `assertion_failed` —
-  // "your change is broken" — when the truthful answer is "not observable". A PerformanceObserver
-  // over `resource` entries reports them with no CDP. Status is the known gap: entries carry one only on
-  // newer Chromium, so the field is emitted ONLY when readable and the evaluation seam downgrades
-  // status assertions it cannot verify instead of guessing.
-  //
-  // Dedup: any URL the patched transports already reported (or later report) is skipped — resource
-  // timing also records fetch/XHR loads. The seen-set is filled eagerly here AND at every
-  // NET_REQUEST emit below, so both orders of arrival stay single-reported.
-  const reportedNetUrls = new Set<string>();
-  let subresourceEvents = 0;
-  const SUBRESOURCE_CAP = 200;
-  let subresourceObserver: PerformanceObserver | undefined;
-  if (typeof PerformanceObserver !== 'undefined') {
-    try {
-      const observer = new PerformanceObserver((list) => {
-        for (const raw of list.getEntries()) {
-          const entry = raw as PerformanceResourceTiming;
-          if (subresourceEvents >= SUBRESOURCE_CAP) {
-            return;
-          }
-          const type = entry.initiatorType || 'other';
-          // Patched transports own their records, but only from the moment they were patched. A
-          // fetch the page made before that (a zero-install reader connects at DOMContentLoaded,
-          // after the app's start-up requests) has no other record, so the browser's is reported.
-          // Resource timing has no method, so it is reported as GET, like every entry here.
-          const patched = 'fetch' === type || 'xmlhttprequest' === type;
-          if (patched && entry.startTime >= installedAt) {
-            continue;
-          }
-          const rawUrl = entry.name;
-          if (reportedNetUrls.has(rawUrl)) {
-            continue;
-          }
-          reportedNetUrls.add(rawUrl);
-          subresourceEvents += 1;
-          emit(EventType.NET_REQUEST, {
-            id: nextId(),
-            method: 'GET',
-            ...netUrlFields(rawUrl),
-            durationMs: Math.round(entry.duration),
-            initiator: type,
-            ...(entry.transferSize > 0 ? { transferSize: entry.transferSize } : {}),
-            // responseStatus is Chromium-only; omitted entirely when unreadable so the wire never
-            // carries a guessed status. Its absence is what the server-side seam reads as unknown.
-            ...((entry.responseStatus ?? 0) > 0
-              ? {
-                  status: entry.responseStatus,
-                  ok: (entry.responseStatus ?? 0) >= 200 && (entry.responseStatus ?? 0) < 400,
-                }
-              : {}),
-          });
-        }
-      });
-      subresourceObserver = observer;
-      observer.observe({ type: 'resource', buffered: true });
-      // Disconnected in the disposer below.
-    } catch {
-      // No observer support: document-initiated loads stay unobserved, stated rather than guessed.
-    }
-  }
+  // The browser's own record of each load, for the loads the patches above never see.
+  const subresourceObserver = observeResourceTiming({
+    emit,
+    installedAt,
+    nextId,
+    reportedNetUrls,
+    patchedNetUrls,
+  });
 
   return () => {
     if (pageSlots()[PAGE_CAPTURE] === owner) {

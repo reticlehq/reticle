@@ -16,7 +16,11 @@ import { describeObserved } from './observed-in-window.js';
 import { netEvidence } from './net-evidence.js';
 import { truncatedBodyAdvice } from './truncated-body-advice.js';
 import { mergeNetworkDetail, withDownloadRequests } from '@/window/network-detail-merge.js';
-import { departedInWindow, mediaEntryBeforeWindow } from '@/window/event-filters.js';
+import {
+  departedInWindow,
+  mediaEntryBeforeWindow,
+  unpatchedInWindow,
+} from '@/window/event-filters.js';
 import {
   checkRequestBody,
   REMEDY_BODY_CAPTURE,
@@ -48,6 +52,8 @@ import {
   targetsNativeDownload,
   targetsUnobservedChannel,
   unobservedChannelReason,
+  unpatchedFetchReason,
+  UNPATCHED_FETCH_ASSERTION,
 } from './net-blind-spots.js';
 export {
   clipBody,
@@ -165,6 +171,25 @@ function nativeDownloadMiss(
     observed: observedNetCalls(events, p.urlContains),
     expected: `a fetch or XHR matching ${filter}`,
     assertion,
+  };
+}
+
+/** `unknown` when the browser recorded a matching call no patched transport saw; else `undefined`. */
+function unpatchedFetchMiss(
+  events: ReticleEvent[],
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): EvalResult | undefined {
+  if (!unpatchedInWindow(events, p.since ?? 0, p.urlContains)) {
+    return undefined;
+  }
+  const reason = unpatchedFetchReason(describeNetFilter(p));
+  return {
+    pass: false,
+    failureReason: reason,
+    inconclusive: reason,
+    observed: observedNetCalls(events, p.urlContains),
+    expected: `a recorded call matching ${describeNetFilter(p)}`,
+    assertion: UNPATCHED_FETCH_ASSERTION,
   };
 }
 
@@ -484,6 +509,11 @@ export function evalNet(
   // useEffect-double-fire / retry-storm regression class, where the request DID fire (presence passes)
   // but fired the WRONG number of times. Without `count`, the matcher is presence-only (≥1).
   if (p.count !== undefined) {
+    // A marked call is not in `matches`, so no count over its URL can be judged, a pass included.
+    const unpatched = unpatchedFetchMiss(events, p);
+    if (unpatched !== undefined) {
+      return unpatched;
+    }
     if (0 === matches.length) {
       const download = nativeDownloadMiss(events, p);
       if (download !== undefined) {
@@ -520,7 +550,7 @@ export function evalNet(
   }
   const hit = matches[0];
   if (hit === undefined) {
-    const download = nativeDownloadMiss(events, p);
+    const download = nativeDownloadMiss(events, p) ?? unpatchedFetchMiss(events, p);
     if (download !== undefined) {
       return download;
     }

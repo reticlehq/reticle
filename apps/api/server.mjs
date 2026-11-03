@@ -314,6 +314,12 @@ app.get('/api/rule-pairs/jobs', (_req, res) => {
   });
 });
 
+// `ping` answers any POST. The bench-app sends one through a `fetch` it saved before connect() and
+// one through `window.fetch`, so the server gets both while only the second is recorded (#1660).
+app.post('/api/rule-pairs/ping/:via', (req, res) => {
+  res.json({ via: req.params.via });
+});
+
 app.get('/api/rule-pairs/:list', (req, res) => {
   res.json({ list: req.params.list, page: Number(req.query.page ?? 1) });
 });

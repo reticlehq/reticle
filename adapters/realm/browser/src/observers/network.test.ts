@@ -923,6 +923,52 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
     expect(net.data['initiator']).toBe('img');
   });
 
+  // A client library that saved `window.fetch` before connect() sends through the saved function,
+  // so the patch never sees the call. The browser still records it in resource timing (#1660).
+  it('marks a fetch that no patched transport saw, and does not record it as a request', () => {
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    FakePO.instances.at(0)?.callback({
+      getEntries: () => [fakeEntry('fetch', 'https://app.test/api/ping')],
+    });
+    expect(events.filter((e) => e.type === EventType.NET_REQUEST)).toEqual([]);
+    const marks = events.filter((e) => e.type === EventType.NET_UNPATCHED);
+    expect(marks.map((e) => [e.data['url'], e.data['initiator'], e.data['method']])).toEqual([
+      ['https://app.test/api/ping', 'fetch', undefined],
+    ]);
+    expect(marks[0]?.data['status']).toBe(200);
+  });
+
+  // The resource entry can arrive before the patched fetch resolves. The patched call must still
+  // own the record: one request, and no marker for the engine to act on.
+  it('gives a patched fetch one record and no marker, also when the entry arrives first', async () => {
+    const origFetch = requireCapturedMethod<typeof window.fetch>(window, 'fetch');
+    let answer: (r: Response) => void = () => undefined;
+    window.fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    try {
+      const { emit, events } = collect();
+      teardown = installNetwork(emit);
+      const pending = window.fetch('/api/ping', { method: 'POST' });
+      FakePO.instances.at(0)?.callback({
+        getEntries: () => [fakeEntry('fetch', new URL('/api/ping', location.href).href)],
+      });
+      answer(fakeResponse(200));
+      await pending;
+      await flushBody();
+      expect(events.filter((e) => e.type === EventType.NET_UNPATCHED)).toEqual([]);
+      expect(events.filter((e) => e.type === EventType.NET_REQUEST)).toHaveLength(1);
+    } finally {
+      teardown?.();
+      teardown = undefined;
+      window.fetch = origFetch;
+    }
+  });
+
   it('disconnects the observer on teardown', () => {
     const { emit } = collect();
     teardown = installNetwork(emit);

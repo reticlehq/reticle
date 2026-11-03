@@ -536,6 +536,16 @@ export type ContractReadError = (typeof ContractReadError)[keyof typeof Contract
 // import path for every consumer. See event-types.ts for why it moved.
 import { CanvasTrigger, EventType, MediaEvent } from './event-types.js';
 export { CanvasTrigger, EventType, MediaEvent };
+export {
+  FieldChangeField,
+  FieldChangeKind,
+  ROUTE_CHANGE_HOW_FIELD,
+  RouteChangeHow,
+  ScrollDirection,
+  StorageArea,
+  StreamDirection,
+  StreamTransport,
+} from './event-types.js';
 
 /** Bounds for the per-session ring buffer. */
 export const RING_BUFFER_DEFAULTS = {

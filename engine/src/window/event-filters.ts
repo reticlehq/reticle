@@ -328,6 +328,25 @@ export function departedInWindow(
   );
 }
 
+/**
+ * Did a request to this URL leave through a `fetch` that Reticle did not patch, in the window?
+ *
+ * The SDK reports such a call as `net.unpatched`: the browser recorded it in resource timing, and no
+ * patched transport saw it. It has no method, so only the URL filter can match it.
+ */
+export function unpatchedInWindow(
+  events: readonly ReticleEvent[],
+  since: number,
+  urlContains: string | undefined,
+): boolean {
+  return events.some(
+    (e) =>
+      e.type === EventType.NET_UNPATCHED &&
+      e.t >= since &&
+      (urlContains === undefined || urlForMatch(e.data).includes(urlContains)),
+  );
+}
+
 /** Is there an event after `record` from a document other than the one that emitted it? */
 function newDocumentAfter(events: readonly ReticleEvent[], record: ReticleEvent): boolean {
   const from = record.documentId;

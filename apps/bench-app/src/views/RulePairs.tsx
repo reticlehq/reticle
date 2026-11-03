@@ -17,8 +17,19 @@ import { useApp } from '../store/store.js';
  *    (report), and a `0 of 6 selected` count that moves with the same request (silent).
  *  - `partial-failure-in-ok-response`: a batch write that answers 200 with one failed item (report),
  *    and a read of a job list that holds old failed jobs (silent).
+ *  - a `net` miss over a `fetch` saved before connect(): `unknown`, not `no` (#1660), and the same
+ *    ping through `window.fetch` passes.
  */
 const API = 'http://localhost:8787/api/rule-pairs';
+/**
+ * `fetch` as it was when this module loaded. `main.tsx` imports the app before it calls
+ * `installReticle()`, so this is the browser's own `fetch`, saved before connect() patched it. A
+ * client library that stores `window.fetch` when it loads does the same (#1660).
+ */
+const savedFetch = window.fetch.bind(window);
+/** Two routes for one ping, so the call that goes through the patch never names the saved one. */
+const PING_SAVED = 'ping/saved';
+const PING_PATCHED = 'ping/patched';
 const PROFILE = { id: 'profile-1', name: 'New name', plan: 'pro' };
 const TOTAL = 6;
 /**
@@ -95,6 +106,21 @@ export function RulePairs(): React.ReactElement {
           onClick={() => useApp.setState({ rulePairsChoice: 'remembered' })}
         >
           Remember
+        </button>
+      </div>
+      <div className="panel panel-pad" style={{ maxWidth: 560 }}>
+        <h3>Saved fetch</h3>
+        <button
+          data-testid="rule-pairs-ping-saved"
+          onClick={() => void savedFetch(`${API}/${PING_SAVED}`, { method: 'POST' })}
+        >
+          Ping through a saved fetch
+        </button>
+        <button
+          data-testid="rule-pairs-ping-patched"
+          onClick={() => void fetch(`${API}/${PING_PATCHED}`, { method: 'POST' })}
+        >
+          Ping through window.fetch
         </button>
       </div>
       <div className="panel panel-pad" style={{ maxWidth: 560 }}>
