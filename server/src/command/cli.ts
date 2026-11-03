@@ -20,6 +20,7 @@ import { installCrashGuard } from './setup/setup-command.js';
 import { handleStatus } from './cli/status-fields.js';
 export { handleStatus, reportStatus } from './cli/status-fields.js';
 import { reticleStateHome } from './daemon/daemon.js';
+import { ensureDaemon } from './cli/ensure-daemon.js';
 import { handleMcp } from './cli/mcp-command.js';
 import { handleReport } from './cli/report-command.js';
 import { handleContext } from './cli/context-command.js';
@@ -49,16 +50,9 @@ import { startDaemon } from '@/index.js';
 import { cmdLink, connectInstalls, isCloudCommand, runCloudCommand } from './cli/cloud-cli.js';
 import { SERVER_VERSION } from './version/identity/server-version.js';
 import { log } from '@/log.js';
-import {
-  isAlive,
-  removePid,
-  spawnDaemon,
-  discoverDaemonPort,
-  writeDaemonRegistry,
-} from './daemon/daemon.js';
-import { PortPresence, probePresence, presenceIsUsable } from './daemon/binding/port-presence.js';
-import { describePortState } from '@/command/daemon/port-state.js';
-import { waitForDaemon, probeDaemon } from '@/surface/mcp/mcp-proxy.js';
+import { isAlive, removePid, discoverDaemonPort, writeDaemonRegistry } from './daemon/daemon.js';
+import { probePresence, presenceIsUsable } from './daemon/binding/port-presence.js';
+import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import {
   installDaemonResilience,
   recordExitReason,
@@ -70,7 +64,6 @@ import { everServedToolCall } from './daemon/lifetime/daemon-usefulness.js';
 import { DAEMON_START_FAILED_EVENT } from './daemon/lifetime/startup-failure.js';
 import {
   summarizeStatus,
-  warnOnDaemonSkew,
   decideOpen,
   openInBrowser,
   openCommand,
@@ -111,13 +104,7 @@ import {
 } from './cli/launch/sdk-version-match.js';
 import type { StartOptions } from '@/index.js';
 
-import {
-  DAEMON_INNER_COMMAND,
-  PORT_FLAG,
-  parseCliArgs,
-  CLI_USAGE,
-  dialsTheDaemon,
-} from './cli/cli-parse.js';
+import { PORT_FLAG, parseCliArgs, CLI_USAGE, dialsTheDaemon } from './cli/cli-parse.js';
 import { renderHelp } from './cli/cli-usage.js';
 import { RENAMED_COMMANDS, renamedCommandFor, renamedNote } from './cli/cli-parse-grammar.js';
 import { handleFeedback, handleTelemetry } from '@/telemetry/feedback-cli.js';
@@ -304,38 +291,9 @@ async function handleAffected(files: string[], since: string | undefined): Promi
 }
 
 /** Ensure a daemon is reachable on `port` (probe the real port; spawn + wait only if nothing's there). */
-function ensureDaemon(port: number): Promise<void> {
-  return probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }).then(
-    async (presence) => {
-      // Attaching to whatever already owns the port is the whole point of a daemon — but it means an
-      // upgrade does NOT take effect until that daemon dies, and nothing used to say so. Say it here,
-      // where both versions are in hand, and keep attaching: killing another agent's daemon on a
-      // version bump is worse than a loud warning.
-      if (presenceIsUsable(presence)) {
-        return warnOnDaemonSkew(port);
-      }
-      // Not free, not a daemon: a stranger holds the port. Spawning here is guaranteed to fail —
-      // the child cannot bind — and `waitForDaemon` would then report READY anyway, because its
-      // probe is the same bare TCP connect and the stranger accepts. That is the "serve reports
-      // success for a daemon that never bound" shape. Refuse instead, with the sentence `doctor`
-      // says.
-      if (PortPresence.FREE !== presence) {
-        throw new Error(describePortState(presence, port));
-      }
-      const scriptPath = process.argv[1];
-      if (scriptPath === undefined) {
-        throw new Error('cannot locate the reticle daemon script');
-      }
-      spawnDaemon(
-        process.execPath,
-        scriptPath,
-        [DAEMON_INNER_COMMAND, PORT_FLAG, String(port)],
-        port,
-      );
-      return waitForDaemon(port);
-    },
-  );
-}
+// ensureDaemon moved to ./cli/ensure-daemon.js — it now retries once when a FOREIGN reading
+// matches a live recorded pid (reticlehq/reticle#2126: `reticle open` right after `restart` read
+// FOREIGN while the daemon was still answering its first /status on Windows).
 
 /**
  * `reticle open [url]` — the one-command "show me the app". Resolves the port (the requested one if a
