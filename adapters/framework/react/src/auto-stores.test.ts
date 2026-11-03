@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { storeNames, registerStore, unregisterStore } from '@reticlehq/browser';
+import { storeNames, registerStore, unregisterStore, readStores } from '@reticlehq/browser';
 import {
   autoRegisterStores,
   classifyProviderValue,
@@ -187,6 +187,42 @@ describe('autoRegisterStores', () => {
     document.body.appendChild(el);
 
     expect(autoRegisterStores(document)).toEqual([AUTO_STORE_KEY.REDUX]);
+    expect(autoRegisterStores(document)).toEqual([]);
+  });
+
+  it('rebinds the name to the new store after a hot reload replaces the instance', () => {
+    const mount = (state: { n: number }): void => {
+      document.body.innerHTML = '';
+      const store = { getState: () => state, subscribe: () => () => {} };
+      const provider = providerFiber({ store });
+      const host: FakeFiber = { return: provider, type: 'div' };
+      provider.child = host;
+      const el = document.createElement('div');
+      (el as unknown as Record<string, unknown>)['__reactFiber$auto'] = host;
+      document.body.appendChild(el);
+    };
+    mount({ n: 1 });
+    expect(autoRegisterStores(document)).toEqual([AUTO_STORE_KEY.REDUX]);
+
+    // HMR re-runs the module that creates the store: same name, new instance.
+    mount({ n: 2 });
+    expect(autoRegisterStores(document)).toEqual([AUTO_STORE_KEY.REDUX]);
+    expect(readStores(AUTO_STORE_KEY.REDUX)).toEqual({ [AUTO_STORE_KEY.REDUX]: { n: 2 } });
+  });
+
+  it('does no writes on repeat passes over the same unchanged stores', () => {
+    // A QueryClient is wrapped in a NEW adapter store on every discovery pass, so the comparison that
+    // decides "replace" must look at the client itself, not at what discovery builds around it.
+    const client = queryClient();
+    const provider = providerFiber(client);
+    const host: FakeFiber = { return: provider, type: 'div' };
+    provider.child = host;
+    const el = document.createElement('div');
+    (el as unknown as Record<string, unknown>)['__reactFiber$auto'] = host;
+    document.body.appendChild(el);
+
+    expect(autoRegisterStores(document)).toEqual([AUTO_STORE_KEY.QUERY]);
+    expect(autoRegisterStores(document)).toEqual([]);
     expect(autoRegisterStores(document)).toEqual([]);
   });
 
