@@ -10,12 +10,15 @@
  * journal that buffers and journals what arrives lives in `page-error-journal.ts`.
  */
 import { RETICLE_EARLY_CAPTURE } from '@reticlehq/core';
-import type { PooledPage, PooledPageError } from './pool-contract.js';
+import type { PooledDialog, PooledPage, PooledPageError } from './pool-contract.js';
 
 /** The page-error hooks `BrowserPoolOptions` carries, forwarded here verbatim. */
 export interface LeasePageErrorHooks {
   onPageError?: ((leaseId: string, error: PooledPageError) => void) | undefined;
   onLeaseClosed?: ((leaseId: string) => void) | undefined;
+  /** Each native dialog the pool dismissed. See `BrowserPoolOptions.onDialog`. */
+  onDialog?:
+    ((leaseId: string, dialog: Pick<PooledDialog, 'kind' | 'message'>) => void) | undefined;
 }
 
 /**

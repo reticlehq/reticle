@@ -30,6 +30,8 @@ import { emit, Sig } from '../lib/reticle-bridge.js';
  *    sent (silent), and an `invite:sent` signal fired after the 409 (report) (#2172).
  *  - `stale-response-applied`: same-path reads that update different store keys (silent), and the
  *    same race when both answers update `shipments.rows` (report) (#2175).
+ *  - `dialog_declined`: a publish behind `confirm()`, which Reticle declines, so its request never
+ *    goes (unknown). The dead button is the other direction: no dialog, no effect (no).
  */
 const API = 'http://localhost:8787/api/rule-pairs';
 /**
@@ -43,6 +45,8 @@ const PING_SAVED = 'ping/saved';
 const PING_PATCHED = 'ping/patched';
 const PROFILE = { id: 'profile-1', name: 'New name', plan: 'pro' };
 const TOTAL = 6;
+/** Not a delete: a destructive label is refused before the click, so no dialog would open. */
+const PUBLISH_QUESTION = 'Publish this profile?';
 /**
  * Counts every click on the page, as an analytics or "last interaction" store does. Earlier clicks
  * move this path before the dead click, and the dead click moves it inside its own window. So the
@@ -157,6 +161,16 @@ export function RulePairs(): React.ReactElement {
         <h3>Effect</h3>
         {/* The defect, on purpose: this button has no handler. */}
         <button data-testid="rule-pairs-dead">Archive</button>
+        <button
+          data-testid="rule-pairs-publish"
+          onClick={() => {
+            if (window.confirm(PUBLISH_QUESTION)) {
+              void fetch(`${API}/publish`, { method: 'POST' });
+            }
+          }}
+        >
+          Publish
+        </button>
         <button
           data-testid="rule-pairs-remember"
           onClick={() => useApp.setState({ rulePairsChoice: 'remembered' })}

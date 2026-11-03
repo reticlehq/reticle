@@ -73,6 +73,7 @@ const OWNER: Readonly<Record<VerifiedReason, VerdictAttribution>> = {
   // Ours, or the caller's — either way not the app's.
   [VerifiedReason.VERSION_SKEW]: VerdictAttribution.HARNESS,
   [VerifiedReason.WINDOW_CLOSED_EARLY]: VerdictAttribution.HARNESS,
+  [VerifiedReason.DIALOG_DECLINED]: VerdictAttribution.HARNESS,
   [VerifiedReason.NOTHING_DECLARED]: VerdictAttribution.HARNESS,
   [VerifiedReason.VACUOUS_GRADE]: VerdictAttribution.HARNESS,
   [VerifiedReason.ALREADY_TRUE]: VerdictAttribution.HARNESS,

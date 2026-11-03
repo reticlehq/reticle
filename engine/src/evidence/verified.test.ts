@@ -438,6 +438,13 @@ describe('every verdict names the clause that decided it', () => {
         stillInFlight: ['POST /api/v1/auth/register'],
       },
     },
+    // The same failing row as ASSERTION_FAILED, plus a `confirm` that Reticle answered "no".
+    [VerifiedReason.DIALOG_DECLINED]: {
+      pass: false,
+      honesty: clean(),
+      settled: true,
+      declinedDialog: { kind: 'confirm', message: 'Delete?' },
+    },
     [VerifiedReason.CONTRADICTED]: {
       pass: true,
       honesty: clean(),
@@ -779,5 +786,42 @@ describe('buffer loss impeaches only when the failing clause reads lost events (
     });
     expect(r.verified).toBe(Verified.UNKNOWN);
     expect(r.verifiedReason).toBe(VerifiedReason.UNCLEAN_CAPTURE);
+  });
+});
+
+/** A dialog that Reticle declined decides only a failure, never a pass (#1350). */
+describe('a declined dialog', () => {
+  const declinedDialog = { kind: 'confirm', message: 'Delete this item?' };
+
+  it('turns a failure into unknown and quotes the question', () => {
+    const decision = decideVerified({
+      pass: false,
+      honesty: clean(),
+      settled: true,
+      declinedDialog,
+    });
+    expect(decision.verified).toBe(Verified.UNKNOWN);
+    expect(decision.because).toContain('confirm dialog ("Delete this item?")');
+  });
+
+  it('leaves a pass as a pass', () => {
+    const decision = decideVerified({
+      pass: true,
+      honesty: clean(),
+      settled: true,
+      declinedDialog,
+    });
+    expect(decision.verified).toBe(Verified.YES);
+  });
+
+  it('quotes a long question bounded, not whole', () => {
+    const long = 'x'.repeat(5_000);
+    const decision = decideVerified({
+      pass: false,
+      honesty: clean(),
+      settled: true,
+      declinedDialog: { kind: 'prompt', message: long },
+    });
+    expect(decision.because.length).toBeLessThan(1_000);
   });
 });

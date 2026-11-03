@@ -32,6 +32,7 @@ import { BrowserPool } from './portal/pool/browser-pool.js';
 import { playwrightLauncher, resolveMaxContexts } from './portal/pool/playwright-launcher.js';
 import { makePageErrorJournal, type PageErrorJournal } from './portal/pool/page-error-journal.js';
 import type { PooledPageError } from './portal/pool/pool-contract.js';
+import type { BrowserPoolOptions } from './portal/pool/pool-lease.js';
 import { resolveLeasedSessionId } from './surface/tools/lease-tools.js';
 import {
   readReaderBundle,
@@ -93,6 +94,7 @@ export function createBrowserPool(
   onPageError?: (leaseId: string, error: PooledPageError) => void,
   onLeaseClosed?: (leaseId: string) => void,
   nonces?: Pick<NonceMinter, 'mint'>,
+  onDialog?: BrowserPoolOptions['onDialog'],
 ): BrowserPool {
   const maxContexts = resolveMaxContexts(process.env[ReticleEnv.MAX_CONTEXTS], cpus().length);
   const genSessionId = (): string =>
@@ -110,6 +112,7 @@ export function createBrowserPool(
     launchHeaded: playwrightLauncher({ headless: false }),
     ...(onPageError === undefined ? {} : { onPageError }),
     ...(onLeaseClosed === undefined ? {} : { onLeaseClosed }),
+    ...(onDialog === undefined ? {} : { onDialog }),
   });
 }
 

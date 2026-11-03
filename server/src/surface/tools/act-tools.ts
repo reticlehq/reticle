@@ -53,7 +53,7 @@ import { hiddenMatchNote } from '@reticlehq/engine/evidence/already-true.js';
 import { inFlightRequestLabels, repeatedRequestLabels } from './act/settle-in-flight.js';
 import { awaitShownMatch, evaluateAfterAct, finishAfterMatch } from './act/after-match.js';
 import { noteProved } from './act/proved-controls.js';
-import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
+import { decideVerified, withDeclinedDialog } from '@reticlehq/engine/evidence/verified.js';
 import { buildHonestyBlock, honestyForVerdict } from '@reticlehq/engine/evidence/honesty.js';
 import {
   declaredExpectations,
@@ -808,6 +808,7 @@ export const ACT_TOOLS: ToolDef[] = [
             },
             ...(namedNetIsInFlight(until, stillInFlight) ? { namedRequestInFlight: true } : {}),
             ...(impeachForLoss && false === verdict.pass ? { bufferLostEvidence: true } : {}),
+            ...withDeclinedDialog(windowEvents),
           }),
           (part) => reloadAndRecheck(deps, session, part, timeout),
         );

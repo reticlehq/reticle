@@ -8,6 +8,7 @@ import type {
   Launcher,
   PooledBrowser,
   PooledContext,
+  PooledDialog,
   PooledPage,
   PooledPageError,
 } from './pool-contract.js';
@@ -111,6 +112,11 @@ export interface BrowserPoolOptions {
    * holding it for the life of the daemon. Optional: no sink, nothing to clean up.
    */
   onLeaseClosed?: (leaseId: string) => void;
+  /**
+   * Sink for each native dialog the pool dismissed, with the lease id. The dismissal is an answer
+   * of "no" on the app's behalf, so the wiring records it for the verdict (#1350). Optional.
+   */
+  onDialog?: (leaseId: string, dialog: Pick<PooledDialog, 'kind' | 'message'>) => void;
   /**
    * Launches a browser with a window, for a lease somebody wants to watch. Launched only when the
    * first headed lease is asked for. Absent: a headed lease is refused.
