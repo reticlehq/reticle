@@ -245,6 +245,49 @@ const APPLY_WINDOW_MS = 500;
  */
 const APPLY_SLACK_MS = 100;
 
+/** The store path or DOM element a reaction changed, when the event names one. */
+function reactionTarget(event: ReticleEvent): string | undefined {
+  if (event.type === EventType.STATE_CHANGE) {
+    const path = event.data['path'];
+    if ('string' !== typeof path) {
+      return undefined;
+    }
+    const name = 'string' === typeof event.data['name'] ? event.data['name'] : '';
+    return `state:${name}:${path}`;
+  }
+  const dom =
+    event.type === EventType.DOM_TEXT ||
+    event.type === EventType.DOM_ADDED ||
+    event.type === EventType.DOM_REMOVED ||
+    event.type === EventType.DOM_ATTR;
+  return dom && event.ref !== undefined ? `dom:${event.ref}` : undefined;
+}
+
+/** Whether a reaction belongs to this flight rather than another completion or request start. */
+function belongsTo(event: ReticleEvent, flight: Flight, all: readonly Flight[]): boolean {
+  if (event.t < flight.settledAt - APPLY_SLACK_MS || event.t > flight.settledAt + APPLY_WINDOW_MS) {
+    return false;
+  }
+  const reacts =
+    event.type === EventType.STATE_CHANGE ||
+    event.type === EventType.SIGNAL ||
+    event.type === EventType.DOM_TEXT ||
+    event.type === EventType.DOM_ADDED ||
+    event.type === EventType.DOM_REMOVED ||
+    event.type === EventType.DOM_ATTR;
+  // A reaction belongs to the completion nearest it. The slack also admits the newer response's
+  // render before the loser and a later request's loading write, so compare request starts too.
+  const own = Math.abs(event.t - flight.settledAt);
+  return (
+    reacts &&
+    !all.some(
+      (other) =>
+        other.id !== flight.id &&
+        (Math.abs(event.t - other.settledAt) < own || Math.abs(event.t - other.issuedAt) < own),
+    )
+  );
+}
+
 /**
  * Did the app REACT to this response — did anything user-visible move after it landed?
  *
@@ -259,35 +302,23 @@ const APPLY_SLACK_MS = 100;
 function appliedAfter(
   events: readonly ReticleEvent[],
   loser: Flight,
+  winner: Flight,
   all: readonly Flight[],
 ): boolean {
-  const { settledAt } = loser;
+  const winnerTargets = new Set(
+    events
+      .filter((event) => belongsTo(event, winner, all))
+      .map(reactionTarget)
+      .filter((target): target is string => target !== undefined),
+  );
   return events.some((event) => {
-    if (event.t < settledAt - APPLY_SLACK_MS || event.t > settledAt + APPLY_WINDOW_MS) {
+    if (!belongsTo(event, loser, all)) {
       return false;
     }
-    const reacts =
-      event.type === EventType.STATE_CHANGE ||
-      event.type === EventType.SIGNAL ||
-      event.type === EventType.DOM_TEXT ||
-      event.type === EventType.DOM_ADDED ||
-      event.type === EventType.DOM_REMOVED ||
-      event.type === EventType.DOM_ATTR;
-    // A reaction belongs to the completion nearest it. The slack lets a render stamped a moment
-    // early count, and so it also took in the NEWER response's own render landing just before the
-    // loser: a correct app that dropped the loser was accused (seen intermittently on a bench twin).
-    // It also belongs to a request being ISSUED nearer it: an action's own write ("loading", the
-    // requested value) lands with its request, and a fast burst of clicks puts the next one a few
-    // ms after a slow loser lands (seen 1 run in 2 on a correctly guarded quote desk).
-    const own = Math.abs(event.t - settledAt);
-    return (
-      reacts &&
-      !all.some(
-        (f) =>
-          f.id !== loser.id &&
-          (Math.abs(event.t - f.settledAt) < own || Math.abs(event.t - f.issuedAt) < own),
-      )
-    );
+    // A known target proves an overwrite only when both answers wrote it. Signals and older SDK events
+    // without a target keep the timing fallback because the event stream cannot compare them.
+    const target = reactionTarget(event);
+    return target === undefined || winnerTargets.has(target);
   });
 }
 
@@ -358,7 +389,7 @@ function raceIn(
       }
       // The race happened. Whether it MATTERS is whether the app acted on the loser — an app that
       // drops superseded responses races just as visibly and is not broken.
-      if (!appliedAfter(events, first, all)) {
+      if (!appliedAfter(events, first, second, all)) {
         continue;
       }
       return {
