@@ -13,6 +13,17 @@ import type { Session } from '@/portal/session/session.js';
 import type { ToolDeps } from './tool-kit.js';
 import { rewriteUploadArgs, tryRealInput, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
+import { normalizeTypeSpelling } from './type-spelling.js';
+
+/**
+ * Map the `fill` spelling onto the `type` action.
+ *
+ * The tool documents `{ text }` for type and `{ value }` for fill/select, and agents mix them up
+ * constantly — `reticle_act` with `{ action: "type", value: "…" }` then fails at run time with
+ * "type requires a string `text`", after the action window opened. When `text` is absent and
+ * `value` is a string, `value` becomes `text`, in the flat args and in the nested `args` object.
+ * A non-string `value` is left alone so the browser's own refusal keeps its accurate message.
+ */
 
 /**
  * Single dispatch point for every ACT and ACT_SEQUENCE command.
@@ -28,10 +39,11 @@ export async function actCommand(
   deps: ToolDeps,
   session: Session,
   command: ReticleCommand,
-  actArgs: Record<string, unknown>,
+  rawActArgs: Record<string, unknown>,
   timeoutMs?: number,
   realTried = false, // the caller (reticle_act) already tried real input: do not press twice
 ): Promise<import('@reticlehq/core').CommandResult> {
+  const actArgs = normalizeTypeSpelling(rawActArgs);
   const rewritten = await rewriteUploadArgs(
     { fs: deps.fs, reticleRoot: sessionRoot(deps, session.id) },
     'string' === typeof actArgs['action'] ? actArgs['action'] : '',
