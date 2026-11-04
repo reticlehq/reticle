@@ -434,7 +434,21 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   // `exhaustive` is crawl's mode: the explorer and ledger it runs, the fill values the harness
   // already chooses (and the RETICLE_SECRET_* names replay reads), and the mocks that break a write.
-  crawl: ['args', 'project', 'tools', 'facts', 'exhaust', 'flows', 'harness', 'input'],
+  // `edges` and `fs`: the exhaustive run (crawl-exhaustive.ts) drives the edge cases and writes the
+  // ledger. It lives here, not in `exhaust`, because `edges` reads `exhaust` and a caller inside
+  // `exhaust` would make the two need each other.
+  crawl: [
+    'args',
+    'project',
+    'tools',
+    'facts',
+    'exhaust',
+    'flows',
+    'harness',
+    'input',
+    'edges',
+    'fs',
+  ],
   /**
    * The app-wide coverage ledger. It persists to `.reticle/coverage.json` through the same three
    * project-memory directories every other store uses, and reads routes the way crawl does.
@@ -444,6 +458,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   exhaust: ['dir', 'fs', 'project', 'facts', 'session'],
   // Two builds are explored with the same breadth-first explorer the exhaustive crawl uses.
   compare: ['exhaust'],
+  // Edge cases, driven on the explorer's states and judged by the explorer's own checks.
+  edges: ['exhaust'],
   // `ports`: port-state.ts names the process that holds the bridge port, so every surface says the
   // same thing about a daemon that holds it and does not answer (#1937).
   daemon: ['lifetime', 'binding', 'ports', 'telemetry'],

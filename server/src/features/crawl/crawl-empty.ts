@@ -15,7 +15,9 @@ interface CrawlOutcome {
 }
 
 export function crawlEmptyNote(outcome: CrawlOutcome): string | undefined {
-  if (outcome.stepsRun > 0) return undefined;
+  if (outcome.stepsRun > 0) {
+    return undefined;
+  }
   if (outcome.maxSteps <= 0) {
     return 'nothing was clicked because maxSteps is 0 — raise it to crawl at all';
   }

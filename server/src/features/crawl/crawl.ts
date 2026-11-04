@@ -4,13 +4,13 @@
  * requests, and DEAD controls (dispatched but the app did nothing). Pure orchestration over a
  * `CrawlSession`, so no browser or Node imports. Single-pass by design, so it always terminates.
  */
+import { isActivity, legitimatelyInert } from '@/features/exhaust/session-fold.js';
 import { span } from '@/trace.js';
 import {
   ActionType,
   CRAWL_DEFAULTS,
   CrawlAnomalyKind,
   DANGEROUS_ACTION_CONFIRM_ARG,
-  EventType,
   ReticleCommand,
   type CommandResult,
   type ReticleEvent,
@@ -159,21 +159,6 @@ export interface CrawlOptions {
   confirmDangerous?: boolean;
 }
 
-/** Any buffer event that proves the app reacted to a click (vs a dead/no-op control). */
-function isActivity(e: ReticleEvent): boolean {
-  return (
-    e.type === EventType.NET_REQUEST ||
-    e.type === EventType.DOM_ADDED ||
-    e.type === EventType.DOM_REMOVED ||
-    e.type === EventType.DOM_ATTR ||
-    e.type === EventType.DOM_TEXT ||
-    e.type === EventType.ROUTE_CHANGE ||
-    e.type === EventType.SIGNAL ||
-    e.type === EventType.ANIM_START ||
-    e.type === EventType.ANIM_END
-  );
-}
-
 const SOURCE_FRAME = /^(.*):(\d+):(\d+)$/;
 const COMPONENT_STACK_FIELDS = ['componentStack', 'message'] as const;
 const URL_SOURCE_PROTOCOLS: ReadonlySet<string> = new Set([
@@ -187,34 +172,52 @@ const URL_SOURCE_PROTOCOLS: ReadonlySet<string> = new Set([
 /** Turn a browser/dev-server frame URL into the file-shaped pointer the rest of Reticle emits. */
 function sourceFile(raw: string): string | undefined {
   let file = raw.trim();
-  if (0 === file.length) return undefined;
+  if (0 === file.length) {
+    return undefined;
+  }
   try {
     const parsed = new URL(file);
-    if (URL_SOURCE_PROTOCOLS.has(parsed.protocol)) file = decodeURIComponent(parsed.pathname);
+    if (URL_SOURCE_PROTOCOLS.has(parsed.protocol)) {
+      file = decodeURIComponent(parsed.pathname);
+    }
   } catch {
     // A repo-relative or Windows path is already the more useful form; keep it as-is.
   }
   file = file.replace(/[?#].*$/, '').replace(/\\/g, '/');
   const bundledPrefix = file.lastIndexOf('/./');
-  if (-1 !== bundledPrefix) file = file.slice(bundledPrefix + 3);
-  if (file.startsWith('/@fs/')) file = file.slice('/@fs/'.length);
-  if (/^\/[A-Za-z]:\//.test(file)) file = file.slice(1);
-  else file = file.replace(/^\/+/, '');
-  if (file.startsWith('./')) file = file.slice(2);
+  if (-1 !== bundledPrefix) {
+    file = file.slice(bundledPrefix + 3);
+  }
+  if (file.startsWith('/@fs/')) {
+    file = file.slice('/@fs/'.length);
+  }
+  if (/^\/[A-Za-z]:\//.test(file)) {
+    file = file.slice(1);
+  } else {
+    file = file.replace(/^\/+/, '');
+  }
+  if (file.startsWith('./')) {
+    file = file.slice(2);
+  }
   return 0 === file.length ? undefined : file;
 }
 
 /** The location part of a Chrome/React or Firefox stack frame. */
 function frameLocation(line: string): string | undefined {
   let frame = line.trim();
-  if (frame.startsWith('at ')) frame = frame.slice(3).trim();
-  else {
+  if (frame.startsWith('at ')) {
+    frame = frame.slice(3).trim();
+  } else {
     const firefoxSeparator = frame.lastIndexOf('@');
-    if (-1 === firefoxSeparator) return undefined;
+    if (-1 === firefoxSeparator) {
+      return undefined;
+    }
     frame = frame.slice(firefoxSeparator + 1);
   }
   const opening = frame.lastIndexOf('(');
-  if (-1 !== opening && frame.endsWith(')')) return frame.slice(opening + 1, -1);
+  if (-1 !== opening && frame.endsWith(')')) {
+    return frame.slice(opening + 1, -1);
+  }
   return frame;
 }
 
@@ -227,11 +230,17 @@ function isFrameworkSource(file: string): boolean {
 function sourceFromStack(stack: string): string | undefined {
   for (const line of stack.split('\n')) {
     const location = frameLocation(line);
-    if (location === undefined) continue;
+    if (location === undefined) {
+      continue;
+    }
     const match = SOURCE_FRAME.exec(location);
-    if (null === match) continue;
+    if (null === match) {
+      continue;
+    }
     const [, rawFile, rawLine] = match;
-    if (rawFile === undefined || rawLine === undefined) continue;
+    if (rawFile === undefined || rawLine === undefined) {
+      continue;
+    }
     const file = sourceFile(rawFile);
     const lineNumber = Number(rawLine);
     if (
@@ -253,9 +262,13 @@ function sourceFromConsoleError(event: ReticleEvent): string | undefined {
   // observer carries it inside `message`; richer producers can send `componentStack` directly.
   for (const field of COMPONENT_STACK_FIELDS) {
     const componentStack = asString(event.data[field]);
-    if (componentStack === undefined) continue;
+    if (componentStack === undefined) {
+      continue;
+    }
     const componentSource = sourceFromStack(componentStack);
-    if (componentSource !== undefined) return componentSource;
+    if (componentSource !== undefined) {
+      return componentSource;
+    }
   }
 
   // The ordinary error stack can also identify a component better than ErrorEvent.filename (for
@@ -263,41 +276,20 @@ function sourceFromConsoleError(event: ReticleEvent): string | undefined {
   const stack = asString(event.data['stack']);
   if (stack !== undefined) {
     const stackSource = sourceFromStack(stack);
-    if (stackSource !== undefined) return stackSource;
+    if (stackSource !== undefined) {
+      return stackSource;
+    }
   }
 
   const directFile = asString(event.data['source']);
   const directLine = asNumber(event.data['line']);
-  if (directFile === undefined || directLine === undefined || directLine <= 0) return undefined;
+  if (directFile === undefined || directLine === undefined || directLine <= 0) {
+    return undefined;
+  }
   const file = sourceFile(directFile);
   return file === undefined || isFrameworkSource(file)
     ? undefined
     : `${file}:${String(directLine)}`;
-}
-
-/**
- * Controls whose correct behaviour IS to do nothing when clicked.
- *
- * Read off the same descriptor the crawler already has, so no extra round trip: `[disabled]` is inert
- * by definition, an already `[checked]` radio/checkbox is idempotent, and clicking a text field
- * focuses it rather than changing anything.
- */
-export function legitimatelyInert(desc: string): boolean {
-  if (desc.includes('[disabled]')) return true;
-  if (desc.includes('[checked]')) return true;
-  // Inputs, and the ARIA LIVE-REGION roles.
-  //
-  // `alert`, `status`, `log`, `timer` and `marquee` exist to be READ — a screen reader announces
-  // them and nothing is meant to happen when one is clicked. Clicking twice and seeing nothing is
-  // therefore correct behaviour, and reporting it as `dead-control` accuses a working app.
-  //
-  // Found by driving a real app: the demo reported `dead-control — alert "Invalid email or
-  // password"`, which is a login form correctly telling somebody their password was wrong. That is
-  // the most expensive kind of false positive there is — the strongest claim the crawler makes,
-  // about an app that was working, and on the path a new user meets first.
-  //
-  // `alertdialog` is deliberately NOT here: it is interactive, and a word boundary keeps it out.
-  return /\b(textbox|searchbox|combobox|spinbutton|alert|status|log|timer|marquee)\b/.test(desc);
 }
 
 /**
@@ -317,7 +309,9 @@ async function revealedItems(
     mode: 'interactive',
     ...(opts.scope !== undefined ? { scope: opts.scope } : {}),
   });
-  if (!snap.ok) return [];
+  if (!snap.ok) {
+    return [];
+  }
   const tree = ((snap.result ?? {}) as { tree?: string }).tree ?? '';
   const known = new Set(before.map((i) => (i.ref !== '' ? i.ref : i.desc)));
   return parseInteractive(tree).filter((i) => !known.has(i.ref !== '' ? i.ref : i.desc));
@@ -359,7 +353,9 @@ async function stillSilent(
     });
     await sleep(settleMs);
     // A control that has GONE (the first click removed it) is not a dead control — it did something.
-    if (!again.ok || false === asRecord(again.result)['dispatched']) return false;
+    if (!again.ok || false === asRecord(again.result)['dispatched']) {
+      return false;
+    }
     return !session.eventsSince(since).some(isActivity);
   } catch {
     return false;
@@ -404,11 +400,15 @@ export async function crawl(
     // so one call finished a deletion nobody authorized the second half of.
     const confirm = 0 === round && true === opts.confirmDangerous;
     for (const item of frontier) {
-      if (stepsRun >= maxSteps) break;
+      if (stepsRun >= maxSteps) {
+        break;
+      }
       // Dedupe by ref (the unique element), not by label — two "Delete"/"Edit" controls share a desc
       // but are different controls; collapsing them by label under-covers list/table UIs.
       const dedupeKey = item.ref !== '' ? item.ref : item.desc;
-      if (seen.has(dedupeKey)) continue; // don't re-click the same control
+      if (seen.has(dedupeKey)) {
+        continue;
+      } // don't re-click the same control
       seen.add(dedupeKey);
       if (ENDS_SESSION.test(item.desc)) {
         notJudged.push({ ref: item.ref, desc: item.desc, reason: ENDS_SESSION_NOT_PRESSED });
@@ -450,7 +450,9 @@ export async function crawl(
           return clicked;
         });
       } catch (err) {
-        if (!isSessionReplacedError(err)) throw err;
+        if (!isSessionReplacedError(err)) {
+          throw err;
+        }
         navigatedAway = true;
       } finally {
         // Close on every exit so a throw cannot leak the window onto the next control's events.
@@ -566,9 +568,13 @@ export async function crawl(
       }
     }
 
-    if (coverageCapped || stepsRun >= maxSteps || REVEAL_ROUNDS <= round) break;
+    if (coverageCapped || stepsRun >= maxSteps || REVEAL_ROUNDS <= round) {
+      break;
+    }
     const next = await revealedItems(session, opts, found);
-    if (0 === next.length) break;
+    if (0 === next.length) {
+      break;
+    }
     found.push(...next);
     frontier = next;
   }
@@ -615,3 +621,5 @@ export async function crawl(
     })(),
   };
 }
+
+export { legitimatelyInert };

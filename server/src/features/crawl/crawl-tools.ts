@@ -5,7 +5,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { stepCountSchema, timeoutMsSchema } from '@/surface/tools/args/numeric-bounds.js';
 import { crawl, type CrawlOptions } from './crawl.js';
-import { EXHAUST_DEFAULT_ACTIONS, runExhaustive } from '@/features/exhaust/exhaust-run.js';
+import { runExhaustive } from './crawl-exhaustive.js';
 import { heuristicFillValue } from '@/features/harness/fill-values.js';
 import { secretEnvKey } from '@/language/flows/flows.js';
 import type { MockRule } from '@/portal/input/network-mock.js';
@@ -20,6 +20,28 @@ const nodeSleep = (ms: number): Promise<void> => new Promise((resolve) => setTim
  * from whatever page is on screen, so without the check a page on another origin could name an
  * empty textbox after a secret and have the crawl type it in.
  */
+/**
+ * How the exhaustive crawl breaks a request: the driven browser first, then the leased page the
+ * session runs in. `reticle mcp --headless` drives a lease, and the mock tool already reaches it the
+ * same way. Undefined when neither exists, so the crawl says why its failure paths were skipped.
+ */
+export function exhaustiveMocks(
+  deps: ToolDeps,
+  sessionId: string,
+): ((url: string, rules: MockRule[]) => Promise<boolean>) | undefined {
+  const driven = deps.realInput?.setMocks?.bind(deps.realInput);
+  const pool = deps.pool;
+  if (driven === undefined && pool === undefined) {
+    return undefined;
+  }
+  return async (url, rules) => {
+    if (driven !== undefined && (await driven(url, rules))) {
+      return true;
+    }
+    return true === (await pool?.setMocksLease(sessionId, rules));
+  };
+}
+
 export function crawlSecret(
   startUrl: string,
   env: Readonly<Record<string, string | undefined>>,
@@ -61,7 +83,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
         .boolean()
         .optional()
         .describe(
-          "Walk every state it can tell apart, drive each write's failure path, fold into the coverage ledger.",
+          "Walk every state it can tell apart, drive each write's failure path and edge cases, fold into the coverage ledger.",
         ),
       confirmDangerous: z
         .boolean()
@@ -114,7 +136,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
         .describe(
           'Controls clicked whose silence could not be judged, e.g. on a background tab. They are NOT reported as dead, and they are not known to work either.',
         ),
-      // Only on `exhaustive` — see features/exhaust/exhaust-run.ts. Loose: it carries the levels.
+      // Only on `exhaustive` — see crawl-exhaustive.ts. Loose: it carries the levels.
       exhaustive: z.record(z.string(), z.unknown()).optional(),
     },
     handler: async (deps: ToolDeps, args) => {
@@ -134,11 +156,12 @@ export const CRAWL_TOOLS: ToolDef[] = [
         // Starts code-coverage collection, so the drive below is measured. See takeCodeCoverage.
         await deps.realInput?.takeCodeCoverage?.(session.url);
         const secret = crawlSecret(session.url, process.env);
+        const mocks = exhaustiveMocks(deps, session.id);
         return runExhaustive({
           sessions: deps.sessions,
           session,
           startUrl: session.url,
-          maxActions: maxSteps ?? EXHAUST_DEFAULT_ACTIONS,
+          ...(maxSteps === undefined ? {} : { maxActions: maxSteps }),
           settleMs: settleMs ?? CRAWL_DEFAULTS.SETTLE_MS,
           fillValue: (label, pageUrl) => {
             const name = /"([^"]*)"/.exec(label)?.[1] ?? label;
@@ -146,12 +169,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
           },
           now: deps.now,
           sleep: nodeSleep,
-          ...(deps.realInput?.setMocks === undefined
-            ? {}
-            : {
-                setMocks: (url: string, rules: MockRule[]) =>
-                  deps.realInput?.setMocks?.(url, rules) ?? Promise.resolve(false),
-              }),
+          ...(mocks === undefined ? {} : { setMocks: mocks }),
           ...(deps.realInput?.takeCodeCoverage === undefined
             ? {}
             : {
@@ -167,8 +185,9 @@ export const CRAWL_TOOLS: ToolDef[] = [
         ...(initialRoute === undefined ? [] : [initialRoute]),
         ...routesFromEvents(session.eventsSince(since)),
       ];
-      if (routes.length > 0)
+      if (routes.length > 0) {
         await projectForRoot(deps, sessionRoot(deps, session.id)).recordRoutes(routes);
+      }
       return report;
     },
   },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ReticleEvent } from '@reticlehq/core';
-import { explore, type ExplorePort } from './explorer.js';
+import { explore, noteDuplicateWrites, type ExplorePort } from './explorer.js';
 import { driveFailureBranches } from './failure-branches.js';
 
 /*
@@ -224,6 +224,52 @@ describe('driveFailureBranches', () => {
     });
     expect(branches.unhandled).toEqual([]);
     expect(branches.indistinguishable).toEqual(['POST /api/items']);
+  });
+
+  /*
+   * Found by driving bench-app with its API down: the login failed while exploring, so the state it
+   * reached was the error message, and breaking the request reached the same error message. That is
+   * the app handling a failure twice, not a success claimed over one.
+   */
+  it('does not accuse a write that never succeeded while exploring', async () => {
+    let page = 'login';
+    const port: ExplorePort = {
+      reset: () => {
+        page = 'login';
+        return Promise.resolve(true);
+      },
+      look: () =>
+        Promise.resolve({
+          route: '/',
+          tree:
+            'login' === page
+              ? '- button "Sign in" (ref=e1)'
+              : '- button "Sign in" (ref=e1)\n- alert "Invalid email or password" (ref=e2)',
+        }),
+      act: () => {
+        page = 'error';
+        return Promise.resolve({
+          ok: true,
+          events: [
+            {
+              type: 'net.request',
+              t: 1,
+              data: { method: 'POST', url: 'http://h/api/login', status: mocked ? 0 : 502 },
+            } as unknown as ReticleEvent,
+          ],
+        });
+      },
+      mock: (rules) => {
+        mocked = rules.length > 0;
+        return Promise.resolve(true);
+      },
+    };
+    let mocked = false;
+    const report = await explore(port, { maxActions: 20, fillValue: () => 'x' });
+    const branches = await driveFailureBranches(port, report.writes, { maxActions: 10 });
+    expect(branches.branched).toEqual(['POST /api/login']);
+    expect(branches.unhandled).toEqual([]);
+    expect(branches.notSucceeded).toEqual(['POST /api/login']);
   });
 
   it('says it could not, rather than passing, when nothing can break a request', async () => {
@@ -468,5 +514,137 @@ describe('explore — paths', () => {
       'wait',
       'look',
     ]);
+  });
+});
+
+/*
+ * Planted-bug runs on bench-app. Every page repeats the same nav buttons, and the explorer tried
+ * them first on every state, so the budget ran out before a page's own controls (Compose's
+ * Generate) were pressed. One press of Sign in sent POST /api/login twice, and nothing said so.
+ */
+describe('explore — what one press shows', () => {
+  const navApp = (opts: { duplicate?: boolean; retryAfter401?: boolean; dead?: boolean } = {}) => {
+    let page = 'home';
+    let refs = new Map<string, string>();
+    let seq = 0;
+    const pressed: string[] = [];
+    const controls: Record<string, string[]> = {
+      home: ['button "Home"', 'button "Compose"', 'button "Help"'],
+      compose: ['button "Home"', 'button "Compose"', 'button "Help"', 'button "Generate"'],
+    };
+    const port: ExplorePort = {
+      reset: () => {
+        page = 'home';
+        return Promise.resolve(true);
+      },
+      look: () => {
+        refs = new Map();
+        const tree = (controls[page] ?? [])
+          .map((c) => {
+            seq += 1;
+            refs.set(`e${String(seq)}`, c);
+            return `- ${c} (ref=e${String(seq)})`;
+          })
+          .join('\n');
+        return Promise.resolve({ tree, route: `/${page}` });
+      },
+      act: (ref) => {
+        const label = refs.get(ref) ?? '';
+        pressed.push(label);
+        const events: ReticleEvent[] = [];
+        const post = (status: number): void => {
+          events.push({
+            type: 'net.request',
+            t: 1,
+            data: { method: 'POST', url: 'http://h/api/generate', status },
+          } as unknown as ReticleEvent);
+        };
+        if ('button "Compose"' === label) {
+          page = 'compose';
+          events.push({ type: 'route.change', t: 1, data: {} } as unknown as ReticleEvent);
+        } else if ('button "Home"' === label) {
+          page = 'home';
+          events.push({ type: 'route.change', t: 1, data: {} } as unknown as ReticleEvent);
+        } else if ('button "Generate"' === label) {
+          post(true === opts.retryAfter401 ? 401 : 200);
+          if (true === opts.duplicate || true === opts.retryAfter401) {
+            post(200);
+          }
+        } else if ('button "Help"' === label && true !== opts.dead) {
+          events.push({ type: 'dom.added', t: 1, data: {} } as unknown as ReticleEvent);
+        }
+        return Promise.resolve({ ok: true, events });
+      },
+    };
+    return { port, pressed };
+  };
+
+  it('tries the controls no state has tried before the ones every page repeats', async () => {
+    const { port, pressed } = navApp();
+    await explore(port, { maxActions: 50, fillValue: () => 'x' });
+    // The home state's three, then the replay to Compose, then Generate before the repeated nav.
+    expect(pressed.slice(0, 5)).toEqual([
+      'button "Home"',
+      'button "Compose"',
+      'button "Help"',
+      'button "Compose"',
+      'button "Generate"',
+    ]);
+  });
+
+  it('reports one press that sends the same write twice', async () => {
+    const { port } = navApp({ duplicate: true });
+    const report = await explore(port, { maxActions: 50, fillValue: () => 'x' });
+    expect(report.anomalies).toContainEqual(
+      expect.objectContaining({ kind: 'duplicate-request', control: 'button "Generate"' }),
+    );
+  });
+
+  it('does not report a write sent again after the server refused the credentials', async () => {
+    const { port } = navApp({ retryAfter401: true });
+    const report = await explore(port, { maxActions: 50, fillValue: () => 'x' });
+    expect(report.anomalies.map((a) => a.kind)).not.toContain('duplicate-request');
+  });
+
+  it('records a press that changed nothing, for the edge drive to confirm', async () => {
+    const dead = await explore(navApp({ dead: true }).port, {
+      maxActions: 50,
+      fillValue: () => 'x',
+    });
+    expect(dead.surfaces[0]?.inert).toEqual(['button "Help"']);
+    const alive = await explore(navApp().port, { maxActions: 50, fillValue: () => 'x' });
+    expect(alive.surfaces[0]?.inert).toEqual([]);
+  });
+});
+
+/*
+ * bench-app's Generate answers after six seconds. The press returns long before that, so its writes
+ * are still in flight: only their `net.pending` events are in the press's window. A double send seen
+ * only there is still one press sending the same write twice.
+ */
+describe('noteDuplicateWrites — requests still in flight', () => {
+  const pending = (id: string): ReticleEvent =>
+    ({
+      type: 'net.pending',
+      t: 1,
+      data: { id, method: 'POST', url: 'http://h/api/generate', initiator: 'fetch' },
+    }) as unknown as ReticleEvent;
+  const done = (id: string): ReticleEvent =>
+    ({
+      type: 'net.request',
+      t: 2,
+      data: { id, method: 'POST', url: 'http://h/api/generate', status: 200 },
+    }) as unknown as ReticleEvent;
+
+  it('counts two sends that have not answered yet', () => {
+    const anomalies: { kind: string; control: string; detail: string }[] = [];
+    noteDuplicateWrites([pending('a'), pending('b')], 'button "Generate"', anomalies);
+    expect(anomalies.map((a) => a.kind)).toEqual(['duplicate-request']);
+  });
+
+  it('counts a send and its own answer once', () => {
+    const anomalies: { kind: string; control: string; detail: string }[] = [];
+    noteDuplicateWrites([pending('a'), done('a')], 'button "Generate"', anomalies);
+    expect(anomalies).toEqual([]);
   });
 });

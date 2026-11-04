@@ -156,6 +156,7 @@ describe('failureFindings', () => {
         branched: ['POST /api/items'],
         unhandled: [{ key: 'POST /api/items', detail: 'claimed' }],
         indistinguishable: [],
+        notSucceeded: [],
       },
       [
         {

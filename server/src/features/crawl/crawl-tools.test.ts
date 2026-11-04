@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { TOOLS, type ToolDef, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { CAPPED_SNAPSHOT_NOTE, type CrawlReport } from './crawl.js';
-import { CRAWL_TOOLS, crawlSecret } from './crawl-tools.js';
+import { CRAWL_TOOLS, crawlSecret, exhaustiveMocks } from './crawl-tools.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 
@@ -26,7 +26,9 @@ function deadButtonSession(): Session {
     elapsed: () => clock,
     eventsSince: (since) => buffer.filter((e) => e.t > since),
     command: (name) => {
-      if (name === ReticleCommand.SNAPSHOT) return ok({ tree: 'button "Dead" (ref=e1)' });
+      if (name === ReticleCommand.SNAPSHOT) {
+        return ok({ tree: 'button "Dead" (ref=e1)' });
+      }
       if (name === ReticleCommand.ACT) {
         clock += 1;
         return ok({ dispatched: true });
@@ -39,7 +41,9 @@ function deadButtonSession(): Session {
 
 function tool(name: string) {
   const t = TOOLS.find((x) => x.name === name);
-  if (t === undefined) throw new Error(`no tool ${name}`);
+  if (t === undefined) {
+    throw new Error(`no tool ${name}`);
+  }
   return t;
 }
 
@@ -79,7 +83,9 @@ describe('reticle_crawl tool', () => {
       elapsed: () => clock,
       eventsSince: (since: number) => buffer.filter((event) => event.t > since),
       command: (name: string) => {
-        if (name === ReticleCommand.SNAPSHOT) return ok({ tree: 'link "Deployments" (ref=e1)' });
+        if (name === ReticleCommand.SNAPSHOT) {
+          return ok({ tree: 'link "Deployments" (ref=e1)' });
+        }
         if (name === ReticleCommand.ACT) {
           clock += 1;
           buffer.push({
@@ -157,13 +163,17 @@ describe('the crawl output schema declares everything crawl returns', () => {
    */
   const tool = (): ToolDef => {
     const found = CRAWL_TOOLS.find((t) => t.name === ReticleTool.CRAWL);
-    if (found === undefined) throw new Error('the crawl tool definition is gone');
+    if (found === undefined) {
+      throw new Error('the crawl tool definition is gone');
+    }
     return found;
   };
 
   it('declares every top-level field of the report', () => {
     const declared = new Set(Object.keys(tool().outputSchema ?? {}));
-    for (const key of Object.keys(report)) expect(declared).toContain(key);
+    for (const key of Object.keys(report)) {
+      expect(declared).toContain(key);
+    }
   });
 
   it('declares every field of an anomaly', () => {
@@ -210,5 +220,31 @@ describe('crawlSecret — a secret is filled only on the origin the crawl starte
     expect(secret('Password', 'http://evil.test/login')).toBeUndefined();
     expect(secret('Password', 'http://localhost:4000/login')).toBeUndefined();
     expect(secret('Password', 'not a url')).toBeUndefined();
+  });
+});
+
+/*
+ * `reticle mcp --headless` drives the app in a leased page. The pool can break a request in it (the
+ * mock tool already uses that), but the exhaustive crawl asked only the driven provider, so every
+ * failure path reported "skipped: needs a driven browser" on a browser Reticle itself launched.
+ */
+describe('exhaustiveMocks — failure paths reach a leased page', () => {
+  it('falls back to the lease pool when no driven provider takes the rules', async () => {
+    const leased: { id: string; count: number }[] = [];
+    const deps = {
+      pool: {
+        setMocksLease: (id: string, rules: readonly unknown[]) => {
+          leased.push({ id, count: rules.length });
+          return Promise.resolve(true);
+        },
+      },
+    } as unknown as ToolDeps;
+    const setMocks = exhaustiveMocks(deps, 'lease-1');
+    expect(await setMocks?.('http://h/', [{ urlContains: '/api/login', abort: true }])).toBe(true);
+    expect(leased).toEqual([{ id: 'lease-1', count: 1 }]);
+  });
+
+  it('is absent when nothing can break a request', () => {
+    expect(exhaustiveMocks({} as ToolDeps, 's1')).toBeUndefined();
   });
 });

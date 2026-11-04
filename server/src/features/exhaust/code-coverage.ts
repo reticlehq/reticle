@@ -41,7 +41,9 @@ export function appFileOf(url: string): string | undefined {
   } catch {
     return undefined;
   }
-  if (NOT_APP.test(path) || !SOURCE_FILE.test(path)) return undefined;
+  if (NOT_APP.test(path) || !SOURCE_FILE.test(path)) {
+    return undefined;
+  }
   return path.replace(/^\/+/, '');
 }
 
@@ -60,14 +62,20 @@ export function foldCodeCoverage(
   const out: CodeCoverage = { ...into };
   for (const script of take) {
     const file = appFileOf(script.url);
-    if (file === undefined) continue;
+    if (file === undefined) {
+      continue;
+    }
     const fns = { ...(out[file] ?? {}) };
     for (const f of script.functions) {
       const first = f.ranges[0];
-      if (first === undefined) continue;
+      if (first === undefined) {
+        continue;
+      }
       // The module's own top-level body is reported as an anonymous function starting at 0. It
       // always runs when the file loads, so counting it would inflate every file by one.
-      if ('' === f.functionName && 0 === first.startOffset) continue;
+      if ('' === f.functionName && 0 === first.startOffset) {
+        continue;
+      }
       const key = `${f.functionName}@${String(first.startOffset)}`;
       const ran = first.count > 0 || true === fns[key]?.executed;
       fns[key] = { name: '' === f.functionName ? '(anonymous)' : f.functionName, executed: ran };
