@@ -67,11 +67,6 @@
       "count": 1
     }
   },
-  "src/evidence/blind-spots.ts": {
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/evidence/body-capture-remedy.ts": {
     "curly": {
       "count": 7

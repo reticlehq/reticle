@@ -270,6 +270,8 @@ interface AbsencePredicate {
     role?: string | undefined;
     by?: string | undefined;
     value?: string | undefined;
+    testid?: string | undefined;
+    text?: string | undefined;
   };
   predicate?: AbsencePredicate;
 }
@@ -288,6 +290,31 @@ const NEVER_VIRTUALIZED_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Did the window see the asserted element itself leave the page, as a page-level node?
+ *
+ * The virtualized blind spot says an unmounted row could hold the target. A `dom.removed` that
+ * names the target by its testid shows that the target was on the page and left (#2176). Only a
+ * page-level role counts: a virtualizer unmounts a ROW when it scrolls out of view, and that row's
+ * removal says nothing about the data. The blind-spot event carries a count and no container, so
+ * the engine cannot tell whether a target is outside every virtualized container.
+ */
+function sawPageLevelTargetLeave(
+  query: AbsencePredicate['query'],
+  windowEvents: readonly ReticleEvent[],
+): boolean {
+  const testid = query?.testid ?? (QueryBy.TESTID === query?.by ? query.value : undefined);
+  if (undefined === testid) {
+    return false;
+  }
+  return windowEvents.some(
+    (e) =>
+      EventType.DOM_REMOVED === e.type &&
+      testid === asString(e.data['testid']) &&
+      NEVER_VIRTUALIZED_ROLES.has(asString(e.data['role']) ?? ''),
+  );
+}
+
+/**
  * When an absence assertion targets a page with regions Reticle cannot observe, "the element is
  * absent" means only "it is absent in what I CAN see". Returns a note when that distinction
  * matters, undefined otherwise.
@@ -295,12 +322,14 @@ const NEVER_VIRTUALIZED_ROLES: ReadonlySet<string> = new Set([
  * Fires on three blind-spot kinds:
  *   - CROSS_ORIGIN_IFRAME (only when the predicate is scoped to a frame region)
  *   - VIRTUALIZED_UNMOUNTED — a row that was never rendered could hold the element (scoped:
- *     skipped when the queried role is structurally page-level, like dialog or a landmark)
+ *     skipped when the queried role is structurally page-level, like dialog or a landmark, or when
+ *     the window saw the target itself leave as a page-level node)
  *   - CLOSED_SHADOW_ROOT — a subtree Reticle cannot see into
  */
 export function absenceBlindSpotNote(
   predicate: AbsencePredicate,
   spots: readonly BlindSpot[],
+  windowEvents: readonly ReticleEvent[] = [],
 ): string | undefined {
   // `not(element)` is the third spelling of an absence assertion — the `not` wrapper IS the
   // negation, so the inner predicate will not carry `absent: true`. Unwrap and synthesize it.
@@ -311,7 +340,7 @@ export function absenceBlindSpotNote(
       if (true === predicate.predicate.absent) {
         return undefined;
       }
-      return absenceBlindSpotNote({ ...predicate.predicate, absent: true }, spots);
+      return absenceBlindSpotNote({ ...predicate.predicate, absent: true }, spots, windowEvents);
     }
     return undefined;
   }
@@ -322,15 +351,21 @@ export function absenceBlindSpotNote(
   const role =
     predicate.query?.role ??
     (QueryBy.ROLE === predicate.query?.by ? predicate.query.value : undefined);
-  const relevant = spots.filter(
-    (spot) =>
-      spot.count > 0 &&
-      (spot.kind === BlindSpotKind.CROSS_ORIGIN_IFRAME
-        ? undefined !== predicate.query?.scope
-        : spot.kind === BlindSpotKind.VIRTUALIZED_UNMOUNTED
-          ? undefined === role || !NEVER_VIRTUALIZED_ROLES.has(role)
-          : spot.kind === BlindSpotKind.CLOSED_SHADOW_ROOT),
-  );
+  const virtualizedApplies =
+    (undefined === role || !NEVER_VIRTUALIZED_ROLES.has(role)) &&
+    !sawPageLevelTargetLeave(predicate.query, windowEvents);
+  const relevant = spots.filter((spot) => {
+    if (spot.count <= 0) {
+      return false;
+    }
+    if (spot.kind === BlindSpotKind.CROSS_ORIGIN_IFRAME) {
+      return undefined !== predicate.query?.scope;
+    }
+    if (spot.kind === BlindSpotKind.VIRTUALIZED_UNMOUNTED) {
+      return virtualizedApplies;
+    }
+    return spot.kind === BlindSpotKind.CLOSED_SHADOW_ROOT;
+  });
   if (0 === relevant.length) {
     return undefined;
   }

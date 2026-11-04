@@ -25,7 +25,8 @@ export type ViewId =
   | 'awkward'
   | 'stale-race'
   | 'rule-pairs'
-  | 'ack-pairs';
+  | 'ack-pairs'
+  | 'claim-pairs';
 export type EnvFilter = Env | 'all';
 
 export interface Toast {

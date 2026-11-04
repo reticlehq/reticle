@@ -338,8 +338,15 @@ export function installDom(emit: Emit): Teardown {
         const { role, name } = gone;
         removed += 1;
         // A removed node has no ref (it is gone), so the CONTAINER is the only stable identity — and it
-        // is what ambient learning needs to recognize a churning region.
-        emit(EventType.DOM_REMOVED, { role, name, region: regionKeyOf(record.target) });
+        // is what ambient learning needs to recognize a churning region. The testid names WHAT left,
+        // so an absence asserted by testid can rest on the removal itself (#2176).
+        const testid = readTestId(gone.el) ?? readTestId(node);
+        emit(EventType.DOM_REMOVED, {
+          role,
+          name,
+          region: regionKeyOf(record.target),
+          ...(null === testid ? {} : { testid }),
+        });
       }
     }
     // Never silent: a capped batch tells the ledger its DOM counts understate reality.

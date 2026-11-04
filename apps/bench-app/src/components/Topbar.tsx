@@ -17,6 +17,7 @@ const TITLES: Record<ViewId, { title: string; sub: string }> = {
   'stale-race': { title: 'Stale Race', sub: 'fan-out · filter race' },
   'rule-pairs': { title: 'Rule Pairs', sub: 'echo · no effect · pagination' },
   'ack-pairs': { title: 'Ack Pairs', sub: 'acknowledged failed writes' },
+  'claim-pairs': { title: 'Claim Pairs', sub: 'route · absence by testid' },
 };
 
 export function Topbar(): React.ReactElement {

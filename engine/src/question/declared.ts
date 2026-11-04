@@ -39,6 +39,8 @@ interface DeclaredExpectations {
   netFailures: readonly DeclaredNetFailure[];
   /** The caller required something to be ON SCREEN — an element or text, present rather than absent. */
   rendersContent: boolean;
+  /** The caller required the page to be on a route. Read like `rendersContent`: top level and `allOf`. */
+  declaresRoute: boolean;
   /**
    * The `urlContains` of every net clause the predicate carries, failure or not.
    *
@@ -72,6 +74,23 @@ export function namedReactions(declared: DeclaredExpectations): {
   namedSignals: readonly string[];
 } {
   return { namedStatePaths: declared.statePaths, namedSignals: declared.signalNames };
+}
+
+/**
+ * What a held declaration proves, for the contradiction rules that infer from absence.
+ *
+ * `held` is the verdict passed AND the consequence was not already true before the action. A
+ * consequence that was already true proves nothing about the action. The act path and the assert
+ * path both call this, so the two cannot drift apart.
+ */
+export function provedConsequences(
+  declared: DeclaredExpectations,
+  held: boolean,
+): { renderProved: boolean; routeProved: boolean } {
+  return {
+    renderProved: held && declared.rendersContent,
+    routeProved: held && declared.declaresRoute,
+  };
 }
 
 /** Below this, a status is a success or a redirect: not a declared failure. */
@@ -138,6 +157,7 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
   const statePaths: string[] = [];
   const signalNames: string[] = [];
   let rendersContent = false;
+  let declaresRoute = false;
 
   const walk = (p: Predicate): void => {
     switch (p.kind) {
@@ -179,6 +199,9 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
           }
         }
         return;
+      case PredicateKind.ROUTE:
+        declaresRoute = true;
+        return;
       case PredicateKind.STATE:
         statePaths.push(p.path);
         return;
@@ -203,7 +226,15 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
   if (predicate !== undefined) {
     walk(predicate);
   }
-  return { netFailures, rendersContent, netUrls, repeatableNetUrls, statePaths, signalNames };
+  return {
+    netFailures,
+    rendersContent,
+    declaresRoute,
+    netUrls,
+    repeatableNetUrls,
+    statePaths,
+    signalNames,
+  };
 }
 
 /**
