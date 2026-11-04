@@ -80,6 +80,24 @@ describe('a drive becomes a flow without anybody asking', () => {
     expect(carriesAnAssertion([step(false)])).toBe(false);
     expect(carriesAnAssertion([step(false), step(true)])).toBe(true);
   });
+
+  // A `reticle_act { steps }` journey is one tape step, and its claims are on its sub-steps.
+  it('saves a journey whose claims are on its sub-steps', () => {
+    const journey: RecordedStep = {
+      tool: ReticleTool.ACT_SEQUENCE,
+      args: {
+        steps: [
+          { by: 'testid', value: 'add', action: 'click' },
+          { by: 'testid', value: 'pay', action: 'click', expect: { kind: 'signal', name: 'paid' } },
+        ],
+      },
+      stable: true,
+    };
+    expect(carriesAnAssertion([journey])).toBe(true);
+    const { programs, outcome } = driveFlowsFrom({ steps: [journey] });
+    expect(programs).toHaveLength(1);
+    expect(outcome.unprovenSteps).toBeUndefined();
+  });
 });
 
 /**

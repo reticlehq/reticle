@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ReticleTool } from '@reticlehq/core';
 import { RecordingStore } from './recording/tape/recordings.js';
 import { captureAct } from './replay.js';
 
@@ -47,6 +48,33 @@ describe('the ambient tape across a page that the app loads', () => {
     captureAct(store, search, { ok: true }, '/tags', 'lease-1');
     const again = store.takeAmbient('lease-1');
     expect(again?.steps.map((s) => s.args['action'])).toEqual(['fill', 'click']);
+  });
+
+  // A `reticle_act { steps }` journey is checked by its sub-steps. Its session end saves it, so the
+  // next page must not start with a second copy of it.
+  it('does not carry a journey whose sub-steps were checked', () => {
+    const store = new RecordingStore(undefined, (id) => ('page-1' === id ? 'page-2' : undefined));
+    store.capture(
+      {
+        tool: ReticleTool.ACT_SEQUENCE,
+        stable: true,
+        args: {
+          steps: [
+            {
+              by: 'testid',
+              value: 'pay',
+              action: 'click',
+              expect: { kind: 'signal', name: 'paid' },
+            },
+          ],
+        },
+      },
+      '/cart',
+      'page-1',
+    );
+    store.takeAmbient('page-1');
+    captureAct(store, search, { ok: true }, '/tags', 'page-2');
+    expect(store.takeAmbient('page-2')?.steps.map((s) => s.tool)).toEqual([ReticleTool.ACT]);
   });
 
   it('keeps them on their own page when Reticle navigated away', () => {
