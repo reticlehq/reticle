@@ -226,6 +226,52 @@ describe('driveFailureBranches', () => {
     expect(branches.indistinguishable).toEqual(['POST /api/items']);
   });
 
+  /*
+   * Found by driving bench-app with its API down: the login failed while exploring, so the state it
+   * reached was the error message, and breaking the request reached the same error message. That is
+   * the app handling a failure twice, not a success claimed over one.
+   */
+  it('does not accuse a write that never succeeded while exploring', async () => {
+    let page = 'login';
+    const port: ExplorePort = {
+      reset: () => {
+        page = 'login';
+        return Promise.resolve(true);
+      },
+      look: () =>
+        Promise.resolve({
+          route: '/',
+          tree:
+            'login' === page
+              ? '- button "Sign in" (ref=e1)'
+              : '- button "Sign in" (ref=e1)\n- alert "Invalid email or password" (ref=e2)',
+        }),
+      act: () => {
+        page = 'error';
+        return Promise.resolve({
+          ok: true,
+          events: [
+            {
+              type: 'net.request',
+              t: 1,
+              data: { method: 'POST', url: 'http://h/api/login', status: mocked ? 0 : 502 },
+            } as unknown as ReticleEvent,
+          ],
+        });
+      },
+      mock: (rules) => {
+        mocked = rules.length > 0;
+        return Promise.resolve(true);
+      },
+    };
+    let mocked = false;
+    const report = await explore(port, { maxActions: 20, fillValue: () => 'x' });
+    const branches = await driveFailureBranches(port, report.writes, { maxActions: 10 });
+    expect(branches.branched).toEqual(['POST /api/login']);
+    expect(branches.unhandled).toEqual([]);
+    expect(branches.notSucceeded).toEqual(['POST /api/login']);
+  });
+
   it('says it could not, rather than passing, when nothing can break a request', async () => {
     const { port } = fakeApp();
     const report = await explore(port, { maxActions: 200, fillValue: () => '2' });

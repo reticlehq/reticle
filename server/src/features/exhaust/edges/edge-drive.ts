@@ -307,7 +307,11 @@ export async function driveEdges(
     field: string,
     value: string,
   ): Promise<boolean> => {
-    const fills: Step[] = surface.fills.map((f) => (f.key === field ? { ...f, value } : f));
+    const fill: Step = { key: field, action: EdgeAction.FILL, value };
+    // A pre-filled field is not among the explorer's fills: it gets its fill after them.
+    const fills = surface.fills.some((f) => f.key === field)
+      ? surface.fills.map((f) => (f.key === field ? fill : f))
+      : [...surface.fills, fill];
     const steps = [...fills, click(submit)];
     return (await probe({ surface, control: field }, steps, steps)) !== undefined;
   };
@@ -359,11 +363,11 @@ export async function driveEdges(
     if (submit === undefined) {
       return [];
     }
-    return surface.fills.map((fill) => ({
+    return surface.fields.map((field) => ({
       surface,
       submit,
-      field: fill.key,
-      values: edgeInputs(specOf(fill.key, surface.attrs[fill.key]), {
+      field,
+      values: edgeInputs(specOf(field, surface.attrs[field]), {
         now: opts.now,
         max: VALUES_PER_FIELD,
       }),

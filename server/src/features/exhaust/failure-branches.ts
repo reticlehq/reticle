@@ -39,6 +39,11 @@ export interface FailureBranches {
    * by hand, or to give the app a visible outcome.
    */
   indistinguishable: string[];
+  /**
+   * Writes that answered an error while exploring too, so there is no success to compare with. Not a
+   * finding. A login with its API down lands on its error message both times.
+   */
+  notSucceeded: string[];
   /** Why nothing was driven, when nothing could be. */
   skipped?: string;
 }
@@ -60,7 +65,12 @@ export async function driveFailureBranches(
   writes: readonly ExploredWrite[],
   opts: { maxActions: number },
 ): Promise<FailureBranches> {
-  const out: FailureBranches = { branched: [], unhandled: [], indistinguishable: [] };
+  const out: FailureBranches = {
+    branched: [],
+    unhandled: [],
+    indistinguishable: [],
+    notSucceeded: [],
+  };
   const mock = port.mock;
   if (mock === undefined) {
     return { ...out, ...(0 < writes.length ? { skipped: NO_MOCKS } : {}) };
@@ -120,7 +130,9 @@ export async function driveFailureBranches(
       // Landing where success lands only ACCUSES when success visibly moved the app. A write whose
       // success shows nothing looks identical failing, and the first version of this called that
       // "claimed success" — found by driving the fixture, whose add-item panel claims nothing at all.
-      else if (write.successState === write.beforeState) {
+      else if (true === write.failed) {
+        out.notSucceeded.push(write.key);
+      } else if (write.successState === write.beforeState) {
         out.indistinguishable.push(write.key);
       } else if (reached === write.successState) {
         out.unhandled.push({

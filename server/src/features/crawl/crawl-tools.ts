@@ -20,6 +20,28 @@ const nodeSleep = (ms: number): Promise<void> => new Promise((resolve) => setTim
  * from whatever page is on screen, so without the check a page on another origin could name an
  * empty textbox after a secret and have the crawl type it in.
  */
+/**
+ * How the exhaustive crawl breaks a request: the driven browser first, then the leased page the
+ * session runs in. `reticle mcp --headless` drives a lease, and the mock tool already reaches it the
+ * same way. Undefined when neither exists, so the crawl says why its failure paths were skipped.
+ */
+export function exhaustiveMocks(
+  deps: ToolDeps,
+  sessionId: string,
+): ((url: string, rules: MockRule[]) => Promise<boolean>) | undefined {
+  const driven = deps.realInput?.setMocks?.bind(deps.realInput);
+  const pool = deps.pool;
+  if (driven === undefined && pool === undefined) {
+    return undefined;
+  }
+  return async (url, rules) => {
+    if (driven !== undefined && (await driven(url, rules))) {
+      return true;
+    }
+    return true === (await pool?.setMocksLease(sessionId, rules));
+  };
+}
+
 export function crawlSecret(
   startUrl: string,
   env: Readonly<Record<string, string | undefined>>,
@@ -134,6 +156,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
         // Starts code-coverage collection, so the drive below is measured. See takeCodeCoverage.
         await deps.realInput?.takeCodeCoverage?.(session.url);
         const secret = crawlSecret(session.url, process.env);
+        const mocks = exhaustiveMocks(deps, session.id);
         return runExhaustive({
           sessions: deps.sessions,
           session,
@@ -146,12 +169,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
           },
           now: deps.now,
           sleep: nodeSleep,
-          ...(deps.realInput?.setMocks === undefined
-            ? {}
-            : {
-                setMocks: (url: string, rules: MockRule[]) =>
-                  deps.realInput?.setMocks?.(url, rules) ?? Promise.resolve(false),
-              }),
+          ...(mocks === undefined ? {} : { setMocks: mocks }),
           ...(deps.realInput?.takeCodeCoverage === undefined
             ? {}
             : {

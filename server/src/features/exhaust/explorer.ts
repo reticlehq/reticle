@@ -107,6 +107,11 @@ export interface ExploredWrite {
   beforeState: string;
   /** The state the app reached when this write SUCCEEDED — what a failure must not look like. */
   successState: string;
+  /**
+   * True when the write answered an error or never completed while exploring. `successState` is
+   * then where a failure lands, not a success, and nothing can be judged by landing there.
+   */
+  failed?: boolean;
 }
 
 /** One explored state, as the edge-case drive needs it. */
@@ -115,6 +120,8 @@ export interface ExploredSurface {
   path: Step[];
   /** What the explorer typed into the state's empty fields, in page order. */
   fills: Step[];
+  /** Every text field on the state, in page order: the empty ones and the pre-filled ones. */
+  fields: string[];
   /** Each field's `FIELD_ATTRS`, by control key. */
   attrs: Record<string, Record<string, string>>;
   /** The controls the explorer clicked on this state, in page order. */
@@ -162,6 +169,8 @@ const TYPED = /^(?:textbox|searchbox|spinbutton)\b/;
 /** Roles that need a value model this explorer does not have, and are left alone. */
 const CHOOSER = /^(?:combobox|listbox|option|slider)\b/;
 const FAILED_STATUS = 400;
+/** The lowest status of an answer that is not an error. 0 is a request that never completed. */
+const OK_MIN = 200;
 
 interface Control {
   ref: string;
@@ -237,6 +246,7 @@ export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<
 
     // Only EMPTY fields. The first drive of the fixture typed placeholders over the login form's
     // correct pre-filled credentials, got a 401, and never left the first page.
+    const fields = [...new Set(controls.filter((c) => TYPED.test(c.key)).map((c) => c.key))];
     const typed = controls.filter((c) => TYPED.test(c.key) && !c.holdsValue);
     const fills: Step[] = typed.map((c, index) => ({
       key: c.key,
@@ -244,10 +254,12 @@ export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<
       value: opts.fillValue(c.key, index),
     }));
     const attrs: ExploredSurface['attrs'] = {};
-    for (const c of typed) {
-      const read = await port.fieldAttrs?.(c.key);
+    // Every field, the pre-filled ones too: the explorer leaves a pre-filled field alone, but its
+    // edge values are still worth typing. A login form whose fields came filled got none.
+    for (const field of fields) {
+      const read = await port.fieldAttrs?.(field);
       if (read !== undefined) {
-        attrs[c.key] = read;
+        attrs[field] = read;
       }
     }
     // Fills first, then the targets: valid input can reveal the button that moves on (a Continue,
@@ -275,6 +287,7 @@ export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<
     const surface: ExploredSurface = {
       path: node.path,
       fills,
+      fields,
       attrs,
       order: untried,
       requests: [],
@@ -377,7 +390,17 @@ function noteWrites(
     const [method = '', urlPath = ''] = key.split(' ');
     const url = event.data['url'];
     const concrete = 'string' === typeof url ? new URL(url, 'http://localhost').pathname : urlPath;
-    writes.set(key, { key, method, urlPath: concrete, path, beforeState, successState });
+    const status = asNumber(event.data['status']);
+    const failed = status === undefined || status < OK_MIN || status >= FAILED_STATUS;
+    writes.set(key, {
+      key,
+      method,
+      urlPath: concrete,
+      path,
+      beforeState,
+      successState,
+      ...(failed ? { failed } : {}),
+    });
   }
 }
 

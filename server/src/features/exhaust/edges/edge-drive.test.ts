@@ -245,3 +245,73 @@ describe('specOf', () => {
     });
   });
 });
+
+/*
+ * The login form of a real app, as the snapshot shows it: both fields pre-filled, the password
+ * redacted. The explorer leaves a field that holds a value alone, so it types nothing here, and the
+ * edge-value round once took its fields from what the explorer typed. It never filled either field.
+ */
+function prefilledLogin() {
+  let email = 'admin@x.dev';
+  let password = 'secret';
+  let refs = new Map<string, string>();
+  let seq = 0;
+  const sent: { email: string; password: string }[] = [];
+  const port: ExplorePort = {
+    reset: () => {
+      email = 'admin@x.dev';
+      password = 'secret';
+      return Promise.resolve(true);
+    },
+    look: () => {
+      refs = new Map();
+      const line = (label: string, extra = ''): string => {
+        seq += 1;
+        refs.set(`e${String(seq)}`, label);
+        return `- ${label} (ref=e${String(seq)})${extra}`;
+      };
+      const tree = [
+        line('textbox "Email"', email.length > 0 ? ` [value="${email}"]` : ''),
+        line('textbox "Password"', password.length > 0 ? ' [value="[REDACTED]"]' : ''),
+        line('button "Sign in"'),
+      ].join('\n');
+      return Promise.resolve({ tree, route: '/' });
+    },
+    fieldAttrs: (control) =>
+      Promise.resolve('textbox "Password"' === control ? { type: 'password' } : {}),
+    act: (ref, action, value) => {
+      const label = refs.get(ref);
+      const events: ReticleEvent[] = [];
+      if ('fill' === action && 'textbox "Email"' === label) {
+        email = value ?? '';
+      } else if ('fill' === action && 'textbox "Password"' === label) {
+        password = value ?? '';
+      } else if ('button "Sign in"' === label) {
+        sent.push({ email, password });
+        const good = 'admin@x.dev' === email && 'secret' === password;
+        events.push({
+          type: 'net.request',
+          t: 1,
+          data: { method: 'POST', url: 'http://h/api/login', status: good ? 200 : 401 },
+        } as unknown as ReticleEvent);
+      }
+      return Promise.resolve({ ok: label !== undefined, events });
+    },
+  };
+  return { port, sent };
+}
+
+describe('driveEdges on a form whose fields are pre-filled', () => {
+  it('types edge values into each pre-filled field and submits them', async () => {
+    const { port, sent } = prefilledLogin();
+    const report = await explore(port, { maxActions: 50, fillValue: () => 'typed' });
+    const form = report.surfaces[0];
+    expect(form?.fills).toEqual([]);
+    expect(form?.fields).toEqual(['textbox "Email"', 'textbox "Password"']);
+    expect(form?.attrs['textbox "Password"']).toEqual({ type: 'password' });
+    const edges = await driveEdges(port, report.surfaces, { maxActions: 200, now: () => 0 });
+    expect(edges.probed).toEqual(expect.arrayContaining(['textbox "Email"', 'textbox "Password"']));
+    expect(sent).toContainEqual({ email: '', password: 'secret' });
+    expect(sent).toContainEqual({ email: 'admin@x.dev', password: '   ' });
+  });
+});

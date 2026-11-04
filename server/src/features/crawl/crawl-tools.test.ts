@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { TOOLS, type ToolDef, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { CAPPED_SNAPSHOT_NOTE, type CrawlReport } from './crawl.js';
-import { CRAWL_TOOLS, crawlSecret } from './crawl-tools.js';
+import { CRAWL_TOOLS, crawlSecret, exhaustiveMocks } from './crawl-tools.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 
@@ -220,5 +220,31 @@ describe('crawlSecret — a secret is filled only on the origin the crawl starte
     expect(secret('Password', 'http://evil.test/login')).toBeUndefined();
     expect(secret('Password', 'http://localhost:4000/login')).toBeUndefined();
     expect(secret('Password', 'not a url')).toBeUndefined();
+  });
+});
+
+/*
+ * `reticle mcp --headless` drives the app in a leased page. The pool can break a request in it (the
+ * mock tool already uses that), but the exhaustive crawl asked only the driven provider, so every
+ * failure path reported "skipped: needs a driven browser" on a browser Reticle itself launched.
+ */
+describe('exhaustiveMocks — failure paths reach a leased page', () => {
+  it('falls back to the lease pool when no driven provider takes the rules', async () => {
+    const leased: { id: string; count: number }[] = [];
+    const deps = {
+      pool: {
+        setMocksLease: (id: string, rules: readonly unknown[]) => {
+          leased.push({ id, count: rules.length });
+          return Promise.resolve(true);
+        },
+      },
+    } as unknown as ToolDeps;
+    const setMocks = exhaustiveMocks(deps, 'lease-1');
+    expect(await setMocks?.('http://h/', [{ urlContains: '/api/login', abort: true }])).toBe(true);
+    expect(leased).toEqual([{ id: 'lease-1', count: 1 }]);
+  });
+
+  it('is absent when nothing can break a request', () => {
+    expect(exhaustiveMocks({} as ToolDeps, 's1')).toBeUndefined();
   });
 });
